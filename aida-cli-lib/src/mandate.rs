@@ -472,6 +472,28 @@ pub(crate) fn store_history_versions(
     Ok(out)
 }
 
+/// The audit copy of a renewal in `.aida/events.jsonl`: old expiry -> new
+/// expiry, and who renewed. Best-effort; the record's own `renewals` lineage
+/// is the authority.
+// trace:STORY-B6B1278890774EF993D2EBC327862470-166 | ai:claude
+pub(crate) fn emit_renewed(project_root: &Path, mandate: &Mandate, renewal: &Renewal) {
+    let mut event = crate::events::Event::new(
+        None,
+        "",
+        crate::events::EventKind::MandateChanged {
+            id: mandate.id.clone(),
+            active: true,
+            principal: renewal.renewed_by.clone(),
+            expires_at: renewal.expires_at.to_rfc3339(),
+            include_supervised: mandate.include_supervised,
+            reason: mandate.reason.clone(),
+            renewed_from: Some(renewal.previous_expires_at.to_rfc3339()),
+        },
+    );
+    event.seat = crate::events::active_seat();
+    crate::events::emit(project_root, &event);
+}
+
 /// The audit copy of a start / stop in `.aida/events.jsonl`. Best-effort.
 // trace:STORY-1698 | ai:claude
 pub(crate) fn emit_changed(project_root: &Path, mandate: &Mandate, active: bool) {
@@ -485,6 +507,7 @@ pub(crate) fn emit_changed(project_root: &Path, mandate: &Mandate, active: bool)
             expires_at: mandate.expires_at.to_rfc3339(),
             include_supervised: mandate.include_supervised,
             reason: mandate.reason.clone(),
+            renewed_from: None,
         },
     );
     event.seat = crate::events::active_seat();
@@ -616,6 +639,8 @@ fn status_json(state: &MandateState, now: DateTime<Utc>) -> serde_json::Value {
     let mut out = serde_json::json!({ "status": status });
     if let Some(m) = mandate {
         out["mandate"] = serde_json::to_value(m).unwrap_or_default();
+        // trace:STORY-B6B1278890774EF993D2EBC327862470-166 | ai:claude
+        out["renewal_count"] = serde_json::json!(m.renewals.len());
         if status == "active" {
             out["remaining_secs"] = serde_json::json!((m.expires_at - now).num_seconds());
         }
@@ -665,6 +690,17 @@ fn status_text(state: &MandateState, now: DateTime<Utc>) -> String {
         if let Some(reason) = &m.reason {
             lines.push(format!("  reason:    {reason}"));
         }
+        // trace:STORY-B6B1278890774EF993D2EBC327862470-166 | ai:claude
+        lines.push(match m.renewals.last() {
+            None => "  renewals:  0".to_string(),
+            Some(last) => format!(
+                "  renewals:  {} (last by {} at {}, from {})",
+                m.renewals.len(),
+                last.renewed_by,
+                last.renewed_at.to_rfc3339(),
+                last.previous_expires_at.to_rfc3339()
+            ),
+        });
         lines.join("\n")
     };
     match state {
@@ -696,7 +732,7 @@ fn state_mandate(state: &MandateState) -> Option<&Mandate> {
     }
 }
 
-/// `aida mandate start|stop|status`.
+/// `aida mandate start|renew|stop|status`.
 // trace:STORY-1698 | ai:claude
 pub(crate) fn handle_mandate(action: &crate::cli::MandateAction) -> Result<()> {
     let dir = mandate_dir()?;
@@ -779,6 +815,30 @@ pub(crate) fn handle_mandate(action: &crate::cli::MandateAction) -> Result<()> {
             println!("Operator-only and decide-mode specs always stay human-only. Stop it any time: `aida mandate stop`.");
             Ok(())
         }
+        // trace:STORY-B6B1278890774EF993D2EBC327862470-166 | ai:claude
+        crate::cli::MandateAction::Renew { duration } => {
+            // Same parser and 24h cap as `start --ttl`, named for this flag.
+            let ttl = duration
+                .as_deref()
+                .map(|raw| {
+                    parse_ttl(raw)
+                        .map_err(|e| anyhow::anyhow!(format!("{e:#}").replace("--ttl", "--for")))
+                })
+                .transpose()?;
+            let (m, renewal) =
+                renew_as_human(&dir, &crate::current_user_id(None), ttl, Utc::now())?;
+            if let Some(root) = &audit_root {
+                emit_renewed(root, &m, &renewal);
+            }
+            println!(
+                "Mandate {} renewed until {} (was {}); its scope, flags and reason are unchanged (renewal {}).",
+                m.id,
+                renewal.expires_at.to_rfc3339(),
+                renewal.previous_expires_at.to_rfc3339(),
+                m.renewals.len()
+            );
+            Ok(())
+        }
         crate::cli::MandateAction::Stop => {
             let stopped = stop_as_human(&dir, &crate::current_user_id(None), Utc::now())?;
             if stopped.is_empty() {
@@ -853,7 +913,7 @@ pub(crate) fn status_report(
 /// Fire-fighting mandate: a human-minted, time-boxed grant that lets the
 /// advisor seat ship held PRs with an attested, independent approval.
 ///
-/// `start` and `stop` need a human at an interactive terminal; `status`
+/// `start`, `renew` and `stop` need a human at an interactive terminal; `status`
 /// is open to anyone. Operator-only specs always stay human-only.
 // trace:STORY-1698 | ai:claude
 #[derive(clap::Parser, Debug)]
