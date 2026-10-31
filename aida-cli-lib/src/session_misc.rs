@@ -961,6 +961,7 @@ pub(crate) fn session_handoff_seat(
     write: Option<&str>,
     _show: bool,
     seat: Option<&str>,
+    final_: bool,
 ) -> Result<()> {
     let seat = resolve_handoff_seat(seat)?;
     let project_root = main_worktree_root_from(&find_project_root()?);
@@ -972,14 +973,23 @@ pub(crate) fn session_handoff_seat(
         } else {
             std::fs::read_to_string(src).with_context(|| format!("reading {src}"))?
         };
-        let written =
-            seat_rotation::write_handoff(&project_root, &seat, &body, chrono::Utc::now())?;
+        // trace:STORY-B6B1278890774EF993D2EBC327862470-101 | ai:claude
+        let written = seat_rotation::write_handoff_by(
+            &project_root,
+            &seat,
+            &body,
+            chrono::Utc::now(),
+            &seat_rotation::HandoffWriter::from_env(final_),
+        )?;
         println!(
             "Handoff written: {} ({} bytes)",
             written.path.display(),
             written.bytes
         );
         println!("Latest: {}", written.latest.display());
+        if final_ {
+            println!("Final handoff: a rotation supervisor will not relaunch this session.");
+        }
         println!("Next session: aida session handoff --seat {seat} --show");
         return Ok(());
     }

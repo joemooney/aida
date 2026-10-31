@@ -14116,6 +14116,10 @@ Options:
           The seat the handoff belongs to (advisor, reviewer, product, ...). Defaults to
           `$AIDA_SESSION_ROLE`
 
+      --final
+          With `--write`: this is the last handoff of the run, so an `aida agent new --rotate`
+          supervisor exits instead of relaunching
+
       --standing-orders <ACTION> <TEXT>
           Manage the seat's repo-local standing orders (`.aida/standing-orders/<seat>.md`): `add
           "<text>"` appends a dated entry, `list` prints them. `--show` prints standing orders
@@ -16671,6 +16675,13 @@ Options:
           agent new claude --bg --role implementer --spec <ID> --cwd <WORKTREE> --prompt-file <FILE>
           --no-resume --permission-mode bypassPermissions`. An explicit owning cwd reuses its
           inactive same-role lease; it never takes over a live agent
+
+      --rotate
+          Supervise the session across context rotations: when it exits after writing a fresh seat
+          handoff, relaunch it in the same worktree under the same handle and lease with the handoff
+          loaded (a 5s countdown; Ctrl-C stops it). `aida session handoff --write --final`, or an
+          exit without a fresh handoff, ends it for real. Default: `[agents.claude] rotate` in
+          agents.toml, else off
 
   -h, --help
           Print help (see a summary with '-h')
@@ -42744,6 +42755,11 @@ Working on aida itself
         "help": "Print the fresh-session vs compact recommendation"
       },
       {
+        "name": "final",
+        "takes_value": false,
+        "help": "With `--write`: this is the last handoff of the run, so an `aida agent new --rotate` supervisor exits instead of relaunching"
+      },
+      {
         "name": "format",
         "takes_value": true,
         "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
@@ -45225,6 +45241,11 @@ Working on aida itself
         "name": "role",
         "takes_value": true,
         "help": "Role propagated to the spawned Claude process as AIDA_SESSION_ROLE"
+      },
+      {
+        "name": "rotate",
+        "takes_value": false,
+        "help": "Supervise the session across context rotations: when it exits after writing a fresh seat handoff, relaunch it in the same worktree under the same handle and lease with the handoff loaded (a 5s countdown; Ctrl-C stops it). `aida session handoff --write --final`, or an exit without a fresh handoff, ends it for real. Default: `[agents.claude] rotate` in agents.toml, else off"
       },
       {
         "name": "sandbox",

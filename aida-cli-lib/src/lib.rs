@@ -585,6 +585,8 @@ mod seat_occupancy;
 // trace:BUG-2014 | ai:codex
 mod grant_expiry_notice;
 mod seat_rotation;
+// trace:STORY-B6B1278890774EF993D2EBC327862470-101 | ai:claude
+mod agent_rotation;
 mod seats;
 mod server_cmd;
 mod session;

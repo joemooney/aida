@@ -151,7 +151,32 @@ for root in "$project_root" "$main_root"; do
     fi
 done
 
-if [ -z "$role_file" ] && [ -z "$standing_line" ]; then
+# STORY-101: a session `aida agent new --rotate` relaunched after a context
+# rotation loads its seat handoff here (generation 2 on), so it resumes
+# under the same handle without being told to read it.
+# trace:STORY-B6B1278890774EF993D2EBC327862470-101 | ai:claude
+rotation_block=""
+rotation_gen="${AIDA_ROTATION_GENERATION:-}"
+case "$rotation_gen" in
+    '' | *[!0-9]*) rotation_gen=0 ;;
+esac
+if [ "$rotation_gen" -ge 2 ] && [ -n "${AIDA_ROTATION_HANDOFF:-}" ] &&
+    command -v aida >/dev/null 2>&1; then
+    if command -v timeout >/dev/null 2>&1; then
+        handoff_show=$(timeout 3 aida session handoff --seat "$canonical_label" --show 2>/dev/null)
+    else
+        handoff_show=$(aida session handoff --seat "$canonical_label" --show 2>/dev/null)
+    fi
+    rotation_block="Rotated: ${AIDA_AGENT_NAME:-this seat} #${rotation_gen} (relaunched by aida agent new after a handoff; same handle, lease and worktree).
+Handoff: ${AIDA_ROTATION_HANDOFF}"
+    if [ -n "$handoff_show" ]; then
+        rotation_block="${rotation_block}
+
+${handoff_show}"
+    fi
+fi
+
+if [ -z "$role_file" ] && [ -z "$standing_line" ] && [ -z "$rotation_block" ]; then
     exit 0
 fi
 
@@ -226,7 +251,7 @@ fi
 # Build the addendum body. If the role contributes no purpose/system_prompt
 # AND there is no findings line, there's nothing useful — exit silently.
 if [ -z "$purpose" ] && [ -z "$system_prompt" ] && [ -z "$findings_line" ] &&
-    [ -z "$standing_line" ]; then
+    [ -z "$standing_line" ] && [ -z "$rotation_block" ]; then
     exit 0
 fi
 
@@ -250,6 +275,11 @@ if [ -n "$standing_line" ]; then
     body="${body}
 
 ${standing_line}"
+fi
+if [ -n "$rotation_block" ]; then
+    body="${body}
+
+${rotation_block}"
 fi
 
 emit_context "$body"

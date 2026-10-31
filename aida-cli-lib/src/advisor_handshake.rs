@@ -128,6 +128,42 @@ pub(crate) struct HelloRecord {
     /// The agent's notice already announced the ack.
     #[serde(default)]
     pub ack_reported: bool,
+    /// Set when `aida agent new --rotate` relaunched this handle after a
+    /// context rotation: the generation (2 on) and the session it replaced.
+    // trace:STORY-B6B1278890774EF993D2EBC327862470-101 | ai:claude
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub rotation: Option<Rotation>,
+}
+
+/// A rotated session's continuity with the one before it.
+// trace:STORY-B6B1278890774EF993D2EBC327862470-101 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub(crate) struct Rotation {
+    pub generation: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub previous_native_session_id: Option<String>,
+}
+
+impl Rotation {
+    /// The rotation this session runs as, from the supervisor's env.
+    pub(crate) fn from_env() -> Option<Self> {
+        let generation: u64 = env_nonempty(crate::agent_rotation::GENERATION_ENV)?
+            .parse()
+            .ok()?;
+        (generation >= 2).then(|| Self {
+            generation,
+            previous_native_session_id: env_nonempty(crate::agent_rotation::PREVIOUS_SESSION_ENV),
+        })
+    }
+}
+
+/// PURE: `handle`, or `handle #N (rotated)` for a rotated generation.
+// trace:STORY-B6B1278890774EF993D2EBC327862470-101 | ai:claude
+pub(crate) fn handle_label(handle: &str, rotation: Option<&Rotation>) -> String {
+    match rotation {
+        Some(r) => format!("{handle} #{} (rotated)", r.generation),
+        None => handle.to_string(),
+    }
 }
 
 /// Where a hello stands for its sender.
@@ -298,6 +334,8 @@ pub(crate) struct HelloContext {
     pub role: String,
     pub spec: Option<String>,
     pub path: PathBuf,
+    // trace:STORY-B6B1278890774EF993D2EBC327862470-101 | ai:claude
+    pub rotation: Option<Rotation>,
     /// When this session's registry entry started; a record sent before it
     /// belongs to an earlier session that reused the handle.
     pub session_started: Option<DateTime<Utc>>,
@@ -336,9 +374,23 @@ pub(crate) fn hello_message(
     now: DateTime<Utc>,
 ) -> Message {
     let spec = ctx.spec.as_deref().unwrap_or("(none)");
+    // A rotated session says hello as the same handle, naming its generation
+    // and the session it replaced. trace:STORY-B6B1278890774EF993D2EBC327862470-101 | ai:claude
+    let rotation = ctx
+        .rotation
+        .as_ref()
+        .map(|r| {
+            format!(
+                "generation: {} (rotated; previous session {})\n",
+                r.generation,
+                r.previous_native_session_id.as_deref().unwrap_or("unknown")
+            )
+        })
+        .unwrap_or_default();
     let body = format!(
-        "Hello from {handle}.\n\nhandle: {handle}\nrole: {role}\nspec: {spec}\npath: {path}\nmailbox: {mailbox}\n\n\
+        "Hello from {label}.\n\nhandle: {handle}\n{rotation}role: {role}\nspec: {spec}\npath: {path}\nmailbox: {mailbox}\n\n\
          Reading this with `aida mailbox inbox` acks it.",
+        label = handle_label(&ctx.handle, ctx.rotation.as_ref()),
         handle = ctx.handle,
         role = ctx.role,
         path = ctx.path.display(),
@@ -352,7 +404,11 @@ pub(crate) fn hello_message(
         timestamp: now.timestamp_millis(),
         in_reply_to: None,
         body,
-        subject: Some(format!("hello from {} ({})", ctx.handle, ctx.role)),
+        subject: Some(format!(
+            "hello from {} ({})",
+            handle_label(&ctx.handle, ctx.rotation.as_ref()),
+            ctx.role
+        )),
         urgent: false,
         intent: Intent::Fyi,
         retracted: false,
@@ -411,6 +467,7 @@ pub(crate) fn send_hello(
         acked_at: None,
         acked_by: None,
         ack_reported: false,
+        rotation: ctx.rotation.clone(),
     };
     save_record(root, &rec)?;
     Ok(if queued {
@@ -554,7 +611,7 @@ fn pending_line(rec: &HelloRecord, now: DateTime<Utc>) -> String {
     };
     format!(
         "Advisor handshake: hello from {} ({} · {} · {}), waiting {} — {how}.",
-        rec.handle,
+        handle_label(&rec.handle, rec.rotation.as_ref()),
         rec.role,
         rec.spec.as_deref().unwrap_or("no spec"),
         rec.path,
@@ -702,6 +759,7 @@ pub(crate) fn run(
             spec: env_nonempty("AIDA_SESSION_SCOPE")
                 .or_else(|| entry.as_ref().and_then(|e| e.current_spec.clone())),
             session_started: entry.as_ref().map(|e| e.started_at),
+            rotation: Rotation::from_env(),
             path: crate::find_aida_project_root_from(checkout)
                 .unwrap_or_else(|_| checkout.to_path_buf()),
         };
