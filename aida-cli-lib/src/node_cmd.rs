@@ -20,6 +20,10 @@ use colored::Colorize;
 pub(crate) mod node_cmd_args;
 pub(crate) use node_cmd_args::*;
 
+// trace:BUG-B6B1278890774EF993D2EBC327862470-026 | ai:codex
+#[path = "node_inventory.rs"]
+mod node_inventory;
+
 use crate::*;
 
 /// Handle `aida node` subcommands. Operates on the orphan-store worktree
@@ -32,7 +36,8 @@ pub(crate) fn handle_node_command(cmd: &NodeCommand, store_path: &std::path::Pat
     let node_config_path = store_path.join(".aida").join("node.toml");
 
     // trace:BUG-2017 | ai:codex — local repair never claims a global registry/block.
-    if !aida_core::allocation_authority::resolve(store_path)?.authoritative {
+    let allocation = aida_core::allocation_authority::resolve(store_path)?;
+    if !allocation.authoritative {
         match cmd {
             NodeCommand::Acquire {
                 id,
@@ -63,15 +68,14 @@ pub(crate) fn handle_node_command(cmd: &NodeCommand, store_path: &std::path::Pat
                 );
                 return Ok(());
             }
-            NodeCommand::List | NodeCommand::Show { id: None } => {
+            NodeCommand::Show { id: None } => {
                 if let Some(binding) = aida_core::work_binding::load(store_path)? {
-                    // Role as lower-case prose and the label on its own, so
-                    // a label named WORK is never mistaken for the role.
+                    // Keep the role/label wording from main while list continues
+                    // through the complete inventory path below.
+                    // trace:BUG-HOME-026 | ai:codex
                     // trace:STORY-B6B1278890774EF993D2EBC327862470-098 | ai:claude
                     println!("{}", work_node_line(store_path, &binding.node_id));
-                    if matches!(cmd, NodeCommand::Show { .. }) {
-                        print_allocation_report(store_path)?;
-                    }
+                    print_allocation_report(store_path)?;
                     return Ok(());
                 }
             }
@@ -80,57 +84,13 @@ pub(crate) fn handle_node_command(cmd: &NodeCommand, store_path: &std::path::Pat
     }
     match cmd {
         NodeCommand::List => {
-            let registry = NodeRegistry::load(&registry_path).unwrap_or_default();
-            // trace:BUG-2017 | ai:codex — use existing surface; no transport help snapshot overlap.
-            let allocation = aida_core::allocation_authority::resolve(store_path)?;
-            println!(
-                "Allocation: {} (clone common Git directory)",
-                if allocation.authoritative {
-                    "authoritative"
-                } else {
-                    "node-local only"
-                }
+            // Listing is a union of known identities, including a worker clone's
+            // opaque binding. It never repairs or allocates identity.
+            // trace:BUG-B6B1278890774EF993D2EBC327862470-026 | ai:codex
+            print!(
+                "{}",
+                node_inventory::list(store_path, allocation.authoritative)?
             );
-            let current_id = if node_config_path.exists() {
-                aida_core::NodeConfig::load(&node_config_path)
-                    .ok()
-                    .map(|c| c.node_id)
-            } else {
-                None
-            };
-
-            if registry.nodes.is_empty() {
-                println!("No nodes registered yet. Run `aida node acquire` to claim id 1.");
-                return Ok(());
-            }
-
-            println!(
-                "{:<2}  {:<6}  {:<8}  {:<28}  {:<22}  Registered",
-                "", "Node", "User", "Email", "Hostname"
-            );
-            println!("{}", "─".repeat(100));
-            for n in &registry.nodes {
-                let marker = if current_id.as_deref() == Some(n.id.as_str()) {
-                    "*"
-                } else {
-                    " "
-                };
-                let email = n.email.clone().unwrap_or_else(|| "-".into());
-                let when = n
-                    .registered
-                    .with_timezone(&chrono::Local)
-                    .format("%Y-%m-%d %H:%M")
-                    .to_string();
-                println!(
-                    "{:<2}  {:<6}  {:<8}  {:<28}  {:<22}  {}",
-                    marker,
-                    n.id,
-                    n.user_id,
-                    truncate(&email, 28),
-                    truncate(&n.hostname, 22),
-                    when
-                );
-            }
         }
 
         NodeCommand::Show { id } => {

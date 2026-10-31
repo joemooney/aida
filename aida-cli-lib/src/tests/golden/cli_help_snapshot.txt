@@ -5692,8 +5692,10 @@ node-aware spec ids (e.g. `FR-<node>-<NNN>`) until the merge gate promotes them 
 Usage: aida node [OPTIONS] <COMMAND>
 
 Commands:
-  list         List all nodes registered in the shared registry. The current node (the one whose
-               `.aida/node.toml` matches an entry) is marked with `*`
+  list         List known nodes from node/label registries, allocation records and stored spec IDs.
+               Includes retired labels and marks this clone's node with `*`. Shows this clone's
+               allocation role and the recorded root; other clones' configuration roles remain
+               unknown
   show         Show details for a single node. With no id, defaults to the current node (read from
                `.aida/node.toml`)
   acquire      Acquire a node id for this clone. Performs a CAS push loop on the shared registry to
@@ -5745,8 +5747,9 @@ Options:
   -h, --help
           Print help (see a summary with '-h')
 ===== aida node list
-List all nodes registered in the shared registry. The current node (the one whose `.aida/node.toml`
-matches an entry) is marked with `*`
+List known nodes from node/label registries, allocation records and stored spec IDs. Includes
+retired labels and marks this clone's node with `*`. Shows this clone's allocation role and the
+recorded root; other clones' configuration roles remain unknown
 
 Usage: aida node list [OPTIONS]
 
@@ -34300,7 +34303,7 @@ Working on aida itself
       "node",
       "list"
     ],
-    "about": "List all nodes registered in the shared registry. The current node (the one whose `.aida/node.toml` matches an entry) is marked with `*`",
+    "about": "List known nodes from node/label registries, allocation records and stored spec IDs. Includes retired labels and marks this clone's node with `*`. Shows this clone's allocation role and the recorded root; other clones' configuration roles remain unknown",
     "flags": [
       {
         "name": "canonical-ids",

@@ -7,8 +7,11 @@ use std::path::PathBuf;
 
 #[derive(Subcommand, Debug)]
 pub enum NodeCommand {
-    /// List all nodes registered in the shared registry. The current node
-    /// (the one whose `.aida/node.toml` matches an entry) is marked with `*`.
+    /// List known nodes from node/label registries, allocation records and stored
+    /// spec IDs. Includes retired labels and marks this clone's node with `*`.
+    /// Shows this clone's allocation role and the recorded root; other clones'
+    /// configuration roles remain unknown.
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-026 | ai:codex
     List,
 
     /// Show details for a single node. With no id, defaults to the current
