@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T21:37:29.201146410Z
-modified_at: 2026-10-31T22:30:30.683584453Z
+modified_at: 2026-10-31T23:16:00.517057750Z
 req_type: Bug
 tags:
 - epic-home-003
@@ -74,6 +74,12 @@ history:
   - field_name: agreed_id
     old_value: ''
     new_value: BUG-2374
+- id: 01a1943f-a1d4-7931-a898-b2cc289bab88
+  author: joe
+  timestamp: 2026-10-31T23:16:00.596247711Z
+  session_id: 01a1943cd5b9
+  harness_version: 2.1.316 (Claude Code)
+  changes: []
 filed_at:
   code_sha: b0d9035fbf3276de24d95845c0b50320ead426bd
   branch: main
@@ -90,7 +96,7 @@ failure_reason:
   phase: reviewer
   phase_index: 3
   kind: verdict:request-changes
-  detail: Brief-leads/conflict-first wiring is sound, but a post-verdict brief is dropped when a later ruling exists, a pre-verdict brief is labelled binding above the authoritative findings, and the production wiring + conflict detection are untested (acceptance 1/2 only verified at helper level).
+  detail: Round-2 items 1 and 4 met; item 2 placement wrong (a pre-verdict brief is rendered ABOVE the authoritative findings, brief says below), (d) untested end-to-end, and a rustfmt failure in queue_rework_tests.rs
   recovery_hint: address the review findings, move BUG-B6B1278890774EF993D2EBC327862470-057 back to In Progress, and clear the PR hold only after approval
   shelved_by: reviewer
-  shelved_at: 2026-10-31T22:26:10.095206330Z
+  shelved_at: 2026-10-31T23:16:00.517057750Z
