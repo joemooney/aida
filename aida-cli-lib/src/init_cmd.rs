@@ -2781,6 +2781,7 @@ enabled = true
 #[cfg(test)]
 mod bug_046_id_width_tests {
     // trace:BUG-B6B1278890774EF993D2EBC327862470-046 | ai:claude
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-046.acbed48e | ai:claude
     #[test]
     fn id_width_is_written_to_ids_table_preserving_other_config() {
         let dir = tempfile::tempdir().unwrap();

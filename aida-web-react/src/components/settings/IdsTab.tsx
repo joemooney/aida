@@ -13,7 +13,6 @@ export function IdsTab() {
   // ID config state
   const [format, setFormat] = useState<IdFormat>('SingleLevel');
   const [numbering, setNumbering] = useState<NumberingStrategy>('Global');
-  const [digits, setDigits] = useState(3);
   const [reqTypes, setReqTypes] = useState<RequirementTypeDefinition[]>([]);
   const [newTypeName, setNewTypeName] = useState('');
   const [newTypePrefix, setNewTypePrefix] = useState('');
@@ -27,7 +26,6 @@ export function IdsTab() {
     if (idConfig) {
       setFormat(idConfig.format);
       setNumbering(idConfig.numbering);
-      setDigits(idConfig.digits);
       setReqTypes(idConfig.requirement_types);
     }
   }, [idConfig]);
@@ -46,7 +44,6 @@ export function IdsTab() {
   const idChanged = idConfig && (
     format !== idConfig.format ||
     numbering !== idConfig.numbering ||
-    digits !== idConfig.digits ||
     JSON.stringify(reqTypes) !== JSON.stringify(idConfig.requirement_types)
   );
 
@@ -59,7 +56,6 @@ export function IdsTab() {
     updateIdMutation.mutate({
       format,
       numbering,
-      digits,
       requirement_types: reqTypes,
     });
   };
@@ -121,18 +117,6 @@ export function IdsTab() {
               <option value="PerPrefix">Per Prefix</option>
               <option value="PerFeatureType">Per Feature+Type</option>
             </select>
-          </label>
-
-          <label className="flex flex-col gap-1 w-24">
-            <span className="text-xs font-medium text-content-secondary">Digits</span>
-            <input
-              type="number"
-              min={1}
-              max={6}
-              value={digits}
-              onChange={(e) => setDigits(Number(e.target.value))}
-              className="rounded-lg border border-edge bg-surface px-3 py-2 text-sm text-content focus:border-accent focus:outline-none"
-            />
           </label>
         </div>
 

@@ -9968,6 +9968,7 @@ mod story_462_doctor_tests {
     }
 
     // trace:BUG-B6B1278890774EF993D2EBC327862470-046 | ai:claude
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-046.ac602938 | ai:claude
     #[test]
     fn doctor_fix_id_collisions_flags_parse_and_require_fix() {
         let cli = crate::command_registry::try_parse_from([
@@ -15651,8 +15652,7 @@ pub(crate) struct DoctorArgs {
 
     /// With --fix id-collisions: leave this spec's own text (title,
     /// description, comments) as written when applying to the store, e.g. the
-    /// spec recording the migration's old -> new table. Repeatable. Defaults
-    /// to the spec that owns the leading-zero migration, when present.
+    /// spec recording the migration's old -> new table. Repeatable.
     // trace:BUG-B6B1278890774EF993D2EBC327862470-046 | ai:claude
     #[clap(long, value_name = "SPEC", requires = "fix", value_parser = crate::spec_arg::spec_id)]
     pub preserve: Vec<String>,

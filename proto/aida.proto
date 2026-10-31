@@ -162,7 +162,9 @@ message FeatureDefinition {
 message IdConfiguration {
     string format = 1;
     string numbering = 2;
-    int32 digits = 3;
+    // `digits` was removed: `[ids] seq_width` in .aida/config.toml pads IDs.
+    reserved 3;
+    reserved "digits";
 }
 
 // User definition

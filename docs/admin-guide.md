@@ -35,7 +35,8 @@ The ID configuration controls how requirement identifiers (SPEC-IDs) are generat
 |---------|---------|-------------|
 | **ID Format** | SingleLevel, TwoLevel | Determines ID structure |
 | **Numbering Strategy** | GlobalSequential, PerPrefix, PerFeatureType | How numbers are assigned |
-| **Digits** | 1-6 | Number of digits in numeric portion |
+
+How many digits the number is padded to is not part of this configuration (or of the REST `/api/v2/settings/id-config` and gRPC `IdConfiguration` payloads): it is `[ids] seq_width` in `.aida/config.toml`, set with `aida config digits N`. See `docs/cli/07-project-setup.md`.
 
 **ID Format Options:**
 

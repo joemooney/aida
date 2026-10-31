@@ -5,6 +5,7 @@
 
 use super::*;
 
+// trace:BUG-B6B1278890774EF993D2EBC327862470-046.ac602938 | ai:claude
 #[test]
 fn tokens_respect_id_boundaries_and_case() {
     let t = "see TASK-42, not TASK-420 or BUG-TASK-42 or TASK-42-2; (TASK-42) [l](task-42.md)";
@@ -28,6 +29,7 @@ fn member(literal: &str, commits: usize, refs: usize) -> Member {
     }
 }
 
+// trace:BUG-B6B1278890774EF993D2EBC327862470-046.ac602938 | ai:claude
 #[test]
 fn survivor_has_most_commit_refs_then_refs_then_unpadded() {
     let m = [member("TASK-0042", 3, 0), member("TASK-42", 1, 50)];
@@ -38,6 +40,7 @@ fn survivor_has_most_commit_refs_then_refs_then_unpadded() {
     assert_eq!(choose_survivor(&m), 1, "tie keeps the unpadded side");
 }
 
+// trace:BUG-B6B1278890774EF993D2EBC327862470-046.ac602938 | ai:claude
 #[test]
 fn tracked_rewrite_touches_docs_and_comments_only() {
     let map = vec![("TASK-0042".to_string(), "TASK-HOME-001".to_string())];
@@ -58,6 +61,7 @@ fn tracked_rewrite_touches_docs_and_comments_only() {
 
 /// Every text file under `docs/` is prose: a plan TSV is rewritten whole
 /// (exact token, case preserved); the same line outside `docs/` is code.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-046.ac602938 | ai:claude
 #[test]
 fn tracked_rewrite_treats_every_docs_text_file_as_prose() {
     let map = vec![("TASK-0042".to_string(), "TASK-HOME-001".to_string())];
@@ -81,6 +85,7 @@ fn tracked_rewrite_treats_every_docs_text_file_as_prose() {
 /// The migration owner's text survives the store apply; other referrers are
 /// rewritten. An explicitly named spec missing from the store is refused; the
 /// default owner may be absent.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-046.ac602938 | ai:claude
 #[test]
 fn build_rewrites_leaves_preserved_specs_text_as_written() {
     let mut a = Requirement::new("padded".into(), String::new());
@@ -107,15 +112,12 @@ fn build_rewrites_leaves_preserved_specs_text_as_written() {
     assert_eq!(referrers[0].description, "see TASK-HOME-001");
 
     assert!(preserved_uuids(&reqs, &["BUG-8".to_string()]).is_err());
+    // No --preserve preserves nothing: there is no store-specific default.
+    // trace:TASK-B6B1278890774EF993D2EBC327862470-149 | ai:claude
     assert!(preserved_uuids(&reqs, &[]).unwrap().is_empty());
-    let mut home = owner.clone();
-    home.spec_id = Some(DEFAULT_PRESERVE.into());
-    assert_eq!(
-        preserved_uuids(&[home.clone()], &[]).unwrap(),
-        HashSet::from([home.id])
-    );
 }
 
+// trace:BUG-B6B1278890774EF993D2EBC327862470-046.ac602938 | ai:claude
 #[test]
 fn mapping_round_trips_and_rejects_garbage() {
     let rows = vec![MappingRow {
@@ -128,6 +130,7 @@ fn mapping_round_trips_and_rejects_garbage() {
     assert!(parse_mapping("TASK-1 TASK-2 not-a-uuid\n").is_err());
 }
 
+// trace:BUG-B6B1278890774EF993D2EBC327862470-046.ac602938 | ai:claude
 #[test]
 fn mapping_problems_name_a_taken_target_and_a_moved_source() {
     let mut a = Requirement::new("a".into(), String::new());
@@ -157,6 +160,7 @@ fn mapping_problems_name_a_taken_target_and_a_moved_source() {
     assert!(p[0].contains("now filed as TASK-0042"), "{p:?}");
 }
 
+// trace:BUG-B6B1278890774EF993D2EBC327862470-046.ac602938 | ai:claude
 #[test]
 fn build_rewrites_renames_records_history_and_rewrites_referrers() {
     let mut a = Requirement::new("padded".into(), "dup of TASK-42".into());
@@ -217,6 +221,7 @@ fn plant(objects: &Path, spec_id: &str, title: &str, description: &str) -> Requi
 /// (but not code literals or lowercase links); the store apply renumbers the
 /// padded twin (same UUID, history recorded, referrer rewritten) and leaves
 /// zero collision groups.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-046.ac602938 | ai:claude
 #[test]
 fn fix_id_collisions_end_to_end() {
     use aida_core::DatabaseBackend;
@@ -355,4 +360,102 @@ fn fix_id_collisions_end_to_end() {
         },
     )
     .unwrap();
+}
+
+/// Native-vs-agreed: a legacy native `TASK-31` (its agreed id is itself) and
+/// another spec whose AGREED id is `TASK-31` are one collision group, the
+/// same group `aida doctor` reports. The fix renumbers the NATIVE side (the
+/// agreed id is the shared identity) and leaves mentions of `TASK-31` alone,
+/// since they now name the agreed holder; afterwards no group remains.
+// trace:TASK-B6B1278890774EF993D2EBC327862470-149 | ai:claude
+// trace:BUG-B6B1278890774EF993D2EBC327862470-046.ac828007 | ai:claude
+#[test]
+fn fix_renumbers_the_native_side_of_a_native_vs_agreed_collision() {
+    use aida_core::DatabaseBackend;
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path().to_path_buf();
+    git(&root, &["init", "-q", "--initial-branch=main"]);
+    git(&root, &["config", "user.email", "test@example.com"]);
+    git(&root, &["config", "user.name", "Test"]);
+    std::fs::write(root.join("CHANGELOG.md"), "- TASK-31 shipped\n").unwrap();
+    git(&root, &["add", "."]);
+    git(&root, &["commit", "-q", "-m", "init"]);
+
+    let store = root.join(".aida-store");
+    let backend = crate::test_env::home_fixture_backend(&store).unwrap();
+    backend.save(&aida_core::RequirementsStore::new()).unwrap();
+    let objects = store.join("objects");
+    let mut native = Requirement::new("legacy native".into(), String::new());
+    native.spec_id = Some("TASK-31".into());
+    native.agreed_id = Some("TASK-31".into());
+    native.req_type = aida_core::RequirementType::Task;
+    aida_core::object_store::write_object(&objects, &native).unwrap();
+    let mut agreed = Requirement::new("agreed holder".into(), String::new());
+    agreed.spec_id = Some("TASK-2-074".into());
+    agreed.agreed_id = Some("TASK-31".into());
+    agreed.req_type = aida_core::RequirementType::Task;
+    aida_core::object_store::write_object(&objects, &agreed).unwrap();
+    let referrer = plant(&objects, "TASK-9", "referrer", "see TASK-31");
+
+    // One grouping for doctor and the fix.
+    let before = aida_core::object_store::load_all_objects(&objects).unwrap();
+    assert_eq!(
+        aida_core::id_collisions::find_requirement_id_collisions(&before).len(),
+        1
+    );
+    let groups = collision_groups(&before);
+    assert_eq!(groups.len(), 1, "{:?}", groups.keys());
+    let planned = plan(&before, &root, "main");
+    assert!(planned.unresolved.is_empty());
+    assert_eq!(planned.renumbers.len(), 1);
+    assert_eq!(planned.renumbers[0].renumber.uuid, native.id);
+    assert_eq!(planned.renumbers[0].survivor.uuid, agreed.id);
+
+    let mapping = root.join("mapping.tsv");
+    let opts = |dry_run, yes| FixOptions {
+        dry_run,
+        yes,
+        mapping: Some(mapping.clone()),
+        ..FixOptions::default()
+    };
+    run(&root, &store, &opts(true, false)).unwrap();
+    let rows = parse_mapping(&std::fs::read_to_string(&mapping).unwrap()).unwrap();
+    assert_eq!(rows.len(), 1, "{rows:?}");
+    assert_eq!((rows[0].old.as_str(), rows[0].uuid), ("TASK-31", native.id));
+    assert!(mention_pairs(&before, &rows).is_empty());
+
+    run(&root, &store, &opts(false, true)).unwrap();
+    let after = aida_core::object_store::load_all_objects(&objects).unwrap();
+    assert!(
+        aida_core::id_collisions::find_requirement_id_collisions(&after).is_empty(),
+        "doctor must report zero groups"
+    );
+    let moved = after.iter().find(|r| r.id == native.id).unwrap();
+    assert_eq!(moved.spec_id.as_deref(), Some(rows[0].new.as_str()));
+    assert_eq!(moved.agreed_id, None);
+    let kept = after.iter().find(|r| r.id == agreed.id).unwrap();
+    assert_eq!(kept.agreed_id.as_deref(), Some("TASK-31"));
+    let untouched = after.iter().find(|r| r.id == referrer.id).unwrap();
+    assert_eq!(untouched.description, "see TASK-31");
+    assert_eq!(
+        std::fs::read_to_string(root.join("CHANGELOG.md")).unwrap(),
+        "- TASK-31 shipped\n"
+    );
+}
+
+/// Two specs holding one key only as their agreed id cannot be separated by
+/// renumbering a native id: the plan reports the key as unresolved.
+// trace:TASK-B6B1278890774EF993D2EBC327862470-149 | ai:claude
+#[test]
+fn plan_reports_agreed_vs_agreed_groups_as_unresolved() {
+    let mut a = Requirement::new("a".into(), String::new());
+    a.spec_id = Some("TASK-2-001".into());
+    a.agreed_id = Some("TASK-50".into());
+    let mut b = Requirement::new("b".into(), String::new());
+    b.spec_id = Some("TASK-3-001".into());
+    b.agreed_id = Some("TASK-050".into());
+    let tmp = tempfile::tempdir().unwrap();
+    let planned = plan(&[a, b], tmp.path(), "main");
+    assert_eq!(planned.unresolved, vec!["TASK-50".to_string()]);
+    assert!(planned.renumbers.is_empty());
 }

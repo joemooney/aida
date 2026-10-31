@@ -1608,6 +1608,7 @@ fn node_alias_trailers_and_traces_expand_to_canonical() {
 /// IDs differing only by leading zeros are one spec: extraction, Refs
 /// collection and spec matching treat `TASK-0042` and `TASK-42` as one id.
 // trace:BUG-B6B1278890774EF993D2EBC327862470-046 | ai:claude
+// trace:BUG-B6B1278890774EF993D2EBC327862470-046.ac8d44cf | ai:claude
 #[test]
 fn bug_046_padded_ids_dedup_numerically() {
     assert_eq!(

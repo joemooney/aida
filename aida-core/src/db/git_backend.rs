@@ -623,28 +623,49 @@ impl GitBackend {
         if crate::id_identity::IdKey::parse(id).is_none() {
             return Ok(None);
         }
-        // Only a file whose `agreed_id:` line names the same number is
-        // parsed, so a miss costs one text read per object.
+        Ok(self.agreed_id_index()?.holder(id, skip_stem))
+    }
+
+    /// Every object's `agreed_id`, keyed by numeric identity, from ONE text
+    /// pass over the object files. Built once per add or batch, so admitting
+    /// N rows costs one scan instead of N (most objects carry an agreed id,
+    /// so the owning UUID is read from the file's top-level `id:` line, and
+    /// the YAML is parsed only when that line is missing).
+    // trace:TASK-B6B1278890774EF993D2EBC327862470-149 | ai:claude
+    pub(crate) fn agreed_id_index(&self) -> Result<AgreedIdIndex> {
+        let mut by_key: std::collections::HashMap<String, Vec<(String, uuid::Uuid)>> =
+            std::collections::HashMap::new();
         for (name, path) in object_store::list_objects(&self.objects_root)? {
-            if skip_stem.is_some_and(|s| name.eq_ignore_ascii_case(s)) {
-                continue;
-            }
             let Ok(text) = crate::read_atomic(&path) else {
                 continue;
             };
-            let names_it = text.lines().any(|line| {
-                line.strip_prefix("agreed_id:").is_some_and(|v| {
-                    let v = v.trim().trim_matches('"').trim_matches('\'');
-                    crate::id_identity::same_id(v, id)
+            let field = |key: &str| {
+                text.lines().find_map(|line| {
+                    line.strip_prefix(key)
+                        .map(|v| v.trim().trim_matches('"').trim_matches('\'').to_string())
                 })
-            });
-            if names_it {
-                if let Ok(req) = object_store::read_object_from_path(&path) {
-                    return Ok(Some(req.id));
-                }
-            }
+            };
+            let Some(agreed) =
+                field("agreed_id:").filter(|v| !v.is_empty() && v != "~" && v != "null")
+            else {
+                continue;
+            };
+            let Some(key) = crate::id_identity::IdKey::parse(&agreed) else {
+                continue;
+            };
+            let owner = match field("id:").and_then(|v| uuid::Uuid::parse_str(&v).ok()) {
+                Some(u) => u,
+                None => match object_store::read_object_from_path(&path) {
+                    Ok(req) => req.id,
+                    Err(_) => continue,
+                },
+            };
+            by_key
+                .entry(key.to_string())
+                .or_default()
+                .push((name, owner));
         }
-        Ok(None)
+        Ok(AgreedIdIndex { by_key })
     }
 
     /// Create a new git backend rooted at the given directory.
@@ -1194,6 +1215,7 @@ impl GitBackend {
             base,
             assigned: std::collections::HashSet::new(),
             staged: Vec::new(),
+            agreed: None,
         })
     }
 
@@ -1687,11 +1709,27 @@ impl GitBackend {
     /// Only a DIFFERENTLY padded twin refuses: a row written under the exact
     /// same literal id replaces that one file (re-run imports rely on it),
     /// and same-literal duplicates are the existing collision guards' job.
-    fn admit_numeric_identity(&self, req: &Requirement) -> Result<()> {
+    ///
+    /// `agreed` is the add's or batch's one [`Self::agreed_id_index`];
+    /// `staged` holds the rows a batch has accepted but not yet written, so a
+    /// later row cannot take an id an earlier row of the same batch holds.
+    // trace:TASK-B6B1278890774EF993D2EBC327862470-149 | ai:claude
+    fn admit_numeric_identity(
+        &self,
+        req: &Requirement,
+        agreed: &AgreedIdIndex,
+        staged: &[Requirement],
+    ) -> Result<()> {
         let Some(id) = req.spec_id.as_deref().filter(|s| !s.trim().is_empty()) else {
             return Ok(());
         };
-        let twin_holder = |i: &str| -> Result<Option<uuid::Uuid>> {
+        let holder = |i: &str| -> Result<Option<uuid::Uuid>> {
+            let names = |v: Option<&str>| v.is_some_and(|v| crate::id_identity::same_id(v, i));
+            if let Some(row) = staged.iter().find(|r| {
+                r.id != req.id && (names(r.spec_id.as_deref()) || names(r.agreed_id.as_deref()))
+            }) {
+                return Ok(Some(row.id));
+            }
             for stem in object_store::numeric_twin_stems(&self.objects_root, i)? {
                 if stem.eq_ignore_ascii_case(i.trim()) {
                     continue;
@@ -1703,9 +1741,9 @@ impl GitBackend {
             // The agreed-id half (AC2: spec_id OR agreed_id holds a number):
             // an explicit id on the authoritative clone is refused while
             // another spec carries it as its agreed id.
-            self.agreed_id_holder(i, Some(i.trim()))
+            Ok(agreed.holder(i, Some(i.trim())))
         };
-        crate::id_identity::admit_new_id(id, &twin_holder, req.id)
+        crate::id_identity::admit_new_id(id, &holder, req.id)
     }
 
     /// Record the granular field ops for one requirement update and write its
@@ -2941,7 +2979,10 @@ impl DatabaseBackend for GitBackend {
         let mut req = requirement;
         if req.spec_id.is_some() || req.agreed_id.is_some() {
             self.admit_allocations(std::slice::from_ref(&req))?;
-            self.admit_numeric_identity(&req)?;
+            if req.spec_id.is_some() {
+                // trace:TASK-B6B1278890774EF993D2EBC327862470-149 | ai:claude
+                self.admit_numeric_identity(&req, &self.agreed_id_index()?, &[])?;
+            }
         }
         // CR-8: stamp filing provenance at creation (write-once; a caller that
         // already stamped keeps its stamp). trace:CR-8 | ai:claude
@@ -3356,6 +3397,25 @@ impl DatabaseBackend for GitBackend {
     }
 }
 
+/// Agreed-id holders by numeric identity (see [`GitBackend::agreed_id_index`]).
+// trace:TASK-B6B1278890774EF993D2EBC327862470-149 | ai:claude
+pub(crate) struct AgreedIdIndex {
+    /// Id key -> `(object stem, owning uuid)`, in object-listing order.
+    by_key: std::collections::HashMap<String, Vec<(String, uuid::Uuid)>>,
+}
+
+impl AgreedIdIndex {
+    /// The first requirement whose agreed id names `id`'s number, skipping
+    /// the object filed under exactly `skip_stem`.
+    fn holder(&self, id: &str, skip_stem: Option<&str>) -> Option<uuid::Uuid> {
+        self.by_key
+            .get(&crate::id_identity::id_key(id))?
+            .iter()
+            .find(|(stem, _)| !skip_stem.is_some_and(|s| stem.eq_ignore_ascii_case(s)))
+            .map(|(_, owner)| *owner)
+    }
+}
+
 /// Buffers a batch of new requirements for write-behind commit. Created via
 /// `GitBackend::bulk_writer()`. Use `add()` per requirement (IDs are assigned
 /// from the live metadata counters), then `finish()` to write all YAMLs +
@@ -3378,6 +3438,10 @@ pub struct BulkWriter<'a> {
     /// Spec ids this writer assigned from the counters (not caller-supplied).
     assigned: std::collections::HashSet<String>,
     staged: Vec<Requirement>,
+    /// The agreed-id index for numeric admission, built on the first
+    /// caller-supplied id and reused for the rest of the batch.
+    // trace:TASK-B6B1278890774EF993D2EBC327862470-149 | ai:claude
+    agreed: Option<AgreedIdIndex>,
 }
 
 impl<'a> BulkWriter<'a> {
@@ -3395,7 +3459,16 @@ impl<'a> BulkWriter<'a> {
         // trace:BUG-2017 | ai:codex
         if req.spec_id.is_some() || req.agreed_id.is_some() {
             self.backend.admit_allocations(std::slice::from_ref(&req))?;
-            self.backend.admit_numeric_identity(&req)?;
+            if req.spec_id.is_some() {
+                // trace:TASK-B6B1278890774EF993D2EBC327862470-149 | ai:claude —
+                // one agreed-id index for the whole batch.
+                if self.agreed.is_none() {
+                    self.agreed = Some(self.backend.agreed_id_index()?);
+                }
+                let agreed = self.agreed.as_ref().expect("index built above");
+                self.backend
+                    .admit_numeric_identity(&req, agreed, &self.staged)?;
+            }
         }
         if req.spec_id.is_none() {
             // Reuse RequirementsStore::add_requirement_with_id by building a
@@ -4347,6 +4420,7 @@ mod tests {
     /// AC2: a number another spec holds as its AGREED id (under any padding)
     /// is taken, so a dispensed local ID never lands on it.
     // trace:BUG-B6B1278890774EF993D2EBC327862470-046 | ai:claude
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-046.ac5bd8aa | ai:claude
     #[test]
     fn bug_046_id_holder_considers_agreed_ids() {
         let dir = tempfile::tempdir().unwrap();
@@ -4376,6 +4450,7 @@ mod tests {
     /// id `TASK-35`; nothing is written. A same-literal re-add of an object
     /// whose agreed id is its own spec id still replaces that one file.
     // trace:BUG-B6B1278890774EF993D2EBC327862470-046 | ai:claude
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-046.ac5bd8aa | ai:claude
     #[test]
     fn bug_046_add_refuses_an_explicit_id_held_as_another_specs_agreed_id() {
         let dir = tempfile::tempdir().unwrap();
@@ -4414,6 +4489,50 @@ mod tests {
         reimport.spec_id = Some("TASK-36".into());
         reimport.agreed_id = Some("TASK-36".into());
         backend.add_requirement(reimport).unwrap();
+    }
+
+    /// Numeric admission inside ONE batch: the second row of a 2-row batch
+    /// whose id is the first row's number under another padding (or the
+    /// first row's agreed id) is refused, although neither is on disk yet.
+    /// The agreed-id index is built once and reused for the batch.
+    // trace:TASK-B6B1278890774EF993D2EBC327862470-149 | ai:claude
+    #[test]
+    fn bulk_add_refuses_a_row_colliding_with_an_earlier_row_of_the_batch() {
+        let dir = tempfile::tempdir().unwrap();
+        let backend = home_fixture_backend(&dir.path().join("aida-store")).unwrap();
+        backend.save(&RequirementsStore::new()).unwrap();
+        let mut holder = Requirement::new("agreed holder".into(), String::new());
+        holder.spec_id = Some("TASK-7-001".into());
+        holder.agreed_id = Some("TASK-0090".into());
+        object_store::write_object(&backend.objects_root, &holder).unwrap();
+
+        let mut writer = backend.bulk_writer().unwrap();
+        let mut first = Requirement::new("first".into(), String::new());
+        first.spec_id = Some("TASK-0077".into());
+        first.agreed_id = Some("TASK-0078".into());
+        writer.add(first.clone()).unwrap();
+        assert!(
+            writer.agreed.is_some(),
+            "the index is built on the first explicit id"
+        );
+
+        for (id, owner) in [
+            ("TASK-77", first.id),
+            ("TASK-078", first.id),
+            ("TASK-90", holder.id),
+        ] {
+            let mut second = Requirement::new("second".into(), String::new());
+            second.spec_id = Some(id.into());
+            let err = writer.add(second).unwrap_err();
+            let taken = err
+                .downcast_ref::<crate::id_identity::IdTakenError>()
+                .unwrap_or_else(|| panic!("{id}: {err:#}"));
+            assert_eq!(taken.owner, owner, "{id}");
+        }
+        let mut fine = Requirement::new("fine".into(), String::new());
+        fine.spec_id = Some("TASK-79".into());
+        writer.add(fine).unwrap();
+        assert_eq!(writer.finish("test batch").unwrap(), 2);
     }
 
     /// BUG-425: bulk_update commits all changed YAMLs in exactly ONE commit
