@@ -26,12 +26,12 @@ description: |
   - Resolution chain: BUG-ggg (agreed) and BUG-1-mmm (alias) both resolve to the spec whose local id is BUG-B6B...-nnn. trace: comments, commit trailers and blocked-by edges that name BUG-1-mmm keep working through the alias. Rewrite edges in the store to the new id; do not rewrite git history.
   - Node 1 is retired after the migration and never allocates again.
   - SKETCH QUESTION for the lane (advisor rules on the sketch): do the 5746 flat pre-node specs (agreed id only, no local id) also get b6b local ids under the "every spec has a local id" rule? Lay out the cost and benefit; the advisor's default is yes, done in the same one-time pass if the alias mechanism is identical.
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T04:47:42.412744068Z
-modified_at: 2026-10-31T16:26:10.625048068Z
+modified_at: 2026-10-31T16:27:46.713725587Z
 req_type: Story
 relationships:
 - rel_type: Child
@@ -45,6 +45,49 @@ comments:
   created_at: 2026-10-31T00:29:30.904508417Z
   modified_at: 2026-10-31T00:29:30.904508417Z
   session_id: 510d8c08-7912-4189-943d-65d110c7abc2
+- id: 01a192c9-b4a6-7d00-a6ac-fb6633229e43
+  author: joe
+  content: |-
+    ## Implementer approach + architecture sketch (awaiting advisor signoff; no code written)
+
+    ### Acceptance criteria as tests
+    - **AC1, command-level:** in a fixture store, run `aida node enroll-root` and then `aida add --type story`. The new object has `agreed_id` = the next number from this node's block and `spec_id` = the node-local id, both in one object write (one store commit). A second test covers `node show`: Root is enrolled and a block is held per auto-allocating type.
+    - **AC2, command-level:** a clone with no usable block (no upstream, or upstream without a delegated block). `aida add` writes a local id only and `aida show` renders "agreed id pending". A fixture then syncs to a block holder and `aida db merge-gate` sets agreed_id (TASK-HOME-274 path).
+    - **AC3, fixture plus a dry-run on a copy of the live store:** `aida doctor --fix agreed-ids` (or a sibling fix name). Run with `--dry-run`, it prints the mapping. With the fix applied, every local-only spec gets an agreed_id, and the old local id, trailers and trace: still resolve. For node-1 specs: new b6b local id, plus a BUG-1-mmm alias that resolves to it. Blocked-by and related edges in the store are rewritten. Git history is not rewritten.
+    - **AC4, unit + golden:** `aida show` header and `aida list` rows show `AGREED  (local)`.
+    - **AC5, unit:** `effective_policy` refuses when role=root but `registry/root.yaml` names a different holder. A command-level test shows a node holding a delegated block dispenses from it, instead of reaching the `downgrade_reason` "not enabled yet" branch.
+
+    ### Sketch
+    **Allocation flow.** `aida add` → `allocation_authority::effective_policy`. This now checks role=root against the `RootRecord`, so the AC5 refusal comes first. Then a block lookup: `BlockRegistry::find_active_block` (root: own pool; node: `LineageView::spendable_block` for a delegated block). `BlockRegistry::next` gives the agreed number, rendered through `IdWidths::render` / `id_identity::render_id` (046 seq_width). The local id still comes from the node-local dispenser. Both candidates go through `id_identity::allocate_id` + `admit_new_id` (the 046 mint-time collision guard, which skips numbers used under any padding). `BlockRegistry::with_dispense_lock` and the store write lock wrap the pair, so the agreed and local ids land in the same object write. If no block is usable, the agreed id is left empty and that empty value is the "pending" marker; no new field.
+
+    **046 functions reused:** `id_identity::{allocate_id, admit_new_id, IdKey, id_key, same_id, IdWidths::render, render_id}`, `GitBackend::{mint_spec_id, peek_spec_id, id_holder}`, and `doctor_renumber`'s mapping/dry-run scaffolding for the backfill.
+
+    **Backfill (one-time).** A doctor fix with the same dry-run → apply shape as `doctor --fix id-collisions`:
+    (a) Census of local-only specs: 269 b6b + 1 node-1 per the advisor census.
+    (b) Each gets an agreed id that continues its type's flat global sequence (`next_range_start_above_counter` from the current per-type max). It is claimed as a root block, so `blocks.yaml` stays the ledger.
+    (c) The 412 node-1 specs: new b6b local ids after this node's per-type max (`peek_spec_id` with a reserved set). The old `BUG-1-mmm` goes into the object's alias list. `node_alias` keeps node 1 as a retired identity, so `NodeAliasMap::expand` still resolves `BUG-1-…`. Store edges are rewritten.
+    (d) Node 1 is marked retired in `nodes.toml` so it never allocates again.
+    Every step is idempotent and re-runnable.
+
+    **Interaction with BUG-HOME-036's resolver.** 036 makes a bare `STORY-100` prefer this node's newer local twin over a legacy flat spec (`local_twin_candidates`, `local_twin_label`). After the backfill every b6b spec has an agreed id, so the bare form should resolve to the agreed id first. That reverses 036's twin preference whenever a backfilled agreed number differs from the local number (it always will: agreed ids continue the flat sequence at ~5746+). A bare `STORY-105` typed by habit would then hit the flat STORY-105, not this spec. This needs a ruling (Q1).
+
+    ### Expected files
+    - `aida-core/src/allocation_authority.rs` (effective_policy, downgrade_reason)
+    - `aida-core/src/allocation_lineage.rs`, `aida-core/src/node.rs` (dispense from delegated block)
+    - `aida-core/src/db/git_backend.rs` (add path: agreed + local in one write)
+    - `aida-core/src/node_alias.rs` (retired node 1, resolution order)
+    - new `aida-cli-lib/src/doctor_backfill_agreed.rs` + `doctor_cmd.rs` registration
+    - `aida-cli-lib/src/requirements_cli.rs` (show/list display)
+    - tests under `aida-cli/tests/story_105_*.rs`, plus the help golden
+
+    ### Ambiguities / conflicts as questions
+    - **Q1 (036 conflict):** after the backfill, should a bare `STORY-NNN` resolve agreed-first (AC4's "agreed ID first") or keep 036's local-twin preference? These conflict for every backfilled spec.
+    - **Q2 (advisor's sketch question):** should the 5746 flat specs also get b6b local ids? Cost: ~5746 object rewrites in one store commit, a much larger alias table, and every flat number gets a second name nobody types. Benefit: a uniform "every spec has a local id" invariant, with no special case in display or AC4 rendering. The alias mechanism is identical. My lean: **no**. A flat spec's agreed id IS its permanent id; render it alone. The invariant is cheaper as "every spec has a canonical id" than as 5746 synthetic local ids.
+    - **Q3:** enrolling the live home primary as root (`aida node enroll-root` in /home/joe/ai/aida) and running the backfill against the live store are operator actions on shared state. Should the implementer do them, or only ship the tooling plus a dry-run report for the operator to apply?
+  created_at: 2026-10-31T16:27:34.950389161Z
+  modified_at: 2026-10-31T16:27:34.950389161Z
+  session_id: 01a192c86747
+  harness_version: 2.1.316 (Claude Code)
 history:
 - id: 01a18b22-e0dc-7ea1-bf10-dfd59b7d6e9d
   author: joe
@@ -74,6 +117,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a192c9-e299-7541-9cc9-0042103b6d30
+  author: joe
+  timestamp: 2026-10-31T16:27:46.713756729Z
+  session_id: 01a192c86747
+  harness_version: 2.1.316 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: f0dfbd03d09c75355249c2f659e8ffd108e6875c
   branch: main
@@ -82,3 +134,9 @@ filed_at:
   aida_build_sha: f0dfbd03d09
   vendor: claude
   session: 32b60b73-45e6-45d8-a58a-ced0ef53c40e
+attention_reason:
+  category: design-fork
+  detail: 'The spec requires a sketch and advisor signoff before code (architecture-adjacent). The sketch is posted as a comment, and it leaves three forks open: Q1, after the backfill does a bare STORY-NNN resolve agreed-first (AC4), which reverses BUG-HOME-036''s local-twin preference for every backfilled spec? Q2, the advisor''s open question: should the 5746 flat specs also get b6b local ids? Q3, should the implementer enroll the live home primary as root and run the backfill on the live store, or ship tooling plus a dry-run report for the operator?'
+  lean: Q1 agreed-first with a one-line 'did you mean' hint when a local twin exists; Q2 no (a flat agreed id is already canonical, so render it alone); Q3 ship the tooling and a dry-run mapping, and the operator runs enroll-root plus the backfill apply
+  raised_by: implementer
+  raised_at: 2026-10-31T16:27:46.713725587Z
