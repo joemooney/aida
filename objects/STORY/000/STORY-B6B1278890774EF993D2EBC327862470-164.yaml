@@ -28,12 +28,12 @@ description: |
 
   ## Related
   STORY-HOME-095 (block delegation, done), STORY-HOME-105 (agreed IDs + backfill, PR-3170 in review), BUG-2017 (allocation authority).
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-31T19:23:04.998731220Z
-modified_at: 2026-10-31T20:19:34.649310557Z
+modified_at: 2026-10-31T20:49:31.277110839Z
 req_type: Story
 tags:
 - architecture
@@ -63,6 +63,14 @@ history:
   timestamp: 2026-10-31T20:18:22.256216839Z
   session_id: f5694f22-ff09-4e87-8934-e79adca4efba
   changes: []
+- id: 01a193b9-848d-7401-895d-08be4d34cc4a
+  author: joe
+  timestamp: 2026-10-31T20:49:31.277106052Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: 53817a25ee83981f919be3dbcee742234338ab9a
   branch: main
