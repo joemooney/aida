@@ -11842,7 +11842,7 @@ Options:
       --preserve <SPEC>
           With --fix id-collisions: leave this spec's own text (title, description, comments) as
           written when applying to the store, e.g. the spec recording the migration's old -> new
-          table. Repeatable. Defaults to the spec that owns the leading-zero migration, when present
+          table. Repeatable
 
       --contradictions
           Run a store-wide semantic contradiction sweep combining mechanical joins in Rust with Jev
@@ -40856,7 +40856,7 @@ Working on aida itself
       {
         "name": "preserve",
         "takes_value": true,
-        "help": "With --fix id-collisions: leave this spec's own text (title, description, comments) as written when applying to the store, e.g. the spec recording the migration's old -> new table. Repeatable. Defaults to the spec that owns the leading-zero migration, when present"
+        "help": "With --fix id-collisions: leave this spec's own text (title, description, comments) as written when applying to the store, e.g. the spec recording the migration's old -> new table. Repeatable"
       },
       {
         "name": "since",

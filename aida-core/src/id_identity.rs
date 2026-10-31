@@ -187,7 +187,7 @@ pub fn allocate_id(
 ///   `[ids]` keeps today's look and its displayed IDs match the filenames.
 ///
 /// Stored IDs and filenames are never re-padded. This replaced the legacy
-/// `id_config.digits` knob (metadata.yaml), which no longer drives minting.
+/// `id_config.digits` knob (metadata.yaml), since removed.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct IdWidths {
     pub seq_width: Option<usize>,
