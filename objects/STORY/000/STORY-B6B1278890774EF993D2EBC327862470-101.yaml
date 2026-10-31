@@ -21,7 +21,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T03:44:26.313784050Z
-modified_at: 2026-10-31T12:00:34.179648721Z
+modified_at: 2026-10-31T12:06:16.932750444Z
 req_type: Story
 relationships:
 - rel_type: Child
@@ -159,6 +159,29 @@ comments:
   content: 'Returned from NeedsAttention to In Progress via `aida edit --status`. It was punted on: design-fork: Architecture sketch posted as a spec comment per the advisor brief (sketch only, no code). It needs advisor signoff and answers to 7 open questions before implementation: opt-in vs default-on, relay-run vs token reuse for the handle, relaunch on non-zero exit, lease liveness during the gap, codex slice, generation-1 injection, and slicing.. No triage reason was given.'
   created_at: 2026-10-31T11:23:40.772025778Z
   modified_at: 2026-10-31T11:23:40.772025778Z
+  session_id: 9b4a9d0a-69b7-4ebd-9bee-314b36573de5
+- id: 01a191da-7a64-78b3-bf34-22a1aea22810
+  author: joe
+  content: |-
+    ADVISOR RULING 2026-10-31 05:08: PR-3163 round 1 is CHANGES REQUESTED. Rework ONE round, with every item in one push (2026-10-28 rule: minors are bundled now, not filed as follow-ups).
+
+    MAJOR
+    1. Handoff identity: the SessionStart hook must inject the exact file the supervisor matched (pass it via AIDA_ROTATION_HANDOFF, path plus its stamp), never the seat's shared latest.md. If that file is missing or its stamp no longer matches, inject nothing and say why in one line. Test: write a second seat handoff between generations; generation N+1 gets the matched one.
+    2. The command-level sh-child fixture tests from the 04:00 signoff:
+       (a) lease, claim and worktree are unchanged across a relaunch, and the lease stays live during the gap (the supervisor holds active_pid);
+       (b) the 3-in-10-minutes relaunch limit stops a real run;
+       (c) SIGINT during the 5s countdown stops the run with exit 130 AND releases the lease (also fixes minor 2);
+       (d) mail sent during the gap reaches generation N+1 exactly once (no double ack);
+       (e) the relaunched session actually sends its hello.
+
+    MINOR (fix all)
+    3. With `rotate = true` from agents.toml, a non-TTY (script/pipe) launch must not rotate unless --rotate is passed explicitly, as the sketch said.
+    4. Hellos from successive generations continue ONE advisor thread per handle.
+    5. Unconfirmed, so confirm each and either fix it or show a test that disproves it: (i) --rotate is silently dropped when the launch becomes a resume. It must either rotate or refuse with a clear message. (ii) A launch without --role gets no handoff because the hook and the supervisor resolve the seat differently. Use ONE seat resolver for both.
+
+    Gate: LIGHT plus the new fixture binaries above, and make check-ci-compile if >10 files. No force push. Keep the full canonical ID trailer.
+  created_at: 2026-10-31T12:06:16.932750444Z
+  modified_at: 2026-10-31T12:06:16.932750444Z
   session_id: 9b4a9d0a-69b7-4ebd-9bee-314b36573de5
 history:
 - id: 01a18ae8-d622-72c1-a3a5-8d4fa60beadd
