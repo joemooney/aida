@@ -16,7 +16,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T12:09:24.781126891Z
-modified_at: 2026-10-31T18:21:07.816458164Z
+modified_at: 2026-10-31T18:22:31.534668952Z
 req_type: Story
 relationships:
 - rel_type:
@@ -70,6 +70,12 @@ comments:
   modified_at: 2026-10-31T18:08:41.307811757Z
   session_id: 01a193046a6d
   harness_version: 2.1.316 (Claude Code)
+- id: 01a19332-f06e-7401-9e33-9ade5966fce6
+  author: joe
+  content: 'ADVISOR RULING 2026-10-31 11:25: PR-3172 round 1 is CHANGES REQUESTED; it is functionally sound and the behaviour tests exist. ONE round, everything in one push: (1) trace every test to its criterion ID so ''aida criteria STORY-HOME-155'' reports none untested; (2) add a test for the authority-raising resume refusal: a paused or expired deputy cannot resume jobs under a grant it no longer holds; (3) the AC5 slice-3 delegation stub must refuse ANY delegation/tty policy field it does not implement (an allow-list of known fields, fail closed), not one exact field name. Test it with an unknown field. Acceptance item 0 (the operator''s live smoke) is NOT a merge gate. Gate: STRICT targeted deputy tests plus make check-ci-fast. No force push.'
+  created_at: 2026-10-31T18:22:31.534668952Z
+  modified_at: 2026-10-31T18:22:31.534668952Z
+  session_id: 9b4a9d0a-69b7-4ebd-9bee-314b36573de5
 history:
 - id: 01a191dd-b7e7-70b3-8177-0ebe5af4e0f9
   author: joe
