@@ -47,12 +47,12 @@ description: |
   - Every privileged act is logged with the job id, the submitting seat and the outcome, and the job's output is still captured (via tee or a pty transcript), not redirected away from the TTY.
   - The submitter gets each job's result back (exit code plus a log path), replacing the /tmp/aida_runme*.sh plus log-tail convention.
   - Jobs that wait on a prompt time out with a clear "needs the operator" notice instead of hanging the queue.
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T01:00:24.723376064Z
-modified_at: 2026-10-31T09:59:59.811974640Z
+modified_at: 2026-10-31T10:02:32.066650371Z
 req_type: Story
 relationships:
 - rel_type: Child
@@ -66,6 +66,82 @@ comments:
   created_at: 2026-10-31T09:58:37.659510432Z
   modified_at: 2026-10-31T09:58:37.659510432Z
   session_id: 510d8c08-7912-4189-943d-65d110c7abc2
+- id: 01a19169-05a3-78d3-a524-4809633667fd
+  author: joe
+  content: |-
+    ## Architecture sketch: `aida deputy` (slice 1). Sketch only, no code.
+
+    Written by the implementer seat, following the advisor brief of 2026-10-31 03:00. Every file reference below was checked against the tree at 361910ec4a0.
+
+    ### 0. The central risk: the TTY is the authority
+    The human-only floor is just `has_integrity_floor_authority()` → `authority_stdin_is_terminal()` (`gate/role_authority.rs:124`, `gate/kernel_deps.rs:70`): it checks that stdin is a terminal and nothing else. `hold_authority_from` also treats `is_tty` as authority. The advisor note asks the deputy to run jobs "on the operator's real TTY (or a pty it owns)" so that `merge-hold clear` and a supervised `pr ship` work. Done naively, **any process that can drop a job gets the human-presence floor**. That would quietly turn the floor's meaning from "a human is here" into "a human started a loop some time today." So the design rests on one rule:
+
+    > **A job gets a terminal only if its exact command was authorized at the operator's TTY. Every other job runs with stdin=/dev/null and no controlling terminal**, so every TTY-gated check refuses it exactly as it refuses an agent today.
+
+    That means the "allowlist" in AC6 can't wait for slice 3. A small form of it has to be in slice 1 (see §4).
+
+    ### 1. Start path (operator, human TTY)
+    - `aida deputy [--name N] [--workers K=2] [--keep-after-mandate]` is a shell-function verb, like `role enter`. The `aida()` wrapper (capability list in `AIDA_SHELL_WRAPPER`, `shell_eval.rs`) runs `aida deputy run` in the foreground, in the operator's shell, so the worker inherits that shell's env, including `AIDA_SESSION_GRANT` and the keyring-held grant secret (`grant_keyring.rs`). That's how jobs inherit the grant (keyrings pass across fork/exec).
+    - Refusals, all before anything is touched: no TTY on stdin/stdout/stderr; `AIDA_AGENT_TYPE` set or `AIDA_HEADLESS=1` (same predicate as `user_alias::is_interactive_human_caller`); the wrapper capability is absent (a bare-binary run fails with "start it from your shell: `aida deputy`"); no valid seat grant held by this process (`seat_authority` presenter validation).
+    - A banner shows the name, the grant seat/principal, when the grant expires, the mandate, the number of workers, and the policy file in effect.
+    - The TTY check is never weakened. Tests use the existing `test_ambient` seam.
+
+    ### 2. Submission and the spool (no /tmp)
+    - `aida deputy submit [--name N] [--serial CLASS] [--wait] [--timeout D] [--spec ID] (-- <argv…> | -f file)` is the non-TTY side. It never requests or receives human attestation.
+    - Spool: `<root>/deputy/<name>/{incoming,running,done,failed}/` plus `deputy.ledger`. The deputy creates it 0700 and checks that the operator owns it at every scan. **Where `<root>` lives is open question Q1.** `~/.aida/deputy/` (the spec's choice) is outside this sandbox's write allowlist, so a bubblewrap-sandboxed agent cannot submit there. The project's `.aida/mailbox` *is* writable, which suggests a `deputy/` sibling of the mailbox root (`mailbox_root.rs`), owner-checked the same way.
+    - A job is written to `incoming/.<id>.tmp`, 0600, with `create_new`, then renamed to `incoming/<id>.job`. The id is a UUIDv7, so ids sort by time. Two submits can't collide, and an existing job can't be overwritten (AC3).
+    - Job record (JSON): id, created_at, the requester's session id, agent handle, seat, grant id (when presented), spec, serial class, timeout, argv **or** the script body, and sha256(body).
+    - Agents use only `submit` (AC1). Nothing documents writing the spool directly, and the deputy refuses anything that isn't a well-formed record that passes the checks below.
+
+    ### 3. Claim, validation, and execution
+    - Scan loop: inotify where available, with a 1 s poll as fallback. For each `<id>.job`: `lstat` it and refuse if it is not a regular file, if the uid ≠ the deputy's uid, if the mode has group/other write bits, if the link count is > 1, or if it fails to parse. A refused job moves to `failed/` with reason `refused:<why>` and gets a ledger row (AC2). Accepted jobs are claimed by `rename(incoming/<id>.job → running/<id>.job)`. Rename is atomic, so with K workers, or several deputies sharing a name, each job runs exactly once.
+    - Concurrency: K worker threads, default 2. `--serial CLASS` jobs (e.g. `ship`) take a per-class lock (a `flock` on `running/.serial-<class>.lock`), so serial-ship stays one at a time while other jobs run in parallel. Named deputies (`--name ship`) each get their own spool and ledger. `submit` without `--name` targets the default deputy.
+    - Each job runs as a **child `bash` process** (`bash --noprofile --norc -c` or `bash file`), never sourced, so a stray `exit` ends only that job (AC3). The child starts its own process group, so a timeout or cancel kills the whole group. The environment is the deputy's, plus `AIDA_DEPUTY_JOB=<id>` and `AIDA_DEPUTY_REQUESTER=<session>`, so every privileged act a job performs can name the job in its own audit trail.
+    - Terminal policy (§0): a job on the TTY allowlist runs in a **pty the deputy owns** (`openpty`), and the deputy tees everything into `<id>.out`. stdin is a terminal and output is still captured, which fixes the case where `>> log 2>&1` caused a refusal. Every other job gets stdin=/dev/null and stdout/stderr written to `<id>.out`.
+    - Prompt hang: a pty job that produces no output for N seconds (default 120) while blocked reading the pty is ended with `rc=125` and the result `needs-operator: waiting on a prompt` (it is not left to hang). A hard per-job timeout (default 30 min, settable with `--timeout`) ends a job with `rc=124 timeout`.
+    - Results go to `done/<id>.{job,out,rc.json}` (or `failed/`). `rc.json` holds rc, start/end times, the reason, whether the job ran with a tty, and the output path. A result is written atomically (tmp + rename) *before* the ledger row, and the ledger row is written before the job file leaves `running/`.
+
+    ### 4. Authority: what the deputy holds and what it refuses
+    - **It holds** exactly the operator's current seat grant, inherited from the shell, and the right to give one job a terminal when the policy permits that job. It never mints, renews, or widens a grant itself.
+    - **Renewal and expiry:** before each claim it re-validates the grant (`seat_authority` read + presenter check). Grants last at most 24 h (`MAX_GRANT_AGE`). Within 30 min of expiry the banner and the ledger warn. Once the grant has expired or been revoked, the deputy **stops claiming**: running jobs finish, queued jobs wait, and the banner says "renew: `aida role enter <seat>` in this shell, then `aida deputy`". Only a human at the TTY can renew. The loop also exits when the mandate expires (`mandate.rs` `expires_at`) unless started with `--keep-after-mandate` (mandate tie-in in slice 2, as filed).
+    - **Slice-1 TTY policy (needed now because of §0):** a `deputy.policy` file in the spool (0600, operator-owned), edited only through `aida deputy allow|deny …`, and those commands require the same human TTY as the start path. Each entry is an exact argv prefix such as `aida merge-hold clear 3120` or `aida pr ship 3120`. Entries default to single-use and/or a TTL. Only an argv-form job whose argv matches an entry gets a pty. Script-form jobs **never** get a pty.
+    - **It must refuse**, for every job: argv containing `--force`, `--no-verify`, `--admin`, or any bypass flag, in TTY mode (the full deny list arrives in slice 3); a job that would leave an unresolved gate standing, since the deputy itself runs no gate logic and waives nothing (it either hands the command a terminal or doesn't, and the command's own gate decides); and any job it can't validate (§3).
+    - **Not in slice 1:** a general command allowlist for non-TTY jobs. A non-TTY job has no more authority than the submitter's own `aida` call except the grant it inherits. This is open question Q2.
+
+    ### 5. Requester identity
+    - `submit` runs inside the requester's process tree, so it can validate *its own* grant with the existing presenter check (keyring possession, BUG-1934) and record `grant_id`, `subject`, `seat`, and `session_id` as **verified-at-submit**. The deputy re-reads the grant record and checks that it exists, hasn't been revoked, and that its subject matches.
+    - Limitation, stated plainly: a same-uid process that skips the CLI and hand-writes a job file can claim any identity it likes. The 0600/0700 owner checks stop *other* users, but nothing stops another process running as the same user. Slice 1 records identity as audit data, not as authority. Authority comes from the operator-authored policy (§4). Slice 3's "submitter holds a delegated grant from this operator" would close the gap: for example, the deputy issues a submit capability bound to a key, or listens on a unix socket and checks `SO_PEERCRED`. This is open question Q3.
+
+    ### 6. Audit and result return
+    - `deputy.ledger` is append-only JSONL, written with `O_APPEND` and one `write` per row, the same discipline as `gate/dispatch_ledger.rs`. Row: ts, job id, event (`submitted|claimed|refused|started|finished|cancelled|timeout`), requester session/handle/seat/spec, deputy name, worker index, tty yes/no, policy entry matched, sha256(body), rc, output path (AC5).
+    - `aida deputy status|log|cancel <id>` and `aida deputy list [--state …]`. `log` prints `<id>.out` (with `--follow`). `submit --wait` polls `done/` and `failed/` in bounded steps (it does not block forever, which matters under the headless rule) and exits with the job's rc after printing the output path. `aida runloop` is a hidden alias (AC4; the AC4 text "runloop log" is served by the alias).
+    - Slice 2 (as filed): a mailbox notice to the requester when a job finishes (`mailbox_store.rs`); failed jobs shown in `aida awaiting` (`status_awaiting.rs`); `pause|resume` (a `paused` marker file the claim loop honours).
+
+    ### 7. Reboot / crash
+    - The spool is on disk, so it survives a reboot. The worker doesn't: the deputy is a foreground process in a terminal and must be started again by a human at the TTY (deliberately so; no systemd unit, since that would have no human TTY).
+    - On start, the deputy writes `running/.lease-<worker>` = `<pid>@<starttime>` (the same token shape as grant binding). Any `running/<id>.job` whose lease process is gone is moved to `failed/` with reason `orphaned: deputy died mid-run`. It is **not re-run**, because jobs may not be idempotent (`pr ship`). The requester can resubmit. Queued `incoming/` jobs simply wait.
+    - Single instance per name: an exclusive `flock` on `<spool>/.deputy.lock`. A second `aida deputy --name N` refuses with the holder's pid.
+
+    ### 8. Module layout (for the implementation PR)
+    `deputy_cmd.rs` + `deputy_cmd_args.rs` (registered via `command_registry::REGISTRY`, not the legacy enum), `deputy/spool.rs` (paths, owner checks, atomic write/claim), `deputy/worker.rs` (claim loop, process groups, pty, timeouts), `deputy/policy.rs`, `deputy/ledger.rs`. Wrapper capability + function verb in the shell-init template (`aida-core/templates/`, then `make sync-templates`). Help golden regenerated.
+
+    ### 9. Test plan
+    - **Unit:** spool owner/mode/nlink/symlink refusal table (AC2); atomic submit (concurrent `create_new` + rename, 100 parallel submits → 100 distinct jobs, AC3); claim exactly-once with two workers racing; policy matching (exact prefix, single-use consumption, TTL, script-form never a tty, `--force` refused); ledger row shape and append atomicity; grant-expiry → stop claiming; orphan recovery → failed, not rerun.
+    - **Command-level:** `aida deputy` refuses with no TTY, with `AIDA_AGENT_TYPE`, with `AIDA_HEADLESS=1`, and when run as a bare binary without the wrapper capability (via `test_ambient`); `submit` works with no TTY; `submit --wait` returns the job's rc and output path (AC4); `status|log|cancel|list`.
+    - **Fixture (real processes, temp `$AIDA_HOME`):** a job running `exit 3` → rc 3, and the loop keeps running and takes the next job (AC3); a long `--serial ship` job doesn't block a quick job on the second worker; a timeout kills the whole process group; a job blocked on a prompt in the pty → `needs-operator` within the idle window; **the integrity probe: a policy-matched job sees `stdin.is_terminal()==true` and an unmatched job sees `false`, so `has_integrity_floor_authority()` refuses it** (the §0 property, as a regression test); output captured from a pty job.
+    - **No automated test:** the live operator flow (real merge-hold clear from the operator's terminal) is a manual smoke step for the STRICT review.
+
+    ### Open questions for the advisor
+    - **Q1 (spool location):** `~/.aida/deputy/` (as specified) can't be written by sandboxed agents in this harness (bubblewrap's write allowlist covers the project `.aida/mailbox`, not `~/.aida`). Options: (a) a per-project `<main-root>/.aida/deputy/<name>/` next to the mailbox; (b) keep `~/.aida` and add it to the agent sandbox allowlist; (c) relay submits through the mailbox. Lean: (a).
+    - **Q2 (TTY policy in slice 1):** do you accept that the minimal TTY allowlist (`aida deputy allow`, exact argv, single-use/TTL, edited only at the human TTY) moves forward from slice 3 into slice 1? Without it, the advisor-note requirement (jobs on the real TTY) gives the human floor to every same-uid process. Lean: yes. The alternative is that slice 1 ships with *no* TTY jobs and merge-hold clear waits for slice 3.
+    - **Q3 (submitter authentication):** is "identity is audit data, not authority" acceptable for slice 1, given that a same-uid process can forge the requester fields? Or should slice 1 already use a unix socket + `SO_PEERCRED` with a deputy-issued submit capability? Lean: accept for slice 1; the policy is the boundary.
+    - **Q4 (orphans):** should an orphaned running job be marked failed and never rerun? Lean: yes, because `pr ship` isn't idempotent.
+    - **Q5 (wide authority):** should the deputy *ever* run script-form (arbitrary bash) jobs, even without a TTY? They inherit the operator's seat grant, which is more than the submitter has. Options: allow them (today's runme behaviour), or restrict them to argv-form `aida …` commands in slice 1. Lean: argv-form `aida` commands only by default, with `--allow-scripts` as an explicit start flag the operator chooses.
+    - **Q6 (integrity floor itself):** should `has_integrity_floor_authority()` also refuse when `AIDA_DEPUTY_JOB` is set and the job's policy entry wasn't consumed, as defence in depth? That would mean editing a gate module (`// mandate-gate`), so it needs its own signoff.
+  created_at: 2026-10-31T10:02:21.475723909Z
+  modified_at: 2026-10-31T10:02:21.475723909Z
+  session_id: 01a19166d7eb
+  harness_version: 2.1.316 (Claude Code)
 history:
 - id: 01a18a52-9d72-7b62-969e-89638e367cb5
   author: joe
@@ -103,6 +179,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a19169-2f02-79c3-8193-3cf2b120329b
+  author: joe
+  timestamp: 2026-10-31T10:02:32.066679522Z
+  session_id: 01a19166d7eb
+  harness_version: 2.1.316 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 1db74dba1129632c01b5bae9ee5681dd76069db1
   branch: main
@@ -111,3 +196,9 @@ filed_at:
   aida_build_sha: 1db74dba112
   vendor: claude
   session: 1fccff89-db7b-4173-8b69-6417ae15d5ea
+attention_reason:
+  category: design-fork
+  detail: 'Sketch-only brief done: the architecture sketch is posted as a spec comment, with no code written. Needs advisor signoff on the open questions before slice 1 starts. Q1: spool location (~/.aida can''t be written by sandboxed agents). Q2: move a minimal operator-authored TTY allowlist into slice 1. Running jobs on the operator''s TTY would otherwise hand the stdin-is-terminal integrity floor to any same-uid process. Q3: submitter identity is audit data, not authority. Q4: orphaned jobs fail and are never rerun. Q5: argv-only jobs by default. Q6: a defence-in-depth gate edit.'
+  lean: Q1 per-project .aida/deputy next to the mailbox; Q2 yes; Q3 accept for slice 1; Q4 yes; Q5 argv-only aida commands unless the operator starts with --allow-scripts; Q6 file separately
+  raised_by: implementer
+  raised_at: 2026-10-31T10:02:32.066650371Z
