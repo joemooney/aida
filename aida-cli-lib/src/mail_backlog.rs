@@ -136,7 +136,7 @@ impl Backlog {
     }
 }
 
-fn format_age(age: Duration) -> String {
+pub(crate) fn format_age(age: Duration) -> String {
     let mins = age.num_minutes();
     if mins < 120 {
         format!("{mins}m")
@@ -153,7 +153,7 @@ fn is_codex_armed(e: &AgentRegistryEntry) -> bool {
     e.agent_type == "codex" && e.mail_wake == Some(MailWake::Armed)
 }
 
-fn handle(e: &AgentRegistryEntry) -> String {
+pub(crate) fn handle(e: &AgentRegistryEntry) -> String {
     e.name.clone().unwrap_or_else(|| e.id.clone())
 }
 

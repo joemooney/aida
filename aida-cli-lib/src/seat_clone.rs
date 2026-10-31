@@ -1294,6 +1294,12 @@ pub(crate) fn probe_until(
         Err(why) => return Probe::Unknown(why),
     };
     let mut facts = parse_status_v2(&status);
+    // The sandbox's empty `.gitmodules` placeholder holds no work, so it
+    // does not make a clean clone read as dirty.
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-047 | ai:claude
+    if is_empty_gitmodules_placeholder(clone) {
+        facts.dirty.retain(|line| line != "? .gitmodules");
+    }
     let base = pinned_base(main, clone).unwrap_or_default();
     // BUG-2224: a seat clone inherits refs (tags, `wip/*` branches) whose
     // commits the main checkout already holds; removing the clone loses none
@@ -1483,6 +1489,15 @@ pub(crate) fn parse_status_v2(out: &str) -> ProbeFacts {
     facts
 }
 
+/// Whether `clone/.gitmodules` is a 0-byte regular file (not a symlink): the
+/// placeholder the Claude Code sandbox creates for a protected path. Only
+/// file metadata is read; nothing in the clone is opened or run.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-047 | ai:claude
+fn is_empty_gitmodules_placeholder(clone: &Path) -> bool {
+    std::fs::symlink_metadata(clone.join(".gitmodules"))
+        .is_ok_and(|meta| meta.file_type().is_file() && meta.len() == 0)
+}
+
 /// Inside the probe sandbox: set `s` to every stash entry's commit (the
 /// reflog of `refs/stash`, not only its tip). Shared by the scripts below.
 // trace:TASK-2053 | ai:claude
@@ -1495,13 +1510,26 @@ macro_rules! stash_entries_sh {
 
 /// Inside the probe sandbox: what shows the clone has, or had, a submodule,
 /// on stdout (nothing when there is none): a `.gitmodules` in the worktree
-/// or at HEAD, a gitlink in the index or in HEAD's tree, or anything under
-/// `.git/modules` (a deinit'd or removed submodule keeps its commits there).
-/// Submodule work is outside what the salvage captures, so the clone is
-/// kept whatever the submodules hold; nothing here enters a submodule.
-// trace:TASK-2053 | ai:claude
+/// that defines a submodule (or is tracked, not a regular file, or cannot be
+/// parsed), one at HEAD, a gitlink in the index or in HEAD's tree, or
+/// anything under `.git/modules` (a deinit'd or removed submodule keeps its
+/// commits there). An empty, untracked `.gitmodules` is not evidence: the
+/// Claude Code sandbox creates one as a placeholder for a protected path
+/// (see [`is_empty_gitmodules_placeholder`]). Submodule work is outside what
+/// the salvage captures, so the clone is kept whatever the submodules hold;
+/// nothing here enters a submodule.
+// trace:TASK-2053 trace:BUG-B6B1278890774EF993D2EBC327862470-047 | ai:claude
 const SUBMODULE_EVIDENCE_SCRIPT: &str = r##"set -u
-if [ -e .gitmodules ] || [ -L .gitmodules ]; then echo '.gitmodules in the worktree'; exit 0; fi
+if [ -L .gitmodules ] || { [ -e .gitmodules ] && [ ! -f .gitmodules ]; }; then echo '.gitmodules in the worktree is not a regular file'; exit 0; fi
+g=$(git ls-files -s -- .gitmodules) || exit 1
+if [ -n "$g" ]; then echo '.gitmodules in the index'; exit 0; fi
+if [ -s .gitmodules ]; then
+  if [ ! -r .gitmodules ]; then echo '.gitmodules in the worktree cannot be read'; exit 0; fi
+  rc=0
+  git config --file .gitmodules --name-only --get-regexp '^submodule\.' >/dev/null 2>&1 || rc=$?
+  if [ "$rc" -eq 0 ]; then echo '.gitmodules in the worktree defines a submodule'; exit 0; fi
+  if [ "$rc" -ne 1 ]; then echo '.gitmodules in the worktree cannot be read'; exit 0; fi
+fi
 if git rev-parse -q --verify HEAD^{commit} >/dev/null; then
   if git cat-file -e HEAD:.gitmodules 2>/dev/null; then echo '.gitmodules at HEAD'; exit 0; fi
   t=$(git ls-tree -r --full-tree HEAD) || exit 1
@@ -2242,3 +2270,8 @@ mod seat_clone_mailbox_tests;
 #[cfg(test)]
 #[path = "tests/bug_home_038_seat_publish_tests.rs"]
 mod seat_publish_tests;
+
+// trace:STORY-B6B1278890774EF993D2EBC327862470-100 | ai:claude
+#[cfg(test)]
+#[path = "tests/story_b6b_100_seat_clone_handshake_tests.rs"]
+mod seat_clone_handshake_tests;

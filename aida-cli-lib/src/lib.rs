@@ -208,6 +208,8 @@ mod relay_stall;
 mod codex_mail_health;
 // trace:STORY-HOME-128 | ai:claude
 mod mail_backlog;
+// trace:STORY-B6B1278890774EF993D2EBC327862470-100 | ai:claude
+mod advisor_handshake;
 mod remote_cmd;
 mod requirements_cli;
 mod review_cmd;
