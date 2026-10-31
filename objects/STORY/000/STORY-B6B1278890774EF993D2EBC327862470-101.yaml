@@ -21,7 +21,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T03:44:26.313784050Z
-modified_at: 2026-10-31T12:06:16.932750444Z
+modified_at: 2026-10-31T13:29:15.888342680Z
 req_type: Story
 relationships:
 - rel_type: Child
@@ -183,6 +183,13 @@ comments:
   created_at: 2026-10-31T12:06:16.932750444Z
   modified_at: 2026-10-31T12:06:16.932750444Z
   session_id: 9b4a9d0a-69b7-4ebd-9bee-314b36573de5
+- id: 01a19226-7370-7050-a696-17e3eba4f428
+  author: joe
+  content: 'PR-3163 round 2 rework pushed as 5f17bedbd61; it addresses all 7 findings. (1) The hook loads the exact matched file via --show --rotated, using AIDA_ROTATION_HANDOFF plus its stamp; a missing or mismatched file loads nothing and prints one line. (2) New command-level sh-child fixtures cover: lease/claim/worktree continuity with the lease Live in the gap, the 3-in-10min limit, SIGINT during the countdown (Cancelled, lease released, exit 130), gap mail reaching gen 2 exactly once, gen 2 sending its hello, and a sibling handoff between generations. (3) The config default applies on a TTY only. (4) Hello thread is aida-hello-<handle>. (5) Ctrl-C releases the lease. (6) --rotate with --resume is refused. (7) One seat resolver through AIDA_ROTATION_SEAT. Gates: check-ci-fast (36 pass), check-ci-compile pass, tests/test_session_role_grant.sh pass, and the targeted story_101/agent_rotation/handshake tests pass. The fixtures launch without --role because a role launch mints a child seat grant from a parent grant the test process lacks; role-to-seat mapping is covered by a unit test. Two unrelated tests fail in this sandbox only: agent_ls_and_doctor_report_an_overdue_hello (read-only HOME) and review_record_pr_handshake_honors_explicit_verdict_file (verdict anchor).'
+  created_at: 2026-10-31T13:29:15.888342680Z
+  modified_at: 2026-10-31T13:29:15.888342680Z
+  session_id: 01a191e974b2
+  harness_version: 2.1.316 (Claude Code)
 history:
 - id: 01a18ae8-d622-72c1-a3a5-8d4fa60beadd
   author: joe
