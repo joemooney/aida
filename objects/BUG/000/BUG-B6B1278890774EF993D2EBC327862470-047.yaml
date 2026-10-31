@@ -8,17 +8,26 @@ description: |-
   1. Salvage/dismiss treats a clone as having submodules only if the index has gitlink entries or .gitmodules defines at least one submodule; an empty or untracked .gitmodules does not block salvage.
   2. A regression test: a clean, pushed seat with a 0-byte read-only untracked .gitmodules is dismissed and its lease released.
   3. A real submodule is still refused as today (existing test kept).
-status: Approved
+status: InProgress
 priority: Medium
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T05:21:31.863608220Z
-modified_at: 2026-10-31T05:21:31.863608220Z
+modified_at: 2026-10-31T07:02:35.318103440Z
 req_type: Bug
 tags:
 - salvage
 - sandbox
 - worktree
+history:
+- id: 01a190c4-7036-7190-9a4d-00159ae21355
+  author: aida-session-start
+  timestamp: 2026-10-31T07:02:35.318101420Z
+  session_id: 510d8c08-7912-4189-943d-65d110c7abc2
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: f4aac4402f3fcce7f2221ab70da55147954d3286
   branch: main
