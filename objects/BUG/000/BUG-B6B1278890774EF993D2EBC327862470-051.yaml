@@ -14,13 +14,37 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T14:13:18.865775624Z
-modified_at: 2026-10-31T15:22:10.412622668Z
+modified_at: 2026-10-31T15:24:39.414863962Z
 req_type: Bug
 relationships:
 - rel_type: Parent
   target_id: 01a18a3d-3b12-7160-8075-2f8afaee0c8b
   created_at: 2026-10-31T14:13:46.412001032Z
   created_by: joe
+comments:
+- id: 01a19290-1876-73d1-8483-b29086927404
+  author: joe
+  content: |-
+    ## Implementer approach
+
+    ### Acceptance criteria as tests
+    - **Unit:** `describe_status_entry` / refusal-rendering tests prove each porcelain-v2 entry is named by path (untracked, modified, renamed, unmerged) and that a positive unpushed count with no attributable ref still yields a named line, so a refusal list is never empty; session end already proceeds on an empty finding set (gate keyed on `!entries.is_empty()`).
+    - **Command-level (bwrap, CI):** seat commits on its branch, the commit is pushed to origin by URL (no tracking ref in clone or main), origin then gains a further commit on the branch; `session_end` without `--force` ends cleanly. Fix: host fetches origin's copy of the lease branch into main (`refs/remotes/origin/<branch>`, bounded, no prompts) before probing, so the existing main-reachable-tips excusal counts an ancestor of origin's branch as pushed.
+    - **Command-level (bwrap, CI):** the same test plants a `.aida-store` symlink, `.aida/cache.db`, `.aida/agents/x` and `target/x` and still ends cleanly (probe drops these runtime entries).
+    - **Command-level (bwrap, CI):** an untracked `scratch.txt` refuses and the message names `scratch.txt`.
+    - Note: bwrap cannot run in this sandbox, so the bwrap tests are verified only in CI (`AIDA_REQUIRE_BWRAP_LIVE=1`).
+
+    ### Expected files
+    - `aida-cli-lib/src/seat_clone.rs`
+    - `aida-cli-lib/src/session_end.rs`
+    - `aida-cli-lib/src/tests/task_2053_seat_clone_lifecycle_tests.rs` (or a new bug_051 test file)
+
+    ### Ambiguities / conflicts as questions
+    - The exact empty-list path could not be reproduced from current code (the gate only refuses on a non-empty entry list); the fix hardens every rendering path so no refusal or kept-clone reason is ever item-less.
+  created_at: 2026-10-31T15:24:39.414863962Z
+  modified_at: 2026-10-31T15:24:39.414863962Z
+  session_id: 01a1928dce68
+  harness_version: 2.1.316 (Claude Code)
 history:
 - id: 01a1924f-0616-7132-b7b1-cc960a88c794
   author: joe
