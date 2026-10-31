@@ -267,12 +267,14 @@ pub(crate) fn handle_session_command(cmd: &SessionCommand) -> Result<()> {
             write,
             show,
             seat,
+            final_,
+            rotated,
             standing_orders,
         } => {
             if let Some(args) = standing_orders {
                 session_handoff_standing_orders(args, seat.as_deref())
             } else if write.is_some() || *show {
-                session_handoff_seat(write.as_deref(), *show, seat.as_deref())
+                session_handoff_seat(write.as_deref(), *show, seat.as_deref(), *final_, *rotated)
             } else {
                 session_handoff_check(*check)
             }
@@ -946,6 +948,7 @@ pub(crate) fn agent_new_command_for_type(token: &str) -> Option<AgentNewCommand>
             name: None,
             description: None,
             bg: false,
+            rotate: false,
         }),
         "codex" => Some(AgentNewCommand::Codex {
             role: None,
@@ -1086,6 +1089,7 @@ pub(crate) fn dispatch_agent_new(cmd: &AgentNewCommand) -> Result<()> {
             name,
             bg,
             description,
+            rotate,
         } => agent_new_claude(
             role.clone(),
             spec.clone(),
@@ -1108,7 +1112,8 @@ pub(crate) fn dispatch_agent_new(cmd: &AgentNewCommand) -> Result<()> {
                 *allow_duplicate,
                 !*no_duplicate_check,
             ),
-            AgentDefaultFlagOptions::new(!*no_default_flags, extra_flags.clone(), model.clone()),
+            AgentDefaultFlagOptions::new(!*no_default_flags, extra_flags.clone(), model.clone())
+                .rotating(*rotate),
             name.clone(),
             description.clone(),
             *bg,
@@ -1591,6 +1596,9 @@ pub(crate) struct AgentDefaultFlagOptions {
     pub(crate) use_config_defaults: bool,
     pub(crate) extra_flags: Vec<String>,
     pub(crate) model_override: Option<String>,
+    /// `--rotate`: supervise the child across context rotations.
+    // trace:STORY-B6B1278890774EF993D2EBC327862470-101 | ai:claude
+    pub(crate) rotate: bool,
 }
 
 impl AgentDefaultFlagOptions {
@@ -1603,7 +1611,15 @@ impl AgentDefaultFlagOptions {
             use_config_defaults,
             extra_flags,
             model_override,
+            rotate: false,
         }
+    }
+
+    /// Set `--rotate`.
+    // trace:STORY-B6B1278890774EF993D2EBC327862470-101 | ai:claude
+    pub(crate) fn rotating(mut self, rotate: bool) -> Self {
+        self.rotate = rotate;
+        self
     }
 }
 
@@ -2675,7 +2691,7 @@ pub(crate) fn agent_new_with_config_wake(
     show_prompt: bool,
     verbose: bool,
     prompt: AgentPromptOptions,
-    resume: AgentResumeOptions,
+    mut resume: AgentResumeOptions,
     flag_options: AgentDefaultFlagOptions,
     name: Option<String>,
     description: Option<String>,
@@ -2697,6 +2713,33 @@ pub(crate) fn agent_new_with_config_wake(
             config.agent_type
         )
     })?;
+    // Rotation is claude-only in this slice: `--rotate`, else
+    // `[agents.claude] rotate = true` on a terminal launch (a scripted or
+    // piped launch never rotates unless it passed `--rotate`).
+    // trace:STORY-B6B1278890774EF993D2EBC327862470-101 | ai:claude
+    let explicit_rotate = flag_options.rotate;
+    let config_rotate = flag_options.use_config_defaults
+        && config.agent_type == "claude"
+        && load_agents_tool_bool(&project_root, config.agent_type, "rotate")?.unwrap_or(false);
+    let mut rotate = crate::agent_rotation::rotation_enabled(
+        config.agent_type,
+        explicit_rotate,
+        config_rotate,
+        std::io::stdin().is_terminal(),
+    );
+    // A resume is not supervised: an explicit `--rotate` refuses it; the
+    // config default says it is off for this session.
+    if rotate && resume.direct_target.is_some() {
+        crate::agent_rotation::refuse_rotating_resume(explicit_rotate)
+            .map_err(anyhow::Error::msg)?;
+        eprintln!("  rotation: off for a resumed session");
+        rotate = false;
+    }
+    // A supervised launch starts a new session, so the resume picker never
+    // turns it into an unsupervised resume.
+    if rotate {
+        resume.prompt_enabled = false;
+    }
     apply_agent_default_flags(
         &mut config,
         &project_root,
@@ -2957,6 +3000,7 @@ pub(crate) fn agent_new_with_config_wake(
         title,
         verbose,
         launch_wake.state,
+        rotate,
         || {
             handle_guard.disarm();
             if let Some(receipt) = setup_receipt.as_mut() {
@@ -6079,6 +6123,7 @@ pub(crate) fn run_tracked_agent(
         title,
         verbose,
         None,
+        false,
         || {},
     )
 }
@@ -6096,8 +6141,267 @@ fn run_tracked_agent_after_spawn(
     title: bool,
     verbose: bool,
     mail_wake: Option<agent_registry::MailWake>,
+    rotate: bool,
     on_spawn: impl FnOnce(),
 ) -> Result<()> {
+    // trace:STORY-B6B1278890774EF993D2EBC327862470-101 | ai:claude
+    let status = if rotate {
+        let mut no_probe = |_: u64| {};
+        let supervision = crate::agent_rotation::Supervision {
+            policy: crate::agent_rotation::RotationPolicy::default(),
+            on_gap: &mut no_probe,
+        };
+        match run_rotating_agent(
+            binary,
+            config,
+            plan,
+            launch_context,
+            prompt_args,
+            description,
+            title,
+            verbose,
+            mail_wake,
+            supervision,
+            on_spawn,
+        )? {
+            crate::agent_rotation::RotationOutcome::Exited(status) => status,
+            crate::agent_rotation::RotationOutcome::Cancelled => std::process::exit(130),
+        }
+    } else {
+        run_agent_generation(
+            binary,
+            config,
+            plan,
+            launch_context,
+            prompt_args,
+            description,
+            title,
+            verbose,
+            mail_wake,
+            None,
+            on_spawn,
+        )?
+    };
+    if !status.success() {
+        std::process::exit(status.code().unwrap_or(1));
+    }
+    Ok(())
+}
+
+/// The rotation generation a supervised child runs as, and the fresh
+/// handoff it loads at SessionStart (generation 2 on).
+// trace:STORY-B6B1278890774EF993D2EBC327862470-101 | ai:claude
+#[derive(Debug, Clone, Copy)]
+struct RotationEnv<'a> {
+    generation: u64,
+    seat: &'a str,
+    /// The handoff file the supervisor matched, and its log stamp.
+    handoff: Option<(&'a std::path::Path, &'a str)>,
+    previous_session: Option<&'a str>,
+}
+
+/// The prompt a relaunched generation starts with: its handoff is already
+/// in context from SessionStart.
+// trace:STORY-B6B1278890774EF993D2EBC327862470-101 | ai:claude
+fn relaunch_prompt_args(config: &AgentLaunchConfig, seat: &str) -> Vec<String> {
+    let prompt = format!(
+        "You were relaunched after a context rotation under the same handle, lease and \
+         worktree. Your seat handoff was loaded at session start (re-read it with \
+         `aida session handoff --seat {seat} --show --rotated`). Continue from it."
+    );
+    match config.prompt_style {
+        AgentPromptStyle::Positional => vec![prompt],
+        AgentPromptStyle::Flag(flag) => vec![flag.to_string(), prompt],
+    }
+}
+
+/// Replace the seeded `--session-id` in `args` with `native_session_id`.
+// trace:STORY-B6B1278890774EF993D2EBC327862470-101 | ai:claude
+pub(crate) fn reseed_session_args(
+    agent_type: &str,
+    args: &mut Vec<String>,
+    native_session_id: Option<&str>,
+) {
+    if let Some(at) = args.iter().position(|a| a == "--session-id") {
+        let end = (at + 2).min(args.len());
+        args.drain(at..end);
+    }
+    args.extend(agent_seed_session_args(agent_type, native_session_id));
+}
+
+/// `aida agent new --rotate`: run generations of the child until one exits
+/// without a fresh handoff. The handle is held by a relay run bound before
+/// the first spawn, and the lease names this launcher as its live process,
+/// so neither lapses in the gap between generations.
+// trace:STORY-B6B1278890774EF993D2EBC327862470-101 | ai:claude
+#[allow(clippy::too_many_arguments)]
+fn run_rotating_agent(
+    binary: &std::path::Path,
+    config: &AgentLaunchConfig,
+    plan: &AgentLaunchPlan,
+    launch_context: Option<&AgentLaunchContext>,
+    prompt_args: &[String],
+    description: Option<String>,
+    title: bool,
+    verbose: bool,
+    mail_wake: Option<agent_registry::MailWake>,
+    supervision: crate::agent_rotation::Supervision<'_>,
+    on_spawn: impl FnOnce(),
+) -> Result<crate::agent_rotation::RotationOutcome> {
+    use crate::agent_rotation::{self, RotationDecision, RotationOutcome};
+    use crate::relay_mail::TerminalReason;
+    let agent_rotation::Supervision { policy, on_gap } = supervision;
+    // ONE seat for the supervisor, the child's handoff commands and its
+    // SessionStart hook: the child gets it as AIDA_ROTATION_SEAT.
+    let seat = agent_rotation::supervisor_seat(plan.role.as_deref(), config.agent_type);
+    let mut run = agent_rotation::RotationRun::bind(&plan.project_root, &plan.name)?;
+    if let Some(lease_id) = &plan.lease_id {
+        if let Err(e) =
+            session::stamp_lease_active_pid_at(&plan.project_root, lease_id, std::process::id())
+        {
+            eprintln!(
+                "  {} lease {lease_id} may read as stale between generations: {e:#}",
+                "warning:".yellow().bold()
+            );
+        }
+    }
+    eprintln!(
+        "  {}: on (exit after `aida session handoff --write` relaunches {})",
+        "rotation".bold(),
+        plan.name.cyan()
+    );
+    let mut config = config.clone();
+    let mut plan = plan.clone();
+    let mut on_spawn = Some(on_spawn);
+    let mut relaunches = Vec::new();
+    let mut handoff: Option<(std::path::PathBuf, String)> = None;
+    let mut previous_session: Option<String> = None;
+    let mut generation = 1u64;
+    let relaunch_prompt = relaunch_prompt_args(&config, &seat);
+    loop {
+        if let Err(e) = run.bind_child(plan.native_session_id.as_deref()) {
+            if generation == 1 {
+                return Err(e);
+            }
+            eprintln!(
+                "{} not relaunching {}: {e:#}",
+                "stopped:".yellow().bold(),
+                plan.name
+            );
+            run.end(TerminalReason::Blocked);
+            return Ok(RotationOutcome::Exited(std::process::ExitStatus::default()));
+        }
+        let spawned_at = chrono::Utc::now();
+        let first_spawn = on_spawn.take();
+        let status = run_agent_generation(
+            binary,
+            &config,
+            &plan,
+            launch_context.filter(|_| generation == 1),
+            if generation == 1 {
+                prompt_args
+            } else {
+                &relaunch_prompt
+            },
+            description.clone(),
+            title,
+            verbose,
+            mail_wake,
+            Some(RotationEnv {
+                generation,
+                seat: &seat,
+                handoff: handoff
+                    .as_ref()
+                    .map(|(path, stamp)| (path.as_path(), stamp.as_str())),
+                previous_session: previous_session.as_deref(),
+            }),
+            move || {
+                if let Some(f) = first_spawn {
+                    f();
+                }
+            },
+        )?;
+        let exited_at = chrono::Utc::now();
+        let records = agent_rotation::read_handoff_log(&plan.project_root, &seat);
+        let decision = agent_rotation::rotation_decision(
+            &agent_rotation::GenerationRun {
+                seat: &seat,
+                handle: &plan.name,
+                native_session_id: plan.native_session_id.as_deref(),
+                spawned_at,
+            },
+            exited_at,
+            &records,
+            &relaunches,
+            &policy,
+        );
+        let RotationDecision::Relaunch {
+            handoff: next,
+            stamp,
+        } = &decision
+        else {
+            eprintln!(
+                "{}",
+                agent_rotation::stop_message(&plan.name, generation, &decision)
+            );
+            run.end(TerminalReason::Exit);
+            return Ok(RotationOutcome::Exited(status));
+        };
+        let stop = agent_rotation::StopFlag::install()?;
+        let proceed = agent_rotation::countdown(
+            &plan.name,
+            generation + 1,
+            policy.countdown_secs,
+            &stop.flag,
+            &mut || std::thread::sleep(std::time::Duration::from_secs(1)),
+            &mut std::io::stderr(),
+        );
+        drop(stop);
+        if !proceed {
+            // Sketch §6: an operator stop ends the relay run and releases
+            // the lease, which would otherwise name this (exiting) launcher
+            // as its live process.
+            eprintln!(
+                "stopped: rotation of {} cancelled by the operator",
+                plan.name
+            );
+            run.end(TerminalReason::Stop);
+            if let Some(lease_id) = &plan.lease_id {
+                crate::session_reap::release_lease_files(&plan.project_root, lease_id);
+                eprintln!("  released lease {lease_id}");
+            }
+            return Ok(RotationOutcome::Cancelled);
+        }
+        relaunches.push(exited_at);
+        generation += 1;
+        on_gap(generation);
+        handoff = Some((plan.project_root.join(next), stamp.to_rfc3339()));
+        previous_session = plan.native_session_id.take();
+        plan.native_session_id = agent_native_session_id_for_new(config.agent_type);
+        reseed_session_args(
+            config.agent_type,
+            &mut config.default_args,
+            plan.native_session_id.as_deref(),
+        );
+    }
+}
+
+/// Spawn one child, wait for it, and clean up its registry row.
+// trace:BUG-2188 | ai:codex
+#[allow(clippy::too_many_arguments)]
+fn run_agent_generation(
+    binary: &std::path::Path,
+    config: &AgentLaunchConfig,
+    plan: &AgentLaunchPlan,
+    launch_context: Option<&AgentLaunchContext>,
+    prompt_args: &[String],
+    description: Option<String>,
+    title: bool,
+    verbose: bool,
+    mail_wake: Option<agent_registry::MailWake>,
+    rotation: Option<RotationEnv<'_>>,
+    on_spawn: impl FnOnce(),
+) -> Result<std::process::ExitStatus> {
     // TASK-864: route the INTERACTIVE foreground launch through the same os_wrap
     // (bwrap) boundary the headless paths use. When `[contained] os_wrap` is on
     // (or the TASK-876 `AIDA_OS_WRAP` per-host override is set) and the agent is
@@ -6139,6 +6443,29 @@ fn run_tracked_agent_after_spawn(
         command.env("AIDA_SESSION_SCOPE", spec);
     }
     apply_agent_lease_identity(&mut command, plan.lease_id.as_deref());
+    // trace:STORY-B6B1278890774EF993D2EBC327862470-101 | ai:claude
+    command
+        .env_remove(crate::agent_rotation::GENERATION_ENV)
+        .env_remove(crate::agent_rotation::HANDOFF_ENV)
+        .env_remove(crate::agent_rotation::PREVIOUS_SESSION_ENV)
+        .env_remove(crate::agent_rotation::HANDOFF_STAMP_ENV)
+        .env_remove(crate::agent_rotation::SEAT_ENV);
+    if let Some(rotation) = rotation {
+        command
+            .env(
+                crate::agent_rotation::GENERATION_ENV,
+                rotation.generation.to_string(),
+            )
+            .env(crate::agent_rotation::SEAT_ENV, rotation.seat);
+        if let Some((path, stamp)) = rotation.handoff {
+            command
+                .env(crate::agent_rotation::HANDOFF_ENV, path)
+                .env(crate::agent_rotation::HANDOFF_STAMP_ENV, stamp);
+        }
+        if let Some(sid) = rotation.previous_session {
+            command.env(crate::agent_rotation::PREVIOUS_SESSION_ENV, sid);
+        }
+    }
     if let Some(ctx) = launch_context {
         command
             .env("AIDA_AGENT_CONTEXT_FILE", &ctx.path)
@@ -6320,10 +6647,7 @@ fn run_tracked_agent_after_spawn(
             }
         }
     }
-    if !status.success() {
-        std::process::exit(status.code().unwrap_or(1));
-    }
-    Ok(())
+    Ok(status)
 }
 
 /// Register a spawned child, wait for it, then print any deferred warnings.
@@ -6393,6 +6717,11 @@ mod bug_2002_launch_lease_tests;
 #[cfg(test)]
 #[path = "tests/bug_030_launch_registry_lock_tests.rs"]
 mod bug_030_launch_registry_lock_tests;
+
+// trace:STORY-B6B1278890774EF993D2EBC327862470-101 | ai:claude
+#[cfg(test)]
+#[path = "tests/story_101_rotation_launch_tests.rs"]
+mod story_101_rotation_launch_tests;
 
 /// Inspect or resume past Claude Code sessions in this project,
 /// enriched with the AIDA role + most-recent spec for each session

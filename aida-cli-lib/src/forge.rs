@@ -1523,8 +1523,12 @@ pub fn forge_for_open_change(project_root: &Path) -> Box<dyn Forge> {
 /// ids the change's branch and title name. These are the same recovery
 /// surfaces SPEC-410 squash subjects are derived from, so the gate sees the
 /// spec-keyed verdict artifact even when the PR-keyed one was never written.
+///
+/// BUG-HOME-048: the ids pass the change's trailer coverage, so the
+/// chokepoint never weighs a verdict under a foreign bare id.
 // trace:BUG-1774 | ai:claude
-fn corpus_gate_spec_hints(c: &ChangeRef) -> Vec<String> {
+// trace:BUG-B6B1278890774EF993D2EBC327862470-048 | ai:claude
+fn corpus_gate_spec_hints(project_root: &Path, c: &ChangeRef) -> Vec<String> {
     let mut ids = crate::pr_ship::extract_spec_ids_from_text(&c.branch);
     if let Some(title) = c.title.as_deref() {
         for id in crate::pr_ship::extract_spec_ids_from_text(title) {
@@ -1533,7 +1537,7 @@ fn corpus_gate_spec_hints(c: &ChangeRef) -> Vec<String> {
             }
         }
     }
-    ids
+    crate::gate::trailer_coverage::covered_gate_ids(project_root, &c.branch, Some(c.id), ids)
 }
 
 /// BUG-1774: the live head a provider's merge gate judges the corpus at when
@@ -2131,7 +2135,7 @@ impl Forge for GitHubForge {
         crate::gate::merge_hold_core::enforce_corpus_gate_before_merge(
             &self.project_root,
             c.id,
-            &corpus_gate_spec_hints(c),
+            &corpus_gate_spec_hints(&self.project_root, c),
             // TASK-1968: a clean-merge carry-over is proven against the PR's
             // base. trace:TASK-1968 | ai:claude
             Some(c.base.as_str()),
@@ -2727,7 +2731,7 @@ impl Forge for GitLabForge {
         crate::gate::merge_hold_core::enforce_corpus_gate_before_merge(
             &self.project_root,
             c.id,
-            &corpus_gate_spec_hints(c),
+            &corpus_gate_spec_hints(&self.project_root, c),
             // TASK-1968: a clean-merge carry-over is proven against the PR's
             // base. trace:TASK-1968 | ai:claude
             Some(c.base.as_str()),
@@ -3110,7 +3114,7 @@ impl Forge for PureGitForge {
         crate::gate::merge_hold_core::enforce_corpus_gate_before_merge(
             &self.project_root,
             c.id,
-            &corpus_gate_spec_hints(c),
+            &corpus_gate_spec_hints(&self.project_root, c),
             // TASK-1968: the branch merges into `base`; there is no forge to
             // read it from. trace:TASK-1968 | ai:claude
             Some(base.as_str()),

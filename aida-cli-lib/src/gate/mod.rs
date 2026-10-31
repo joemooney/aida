@@ -42,3 +42,5 @@ pub(crate) mod role_authority;
 pub(crate) mod seat_authority;
 pub(crate) mod ship;
 pub(crate) mod solo_review;
+// BUG-HOME-048: completion trailers complete only the specs a PR covers.
+pub(crate) mod trailer_coverage;
