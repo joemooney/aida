@@ -11480,6 +11480,7 @@ mod tests {
             spec: None,
             path: root.clone(),
             session_started: None,
+            rotation: None,
         };
         let hello = hello_message(&id, &ctx, "advisor", &mailbox, now);
         crate::mailbox_store::write_message(&root, &hello).unwrap();
@@ -11498,6 +11499,7 @@ mod tests {
                 acked_at: None,
                 acked_by: None,
                 ack_reported: false,
+                rotation: None,
             },
         )
         .unwrap();
