@@ -1,9 +1,9 @@
-<!-- trace:TASK-0423 -->
+<!-- trace:TASK-b6b1278890774ef993d2ebc327862470-258 -->
 
 # Codex sandbox posture: native-first, no AIDA outer wrapper by default
 
 Date: 2026-06-25
-Specs: TASK-0423 (child of EPIC-0419, Claude-to-Codex migration readiness)
+Specs: TASK-b6b1278890774ef993d2ebc327862470-258 (child of EPIC-0419, Claude-to-Codex migration readiness)
 Status: Design -- for operator review (DESIGN-ONLY; no production code in this change)
 Complexity: Low for the recommendation (a launch-path decision + doctor wiring);
 the alternative wrapper is Medium-High
@@ -49,7 +49,7 @@ From `aida-cli/src/session.rs`:
   headless `claude -p` drain paths. The interactive `aida agent new` path is not
   wrapped (TASK-864). Codex, Antigravity: not wrapped at all.
 
-So the launch-path coverage table (TASK-0423 acceptance item 2) is:
+So the launch-path coverage table (TASK-b6b1278890774ef993d2ebc327862470-258 acceptance item 2) is:
 
 | Launch path | Outer AIDA sandbox today |
 |---|---|
@@ -194,7 +194,7 @@ uniform boundary; otherwise Codex-native is stronger and the default."
 - **Docs:** a `docs/agents/codex-sandbox.md` companion to
   `claude-bubblewrap-sandbox.md`, plus a cross-link in `per-agent-config.md`
   documenting the read/write/egress posture and the verification self-test
-  (TASK-0423 acceptance item 5).
+  (TASK-b6b1278890774ef993d2ebc327862470-258 acceptance item 5).
 - **No change** to the existing Claude `os_wrap` path -- this is additive.
 
 ## 9. Open questions for the operator

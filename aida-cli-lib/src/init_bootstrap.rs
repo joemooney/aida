@@ -608,7 +608,7 @@ mod store_leg_tests {
 }
 
 /// How the final `cd` into the new project reaches the calling shell.
-// trace:BUG-0445 | ai:claude
+// trace:BUG-b6b1278890774ef993d2ebc327862470-149 | ai:claude
 #[derive(Debug, PartialEq, Eq)]
 pub(crate) enum EnterDirChannel {
     /// The wrapper handed us a private file: write the marked block there and
@@ -625,7 +625,7 @@ pub(crate) enum EnterDirChannel {
 /// one, because that wrapper left stdout attached to the terminal and will
 /// NOT be looking for markers there; the stdout block is only for a wrapper
 /// that advertises `init-cd` and therefore still captures.
-// trace:BUG-0445 | ai:claude
+// trace:BUG-b6b1278890774ef993d2ebc327862470-149 | ai:claude
 pub(crate) fn enter_dir_channel(
     side_channel: Option<&std::ffi::OsStr>,
     wrapper: Option<&str>,
@@ -645,7 +645,7 @@ pub(crate) fn enter_dir_channel(
 /// for a wrapper that still captures stdout, or a plain copy-paste hint. A
 /// wrapper that speaks only the legacy verbs never sees markers from init, so
 /// nothing is ever printed as comment noise.
-// trace:BUG-0445 | ai:claude
+// trace:BUG-b6b1278890774ef993d2ebc327862470-149 | ai:claude
 fn emit_enter_dir(plan_dir: &Path) {
     let abs = std::env::current_dir().unwrap_or_else(|_| plan_dir.to_path_buf());
     let wrapper = std::env::var("AIDA_SHELL_WRAPPER").ok();

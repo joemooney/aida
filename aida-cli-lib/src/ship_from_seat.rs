@@ -417,7 +417,9 @@ where
 /// the wrong one.
 // trace:BUG-HOME-038 | ai:claude
 pub(crate) fn explicit_spec_check(explicit: &str, trailer_ids: &[String]) -> Result<()> {
-    let canonical = |id: &str| aida_core::node_alias::expand_or_keep(id).to_ascii_uppercase();
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-046 | ai:claude — numeric identity.
+    let canonical =
+        |id: &str| aida_core::id_identity::id_key(&aida_core::node_alias::expand_or_keep(id));
     let want = canonical(explicit);
     if trailer_ids.iter().any(|id| canonical(id) == want) {
         return Ok(());

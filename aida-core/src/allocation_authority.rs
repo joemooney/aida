@@ -441,29 +441,37 @@ fn admit_with_binding(
     // trace:BUG-2017 | ai:codex — reserve the complete candidate namespace
     // before any row can be persisted. Spec and agreed IDs share ownership;
     // aliases of the same UUID are valid, including canonical case variants.
-    let mut owners = std::collections::HashMap::new();
-    for req in incoming {
-        for id in [req.spec_id.as_deref(), req.agreed_id.as_deref()]
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-046 | ai:claude — ownership
+    // is keyed by NUMERIC identity (TASK-0042 == TASK-42). A (key, UUID)
+    // pair already on disk is not a new claim, so a pre-existing collision
+    // (repaired by `aida doctor --fix id-collisions`) never blocks unrelated
+    // saves; only a claim this write introduces is checked.
+    fn ids(req: &crate::Requirement) -> impl Iterator<Item = String> + '_ {
+        [req.spec_id.as_deref(), req.agreed_id.as_deref()]
             .into_iter()
             .flatten()
-        {
-            let canonical = crate::object_store::canonical_spec_id(id);
-            if owners
-                .insert(canonical, req.id)
-                .is_some_and(|owner| owner != req.id)
-            {
-                bail!("display ID already belongs to another UUID; nothing was written")
-            }
+            .filter(|s| !s.trim().is_empty())
+            .map(crate::id_identity::id_key)
+    }
+    let held: std::collections::HashSet<(String, uuid::Uuid)> = existing
+        .iter()
+        .flat_map(|r| ids(r).map(move |k| (k, r.id)))
+        .collect();
+    let mut holders: std::collections::HashMap<String, std::collections::HashSet<uuid::Uuid>> =
+        std::collections::HashMap::new();
+    for req in existing.iter().chain(incoming) {
+        for key in ids(req) {
+            holders.entry(key).or_default().insert(req.id);
         }
     }
-    for req in existing {
-        for id in [req.spec_id.as_deref(), req.agreed_id.as_deref()]
-            .into_iter()
-            .flatten()
-        {
-            if owners
-                .get(&crate::object_store::canonical_spec_id(id))
-                .is_some_and(|owner| *owner != req.id)
+    for req in incoming {
+        for key in ids(req) {
+            if held.contains(&(key.clone(), req.id)) {
+                continue;
+            }
+            if holders
+                .get(&key)
+                .is_some_and(|owners| owners.iter().any(|o| *o != req.id))
             {
                 bail!("display ID already belongs to another UUID; nothing was written")
             }
@@ -731,7 +739,9 @@ impl crate::dispenser::Dispenser for CloneDispenser {
         }
         // The clone decides the namespace; a custom provider cannot turn an
         // admitted local sequence into a bare global display ID.
-        Ok(format!("{prefix}-{binding}-{seq:03}"))
+        // trace:BUG-B6B1278890774EF993D2EBC327862470-046 | ai:claude — `[ids] node_seq_width`.
+        let width = crate::id_identity::installed_widths().node_mint_width();
+        Ok(format!("{prefix}-{binding}-{seq:0width$}"))
     }
     fn next_id(&self, prefix: &str) -> Result<String> {
         self.format_id(prefix, 1)?;
@@ -961,7 +971,13 @@ mod tests {
         let imported = backend.add_requirement(imported).unwrap();
         let mut next = Requirement::new("new local".into(), "fixture".into());
         next.req_type = crate::RequirementType::Bug;
-        assert!(backend.add_requirement(next.clone()).is_err());
+        // trace:BUG-B6B1278890774EF993D2EBC327862470-046 | ai:claude — the
+        // shared mint seam skips the taken number (it used to refuse the add
+        // and leave the retry to the caller); the import is never overwritten.
+        assert_eq!(
+            backend.add_requirement(next).unwrap().spec_id.as_deref(),
+            Some("BUG-7-002")
+        );
         assert_eq!(
             backend
                 .get_requirement_by_spec_id("BUG-7-001")
@@ -969,10 +985,6 @@ mod tests {
                 .unwrap()
                 .id,
             imported.id
-        );
-        assert_eq!(
-            backend.add_requirement(next).unwrap().spec_id.as_deref(),
-            Some("BUG-7-002")
         );
     }
     #[test]

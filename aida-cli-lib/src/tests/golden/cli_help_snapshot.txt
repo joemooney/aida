@@ -11819,6 +11819,30 @@ Options:
           Show node-local spec IDs in their canonical form instead of the node's friendly label (for
           scripts). Also settable via AIDA_CANONICAL_IDS=1
 
+      --fix <CATEGORY>
+          Repair one category of store damage that needs a data migration. `id-collisions`: spec IDs
+          that differ only by leading zeros are the same ID, so each collision keeps one spec on the
+          number and gives the others a fresh ID, rewriting their mentions in the store, docs and
+          code comments. Needs --dry-run (preview) or --yes (apply)
+          
+          [possible values: id-collisions]
+
+      --dry-run
+          With --fix: show the plan and write nothing to the store
+
+      --mapping <FILE>
+          With --fix id-collisions: the old -> new mapping file. With --dry-run a missing file is
+          created from the plan; otherwise the file's mapping is applied exactly as written
+
+      --tree-only
+          With --fix id-collisions --mapping: rewrite only this checkout's tracked files (docs,
+          changelog, code comments), not the store
+
+      --preserve <SPEC>
+          With --fix id-collisions: leave this spec's own text (title, description, comments) as
+          written when applying to the store, e.g. the spec recording the migration's old -> new
+          table. Repeatable. Defaults to the spec that owns the leading-zero migration, when present
+
       --contradictions
           Run a store-wide semantic contradiction sweep combining mechanical joins in Rust with Jev
           System One semantic choice queries
@@ -18435,7 +18459,8 @@ Commands:
   show         Show current ID configuration
   format       Set the ID format (single-level or two-level)
   numbering    Set the numbering strategy
-  digits       Set the number of digits in IDs
+  digits       Set how many digits new spec ID numbers are padded to (writes `[ids] seq_width` in
+               .aida/config.toml; displayed IDs use it too)
   migrate      Migrate existing SPEC-XXX IDs to new format
   user         Show or update user-level preferences at `~/.aida/preferences.toml`. Currently
                stores: preferred node id (used as default by `aida init`) and a fallback email (used
@@ -18762,13 +18787,14 @@ Options:
   -h, --help
           Print help (see a summary with '-h')
 ===== aida config digits
-Set the number of digits in IDs
+Set how many digits new spec ID numbers are padded to (writes `[ids] seq_width` in
+.aida/config.toml; displayed IDs use it too)
 
 Usage: aida config digits [OPTIONS] <DIGITS>
 
 Arguments:
   <DIGITS>
-          Number of digits (1-6)
+          Number of digits (0-6; 0 = no padding)
 
 Options:
       --format <FORMAT>
@@ -20850,6 +20876,11 @@ Options:
           Friendly name for this node, recorded alongside the node id in the shared roster (`aida
           team`). Defaults to `<host>-<user>-<seq>` (e.g. `imac-joe-1`). At a TTY with no flag you
           are prompted with the default pre-filled; non-interactive init uses the default silently
+
+      --id-width <N>
+          Zero-pad the number in new spec IDs to N digits (TASK-0001 with 4), for legacy and
+          node-local IDs alike. IDs that differ only by leading zeros are the same ID, so changing
+          this later renames nothing. Written to `[ids]` in .aida/config.toml
 
   -h, --help
           Print help (see a summary with '-h')
@@ -40416,6 +40447,16 @@ Working on aida itself
         "help": "Zero-based offset into the deterministically ordered contradiction findings. Ignored with --all"
       },
       {
+        "name": "dry-run",
+        "takes_value": false,
+        "help": "With --fix: show the plan and write nothing to the store"
+      },
+      {
+        "name": "fix",
+        "takes_value": true,
+        "help": "Repair one category of store damage that needs a data migration. `id-collisions`: spec IDs that differ only by leading zeros are the same ID, so each collision keeps one spec on the number and gives the others a fresh ID, rewriting their mentions in the store, docs and code comments. Needs --dry-run (preview) or --yes (apply)"
+      },
+      {
         "name": "fix-sandbox",
         "takes_value": false,
         "help": "Print the guided, copy-pasteable steps to bring the OS sandbox (bubblewrap write-confinement) up on this host: detect the current state, the exact sysctl to persist if the kernel blocks unprivileged user namespaces, how to opt in, and the verify command. Prints the sequence — sudo steps are clearly marked \"run this yourself\"; it never silently runs sudo. Runs the non-sudo availability re-probe as a smoke check"
@@ -40446,9 +40487,24 @@ Working on aida itself
         "help": "Emit machine-readable JSON"
       },
       {
+        "name": "mapping",
+        "takes_value": true,
+        "help": "With --fix id-collisions: the old -> new mapping file. With --dry-run a missing file is created from the plan; otherwise the file's mapping is applied exactly as written"
+      },
+      {
+        "name": "preserve",
+        "takes_value": true,
+        "help": "With --fix id-collisions: leave this spec's own text (title, description, comments) as written when applying to the store, e.g. the spec recording the migration's old -> new table. Repeatable. Defaults to the spec that owns the leading-zero migration, when present"
+      },
+      {
         "name": "since",
         "takes_value": true,
         "help": "Exempt specs completed before this point from the completed-without-commit integrity check: a relative duration (`30d`, `2w`, `24 hours ago`), an ISO date (local midnight), a zone-less ISO datetime (local time), RFC3339, or else a git ref/tag whose commit date is the cutoff. An invalid value is an error. Quiets noise on legacy history predating trace conventions. Falls back to the AIDA_DOCTOR_COMPLETED_SINCE env var"
+      },
+      {
+        "name": "tree-only",
+        "takes_value": false,
+        "help": "With --fix id-collisions --mapping: rewrite only this checkout's tracked files (docs, changelog, code comments), not the store"
       },
       {
         "name": "yes",
@@ -47531,7 +47587,7 @@ Working on aida itself
       "config",
       "digits"
     ],
-    "about": "Set the number of digits in IDs",
+    "about": "Set how many digits new spec ID numbers are padded to (writes `[ids] seq_width` in .aida/config.toml; displayed IDs use it too)",
     "flags": [
       {
         "name": "canonical-ids",
@@ -49666,6 +49722,11 @@ Working on aida itself
         "name": "help",
         "takes_value": false,
         "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "id-width",
+        "takes_value": true,
+        "help": "Zero-pad the number in new spec IDs to N digits (TASK-0001 with 4), for legacy and node-local IDs alike. IDs that differ only by leading zeros are the same ID, so changing this later renames nothing. Written to `[ids]` in .aida/config.toml"
       },
       {
         "name": "lang",

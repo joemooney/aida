@@ -944,7 +944,7 @@ that divergence is the point of a dated record.
 | Type A/B/C calibration | `.claude/skills/aida-advise/SKILL.md`, STORY-347 |
 | Fork-from-live | `aida-cli/src/advisor.rs::plan_fork`, `aida advisor register/status/unregister`, STORY-360, `docs/archive/spikes/2026-05-20-spike-11-session-forking.md` |
 | File-based comms | `.aida/` (gitignored), TASK-329, `docs/architecture/mcp-coordination-surface.md` |
-| Multi-advisor coordination | `docs/multi-advisor-coordination.md`, `docs/plans/2026-07-19-subsystem-advisor-routing.md`, SPIKE-10, STORY-362, STORY-364, TASK-0434, TASK-0435, TASK-0436, TASK-0437 |
+| Multi-advisor coordination | `docs/multi-advisor-coordination.md`, `docs/plans/2026-07-19-subsystem-advisor-routing.md`, SPIKE-10, STORY-362, STORY-364, TASK-0434, TASK-b6b1278890774ef993d2ebc327862470-268, TASK-0436, TASK-b6b1278890774ef993d2ebc327862470-270 |
 | Advisor autopilot envelope | `aida-cli-lib/src/autopilot.rs`, `aida autopilot inspect/audit/challenge`, EPIC-0428, TASK-0429, TASK-1007, TASK-1020, TASK-1147 |
 | Autopilot's one wired executor | `aida-cli-lib/src/zen_drive.rs::run_draft_gate` (`aida zen <draft>`), TASK-1037 |
 | Reconcile-against-reality | `aida-cli/src/auto_complete.rs`, BUG-241 |
@@ -964,7 +964,7 @@ keystone/security work, and autonomy machinery escalate to the master advisor or
 human gate. This keeps subsystem focus a context reducer rather than a second
 architecture authority.
 
-<!-- trace:TASK-0437 | ai:codex -->
+<!-- trace:TASK-b6b1278890774ef993d2ebc327862470-270 | ai:codex -->
 
 ---
 

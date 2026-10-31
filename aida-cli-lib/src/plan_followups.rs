@@ -282,11 +282,11 @@ pub(crate) fn find_plan_files_for_spec(
 /// Parse the `## Followups` section of a plan: collect the column-0
 /// `- `/`* ` bullets until the next `##` header. Leading marker and a
 /// trailing period are stripped; placeholder/empty bullets are dropped.
-/// TASK-431: is this `## Followups` bullet a "no followups" sentinel
+/// TASK-b6b1278890774ef993d2ebc327862470-265: is this `## Followups` bullet a "no followups" sentinel
 /// (`None`, `N/A`, `NA`, `Nothing`, `(none)`, optionally followed by an
 /// em-dash / colon / spaced-dash explanation) rather than a real followup?
 /// Conservative — only when the sentinel is the WHOLE leading clause, so a
-/// genuine bullet like "None of these handlers do X" is kept. trace:TASK-431
+/// genuine bullet like "None of these handlers do X" is kept. trace:TASK-b6b1278890774ef993d2ebc327862470-265
 pub(crate) fn followup_is_sentinel(text: &str) -> bool {
     let lower = text.trim().to_ascii_lowercase();
     let unparen = lower.trim_start_matches('(').trim_end_matches(')').trim();

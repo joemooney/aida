@@ -370,14 +370,35 @@ where
         .max()
         .unwrap_or(0);
     let status_w = 13 + drv_w;
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-046 | ai:claude — the ID
+    // column fits the widest RENDERED id (labels and `[ids]` widths
+    // applied), never narrower than the historical column.
+    let display_ids: Vec<String> = reqs
+        .iter()
+        .map(|req| {
+            aida_core::node_alias::display_spec_id(
+                req.agreed_id
+                    .as_deref()
+                    .or(req.spec_id.as_deref())
+                    .unwrap_or("?"),
+            )
+        })
+        .collect();
+    let widest_id = display_ids
+        .iter()
+        .map(|d| d.chars().count())
+        .max()
+        .unwrap_or(0);
+    let id_w = widest_id.max(if options.show_origin { 12 } else { 14 });
+    let id_extra = id_w - if options.show_origin { 12 } else { 14 };
     let header_prefix = if options.show_origin {
         format!(
-            "{}{:<12} {:<14} {:<12} {:<status_w$} ",
+            "{}{:<id_w$} {:<14} {:<12} {:<status_w$} ",
             options.flow_header, "ID", "Origin ID", "Type", "Status"
         )
     } else {
         format!(
-            "{}{:<14} {:<12} {:<status_w$} {:<10} ",
+            "{}{:<id_w$} {:<12} {:<status_w$} {:<10} ",
             options.flow_header, "ID", "Type", "Status", "Priority"
         )
     };
@@ -417,6 +438,7 @@ where
                 (false, false) => 77,
             }
             + drv_w
+            + id_extra
     });
 
     let render_status = |r: &aida_core::RequirementSummary| -> String {
@@ -499,14 +521,8 @@ where
     }
     lines.push("─".repeat(table_width));
 
-    for req in reqs {
+    for (req, display_id) in reqs.iter().zip(&display_ids) {
         // trace:STORY-B6B1278890774EF993D2EBC327862470-078 | ai:claude
-        let display_id = aida_core::node_alias::display_spec_id(
-            req.agreed_id
-                .as_deref()
-                .or(req.spec_id.as_deref())
-                .unwrap_or("?"),
-        );
         let display_id = display_id.as_str();
         let status = render_status(req);
         let prefix = if options.show_origin {
@@ -518,7 +534,7 @@ where
                 origin_padded
             };
             format!(
-                "{}{:<12} {} {:<12} {} ",
+                "{}{:<id_w$} {} {:<12} {} ",
                 flow_prefix(req),
                 display_id,
                 origin_cell,
@@ -527,7 +543,7 @@ where
             )
         } else {
             format!(
-                "{}{:<14} {:<12} {} {:<10} ",
+                "{}{:<id_w$} {:<12} {} {:<10} ",
                 flow_prefix(req),
                 display_id,
                 req.req_type,
@@ -654,6 +670,66 @@ mod list_title_width_tests {
         assert!(row.contains(&truncate(&req.title, 50)));
         assert!(!row.contains(&req.title));
         assert!(row.contains(&format_tags_inline(&req.tags, 3)));
+    }
+
+    /// AC5e: at `[ids] seq_width` 0 and 4 the ID column fits the widest
+    /// RENDERED id, so with mixed-length IDs (a short legacy id, a 4-digit
+    /// one, a node-local id longer than the historical 14-char column) every
+    /// row's Type, Status and Title cells start where the header's do.
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-046 | ai:claude
+    #[test]
+    fn list_columns_align_with_mixed_length_ids_at_seq_width_0_and_4() {
+        let node_local = "TASK-0123456789abcdef0123456789abcdef-001";
+        let row = |id: &str, ty: &str, title: &str| aida_core::RequirementSummary {
+            spec_id: Some(id.into()),
+            agreed_id: None,
+            req_type: ty.into(),
+            title: title.into(),
+            tags: Vec::new(),
+            ..summary()
+        };
+        let reqs = vec![
+            row("BUG-07", "bug", "short id"),
+            row("STORY-1207", "story", "four digits"),
+            row(node_local, "task", "node local"),
+        ];
+        let options = ListTableOptions {
+            show_origin: false,
+            show_tags: false,
+            no_glyph: true,
+            flow_header: String::new(),
+            terminal_width: None,
+            drivers: Default::default(),
+        };
+        for (width, short) in [(0, "BUG-7 "), (4, "BUG-0007 ")] {
+            let prev = aida_core::id_identity::install_widths_for_thread(Some(
+                aida_core::id_identity::IdWidths {
+                    seq_width: Some(width),
+                    ..Default::default()
+                },
+            ));
+            let lines: Vec<String> = render_list_table(&reqs, &options, |_| (false, false, false))
+                .iter()
+                .map(|l| strip_ansi_color(l))
+                .collect();
+            aida_core::id_identity::install_widths_for_thread(prev);
+            let col = |line: &str, needle: &str| {
+                line.find(needle)
+                    .map(|b| line[..b].chars().count())
+                    .unwrap_or_else(|| panic!("{needle:?} missing from {line:?}"))
+            };
+            let header = &lines[0];
+            let (type_at, title_at) = (col(header, "Type"), col(header, "Title"));
+            assert!(
+                type_at > node_local.len(),
+                "ID column fits the long id: {header:?}"
+            );
+            assert!(lines[2].starts_with(short), "width {width}: {:?}", lines[2]);
+            for (line, req) in lines[2..].iter().zip(&reqs) {
+                assert_eq!(col(line, &req.req_type), type_at, "width {width}: {line:?}");
+                assert_eq!(col(line, &req.title), title_at, "width {width}: {line:?}");
+            }
+        }
     }
 }
 

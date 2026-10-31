@@ -1,7 +1,7 @@
 # ADR-18 (Accepted) - Route advisors by subsystem with master fallback
 
 Status: Accepted 2026-07-19 (operator ratification; store decision ADR-18)
-Specs: TASK-0435
+Specs: TASK-b6b1278890774ef993d2ebc327862470-268
 
 ## Context
 
@@ -31,4 +31,4 @@ Headless advisor selection must read subsystem membership before spawning the
 advisor tier. `aida status`, TUI, findings, and session manifests should expose
 the routing explanation for audit.
 
-<!-- trace:TASK-0435 | ai:codex -->
+<!-- trace:TASK-b6b1278890774ef993d2ebc327862470-268 | ai:codex -->

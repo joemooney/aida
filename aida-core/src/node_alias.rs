@@ -339,11 +339,16 @@ fn literal_slot() -> &'static RwLock<Option<LiteralCheck>> {
 #[cfg(feature = "native")]
 pub fn install_from_store(store_root: &Path) {
     install(NodeAliasMap::load(store_root));
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-046 | ai:claude — `[ids]`
+    // widths live in the project's `.aida/config.toml`, beside the store.
+    if let Some(project) = store_root.parent() {
+        crate::id_identity::install_widths(crate::id_identity::IdWidths::load(project));
+    }
     let objects = store_root.join("objects");
     let ids: Arc<OnceLock<std::collections::HashSet<String>>> = Arc::new(OnceLock::new());
     let check: LiteralCheck = Arc::new(move |id: &str| {
         ids.get_or_init(|| stored_spec_ids(&objects))
-            .contains(&id.trim().to_ascii_uppercase())
+            .contains(&crate::id_identity::id_key(id))
     });
     if let Ok(mut guard) = literal_slot().write() {
         *guard = Some(check);
@@ -356,10 +361,12 @@ pub fn install_from_store(store_root: &Path) {
 fn stored_spec_ids(objects: &Path) -> std::collections::HashSet<String> {
     let mut out = std::collections::HashSet::new();
     for (stem, path) in crate::object_store::list_objects(objects).unwrap_or_default() {
-        out.insert(stem.to_ascii_uppercase());
+        // trace:BUG-B6B1278890774EF993D2EBC327862470-046 | ai:claude — keyed
+        // by numeric identity, so any padding of a stored id is literal.
+        out.insert(crate::id_identity::id_key(&stem));
         if let Ok(req) = crate::object_store::read_object_from_path(&path) {
-            out.extend(req.spec_id.map(|s| s.to_ascii_uppercase()));
-            out.extend(req.agreed_id.map(|s| s.to_ascii_uppercase()));
+            out.extend(req.spec_id.as_deref().map(crate::id_identity::id_key));
+            out.extend(req.agreed_id.as_deref().map(crate::id_identity::id_key));
         }
     }
     out
@@ -503,8 +510,12 @@ pub fn expand_or_keep(id: &str) -> String {
 
 /// Display form of a spec ID with the installed map (see
 /// [`NodeAliasMap::display`]), honouring `--canonical-ids`.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-046 | ai:claude — the sequence is
+// rendered at the configured `[ids]` width first (on the canonical node id,
+// so node-local widths apply), then the label is substituted. Stored ids are
+// never re-padded; `--canonical-ids` turns off labels, not width.
 pub fn display_spec_id(id: &str) -> String {
-    installed().display(id, canonical_ids())
+    installed().display(&crate::id_identity::render_id(id), canonical_ids())
 }
 
 // ---------------------------------------------------------------------------
