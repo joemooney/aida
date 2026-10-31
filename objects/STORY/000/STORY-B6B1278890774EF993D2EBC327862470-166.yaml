@@ -1,0 +1,27 @@
+id: 01a1938c-881c-7d01-a68a-ed62f7cf6fa3
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-166
+title: 'aida mandate renew: extend the active mandate in place without retyping its flags'
+description: |
+  Operator request (2026-10-31): `aida mandate renew [--for <duration>]` extends the ACTIVE mandate in place, keeping its scope, flags (--ship-held, --include-supervised), principal and gates, instead of stop + start with every flag retyped.
+
+  Acceptance:
+  1. Human at an interactive terminal only (same rule as start/stop); refuses under an agent or headless env.
+  2. Renews only an active, unexpired mandate; with none active it refuses and points at `aida mandate start`.
+  3. Keeps the scope and flags exactly; the new expiry is now + duration (default: the original duration), capped by the same maximum as start.
+  4. Writes an audit/lineage record (old expiry -> new expiry, who renewed); `aida mandate status` shows the renewal count.
+  5. Grants derived from the mandate stay valid across the renewal (no re-delegation needed), with a test.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-31T20:00:23.068491024Z
+modified_at: 2026-10-31T20:00:23.068491024Z
+req_type: Story
+filed_at:
+  code_sha: 53817a25ee83981f919be3dbcee742234338ab9a
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 53817a25ee8
+  vendor: claude
+  session: 9b4a9d0a-69b7-4ebd-9bee-314b36573de5
