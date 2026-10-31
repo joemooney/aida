@@ -1,0 +1,78 @@
+{
+  "schema_version": 1,
+  "spec": "TASK-B6B1278890774EF993D2EBC327862470-149",
+  "publishes": [
+    {
+      "at": "2026-10-31T20:22:03.770847722Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-31T13:08:43.479024871Z",
+      "spec": "TASK-b6b1278890774ef993d2ebc327862470-149",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-31T16:28:13.858885248Z",
+      "spec": "TASK-b6b1278890774ef993d2ebc327862470-149",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-31T19:13:51.993792149Z",
+      "spec": "TASK-B6B1278890774EF993D2EBC327862470-149",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "TASK-B6B1278890774EF993D2EBC327862470-149",
+        "branch": "origin/task-b6b1278890774ef993d2ebc327862470-149",
+        "first_seen": "2026-10-31T19:13:51.993747413+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-31T20:10:51.245092088Z",
+      "spec": "TASK-B6B1278890774EF993D2EBC327862470-149",
+      "seat": "advisor",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-10-31T20:21:25.399772002Z",
+      "spec": "TASK-B6B1278890774EF993D2EBC327862470-149",
+      "seat": "advisor",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-10-31T20:21:44.829759763Z",
+      "spec": "TASK-B6B1278890774EF993D2EBC327862470-149",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 3171
+      }
+    },
+    {
+      "ts": "2026-10-31T20:22:03.625875252Z",
+      "spec": "TASK-B6B1278890774EF993D2EBC327862470-149",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "271e42d368032e9e155226631512ebdde8c71ba5",
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
