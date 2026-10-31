@@ -11,12 +11,12 @@ description: |-
   - A contained reviewer can record its verdict from its own review worktree with its own grant (or the launcher collects a verdict file the reviewer writes in its tree); a regression test covers the contained path.
   - When no verdict is collected, the launcher prints no verdict summary from any other PR or session; a test asserts the no-verdict output contains no 'PASS'/'approve' line.
   - The reviewer brief names the exact cwd for 'aida review record' so it does not cd to the primary checkout.
-status: NeedsAttention
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T23:12:51.682698239Z
-modified_at: 2026-10-31T10:25:31.519659144Z
+modified_at: 2026-10-31T10:44:12.538737308Z
 req_type: Bug
 tags:
 - headless
@@ -123,6 +123,21 @@ history:
   session_id: 01a19115e9bb
   harness_version: 2.1.316 (Claude Code)
   changes: []
+- id: 01a1918f-5641-7420-be8f-e6ec7182f731
+  author: aida-auto-bump
+  timestamp: 2026-10-31T10:44:12.481171626Z
+  session_id: 510d8c08-7912-4189-943d-65d110c7abc2
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Completed
+processing_record:
+- id: 01a1918f-567a-7fd2-8f93-c0a2b2481868
+  timestamp: 2026-10-31T10:44:12.538733660Z
+  agent: aida
+  commit_sha: 273549a2d9d738b1846028776855309da26a2ef7
+  summary: 'All 3 acceptance criteria and the advisor''s fail-fast extra (fresh and resume) are met with launcher-level tests; round-3 ratchet fix keeps both granted headless launches in the shared-argv-builder window; CI green at c1ab08e. Non-blocking: unused issue_sandboxed_child; the fresh headless queue-work arm still mints via issue_headless_child (reviewers covered by preflight only); tests carry no AC-id traces.'
+  review_verdict: approved
 filed_at:
   code_sha: cdbecda76786aa4df79e0b965ae401e8db20d633
   branch: main
@@ -135,11 +150,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-10-31T06:31:36.866978845Z
   implemented_by: joe
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: Round-1 findings all addressed (resume paths, launcher-level tests, refusal before verdict reset); all 12 bug_045 tests pass locally, but PR CI is red at the head (lib-1 Run tests) and at 28ef61e (lib-0 Run tests) while fefdcca was green, so the round-2 commit breaks a test
-  recovery_hint: address the review findings, move BUG-B6B1278890774EF993D2EBC327862470-045 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-10-31T09:05:07.668184616Z
+  completed_at: 2026-10-31T10:44:12.481167311Z
+  completion_sha: 273549a2d9d738b1846028776855309da26a2ef7
