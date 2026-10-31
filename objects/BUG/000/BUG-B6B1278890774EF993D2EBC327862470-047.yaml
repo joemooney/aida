@@ -13,12 +13,32 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T05:21:31.863608220Z
-modified_at: 2026-10-31T07:02:35.318103440Z
+modified_at: 2026-10-31T07:03:47.520106757Z
 req_type: Bug
 tags:
 - salvage
 - sandbox
 - worktree
+comments:
+- id: 01a190c5-8a40-7b62-ba70-8666e35b08ff
+  author: joe
+  content: |-
+    ## Implementer approach
+
+    ### Acceptance criteria as tests
+    - **Fixture (bwrap-gated, seat_clone probe):** AC1+AC2 — a clean, pushed leased seat clone with a 0-byte, read-only, untracked `.gitmodules` probes as `Known` with nothing unshipped, and `salvage_worktree_patch` returns `Ok(None)` (dismissable, lease releasable). A second case: an untracked `.gitmodules` that parses but defines no `submodule.*` section is not submodule evidence either.
+    - **Fixture (existing):** AC3 — `task_2053_bwrap_a_submodule_clone_fails_reentry_and_salvage_closed` (a `.gitmodules` defining `submodule.sm`) and the s4b gate test (an unparseable `.gitmodules`) stay as they are and still refuse.
+
+    ### Expected files
+    - `aida-cli-lib/src/seat_clone.rs` (`SUBMODULE_EVIDENCE_SCRIPT`: a worktree `.gitmodules` is evidence only when it is a symlink/non-regular file, is tracked in the index, cannot be parsed, or defines at least one submodule; an empty regular file is skipped. The probe drops the `? .gitmodules` untracked line for that empty placeholder so it does not read as dirty.)
+    - `aida-cli-lib/src/tests/task_2053_s4_host_git_tests.rs` (regression test)
+
+    ### Ambiguities / conflicts as questions
+    - None. Kept conservative: `.gitmodules` at HEAD, gitlinks in HEAD/index, and `.git/modules` contents still count as evidence.
+  created_at: 2026-10-31T07:03:47.520106757Z
+  modified_at: 2026-10-31T07:03:47.520106757Z
+  session_id: 01a190c46c72
+  harness_version: 2.1.316 (Claude Code)
 history:
 - id: 01a190c4-7036-7190-9a4d-00159ae21355
   author: aida-session-start
