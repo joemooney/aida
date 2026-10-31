@@ -7,7 +7,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T00:48:57.745160003Z
-modified_at: 2026-10-31T00:35:50.544011672Z
+modified_at: 2026-10-31T00:52:52.821447800Z
 req_type: Bug
 relationships:
 - rel_type: Child
@@ -55,6 +55,13 @@ comments:
   content: 'PR-3130 merge conflicts resolved and plain-pushed at fb17a888f53c2e31b6f76e86a0b93b199f33239f. Normal merge parents are prior author head9330169f753157c46187d0ae685755d1875ef6b2 and current maincdbecda76786aa4df79e0b965ae401e8db20d633. One node_cmd.rs conflict: preserve complete inventory List path, main work_node_line role/label wording and Show allocation report. Inventory implementation/tests and node-show helper bodies match their respective parents; resolver fix retained. Full make check-ci-compile passed every workspace test target; all36 fast gates passed; focused tests27passed (inventory6 + show-label1 + resolver1 + command-registry/help19; one ignored child helper). Fresh spawned author checker independently ran its own27 focused tests plus parent-preservation/whitespace checks, no findings; this is author validation, not independent approval. Latest-main merge simulation clean and origin accepted the exact new head. PR body updated. Code mirror pre-push skipped before origin acceptance, so no GitLab code-mirror confirmation is claimed. Advisor owns remaining delta review/hold/ship; no spec status escalation, self-verdict, clearance or merge.'
   created_at: 2026-10-30T23:40:58.024761700Z
   modified_at: 2026-10-30T23:40:58.024761700Z
+- id: 01a18f71-f5d5-7983-b8f3-905466bfe65d
+  author: joe
+  content: |
+    ADVISOR RULING 2026-10-30 17:58 on PR-3130 (2026-10-28 rule: ruled once here). ONE new commit fixes ALL four findings: (1) two-level IDs (FEAT-TYPE-NNN, e.g. AUTH-FR-001) must not become node rows: infer only UUID, numeric or registry-known namespaces (or consult id_config); add an AUTH-FR-001 regression. (2) one role term: use the wording `aida node show` uses per STORY-HOME-098, in list, show, the bug026 test (:617) and the docs. (3) bug026 test (:594) asserts the resolved runner sits under deps/ (as bug_1749_doctor_toon_tests.rs:59-61). (4) remove the discarded try_exists()? at node_inventory.rs:213,230 or comment why. Gate: LIGHT.
+  created_at: 2026-10-31T00:52:52.821447800Z
+  modified_at: 2026-10-31T00:52:52.821447800Z
+  session_id: 510d8c08-7912-4189-943d-65d110c7abc2
 history:
 - id: 01a18a48-31b6-75e1-983a-8a6e4dad3aff
   author: joe
