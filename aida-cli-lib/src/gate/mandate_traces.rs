@@ -195,27 +195,104 @@ impl std::fmt::Display for StoreDirty {
 
 impl std::error::Error for StoreDirty {}
 
+/// BUG-056: what one exclusion collection read from the store — the object
+/// paths of every spec it judged (each ID and alias) and those IDs, so
+/// [`store_snapshot_stable`] counts as a change only a store write that could
+/// alter THAT evidence, not every concurrent fleet write. [`Self::strict`] is
+/// the whole `objects/` tree with an unmoved HEAD: the rule for a collection
+/// whose scope is unknown (a store that did not load, an unsearchable ID).
+// trace:BUG-B6B1278890774EF993D2EBC327862470-056 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct EvidenceScope {
+    /// Pathspecs below the store root; `["objects"]` for the strict scope.
+    paths: Vec<String>,
+    /// IDs whose `spec_id:` / `agreed_id:` line, added or removed anywhere
+    /// under `objects/`, is a change (a new alias object, a renumber).
+    ids: Vec<String>,
+    strict: bool,
+}
+
+impl EvidenceScope {
+    /// Every object, and any HEAD move, is evidence (the pre-BUG-056 rule).
+    pub(crate) fn strict() -> Self {
+        Self {
+            paths: vec![STORE_OBJECTS_PATH.to_owned()],
+            ids: Vec::new(),
+            strict: true,
+        }
+    }
+
+    /// The evidence of a collection that judged `ids` (each spec's ID and its
+    /// aliases). Any ID without a canonical object path, or not safe to put
+    /// in a history search, falls back to [`Self::strict`] (fail closed).
+    pub(crate) fn of_ids<I, S>(ids: I) -> Self
+    where
+        I: IntoIterator<Item = S>,
+        S: AsRef<str>,
+    {
+        let mut paths = BTreeSet::new();
+        let mut keys = BTreeSet::new();
+        for id in ids {
+            let id = id.as_ref().trim().to_ascii_uppercase();
+            let searchable = !id.is_empty()
+                && id
+                    .chars()
+                    .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_');
+            let Ok(path) = aida_core::object_store::relative_object_path(&id) else {
+                return Self::strict();
+            };
+            if !searchable {
+                return Self::strict();
+            }
+            paths.insert(path);
+            keys.insert(id);
+        }
+        Self {
+            paths: paths.into_iter().collect(),
+            ids: keys.into_iter().collect(),
+            strict: false,
+        }
+    }
+}
+
 /// BUG-2195: whether evidence gathered between `before` and `after` came from
-/// one store version as far as the mandate exclusion reader can tell. Stable
-/// iff HEAD is unchanged and no ref change can alter the `--all` history of
-/// `objects/`:
-/// - a changed or added ref must bring no commit touching `objects/` that no
-///   earlier tip already reached;
+/// one store version as far as the mandate exclusion reader can tell.
+///
+/// BUG-056: `before` is the pinned store version, and the evidence is measured
+/// against it. Stable iff no commit in the delta between the pinned tips and
+/// `after` can change what `scope` read:
+/// - a changed or added ref must bring no commit, that no pinned tip already
+///   reached, touching a scoped path or adding/removing a scoped ID line;
 /// - a ref moved to a tip that does not contain its old tip (force move) must
-///   not drop any commit touching `objects/` (advisor condition C3);
+///   not drop such a commit (advisor condition C3);
+/// - a moved store HEAD (the working tree the current records are loaded
+///   from) must differ from the pinned HEAD by no such commit, either way —
+///   so a concurrent fleet write of an unrelated spec is stable, while a write
+///   to an excluded spec still re-collects and then refuses. Under
+///   [`EvidenceScope::strict`] any HEAD move is a change;
 /// - a deleted ref only removes versions, so the evidence already gathered
 ///   stays a superset and the attempt stays stable.
 ///
 /// Any git failure is reported as unstable, so the caller re-collects and then
 /// refuses after its bound (fail closed).
 // trace:TASK-2067 | ai:antigravity
+// trace:BUG-B6B1278890774EF993D2EBC327862470-056 | ai:claude
 pub(crate) fn store_snapshot_stable(
     store: &Path,
     before: &StoreSnapshot,
     after: &StoreSnapshot,
+    scope: &EvidenceScope,
 ) -> bool {
     if before.head != after.head {
-        return false;
+        if scope.strict {
+            return false;
+        }
+        let (old, new) = (&before.head, &after.head);
+        if !no_evidence_commit(store, &format!("{new}\n^{old}\n"), scope)
+            || !no_evidence_commit(store, &format!("{old}\n^{new}\n"), scope)
+        {
+            return false;
+        }
     }
     let mut new_tips: Vec<&str> = Vec::new();
     let mut forced: Vec<(&str, &str)> = Vec::new();
@@ -232,8 +309,8 @@ pub(crate) fn store_snapshot_stable(
     if new_tips.is_empty() {
         return true;
     }
-    // New objects/ history: commits reachable from a changed or added tip
-    // that no earlier tip (or HEAD) reached.
+    // New history: commits reachable from a changed or added tip that no
+    // pinned tip (or HEAD) reached.
     let mut input = String::new();
     for tip in &new_tips {
         input.push_str(tip);
@@ -249,7 +326,7 @@ pub(crate) fn store_snapshot_stable(
         input.push_str(tip);
         input.push('\n');
     }
-    if !no_objects_commit(store, &input) {
+    if !no_evidence_commit(store, &input, scope) {
         return false;
     }
     // A changed ref that is not a fast-forward drops its old commits.
@@ -258,7 +335,7 @@ pub(crate) fn store_snapshot_stable(
         match fast_forward {
             Some(true) => {}
             Some(false) => {
-                if !no_objects_commit(store, &format!("{old}\n^{new}\n")) {
+                if !no_evidence_commit(store, &format!("{old}\n^{new}\n"), scope) {
                     return false;
                 }
             }
@@ -269,13 +346,39 @@ pub(crate) fn store_snapshot_stable(
 }
 
 /// `true` when the commit range on stdin (`rev-list --stdin` syntax) has no
-/// commit touching `objects/`; `false` when it has one or git fails.
+/// commit touching a `scope` path nor adding/removing a `spec_id:` /
+/// `agreed_id:` line naming a `scope` ID; `false` when it has one or git
+/// fails.
 // trace:TASK-2067 | ai:antigravity
-fn no_objects_commit(store: &Path, range: &str) -> bool {
+// trace:BUG-B6B1278890774EF993D2EBC327862470-056 | ai:claude
+fn no_evidence_commit(store: &Path, range: &str, scope: &EvidenceScope) -> bool {
+    let mut args: Vec<&str> = vec!["rev-list", "--max-count=1", "--stdin", "--"];
+    args.extend(scope.paths.iter().map(String::as_str));
+    if !matches!(snapshot_git(store, &args, Some(range.as_bytes())), Ok(out) if out.is_empty()) {
+        return false;
+    }
+    if scope.ids.is_empty() {
+        return true;
+    }
+    let pickaxe = format!(
+        "-G^(spec_id|agreed_id): *['\"]?({})['\"]? *$",
+        scope.ids.join("|")
+    );
     matches!(
         snapshot_git(
             store,
-            &["rev-list", "--max-count=1", "--stdin", "--", "objects/"],
+            &[
+                "log",
+                "--stdin",
+                "--format=%H",
+                "--no-renames",
+                "--no-ext-diff",
+                "--no-textconv",
+                "--regexp-ignore-case",
+                &pickaxe,
+                "--",
+                STORE_OBJECTS_PATH,
+            ],
             Some(range.as_bytes()),
         ),
         Ok(out) if out.is_empty()

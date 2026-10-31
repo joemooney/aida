@@ -57,7 +57,16 @@ impl Store {
         store_snapshot(self.path()).unwrap()
     }
     fn stable(&self, before: &StoreSnapshot) -> bool {
-        store_snapshot_stable(self.path(), before, &self.snap())
+        store_snapshot_stable(self.path(), before, &self.snap(), &EvidenceScope::strict())
+    }
+    /// BUG-056: stability for a collection that read `ids`.
+    fn stable_for(&self, before: &StoreSnapshot, ids: &[&str]) -> bool {
+        store_snapshot_stable(
+            self.path(),
+            before,
+            &self.snap(),
+            &EvidenceScope::of_ids(ids.iter().copied()),
+        )
     }
 }
 
@@ -78,7 +87,12 @@ fn an_unrelated_code_ref_move_is_stable() {
     s.commit_on("code", &code, "src/lib.rs", "fn b() {}\n");
     let after = s.snap();
     assert_ne!(before, after, "the old byte comparison saw a change here");
-    assert!(store_snapshot_stable(s.path(), &before, &after));
+    assert!(store_snapshot_stable(
+        s.path(),
+        &before,
+        &after,
+        &EvidenceScope::strict()
+    ));
 }
 
 #[test]
@@ -169,7 +183,12 @@ fn an_unreadable_ref_range_is_unstable() {
         "refs/heads/ghost".into(),
         "1111111111111111111111111111111111111111".into(),
     );
-    assert!(!store_snapshot_stable(s.path(), &before, &after));
+    assert!(!store_snapshot_stable(
+        s.path(),
+        &before,
+        &after,
+        &EvidenceScope::strict()
+    ));
 }
 
 /// TASK-2019: a dirty store is the typed, retryable [`StoreDirty`] error, and
@@ -308,7 +327,12 @@ fn bug_2213_coordination_and_other_non_evidence_dirt_allow_a_snapshot() {
         "{status}"
     );
     let after = store_snapshot(s.path()).expect("non-evidence dirt permits a snapshot");
-    assert!(store_snapshot_stable(s.path(), &before, &after));
+    assert!(store_snapshot_stable(
+        s.path(),
+        &before,
+        &after,
+        &EvidenceScope::strict()
+    ));
 }
 
 /// Scoped status must still reject indexed and working-tree changes of any
@@ -405,4 +429,93 @@ fn bug_2213_inherited_pathspec_modes_cannot_hide_object_dirt() {
             );
         }
     }
+}
+
+/// BUG-056 acceptance (2): a concurrent fleet writer committing other specs to
+/// the store HEAD during collection — the exact load that refused PR-3171 —
+/// leaves the pinned evidence of the excluded spec stable, on HEAD and on any
+/// other ref, so the ship's evidence is still yielded.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-056 | ai:claude
+#[test]
+fn bug_056_concurrent_writes_to_other_specs_are_stable() {
+    let (s, base) = store();
+    let before = s.snap();
+    for n in 2..6 {
+        s.commit(
+            &format!("objects/TASK/000/TASK-{n}.yaml"),
+            &format!("spec_id: TASK-{n}\ntitle: other\n"),
+        );
+    }
+    s.commit("coordination/leases/x.toml", "lease\n");
+    s.commit_on(
+        "sticky",
+        &base,
+        "objects/STORY/000/STORY-7.yaml",
+        "title: s\n",
+    );
+    assert!(!s.stable(&before), "the strict rule refused this load");
+    assert!(s.stable_for(&before, &["TASK-1"]));
+}
+
+/// BUG-056 acceptance (3): a genuine change to an excluded spec during the
+/// ship is still a change — on HEAD, on another ref, as a deletion, or as a
+/// new object whose `agreed_id` names it — so the cover re-collects and, if
+/// it keeps changing, refuses.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-056 | ai:claude
+#[test]
+fn bug_056_a_change_to_an_excluded_spec_is_unstable() {
+    let (s, _) = store();
+    let before = s.snap();
+    s.commit("objects/TASK/000/TASK-2.yaml", "title: other\n");
+    s.commit("objects/TASK/000/TASK-1.yaml", "tags: [security]\n");
+    assert!(!s.stable_for(&before, &["TASK-1"]), "HEAD write to it");
+
+    let (s, base) = store();
+    let before = s.snap();
+    s.commit_on(
+        "sticky",
+        &base,
+        "objects/TASK/000/TASK-1.yaml",
+        "title: x\n",
+    );
+    assert!(
+        !s.stable_for(&before, &["TASK-1"]),
+        "a ref bringing a version"
+    );
+
+    let (s, _) = store();
+    let before = s.snap();
+    s.git(&["rm", "-q", "objects/TASK/000/TASK-1.yaml"]);
+    s.git(&["commit", "-qm", "delete"]);
+    assert!(!s.stable_for(&before, &["TASK-1"]), "deleting it");
+
+    let (s, _) = store();
+    let before = s.snap();
+    s.commit(
+        "objects/TASK/000/TASK-9.yaml",
+        "spec_id: TASK-9\nagreed_id: 'task-1'\n",
+    );
+    assert!(!s.stable_for(&before, &["TASK-1"]), "an object aliasing it");
+
+    // A HEAD moved back off a version of it (a reset) drops that version.
+    let (s, base) = store();
+    s.commit("objects/TASK/000/TASK-1.yaml", "title: two\n");
+    let before = s.snap();
+    s.git(&["reset", "-q", "--hard", &base]);
+    assert!(!s.stable_for(&before, &["TASK-1"]), "a reset off it");
+}
+
+/// BUG-056: an ID with no canonical object path cannot be scoped, so the
+/// collection falls back to the strict rule (fail closed).
+// trace:BUG-B6B1278890774EF993D2EBC327862470-056 | ai:claude
+#[test]
+fn bug_056_an_unscopable_id_falls_back_to_the_strict_rule() {
+    assert_eq!(
+        EvidenceScope::of_ids(["TASK-1", "not an id"]),
+        EvidenceScope::strict()
+    );
+    let (s, _) = store();
+    let before = s.snap();
+    s.commit("notes.txt", "x\n");
+    assert!(!s.stable_for(&before, &["not an id"]));
 }
