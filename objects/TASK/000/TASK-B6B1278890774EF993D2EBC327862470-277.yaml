@@ -1,0 +1,35 @@
+id: 01a19409-85c6-7620-b7df-c31b4cc8ca09
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-277
+title: Publish the air-gapped development explainer on the product website
+description: |
+  ## Why
+  Operator request (2026-10-31): publish the air-gapped explainer on the product website. The draft is a private claude.ai artifact (https://claude.ai/artifact/4r7gBVWL2sMU6vkoCjWK2E, "Support for air-gapped development / Does your project need an ID root?"). It explains hubs, refs, pools, blocks and the root, with diagrams of the one-hub claim race, the two-hub collision with and without a root, the split of the number space, and a walkthrough of bringing an air-gapped team online.
+
+  ## Acceptance
+  1. New page `docs/showcase/air-gapped.html` in the showcase's own style (`guide.css` and layout, not the artifact's styling), linked from `library.html` and indexed in `search-data.js`.
+  2. End-user prose only: no internal spec IDs, PR numbers or seat/advisor process language.
+  3. Describes only built behaviour as current. Single-hub mode without a root (STORY-HOME-165) appears as "planned" or not at all, and the page is corrected when that story's sketch is ruled.
+  4. The bundle-crossing step of the walkthrough is marked untested until SPIKE-HOME-005 reports. Either hold publication until then, or publish with that note and update the page afterwards.
+  5. Diagrams are inline SVG or assets under `docs/showcase/assets/`, readable in light and dark, with text alternatives.
+  6. Deployed per docs/showcase/README.md: a gh-pages snapshot from an approved merged revision.
+
+  ## Out of scope
+  GitLab Pages deployment (separate task).
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-31T22:16:54.470798142Z
+modified_at: 2026-10-31T22:16:54.470798142Z
+req_type: Task
+tags:
+- air-gap
+- docs
+- website
+filed_at:
+  code_sha: 0506fa2eb862db100dffbc80b0c5cfdedec28522
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 584e95e4505
+  vendor: claude
