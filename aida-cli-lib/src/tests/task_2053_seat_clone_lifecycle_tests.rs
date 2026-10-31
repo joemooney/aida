@@ -1774,6 +1774,7 @@ fn task_2053_bwrap_bug_023_an_orphaned_clone_lease_with_only_ignored_state_reads
 
 /// BUG-051: every probe `git status` entry is named by its path, and a set
 /// of findings is never rendered as an empty list.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-051.ac225260 | ai:claude
 // trace:BUG-B6B1278890774EF993D2EBC327862470-051 | ai:claude
 #[test]
 fn bug_051_refusal_items_name_every_path_and_are_never_empty() {
@@ -1821,6 +1822,7 @@ fn bug_051_refusal_items_name_every_path_and_are_never_empty() {
 }
 
 /// BUG-051: the session's runtime links and build/cache output are not work.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-051.acbe987b | ai:claude
 // trace:BUG-B6B1278890774EF993D2EBC327862470-051 | ai:claude
 #[cfg(unix)]
 #[test]
@@ -1855,6 +1857,7 @@ fn bug_051_runtime_links_and_build_output_are_not_work() {
 /// main), whose origin copy then gained a commit (an update-branch merge), is
 /// pushed: session end, without `--force`, removes the clone. The session's
 /// runtime links and build output do not hold it either.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-051.ac79099f | ai:claude
 // trace:BUG-B6B1278890774EF993D2EBC327862470-051 | ai:claude
 #[cfg(target_os = "linux")]
 #[test]
@@ -1903,6 +1906,7 @@ fn bug_051_bwrap_session_end_ends_a_clone_whose_branch_is_an_ancestor_of_origin(
 }
 
 /// BUG-051: an untracked file refuses session end, and the refusal names it.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-051.ac225260 | ai:claude
 // trace:BUG-B6B1278890774EF993D2EBC327862470-051 | ai:claude
 #[cfg(target_os = "linux")]
 #[test]
