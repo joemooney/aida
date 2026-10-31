@@ -142,7 +142,33 @@ pub(crate) fn notice_from_hook_payload(payload: &str, seat: &str) -> Option<Stri
     let ceiling = context_ceiling()?;
     let transcript = transcript_path_from_payload(payload)?;
     let tokens = last_context_tokens(&transcript)?;
-    rotation_notice_line(tokens, Some(ceiling), seat)
+    let line = rotation_notice_line(tokens, Some(ceiling), seat)?;
+    Some(match supervised_handle() {
+        Some(handle) => supervised_rotation_notice(&line, seat, &handle),
+        None => line,
+    })
+}
+
+/// The handle a rotation supervisor relaunches this session under, when one
+/// supervises it.
+// trace:STORY-B6B1278890774EF993D2EBC327862470-101 | ai:claude
+fn supervised_handle() -> Option<String> {
+    std::env::var(crate::agent_rotation::GENERATION_ENV).ok()?;
+    std::env::var("AIDA_AGENT_NAME")
+        .ok()
+        .filter(|h| !h.trim().is_empty())
+}
+
+/// PURE: the ceiling notice for a session `aida agent new --rotate`
+/// supervises: exiting after the handoff relaunches it under the same handle.
+// trace:STORY-B6B1278890774EF993D2EBC327862470-101 | ai:claude
+pub(crate) fn supervised_rotation_notice(line: &str, seat: &str, handle: &str) -> String {
+    let head = line.split(" Hand off and restart:").next().unwrap_or(line);
+    format!(
+        "{head} Hand off and rotate: at the next turn boundary, write a short handoff with \
+         `aida session handoff --seat {seat} --write -`, then exit; `aida agent new` \
+         relaunches you as {handle} with the handoff loaded."
+    )
 }
 
 /// Seat names become directory names; keep them to a safe charset.
@@ -179,6 +205,50 @@ pub(crate) fn write_handoff(
     body: &str,
     now: chrono::DateTime<chrono::Utc>,
 ) -> Result<HandoffWritten> {
+    write_handoff_by(project_root, seat, body, now, &HandoffWriter::default())
+}
+
+/// Who wrote a handoff, so a rotation supervisor can tell its own child's
+/// handoff from a sibling seat's or a stale one.
+// trace:STORY-B6B1278890774EF993D2EBC327862470-101 | ai:claude
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub(crate) struct HandoffWriter {
+    pub handle: Option<String>,
+    pub native_session_id: Option<String>,
+    pub generation: Option<u64>,
+    /// `--final`: the handoff is recorded, but the session ends for real.
+    pub final_: bool,
+}
+
+impl HandoffWriter {
+    /// The writer as this process's environment names it.
+    pub(crate) fn from_env(final_: bool) -> Self {
+        let var = |k: &str| {
+            std::env::var(k)
+                .ok()
+                .map(|v| v.trim().to_string())
+                .filter(|v| !v.is_empty())
+        };
+        Self {
+            handle: var(crate::agent_handle::HANDLE_ENV)
+                .or_else(|| var("AIDA_AGENT_NAME"))
+                .or_else(|| var("AIDA_USER")),
+            native_session_id: crate::agent_handle::current_native_session_id(),
+            generation: var(crate::agent_rotation::GENERATION_ENV).and_then(|g| g.parse().ok()),
+            final_,
+        }
+    }
+}
+
+/// [`write_handoff`], stamping who wrote it into the header and the log.
+// trace:STORY-B6B1278890774EF993D2EBC327862470-101 | ai:claude
+pub(crate) fn write_handoff_by(
+    project_root: &Path,
+    seat: &str,
+    body: &str,
+    now: chrono::DateTime<chrono::Utc>,
+    writer: &HandoffWriter,
+) -> Result<HandoffWritten> {
     let seat = sanitize_seat(seat)?;
     let body = body.trim();
     if body.is_empty() {
@@ -195,8 +265,18 @@ pub(crate) fn write_handoff(
     }
     let dir = seat_dir(project_root, &seat);
     std::fs::create_dir_all(&dir).with_context(|| format!("creating {}", dir.display()))?;
+    let mut stamp = String::new();
+    if let Some(handle) = &writer.handle {
+        stamp.push_str(&format!(" handle={handle}"));
+    }
+    if let Some(generation) = writer.generation {
+        stamp.push_str(&format!(" generation={generation}"));
+    }
+    if writer.final_ {
+        stamp.push_str(" final=true");
+    }
     let content = format!(
-        "<!-- seat handoff: seat={seat} written={} -->\n{body}\n",
+        "<!-- seat handoff: seat={seat} written={}{stamp} -->\n{body}\n",
         now.to_rfc3339()
     );
     let path = dir.join(format!("{}.md", now.format("%Y%m%dT%H%M%SZ")));
@@ -205,7 +285,7 @@ pub(crate) fn write_handoff(
     let tmp = dir.join(".latest.md.tmp");
     std::fs::write(&tmp, &content)?;
     std::fs::rename(&tmp, &latest)?;
-    let record = serde_json::json!({
+    let mut record = serde_json::json!({
         "ts": now.to_rfc3339(),
         "seat": seat,
         "event": "handoff",
@@ -213,6 +293,18 @@ pub(crate) fn write_handoff(
         "bytes": body.len(),
         "approx_tokens": body.len() / 4,
     });
+    if let Some(handle) = &writer.handle {
+        record["handle"] = serde_json::json!(handle);
+    }
+    if let Some(sid) = &writer.native_session_id {
+        record["native_session_id"] = serde_json::json!(sid);
+    }
+    if let Some(generation) = writer.generation {
+        record["generation"] = serde_json::json!(generation);
+    }
+    if writer.final_ {
+        record["final"] = serde_json::json!(true);
+    }
     let mut log = std::fs::OpenOptions::new()
         .create(true)
         .append(true)

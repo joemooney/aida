@@ -97,12 +97,23 @@ pub(crate) fn agent_ls_in(
     // trace:STORY-B6B1278890774EF993D2EBC327862470-100 | ai:claude — an
     // agent whose advisor hello went unacked says so after its worktree.
     let handshake = (!ended_only).then(|| crate::advisor_handshake::Census::load(&project_root));
+    // trace:STORY-B6B1278890774EF993D2EBC327862470-101 | ai:claude — a
+    // rotated session shows its generation and when it last rotated.
+    let rotations = if ended_only {
+        Default::default()
+    } else {
+        crate::agent_rotation::rotation_census(&project_root)
+    };
     for agent in agents {
         let elapsed = agent_registry::humanize_elapsed(agent_registry::elapsed_secs_clamped(
             now,
             agent.last_active_at,
         ));
-        let identity = ls_handle_cell(agent.name.as_deref());
+        let rotation = agent.name.as_deref().and_then(|n| rotations.get(n.trim()));
+        let identity = crate::agent_rotation::ls_handle_label(
+            &ls_handle_cell(agent.name.as_deref()),
+            rotation,
+        );
         let pid_str = if agent.source == "lease" {
             "-".to_string()
         } else {
@@ -120,6 +131,7 @@ pub(crate) fn agent_ls_in(
             Some(g) => format!("  {g}"),
             None => String::new(),
         };
+        paused_note.push_str(&crate::agent_rotation::ls_rotation_note(rotation, now));
         if let Some(census) = &handshake {
             paused_note.push_str(&crate::advisor_handshake::ls_note(
                 census,

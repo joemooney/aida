@@ -30,6 +30,7 @@ fn record(home: HomeKind, sent_mins_ago: i64) -> HelloRecord {
         acked_at: None,
         acked_by: None,
         ack_reported: false,
+        rotation: None,
     }
 }
 
