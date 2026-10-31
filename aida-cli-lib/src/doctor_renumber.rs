@@ -48,15 +48,9 @@ pub(crate) struct FixOptions {
     pub tree_only: bool,
     /// Spec IDs whose own text the store apply leaves as written (the spec
     /// that owns the migration records the old -> new table in its comments).
-    /// Empty means [`DEFAULT_PRESERVE`].
+    /// Empty preserves nothing.
     pub preserve: Vec<String>,
 }
-
-/// The spec that owns the leading-zero migration (`BUG-HOME-046` on its home
-/// node): its mapping table and keep/renumber lists must survive the apply.
-/// Absent from other stores, where the default preserves nothing.
-// trace:BUG-B6B1278890774EF993D2EBC327862470-046 | ai:claude
-pub(crate) const DEFAULT_PRESERVE: &str = "BUG-B6B1278890774EF993D2EBC327862470-046";
 
 fn id_char(c: char) -> bool {
     c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == '$'
@@ -329,66 +323,128 @@ fn tree_refs(project_root: &Path, files: &[String], literal: &str) -> usize {
         .sum()
 }
 
-/// Numeric collision groups in `reqs`: id key -> the objects sharing it
-/// (only keys held by two or more distinct UUIDs).
-pub(crate) fn collision_groups(reqs: &[Requirement]) -> BTreeMap<String, Vec<&Requirement>> {
-    let mut groups: BTreeMap<String, Vec<&Requirement>> = BTreeMap::new();
-    for r in reqs {
-        if let Some(sid) = r.spec_id.as_deref().filter(|s| !s.trim().is_empty()) {
-            groups
-                .entry(aida_core::id_identity::id_key(sid))
-                .or_default()
-                .push(r);
-        }
-    }
-    groups.retain(|_, v| v.iter().map(|r| r.id).collect::<HashSet<_>>().len() > 1);
-    groups
+/// Numeric collision groups in `reqs`: id key -> each object sharing it,
+/// with whether it holds the key NATIVELY (as its `spec_id`) rather than only
+/// as its `agreed_id`. The same grouping `aida doctor` reports under
+/// `id-collisions` (native and agreed IDs, numeric identity), so the fix sees
+/// every group doctor counts.
+// trace:TASK-B6B1278890774EF993D2EBC327862470-149 | ai:claude
+pub(crate) fn collision_groups(
+    reqs: &[Requirement],
+) -> BTreeMap<String, Vec<(&Requirement, bool)>> {
+    let by_uuid: std::collections::HashMap<Uuid, &Requirement> =
+        reqs.iter().map(|r| (r.id, r)).collect();
+    aida_core::id_collisions::find_requirement_id_collisions(reqs)
+        .into_iter()
+        .map(|c| {
+            let members = c
+                .candidates
+                .iter()
+                .filter_map(|cand| by_uuid.get(&cand.uuid).map(|r| (*r, cand.native)))
+                .collect();
+            (c.id, members)
+        })
+        .collect()
 }
 
-/// Plan the renumbers for every numeric collision group in `reqs`.
-pub(crate) fn plan(
-    reqs: &[Requirement],
-    project_root: &Path,
-    main_rev: &str,
-) -> Vec<PlannedRenumber> {
+/// The planned renumbers, plus the groups no renumber can repair.
+#[derive(Debug, Default)]
+pub(crate) struct Plan {
+    pub renumbers: Vec<PlannedRenumber>,
+    /// Keys two or more specs hold only as their agreed ID: renumbering a
+    /// native `spec_id` cannot separate them.
+    pub unresolved: Vec<String>,
+}
+
+/// Plan the renumbers for every collision group in `reqs`.
+///
+/// - Native-only groups (padded twins): the survivor rule picks the spec
+///   that keeps the number; every other twin is renumbered.
+/// - Groups where some spec holds the key as its AGREED ID: the agreed ID is
+///   the shared identity, so that spec keeps it and every NATIVE holder is
+///   renumbered. Two agreed holders of one key are [`Plan::unresolved`].
+// trace:TASK-B6B1278890774EF993D2EBC327862470-149 | ai:claude
+pub(crate) fn plan(reqs: &[Requirement], project_root: &Path, main_rev: &str) -> Plan {
     let groups = collision_groups(reqs);
+    let mut out = Plan::default();
     if groups.is_empty() {
-        return Vec::new();
+        return out;
     }
     let commits = commit_messages(project_root, main_rev);
     let files = tracked_files(project_root);
-    let mut out = Vec::new();
-    for (key, group) in groups {
-        let members: Vec<Member> = group
+    let member = |r: &Requirement, literal: String| {
+        let store_refs: usize = reqs
             .iter()
-            .map(|r| {
-                let literal = r.spec_id.clone().unwrap_or_default();
-                let store_refs: usize = reqs
-                    .iter()
-                    .filter(|o| o.id != r.id)
-                    .map(|o| requirement_text_refs(o, &literal))
-                    .sum();
-                Member {
-                    uuid: r.id,
-                    literal: literal.clone(),
-                    title: r.title.clone(),
-                    commit_shas: citing_shas(&commits, &literal),
-                    other_refs: store_refs + tree_refs(project_root, &files, &literal),
-                }
-            })
+            .filter(|o| o.id != r.id)
+            .map(|o| requirement_text_refs(o, &literal))
+            .sum();
+        Member {
+            uuid: r.id,
+            literal: literal.clone(),
+            title: r.title.clone(),
+            commit_shas: citing_shas(&commits, &literal),
+            other_refs: store_refs + tree_refs(project_root, &files, &literal),
+        }
+    };
+    for (key, group) in groups {
+        let natives: Vec<Member> = group
+            .iter()
+            .filter(|(_, native)| *native)
+            .map(|(r, _)| member(r, r.spec_id.clone().unwrap_or_default()))
             .collect();
-        let survivor = choose_survivor(&members);
-        for (i, m) in members.iter().enumerate() {
-            if i != survivor {
-                out.push(PlannedRenumber {
-                    key: key.clone(),
-                    survivor: members[survivor].clone(),
-                    renumber: m.clone(),
-                });
+        let agreed: Vec<Member> = group
+            .iter()
+            .filter(|(_, native)| !*native)
+            .map(|(r, _)| member(r, r.agreed_id.clone().unwrap_or_default()))
+            .collect();
+        if agreed.len() > 1 {
+            out.unresolved.push(key.clone());
+        }
+        let (survivor, renumber): (Member, Vec<Member>) = match agreed.first() {
+            Some(holder) => (holder.clone(), natives),
+            None => {
+                let keep = choose_survivor(&natives);
+                let rest = natives
+                    .iter()
+                    .enumerate()
+                    .filter(|(i, _)| *i != keep)
+                    .map(|(_, m)| m.clone())
+                    .collect();
+                (natives[keep].clone(), rest)
             }
+        };
+        for m in renumber {
+            out.renumbers.push(PlannedRenumber {
+                key: key.clone(),
+                survivor: survivor.clone(),
+                renumber: m,
+            });
         }
     }
     out
+}
+
+/// Whether `old` (a renumbered spec's former ID) is still the agreed ID of a
+/// spec other than `uuid`. Then the agreed holder keeps the shared identity,
+/// so mentions of `old` already name it and must not be rewritten.
+// trace:TASK-B6B1278890774EF993D2EBC327862470-149 | ai:claude
+fn held_as_agreed_elsewhere(reqs: &[Requirement], uuid: Uuid, old: &str) -> bool {
+    reqs.iter().any(|q| {
+        q.id != uuid
+            && q.agreed_id
+                .as_deref()
+                .is_some_and(|a| aida_core::id_identity::same_id(a, old))
+    })
+}
+
+/// The `(old, new)` pairs whose mentions are rewritten for `rows`: every
+/// renumber except one whose old ID stays another spec's agreed ID.
+// trace:TASK-B6B1278890774EF993D2EBC327862470-149 | ai:claude
+pub(crate) fn mention_pairs(reqs: &[Requirement], rows: &[MappingRow]) -> Vec<(String, String)> {
+    rows.iter()
+        .filter(|r| !held_as_agreed_elsewhere(reqs, r.uuid, &r.old))
+        .map(|r| (r.old.clone(), r.new.clone()))
+        .collect()
 }
 
 /// One line of the old -> new mapping.
@@ -511,8 +567,9 @@ pub(crate) fn build_rewrites(
     preserve: &HashSet<Uuid>,
 ) -> (Vec<(String, Requirement)>, Vec<Requirement>) {
     let map: Vec<(String, String)> = mapping
-        .values()
-        .map(|(old, new, _)| (old.clone(), new.clone()))
+        .iter()
+        .filter(|(uuid, (old, _, _))| !held_as_agreed_elsewhere(reqs, **uuid, old))
+        .map(|(_, (old, new, _))| (old.clone(), new.clone()))
         .collect();
     let mut renames = Vec::new();
     let mut referrers = Vec::new();
@@ -574,12 +631,6 @@ pub(crate) fn rewrite_tree(
     Ok(out)
 }
 
-fn pairs(rows: &[MappingRow]) -> Vec<(String, String)> {
-    rows.iter()
-        .map(|r| (r.old.clone(), r.new.clone()))
-        .collect()
-}
-
 fn print_files(files: &[(String, usize)]) {
     for (f, n) in files {
         println!("  {f}: {n}");
@@ -587,13 +638,11 @@ fn print_files(files: &[(String, usize)]) {
 }
 
 /// UUIDs of the `--preserve` specs (spec or agreed ID, any padding, node
-/// labels expanded). A spec named explicitly that is not in the store is an
-/// error; the [`DEFAULT_PRESERVE`] default may be absent.
+/// labels expanded). A named spec that is not in the store is an error; no
+/// `--preserve` preserves nothing (there is no store-specific default).
 // trace:BUG-B6B1278890774EF993D2EBC327862470-046 | ai:claude
+// trace:TASK-B6B1278890774EF993D2EBC327862470-149 | ai:claude
 pub(crate) fn preserved_uuids(reqs: &[Requirement], ids: &[String]) -> Result<HashSet<Uuid>> {
-    let defaults = [DEFAULT_PRESERVE.to_string()];
-    let explicit = !ids.is_empty();
-    let ids = if explicit { ids } else { &defaults[..] };
     let mut out = HashSet::new();
     for id in ids {
         let want = aida_core::node_alias::expand_or_keep(id);
@@ -607,8 +656,7 @@ pub(crate) fn preserved_uuids(reqs: &[Requirement], ids: &[String]) -> Result<Ha
             Some(r) => {
                 out.insert(r.id);
             }
-            None if explicit => anyhow::bail!("--preserve {id}: no such spec in the store"),
-            None => {}
+            None => anyhow::bail!("--preserve {id}: no such spec in the store"),
         }
     }
     Ok(out)
@@ -634,7 +682,7 @@ pub(crate) fn run(project_root: &Path, store_root: &Path, opts: &FixOptions) -> 
         let rows = saved.context("--tree-only needs an existing --mapping file")?;
         let files = rewrite_tree(
             project_root,
-            &pairs(&rows),
+            &mention_pairs(&reqs, &rows),
             opts.dry_run,
             opts.mapping.as_deref(),
         )?;
@@ -664,7 +712,16 @@ pub(crate) fn run(project_root: &Path, store_root: &Path, opts: &FixOptions) -> 
             if !opts.dry_run && opts.mapping.is_some() {
                 anyhow::bail!("mapping file not found; create it with --dry-run --mapping <file>");
             }
-            let planned = plan(&reqs, project_root, "origin/main");
+            let Plan {
+                renumbers: planned,
+                unresolved,
+            } = plan(&reqs, project_root, "origin/main");
+            for key in &unresolved {
+                println!(
+                    "  warning: {key} is the agreed ID of more than one spec; renumbering \
+                     native IDs cannot separate them, so this group needs a manual fix"
+                );
+            }
             if planned.is_empty() {
                 println!("No numeric ID collisions: every spec number is used once.");
                 return Ok(());
@@ -737,7 +794,12 @@ pub(crate) fn run(project_root: &Path, store_root: &Path, opts: &FixOptions) -> 
                 .with_context(|| format!("write {}", path.display()))?;
             println!("Saved the mapping to {}.", path.display());
         }
-        let files = rewrite_tree(project_root, &pairs(&rows), true, opts.mapping.as_deref())?;
+        let files = rewrite_tree(
+            project_root,
+            &mention_pairs(&reqs, &rows),
+            true,
+            opts.mapping.as_deref(),
+        )?;
         println!(
             "Would renumber {} spec(s), rewrite {} store referrer(s) and {} tracked file(s).",
             renames.len(),
@@ -755,7 +817,12 @@ pub(crate) fn run(project_root: &Path, store_root: &Path, opts: &FixOptions) -> 
         );
     }
     backend.renumber_requirements(&renames, &referrers, "doctor")?;
-    let files = rewrite_tree(project_root, &pairs(&rows), false, opts.mapping.as_deref())?;
+    let files = rewrite_tree(
+        project_root,
+        &mention_pairs(&reqs, &rows),
+        false,
+        opts.mapping.as_deref(),
+    )?;
     println!(
         "Renumbered {} spec(s); rewrote {} store referrer(s) and {} tracked file(s).",
         renames.len(),

@@ -48,6 +48,7 @@ pub(crate) static REGISTRY: &[&CommandReg] = &[
     &crate::defer_cmd::DEFER,
     &crate::requirements_cli::DEL,
     &crate::deps_cmd::DEPS,
+    &crate::deputy_cmd::DEPUTY,
     &crate::derisk_cmd::DERISK,
     &crate::dev_cmd::DEV,
     &crate::digest_cmd::DIGEST,

@@ -1825,8 +1825,8 @@ pub(crate) static DOCTOR_CATEGORY_ALIASES: &[(&[&str], &str)] = &[
     // a "Quick safety check" modal, so a fresh per-spec worktree strands
     // `aida agent new claude --spec <ID>` in a PTY nobody is watching. Trust
     // inherits from a parent directory, so `[worktree_pool] worktree_parent`
-    // plus one operator grant retires the whole class. Read-only: AIDA never
-    // writes ~/.claude.json. trace:BUG-1700 | ai:claude
+    // plus one operator grant retires the whole class. Read-only; it also reports
+    // the opt-in per-seat pre-trust (BUG-049). trace:BUG-1700 | ai:claude
     (
         &[
             "agent-launch",

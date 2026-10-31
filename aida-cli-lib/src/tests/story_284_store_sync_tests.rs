@@ -96,6 +96,27 @@ fn spec_id_collision_scan_detects_same_id_different_uuid() {
     assert_eq!(collisions[0].claimants.len(), 2);
 }
 
+/// The full-store fallback agrees with the cache scan: padded twins are one
+/// collision under the shared numeric key.
+// trace:TASK-B6B1278890774EF993D2EBC327862470-149 | ai:claude
+#[test]
+fn spec_id_collision_scan_groups_padded_twins() {
+    let mut a = Requirement::new("padded".to_string(), String::new());
+    a.spec_id = Some("TASK-0042".to_string());
+    let mut b = Requirement::new("plain".to_string(), String::new());
+    b.spec_id = Some("TASK-42".to_string());
+    let mut c = Requirement::new("different number".to_string(), String::new());
+    c.spec_id = Some("TASK-420".to_string());
+    let store = RequirementsStore {
+        requirements: vec![a, b, c],
+        ..RequirementsStore::new()
+    };
+    let collisions = find_spec_id_collisions(&store);
+    assert_eq!(collisions.len(), 1);
+    assert_eq!(collisions[0].spec_id, "TASK-42");
+    assert_eq!(collisions[0].claimants.len(), 2);
+}
+
 #[test]
 fn spec_id_collision_scan_ignores_single_claimant() {
     let mut req = Requirement::new("single".to_string(), String::new());

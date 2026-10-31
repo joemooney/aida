@@ -2364,6 +2364,12 @@ fn destroy_inner(
             eprintln!("{error:#}");
         }
     }
+    // BUG-049: drop the seat's Claude Code trust entry with the seat, so
+    // ~/.claude.json does not grow without bound. Teardown never fails on it.
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-049 | ai:claude
+    if let Err(error) = crate::claude_trust::remove_seat_trust(main, clone) {
+        eprintln!("could not remove the seat's Claude Code trust entry: {error:#}");
+    }
     Ok(Destroyed::Removed { salvage: salvaged })
 }
 

@@ -422,6 +422,7 @@ Commands:
   commands      List every command and subcommand as grep-able one-line rows
   skill         Stock and local skill tooling
   alias         Discover built-in shortcuts and manage user-defined aliases
+  deputy        Run jobs other sessions submit, under the grant held by your terminal
   adoption      Adopt AIDA without product-branch files: shared settings and guidance live in
                 `adoption/` on the aida-store branch and are projected into this worktree's
                 git-ignored `.aida/`
@@ -11841,7 +11842,7 @@ Options:
       --preserve <SPEC>
           With --fix id-collisions: leave this spec's own text (title, description, comments) as
           written when applying to the store, e.g. the spec recording the migration's old -> new
-          table. Repeatable. Defaults to the spec that owns the leading-zero migration, when present
+          table. Repeatable
 
       --contradictions
           Run a store-wide semantic contradiction sweep combining mechanical joins in Rust with Jev
@@ -28110,6 +28111,359 @@ Options:
 
   -h, --help
           Print help (see a summary with '-h')
+===== aida deputy
+Run jobs other sessions submit, under the grant held by your terminal.
+
+Start it once in your own terminal, from your shell (`aida deputy`, through the `aida()` shell
+function). It refuses to start without a human terminal, outside the shell function, or without a
+seat grant. Sessions then hand it work with `aida deputy submit -- <command…>`, and get the exit
+code and output back with `--wait`, `aida deputy status <id>` or `aida deputy log <id>`.
+
+A job runs on a terminal only when its command matches a TTY entry you set here (`--allow-tty`, or
+`aida deputy allow`). Every other job runs with no terminal, so a check that needs a person at the
+keyboard refuses it.
+
+Usage: aida deputy [OPTIONS]
+       aida deputy <COMMAND>
+
+Commands:
+  submit  Queue a job for the deputy and print its id
+  status  Show a job's state and result
+  log     Print a job's output
+  cancel  Cancel a queued or running job
+  list    List jobs
+  allow   Let a command prefix run on a terminal (at your terminal only)
+  deny    Remove a TTY entry by id or prefix (at your terminal only)
+  policy  Show the live TTY entries
+  help    Print this message or the help of the given subcommand(s)
+
+Options:
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+      --name <NAME>
+          Name of this deputy; each name has its own queue and ledger
+          
+          [default: default]
+
+      --workers <WORKERS>
+          How many jobs run at once
+          
+          [default: 2]
+
+      --allow-tty <PREFIX>
+          A command prefix that may run on a terminal (repeatable), e.g. 'aida merge-hold clear'
+
+      --ttl <TTL>
+          How long each --allow-tty entry lasts (capped at your grant's expiry)
+          
+          [default: 8h]
+
+      --allow-exec <PATH>
+          An executable other than `aida` that jobs may run (repeatable)
+
+      --allow-scripts
+          Also run shell-script jobs (`submit -f FILE` / `--script`). Script jobs never get a
+          terminal
+
+      --tty-idle <TTY_IDLE>
+          A terminal job silent this long shows as waiting on a prompt in `aida deputy status`. It
+          is never stopped for it; its --timeout still applies
+          
+          [default: 10s]
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida deputy submit
+Queue a job for the deputy and print its id
+
+Usage: aida deputy submit [OPTIONS] [-- <COMMAND>...]
+
+Arguments:
+  [COMMAND]...
+          The command to run, after `--`
+
+Options:
+      --name <NAME>
+          Which deputy
+          
+          [default: default]
+
+      --serial <CLASS>
+          Run one job of this class at a time (e.g. `ship`)
+
+      --wait
+          Wait for the job and exit with its exit code
+
+      --timeout <TIMEOUT>
+          Stop the job after this long
+          
+          [default: 30m]
+
+      --spec <SPEC-ID>
+          The spec this job is for (recorded in the ledger)
+
+  -f, --file <FILE>
+          Run this file's contents as a bash script (needs a deputy started with --allow-scripts)
+
+      --script <BODY>
+          Run this text as a bash script (needs --allow-scripts on the deputy)
+
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida deputy status
+Show a job's state and result
+
+Usage: aida deputy status [OPTIONS] <ID>
+
+Arguments:
+  <ID>
+          The job id `submit` printed
+
+Options:
+      --name <NAME>
+          Which deputy
+          
+          [default: default]
+
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida deputy log
+Print a job's output
+
+Usage: aida deputy log [OPTIONS] <ID>
+
+Arguments:
+  <ID>
+          The job id `submit` printed
+
+Options:
+      --name <NAME>
+          Which deputy
+          
+          [default: default]
+
+      --follow
+          Keep printing output until the job finishes
+
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida deputy cancel
+Cancel a queued or running job
+
+Usage: aida deputy cancel [OPTIONS] <ID>
+
+Arguments:
+  <ID>
+          The job id `submit` printed
+
+Options:
+      --name <NAME>
+          Which deputy
+          
+          [default: default]
+
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida deputy list
+List jobs
+
+Usage: aida deputy list [OPTIONS]
+
+Options:
+      --name <NAME>
+          Which deputy
+          
+          [default: default]
+
+      --state <STATE>
+          Only jobs in this state (incoming, running, done, failed)
+
+      --limit <LIMIT>
+          At most this many jobs per state, newest first
+          
+          [default: 20]
+
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida deputy allow
+Let a command prefix run on a terminal (at your terminal only)
+
+Usage: aida deputy allow [OPTIONS] <PREFIX>
+
+Arguments:
+  <PREFIX>
+          The command prefix, e.g. 'aida merge-hold clear'
+
+Options:
+      --name <NAME>
+          Which deputy
+          
+          [default: default]
+
+      --ttl <TTL>
+          How long the entry lasts (capped at your grant's expiry)
+          
+          [default: 8h]
+
+      --single-use
+          The entry is used up by the first job that matches it
+
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida deputy deny
+Remove a TTY entry by id or prefix (at your terminal only)
+
+Usage: aida deputy deny [OPTIONS] <ENTRY>
+
+Arguments:
+  <ENTRY>
+          The entry id, or its exact prefix
+
+Options:
+      --name <NAME>
+          Which deputy
+          
+          [default: default]
+
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida deputy policy
+Show the live TTY entries
+
+Usage: aida deputy policy [OPTIONS]
+
+Options:
+      --name <NAME>
+          Which deputy
+          
+          [default: default]
+
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+  -h, --help
+          Print help (see a summary with '-h')
 ===== aida adoption
 Adopt AIDA without product-branch files: shared settings and guidance live in `adoption/` on the
 aida-store branch and are projected into this worktree's git-ignored `.aida/`
@@ -40502,7 +40856,7 @@ Working on aida itself
       {
         "name": "preserve",
         "takes_value": true,
-        "help": "With --fix id-collisions: leave this spec's own text (title, description, comments) as written when applying to the store, e.g. the spec recording the migration's old -> new table. Repeatable. Defaults to the spec that owns the leading-zero migration, when present"
+        "help": "With --fix id-collisions: leave this spec's own text (title, description, comments) as written when applying to the store, e.g. the spec recording the migration's old -> new table. Repeatable"
       },
       {
         "name": "since",
@@ -56913,6 +57267,374 @@ Working on aida itself
         "name": "project",
         "takes_value": false,
         "help": "Remove from the project store (`.aida/aliases.toml`)"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "deputy"
+    ],
+    "about": "Run jobs other sessions submit, under the grant held by your terminal",
+    "flags": [
+      {
+        "name": "allow-exec",
+        "takes_value": true,
+        "help": "An executable other than `aida` that jobs may run (repeatable)"
+      },
+      {
+        "name": "allow-scripts",
+        "takes_value": false,
+        "help": "Also run shell-script jobs (`submit -f FILE` / `--script`). Script jobs never get a terminal"
+      },
+      {
+        "name": "allow-tty",
+        "takes_value": true,
+        "help": "A command prefix that may run on a terminal (repeatable), e.g. 'aida merge-hold clear'"
+      },
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "keep-after-mandate",
+        "takes_value": false,
+        "help": "Keep running after the mandate expires (the mandate tie-in arrives in a later release; accepted now so start lines stay stable)"
+      },
+      {
+        "name": "name",
+        "takes_value": true,
+        "help": "Name of this deputy; each name has its own queue and ledger"
+      },
+      {
+        "name": "ttl",
+        "takes_value": true,
+        "help": "How long each --allow-tty entry lasts (capped at your grant's expiry)"
+      },
+      {
+        "name": "tty-idle",
+        "takes_value": true,
+        "help": "A terminal job silent this long shows as waiting on a prompt in `aida deputy status`. It is never stopped for it; its --timeout still applies"
+      },
+      {
+        "name": "workers",
+        "takes_value": true,
+        "help": "How many jobs run at once"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "deputy",
+      "submit"
+    ],
+    "about": "Queue a job for the deputy and print its id",
+    "flags": [
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "file",
+        "takes_value": true,
+        "help": "Run this file's contents as a bash script (needs a deputy started with --allow-scripts)"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "name",
+        "takes_value": true,
+        "help": "Which deputy"
+      },
+      {
+        "name": "script",
+        "takes_value": true,
+        "help": "Run this text as a bash script (needs --allow-scripts on the deputy)"
+      },
+      {
+        "name": "serial",
+        "takes_value": true,
+        "help": "Run one job of this class at a time (e.g. `ship`)"
+      },
+      {
+        "name": "spec",
+        "takes_value": true,
+        "help": "The spec this job is for (recorded in the ledger)"
+      },
+      {
+        "name": "timeout",
+        "takes_value": true,
+        "help": "Stop the job after this long"
+      },
+      {
+        "name": "wait",
+        "takes_value": false,
+        "help": "Wait for the job and exit with its exit code"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "deputy",
+      "status"
+    ],
+    "about": "Show a job's state and result",
+    "flags": [
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "name",
+        "takes_value": true,
+        "help": "Which deputy"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "deputy",
+      "log"
+    ],
+    "about": "Print a job's output",
+    "flags": [
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "follow",
+        "takes_value": false,
+        "help": "Keep printing output until the job finishes"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "name",
+        "takes_value": true,
+        "help": "Which deputy"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "deputy",
+      "cancel"
+    ],
+    "about": "Cancel a queued or running job",
+    "flags": [
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "name",
+        "takes_value": true,
+        "help": "Which deputy"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "deputy",
+      "list"
+    ],
+    "about": "List jobs",
+    "flags": [
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "limit",
+        "takes_value": true,
+        "help": "At most this many jobs per state, newest first"
+      },
+      {
+        "name": "name",
+        "takes_value": true,
+        "help": "Which deputy"
+      },
+      {
+        "name": "state",
+        "takes_value": true,
+        "help": "Only jobs in this state (incoming, running, done, failed)"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "deputy",
+      "allow"
+    ],
+    "about": "Let a command prefix run on a terminal (at your terminal only)",
+    "flags": [
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "name",
+        "takes_value": true,
+        "help": "Which deputy"
+      },
+      {
+        "name": "single-use",
+        "takes_value": false,
+        "help": "The entry is used up by the first job that matches it"
+      },
+      {
+        "name": "ttl",
+        "takes_value": true,
+        "help": "How long the entry lasts (capped at your grant's expiry)"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "deputy",
+      "deny"
+    ],
+    "about": "Remove a TTY entry by id or prefix (at your terminal only)",
+    "flags": [
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "name",
+        "takes_value": true,
+        "help": "Which deputy"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "deputy",
+      "policy"
+    ],
+    "about": "Show the live TTY entries",
+    "flags": [
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "name",
+        "takes_value": true,
+        "help": "Which deputy"
       }
     ],
     "hidden": false

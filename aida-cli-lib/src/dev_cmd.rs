@@ -1637,7 +1637,7 @@ pub(crate) const SHELL_HELPERS: &str = r#"# AIDA shell wrapper.
 # `zsh-localopts` says the wrapper scopes options with `setopt localoptions`
 # under zsh rather than bare `local -` (which leaked every parameter/API key).
 # (trace:BUG-2005)
-export AIDA_SHELL_WRAPPER='role,session,dev,worktree,worktree-exit,worktree-stale,eval-block,init-cd-file,zsh-localopts'
+export AIDA_SHELL_WRAPPER='role,session,dev,worktree,worktree-exit,worktree-stale,eval-block,init-cd-file,zsh-localopts,deputy'
 
 aida() {
     # trace:BUG-1811 | ai:antigravity
@@ -1720,6 +1720,14 @@ AIDA_WRAPPER_OUTPUT
                 printf '%s' "$_aida_out"
             fi
             return 0
+            ;;
+        "deputy "*|"runloop "*)
+            # `aida deputy` starts the operator's stand-in, which must run in
+            # THIS shell so its jobs inherit this shell's grant. The marker is
+            # a per-command prefix, never exported, so a bare-binary run
+            # (`command aida deputy`) cannot present it and is refused.
+            # trace:STORY-B6B1278890774EF993D2EBC327862470-099 | ai:claude
+            AIDA_DEPUTY_VIA_WRAPPER=1 command aida "$@"
             ;;
         "init"|"init "*)
             # STORY-780: `aida init <DIR>` finishes by handing this shell a
