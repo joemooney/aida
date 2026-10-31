@@ -283,6 +283,15 @@ pub(crate) struct HelloContext {
     pub role: String,
     pub spec: Option<String>,
     pub path: PathBuf,
+    /// When this session's registry entry started; a record sent before it
+    /// belongs to an earlier session that reused the handle.
+    pub session_started: Option<DateTime<Utc>>,
+}
+
+/// PURE: whether `rec` was sent by the session that started at `started`
+/// (or the session is unknown), rather than an earlier one with this handle.
+pub(crate) fn sent_this_session(rec: &HelloRecord, started: Option<DateTime<Utc>>) -> bool {
+    started.is_none_or(|s| rec.sent_at >= s)
 }
 
 /// What [`send_hello`] did.
@@ -304,7 +313,7 @@ impl SendOutcome {
     }
 }
 
-fn hello_message(
+pub(crate) fn hello_message(
     id: &str,
     ctx: &HelloContext,
     to: &str,
@@ -340,8 +349,9 @@ fn hello_message(
     }
 }
 
-/// Mail the advisor role once for `ctx.handle`. With no live advisor the
-/// send is queued for the role, as `--queue-for-role` does.
+/// Mail the advisor role once per session for `ctx.handle`. With no live
+/// advisor the send is queued for the role, as `--queue-for-role` does. A
+/// record left by an earlier session with the same handle is replaced.
 pub(crate) fn send_hello(
     home: &MailboxHome,
     store_root: &Path,
@@ -349,7 +359,9 @@ pub(crate) fn send_hello(
     now: DateTime<Utc>,
 ) -> Result<SendOutcome> {
     let root = home.root();
-    if let Some(rec) = load_record(root, &ctx.handle) {
+    if let Some(rec) =
+        load_record(root, &ctx.handle).filter(|r| sent_this_session(r, ctx.session_started))
+    {
         return Ok(SendOutcome::AlreadySent(rec));
     }
     let id = uuid::Uuid::new_v4().to_string();
@@ -459,7 +471,8 @@ fn ack_message(
 /// Ack every hello among `shown` (the mail an advisor's inbox read just
 /// displayed): one reply to the sender's handle each, written once, and the
 /// sender's record marked acked when this checkout can reach it. Returns the
-/// handles acked. Best-effort per hello.
+/// handles whose ack this call wrote, so a re-read of an old hello reports
+/// nothing. Best-effort per hello.
 pub(crate) fn ack_hellos(
     home_root: &Path,
     store_root: &Path,
@@ -499,6 +512,7 @@ pub(crate) fn ack_hellos(
                 );
                 continue;
             }
+            acked.push(hello.from.clone());
         }
         if let Some((root, mut rec)) = find_record(&roots, &hello.from) {
             if rec.hello_id == hello.id && rec.acked_at.is_none() {
@@ -507,7 +521,6 @@ pub(crate) fn ack_hellos(
                 let _ = save_record(&root, &rec);
             }
         }
-        acked.push(hello.from.clone());
     }
     acked
 }
@@ -648,13 +661,14 @@ pub(crate) fn run(
     let mut lines = Vec::new();
     let root = home.root().to_path_buf();
     let mut rec = if is_start || !hook {
+        let entry = crate::agent_handle::current_session_entry_for_cwd();
         let ctx = HelloContext {
             handle: handle.clone(),
             from_source,
             role: role.clone().unwrap_or_default(),
-            spec: env_nonempty("AIDA_SESSION_SCOPE").or_else(|| {
-                crate::agent_handle::current_session_entry_for_cwd().and_then(|e| e.current_spec)
-            }),
+            spec: env_nonempty("AIDA_SESSION_SCOPE")
+                .or_else(|| entry.as_ref().and_then(|e| e.current_spec.clone())),
+            session_started: entry.as_ref().map(|e| e.started_at),
             path: crate::find_aida_project_root_from(checkout)
                 .unwrap_or_else(|_| checkout.to_path_buf()),
         };
@@ -700,55 +714,98 @@ pub(crate) fn run(
     Ok(lines)
 }
 
+/// What `aida agent ls` and `aida doctor` read to judge each agent's hello,
+/// so both report the same agents unreachable.
+pub(crate) struct Census {
+    main: PathBuf,
+    store_root: PathBuf,
+    live: Vec<AgentRegistryEntry>,
+    roots: Vec<PathBuf>,
+    policy: Policy,
+    now: DateTime<Utc>,
+}
+
+impl Census {
+    pub(crate) fn new(
+        main: &Path,
+        store_root: PathBuf,
+        live: Vec<AgentRegistryEntry>,
+        policy: Policy,
+        now: DateTime<Utc>,
+    ) -> Self {
+        Self {
+            roots: record_roots(main, &live),
+            main: main.to_path_buf(),
+            store_root,
+            live,
+            policy,
+            now,
+        }
+    }
+
+    pub(crate) fn load(project_root: &Path) -> Self {
+        let store_root = crate::detect_distributed_store_from(project_root)
+            .unwrap_or_else(|| project_root.join(".aida-store"));
+        Self::new(
+            project_root,
+            store_root,
+            crate::agent_registry::load_live_entries(project_root),
+            Policy::load(project_root),
+            Utc::now(),
+        )
+    }
+
+    /// The record and reason when `handle`'s hello from the session that
+    /// started at `started` has no ack past the window. An ack already in a
+    /// mailbox counts even before the agent's record is marked.
+    pub(crate) fn unreachable(
+        &self,
+        handle: Option<&str>,
+        started: DateTime<Utc>,
+    ) -> Option<(HelloRecord, String)> {
+        if !self.policy.enabled {
+            return None;
+        }
+        let (root, rec) = find_record(&self.roots, handle?)?;
+        if !sent_this_session(&rec, Some(started)) {
+            return None;
+        }
+        if rec.acked_at.is_none()
+            && find_ack(
+                &rec,
+                &ack_dirs(&root, &self.main, &self.store_root, &self.live),
+            )
+            .is_some()
+        {
+            return None;
+        }
+        let advisor_live = !live_advisors(&self.live).is_empty();
+        match state(&rec, advisor_live, &self.policy, self.now) {
+            State::Unreachable(reason) => Some((rec, reason)),
+            _ => None,
+        }
+    }
+}
+
 /// The `aida agent ls` suffix for an agent whose hello went unacked past
 /// the window, else empty.
-pub(crate) fn ls_note(
-    roots: &[PathBuf],
-    handle: Option<&str>,
-    advisor_live: bool,
-    policy: &Policy,
-    now: DateTime<Utc>,
-) -> String {
-    let Some((_, rec)) = handle.and_then(|h| find_record(roots, h)) else {
-        return String::new();
-    };
-    match state(&rec, advisor_live, policy, now) {
-        State::Unreachable(reason) => format!("  ⚠ advisor unreachable: {reason}"),
-        _ => String::new(),
-    }
+pub(crate) fn ls_note(census: &Census, handle: Option<&str>, started: DateTime<Utc>) -> String {
+    census
+        .unreachable(handle, started)
+        .map(|(_, reason)| format!("  ⚠ advisor unreachable: {reason}"))
+        .unwrap_or_default()
 }
 
 /// Doctor scan: one finding per live agent whose hello has no ack past the
 /// window, naming the mail path that failed.
 pub(crate) fn doctor_scan(project_root: &Path) -> Vec<DoctorFinding> {
-    let policy = Policy::load(project_root);
-    if !policy.enabled {
-        return Vec::new();
-    }
-    let live = crate::agent_registry::load_live_entries(project_root);
-    let store_root = crate::detect_distributed_store_from(project_root)
-        .unwrap_or_else(|| project_root.join(".aida-store"));
-    let roots = record_roots(project_root, &live);
-    let advisor_live = !live_advisors(&live).is_empty();
-    let now = Utc::now();
-    let mut out = Vec::new();
-    for e in &live {
-        let Some(handle) = e.name.as_deref() else {
-            continue;
-        };
-        let Some((root, rec)) = find_record(&roots, handle) else {
-            continue;
-        };
-        if rec.acked_at.is_none()
-            && find_ack(&rec, &ack_dirs(&root, project_root, &store_root, &live)).is_some()
-        {
-            continue;
-        }
-        if let State::Unreachable(reason) = state(&rec, advisor_live, &policy, now) {
-            out.push(finding(&rec, &reason, now));
-        }
-    }
-    out
+    let census = Census::load(project_root);
+    census
+        .live
+        .iter()
+        .filter_map(|e| census.unreachable(e.name.as_deref(), e.started_at))
+        .map(|(rec, reason)| finding(&rec, &reason, census.now))
+        .collect()
 }
 
 /// PURE: the doctor finding for an unacked hello.

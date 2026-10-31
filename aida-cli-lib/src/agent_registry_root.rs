@@ -83,14 +83,7 @@ pub(crate) fn agent_ls(show_all: bool, stale_only: bool, ended_only: bool) -> Re
     let notes = unobserved_liveness_notes(&agents, observer);
     // trace:STORY-B6B1278890774EF993D2EBC327862470-100 | ai:claude — an
     // agent whose advisor hello went unacked says so after its worktree.
-    let live = agent_registry::load_live_entries(&project_root);
-    let handshake_roots = crate::advisor_handshake::record_roots(&project_root, &live);
-    let handshake_policy = crate::advisor_handshake::Policy::load(&project_root);
-    let advisor_live = live.iter().any(|e| {
-        e.role
-            .as_deref()
-            .is_some_and(|r| canonical_role_name(r) == crate::advisor_handshake::ADVISOR_ROLE)
-    });
+    let handshake = (!ended_only).then(|| crate::advisor_handshake::Census::load(&project_root));
     for agent in agents {
         let elapsed = agent_registry::humanize_elapsed(agent_registry::elapsed_secs_clamped(
             now,
@@ -114,13 +107,11 @@ pub(crate) fn agent_ls(show_all: bool, stale_only: bool, ended_only: bool) -> Re
             Some(g) => format!("  {g}"),
             None => String::new(),
         };
-        if handshake_policy.enabled && !ended_only {
+        if let Some(census) = &handshake {
             paused_note.push_str(&crate::advisor_handshake::ls_note(
-                &handshake_roots,
+                census,
                 agent.name.as_deref(),
-                advisor_live,
-                &handshake_policy,
-                now,
+                agent.started_at,
             ));
         }
         if ended_only {

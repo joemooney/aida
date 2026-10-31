@@ -155,9 +155,10 @@ if [ -z "$agy" ]; then
     hello
     exit 0
 fi
-# JSON-escape the notice lines (backslash, quote, tab; CR dropped; lines
-# joined with \n) — the verb prints plain text with no other control bytes.
-text=$(notice | awk '{ gsub(/\\/, "\\\\"); gsub(/"/, "\\\""); gsub(/\t/, "\\t"); gsub(/\r/, ""); if (NR > 1) printf "\\n"; printf "%s", $0 }')
+# JSON-escape the notice and handshake lines (backslash, quote, tab; CR
+# dropped; lines joined with \n) — the verbs print plain text with no other
+# control bytes. trace:STORY-B6B1278890774EF993D2EBC327862470-100 | ai:claude
+text=$({ notice; hello; } | awk '{ gsub(/\\/, "\\\\"); gsub(/"/, "\\\""); gsub(/\t/, "\\t"); gsub(/\r/, ""); if (NR > 1) printf "\\n"; printf "%s", $0 }')
 [ -n "$text" ] || done_out
 printf '{"injectSteps":[{"systemMessage":{"systemMessage":"%s"}}]}\n' "$text"
 exit 0
