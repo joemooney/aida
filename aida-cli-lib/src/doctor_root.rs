@@ -3,6 +3,11 @@
 
 use crate::*;
 
+/// How long an uncommitted new spec (one a contained session filed, or a host
+/// add whose commit did not run) may wait for a host commit before `aida doctor` reports it (`store-queued-specs`).
+// trace:BUG-B6B1278890774EF993D2EBC327862470-053 | ai:claude
+pub(crate) const QUEUED_SPEC_MAX_AGE_MINUTES: u64 = 30;
+
 #[derive(Debug, Clone, serde::Serialize)]
 pub(crate) struct DoctorFinding {
     pub(crate) category: String,
@@ -836,6 +841,36 @@ pub(crate) fn collect_doctor_findings_at(
                 unwritable.display(),
                 unwritable.display()
             ),
+            safe_heal: false,
+        });
+    }
+    // A new spec object nobody has committed waits in the store worktree for
+    // a host commit: one a contained session filed, or a host add whose
+    // auto-commit failed or was off. Still waiting after QUEUED_SPEC_MAX_AGE
+    // means no host commit has run since: name the specs and the drain.
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-053 | ai:claude
+    let queued = crate::child_store_commit::queued_spec_objects(
+        &store_worktree,
+        std::time::Duration::from_secs(QUEUED_SPEC_MAX_AGE_MINUTES * 60),
+    );
+    if !queued.is_empty() {
+        let oldest = queued
+            .iter()
+            .map(|(_, age)| age.as_secs() / 60)
+            .max()
+            .unwrap_or(0);
+        let ids: Vec<&str> = queued.iter().map(|(id, _)| id.as_str()).collect();
+        push(DoctorFinding {
+            category: "store-worktree".to_string(),
+            id: "store-queued-specs".to_string(),
+            summary: format!(
+                "{} uncommitted new spec{} waiting for a host commit (oldest {oldest} min, over {QUEUED_SPEC_MAX_AGE_MINUTES} min): {}",
+                queued.len(),
+                if queued.len() == 1 { " is" } else { "s are" },
+                ids.join(", ")
+            ),
+            action: "run `aida db sync` from a host (not sandboxed) shell to commit them"
+                .to_string(),
             safe_heal: false,
         });
     }

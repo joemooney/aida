@@ -797,6 +797,10 @@ pub(crate) fn probe_clone_seat_trees(
                     wt.path.display()
                 ))
             } else {
+                // Read-only surface: no origin refresh (no network, no write
+                // to main's refs); main's last-fetched origin refs still excuse
+                // an ancestor-of-origin head.
+                // trace:BUG-B6B1278890774EF993D2EBC327862470-051 | ai:claude
                 crate::seat_clone::probe_until(project_root, &wt.path, &[], deadline)
             };
             (wt, probe)
@@ -2968,6 +2972,8 @@ pub(crate) fn clone_unshipped_work_items_bounded(
             scan.complete = false;
             continue;
         }
+        // Read-only surface: no origin refresh (see probe_clone_seat_trees).
+        // trace:BUG-B6B1278890774EF993D2EBC327862470-051 | ai:claude
         let probe =
             crate::seat_clone::probe_until(project_root, &lease.worktree_path, &[], deadline);
         if deadline.is_some_and(|end| std::time::Instant::now() >= end) {

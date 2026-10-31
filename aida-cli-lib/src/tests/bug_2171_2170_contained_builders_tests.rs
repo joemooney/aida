@@ -9,6 +9,9 @@
 //! - Containment flags (`claude_contained_flags().unwrap()`) are added to argv.
 //! - Interactive questions clarify adds containment flags to argv.
 //! - `AIDA_CONTAINED=1` is exported to child commands.
+//! - BUG-050: every headless lane (contained or not) carries the headless
+//!   posture: one `--settings` turning background tasks off and denying
+//!   `Monitor`, and `--disallowed-tools AskUserQuestion Monitor`.
 //! - `AIDA_SESSION_PURPOSE` is scrubbed from all child commands (BUG-2170).
 //! - Child grants are revoked on exit and on spawn failure (BUG-2170).
 // trace:BUG-2171 trace:BUG-2170 | ai:antigravity
@@ -132,10 +135,8 @@ fn burndown_quiet_builder_argv_and_env_contained_vs_uncontained() {
     let args = args_of(&cmd);
     assert!(args.contains(&"--permission-mode".to_string()));
     assert!(args.contains(&"dontAsk".to_string()));
-    assert!(
-        args.contains(&"--settings".to_string()),
-        "contained quiet burndown must include --settings in argv: {args:?}"
-    );
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-050 | ai:claude
+    crate::session::assert_headless_posture(&args, true, "contained quiet burndown");
 
     // Uncontained
     let cmd_uncontained = build_burndown_quiet_command(
@@ -160,10 +161,9 @@ fn burndown_quiet_builder_argv_and_env_contained_vs_uncontained() {
     let args_uncontained = args_of(&cmd_uncontained);
     assert!(args_uncontained.contains(&"--permission-mode".to_string()));
     assert!(args_uncontained.contains(&"bypassPermissions".to_string()));
-    assert!(
-        !args_uncontained.contains(&"--settings".to_string()),
-        "uncontained quiet burndown must not include --settings: {args_uncontained:?}"
-    );
+    // BUG-050: an uncontained lane is still headless: its one `--settings`
+    // turns background tasks off and denies Monitor, with no sandbox.
+    crate::session::assert_headless_posture(&args_uncontained, false, "uncontained quiet burndown");
 }
 
 #[test]
@@ -203,10 +203,7 @@ fn burndown_verbose_builder_argv_and_env_contained_vs_uncontained() {
     assert!(args.contains(&"stream-json".to_string()));
     assert!(args.contains(&"--verbose".to_string()));
     assert!(args.contains(&"--include-partial-messages".to_string()));
-    assert!(
-        args.contains(&"--settings".to_string()),
-        "contained verbose burndown must include --settings: {args:?}"
-    );
+    crate::session::assert_headless_posture(&args, true, "contained verbose burndown");
     assert_eq!(args.last().unwrap(), "prompt-verbose");
 
     // Uncontained
@@ -232,9 +229,10 @@ fn burndown_verbose_builder_argv_and_env_contained_vs_uncontained() {
     let args_uncontained = args_of(&cmd_uncontained);
     assert!(args_uncontained.contains(&"--permission-mode".to_string()));
     assert!(args_uncontained.contains(&"bypassPermissions".to_string()));
-    assert!(
-        !args_uncontained.contains(&"--settings".to_string()),
-        "uncontained verbose burndown must not include --settings: {args_uncontained:?}"
+    crate::session::assert_headless_posture(
+        &args_uncontained,
+        false,
+        "uncontained verbose burndown",
     );
     assert_eq!(args_uncontained.last().unwrap(), "prompt-verbose");
 }
@@ -279,10 +277,7 @@ fn autopilot_intake_builder_argv_and_env_contained_vs_uncontained() {
     let args = args_of(&cmd);
     assert!(args.contains(&"--permission-mode".to_string()));
     assert!(args.contains(&"dontAsk".to_string()));
-    assert!(
-        args.contains(&"--settings".to_string()),
-        "contained autopilot intake must include --settings: {args:?}"
-    );
+    crate::session::assert_headless_posture(&args, true, "contained autopilot intake");
 
     // Uncontained
     let cmd_uncontained = build_autopilot_intake_command(
@@ -312,9 +307,10 @@ fn autopilot_intake_builder_argv_and_env_contained_vs_uncontained() {
     let args_uncontained = args_of(&cmd_uncontained);
     assert!(args_uncontained.contains(&"--permission-mode".to_string()));
     assert!(args_uncontained.contains(&"bypassPermissions".to_string()));
-    assert!(
-        !args_uncontained.contains(&"--settings".to_string()),
-        "uncontained autopilot intake must not include --settings: {args_uncontained:?}"
+    crate::session::assert_headless_posture(
+        &args_uncontained,
+        false,
+        "uncontained autopilot intake",
     );
 }
 
@@ -374,12 +370,12 @@ fn burndown_verbose_args_with_containment_helper() {
     let uncontained_args =
         burndown_verbose_claude_args_with_containment("/aida-burndown", "acceptEdits", false)
             .unwrap();
-    assert!(!uncontained_args.contains(&"--settings".to_string()));
+    crate::session::assert_headless_posture(&uncontained_args, false, "verbose args");
     assert_eq!(uncontained_args.last().unwrap(), "/aida-burndown");
 
     let contained_args =
         burndown_verbose_claude_args_with_containment("/aida-burndown", "dontAsk", true).unwrap();
-    assert!(contained_args.contains(&"--settings".to_string()));
+    crate::session::assert_headless_posture(&contained_args, true, "contained verbose args");
     assert_eq!(contained_args.last().unwrap(), "/aida-burndown");
 }
 

@@ -520,7 +520,9 @@ pub(crate) fn salvage_worktree_patch(
     // it rather than tear down work it could not capture.
     // trace:TASK-2053 | ai:claude
     if let Some(clone) = aida_core::seat_clone_detect::seat_clone_root(worktree) {
-        return match crate::seat_clone::probe(project_root, &clone) {
+        // trace:BUG-B6B1278890774EF993D2EBC327862470-051 | ai:claude
+        return match crate::seat_clone::probe_counting_origin(project_root, &clone, None, &[], None)
+        {
             crate::seat_clone::Probe::Known(facts) if !facts.unshipped() => Ok(None),
             crate::seat_clone::Probe::Known(_) => {
                 crate::seat_clone::salvage(project_root, &clone).map(Some)
