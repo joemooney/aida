@@ -23,12 +23,12 @@ description: |
 
   ## Out of scope
   Changing the delegation policy itself (a grant still does not implicitly delegate its own seat). Separate cosmetic oddity, not required here: `role enter --no-resume` prints "✓ Resumed role".
-status: InProgress
+status: Done
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T18:05:17.938860854Z
-modified_at: 2026-10-31T20:21:09.219542286Z
+modified_at: 2026-10-31T20:44:10.999483572Z
 req_type: Bug
 tags:
 - area:agents
@@ -101,6 +101,15 @@ history:
   timestamp: 2026-10-31T20:17:44.983250792Z
   session_id: f5694f22-ff09-4e87-8934-e79adca4efba
   changes: []
+- id: 01a193b4-a1ff-70a3-943d-679043a2dff2
+  author: joe
+  timestamp: 2026-10-31T20:44:11.135098279Z
+  session_id: 01a1939e269d
+  harness_version: 2.1.316 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 filed_at:
   code_sha: 53817a25ee83981f919be3dbcee742234338ab9a
   branch: main
@@ -108,3 +117,7 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: '79664625335'
   vendor: claude
+implementation_info:
+  implemented: true
+  implemented_at: 2026-10-31T20:44:10.999483572Z
+  implemented_by: joe
