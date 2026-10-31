@@ -17,7 +17,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T22:17:06.607335957Z
-modified_at: 2026-10-31T22:23:27.544223639Z
+modified_at: 2026-10-31T22:25:24.808959796Z
 req_type: Story
 tags:
 - agent-new
@@ -62,6 +62,18 @@ comments:
   modified_at: 2026-10-31T22:23:16.506503999Z
   session_id: 01a1940e10b7
   harness_version: 2.1.316 (Claude Code)
+- id: 01a19411-4f48-76d3-8ff9-6da6ce55dc27
+  author: joe
+  content: |-
+    ADVISOR SIGNOFF 15:27 on the inline-grant sketch: APPROVED. Rulings:
+    Q1 lifetime: inline parent TTL = min(8h, the configured seat max). 'Only for this launch' means never exported and bound to the launcher, not revoked at spawn; the child clamps to the parent's expiry as today.
+    Q2 binding: a child validates its parent chain by id, expiry and revocation ONLY, never by the parent's process binding. Verify grant_check does this; if it checks the parent binding, change that for inline-origin parents and say so in the PR. REQUIRED TEST: the launcher process exits (the --bg case) and the child grant still validates. Resume of an existing child is fine while the parent is unexpired; deriving a NEW child from an inline parent (rework rounds, re-derivation) needs a fresh human prompt, so inline parents are not re-derivable.
+    Q3 audit: the SeatGrant record with origin='agent-new-inline' is the record, consistent with role enter. No new history event.
+    Q4 parent seat: hardcode advisor; if the roster refuses the principal that seat, today's refusal.
+    Implementation brief: build exactly the sketch plus the rulings above. Gate (STRICT, security-adjacent): cargo test -p aida-cli-lib seat_authority + agent_launch filters; the new PTY test; make check-ci-fast. Open the PR via aida ship.
+  created_at: 2026-10-31T22:25:24.808959796Z
+  modified_at: 2026-10-31T22:25:24.808959796Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
 history:
 - id: 01a1940e-15d9-7e13-bbb4-79222982ffb5
   author: aida-session-start
