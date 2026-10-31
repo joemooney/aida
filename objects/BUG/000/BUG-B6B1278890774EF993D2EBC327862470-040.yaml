@@ -9,12 +9,12 @@ description: |-
   3. Unread mail older than N days (default 7) from automated senders (review-watch) is auto-archived or summarized as one line, so it cannot bury new mail.
   4. A [request] unread for more than 30 minutes escalates in `aida awaiting` as an item for the addressed seat.
   5. Test: a role-addressed handoff from another vendor shows by sender and subject in the next per-turn notice.
-status: InProgress
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T14:11:52.122081904Z
-modified_at: 2026-10-30T23:31:45.166590814Z
+modified_at: 2026-10-31T04:48:33.965160826Z
 req_type: Bug
 relationships:
 - rel_type: Child
@@ -183,6 +183,20 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a19049-bca7-7f10-88a0-088f9a49c5ed
+  author: aida-auto-bump
+  timestamp: 2026-10-31T04:48:33.959851284Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a19049-bcad-74e1-ae09-90c098ca27db
+  timestamp: 2026-10-31T04:48:33.965157030Z
+  agent: implementer
+  commit_sha: 6c83f400789b80184adedda5c356bb2a8a81534c
+  summary: 'Base-only update from main (gh update-branch d83e0a40e688c9edbc20cf6015eee155e6bcb64a -> 780045e8ac42ae4a724b24c4fe5ac0614a920e5c); reviewed content unchanged, prior approval carried; serial ship after main fix #2646.'
+  review_verdict: approved
 filed_at:
   code_sha: 7ee1fa1789a1285dba7a9790422628d1043b62d5
   branch: main
@@ -195,4 +209,6 @@ implementation_info:
   implemented: true
   implemented_at: 2026-10-30T17:11:06.786358299Z
   implemented_by: joe
+  completed_at: 2026-10-31T04:48:33.959846342Z
+  completion_sha: 6c83f400789b80184adedda5c356bb2a8a81534c
   reopened_at_sha: d7ff223575290d0a2d3d749400efa29f7ed24605
