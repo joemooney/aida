@@ -17,7 +17,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T23:17:06.038259824Z
-modified_at: 2026-10-31T12:13:52.986432913Z
+modified_at: 2026-10-31T13:07:39.625275362Z
 req_type: Bug
 tags:
 - ids
@@ -300,6 +300,13 @@ comments:
   content: 'FOLLOW-UPS (one draft task wanted, per the 2026-10-28 rule; this seat could not mint it because the sandbox makes ID allocation read-only, so the advisor needs to file it): (1) the server REST/gRPC surfaces still expose id_config.digits, which no longer governs minting; (2) drop ''digits: 4'' from the store metadata.yaml after the apply; (3) switch the cache sync guard spec_id_collisions from text grouping to id_key grouping after the apply. The cache lookups now use the indexed id_key and agreed_id_key columns (schema 16), so finding 13 is closed and needs no follow-up.'
   created_at: 2026-10-31T12:13:52.986432913Z
   modified_at: 2026-10-31T12:13:52.986432913Z
+  session_id: 01a191cf86c2
+  harness_version: 2.1.316 (Claude Code)
+- id: 01a19212-abe9-7252-b1d1-d996c3138a73
+  author: joe
+  content: 'ROUND 2 pushed: 287fee637b9 on top of the salvaged 364942e1e08 (no force push). Per the 04:08 ruling the store is NOT renumbered: the mapping is posted (spec comment above and on PR-3161), and only its tracked-tree rewrites are committed (38 files). The advisor runs the store apply after merge. Gate: aida-core targeted run 264 pass; cli-lib doctor_renumber 7/7, help golden, bug_1723, pr_ship and init_cmd pass, except init_at_non_tty_writes_no_team_roster, which fails only in this sandbox (read-only hermetic HOME); aida-cli bug_046_padded_id_cli 4/4 and bug_1502_format_json_audit 9/9; make check-ci-fast exit 0; make check-ci-compile exit 0; the manual spec-ID leak scan is clean. NOT RUN: clippy and the full CI suite; CI on 287fee6 has not been watched. Deviations: (1) this seat''s sandbox refused to execute the worktree binary, so the tree-only rewrite used a line-for-line Python port of rewrite_tracked_text; (2) the help golden was hand-edited because the AIDA_UPDATE_SNAPSHOTS run was refused, and the test now passes; (3) the follow-up draft task could not be minted (read-only ID allocation), see the FOLLOW-UPS comment.'
+  created_at: 2026-10-31T13:07:39.625275362Z
+  modified_at: 2026-10-31T13:07:39.625275362Z
   session_id: 01a191cf86c2
   harness_version: 2.1.316 (Claude Code)
 history:
