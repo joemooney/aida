@@ -335,6 +335,12 @@ pub struct NodeRegistryEntry {
     pub user: Option<String>,
     /// Registration timestamp
     pub registered: DateTime<Utc>,
+    /// When the node was retired (its specs renamed into another node's
+    /// local IDs). A retired node keeps its row, so its ID is never reissued,
+    /// but it allocates nothing: no local IDs, no block claims.
+    // trace:STORY-B6B1278890774EF993D2EBC327862470-105 | ai:claude
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub retired_at: Option<DateTime<Utc>>,
 }
 
 /// Slugify a component of a default node name: lowercase, keep `[a-z0-9_-]`,
@@ -596,7 +602,16 @@ impl NodeRegistry {
             name: Some(name),
             user,
             registered: Utc::now(),
+            retired_at: None,
         });
+    }
+
+    /// Whether `node_id` is registered and retired (case-insensitive).
+    // trace:STORY-B6B1278890774EF993D2EBC327862470-105 | ai:claude
+    pub fn is_retired(&self, node_id: &str) -> bool {
+        self.nodes
+            .iter()
+            .any(|n| n.id.eq_ignore_ascii_case(node_id) && n.retired_at.is_some())
     }
 
     /// Remove a node by id. Returns true if the entry existed.
@@ -880,6 +895,41 @@ impl BlockRegistry {
         if let Some(parent) = path.parent() {
             std::fs::create_dir_all(parent)?;
         }
+        let content = serde_yaml::to_string(self)?;
+        crate::write_atomic(path, content)?;
+        Ok(())
+    }
+
+    /// Save after dispensing from a delegated block on a non-root clone.
+    ///
+    /// The only change admitted against the registry on disk is `next`
+    /// advancing on `node_id`'s own blocks: no block is added, removed,
+    /// re-ranged or re-bound, so this can never mint a claim. The root (or a
+    /// file outside a clone) takes the ordinary [`save`](Self::save) path.
+    // trace:STORY-B6B1278890774EF993D2EBC327862470-105 | ai:claude
+    #[cfg(feature = "native")]
+    pub fn save_dispensed(&self, path: &Path, node_id: &str) -> anyhow::Result<()> {
+        let parent = path.parent().unwrap_or(Path::new("."));
+        let root = parent.parent().unwrap_or(parent);
+        if crate::allocation_authority::resolve(root).is_ok_and(|m| m.authoritative)
+            || !crate::allocation_authority::in_git_clone(root).unwrap_or(true)
+        {
+            return self.save(path);
+        }
+        #[cfg(unix)]
+        crate::transport_policy::refuse_unsupported(path)?;
+        let on_disk = Self::load(path)?;
+        let same_shape = on_disk.blocks.len() == self.blocks.len()
+            && on_disk.blocks.iter().zip(&self.blocks).all(|(old, new)| {
+                let mut moved = new.clone();
+                moved.next = old.next;
+                moved == *old
+                    && (new.next == old.next || (new.node_id == node_id && new.next > old.next))
+            });
+        anyhow::ensure!(
+            same_shape,
+            "a non-root clone may only advance its own delegated blocks; registry/blocks.yaml was not written"
+        );
         let content = serde_yaml::to_string(self)?;
         crate::write_atomic(path, content)?;
         Ok(())
@@ -1767,6 +1817,7 @@ registered = "2026-05-09T00:00:00Z"
             name: None,
             user: None,
             registered: Utc::now(),
+            retired_at: None,
         };
         // owner falls back to the email local-part …
         assert_eq!(entry.owner(), "alice");
@@ -1783,6 +1834,7 @@ registered = "2026-05-09T00:00:00Z"
             name: None,
             user: None,
             registered: Utc::now(),
+            retired_at: None,
         };
         assert_eq!(bare.owner(), "42");
         assert_eq!(bare.display_name(), "imac-42-9");
@@ -2245,6 +2297,7 @@ registered = "2026-01-01T00:00:00Z"
             name: None,
             user: None,
             registered: Utc::now(),
+            retired_at: None,
         }
     }
 

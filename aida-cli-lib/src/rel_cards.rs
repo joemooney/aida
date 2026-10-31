@@ -6,6 +6,13 @@ use crate::*;
 /// Read node_id from the store's node.toml; defaults to 1 for unregistered nodes.
 pub(crate) fn load_node_id(store_path: &std::path::Path) -> String {
     use aida_core::NodeConfig;
+    // The clone's work binding names its node ahead of the store's legacy
+    // `.aida/node.toml`, which a shared store can still carry from an older
+    // clone (node `1` on the home store). Blocks and local IDs must both be
+    // this clone's. trace:STORY-B6B1278890774EF993D2EBC327862470-105 | ai:claude
+    if let Ok(Some(binding)) = aida_core::work_binding::load(store_path) {
+        return binding.node_id;
+    }
     let node_config_path = store_path.join(".aida").join("node.toml");
     if node_config_path.exists() {
         NodeConfig::load(&node_config_path)
@@ -54,7 +61,12 @@ pub(crate) fn load_dispenser(
     use aida_core::node::NodeConfig;
 
     // trace:BUG-2017 | ai:codex — no default node or global fallback on WORK.
-    if !aida_core::allocation_authority::resolve(store_path)?.authoritative {
+    // A bound root clone mints node-local IDs from its bound counter too:
+    // the agreed ID comes from a block, the local ID from this dispenser.
+    // trace:STORY-B6B1278890774EF993D2EBC327862470-105 | ai:claude
+    if !aida_core::allocation_authority::resolve(store_path)?.authoritative
+        || aida_core::work_binding::load(store_path)?.is_some()
+    {
         // trace:BUG-2017 | ai:codex — migration happens on admitted allocation,
         // not provider loading before a global-request refusal.
         return Ok(aida_core::allocation_authority::lifecycle_dispenser(

@@ -32,6 +32,7 @@ fn node() -> NodeRegistryEntry {
         name: None,
         user: None,
         registered: at(),
+        retired_at: None,
     }
 }
 

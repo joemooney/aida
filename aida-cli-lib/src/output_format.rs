@@ -212,6 +212,45 @@ pub(crate) fn toon_list_fields(csv: Option<&str>) -> Result<Vec<String>> {
     Ok(out)
 }
 
+/// The agent-mode `local_id` cell: the spec's local ID when it differs from
+/// the agreed ID shown in `id`, `(agreed id pending)` for a local-only spec,
+/// and empty for a spec with one ID.
+// trace:STORY-B6B1278890774EF993D2EBC327862470-105 | ai:claude
+pub(crate) fn toon_local_id_cell(agreed_id: Option<&str>, spec_id: Option<&str>) -> String {
+    if aida_core::node_alias::agreed_id_pending(agreed_id, spec_id) {
+        return "(agreed id pending)".to_string();
+    }
+    let agreed = agreed_id.map(str::trim).filter(|a| !a.is_empty());
+    let local = spec_id.map(str::trim).filter(|s| !s.is_empty());
+    match (agreed, local) {
+        (Some(a), Some(l)) if !aida_core::id_identity::same_id(a, l) => {
+            aida_core::node_alias::display_spec_id(l)
+        }
+        _ => String::new(),
+    }
+}
+
+/// Whether any row has a `local_id` cell, so the default agent list adds the
+/// column right after `id` (a store with only one-ID specs keeps its shape).
+// trace:STORY-B6B1278890774EF993D2EBC327862470-105 | ai:claude
+pub(crate) fn with_local_id_column(
+    mut selected: Vec<String>,
+    explicit_fields: bool,
+    reqs: &[aida_core::RequirementSummary],
+) -> Vec<String> {
+    if explicit_fields || selected.iter().any(|f| f == "local_id") {
+        return selected;
+    }
+    let any = reqs
+        .iter()
+        .any(|r| !toon_local_id_cell(r.agreed_id.as_deref(), r.spec_id.as_deref()).is_empty());
+    if any {
+        let at = selected.iter().position(|f| f == "id").map_or(0, |i| i + 1);
+        selected.insert(at, "local_id".to_string());
+    }
+    selected
+}
+
 /// Project one requirement summary + its routing triple `(in_flight, blocked,
 /// queued)` onto a single named list field, as the cell string for a TOON row.
 // trace:TASK-964
@@ -229,6 +268,10 @@ pub(crate) fn toon_list_cell(
                 .or(r.spec_id.as_deref())
                 .unwrap_or(""),
         ),
+        // The local ID beside the agreed one; a local-only spec says its
+        // agreed ID is pending (its `id` cell already is the local ID).
+        // trace:STORY-B6B1278890774EF993D2EBC327862470-105 | ai:claude
+        "local_id" => toon_local_id_cell(r.agreed_id.as_deref(), r.spec_id.as_deref()),
         "title" => r.title.clone(),
         // BUG-781: the agent surface reports the TERMINAL truth for an accepted
         // decision — `accepted`, the recognized ADR verb — not the `approved`
