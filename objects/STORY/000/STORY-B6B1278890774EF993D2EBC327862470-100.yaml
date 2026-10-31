@@ -12,12 +12,12 @@ description: |
   5. Test: an agent in a seat clone sends hello; the advisor in the primary sees it; the agent sees the ack. This test fails until BUG-HOME-031 is fixed.
 
   Depends on BUG-HOME-031 (seat-clone mail reaches the primary inbox).
-status: NeedsAttention
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T03:41:28.973506961Z
-modified_at: 2026-10-31T06:58:14.986870722Z
+modified_at: 2026-10-31T07:02:11.866596360Z
 req_type: Story
 relationships:
 - rel_type: BlockedBy
@@ -76,6 +76,12 @@ comments:
   created_at: 2026-10-31T06:58:14.986870722Z
   modified_at: 2026-10-31T06:58:14.986870722Z
   session_id: 510d8c08-7912-4189-943d-65d110c7abc2
+- id: 01a190c4-149a-7013-8db7-c2d833e9d1ef
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Core handshake logic is sound and AC1/AC4/AC5 are tested at the function level, but CI cli-0 is red at the head (main green at parent), AC2/AC3 command wiring is untested, the Antigravity hook branch skips the hello, and agent ls disagrees with doctor on acked hellos.. No triage reason was given.'
+  created_at: 2026-10-31T07:02:11.866593932Z
+  modified_at: 2026-10-31T07:02:11.866593932Z
+  session_id: 510d8c08-7912-4189-943d-65d110c7abc2
 history:
 - id: 01a18ae6-1e13-7781-8ad3-aa7c7eaef9ba
   author: joe
@@ -122,6 +128,14 @@ history:
   - field_name: status
     old_value: Done
     new_value: NeedsAttention
+- id: 01a190c4-149a-7013-8db7-c2c8857289d1
+  author: joe
+  timestamp: 2026-10-31T07:02:11.866581160Z
+  session_id: 510d8c08-7912-4189-943d-65d110c7abc2
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: 9a86ae54ce569534e059b0cf19565f3ce9b46c59
   branch: main
@@ -134,11 +148,3 @@ implementation_info:
   implemented: true
   implemented_at: 2026-10-31T00:16:24.205377929Z
   implemented_by: joe
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: Core handshake logic is sound and AC1/AC4/AC5 are tested at the function level, but CI cli-0 is red at the head (main green at parent), AC2/AC3 command wiring is untested, the Antigravity hook branch skips the hello, and agent ls disagrees with doctor on acked hellos.
-  recovery_hint: address the review findings, move STORY-B6B1278890774EF993D2EBC327862470-100 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-10-31T00:31:13.491711762Z
