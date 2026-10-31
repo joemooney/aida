@@ -1309,11 +1309,10 @@ pub(crate) fn emit_notice_time_line() {
     // Tail-read of the hook's transcript only; silent below the ceiling.
     // trace:STORY-1464 | ai:claude
     if let Ok(payload) = std::env::var("AIDA_HOOK_PAYLOAD") {
-        let seat = std::env::var("AIDA_SESSION_ROLE")
-            .ok()
-            .filter(|s| !s.trim().is_empty())
-            .map(|s| canonical_role_name(&s))
-            .unwrap_or_else(|| "<seat>".to_string());
+        // The same seat resolver the handoff commands use, so a rotation
+        // supervisor's seat wins. trace:STORY-B6B1278890774EF993D2EBC327862470-101 | ai:claude
+        let seat = crate::session_misc::resolve_handoff_seat(None)
+            .unwrap_or_else(|_| "<seat>".to_string());
         if let Some(line) = seat_rotation::notice_from_hook_payload(&payload, &seat) {
             println!("{line}");
         }

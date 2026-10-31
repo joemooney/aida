@@ -626,6 +626,20 @@ pub enum SessionCommand {
         #[clap(long, value_name = "SEAT")]
         seat: Option<String>,
 
+        /// With `--write`: this is the last handoff of the run, so an
+        /// `aida agent new --rotate` supervisor exits instead of relaunching.
+        // trace:STORY-B6B1278890774EF993D2EBC327862470-101 | ai:claude
+        #[clap(long = "final", requires = "write")]
+        final_: bool,
+
+        /// With `--show`, inside a session `aida agent new --rotate`
+        /// relaunched: show exactly the handoff its supervisor matched
+        /// (`AIDA_ROTATION_HANDOFF`), not the seat's latest. The SessionStart
+        /// hook's call.
+        // trace:STORY-B6B1278890774EF993D2EBC327862470-101 | ai:claude
+        #[clap(long, hide = true, requires = "show")]
+        rotated: bool,
+
         /// Manage the seat's repo-local standing orders
         /// (`.aida/standing-orders/<seat>.md`): `add "<text>"` appends a dated
         /// entry, `list` prints them. `--show` prints standing orders before
@@ -1202,6 +1216,16 @@ pub enum AgentNewCommand {
         // trace:SPIKE-34 | ai:claude
         #[clap(long = "bg")]
         bg: bool,
+
+        /// Supervise the session across context rotations: when it exits
+        /// after writing a fresh seat handoff, relaunch it in the same
+        /// worktree under the same handle and lease with the handoff loaded
+        /// (a 5s countdown; Ctrl-C stops it). `aida session handoff --write
+        /// --final`, or an exit without a fresh handoff, ends it for real.
+        /// Default: `[agents.claude] rotate` in agents.toml, else off.
+        // trace:STORY-B6B1278890774EF993D2EBC327862470-101 | ai:claude
+        #[clap(long, conflicts_with_all = ["bg", "noexec", "show_context", "show_prompt"])]
+        rotate: bool,
     },
 
     /// Spawn Codex CLI with project-correct cwd/env and registry tracking.

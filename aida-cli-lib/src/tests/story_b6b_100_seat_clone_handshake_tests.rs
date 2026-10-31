@@ -38,6 +38,7 @@ fn ctx(clone: &Path) -> HelloContext {
         spec: Some("STORY-HOME-100".into()),
         path: clone.to_path_buf(),
         session_started: None,
+        rotation: None,
     }
 }
 
@@ -179,6 +180,7 @@ fn the_advisors_inbox_read_acks_the_hello_into_the_agents_inbox() {
             acked_at: None,
             acked_by: None,
             ack_reported: false,
+            rotation: None,
         },
     )
     .unwrap();
