@@ -544,6 +544,7 @@ fn bug_045_contained_launch_child_without_a_keyring_key_is_refused() {
 /// key the keyring cannot hold is refused before it spawns (a
 /// [`ChildGrantRefused`]); an uncontained one keeps the proc-only fallback.
 // trace:TASK-b6b1278890774ef993d2ebc327862470-144 | ai:claude
+// trace:TASK-b6b1278890774ef993d2ebc327862470-144.ac45ce7b | ai:claude
 #[test]
 fn contained_headless_implementer_without_a_keyring_key_is_refused() {
     if !crate::grant_keyring::available() {
@@ -580,6 +581,7 @@ fn contained_headless_implementer_without_a_keyring_key_is_refused() {
 /// contained launch preflight is a [`ChildGrantRefused`], so a refused review
 /// launch releases its lease exactly as for the ELOOP refusal.
 // trace:TASK-b6b1278890774ef993d2ebc327862470-144 | ai:claude
+// trace:TASK-b6b1278890774ef993d2ebc327862470-144.accfe87a | ai:claude
 #[test]
 fn preflight_key_quota_exhaustion_is_a_child_grant_refusal() {
     crate::grant_keyring::FORCE_INSTALL_ERRNO.with(|e| e.set(Some(libc::EDQUOT)));

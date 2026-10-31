@@ -255,6 +255,7 @@ fn bug_045_contained_interactive_resume_is_refused_before_the_review() {
 /// [`ChildGrantRefused`] (so the PR-N review lease is released), before any
 /// reviewer runs and before the prior verdict is touched.
 // trace:TASK-b6b1278890774ef993d2ebc327862470-144 | ai:claude
+// trace:TASK-b6b1278890774ef993d2ebc327862470-144.accfe87a | ai:claude
 #[cfg(unix)]
 #[test]
 fn task_144_contained_launch_on_key_quota_exhaustion_is_a_child_grant_refusal() {
@@ -325,6 +326,7 @@ fn bug_045_launch_paths_mint_through_the_containment_aware_issuer() {
 /// containment-aware issuer). A call site that hard-codes `false` would let a
 /// contained non-reviewer child launch with an unpresentable grant.
 // trace:TASK-b6b1278890774ef993d2ebc327862470-144 | ai:claude
+// trace:TASK-b6b1278890774ef993d2ebc327862470-144.ac45ce7b | ai:claude
 #[test]
 fn task_144_headless_child_launches_pass_their_containment() {
     let mut calls = 0;
@@ -356,5 +358,21 @@ fn task_144_headless_child_launches_pass_their_containment() {
     assert!(
         calls >= 4,
         "expected every headless child launch site, saw {calls}"
+    );
+}
+
+/// TASK-HOME-144: `issue_launch_child` is the one containment-aware child
+/// issuer; the uncalled `issue_sandboxed_child` stays deleted.
+// trace:TASK-b6b1278890774ef993d2ebc327862470-144.ac70bfc5 | ai:claude
+#[test]
+fn task_144_no_dead_child_issuer_remains() {
+    let source = include_str!("../gate/seat_authority.rs");
+    assert!(
+        !source.contains("fn issue_sandboxed_child("),
+        "seat_authority.rs regrew the dead sandboxed issuer"
+    );
+    assert_eq!(
+        source.matches("pub(crate) fn issue_launch_child(").count(),
+        1
     );
 }
