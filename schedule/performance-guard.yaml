@@ -1,9 +1,9 @@
 job: performance-guard
-last_run: 2026-10-31T14:55:31.910053372Z
+last_run: 2026-10-31T21:04:50.036345769Z
 last_by:
   seat: substrate
   vendor: tick
-result: failed:1
+result: ok
 failure_trips:
 - trip_id: performance-guard@2026-10-26T12:56:01.554848718Z
   at: 2026-10-26T12:56:01.554848718Z
