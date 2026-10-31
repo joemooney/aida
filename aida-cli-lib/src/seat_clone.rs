@@ -1320,7 +1320,14 @@ pub(crate) fn probe_until(
         Ok(out) => out,
         Err(why) => return Probe::Unknown(why),
     };
-    let in_main = main_reachable_commits(main, tips.lines().map(str::trim), deadline);
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-051 | ai:claude
+    let (ref_tips, candidates) = split_tips(&tips);
+    let mut in_main = main_reachable_commits(main, ref_tips.into_iter(), deadline);
+    in_main.extend(main_reachable_commits(
+        main,
+        candidates.into_iter(),
+        deadline,
+    ));
     let count = probe_run(
         clone,
         main,
@@ -1352,6 +1359,18 @@ pub(crate) fn probe_until(
         Err(why) => return Probe::Unknown(why),
     }
     Probe::Known(facts)
+}
+
+/// [`REF_TIPS_SCRIPT`]'s output as (ref tips, candidate commits), split at
+/// the [`TIPS_SEPARATOR`] line; output without one is all ref tips.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-051 | ai:claude
+pub(crate) fn split_tips(out: &str) -> (Vec<&str>, Vec<&str>) {
+    let mut lines = out.lines().map(str::trim);
+    let tips = lines
+        .by_ref()
+        .take_while(|line| *line != TIPS_SEPARATOR)
+        .collect();
+    (tips, lines.collect())
 }
 
 /// Why a clone with `facts` is kept: the work origin does not have, by ref.
@@ -1733,10 +1752,24 @@ exit 0
 "##;
 
 /// Inside the probe sandbox: the commit every ref of the clone points at
-/// (tags peeled), one per line, for [`main_reachable_commits`].
+/// (tags peeled), one per line, for [`main_reachable_commits`]; then a
+/// [`TIPS_SEPARATOR`] line and the newest 5000 commits the clone's refs
+/// reach that no `origin/*` ref does (older ones are not excused, so count). BUG-051: a seat commit on
+/// top of one that main now reaches (origin's branch gained a merge after
+/// the seat pushed) leaves no tip main reaches, so the candidates are checked
+/// too: each one main reaches is excused, and with it its ancestors.
 // trace:BUG-2224 | ai:claude
-const REF_TIPS_SCRIPT: &str =
-    "set -u\nexec git for-each-ref --format='%(if)%(*objectname)%(then)%(*objectname)%(else)%(objectname)%(end)'\n";
+// trace:BUG-B6B1278890774EF993D2EBC327862470-051 | ai:claude
+const REF_TIPS_SCRIPT: &str = concat!(
+    "set -u\n",
+    "git for-each-ref --format='%(if)%(*objectname)%(then)%(*objectname)%(else)%(objectname)%(end)' || exit 1\n",
+    "echo --\n",
+    "exec git rev-list --max-count=5000 --all --not --remotes=origin\n"
+);
+
+/// The line [`REF_TIPS_SCRIPT`] prints between the ref tips and the
+/// candidate commits.
+const TIPS_SEPARATOR: &str = "--";
 
 /// Inside the probe sandbox: how many commits the clone holds that origin
 /// does not: reachable from ANY ref (every branch, tag, HEAD) or stash entry,

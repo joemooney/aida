@@ -1917,6 +1917,19 @@ fn bug_051_bwrap_lease_classifier_counts_an_ancestor_of_origin_as_pushed() {
     );
 }
 
+/// BUG-051: the ref-tips probe output splits into ref tips and the candidate
+/// commits origin lacks, so a seat commit on top of one main reaches leaves
+/// that one excused; output without the separator is all ref tips.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-051 | ai:claude
+#[test]
+fn bug_051_split_tips_separates_ref_tips_from_candidates() {
+    let split = crate::seat_clone::split_tips;
+    assert_eq!(split("a\nb\n--\nc\nd\n"), (vec!["a", "b"], vec!["c", "d"]));
+    assert_eq!(split("a\n--\n"), (vec!["a"], vec![]));
+    assert_eq!(split("a\nb\n"), (vec!["a", "b"], vec![]));
+    assert_eq!(split(""), (vec![], vec![]));
+}
+
 /// BUG-051: the refresh fetch never runs without budget, or for a branch name
 /// git would not accept.
 // trace:BUG-B6B1278890774EF993D2EBC327862470-051.ac79099f | ai:claude
