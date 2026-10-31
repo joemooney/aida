@@ -16,12 +16,12 @@ description: |
 
   ## Out of scope
   GitLab Pages deployment (separate task).
-status: Done
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T22:16:54.470798142Z
-modified_at: 2026-10-31T23:18:21.400833866Z
+modified_at: 2026-10-31T23:26:23.526960507Z
 req_type: Task
 tags:
 - air-gap
@@ -116,6 +116,15 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a19449-2326-7281-bcdc-9a745622ae24
+  author: aida-orchestrator
+  timestamp: 2026-10-31T23:26:23.526979837Z
+  session_id: 01a194469424
+  harness_version: 2.1.316 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: NeedsAttention
 filed_at:
   code_sha: 0506fa2eb862db100dffbc80b0c5cfdedec28522
   branch: main
@@ -127,3 +136,11 @@ implementation_info:
   implemented: true
   implemented_at: 2026-10-31T23:18:21.400833866Z
   implemented_by: joe
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'AC1/2/4/5 met and showcase build/tests green; AC3 not met: the ''One hub'' and ''Two hubs without a root'' sections present non-root clones claiming blocks by push as current behaviour, though claiming blocks from an upstream is planned; AC6 deploy is post-merge'
+  recovery_hint: address the review findings, move TASK-B6B1278890774EF993D2EBC327862470-277 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-10-31T23:26:23.526960507Z
