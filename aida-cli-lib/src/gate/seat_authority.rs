@@ -1865,6 +1865,33 @@ fn current_uid() -> Option<u32> {
     }
 }
 
+/// The `aida role enter` command that re-enters `parent_seat` delegating
+/// everything it already delegates plus `requested_seat`, so pasting it widens
+/// the grant instead of narrowing it to the one requested seat.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-052 | ai:claude
+pub(crate) fn widen_delegation_command(
+    parent_seat: &str,
+    delegable_seats: &[String],
+    requested_seat: &str,
+) -> String {
+    let mut seats: Vec<&str> = Vec::new();
+    for seat in delegable_seats
+        .iter()
+        .map(String::as_str)
+        .chain(std::iter::once(requested_seat))
+    {
+        if !seats.contains(&seat) {
+            seats.push(seat);
+        }
+    }
+    let mut command = format!("aida role enter {parent_seat}");
+    for seat in seats {
+        command.push_str(" --delegate-seat ");
+        command.push_str(seat);
+    }
+    command
+}
+
 /// Read-only launch preflight; issuance repeats this validation after setup.
 // trace:TASK-1337 | ai:codex
 pub(crate) fn validate_child_delegation(
@@ -1878,11 +1905,12 @@ pub(crate) fn validate_child_delegation(
         .any(|seat| seat == requested_seat)
     {
         // trace:TASK-1597 | ai:claude
+        // trace:BUG-B6B1278890774EF993D2EBC327862470-052 | ai:claude — the
+        // hint keeps every seat the grant already delegates.
         bail!(
-            "the active `{}` grant does not delegate `{requested_seat}` (re-enter the role to include it: `aida role enter {} --delegate-seat {requested_seat}`)",
-
+            "the active `{}` grant does not delegate `{requested_seat}` (re-enter the role to include it: `{}`)",
             parent.seat,
-            parent.seat
+            widen_delegation_command(&parent.seat, &parent.delegable_seats, requested_seat)
         );
     }
     // trace:BUG-2200 | ai:claude

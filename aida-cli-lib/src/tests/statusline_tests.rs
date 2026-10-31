@@ -935,6 +935,7 @@ fn picker_row(
         purpose: purpose.map(|p| p.to_string()),
         live_driver_recency: live_driver_recency.map(|p| p.to_string()),
         single_instance,
+        not_delegated: None,
     }
 }
 
