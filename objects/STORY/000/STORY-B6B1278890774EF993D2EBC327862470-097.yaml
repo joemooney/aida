@@ -10,12 +10,12 @@ description: |-
   3. A clone can declare its push hubs (work: gitlab only) so `db sync --push` / mirror-sync never attempt origin from it.
   4. hub-drift-guard stays the escalation for drift the bridge could not union.
   5. The stopgap cron line is removed by the install path.
-status: InProgress
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T00:15:31.974123449Z
-modified_at: 2026-10-31T07:14:50.942494938Z
+modified_at: 2026-10-31T08:27:37.547265230Z
 req_type: Story
 relationships:
 - rel_type:
@@ -198,6 +198,20 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: InProgress
+- id: 01a19112-4abf-7ff2-b1a6-4217b32a8d23
+  author: aida-auto-bump
+  timestamp: 2026-10-31T08:27:37.535651523Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a19112-4acb-7b73-adb5-0e6e648b4797
+  timestamp: 2026-10-31T08:27:37.547259761Z
+  agent: aida
+  commit_sha: c0ab6f09380a7c0b1903eb9b207071e7748b954c
+  summary: 'Base-only update from main (gh update-branch db79810ecbbb20afdc910e9865acd11b9432e7f8 -> 6ece3ad334c2653c80dd79db5cc702677686ccd2); reviewed content unchanged, prior approval carried; serial ship after main fix #2646.'
+  review_verdict: approved
 filed_at:
   code_sha: 1db74dba1129632c01b5bae9ee5681dd76069db1
   branch: main
@@ -210,3 +224,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-10-31T00:19:04.142015265Z
   implemented_by: joe
+  completed_at: 2026-10-31T08:27:37.535644385Z
+  completion_sha: c0ab6f09380a7c0b1903eb9b207071e7748b954c
