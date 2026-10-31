@@ -1,0 +1,92 @@
+{
+  "schema_version": 1,
+  "spec": "STORY-B6B1278890774EF993D2EBC327862470-100",
+  "publishes": [
+    {
+      "at": "2026-10-31T09:57:12.791527373Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-30T23:11:30.487375664Z",
+      "spec": "STORY-b6b1278890774ef993d2ebc327862470-100",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-31T04:15:07.035078757Z",
+      "spec": "STORY-B6B1278890774EF993D2EBC327862470-100",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "STORY-B6B1278890774EF993D2EBC327862470-100",
+        "branch": "origin/story-b6b1278890774ef993d2ebc327862470-100",
+        "first_seen": "2026-10-31T04:15:07.034896100+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-31T07:02:18.046872292Z",
+      "spec": "STORY-b6b1278890774ef993d2ebc327862470-100",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-31T07:04:50.885191355Z",
+      "spec": "STORY-b6b1278890774ef993d2ebc327862470-100",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-31T09:44:01.044015329Z",
+      "spec": "STORY-B6B1278890774EF993D2EBC327862470-100",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 3151,
+        "verdict": "APPROVED",
+        "reviewed_sha": "5849bfcb42689d3b17c2c256b77dffc60fea6348"
+      }
+    },
+    {
+      "ts": "2026-10-31T09:56:46.029180759Z",
+      "spec": "STORY-B6B1278890774EF993D2EBC327862470-100",
+      "seat": "advisor",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-10-31T09:56:58.910178266Z",
+      "spec": "STORY-B6B1278890774EF993D2EBC327862470-100",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 3151
+      }
+    },
+    {
+      "ts": "2026-10-31T09:57:12.657960896Z",
+      "spec": "STORY-B6B1278890774EF993D2EBC327862470-100",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "361910ec4a02ee24d768d9f1fecc311f229991ef",
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
