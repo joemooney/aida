@@ -7,12 +7,18 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T21:37:20.408058815Z
-modified_at: 2026-10-31T21:40:25.758362389Z
+modified_at: 2026-10-31T22:16:06.890264131Z
 req_type: Bug
 tags:
 - epic-home-003
 - regroup
 - ship
+relationships:
+- rel_type:
+    custom: implemented-by
+  target_id: 01a19408-ab95-71e0-9637-17f6d65f6eae
+  created_at: 2026-10-31T22:16:06.890260317Z
+  created_by: joe
 comments:
 - id: 01a193e8-201e-7a72-b2c4-f5e0c179a04c
   author: joe
@@ -52,6 +58,12 @@ history:
 - id: 01a193e6-bbc3-7441-9a1c-3b5b9e4f14c3
   author: joe
   timestamp: 2026-10-31T21:38:54.531964898Z
+  session_id: 01a193e6837a
+  harness_version: 2.1.316 (Claude Code)
+  changes: []
+- id: 01a19408-d47b-79c2-b1ee-6e7584e9315e
+  author: joe
+  timestamp: 2026-10-31T22:16:09.083095998Z
   session_id: 01a193e6837a
   harness_version: 2.1.316 (Claude Code)
   changes: []

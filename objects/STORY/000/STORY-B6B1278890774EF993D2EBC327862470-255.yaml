@@ -1,0 +1,71 @@
+id: 01a19408-ab95-71e0-9637-17f6d65f6eae
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-255
+title: 'Review PR-3176: [AI:claude] fix(mandate): exclusion evidence pinned to the before snapshot; only a change to the excluded specs'' objects or ID lines discards a collection, so unrelated fleet writes no'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a193e6`) for branch `bug-b6b1278890774ef993d2ebc327862470-056`.
+
+  - PR: <https://github.com/joemooney/aida/pull/3176>
+  - Branch: `bug-b6b1278890774ef993d2ebc327862470-056` → `main`
+
+  ## Covers
+
+  - BUG-B6B1278890774EF993D2EBC327862470-056
+  - BUG-B6B1278890774EF993D2EBC327862470-052
+  - BUG-B6B1278890774EF993D2EBC327862470-051
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 3176` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-31T22:15:58.613163232Z
+modified_at: 2026-10-31T22:16:19.352942399Z
+req_type: Story
+relationships:
+- rel_type:
+    custom: implements
+  target_id: 01a193e5-4c18-7cb0-bb49-37ce7256a41c
+  created_at: 2026-10-31T22:16:02.136742543Z
+  created_by: joe
+- rel_type:
+    custom: implements
+  target_id: 01a19323-2af2-78a2-825a-55c8a6fafc13
+  created_at: 2026-10-31T22:16:10.495955812Z
+  created_by: joe
+- rel_type:
+    custom: implements
+  target_id: 01a1924e-c791-71f2-9695-838a8b0a1ce4
+  created_at: 2026-10-31T22:16:19.352938616Z
+  created_by: joe
+history:
+- id: 01a19408-c229-7c01-be36-b22375d99cf4
+  author: joe
+  timestamp: 2026-10-31T22:16:04.393875318Z
+  session_id: 01a193e6837a
+  harness_version: 2.1.316 (Claude Code)
+  changes: []
+- id: 01a19408-e233-7413-8681-5f1cab070388
+  author: joe
+  timestamp: 2026-10-31T22:16:12.595681660Z
+  session_id: 01a193e6837a
+  harness_version: 2.1.316 (Claude Code)
+  changes: []
+- id: 01a19409-047b-7402-94af-29e9f152884f
+  author: joe
+  timestamp: 2026-10-31T22:16:21.371976879Z
+  session_id: 01a193e6837a
+  harness_version: 2.1.316 (Claude Code)
+  changes: []
+filed_at:
+  code_sha: 7b610bddb8a007440122388431d3d09a19b8d169
+  branch: bug-b6b1278890774ef993d2ebc327862470-056
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 584e95e4505
+  vendor: claude
+  session: 01a193e6837a
+  harness_version: 2.1.316 (Claude Code)
