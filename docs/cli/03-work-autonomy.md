@@ -114,9 +114,14 @@ A Claude implementer that ends its turn while a build or test it started is
 still running is not reported `no-pr` straight away. The launcher waits for
 that run to finish, up to the background-wait ceiling (`[burndown]
 bg_wait_ceiling_ms`, 45 minutes by default), then resumes the same session and
-tells it to continue. The same happens when its final message says it is
-waiting on a background run. A launch resumes at most three times. Each resume
-logs to its own `-resume<n>.jsonl` file next to the first log.
+tells it to continue. A run still going at the ceiling is stopped, and the
+resumed session is told it was terminated and must rerun it. The same resume
+happens when its final message says it is waiting on a build or test run.
+Only compiler, cargo and test-binary processes count as such a run; a
+long-lived daemon such as the sccache server does not. A launch resumes at
+most three times, and while it waits it keeps its place under the
+concurrency cap. Each resume logs to its own `-resume<n>.jsonl` file next to
+the first log.
 <!-- trace:BUG-B6B1278890774EF993D2EBC327862470-044 | ai:claude -->
 
 The child must stop once its PR is open. Inside it, `aida pr ship` and

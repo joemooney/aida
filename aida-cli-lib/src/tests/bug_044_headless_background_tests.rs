@@ -15,6 +15,7 @@ fn the_reported_parking_results_read_as_waiting_and_a_finish_does_not() {
         "Both runs are in the background; I'll pick up results when they finish.",
         "The full test suite is still running.",
         "I'll continue once the build completes.",
+        "cargo nextest is still running for aida-cli-lib",
     ] {
         assert!(says_waiting_on_background(text), "{text}");
     }
@@ -22,6 +23,10 @@ fn the_reported_parking_results_read_as_waiting_and_a_finish_does_not() {
         "Opened PR #42; stopping.",
         "Punted: two valid schemas.",
         "All tests pass. PR is open.",
+        "Stopping: waiting for the advisor to decide X",
+        "Waiting for the advisor; all tests pass.",
+        "The dev server is still running.",
+        "Waiting on review of PR #42.",
         "",
     ] {
         assert!(!says_waiting_on_background(text), "{text}");
@@ -48,9 +53,41 @@ fn build_work_is_compilers_and_target_binaries_not_servers_or_shells() {
         ("bash", "/bin/bash"),
         ("sleep", "sleep"),
         ("claude", "claude"),
+        // Long-lived daemons that inherit the marker do not hold the lane.
+        ("sccache", "/home/u/.cargo/bin/sccache"),
+        ("aida-server", "/repo/target/debug/aida-server"),
+        ("aida", "/repo/target/agent/aida"),
     ] {
         assert!(!is_build_work(comm, exe), "{comm} {exe}");
     }
+}
+
+/// A lingering sccache-like daemon carrying the lane's marker is not live
+/// background work: the lane is not held for it.
+#[cfg(target_os = "linux")]
+#[test]
+fn a_lingering_marked_daemon_does_not_hold_the_lane() {
+    let dir = tempfile::tempdir().unwrap();
+    let daemon = dir.path().join("sccache");
+    std::fs::copy("/bin/sleep", &daemon).unwrap();
+    let mut child = std::process::Command::new(&daemon)
+        .arg("30")
+        .env(si::MARKER_ENV, "b044daemon01")
+        .spawn()
+        .unwrap();
+    let marked = marked_processes(si::MARKER_ENV, "b044daemon01");
+    let live = live_background_work("b044daemon01");
+    let _ = child.kill();
+    let _ = child.wait();
+    assert!(
+        marked
+            .iter()
+            .any(|p| p.pid == child.id() && p.comm == "sccache"),
+        "{marked:?}"
+    );
+    assert!(live.is_empty(), "the daemon held the lane: {live:?}");
+    let hold = ReapHold::new(std::time::Duration::from_secs(60));
+    assert!(!hold.check(!live.is_empty()));
 }
 
 #[test]
@@ -58,29 +95,149 @@ fn resume_reason_needs_a_final_result_a_resumable_vendor_and_budget() {
     let waiting = Some("Waiting on the test build.");
     let done = Some("Stopping here.");
     assert_eq!(
-        resume_reason(0, true, done, true, false),
+        resume_reason(0, true, done, true, false, false),
         Some(ResumeReason::LiveWork)
     );
     assert_eq!(
-        resume_reason(0, true, done, false, true),
+        resume_reason(0, true, done, false, true, false),
         Some(ResumeReason::HeldForWork)
     );
     assert_eq!(
-        resume_reason(0, true, waiting, false, false),
+        resume_reason(0, true, waiting, false, false, false),
         Some(ResumeReason::SaidWaiting)
     );
-    assert_eq!(resume_reason(0, true, done, false, false), None);
     assert_eq!(
-        resume_reason(0, true, None, true, true),
+        resume_reason(0, true, done, false, true, true),
+        Some(ResumeReason::Terminated),
+        "a hold that ran out means the reaper killed the run: never 'finished'"
+    );
+    assert_eq!(resume_reason(0, true, done, false, false, false), None);
+    assert_eq!(
+        resume_reason(0, true, None, true, true, false),
         None,
         "a run that logged no result crashed; it did not park"
     );
-    assert_eq!(resume_reason(0, false, waiting, true, false), None);
+    assert_eq!(resume_reason(0, false, waiting, true, false, false), None);
     assert_eq!(
-        resume_reason(MAX_AUTO_RESUMES, true, waiting, true, true),
+        resume_reason(MAX_AUTO_RESUMES, true, waiting, true, true, false),
         None
     );
-    assert!(resume_reason(MAX_AUTO_RESUMES - 1, true, waiting, false, false).is_some());
+    assert!(resume_reason(MAX_AUTO_RESUMES - 1, true, waiting, false, false, false).is_some());
+}
+
+#[test]
+fn a_terminated_run_is_resumed_saying_it_was_terminated_not_finished() {
+    let prompt = resume_prompt(&ResumeReason::Terminated);
+    assert!(prompt.contains("TERMINATED"), "{prompt}");
+    assert!(prompt.contains("Rerun"), "{prompt}");
+    assert!(!prompt.contains("has finished"), "{prompt}");
+    for reason in [
+        ResumeReason::LiveWork,
+        ResumeReason::HeldForWork,
+        ResumeReason::SaidWaiting,
+    ] {
+        assert_eq!(resume_prompt(&reason), RESUME_PROMPT);
+    }
+}
+
+// ── The two ceiling paths ─────────────────────────────────────────────────
+
+/// Ceiling path 1: the reaper hold runs out while the build is still live.
+/// The hold lifts (so the reaper kills the tree) and records that it
+/// expired, so the resume says TERMINATED.
+#[test]
+fn a_reap_hold_lifts_at_the_ceiling_and_records_that_it_expired() {
+    let hold = ReapHold::new(std::time::Duration::from_millis(200));
+    assert!(hold.check(true), "live work holds the reaper off");
+    assert!(hold.held() && !hold.expired());
+    std::thread::sleep(std::time::Duration::from_millis(250));
+    assert!(!hold.check(true), "the ceiling lifts the hold");
+    assert!(hold.expired(), "the work was still live at the ceiling");
+    let terminated = std::cell::Cell::new(false);
+    let settled = settle_background_work(
+        std::time::Duration::from_secs(30),
+        hold.expired(),
+        Vec::new,
+        || terminated.set(true),
+    );
+    assert_eq!(settled, Settled::Terminated);
+    assert!(terminated.get(), "any survivor of the reaper is stopped");
+    assert_eq!(
+        resume_reason(
+            0,
+            true,
+            Some("Stopping."),
+            false,
+            hold.held(),
+            hold.expired()
+        ),
+        Some(ResumeReason::Terminated)
+    );
+
+    let quiet = ReapHold::new(std::time::Duration::from_millis(200));
+    assert!(!quiet.check(false));
+    assert!(!quiet.held() && !quiet.expired(), "no work, no hold");
+}
+
+/// Ceiling path 2: the vendor exited and its build outlives the launcher's
+/// wait. The build is stopped and reported Terminated; work that ends in
+/// time is Finished, and nothing is stopped.
+#[test]
+fn work_outliving_the_wait_ceiling_is_stopped_and_reported_terminated() {
+    let cargo = || MarkedProcess {
+        pid: 1,
+        comm: "cargo".into(),
+        exe: "cargo".into(),
+    };
+    let terminated = std::cell::Cell::new(false);
+    let settled = settle_background_work(
+        std::time::Duration::from_millis(300),
+        false,
+        || vec![cargo()],
+        || terminated.set(true),
+    );
+    assert_eq!(settled, Settled::Terminated);
+    assert!(terminated.get());
+
+    let terminated = std::cell::Cell::new(false);
+    let calls = std::cell::Cell::new(0);
+    let settled = settle_background_work(
+        std::time::Duration::from_secs(30),
+        false,
+        || {
+            calls.set(calls.get() + 1);
+            if calls.get() < 3 {
+                vec![cargo()]
+            } else {
+                Vec::new()
+            }
+        },
+        || terminated.set(true),
+    );
+    assert_eq!(settled, Settled::Finished);
+    assert!(!terminated.get(), "finished work is not stopped");
+}
+
+/// The real stop: a marked build process outliving the ceiling is killed.
+#[cfg(target_os = "linux")]
+#[test]
+fn terminate_background_work_stops_the_marked_build() {
+    let mut child = std::process::Command::new("sleep")
+        .arg("30")
+        .env(si::MARKER_ENV, "b044term01")
+        .spawn()
+        .unwrap();
+    let pid = child.id();
+    let live = || {
+        marked_processes(si::MARKER_ENV, "b044term01")
+            .into_iter()
+            .filter(|p| p.pid == pid)
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(live().len(), 1);
+    terminate_background_work(live);
+    let status = child.wait().unwrap();
+    assert!(!status.success(), "the build was killed: {status:?}");
 }
 
 #[test]
@@ -119,6 +276,37 @@ fn a_no_pr_report_names_the_uncommitted_paths() {
         si::report(&si::Outcome::NoPr, Some(0), None).0,
         "implementer: no-pr"
     );
+}
+
+/// A lane whose child logged its final result but whose launcher is waiting
+/// on that child's background run (to resume it) still holds its cap slot:
+/// no other launch takes it.
+#[test]
+fn a_lane_waiting_on_its_own_background_work_still_counts_toward_the_cap() {
+    let tmp = tempfile::tempdir().unwrap();
+    let dir = tmp.path().join(".aida").join("standalone-implementers");
+    std::fs::create_dir_all(&dir).unwrap();
+    let log = tmp.path().join("parked.jsonl");
+    std::fs::write(&log, "{\"type\":\"result\",\"is_error\":false}\n").unwrap();
+    let slot = |pid: u32, spec: &str, waiting: bool| {
+        std::fs::write(
+            dir.join(format!("{pid}.json")),
+            serde_json::json!({"pid": pid, "start": "t", "spec": spec, "log": log, "waiting": waiting})
+                .to_string(),
+        )
+        .unwrap();
+    };
+    let alive = |_: u32, _: Option<&str>| true;
+    slot(11, "STORY-1", true);
+    let err = si::acquire_slot_with(tmp.path(), "STORY-2", 1, 500, alive)
+        .err()
+        .expect("the waiting lane keeps its slot");
+    assert!(format!("{err:#}").contains("STORY-1"), "{err:#}");
+
+    slot(11, "STORY-1", false);
+    let guard = si::acquire_slot_with(tmp.path(), "STORY-2", 1, 500, alive)
+        .expect("once it is not waiting, a finished lane frees its slot");
+    drop(guard);
 }
 
 // ── Finding and waiting on the session's own work ─────────────────────────
@@ -296,18 +484,27 @@ fn a_run_parked_on_its_own_build_is_waited_for_and_resumed() {
     let cargo = fx.path("bin").join("cargo");
     std::fs::create_dir_all(cargo.parent().unwrap()).unwrap();
     let built = fx.path("built");
+    let running = fx.path("cargo-running");
     crate::test_exec::write_executable(
         &cargo,
-        format!("#!/bin/sh\nsleep 2\ntouch \"{}\"\n", built.display()),
+        format!(
+            "#!/bin/sh\ntouch \"{}\"\nsleep 2\ntouch \"{}\"\n",
+            running.display(),
+            built.display()
+        ),
     );
+    // The vendor ends its turn only once its background cargo has exec'd
+    // (a loaded CI runner can otherwise exit before the fork becomes cargo).
     let err = fx
         .run(&format!(
             "if [ $n -eq 1 ]; then\n  \"{cargo}\" &\n  \
+             while [ ! -f \"{running}\" ]; do sleep 0.05; done\n  \
              echo '{{\"type\":\"result\",\"is_error\":false,\"result\":\"Stopping for now.\"}}'\n  exit 0\nfi\n\
              [ -f \"{built}\" ] && touch \"{saw}\"\n\
              printf '%s' '{{\"spec\":\"STORY-9\",\"branch\":\"claude/story-9\"}}' > \"$AIDA_HOLD_SIGNAL_FILE\"\n\
              echo '{{\"type\":\"result\",\"is_error\":false,\"result\":\"held\"}}'",
             cargo = cargo.display(),
+            running = running.display(),
             built = built.display(),
             saw = fx.path("saw-build").display(),
         ))

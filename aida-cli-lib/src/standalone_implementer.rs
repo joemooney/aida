@@ -298,12 +298,16 @@ struct Slot {
     // trace:BUG-B6B1278890774EF993D2EBC327862470-027 | ai:claude
     #[serde(default, skip_serializing_if = "Option::is_none")]
     log: Option<PathBuf>,
+    /// The launcher is holding off the reaper for, or waiting on, the
+    /// child's own background run, to resume it: the lane is still working
+    /// though its log ends in a final result, so the slot counts.
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-044 | ai:claude
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    waiting: bool,
 }
 
-/// Record the child's log on this process's slot, so the cap stops counting
-/// the slot once the child logs its final result. Best effort.
-// trace:BUG-B6B1278890774EF993D2EBC327862470-027 | ai:claude
-pub(crate) fn record_slot_log(project_root: &Path, log_path: &Path) {
+/// Rewrite this process's slot with `edit`. Best effort.
+fn edit_own_slot(project_root: &Path, edit: impl FnOnce(&mut Slot)) {
     let path = slots_dir(project_root).join(format!("{}.json", std::process::id()));
     let Some(mut slot) = std::fs::read_to_string(&path)
         .ok()
@@ -311,10 +315,28 @@ pub(crate) fn record_slot_log(project_root: &Path, log_path: &Path) {
     else {
         return;
     };
-    slot.log = Some(log_path.to_path_buf());
+    edit(&mut slot);
     if let Ok(body) = serde_json::to_string(&slot) {
         let _ = aida_core::write_atomic(&path, body);
     }
+}
+
+/// Record the child's log on this process's slot, so the cap stops counting
+/// the slot once the child logs its final result. A new log clears the
+/// waiting mark: the resumed run is counted by its own log.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-027 | ai:claude
+pub(crate) fn record_slot_log(project_root: &Path, log_path: &Path) {
+    edit_own_slot(project_root, |slot| {
+        slot.log = Some(log_path.to_path_buf());
+        slot.waiting = false;
+    });
+}
+
+/// Mark this process's slot as waiting on its child's background run, so
+/// the cap keeps counting it while the logged final result says it ended.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-044 | ai:claude
+pub(crate) fn mark_slot_waiting(project_root: &Path) {
+    edit_own_slot(project_root, |slot| slot.waiting = true);
 }
 
 /// A held concurrency slot; released when dropped.
@@ -368,10 +390,12 @@ pub(crate) fn acquire_slot_with(
             // finishing, not running: its slot stays but is not counted.
             // trace:BUG-B6B1278890774EF993D2EBC327862470-027 | ai:claude
             Some(slot) if slot.pid != pid && is_alive(slot.pid, slot.start.as_deref()) => {
-                let finishing = slot
-                    .log
-                    .as_deref()
-                    .is_some_and(crate::headless_linger::log_has_final_result);
+                // trace:BUG-B6B1278890774EF993D2EBC327862470-044 | ai:claude
+                let finishing = !slot.waiting
+                    && slot
+                        .log
+                        .as_deref()
+                        .is_some_and(crate::headless_linger::log_has_final_result);
                 if !finishing {
                     running.push(slot.spec)
                 }
@@ -402,6 +426,7 @@ pub(crate) fn acquire_slot_with(
         start: aida_core::liveness::process_start_identity(pid),
         spec: spec.to_string(),
         log: None,
+        waiting: false,
     };
     aida_core::write_atomic(&path, serde_json::to_string(&slot)?)
         .with_context(|| format!("writing {}", path.display()))?;
@@ -545,27 +570,21 @@ pub(crate) fn run(launch: Launch<'_>) -> Result<()> {
     let ceiling = std::time::Duration::from_millis(
         crate::burndown_run::resolved_bg_wait_ceiling_ms(Some(launch.project_root)),
     );
-    let held = std::cell::Cell::new(false);
-    let hold_started = std::cell::Cell::new(None::<std::time::Instant>);
-    let hold = || {
-        let started = hold_started.get().unwrap_or_else(|| {
-            let now = std::time::Instant::now();
-            hold_started.set(Some(now));
-            now
-        });
-        let live =
-            started.elapsed() < ceiling && !bg::live_background_work(launch.lease_id).is_empty();
-        if live {
-            held.set(true);
-        }
-        live
-    };
+    let live_work = || bg::live_background_work(launch.lease_id);
     let mut resumes = 0;
     let mut run_log = log_path.clone();
     let mut run_prompt = prompt;
     let finished = loop {
-        held.set(false);
-        hold_started.set(None);
+        let reap_hold = bg::ReapHold::new(ceiling);
+        let hold = || {
+            let was_held = reap_hold.held();
+            let on = reap_hold.check(!live_work().is_empty());
+            if on && !was_held {
+                // The lane is still working: keep its cap slot counted.
+                mark_slot_waiting(launch.project_root);
+            }
+            on
+        };
         let status = crate::session::run_standalone_implementer_child(
             launch.vendor,
             &run_prompt,
@@ -594,31 +613,36 @@ pub(crate) fn run(launch: Launch<'_>) -> Result<()> {
         if outcome != Outcome::NoPr {
             break Ok((status, outcome));
         }
-        let live = bg::live_background_work(launch.lease_id);
-        let Some(reason) = bg::resume_reason(
+        let live = live_work();
+        let Some(mut reason) = bg::resume_reason(
             resumes,
             can_resume,
             crate::headless_linger::final_result_text(&run_log).as_deref(),
             !live.is_empty(),
-            held.get(),
+            reap_hold.held(),
+            reap_hold.expired(),
         ) else {
             break Ok((status, outcome));
         };
-        if !live.is_empty() {
+        // A resume is pending: the lane keeps its cap slot while it waits.
+        mark_slot_waiting(launch.project_root);
+        if !live.is_empty() && !reap_hold.expired() {
             eprintln!(
                 "{} the implementer ended its turn with its background run still going; waiting for it (up to {}m)",
                 crate::glyph(crate::glyphs::Glyph::InfoAlt).cyan(),
                 ceiling.as_secs() / 60
             );
-            if !bg::wait_for_background_work(ceiling, || bg::live_background_work(launch.lease_id))
-            {
-                eprintln!(
-                    "{} the background run is still going after {}m; not resuming",
-                    "Note:".cyan().bold(),
-                    ceiling.as_secs() / 60
-                );
-                break Ok((status, outcome));
-            }
+        }
+        let settled = bg::settle_background_work(ceiling, reap_hold.expired(), live_work, || {
+            bg::terminate_background_work(live_work)
+        });
+        if settled == bg::Settled::Terminated {
+            eprintln!(
+                "{} the background run was still going after {}m; the launcher stopped it",
+                "Note:".cyan().bold(),
+                ceiling.as_secs() / 60
+            );
+            reason = bg::ResumeReason::Terminated;
         }
         resumes += 1;
         run_log = resume_log_path(&log_path, resumes);
@@ -630,13 +654,14 @@ pub(crate) fn run(launch: Launch<'_>) -> Result<()> {
                 .bold(),
             bg::MAX_AUTO_RESUMES,
             match reason {
+                bg::ResumeReason::Terminated => "its background run was stopped at the ceiling",
                 bg::ResumeReason::LiveWork | bg::ResumeReason::HeldForWork =>
                     "its background run finished",
                 bg::ResumeReason::SaidWaiting => "it ended its turn waiting on a background run",
             },
             run_log.display().to_string().dimmed()
         );
-        run_prompt = bg::RESUME_PROMPT.to_string();
+        run_prompt = bg::resume_prompt(&reason).to_string();
     };
     crate::session::revoke_standalone_implementer_grant(launch.child_grant);
     let (status, outcome) = finished?;

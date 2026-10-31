@@ -416,20 +416,24 @@ mod tests {
     fn a_vendor_that_resumes_after_its_held_work_is_not_reaped() {
         let dir = tempfile::tempdir().unwrap();
         let log = dir.path().join("run.jsonl");
+        // The hold follows the "build" (a file the vendor touches), not the
+        // clock, so a slow start on a loaded runner cannot lift it early.
+        let built = dir.path().join("built");
         let mut child = std::process::Command::new("sh")
             .arg("-c")
             .arg(format!(
-                "echo '{{\"type\":\"result\",\"is_error\":false}}' >> {log}; sleep 0.8; \
-                 echo '{{\"type\":\"assistant\"}}' >> {log}; sleep 1.2; \
+                "echo '{{\"type\":\"result\",\"is_error\":false}}' >> {log}; sleep 2.5; \
+                 touch {built}; sleep 0.2; \
+                 echo '{{\"type\":\"assistant\"}}' >> {log}; sleep 0.2; \
                  echo '{{\"type\":\"result\",\"is_error\":false}}' >> {log}; exit 5",
-                log = log.display()
+                log = log.display(),
+                built = built.display()
             ))
             .spawn()
             .unwrap();
-        let started = Instant::now();
-        let hold = || started.elapsed() < Duration::from_millis(1000);
+        let hold = || !built.exists();
         let out =
-            wait_reaping_after_result_holding(&mut child, &log, Duration::from_millis(500), &hold)
+            wait_reaping_after_result_holding(&mut child, &log, Duration::from_millis(1000), &hold)
                 .unwrap();
         assert!(!out.reaped, "the vendor went back to work");
         assert_eq!(out.status.code(), Some(5));

@@ -32,13 +32,31 @@ Continue where you left off: read its output, finish the work, then commit, push
 Do not end your turn while a build or test you started is still running: run it in the foreground \
 or poll it in bounded steps.";
 
+/// The message a session is resumed with when its background run was still
+/// going at the ceiling and the launcher stopped it.
+pub(crate) const TERMINATED_PROMPT: &str =
+    "Your background run was TERMINATED by the launcher: it was still running at the wait ceiling, \
+so it did not finish and its results are incomplete. Rerun what you need in the foreground (narrow it \
+to the tests you touched), finish the work, then commit, push and open the PR. Do not end your turn \
+while a build or test you started is still running.";
+
+/// The prompt a resume for `reason` is sent with.
+pub(crate) fn resume_prompt(reason: &ResumeReason) -> &'static str {
+    match reason {
+        ResumeReason::Terminated => TERMINATED_PROMPT,
+        _ => RESUME_PROMPT,
+    }
+}
+
 /// How often [`wait_for_background_work`] looks again, and how often it
 /// reports that it is still waiting.
 const POLL: Duration = Duration::from_secs(2);
 const PROGRESS_EVERY: Duration = Duration::from_secs(60);
 
 /// Phrases a final result uses when the session parked on background work
-/// rather than finishing. Matched case-insensitively.
+/// rather than finishing. Matched case-insensitively, and only in a clause
+/// that also names build or test work ([`BUILD_WORDS`]): "waiting for the
+/// advisor" or "the dev server is still running" is not a parked build.
 const WAITING_PHRASES: &[&str] = &[
     "in the background",
     "waiting on",
@@ -55,14 +73,29 @@ const WAITING_PHRASES: &[&str] = &[
     "will report back",
 ];
 
-/// Whether `text` (a final result) says the session is waiting on work it
-/// left running.
+/// Word stems that make a clause about build or test work. A word matches
+/// when it starts with one; `runs` must match whole.
+const BUILD_WORDS: &[&str] = &[
+    "build", "test", "cargo", "nextest", "compil", "clippy", "rustc",
+];
+
+/// Whether `text` (a final result) says the session is waiting on build or
+/// test work it left running: one clause (split on `.`, `;`, `!`, `?`, `:`
+/// and newlines) carries a waiting phrase and a build word.
 pub(crate) fn says_waiting_on_background(text: &str) -> bool {
     let lower = text.to_lowercase();
-    WAITING_PHRASES.iter().any(|p| lower.contains(p))
+    lower.split(['.', ';', '!', '?', ':', '\n']).any(|clause| {
+        WAITING_PHRASES.iter().any(|p| clause.contains(p))
+            && clause
+                .split(|c: char| !c.is_alphanumeric())
+                .any(|w| w == "runs" || BUILD_WORDS.iter().any(|b| w.starts_with(b)))
+    })
 }
 
-/// Process names that are build or test work, not an MCP server or shell.
+/// Process names that are build or test work, not an MCP server, a shell
+/// or a long-lived daemon. `sccache` is left out on purpose: a session's
+/// first cargo can start the sccache server, which inherits the marker and
+/// outlives the build by its idle timeout (or forever).
 const BUILD_COMMS: &[&str] = &[
     "cargo",
     "rustc",
@@ -75,14 +108,16 @@ const BUILD_COMMS: &[&str] = &[
     "gcc",
     "ld",
     "rust-lld",
-    "sccache",
 ];
 
 /// Whether a process named `comm` running `exe` (its argv[0]) is build or
-/// test work: a compiler driver, or a binary under a `target/` dir (a test
-/// executable).
+/// test work: a compiler driver, or a test executable, which cargo always
+/// builds under `target/<profile>/deps/`. A server run from `target/debug/`
+/// (say by `cargo run`) is not test work and does not hold the lane.
 pub(crate) fn is_build_work(comm: &str, exe: &str) -> bool {
-    BUILD_COMMS.contains(&comm) || comm.starts_with("cargo-") || exe.contains("/target/")
+    BUILD_COMMS.contains(&comm)
+        || (comm.starts_with("cargo-") && comm != "cargo-sccache")
+        || (exe.contains("/target/") && exe.contains("/deps/"))
 }
 
 /// One live process the launcher's marker reached.
@@ -178,9 +213,117 @@ pub(crate) fn wait_for_background_work(
     }
 }
 
+/// Send SIGTERM to the build or test work `live()` finds, give it a few
+/// seconds, then SIGKILL what is left. Used when the work outlived the wait
+/// ceiling.
+pub(crate) fn terminate_background_work(live: impl Fn() -> Vec<MarkedProcess>) {
+    #[cfg(unix)]
+    {
+        let signal_all = |sig: libc::c_int| {
+            for p in live() {
+                // SAFETY: kill(2) on a pid just read from /proc; no memory is touched.
+                unsafe {
+                    libc::kill(p.pid as libc::pid_t, sig);
+                }
+            }
+        };
+        signal_all(libc::SIGTERM);
+        let started = Instant::now();
+        while !live().is_empty() && started.elapsed() < Duration::from_secs(5) {
+            std::thread::sleep(Duration::from_millis(100));
+        }
+        signal_all(libc::SIGKILL);
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = live;
+    }
+}
+
+/// The launcher's hold on the linger reaper for one run: on while the
+/// session's build or test work is live, off once it ends or the ceiling
+/// passes. Hitting the ceiling is recorded, since the reaper then kills
+/// that work with the vendor's tree.
+pub(crate) struct ReapHold {
+    ceiling: Duration,
+    started: std::cell::Cell<Option<Instant>>,
+    held: std::cell::Cell<bool>,
+    expired: std::cell::Cell<bool>,
+}
+
+impl ReapHold {
+    pub(crate) fn new(ceiling: Duration) -> Self {
+        Self {
+            ceiling,
+            started: std::cell::Cell::new(None),
+            held: std::cell::Cell::new(false),
+            expired: std::cell::Cell::new(false),
+        }
+    }
+
+    /// Whether to keep holding, given whether work is live now. The ceiling
+    /// counts from the first check.
+    pub(crate) fn check(&self, live: bool) -> bool {
+        let started = self.started.get().unwrap_or_else(Instant::now);
+        self.started.set(Some(started));
+        if !live {
+            return false;
+        }
+        if started.elapsed() >= self.ceiling {
+            self.expired.set(true);
+            return false;
+        }
+        self.held.set(true);
+        true
+    }
+
+    /// Whether the reaper was held off for live work at all.
+    pub(crate) fn held(&self) -> bool {
+        self.held.get()
+    }
+
+    /// Whether the hold ran out with the work still live.
+    pub(crate) fn expired(&self) -> bool {
+        self.expired.get()
+    }
+}
+
+/// How the background work of a run that is about to be resumed ended.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Settled {
+    /// It exited by itself (or there was none to wait for).
+    Finished,
+    /// It was still running at the ceiling and was stopped.
+    Terminated,
+}
+
+/// Before a resume: wait for the work `live()` finds, bounded by `ceiling`.
+/// Work still running at the ceiling, or a run whose reaper hold already
+/// expired (`hold_expired`: the reaper killed that work), is stopped with
+/// `terminate` and reported [`Settled::Terminated`], never as finished.
+pub(crate) fn settle_background_work(
+    ceiling: Duration,
+    hold_expired: bool,
+    live: impl Fn() -> Vec<MarkedProcess>,
+    terminate: impl FnOnce(),
+) -> Settled {
+    if hold_expired {
+        terminate();
+        return Settled::Terminated;
+    }
+    if live().is_empty() || wait_for_background_work(ceiling, &live) {
+        return Settled::Finished;
+    }
+    terminate();
+    Settled::Terminated
+}
+
 /// Why a run that ended without a PR is resumed, or `None` to report it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum ResumeReason {
+    /// The session's background run outlived the wait ceiling and was
+    /// stopped; the session must rerun it.
+    Terminated,
     /// Build or test work the session started is still running.
     LiveWork,
     /// The reaper was held off for such work while the vendor lingered.
@@ -192,18 +335,22 @@ pub(crate) enum ResumeReason {
 /// Decide whether to resume a run that ended without a PR. A run is only
 /// resumed when it logged a final result (it ended its turn, it did not
 /// crash), the vendor can resume, and the budget is not spent.
+/// `hold_expired` is a reaper hold that ran out with the work still live.
 pub(crate) fn resume_reason(
     resumes_so_far: u32,
     can_resume: bool,
     final_result: Option<&str>,
     live_work: bool,
     held_for_work: bool,
+    hold_expired: bool,
 ) -> Option<ResumeReason> {
     if resumes_so_far >= MAX_AUTO_RESUMES || !can_resume {
         return None;
     }
     let text = final_result?;
-    if live_work {
+    if hold_expired {
+        Some(ResumeReason::Terminated)
+    } else if live_work {
         Some(ResumeReason::LiveWork)
     } else if held_for_work {
         Some(ResumeReason::HeldForWork)
@@ -215,11 +362,10 @@ pub(crate) fn resume_reason(
 }
 
 /// How many paths `git status --porcelain` lists in `worktree`, or `None`
-/// when it cannot be read.
+/// when it cannot be read. Built with the hardened host git builder, which
+/// refuses inside a seat clone (`None` then).
 pub(crate) fn uncommitted_paths(worktree: &Path) -> Option<usize> {
-    let out = std::process::Command::new("git")
-        .arg("-C")
-        .arg(worktree)
+    let out = aida_core::git_ops::host_git_command(worktree)
         .args(["status", "--porcelain"])
         .output()
         .ok()?;
