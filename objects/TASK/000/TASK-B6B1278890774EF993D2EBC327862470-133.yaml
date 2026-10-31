@@ -6,12 +6,12 @@ description: |-
 
   minor (test-coverage): route_backlog I/O layer (mail_backlog.rs:336-373) is untested — nudged.json recording, failed-nudge retry, and dropping records for read mail are only verified by reading; spec AC5 'one nudge' is exercised at due_nudges() only
   Reviewed sha: 72bae010a56e4e7b43e9a8e02f701e0c000ebb48
-status: InProgress
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T21:28:04.432862500Z
-modified_at: 2026-10-31T00:30:24.565067347Z
+modified_at: 2026-10-31T06:27:51.663157471Z
 req_type: Task
 tags:
 - carried-from:STORY-B6B1278890774EF993D2EBC327862470-128
@@ -62,6 +62,21 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a190a4-a3ff-7d01-a89d-1d7bf627c12d
+  author: aida-auto-bump
+  timestamp: 2026-10-31T06:27:51.423003565Z
+  session_id: 510d8c08-7912-4189-943d-65d110c7abc2
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a190a4-a4ef-7ba0-9631-305f40fdc0fe
+  timestamp: 2026-10-31T06:27:51.663154878Z
+  agent: aida
+  commit_sha: 0055329071e020e27dc8342cd4479eec6b4a1e87
+  summary: 'All three bundled STORY-128 findings addressed with tests: route_backlog I/O tested (record/no-repeat/retry/drop), typo route jobs refused by done with no stray ledger, operator escalations reach awaiting under any role; CI green at head'
+  review_verdict: approved
 filed_at:
   code_sha: 25d50e8d3350d29dbfc5489e94e86bd1a855400f
   branch: main
@@ -70,3 +85,7 @@ filed_at:
   aida_build_sha: 508fe88be8e
   vendor: claude
   session: 59c0ddec-c215-4704-bb07-25b6ce885ad1
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-31T06:27:51.422999461Z
+  completion_sha: 0055329071e020e27dc8342cd4479eec6b4a1e87
