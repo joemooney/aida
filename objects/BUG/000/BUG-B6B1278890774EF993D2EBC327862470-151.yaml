@@ -31,7 +31,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T22:16:54.008855195Z
-modified_at: 2026-10-31T23:39:39.751754474Z
+modified_at: 2026-10-31T23:40:53.406473719Z
 req_type: Bug
 tags:
 - area:agents
@@ -79,6 +79,12 @@ comments:
   modified_at: 2026-10-31T23:31:54.507917512Z
   session_id: 01a194156847
   harness_version: 2.1.316 (Claude Code)
+- id: 01a19456-691e-7d83-95f7-218a199dfd21
+  author: joe
+  content: 'ADVISOR REWORK BRIEF round 2 (16:41), PR-3181. AC1-AC4 met. ONE item, AC5: ended_at is still the last UserPromptSubmit heartbeat, so a single-prompt headless lane (claude-reviewer-724) still shows ended ~at started_at. Fix: record activity on more than prompt submit (PostToolUse/Stop hook heartbeat, or the transcript mtime when the registry entry is read), so ended_at reflects the last observed activity. Test: a single-prompt lane with tool activity 10 min after start reports ended_at at least 10 min after started_at. LIGHT gate.'
+  created_at: 2026-10-31T23:40:53.406473719Z
+  modified_at: 2026-10-31T23:40:53.406473719Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
 history:
 - id: 01a1940f-8def-7313-80d3-270615a3923f
   author: joe
