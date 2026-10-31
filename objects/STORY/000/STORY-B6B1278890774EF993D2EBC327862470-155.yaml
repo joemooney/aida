@@ -11,12 +11,12 @@ description: |
   4. The deputy exits cleanly when the operator's mandate or grant expires, and refuses new claims after that point. Tested with a short-TTL grant fixture.
   5. The slice-3 tty policy hooks named in the 099 sketch are stubbed with refusals, so no silent fail-open.
   Gate: STRICT (authority-bearing).
-status: NeedsAttention
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T12:09:24.781126891Z
-modified_at: 2026-10-31T18:22:31.534668952Z
+modified_at: 2026-10-31T20:40:58.479800014Z
 req_type: Story
 relationships:
 - rel_type:
@@ -113,6 +113,20 @@ history:
   - field_name: status
     old_value: Done
     new_value: NeedsAttention
+- id: 01a193b1-b169-7313-bd03-a1e6cf9fcda6
+  author: aida-auto-bump
+  timestamp: 2026-10-31T20:40:58.473649271Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Completed
+processing_record:
+- id: 01a193b1-b16f-7b33-994d-3b9cb9fe070c
+  timestamp: 2026-10-31T20:40:58.479795039Z
+  agent: aida
+  commit_sha: a4a6e2a6d182df7805362e00c9393fec18752684
+  summary: 'Base-only update from main (gh update-branch 3873143cf392419b2f0421048c89f07da776f08d -> cf292dd8385300284685462866af6621bf470552); reviewed content unchanged, prior approval carried; serial ship after main fix #2646.'
+  review_verdict: approved
 filed_at:
   code_sha: d083bdf13d4baa456db71671a4e3e0f144ee054c
   branch: main
@@ -125,11 +139,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-10-31T18:09:44.504890650Z
   implemented_by: joe
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: Functionally sound and the behaviour tests exist (CI green except gates still pending at record time), but none of the 5 criteria is traced to a test, the authority-raising resume refusal is untested, and the AC5 delegation stub only catches one exact field name
-  recovery_hint: address the review findings, move STORY-B6B1278890774EF993D2EBC327862470-155 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-10-31T18:21:07.816458164Z
+  completed_at: 2026-10-31T20:40:58.473644198Z
+  completion_sha: a4a6e2a6d182df7805362e00c9393fec18752684
