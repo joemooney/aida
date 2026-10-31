@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T09:28:50.459211418Z
-modified_at: 2026-10-31T13:27:24.991562662Z
+modified_at: 2026-10-31T13:40:20.001557885Z
 req_type: Bug
 tags:
 - ids
@@ -68,6 +68,12 @@ comments:
   content: 'ADVISOR 06:32: the round-3 lane ended its turn waiting on a background cargo build (a headless-rule violation) and was stopped. Its edits are uncommitted in the seat. Resumed lane: run cargo in the FOREGROUND in bounded steps (timeout <= 55s per call, re-polling the same build), never end a turn to wait for a notification. Finish the 05:36 ruling, commit and push.'
   created_at: 2026-10-31T13:27:24.991562662Z
   modified_at: 2026-10-31T13:27:24.991562662Z
+  session_id: 9b4a9d0a-69b7-4ebd-9bee-314b36573de5
+- id: 01a19230-95a1-75c0-835f-4e89c703c1c2
+  author: joe
+  content: 'ADVISOR 06:42: round 3 pushed at 6dac59e; delta review queued. The squash body no longer gets GitHub''s auto Co-authored-by lines: ACCEPTED. Lines already in commit messages are kept, and this repo has a single human author. The protected gate/ file means this PR ships with a hold clear (operator TTY) or under an --include-supervised mandate.'
+  created_at: 2026-10-31T13:40:20.001557885Z
+  modified_at: 2026-10-31T13:40:20.001557885Z
   session_id: 9b4a9d0a-69b7-4ebd-9bee-314b36573de5
 history:
 - id: 01a19166-4eb3-7172-8f0a-f2ff30b1fe9b
