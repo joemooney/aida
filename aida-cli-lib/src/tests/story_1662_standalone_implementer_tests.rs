@@ -956,6 +956,7 @@ fn stub_vendor_that_punts_exits_32_as_a_live_implementer_lane_with_no_grant_leak
         &project,
         "implementer",
         &crate::current_user_id(None),
+        false,
     )
     .unwrap();
     assert!(matches!(

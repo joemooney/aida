@@ -318,6 +318,11 @@ fn child_launch_refuses_on_key_quota_exhaustion() {
     ] {
         assert!(err.contains(needle), "missing {needle:?}: {err}");
     }
+    // No child was minted, so the refusal is a child-grant refusal (a review
+    // launch releases its lease on it). trace:TASK-b6b1278890774ef993d2ebc327862470-144 | ai:claude
+    crate::grant_keyring::FORCE_INSTALL_ERRNO.with(|e| e.set(Some(libc::EDQUOT)));
+    let refused = issue_child(tmp.path(), "reviewer", SUBJECT).unwrap_err();
+    assert!(ChildGrantRefused::is_in(&refused), "{refused:#}");
     // A keyring that is merely unavailable keeps the documented proc-only
     // fallback (warned on stderr), which a sandboxed worker cannot present.
     crate::grant_keyring::FORCE_INSTALL_ERRNO.with(|e| e.set(Some(libc::ENOSYS)));
@@ -467,6 +472,7 @@ fn doctor_warns_on_ptrace_scope_zero_with_a_grant() {
 /// could never present the grant. An unsandboxed worker only warns, and a
 /// structurally unavailable keyring never refuses.
 // trace:BUG-b6b1278890774ef993d2ebc327862470-045 | ai:claude
+// trace:BUG-b6b1278890774ef993d2ebc327862470-045.ace2889c | ai:claude
 #[test]
 fn sandboxed_child_without_a_keyring_key_is_refused_before_launch() {
     let err = crate::grant_keyring::InstallError::new(
@@ -498,6 +504,7 @@ fn sandboxed_child_without_a_keyring_key_is_refused_before_launch() {
 /// lease) and keeps the warn-only proc-only fallback for an uncontained one;
 /// the launch preflight refuses the same condition without minting a grant.
 // trace:BUG-b6b1278890774ef993d2ebc327862470-045 | ai:claude
+// trace:BUG-b6b1278890774ef993d2ebc327862470-045.ace2889c | ai:claude
 #[test]
 fn bug_045_contained_launch_child_without_a_keyring_key_is_refused() {
     if !crate::grant_keyring::available() {
@@ -530,4 +537,60 @@ fn bug_045_contained_launch_child_without_a_keyring_key_is_refused() {
     assert!(ChildGrantRefused::is_in(&err), "{err:#}");
     // Off the forced failure the probe passes and leaves no key behind.
     preflight_sandboxed_child_key("reviewer").expect("a holdable key passes the preflight");
+}
+
+/// TASK-HOME-144: a contained headless child of a NON-reviewer seat goes
+/// through the containment-aware issuer too. A delegated implementer whose
+/// key the keyring cannot hold is refused before it spawns (a
+/// [`ChildGrantRefused`]); an uncontained one keeps the proc-only fallback.
+// trace:TASK-b6b1278890774ef993d2ebc327862470-144 | ai:claude
+// trace:TASK-b6b1278890774ef993d2ebc327862470-144.ac45ce7b | ai:claude
+#[test]
+fn contained_headless_implementer_without_a_keyring_key_is_refused() {
+    if !crate::grant_keyring::available() {
+        eprintln!("SKIP: the session keyring is unavailable here");
+        return;
+    }
+    let tmp = tempfile::tempdir().unwrap();
+    let mut env = pinned_env();
+    let parent = test_support::mint_grant_for(tmp.path(), SUBJECT, "advisor", &["implementer"]);
+    env.set_key(GRANT_ENV, &parent);
+
+    crate::grant_keyring::FORCE_INSTALL_ERRNO.with(|e| e.set(Some(libc::ELOOP)));
+    let err = issue_headless_child(tmp.path(), "implementer", SUBJECT, true).unwrap_err();
+    assert!(ChildGrantRefused::is_in(&err), "{err:#}");
+    assert!(
+        format!("{err:#}").contains("cannot launch the contained `implementer` worker"),
+        "{err:#}"
+    );
+
+    crate::grant_keyring::FORCE_INSTALL_ERRNO.with(|e| e.set(Some(libc::ELOOP)));
+    let HeadlessChildGrant::Issued(child) =
+        issue_headless_child(tmp.path(), "implementer", SUBJECT, false).unwrap()
+    else {
+        panic!("a delegated implementer mints a child grant");
+    };
+    assert!(
+        child.binding.iter().all(|b| b.starts_with("proc:")),
+        "{:?}",
+        child.binding
+    );
+}
+
+/// TASK-HOME-144 (was TASK-HOME-145): kernel key-quota exhaustion in the
+/// contained launch preflight is a [`ChildGrantRefused`], so a refused review
+/// launch releases its lease exactly as for the ELOOP refusal.
+// trace:TASK-b6b1278890774ef993d2ebc327862470-144 | ai:claude
+// trace:TASK-b6b1278890774ef993d2ebc327862470-144.accfe87a | ai:claude
+#[test]
+fn preflight_key_quota_exhaustion_is_a_child_grant_refusal() {
+    crate::grant_keyring::FORCE_INSTALL_ERRNO.with(|e| e.set(Some(libc::EDQUOT)));
+    let err = preflight_sandboxed_child_key("reviewer").unwrap_err();
+    assert!(ChildGrantRefused::is_in(&err), "{err:#}");
+    let msg = format!("{err:#}");
+    assert!(msg.contains("kernel key quota"), "{msg}");
+    assert!(
+        crate::queue_cmd::refused_review_launch_releases_lease(true, &err),
+        "a quota-refused review launch releases its lease"
+    );
 }
