@@ -18,6 +18,20 @@
 # runner may deny — it is `allow_failure: true` here (reported, not blocking)
 # until the runner's capabilities are confirmed; promote it to a hard gate then.
 # trace:TASK-825 | ai:claude
+#
+# Main runs nightly, not on every mirrored merge. Every GitHub merge mirrors to
+# gitlab `main`; GitHub CI already gated that exact commit, so re-running the
+# full verify/test/bwrap set on each push only duplicated it and competed with
+# implementer lanes for the runner host's disk. The merge gates therefore run
+# for merge requests, for the scheduled nightly pipeline on the default branch
+# (CI/CD > Schedules, see docs/gitlab-ci-runner.md) and for a manual "Run
+# pipeline" from the UI. They are interruptible, so a newer commit cancels a
+# stale run. Release (tag) jobs and the merge-hold gate are unaffected.
+# trace:TASK-B6B1278890774EF993D2EBC327862470-141 | ai:claude
+
+workflow:
+  auto_cancel:
+    on_new_commit: interruptible
 
 stages:
   - verify
@@ -68,15 +82,24 @@ default:
   before_script:
     - ci/restore-git-mtimes
 
+# Shared rules for the merge gates (verify / test / bwrap-confinement): MR
+# pipelines, the nightly schedule on the default branch, and manual web runs —
+# never a plain push to main. Interruptible so auto_cancel can drop a stale run.
+# trace:TASK-B6B1278890774EF993D2EBC327862470-141 | ai:claude
+.merge-gate:
+  interruptible: true
+  rules:
+    - if: $CI_MERGE_REQUEST_IID
+    - if: $CI_PIPELINE_SOURCE == "schedule" && $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - if: $CI_PIPELINE_SOURCE == "web"
+
 # Fast compile/static gates. Tests are separate so they can start immediately
 # and overlap this job on the two-slot mirror runner. Release binaries are built
 # by release-linux-assets for tags; MR tests use the test profile and therefore
 # no longer pay for an unused workspace release build. trace:TASK-1274 | ai:codex
 verify:
   stage: verify
-  rules:
-    - if: $CI_MERGE_REQUEST_IID
-    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+  extends: .merge-gate
   script:
     - env -u AIDA_SESSION_ROLE cargo test --workspace --doc
     - cargo fmt --all -- --check
@@ -94,9 +117,7 @@ verify:
 test:
   stage: test
   needs: []
-  rules:
-    - if: $CI_MERGE_REQUEST_IID
-    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+  extends: .merge-gate
   script:
     # Unset AIDA_SESSION_ROLE so role-gated queue/mcp tests don't false-fail.
     # STORY-1216: nextest (one process per test) for speed + isolation; it does
@@ -115,9 +136,7 @@ test:
 # runner (TASK-1254, 2026-09-18), so it is a hard gate here, mirroring GitHub.
 bwrap-confinement:
   stage: verify
-  rules:
-    - if: $CI_MERGE_REQUEST_IID
-    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+  extends: .merge-gate
   script:
     - sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
     - AIDA_REQUIRE_BWRAP_LIVE=1 cargo test -p aida-cli --bin aida
