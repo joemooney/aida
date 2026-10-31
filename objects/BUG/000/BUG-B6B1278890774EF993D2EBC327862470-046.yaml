@@ -17,7 +17,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T23:17:06.038259824Z
-modified_at: 2026-10-31T11:52:07.023324683Z
+modified_at: 2026-10-31T11:53:30.293923257Z
 req_type: Bug
 tags:
 - ids
@@ -239,6 +239,12 @@ comments:
   content: 'ADVISOR 2026-10-31 04:55: the round-2 rework lane rotated with everything uncommitted. I saved the work as LOCAL commit 364942e1e08 (''wip: ... amend before push'') on the seat branch; it is not pushed. Next lane: start from the 04:51 implementer handoff above, steps 1-7. Before pushing, fold every change into ONE commit (amend 364942e is fine, since it was never pushed). The title is the PR''s full-canonical-ID subject; no force push to the PR branch. Follow-ups in step 7: put all three in ONE draft task (2026-10-28 rule), not three.'
   created_at: 2026-10-31T11:52:07.023324683Z
   modified_at: 2026-10-31T11:52:07.023324683Z
+  session_id: 9b4a9d0a-69b7-4ebd-9bee-314b36573de5
+- id: 01a191ce-c7b5-7c52-93b6-a0f62feb2454
+  author: joe
+  content: 'ADVISOR 2026-10-31 04:58, correction to 04:55: the salvage commit 364942e1e08 is now PUSHED to the PR branch, because the seat clone had to be removed to relaunch. Do NOT amend it. Add your remaining work as normal commits on top (no force). ship squash-merges, so the PR still lands as one commit. CI on 364942e will be red or incomplete until your push.'
+  created_at: 2026-10-31T11:53:30.293923257Z
+  modified_at: 2026-10-31T11:53:30.293923257Z
   session_id: 9b4a9d0a-69b7-4ebd-9bee-314b36573de5
 history:
 - id: 01a19139-af95-70c3-b78b-a3a3bb923a1b
