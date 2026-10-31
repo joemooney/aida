@@ -489,6 +489,22 @@ pub(crate) fn known_route_seat<'a>(store_root: &Path, job: &'a str) -> Option<&'
         .then_some(seat)
 }
 
+/// Whether a session may see (and clear) operator escalations: only sessions
+/// a human reads — the operator terminal (no seat, or seat `operator`) and
+/// interactive advisor sessions. Headless lanes and doer seats
+/// (implementer/reviewer/…) never do, so an agent cannot act on or clear the
+/// human's escalation before the human sees it.
+// trace:TASK-B6B1278890774EF993D2EBC327862470-142 | ai:claude
+pub(crate) fn operator_escalation_visible(seat: Option<&str>, headless: bool) -> bool {
+    !headless && seat.is_none_or(|s| s == OPERATOR_SEAT || s == "advisor")
+}
+
+/// A job whose only seat is `operator` — an escalation for the human.
+// trace:TASK-B6B1278890774EF993D2EBC327862470-142 | ai:claude
+pub(crate) fn is_operator_job(seats: &[String]) -> bool {
+    !seats.is_empty() && seats.iter().all(|s| s == OPERATOR_SEAT)
+}
+
 /// The prompt the routed seat job carries.
 pub(crate) fn route_prompt(seat: &str) -> String {
     let job = route_job_name(seat);

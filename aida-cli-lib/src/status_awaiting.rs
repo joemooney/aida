@@ -985,7 +985,9 @@ pub(crate) fn collect_awaiting_report_with_mail_facts(
     // Due seat jobs from the `[schedule]` registry — the per-seat delivery
     // channel (STORY-1226). Scoped to the session's seat when one is known;
     // every seat otherwise (the operator orchestrating several seats sees
-    // them all, like briefs); operator escalations surface either way.
+    // them all, like briefs); operator escalations surface only in sessions
+    // a human reads (operator terminal, interactive advisor) — never in a
+    // headless lane or a doer seat. trace:TASK-B6B1278890774EF993D2EBC327862470-142 | ai:claude
     // File-only: a TOML parse plus the store ledger /
     // local state files — never git, never the network — so it rides the
     // per-turn notice. Substrate jobs never surface here; the tick runs them.
@@ -998,7 +1000,11 @@ pub(crate) fn collect_awaiting_report_with_mail_facts(
             .filter(|s| !s.trim().is_empty())
             .map(|r| canonical_role_name(&r));
         // trace:TASK-B6B1278890774EF993D2EBC327862470-135 | ai:claude
-        let due = maintenance_schedule::awaiting_seat_jobs(project_root, seat.as_deref());
+        let due = maintenance_schedule::awaiting_seat_jobs(
+            project_root,
+            seat.as_deref(),
+            crate::autopilot::current_headless(),
+        );
         awaiting_you::CronChannel {
             due: due.len(),
             next: due.first().map(|j| j.line(chrono::Utc::now())),
