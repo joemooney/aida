@@ -17,7 +17,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-31T22:20:21.225603942Z
-modified_at: 2026-10-31T22:22:41.909657839Z
+modified_at: 2026-10-31T22:23:51.852426783Z
 req_type: Task
 tags:
 - authority
@@ -31,6 +31,12 @@ comments:
   modified_at: 2026-10-31T22:22:41.909657839Z
   session_id: 01a19317-50be-7103-a820-408213c53b0b
   harness_version: 2.1.316 (Claude Code)
+- id: 01a1940f-e42c-7782-923b-357e01222a6c
+  author: joe
+  content: 'ADVISOR 15:24: stays Draft until the operator has reviewed the product seat''s artifact draft (per this task''s own Why). Promote then.'
+  created_at: 2026-10-31T22:23:51.852426783Z
+  modified_at: 2026-10-31T22:23:51.852426783Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
 filed_at:
   code_sha: 0506fa2eb862db100dffbc80b0c5cfdedec28522
   branch: main
