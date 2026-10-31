@@ -14,7 +14,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T14:13:18.865775624Z
-modified_at: 2026-10-31T20:37:27.336987030Z
+modified_at: 2026-10-31T20:57:48.938041597Z
 req_type: Bug
 relationships:
 - rel_type: Parent
@@ -79,6 +79,12 @@ comments:
   content: 'ADVISOR BRIEF 13:10 (merge-only, retry): PR-3169 CONFLICTS with main at f976c90. The previous merge lane ended without pushing. Job: in your seat worktree, git fetch origin && git merge origin/main, resolve the conflicts keeping BOTH main''s changes and this PR''s intent, then commit and push to the PR branch. Gate: one targeted cargo test -p aida-cli-lib <session_end filter> plus make check-ci-fast. If cargo is denied in the sandbox, still push the merge: CI is the authority. No new features.'
   created_at: 2026-10-31T20:08:41.380905095Z
   modified_at: 2026-10-31T20:08:41.380905095Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+- id: 01a193c1-1c8a-78e0-8022-0dc4a4cf21c2
+  author: joe
+  content: 'ADVISOR RULING 14:00 on PR-3169 PASS non-blocking findings (ruled once): BOTH ACCEPTED. (1) lease_tree_dirty_entries emits raw porcelain-v2 lines: cosmetic, the refusal path already names items via describe_status_entry. (2) a collapsed ''? .aida/'' is not treated as noise: it only occurs when .aida/ is wholly untracked (this repo tracks .aida/config.toml), and refusing there is the conservative direction. No follow-up specs.'
+  created_at: 2026-10-31T20:57:48.938041597Z
+  modified_at: 2026-10-31T20:57:48.938041597Z
   session_id: f5694f22-ff09-4e87-8934-e79adca4efba
 history:
 - id: 01a1924f-0616-7132-b7b1-cc960a88c794
