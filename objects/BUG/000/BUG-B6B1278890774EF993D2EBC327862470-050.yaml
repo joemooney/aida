@@ -8,12 +8,12 @@ description: |
   1. The contained headless claude settings deny the Monitor tool, and the launcher disables background Bash for headless lanes (deny run_in_background, or the Claude Code setting or env that disables background tasks, whichever the installed CLI honours). Probe and pick one, and pin it with a test on the generated settings/argv.
   2. Safety net: when the headless wrapper sees a `result` event but the session's process group still has live children (or the result text says it is waiting), it resumes the same session once with a fixed continuation prompt ("Your background work has finished or must be run in the foreground now; continue and finish the task."), with a cap of N continuations. Tested with a fake claude that ends its turn while a child runs.
   3. A lane that still ends with uncommitted work in its seat reports `implementer: no-pr reason=uncommitted-work` (not pr-opened with the old head), so the advisor can tell a stall from a finished push.
-status: InProgress
+status: Done
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T13:37:47.020257057Z
-modified_at: 2026-10-31T14:24:20.618109938Z
+modified_at: 2026-10-31T14:27:27.628169847Z
 req_type: Bug
 relationships:
 - rel_type: Parent
@@ -76,6 +76,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1925b-bb6a-7081-9f6d-9ac75e376fd2
+  author: joe
+  timestamp: 2026-10-31T14:27:27.722900913Z
+  session_id: 01a192318a61
+  harness_version: 2.1.316 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 filed_at:
   code_sha: 0ee902ae50d53211d3346fe6c0e26e6abefc659c
   branch: main
@@ -84,3 +93,7 @@ filed_at:
   aida_build_sha: 0ee902ae50d
   vendor: claude
   session: 9b4a9d0a-69b7-4ebd-9bee-314b36573de5
+implementation_info:
+  implemented: true
+  implemented_at: 2026-10-31T14:27:27.628169847Z
+  implemented_by: joe
