@@ -265,7 +265,10 @@ fn resume_logs_are_fresh_files_beside_the_first() {
 #[test]
 fn a_no_pr_report_names_the_uncommitted_paths() {
     let (line, code) = si::report(&si::Outcome::NoPr, Some(0), Some(12));
-    assert_eq!(line, "implementer: no-pr uncommitted=12");
+    assert_eq!(
+        line,
+        "implementer: no-pr reason=uncommitted-work uncommitted=12"
+    );
     assert_eq!(code, si::NO_PR_EXIT_CODE);
     assert_eq!(
         si::report(&si::Outcome::NoPr, Some(0), Some(0)).0,
@@ -275,6 +278,56 @@ fn a_no_pr_report_names_the_uncommitted_paths() {
         si::report(&si::Outcome::NoPr, Some(0), None).0,
         "implementer: no-pr"
     );
+}
+
+/// BUG-050: a rework round starts with its PR open. Finding it open on the
+/// head it had at launch is not a push: with work left uncommitted in the
+/// seat the round is a stall, reported `no-pr reason=uncommitted-work`, not
+/// `pr-opened` with the old head.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-050 | ai:claude
+#[test]
+fn a_rework_round_left_uncommitted_on_the_old_pr_head_is_a_stall() {
+    let pr = |head: Option<&str>| si::Outcome::PrOpened {
+        pr: 7,
+        head: head.map(String::from),
+    };
+    assert!(si::is_stale_pr(&pr(Some("abc")), Some("abc")));
+    assert!(!si::is_stale_pr(&pr(Some("def")), Some("abc")), "pushed");
+    assert!(!si::is_stale_pr(&pr(Some("abc")), None), "no PR at launch");
+    assert!(!si::is_stale_pr(&pr(None), Some("abc")), "unknown head");
+    assert!(!si::is_stale_pr(&si::Outcome::NoPr, Some("abc")));
+
+    let settled = si::settle_outcome(pr(Some("abc")), Some("abc"), Some(4));
+    assert_eq!(settled, si::Outcome::NoPr);
+    let (line, code) = si::report(&settled, Some(0), Some(4));
+    assert_eq!(
+        line,
+        "implementer: no-pr reason=uncommitted-work uncommitted=4"
+    );
+    assert_eq!(code, si::NO_PR_EXIT_CODE);
+
+    // A pushed round, or a stale PR on a clean seat, stays pr-opened.
+    for (outcome, uncommitted) in [
+        (pr(Some("def")), Some(4)),
+        (pr(Some("abc")), None),
+        (pr(Some("abc")), Some(0)),
+    ] {
+        assert_eq!(
+            si::settle_outcome(outcome.clone(), Some("abc"), uncommitted),
+            outcome
+        );
+    }
+}
+
+/// BUG-050: the continuation a parked lane is resumed with opens with the
+/// fixed instruction.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-050 | ai:claude
+#[test]
+fn the_resume_prompt_opens_with_the_fixed_continuation() {
+    assert!(RESUME_PROMPT.starts_with(
+        "Your background work has finished or must be run in the foreground now; continue and \
+         finish the task."
+    ));
 }
 
 /// A lane whose child logged its final result but whose launcher is waiting

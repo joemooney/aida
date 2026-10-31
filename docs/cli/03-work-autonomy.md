@@ -96,7 +96,7 @@ branches on the exit code:
 | Exit | stdout line | Meaning |
 |---|---|---|
 | 0 | `implementer: pr-opened pr=<n> head=<sha>` | The PR is open; review it with a separate reviewer. |
-| 31 | `implementer: no-pr` (`uncommitted=<n>` appended when the worktree has uncommitted changes) | No PR, punt or hold. If the vendor itself exited non-zero, that code is returned instead. |
+| 31 | `implementer: no-pr` (`reason=uncommitted-work uncommitted=<n>` appended when the worktree has uncommitted changes; a rework round whose PR is still on its launch head reports this too, not `pr-opened`, when it leaves such changes) | No PR, punt or hold. If the vendor itself exited non-zero, that code is returned instead. |
 | 32 | `implementer: punted reason=<summary>` | The implementer ran `aida punt`; read the spec's comments. |
 | 33 | `implementer: held branch=<branch>` | The branch is pushed and the PR is held (`aida pr hold`). |
 | 34 | (none) | Refused before any setup: the concurrency cap is reached. |

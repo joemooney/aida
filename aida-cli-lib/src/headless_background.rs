@@ -26,11 +26,12 @@ use std::time::{Duration, Instant};
 pub(crate) const MAX_AUTO_RESUMES: u32 = 3;
 
 /// The message a parked session is resumed with.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-050 | ai:claude
 pub(crate) const RESUME_PROMPT: &str =
-    "Your background run has finished (the launcher waited for it). \
-Continue where you left off: read its output, finish the work, then commit, push and open the PR. \
-Do not end your turn while a build or test you started is still running: run it in the foreground \
-or poll it in bounded steps.";
+    "Your background work has finished or must be run in the foreground now; continue and finish \
+the task. The launcher waited for any background run you left: read its output, finish the work, \
+then commit, push and open the PR. Do not end your turn while a build or test you started is still \
+running: run it in the foreground or poll it in bounded steps.";
 
 /// The message a session is resumed with when its background run was still
 /// going at the ceiling and the launcher stopped it.

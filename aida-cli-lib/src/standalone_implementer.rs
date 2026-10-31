@@ -207,13 +207,46 @@ pub(crate) fn report(
         ),
         Outcome::Held { branch } => (format!("implementer: held branch={branch}"), HELD_EXIT_CODE),
         // trace:BUG-B6B1278890774EF993D2EBC327862470-044 | ai:claude
+        // BUG-050: a stall leaves work in the seat; name it as the reason.
+        // trace:BUG-B6B1278890774EF993D2EBC327862470-050 | ai:claude
         Outcome::NoPr => (
             match uncommitted.filter(|n| *n > 0) {
-                Some(n) => format!("implementer: no-pr uncommitted={n}"),
+                Some(n) => format!("implementer: no-pr reason=uncommitted-work uncommitted={n}"),
                 None => "implementer: no-pr".to_string(),
             },
             vendor_code.filter(|c| *c != 0).unwrap_or(NO_PR_EXIT_CODE),
         ),
+    }
+}
+
+/// BUG-050: whether `outcome` is an open PR still on `head_before`, the head
+/// it had when this run launched. A rework round starts with its PR already
+/// open, so finding it open proves nothing: until its head moves, this run
+/// has pushed nothing and is treated as PR-less (resumed if it parked).
+/// An unknown head on either side is not stale.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-050 | ai:claude
+pub(crate) fn is_stale_pr(outcome: &Outcome, head_before: Option<&str>) -> bool {
+    matches!(
+        (outcome, head_before),
+        (Outcome::PrOpened { head: Some(head), .. }, Some(before)) if head == before
+    )
+}
+
+/// BUG-050: the outcome to report once the run is done. A stale PR (see
+/// [`is_stale_pr`]) with `uncommitted` paths left in the seat is a stall,
+/// reported [`Outcome::NoPr`] so the caller does not read the old head as a
+/// finished push. A stale PR on a clean seat stays `pr-opened`: the round
+/// had nothing to change.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-050 | ai:claude
+pub(crate) fn settle_outcome(
+    outcome: Outcome,
+    head_before: Option<&str>,
+    uncommitted: Option<usize>,
+) -> Outcome {
+    if uncommitted.is_some_and(|n| n > 0) && is_stale_pr(&outcome, head_before) {
+        Outcome::NoPr
+    } else {
+        outcome
     }
 }
 
@@ -571,6 +604,10 @@ pub(crate) fn run(launch: Launch<'_>) -> Result<()> {
         crate::burndown_run::resolved_bg_wait_ceiling_ms(Some(launch.project_root)),
     );
     let live_work = || bg::live_background_work(launch.lease_id);
+    // BUG-050: the head of the branch's PR before this run, if one is open
+    // (a rework round), so finding that same PR afterwards is not a push.
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-050 | ai:claude
+    let head_before = lookup_pr_with(launch.project_root, launch.branch, 1).and_then(|(_, h)| h);
     let mut resumes = 0;
     let mut run_log = log_path.clone();
     let mut run_prompt = prompt;
@@ -610,7 +647,8 @@ pub(crate) fn run(launch: Launch<'_>) -> Result<()> {
             crate::punt::read_hold_signal(&hold_signal),
             || lookup_pr(launch.project_root, launch.branch),
         );
-        if outcome != Outcome::NoPr {
+        // trace:BUG-B6B1278890774EF993D2EBC327862470-050 | ai:claude
+        if outcome != Outcome::NoPr && !is_stale_pr(&outcome, head_before.as_deref()) {
             break Ok((status, outcome));
         }
         let live = live_work();
@@ -668,10 +706,15 @@ pub(crate) fn run(launch: Launch<'_>) -> Result<()> {
     store_commit.commit();
 
     // trace:BUG-B6B1278890774EF993D2EBC327862470-044 | ai:claude
-    let uncommitted = matches!(outcome, Outcome::NoPr)
+    // BUG-050: a stale PR is as unshipped as no PR.
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-050 | ai:claude
+    let unshipped =
+        matches!(outcome, Outcome::NoPr) || is_stale_pr(&outcome, head_before.as_deref());
+    let uncommitted = unshipped
         .then(|| bg::uncommitted_paths(&lease_worktree(launch.project_root, launch.lease_id)))
         .flatten()
         .filter(|n| *n > 0);
+    let outcome = settle_outcome(outcome, head_before.as_deref(), uncommitted);
     let (line, code) = report(&outcome, status.code(), uncommitted);
     println!("{line}");
     if code == 0 {
@@ -761,7 +804,16 @@ pub(crate) fn is_run_pr(pr: &crate::OpenPrInfo, branch: &str) -> bool {
 /// just-created PR may lag the forge's list queries by seconds, so a branch
 /// that reached origin gets two more looks before the run is called PR-less.
 fn lookup_pr(project_root: &Path, branch: &str) -> Option<(u64, Option<String>)> {
-    for attempt in 0..3 {
+    lookup_pr_with(project_root, branch, 3)
+}
+
+/// [`lookup_pr`] with `attempts` looks (one look never sleeps).
+fn lookup_pr_with(
+    project_root: &Path,
+    branch: &str,
+    attempts: u64,
+) -> Option<(u64, Option<String>)> {
+    for attempt in 0..attempts {
         if attempt > 0 {
             std::thread::sleep(std::time::Duration::from_secs(3 * attempt));
         }

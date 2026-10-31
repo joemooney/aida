@@ -2906,16 +2906,15 @@ pub(crate) fn claude_headless_args_for_roots(
         permission_mode.to_string(),
     ]
     .into_iter()
-    .chain(contained_flags)
+    .chain(headless_no_background_settings(contained_flags)?)
     .chain([
         "--output-format".to_string(),
         "stream-json".to_string(),
         "--verbose".to_string(),
         "--disallowed-tools".to_string(),
-        "AskUserQuestion".to_string(),
-        "--session-id".to_string(),
-        session_id.to_string(),
     ])
+    .chain(HEADLESS_DISALLOWED_TOOLS.iter().map(|t| t.to_string()))
+    .chain(["--session-id".to_string(), session_id.to_string()])
     .chain(
         model
             .filter(|m| !m.trim().is_empty())
@@ -2931,6 +2930,73 @@ pub(crate) fn claude_headless_args_for_roots(
     .chain([prompt.to_string()])
     .collect();
     Ok(args)
+}
+
+/// BUG-050: the tools a headless `claude -p` session never gets.
+/// `AskUserQuestion` has no human to answer it (BUG-327). `Monitor` arms a
+/// watch that reports back on a *later* turn, and `-p` has no later turn:
+/// a lane that armed one ended its only turn and hung, its work uncommitted.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-050 | ai:claude
+pub(crate) const HEADLESS_DISALLOWED_TOOLS: &[&str] = &["AskUserQuestion", "Monitor"];
+
+/// BUG-050: the Claude Code variable that turns off background tasks: Bash's
+/// `run_in_background`, auto-backgrounding of a long command, and background
+/// subagents. Claude Code 2.1.316 reads it (probed in the binary); set
+/// through the `--settings` document's `env`, so it rides the argv.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-050 | ai:claude
+pub(crate) const DISABLE_BACKGROUND_TASKS_ENV: &str = "CLAUDE_CODE_DISABLE_BACKGROUND_TASKS";
+
+/// BUG-050: `flags` (the contained `--settings` flags, or none) with the
+/// headless no-background posture added. A contained `--settings` document
+/// gains `env.CLAUDE_CODE_DISABLE_BACKGROUND_TASKS=1` and a `Monitor` deny
+/// rule; without one, a `--settings` document carrying only that `env` is
+/// appended. Headless only: the interactive contained launch builds the same
+/// settings and keeps background tasks, since a human turn follows.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-050 | ai:claude
+pub(crate) fn headless_no_background_settings(mut flags: Vec<String>) -> Result<Vec<String>> {
+    match flags.iter().position(|f| f == "--settings") {
+        Some(at) => {
+            let value = flags
+                .get_mut(at + 1)
+                .ok_or_else(|| anyhow::anyhow!("`--settings` without a value"))?;
+            let mut settings: serde_json::Value = serde_json::from_str(value)
+                .context("the contained `--settings` document is not JSON")?;
+            let obj = settings
+                .as_object_mut()
+                .ok_or_else(|| anyhow::anyhow!("the contained `--settings` is not an object"))?;
+            let env_obj = obj
+                .entry("env")
+                .or_insert_with(|| serde_json::json!({}))
+                .as_object_mut()
+                .ok_or_else(|| {
+                    anyhow::anyhow!("the contained `--settings` env is not an object")
+                })?;
+            env_obj.insert(DISABLE_BACKGROUND_TASKS_ENV.to_string(), "1".into());
+            let permissions = obj
+                .entry("permissions")
+                .or_insert_with(|| serde_json::json!({}));
+            let deny = permissions
+                .as_object_mut()
+                .ok_or_else(|| anyhow::anyhow!("the contained `permissions` is not an object"))?
+                .entry("deny")
+                .or_insert_with(|| serde_json::json!([]))
+                .as_array_mut()
+                .ok_or_else(|| anyhow::anyhow!("the contained `permissions.deny` is not a list"))?;
+            if !deny.iter().any(|r| r == "Monitor") {
+                deny.push("Monitor".into());
+            }
+            *value = settings.to_string();
+        }
+        None => {
+            let mut env = serde_json::Map::new();
+            env.insert(DISABLE_BACKGROUND_TASKS_ENV.to_string(), "1".into());
+            flags.extend([
+                "--settings".to_string(),
+                serde_json::json!({ "env": env }).to_string(),
+            ]);
+        }
+    }
+    Ok(flags)
 }
 
 /// STORY-263: build the argv (after the `claude` program name) for a headless
@@ -4954,13 +5020,17 @@ pub fn claude_headless_resume_args_with_posture(
         "--permission-mode".to_string(),
         permission_mode.to_string(),
     ];
-    if let Some(worktree) = contained_in {
+    let contained_flags = match contained_in {
         // BUG-1971: only when `worktree` is itself a git root; otherwise no
         // write roots. trace:BUG-1971 | ai:claude
-        args.extend(claude_contained_flags_for_roots(
-            &contained_resume_write_roots(worktree),
-        )?);
-    }
+        Some(worktree) => {
+            claude_contained_flags_for_roots(&contained_resume_write_roots(worktree))?
+        }
+        None => Vec::new(),
+    };
+    // BUG-050: a resumed lane is as headless as the launch it continues.
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-050 | ai:claude
+    args.extend(headless_no_background_settings(contained_flags)?);
     args.extend([
         "--output-format".to_string(),
         "stream-json".to_string(),
@@ -4970,7 +5040,9 @@ pub fn claude_headless_resume_args_with_posture(
         // the value list so the trailing prompt positional is unharmed.
         // trace:BUG-327 | ai:claude
         "--disallowed-tools".to_string(),
-        "AskUserQuestion".to_string(),
+    ]);
+    args.extend(HEADLESS_DISALLOWED_TOOLS.iter().map(|t| t.to_string()));
+    args.extend([
         "--resume".to_string(),
         session_id.to_string(),
         prompt.to_string(),
@@ -8183,6 +8255,63 @@ mod tests {
         assert_eq!(agy.last().map(String::as_str), Some(prompt));
     }
 
+    /// BUG-050: every headless claude argv (fresh and resume, contained and
+    /// not) carries exactly one `--settings` document whose `env` turns off
+    /// background tasks, and a contained one also denies `Monitor`. The
+    /// interactive contained flags keep background tasks: a human turn follows.
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-050 | ai:claude
+    #[test]
+    fn headless_argv_disables_monitor_and_background_tasks() {
+        let dir = std::env::temp_dir();
+        for (label, contained, args) in [
+            ("fresh", false, claude_headless_args("p", "sid")),
+            (
+                "fresh-contained",
+                true,
+                claude_headless_args_for_roots("p", "sid", Some(&[dir.clone()]), None, None)
+                    .unwrap(),
+            ),
+            ("resume", false, claude_headless_resume_args("p", "sid")),
+            (
+                "resume-contained",
+                true,
+                claude_headless_resume_args_with_posture("p", "sid", Some(&dir)).unwrap(),
+            ),
+        ] {
+            let settings: Vec<&String> = args
+                .windows(2)
+                .filter(|w| w[0] == "--settings")
+                .map(|w| &w[1])
+                .collect();
+            assert_eq!(settings.len(), 1, "[{label}] one --settings: {args:?}");
+            let settings: serde_json::Value = serde_json::from_str(settings[0]).unwrap();
+            assert_eq!(
+                settings["env"][DISABLE_BACKGROUND_TASKS_ENV], "1",
+                "[{label}] {settings}"
+            );
+            let denies_monitor = settings["permissions"]["deny"]
+                .as_array()
+                .is_some_and(|d| d.iter().any(|r| r == "Monitor"));
+            assert_eq!(denies_monitor, contained, "[{label}] {settings}");
+            if contained {
+                assert_eq!(settings["sandbox"]["enabled"], true, "[{label}] {settings}");
+            }
+            assert!(
+                args.windows(3)
+                    .any(|w| w == ["--disallowed-tools", "AskUserQuestion", "Monitor"]),
+                "[{label}] {args:?}"
+            );
+            assert_eq!(args.last().map(String::as_str), Some("p"), "[{label}]");
+        }
+        let interactive = claude_contained_flags_for_roots(&[dir]).unwrap();
+        assert!(
+            !interactive
+                .iter()
+                .any(|a| a.contains(DISABLE_BACKGROUND_TASKS_ENV)),
+            "{interactive:?}"
+        );
+    }
+
     #[test]
     fn contained_headless_args_use_strict_sandbox_settings() {
         let args = claude_headless_args_with_posture("/aida-review", "sid", true).unwrap();
@@ -9200,11 +9329,17 @@ mod tests {
                 Some("AskUserQuestion"),
                 "[{label}] AskUserQuestion must immediately follow --disallowed-tools: {args:?}",
             );
-            // The variadic-terminator: the token after "AskUserQuestion"
+            // BUG-050: `Monitor` follows in the same value list.
+            assert_eq!(
+                args.get(pos + 2).map(String::as_str),
+                Some("Monitor"),
+                "[{label}] Monitor must be disallowed too: {args:?}",
+            );
+            // The variadic-terminator: the token after the tool list
             // must start with "--" or "-", otherwise the prompt at the
             // tail gets gobbled into the disallowed-tool list.
             let terminator = args
-                .get(pos + 2)
+                .get(pos + 3)
                 .unwrap_or_else(|| panic!("[{label}] value list runs off the end: {args:?}"));
             assert!(
                 terminator.starts_with('-'),
