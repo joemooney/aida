@@ -8629,6 +8629,7 @@ mod tests {
     /// (spec id) and `BUG-035` (agreed id) hold 34 and 35, so the next free
     /// agreed id is `BUG-36`, never `BUG-34`/`BUG-35` beside a padded twin.
     // trace:BUG-B6B1278890774EF993D2EBC327862470-046 | ai:claude
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-046.ac5bd8aa | ai:claude
     #[test]
     fn bug_046_merge_gate_skips_padded_twins() {
         use crate::models::{Requirement, RequirementType};

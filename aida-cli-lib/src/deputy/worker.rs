@@ -38,6 +38,16 @@ pub(crate) enum GrantState {
 
 pub(crate) type GrantProbe = Arc<dyn Fn() -> GrantState + Send + Sync>;
 
+/// `Some(why)` once the mandate the deputy started under has ended (and the
+/// operator did not pass `--keep-after-mandate`); `None` while it holds.
+// trace:STORY-B6B1278890774EF993D2EBC327862470-155 | ai:claude
+pub(crate) type MandateProbe = Arc<dyn Fn() -> Option<String> + Send + Sync>;
+
+/// A probe for a deputy that never stops for a mandate.
+pub(crate) fn no_mandate_stop() -> MandateProbe {
+    Arc::new(|| None)
+}
+
 #[derive(Clone)]
 pub(crate) struct WorkerConfig {
     pub name: String,
@@ -50,6 +60,10 @@ pub(crate) struct WorkerConfig {
     pub tty_idle: Duration,
     pub poll: Duration,
     pub grant: GrantProbe,
+    pub mandate: MandateProbe,
+    /// The checkout whose mailbox gets each requester's result mail; `None`
+    /// sends none.
+    pub mail_root: Option<PathBuf>,
     /// Tests: stop once this many jobs have finished or been refused.
     pub max_jobs: Option<usize>,
     /// The program an argv job's `aida` resolves to (tests point it at a stub).
@@ -95,7 +109,8 @@ pub(crate) fn acquire_lock(spool: &Spool) -> Result<InstanceLock> {
 /// Jobs left in `running/` by a deputy that died. They are marked failed and
 /// never re-run: a job may not be idempotent (`pr ship`). Call only while
 /// holding the instance lock.
-pub(crate) fn recover_orphans(spool: &Spool, name: &str) -> Result<usize> {
+pub(crate) fn recover_orphans(spool: &Spool, cfg: &WorkerConfig) -> Result<usize> {
+    let name = cfg.name.as_str();
     let ids = spool.list_ids("running");
     for id in &ids {
         let rec = std::fs::read(spool.job_path("running", id))
@@ -113,12 +128,13 @@ pub(crate) fn recover_orphans(spool: &Spool, name: &str) -> Result<usize> {
         };
         spool.write_result("failed", &res)?;
         let mut row = LedgerRow::new(name, id, "orphaned");
-        row.requester = rec.map(|r| r.requester);
+        row.requester = rec.as_ref().map(|r| r.requester.clone());
         row.rc = Some(res.rc);
         row.reason = Some(res.reason.clone());
         spool.ledger(&row)?;
         std::fs::rename(spool.job_path("running", id), spool.job_path("failed", id))?;
         clear_job_markers(spool, id);
+        notify(spool, cfg, rec.as_ref(), &res);
     }
     Ok(ids.len())
 }
@@ -154,10 +170,11 @@ fn sweep_cancel_requests(spool: &Spool, cfg: &WorkerConfig, active: &Arc<Mutex<A
             if std::fs::rename(&queued, spool.job_path("failed", &id)).is_ok() {
                 let _ = spool.write_result("failed", &res);
                 let mut row = LedgerRow::new(&cfg.name, &id, "cancelled");
-                row.requester = rec.map(|r| r.requester);
+                row.requester = rec.as_ref().map(|r| r.requester.clone());
                 row.rc = Some(res.rc);
-                row.reason = Some(res.reason);
+                row.reason = Some(res.reason.clone());
                 let _ = spool.ledger(&row);
+                notify(spool, cfg, rec.as_ref(), &res);
                 bump_handled(active);
             }
             let _ = std::fs::remove_file(spool.cancel_request_path(&id));
@@ -205,40 +222,71 @@ pub(crate) fn claim_terminal(
 pub(crate) fn run(spool: &Spool, cfg: &WorkerConfig, stop: &AtomicBool) -> Result<usize> {
     spool.ensure()?;
     let _lock = acquire_lock(spool)?;
-    recover_orphans(spool, &cfg.name)?;
+    recover_orphans(spool, cfg)?;
     let active = Arc::new(Mutex::new(Active::default()));
     let mut handles = Vec::new();
-    let mut last_grant_note: Option<String> = None;
+    // Once set, the deputy claims nothing more and exits when its running
+    // jobs finish: the grant or the mandate it ran under has ended.
+    // trace:STORY-B6B1278890774EF993D2EBC327862470-155 | ai:claude
+    let mut stopping: Option<String> = None;
+    let mut was_paused = false;
     loop {
         if stop.load(Ordering::SeqCst) {
             break;
         }
-        {
+        let running = {
             let a = active.lock().unwrap_or_else(|p| p.into_inner());
             if cfg.max_jobs.is_some_and(|m| a.handled >= m) && a.running == 0 {
                 break;
             }
-        }
-        match (cfg.grant)() {
-            GrantState::Valid { expires_at } => {
-                last_grant_note = None;
-                if let Err(e) = spool.check_owned() {
-                    eprintln!(
-                        "deputy {}: spool check failed, not claiming: {e:#}",
-                        cfg.name
-                    );
-                } else {
-                    claim_round(spool, cfg, &active, expires_at, &mut handles);
-                }
+            a.running
+        };
+        if stopping.is_none() {
+            stopping = stop_reason(cfg);
+            if let Some(why) = &stopping {
+                eprintln!(
+                    "deputy {}: claiming no new jobs: {why}. It exits once its {running} running job(s) finish. Renew in this shell (`aida role enter <seat>`), then start `aida deputy` again.",
+                    cfg.name
+                );
             }
-            GrantState::Invalid(why) => {
-                if last_grant_note.as_deref() != Some(why.as_str()) {
-                    eprintln!(
-                        "deputy {}: not claiming new jobs: {why}. Renew in this shell (`aida role enter <seat>`), then start `aida deputy` again.",
-                        cfg.name
-                    );
-                    last_grant_note = Some(why);
+        }
+        if let Some(why) = &stopping {
+            if running == 0 {
+                let mut row = LedgerRow::new(&cfg.name, "-", "stopped");
+                row.reason = Some(why.clone());
+                let _ = spool.ledger(&row);
+                eprintln!("deputy {}: stopped: {why}", cfg.name);
+                break;
+            }
+            std::thread::sleep(cfg.poll);
+            continue;
+        }
+        let paused = spool.paused().is_some();
+        if paused != was_paused {
+            let event = if paused { "paused" } else { "resumed" };
+            let _ = spool.ledger(&LedgerRow::new(&cfg.name, "-", event));
+            eprintln!(
+                "deputy {}: {}",
+                cfg.name,
+                if paused {
+                    "paused: claiming no new jobs (running jobs finish); `aida deputy resume` at your terminal resumes"
+                } else {
+                    "resumed"
                 }
+            );
+            was_paused = paused;
+        }
+        if paused {
+            // Cancels of queued jobs still apply; nothing new is claimed.
+            sweep_cancel_requests(spool, cfg, &active);
+        } else if let GrantState::Valid { expires_at } = (cfg.grant)() {
+            if let Err(e) = spool.check_owned() {
+                eprintln!(
+                    "deputy {}: spool check failed, not claiming: {e:#}",
+                    cfg.name
+                );
+            } else {
+                claim_round(spool, cfg, &active, expires_at, &mut handles);
             }
         }
         std::thread::sleep(cfg.poll);
@@ -250,6 +298,27 @@ pub(crate) fn run(spool: &Spool, cfg: &WorkerConfig, stop: &AtomicBool) -> Resul
     Ok(handled)
 }
 
+/// Why the deputy must stop claiming, if it must: the grant is invalid or
+/// past its expiry, or the mandate it started under has ended. A grant that
+/// says it is valid but whose expiry has passed counts as expired, so a
+/// cached probe never extends it.
+// trace:STORY-B6B1278890774EF993D2EBC327862470-155 | ai:claude
+pub(crate) fn stop_reason(cfg: &WorkerConfig) -> Option<String> {
+    match (cfg.grant)() {
+        GrantState::Invalid(why) => return Some(format!("the operator's grant ended: {why}")),
+        GrantState::Valid {
+            expires_at: Some(at),
+        } if at <= Utc::now() => {
+            return Some(format!(
+                "the operator's grant expired at {}",
+                at.to_rfc3339()
+            ))
+        }
+        GrantState::Valid { .. } => {}
+    }
+    (cfg.mandate)()
+}
+
 fn claim_round(
     spool: &Spool,
     cfg: &WorkerConfig,
@@ -259,6 +328,12 @@ fn claim_round(
 ) {
     sweep_cancel_requests(spool, cfg, active);
     for id in spool.list_ids("incoming") {
+        // Re-checked before every claim, so a pause or an expiry that lands
+        // mid-round takes effect at the next job, not the next round.
+        // trace:STORY-B6B1278890774EF993D2EBC327862470-155 | ai:claude
+        if spool.paused().is_some() || stop_reason(cfg).is_some() {
+            return;
+        }
         let worker_idx = {
             let a = active.lock().unwrap_or_else(|p| p.into_inner());
             if a.running >= cfg.workers {
@@ -299,6 +374,13 @@ fn claim_round(
             bump_handled(active);
             continue;
         }
+        // Slice-3 hooks, stubbed to refuse what they cannot judge yet.
+        // trace:STORY-B6B1278890774EF993D2EBC327862470-155 | ai:claude
+        if let super::hooks::HookVerdict::Refuse(why) = super::hooks::check(spool, &rec) {
+            refuse(spool, cfg, &id, Some(&rec), "incoming", &why);
+            bump_handled(active);
+            continue;
+        }
         let job_file = match spool.claim(&id) {
             Ok(identity) => identity,
             Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
@@ -316,14 +398,22 @@ fn claim_round(
         let _ = spool.ledger(&row);
 
         let now = Utc::now();
+        // A policy that cannot be read (or carries rules this deputy does
+        // not know) refuses the job: running it detached would skip whatever
+        // that policy says about it. trace:STORY-B6B1278890774EF993D2EBC327862470-155 | ai:claude
         let decision = match policy::load(spool) {
             Ok(p) => p.decide(&rec.body, now, grant_expires_at),
             Err(e) => {
-                eprintln!(
-                    "deputy {}: TTY policy unreadable, running detached: {e:#}",
-                    cfg.name
+                refuse(
+                    spool,
+                    cfg,
+                    &id,
+                    Some(&rec),
+                    "running",
+                    &format!("refused:policy-unreadable ({e:#})"),
                 );
-                TtyDecision::NoTty
+                bump_handled(active);
+                continue;
             }
         };
         let tty = match decision {
@@ -403,6 +493,31 @@ fn refuse(
     let _ = spool.ledger(&row);
     let _ = std::fs::rename(spool.job_path(from, id), spool.job_path("failed", id));
     eprintln!("deputy {}: refused job {id}: {reason}", cfg.name);
+    notify(spool, cfg, rec, &res);
+}
+
+/// Mail the requester a job's result (AC2 of slice 2), and ledger whether it
+/// went. A failed send never fails the job: the result is already filed.
+// trace:STORY-B6B1278890774EF993D2EBC327862470-155 | ai:claude
+fn notify(spool: &Spool, cfg: &WorkerConfig, rec: Option<&JobRecord>, res: &JobResult) {
+    let Some(root) = &cfg.mail_root else {
+        return;
+    };
+    let mut row = LedgerRow::new(&cfg.name, &res.id, "mailed");
+    match super::mail_result(root, &cfg.name, rec, res) {
+        Ok(true) => {
+            row.summary = rec.and_then(|r| r.requester.mail_to.clone().or(r.requester.role.clone()))
+        }
+        Ok(false) => row.reason = Some("no requester mail identity on the job".into()),
+        Err(e) => {
+            eprintln!(
+                "deputy {}: could not mail the result of job {}: {e:#}",
+                cfg.name, res.id
+            );
+            row.reason = Some(format!("mail failed: {e:#}"));
+        }
+    }
+    let _ = spool.ledger(&row);
 }
 
 /// Refuse a submission that reuses an id already in use (`where_` says
@@ -742,6 +857,7 @@ pub(crate) fn run_job(
         spool.job_path(state, &rec.id),
     )?;
     clear_job_markers(spool, &rec.id);
+    notify(spool, cfg, Some(rec), &res);
     Ok(res)
 }
 

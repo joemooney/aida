@@ -518,6 +518,7 @@ mod tests {
             orphaned_in_progress: Vec::new(),
             idle_in_progress: Vec::new(),
             blocked_seats: Vec::new(),
+            deputy_failed: Vec::new(),
             role: None,
         };
         let channels = you_channels(&report);

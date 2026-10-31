@@ -24,6 +24,7 @@
 //! an agent.
 // trace:STORY-B6B1278890774EF993D2EBC327862470-099 | ai:claude
 
+pub(crate) mod hooks;
 pub(crate) mod policy;
 #[cfg(unix)]
 pub(crate) mod worker;
@@ -98,6 +99,22 @@ pub(crate) struct Requester {
     pub grant_verified: bool,
     pub spec: Option<String>,
     pub pid: u32,
+    /// The mail identity the submitter sends as, recorded at submit so the
+    /// deputy can mail it the result. Absent on jobs from older submits.
+    ///
+    /// Submitter-controlled like the rest of this struct: a submitter can
+    /// point the result mail at any recipient (operator, advisor). The mail
+    /// is genuinely from the deputy, but its body (the command summary, rc,
+    /// output path) only reports what the job record said and what the job
+    /// did; a recipient must not read it as an endorsement of the request.
+    // trace:STORY-B6B1278890774EF993D2EBC327862470-155 | ai:claude
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mail_to: Option<String>,
+    /// Any field this deputy does not know. Kept (not dropped) so the claim
+    /// hook can refuse it: an unknown field may be a slice-3 capability or
+    /// policy this deputy cannot honour ([`hooks::unknown_fields`]).
+    #[serde(flatten)]
+    pub extra: std::collections::BTreeMap<String, serde_json::Value>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -135,6 +152,18 @@ pub(crate) struct JobRecord {
     pub timeout_secs: u64,
     pub body: JobBody,
     pub sha256: String,
+    /// A submit capability or delegated grant (slice 3). This deputy cannot
+    /// verify one, so a job that carries one is refused at claim
+    /// ([`hooks::submitter_delegation`]), never run as if it were absent.
+    // trace:STORY-B6B1278890774EF993D2EBC327862470-155 | ai:claude
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub delegation: Option<serde_json::Value>,
+    /// Every top-level field outside the ones above. The fields above are the
+    /// allow-list: anything else (`capability`, `grant`, a tty policy, …) is
+    /// refused at claim ([`hooks::unknown_fields`]), never silently dropped.
+    // trace:STORY-B6B1278890774EF993D2EBC327862470-155 | ai:claude
+    #[serde(flatten)]
+    pub extra: std::collections::BTreeMap<String, serde_json::Value>,
 }
 
 /// A finished job's result.
@@ -158,6 +187,138 @@ pub(crate) struct JobResult {
 pub(crate) struct WaitingMarker {
     pub since: DateTime<Utc>,
     pub idle_secs: u64,
+}
+
+/// `<root>/paused`: the deputy claims nothing while it exists.
+// trace:STORY-B6B1278890774EF993D2EBC327862470-155 | ai:claude
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub(crate) struct PauseMarker {
+    pub at: Option<DateTime<Utc>>,
+    pub by: Option<String>,
+}
+
+/// One failed job a requester has not acknowledged yet, as `aida awaiting`
+/// lists it.
+// trace:STORY-B6B1278890774EF993D2EBC327862470-155 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub(crate) struct FailedJob {
+    pub deputy: String,
+    pub id: String,
+    pub requester_session: Option<String>,
+    pub rc: i32,
+    pub reason: String,
+    pub output: PathBuf,
+}
+
+/// Failed jobs under every deputy of `main_root` that nobody acknowledged,
+/// oldest first. With `session`, only the jobs that session submitted; with
+/// `None` (the operator's shell), every one. File reads only (no git, no
+/// network), so it rides the per-turn notice.
+// trace:STORY-B6B1278890774EF993D2EBC327862470-155 | ai:claude
+pub(crate) fn unacked_failed_jobs(main_root: &Path, session: Option<&str>) -> Vec<FailedJob> {
+    let base = deputy_base(main_root);
+    let mut names: Vec<String> = std::fs::read_dir(&base)
+        .into_iter()
+        .flatten()
+        .flatten()
+        .filter(|e| e.file_type().is_ok_and(|t| t.is_dir()))
+        .filter_map(|e| e.file_name().into_string().ok())
+        .filter(|n| validate_name(n).is_ok())
+        .collect();
+    names.sort();
+    let mut out = Vec::new();
+    for name in names {
+        let Ok(spool) = spool_for(main_root, &name) else {
+            continue;
+        };
+        for id in spool.list_ids("failed") {
+            if spool.acknowledged(&id) {
+                continue;
+            }
+            let Some(res) = spool.read_result(&id) else {
+                continue;
+            };
+            let requester_session = std::fs::read(spool.job_path("failed", &id))
+                .ok()
+                .and_then(|b| serde_json::from_slice::<JobRecord>(&b).ok())
+                .and_then(|r| r.requester.session_id);
+            if let Some(s) = session {
+                if requester_session.as_deref() != Some(s) {
+                    continue;
+                }
+            }
+            out.push(FailedJob {
+                deputy: name.clone(),
+                id,
+                requester_session,
+                rc: res.rc,
+                reason: res.reason,
+                output: res.output,
+            });
+        }
+    }
+    out
+}
+
+/// Mail the requester the job's result: rc, reason and output path, plus how
+/// to acknowledge it when it failed. Returns `Ok(false)` when the job names
+/// no one to mail. `project_root` is the checkout whose mailbox gets it.
+// trace:STORY-B6B1278890774EF993D2EBC327862470-155 | ai:claude
+pub(crate) fn mail_result(
+    project_root: &Path,
+    deputy: &str,
+    rec: Option<&JobRecord>,
+    res: &JobResult,
+) -> Result<bool> {
+    let Some(to) = rec.and_then(|r| {
+        r.requester
+            .mail_to
+            .clone()
+            .or_else(|| r.requester.role.clone())
+            .filter(|s| !s.trim().is_empty())
+    }) else {
+        return Ok(false);
+    };
+    let short: String = res.id.chars().take(8).collect();
+    let outcome = if res.rc == 0 { "done" } else { "FAILED" };
+    let mut body = format!(
+        "Deputy {deputy:?} finished job {id}: rc {rc} ({reason}).\n",
+        id = res.id,
+        rc = res.rc,
+        reason = res.reason
+    );
+    if let Some(r) = rec {
+        body.push_str(&format!("Command: {}\n", r.body.summary()));
+    }
+    body.push_str(&format!("Output: {}\n", res.output.display()));
+    body.push_str(&format!("Read it with `aida deputy log {}`.\n", res.id));
+    if res.rc != 0 {
+        body.push_str(&format!(
+            "`aida awaiting` lists it until you run `aida deputy ack {}`.\n",
+            res.id
+        ));
+    }
+    let msg = aida_core::mailbox::Message {
+        subject: Some(format!("deputy job {short} {outcome}: rc {}", res.rc)),
+        // One message per job result, so a retry never duplicates it.
+        id: format!("deputy-{deputy}-{}", res.id),
+        thread_id: format!("deputy-{}", res.id),
+        from: format!("deputy:{deputy}"),
+        to: aida_core::mailbox::Recipient::Agent(to),
+        timestamp: Utc::now().timestamp_millis(),
+        in_reply_to: None,
+        body,
+        urgent: false,
+        intent: aida_core::mailbox::Intent::Fyi,
+        retracted: false,
+        deleted: false,
+        archived: false,
+        from_source: aida_core::mailbox::SenderSource::Explicit,
+        from_role: None,
+        relayed_from: None,
+    };
+    crate::mailbox_store::write_message(project_root, &msg)?;
+    Ok(true)
 }
 
 /// rc for a timed-out job (as `timeout(1)`).
@@ -246,6 +407,76 @@ impl Spool {
     /// Present while a terminal job looks to be waiting on a prompt.
     pub(crate) fn waiting_marker_path(&self, id: &str) -> PathBuf {
         self.dir("running").join(format!("{id}.waiting"))
+    }
+    /// The requester's acknowledgement of a failed job: written on the
+    /// submit side, so a contained session can clear its own failures.
+    // trace:STORY-B6B1278890774EF993D2EBC327862470-155 | ai:claude
+    pub(crate) fn ack_path(&self, id: &str) -> PathBuf {
+        self.incoming.join(format!("{id}.ack"))
+    }
+    /// Present while the deputy is paused (`aida deputy pause`). Only the
+    /// operator's side writes it; a contained agent cannot reach `root`.
+    pub(crate) fn paused_path(&self) -> PathBuf {
+        self.root.join("paused")
+    }
+    /// The slice-3 per-deputy command policy. This deputy cannot enforce one,
+    /// so while the file exists it claims nothing ([`hooks::command_policy`]).
+    pub(crate) fn command_policy_path(&self) -> PathBuf {
+        self.root.join("deputy.commands")
+    }
+
+    /// Whether the deputy is paused. Any entry at the marker path counts, so
+    /// a marker that cannot be read still pauses (fails closed).
+    pub(crate) fn paused(&self) -> Option<PauseMarker> {
+        let p = self.paused_path();
+        std::fs::symlink_metadata(&p).ok()?;
+        Some(
+            std::fs::read(&p)
+                .ok()
+                .and_then(|b| serde_json::from_slice(&b).ok())
+                .unwrap_or(PauseMarker { at: None, by: None }),
+        )
+    }
+
+    /// Pause: write the marker (idempotent). Returns false if already paused.
+    pub(crate) fn pause(&self, by: Option<String>) -> Result<bool> {
+        if self.paused().is_some() {
+            return Ok(false);
+        }
+        let marker = PauseMarker {
+            at: Some(Utc::now()),
+            by,
+        };
+        match write_private_new(&self.paused_path(), &serde_json::to_vec(&marker)?) {
+            Ok(()) => Ok(true),
+            Err(_) if self.paused().is_some() => Ok(false),
+            Err(e) => Err(e),
+        }
+    }
+
+    /// Resume: remove the marker. Returns false if it was not paused.
+    pub(crate) fn resume(&self) -> Result<bool> {
+        match std::fs::remove_file(self.paused_path()) {
+            Ok(()) => Ok(true),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(false),
+            Err(e) => Err(e).context("remove the deputy's pause marker"),
+        }
+    }
+
+    /// Acknowledge failed job `id` so `aida awaiting` stops listing it.
+    /// Writes only under `incoming/`, like a submit.
+    pub(crate) fn acknowledge(&self, id: &str) -> Result<()> {
+        validate_id(id)?;
+        self.check_incoming()?;
+        match write_private_new(&self.ack_path(id), b"ack\n") {
+            Ok(()) => Ok(()),
+            Err(_) if self.acknowledged(id) => Ok(()),
+            Err(e) => Err(e),
+        }
+    }
+
+    pub(crate) fn acknowledged(&self, id: &str) -> bool {
+        std::fs::symlink_metadata(self.ack_path(id)).is_ok()
     }
 
     fn private_dirs(&self) -> Vec<PathBuf> {
@@ -620,6 +851,9 @@ pub(crate) fn current_requester(spec: Option<String>) -> Requester {
         role: env("AIDA_SESSION_ROLE"),
         spec,
         pid: std::process::id(),
+        // The identity this session sends mail as is where its results go.
+        // trace:STORY-B6B1278890774EF993D2EBC327862470-155 | ai:claude
+        mail_to: Some(crate::resolve_mail_sender_identity(None).0),
         ..Default::default()
     };
     if let Ok(main) = crate::worktree_gc::find_main_worktree_root() {
