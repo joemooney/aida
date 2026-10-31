@@ -591,10 +591,12 @@ pub(crate) fn handle_burndown_run(
             if contained {
                 session::prepare_contained_mailbox_for_launch(&project_root)?;
             }
+            // trace:TASK-b6b1278890774ef993d2ebc327862470-144 | ai:claude
             let child_grant = crate::gate::seat_authority::issue_headless_child(
                 &project_root,
                 "implementer",
                 &current_user_id(None),
+                contained,
             )?;
             if let crate::gate::seat_authority::HeadlessChildGrant::Baseline { cause } =
                 &child_grant
@@ -2087,10 +2089,12 @@ pub(crate) fn run_burndown_verbose(
     let tee_handle = headless_tee::start_tee(&log_path, &tee_opts);
 
     // trace:BUG-2165 | ai:antigravity
+    // trace:TASK-b6b1278890774ef993d2ebc327862470-144 | ai:claude
     let child_grant = crate::gate::seat_authority::issue_headless_child(
         &project_root,
         "implementer",
         &current_user_id(None),
+        contained,
     )?;
     if let crate::gate::seat_authority::HeadlessChildGrant::Baseline { cause } = &child_grant {
         eprintln!(

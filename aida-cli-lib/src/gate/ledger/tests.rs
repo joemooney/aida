@@ -754,6 +754,66 @@ fn a_collected_verdict_goes_on_the_ledger_and_no_legacy_file_is_written() {
     assert_eq!(store::read_file(&launcher, ChangeKey::pr(30)).len(), before);
 }
 
+/// BUG-HOME-045 AC ace2889c: a CONTAINED reviewer records from its own
+/// review worktree under its OWN child grant, and the launcher collects it.
+/// The contained launch issuer gives that child a session-keyring key (the
+/// only binding a sandboxed `aida review record` can present), and a verdict
+/// attested by exactly that grant goes on the PR's gate ledger.
+// trace:BUG-b6b1278890774ef993d2ebc327862470-045.ace2889c | ai:claude
+// trace:TASK-b6b1278890774ef993d2ebc327862470-144 | ai:claude
+#[test]
+fn a_contained_reviewers_own_grant_verdict_is_collected_from_its_worktree() {
+    if !crate::grant_keyring::available() {
+        eprintln!("SKIP: the session keyring is unavailable here");
+        return;
+    }
+    let (_tmp, root) = root();
+    let launcher = root.join("primary");
+    let worktree = root.join("seat");
+    std::fs::create_dir_all(&launcher).unwrap();
+    let _guard = crate::test_env::AmbientGuard::hermetic_with_seat_and(
+        &launcher,
+        "advisor",
+        &["reviewer"],
+        &[("AIDA_CONTAINED", None)],
+    );
+    let child = crate::gate::seat_authority::issue_launch_child(
+        &launcher,
+        "reviewer",
+        crate::test_env::HERMETIC_TEST_USER,
+        true,
+    )
+    .expect("a contained reviewer child is minted while the keyring holds its key");
+    assert!(
+        child.binding.iter().any(|b| !b.starts_with("proc:")),
+        "a contained child carries a key its sandbox can present: {:?}",
+        child.binding
+    );
+    let own = RecorderAttestation {
+        grant_id: Some(child.id.clone()),
+        grant_binding: child.binding.clone(),
+        ..attestation("reviewer")
+    };
+    let rec = record("approved", &ts(1), Some(&own));
+    reviewer_wrote(&worktree, "STORY-1", &rec);
+    let canonical = rv::verdict_path(&launcher, "PR-31");
+
+    let got = rv::collect_standalone_verdict(
+        &launcher,
+        &worktree,
+        &canonical,
+        &["STORY-1".to_string()],
+        since(),
+        &checks(&launcher, 31, &child.id),
+    )
+    .expect("the contained reviewer's own-grant verdict is collected");
+    assert!(got.collected_from_worktree);
+    assert_eq!(
+        rv::read_recorded_verdict(&launcher, "PR-31").unwrap().kind,
+        rv::VerdictKind::Approved
+    );
+}
+
 /// Round 2, item 2: a verdict for PR-B is never collected from PR-A's
 /// reviewer seat — neither a record naming PR-B, nor one reviewed at PR-B's
 /// head, nor a `PR-B.json` file in the seat.

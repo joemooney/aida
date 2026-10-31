@@ -1040,7 +1040,7 @@ fn pool_reuse_revokes_only_the_prior_occupants_child_grant() {
     let subject = crate::test_env::HERMETIC_TEST_USER;
     let mint_child = || {
         let crate::gate::seat_authority::HeadlessChildGrant::Issued(child) =
-            crate::gate::seat_authority::issue_headless_child(root, "implementer", subject)
+            crate::gate::seat_authority::issue_headless_child(root, "implementer", subject, false)
                 .unwrap()
         else {
             panic!("fixture must mint a delegated child");
