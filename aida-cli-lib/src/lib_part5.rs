@@ -3113,6 +3113,18 @@ pub(crate) fn handle_review_record_at(
         let (subjects, author_branch) = review_subject(spec, pr, branch.as_deref(), |n| {
             review_pr_subject_from_forge(&project_root, n)
         })?;
+        // BUG-HOME-048: an approval for PR N is recorded only under a spec PR
+        // N covers — the same coverage check that decides which title
+        // trailers complete — so a foreign bare id (`TASK-139`) cannot carry
+        // an approval the ship gate would accept.
+        // trace:BUG-B6B1278890774EF993D2EBC327862470-048 | ai:claude
+        if let (Some(n), Some(head)) = (review_pr_number(spec, pr), author_branch.as_deref()) {
+            if let Some(refusal) =
+                crate::trailer_coverage::review_record_refusal(&project_root, head, n, spec)
+            {
+                anyhow::bail!(refusal);
+            }
+        }
         let authors = crate::gate::review_author::review_recorder_authors(
             &project_root,
             &subjects,

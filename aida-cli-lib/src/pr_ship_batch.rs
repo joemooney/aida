@@ -544,6 +544,7 @@ impl BatchPorts for GitHubPorts {
             &self.project_root,
             &view.head_ref,
             Some(&view.title),
+            Some(pr),
         );
         let (candidates, policy) = crate::gate::approval::merge_approval_inputs(
             &roots,

@@ -232,3 +232,164 @@ fn the_squash_subject_drops_the_refused_trailer_and_names_the_claim() {
         "{trailer:?}"
     );
 }
+
+/// A git project whose root holds one commit and a store with the incident
+/// specs (legacy YAML, which `load_store_for_lookup` reads at the root);
+/// returns it and the head sha.
+fn incident_project() -> (tempfile::TempDir, String) {
+    let root = tempfile::tempdir().unwrap();
+    std::fs::create_dir_all(root.path().join(".aida")).unwrap();
+    crate::Storage::new(root.path().join("requirements.yaml"))
+        .save(&incident_store())
+        .unwrap();
+    let head = crate::test_git::commit_fixture(root.path());
+    (root, head)
+}
+
+/// `aida review record <spec> --verdict approved --pr 3159` from an
+/// independent reviewer, the forge reporting PR-3159's head as [`BRANCH`].
+fn record_approval(root: &std::path::Path, head: &str, spec: &str) -> anyhow::Result<()> {
+    let root_str = root.to_str().unwrap();
+    let _pinned = crate::test_env::EnvVarsGuard::apply(&[
+        ("AIDA_PROJECT_ROOT", Some(root_str)),
+        ("AIDA_DRIVE_ROOT", Some(root_str)),
+        ("AIDA_REVIEW_VERDICT_FILE", None),
+        ("AIDA_FROM_PR_HEAD_SHA", None),
+        (crate::gate::seat_authority::GRANT_ENV, None),
+    ]);
+    let subject = crate::ReviewPrSubject {
+        head_ref: BRANCH.into(),
+        commit_subjects: vec![],
+    };
+    let reviewer = crate::gate::review_authority::IdentitySource {
+        session_ids: vec!["independent-reviewer".into()],
+        ..Default::default()
+    };
+    crate::with_review_pr_subject(subject, || {
+        crate::gate::review_authority::with_identity_source(reviewer, || {
+            crate::handle_review_record_at(
+                root.to_path_buf(),
+                spec,
+                "approved",
+                Some(head),
+                Some(BRANCH),
+                Some("looks right"),
+                &[],
+                &[],
+                Some(3159),
+            )
+        })
+    })
+}
+
+/// Acceptance 3, the incident case: a PR claimed for TASK-<node>-138 whose
+/// title says `(TASK-139)`, with legacy TASK-139 in the store. `review
+/// record TASK-139 --pr 3159` refuses naming both ids, records nothing, and
+/// the ship gate neither demands nor accepts an approval under TASK-139 — so
+/// nothing completes the legacy spec.
+#[test]
+fn review_record_refuses_an_approval_under_a_foreign_bare_id() {
+    let (root, head) = incident_project();
+    let err = format!(
+        "{:#}",
+        record_approval(root.path(), &head, "TASK-139")
+            .expect_err("an approval under an uncovered spec must be refused")
+    );
+    assert!(err.starts_with("refused:"), "{err}");
+    assert!(err.contains("`TASK-139`"), "names the trailer id: {err}");
+    assert!(err.contains("TASK-1-114"), "names the resolved spec: {err}");
+    assert!(err.contains("-138"), "names the claimed spec: {err}");
+    assert!(err.contains("nothing was recorded"), "{err}");
+    assert!(
+        crate::gate::review_verdict::read_recorded_verdict(root.path(), "TASK-139").is_none(),
+        "no verdict may be written"
+    );
+    assert!(!crate::gate::review_verdict::verdict_path(root.path(), "TASK-139").exists());
+
+    // The ship approval gate drops the foreign id from the ids it looks
+    // verdicts up under, so no approval under TASK-139 can satisfy it.
+    let ids = crate::pr_cmd::ship_gate_known_ids(
+        root.path(),
+        BRANCH,
+        Some("[AI:claude] fix(ship-from-seat): quarantine cleanup (TASK-139)"),
+        Some(3159),
+    );
+    assert!(
+        !ids.iter().any(|id| id.eq_ignore_ascii_case("TASK-139")),
+        "{ids:?}"
+    );
+    assert!(
+        ids.iter().any(|id| id.ends_with("-138")),
+        "the claimed spec stays: {ids:?}"
+    );
+}
+
+/// The covered spec still records: the check refuses only what PR N does
+/// not cover.
+#[test]
+fn review_record_accepts_the_claimed_spec() {
+    let (root, head) = incident_project();
+    record_approval(root.path(), &head, NODE_138).expect("the claimed spec records");
+    assert!(crate::gate::review_verdict::read_recorded_verdict(root.path(), NODE_138).is_some());
+}
+
+/// Acceptance 2, rebase/merge: the branch commits land verbatim and the
+/// pull-side auto-bump completes their trailers, so ship refuses a rebase
+/// whose branch commit carries an uncovered trailer, naming both ids.
+#[test]
+fn a_rebase_with_an_uncovered_branch_commit_trailer_is_refused() {
+    let store = incident_store();
+    let root = tempfile::tempdir().unwrap();
+    let refusal = crate::pr_cmd::rebase_trailer_refusal(
+        root.path(),
+        &store,
+        BRANCH,
+        3159,
+        &[
+            format!("fix(ship-from-seat): first slice ({NODE_138})"),
+            "fix(ship-from-seat): quarantine cleanup (TASK-139)".to_string(),
+        ],
+    )
+    .expect("an uncovered branch-commit trailer refuses the rebase");
+    assert!(refusal.contains("`TASK-139`"), "{refusal}");
+    assert!(refusal.contains("TASK-1-114"), "{refusal}");
+    assert!(refusal.contains("-138"), "{refusal}");
+
+    assert_eq!(
+        crate::pr_cmd::rebase_trailer_refusal(
+            root.path(),
+            &store,
+            BRANCH,
+            3159,
+            &[format!("fix: covered ({NODE_138})")],
+        ),
+        None
+    );
+}
+
+/// Acceptance 2, `--final-slice`: the rebase completion ids come from the same
+/// coverage-filtered trailer, so the final slice completes the claimed spec
+/// and never the legacy one.
+#[test]
+fn a_final_slice_rebase_completes_only_the_covered_spec() {
+    let store = incident_store();
+    let coverage = TrailerCoverage::for_pr(&store, BRANCH, &[], Some(3159));
+    let trailer = crate::pr_cmd::ship_completion_trailer_for_method(
+        &store,
+        coverage.as_ref(),
+        crate::forge::MergeMethod::Rebase,
+        true,
+        "[3/3] fix(ship-from-seat): quarantine cleanup (TASK-139)",
+        BRANCH,
+        "",
+        false,
+    );
+    assert!(
+        !trailer
+            .ids
+            .iter()
+            .any(|id| id.eq_ignore_ascii_case("TASK-139")),
+        "{trailer:?}"
+    );
+    assert!(trailer.notes.iter().any(|n| n.contains("TASK-1-114")));
+}

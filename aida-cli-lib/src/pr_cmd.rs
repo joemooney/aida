@@ -1827,11 +1827,17 @@ pub(crate) fn pr_gate_subject(
 /// records for the local range, then every ID in the branch and the title.
 /// `aida pr ship-batch` waits on the same set, so its "approved at head"
 /// cannot drift from what ship accepts.
+///
+/// BUG-HOME-048: the title's ids pass the PR's trailer coverage first, so a
+/// foreign bare id (`TASK-139`) is neither demanded nor accepted. The mandate
+/// cover and the pre-merge approval gate use this same set.
 // trace:STORY-1887 | ai:claude
+// trace:BUG-B6B1278890774EF993D2EBC327862470-048 | ai:claude
 pub(crate) fn ship_gate_known_ids(
     project_root: &std::path::Path,
     branch: &str,
     title: Option<&str>,
+    pr: Option<u64>,
 ) -> Vec<String> {
     let mut ids: Vec<String> = ship_gate_spec_records(project_root)
         .into_iter()
@@ -1839,7 +1845,12 @@ pub(crate) fn ship_gate_known_ids(
         .collect();
     ids.extend(pr_ship::extract_spec_ids_from_text(branch));
     if let Some(title) = title {
-        ids.extend(pr_ship::extract_spec_ids_from_text(title));
+        ids.extend(crate::trailer_coverage::covered_title_ids(
+            project_root,
+            branch,
+            pr,
+            title,
+        ));
     }
     ids
 }
@@ -1962,7 +1973,12 @@ fn ship_preflight_gates(
             change.id
         )));
     }
-    let ids = ship_gate_known_ids(project_root, &change.branch, change.title.as_deref());
+    let ids = ship_gate_known_ids(
+        project_root,
+        &change.branch,
+        change.title.as_deref(),
+        Some(change.id),
+    );
     // BUG-1918: authors resolved from what the forge says the PR ships, not
     // only the local range (empty when shipping from main).
     let (candidates, policy) = merge_approval_inputs(
@@ -2603,16 +2619,15 @@ pub(crate) fn pr_ship_with_method_and_dispatch_ctx(
     // fresh here, again under the merge lease, and once more immediately
     // before the merge call. trace:STORY-1698 | ai:claude
     let floor_authority = crate::gate::role_authority::has_integrity_floor_authority();
+    // BUG-HOME-048: the same coverage-filtered set as the preflight gate.
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-048 | ai:claude
     let mandate_ids = || {
-        let mut ids: Vec<String> = ship_gate_spec_records(&project_root)
-            .into_iter()
-            .map(|(id, _, _)| id)
-            .collect();
-        ids.extend(pr_ship::extract_spec_ids_from_text(&ship_branch));
-        if let Some(title) = target_change.as_ref().and_then(|c| c.title.as_deref()) {
-            ids.extend(pr_ship::extract_spec_ids_from_text(title));
-        }
-        ids
+        ship_gate_known_ids(
+            &project_root,
+            &ship_branch,
+            target_change.as_ref().and_then(|c| c.title.as_deref()),
+            Some(pr_number),
+        )
     };
     let mandate_cover_now = || {
         if pr_number == 0 || already_merged || floor_authority {
@@ -3028,14 +3043,14 @@ pub(crate) fn pr_ship_with_method_and_dispatch_ctx(
         // lease, immediately before the merge (and before any merge-hold is
         // released), so the head it compares is the one about to land. ----
         // trace:TASK-1448 | ai:claude
-        let mut gate_spec_ids: Vec<String> = ship_gate_spec_records(&project_root)
-            .into_iter()
-            .map(|(id, _, _)| id)
-            .collect();
-        gate_spec_ids.extend(pr_ship::extract_spec_ids_from_text(&ship_branch));
-        if let Some(title) = target_change.as_ref().and_then(|c| c.title.as_deref()) {
-            gate_spec_ids.extend(pr_ship::extract_spec_ids_from_text(title));
-        }
+        // BUG-HOME-048: title ids pass the PR's trailer coverage.
+        // trace:BUG-B6B1278890774EF993D2EBC327862470-048 | ai:claude
+        let gate_spec_ids = ship_gate_known_ids(
+            &project_root,
+            &ship_branch,
+            target_change.as_ref().and_then(|c| c.title.as_deref()),
+            Some(pr_number),
+        );
         let head_sha = pr_head_sha_for_merge_gate(&project_root, pr_number, &ship_branch);
         merged_head_sha = head_sha.clone();
         // STORY-1663: if the PR head moved after preflight/CI, refuse the stale head
@@ -3101,6 +3116,33 @@ pub(crate) fn pr_ship_with_method_and_dispatch_ctx(
                 &format!("origin/{retarget_base}"),
                 head_sha.as_deref().unwrap_or(&ship_branch),
             )?;
+        }
+        // BUG-HOME-048: a rebase or merge lands the branch commits verbatim,
+        // and the pull-side auto-bump completes every trailer on them — so a
+        // branch commit whose trailer the PR does not cover is refused here,
+        // before it can reach the default branch.
+        // trace:BUG-B6B1278890774EF993D2EBC327862470-048 | ai:claude
+        if merge_method != crate::forge::MergeMethod::Squash {
+            let subjects = branch_commit_subjects(
+                &project_root,
+                &format!("origin/{retarget_base}"),
+                head_sha.as_deref().unwrap_or(&ship_branch),
+            );
+            if let Some(refusal) = Storage::new(main_worktree.join(".aida-store"))
+                .load()
+                .ok()
+                .and_then(|store| {
+                    rebase_trailer_refusal(
+                        &main_worktree,
+                        &store,
+                        &ship_branch,
+                        pr_number,
+                        &subjects,
+                    )
+                })
+            {
+                return Err(crate::gate::ship::ShipRefusal::Review.error(refusal));
+            }
         }
         if branch_in_sibling {
             eprintln!(
@@ -4955,6 +4997,50 @@ pub(crate) fn ship_completion_trailer_for_method(
     );
     trailer.notes.extend(refusals.into_inner());
     trailer
+}
+
+/// BUG-HOME-048: the refusal for a rebase/merge ship of PR `pr` whose branch
+/// commits (`subjects`) carry a trailer the PR does not cover; `None` when
+/// every trailer is covered or coverage is unknown.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-048 | ai:claude
+pub(crate) fn rebase_trailer_refusal(
+    project_root: &std::path::Path,
+    store: &aida_core::RequirementsStore,
+    branch: &str,
+    pr: u64,
+    subjects: &[String],
+) -> Option<String> {
+    let refusals =
+        crate::trailer_coverage::branch_commit_refusals(project_root, store, branch, pr, subjects);
+    if refusals.is_empty() {
+        return None;
+    }
+    Some(format!(
+        "PR-{pr} would land branch commits whose trailers it does not cover, and the \
+         default-branch auto-bump would complete those specs:\n  - {}\nReword the commits to \
+         name the claimed spec by its full id, or ship as a squash merge (without `--rebase`).",
+        refusals.join("\n  - ")
+    ))
+}
+
+/// The subjects of the commits in `base..head` (best effort: empty when the
+/// range is not available locally).
+// trace:BUG-B6B1278890774EF993D2EBC327862470-048 | ai:claude
+fn branch_commit_subjects(project_root: &std::path::Path, base: &str, head: &str) -> Vec<String> {
+    std::process::Command::new("git")
+        .arg("-C")
+        .arg(project_root)
+        .args(["log", "--format=%s", &format!("{base}..{head}"), "--"])
+        .output()
+        .ok()
+        .filter(|o| o.status.success())
+        .map(|o| {
+            String::from_utf8_lossy(&o.stdout)
+                .lines()
+                .map(str::to_string)
+                .collect()
+        })
+        .unwrap_or_default()
 }
 
 /// BUG-HOME-048: the trailer coverage for PR `pr` on `branch` — its branch
