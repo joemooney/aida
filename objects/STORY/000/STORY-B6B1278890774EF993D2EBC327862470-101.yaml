@@ -16,12 +16,12 @@ description: |
   7. Interacts with STORY-HOME-100 (handshake): a relaunch re-sends the hello as the same handle so the advisor sees continuity, not a new agent.
 
   Process: architecture change (the launcher becomes a supervisor process). The FIRST deliverable is a sketch comment covering the supervisor process model, handoff freshness detection, how the lease and grant are held across the gap, and the BUG-HOME-030 interaction (agent new advisor crash at launch). Advisor signoff comes before implementation.
-status: Done
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-30T03:44:26.313784050Z
-modified_at: 2026-10-31T11:50:18.576232858Z
+modified_at: 2026-10-31T12:00:34.179648721Z
 req_type: Story
 relationships:
 - rel_type: Child
@@ -209,6 +209,15 @@ history:
   author: joe
   timestamp: 2026-10-31T11:50:20.299064648Z
   changes: []
+- id: 01a191d5-3f83-75d1-8b86-e2e6a444edf4
+  author: aida-orchestrator
+  timestamp: 2026-10-31T12:00:34.179668668Z
+  session_id: 01a191cbf527
+  harness_version: 2.1.316 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: NeedsAttention
 filed_at:
   code_sha: 9a86ae54ce569534e059b0cf19565f3ce9b46c59
   branch: main
@@ -221,3 +230,11 @@ implementation_info:
   implemented: true
   implemented_at: 2026-10-31T11:47:40.154556958Z
   implemented_by: joe
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: Rotation loop, freshness matcher, guards, relay-run handle hold and ls/hello labels are sound and CI is green, but the SessionStart hook injects latest.md instead of the matched handoff, and the command-level fixture tests the advisor's gate required (lease continuity, gap liveness, command-level limit, SIGINT stop, mail across the gap) are missing.
+  recovery_hint: address the review findings, move STORY-B6B1278890774EF993D2EBC327862470-101 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-10-31T12:00:34.179648721Z
