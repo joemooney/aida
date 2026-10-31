@@ -6,18 +6,27 @@ description: |-
 
   note (non-blocking): cli-0's 'Test time budget' step failed once at 9b58bbb (run 41230254053) while its tests passed; the re-run was green. The reviewer sandbox could not download the timing artifact, so the slow test is unknown. If it recurs, check whether aida-cli/tests/bug_046_padded_id_cli.rs needs a budget entry.
   Reviewed sha: 9b58bbb9530701d536b7278ec018c4ec43f0a542
-status: Draft
+status: Rejected
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-31T20:22:12.643062982Z
-modified_at: 2026-10-31T20:22:12.643062982Z
+modified_at: 2026-10-31T20:45:49.362989392Z
 req_type: Task
 tags:
 - carried-from:TASK-B6B1278890774EF993D2EBC327862470-149
 - finding-hash:eddeb79c
 - from-review:TASK-B6B1278890774EF993D2EBC327862470-149
 - kind:carried-forward
+history:
+- id: 01a193b6-21b2-7c92-abaf-764f9d40061b
+  author: joe
+  timestamp: 2026-10-31T20:45:49.362986605Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Rejected
 filed_at:
   code_sha: 271e42d368032e9e155226631512ebdde8c71ba5
   branch: main
