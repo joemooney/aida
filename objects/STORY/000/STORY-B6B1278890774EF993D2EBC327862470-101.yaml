@@ -21,12 +21,30 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-30T03:44:26.313784050Z
-modified_at: 2026-10-30T04:45:30.296428745Z
+modified_at: 2026-10-31T10:26:55.746580598Z
 req_type: Story
 relationships:
 - rel_type: Child
   target_id: 01a18a3d-3b12-7160-8075-2f8afaee0c8b
   created_at: 2026-10-30T03:44:34.733013356Z
+comments:
+- id: 01a1917f-8482-7a01-876c-a4359eb25464
+  author: joe
+  content: |
+    ADVISOR BRIEF 2026-10-31 03:18: SKETCH ONLY. Write the architecture sketch as a comment on this spec, then stop (aida punt), with NO code. Cover:
+    - how aida agent new supervises its child;
+    - what counts as a "fresh handoff written after this run started" (seat and handle match, timestamps);
+    - how the relaunch keeps the SAME handle, lease, spec claim and worktree;
+    - how the handoff is injected at SessionStart;
+    - loop and crash-loop limits;
+    - the operator's way to stop a relaunch;
+    - interaction with the seat rotation ceiling notice;
+    - vendor support (claude first; codex?);
+    - the test plan.
+    List open questions for the advisor.
+  created_at: 2026-10-31T10:26:55.746580598Z
+  modified_at: 2026-10-31T10:26:55.746580598Z
+  session_id: 510d8c08-7912-4189-943d-65d110c7abc2
 history:
 - id: 01a18ae8-d622-72c1-a3a5-8d4fa60beadd
   author: joe
