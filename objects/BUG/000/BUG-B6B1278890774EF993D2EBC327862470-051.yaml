@@ -14,7 +14,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T14:13:18.865775624Z
-modified_at: 2026-10-31T17:03:28.256719875Z
+modified_at: 2026-10-31T17:04:54.923944186Z
 req_type: Bug
 relationships:
 - rel_type: Parent
@@ -55,6 +55,12 @@ comments:
   content: 'ADVISOR RULING 2026-10-31 09:26: PR-3169 round 1 is CHANGES REQUESTED; the code meets all 4 criteria on read. CI lib-1, read by the advisor (job 124586994169): seat_clone::lifecycle_tests::bug_051_bwrap_session_end_ends_a_clone_whose_branch_is_an_ancestor_of_origin fails at task_2053_seat_clone_lifecycle_tests.rs:1887 with ''assertion failed: !ref_exists(&clone, "refs/remotes/origin/feat")''. Under bwrap the test''s precondition (the clone has no origin/feat ref before session end) does not hold: the refresh fetch or the fixture already created it. Fix the fixture or the assertion so it tests the real precondition, without weakening the end-cleanly check. Bundle the minors in the same push (2026-10-28 rule): trace criterion 4; route reap and the status/lease checks (session_reap.rs:1350 and the others) through the same ancestor-of-origin rule via one helper; bound refresh_origin_branch''s fetch by the check''s remaining budget, not a fixed 20s. Gate: LIGHT plus make check-ci-fast; CI''s bwrap gate is the authority. No force push.'
   created_at: 2026-10-31T16:24:21.093749498Z
   modified_at: 2026-10-31T16:24:21.093749498Z
+  session_id: 9b4a9d0a-69b7-4ebd-9bee-314b36573de5
+- id: 01a192eb-e28b-7a71-8ee0-02524b45d056
+  author: joe
+  content: 'ADVISOR RULING 2026-10-31 10:08: PR-3169 round 2 is CHANGES REQUESTED. The code and traces are verified on read; CI lib-1 is red again (job 124596147095): seat_clone::lifecycle_tests::bug_051_bwrap_lease_classifier_counts_an_ancestor_of_origin_as_pushed at task_2053_seat_clone_lifecycle_tests.rs:1914, left [''2 commit(s) that origin does not have''] vs right [''1 commit(s) ...'']. Under bwrap the LEASE CLASSIFIER path still counts the ancestor-of-origin commit as unpushed. Either it does not go through the shared ancestor helper, or it compares against a stale origin ref (no refresh in that path). Fix the classifier so it uses the same helper with the same budgeted origin refresh as session end; do NOT change the expected count. This is the FINAL round, and the bwrap gate only proves it live: run it locally with AIDA_REQUIRE_BWRAP_LIVE=1 cargo test -p aida-cli-lib --lib bug_051_bwrap before pushing, and paste the pass line in the PR. Then make check-ci-fast, no force push.'
+  created_at: 2026-10-31T17:04:54.923944186Z
+  modified_at: 2026-10-31T17:04:54.923944186Z
   session_id: 9b4a9d0a-69b7-4ebd-9bee-314b36573de5
 history:
 - id: 01a1924f-0616-7132-b7b1-cc960a88c794
