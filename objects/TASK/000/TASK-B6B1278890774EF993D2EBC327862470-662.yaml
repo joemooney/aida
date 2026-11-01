@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-662
 agreed_id: TASK-2709
 title: Merge the engineering audit documentation and verify its public publication
 description: 'Operator explicitly requested PR #3213 shipped to main on 2026-11-01. Scope: engineering-audit.html in showcase and standalone report, plus landing-page and README links. Acceptance: (1) static page and navigation work without external dependencies; generated showcase check and existing publication tests pass; (2) published quantitative claims distinguish measured repository statistics from deployment metrics and illustrative assumptions, with source/methodology references or explicit unknowns; (3) independently approved current head passes required CI and ships through normal AIDA gates to main, with public publication verified against approved source. This is the new audit update; do not reopen or grant duplicate completion to the historical completed initial Pages task TASK-2542/TASK-HOME-130.'
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T20:06:03.816039190Z
-modified_at: 2026-11-01T20:45:49.813300213Z
+modified_at: 2026-11-01T20:53:28.461596581Z
 req_type: Task
 relationships:
 - rel_type:
@@ -50,6 +50,15 @@ history:
   author: joe
   timestamp: 2026-11-01T20:45:51.046261643Z
   changes: []
+- id: 01a198e3-7f0d-7df1-9e14-212c665f4cb3
+  author: aida-orchestrator
+  timestamp: 2026-11-01T20:53:28.461625737Z
+  session_id: 01a198dea5f0
+  harness_version: 2.1.316 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 execution_mode: drain
 filed_at:
   code_sha: 6a3f67671a974703590efde5ae2a323f3f7471fa
@@ -62,7 +71,7 @@ failure_reason:
   phase: reviewer
   phase_index: 3
   kind: verdict:request-changes
-  detail: Static publication checks pass; correct unsupported deployment metric equivalence and empirical simulator claims before approval.
-  recovery_hint: address the review findings, move TASK-B6B1278890774EF993D2EBC327862470-662 back to In Progress, and clear the PR hold only after approval
-  shelved_by: advisor
-  shelved_at: 2026-11-01T20:06:32.195706453Z
+  detail: 'AC1 met (build.py --check clean, publish.py assembles engineering-audit.html, tests/test_showcase_publish.py 7/7, CI green except expected merge-hold). AC2 partial: headline PR-size statistics do not reproduce from the stated git shortstat method, several ''measured'' figures have no collection method, and many industry benchmark numbers are unsourced or attributed to pages that do not carry them. Same fixes needed in both HTML copies.'
+  recovery_hint: address the review findings, move TASK-2709 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-11-01T20:53:28.461596581Z
