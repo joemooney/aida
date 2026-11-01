@@ -1,0 +1,40 @@
+id: 01a195dd-d355-7892-bd81-06542ae4e3a5
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-169
+agreed_id: BUG-2395
+title: aida scaffold ignores .codex/hooks*, and hook templates (session-context, commit-msg, capture-prompt, advisor-code-guard) assume Claude
+description: |-
+  Why
+  ───
+  Discovered by SPIKE-710 audit:
+
+  1. `Scaffolder` (`aida-core/src/scaffolding/mod.rs:607-610, 1084, 2424-2706, 2888-2890`, `aida-core/src/scaffolding/codex_hooks.rs:75-113`, `aida-core/src/scaffolding/managed_merge.rs:47-74`): `aida scaffold status`, `diff`, `apply`, and `upgrade` only preview, diff, merge, and `chmod 0o755` `.claude/hooks/*` and `.claude/settings.json`. `.codex/hooks.json` and `.codex/hooks/*.sh` are only written during `aida init` (and skipped if present without `--force`), so existing Codex repos never receive hook upgrades on `aida scaffold upgrade` (including when STORY-2256 updates `aida-session-context.sh`).
+  2. `aida-core/templates/hooks/aida-session-context.sh:99-104`: `lane_env_correction()` persists `aida internal lane-env` (`AIDA_SESSION_ROLE`, `AIDA_SESSION_GRANT`) only by appending to `$CLAUDE_ENV_FILE`. On Codex (`CLAUDE_ENV_FILE` unset), `eval "$out"` only mutates the ephemeral `SessionStart` hook subshell, so subsequent hooks (`aida-role-context.sh`, `aida-mail-notice.sh`) and Codex Bash calls in a linked worktree do not inherit the lane's role or grant.
+  3. `aida-core/templates/hooks/aida-commit-msg:99, 131, 168, 171`: `EXCLUDE_PATTERNS="requirements.yaml requirements.yaml.lock requirements.db .md .claude/"` exempts `.claude/` from foreign spec-ID trace warnings in commit diffs, but omits `.codex/` and `.agents/`. Committing scaffolded `.codex/hooks/*.sh` triggers false foreign spec-ID warnings.
+  4. `aida-core/templates/hooks/aida-capture-prompt.sh:43-47, 65, 70`: falls back to `$HOME/.claude/projects/${encoded_cwd}/${session_id}.jsonl`, checks regex only for `/aida-capture` (not `$aida-capture`), and emits a Stop `systemMessage` telling Codex users `"Consider running \`/aida-capture\`"`.
+  5. `aida-core/templates/hooks/aida-advisor-code-guard.sh:151, 156`: checks `CLAUDE_PROJECT_DIR` and `$PWD` in `__aida_guard_target_outside_repo`, omitting `AIDA_SESSION_PROJECT` and `CODEX_PROJECT_DIR`.
+
+  Acceptance
+  ──────────
+  1. Wire `.codex/hooks.json` and `.codex/hooks/*.sh` into `Scaffolder::preview`, `apply`, `upgrade`, header injection (`mod.rs:607`), and `0o755` chmod (`mod.rs:2888`).
+  2. Ensure worktree lane role/grant resolution works across Codex hooks and CLI invocations when `$CLAUDE_ENV_FILE` is absent.
+  3. Add `.codex/` and `.agents/` to `EXCLUDE_PATTERNS` in `aida-commit-msg:99`, support `$aida-capture` in `aida-capture-prompt.sh`, and include `AIDA_SESSION_PROJECT` / `CODEX_PROJECT_DIR` in `aida-advisor-code-guard.sh`.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-01T06:48:25.173889038Z
+modified_at: 2026-11-01T06:48:25.173889038Z
+req_type: Bug
+tags:
+- audit
+- hooks
+- scaffolding
+- vendor:codex
+filed_at:
+  code_sha: 6dc7d4977ac5e47c42ddfb26597fe3ec5fb70b60
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 962ca07af25
+  vendor: antigravity
+  session: 01a194b1bcfb
