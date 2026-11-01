@@ -583,6 +583,62 @@ fn bug_2017_legacy_duplicates_already_shared_never_block_a_sync() {
     }
 }
 
+/// `blocks.yaml` rows stamped with a single-hub pool id (`hub:hub:<TYPE>`).
+// trace:STORY-B6B1278890774EF993D2EBC327862470-164 | ai:claude
+fn hub_blocks_yaml(rows: &[(&str, &str, u32, u32)]) -> String {
+    let mut out = String::from("blocks:\n");
+    for (node, prefix, start, end) in rows {
+        out.push_str(&format!(
+            "- node_id: {node}\n  owner: {SECRET_EMAIL}\n  hostname: {node}\n  type_prefix: '{prefix}'\n  range_start: {start}\n  range_end: {end}\n  next: {start}\n  allocated_at: 2026-01-01T00:00:00Z\n  pool_id: 'hub:hub:{prefix}'\n"
+        ));
+    }
+    out
+}
+
+// AC6: the sync claim check still refuses two overlapping hub-stamped BUG
+// claims, both in single-hub mode (no root record) and once a root is
+// enrolled with the hub pool promoted (root record + pools.yaml).
+// trace:STORY-B6B1278890774EF993D2EBC327862470-164.ac47d5e9 | ai:claude
+#[test]
+fn story_164_overlapping_hub_stamped_claims_refuse_every_sync_unrooted_and_rooted() {
+    for rooted in [false, true] {
+        for (name, sync) in SYNCS.into_iter().filter(|(n, _)| *n != "fast-forward") {
+            let name = format!("{name} rooted={rooted}");
+            let c = clones();
+            if rooted {
+                write_file(&c.a, "registry/root.yaml", "holder_node: N9\nepoch: 1\n");
+                write_file(
+                    &c.a,
+                    "registry/pools.yaml",
+                    "pools:\n- pool_id: 'hub:hub:BUG'\n  type_prefix: BUG\n  range_start: 1\n  range_end: 4294967295\n  holder_node: N9\n  home_ref: hub/aida-store\n",
+                );
+                publish(&c.a, "enroll a root");
+                run(&c.b, &["pull", "-q", "--ff-only", "origin", "aida-store"]);
+            }
+            write_file(
+                &c.a,
+                "registry/blocks.yaml",
+                &hub_blocks_yaml(&[(SECRET_NODE, "FR", 1, 100), ("N2", "BUG", 1, 50)]),
+            );
+            publish(&c.a, "a claims BUG on the hub");
+            write_file(
+                &c.b,
+                "registry/blocks.yaml",
+                &hub_blocks_yaml(&[(SECRET_NODE, "FR", 1, 100), ("N3", "BUG", 40, 90)]),
+            );
+            commit(&c.b, "b claims an overlapping BUG range");
+            let before = snapshot(&c, &c.b);
+            let err = sync(&c.b).unwrap_err();
+            let report = assert_refused(&name, &c, &c.b, &before, err);
+            assert!(report.is_complete(), "{name}: {report}");
+            assert!(
+                kinds(&report.conflicts).contains(&ConflictKind::GlobalRange),
+                "{name}: {report}"
+            );
+        }
+    }
+}
+
 /// BUG-2378: reconcile passes every hub tip, and one hub can still sit at a
 /// commit before a registration change (a node marked retired) while the
 /// other hub already has it. A tip that is an ancestor of another tip claims

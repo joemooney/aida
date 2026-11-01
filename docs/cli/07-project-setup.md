@@ -394,7 +394,7 @@ The widths apply when an ID is minted and whenever one is displayed: lists, `sho
 
 ### `aida docs`
 
-*(Covered in [Chapter 9 — Integrations & servers](09-integrations.md).)* Projects the requirements graph into a layered docs tree (`docs build`, `docs check`, the embedded `docs glossary`). It's setup-adjacent — you wire `docs check` into CI at project-setup time so the docs projection can't drift from the graph — but the command family lives with the other projection/server surfaces.
+*(Covered in [Chapter 9 — Integrations & servers](09-integrations.md).)* Projects the requirements graph into a layered docs tree (`docs build`, `docs check`, the embedded `docs glossary`, and the `docs sweep` drift review). It's setup-adjacent — you wire `docs check` into CI at project-setup time so the docs projection can't drift from the graph — but the command family lives with the other projection/server surfaces.
 
 ---
 
