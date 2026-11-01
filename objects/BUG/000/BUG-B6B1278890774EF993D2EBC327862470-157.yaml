@@ -14,17 +14,44 @@ description: |
   2. The lane's target dir is warm on first use: seeded or shared with the primary's agent-profile target, so the first targeted run isn't a cold full build.
   3. The implementer prompt names that path in place of `setsid nohup`, and a lane that cannot run it says so in its result line (`untested=true`) so the advisor knows.
   4. Test: a headless lane fixture runs one filtered cargo test via the sanctioned path and reports its pass/fail.
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T02:25:46.947809262Z
-modified_at: 2026-11-01T03:27:07.499949050Z
+modified_at: 2026-11-01T03:29:23.730897469Z
 req_type: Bug
 tags:
 - area:agents
 - area:cargo
 - area:headless
+comments:
+- id: 01a19527-5322-7eb2-86be-d863edb90b76
+  author: joe
+  content: |-
+    ## Implementer approach
+
+    ### Findings from inside a headless sandboxed seat (2026-10-31, lane 01a195258405)
+    - **Detached cargo cannot work from inside the seat.** Each Bash tool call runs in its own bubblewrap PID namespace. `(setsid nohup sh -c 'sleep 90' &)` was gone by the next tool call. A seat-side `aida cargo run-bg` would die the same way, so the runner has to live **outside** the per-command sandbox (host side).
+    - **Why the target dir is cold:** lanes are seat **clones** (`aida-seat-*`, own `.git`), not linked worktrees. The host wrapper `~/ai/aida-host/bin/cargo` seeds `<main>/target/worktrees/<name>/agent` only when `in_linked_wt=1` (git-dir != common-dir), so a clone never seeds. Main `target/agent` is 45G, so seeding from inside the sandbox would also exceed the 60s cap.
+    - Even with a warm target, aida-cli-lib workspace crates recompile (fresh mtimes), so a foreground targeted test does not finish within 60s.
+
+    ### Acceptance criteria as tests
+    - AC1 **drain-level**: a headless seat submits `cargo test --profile agent -p <crate> --lib -- <filter>` through the sanctioned path, polls it in <=60s steps, and gets the exit code and log back. It holds a cargo slot (the slot log records it).
+    - AC2 **unit/fixture**: creating a seat clone seeds `<main>/target/worktrees/<clone>/agent` from `<main>/target/agent`, host side, honouring the wrapper's min-free guard. Or teach the wrapper to treat a host-recorded clone like a linked worktree.
+    - AC3 **unit**: a golden check on `headless_waiting_rule_suffix` / the standalone prompt names the path, and the result line carries `untested=true` when the path is unavailable.
+    - AC4 **fixture**: a headless lane fixture runs one filtered test through the path and reports pass/fail.
+
+    ### Expected files
+    - `aida-cli-lib/src/seat_clone.rs` (seed at clone creation), `aida-cli-lib/src/standalone_implementer.rs` + `queue_cmd.rs` (prompt), a new host-side job runner module, plus tests. The cross-repo option touches `aida-host/bin/cargo`, which this seat cannot write.
+
+    ### Ambiguities / conflicts as questions
+    - **Which background mechanism?** (a) A host-side cargo job runner owned by the lane launcher. It watches a seat-writable inbox (like `.aida/deputy/incoming`) and runs the job in the seat root under the seat's own bwrap profile and cargo slot, writing a log the seat polls. (b) Exempt `AIDA_CARGO_TIMEOUT=… cargo` calls from the 60s HEADLESS WAITING RULE and widen the watchdog's silence grace for them, so one foreground call can run 15 min. (c) Extend `aida deputy` to run without a human terminal. Each option changes the containment/watchdog design, so it needs an architecture sketch and advisor signoff before implementation.
+    - Is seeding a 45G target per seat acceptable on disk, or should seats share a read-only dependency layer?
+  created_at: 2026-11-01T03:29:04.802940316Z
+  modified_at: 2026-11-01T03:29:04.802940316Z
+  session_id: 01a195258405
+  harness_version: 2.1.316 (Claude Code)
 history:
 - id: 01a19525-88eb-79e3-aab8-8d511ad2f605
   author: aida-session-start
@@ -34,6 +61,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a19527-9d12-7740-b891-b495f3fc0912
+  author: joe
+  timestamp: 2026-11-01T03:29:23.730963512Z
+  session_id: 01a195258405
+  harness_version: 2.1.316 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 7518617e469376bbe5debebd7cadd980e08656e5
   branch: main
@@ -42,3 +78,9 @@ filed_at:
   aida_build_sha: c2b2539263a
   vendor: claude
   session: 77a7a933-9a3f-4243-9a44-892bcedf206c
+attention_reason:
+  category: design-fork
+  detail: 'AC1 needs a background cargo path, but anything detached inside a seat dies when its tool call ends: each Bash call is its own bwrap PID namespace (verified: a setsid nohup sleep 90 was killed and never wrote its file). So the runner must run outside the seat sandbox, and picking it is an architecture/containment decision (CLAUDE.md requires a sketch plus advisor signoff). Options: (a) a host-side cargo job runner owned by the lane launcher, polling a seat-writable inbox and running jobs under the seat''s bwrap profile and cargo slot; (b) exempt AIDA_CARGO_TIMEOUT cargo calls from the 60s HEADLESS WAITING RULE and widen watchdog silence grace; (c) a deputy mode that needs no human terminal. Separately for AC2: lanes are seat clones, not linked worktrees, so aida-host/bin/cargo''s seed (gated on in_linked_wt) never fires. Main target/agent is 45G, so the seed must happen host side at clone creation in seat_clone.rs, or in the wrapper (another repo, not writable from the seat). Details are in the approach comment on this spec.'
+  lean: 'Option (a): a host-side runner thread in the standalone/queue-work launcher, with a seat-writable job inbox. It runs the job in the seat root under the same bwrap profile and through the slot-gated wrapper, and writes .out/.rc files the seat polls in <=60s steps. Seed the agent target at clone creation (host side, with the wrapper''s min-free guard). Prompt names ''aida cargo run-bg'' + poll, and the result line carries untested=true when the runner is unavailable.'
+  raised_by: implementer
+  raised_at: 2026-11-01T03:29:23.730897469Z
