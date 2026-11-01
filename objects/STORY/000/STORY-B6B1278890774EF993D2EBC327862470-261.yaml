@@ -20,12 +20,12 @@ description: |
 
   ## Out of scope
   Rewriting the developer-facing CLI glossary entries; new explainer pages.
-status: InProgress
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T22:58:37.964636963Z
-modified_at: 2026-11-01T09:45:59.855838380Z
+modified_at: 2026-11-01T09:46:01.935060293Z
 req_type: Story
 tags:
 - docs
@@ -284,6 +284,13 @@ history:
   author: joe
   timestamp: 2026-11-01T08:05:34.498576828Z
   changes: []
+- id: 01a19680-7020-7371-9752-8d5b99c72708
+  author: joe
+  timestamp: 2026-11-01T09:46:02.144598916Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Approved
 filed_at:
   code_sha: 44c7b6663259478cfd02fd2f5da843720f0ee6e0
   branch: main
