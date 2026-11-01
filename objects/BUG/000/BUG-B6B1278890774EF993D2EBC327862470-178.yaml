@@ -11,7 +11,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-01T16:42:07.593722571Z
-modified_at: 2026-11-01T20:12:50.751100798Z
+modified_at: 2026-11-01T20:19:18.701548444Z
 req_type: Bug
 tags:
 - doctor
@@ -23,6 +23,23 @@ comments:
   content: 'Read-only diagnosis now narrows the operational mismatch: two named historical messages 84b36522 and128fbf1f have immutable fixed-cohort delivery sidecars bound to a different recipient UUID than current advisor05 reservation. The guard evaluate/scan_and_route in mail_backlog.rs195/282 reads raw local+canonical Message.to role names and read_by(role), whereas supported own inbox uses logical delivery_gates and recipientUUID receipt keys. Same current supported wake-snapshot is complete, pending0, messages[]. Full source/evidence/candidate bounded sketch /tmp/aida-BUG2405-source-diagnosis.md. This proves the two inspected ownership mismatches; not a claim all28 messages share identical cause. Preserve original delivery ownership, ACK authority and unknown/partial reporting; no migration/suppression or receipt edits. Independent sketch assessment required before implementation; BUG remains Draft.'
   created_at: 2026-11-01T20:12:50.751100798Z
   modified_at: 2026-11-01T20:12:50.751100798Z
+- id: 01a198c4-382d-70c0-8fc4-255416bd5663
+  author: joe
+  content: |
+    ADVISOR SIGNOFF: BUG2405 bounded read-only inspection repair, 2026-11-01.
+
+    Read FULL independent reviewer28 assessment /tmp/aida-BUG2405-independent-diagnosis-result.md (20083 bytes) and source diagnosis. APPROVED WITH BINDING BOUNDARIES below. The assessment correctly identifies two missing design decisions: third-party inspection facts for unarmed readers, and per-delivery unknown evidence. This ruling resolves those decisions; it grants no delivery ownership or ACK authority.
+
+    1. Add an explicitly read-only inspection projection, sharing the existing logical delivery/read policy. Use RecipientDirectory::load (not mutating load_for_send), reservation UUID binding and actual PID/start/liveness validation to produce typed, non-deserializable inspection subjects. Unknown or unverified liveness/reservation remains unknown. Do not construct another reader's ResolvedAudience, impersonate a target process, borrow grants, arm a watcher or relax watched() checks. The guard may receive minimal identity/time/intent/subject and eligibility/read/pending/unknown facts only; no new body-display, ACK, binding, grant or write capability. Existing own-identity and ACK constructors remain unchanged. Existing legitimate human/legacy diagnostic semantics remain covered. This conforms existing third-party diagnostic inspection to delivery policy; it does not turn inspection into target authority.
+    2. Original fixed cohorts, queued bindings, explicit valid handovers, retained sidecars, cross-worktree reconciliation and owned UUID receipt keys govern inspection. Current send cohorts never replace original cohorts. Filter eligible unread owners before existing Claude/armed-Codex/operator wake preference. One owner's ACK never clears another owner. Preserve existing message dedup key, age/re-nudge thresholds and landed-only nudge recording; no new fanout framework. A watcher-only fix is insufficient for the existing full guard contract.
+    3. Expose delivery-specific unknown evidence for torn bindings and corrupt matching retained sidecars, plus source/budget/receipt failures. Preserve existing fail-closed own-inbox visibility and global-complete compatibility. An additive inspection diagnostic may expose local unknown without changing the own-reader complete contract. Absent/not-owned, unread, acknowledged/read-legacy, pending eligible and unknown remain distinct. No diagnostic binding/ACK. Preserve unrelated known findings. Incomplete/unknown observations must not emit ordinary all-clear or prune prior nudge state as cleared; cleanup requires positive clearing/absence evidence. Do not scan unrelated retained files or poison all work from unrelated corruption.
+    4. Scope mailbox identity/logical inspection, guard adapter and tests/docs. Factor private shared policy rather than copy it. No storage/receipt/journal migrations, raw user-receipt edits, generic framework, daemon, retention or threshold changes. If sharing policy requires exposing ACK authority or broadening this boundary, STOP with the exact fork before implementation expands.
+    5. Meaningful regression scope is the actual production scan/route and supported inbox on the same synthetic scratch repository: old-cohort/new-holder exclusion with new-owner positive; role watermark/receipt cannot suppress UUID unread; actual post-flush owner ACK, second owner remains; mixed non-owner Claude and owner Codex routing; queued pending then real bind; valid/invalid handover; sibling/retained/anchor receipts; local corrupt/torn and global partial preserve unknown/nudge state; source-scoped legacy watermark; reminder ACK/notice/job completion never ACK original target. Use reviewer's nine cases and existing fixture seams; pure evaluate closures are insufficient. No developer credentials or real user-state mutation.
+    6. Local gate: ONE AIDA_CARGO_TIMEOUT=10m cargo test --profile agent -p aida-cli-lib focused_bug2405_filter plus make check-ci-fast, formatting/diff checks. Actual shared-test-infra or >10 changed files adds required test-touched/check-ci-compile once; a core change needs corresponding focused core coverage. Long Cargo in background, normal slots, no outer timeout/full suite/blind retries. After timeout/KILLED inspect actual cargo process. CI runs full suite. Canonical trace/comments, normal spec-linked commit and non-force publication. Native Git RO may use previously authorized bounded TMP publication with exact base/blob/patch proof, never authority/cache/permission bypass.
+
+    This is design approval, not implementation review, production approval or merge permission. Root dispatches the implementation and therefore cannot approve or merge its own authored work. Fresh independent STRICT review at the actual head and all normal sensitive-change/signoff/CI/hold gates remain. No own approval, merge, hold clearance, Done/Completed claim, or assertion that the historical 28 messages were ACKed or transferred.
+  created_at: 2026-11-01T20:19:18.701548444Z
+  modified_at: 2026-11-01T20:19:18.701548444Z
 filed_at:
   code_sha: 6a3f67671a974703590efde5ae2a323f3f7471fa
   branch: main
