@@ -122,8 +122,6 @@ fn run_standalone_reviewer_with_codex_only_project_launches_codex_after_worktree
     let worktree = tmp.path().join("reviewer-worktree");
     std::fs::create_dir_all(&worktree).unwrap();
     assert!(worktree.is_dir(), "worktree must exist before launch");
-    crate::test_exec::link_fixture_store(&project, &worktree);
-    std::env::set_current_dir(&worktree).unwrap();
 
     let verdict_path = tmp.path().join("verdict.json");
     let prompt = "/aida-review --pr 59";

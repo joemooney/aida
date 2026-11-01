@@ -3220,8 +3220,7 @@ fn bug_2185_standalone_reviewer_commits_child_store_writes_on_its_error_exit() {
     let launch_vendor = crate::session::resolve_enabled_headless_vendor(&work).unwrap();
     let worktree = tmp.path().join("reviewer-worktree");
     std::fs::create_dir_all(&worktree).unwrap();
-    crate::test_exec::link_fixture_store(&work, &worktree);
-    std::env::set_current_dir(&worktree).unwrap();
+    std::env::set_current_dir(&work).unwrap();
 
     let result = crate::queue_cmd::run_standalone_reviewer(
         &work,

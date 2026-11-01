@@ -155,12 +155,13 @@ fn run_mock_reviewer_in(
         &["reviewer"],
     );
     env.set_key(crate::gate::seat_authority::GRANT_ENV, &launcher_grant);
-    crate::test_exec::link_fixture_store(&project, &worktree);
     assert!(
         !crate::test_env::run_path_isolated_test(),
         "fixture requires its exact isolated child"
     );
-    std::env::set_current_dir(&worktree).unwrap();
+    // The mock writes the worktree verdict by absolute path. Keep the
+    // invoking CLI in the real fixture project for roster and lease lookup.
+    std::env::set_current_dir(&project).unwrap();
     let script = setup(
         &Launch {
             project: &project,
@@ -536,7 +537,12 @@ fn standalone_reviewer_reaps_its_finished_review_once_the_verdict_is_collected()
         });
     result.expect("a verified review verdict must succeed");
 
-    assert!(crate::list_leases(&project).is_empty());
+    assert!(
+        crate::list_leases(&project).is_empty(),
+        "review lease retained: dirty={}, removal check={:?}",
+        crate::session_reap::worktree_status_dirty(&worktree),
+        aida_core::worktree_holders::check_worktree_removal(&worktree)
+    );
     assert!(!worktree.exists());
     assert!(!review_branch_exists(&project));
 }
