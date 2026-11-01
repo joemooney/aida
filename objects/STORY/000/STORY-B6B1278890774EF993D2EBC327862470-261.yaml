@@ -25,7 +25,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T22:58:37.964636963Z
-modified_at: 2026-11-01T07:56:01.570915403Z
+modified_at: 2026-11-01T07:57:08.803109379Z
 req_type: Story
 tags:
 - docs
@@ -161,6 +161,11 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-01T07:31:37.668049944Z
   modified_at: 2026-11-01T07:31:37.668049944Z
+- id: 01a1961c-bf43-7b23-9d2b-c1a05f7325d9
+  author: mcp
+  content: 'Round 4: pushed commit 78523cf165b to existing PR #3193. Replaced GNU-only sed -i fixture cleanup with cp save/restore; no allowlist change. Passed bash tests/test_generate_glossary_check.sh, scripts/check-portability.sh, python3 docs/showcase/build.py --check and git diff --check. make check-ci-fast attempted once; interrupted after it started a substantial dependency compile in the no-default-features check, per advisor sandbox limit (unavailable locally). Contributor instructions retained per binding ruling. Push succeeded remotely; updating the local remote-tracking ref reported a read-only filesystem. Stopping for independent review; no ship or review record.'
+  created_at: 2026-11-01T07:57:08.803094249Z
+  modified_at: 2026-11-01T07:57:08.803094249Z
 history:
 - id: 01a19517-7d5f-7092-83c8-b303944f0e16
   author: joe
