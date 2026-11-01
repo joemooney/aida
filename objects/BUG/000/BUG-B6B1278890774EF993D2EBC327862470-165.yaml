@@ -22,7 +22,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-01T06:47:10.885136620Z
-modified_at: 2026-11-01T13:54:27.226133401Z
+modified_at: 2026-11-01T14:23:55.854848383Z
 req_type: Bug
 tags:
 - audit
@@ -870,6 +870,12 @@ comments:
     Own-context posting: /tmp/aida-native-design-final-signoff-own-context.sh is the only sourced context; exact codex-advisor-19/companion/context binding and same-shell aida role current --check are checked before posting. Posting/readback/host-commit state is reported separately and not assumed in this body.
   created_at: 2026-11-01T13:54:27.226133401Z
   modified_at: 2026-11-01T13:54:27.226133401Z
+- id: 01a1977e-dbce-7430-9350-df7aecaec5b0
+  author: joe
+  content: |
+    PROXY ADOPTION / IMPLEMENTATION DIRECTION: Root read FULL independent advisor19 /tmp/aida-BUG2391-final-signoff-result.md and verified its own canonical comment exists on this spec (2026-11-01T13:54:27.226133401Z). Adopt author18's full replacement /tmp/aida-BUG2391-producer-sketch-result.md AS AMENDED by advisor19 B2391-1 and ALL retained advisor17 tests/conditions. Explicit source-emitted positionally valid native User plus actual delivery/raw join may map to ordinary non-injected eligibility WITHOUT a human-authenticity assertion; Unknown/default/missing/misaligned/known-AIDA-unjoined remains incomplete. Preserve every known automated entrypoint, trusted producer journal and actual delivery correlation, compaction matrix, historical attribution/metrics/window completeness and actual scan-to-budget guard with empty overrides. Full3AC/native first-class scope, no weaker policy or token-only admission. Existing local daemon route only, no new service/timer/auth/credential/globalconfig; actual endpoint/protected-root capability evidence is hard gate. Missing real deployment capability must be reported precisely, never waived or replaced with synthetic production credit. Authorize independent IMPLEMENTER work in own scoped worktree, fake-state fixtures, no live shift/timer enablement or user transcript/config changes. COVERED_VENDORS only after actual complete coverage. Root is not the independent implementation reviewer or merger; new fresh strict review and exact-head CI required. Task2712 signoff remains conditional PRE-CODE NOTREADY and is not unblocked by this adoption. LIGHT one targeted watchdog/native metric filter+fast; actual touched/compile if sharedtestinfra or >10files; normal slots, long jobs background, no fullsuite/outertimeout/bypass.
+  created_at: 2026-11-01T14:23:55.854848383Z
+  modified_at: 2026-11-01T14:23:55.854848383Z
 history:
 - id: 01a195dc-cb7c-7693-b0fc-4f832c1863f5
   author: joe
