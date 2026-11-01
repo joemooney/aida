@@ -1,0 +1,18 @@
+{
+  "id": "deputy-default-01a194ce-3227-79f0-925a-96ce85e3168e",
+  "thread_id": "deputy-01a194ce-3227-79f0-925a-96ce85e3168e",
+  "from": "deputy:default",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-advisor-11"
+  },
+  "timestamp": 1793503447678,
+  "body": "Deputy \"default\" finished job 01a194ce-3227-79f0-925a-96ce85e3168e: rc 130 (cancelled before it ran).\nCommand: aida add --type bug --priority high --status draft --tags area:agents,area:codex,area:liveness --title aida ps reports a live hand-started Codex session as dead and salvageable: the lease binds only the exited 'aida session start' pid --description-from-file /tmp/bugps.md\nOutput: /home/joe/ai/aida/.aida/deputy/default/out/01a194ce-3227-79f0-925a-96ce85e3168e.out\nRead it with `aida deputy log 01a194ce-3227-79f0-925a-96ce85e3168e`.\n`aida awaiting` lists it until you run `aida deputy ack 01a194ce-3227-79f0-925a-96ce85e3168e`.\n",
+  "subject": "deputy job 01a194ce FAILED: rc 130",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}

@@ -1,0 +1,18 @@
+{
+  "id": "deputy-default-01a194cc-5589-73a1-b218-88ffa801f291",
+  "thread_id": "deputy-01a194cc-5589-73a1-b218-88ffa801f291",
+  "from": "deputy:default",
+  "to": {
+    "kind": "agent",
+    "agent": "joe"
+  },
+  "timestamp": 1793503449141,
+  "body": "Deputy \"default\" finished job 01a194cc-5589-73a1-b218-88ffa801f291: rc 0 (ok).\nCommand: aida comment add TASK-2631 --body-file /tmp/task2631-validation.md\nOutput: /home/joe/ai/aida/.aida/deputy/default/out/01a194cc-5589-73a1-b218-88ffa801f291.out\nRead it with `aida deputy log 01a194cc-5589-73a1-b218-88ffa801f291`.\n",
+  "subject": "deputy job 01a194cc done: rc 0",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}
