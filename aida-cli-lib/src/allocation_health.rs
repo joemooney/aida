@@ -255,6 +255,7 @@ mod tests {
         .unwrap();
         git(&["add", ".aida/config.toml"]);
         git(&["commit", "-qm", "config"]);
+        git(&["update-ref", "refs/remotes/origin/main", "HEAD"]);
         let findings = hub_findings(p);
         let ids: Vec<_> = findings.iter().map(|f| f.id.as_str()).collect();
         assert_eq!(

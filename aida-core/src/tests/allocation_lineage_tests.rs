@@ -234,6 +234,7 @@ fn view<'a>(
         role,
         upstream,
         hub: None,
+        hub_remotes: &[],
     }
 }
 
@@ -481,6 +482,7 @@ fn hub_view<'a>(
             hub: "github",
             on_hub,
         }),
+        hub_remotes: &[],
     }
 }
 
@@ -583,4 +585,37 @@ fn materialized_pools_keep_every_block_lineage_and_free_space_excludes_them() {
     assert_eq!(free.first(), Some(&(201, u32::MAX)));
     // Already-recorded pools are not materialized again.
     assert!(pools_to_materialize(&pools, &blocks, ROOT).is_empty());
+}
+
+// AC5: after enroll-root, a non-root clone's block in a promoted hub pool
+// stays spendable through whichever of its remotes reaches the hub, with or
+// without a declared upstream; a clone that reaches no such hub is told so.
+// trace:STORY-B6B1278890774EF993D2EBC327862470-164 | ai:claude
+#[test]
+fn a_promoted_hub_pool_is_spendable_through_the_remote_reaching_its_hub() {
+    let blocks = vec![block(LEAF, "BUG", 1, 100, Some("hub:github:BUG"))];
+    let pools = pools_to_materialize(&[], &blocks, ROOT);
+    let r = root();
+    let reaches = [("github".to_string(), "origin".to_string())];
+    let mut v = view(&pools, &blocks, Some(&r), LEAF, AllocationRole::Node, None);
+    v.hub_remotes = &reaches;
+    assert_eq!(v.spendable_block("BUG"), Ok(0));
+    // A declared upstream that is the hub's remote also passes...
+    v.upstream = Some("origin");
+    assert_eq!(v.spendable_block("BUG"), Ok(0));
+    // ...one that is another remote does not.
+    v.upstream = Some("gitlab");
+    assert!(matches!(
+        v.spendable_block("BUG"),
+        Err(Unusable::WrongUpstream { .. })
+    ));
+    // No remote of this clone reaches the hub.
+    let v = view(&pools, &blocks, Some(&r), LEAF, AllocationRole::Node, None);
+    assert_eq!(
+        v.spendable_block("BUG"),
+        Err(Unusable::HubUnreached {
+            type_prefix: "BUG".into(),
+            hub: "github".into()
+        })
+    );
 }

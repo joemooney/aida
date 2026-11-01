@@ -253,6 +253,25 @@ fn stamp_last_claim(
     }
 }
 
+/// The number a new `type_prefix` claim starts above: the merge-gate
+/// counter, and in single-hub mode also every number a spec or block of the
+/// type already holds (no root runs the agreed-ID backfill there, so the
+/// claim itself must clear it; see `refuse_claim_before_backfill`).
+// trace:STORY-B6B1278890774EF993D2EBC327862470-164 | ai:claude
+fn claim_floor(
+    store_path: &std::path::Path,
+    type_prefix: &str,
+    authority: &aida_core::allocation_authority::ClaimAuthority,
+) -> Result<u32> {
+    let counter = read_agreed_counter(store_path, type_prefix);
+    match authority {
+        aida_core::allocation_authority::ClaimAuthority::HubCas { .. } => Ok(counter.max(
+            crate::doctor_backfill_agreed::hub_claim_floor(store_path, type_prefix)?,
+        )),
+        aida_core::allocation_authority::ClaimAuthority::Rooted => Ok(counter),
+    }
+}
+
 pub(crate) fn handle_block_command(cmd: &BlockCommand, store_path: &std::path::Path) -> Result<()> {
     use aida_core::BlockRegistry;
 
@@ -295,7 +314,7 @@ pub(crate) fn handle_block_command(cmd: &BlockCommand, store_path: &std::path::P
                             // start at a number already issued in past merge-gate runs
                             // or retire-legacy-ids migrations.
                             // trace:FR-1-073 | ai:claude
-                            let counter_floor = read_agreed_counter(store_path, &type_prefix);
+                            let counter_floor = claim_floor(store_path, &type_prefix, &authority)?;
                             // BUG-715: redact the hostname before it lands in blocks.yaml.
                             let (block_host, _) =
                                 aida_core::git_ops::redacted_identity(&hostname(), None);
@@ -965,7 +984,7 @@ pub(crate) fn auto_allocate_block_inner(
                         return Ok(None);
                     }
 
-                    let counter_floor = read_agreed_counter(store_path, type_prefix);
+                    let counter_floor = claim_floor(store_path, type_prefix, &authority)?;
                     // BUG-715: redact owner (email) + hostname before they land in blocks.yaml.
                     let raw_owner = owner.to_string();
                     let raw_hn = hn.to_string();

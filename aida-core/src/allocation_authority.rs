@@ -402,7 +402,7 @@ pub enum StoreMode {
     SingleHub { hub: String, remote: Option<String> },
     /// More than one hub and no root: claims are refused.
     MultiHubNoRoot { hubs: Vec<String> },
-    /// No hub committed on the code default branch.
+    /// No hub declared on the shared code default branch.
     Undeclared,
 }
 
@@ -440,7 +440,7 @@ pub fn claim_authority(root: &Path) -> Result<ClaimAuthority> {
             if resolve(root)?.authoritative {
                 return Ok(ClaimAuthority::Rooted);
             }
-            bail!("this store declares no hub, so this clone may allocate only node-local IDs. Declare the one git server the store syncs through under [store.hubs] in .aida/config.toml and commit it on the default branch (or enroll a root with `aida node enroll-root`)")
+            bail!("this store declares no hub, so this clone may allocate only node-local IDs. Declare the one git server the store syncs through under [store.hubs] in .aida/config.toml, commit it and push it to the shared default branch (or enroll a root with `aida node enroll-root`)")
         }
         StoreMode::SingleHub {
             hub,
@@ -531,6 +531,7 @@ fn with_lineage_view_of<T>(
     let pools = PoolRegistry::load(root)?;
     let root_record = RootRecord::load(root)?;
     let hub = single_hub_blocks(root)?;
+    let hub_remotes = hub_remotes(root)?;
     let view = LineageView {
         pools: &pools.pools,
         blocks,
@@ -539,8 +540,60 @@ fn with_lineage_view_of<T>(
         role: mode.role,
         upstream: mode.upstream.as_deref(),
         hub: hub.as_ref().map(|(hub, on_hub)| HubSpend { hub, on_hub }),
+        hub_remotes: &hub_remotes,
     };
     Ok(f(&view))
+}
+
+/// Each declared hub this clone reaches, with the remote it reaches it as.
+// trace:STORY-B6B1278890774EF993D2EBC327862470-164 | ai:claude
+fn hub_remotes(root: &Path) -> Result<Vec<(String, String)>> {
+    let hubs = crate::store_hubs::committed(root)?;
+    Ok(hubs
+        .hubs
+        .iter()
+        .filter_map(|h| {
+            crate::store_hubs::remote_reaching(root, &hubs, h).map(|r| (h.name.clone(), r))
+        })
+        .collect())
+}
+
+/// Why `block` may not be spent in single-hub mode although the dispenser
+/// found it active: it carries the hub's pool id but the identical claim is
+/// not on the hub's store ref (committed locally and never pushed, or only
+/// present in an imported store). `None` outside single-hub mode, for a
+/// block that is not hub-stamped, and for a claim that is on the hub. This
+/// is the check an authoritative (legacy root) clone's dispense applies;
+/// a non-root clone gets it through [`delegated_block_in`].
+// trace:STORY-B6B1278890774EF993D2EBC327862470-164 | ai:claude
+pub fn unpushed_hub_claim(
+    root: &Path,
+    block: &crate::node::AgreedIdBlock,
+) -> Result<Option<crate::allocation_lineage::Unusable>> {
+    let Some((name, typ)) = block
+        .pool_id
+        .as_deref()
+        .and_then(crate::store_hubs::parse_hub_pool_id)
+    else {
+        return Ok(None);
+    };
+    if !typ.eq_ignore_ascii_case(&block.type_prefix) {
+        return Ok(None);
+    }
+    let Some((hub, on_hub)) = single_hub_blocks(root)? else {
+        return Ok(None);
+    };
+    if name != hub
+        || on_hub
+            .iter()
+            .any(|b| crate::allocation_lineage::same_claim(b, block))
+    {
+        return Ok(None);
+    }
+    Ok(Some(crate::allocation_lineage::Unusable::NotOnHub {
+        type_prefix: block.type_prefix.to_ascii_uppercase(),
+        hub,
+    }))
 }
 
 /// Index (in `registry/blocks.yaml`) of the delegated `type_prefix` block a

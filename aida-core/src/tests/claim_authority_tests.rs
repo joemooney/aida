@@ -18,8 +18,14 @@ fn git(dir: &Path, args: &[&str]) {
     );
 }
 
-/// A clone on branch `main` whose committed `.aida/config.toml` carries
-/// `config`, with `remotes` configured.
+/// Record HEAD as the shared default branch (`origin/main`), as a push and
+/// fetch would.
+fn publish(dir: &Path) {
+    git(dir, &["update-ref", "refs/remotes/origin/main", "HEAD"]);
+}
+
+/// A clone on branch `main` whose `.aida/config.toml` carrying `config` is
+/// committed and on the shared default branch, with `remotes` configured.
 fn clone_with(config: &str, remotes: &[(&str, &str)], authoritative: bool) -> tempfile::TempDir {
     let dir = tempfile::tempdir().unwrap();
     let p = dir.path();
@@ -28,6 +34,7 @@ fn clone_with(config: &str, remotes: &[(&str, &str)], authoritative: bool) -> te
     std::fs::write(p.join(".aida/config.toml"), config).unwrap();
     git(p, &["add", ".aida/config.toml"]);
     git(p, &["commit", "-qm", "config"]);
+    publish(p);
     for (name, url) in remotes {
         git(p, &["remote", "add", name, url]);
     }
@@ -112,7 +119,7 @@ fn no_hub_declared_keeps_the_legacy_root_and_refuses_others() {
 }
 
 #[test]
-fn an_uncommitted_hub_declaration_does_not_count() {
+fn an_uncommitted_or_unpushed_hub_declaration_does_not_count() {
     let dir = clone_with(
         "",
         &[("origin", "https://github.com/joemooney/aida.git")],
@@ -122,6 +129,10 @@ fn an_uncommitted_hub_declaration_does_not_count() {
     assert_eq!(store_mode(dir.path()).unwrap(), StoreMode::Undeclared);
     assert!(claim_authority(dir.path()).is_err());
     git(dir.path(), &["commit", "-qam", "declare the hub"]);
+    // Committed only on this clone's local main (never pushed): still no hub.
+    assert_eq!(store_mode(dir.path()).unwrap(), StoreMode::Undeclared);
+    assert!(claim_authority(dir.path()).is_err());
+    publish(dir.path());
     assert!(matches!(
         claim_authority(dir.path()).unwrap(),
         ClaimAuthority::HubCas { .. }

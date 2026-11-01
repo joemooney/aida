@@ -262,8 +262,8 @@ one hub, `git push` already orders every block claim, because the push is a
 compare-and-swap on the hub's `aida-store` ref. No root clone and no enrollment
 are needed.
 
-Declare the hub in the tracked `.aida/config.toml` and commit it on the default
-branch:
+Declare the hub in the tracked `.aida/config.toml`, commit it and push it to the
+shared default branch:
 
 ```toml
 [store.hubs]
@@ -272,9 +272,12 @@ github = { urls = ["https://github.com/acme/app.git", "git@github.com:acme/app.g
 
 A hub is identified by URL, because remote names are local to each clone. URLs
 are compared without scheme, user, port or `.git`, so ssh and https forms of one
-server count as one hub. The declaration takes effect only once it is committed
-on the default branch. If two clones each assumed their own `origin` was the hub,
-they could mint on two different refs. Remotes listed in `[store.sync]
+server count as one hub. The declaration takes effect only once it is on the
+shared default branch, as the clone's remote-tracking copy records it (the
+default branch's upstream, else `origin/<default>`). A declaration committed
+only on a local branch does not count. If two clones each assumed their own
+`origin` was the hub, or each committed a different hub locally, they could
+mint on two different refs. Remotes listed in `[store.sync]
 mirror_remotes` are never hubs. A remote that is both a mirror and a declared hub
 is a config error, reported by `aida node show` and `aida doctor check
 allocation`.
@@ -287,10 +290,14 @@ With exactly one hub declared and no root enrolled:
   retried. Every block is stamped with the pool `hub:<hub>:<TYPE>`. This pool is
   implicit: it is never written to `registry/pools.yaml`.
 - `aida add` mints the agreed ID from the clone's block, beside its local ID.
+- Specs filed before the clone held a block keep their node-local IDs. The
+  agreed-ID backfill (`aida doctor --fix agreed-ids`) does not hold a hub claim
+  back: a hub claim starts above the highest number any spec, block or counter
+  of its type already holds.
 - A block is spendable only while the identical claim is on the hub's store ref,
   as recorded by the clone's remote-tracking copy. A claim committed locally but
   never pushed, or one that only appears in an imported store, is not
-  spendable. `aida add` issues a node-local ID instead and says why.
+  spendable. This holds for an authoritative (legacy root) clone too. `aida add` issues a node-local ID instead and says why.
 - A clone with no remote that reaches the hub cannot claim. The refusal names
   the hub's URLs.
 - `aida node show` prints the mode, for example `Mode: single-hub (hub github →
@@ -307,7 +314,10 @@ root enrolled, every claim is refused and the refusal names `aida node
 enroll-root`. Blocks a clone already holds keep dispensing. Run `aida node
 enroll-root --dry-run`, then `aida node enroll-root`, on the primary clone. Each
 implicit `hub:` pool in use becomes a real root pool with the same id, so every
-existing block and agreed ID stays valid and nothing is renumbered. Granting a
+existing block and agreed ID stays valid and nothing is renumbered. A promoted
+pool is homed on the hub, not on a remote name: every clone's existing block in
+it stays spendable through whichever of its remotes reaches that hub, whatever
+the remote is called. Granting a
 pool to the new hub is not available yet.
 
 #### Block delegation for more than one hub: root, upstream and lineage

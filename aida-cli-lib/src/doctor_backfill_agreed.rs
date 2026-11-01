@@ -511,8 +511,22 @@ fn load_plan(store_root: &Path) -> Result<(Vec<Requirement>, Plan)> {
 /// below numbers the backfill is about to assign. The backfill itself claims
 /// the root's blocks, above every backfilled number. An unbound store, or
 /// one with nothing to backfill, is never refused.
+///
+/// Single-hub mode is never refused either: it has no root to run the
+/// backfill, and every clone binding itself files a spec without an agreed
+/// ID, so the gate would never open. A hub claim starts instead above
+/// [`hub_claim_floor`], the highest number any spec, block or counter of its
+/// type holds, so it can never land below a number the backfill would
+/// assign (the backfill numbers above every block, including hub claims).
 pub(crate) fn refuse_claim_before_backfill(store_root: &Path) -> Result<()> {
     if aida_core::work_binding::load(store_root)?.is_none() {
+        return Ok(());
+    }
+    // trace:STORY-B6B1278890774EF993D2EBC327862470-164 | ai:claude
+    if matches!(
+        aida_core::allocation_authority::claim_authority(store_root),
+        Ok(aida_core::allocation_authority::ClaimAuthority::HubCas { .. })
+    ) {
         return Ok(());
     }
     let blocks = load_blocks(store_root)?;
@@ -528,6 +542,23 @@ pub(crate) fn refuse_claim_before_backfill(store_root: &Path) -> Result<()> {
         plan.agreed.len(),
         plan.renames.len()
     )
+}
+
+/// The floor a single-hub claim of `type_prefix` starts above: the highest
+/// number any spec (native or agreed ID), any block, the spent part of a
+/// shared `*` block, or the merge-gate counter holds for the type, so a hub
+/// claim never reissues a number and never starts below one the agreed-ID
+/// backfill could assign later. Every read fails closed.
+// trace:STORY-B6B1278890774EF993D2EBC327862470-164 | ai:claude
+pub(crate) fn hub_claim_floor(store_root: &Path, type_prefix: &str) -> Result<u32> {
+    let reqs = aida_core::object_store::load_all_objects(&store_root.join("objects"))?;
+    let blocks = load_blocks(store_root)?;
+    let counters = load_counters(store_root)?;
+    let floor = type_floors(&reqs, &blocks, &counters)
+        .get(&type_prefix.to_ascii_uppercase())
+        .copied()
+        .unwrap_or(0);
+    Ok(u32::try_from(floor).unwrap_or(u32::MAX))
 }
 
 fn print_plan(plan: &Plan, reqs: &[Requirement]) {

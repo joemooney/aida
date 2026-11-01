@@ -13,8 +13,10 @@
 //! A second declared hub requires an enrolled root (`aida node enroll-root`).
 //! Remotes listed in `[store.sync] mirror_remotes` are never hubs.
 //!
-//! The list counts only once committed on the code default branch: two
-//! clones each guessing "my `origin` is the hub" would mint on two refs.
+//! The list counts only once it is on the shared code default branch (this
+//! clone's remote-tracking copy of it): two clones each guessing "my
+//! `origin` is the hub", or each committing a different hub locally, would
+//! mint on two refs.
 //! The list grants no authority by itself; authority is still push
 //! permission on the hub ref.
 // trace:STORY-B6B1278890774EF993D2EBC327862470-164 | ai:claude
@@ -198,12 +200,32 @@ fn code_repo_for(store_path: &Path) -> PathBuf {
         .unwrap_or_else(|| store_path.to_path_buf())
 }
 
-/// The hubs declared in the `.aida/config.toml` committed on the code
-/// default branch. Empty when the branch or the file cannot be read.
+/// The hubs declared in the `.aida/config.toml` of the shared code default
+/// branch: this clone's remote-tracking copy of it (the branch's configured
+/// upstream, else `origin/<default>`). A declaration committed only on a
+/// local branch (never pushed, never reviewed) does not count: two clones
+/// could each declare a different hub locally and mint on two refs. Empty
+/// when no remote-tracking default branch or file can be read.
+// trace:STORY-B6B1278890774EF993D2EBC327862470-164 | ai:claude
 pub fn committed(store_path: &Path) -> Result<HubSet> {
     let repo = code_repo_for(store_path);
     let branch = crate::git_ops::default_branch_name(&repo);
-    for rev in [format!("refs/heads/{branch}"), format!("origin/{branch}")] {
+    let mut revs = Vec::new();
+    if let Ok(out) = crate::git_ops::host_git_command(&repo)
+        .args([
+            "rev-parse",
+            "--symbolic-full-name",
+            &format!("refs/heads/{branch}@{{upstream}}"),
+        ])
+        .output()
+    {
+        let upstream = String::from_utf8_lossy(&out.stdout).trim().to_string();
+        if out.status.success() && upstream.starts_with("refs/remotes/") {
+            revs.push(upstream);
+        }
+    }
+    revs.push(format!("refs/remotes/origin/{branch}"));
+    for rev in revs {
         let out = crate::git_ops::host_git_command(&repo)
             .args(["show", &format!("{rev}:.aida/config.toml")])
             .output();

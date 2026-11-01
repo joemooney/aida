@@ -324,6 +324,14 @@ pub fn materialized_hub_pool(pool_id: &str, root_node: &str) -> Option<PoolRecor
     })
 }
 
+/// The hub a pool promoted from single-hub mode is homed on: a
+/// `hub:<hub>:<TYPE>` pool whose `home_ref` is `<hub>/aida-store`.
+// trace:STORY-B6B1278890774EF993D2EBC327862470-164 | ai:claude
+pub fn promoted_hub(pool: &PoolRecord) -> Option<&str> {
+    let (hub, _) = crate::store_hubs::parse_hub_pool_id(&pool.pool_id)?;
+    (home_remote(&pool.home_ref) == hub).then_some(hub)
+}
+
 /// The virtual hub pools `blocks` reference that `pools` does not record,
 /// materialized for `root_node`, one per pool id, in first-seen order.
 // trace:STORY-B6B1278890774EF993D2EBC327862470-164 | ai:claude
@@ -531,6 +539,13 @@ pub enum Unusable {
         type_prefix: String,
         hub: String,
     },
+    /// Rooted after single-hub: the block's promoted hub pool is homed on a
+    /// hub none of this clone's remotes reaches.
+    // trace:STORY-B6B1278890774EF993D2EBC327862470-164 | ai:claude
+    HubUnreached {
+        type_prefix: String,
+        hub: String,
+    },
 }
 
 impl std::fmt::Display for Unusable {
@@ -548,6 +563,10 @@ impl std::fmt::Display for Unusable {
             Self::NotOnHub { type_prefix, hub } => write!(
                 f,
                 "this clone's {type_prefix} block claim is not on hub `{hub}`'s store ref (it was never pushed there); run `aida db sync` or claim a new block"
+            ),
+            Self::HubUnreached { type_prefix, hub } => write!(
+                f,
+                "this clone's {type_prefix} block is homed on hub `{hub}`, which none of this clone's git remotes reaches"
             ),
         }
     }
@@ -572,6 +591,11 @@ pub struct LineageView<'a> {
     /// reaches): the hub and the blocks on its store ref.
     // trace:STORY-B6B1278890774EF993D2EBC327862470-164 | ai:claude
     pub hub: Option<HubSpend<'a>>,
+    /// Each declared hub this clone reaches, and the remote it reaches it
+    /// as: `(hub, remote)`. A pool promoted from single-hub mode is homed on
+    /// a hub (by name), not on a clone's remote name.
+    // trace:STORY-B6B1278890774EF993D2EBC327862470-164 | ai:claude
+    pub hub_remotes: &'a [(String, String)],
 }
 
 /// The single hub a block claim must be on to be spendable, and the claims
@@ -584,7 +608,7 @@ pub struct HubSpend<'a> {
 }
 
 /// The same claim: node, type, range and pool (the `next` cursor moves).
-fn same_claim(a: &AgreedIdBlock, b: &AgreedIdBlock) -> bool {
+pub(crate) fn same_claim(a: &AgreedIdBlock, b: &AgreedIdBlock) -> bool {
     a.node_id == b.node_id
         && a.type_prefix.eq_ignore_ascii_case(&b.type_prefix)
         && a.range_start == b.range_start
@@ -604,6 +628,24 @@ impl LineageView<'_> {
 
     fn needs_upstream(&self) -> bool {
         self.role == AllocationRole::Node && self.upstream.is_none() && self.hub.is_none()
+    }
+
+    /// The hub `block`'s pool is homed on, when that pool is one
+    /// `aida node enroll-root` promoted from a single-hub `hub:<hub>:<TYPE>`
+    /// pool (its `home_ref` names the hub, not a remote).
+    // trace:STORY-B6B1278890774EF993D2EBC327862470-164 | ai:claude
+    fn promoted_hub_of(&self, block: &AgreedIdBlock) -> Option<&str> {
+        let pool_id = block.pool_id.as_deref()?;
+        let pool = self.pools.iter().find(|p| p.pool_id == pool_id)?;
+        promoted_hub(pool)
+    }
+
+    /// The remote this clone reaches `hub` as.
+    fn remote_for_hub(&self, hub: &str) -> Option<&str> {
+        self.hub_remotes
+            .iter()
+            .find(|(h, _)| h == hub)
+            .map(|(_, r)| r.as_str())
     }
 
     /// Index of the block this clone may dispense `type_prefix` from: bound
@@ -633,7 +675,12 @@ impl LineageView<'_> {
                 }
             }
         }
-        if self.needs_upstream() {
+        let promoted = self.blocks.iter().any(|b| {
+            b.node_id == self.node
+                && b.type_prefix.eq_ignore_ascii_case(&typ)
+                && self.promoted_hub_of(b).is_some()
+        });
+        if self.needs_upstream() && !promoted {
             return Err(Unusable::NoUpstream);
         }
         Err(reason)
@@ -643,7 +690,7 @@ impl LineageView<'_> {
     pub fn block_status(&self, block: &AgreedIdBlock) -> Result<(), Unusable> {
         let typ = block.type_prefix.to_ascii_uppercase();
         let hub = self.hub_of(block);
-        if hub.is_none() && self.needs_upstream() {
+        if hub.is_none() && self.promoted_hub_of(block).is_none() && self.needs_upstream() {
             return Err(Unusable::NoUpstream);
         }
         if block.node_id != self.node {
@@ -694,8 +741,28 @@ impl LineageView<'_> {
             return Err(no_lineage());
         }
         if self.role == AllocationRole::Node {
-            let upstream = self.upstream.unwrap_or_default();
             let parent = chain[0];
+            // A pool promoted from single-hub mode is homed on its hub: the
+            // clone's remote that reaches that hub is its upstream for it,
+            // whatever that remote is called. A declared upstream must be it.
+            // trace:STORY-B6B1278890774EF993D2EBC327862470-164 | ai:claude
+            if let Some(hub) = promoted_hub(parent) {
+                return match (self.remote_for_hub(hub), self.upstream) {
+                    (None, _) => Err(Unusable::HubUnreached {
+                        type_prefix: typ.to_string(),
+                        hub: hub.to_string(),
+                    }),
+                    (Some(remote), Some(upstream)) if remote != upstream => {
+                        Err(Unusable::WrongUpstream {
+                            type_prefix: typ.to_string(),
+                            home_ref: parent.home_ref.clone(),
+                            upstream: upstream.to_string(),
+                        })
+                    }
+                    _ => Ok(()),
+                };
+            }
+            let upstream = self.upstream.unwrap_or_default();
             if home_remote(&parent.home_ref) != upstream {
                 return Err(Unusable::WrongUpstream {
                     type_prefix: typ.to_string(),
