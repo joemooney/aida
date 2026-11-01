@@ -10,12 +10,12 @@ description: |
   1. Add the OpenAI endpoints Codex needs to `[contained] allowed_hosts`, verified against the installed Codex CLI with both API-key and ChatGPT sign-in auth (at least api.openai.com; confirm whether chatgpt.com and auth.openai.com are needed).
   2. Resolve the vendor/containment contradiction until vendor-neutral containment lands: either the default vendor is one containment can launch, or containment is scoped so Codex launches with the contained-autonomous posture (STORY-1124 / ADR-31). The operator chooses which; record the choice in the config comment.
   3. `aida doctor` flags a project whose default `[agents] vendor` cannot launch under its own containment setting, naming both settings and the fix. Test with a fixture config.
-status: Approved
+status: InProgress
 priority: High
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T00:55:07.917269049Z
-modified_at: 2026-11-01T01:03:20.359427760Z
+modified_at: 2026-11-01T01:14:04.462393568Z
 req_type: Task
 tags:
 - config
@@ -65,6 +65,14 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a194ab-b92e-70b1-a9f2-47b18239d2a4
+  author: aida-session-start
+  timestamp: 2026-11-01T01:14:04.462390850Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 43d9f95803036ec22350e5a210d8c1cae20b9fe5
   branch: main
