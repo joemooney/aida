@@ -4193,8 +4193,8 @@ pub(crate) fn os_wrapped_program_and_args(
 /// tests, a seat-written `.cargo/config.toml` runner), so it never runs
 /// unsandboxed and never gets the seat's wider launch profile (`~/.claude`,
 /// the store, the mailbox): the filesystem is read-only except `seat` and the
-/// `rw` paths the caller names (the seat's cargo target, cargo home, the slot
-/// limiter's state). Fails closed, with the remediation, when `[contained]
+/// `rw` paths the caller names (the seat's cargo target, cargo home's download
+/// caches, the slot limiter's state). Fails closed, with the remediation, when `[contained]
 /// os_wrap` is off for the seat or bubblewrap cannot run.
 // trace:BUG-2383 | ai:claude
 pub(crate) fn lane_job_wrapped_program_and_args(

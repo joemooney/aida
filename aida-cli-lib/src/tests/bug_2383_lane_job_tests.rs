@@ -68,7 +68,7 @@ fn allow_list_refuses_other_argv() {
             "--profile",
             "agent",
             "--manifest-path",
-            "/tmp/x/Cargo.toml",
+            "/elsewhere/x/Cargo.toml",
         ][..],
         &[
             "cargo",
@@ -76,7 +76,7 @@ fn allow_list_refuses_other_argv() {
             "--profile",
             "agent",
             "--target-dir",
-            "/tmp/t",
+            "/elsewhere/t",
         ][..],
         &["cargo", "test", "--profile", "agent", "-Zunstable-options"][..],
         &["cargo", "test", "--profile", "agent", "-C", "/elsewhere"][..],
@@ -93,13 +93,43 @@ fn allow_list_refuses_other_argv() {
 #[test]
 fn timeout_honours_aida_cargo_timeout_within_bounds() {
     let mut j = job(&["cargo", "test", "--profile", "agent"]);
-    assert_eq!(timeout_for(&j), Duration::from_secs(DEFAULT_TIMEOUT_SECS));
+    assert_eq!(
+        timeout_for(&j, false),
+        Duration::from_secs(DEFAULT_TIMEOUT_SECS)
+    );
     j.env.insert("AIDA_CARGO_TIMEOUT".into(), "900".into());
-    assert_eq!(timeout_for(&j), Duration::from_secs(900));
+    assert_eq!(timeout_for(&j, false), Duration::from_secs(900));
+    assert_eq!(
+        timeout_for(&j, true),
+        Duration::from_secs(900),
+        "an explicit timeout wins"
+    );
     j.env.insert("AIDA_CARGO_TIMEOUT".into(), "99999".into());
-    assert_eq!(timeout_for(&j), Duration::from_secs(MAX_TIMEOUT_SECS));
+    assert_eq!(
+        timeout_for(&j, false),
+        Duration::from_secs(MAX_TIMEOUT_SECS)
+    );
     j.env.insert("AIDA_CARGO_TIMEOUT".into(), "nonsense".into());
-    assert_eq!(timeout_for(&j), Duration::from_secs(DEFAULT_TIMEOUT_SECS));
+    assert_eq!(
+        timeout_for(&j, false),
+        Duration::from_secs(DEFAULT_TIMEOUT_SECS)
+    );
+}
+
+// Round-3 finding 7: on a host without reflinks every seat target starts cold,
+// and a cold aida-cli-lib build outlasts the default. trace:BUG-2383 | ai:claude
+#[test]
+fn an_unseeded_target_gets_the_largest_timeout_by_default() {
+    let j = job(&["cargo", "test", "--profile", "agent"]);
+    assert_eq!(timeout_for(&j, true), Duration::from_secs(MAX_TIMEOUT_SECS));
+    use crate::seat_target_seed::{is_cold, Seeded};
+    assert!(is_cold(&[(
+        "agent".into(),
+        Seeded::Skipped("no reflinks".into())
+    )]));
+    assert!(is_cold(&[]));
+    assert!(!is_cold(&[("agent".into(), Seeded::Reflinked)]));
+    assert!(!is_cold(&[("agent".into(), Seeded::AlreadyWarm)]));
 }
 
 #[test]
@@ -185,7 +215,7 @@ fn dirty_host_env(tmp: &Path) -> Vec<(String, String)> {
         ("AIDA_SESSION_ROLE", "implementer"),
         ("AIDA_SESSION_ID", "s-1"),
         ("AIDA_HANDLE", "claude-implementer-1"),
-        ("AIDA_REVIEW_VERDICT_FILE", "/tmp/verdict"),
+        ("AIDA_REVIEW_VERDICT_FILE", "/host/verdict"),
         ("AIDA_ORCHESTRATOR_TOKEN", "tok"),
         ("AIDA_LANE_JOBS_INBOX", "/x"),
         ("AIDA_LANE_JOBS_RESULTS", "/y"),
@@ -578,7 +608,8 @@ fn sandbox_writes_only_the_target_cargo_home_and_slot_state() {
         rw,
         vec![
             PathBuf::from("/m/target/worktrees/x"),
-            PathBuf::from("/home/u/.cargo"),
+            PathBuf::from("/home/u/.cargo/registry"),
+            PathBuf::from("/home/u/.cargo/git"),
             PathBuf::from(&slot_dir),
             PathBuf::from("/home/u/.local/state/cargo-slots"),
         ]
@@ -602,12 +633,35 @@ fn sandbox_writes_only_the_target_cargo_home_and_slot_state() {
         vec![
             "/w/aida-seat-x",
             "/m/target/worktrees/x",
-            "/home/u/.cargo",
+            "/home/u/.cargo/registry",
+            "/home/u/.cargo/git",
             slot_dir.as_str(),
             "/home/u/.local/state/cargo-slots",
         ]
     );
     assert!(!argv.iter().any(|a| a.contains(".claude")), "{argv:?}");
+    // Round-3 finding 5: neither the rustup proxies in cargo home's bin/ nor
+    // its config.toml (a build.rustc-wrapper) is writable, whether as a bind
+    // of its own or under a writable parent. trace:BUG-2383 | ai:claude
+    for host_code in ["/home/u/.cargo/bin/cargo", "/home/u/.cargo/config.toml"] {
+        let covering: Vec<&&str> = rw_binds
+            .iter()
+            .filter(|bind| std::path::Path::new(host_code).starts_with(bind))
+            .collect();
+        assert!(
+            covering.is_empty(),
+            "{host_code} is writable through {covering:?}"
+        );
+    }
+    // A CARGO_HOME elsewhere is cut the same way.
+    let mut custom = env.clone();
+    custom.insert("CARGO_HOME".into(), "/opt/cargo".into());
+    let rw = lane.sandbox_rw_paths(&custom);
+    assert!(rw.contains(&PathBuf::from("/opt/cargo/registry")));
+    assert!(!rw.contains(&PathBuf::from("/opt/cargo")));
+    assert!(!rw
+        .iter()
+        .any(|p| Path::new("/opt/cargo/bin").starts_with(p)));
     assert_eq!(
         &argv[argv.len() - 2..],
         &["/home/u/.local/bin/cargo", "test"]
@@ -622,8 +676,51 @@ fn only_a_test_job_counts_as_tested() {
     tally.record_exit(&job(&["cargo", "build", "--profile", "agent"]));
     assert_eq!(tally.completed.load(Ordering::Relaxed), 2);
     assert!(tally.untested(), "check and build alone are untested");
+    // Round-3 finding 6: a test build that runs no test is not a test.
+    tally.record_exit(&job(&["cargo", "test", "--profile", "agent", "--no-run"]));
+    tally.record_exit(&job(&[
+        "cargo",
+        "test",
+        "--profile",
+        "agent",
+        "--",
+        "--list",
+    ]));
+    assert!(tally.untested(), "--no-run and --list run no test");
     tally.record_exit(&job(&["cargo", "test", "--profile", "agent"]));
     assert!(!tally.untested());
+    // `--no-run` after `--` is a test filter, and `--list` before it is not
+    // the harness's flag.
+    assert!(runs_tests(&job(&[
+        "cargo",
+        "test",
+        "--profile",
+        "agent",
+        "--",
+        "--no-run",
+    ])));
+}
+
+// Round-3 finding 6: a run killed by a signal did not exit by itself, so it
+// counts as incomplete, never as tested. trace:BUG-2383 | ai:claude
+#[cfg(unix)]
+#[test]
+fn a_job_killed_by_a_signal_is_not_tested() {
+    use std::os::unix::fs::PermissionsExt;
+    let tmp = tempfile::tempdir().unwrap();
+    let mut lane = fixture_lane(tmp.path());
+    let killed = tmp.path().join("killed-cargo");
+    std::fs::write(&killed, "#!/bin/sh\necho \"running 1 test\"\nkill -9 $$\n").unwrap();
+    std::fs::set_permissions(&killed, std::fs::Permissions::from_mode(0o755)).unwrap();
+    lane.program = killed.display().to_string();
+    let runner = Runner::start(lane.clone());
+    let (rc, out) = run_through(&lane, &job(&["cargo", "test", "--profile", "agent"]));
+    let tally = runner.stop();
+    assert_eq!(rc, STOPPED_RC, "{out}");
+    assert!(out.contains("killed by a signal"), "{out}");
+    assert!(tally.untested());
+    assert_eq!(tally.completed.load(Ordering::Relaxed), 0);
+    assert_eq!(tally.incomplete.load(Ordering::Relaxed), 1);
 }
 
 // Finding 9: an inbox the seat turned into a symlink is never read or

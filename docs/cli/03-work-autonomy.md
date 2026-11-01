@@ -212,7 +212,7 @@ headless tool call is capped at 60 seconds, and a process it detaches dies
 with the call, so the launcher runs a lane job runner for as long as it waits.
 In the seat, `aida lane job run --` followed by a cargo command hands the run
 to it, for example
-`AIDA_CARGO_TIMEOUT=900 aida lane job run -- <cargo command>` with
+`aida lane job run -- <cargo command>` with
 `cargo test --profile agent -p <crate> --lib -- <filter>` as the cargo command.
 The runner accepts only `cargo test`, `cargo check` and `cargo build` with the
 agent profile, and refuses options that point cargo at other config, another
@@ -222,7 +222,10 @@ the job in the seat with the seat's own cargo target, through the host's
 
 A job runs code the seat wrote (build scripts, tests), so it always runs in its
 own bubblewrap sandbox. The filesystem is read-only except the seat, its cargo
-target, cargo home and the slot wrapper's lock and log directories. When
+target, the `registry/` and `git/` download caches in cargo home, and the slot
+wrapper's lock and log directories. Cargo home's `bin/` (the `cargo` and
+`rustc` proxies) and its `config.toml` stay read-only, so a job cannot change
+what the host's next cargo runs. When
 `[contained] os_wrap` is off, or bubblewrap cannot run, the launcher does not
 offer the runner and the runner refuses every job. Nothing runs unsandboxed,
 and the result line says `untested=true`. A job starts from a cleared
@@ -241,11 +244,14 @@ run finishes, and otherwise prints the job id and exits 75; `aida lane job wait
 only `cargo check` or `cargo build` still says `untested=true`.
 
 A seat clone's cargo target is seeded from the primary's agent-profile target
-when the clone is created, and again before the first job. The seed uses only
-reflinks (`cp -a --reflink=always` of `deps/`, `.fingerprint/` and `build/`), so
-a seat never shares a file with the primary's target. On a filesystem without
-reflinks nothing is seeded and the seat builds cold. Each job's output says
-which happened.
+when the clone is created, and again before the first job. The seed copies
+`deps/`, `.fingerprint/` and `build/` with copy-on-write reflinks only, so a
+seat never shares a file with the primary's target. On a filesystem without
+reflinks (ext4, for one) nothing is seeded and the seat builds cold, and the
+job output says `not seeded`. A cold build of a large crate can take longer
+than the default 900-second timeout, so the runner gives a job on an unseeded
+target the largest timeout (3600 seconds) unless the job sets its own
+`AIDA_CARGO_TIMEOUT`.
 <!-- trace:BUG-2383 | ai:claude -->
 
 ### `aida backlog`

@@ -32,8 +32,9 @@
 //!   seat-written `.cargo/config.toml` runner), so it always runs inside its
 //!   own minimal bubblewrap profile
 //!   ([`crate::session::lane_job_wrapped_program_and_args`]): the filesystem
-//!   is read-only except the seat, its cargo target, cargo home and the slot
-//!   limiter's state. When `[contained] os_wrap` is off or bubblewrap cannot
+//!   is read-only except the seat, its cargo target, cargo home's `registry/`
+//!   and `git/` download caches (never its `bin/` or `config.toml`) and the
+//!   slot limiter's state. When `[contained] os_wrap` is off or bubblewrap cannot
 //!   run, the job is refused and nothing runs; the lane reports
 //!   `untested=true`.
 //! - A job starts from a cleared environment plus [`HOST_ENV_ALLOWED`], the
@@ -128,6 +129,11 @@ pub(crate) fn scrub_host_env(
         .collect()
 }
 
+/// The only cargo-home subdirectories a job's sandbox may write: the
+/// registry and git download caches. Everything else there (`bin/`,
+/// `config.toml`, `credentials.toml`, `env`) stays read-only.
+pub(crate) const CARGO_HOME_RW: &[&str] = &["registry", "git"];
+
 /// The cargo subcommands a job may run.
 pub(crate) const ALLOWED_SUBCOMMANDS: &[&str] = &["test", "check", "build"];
 
@@ -214,14 +220,23 @@ pub(crate) fn validate(job: &JobRequest) -> std::result::Result<(), String> {
 }
 
 /// The job's timeout: its `AIDA_CARGO_TIMEOUT` (seconds) bounded by
-/// [`MAX_TIMEOUT_SECS`], else [`DEFAULT_TIMEOUT_SECS`].
-pub(crate) fn timeout_for(job: &JobRequest) -> Duration {
+/// [`MAX_TIMEOUT_SECS`], else [`DEFAULT_TIMEOUT_SECS`] on a seeded target
+/// and [`MAX_TIMEOUT_SECS`] on a `cold` (unseeded) one. A cold build of
+/// aida-cli-lib alone takes about 27 minutes, so on a host without reflinks
+/// (ext4) the default would time every first job out (round-3 finding 7).
+// trace:BUG-2383 | ai:claude
+pub(crate) fn timeout_for(job: &JobRequest, cold: bool) -> Duration {
+    let default = if cold {
+        MAX_TIMEOUT_SECS
+    } else {
+        DEFAULT_TIMEOUT_SECS
+    };
     let secs = job
         .env
         .get("AIDA_CARGO_TIMEOUT")
         .and_then(|v| v.trim().trim_end_matches('s').parse::<u64>().ok())
         .filter(|s| *s > 0)
-        .unwrap_or(DEFAULT_TIMEOUT_SECS)
+        .unwrap_or(default)
         .min(MAX_TIMEOUT_SECS);
     Duration::from_secs(secs)
 }
@@ -266,13 +281,34 @@ impl Tally {
         self.tested.load(Ordering::Relaxed) == 0
     }
 
-    /// Count a job that exited by itself.
+    /// Count a job that exited with an exit code of its own.
     pub(crate) fn record_exit(&self, job: &JobRequest) {
         self.completed.fetch_add(1, Ordering::Relaxed);
-        if job.argv.get(1).map(String::as_str) == Some("test") {
+        if runs_tests(job) {
             self.tested.fetch_add(1, Ordering::Relaxed);
         }
     }
+}
+
+/// Whether `job` runs tests: a `cargo test` without `--no-run` (cargo's
+/// option, before `--`) or `--list` (the test harness's, after it). Both
+/// build and exit without running a test (round-3 finding 6).
+// trace:BUG-2383 | ai:claude
+pub(crate) fn runs_tests(job: &JobRequest) -> bool {
+    if job.argv.get(1).map(String::as_str) != Some("test") {
+        return false;
+    }
+    let mut harness = false;
+    for arg in &job.argv[2..] {
+        if arg == "--" && !harness {
+            harness = true;
+            continue;
+        }
+        if (!harness && arg == "--no-run") || (harness && arg == "--list") {
+            return false;
+        }
+    }
+    true
 }
 
 /// How a job is sandboxed.
@@ -373,9 +409,16 @@ impl LaneJobs {
     }
 
     /// The paths a job's sandbox may write besides the seat: its cargo
-    /// target, cargo home (registry downloads), and the host cargo wrapper's
+    /// target, cargo home's download caches, and the host cargo wrapper's
     /// slot locks and slot log, so the job queues for a slot with every other
     /// cargo on the host and its run is recorded.
+    ///
+    /// Only [`CARGO_HOME_RW`] (`registry/`, `git/`) is writable in cargo
+    /// home. `bin/` holds the rustup proxies (`cargo`, `rustc`) and
+    /// `config.toml` can name a `build.rustc-wrapper`; a job that could write
+    /// either would run its code on the host's next cargo, unsandboxed
+    /// (round-3 finding 5).
+    // trace:BUG-2383 | ai:claude
     pub(crate) fn sandbox_rw_paths(&self, env: &BTreeMap<String, String>) -> Vec<PathBuf> {
         let mut rw = Vec::new();
         if let Some(target) = self.target_dir() {
@@ -387,7 +430,7 @@ impl LaneJobs {
             .map(PathBuf::from)
             .or_else(|| home.as_ref().map(|h| h.join(".cargo")))
         {
-            rw.push(cargo_home);
+            rw.extend(CARGO_HOME_RW.iter().map(|sub| cargo_home.join(sub)));
         }
         let runtime = env
             .get("XDG_RUNTIME_DIR")
@@ -504,7 +547,7 @@ const POLL: Duration = Duration::from_millis(500);
 #[cfg(unix)]
 fn run_loop(lane: &LaneJobs, stop: &AtomicBool, tally: &Tally) {
     let mut seen: HashSet<String> = HashSet::new();
-    let mut seed_note: Option<String> = None;
+    let mut seed_note: Option<SeedNote> = None;
     let mut warned = false;
     while !stop.load(Ordering::Relaxed) {
         let inbox = match inbox::InboxDir::open(lane) {
@@ -534,26 +577,42 @@ fn run_loop(lane: &LaneJobs, stop: &AtomicBool, tally: &Tally) {
 #[cfg(not(unix))]
 fn run_loop(_lane: &LaneJobs, _stop: &AtomicBool, _tally: &Tally) {}
 
+/// What the seed before the first job found.
+#[derive(Debug, Clone)]
+pub(crate) struct SeedNote {
+    /// Which path ran, for the lane log and every job's output.
+    pub(crate) note: String,
+    /// Nothing was seeded or already warm: the first build is cold, so a job
+    /// gets [`MAX_TIMEOUT_SECS`] by default ([`timeout_for`]).
+    pub(crate) cold: bool,
+}
+
 /// Seed the seat's cargo target from the primary's before the first job, and
-/// say which path ran, for the lane log and every job's output.
-fn seed_lane_target(lane: &LaneJobs) -> String {
+/// say which path ran.
+fn seed_lane_target(lane: &LaneJobs) -> SeedNote {
     let Some(target) = lane.target_dir() else {
-        return "the seat has no cargo target of its own; not seeded".into();
+        return SeedNote {
+            note: "the seat has no cargo target of its own; not seeded".into(),
+            cold: true,
+        };
     };
-    let note = match target.parent().and_then(Path::parent) {
+    let (note, cold) = match target.parent().and_then(Path::parent) {
         Some(main_target) if main_target.file_name() == Some(std::ffi::OsStr::new("target")) => {
             let results = crate::seat_target_seed::seed_seat_target(
                 main_target,
                 &target,
                 crate::seat_target_seed::LOCK_WAIT,
             );
-            crate::seat_target_seed::describe(&results)
+            (
+                crate::seat_target_seed::describe(&results),
+                crate::seat_target_seed::is_cold(&results),
+            )
         }
-        _ => "not under the primary's target; not seeded".into(),
+        _ => ("not under the primary's target; not seeded".into(), true),
     };
     let note = format!("seat target {}: {note}", target.display());
     lane.log(&note);
-    note
+    SeedNote { note, cold }
 }
 
 /// The next job in the inbox, oldest name first, taken out of the inbox
@@ -730,8 +789,9 @@ fn run_one(
     job: std::result::Result<JobRequest, String>,
     stop: &AtomicBool,
     tally: &Tally,
-    seed_note: &str,
+    seed: &SeedNote,
 ) {
+    let seed_note = seed.note.as_str();
     let out_file = out_path(&lane.results, id);
     let refuse = |why: &str| {
         let _ = std::fs::write(&out_file, format!("lane job refused: {why}\n"));
@@ -797,7 +857,7 @@ fn run_one(
         use std::os::unix::process::CommandExt;
         cmd.process_group(0);
     }
-    let timeout = timeout_for(&job);
+    let timeout = timeout_for(&job, seed.cold);
     lane.log(&format!(
         "{id} started: {} (timeout {}s; {ran_with})",
         job.argv.join(" "),
@@ -810,7 +870,12 @@ fn run_one(
     };
     let (rc, how) = loop {
         match child.try_wait() {
-            Ok(Some(status)) => break (status.code().unwrap_or(STOPPED_RC), "exited"),
+            // A run killed by a signal has no exit code of its own: it is not
+            // a completed run (round-3 finding 6). trace:BUG-2383 | ai:claude
+            Ok(Some(status)) => match status.code() {
+                Some(code) => break (code, "exited"),
+                None => break (STOPPED_RC, "killed by a signal"),
+            },
             Ok(None) => {}
             Err(_) => break (STOPPED_RC, "lost"),
         }

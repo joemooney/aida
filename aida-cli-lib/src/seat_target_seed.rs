@@ -205,6 +205,15 @@ fn reflink_into(src: &Path, dst: &Path) -> std::result::Result<(), String> {
     Ok(())
 }
 
+/// Whether a [`seed_seat_target`] result left the seat to build cold: no
+/// profile was seeded or already warm.
+// trace:BUG-2383 | ai:claude
+pub(crate) fn is_cold(results: &[(String, Seeded)]) -> bool {
+    !results
+        .iter()
+        .any(|(_, s)| matches!(s, Seeded::Reflinked | Seeded::AlreadyWarm))
+}
+
 /// A one-line summary of [`seed_seat_target`]'s result, for a log and the
 /// job output.
 pub(crate) fn describe(results: &[(String, Seeded)]) -> String {

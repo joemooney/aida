@@ -58,10 +58,20 @@ fn run_job(argv: Vec<String>, wait: u64, tail: usize) -> Result<i32> {
     let (inbox, results) = lane_job::seat_dirs()?;
     let id = lane_job::new_id();
     lane_job::submit(&inbox, &id, &job)?;
+    // The runner knows whether the seat target is seeded; the seat does not.
+    // trace:BUG-2383 | ai:claude
+    let timeout = if job.env.contains_key("AIDA_CARGO_TIMEOUT") {
+        format!("timeout {}s", lane_job::timeout_for(&job, false).as_secs())
+    } else {
+        format!(
+            "timeout {}s on a seeded target, {}s on a cold one",
+            lane_job::DEFAULT_TIMEOUT_SECS,
+            lane_job::MAX_TIMEOUT_SECS
+        )
+    };
     println!(
-        "lane job {id} submitted: {} (timeout {}s)",
-        job.argv.join(" "),
-        lane_job::timeout_for(&job).as_secs()
+        "lane job {id} submitted: {} ({timeout})",
+        job.argv.join(" ")
     );
     finish_wait(&inbox, &results, &id, wait, tail)
 }

@@ -100,9 +100,11 @@ a design fork, run `aida punt`; to push the branch but hold the PR for a manual 
 pub(crate) const LANE_JOB_CONTRACT: &str = "\n\nLocal tests in this lane: a tool call is capped \
 at 60 seconds and anything you detach (`setsid nohup ...`, `&`) dies with the call, so do not run \
 cargo yourself and do not background it. Hand the run to the launcher instead: \
-`AIDA_CARGO_TIMEOUT=900 aida lane job run -- cargo test --profile agent -p <crate> --lib -- \
-<filter>`. It accepts `cargo test|check|build --profile agent ...`, runs in this seat inside a \
-sandbox, with its own target, under the cargo slot limiter, and returns within 50 seconds. When \
+`aida lane job run -- cargo test --profile agent -p <crate> --lib -- <filter>`. It accepts \
+`cargo test|check|build --profile agent ...`, runs in this seat inside a sandbox, with its own \
+target, under the cargo slot limiter, and returns within 50 seconds. The runner picks the run's \
+timeout: 900 seconds on a seeded target, 3600 when the output says `not seeded` (a cold build \
+can take half an hour); set `AIDA_CARGO_TIMEOUT=<secs>` only to override it. When \
 it finishes it prints the output tail and exits with cargo's exit code; while it still runs it \
 prints the job id and exits 75, and you continue with `aida lane job wait <id>` until it \
 finishes. Only a `cargo test` run counts as tested. If it reports that this session has no lane \
