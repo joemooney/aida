@@ -13,7 +13,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T23:00:22.284758314Z
-modified_at: 2026-11-01T03:53:09.900213469Z
+modified_at: 2026-11-01T04:00:44.858187362Z
 req_type: Bug
 tags:
 - epic-home-003
@@ -85,6 +85,13 @@ comments:
   created_at: 2026-11-01T03:53:09.900213469Z
   modified_at: 2026-11-01T03:53:09.900213469Z
   session_id: 77a7a933-9a3f-4243-9a44-892bcedf206c
+- id: 01a19544-513a-7870-a515-612fcdb91ee3
+  author: joe
+  content: 'Round 2 (cd5b0b05d5d, PR #3182). CI cli-0 failure was bug_2378_root_after_backfill.rs:292 (remote reconcile --execute): the backfill''s untracked registry/blocks.lock dirtied the store. Fix: aida doctor treats registry/*.lock as per-clone runtime (a tracked copy is flagged store-tracked-runtime and untracked; the pattern joins the runtime ignores doctor writes). aida-init stores already ignore it via *.lock. The fixture .gitignore now carries the same set; no assertions changed. db block verify skips retired nodes.toml rows (the fixture re-verifies under blocks-only). Retired-clone shape (home clone, read-only check): .aida/node.toml and .aida/dispenser.toml are both present and ignored, both naming node 1. A node.toml without dispenser.toml does not occur. After the backfill node.toml names the root node and dispenser.toml still names node 1. Bootstrap on a bound clone returns before reading the legacy pair; the new test bound_clone_bootstrap_ignores_the_backfill_repointed_legacy_pair covers it. Not verified locally: cargo was denied in this seat''s sandbox, so CI is the first run.'
+  created_at: 2026-11-01T04:00:44.858187362Z
+  modified_at: 2026-11-01T04:00:44.858187362Z
+  session_id: 01a1953f7978
+  harness_version: 2.1.316 (Claude Code)
 history:
 - id: 01a1943a-492b-7f72-9377-cfc786176bec
   author: aida-session-start
