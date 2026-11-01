@@ -1642,7 +1642,8 @@ fn doctor_check_store_free_light(category: &str, json: bool, fail_on_findings: b
         }
         // trace:STORY-B6B1278890774EF993D2EBC327862470-100 | ai:claude
         crate::advisor_handshake::DOCTOR_CATEGORY => {
-            DoctorReport::from_findings(crate::advisor_handshake::doctor_scan(&project_root))
+            // trace:BUG-B6B1278890774EF993D2EBC327862470-151 | ai:claude
+            DoctorReport::from_findings(crate::advisor_handshake::doctor_report(&project_root))
         }
         // Routes like lane-liveness: only the scheduled tick nudges, and a
         // nudged backlog is not a job failure. trace:STORY-HOME-128 | ai:claude

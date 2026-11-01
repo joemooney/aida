@@ -12057,6 +12057,21 @@ pub(crate) fn handle_queue_work(
         review_findings.as_deref(),
         &rework_comments,
     );
+    // A rework lane is contained and cannot download CI logs, so the launcher
+    // leads its prompt with the PR head's failing tests and panic lines.
+    // trace:BUG-2380 | ai:claude
+    if review_findings.is_some() {
+        if let Some(root) = project_root_for_config.as_deref() {
+            let spec_id = plan
+                .entries
+                .first()
+                .map(|entry| entry.spec_id.as_str())
+                .unwrap_or(plan.anchor_display.as_str());
+            if let Some(section) = crate::ci_failures::section_for_spec(root, spec_id) {
+                prompt = format!("{}\n\n{prompt}", section.trim_end());
+            }
+        }
+    }
     // An advisor ruling left as a spec comment leads the implementer pickup;
     // a lane that read only the description repeated the overruled change.
     // trace:BUG-B6B1278890774EF993D2EBC327862470-021 | ai:claude
@@ -12133,6 +12148,16 @@ pub(crate) fn handle_queue_work(
             if let Some(root) = project_root_for_config.as_deref() {
                 if let Ok(store) = storage.load() {
                     append_untraced_criteria_prompt_block(&mut prompt, root, &store, forge, pr_n);
+                }
+            }
+        }
+        // The reviewer gets the same failing-test digest the rework lane does.
+        // trace:BUG-2380 | ai:claude
+        if let Some((ReviewForge::GitHub, pr_n)) = plan.review_target {
+            if let Some(root) = project_root_for_config.as_deref() {
+                if let Some(section) = crate::ci_failures::section_for_pr(root, pr_n) {
+                    prompt.push_str("\n\n");
+                    prompt.push_str(section.trim_end());
                 }
             }
         }
