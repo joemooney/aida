@@ -25,7 +25,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T06:47:26.114384272Z
-modified_at: 2026-11-01T08:17:51.564918917Z
+modified_at: 2026-11-01T08:20:46.025872353Z
 req_type: Bug
 tags:
 - audit
@@ -42,6 +42,11 @@ comments:
   content: 'ADVISOR DISPOSITION: APPROVED. Verified .aida/agents.toml lines68-69 explicitly override workspace-write with danger-full-access; verified TASK-2631 native mode strips posture flags and sets workspace-write, so this is repo-default/scaffold cleanup rather than a blocker of that accepted native launch path. Remove the dangerous default, retain configured Codex vendor and Claude parity, and add the already verified TASK-2631 OpenAI endpoints to the canonical scaffold template with a fixture. No new permissions, grants or write roots. Codex lane once TASK-2631 is live; normal independent review/CI gates.'
   created_at: 2026-11-01T07:01:26.814522907Z
   modified_at: 2026-11-01T07:01:26.814522907Z
+- id: 01a19632-5f49-7f52-a7f8-31ecd6f2838f
+  author: mcp
+  content: 'Implementation prepared in assigned checkout /home/joe/ai/aida-worktrees/aida-seat-aida-bug-b6b1278890774ef993d2ebc327862470-166, branch codex/bug-2392-default-config. Six-file diff adds portable tracked workspace-write Codex defaults and gitignore exception, replaces the unsafe template example, adds the three approved OpenAI hosts to the canonical contained template and a regression test. Existing init/upgrade helpers already consume that master; custom allowlists remain preserved. Verification: 14/14 scaffolding::settings tests passed; cargo fmt --all -- --check; git diff --check; static TOML/vendor/default-flags checks; aida config permissions show reports no dangerous inconsistencies. BLOCKED before commit: managed sandbox mounts .git read-only, and git add fails creating .git/index.lock with Read-only file system. Cannot commit/push/open PR; no PR created; left In Progress. post_punt MCP was rejected because it requires approval and policy is never. Main checkout''s old ignored .aida/agents.toml was read only, not edited. Handoff needs an authorized Git-writable session to commit/push/open PR and queue done; do not run ship or review record from this standalone implementation.'
+  created_at: 2026-11-01T08:20:46.025856995Z
+  modified_at: 2026-11-01T08:20:46.025856995Z
 history:
 - id: 01a195dd-0846-7b42-9f84-f4128c00ca5d
   author: joe
