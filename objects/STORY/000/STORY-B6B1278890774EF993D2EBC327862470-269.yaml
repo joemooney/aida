@@ -32,7 +32,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T00:54:49.371776631Z
-modified_at: 2026-11-01T08:57:58.435145925Z
+modified_at: 2026-11-01T09:03:06.885806858Z
 req_type: Story
 tags:
 - architecture
@@ -209,6 +209,11 @@ comments:
   content: 'HOST PROBE P1 PASSED with synthetic state only: installed Codex0.166 sandbox -P :workspace executes Python successfully INSIDE bwrap --unshare-all --cap-drop ALL --new-session, read-only host root, private dev/proc/tmp, only synthetic worktree writable, and private0700 HOME/CODEX_HOME/XDG_RUNTIME_DIR/state/cache. Both default CLI and --no-daemon variants exited0, printed only nested-synthetic-ok uid1000 pid2. The temporary-CODEX_HOME PATH-alias warning is nonfatal. No model/auth/global settings or grant keys used. Scratch /tmp/aida-contained-codex-probe-xlkscvyv. Nested native composition is therefore possible on this host with correctly prepared private state. This does not yet prove real model daemon lifecycle, network containment, credential refresh or own-grant presentation; those remain acceptance tests. Host Landlock reports ABI8; installed headers expose TCP rights but no Unix-connect right, so P2 needs exact kernel capability/probe, not ABI-number inference.'
   created_at: 2026-11-01T08:57:58.435145925Z
   modified_at: 2026-11-01T08:57:58.435145925Z
+- id: 01a19659-2485-7a82-aa41-a605a69cbb3f
+  author: joe
+  content: 'HOST P2 DECISION: deployed kernel reports Landlock ABI8. Official Linux kernel documentation https://docs.kernel.org/userspace-api/landlock.html states pathname Unix-socket resolution right LANDLOCK_ACCESS_FS_RESOLVE_UNIX begins at ABI9; TCP/abstract-scope support is not pathname-connect confinement. This host therefore requires the already-approved C5 broker branch, or named refusal, for full contained launches. Do not silently omit the Unix-socket bar. The stricter namespace P1 probe succeeded for default and no-daemon installed CLI; real credential refresh P3 and own-grant/model lifecycle proofs remain gates. New backend C2 hardening stays binding; existing legacy escape remains unproven by actual host negative probe.'
+  created_at: 2026-11-01T09:03:06.885806858Z
+  modified_at: 2026-11-01T09:03:06.885806858Z
 history:
 - id: 01a1949a-3f43-7b12-bc6b-0d5bf40ee2f2
   author: joe
