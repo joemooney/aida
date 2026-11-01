@@ -34,7 +34,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T19:23:04.998731220Z
-modified_at: 2026-10-31T23:34:54.659153383Z
+modified_at: 2026-11-01T00:16:03.307247152Z
 req_type: Story
 tags:
 - architecture
@@ -187,6 +187,19 @@ comments:
     - None beyond the signoff; scope is cut at AC4 refusal + AC5 materialization.
   created_at: 2026-10-31T23:34:54.659153383Z
   modified_at: 2026-10-31T23:34:54.659153383Z
+  session_id: 01a194506f98
+  harness_version: 2.1.316 (Claude Code)
+- id: 01a19476-9aeb-7e80-bf87-446ec4a56dbf
+  author: joe
+  content: |-
+    ## Implementer findings (draft TASK filing is blocked in this sandbox; recorded here for advisor triage)
+
+    1. **bug-spotted / major:** `refuse_claim_before_backfill` (aida-cli-lib/src/doctor_backfill_agreed.rs:514) refuses any claim on a bound clone while a spec lacks an agreed ID and says to run the backfill on the root. A single-hub store has no root, so a clone that filed a spec before its first claim can never claim. The story_164 fixture drops the binding spec to work around this. Decide who runs the backfill in single-hub mode, or limit the guard to rooted stores.
+    2. **followup / minor (STORY-170):** enroll-root materializes `hub:<h>:<T>` pools with home_ref `<h>/aida-store`. Afterwards a non-root clone spends hub blocks only when its `aida node upstream` remote is named like the hub. Suggest resolving a declared hub name in home_ref to the clone remote that reaches it.
+    3. **deviation / minor:** `aida init` and the first claim do NOT auto-write `[store.hubs]` (the sketch proposed this). An undeclared store keeps today's behaviour, and declaring the hub is a manual edit plus commit. "Committed" means present in `.aida/config.toml` on the local default branch (else origin/<default>).
+    4. **design-choice:** the hub spend context also applies with more than one hub and no root (to the first declared hub this clone reaches), so blocks already held keep dispensing (AC4).
+  created_at: 2026-11-01T00:16:03.307247152Z
+  modified_at: 2026-11-01T00:16:03.307247152Z
   session_id: 01a194506f98
   harness_version: 2.1.316 (Claude Code)
 history:
