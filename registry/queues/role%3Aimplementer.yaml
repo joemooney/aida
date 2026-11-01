@@ -1,4 +1,11 @@
 - user_id: role:implementer
+  requirement_id: 01a1942f-b90c-7ee1-a06c-d5856831d28e
+  position: 277000
+  added_by: role:implementer
+  note: 'PR-3193 review: CHANGES REQUESTED'
+  added_at: 2026-11-01T06:05:34.142236770Z
+  for_role: implementer
+- user_id: role:implementer
   requirement_id: 01a1936a-61a6-73a0-a35d-c22c1ce50b32
   position: 278000
   added_by: role:implementer
@@ -588,10 +595,3 @@
   added_by: role:implementer
   added_at: 2026-11-01T03:36:44.401313192Z
   for_role: advisor
-- user_id: role:implementer
-  requirement_id: 01a1942f-b90c-7ee1-a06c-d5856831d28e
-  position: 598000
-  added_by: role:implementer
-  added_at: 2026-11-01T06:01:03.065947656Z
-  for_role: implementer
-  added_by_machine: imac
