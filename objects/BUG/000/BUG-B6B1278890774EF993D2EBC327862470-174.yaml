@@ -19,12 +19,18 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-01T09:27:24.546816181Z
-modified_at: 2026-11-01T09:27:24.546816181Z
+modified_at: 2026-11-01T09:36:54.416421597Z
 req_type: Bug
 tags:
 - ci
 - merge-train
 - registration
+comments:
+- id: 01a19678-1490-78e1-a397-469d7b8ee71f
+  author: joe
+  content: 'Additional evidence: later jobs query with filter=all reported9 jobs including successful Build, whereas prior default job/check rollups reported only7 matrix jobs and hold. Run_attempt1, actual workflowpathci.yml, trainnotdraft, no CIfilediff from4ce. Treat as required-context registration/visibility lag, not proof that aggregate never ran. Existing ci_gate uses Forge::required_check_names and BUG1481 missing/unknown classification is reusable; inspect every normal-success and hold-tolerance Green promotion. No current required policy was changed.'
+  created_at: 2026-11-01T09:36:54.416421597Z
+  modified_at: 2026-11-01T09:36:54.416421597Z
 filed_at:
   code_sha: 4ce0af750fcb68d4adf57496e4e002aefd8ace77
   branch: main
