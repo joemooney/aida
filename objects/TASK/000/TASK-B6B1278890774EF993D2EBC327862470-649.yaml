@@ -7,12 +7,12 @@ description: |-
   [queue]
   standalone_implementer_cap = 4
   (keep any existing [queue] keys; add a one-line comment with the reason). Not higher: the host has 2 cargo build slots shared with reviewers and dev builds. Gate: make check-ci-fast only (no cargo). Open the PR via aida ship.
-status: Done
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T01:02:53.181015351Z
-modified_at: 2026-11-01T01:13:20.674132011Z
+modified_at: 2026-11-01T02:21:10.259040400Z
 req_type: Task
 tags:
 - config
@@ -36,6 +36,20 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a194e9-26ee-7163-b73c-99baf9224c08
+  author: aida-auto-bump
+  timestamp: 2026-11-01T02:21:10.254114547Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a194e9-26f3-7043-a75e-e0f75c2ba19b
+  timestamp: 2026-11-01T02:21:10.259038280Z
+  agent: aida
+  commit_sha: 7518617e469376bbe5debebd7cadd980e08656e5
+  summary: 'Base-only update from main (gh update-branch e06cebd7de8fe8fbd9278bb841898828c2ea0947 -> 84d2abf78b356185199a1543a4dcda82d72618e3); reviewed content unchanged, prior approval carried; serial ship after main fix #2646.'
+  review_verdict: approved
 filed_at:
   code_sha: 43d9f95803036ec22350e5a210d8c1cae20b9fe5
   branch: main
@@ -48,3 +62,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-11-01T01:13:20.674132011Z
   implemented_by: joe
+  completed_at: 2026-11-01T02:21:10.254110133Z
+  completion_sha: 7518617e469376bbe5debebd7cadd980e08656e5
