@@ -11,7 +11,9 @@ function filterGuides() {
   for (const card of cards) {
     const entry = records.get(card.dataset.url);
     const text = entry.text.toLocaleLowerCase();
-    const matches = (category.value === 'all' || category.value === entry.category) && words.every(word => text.includes(word));
+    // trace:STORY-2219 | ai:claude — glossary term cards show only for a search.
+    const searchable = !('term' in card.dataset) || words.length > 0;
+    const matches = searchable && (category.value === 'all' || category.value === entry.category) && words.every(word => text.includes(word));
     card.hidden = !matches;
     if (matches) {
       count += 1;
@@ -22,7 +24,7 @@ function filterGuides() {
       card.querySelector('.excerpt').textContent = (first ? '…' : '') + entry.text.slice(first, first + 180) + '…';
     }
   }
-  document.getElementById('search-status').textContent = `${count} matching ${count === 1 ? 'guide' : 'guides'}.`;
+  document.getElementById('search-status').textContent = `${count} matching ${count === 1 ? 'result' : 'results'}.`;
   document.getElementById('search-empty').hidden = count !== 0;
 }
 form.addEventListener('submit', event => { event.preventDefault(); filterGuides(); });
