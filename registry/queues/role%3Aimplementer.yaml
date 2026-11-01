@@ -1,4 +1,11 @@
 - user_id: role:implementer
+  requirement_id: 01a19434-2aa8-74d0-bccf-38faf512e4c7
+  position: 267000
+  added_by: role:implementer
+  note: 'PR-3194 round-2 verdict ledger PR-3194.jsonl#7 at 1a9bb9a73bce: one portability false-positive site and a real combined file-cap violation. Both verified against source.'
+  added_at: 2026-11-01T07:36:19.465888088Z
+  for_role: implementer
+- user_id: role:implementer
   requirement_id: 01a1942f-b90c-7ee1-a06c-d5856831d28e
   position: 268000
   added_by: role:implementer
@@ -32,13 +39,6 @@
   added_by: role:implementer
   note: PR-3196 round-1 AC3/AC5 prose corrections; latest complete advisor brief names every correction and the post-merge publication gate.
   added_at: 2026-11-01T06:48:51.001830333Z
-  for_role: implementer
-- user_id: role:implementer
-  requirement_id: 01a19434-2aa8-74d0-bccf-38faf512e4c7
-  position: 274000
-  added_by: role:implementer
-  note: 'PR-3194 review: CHANGES REQUESTED'
-  added_at: 2026-11-01T06:16:44.014587911Z
   for_role: implementer
 - user_id: role:implementer
   requirement_id: 01a1936a-61a6-73a0-a35d-c22c1ce50b32
