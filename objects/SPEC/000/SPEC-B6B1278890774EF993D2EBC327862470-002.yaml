@@ -3,12 +3,12 @@ spec_id: SPEC-b6b1278890774ef993d2ebc327862470-002
 agreed_id: TASK-2714
 title: Native Codex implementer checkout has read-only .git and cannot complete PR handoff
 description: 'BUG-2401 standalone implementer checkout /home/joe/ai/aida-worktrees/aida-seat-aida-bug-b6b1278890774ef993d2ebc327862470-174 allows source edits but native sandbox grants its .git only read access. `git add aida-cli-lib/src/pr_train.rs aida-cli-lib/src/status_prs.rs aida-cli-lib/src/tests/story_1690_train_tests.rs` fails: fatal: Unable to create ''<checkout>/.git/index.lock'': Read-only file system. Approval policy never; no escalation is available. CLI aida edit also refuses the non-writable shared cache; connected AIDA MCP update succeeds. Fix launcher sandbox permissions for its sanctioned git mutation workflow, or have the host collect the patch, validate, commit/push and open the PR. No commit, push, PR, review record or merge was performed by this implementer.'
-status: Draft
+status: Superseded
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-01T09:51:46.409743885Z
-modified_at: 2026-11-01T11:15:59.131754445Z
+modified_at: 2026-11-01T11:16:01.052014001Z
 req_type: Task
 tags:
 - from-implementer:BUG-2401
@@ -25,6 +25,13 @@ history:
   author: joe
   timestamp: 2026-11-01T10:02:33.441955633Z
   changes: []
+- id: 01a196d2-d19b-7a33-893a-5be11b9cd696
+  author: joe
+  timestamp: 2026-11-01T11:16:01.052009672Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   aida_version: 0.16.0
   aida_build_sha: 4ce0af750fc
