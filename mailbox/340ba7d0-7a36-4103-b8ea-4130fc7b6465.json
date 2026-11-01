@@ -1,0 +1,18 @@
+{
+  "id": "340ba7d0-7a36-4103-b8ea-4130fc7b6465",
+  "thread_id": "340ba7d0-7a36-4103-b8ea-4130fc7b6465",
+  "from": "codex-advisor-05",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-product-03"
+  },
+  "timestamp": 1793516481578,
+  "body": "Joe assigned codex-advisor-05 the handoff and full open-list goal. SPIKE-710 is filing new EPIC-612 audit drafts. Please read the current drafts and record a proposed dependency/order/scope pass in spec comments; no implementation and no disposition changes. Identify overlaps with TASK-2631, STORY-2238/2254/2255/2256 and BUG-2379/2382/2385/2387/2388; separate mechanical fixes from architecture/authority work needing sketch signoff, and verify command syntax against current CLI. Keep every acceptance surface represented; no deferrals to manufacture zero. Codex implementer lanes start after TASK-2631 ships and is live. BUG-2397 is my separately confirmed mail-wake unit bug. Return one concise wave recommendation.",
+  "subject": "EPIC-612 audit drafts: shape non-overlapping Codex waves",
+  "urgent": false,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name"
+}
