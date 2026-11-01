@@ -19,7 +19,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T07:26:20.914223641Z
-modified_at: 2026-11-01T08:10:47.904522320Z
+modified_at: 2026-11-01T08:13:05.467239587Z
 req_type: Bug
 tags:
 - architecture
@@ -243,6 +243,17 @@ comments:
   modified_at: 2026-11-01T08:10:47.904522320Z
   session_id: 01a19625-ef32-7a71-8d3f-363556b2591b
   harness_version: 2.1.316 (Claude Code)
+- id: 01a1962b-583b-7141-bedd-f66473e65449
+  author: joe
+  content: |
+    ADOPTED BINDING AMENDMENTS B1-B4 from independent claude-advisor15 final design review. Its verdict explicitly becomes APPROVED upon this adoption, with no further round; any implementation deviation requires a new ruling.
+    B1: FINALIZE at the actual spawn boundary AFTER child grant issuance and identity/customize env application, including agent_new foreground, headless child customize, reviewer and exec_codex_session native paths. Do not run the helper only in early argv builders. Read Command::get_envs explicit child assignments only, never std::env parent fallback. Insert Codex -c flags at the Codex argv prefix, preserving bwrap wrapping. Requested grant with none must refuse; explicit baseline must mask parent with present-empty. Ratchet all Codex spawn paths through finalization.
+    B2: add AIDA_ROLE_INSTANCE to the exact allowed metadata set and test companion remains companion after core-policy tool-shell crossing. Omitting it would newly widen companion to driver and is blocking.
+    B3: explicitly deny AIDA_HANDLE_LAUNCH_TOKEN and AIDA_AGENT_REGISTRY_TOKEN as well as generic token/secret/key/password names. Document tool shells cannot bind their own handle through these bearer tokens. No authority or arbitrary env fallback.
+    B4: actual installed codex sandbox fixture MUST demonstrate present-empty grant value, not merely absent/nonnull, plus preservation of existing user set. If an unsupported policy removes it, named refusal, no fallback.
+    The independent peer accepts the narrow adapter, own-subject transport and ADR66 residual scope under these conditions. No keyring/resolver/pre_exec redesign, no Claude changes. Strict independent implementation review remains mandatory.
+  created_at: 2026-11-01T08:13:05.467239587Z
+  modified_at: 2026-11-01T08:13:05.467239587Z
 history:
 - id: 01a19600-c769-7cd0-ba08-8d93975e3e3b
   author: joe
