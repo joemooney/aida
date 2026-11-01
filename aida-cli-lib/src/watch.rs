@@ -409,10 +409,14 @@ fn describe(ek: &EventKind) -> (&'static str, String) {
             active,
             principal,
             expires_at,
+            renewed_from,
             ..
         } => (
             "mandate-changed",
-            if *active {
+            // trace:STORY-B6B1278890774EF993D2EBC327862470-166 | ai:claude
+            if let (true, Some(from)) = (*active, renewed_from) {
+                format!("mandate {id} renewed by {principal}: {from} -> {expires_at}")
+            } else if *active {
                 format!("mandate {id} started by {principal}, until {expires_at}")
             } else {
                 format!("mandate {id} stopped")

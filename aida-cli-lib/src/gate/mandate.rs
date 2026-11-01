@@ -131,9 +131,45 @@ pub(crate) struct Mandate {
     /// STORY-1700: `Some("drive")` for a drive mandate; absent otherwise.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub kind: Option<String>,
+    /// Every in-place renewal (`aida mandate renew`), oldest first: the
+    /// lineage of the record's expiry. The id, scopes and flags never change,
+    /// so grants that name this mandate's id stay valid across a renewal.
+    // trace:STORY-B6B1278890774EF993D2EBC327862470-166 | ai:claude
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub renewals: Vec<Renewal>,
+}
+
+/// One in-place renewal of a mandate: who extended it, when, and the expiry
+/// before and after.
+// trace:STORY-B6B1278890774EF993D2EBC327862470-166 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub(crate) struct Renewal {
+    pub renewed_at: DateTime<Utc>,
+    pub renewed_by: String,
+    pub previous_expires_at: DateTime<Utc>,
+    pub expires_at: DateTime<Utc>,
 }
 
 impl Mandate {
+    /// When the current lifetime began: the latest renewal, else issuance.
+    /// The 24h cap applies from here.
+    // trace:STORY-B6B1278890774EF993D2EBC327862470-166 | ai:claude
+    pub(crate) fn lifetime_start(&self) -> DateTime<Utc> {
+        self.renewals
+            .last()
+            .map_or(self.issued_at, |r| r.renewed_at)
+    }
+
+    /// The duration the mandate was originally started with — the default
+    /// for `aida mandate renew`.
+    // trace:STORY-B6B1278890774EF993D2EBC327862470-166 | ai:claude
+    pub(crate) fn original_ttl(&self) -> Duration {
+        self.renewals
+            .first()
+            .map_or(self.expires_at, |r| r.previous_expires_at)
+            - self.issued_at
+    }
+
     pub(crate) fn is_active_at(&self, now: DateTime<Utc>) -> bool {
         self.revoked_at.is_none() && now < self.expires_at
     }
@@ -280,14 +316,49 @@ fn record_problem(m: &Mandate, stem: &str, principal: &str, now: DateTime<Utc>) 
             m.principal
         ));
     }
-    let ttl = m.expires_at - m.issued_at;
+    // A renewed record's cap runs from its latest renewal; its lineage must
+    // be a chain in time order that ends at the record's expiry.
+    // trace:STORY-B6B1278890774EF993D2EBC327862470-166 | ai:claude
+    let ttl = m.expires_at - m.lifetime_start();
     if ttl <= Duration::zero() || ttl > MAX_TTL {
         return Some("its lifetime exceeds the 24h cap".into());
     }
-    if m.issued_at > now + ISSUE_SKEW {
+    if m.issued_at > now + ISSUE_SKEW || m.lifetime_start() > now + ISSUE_SKEW {
         return Some("it claims to be issued in the future".into());
     }
+    if let Some(why) = renewal_problem(m) {
+        return Some(why);
+    }
     None
+}
+
+/// Why a record's renewal lineage is not coherent: every renewal follows the
+/// previous one in time, extends from the expiry the previous one set, and
+/// the last one sets the record's expiry.
+// trace:STORY-B6B1278890774EF993D2EBC327862470-166 | ai:claude
+fn renewal_problem(m: &Mandate) -> Option<String> {
+    if m.original_ttl() <= Duration::zero() || m.original_ttl() > MAX_TTL {
+        return Some("its original lifetime exceeds the 24h cap".into());
+    }
+    let mut since = m.issued_at;
+    let mut expiry = m.issued_at + m.original_ttl();
+    for r in &m.renewals {
+        if r.renewed_at < since || r.previous_expires_at != expiry {
+            return Some("its renewal lineage is out of order".into());
+        }
+        // `extend` only renews an ACTIVE mandate, so a renewal at or after the
+        // expiry it extends cannot be genuine: it would resurrect an expired one.
+        if r.renewed_at >= r.previous_expires_at {
+            return Some("its renewal lineage renews an already-expired mandate".into());
+        }
+        let ttl = r.expires_at - r.renewed_at;
+        if ttl <= Duration::zero() || ttl > MAX_TTL {
+            return Some("a renewal exceeds the 24h cap".into());
+        }
+        since = r.renewed_at;
+        expiry = r.expires_at;
+    }
+    (expiry != m.expires_at).then(|| "its expiry does not match its renewal lineage".into())
 }
 
 /// Every mandate record in `dir`, validated: `(valid, warnings)`. Valid
@@ -414,21 +485,40 @@ pub(crate) fn recheck(
 /// Parse `--ttl`: `<n>h` or `<n>m`, more than zero and at most [`MAX_TTL`].
 // trace:STORY-1698 | ai:claude
 pub(crate) fn parse_ttl(raw: &str) -> Result<Duration> {
+    parse_duration_flag(
+        raw,
+        "--ttl",
+        "--ttl may be at most 24h; extend an active mandate with `aida mandate renew`",
+    )
+}
+
+/// Parse `aida mandate renew --for`: the same grammar and [`MAX_TTL`] cap as
+/// `--ttl`, with errors that name `--for` and no "use renew" hint.
+// trace:STORY-B6B1278890774EF993D2EBC327862470-166.ac139435 | ai:claude
+pub(crate) fn parse_renew_for(raw: &str) -> Result<Duration> {
+    parse_duration_flag(
+        raw,
+        "--for",
+        "--for may be at most 24h; a renewal runs at most 24h from now",
+    )
+}
+
+fn parse_duration_flag(raw: &str, flag: &str, too_long: &str) -> Result<Duration> {
     let raw = raw.trim().to_ascii_lowercase();
     let (digits, unit) = raw.split_at(raw.len().saturating_sub(1));
     let n: i64 = digits
         .parse()
-        .with_context(|| format!("invalid --ttl `{raw}`: use hours or minutes, e.g. 8h or 90m"))?;
+        .with_context(|| format!("invalid {flag} `{raw}`: use hours or minutes, e.g. 8h or 90m"))?;
     let ttl = match unit {
         "h" => Duration::hours(n),
         "m" => Duration::minutes(n),
-        _ => bail!("invalid --ttl `{raw}`: use hours or minutes, e.g. 8h or 90m"),
+        _ => bail!("invalid {flag} `{raw}`: use hours or minutes, e.g. 8h or 90m"),
     };
     if ttl <= Duration::zero() {
-        bail!("--ttl must be more than zero");
+        bail!("{flag} must be more than zero");
     }
     if ttl > MAX_TTL {
-        bail!("--ttl may be at most 24h; a mandate cannot be extended, only minted again");
+        bail!("{too_long}");
     }
     Ok(ttl)
 }
@@ -478,6 +568,75 @@ pub(crate) fn start_as_human(
 // trace:STORY-1889 | ai:claude
 pub(crate) fn stop_as_human(dir: &Path, by: &str, now: DateTime<Utc>) -> Result<Vec<Mandate>> {
     tombstone_all(dir, &require_mandate_human, by, now)
+}
+
+/// `aida mandate renew`, with the terminal floor bound here (see
+/// [`start_as_human`]). `ttl` defaults to the mandate's original duration.
+// trace:STORY-B6B1278890774EF993D2EBC327862470-166 | ai:claude
+pub(crate) fn renew_as_human(
+    dir: &Path,
+    by: &str,
+    ttl: Option<Duration>,
+    now: DateTime<Utc>,
+) -> Result<(Mandate, Renewal)> {
+    extend(dir, &require_mandate_human, by, ttl, now)
+}
+
+/// Test seam: [`renew_as_human`] with an injected `human` floor.
+// trace:STORY-B6B1278890774EF993D2EBC327862470-166 | ai:claude
+#[cfg(test)]
+pub(crate) fn renew(
+    dir: &Path,
+    human: &dyn Fn() -> Result<()>,
+    by: &str,
+    ttl: Option<Duration>,
+    now: DateTime<Utc>,
+) -> Result<(Mandate, Renewal)> {
+    extend(dir, human, by, ttl, now)
+}
+
+/// Extend the ACTIVE mandate in place: same id, scopes, flags, principal and
+/// reason; the expiry becomes `now + ttl` (default: the original duration,
+/// at most [`MAX_TTL`]) and a [`Renewal`] is appended to its lineage. Same
+/// floor as [`mint`]. A stop racing this write still wins: its tombstone is
+/// never removed and revokes whatever the record says. Private: production
+/// binds `human` in [`renew_as_human`].
+// trace:STORY-B6B1278890774EF993D2EBC327862470-166 | ai:claude
+fn extend(
+    dir: &Path,
+    human: &dyn Fn() -> Result<()>,
+    by: &str,
+    ttl: Option<Duration>,
+    now: DateTime<Utc>,
+) -> Result<(Mandate, Renewal)> {
+    if let Err(err) = human() {
+        bail!("a mandate can only be renewed by a human at an interactive terminal ({err})");
+    }
+    let by = by.trim();
+    if by.is_empty() {
+        bail!("cannot renew a mandate: the human user identity is unknown");
+    }
+    let MandateState::Active(mut m) = state_at(&load_valid(dir, by, now).0, now) else {
+        bail!("no mandate is active to renew; start one with `aida mandate start`");
+    };
+    let ttl = ttl.unwrap_or_else(|| m.original_ttl()).min(MAX_TTL);
+    if ttl <= Duration::zero() {
+        bail!("a mandate lasts more than zero and at most 24h");
+    }
+    let renewal = Renewal {
+        renewed_at: now,
+        renewed_by: by.to_string(),
+        previous_expires_at: m.expires_at,
+        expires_at: now + ttl,
+    };
+    m.expires_at = renewal.expires_at;
+    m.renewals.push(renewal.clone());
+    write_private(
+        &dir.join(format!("{}.json", m.id)),
+        &serde_json::to_vec_pretty(&m)?,
+    )
+    .with_context(|| format!("could not write the renewed mandate {}", m.id))?;
+    Ok((m, renewal))
 }
 
 /// Test seam: mint a mandate with an injected `human` floor. Production
@@ -563,8 +722,8 @@ pub(crate) fn start_with_scopes(
 }
 
 /// Mint a mandate. `human` is the terminal floor and runs before anything
-/// is read or written. Refuses while one is active: there is no extension,
-/// only stop and mint again. Private: production binds `human` in
+/// is read or written. Refuses while one is active: extend that one with
+/// [`renew_as_human`] instead. Private: production binds `human` in
 /// [`start_as_human`].
 // trace:STORY-1698 | ai:claude
 #[allow(clippy::too_many_arguments)]
@@ -591,7 +750,7 @@ fn mint(
     }
     if let MandateState::Active(active) = state_at(&load_valid(dir, principal, now).0, now) {
         bail!(
-            "mandate {} is already active until {}; stop it with `aida mandate stop` before starting another (mandates cannot be extended)",
+            "mandate {} is already active until {}; extend it with `aida mandate renew`, or stop it with `aida mandate stop` before starting another",
             active.id,
             active.expires_at.to_rfc3339()
         );
@@ -620,6 +779,7 @@ fn mint(
         revoked_by: None,
         scopes,
         kind: drive.then(|| KIND_DRIVE.to_string()),
+        renewals: Vec::new(),
     };
     write_private(
         &dir.join(format!("{}.json", mandate.id)),
@@ -1548,10 +1708,14 @@ pub(crate) fn release_note(mandate_id: &str) -> String {
 // trace:TASK-1790 | ai:codex
 pub(crate) fn require_mandate_human() -> Result<()> {
     crate::gate::seat_authority::require_direct_human().map_err(|_| anyhow::anyhow!(
-        "mandates require a direct human session at an interactive TTY; run `aida mandate start` or `aida mandate stop` from your terminal"
+        "mandates require a direct human session at an interactive TTY; run `aida mandate start`, `aida mandate renew` or `aida mandate stop` from your terminal"
     ))
 }
 
 #[cfg(test)]
 #[path = "tests/story_1698_mandate_tests.rs"]
 mod story_1698_mandate_tests;
+
+#[cfg(test)]
+#[path = "tests/story_b6b_166_mandate_renew_tests.rs"]
+mod story_b6b_166_mandate_renew_tests;
