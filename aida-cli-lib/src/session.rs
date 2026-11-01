@@ -1754,7 +1754,23 @@ fn contained_session_cwd() -> Option<PathBuf> {
     if let Some(root) = crate::test_ambient::project_root() {
         return Some(root);
     }
-    std::env::current_dir().ok()
+    std::env::current_dir().ok().map(ambient_session_cwd)
+}
+
+/// The process cwd as a contained session resolves it. Production: as is.
+// trace:BUG-2381 | ai:claude
+#[cfg(not(test))]
+fn ambient_session_cwd(cwd: PathBuf) -> PathBuf {
+    cwd
+}
+
+/// BUG-2381: an unpinned test must not resolve the operator's own checkout
+/// (from a seat clone its main is the LIVE main); see
+/// [`contained_cwd_seam::hermetic_unless_fixture`].
+// trace:BUG-2381 | ai:claude
+#[cfg(test)]
+fn ambient_session_cwd(cwd: PathBuf) -> PathBuf {
+    contained_cwd_seam::hermetic_unless_fixture(cwd)
 }
 
 /// The git root a contained session launched from this process writes in:
@@ -1794,6 +1810,50 @@ pub(crate) mod contained_cwd_seam {
             let prev = self.0.take();
             CWD.with(|c| *c.borrow_mut() = prev);
         }
+    }
+
+    /// BUG-2381: `cwd`, unless its git root is this crate's own workspace
+    /// checkout — the directory libtest starts in — in which case a
+    /// process-wide hermetic git repository stands in for it. In a seat clone
+    /// or linked worktree that checkout's main is the operator's live main, so
+    /// an unpinned test resolved the live store, its lock and its seat leases
+    /// (and was refused as an unrecorded seat clone). A fixture directory a
+    /// launch `chdir`s into has its own git root and is kept as given.
+    // trace:BUG-2381 | ai:claude
+    pub(crate) fn hermetic_unless_fixture(cwd: PathBuf) -> PathBuf {
+        let workspace = Path::new(env!("CARGO_MANIFEST_DIR")).parent();
+        let canon = |p: &Path| std::fs::canonicalize(p).ok();
+        let git_root = crate::find_project_root_from(&cwd).ok();
+        match (
+            git_root.as_deref().and_then(canon),
+            workspace.and_then(canon),
+        ) {
+            (Some(root), Some(ws)) if root == ws => hermetic_checkout().clone(),
+            _ => cwd,
+        }
+    }
+
+    /// A plain `git init` checkout under the system temp dir, created once per
+    /// test process and kept for its lifetime: a main checkout of its own,
+    /// the shape a CI clone has, with no store, leases or seat marker.
+    // trace:BUG-2381 | ai:claude
+    pub(crate) fn hermetic_checkout() -> &'static PathBuf {
+        static ROOT: std::sync::OnceLock<PathBuf> = std::sync::OnceLock::new();
+        ROOT.get_or_init(|| {
+            let dir = tempfile::Builder::new()
+                .prefix("aida-bug-2381-checkout-")
+                .tempdir()
+                .expect("BUG-2381: create the hermetic checkout")
+                .keep();
+            let status = std::process::Command::new("git")
+                .args(["init", "-q"])
+                .arg(&dir)
+                .env("GIT_CONFIG_NOSYSTEM", "1")
+                .status()
+                .expect("BUG-2381: run git init for the hermetic checkout");
+            assert!(status.success(), "BUG-2381: git init {}", dir.display());
+            std::fs::canonicalize(&dir).unwrap_or(dir)
+        })
     }
 }
 

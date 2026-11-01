@@ -527,6 +527,36 @@ fn contained_session_write_roots_are_the_git_root_of_cwd() {
     );
 }
 
+// BUG-2381: an unpinned test resolves a hermetic checkout, never this crate's
+// own workspace checkout (a seat clone whose main is the operator's live
+// main), while a fixture with its own git root is kept as given.
+// trace:BUG-2381 | ai:claude
+#[test]
+fn bug_2381_unpinned_contained_cwd_never_resolves_the_workspace_checkout() {
+    use crate::session::contained_cwd_seam::{hermetic_checkout, hermetic_unless_fixture};
+    let workspace = std::fs::canonicalize(
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .unwrap(),
+    )
+    .unwrap();
+    let hermetic = hermetic_checkout();
+    assert!(hermetic.join(".git").is_dir(), "{}", hermetic.display());
+    assert!(!hermetic.starts_with(&workspace), "{}", hermetic.display());
+    assert_eq!(
+        &hermetic_unless_fixture(PathBuf::from(env!("CARGO_MANIFEST_DIR"))),
+        hermetic
+    );
+    let roots = crate::session::contained_session_write_roots();
+    assert!(
+        roots.iter().all(|r| !r.starts_with(&workspace)),
+        "unpinned roots must not be the workspace checkout: {roots:?}"
+    );
+    assert_eq!(roots, contained_write_roots(hermetic));
+    let (_tmp, _parent, worktree) = pool_fixture();
+    assert_eq!(hermetic_unless_fixture(worktree.clone()), worktree);
+}
+
 // BUG-1971 (should-fix 2): the `queue work` launch lines announce the roots the
 // launch's `--settings` use (git root of the process cwd), not the lease path
 // as given — here a requested path the session does not run in.
