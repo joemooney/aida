@@ -26,6 +26,16 @@ tags:
 - architecture
 - area:agents
 - area:codex
+relationships:
+- rel_type: Child
+  target_id: 01a19499-932e-79f0-a3e1-1299dfe355ad
+  created_at: 2026-11-01T04:28:52.810967176Z
+history:
+- id: 01a1955e-16e5-7240-960f-01af4eb41bfe
+  author: joe
+  timestamp: 2026-11-01T04:28:53.861217482Z
+  session_id: 77a7a933-9a3f-4243-9a44-892bcedf206c
+  changes: []
 filed_at:
   code_sha: a83e05d785df667dfa986cf3eb310a3f0637b602
   branch: main
