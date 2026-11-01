@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-056
 agreed_id: BUG-2478
 title: aida pr ship refuses a mandate ship when the store changes during exclusion collection (3 attempts) instead of retrying under the store lock
 description: 'Observed 2026-10-31 13:16 (advisor, serial-ship of PR-3171 under the ship-held mandate, ~5 concurrent lanes/reviewers writing the store): ''PR-3171 left OPEN — the merge-hold stays. the fire-fighting mandate does not cover this ship: the PR''s mandate exclusion evidence could not be read (the store changed while collecting exclusions (3 attempts); retry).'' A manual retry 1 minute later merged. Evidence: /tmp/aida_runme2.log. Expected: exclusion evidence is read from one consistent snapshot (a store ref pinned at start, or under the store read lock) so concurrent unrelated writes cannot fail the read; at minimum bounded backoff retries long enough to outlast normal fleet write bursts. Acceptance: (1) the read uses a pinned store commit; (2) a test with a concurrent writer committing during collection still yields the evidence; (3) a genuine change to an excluded spec during the ship still refuses.'
-status: NeedsAttention
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T21:37:20.408058815Z
-modified_at: 2026-11-01T00:30:41.493867095Z
+modified_at: 2026-11-01T01:29:30.517658928Z
 req_type: Bug
 tags:
 - epic-home-003
@@ -105,6 +105,20 @@ history:
   author: joe
   timestamp: 2026-10-31T22:59:47.223581567Z
   changes: []
+- id: 01a194b9-da90-7e21-bf7b-5f4d4d06414a
+  author: aida-auto-bump
+  timestamp: 2026-11-01T01:29:30.512291185Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Completed
+processing_record:
+- id: 01a194b9-da95-7190-91a4-42b031b69c05
+  timestamp: 2026-11-01T01:29:30.517654651Z
+  agent: aida
+  commit_sha: cdcdfaedb7a364fc109031fcf9c4ebc854d66738
+  summary: 'Round 2: all three acceptance criteria verified by git-fixture tests; round-1 blocker (lib-1 gate-boundary test) fixed by a glob pathspec scope, CI run 41257305979 green at fbd8108; findings 2-4 addressed, finding 5 (pinned-read equivalence) accepted by the advisor'
+  review_verdict: approved
 filed_at:
   code_sha: b0d9035fbf3276de24d95845c0b50320ead426bd
   branch: main
@@ -117,11 +131,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-10-31T22:17:03.949813022Z
   implemented_by: joe
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: Design is sound and acceptance (1)-(3) are covered by unit tests, but CI (lib-1) fails deterministically at the head (failed twice incl. a rerun; passes on parent 0506fa2) - fix the failing lib-1 test before merge
-  recovery_hint: address the review findings, move BUG-B6B1278890774EF993D2EBC327862470-056 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-10-31T22:53:55.540733572Z
+  completed_at: 2026-11-01T01:29:30.512286086Z
+  completion_sha: cdcdfaedb7a364fc109031fcf9c4ebc854d66738
