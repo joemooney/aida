@@ -14,12 +14,12 @@ description: |
   4. Add truthful diagnostic/refusal for an unusable requested seat before model work when possible. Document any native keyring limitation rather than silently granting a fallback.
 
   Sketch and independent advisor signoff before code; strict review for authority plumbing. This finding is separate from the native cache path writable-root refusal, which is recorded on STORY-2238. User's global Codex config must remain unchanged. Codex implementer lane after signoff; LIGHT targeted grant/launch test plus make check-ci-fast, CI is the full gate.
-status: Draft
+status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-01T07:26:20.914223641Z
-modified_at: 2026-11-01T08:04:16.550828967Z
+modified_at: 2026-11-01T08:04:19.574631515Z
 req_type: Bug
 tags:
 - architecture
@@ -191,6 +191,13 @@ history:
   author: joe
   timestamp: 2026-11-01T07:26:35.881949274Z
   changes: []
+- id: 01a19623-51f6-79d1-bb45-d8601605fc2b
+  author: joe
+  timestamp: 2026-11-01T08:04:19.574628668Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: 53c89700b4da50b5593a2079ed4cc3abaae5cdfe
   branch: main
