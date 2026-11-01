@@ -18,7 +18,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T08:28:54.983776375Z
-modified_at: 2026-11-01T11:27:05.242507970Z
+modified_at: 2026-11-01T11:34:35.196858742Z
 req_type: Bug
 tags:
 - forge
@@ -34,6 +34,11 @@ comments:
   content: 'Implementation is present in assigned checkout codex/bug-2400-exact-pr: shared candidate parsing and exact store-resolving native/agreed/node-label/retired association filter for single and all-open GitHub spec lookups, with bounded fallback branch/commit checks and preserved typed forge errors. Added one fixture regression covering unrelated canonical-057 before true canonical-166, unrelated-only pickup, aliases/renames, duplicates, literal alias ownership and errors. git add fails creating .git/index.lock (Read-only file system), so commit/push/PR and queue done cannot be completed in this launcher sandbox. Draft finding SPEC-b6b1278890774ef993d2ebc327862470-003 records recovery context; related launch findings TASK-2712/TASK-2714. Formatting and no-default-features CLI check pass; targeted test and remaining fast gates are running. Leave In Progress pending verified handoff; intended commit: [AI:codex] fix(forge): validate exact spec association for search candidates (BUG-2400).'
   created_at: 2026-11-01T11:27:05.242498304Z
   modified_at: 2026-11-01T11:27:05.242498304Z
+- id: 01a196e3-d1bc-7692-8580-6137ec936e3d
+  author: mcp
+  content: 'Final validation: cargo test -p aida-cli-lib --lib pr_lookup::bug_2400_exact_pr_association_tests::bug_2400_search_candidates_require_exact_store_association -- --exact PASSED (1 test, 1.95s); make check-ci-fast PASSED all 36 gates; cargo fmt --all -- --check and git diff --check passed. Regression fixture explicitly initializes its temporary Git repository and uses the existing synthetic HOME backend helper, avoiding sandbox /tmp/.git inheritance. Complete final patch, including untracked regression source, saved at /tmp/BUG-2400.patch; live changes remain in assigned checkout /home/joe/ai/aida-worktrees/aida-seat-aida-bug-b6b1278890774ef993d2ebc327862470-173 on codex/bug-2400-exact-pr. No commit/push/PR was possible: sandbox mounts checkout .git read-only, and git add exits 128 creating .git/index.lock. No ship/review record performed. BUG-2400 remains In Progress and queued because commit/PR handoff is incomplete. Resume this same checkout with correct Git write grants, commit [AI:codex] fix(forge): validate exact spec association for search candidates (BUG-2400), push/open PR, then queue done under ordinary ownership gates. Independent review is still required.'
+  created_at: 2026-11-01T11:34:35.196851637Z
+  modified_at: 2026-11-01T11:34:35.196851637Z
 history:
 - id: 01a1963a-2b42-7cd2-a795-0772bcc408d1
   author: joe
