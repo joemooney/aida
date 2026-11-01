@@ -17,12 +17,12 @@ description: |-
   1. `runaway_seats.rs` scans `~/.codex/sessions` filtered by project/worktree `cwd` (matching `usage.rs` / `vendor_activity.rs`) and evaluates the same window token/byte/line thresholds for Codex sessions.
   2. `shift.rs:100` includes `"codex"` in `COVERED_VENDORS` once `runaway-seats` covers Codex, so `aida shift tick` runs on `[agents] vendor = "codex"` without requiring `allow_uncovered_vendors`.
   3. Update `docs/autonomous-drain.md:1613-1615` to reflect Codex watchdog coverage, and add unit tests with synthetic `~/.codex/sessions` JSONL fixtures.
-status: InProgress
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T06:47:10.885136620Z
-modified_at: 2026-11-01T16:47:49.534238217Z
+modified_at: 2026-11-01T21:46:47.080995055Z
 req_type: Bug
 tags:
 - audit
@@ -1323,6 +1323,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a19914-4da8-74a0-8230-e2ca873b0911
+  author: joe
+  timestamp: 2026-11-01T21:46:47.080992863Z
+  session_id: 126bbd5a-a92f-452b-ab0b-2637a1db42c2
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Approved
 filed_at:
   code_sha: 6dc7d4977ac5e47c42ddfb26597fe3ec5fb70b60
   branch: main
