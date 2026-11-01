@@ -1037,7 +1037,7 @@ blocks:
   type_prefix: TASK
   range_start: 2611
   range_end: 2710
-  next: 2692
+  next: 2693
   allocated_at: 2026-10-31T22:53:56.205123548Z
 - node_id: b6b1278890774ef993d2ebc327862470
   owner: aida-backfill-agreed-ids
@@ -1103,3 +1103,11 @@ blocks:
   range_end: 247
   next: 148
   allocated_at: 2026-10-31T22:53:56.205127306Z
+- node_id: b6b1278890774ef993d2ebc327862470
+  owner: redacted@node.invalid
+  hostname: imac
+  type_prefix: TASK
+  range_start: 2712
+  range_end: 2811
+  next: 2712
+  allocated_at: 2026-11-01T07:03:16.735531283Z
