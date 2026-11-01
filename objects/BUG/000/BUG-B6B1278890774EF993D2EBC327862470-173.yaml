@@ -1,0 +1,33 @@
+id: 01a19639-d547-7300-9a70-befaedad7e96
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-173
+agreed_id: BUG-2400
+title: Forge spec lookup treats broad GitHub search results as exact matches and blocks unrelated canonical-ID pickups
+description: |
+  Observed on current main ac1e318 during native Codex BUG2392 pickup: queue work canonical BUG-b6b1278890774ef993d2ebc327862470-166 refused because unrelated PR3177 BUG-...-057 was open. Exact gh pr list --search canonical166 returned3177; title/body/head branch do not contain canonical166 or agreed BUG2392. A deliberate --force-claim plus explicit new branch allowed correct work without touching3177.
+
+  Source: pr_lookup.rs detect_open_pr_for_spec_github passes search results directly from gh_pr_list_first, with no exact spec association check; all_open_prs_for_spec_via_forge similarly trusts broad search. BUG1074 already narrows rework branch reuse, but the generic preclaim collision caller still trusts this earlier result. GitHub search is candidate retrieval, not proof of ownership.
+
+  Acceptance:
+  1. Spec-based forge lookup validates exact store-resolving spec association from title/branch/explicit supported metadata before reporting Found, including canonical IDs and agreed/native aliases; reject unrelated shared UUID prefixes, substrings and tokenized-search hits. Inspect all returned candidates rather than silently taking first unrelated row.
+  2. The all-open-PR listing used by canonical selection applies the same association rule; preserve errors/unknown states and intentional ambiguity handling, with no new author/reviewer authority or branch takeover.
+  3. Fixture regression: search for canonical166 returns unrelated057 first and true166 later; only166 selected. Unrelated-only rows give no associated PR so ordinary fresh pickup is not blocked. Existing true-open-PR collision and renamed/native/agreed ID cases still protect active work.
+
+  Codex implementation lane, no global config changes. LIGHT one targeted pr_lookup/association test plus fast gates; fixtures only, CI full gate. Independent review before integration. This is a new observed operational defect, not a follow-up to a nonblocking review nit.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-01T08:28:54.983776375Z
+modified_at: 2026-11-01T08:28:54.983776375Z
+req_type: Bug
+tags:
+- forge
+- queue
+- vendor:codex
+filed_at:
+  code_sha: ac1e318069f96c3f7e35be7ee0408f2ff4f5f284
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 9d26f95d2b3
+  vendor: codex
