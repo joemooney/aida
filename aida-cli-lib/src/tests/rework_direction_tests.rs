@@ -40,7 +40,44 @@ fn assemble(
         review_findings: findings,
         spec_comments: comments,
         conflict,
+        ci_failures: None,
     })
+}
+
+/// The merge with main (BUG-2380): the PR head's CI failures sit on top of
+/// the base prompt, below the advisor leads, as main ordered them.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-057 | ai:claude
+#[test]
+fn ci_failures_sit_below_the_leads_and_above_the_findings() {
+    let _g = no_gate();
+    let comments = vec![
+        comment(90, FINDINGS),
+        comment(30, "Advisor ruling: keep the config-only change"),
+    ];
+    let plan = item_plan();
+    let conflict = MainConflict {
+        pr: 3177,
+        base: "main".into(),
+        files: vec!["f.txt".into()],
+    };
+    let prompt = assemble_pickup_prompt(&PickupInputs {
+        plan: &plan,
+        role: "implementer",
+        plan_only: false,
+        guided: false,
+        review_findings: Some(FINDINGS),
+        spec_comments: &comments,
+        conflict: Some(&conflict),
+        ci_failures: Some("CI FAILURES AT THE PR HEAD:\n- lib-0: some_test\n"),
+    });
+    let at = |needle: &str| {
+        prompt
+            .find(needle)
+            .unwrap_or_else(|| panic!("{needle} missing: {prompt}"))
+    };
+    assert!(prompt.starts_with("FIRST TASK"), "{prompt}");
+    assert!(at("ADVISOR RULING (") < at("CI FAILURES AT THE PR HEAD"));
+    assert!(at("CI FAILURES AT THE PR HEAD") < at("run the bwrap tests"));
 }
 
 fn no_gate() -> crate::test_env::EnvVarsGuard {

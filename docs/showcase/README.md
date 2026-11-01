@@ -30,16 +30,82 @@ The existing owner-private Sites preview retains its separate audience.
 
 <!-- trace:TASK-HOME-130 | ai:codex -->
 
+### Assembling the published site
+
+`python3 docs/showcase/publish.py --rev <revision> --out <empty-dir>` produces
+the published file set from one git revision: the static pages, styles,
+scripts and assets in this directory (not templates, `build.py`,
+`publication.json` or this README), `docs/what-is-aida.html` as
+`overview.html`, and `.nojekyll`. Links to published files are rewritten to
+their published names. All other repository links point at the public GitHub
+repository. The script uses only Python's standard library and Git, and makes
+no network calls. Unchanged inputs give byte-identical output.
+
+To refresh GitHub Pages from an approved merged revision, check out
+`gh-pages` in a separate worktree, replace its files with the output of
+`publish.py --rev <revision>`, and commit with the revision in the message.
+
+## GitLab Pages site
+
+The `pages` job in `.gitlab-ci.yml` publishes the same site to GitLab Pages.
+It runs `publish.py` for the pipeline's revision into `public/`, which GitLab
+serves. Like `gh-pages`, it publishes only from an approved merged revision.
+It never runs on mirrored pushes or merge requests. It runs in two cases:
+
+- **A release tag** (`vN…`) mirrored to GitLab.
+- **A manual run.** Open *Build > Pipelines > Run pipeline* on the default
+  branch and set the variable `PUBLISH_PAGES` to `true`. The job waits for that
+  pipeline's verify and test stages.
+
+The site is served at `https://<namespace>.<pages-domain>/<project>/`, for
+example `https://joe.pages.example.com/aida/`. *Deploy > Pages* in the project
+shows the exact URL. Pages does not work on a self-hosted instance until its
+administrator enables it: set `pages_external_url` (the Pages domain) in
+`gitlab.rb` and add a wildcard DNS record `*.<pages-domain>` pointing at the
+instance. Wildcard TLS is needed for HTTPS. Until then the job can run, but
+nothing is served. That is a blocker for the instance operator, and there is
+no workaround inside this repository.
+
+Inside an air gap, github.com is unreachable. Run the job with
+`--repo-url <gitlab-project-url> --blob-prefix <gitlab-project-url>/-/blob/main/`
+added to the job's `publish.py` line to point source links at the local project.
+This deliberately makes that site differ from GitHub Pages.
+
+### Confirming both hosts match
+
+Both hosts publish identical files when they publish the same revision with
+the default options. To confirm:
+
+1. Read the revision each host serves: the `gh-pages` commit message, and the
+   commit of the GitLab `pages` job (*Deploy > Pages*, or the job page).
+2. Check GitHub: `git worktree add $TMPDIR/ghp origin/gh-pages`, then
+   `python3 docs/showcase/publish.py --rev <revision> --compare $TMPDIR/ghp`.
+3. Check GitLab: download the `pages` job's `public` artifact, unzip it, then
+   run `python3 docs/showcase/publish.py --rev <revision> --compare <unzipped>/public`.
+
+`--compare` lists every missing, extra or differing file. It exits non-zero on
+any difference. It compares a published tree against a fresh assembly of the
+named revision, so run it against each host's files as above; the `pages` job
+does not compare against GitHub itself.
+
+<!-- trace:TASK-2604 | ai:claude -->
+
 ## Source guide build
 
 `python3 docs/showcase/build.py` renders every manifest-selected guide into the
 shared `page-template.html` layout: `getting-started.html`, `configuration.html`,
 `workflow.html`, `autonomy.html`, `trust.html`, `metrics.html`, `setup.html`,
-`capabilities.html` and `integrations.html`,
+`capabilities.html`, `integrations.html` and `air-gapped.html`,
 plus `library.html` and `search-data.js`. Edit the corresponding Markdown,
 templates or `guide.css`, then rebuild; do not hand-edit derived outputs.
 Python 3 with its standard library and Git are required. The renderer intentionally supports
 only the Markdown used by these guides, with explicit page selection in `publication.json`.
+A guide gets a header diagram from `assets/<output-stem>.svg` when that file exists.
+A line holding only `![label](showcase/assets/<name>.svg)` places a further diagram in
+the body; the path is relative to `docs/`, so the Markdown also renders on the forge.
+Alt text comes from the SVG's `<title>` and `<desc>`. Body diagrams carry a light
+palette and a `prefers-color-scheme: dark` style block so they read in either scheme.
+<!-- trace:TASK-B6B1278890774EF993D2EBC327862470-277 | ai:claude -->
 Generated files are committed and can be read directly from disk.
 Run `python3 docs/showcase/build.py --check` to report every drifted generated
 page and search artifact without writing files; the fast CI gate runs this check.
@@ -47,7 +113,7 @@ page and search artifact without writing files; the fast CI gate runs this check
 ## Curated library and publication scope
 
 `publication.json` is the explicit source allowlist and audience classification.
-It currently selects nine tracked product guides, classified as human or operator
+It currently selects ten tracked product guides, classified as human or operator
 reading. Technical references remain links; historical, internal, archived,
 plan/spike/security/agent material and runtime data are not republished or indexed.
 The manifest keeps publication scope explicit; adding a source requires checking its audience, currentness and references.

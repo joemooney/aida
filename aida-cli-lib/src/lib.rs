@@ -96,6 +96,8 @@ mod criteria;
 mod criteria_coverage;
 mod criteria_gate;
 mod criteria_red_run;
+// trace:BUG-2380 | ai:claude
+mod ci_failures;
 mod db_audit_ids;
 mod db_block;
 mod db_cmd;

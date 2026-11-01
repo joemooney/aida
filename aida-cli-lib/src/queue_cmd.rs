@@ -12056,6 +12056,20 @@ pub(crate) fn handle_queue_work(
     } else {
         Vec::new()
     };
+    // A rework lane is contained and cannot download CI logs, so the launcher
+    // leads its prompt with the PR head's failing tests and panic lines.
+    // trace:BUG-2380 | ai:claude
+    let ci_failures = review_findings
+        .as_ref()
+        .and(project_root_for_config.as_deref())
+        .and_then(|root| {
+            let spec_id = plan
+                .entries
+                .first()
+                .map(|entry| entry.spec_id.as_str())
+                .unwrap_or(plan.anchor_display.as_str());
+            crate::ci_failures::section_for_spec(root, spec_id)
+        });
     let mut prompt =
         crate::rework_direction::assemble_pickup_prompt(&crate::rework_direction::PickupInputs {
             plan: &plan,
@@ -12065,6 +12079,7 @@ pub(crate) fn handle_queue_work(
             review_findings: review_findings.as_deref(),
             spec_comments: &spec_comments,
             conflict: rework_conflict.as_ref(),
+            ci_failures: ci_failures.as_deref(),
         });
     // Interactive implementers and every headless phase receive the same
     // resolved, capped type+lane protocol. Reviewers are included headlessly
@@ -12125,6 +12140,16 @@ pub(crate) fn handle_queue_work(
             if let Some(root) = project_root_for_config.as_deref() {
                 if let Ok(store) = storage.load() {
                     append_untraced_criteria_prompt_block(&mut prompt, root, &store, forge, pr_n);
+                }
+            }
+        }
+        // The reviewer gets the same failing-test digest the rework lane does.
+        // trace:BUG-2380 | ai:claude
+        if let Some((ReviewForge::GitHub, pr_n)) = plan.review_target {
+            if let Some(root) = project_root_for_config.as_deref() {
+                if let Some(section) = crate::ci_failures::section_for_pr(root, pr_n) {
+                    prompt.push_str("\n\n");
+                    prompt.push_str(section.trim_end());
                 }
             }
         }

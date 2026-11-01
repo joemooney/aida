@@ -104,6 +104,29 @@ class ShowcaseBuildTests(unittest.TestCase):
         self.assertLess(page.index('</h1>'), page.index('<figure>'))
         self.build('--check')
 
+    # trace:TASK-B6B1278890774EF993D2EBC327862470-277 | ai:claude
+    def test_body_figure_uses_svg_text_and_stays_out_of_search_markup(self):
+        assets = self.site / 'assets'
+        assets.mkdir()
+        (assets / 'race.svg').write_text('<svg xmlns="http://www.w3.org/2000/svg"><title>Two pushes</title><desc>One wins.</desc></svg>')
+        self.source.write_text('# Fixture guide\n\nBefore.\n\n![Race diagram](showcase/assets/race.svg)\n\nAfter.\n')
+        self.build()
+        page = (self.site / 'guide.html').read_text()
+        self.assertIn('<figure><img class="guide-graphic" src="assets/race.svg" alt="Two pushes. One wins."></figure>', page)
+        self.assertLess(page.index('Before.'), page.index('<figure>'))
+        self.assertLess(page.index('<figure>'), page.index('After.'))
+        script = (self.site / 'search-data.js').read_text()
+        self.assertIn('Before. Race diagram After.', script)
+        self.assertNotIn('race.svg', script)
+
+    def test_body_figure_refuses_missing_or_foreign_assets(self):
+        for line in ('![Gone](showcase/assets/gone.svg)', '![Remote](https://example.com/x.svg)'):
+            with self.subTest(line=line):
+                self.source.write_text('# Fixture guide\n\n' + line + '\n')
+                before = self.snapshot()
+                self.build(expected=1)
+                self.assertEqual(before, self.snapshot())
+
     @unittest.skipUnless(shutil.which('node'), 'Node is needed for the DOM fixture')
     def test_unicode_excerpt_and_literal_query(self):
         script = r'''

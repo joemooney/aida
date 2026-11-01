@@ -323,6 +323,9 @@ pub(crate) struct PickupInputs<'a> {
     pub spec_comments: &'a [aida_core::Comment],
     /// The rework PR's conflict with main, if any.
     pub conflict: Option<&'a MainConflict>,
+    /// The PR head's failing CI tests (BUG-2380), when the spec is in rework.
+    /// It sits on top of the base prompt, below the advisor leads.
+    pub ci_failures: Option<&'a str>,
 }
 
 /// Assemble the queue-work pickup prompt: the base prompt (with the
@@ -355,6 +358,11 @@ pub(crate) fn assemble_pickup_prompt(inputs: &PickupInputs<'_>) -> String {
             &[][..]
         },
     );
+    // trace:BUG-2380 | ai:claude
+    let prompt = match inputs.ci_failures {
+        Some(section) => format!("{}\n\n{prompt}", section.trim_end()),
+        None => prompt,
+    };
     if !implementer_item {
         return prompt;
     }
