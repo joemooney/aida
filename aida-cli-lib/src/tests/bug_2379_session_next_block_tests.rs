@@ -19,6 +19,8 @@ const TREE: &str = "/work/aida-seat-aida-task-2631";
 
 #[test]
 fn linked_worktree_claude_output_is_unchanged() {
+    // trace:BUG-b6b1278890774ef993d2ebc327862470-153.acf478b4 | ai:claude
+    // trace:BUG-b6b1278890774ef993d2ebc327862470-153.ac8a4f04 | ai:claude
     let lines = render(&session_next_lines(
         "TASK-2631",
         Path::new(TREE),
@@ -53,6 +55,8 @@ fn linked_worktree_claude_output_is_unchanged() {
 
 #[test]
 fn linked_worktree_codex_uses_codex_launcher() {
+    // trace:BUG-b6b1278890774ef993d2ebc327862470-153.ac4b70f0 | ai:claude
+    // trace:BUG-b6b1278890774ef993d2ebc327862470-153.ac8a4f04 | ai:claude
     let lines = render(&session_next_lines(
         "TASK-2631",
         Path::new(TREE),
@@ -67,6 +71,9 @@ fn linked_worktree_codex_uses_codex_launcher() {
 
 #[test]
 fn clone_names_the_clone_and_never_suggests_worktree_enter() {
+    // trace:BUG-b6b1278890774ef993d2ebc327862470-153.ac213f2e | ai:claude
+    // trace:BUG-b6b1278890774ef993d2ebc327862470-153.ac4b70f0 | ai:claude
+    // trace:BUG-b6b1278890774ef993d2ebc327862470-153.ac8a4f04 | ai:claude
     for (vendor, launch) in [
         ("claude", "claude    # then /aida-implement TASK-2631"),
         ("codex", "codex    # then $aida-implement TASK-2631"),
