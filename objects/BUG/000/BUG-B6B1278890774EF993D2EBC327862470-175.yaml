@@ -16,7 +16,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T10:04:17.050576260Z
-modified_at: 2026-11-01T16:55:47.604672850Z
+modified_at: 2026-11-01T17:15:27.442480489Z
 req_type: Bug
 tags:
 - guard-recurrence
@@ -33,6 +33,13 @@ comments:
   content: 'Current recurrence update: schedule trip performance-guard@2026-11-01T15:26:40.081371253Z reports123/494 show calls over2000ms (24.899%, allowed10%), worst40380ms (ceiling5000ms),24h,0excluded,lineage_scopedtrue. The later breach remains covered by this existing approved incident, not a new follow-up or budget change. Actual current liveartifact6a3f676, default/no-git/path-shape and controlled fakeHOME/load/phase evidence still needed; earlier three warm samples and old-artifact description do not close current acceptance. No doctor exit0 or missing new samples proves SLO recovery.'
   created_at: 2026-11-01T16:47:51.047469366Z
   modified_at: 2026-11-01T16:47:51.047469366Z
+- id: 01a1981b-e552-7053-a2d2-569ae0844cc9
+  author: joe
+  content: |-
+    PROXY DIAGNOSIS DISPOSITION: FULL /tmp/aida-BUG2402-diagnosis-result.md read and actual CachedGitBackend::resolve_unambiguous_exact plus GitBackend::get_requirement_by_exact_spec_id inspected. Current6a artifact is NOT historically cured: retained6/44>2s intrip and24/97aftertrip; old40380ms tail belongs471540 notcurrent. Bothlookup/linkagecontribute; controlledpositivefixturefailed and mustnotcountasvalidation. Author34 was diagnosis-only and attempted canonicalcommentrefusednothingwritten; no workaround. Existing budgets2000ms/10%/5000 andBUG1801zero-refresh-wait unchanged.
+    Authorize next bounded routine fix within same BUG2402: NONSTRICT read path may reuse existing unambiguous derived candidate ONLY as locator for authoritative targeted objectread with fullcurrent identity/literal-first/alias/UUID/ambiguity validation and truthful stale/error fallback, avoiding the observed redundant agreed-ID full-store scan. Strict WRITE resolver and all canonical/authority/ambiguity policy unchanged. This reuses existing locator-plus-authoritative-read design, no new cache/store format, authority policy or architecture. Any required semantic/fork change stops for separately signed sketch. Establish complete valid fakeHOME positive/nativeUUID/nativeID/agreed/padded/alias plus canonicalmutate/delete/malformed/collision/stale/held-refresh-lock cases and existing scan-counter proof; do not substitute timing-only test or return cache rows as truth. Add only bounded existing-style attribution for unaccounted linkage operations; no deadline/budget/partialtruth relaxation. Remeasure exact artifact/shapes/load with finite count; lookup-only improvement is not full incident completion if linkage/SLOstillfails. One same-spec PR, independent STRICT exact-head review and normal CI. LIGHT one decisive aida-core targetedfixture+fast, sharedinfra/>10file extras as required. No productioncodeauthorizations from diagnostic controls that failed.
+  created_at: 2026-11-01T17:15:27.442480489Z
+  modified_at: 2026-11-01T17:15:27.442480489Z
 history:
 - id: 01a19809-e494-74a2-9ac1-332231d47592
   author: aida-session-start
