@@ -22,7 +22,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-01T06:47:54.074794793Z
-modified_at: 2026-11-01T06:47:54.074794793Z
+modified_at: 2026-11-01T08:10:18.520556649Z
 req_type: Bug
 tags:
 - audit
@@ -32,6 +32,12 @@ relationships:
 - rel_type: Child
   target_id: 01a19499-932e-79f0-a3e1-1299dfe355ad
   created_at: 2026-11-01T06:47:59.880030647Z
+comments:
+- id: 01a19628-cc18-7721-819e-739fcad5f9e7
+  author: joe
+  content: 'PROXY DECISION: source confirms ambient-only/literal false containment callers. Approve full inventory correction using trusted project/user containment resolution AND strict inherited AIDA_CONTAINED; no caller may downgrade a contained parent. Preserve TASK2631 native posture as explicitly selected and STORY2238 future wrapper, no special Codex escape. Sequence overlapping questions/plan_intent/intake/burndown after BUG2389; require tests for configuration-only containment with ambient unset, explicit parent containment, unavailable containment refusal, Claude/Codex parity and compete arms/judge. Independent sensitive review and operator merge floor remain.'
+  created_at: 2026-11-01T08:10:18.520556649Z
+  modified_at: 2026-11-01T08:10:18.520556649Z
 history:
 - id: 01a195dd-7495-70a1-9fe4-3bf923e003f5
   author: joe
