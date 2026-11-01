@@ -42228,6 +42228,11 @@ Working on aida itself
         "help": "Seat the delegated child grant must hold"
       },
       {
+        "name": "expect-context-sha256",
+        "takes_value": true,
+        "help": "Integrity digest of this launch's explicit nonsecret child context"
+      },
+      {
         "name": "expect-role-instance",
         "takes_value": true,
         "help": "Require the launch's driver/companion restriction to survive"
