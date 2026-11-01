@@ -1200,6 +1200,14 @@ pub enum AgentNewCommand {
         #[clap(long, allow_hyphen_values = true)]
         description: Option<String>,
 
+        /// At a human terminal with no seat grant, `auto` offers to launch the
+        /// seat under a one-time grant from you (your keystroke is the proof;
+        /// nothing is exported to your shell). `no` refuses instead, as scripts
+        /// expect.
+        // trace:STORY-2215 | ai:claude
+        #[clap(long = "grant-inline", value_name = "MODE", value_enum, default_value_t = GrantInline::Auto)]
+        grant_inline: GrantInline,
+
         /// Dispatch to Claude Code's background supervisor via `claude
         /// --bg`. The session detaches from this terminal and shows up
         /// in `claude agents` (and `aida status`). When `--spec` is
@@ -1362,6 +1370,14 @@ pub enum AgentNewCommand {
         #[clap(long, allow_hyphen_values = true)]
         description: Option<String>,
 
+        /// At a human terminal with no seat grant, `auto` offers to launch the
+        /// seat under a one-time grant from you (your keystroke is the proof;
+        /// nothing is exported to your shell). `no` refuses instead, as scripts
+        /// expect.
+        // trace:STORY-2215 | ai:claude
+        #[clap(long = "grant-inline", value_name = "MODE", value_enum, default_value_t = GrantInline::Auto)]
+        grant_inline: GrantInline,
+
         /// Do not wake this session's thread when its inbox has mail (default:
         /// `[agents.codex] mail_wake` in agents.toml, else on).
         // trace:STORY-HOME-096 | ai:claude
@@ -1509,5 +1525,25 @@ pub enum AgentNewCommand {
         // trace:BUG-1294 | ai:claude
         #[clap(long, allow_hyphen_values = true)]
         description: Option<String>,
+
+        /// At a human terminal with no seat grant, `auto` offers to launch the
+        /// seat under a one-time grant from you (your keystroke is the proof;
+        /// nothing is exported to your shell). `no` refuses instead, as scripts
+        /// expect.
+        // trace:STORY-2215 | ai:claude
+        #[clap(long = "grant-inline", value_name = "MODE", value_enum, default_value_t = GrantInline::Auto)]
+        grant_inline: GrantInline,
     },
+}
+
+/// `aida agent new --grant-inline`: whether a human terminal with no seat
+/// grant is offered a one-time parent grant for this launch.
+// trace:STORY-2215 | ai:claude
+#[derive(ValueEnum, Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub enum GrantInline {
+    /// Offer the one-time grant when a human is at the terminal.
+    #[default]
+    Auto,
+    /// Never offer it; refuse with the recovery command.
+    No,
 }
