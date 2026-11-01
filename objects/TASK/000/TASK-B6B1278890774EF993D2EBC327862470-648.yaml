@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T00:55:07.917269049Z
-modified_at: 2026-11-01T01:20:39.758161345Z
+modified_at: 2026-11-01T01:20:51.580183984Z
 req_type: Task
 tags:
 - config
@@ -87,6 +87,12 @@ comments:
   modified_at: 2026-11-01T01:15:55.466708289Z
   session_id: 01a194abb51e
   harness_version: 2.1.316 (Claude Code)
+- id: 01a194b1-ef7c-73e0-8b8e-bf0bed2e1b95
+  author: joe
+  content: 'ADVISOR 18:20: operator override (product seat, 18:15) ACCEPTED; it supersedes my 18:05 AC2 recommendation, and my premise that Codex launches under containment via --vendor codex was wrong. Build AC2'' as written in the override: keep vendor = codex, add [contained.vendors] codex = "native" reported as ''native sandbox, not AIDA-contained'', Claude stays fully contained. The advisor''s Claude lane that started 18:13 was STOPPED and its seat ended; its uncommitted work is in .aida/salvage (seat ...-648) for reference only. The 18:15 ''Implementer approach'' comment came from that Claude lane: the Codex implementer may use or discard it. A Codex implementer started by the operator owns this task.'
+  created_at: 2026-11-01T01:20:51.580183984Z
+  modified_at: 2026-11-01T01:20:51.580183984Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
 history:
 - id: 01a1949a-7ffe-78a3-8011-c5c0c44dc2d3
   author: joe
