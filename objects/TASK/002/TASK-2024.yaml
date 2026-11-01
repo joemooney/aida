@@ -11,7 +11,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-20T22:16:59.228646183Z
-modified_at: 2026-10-21T04:33:01.652695006Z
+modified_at: 2026-11-01T06:31:56.441122549Z
 req_type: Task
 tags:
 - bwrap
@@ -19,6 +19,13 @@ tags:
 - operator-held
 - severity:minor
 - test
+comments:
+- id: 01a195ce-bd19-79f0-8e4f-765cca1b382e
+  author: joe
+  content: 'Advisor regroup 2026-10-31: already fixed. The BUG-2169 bwrap test builds its argv through crate::session::os_wrapped_program_and_args (bug_2169_contained_clone_bwrap_tests.rs:379-389). Closing as obsolete.'
+  created_at: 2026-11-01T06:31:56.441122549Z
+  modified_at: 2026-11-01T06:31:56.441122549Z
+  session_id: a31b25d9-60a5-4347-a85b-4c74ab06f274
 history:
 - id: 01a15cbb-ec9b-7022-a771-f3d5363f29ff
   author: joe
