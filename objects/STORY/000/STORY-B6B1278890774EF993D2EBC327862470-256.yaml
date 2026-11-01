@@ -18,7 +18,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T22:17:06.607335957Z
-modified_at: 2026-11-01T00:53:13.604024263Z
+modified_at: 2026-11-01T00:54:35.658213011Z
 req_type: Story
 tags:
 - agent-new
@@ -108,6 +108,12 @@ comments:
   modified_at: 2026-10-31T23:36:55.104938675Z
   session_id: 01a1945097d4
   harness_version: 2.1.316 (Claude Code)
+- id: 01a19499-e38a-7e51-91b6-df78e854e3ad
+  author: joe
+  content: 'ADVISOR REWORK BRIEF round 2 (17:55), PR-3184. All 6 ACs and rulings Q1-Q4 are met. Fix: (1) CI lib-1 ''Run tests'' is red at head while main and sibling PRs pass: find the failing test from the CI log, reproduce with a targeted filter, fix the cause. (2) Bundle the reviewer''s three minor ordering/test gaps from the verdict (authoritative list). LIGHT gate plus the failing test''s filter.'
+  created_at: 2026-11-01T00:54:35.658213011Z
+  modified_at: 2026-11-01T00:54:35.658213011Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
 history:
 - id: 01a1940e-15d9-7e13-bbb4-79222982ffb5
   author: aida-session-start
