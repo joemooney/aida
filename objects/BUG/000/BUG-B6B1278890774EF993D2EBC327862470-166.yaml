@@ -1,0 +1,42 @@
+id: 01a195dc-eca2-7570-afea-e3ba747f78c3
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-166
+agreed_id: BUG-2392
+title: Repo .aida/agents.toml overrides Codex sandbox with danger-full-access, and template master contained.toml omits OpenAI hosts
+description: |-
+  Why
+  ───
+  Discovered by SPIKE-710 audit:
+
+  1. `.aida/agents.toml:68-69` in this repository sets:
+     `[agents.codex]`
+     `default_flags = ["--ask-for-approval=never", "--sandbox=danger-full-access"]`
+     Running `aida config permissions show` reports a high-severity finding:
+     `finding high: Codex sandbox_mode is workspace-write (~/.codex/config.toml), but default_flags override it with --sandbox danger-full-access`.
+     Every uncontained `aida agent new codex` launch in this repo has its `~/.codex/config.toml` `workspace-write` sandbox silently downgraded to `danger-full-access`.
+  2. While TASK-2631 (PR-3188) updates this repository's `.aida/config.toml`, the scaffold template master `aida-core/templates/contained.toml:7-12` and `aida-core/src/scaffolding/settings.rs:19, 29, 418` (`CONTAINED_CONFIG_TEMPLATE`, `ensure_contained_allowed_hosts`) still include only `"api.anthropic.com"` and `"statsig.anthropic.com"` and omit OpenAI endpoints (`"api.openai.com"`, `"chatgpt.com"`, `"auth.openai.com"`). Any new project created with `aida init` or updated with `aida scaffold upgrade` receives a Claude-only egress allow-list.
+
+  Acceptance
+  ──────────
+  1. Remove `--sandbox=danger-full-access` from `.aida/agents.toml:68-69` (or align `[agents.codex] default_flags` with `workspace-write` / `[contained.vendors] codex = "native"` from TASK-2631) so `aida config permissions show` reports zero high-severity findings on this repo.
+  2. Add the verified OpenAI endpoints from TASK-2631 to `aida-core/templates/contained.toml:7-12` and `aida-core/src/scaffolding/settings.rs:19, 29, 418` so newly initialized and scaffold-upgraded projects include OpenAI egress hosts.
+  3. Add a unit test in `aida-core/src/scaffolding/settings.rs` verifying the template's `allowed_hosts`.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-01T06:47:26.114384272Z
+modified_at: 2026-11-01T06:47:26.114384272Z
+req_type: Bug
+tags:
+- audit
+- config
+- containment
+- vendor:codex
+filed_at:
+  code_sha: 6dc7d4977ac5e47c42ddfb26597fe3ec5fb70b60
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 962ca07af25
+  vendor: antigravity
+  session: 01a194b1bcfb
