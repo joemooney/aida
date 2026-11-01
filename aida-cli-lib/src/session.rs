@@ -10552,7 +10552,7 @@ mod tests {
         let env_out = tmp.path().join("env.txt");
         crate::test_exec::write_executable(
             &fake,
-            format!("#!/bin/sh\nenv | sort > '{}'\nexit 0\n", env_out.display()),
+            format!("#!/bin/sh\ncase \" $* \" in *\" --probe-seat \"*) echo \"seat_grant_valid=true expected_seat=true\"; exit 0;; esac\nenv | sort > '{}'\nexit 0\n", env_out.display()),
         );
         let log_path = tmp.path().join("headless.log");
         let tee_opts = crate::headless_tee::TeeOptions {

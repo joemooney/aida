@@ -423,47 +423,6 @@ pub(crate) fn merge_path_approval_decision(
     Ok(crate::gate::ship::approved_match_head(candidates, head_sha))
 }
 
-/// Read-only positive review authority for dispatch and review views. Reuse
-/// shipping's durable grant/receipt, identity, independence and time checks.
-/// Unlike shipping, a view never fetches a missing commit or grants a solo
-/// self-review exception. Missing local evidence stays unverified.
-// trace:BUG-2398 | ai:codex
-pub(crate) fn independent_approval_authorized(
-    project_root: &std::path::Path,
-    spec_ids: &[String],
-    branch: Option<&str>,
-    verdict: &crate::gate::review_verdict::RecordedVerdict,
-) -> bool {
-    if !verdict.kind.approves() || verdict.is_closed() {
-        return false;
-    }
-    let candidates = std::slice::from_ref(verdict);
-    let ids: Vec<String> = normalized_spec_ids(spec_ids)
-        .into_iter()
-        .filter(|id| !id.starts_with("PR-") && !id.starts_with("MR-"))
-        .collect();
-    let author_sessions = if ids.is_empty() {
-        crate::gate::review_authority::all_author_sessions(project_root, branch)
-    } else {
-        crate::gate::review_authority::author_sessions_at(project_root, &ids, branch)
-    };
-    let policy = crate::gate::ship::ShipApprovalPolicy {
-        author_sessions,
-        verified_authority: crate::gate::review_authority::verified_authority_keys(
-            project_root,
-            candidates,
-        ),
-        reviewed_committed_at: verdict
-            .reviewed_sha
-            .as_deref()
-            .and_then(|sha| commit_committed_at(project_root, sha)),
-        shipper: Vec::new(),
-        solo_human: false,
-        verified_solo: Default::default(),
-    };
-    crate::gate::ship::approval_authority_refusal(candidates, &policy).is_none()
-}
-
 /// BUG-1918: the approval policy for the specs a PR ships — its author
 /// sessions (authoring leases on those specs or on the PR's head branch, live
 /// or recorded in the durable authorship ledger; with NO spec id, every live

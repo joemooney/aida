@@ -1891,33 +1891,14 @@ pub(crate) fn commit_committed_at(
     repo: &std::path::Path,
     sha: &str,
 ) -> Option<chrono::DateTime<chrono::Utc>> {
-    let sha = sha.trim();
-    if sha.is_empty() || sha.starts_with('-') {
-        return None;
-    }
-    let out = std::process::Command::new("git")
-        .arg("-C")
-        .arg(repo)
-        .args(["log", "-1", "--format=%cI", sha, "--"])
-        .output()
-        .ok()
-        .filter(|o| o.status.success())?;
-    chrono::DateTime::parse_from_rfc3339(String::from_utf8_lossy(&out.stdout).trim())
-        .ok()
-        .map(|t| t.with_timezone(&chrono::Utc))
+    // trace:BUG-2398 | ai:codex
+    crate::gate::kernel_deps::commit_committed_at(repo, sha)
 }
 
 /// Trimmed, upper-cased, deduplicated, non-empty spec ids.
-// trace:BUG-1918 | ai:claude
+// trace:BUG-1918 trace:BUG-2398 | ai:codex
 pub(crate) fn normalized_spec_ids(spec_ids: &[String]) -> Vec<String> {
-    let mut ids: Vec<String> = spec_ids
-        .iter()
-        .map(|id| id.trim().to_ascii_uppercase())
-        .filter(|id| !id.is_empty())
-        .collect();
-    ids.sort();
-    ids.dedup();
-    ids
+    crate::gate::kernel_deps::normalized_spec_ids(spec_ids)
 }
 
 /// STORY-1690: fetch `base_branch` and the PR head `ship_branch` from origin,

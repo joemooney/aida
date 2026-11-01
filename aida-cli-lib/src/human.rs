@@ -38,7 +38,7 @@ pub(crate) fn pr_has_approved_verdict(project_root: &std::path::Path, pr_number:
         Ok(auto_complete::ReviewerOutcome::Verdict(
             auto_complete::Verdict::Approved
         ))
-    ) && crate::gate::approval::independent_approval_authorized(
+    ) && crate::gate::review_authority::independent_approval_authorized(
         project_root,
         &[],
         v.reviewed_branch.as_deref(),
@@ -209,7 +209,14 @@ pub(crate) fn spec_review_approved_at_head(
             crate::gate::review_verdict::parse_recorded_verdict(&current.body)
                 .as_ref()
                 .is_some_and(|v| {
-                    human_approval_authorized(project_root, req, spec_id, head, branch, v)
+                    crate::gate::review_authority::human_approval_authorized(
+                        project_root,
+                        req,
+                        spec_id,
+                        head,
+                        branch,
+                        v,
+                    )
                 })
                 && matches!(
                     crate::phase_gates::outcome_of_verdict_body(&current.body),
@@ -243,13 +250,19 @@ pub(crate) fn spec_review_approved_at_head(
         }
         candidates.push((
             record.as_ref().is_some_and(|v| {
-                human_approval_authorized(project_root, req, spec_id, head, branch, v)
-                    && matches!(
-                        crate::phase_gates::outcome_of_verdict_body(&current.body),
-                        Ok(auto_complete::ReviewerOutcome::Verdict(
-                            auto_complete::Verdict::Approved
-                        ))
-                    )
+                crate::gate::review_authority::human_approval_authorized(
+                    project_root,
+                    req,
+                    spec_id,
+                    head,
+                    branch,
+                    v,
+                ) && matches!(
+                    crate::phase_gates::outcome_of_verdict_body(&current.body),
+                    Ok(auto_complete::ReviewerOutcome::Verdict(
+                        auto_complete::Verdict::Approved
+                    ))
+                )
             }),
             current
                 .written_at
@@ -257,25 +270,6 @@ pub(crate) fn spec_review_approved_at_head(
         ));
     }
     review_candidates_approved(&candidates)
-}
-
-// trace:BUG-2398 | ai:codex
-fn human_approval_authorized(
-    root: &std::path::Path,
-    req: &aida_core::Requirement,
-    spec: &str,
-    head: Option<&str>,
-    branch: Option<&str>,
-    verdict: &crate::gate::review_verdict::RecordedVerdict,
-) -> bool {
-    let ids: Vec<String> = [Some(spec), req.spec_id.as_deref(), req.agreed_id.as_deref()]
-        .into_iter()
-        .flatten()
-        .map(str::to_string)
-        .collect();
-    matches!((verdict.reviewed_sha.as_deref(), head), (Some(a), Some(b))
-        if crate::gate::review_verdict::same_reviewed_sha(a, b))
-        && crate::gate::approval::independent_approval_authorized(root, &ids, branch, verdict)
 }
 
 // trace:BUG-1672 | ai:codex

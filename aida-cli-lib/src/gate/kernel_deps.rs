@@ -352,3 +352,38 @@ pub(crate) fn verdict_tip_relation(
     };
     super::review_verdict::classify_tip_relation(reviewed.as_deref(), tip.as_deref(), ancestry)
 }
+
+// Read-only commit evidence and ID normalization shared by the approval
+// readers and shipping. Authority plumbing stays on the protected floor.
+// trace:BUG-2398 | ai:codex
+pub(crate) fn commit_committed_at(
+    repo: &std::path::Path,
+    sha: &str,
+) -> Option<chrono::DateTime<chrono::Utc>> {
+    let sha = sha.trim();
+    if sha.is_empty() || sha.starts_with('-') {
+        return None;
+    }
+    let out = std::process::Command::new("git")
+        .arg("-C")
+        .arg(repo)
+        .args(["log", "-1", "--format=%cI", sha, "--"])
+        .output()
+        .ok()
+        .filter(|o| o.status.success())?;
+    chrono::DateTime::parse_from_rfc3339(String::from_utf8_lossy(&out.stdout).trim())
+        .ok()
+        .map(|t| t.with_timezone(&chrono::Utc))
+}
+
+// trace:BUG-2398 | ai:codex
+pub(crate) fn normalized_spec_ids(spec_ids: &[String]) -> Vec<String> {
+    let mut ids: Vec<String> = spec_ids
+        .iter()
+        .map(|id| id.trim().to_ascii_uppercase())
+        .filter(|id| !id.is_empty())
+        .collect();
+    ids.sort();
+    ids.dedup();
+    ids
+}
