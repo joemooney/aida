@@ -29,12 +29,12 @@ description: |
 
   ## Related
   STORY-HOME-095 (block delegation, done), STORY-HOME-105 (agreed IDs + backfill, PR-3170 in review), BUG-2017 (allocation authority).
-status: InProgress
+status: Done
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T19:23:04.998731220Z
-modified_at: 2026-11-01T00:16:03.307247152Z
+modified_at: 2026-11-01T00:36:23.073217643Z
 req_type: Story
 tags:
 - architecture
@@ -232,6 +232,15 @@ history:
   - field_name: agreed_id
     old_value: ''
     new_value: STORY-2204
+- id: 01a19489-3809-7df3-95e4-666a1d9188a8
+  author: joe
+  timestamp: 2026-11-01T00:36:23.177978413Z
+  session_id: 01a194506f98
+  harness_version: 2.1.316 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 filed_at:
   code_sha: 53817a25ee83981f919be3dbcee742234338ab9a
   branch: main
@@ -239,3 +248,7 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: 53817a25ee8
   vendor: claude
+implementation_info:
+  implemented: true
+  implemented_at: 2026-11-01T00:36:23.073217643Z
+  implemented_by: joe
