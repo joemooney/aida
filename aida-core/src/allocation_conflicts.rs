@@ -819,10 +819,46 @@ fn collect_with(
             }
         }
     }
+    // A tip that is an ancestor of another tip claims nothing new: every
+    // claim it holds is history the descendant already carries, and joining
+    // it is a fast-forward. Counted as its own claimant, a hub that is merely
+    // behind looks like a second side that kept an old registration, and a
+    // claim changed after the hub's tip (a node marked retired, a renamed
+    // display ID) reads as a dispute between two baseline values.
+    // trace:BUG-2378 | ai:claude
+    let behind: Vec<bool> = tips
+        .iter()
+        .map(|t| {
+            tips.iter().any(|other| {
+                t != other
+                    && matches!(
+                        git_status(repo, &["merge-base", "--is-ancestor", t, other]),
+                        Ok((0, _, _))
+                    )
+            })
+        })
+        .collect();
+    // A pruned tip is still a merge base of the tip that descends from it
+    // (a fast-forward joins exactly that pair), so it stays as baseline
+    // when one tip remains: a display ID two UUIDs first claim after it is
+    // still introduced. With two or more kept tips their own merge bases are
+    // the baseline and a pruned tip is dropped: a stale hub older than those
+    // merge bases would otherwise add an older baseline, and a claim one side
+    // reverted to the stale value would no longer count as introduced.
+    // trace:BUG-2378 | ai:claude
+    let (pruned, kept): (Vec<(String, bool)>, Vec<(String, bool)>) = tips
+        .into_iter()
+        .zip(behind)
+        .partition(|(_, is_behind)| *is_behind);
+    let tips: Vec<String> = kept.into_iter().map(|(t, _)| t).collect();
+    let pruned: Vec<String> = pruned.into_iter().map(|(t, _)| t).collect();
     // A sync that joins one distinct tip introduces nothing: that tip is its
     // own baseline (an unborn local, or local already equal to incoming).
+    // A tip left alone only because the others were pruned is not that
+    // case: the pruned tips are its baseline.
     let mut bases: Vec<String> = match tips.as_slice() {
-        [only] if lone_tip_is_baseline => vec![only.clone()],
+        [only] if lone_tip_is_baseline && pruned.is_empty() => vec![only.clone()],
+        [_] => pruned,
         _ => Vec::new(),
     };
     let mut unrelated = false;

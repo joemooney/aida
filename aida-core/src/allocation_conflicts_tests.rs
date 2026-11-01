@@ -638,3 +638,102 @@ fn story_164_overlapping_hub_stamped_claims_refuse_every_sync_unrooted_and_roote
         }
     }
 }
+
+/// BUG-2378: reconcile passes every hub tip, and one hub can still sit at a
+/// commit before a registration change (a node marked retired) while the
+/// other hub already has it. A tip that is an ancestor of another tip claims
+/// nothing new, so joining it is clean; a real divergence still refuses.
+// trace:BUG-2378 | ai:claude
+#[test]
+fn bug_2378_a_hub_behind_another_tip_is_not_a_second_claimant() {
+    let c = clones();
+    let stale = head_sha(&c.a).unwrap();
+    write_file(&c.a, "registry/nodes.toml", &nodes_toml("retired-host"));
+    commit(&c.a, "a changes the node registration");
+    let updated = head_sha(&c.a).unwrap();
+    write_row(&c.a, &row("FR-2"));
+    commit(&c.a, "a keeps working");
+    let report = collect(&c.a, Some("HEAD"), &[updated.clone(), stale.clone()]);
+    assert!(report.is_clean(), "{report}");
+    crate::allocation_conflicts::refuse_conflicts(&c.a, Some("HEAD"), &[updated, stale.clone()])
+        .unwrap();
+
+    // The same stale tip with an independent change of its own still refuses.
+    write_file(&c.b, "registry/nodes.toml", &nodes_toml("other-host"));
+    commit(&c.b, "b rebinds");
+    let diverged = head_sha(&c.b).unwrap();
+    run(&c.a, &["fetch", "-q", c.b.to_str().unwrap(), "aida-store"]);
+    let report = collect(&c.a, Some("HEAD"), &[diverged, stale]);
+    assert_eq!(
+        kinds(&report.conflicts),
+        [ConflictKind::NodeBinding],
+        "{report}"
+    );
+}
+
+/// BUG-2378: pruning a tip that is an ancestor of another must keep it as the
+/// baseline. Every wrapper's pull of a hub that only moved ahead (local HEAD
+/// an ancestor of incoming) still refuses a display ID two UUIDs first claim
+/// in the incoming commits.
+// trace:BUG-2378 | ai:claude
+#[test]
+fn bug_2378_a_fast_forward_pull_still_refuses_a_new_duplicate() {
+    for (name, sync) in SYNCS {
+        let c = clones();
+        write_row(&c.a, &row("FR-50"));
+        let mut twin = row("FR-0123456789ABCDEF0123456789ABCDEF-1");
+        twin.agreed_id = Some("FR-50".into());
+        write_row(&c.a, &twin);
+        publish(&c.a, "a claims FR-50 for two UUIDs");
+        let before = snapshot(&c, &c.b);
+        let err = sync(&c.b).unwrap_err();
+        let report = assert_refused(name, &c, &c.b, &before, err);
+        assert_eq!(
+            kinds(&report.conflicts),
+            [ConflictKind::DisplayId],
+            "{name}"
+        );
+    }
+}
+
+/// BUG-2378: a stale hub tip that is an ancestor of two diverged tips adds
+/// no baseline of its own. The two tips' merge base is the baseline, so a
+/// side reverting a node registration to the stale hub's old value while the
+/// other side changes it still refuses: both values are new since the merge
+/// base.
+// trace:BUG-2378 | ai:claude
+#[test]
+fn bug_2378_a_stale_ancestor_tip_adds_no_older_baseline_to_a_divergence() {
+    let c = clones();
+    // The stale hub sits at the seed, whose registration is "seed-host".
+    let stale = head_sha(&c.a).unwrap();
+    write_file(&c.a, "registry/nodes.toml", &nodes_toml("merge-base-host"));
+    commit(&c.a, "both sides share this registration");
+    let merge_base = head_sha(&c.a).unwrap();
+    // One side reverts to the stale hub's value ...
+    write_file(&c.a, "registry/nodes.toml", &nodes_toml("seed-host"));
+    commit(&c.a, "a reverts the registration");
+    let reverted = head_sha(&c.a).unwrap();
+    // ... while the other side changes it.
+    run(
+        &c.a,
+        &["checkout", "-q", "-b", "other", merge_base.as_str()],
+    );
+    write_file(&c.a, "registry/nodes.toml", &nodes_toml("other-host"));
+    commit(&c.a, "b rebinds");
+    let changed = head_sha(&c.a).unwrap();
+
+    let report = collect(&c.a, Some(&reverted), &[changed.clone(), stale]);
+    assert_eq!(
+        kinds(&report.conflicts),
+        [ConflictKind::NodeBinding],
+        "{report}"
+    );
+    // The same divergence without the stale tip judges the same way.
+    let report = collect(&c.a, Some(&reverted), &[changed]);
+    assert_eq!(
+        kinds(&report.conflicts),
+        [ConflictKind::NodeBinding],
+        "{report}"
+    );
+}

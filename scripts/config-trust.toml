@@ -34,7 +34,7 @@ channels = ["worktree"]
 sites = 1
 
 [readers."aida-cli-lib/src/agent_config.rs"]
-channels = ["home", "write"]
+channels = ["home", "write", "worktree", "trusted"]
 sites = 1
 
 [readers."aida-cli-lib/src/agent_registry.rs"]
@@ -922,3 +922,8 @@ sites = 1
 single_seats = "policy"
 takeover_grace_secs = "policy"
 inspection = "policy"
+
+# Native opt-in changes the launch security boundary; never read from a branch.
+# trace:TASK-2631 | ai:codex
+[keys.trusted."contained.vendors"]
+"*" = "policy"

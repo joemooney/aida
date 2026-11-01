@@ -95,24 +95,51 @@ pub(crate) fn handle_node_command(cmd: &NodeCommand, store_path: &std::path::Pat
 
         NodeCommand::Show { id } => {
             let registry = NodeRegistry::load(&registry_path).unwrap_or_default();
+            // This clone's identity is its WORK binding first, the legacy
+            // `.aida/node.toml` only without one, so a retired legacy node
+            // never shows as this clone's node. With an explicit id the
+            // local identity only decorates the display ("Active on this
+            // clone"), so an unreadable binding or node.toml degrades to "not
+            // this clone" instead of failing `aida node show <id>`.
+            // trace:BUG-2378 | ai:claude
+            let local_id = match id {
+                Some(_) => aida_core::allocation_authority::clone_node_id(store_path)
+                    .ok()
+                    .flatten(),
+                None => aida_core::allocation_authority::clone_node_id(store_path)?,
+            };
             let target_id: String = match id {
                 Some(i) => i.clone(),
-                None => {
-                    if !node_config_path.exists() {
-                        anyhow::bail!(
-                            "No current node — `.aida/node.toml` does not exist. \
-                             Run `aida node acquire` to claim a node id, or pass an id explicitly."
-                        );
-                    }
-                    aida_core::NodeConfig::load(&node_config_path)?.node_id
-                }
+                None => local_id.clone().ok_or_else(|| {
+                    anyhow::anyhow!(
+                        "No current node — `.aida/node.toml` does not exist. \
+                         Run `aida node acquire` to claim a node id, or pass an id explicitly."
+                    )
+                })?,
             };
 
             // This clone's own node still reports its delegation state when
-            // the shared roster has no row for it.
+            // the shared roster has no row for it; a node a label or the root
+            // record registers says so instead of "not registered".
             // trace:STORY-B6B1278890774EF993D2EBC327862470-095 | ai:claude
+            // trace:BUG-2378 | ai:claude
             if id.is_none() && registry.get(&target_id).is_none() {
-                println!("Node {target_id} (not in the shared registry)");
+                // A display command degrades on a malformed label registry
+                // (like the best-effort label lookup below) instead of failing;
+                // `aida db block verify` is the gate that fails closed on it.
+                let known = aida_core::allocation_authority::registered_node_ids(store_path)
+                    .map(|ids| ids.contains(&target_id.to_ascii_lowercase()))
+                    .unwrap_or(false);
+                if known {
+                    println!("Node {target_id}");
+                    let aliases = aida_core::node_alias::NodeAliasMap::load(store_path);
+                    if let Some(label) = aliases.current_label(&target_id) {
+                        println!("  Label: {label}");
+                    }
+                    println!("  Active on this clone: yes (this clone's node binding)");
+                } else {
+                    println!("Node {target_id} (not in the shared registry)");
+                }
                 return print_allocation_report(store_path);
             }
             let entry = registry.get(&target_id).ok_or_else(|| {
@@ -140,11 +167,11 @@ pub(crate) fn handle_node_command(cmd: &NodeCommand, store_path: &std::path::Pat
                     .with_timezone(&chrono::Local)
                     .format("%Y-%m-%d %H:%M:%S %Z")
             );
-            if node_config_path.exists() {
-                let local = aida_core::NodeConfig::load(&node_config_path)?;
-                if local.node_id == entry.id {
-                    println!("  Active on this clone: yes (.aida/node.toml matches)");
-                }
+            if local_id.as_deref() == Some(entry.id.as_str()) {
+                println!("  Active on this clone: yes (this clone's node binding)");
+            }
+            if entry.retired_at.is_some() {
+                println!("  Retired:    yes (allocates no IDs)");
             }
             if id.is_none() {
                 print_allocation_report(store_path)?;
