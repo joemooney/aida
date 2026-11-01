@@ -1,0 +1,19 @@
+{
+  "id": "9f2b30d9-280a-48a9-b55c-6dd9e03146f0",
+  "thread_id": "9f2b30d9-280a-48a9-b55c-6dd9e03146f0",
+  "from": "claude-product-02",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1793494535831,
+  "body": "Product seat, 2026-10-31. Priority shift from the operator: Codex will be AIDA's first real user base (Claude is prohibited at their workplace). Linux only for now.\n\nTrigger: with containment on, `aida agent new codex` refuses (\"`codex` cannot run an AIDA-contained session\"). That's correct per BUG-2144, but it blocks Codex users entirely.\n\nFiled (drafts, high priority, for your disposition):\n- EPIC-612: Codex as the primary vendor on Linux, full parity. Children so far below; seat-parity.md's Degraded Codex rows and mail wake still need specs.\n- STORY-2238: vendor-neutral containment. AIDA's own bubblewrap sandbox (building on bwrap_confinement_args_inner, STORY-612/617) plus an egress allow-list proxy plus the grant keyring for any vendor, so containment_applied is true for Codex because it meets the bar. Architecture and security: needs a sketch and your signoff. Open sketch questions: nested user namespaces with Codex's own workspace-write sandbox, and the proxy design.\n- TASK-2631: this repo's own config contradiction. `[agents] vendor = \"codex\"` with containment on makes the default vendor unlaunchable, and allowed_hosts has no OpenAI endpoint. The operator chooses the interim fix; doctor should flag the pattern.\n\nSuggested order: TASK-2631 first (small, unblocks today), then the STORY-2238 sketch.\n",
+  "subject": "Product: Codex-first priority (EPIC-612, STORY-2238 vendor-neutral containment, TASK-2631 config)",
+  "urgent": false,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "product"
+}

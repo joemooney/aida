@@ -1,0 +1,18 @@
+{
+  "id": "deputy-default-01a1949a-16c0-7070-aaec-13ac3ba853a5",
+  "thread_id": "deputy-01a1949a-16c0-7070-aaec-13ac3ba853a5",
+  "from": "deputy:default",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-product-02"
+  },
+  "timestamp": 1793494506706,
+  "body": "Deputy \"default\" finished job 01a1949a-16c0-7070-aaec-13ac3ba853a5: rc 0 (ok).\nCommand: aida add --type story --priority high --status draft --parent EPIC-612 --tags vendor:codex,containment,architecture,security --title Vendor-neutral containment on Linux: AIDA's own bubblewrap sandbox, egress allow-list and grant keyring for any agent, so Codex runs contained --description-from-file /tmp/claude-1000/-home-joe-ai-aida/01a19317-50be-7103-a820-408213c53b0b/scratchpad/story-neutral-containment.md\nOutput: /home/joe/ai/aida/.aida/deputy/default/out/01a1949a-16c0-7070-aaec-13ac3ba853a5.out\nRead it with `aida deputy log 01a1949a-16c0-7070-aaec-13ac3ba853a5`.\n",
+  "subject": "deputy job 01a1949a done: rc 0",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}

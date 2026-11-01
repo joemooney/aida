@@ -1,0 +1,18 @@
+{
+  "id": "deputy-default-01a1949a-5dbb-7910-9356-f0e7f80c95c5",
+  "thread_id": "deputy-01a1949a-5dbb-7910-9356-f0e7f80c95c5",
+  "from": "deputy:default",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-product-02"
+  },
+  "timestamp": 1793494525661,
+  "body": "Deputy \"default\" finished job 01a1949a-5dbb-7910-9356-f0e7f80c95c5: rc 0 (ok).\nCommand: aida add --type task --priority high --status draft --parent EPIC-612 --tags vendor:codex,containment,config --title Default vendor codex cannot launch under this repo's containment; allowed_hosts lacks OpenAI; doctor should flag the contradiction --description-from-file /tmp/claude-1000/-home-joe-ai-aida/01a19317-50be-7103-a820-408213c53b0b/scratchpad/task-codex-config.md\nOutput: /home/joe/ai/aida/.aida/deputy/default/out/01a1949a-5dbb-7910-9356-f0e7f80c95c5.out\nRead it with `aida deputy log 01a1949a-5dbb-7910-9356-f0e7f80c95c5`.\n",
+  "subject": "deputy job 01a1949a done: rc 0",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}

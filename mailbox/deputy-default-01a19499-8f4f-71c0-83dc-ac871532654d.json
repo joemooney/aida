@@ -1,0 +1,18 @@
+{
+  "id": "deputy-default-01a19499-8f4f-71c0-83dc-ac871532654d",
+  "thread_id": "deputy-01a19499-8f4f-71c0-83dc-ac871532654d",
+  "from": "deputy:default",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-product-02"
+  },
+  "timestamp": 1793494464374,
+  "body": "Deputy \"default\" finished job 01a19499-8f4f-71c0-83dc-ac871532654d: rc 0 (ok).\nCommand: aida add --type epic --priority high --status draft --tags vendor:codex,from-operator --title Codex as the primary vendor on Linux: full parity with Claude for every seat, contained --description-from-file /tmp/claude-1000/-home-joe-ai-aida/01a19317-50be-7103-a820-408213c53b0b/scratchpad/epic-codex.md\nOutput: /home/joe/ai/aida/.aida/deputy/default/out/01a19499-8f4f-71c0-83dc-ac871532654d.out\nRead it with `aida deputy log 01a19499-8f4f-71c0-83dc-ac871532654d`.\n",
+  "subject": "deputy job 01a19499 done: rc 0",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}
