@@ -36,30 +36,8 @@ pub(crate) fn handle_mcp_command(cmd: &McpCommand) -> Result<()> {
                         e
                     )
                 })?;
-            let skills_dir = project_root.join(".claude").join("skills");
-            let stock_path = skills_dir.join(format!("{}.md", name));
-
-            if !stock_path.exists() {
-                anyhow::bail!("Error: skill '{}' not found under .claude/skills/", name);
-            }
-
-            let stock_content = std::fs::read_to_string(&stock_path)
-                .map_err(|e| anyhow::anyhow!("Failed to read skill file: {}", e))?;
-
-            let local_path = skills_dir.join(format!("{}.local.md", name));
-            if local_path.exists() {
-                let local_content = std::fs::read_to_string(&local_path)
-                    .map_err(|e| anyhow::anyhow!("Failed to read local skill file: {}", e))?;
-
-                let sep = if stock_content.ends_with('\n') {
-                    ""
-                } else {
-                    "\n"
-                };
-                print!("{}{}{}", stock_content, sep, local_content);
-            } else {
-                print!("{}", stock_content);
-            }
+            // trace:BUG-2388 | ai:codex
+            print!("{}", crate::skill_cmd::render_skill(&project_root, name)?);
             Ok(())
         }
         // `skill lint` is a read-only filesystem check; route it through the
