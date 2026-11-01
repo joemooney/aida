@@ -61,6 +61,16 @@ impl Fixture {
         )
         .unwrap();
         fs::create_dir_all(f.store.join(".aida")).unwrap();
+        // Like a real store, the per-clone identity and counter stay out of
+        // the shared branch. Without this the pre-allocation sync of the
+        // first `aida add` (an origin remote exists) commits them, the
+        // backfill's identity re-point dirties the store worktree, and
+        // `aida remote reconcile --execute` refuses the uncommitted change.
+        fs::write(
+            f.store.join(".gitignore"),
+            ".aida/node.toml\n.aida/dispenser.toml\n.aida/*.lock\n",
+        )
+        .unwrap();
         // The store carries an older clone's legacy node, like node 1 on
         // the home store.
         fs::write(

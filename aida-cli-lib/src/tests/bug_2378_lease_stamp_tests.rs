@@ -11,10 +11,17 @@ fn bug_2378_a_new_lease_stamps_the_bound_node_not_the_retired_legacy_node() {
     let store = dir.path().join(".aida-store");
     std::fs::create_dir_all(store.join(".aida")).unwrap();
     aida_core::git_ops::init(&store).unwrap();
-    // The retired legacy node the shared store worktree still carries.
+    // The retired legacy node the shared store worktree still carries, as
+    // the complete node/provider pair: `bootstrap` refuses a legacy node
+    // without its provider ("incomplete legacy node/provider pair").
     std::fs::write(
         store.join(".aida/node.toml"),
         "node_id='7'\nuser_id=0\nhostname=''\nregistered_at='2026-01-01T00:00:00Z'\n",
+    )
+    .unwrap();
+    std::fs::write(
+        store.join(".aida/dispenser.toml"),
+        "[mode.Distributed]\nnode_id='7'\n[sequences]\n",
     )
     .unwrap();
     let binding = aida_core::work_binding::bootstrap(&store)

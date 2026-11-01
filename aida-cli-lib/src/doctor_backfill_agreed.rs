@@ -376,6 +376,31 @@ fn retiring_node(store_root: &Path, reqs: &[Requirement]) -> Result<Option<Retir
     }))
 }
 
+/// Whether the store's git tracks `.aida/node.toml`. A current store
+/// ignores it (it is per-clone); an older one committed it to the shared
+/// branch. Re-pointing a tracked copy would leave the store worktree dirty
+/// (`aida remote reconcile --execute` then refuses) and, once committed,
+/// hand the root's node to every unbound clone that pulls it. The clone's
+/// WORK binding already outranks it for `aida node show` and lease stamps,
+/// so the backfill leaves a tracked copy alone. Fails closed on a git error.
+// trace:BUG-2378 | ai:claude
+fn legacy_identity_tracked(store_root: &Path) -> Result<bool> {
+    if !aida_core::git_ops::is_git_repo(store_root) {
+        return Ok(false);
+    }
+    let out = aida_core::git_ops::host_git_command(store_root)
+        .args(["ls-files", "--", ".aida/node.toml"])
+        .output()
+        .context("run git ls-files .aida/node.toml")?;
+    anyhow::ensure!(
+        out.status.success(),
+        "git ls-files failed in {}: {}",
+        store_root.display(),
+        String::from_utf8_lossy(&out.stderr).trim()
+    );
+    Ok(!out.stdout.is_empty())
+}
+
 /// The bound counter's last dispensed number per type (empty when the
 /// clone has no counter file). An unreadable counter refuses the run.
 fn bound_counter_floor(store_root: &Path) -> Result<BTreeMap<String, u64>> {
@@ -502,7 +527,7 @@ fn load_plan(store_root: &Path) -> Result<(Vec<Requirement>, Plan)> {
             agreed,
             renames,
             // `retiring_node` only names a node `.aida/node.toml` still holds.
-            repoint_identity: retire.is_some(),
+            repoint_identity: retire.is_some() && !legacy_identity_tracked(store_root)?,
             retire,
             mark_retired,
             claim_node,
