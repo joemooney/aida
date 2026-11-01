@@ -12,10 +12,11 @@ AIDA runs a team of agents and people in one repository. Some actions change wha
 - **Seat.** The authority that goes with a role. Advisor routes and approves work, implementer builds one spec, reviewer records verdicts on a change.
 - **Roster.** The list of seats each person on the team may take. It is a ceiling, not an active seat.
 - **Grant.** A record that this session holds one seat, until a set time. Authority-gated commands check the grant, not the role name.
+- **Launcher.** An AIDA command that starts an agent session for you, such as `aida agent new` or `aida queue work`.
 - **Child grant.** A grant a launcher issues to an agent it starts, for one seat the parent session chose to hand down.
 - **Mandate.** A time-boxed permission a person starts at their terminal so the advisor seat can do named things while they are away.
 - **Deputy.** A process in your terminal that runs commands other sessions hand it, under your grant.
-- **Hold.** A marker that keeps a change from merging until someone with the right authority clears it.
+- **Hold.** A marker that keeps a change from merging until someone with the right authority clears it. AIDA records why each hold was placed, for example that the spec needs a person's review or that a reviewer stepped aside.
 
 ## What a role shows you, and what a grant lets you do
 
@@ -66,9 +67,9 @@ Not every launcher issues a child grant. `aida agent new --role <seat>` and `aid
 
 ![A grant is bound to the terminal session that minted it](showcase/assets/authority-binding.svg)
 
-Agent sandboxes add a wrinkle. A sandbox may run each tool call in its own process namespace, where the bound shell is invisible. So entering a seat also places a one-time secret, the **session key**, in that shell's Linux session keyring. Only that shell and the processes it starts can read it, and sandboxes inherit the keyring. A sandboxed tool call presents the grant by holding the key. The grant record keeps only a digest of the secret, and the secret never appears in a command line, an environment variable, a file or shell history.
+Agent sandboxes add a wrinkle. The tool an agent runs in, such as Claude Code, often runs commands in a sandbox, and a sandbox may run each tool call in its own process namespace, where the bound shell is invisible. So entering a seat also places a one-time secret, the **session key**, in that shell's Linux session keyring. Only that shell and the processes it starts can read it, and sandboxes inherit the keyring. A sandboxed tool call presents the grant by holding the key. The grant record keeps only a digest of the secret, and the secret never appears in a command line, an environment variable, a file or shell history.
 
-A session started by the background agent daemon or by a tmux server does not descend from your shell. It holds no key, and its grant-gated calls are refused with a sentence naming the fix: start it from the role shell. Where the kernel refuses keyrings, as some containers do, a grant falls back to its process binding, and a sandboxed caller is refused with that reason, never allowed.
+A session that does not descend from your shell holds no key: for example, one started in the background with `aida agent new --bg`, or one a tmux server starts. Its grant-gated calls are refused with a sentence naming the fix: start it from the role shell. Where the kernel refuses keyrings, as some containers do, a grant falls back to its process binding, and a sandboxed caller is refused with that reason, never allowed.
 
 ## Expiry and renewal
 
@@ -85,7 +86,7 @@ aida mandate start --ship-held --ttl 8h --reason "overnight run"
 ![A mandate: started by a person, scoped, time-boxed, checked on every action](showcase/assets/authority-mandate.svg)
 
 - **Time-boxed.** 8 hours by default, at most 24. `aida mandate renew` extends it in place, keeping its scope and reason; `aida mandate stop` ends it at once. Start, renew and stop need a person at an interactive terminal. `aida mandate status` is open to anyone.
-- **Scoped.** `--ship-held` lets the advisor seat ship held changes. It still needs an independent approval of the change's current commit, from neither the implementer nor the shipping session, and green CI. `--scope dispatch` adds queueing dispatch work. `--drive` also covers signing off design sketches, dispatching fixers and restarting a crashed relay you started at a terminal, and turns on a 15-minute tick that routes every stalled lane to the advisor.
+- **Scoped.** `--ship-held` lets the advisor seat ship held changes. It still needs all of these: an independent approval of the change's current commit, from neither the implementer nor the shipping session; work the advisor did not author; and green CI. The option that lets a ship accept an approval of an older commit is never honoured under a mandate. `--scope dispatch` adds queueing dispatch work. `--drive` also covers signing off design sketches, dispatching fixers and restarting a crashed long-running agent run you started at a terminal, and turns on a check every 15 minutes that hands each stalled piece of work to the advisor.
 - **Supervised specs.** Sensitive specs (security, containment, authority, guided and keystone work) stay with a person unless you pass `--include-supervised`. A drive mandate covers them unless you pass `--exclude-supervised`.
 - **Operator-only specs.** A spec tagged operator-only, or in operator or decide mode, is never covered by any mandate. Once a spec has been in that class, it stays excluded even if the tag is removed.
 - **Checked every time.** Expiry is checked by every ship as it decides, again under the merge lock and once more just before the merge call. Each release is recorded, and the statusline of every session shows the mandate and its time left.
@@ -101,22 +102,22 @@ Some paths never ship under a mandate: the project's authority configuration and
 - **Started by you.** It refuses to start unless stdin, stdout and stderr are your terminal and your shell holds a grant. It will not start inside an agent session, a headless run or another deputy job.
 - **AIDA commands only, by default.** Other programs run only if you add them with `--allow-exec`, and shell scripts only with `--allow-scripts`.
 - **No terminal unless you say so.** A job gets a terminal only if its command matches an entry you set at your terminal, such as `aida deputy --allow-tty 'aida merge-hold clear' --ttl 8h`, or later with `aida deputy allow`. An entry never outlasts your grant. Scripts never get a terminal, and neither does a command carrying a gate-bypass flag. Any other job runs without one, so a command that needs a person at the keyboard refuses it.
-- **Stops with your authority.** When your grant expires or is revoked, the deputy takes no new jobs and exits once running jobs finish. If a mandate was active when you started it, the same happens when the mandate ends.
+- **Stops with your authority.** When your grant expires or is revoked, the deputy takes no new jobs and exits once running jobs finish. If a mandate was active when you started it, the same happens when the mandate ends, unless you started the deputy with `--keep-after-mandate`.
 - **Recorded.** A ledger records who submitted each job, its command, whether it ran on a terminal and its exit code.
 - **Planned.** A per-deputy command policy, and capabilities a submitting session can present, are not built yet. Until they are, the deputy refuses any job that presents a capability, and refuses every job while a command policy file is present, rather than running it as though the check had passed.
 
 ## What always needs a person at a terminal
 
-**Status: built.** These steps refuse unless they run at an interactive terminal. Holding a grant or a mandate does not stand in for that.
+**Status: built.** These steps happen only at an interactive terminal. Holding a grant or a mandate does not stand in for that.
 
-- Taking a seat: `aida role enter` and `aida role add`.
+- Taking a seat: `aida role enter` refuses without a terminal. `aida role add` mints a grant only at a terminal; without one it creates the role as a label only, with no grant.
 - Changing the roster: `aida team allow-seat` and `aida team disallow-seat`.
 - Starting, renewing and stopping a mandate.
 - Accepting the one-time grant `aida agent new` offers, by typing `y`.
 - Starting a deputy, resuming a paused one, and giving its jobs a terminal.
 - Clearing an advisor's escalation to a person.
 
-Holds are the emergency brake. A person at an interactive terminal can reach them even without a grant. A mandate releases only a typed hold marker: a label-only hold or a recusal hold always needs a person.
+Holds are the emergency brake. A person at an interactive terminal can reach them even without a grant. A mandate releases only a hold whose recorded reason it covers. A hold that exists only as a label on the pull request, or one placed because a reviewer stepped aside from the change, always needs a person.
 
 ## Handing authority to someone else
 
