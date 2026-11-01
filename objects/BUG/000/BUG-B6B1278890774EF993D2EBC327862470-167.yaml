@@ -17,12 +17,12 @@ description: |-
   ──────────
   1. All headless spawn and resume call sites resolve project/user containment via `session::drain_contained(project_root)?` (which combines `AIDA_CONTAINED`, `[agents] contained`, and `[contained] enable`) rather than passing `false` or checking only `aida_contained_env()?`.
   2. Unit tests verify that setting `contained = true` in `agents.toml` without `AIDA_CONTAINED` in the environment enforces containment on `advisor watch`, `questions`, `dryrun`, `intent`, `burndown`, `intake`, `compete`, and `session resume`.
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-01T06:47:54.074794793Z
-modified_at: 2026-11-01T08:10:18.520556649Z
+modified_at: 2026-11-01T08:10:21.682998674Z
 req_type: Bug
 tags:
 - audit
@@ -44,6 +44,13 @@ history:
   timestamp: 2026-11-01T06:48:00.917201916Z
   session_id: 01a194b1bcfb
   changes: []
+- id: 01a19628-d872-7c43-b807-10bcf105bdc2
+  author: joe
+  timestamp: 2026-11-01T08:10:21.682995503Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: 6dc7d4977ac5e47c42ddfb26597fe3ec5fb70b60
   branch: main
