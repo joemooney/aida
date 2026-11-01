@@ -419,8 +419,10 @@ esac
     // Exercise actual PATH resolution, without the test-binary shortcut.
     // The fallback policy is preserved and one collection probes only once.
     drop(_gh);
-    let _path = crate::test_env::EnvVarGuard::set("PATH", root);
-    let _fallback = crate::test_env::EnvVarGuard::set("AIDA_TEST_FORGE_FALLBACK_DIRS", root);
+    let mut production_env = crate::test_env::EnvVarsGuard::set(&[
+        ("PATH", root.to_str().unwrap()),
+        ("AIDA_TEST_FORGE_FALLBACK_DIRS", root.to_str().unwrap()),
+    ]);
     crate::test_exec::write_executable(&gh, "#!/bin/sh\nexec /bin/sleep 30\n");
     let started = std::time::Instant::now();
     assert!(matches!(
@@ -446,7 +448,7 @@ esac
             root.display()
         ),
     );
-    let _fallback2 = crate::test_env::EnvVarGuard::set("AIDA_TEST_FORGE_FALLBACK_DIRS", &fallback);
+    production_env.set_key("AIDA_TEST_FORGE_FALLBACK_DIRS", &fallback);
     std::fs::write(root.join("search"), "").unwrap();
     assert!(matches!(
         detect_open_pr_for_spec_github(root, &canonical),
@@ -459,9 +461,7 @@ esac
             .count(),
         1
     );
-    drop(_fallback2);
-    drop(_fallback);
-    drop(_path);
+    drop(production_env);
     std::fs::write(&gh, original_gh).unwrap();
     let _gh = crate::test_env::EnvVarGuard::set("AIDA_TEST_GH_BINARY", &gh);
 
