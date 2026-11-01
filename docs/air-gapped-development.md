@@ -40,7 +40,7 @@ AIDA guards that boundary today. Before every store sync it reads the allocation
 
 **Status: partly built.** Built today: the root, each clone's declared upstream hub, the pool and block records, and the checks on them. **Planned:** the command that grants a pool to a hub, and claiming blocks from the upstream automatically during `aida push` or on request.
 
-![A root splits the number space between hubs](showcase/assets/air-gapped-two-hubs-root.svg)
+![A root will split the number space between hubs (planned)](showcase/assets/air-gapped-two-hubs-root.svg)
 
 The root prevents the collision instead of catching it. It owns the unallocated numbers and, once pool grants ship, will hand each hub its own pool before anyone on that hub claims a block. Clones will claim blocks only from the pool homed on their own hub, so the outside and inside ranges cannot overlap, and the two stores merge cleanly when they meet.
 
