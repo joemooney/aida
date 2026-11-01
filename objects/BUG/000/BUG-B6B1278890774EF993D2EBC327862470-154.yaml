@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T01:26:21.540218031Z
-modified_at: 2026-11-01T02:16:36.583407141Z
+modified_at: 2026-11-01T03:15:44.213495487Z
 req_type: Bug
 tags:
 - ci
@@ -24,6 +24,12 @@ comments:
     Fix options: (a) set XDG_CACHE_HOME (or GH_CACHE_DIR, if supported) to a writable per-session dir in contained lanes; (b) add a small `aida ci failures <PR>` helper that walks the failed jobs through the API and prints the panics, the `FAILED` lines and the first `##[error]` per job; (c) teach the reviewer and rework prompts the `gh api` form. (a) plus (b) is the durable fix. The "stray/" and "leak" lines in the gates job are self-test output and must not be reported as failures.
   created_at: 2026-11-01T01:43:15.488404295Z
   modified_at: 2026-11-01T01:43:15.488404295Z
+  session_id: 77a7a933-9a3f-4243-9a44-892bcedf206c
+- id: 01a1951b-1bd5-7840-9652-e978c30ab93b
+  author: joe
+  content: 'ADVISOR RULING on PR-3187 non-blocking findings (10-28 rule, ruled once): ACCEPTED. (1) The rework section fires only when a review-findings block exists: every red-CI rework round today had one, and advisor briefs cover the rest. (2) The prompt wiring has no direct test: the extraction and stubbed-gh path are tested, and the wiring is a single call site. (3) The gh calls have no timeout: gh fails fast on connection errors (today''s 20:13 GitHub outage returned ''error connecting'' at once, with no hang), and the call runs once per pickup. Shipping now: this fix ends the blind red-CI rounds.'
+  created_at: 2026-11-01T03:15:44.213495487Z
+  modified_at: 2026-11-01T03:15:44.213495487Z
   session_id: 77a7a933-9a3f-4243-9a44-892bcedf206c
 history:
 - id: 01a194cf-a7e0-7943-ae43-787c49406e34
