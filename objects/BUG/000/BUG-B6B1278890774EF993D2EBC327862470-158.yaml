@@ -17,12 +17,12 @@ description: |
   - A ship with 25 or more seat clones finishes step 5 in under 30s, or reports progress and continues in the background.
   - The merge-lease is released before the cleanup step, and a test asserts it.
   - A test covers the unpushed check with a large shipped set and no per-SHA spawn.
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T06:30:56.167167026Z
-modified_at: 2026-11-01T21:56:36.713293624Z
+modified_at: 2026-11-01T22:50:02.191770073Z
 req_type: Bug
 tags:
 - area:ship
@@ -63,6 +63,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1994e-364f-7441-bb45-bea6ae744587
+  author: aida-orchestrator
+  timestamp: 2026-11-01T22:50:02.191802946Z
+  session_id: 01a1994ba903
+  harness_version: 2.1.316 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 962ca07af25ca4de3426bdd951fb2d6782568184
   branch: main
@@ -71,3 +80,11 @@ filed_at:
   aida_build_sha: a83e05d785d
   vendor: claude
   session: a31b25d9-60a5-4347-a85b-4c74ab06f274
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: Core fix (lease drop before cleanup, batched cat-file + stdin rev-list, bounded clone probes, detached worker) is sound and the 3 ACs have tests, but CI is red at head from the PR's own new hidden subcommand (help golden + BUG-1502 audit) plus an unattributed gates failure, and the detached worker silently disables post-ship merged-worktree pruning for interactive ships.
+  recovery_hint: address the review findings, move BUG-2384 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-11-01T22:50:02.191770073Z
