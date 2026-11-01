@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T01:39:06.904532581Z
-modified_at: 2026-11-01T04:18:06.084850320Z
+modified_at: 2026-11-01T04:28:01.023534966Z
 req_type: Bug
 tags:
 - containment
@@ -26,6 +26,13 @@ comments:
   created_at: 2026-11-01T04:18:06.084850320Z
   modified_at: 2026-11-01T04:18:06.084850320Z
   session_id: 77a7a933-9a3f-4243-9a44-892bcedf206c
+- id: 01a1955d-487f-7242-9b9e-4daeada385c1
+  author: joe
+  content: 'Round 2 pushed as 5a12084961d on PR-3190. (1) Store lock: the root cause is store_sync::detect_distributed_store() walking from the process cwd, which ignored the test''s pinned ambient root. This seat clone''s .aida-store is a symlink to /home/joe/ai/aida/.aida-store, so a fixture session_start, or any in-process command, resolved the live store and its write lock from the crate dir. Under cfg(test) the walk now starts at the pinned root (the BUG-1618 seam). With nothing pinned it starts at the cwd, except that the workspace checkout maps to the store-less hermetic checkout. New test bug_2381_a_pinned_fixture_resolves_its_own_store_and_store_lock asserts on store_write_lock_path. Caveat: I could not run cargo in this lane, so I have not confirmed from a seat-clone run that the bug_2169 session_start reaches the lock through this resolver and no other. If a seat-clone run still shows a live-store lock, that is a separate resolver path and should be split into its own bug. (2) The hermetic checkout''s git init runs with GIT_CONFIG_GLOBAL=/dev/null, GIT_CONFIG_NOSYSTEM=1, the test template dir and -b main. An atexit hook removes it, and a child-process test checks that.'
+  created_at: 2026-11-01T04:28:01.023534966Z
+  modified_at: 2026-11-01T04:28:01.023534966Z
+  session_id: 01a195553529
+  harness_version: 2.1.316 (Claude Code)
 history:
 - id: 01a19517-617d-7151-9e47-aa0da46d6e93
   author: joe
