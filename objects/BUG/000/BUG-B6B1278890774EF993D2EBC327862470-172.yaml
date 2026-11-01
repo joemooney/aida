@@ -25,6 +25,15 @@ tags:
 - architecture
 - grants
 - vendor:codex
+relationships:
+- rel_type: Child
+  target_id: 01a19499-932e-79f0-a3e1-1299dfe355ad
+  created_at: 2026-11-01T07:26:34.503067746Z
+history:
+- id: 01a19600-c769-7cd0-ba08-8d93975e3e3b
+  author: joe
+  timestamp: 2026-11-01T07:26:35.881949274Z
+  changes: []
 filed_at:
   code_sha: 53c89700b4da50b5593a2079ed4cc3abaae5cdfe
   branch: main
