@@ -37,6 +37,9 @@ VERIFIED = {
     "aida fleet drive": "fleet drive (preview; changes nothing without --tick)",
     # trace:STORY-B6B1278890774EF993D2EBC327862470-098 | ai:claude
     "aida whoami": "whoami",
+    # trace:STORY-2243 | ai:claude
+    "aida goal advisor show": "goal advisor show",
+    "aida goal advisor history": "goal advisor history",
 }
 
 # Documented top-level fields of JSON leaves the hermetic audit cannot run.

@@ -68,6 +68,9 @@
 //!
 //! trace:STORY-266 | ai:claude
 
+// The advisor's standing goal. trace:STORY-2243 | ai:claude
+#[cfg(feature = "native")]
+pub mod advisor_goal;
 pub mod agents_config;
 pub mod ai;
 pub mod alias;

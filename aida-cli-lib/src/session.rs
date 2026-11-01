@@ -1783,7 +1783,23 @@ fn contained_session_cwd() -> Option<PathBuf> {
     if let Some(root) = crate::test_ambient::project_root() {
         return Some(root);
     }
-    std::env::current_dir().ok()
+    std::env::current_dir().ok().map(ambient_session_cwd)
+}
+
+/// The process cwd as a contained session resolves it. Production: as is.
+// trace:BUG-2381 | ai:claude
+#[cfg(not(test))]
+fn ambient_session_cwd(cwd: PathBuf) -> PathBuf {
+    cwd
+}
+
+/// BUG-2381: an unpinned test must not resolve the operator's own checkout
+/// (from a seat clone its main is the LIVE main); see
+/// [`contained_cwd_seam::hermetic_unless_fixture`].
+// trace:BUG-2381 | ai:claude
+#[cfg(test)]
+fn ambient_session_cwd(cwd: PathBuf) -> PathBuf {
+    contained_cwd_seam::hermetic_unless_fixture(cwd)
 }
 
 /// The git root a contained session launched from this process writes in:
@@ -1822,6 +1838,85 @@ pub(crate) mod contained_cwd_seam {
         fn drop(&mut self) {
             let prev = self.0.take();
             CWD.with(|c| *c.borrow_mut() = prev);
+        }
+    }
+
+    /// BUG-2381: `cwd`, unless its git root is this crate's own workspace
+    /// checkout — the directory libtest starts in — in which case a
+    /// process-wide hermetic git repository stands in for it. In a seat clone
+    /// or linked worktree that checkout's main is the operator's live main, so
+    /// an unpinned test resolved the live store, its lock and its seat leases
+    /// (and was refused as an unrecorded seat clone). A fixture directory a
+    /// launch `chdir`s into has its own git root and is kept as given.
+    // trace:BUG-2381 | ai:claude
+    pub(crate) fn hermetic_unless_fixture(cwd: PathBuf) -> PathBuf {
+        let workspace = Path::new(env!("CARGO_MANIFEST_DIR")).parent();
+        let canon = |p: &Path| std::fs::canonicalize(p).ok();
+        let git_root = crate::find_project_root_from(&cwd).ok();
+        match (
+            git_root.as_deref().and_then(canon),
+            workspace.and_then(canon),
+        ) {
+            (Some(root), Some(ws)) if root == ws => hermetic_checkout().clone(),
+            _ => cwd,
+        }
+    }
+
+    /// The process-wide hermetic checkout, once created.
+    static HERMETIC_ROOT: std::sync::OnceLock<PathBuf> = std::sync::OnceLock::new();
+
+    /// A plain `git init -b main` checkout under the system temp dir, created
+    /// once per test process: a main checkout of its own, the shape a CI clone
+    /// has, with no store, leases or seat marker. A test binary shares it
+    /// across threads, so no test's `TempDir` can own it; it is removed when
+    /// the process exits (an `atexit` hook, the way `drain_lock` cleans up),
+    /// so test runs leave no `aida-bug-2381-checkout-*` directory behind.
+    // trace:BUG-2381 | ai:claude
+    pub(crate) fn hermetic_checkout() -> &'static PathBuf {
+        HERMETIC_ROOT.get_or_init(|| {
+            let dir = tempfile::Builder::new()
+                .prefix("aida-bug-2381-checkout-")
+                .tempdir()
+                .expect("BUG-2381: create the hermetic checkout")
+                .keep();
+            let dir = std::fs::canonicalize(&dir).unwrap_or(dir);
+            register_hermetic_cleanup();
+            let status = hermetic_git_init(&dir)
+                .status()
+                .expect("BUG-2381: run git init for the hermetic checkout");
+            assert!(status.success(), "BUG-2381: git init {}", dir.display());
+            dir
+        })
+    }
+
+    /// The `git init` for the hermetic checkout, with no system or global
+    /// git config (an operator's `init.templateDir` hooks or
+    /// `init.defaultBranch` never reach it) and an explicit `main` branch.
+    // trace:BUG-2381 | ai:claude
+    pub(crate) fn hermetic_git_init(dir: &Path) -> std::process::Command {
+        let mut command = crate::test_git::git_command();
+        command
+            .env("GIT_CONFIG_NOSYSTEM", "1")
+            .env("GIT_CONFIG_GLOBAL", "/dev/null")
+            .args(["init", "-q", "-b", "main"])
+            .arg(dir);
+        command
+    }
+
+    /// Remove the hermetic checkout at process exit. Unix only (`libc` is a
+    /// unix-only dependency); elsewhere it stays in the temp dir.
+    // trace:BUG-2381 | ai:claude
+    fn register_hermetic_cleanup() {
+        #[cfg(unix)]
+        // SAFETY: `remove_hermetic_checkout` is a no-arg extern "C" fn that
+        // only reads a OnceLock and does best-effort fs; safe to run at exit.
+        let _registered = unsafe { libc::atexit(remove_hermetic_checkout) };
+    }
+
+    #[cfg(unix)]
+    extern "C" fn remove_hermetic_checkout() {
+        if let Some(dir) = HERMETIC_ROOT.get() {
+            let _ = std::fs::remove_dir_all(dir);
         }
     }
 }

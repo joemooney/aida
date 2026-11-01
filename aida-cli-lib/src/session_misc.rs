@@ -1048,10 +1048,15 @@ pub(crate) fn session_handoff_seat(
         ),
         _ => None,
     };
+    // STORY-2243: the advisor's standing goal, read live from the store,
+    // follows the mandate. trace:STORY-2243 | ai:claude
+    let goal =
+        crate::goal_cmd::goal_advisor::handoff_goal_block(&project_root.join(".aida-store"), &seat);
     print!(
         "{}",
-        seat_rotation::compose_handoff_show_with_mandate(
+        seat_rotation::compose_handoff_show_with_goal(
             mandate.as_deref(),
+            goal.as_deref(),
             standing.as_deref(),
             handoff.as_deref(),
             &seat
