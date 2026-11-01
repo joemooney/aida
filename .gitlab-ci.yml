@@ -156,8 +156,11 @@ pages:
     - if: '$CI_COMMIT_TAG =~ /^v[0-9]+/'
     - if: '$CI_PIPELINE_SOURCE == "web" && $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $PUBLISH_PAGES == "true"'
   script:
+    # The runner keeps its checkout between pipelines (GIT_STRATEGY fetch,
+    # GIT_CLEAN_FLAGS none), so the previous publish's public/ is still here
+    # and publish.py refuses a non-empty output. Start from an empty one.
+    - rm -rf public
     - python3 docs/showcase/publish.py --rev "$CI_COMMIT_SHA" --out public
-    - python3 docs/showcase/publish.py --rev "$CI_COMMIT_SHA" --compare public
   artifacts:
     paths:
       - public

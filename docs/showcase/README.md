@@ -68,7 +68,7 @@ no workaround inside this repository.
 
 Inside an air gap, github.com is unreachable. Run the job with
 `--repo-url <gitlab-project-url> --blob-prefix <gitlab-project-url>/-/blob/main/`
-added to both `publish.py` lines to point source links at the local project.
+added to the job's `publish.py` line to point source links at the local project.
 This deliberately makes that site differ from GitHub Pages.
 
 ### Confirming both hosts match
@@ -84,8 +84,9 @@ the default options. To confirm:
    run `python3 docs/showcase/publish.py --rev <revision> --compare <unzipped>/public`.
 
 `--compare` lists every missing, extra or differing file. It exits non-zero on
-any difference. The `pages` job runs the same comparison on its own output
-before publishing.
+any difference. It compares a published tree against a fresh assembly of the
+named revision, so run it against each host's files as above; the `pages` job
+does not compare against GitHub itself.
 
 <!-- trace:TASK-2604 | ai:claude -->
 

@@ -1,6 +1,7 @@
 """Behavioral checks for the shared GitHub/GitLab Pages site assembly."""
 # trace:TASK-2604 | ai:claude
 from pathlib import Path
+import re
 import subprocess
 import tempfile
 import unittest
@@ -45,6 +46,7 @@ class ShowcasePublishTests(unittest.TestCase):
         self.assertEqual(result.returncode, expected, result.stdout + result.stderr)
         return result
 
+    # trace:TASK-2604.ac3fcca5 | ai:claude
     def test_selects_published_set_and_rewrites_links(self):
         out = Path(self.temp.name) / 'public'
         self.run_publish('--out', str(out))
@@ -64,6 +66,7 @@ class ShowcasePublishTests(unittest.TestCase):
         self.assertIn('href="index.html"', overview)
         self.assertIn('blob/main/docs/cli/02-specs.md', overview)
 
+    # trace:TASK-2604.ac834331 | ai:claude
     def test_output_is_deterministic_and_compare_detects_drift(self):
         out = Path(self.temp.name) / 'public'
         self.run_publish('--out', str(out))
@@ -76,6 +79,16 @@ class ShowcasePublishTests(unittest.TestCase):
         self.assertIn('extra:   stray.html', result.stdout)
         self.assertIn('missing: app.js', result.stdout)
 
+    def test_republishing_after_clearing_output_succeeds(self):
+        # Regression for the persistent CI checkout: a second publish into the
+        # same directory works once the job clears it first.
+        out = Path(self.temp.name) / 'public'
+        self.run_publish('--out', str(out))
+        self.run_publish('--out', str(out), expected=1)
+        subprocess.run(['rm', '-rf', str(out)], check=True)
+        self.run_publish('--out', str(out))
+        self.run_publish('--compare', str(out))
+
     def test_refuses_non_empty_output_and_honours_source_override(self):
         out = Path(self.temp.name) / 'public'
         out.mkdir()
@@ -87,6 +100,43 @@ class ShowcasePublishTests(unittest.TestCase):
         index = (other / 'index.html').read_text()
         self.assertIn('href="https://git.local/aida/-/blob/main/docs/cli/02-specs.md#x"', index)
         self.assertIn('href="https://git.local/aida"', index)
+
+
+def pages_job(ci_text):
+    """The `pages:` job block of .gitlab-ci.yml (text up to the next top-level key)."""
+    match = re.search(r'^pages:\n((?:[ \t].*\n|\n)*)', ci_text, re.MULTILINE)
+    assert match, 'no pages job in .gitlab-ci.yml'
+    return match.group(1)
+
+
+class GitlabPagesJobTests(unittest.TestCase):
+    def setUp(self):
+        self.job = pages_job((REPO / '.gitlab-ci.yml').read_text())
+
+    def section(self, key):
+        match = re.search(rf'^  {key}:\n((?:    .*\n|\n)*)', self.job, re.MULTILINE)
+        self.assertIsNotNone(match, f'pages job has no {key}')
+        return [line.strip() for line in match.group(1).splitlines()
+                if line.strip().startswith('- ')]
+
+    # trace:TASK-2604.ac3fcca5 | ai:claude
+    def test_publishes_only_from_tags_or_explicit_manual_run(self):
+        rules = self.section('rules')
+        self.assertEqual(rules, [
+            "- if: '$CI_COMMIT_TAG =~ /^v[0-9]+/'",
+            "- if: '$CI_PIPELINE_SOURCE == \"web\" && $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH"
+            " && $PUBLISH_PAGES == \"true\"'",
+        ])
+        self.assertNotIn('merge_request', self.job)
+        self.assertNotIn('"push"', self.job)
+
+    # trace:TASK-2604.ac3fcca5 | ai:claude
+    def test_clears_previous_public_before_publishing(self):
+        # The runner keeps its checkout between pipelines, so public/ from the
+        # last publish survives and publish.py --out refuses a non-empty dir.
+        script = self.section('script')
+        publish = next(i for i, s in enumerate(script) if 'publish.py' in s and '--out public' in s)
+        self.assertIn('- rm -rf public', script[:publish])
 
 
 if __name__ == '__main__':
