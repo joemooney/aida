@@ -11,7 +11,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T09:05:27.409838422Z
-modified_at: 2026-11-01T14:57:12.740952638Z
+modified_at: 2026-11-01T14:57:14.117430433Z
 req_type: Task
 tags:
 - architecture
@@ -113,6 +113,18 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Typed stdout B2 fixed; required nested-userns positive control fails EPERM on exact-head CI, so slice AC3 remains unaccepted.. Triage reason: Independent review16 retains required nested-positive gate; reviewed HOST diagnostic passes. Obtain finite same-CI-runner A/B and original strict fixture without waiver, same PR3205.'
   created_at: 2026-11-01T14:57:12.740950932Z
   modified_at: 2026-11-01T14:57:12.740950932Z
+- id: 01a1979d-58eb-7e23-b1db-5b9ab0500038
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (TASK-b6b1278890774ef993d2ebc327862470-655):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: acb177db657a
+    Recorded: 2026-11-01T13:03:54.836760277+00:00
+    Findings:
+    1. AC3/C12: exact-head CI run 41308047263 lib-0 job 124852421203 fails task_2705_closed_containment_tracer at nested_stage=unshare errno=1, before mount_positive/protected_unmount. Preserve all nested positive/negative and FD controls. Establish the actual runner/platform precondition versus policy cause with bounded synthetic evidence and obtain required-live exact-head acceptance; do not skip/reclassify EPERM as successful protection. A genuine policy design fork requires advisor ruling before changes; none is established by this log alone.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-01T14:57:13.963129876Z
+  modified_at: 2026-11-01T14:57:13.963129876Z
 history:
 - id: 01a1965b-7cae-7260-83dd-5767f6772d90
   author: joe
