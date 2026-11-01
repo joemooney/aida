@@ -19,12 +19,13 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T02:25:46.947809262Z
-modified_at: 2026-11-01T03:55:13.843843970Z
+modified_at: 2026-11-01T04:16:11.053995296Z
 req_type: Bug
 tags:
 - area:agents
 - area:cargo
 - area:headless
+- docs:impacted
 comments:
 - id: 01a19527-5322-7eb2-86be-d863edb90b76
   author: joe
@@ -109,6 +110,12 @@ history:
 - id: 01a1953f-591c-7a21-b29a-c1cb8e1a309f
   author: joe
   timestamp: 2026-11-01T03:55:19.196609901Z
+  session_id: 01a1953ec6c3
+  harness_version: 2.1.316 (Claude Code)
+  changes: []
+- id: 01a19552-73c9-7cd3-a631-1606ee0053a8
+  author: joe
+  timestamp: 2026-11-01T04:16:11.209535703Z
   session_id: 01a1953ec6c3
   harness_version: 2.1.316 (Claude Code)
   changes: []
