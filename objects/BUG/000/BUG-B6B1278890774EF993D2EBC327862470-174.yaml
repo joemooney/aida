@@ -1,0 +1,34 @@
+id: 01a1966f-6282-7520-ae1f-34c1ed63f59e
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-174
+agreed_id: BUG-2401
+title: Merge train treats observed green lanes as ready before the protected aggregate check registers
+description: |
+  Observed live train3202 for members3190/3177/3198 at14c67e8e97f05d2e02728e55398e184165d59c0c, base4ce0af7. All7 CI matrix lanes and merge-hold-gate appeared green, but required Build (ubuntu-latest) was absent in fresh check rollup/check-runs/jobs and GitHub refused merge with base-branch policy prohibits merge. Train closed itself, landed0. Later API filter=all exposed the successful aggregate Build; no protection was changed. Main branch protection explicitly requires Build (ubuntu-latest) plus merge-hold-gate, strict=false. Both original source and train tree contain build-result with always()/needs build. Thus readiness/registration lags are not equivalent to all required checks satisfied; no claim that Build actually failed or never eventually ran.
+
+  Source: pr_train::RealHost::wait_ci around1582 accepts checks_registered then watch_ci Success; observed rows can omit protected aggregate. BUG1481 already fixes analogous missing-required false green in awaiting; reuse the existing authoritative required-check machinery instead of hardcoding this repo check name.
+
+  Acceptance:
+  1. Train registration/settlement and final landing readiness distinguish missing, pending, failed and all-required-green at pinned head. Absent required context stays non-green and waits/refuses truthfully within existing bounded registration policy; never call merge merely because observed lanes pass.
+  2. Discover the applicable required-check set from authoritative existing forge/protection/ruleset contract; preserve required-over-informational precedence. Failed discovery/unsupported evidence cannot become green. No branch protection/required-context changes, admin merge, manual successful-check injection or weakened independent member/patch-id/hold/mandate gates.
+  3. Fixture the exact seven-green-plus-hold/no-required-Build shape, delayed aggregate registration and success, failure/unavailable metadata, stale/movinghead and final recheck. Existing no-CI, informational CI, red-train rerun/bisection and hold tolerance remain correct.
+  4. Validate live recovery with a sanctioned train and exact protected-head checks before landing. Do not simply retry blind or substitute raw gh merge. Record prior3202 failure and full recovery evidence.
+
+  LIGHT one targeted train/CI filter plus fastgates; fixtures/fakeHOME only, no actual admin/protection changes. Independent review, ordinary guarded integration. Claude quota exhausted; implement on Codex.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-01T09:27:24.546816181Z
+modified_at: 2026-11-01T09:27:24.546816181Z
+req_type: Bug
+tags:
+- ci
+- merge-train
+- registration
+filed_at:
+  code_sha: 4ce0af750fcb68d4adf57496e4e002aefd8ace77
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 4ce0af750fc
+  vendor: codex
