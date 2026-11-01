@@ -5,3 +5,9 @@ last_by:
   vendor: codex
 result: done
 note: Live BUG2378 repair/reconcile completed; fresh remote status now confirms main ac1e318 and store703ead3a2344 agree across origin/gitlab, release v0.16.0 agrees. No force push; current comments continue normal store writes.
+due_since: 2026-11-01T11:26:37.148611861Z
+due_reason: on CronJobFailed:hub-drift-guard
+due_failure:
+  trip_id: hub-drift-guard@2026-11-01T11:18:59.996380484Z
+  job: hub-drift-guard
+  error: 'exit 1: '
