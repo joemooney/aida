@@ -13,12 +13,12 @@ description: |
   3. Fixture regression: search for canonical166 returns unrelated057 first and true166 later; only166 selected. Unrelated-only rows give no associated PR so ordinary fresh pickup is not blocked. Existing true-open-PR collision and renamed/native/agreed ID cases still protect active work.
 
   Codex implementation lane, no global config changes. LIGHT one targeted pr_lookup/association test plus fast gates; fixtures only, CI full gate. Independent review before integration. This is a new observed operational defect, not a follow-up to a nonblocking review nit.
-status: Approved
+status: InProgress
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T08:28:54.983776375Z
-modified_at: 2026-11-01T12:40:54.458551680Z
+modified_at: 2026-11-01T12:43:53.532139110Z
 req_type: Bug
 tags:
 - forge
@@ -101,6 +101,13 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
+- id: 01a19723-453c-70c2-a5a9-f7c86a3f3358
+  author: aida-session-start
+  timestamp: 2026-11-01T12:43:53.532136922Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: ac1e318069f96c3f7e35be7ee0408f2ff4f5f284
   branch: main
