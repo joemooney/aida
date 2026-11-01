@@ -21,7 +21,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T07:26:20.914223641Z
-modified_at: 2026-11-01T12:21:34.088047090Z
+modified_at: 2026-11-01T12:24:23.593565711Z
 req_type: Bug
 tags:
 - architecture
@@ -430,6 +430,10 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a19711-6b92-7391-98d2-b9d4ec5148a8
+  author: joe
+  timestamp: 2026-11-01T12:24:23.698059471Z
+  changes: []
 filed_at:
   code_sha: 53c89700b4da50b5593a2079ed4cc3abaae5cdfe
   branch: main
@@ -441,7 +445,7 @@ failure_reason:
   phase: reviewer
   phase_index: 3
   kind: verdict:request-changes
-  detail: 'STRICT full review: companion constructor gap, effective metadata override/probe gap, four CI ratchets and fresh authorized dispatch/reviewer lifecycle regressions; native host fixture pass acknowledged.'
+  detail: 'Final STRICT full review: effective child metadata override/probe integrity gap, four CI ratchets and fresh authorized dispatch/reviewer lifecycle failures. Preliminary exec-companion finding withdrawn: caller forbids companion. Native host fixture pass acknowledged.'
   recovery_hint: address the review findings, move BUG-B6B1278890774EF993D2EBC327862470-172 back to In Progress, and clear the PR hold only after approval
   shelved_by: reviewer
-  shelved_at: 2026-11-01T12:21:34.088047090Z
+  shelved_at: 2026-11-01T12:24:23.593565711Z

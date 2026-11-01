@@ -25,7 +25,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T22:58:37.964636963Z
-modified_at: 2026-11-01T12:22:35.261024350Z
+modified_at: 2026-11-01T12:25:13.566106973Z
 req_type: Story
 tags:
 - docs
@@ -177,6 +177,11 @@ comments:
   content: 'Advisor ruling: PR3193 e20ca36 already has independent PASS and all prior blockers fixed. It now conflicts with main after authority explainer landed. Next task ONLY: merge current origin/main on existing branch, preserve both reviewed authority guide/pages and canonical glossary/23anchors/search/library/CLI/book outputs. Resolve generated artifacts by rebuilding from their source templates/manifest, never drop either feature or handpatch generated outputs. Source authority guide may now link first-use defined terms to stable glossary anchors perAC4 during this update, preserving all reviewed mandate/grant TTL wording. No old blocker replay or followup chain. FASTTRACK docs-only conflict delta: glossary fixture, portability, showcase build/check/tests, fastgates; no directcargo unless actualRustbehavior changes (thenLIGHT once). Push and stop for fresh independent affected-delta review and exactheadCI; existing review does not cover conflictresolution. Bounded tmp publication allowed under current native sandbox, no permissions relaxation.'
   created_at: 2026-11-01T09:45:59.716016680Z
   modified_at: 2026-11-01T09:45:59.716016680Z
+- id: 01a19712-2e5e-7033-b49c-5c60d3da8429
+  author: mcp
+  content: 'Advisor conflict-only delta complete: pushed merge commit cda8b50138481b9795fd8a9995d472c9711270b3 to existing PR #3193. Merged current origin/main 471540a8c477a50a81170f338d81532cb5dbd329 into e20ca36. Resolved manifest/README with both Authority and Glossary, rebuilt showcase outputs from sources. Authority Markdown (including reviewed mandate/grant TTL wording), glossary templates, CLI implementation and book chapter unchanged by resolution; make book-glossary regenerated via approved render_discipline_glossary fixture with identical output. Passed glossary fixture, anchor verification, portability, showcase build/check, all 21 showcase build/publication tests, all 23 required term anchors/search records, and whitespace check. make check-ci-fast attempted once, interrupted after feature-disabled check began substantial dependency compilation per FASTTRACK ruling; incomplete locally. GitHub confirmed new head; no checks registered at immediate snapshot. Stopped for fresh independent affected-delta review and exact-head CI; no ship or review record. Sandbox checkout .git is read-only; used advisor-authorized temporary Git metadata /tmp/aida-3193-git.Cmmm3J for merge/commit/push. Workspace files contain merged tree, but original read-only local HEAD remains e20ca36; recovery/inspection: GIT_DIR=/tmp/aida-3193-git.Cmmm3J git status. No permissions relaxed.'
+  created_at: 2026-11-01T12:25:13.566092605Z
+  modified_at: 2026-11-01T12:25:13.566092605Z
 history:
 - id: 01a19517-7d5f-7092-83c8-b303944f0e16
   author: joe
