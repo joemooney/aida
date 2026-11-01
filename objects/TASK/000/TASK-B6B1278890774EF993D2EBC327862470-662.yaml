@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-662
 agreed_id: TASK-2709
 title: Merge the engineering audit documentation and verify its public publication
 description: 'Operator explicitly requested PR #3213 shipped to main on 2026-11-01. Scope: engineering-audit.html in showcase and standalone report, plus landing-page and README links. Acceptance: (1) static page and navigation work without external dependencies; generated showcase check and existing publication tests pass; (2) published quantitative claims distinguish measured repository statistics from deployment metrics and illustrative assumptions, with source/methodology references or explicit unknowns; (3) independently approved current head passes required CI and ships through normal AIDA gates to main, with public publication verified against approved source. This is the new audit update; do not reopen or grant duplicate completion to the historical completed initial Pages task TASK-2542/TASK-HOME-130.'
-status: Approved
+status: InProgress
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T20:06:03.816039190Z
-modified_at: 2026-11-01T21:08:18.623759897Z
+modified_at: 2026-11-01T21:10:30.755456004Z
 req_type: Task
 relationships:
 - rel_type:
@@ -73,6 +73,14 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
+- id: 01a198f3-1863-7850-8c5d-caf61961308c
+  author: aida-session-start
+  timestamp: 2026-11-01T21:10:30.755453123Z
+  session_id: 126bbd5a-a92f-452b-ab0b-2637a1db42c2
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 execution_mode: drain
 filed_at:
   code_sha: 6a3f67671a974703590efde5ae2a323f3f7471fa
