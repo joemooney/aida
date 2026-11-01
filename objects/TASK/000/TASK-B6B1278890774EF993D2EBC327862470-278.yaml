@@ -19,7 +19,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T22:17:10.638818101Z
-modified_at: 2026-11-01T00:54:37.432649728Z
+modified_at: 2026-11-01T00:58:15.914875940Z
 req_type: Task
 tags:
 - docs
@@ -71,6 +71,13 @@ comments:
   created_at: 2026-11-01T00:54:37.432649728Z
   modified_at: 2026-11-01T00:54:37.432649728Z
   session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+- id: 01a1949d-3fea-73a0-9801-3e2338d64186
+  author: joe
+  content: 'Criterion acbdbf58 (record the Pages-not-enabled blocker for the operator) has no traced test by design: it is a process criterion, not code behaviour. It is met by the earlier ''Operator blocker'' comment on this spec (AC4) and by docs/showcase/README.md''s GitLab Pages section, which names the admin prerequisites (pages_external_url, wildcard DNS, wildcard TLS) and states there is no in-repo workaround. Its ''untraced'' line in ''aida criteria'' is expected.'
+  created_at: 2026-11-01T00:58:15.914875940Z
+  modified_at: 2026-11-01T00:58:15.914875940Z
+  session_id: 01a1949c630a
+  harness_version: 2.1.316 (Claude Code)
 history:
 - id: 01a1940f-ab2f-7503-bff7-8f14eda1a722
   author: joe
