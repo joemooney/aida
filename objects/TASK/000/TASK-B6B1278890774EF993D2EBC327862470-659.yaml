@@ -14,13 +14,19 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-01T10:03:14.535523367Z
-modified_at: 2026-11-01T10:03:14.535523367Z
+modified_at: 2026-11-01T11:11:48.124384853Z
 req_type: Task
 tags:
 - carried-from:BUG-2388
 - finding-hash:d6c28bb4
 - from-review:PR-3198
 - kind:carried-forward
+comments:
+- id: 01a196ce-f59c-7670-8db2-3827e7a057b2
+  author: joe
+  content: 'Disposition under operator one-ruling/no-followup-chain order: exact carried minor from completed BUG2388 review, alreadyacceptedonce because CI Rust skill_discovery_codex_only_render_and_lint coversAC3 while Pythonend-to-endfixture remainsmanual. No changedclaim/newfailure. Owningchange independentlyreviewed and landed6fefb632 via3203. Supersededby completedBUG2388, no followupPRchain.'
+  created_at: 2026-11-01T11:11:48.124384853Z
+  modified_at: 2026-11-01T11:11:48.124384853Z
 history:
 - id: 01a196b7-3365-7e13-ab84-f5c3864f9ef9
   author: joe
