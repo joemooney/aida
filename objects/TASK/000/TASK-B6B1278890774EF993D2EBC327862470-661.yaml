@@ -12,14 +12,15 @@ description: |-
   1. CI gates red at 1a9bb9a73bc (run 41283260604, step 'Check Rust test portability ratchet'; reproduced locally with scripts/check-portability.sh): aida-cli-lib/src/docs_sweep.rs:128 matches rule toml-value-interpolation ('value interpolated into a hand-built TOML string') for the error message "[docs_sweep] mode = \"{other}\" is not a sweep mode ...". It is an error message, not TOML: reword it (e.g. "unknown [docs_sweep] mode '{other}' (expected report or pr)"; note {other:?} also matches the regex) or add the rule's opt-out comment '// toml-ok: error message, not a TOML value'. Re-run scripts/check-portability.sh before pushing.
   2. AC acec3f70 (per-run cap on files changed, default 20): check_staged (docs_sweep.rs:1668-1694) lets a commit carry the up-to-max_files edited files PLUS up to another max_files same-named derived copies, so one run can change up to 2*max_files files. Count the edited files and derived copies against the one cap (e.g. staged.len() <= max_files, with plan() reserving room for known mirrors, or reporting the excess), and extend a_regenerate_step_that_reaches_past_the_docs_commits_nothing to assert the combined bound.
   Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
-status: Draft
+status: Completed
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-01T10:08:51.706551714Z
-modified_at: 2026-11-01T10:11:15.513753680Z
+modified_at: 2026-11-01T10:11:23.663303651Z
 req_type: Task
 tags:
+- doctor:no-code
 - from-advisor:STORY-2220
 - kind:observation
 - linked:STORY-2220
@@ -32,6 +33,14 @@ comments:
   content: 'ADVISOR DISPUTE RESOLVED: this recurrence imported obsolete 1a9bb9a findings from friendly STORY2220 key. Current independent reviewer07 ledger PR3194#13 is at6b1fd1a and explicitly PASSES both old portability and combined-cap findings; its one blocker is the newly demonstrated local YAML empty-document→idle case. Root inspected exact production parser and recorded a different concrete remedy + real snapshot/tick cases. Latest advisor ruling governs; no identical unchanged finding is being resent. Manual requeue authorized after safe old-source preservation/end. This observation is coordination-only; no code commit expected.'
   created_at: 2026-11-01T10:11:15.513753680Z
   modified_at: 2026-11-01T10:11:15.513753680Z
+history:
+- id: 01a19697-a78f-7093-9a6b-67855e29891e
+  author: joe
+  timestamp: 2026-11-01T10:11:23.663292310Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Completed
 filed_at:
   code_sha: 6fefb63280c352be0194c2cfadf54a085eb55471
   branch: main
@@ -39,3 +48,6 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: 4ce0af750fc
   vendor: codex
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-01T10:11:23.663269350Z
