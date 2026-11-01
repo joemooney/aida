@@ -14,12 +14,12 @@ description: |
   2. The lane's target dir is warm on first use: seeded or shared with the primary's agent-profile target, so the first targeted run isn't a cold full build.
   3. The implementer prompt names that path in place of `setsid nohup`, and a lane that cannot run it says so in its result line (`untested=true`) so the advisor knows.
   4. Test: a headless lane fixture runs one filtered cargo test via the sanctioned path and reports its pass/fail.
-status: NeedsAttention
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T02:25:46.947809262Z
-modified_at: 2026-11-01T03:44:55.403109281Z
+modified_at: 2026-11-01T03:44:57.711506787Z
 req_type: Bug
 tags:
 - area:agents
@@ -66,6 +66,12 @@ comments:
   created_at: 2026-11-01T03:44:55.403109281Z
   modified_at: 2026-11-01T03:44:55.403109281Z
   session_id: 77a7a933-9a3f-4243-9a44-892bcedf206c
+- id: 01a19535-dd6f-7962-80d2-f664a74b411a
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was punted on: design-fork: AC1 needs a background cargo path, but anything detached inside a seat dies when its tool call ends: each Bash call is its own bwrap PID namespace (verified: a setsid nohup sleep 90 was killed and never wrote its file). So the runner must run outside the seat sandbox, and picking it is an architecture/containment decision (CLAUDE.md requires a sketch plus advisor signoff). Options: (a) a host-side cargo job runner owned by the lane launcher, polling a seat-writable inbox and running jobs under the seat''s bwrap profile and cargo slot; (b) exempt AIDA_CARGO_TIMEOUT cargo calls from the 60s HEADLESS WAITING RULE and widen watchdog silence grace; (c) a deputy mode that needs no human terminal. Separately for AC2: lanes are seat clones, not linked worktrees, so aida-host/bin/cargo''s seed (gated on in_linked_wt) never fires. Main target/agent is 45G, so the seed must happen host side at clone creation in seat_clone.rs, or in the wrapper (another repo, not writable from the seat). Details are in the approach comment on this spec.. No triage reason was given.'
+  created_at: 2026-11-01T03:44:57.711501925Z
+  modified_at: 2026-11-01T03:44:57.711501925Z
+  session_id: 77a7a933-9a3f-4243-9a44-892bcedf206c
 history:
 - id: 01a19525-88eb-79e3-aab8-8d511ad2f605
   author: aida-session-start
@@ -84,6 +90,14 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a19535-dd6f-7962-80d2-f65da25d37e1
+  author: joe
+  timestamp: 2026-11-01T03:44:57.711481784Z
+  session_id: 77a7a933-9a3f-4243-9a44-892bcedf206c
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: 7518617e469376bbe5debebd7cadd980e08656e5
   branch: main
@@ -92,9 +106,3 @@ filed_at:
   aida_build_sha: c2b2539263a
   vendor: claude
   session: 77a7a933-9a3f-4243-9a44-892bcedf206c
-attention_reason:
-  category: design-fork
-  detail: 'AC1 needs a background cargo path, but anything detached inside a seat dies when its tool call ends: each Bash call is its own bwrap PID namespace (verified: a setsid nohup sleep 90 was killed and never wrote its file). So the runner must run outside the seat sandbox, and picking it is an architecture/containment decision (CLAUDE.md requires a sketch plus advisor signoff). Options: (a) a host-side cargo job runner owned by the lane launcher, polling a seat-writable inbox and running jobs under the seat''s bwrap profile and cargo slot; (b) exempt AIDA_CARGO_TIMEOUT cargo calls from the 60s HEADLESS WAITING RULE and widen watchdog silence grace; (c) a deputy mode that needs no human terminal. Separately for AC2: lanes are seat clones, not linked worktrees, so aida-host/bin/cargo''s seed (gated on in_linked_wt) never fires. Main target/agent is 45G, so the seed must happen host side at clone creation in seat_clone.rs, or in the wrapper (another repo, not writable from the seat). Details are in the approach comment on this spec.'
-  lean: 'Option (a): a host-side runner thread in the standalone/queue-work launcher, with a seat-writable job inbox. It runs the job in the seat root under the same bwrap profile and through the slot-gated wrapper, and writes .out/.rc files the seat polls in <=60s steps. Seed the agent target at clone creation (host side, with the wrapper''s min-free guard). Prompt names ''aida cargo run-bg'' + poll, and the result line carries untested=true when the runner is unavailable.'
-  raised_by: implementer
-  raised_at: 2026-11-01T03:29:23.730897469Z
