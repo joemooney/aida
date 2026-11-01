@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T00:55:07.917269049Z
-modified_at: 2026-11-01T07:08:36.491543830Z
+modified_at: 2026-11-01T07:08:38.087706314Z
 req_type: Task
 tags:
 - closure:pending
@@ -170,6 +170,11 @@ comments:
   content: 'ADVISOR HANDOFF AUDIT (codex-advisor-05): verified PR-3188 head a2666119e8bbe2ebb8738e3732552ba5ea7d3fca has an independently attested approved verdict at that exact SHA (2026-11-01T06:38:25Z), and Build passed at that head. Serial shipping is already queued behind PR-3182/3190; no duplicate ship started. Round-2 non-blocking findings accepted for this bounded fix: native child remains inside parent sandbox (no escape); statusline trusted-read overhead and redundant stamps do not change authority. STORY-2238 owns the unified containment contract. Preserve the required post-merge live-auth check before considering that handoff action done.'
   created_at: 2026-11-01T06:44:02.414685573Z
   modified_at: 2026-11-01T06:44:02.414685573Z
+- id: 01a195f0-5547-7980-9394-665c2f3d681e
+  author: joe
+  content: 'ADVISOR POST-MERGE GATE: all PR-3188 CI including Build is green at 74daab5561a8a8dcdd289642aaee01d0d1cce689 and the existing serial ship is now running. Added closure:pending so merge does not claim the separately required first live authenticated native Codex lane has already run. After merge, rebuild/promote clean main, verify trusted native posture and Claude parity display, launch BUG-2397 as the first Codex lane, record its actual authenticated model execution, then resolve this post-merge gate. No duplicate ship or bypass started.'
+  created_at: 2026-11-01T07:08:38.087706314Z
+  modified_at: 2026-11-01T07:08:38.087706314Z
 history:
 - id: 01a1949a-7ffe-78a3-8011-c5c0c44dc2d3
   author: joe
