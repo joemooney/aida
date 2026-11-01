@@ -16,12 +16,12 @@ description: |-
   1. Interactive Codex launches (`codex_session_args` / `exec_codex_session`, interactive reviewer, `aida derisk`, `aida human review --guided`) expand `/aida-*` prompts via `codex_inline_prompt` (or `$aida-*` skill syntax) instead of passing unexpanded `/aida-*` slash literals.
   2. `--no-launch` / `--dry-run` hints (`queue_cmd.rs:10987-10992`) render vendor-appropriate skill syntax for Codex.
   3. Unit tests cover interactive Codex argv construction for pickup, review, and derisk.
-status: Approved
+status: InProgress
 priority: High
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T06:45:59.471168135Z
-modified_at: 2026-11-01T06:53:06.950214285Z
+modified_at: 2026-11-01T21:47:56.147334722Z
 req_type: Bug
 tags:
 - audit
@@ -51,6 +51,13 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a19915-5b73-7e00-a4a9-a4981d296bed
+  author: aida-session-start
+  timestamp: 2026-11-01T21:47:56.147330624Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 6dc7d4977ac5e47c42ddfb26597fe3ec5fb70b60
   branch: main
