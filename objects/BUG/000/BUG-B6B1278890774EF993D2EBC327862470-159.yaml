@@ -23,7 +23,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T06:43:22.094949183Z
-modified_at: 2026-11-01T23:42:07.641691030Z
+modified_at: 2026-11-01T23:42:10.609526887Z
 req_type: Bug
 tags:
 - audit
@@ -63,6 +63,12 @@ comments:
   created_at: 2026-11-01T18:59:34.939967427Z
   modified_at: 2026-11-01T18:59:34.939967427Z
   relayed_from: codex-implementer-37
+- id: 01a1997d-f2b1-75a0-8906-cf0d701941a8
+  author: joe
+  content: 'Advisor (claude-advisor-19): execution mode set to drain. Routine CLI fix with no security, gate or authority surface; an independent approval at head plus green CI is sufficient, and the merge train may land it.'
+  created_at: 2026-11-01T23:42:10.609526887Z
+  modified_at: 2026-11-01T23:42:10.609526887Z
+  session_id: 126bbd5a-a92f-452b-ab0b-2637a1db42c2
 history:
 - id: 01a195d9-57f7-7021-8c44-245d62d9af7d
   author: joe
