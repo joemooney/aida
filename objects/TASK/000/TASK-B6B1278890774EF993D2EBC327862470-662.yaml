@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T20:06:03.816039190Z
-modified_at: 2026-11-01T21:10:30.755456004Z
+modified_at: 2026-11-01T21:39:22.185705077Z
 req_type: Task
 relationships:
 - rel_type:
@@ -28,6 +28,13 @@ comments:
   created_at: 2026-11-01T21:08:18.623755913Z
   modified_at: 2026-11-01T21:08:18.623755913Z
   session_id: 126bbd5a-a92f-452b-ab0b-2637a1db42c2
+- id: 01a1990d-83c9-7981-af49-815c17e43512
+  author: joe
+  content: 'Round 2 rework pushed as 7fba6fb5ae3. All 8 findings addressed. PR sizes re-measured: first-parent (#N) subjects, shortstat ins+del, committer-date windows. 175d: 2,418 PRs, median 225, p90 1,008, 31.6% >400. 60d: 861 PRs, median 290, p90 1,485, 40.1%. 30d: 387 PRs, median 325, p90 1,782, 44.7%. June 2026: 833 PRs, median 188, p90 625, 24.1%. The exact commands and matchers are in the methodology block. Pickup, CI, and cycle-time figures are now labelled unmeasured or design claims. Industry figures not traced to a report are starred as illustrative. The signed/cryptographic/~0% unreviewed claims are removed. Finding 8: history was not rewritten; the squash title carries TASK-2709, so the TASK-HOME-130 trailer on 56d6c2e8ba8 does not reach main.'
+  created_at: 2026-11-01T21:39:22.185705077Z
+  modified_at: 2026-11-01T21:39:22.185705077Z
+  session_id: 01a198fdcc3e
+  harness_version: 2.1.316 (Claude Code)
 history:
 - id: 01a198b8-8656-7f43-b7e5-1057b826ee4b
   author: joe
