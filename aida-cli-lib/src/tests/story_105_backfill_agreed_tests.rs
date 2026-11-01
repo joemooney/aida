@@ -350,6 +350,61 @@ fn story_105_retirement_renames_legacy_node_specs_into_the_bound_node() {
     );
 }
 
+/// BUG-2378: the retirement re-points an untracked (per-clone)
+/// `.aida/node.toml` at the bound node, but leaves a copy an older store
+/// still tracks on the shared branch alone: re-pointing it would dirty the
+/// store worktree and, once committed, rename every unbound clone's node.
+// trace:BUG-2378 | ai:claude
+#[test]
+fn bug_2378_repoint_skips_a_tracked_legacy_identity() {
+    let tmp = tempfile::tempdir().unwrap();
+    let store = tmp.path().join(".aida-store");
+    std::fs::create_dir_all(store.join(".aida")).unwrap();
+    std::fs::create_dir_all(store.join("objects")).unwrap();
+    std::fs::create_dir_all(store.join("registry")).unwrap();
+    aida_core::git_ops::init(&store).unwrap();
+    std::fs::write(
+        store.join(".aida/node.toml"),
+        "node_id='7'\nuser_id=0\nhostname=''\nregistered_at='2026-01-01T00:00:00Z'\n",
+    )
+    .unwrap();
+    std::fs::write(
+        store.join(".aida/dispenser.toml"),
+        "[mode.Distributed]\nnode_id='7'\n[sequences]\n",
+    )
+    .unwrap();
+    std::fs::write(
+        store.join("registry/nodes.toml"),
+        "[[nodes]]\nid = \"7\"\nuser_id = 1\nhostname = \"\"\nregistered = \"2026-01-01T00:00:00Z\"\n",
+    )
+    .unwrap();
+    let bound = aida_core::work_binding::bootstrap(&store)
+        .unwrap()
+        .expect("a WORK clone binds its own node")
+        .node_id;
+
+    let (_, plan) = load_plan(&store).unwrap();
+    let retire = plan.retire.as_ref().expect("legacy node 7 retires");
+    assert_eq!(
+        (retire.old_node.as_str(), retire.new_node.as_str()),
+        ("7", bound.as_str())
+    );
+    assert!(plan.repoint_identity, "an untracked identity is re-pointed");
+
+    let ok = crate::test_git::git_command()
+        .args(["add", "-f", ".aida/node.toml"])
+        .current_dir(&store)
+        .status()
+        .unwrap();
+    assert!(ok.success());
+    let (_, plan) = load_plan(&store).unwrap();
+    assert!(plan.retire.is_some());
+    assert!(
+        !plan.repoint_identity,
+        "a tracked identity on the shared branch is left alone"
+    );
+}
+
 #[test]
 fn doctor_fix_agreed_ids_parses() {
     let cli = crate::command_registry::try_parse_from([
