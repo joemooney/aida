@@ -19,12 +19,12 @@ description: |-
   1. `aida skill render` and `aida mcp skill render` resolve skills from `.agents/skills/<name>/SKILL.md` and `.claude/skills/<name>/SKILL.md` (plus legacy flat `.claude/skills/<name>.md` and local overlays), working on Codex-only repos without `.claude/`.
   2. `aida skill lint` scans `.agents/skills/*/SKILL.md` and `.claude/skills/*/SKILL.md` (not just flat `.claude/skills/*.md`) so skills are actually linted.
   3. Regression tests cover a Codex-only repo layout (`.agents/skills/<name>/SKILL.md`, no `.claude/`).
-status: Done
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T06:46:15.376021939Z
-modified_at: 2026-11-01T08:14:29.585366534Z
+modified_at: 2026-11-01T10:02:51.734428895Z
 req_type: Bug
 tags:
 - audit
@@ -99,6 +99,20 @@ history:
   author: joe
   timestamp: 2026-11-01T07:54:19.583058097Z
   changes: []
+- id: 01a1968f-d7b4-7cf0-81ce-ed9c4e11f5ce
+  author: aida-auto-bump
+  timestamp: 2026-11-01T10:02:51.700287192Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a1968f-d7d6-7c91-8f8b-2f390fa35c49
+  timestamp: 2026-11-01T10:02:51.734423521Z
+  agent: implementer
+  commit_sha: 6fefb63280c352be0194c2cfadf54a085eb55471
+  summary: 'BUG-2388 AC1-3 met: shared discover_skill_files/render_skill serve CLI render, MCP render and lint across .agents/skills + .claude/skills folder and legacy flat layouts; Codex-only Rust regression tests; CI fully green at head; bug protocol (touches test file) met.'
+  review_verdict: approved
 filed_at:
   code_sha: 6dc7d4977ac5e47c42ddfb26597fe3ec5fb70b60
   branch: main
@@ -117,6 +131,8 @@ implementation_info:
     cargo fmt --all -- --check and git diff --check (passed)
   implemented_at: 2026-11-01T07:54:16.601776433Z
   implemented_by: joe
+  completed_at: 2026-11-01T10:02:51.700278601Z
+  completion_sha: 6fefb63280c352be0194c2cfadf54a085eb55471
 interface_changes:
   cli:
   - Skill render and lint now discover .agents/skills and Claude folder skills, with legacy flat skills and local overlays preserved.
