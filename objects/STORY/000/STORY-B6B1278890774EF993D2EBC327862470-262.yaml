@@ -27,7 +27,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T23:03:29.192827531Z
-modified_at: 2026-11-01T08:14:13.324508604Z
+modified_at: 2026-11-01T08:44:38.754251187Z
 req_type: Story
 tags:
 - docs
@@ -141,6 +141,11 @@ comments:
   content: 'Round 3: commit 2bb68624ff7 addresses both authoritative findings. Reworded the invalid docs_sweep mode diagnostic to preserve the invalid value without resembling a TOML assignment; no portability allowlist exception. check_staged now bounds the entire staged source-plus-derived-copy set by max_files and reports total, configured cap and excess before any spec filing or commit. Extended a_regenerate_step_that_reaches_past_the_docs_commits_nothing: source plus mirror at cap 1 refuses with no local commit, remote push, filed spec or PR; cap 2 commits exactly those two files. Validation: scripts/check-portability.sh passed; cargo fmt --all -- --check and git diff --check passed; AIDA_CARGO_TIMEOUT=1800 timeout 1800 cargo test --profile agent -p aida-cli-lib docs_sweep --lib passed 36 tests (background session, 10m31s cold compile); make check-ci-fast passed all 36 gates. Existing trusted config/commands, credential routing, docs-only boundary, PR reuse/dedup and report-only default preserved. Updating existing PR #3194 and stopping for independent delta review; no ship or review record.'
   created_at: 2026-11-01T08:14:13.324489272Z
   modified_at: 2026-11-01T08:14:13.324489272Z
+- id: 01a19648-3b29-7f63-873c-95bec31104ed
+  author: joe
+  content: 'Advisor ruling: PR3194 at5d1d8d76189f has independent Codex CHANGES REQUESTED review5727231837; keep existing hold. Prior portability and combined staged-cap fixes PASS and must remain. NEW B1 idle-only: maintenance snapshot QueueDepth calls read_queue_depth(project,None), which counts only scheduler user local queue, excludes other users/global role queues and unwraps failures to0. Use a strict project-wide relevant feature-work predicate for this daily docs job (preserve other jobs documented meter semantics), count other-user and global implementer/reviewer work for this project, and unreadable/corrupt evidence must be unknown/refusal, never idle. Test real snapshot plus schedule tick with other-user/global work and failure evidence, not only scaffold string. NEW B2 dedup: docs_sweep LiveHost::filed_keys1633 uses advisory list_summaries().unwrap_or_default(), allowing stale/error lookup to file duplicates. Use authoritative current dedup read and propagate refusal before filing, preserving one-run/no-partial side effects and existing locking. Add stale/error evidence regression with an already-filed docs-sweep-key; test production adapter seam rather than only fake always-current set. Root verified both sources against pinnedhead. Bundle both in samePR, no followup. LIGHT one targeted docs_sweep/schedule boundary regression plus fast gates; background cargo, no broad suite or repeated capped compiles. Use bounded tmp publication checkout if native source .git readonly, no sandbox or authority relaxation.'
+  created_at: 2026-11-01T08:44:38.569695589Z
+  modified_at: 2026-11-01T08:44:38.569695589Z
 history:
 - id: 01a19517-853a-7dc1-addd-62b1b73de3be
   author: joe
