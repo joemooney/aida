@@ -25,7 +25,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-01T06:47:26.114384272Z
-modified_at: 2026-11-01T07:01:22.770093059Z
+modified_at: 2026-11-01T07:01:26.814522907Z
 req_type: Bug
 tags:
 - audit
@@ -36,6 +36,12 @@ relationships:
 - rel_type: Child
   target_id: 01a19499-932e-79f0-a3e1-1299dfe355ad
   created_at: 2026-11-01T06:47:31.988677482Z
+comments:
+- id: 01a195e9-c09e-7a61-89b2-14fe52920c41
+  author: joe
+  content: 'ADVISOR DISPOSITION: APPROVED. Verified .aida/agents.toml lines68-69 explicitly override workspace-write with danger-full-access; verified TASK-2631 native mode strips posture flags and sets workspace-write, so this is repo-default/scaffold cleanup rather than a blocker of that accepted native launch path. Remove the dangerous default, retain configured Codex vendor and Claude parity, and add the already verified TASK-2631 OpenAI endpoints to the canonical scaffold template with a fixture. No new permissions, grants or write roots. Codex lane once TASK-2631 is live; normal independent review/CI gates.'
+  created_at: 2026-11-01T07:01:26.814522907Z
+  modified_at: 2026-11-01T07:01:26.814522907Z
 history:
 - id: 01a195dd-0846-7b42-9f84-f4128c00ca5d
   author: joe
