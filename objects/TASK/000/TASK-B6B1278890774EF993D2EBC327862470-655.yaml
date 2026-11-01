@@ -6,12 +6,12 @@ description: |-
   Acceptance: (1) Common data-driven vendor capability/trusted-policy/launch-boundary contract and a closed model-free doctor/config probe, with precise ready/unsupported/refused cause. No arbitrary harness or stored shell through partial backend. (2) Same intended production filesystem/supervisor builder executes fixed synthetic lane with private namespaces/proc, capdrop, terminal-injection refusal, FD hygiene, typed own-write roots/protected paths and teardown. (3) Required-live fixture proves permitted synthetic writes, denied outside/proc/FD/protected-path writes and process teardown; unavailable bwrap/userns/TTY/channel fails closed. (4) Current real-vendor behavior unchanged and unsupported partial backend remains unselectable. Layers: trusted config/capability data, public diagnostics, runtime supervisor/filesystem, integration tests. Signed sliceA.
 
   All signed STORY2238 sketch C1-C12 and BUG2398 B1-B4 apply. Linux only, fakeHOME/synthetic tests, no global user settings or schedules. No partial backend may report AIDA containment applied or launch ordinary agents until all required protections are ready; named refusal, no fallback. STRICT independent review, operator merge floor. LIGHT one targeted test plus fast gates; shared infra or >10files adds touched-test/compile, fullsuiteCI only. Longcargo background, no slotbypass. Parent all7AC remain open until final installed-tool evidence; no slice alone completes parent.
-status: NeedsAttention
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T09:05:27.409838422Z
-modified_at: 2026-11-01T19:22:33.802382791Z
+modified_at: 2026-11-01T19:22:35.820932102Z
 req_type: Task
 tags:
 - architecture
@@ -136,6 +136,11 @@ comments:
   content: 'Advisor ruling: Bounded CI instrumentation and READONLY exact failing-runner profile/package/attachment inventory ONLY. Preserve production backend and all signed protections/tests/typed refusal, no LSM/policy/sysctl/unconfined/profile renaming/skip changes. Same TASK2705/PR3205, base advertiseda3590fe. New own-session adoption of preserved strictclone permitted after freshly verified20-file public byte proof; no actor30context reuse or source cleanup. Full /tmp/aida-TASK2705-profile-inventory-brief.txt. Obtain same-instance unchanged synthetic failure plus profile/package facts, not infer cause from profile label. Architecture or host-policy remedy still requires separate grounded judgment/signoff. No completion claim from diagnostic evidence.'
   created_at: 2026-11-01T19:22:33.712016108Z
   modified_at: 2026-11-01T19:22:33.712016108Z
+- id: 01a19890-4bac-7bc3-a024-b2302e73161f
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Authorized CI experiment conforms, but repeated same-runner evidence and original required-live strict/generic tests leave AC3/C12 unmet.. Triage reason: Actual unchanged composednamespace rawunshareEPERM survives both same-runner A/B controls. Need exact running profile/rules/package/attachment facts to identify denying rule; old runner gone, add bounded readonly same-next-failing-run inventory without backend or test-policy change.'
+  created_at: 2026-11-01T19:22:35.820930548Z
+  modified_at: 2026-11-01T19:22:35.820930548Z
 history:
 - id: 01a1965b-7cae-7260-83dd-5767f6772d90
   author: joe
@@ -205,6 +210,13 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a19890-4bac-7bc3-a024-b226dfdc4bc9
+  author: joe
+  timestamp: 2026-11-01T19:22:35.820913776Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: 4ce0af750fcb68d4adf57496e4e002aefd8ace77
   branch: main
@@ -212,11 +224,3 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: 4ce0af750fc
   vendor: codex
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: Authorized CI experiment conforms, but repeated same-runner evidence and original required-live strict/generic tests leave AC3/C12 unmet.
-  recovery_hint: address the review findings, move TASK-B6B1278890774EF993D2EBC327862470-655 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-01T15:30:37.130887954Z
