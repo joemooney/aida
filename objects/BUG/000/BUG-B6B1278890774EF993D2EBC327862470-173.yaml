@@ -18,7 +18,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T08:28:54.983776375Z
-modified_at: 2026-11-01T15:57:36.778377180Z
+modified_at: 2026-11-01T15:58:15.114705349Z
 req_type: Bug
 tags:
 - forge
@@ -155,6 +155,15 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-01T15:57:36.647359120Z
   modified_at: 2026-11-01T15:57:36.647359120Z
+- id: 01a197d5-35ef-7d51-9111-4897df764677
+  author: joe
+  content: |-
+    Advisor ruling: ADVISOR BINDING LIVE REWORK sameBUG2400/PR3208 SAMEbranchcodex/bug-2400-exact-pr atab88380ae8b450f070fe26b2f9610ec1d0eac23f. ReadFULL freshindependent18 /tmp/aida-review3208-round3-result.md REQUESTCHANGESledger13, timestamp15:30:09Z. Reviewer18normalPRIMARYfetch+actualforgepinincludes6linetestguardfix; no stale0f5review. Rootverified publishedpositive-matchreturnprecedesterminalHEADcheck. B2resolverboundedonceandB1no-matchpaginationaddressed; SOLEremainingB1AC1/2 current-snapshotassociation defect:
+    pr_lookup.rs610-611 ifmatched returnOktrue runsBEFORE613-623declaredheadcheck. Detailcommits1/headA +onevalidcommitrowSHA_B/trailer(BUG2392), B!=A =>MATCH evenallmetadata contradictsHEAD. RESTpages movingPRnumberendpointnotpinned; no aftercollectiondetailrevalidation. Earlypartialpagepositivealsolacksproofmatchingcommitbelongsvalidatedcurrenthead. firstsingleFound andallopenOkcanmisassociatewronghead/duplicates. Knownexistenceneedn'tenumerateirrelevantrest, BUTmustproveassociationtoVALIDATEDPRsnapshot.
+    Implementboundedpinned-headmembership ORstablevalidatedcollection/recheck preservingexistingfiniteaggregatebudget. Head/countdrift,inconsistent/missinguncertainmembership=>typedunknown, neverwrong-headpositive. Covermatchingtrailerwithmismatchedhead,mixedtitle-visible+wrong-headduplicate, head/countchangeacrossrequests, earlymatchingpage andvalidpositive. Don'tjustmovecomparisonwherefirstpartialpagecan'tlegitmatchterminal; chooseminimalactualhead-boundproof. Keepfirst100fix/endpoint250captypedunknown/structuredschema/uniqueSHAs/pages/completelistandprovenexistencedistinction. No newglobalunknownpolicy/ownership/alias/GitLab/authoritychanges. SamePRbundle, NOnewfollowup.
+    CONTEXT CORRECTION08:58: actor26TERMINAL0. Oldlease01a1977e7b3cNORMALCLIendedwithoutinclude-in-use AFTERall4cumulativesourcefilesbyteequalpublicabarchive0600 /tmp/aida-BUG2400-ab-reviewed-source.tar plus /tmp/aida-BUG2400-ab-preservation.json. No source lost; CLIalsoauto-salvaged anddigested8mailmessages. StartNEWstrictscopedpickup atPUBLICab88380 SAMEbranch/SAMEPR, ownNEWgrant/lease/context; NEVERsource26deadcontext/rootgrant. SupportedreviewparkedNeedsAttention; advisorreworkpromotesclaimableApproved, newpickupownsInProgress. No completionclaim. ExistingfocusedEnvLockfailureandcorrectedqueuedtestsremaintruthful; oldfast36PASSwaspre-correction. Don'tkillvalidCargo orrestartbecausewait. NewchangedsourcejustifiesONEfocusedbug2400test+fastafterfixnormaladmission; existingqueuedrunifalreadystartedrepresentsitsexactsourceandisnotnewfixproof. No broadtests/unfilteredlib/slotbypass/outertimeout. Reportnewsource/publicbyteidentity/fullnewhead, normalpushSAMEPR andactualvalidation. RootthenfreshDIFFERENTSTRICTdeltareview+exactCI; noownapproval/ship/merge/holds/rawledger.
+  created_at: 2026-11-01T15:58:15.023931215Z
+  modified_at: 2026-11-01T15:58:15.023931215Z
 history:
 - id: 01a1963a-2b42-7cd2-a795-0772bcc408d1
   author: joe
