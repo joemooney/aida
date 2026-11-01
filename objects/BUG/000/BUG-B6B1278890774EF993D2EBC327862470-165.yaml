@@ -22,7 +22,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T06:47:10.885136620Z
-modified_at: 2026-11-01T23:42:13.199990002Z
+modified_at: 2026-11-01T23:42:16.706280878Z
 req_type: Bug
 tags:
 - audit
@@ -1327,6 +1327,12 @@ comments:
   modified_at: 2026-11-01T23:28:12.122296202Z
   session_id: 01a1993f2378
   harness_version: 2.1.316 (Claude Code)
+- id: 01a1997e-0a82-79c1-a5ab-bb84f7336a1e
+  author: joe
+  content: 'Advisor (claude-advisor-19): execution mode set to drain. Routine CLI fix with no security, gate or authority surface; an independent approval at head plus green CI is sufficient, and the merge train may land it.'
+  created_at: 2026-11-01T23:42:16.706280878Z
+  modified_at: 2026-11-01T23:42:16.706280878Z
+  session_id: 126bbd5a-a92f-452b-ab0b-2637a1db42c2
 history:
 - id: 01a195dc-cb7c-7693-b0fc-4f832c1863f5
   author: joe
