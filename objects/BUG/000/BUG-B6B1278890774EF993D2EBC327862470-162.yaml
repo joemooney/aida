@@ -24,7 +24,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T06:46:15.376021939Z
-modified_at: 2026-11-01T07:54:43.834574059Z
+modified_at: 2026-11-01T08:14:29.585366534Z
 req_type: Bug
 tags:
 - audit
@@ -55,6 +55,11 @@ comments:
   content: 'Handoff bookkeeping: PR #3198 is open and queue done succeeded. MCP advisory lease 01a19603ffb1 could not be released: the connected transport closed; a fresh stdio release_task then returned Read-only file system (os error 30). No session teardown or permissions bypass attempted. The launcher-owned session is retained for its normal handoff cleanup.'
   created_at: 2026-11-01T07:54:43.834574059Z
   modified_at: 2026-11-01T07:54:43.834574059Z
+- id: 01a1962c-a0d1-70e0-944c-9c7f01602b6a
+  author: joe
+  content: 'PROXY DECISION: accept the sole minor review finding without follow-up. tests/test_skill_discovery.py remains an optional end-to-end cross-surface probe; CI Rust unit tests directly cover the Codex-only acceptance and shared renderer used by MCP, and required CI is green at fa636d0. This review does not introduce a mandatory new CI lane. All three ACs independently approved at that head.'
+  created_at: 2026-11-01T08:14:29.585366534Z
+  modified_at: 2026-11-01T08:14:29.585366534Z
 history:
 - id: 01a195dc-0e68-73b0-b950-a0f3ab5b3b3f
   author: joe
