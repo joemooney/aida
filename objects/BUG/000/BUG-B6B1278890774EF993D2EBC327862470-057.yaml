@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T21:37:29.201146410Z
-modified_at: 2026-11-01T07:01:29.045314498Z
+modified_at: 2026-11-01T07:04:52.038026228Z
 req_type: Bug
 tags:
 - epic-home-003
@@ -133,6 +133,11 @@ comments:
   content: 'ADVISOR RECOVERY EVIDENCE: old PR-scope lease 01a195c021a4 at aida-pr-3177 had no process with cwd in that tree, but three dirty tracked files. Preserved all changes using git stash before ending that clean lease. Recovery object: 8cb6afc91edf540fe5e3c4c31b164214a4a35722 (AIDA preservation: stale PR-3177 worktree before independent review; advisor05 2026-11-01). The PR already has its round-3 fix plus a normal merge from main at 9383d0215dda. No branch deleted and no dirty work discarded. Fresh independent review is being launched in a separate path.'
   created_at: 2026-11-01T06:53:38.593154879Z
   modified_at: 2026-11-01T06:53:38.593154879Z
+- id: 01a195ec-e1ec-75e0-8ae4-c8efe4d3e961
+  author: joe
+  content: 'Advisor ruling: ADVISOR REWORK BRIEF: source verified. last_verdict_at in rework_direction.rs78-89 incorrectly maxes the actual Recorded timestamp with the later queue-rework findings-comment creation time. Use a valid live Recorded timestamp as the verdict cutoff; use findings-comment created_at only when Recorded is unavailable. Add actual assemble_pickup_prompt regression: verdict T0, ADVISOR REWORK BRIEF at T1, queue findings comment T2 -> brief leads, findings SUPERSEDED CONTEXT, no AUTHORITATIVE TASK. Preserve older-brief behavior. Bundle the nonblocking fetch finding now: if bounded fetch fails/times out, skip conflict forecast rather than running merge-tree on stale refs, and test it. Do not open another follow-up. One targeted rework_direction test filter with AIDA_CARGO_TIMEOUT and tool background mode plus make check-ci-fast; if sandbox cannot run the gate, report unavailable and let CI prove it, never repeat 55s cargo attempts. Push one commit to same PR then stop for independent delta review. No gate waiver.'
+  created_at: 2026-11-01T07:04:51.948515908Z
+  modified_at: 2026-11-01T07:04:51.948515908Z
 history:
 - id: 01a193e8-1070-7260-a5d0-2973465ae4a2
   author: aida-session-start
