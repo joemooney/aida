@@ -11,12 +11,19 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-31T22:23:53.631532267Z
-modified_at: 2026-10-31T22:23:53.631532267Z
+modified_at: 2026-11-01T03:11:50.258630330Z
 req_type: Task
 tags:
 - from-review:PR-3175
 - mandate
 - severity:minor
+comments:
+- id: 01a19517-89f2-74b0-a23f-dda333fc6041
+  author: joe
+  content: 'ADVISOR RULING (20:15): REJECTED. extend() can only renew an Active mandate, so no AIDA code path can write this record; it takes a same-uid hand edit, which the threat model excludes (the spec says so itself). That isn''t worth a lane under the zero-open-list goal. Revisit only if mandate records become cross-user.'
+  created_at: 2026-11-01T03:11:50.258630330Z
+  modified_at: 2026-11-01T03:11:50.258630330Z
+  session_id: 77a7a933-9a3f-4243-9a44-892bcedf206c
 history:
 - id: 01a1942b-6c58-75b3-9ae3-4448e17ea6fe
   author: aida-backfill-agreed-ids
