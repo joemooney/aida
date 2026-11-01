@@ -1,0 +1,38 @@
+id: 01a195cd-d1a7-7da1-a2e4-2327bf5a9d16
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-158
+agreed_id: BUG-2384
+title: pr ship step 5 cleanup spawns git once per shipped SHA per seat clone (~160k processes) while holding the main merge-lease, blocking every other ship
+description: |
+  ## Observed (2026-10-31 23:30, PR-3184 ship at the operator's terminal)
+  `aida pr ship 3184` merged, pulled and completed STORY-2215. It then sat in step 5 (cleanup) for more than 20 minutes while holding the `main` merge-lease. A concurrent `serial-ship.sh 3188` gave up after 180s ("another merger holds the 'main' merge-lease").
+
+  Step 5 runs the `aida-seat-unpushed` shell script inside bwrap in each seat clone (the host has about 26 salvageable clones). The script receives about 6,400 "shipped" SHAs as argv and runs `git cat-file -e` once per SHA, then `git rev-list` once per ref. That is about 6,400 process spawns per clone, roughly 160,000 for a single ship.
+
+  ## Expected
+  - Post-merge cleanup does not hold the merge-lease. Release the lease once main is pulled; cleanup is not a merge step.
+  - The unpushed check is O(refs), not O(shipped SHAs × clones). Pass the shipped set on stdin to one `git rev-list --stdin` or `cat-file --batch-check`, or compare against `--remotes=origin` alone.
+  - The sweep is bounded: a time budget per clone, and progress output so it does not look hung.
+
+  ## Acceptance
+  - A ship with 25 or more seat clones finishes step 5 in under 30s, or reports progress and continues in the background.
+  - The merge-lease is released before the cleanup step, and a test asserts it.
+  - A test covers the unpushed check with a large shipped set and no per-SHA spawn.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-01T06:30:56.167167026Z
+modified_at: 2026-11-01T06:30:56.167167026Z
+req_type: Bug
+tags:
+- area:ship
+- merge-lease
+- performance
+filed_at:
+  code_sha: 962ca07af25ca4de3426bdd951fb2d6782568184
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: a83e05d785d
+  vendor: claude
+  session: a31b25d9-60a5-4347-a85b-4c74ab06f274
