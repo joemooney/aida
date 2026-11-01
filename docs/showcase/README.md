@@ -95,7 +95,7 @@ does not compare against GitHub itself.
 `python3 docs/showcase/build.py` renders every manifest-selected guide into the
 shared `page-template.html` layout: `getting-started.html`, `configuration.html`,
 `workflow.html`, `autonomy.html`, `trust.html`, `metrics.html`, `setup.html`,
-`capabilities.html`, `integrations.html` and `air-gapped.html`,
+`capabilities.html`, `integrations.html`, `air-gapped.html` and `authority.html`,
 plus `library.html` and `search-data.js`. Edit the corresponding Markdown,
 templates or `guide.css`, then rebuild; do not hand-edit derived outputs.
 Python 3 with its standard library and Git are required. The renderer intentionally supports
@@ -113,7 +113,7 @@ page and search artifact without writing files; the fast CI gate runs this check
 ## Curated library and publication scope
 
 `publication.json` is the explicit source allowlist and audience classification.
-It currently selects ten tracked product guides, classified as human or operator
+It currently selects eleven tracked product guides, classified as human or operator
 reading. Technical references remain links; historical, internal, archived,
 plan/spike/security/agent material and runtime data are not republished or indexed.
 The manifest keeps publication scope explicit; adding a source requires checking its audience, currentness and references.
