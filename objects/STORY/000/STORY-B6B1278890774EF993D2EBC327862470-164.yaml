@@ -34,7 +34,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T19:23:04.998731220Z
-modified_at: 2026-11-01T01:24:20.130485292Z
+modified_at: 2026-11-01T01:26:31.820761407Z
 req_type: Story
 tags:
 - architecture
@@ -221,6 +221,12 @@ comments:
   modified_at: 2026-11-01T01:05:05.734650669Z
   session_id: 01a194945b4b
   harness_version: 2.1.316 (Claude Code)
+- id: 01a194b7-208c-7523-949e-19062158607e
+  author: joe
+  content: 'ADVISOR REWORK BRIEF round 3 (18:27), PR-3185. Round-2 findings are all addressed. Remaining: (1) CI red at head on lib-0 and cli-1 ''Run tests'' (main is green). The failing test names were not extractable by the advisor at 18:27; the next advisor session will paste them here. Until then, run the story_164 / story_095 / story_105 integration binaries and the aida-core allocation_ unit tests to find them. (2) Promoted hub pools skip the on-hub (NotOnHub) spendability check after enroll-root: apply the check to materialized hub pools too, with a test.'
+  created_at: 2026-11-01T01:26:31.820761407Z
+  modified_at: 2026-11-01T01:26:31.820761407Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
 history:
 - id: 01a1939c-ffb0-7d40-b083-9d0d5a3d6156
   author: joe
