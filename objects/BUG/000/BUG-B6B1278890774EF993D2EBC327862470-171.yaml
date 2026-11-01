@@ -1,0 +1,32 @@
+id: 01a195e4-a4c4-79e3-a0fc-f163c222009c
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-171
+agreed_id: BUG-2397
+title: mail-wake service install writes an invalid quoted WorkingDirectory and reports success after systemctl fails
+description: |
+  Observed during the authorized handoff live action 2026-11-01: `aida mailbox wake-service install` enabled the unit, systemctl rejected it, but the CLI exited 0 and printed installed. `systemd-analyze verify ~/.config/systemd/user/aida-mail-wake-2b20e8a3bd225e89.service` reports line 7: WorkingDirectory= path is not absolute: "/home/joe/ai/aida". mailbox_wake_run::unit_text applies ExecStart argument quoting to WorkingDirectory, whose directive does not remove these quotes. The handoff service remains inactive despite installed:true.
+
+  Acceptance:
+  1. Emit a valid WorkingDirectory directive using directive-appropriate escaping (including spaces and percent signs), independently of ExecStart argv escaping. Validate a generated fixture with systemd-analyze verify when available; keep a pure regression for the literal ordinary absolute path.
+  2. Installer must report systemctl daemon-reload/enable/start failures and exit nonzero instead of claiming success; status must distinguish installed from running/failed. Tests use stub systemctl and fake HOME, never real user service state.
+  3. Reinstall the corrected reviewed merged binary on this host, verify service is active, and record evidence on this spec. Retain closure:pending through this live action.
+  4. Preserve exact-thread arming, opt-outs, notification deduplication, watcher locking and grant boundaries.
+
+  Source: aida-cli-lib/src/mailbox_wake_run.rs unit_text/systemd_quote/systemctl; tests in mailbox_wake_run_tests.rs. Local gate LIGHT: one mailbox_wake_run filtered cargo test plus make check-ci-fast, long cargo in tool background with AIDA_CARGO_TIMEOUT. Independent review, green CI and ordinary ship gates remain required. Codex implementer lane after TASK-2631 is live.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-01T06:55:52.004339498Z
+modified_at: 2026-11-01T06:55:52.004339498Z
+req_type: Bug
+tags:
+- mail-wake
+- systemd
+- vendor:codex
+filed_at:
+  code_sha: 6dc7d4977ac5e47c42ddfb26597fe3ec5fb70b60
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: a83e05d785d
+  vendor: codex
