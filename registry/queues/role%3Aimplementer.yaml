@@ -1,4 +1,11 @@
 - user_id: role:implementer
+  requirement_id: 01a1936a-61a6-73a0-a35d-c22c1ce50b32
+  position: 266000
+  added_by: role:implementer
+  note: PR3185 conflicts with merged BUG2378; preserve both reviewed behaviors, fresh independent review at resolution head
+  added_at: 2026-11-01T08:19:14.517033441Z
+  for_role: implementer
+- user_id: role:implementer
   requirement_id: 01a19434-2aa8-74d0-bccf-38faf512e4c7
   position: 267000
   added_by: role:implementer
@@ -39,13 +46,6 @@
   added_by: role:implementer
   note: PR-3196 round-1 AC3/AC5 prose corrections; latest complete advisor brief names every correction and the post-merge publication gate.
   added_at: 2026-11-01T06:48:51.001830333Z
-  for_role: implementer
-- user_id: role:implementer
-  requirement_id: 01a1936a-61a6-73a0-a35d-c22c1ce50b32
-  position: 278000
-  added_by: role:implementer
-  note: 'PR-3185 review round 5: CHANGES REQUESTED'
-  added_at: 2026-11-01T06:05:28.592964774Z
   for_role: implementer
 - user_id: role:implementer
   requirement_id: 01a11874-024a-71b2-935d-56a2a7e89778
