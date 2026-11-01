@@ -11,6 +11,10 @@ use anyhow::Result;
 use colored::Colorize;
 
 use crate::copy_to_clipboard;
+
+// The advisor's standing goal. trace:STORY-2243 | ai:claude
+#[path = "goal_advisor.rs"]
+pub(crate) mod goal_advisor;
 use crate::deep_link;
 use crate::forge::ForgeKind;
 
@@ -25,6 +29,22 @@ use crate::forge::ForgeKind;
 pub(crate) struct GoalClause {
     description: String,
     pub(crate) verify: String,
+    /// What the clause checks and its operand, so a stored goal can be
+    /// evaluated (`aida goal advisor check`). trace:STORY-2243 | ai:claude
+    kind: aida_core::advisor_goal::ClauseKind,
+    arg: String,
+}
+
+impl GoalClause {
+    /// The clause as stored in an advisor goal. trace:STORY-2243 | ai:claude
+    pub(crate) fn to_record(&self) -> aida_core::advisor_goal::GoalClauseRecord {
+        aida_core::advisor_goal::GoalClauseRecord {
+            kind: self.kind.clone(),
+            arg: self.arg.clone(),
+            description: self.description.clone(),
+            verify: self.verify.clone(),
+        }
+    }
 }
 
 /// Build the ordered list of `GoalClause`s from the `aida goal` flags.
@@ -40,6 +60,7 @@ pub(crate) fn build_goal_clauses_for_forge(
     queue_empty: Option<&str>,
     forge: ForgeKind,
 ) -> Result<Vec<GoalClause>> {
+    use aida_core::advisor_goal::ClauseKind;
     let mut clauses: Vec<GoalClause> = Vec::new();
 
     if let Some(name) = batch {
@@ -50,6 +71,8 @@ pub(crate) fn build_goal_clauses_for_forge(
                 name
             ),
             verify: format!("`aida list --tags batch:{}` returns no rows", name),
+            kind: ClauseKind::Batch,
+            arg: name.to_string(),
         });
     }
     if let Some(id) = epic {
@@ -59,12 +82,16 @@ pub(crate) fn build_goal_clauses_for_forge(
                 id
             ),
             verify: format!("`aida list --parent {}` returns no rows", id),
+            kind: ClauseKind::Epic,
+            arg: id.to_string(),
         });
     }
     if let Some(id) = spec {
         clauses.push(GoalClause {
             description: format!("spec {} is status Completed", id),
             verify: format!("`aida show {}` reports `Status: Completed`", id),
+            kind: ClauseKind::Spec,
+            arg: id.to_string(),
         });
     }
     if let Some(n) = pr {
@@ -76,6 +103,8 @@ pub(crate) fn build_goal_clauses_for_forge(
         clauses.push(GoalClause {
             description: format!("{noun} #{n} is merged"),
             verify,
+            kind: ClauseKind::Pr,
+            arg: n.to_string(),
         });
     }
     if let Some(role) = queue_empty {
@@ -86,6 +115,8 @@ pub(crate) fn build_goal_clauses_for_forge(
                 "`aida queue list --for {} --no-in-flight` shows no queued items",
                 role
             ),
+            kind: ClauseKind::QueueEmpty,
+            arg: role.to_string(),
         });
     }
 
@@ -328,9 +359,16 @@ mod goal_command_tests {
 /// evaluator can check it deterministically — no vague "make the
 /// tests pass" conditions that loop forever.
 // trace:TASK-242 | ai:claude
+///
+/// `aida goal advisor …` keeps the operator's standing goal for the advisor
+/// seat in the store (see `aida goal advisor --help`).
 #[derive(clap::Parser, Debug)]
-#[clap(name = "goal")]
+#[clap(name = "goal", args_conflicts_with_subcommands = true)]
 pub(crate) struct GoalArgs {
+    // trace:STORY-2243 | ai:claude
+    #[clap(subcommand)]
+    pub command: Option<GoalCommand>,
+
     /// Condition: all specs tagged `batch:<NAME>` reach a terminal
     /// status (Completed/Rejected). `batch:` prefix optional.
     #[clap(long, value_name = "NAME")]
@@ -372,6 +410,56 @@ pub(crate) struct GoalArgs {
     pub as_deep_link: bool,
 }
 
+/// `aida goal` subcommands.
+// trace:STORY-2243 | ai:claude
+#[derive(clap::Subcommand, Debug)]
+pub(crate) enum GoalCommand {
+    /// The operator's standing goal for the advisor seat, kept in the
+    /// requirements store so a new or rotated advisor session (any vendor)
+    /// reads the same goal. Only the operator sets it, from their own
+    /// terminal; any seat can show, check and list it.
+    Advisor {
+        #[clap(subcommand)]
+        action: AdvisorGoalAction,
+    },
+}
+
+/// `aida goal advisor` actions.
+// trace:STORY-2243 | ai:claude
+#[derive(clap::Subcommand, Debug)]
+pub(crate) enum AdvisorGoalAction {
+    /// Set the advisor's goal: free text plus optional checkable clauses.
+    /// Replaces the active goal; the previous one stays in history. Operator
+    /// only, at an interactive terminal outside any agent session.
+    Set {
+        /// The goal, in your words.
+        text: String,
+        /// Clause: all specs tagged `batch:<NAME>` are resolved.
+        #[clap(long, value_name = "NAME")]
+        batch: Option<String>,
+        /// Clause: all direct children of `<ID>` are resolved.
+        #[clap(long, value_name = "ID", value_parser = crate::spec_arg::spec_id)]
+        epic: Option<String>,
+        /// Clause: spec `<SPEC-ID>` is Completed.
+        #[clap(long, value_name = "SPEC-ID", value_parser = crate::spec_arg::spec_id)]
+        spec: Option<String>,
+        /// Clause: PR `<N>` is merged.
+        #[clap(long, value_name = "N")]
+        pr: Option<u64>,
+        /// Clause: the given role's queue is empty.
+        #[clap(long, value_name = "ROLE")]
+        queue_empty: Option<String>,
+    },
+    /// Show the active goal: text, clauses with their verify commands, who
+    /// set it and when.
+    Show,
+    /// Check each clause and print met/unmet. Exits 0 only when every clause
+    /// is met; a goal with no checkable clauses is never met.
+    Check,
+    /// Every goal set, newest first.
+    History,
+}
+
 // `aida goal` is a pure condition generator — no store needed.
 // trace:TASK-242 | ai:claude
 fn run_goal(
@@ -380,7 +468,12 @@ fn run_goal(
 ) -> anyhow::Result<()> {
     use crate::*;
     let args = <GoalArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    // trace:STORY-2243 | ai:claude
+    if let Some(GoalCommand::Advisor { action }) = &args.command {
+        return goal_advisor::handle(action);
+    }
     let GoalArgs {
+        command: _,
         batch,
         epic,
         spec,

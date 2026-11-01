@@ -5046,6 +5046,16 @@ fresh `aida agent new ... --spec NEXT-ID` session.\n"
         out.push_str(&section);
     }
 
+    // STORY-2243: the operator's standing goal, advisor seat only, for every
+    // vendor (read from the store, not from any harness `/goal`).
+    // trace:STORY-2243 | ai:claude
+    if let Some(section) = crate::goal_cmd::goal_advisor::render_launch_goal_section(
+        &plan.project_root.join(".aida-store"),
+        role,
+    ) {
+        out.push_str(&section);
+    }
+
     // STORY-1226: the seat's due jobs from the `[schedule]` registry, so a
     // freshly launched seat starts with the periodic work that applies to it
     // — identical under every vendor (one registry, one view). No vendor is

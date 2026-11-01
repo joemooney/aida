@@ -394,6 +394,15 @@ These three support the autonomy machinery rather than driving work directly.
 
 **`aida goal`** — derive a *machine-checkable* completion condition from spec metadata, ready to paste into `/goal` or `/schedule`. Each flag is one clause (`aida goal --batch`, `aida goal --epic`, `aida goal --queue-empty`, …); flags compose with AND; every clause carries an explicit verification command. **Reach for it when** you want a loop/drain to stop on a *deterministic* condition rather than a vague "make it pass." **Don't** pick a clause whose mechanism your drain bypasses (e.g. an `aida goal --queue-empty` condition met trivially because autonomous-merge skipped that queue) — the clause must match how the work actually routes.
 
+**`aida goal advisor`** — the operator's *standing goal for the advisor seat*, kept in the requirements store (`registry/advisor_goal.yaml` on the store branch) so a new or rotated advisor session, of any vendor, reads the same goal without anyone re-pasting `/goal`. <!-- trace:STORY-2243 | ai:claude -->
+
+- `aida goal advisor set "<text>" [--epic ID] [--spec ID] [--batch N] [--queue-empty ROLE] [--pr N]` stores free text plus the ordered clauses the bare `aida goal` flags build, each with its verify command. It replaces the active goal; the old one stays in history. **Only the operator sets it:** `set` refuses from an agent session, a session carrying a seat grant, a process under an agent harness (even with a PTY), and a non-interactive terminal.
+- `aida goal advisor show` prints the text, the clauses with their verify commands, who set it and when (human, toon or json via `--format`).
+- `aida goal advisor check` evaluates each clause and prints met/unmet; it exits 0 only when every clause is met. A free-text-only goal reports "no checkable clauses" and exits non-zero.
+- `aida goal advisor history` lists every goal, newest first.
+
+The goal appears in the advisor's launch context (`## Goal`), in `aida session handoff --seat advisor --show` (after the mandate), and on the `goal:` line of `aida whoami` in the advisor seat, where the seat purpose moves to its own `purpose:` line. Other seats never see it: implementers already have their spec as their goal. Each record carries a `scope` key (today the default branch).
+
 ### `aida schedule` (alias `aida cron`)
 
 The per-seat **job registry**: which periodic jobs each seat runs, whether one is overdue, and who last ran it. One command, one registry, two kinds of job:
