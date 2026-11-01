@@ -8,12 +8,18 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-01T09:51:46.409743885Z
-modified_at: 2026-11-01T09:51:46.409743885Z
+modified_at: 2026-11-01T11:15:59.131754445Z
 req_type: Task
 tags:
 - from-implementer:BUG-2401
 - kind:bug-spotted
 - severity:major
+comments:
+- id: 01a196d2-ca1b-71a0-87a9-4cb2e8dee166
+  author: joe
+  content: Exact duplicate of reopened TASK2712, which now explicitly owns the native sandbox publication/shared-cache delivery gap distinct from contained-only backend. BUG2401patchwasmechanicallypublishedas3206 withmatchingbyteidentity; this is recoveryevidence, NOT productfix. Scope and original2397observation retained inTASK2712; no separateimplementationchain.
+  created_at: 2026-11-01T11:15:59.131754445Z
+  modified_at: 2026-11-01T11:15:59.131754445Z
 history:
 - id: 01a1968f-9061-7870-89fe-94df204741ae
   author: joe
