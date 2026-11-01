@@ -21,7 +21,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T07:26:20.914223641Z
-modified_at: 2026-11-01T16:02:47.358154144Z
+modified_at: 2026-11-01T16:04:28.389396812Z
 req_type: Bug
 tags:
 - architecture
@@ -459,6 +459,12 @@ comments:
     PROXY COMPLETION GATE: preserve the EXISTING signed operator-run real model-backed codex exec check explicitly with closure:pending before merge reconciliation. Fresh reviewer19 source approval and actual model-FREE native/cleanup HOST passes do not discharge that check. After approved code lands and a matching normal binary is live (or an approved reviewed candidate workflow), verify actual inherit=core model tools retain the OWN implementer subject/role/scope, own-spec comment succeeds and advisor-only act refuses; separately granted independent reviewer actual model-tool recording and durable validation. No parent/dead grant, global core-policy relaxation, fixture borrowed auth/key, public-selector-as-authority, or source-only/model-free-as-model credit. Source may proceed through ordinary independent review/exact CI/hold/operator ship floors; spec must stay Done/pending closure until the documented real-workflow receipts actually exist. This records an existing gate, not acceptance reduction or a new full-EPIC parity demand.
   created_at: 2026-11-01T16:02:47.358154144Z
   modified_at: 2026-11-01T16:02:47.358154144Z
+- id: 01a197da-e865-7232-9a77-d1a3dfac541c
+  author: joe
+  content: |
+    PROXY RECEIPT RECOVERY: reviewer19 source-APPROVED f20 and all7CI+BuildSUCCESS, but friendly/canonical-without-PR followups REFUSED because PRIMARY LOCAL branch was still2f9 while fetchedorigin/currentforge=f20. Canonical--pr normal14+phase3record15 exists, latestphase3lacks top-level release_grant and friendly remainsolder; no completed pair claimed. RootnowNORMALNONFORCEDREMOTEfast-forwarded actualPRIMARY LOCAL branch to advertisedf20 (and3194branch2c→fca), no force/ledger/ref-fabrication/oldsignature/projectionedit/authorityborrow. Both actualrefsresolveexactpublicpins. Fresh DIFFERENT reviewer will independently confirm current source/meta and make own supported records after this real repository-state correction. Existing closure:pending manualmodeltoolgate nowexplicit. Keystoneholdremainsrequiresgenuineoperatorclear, neverassertautoreleased.
+  created_at: 2026-11-01T16:04:28.389396812Z
+  modified_at: 2026-11-01T16:04:28.389396812Z
 history:
 - id: 01a19600-c769-7cd0-ba08-8d93975e3e3b
   author: joe
