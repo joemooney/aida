@@ -223,8 +223,17 @@ impl EvidenceScope {
     }
 
     /// The evidence of a collection that judged `ids` (each spec's ID and its
-    /// aliases). Any ID without a canonical object path, or not safe to put
-    /// in a history search, falls back to [`Self::strict`] (fail closed).
+    /// aliases). An ID not safe to put in a pathspec or a history search, or
+    /// an empty set (nothing to scope by), falls back to [`Self::strict`]
+    /// (fail closed).
+    ///
+    /// Each ID's objects are matched by the pathspec
+    /// `:(glob,icase)objects/**/<ID>.yaml` — any shard, any case — rather than
+    /// by computing the canonical shard path, so the gate kernel reaches no
+    /// object-store layout code outside `gate/` and an object at a
+    /// non-canonical path still counts. The IDs are restricted to
+    /// `[A-Z0-9_-]`, which holds no glob or pathspec magic character.
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-056 | ai:claude
     pub(crate) fn of_ids<I, S>(ids: I) -> Self
     where
         I: IntoIterator<Item = S>,
@@ -238,14 +247,14 @@ impl EvidenceScope {
                 && id
                     .chars()
                     .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_');
-            let Ok(path) = aida_core::object_store::relative_object_path(&id) else {
-                return Self::strict();
-            };
             if !searchable {
                 return Self::strict();
             }
-            paths.insert(path);
+            paths.insert(format!(":(glob,icase){STORE_OBJECTS_PATH}/**/{id}.yaml"));
             keys.insert(id);
+        }
+        if keys.is_empty() {
+            return Self::strict();
         }
         Self {
             paths: paths.into_iter().collect(),
@@ -266,8 +275,8 @@ impl EvidenceScope {
 /// - a ref moved to a tip that does not contain its old tip (force move) must
 ///   not drop such a commit (advisor condition C3);
 /// - a moved store HEAD (the working tree the current records are loaded
-///   from) must differ from the pinned HEAD by no such commit, either way —
-///   so a concurrent fleet write of an unrelated spec is stable, while a write
+///   from) must hold the same scoped tree content as the pinned HEAD and
+///   differ from it by no such commit, either way — so a concurrent fleet write of an unrelated spec is stable, while a write
 ///   to an excluded spec still re-collects and then refuses. Under
 ///   [`EvidenceScope::strict`] any HEAD move is a change;
 /// - a deleted ref only removes versions, so the evidence already gathered
@@ -288,7 +297,8 @@ pub(crate) fn store_snapshot_stable(
             return false;
         }
         let (old, new) = (&before.head, &after.head);
-        if !no_evidence_commit(store, &format!("{new}\n^{old}\n"), scope)
+        if !same_evidence_tree(store, old, new, scope)
+            || !no_evidence_commit(store, &format!("{new}\n^{old}\n"), scope)
             || !no_evidence_commit(store, &format!("{old}\n^{new}\n"), scope)
         {
             return false;
@@ -360,16 +370,16 @@ fn no_evidence_commit(store: &Path, range: &str, scope: &EvidenceScope) -> bool 
     if scope.ids.is_empty() {
         return true;
     }
-    let pickaxe = format!(
-        "-G^(spec_id|agreed_id): *['\"]?({})['\"]? *$",
-        scope.ids.join("|")
-    );
+    let pickaxe = id_line_pickaxe(scope);
+    // `-m` diffs a merge against each parent, so an ID line only a merge
+    // resolution adds is still seen (more matches only re-collect).
     matches!(
         snapshot_git(
             store,
             &[
                 "log",
                 "--stdin",
+                "-m",
                 "--format=%H",
                 "--no-renames",
                 "--no-ext-diff",
@@ -380,6 +390,67 @@ fn no_evidence_commit(store: &Path, range: &str, scope: &EvidenceScope) -> bool 
                 STORE_OBJECTS_PATH,
             ],
             Some(range.as_bytes()),
+        ),
+        Ok(out) if out.is_empty()
+    )
+}
+
+/// BUG-056: the `-G` pickaxe (POSIX extended, case-insensitive via
+/// `--regexp-ignore-case`) matching a `spec_id:` / `agreed_id:` line that
+/// names a `scope` ID — quoted or not, with any blanks (spaces or tabs)
+/// around the value and an optional trailing YAML comment. A writer that
+/// spells the line some other way (a flow mapping, a multi-line scalar) is
+/// not matched; aida's own writers never do.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-056 | ai:claude
+fn id_line_pickaxe(scope: &EvidenceScope) -> String {
+    format!(
+        "-G^[[:blank:]]*(spec_id|agreed_id):[[:blank:]]*['\"]?({})['\"]?[[:blank:]]*(#.*)?$",
+        scope.ids.join("|")
+    )
+}
+
+/// BUG-056: `true` when the store trees at `old` and `new` agree on every
+/// `scope` path and on every `scope` ID line under `objects/` — what the
+/// working-tree reader loads, compared tree to tree, so a merge that brings
+/// an already-reached version onto HEAD is still a change. `false` when they
+/// differ or git fails.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-056 | ai:claude
+fn same_evidence_tree(store: &Path, old: &str, new: &str, scope: &EvidenceScope) -> bool {
+    let mut args: Vec<&str> = vec![
+        "diff",
+        "--quiet",
+        "--no-ext-diff",
+        "--no-textconv",
+        "--no-renames",
+        old,
+        new,
+        "--",
+    ];
+    args.extend(scope.paths.iter().map(String::as_str));
+    if snapshot_status(store, &args) != Some(true) {
+        return false;
+    }
+    if scope.ids.is_empty() {
+        return true;
+    }
+    let pickaxe = id_line_pickaxe(scope);
+    matches!(
+        snapshot_git(
+            store,
+            &[
+                "diff",
+                "--name-only",
+                "--no-ext-diff",
+                "--no-textconv",
+                "--no-renames",
+                "--regexp-ignore-case",
+                &pickaxe,
+                old,
+                new,
+                "--",
+                STORE_OBJECTS_PATH,
+            ],
+            None,
         ),
         Ok(out) if out.is_empty()
     )
@@ -411,6 +482,12 @@ fn snapshot_command(store: &Path) -> std::process::Command {
     ])
     .env("GIT_NO_REPLACE_OBJECTS", "1")
     .env("GIT_CONFIG_NOSYSTEM", "1")
+    // BUG-056: the evidence scope's `:(glob,icase)` pathspecs must keep their
+    // magic; an inherited literal/noglob mode would make them match nothing
+    // and report a change to the excluded spec as stable (fail open).
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-056 | ai:claude
+    .env_remove("GIT_LITERAL_PATHSPECS")
+    .env_remove("GIT_NOGLOB_PATHSPECS")
     .stdin(std::process::Stdio::null())
     .stdout(std::process::Stdio::piped())
     .stderr(std::process::Stdio::piped());

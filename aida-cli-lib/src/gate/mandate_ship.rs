@@ -209,6 +209,27 @@ pub(crate) fn cleared_by_human_facts(
     }
 }
 
+/// BUG-056: the store evidence one exclusion collection read, for the
+/// stability check. Every judged spec contributes its ID and its aliases: a
+/// spec named by its `agreed_id` has its object at the canonical `spec_id`
+/// path, which only the alias puts in scope. A store that did not load
+/// (`loaded == false`) read no known scope, so it is judged by the strict
+/// rule (fail closed).
+// trace:BUG-B6B1278890774EF993D2EBC327862470-056 | ai:claude
+pub(in crate::gate) fn collection_evidence_scope(
+    loaded: bool,
+    specs: &[crate::gate::mandate::ShipSpec],
+) -> crate::gate::mandate_traces::EvidenceScope {
+    if !loaded {
+        return crate::gate::mandate_traces::EvidenceScope::strict();
+    }
+    crate::gate::mandate_traces::EvidenceScope::of_ids(
+        specs
+            .iter()
+            .flat_map(|spec| std::iter::once(&spec.id).chain(spec.aliases.iter())),
+    )
+}
+
 /// BUG-2179: how many times the mandate cover rebuilds its store evidence when
 /// a concurrent writer changes the store mid-collection, before refusing.
 /// BUG-056: five, with a growing pause, so a burst of fleet writes to the
@@ -417,22 +438,17 @@ pub(in crate::gate) fn mandate_ship_cover(
     };
     // BUG-056: the before snapshot pins the store version; only a change to
     // the evidence this collection read (its specs' objects and ID lines)
-    // discards it, so unrelated concurrent fleet writes no longer exhaust the
-    // bound. A store that did not load is judged by the strict rule.
+    // discards it, so concurrent commits of unrelated specs no longer count
+    // as a change. Uncommitted dirt anywhere under `objects/` still makes a
+    // snapshot retry (`StoreDirty`), so a long enough burst of in-flight
+    // object writes can still exhaust the bound. A store that did not load
+    // is judged by the strict rule.
     // trace:BUG-B6B1278890774EF993D2EBC327862470-056 | ai:claude
     let stable = |before: &crate::gate::mandate_traces::StoreSnapshot,
                   after: &crate::gate::mandate_traces::StoreSnapshot,
                   collected: &(bool, Vec<crate::gate::mandate::ShipSpec>, _)| {
         let (loaded, specs, _) = collected;
-        let scope = if *loaded {
-            crate::gate::mandate_traces::EvidenceScope::of_ids(
-                specs
-                    .iter()
-                    .flat_map(|spec| std::iter::once(&spec.id).chain(spec.aliases.iter())),
-            )
-        } else {
-            crate::gate::mandate_traces::EvidenceScope::strict()
-        };
+        let scope = collection_evidence_scope(*loaded, specs);
         crate::gate::mandate_traces::store_snapshot_stable(&store_root, before, after, &scope)
     };
     let (_, specs, ledger) = collect_on_stable_store(

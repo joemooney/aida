@@ -519,3 +519,50 @@ fn bug_056_an_unscopable_id_falls_back_to_the_strict_rule() {
     s.commit("notes.txt", "x\n");
     assert!(!s.stable_for(&before, &["not an id"]));
 }
+
+/// BUG-056 (review finding 4): an ID line spelled with a tab or a trailing
+/// YAML comment, and one that only a merge resolution adds (on a ref other
+/// than HEAD), still names the excluded spec — a change, not stable.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-056 | ai:claude
+#[test]
+fn bug_056_tabbed_commented_and_merge_only_id_lines_are_changes() {
+    for line in ["agreed_id:\tTASK-1\n", "agreed_id: \"TASK-1\"  # alias\n"] {
+        let (s, _) = store();
+        let before = s.snap();
+        s.commit(
+            "objects/TASK/000/TASK-9.yaml",
+            &format!("spec_id: TASK-9\n{line}"),
+        );
+        assert!(!s.stable_for(&before, &["TASK-1"]), "{line:?}");
+    }
+
+    let (s, base) = store();
+    let x = s.commit_on("x", &base, "objects/TASK/000/TASK-9.yaml", "title: x\n");
+    let y = s.commit_on("y", &base, "objects/TASK/000/TASK-9.yaml", "title: y\n");
+    let before = s.snap();
+    s.git(&["checkout", "-q", "-B", "m", &x]);
+    s.git(&["merge", "-q", "-s", "ours", "--no-commit", &y]);
+    std::fs::write(
+        s.path().join("objects/TASK/000/TASK-9.yaml"),
+        "title: m\nagreed_id: TASK-1\n",
+    )
+    .unwrap();
+    s.git(&["add", "-A"]);
+    s.git(&["commit", "-qm", "merge"]);
+    s.git(&["checkout", "-q", "main"]);
+    assert!(
+        !s.stable_for(&before, &["TASK-1"]),
+        "only the merge resolution adds the ID line"
+    );
+}
+
+/// BUG-056: an object of the excluded spec outside its canonical shard is
+/// still in scope (the pathspec matches any shard, any case).
+// trace:BUG-B6B1278890774EF993D2EBC327862470-056 | ai:claude
+#[test]
+fn bug_056_a_non_canonical_object_path_is_in_scope() {
+    let (s, _) = store();
+    let before = s.snap();
+    s.commit("objects/TASK/task-1.yaml", "title: stray\n");
+    assert!(!s.stable_for(&before, &["TASK-1"]));
+}
