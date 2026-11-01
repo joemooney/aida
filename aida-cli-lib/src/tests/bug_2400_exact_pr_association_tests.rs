@@ -58,7 +58,10 @@ case "$*" in
       *'/commits?'*)
         page=${2##*page=}
         if [ -f "$base/fail-page-$page" ]; then echo 'page failed' >&2; exit 1; fi
-        if [ "$pr" = 3200 ]; then cat "$base/commits-$page"; else echo '[]'; fi ;;
+        if [ "$pr" = 3200 ]; then
+          cat "$base/commits-$page"
+          if [ -f "$base/detail-after-page" ]; then cp "$base/detail-after-page" "$base/detail"; fi
+        else echo '[]'; fi ;;
       *) if [ "$pr" = 3200 ]; then cat "$base/detail";
          else echo '{"commits":0,"head":{"sha":"0000000000000000000000000000000000000000"}}'; fi ;;
     esac ;;
@@ -161,6 +164,44 @@ esac
         vec![(3200, "unscoped".into())]
     );
 
+    // A matching trailer from a different head is unknown, including when
+    // it would otherwise pollute a title-visible duplicate set.
+    let valid_detail = std::fs::read(root.join("detail")).unwrap();
+    std::fs::write(
+        root.join("detail"),
+        serde_json::json!({"commits":1,"head":{"sha":format!("{:040x}",2)}}).to_string(),
+    )
+    .unwrap();
+    assert!(matches!(
+        detect_open_pr_for_spec_github(root, &canonical),
+        PrLookup::GhFailed(_)
+    ));
+    assert!(all_open_prs_for_spec_via_forge(root, &canonical).is_err());
+    std::fs::write(root.join("search"), row(3204, "fix (BUG-2392)", "visible")).unwrap();
+    assert!(
+        matches!(detect_open_pr_for_spec_github(root, &canonical), PrLookup::Found(pr) if pr.number == 3204)
+    );
+    assert!(all_open_prs_for_spec_via_forge(root, &canonical).is_err());
+    std::fs::write(root.join("search"), &noise).unwrap();
+    // A complete matching page cannot authorize a positive after either
+    // count or head changes across requests. Missing recheck data is unknown.
+    for changed in [
+        serde_json::json!({"commits":1,"head":{"sha":format!("{:040x}",2)}}),
+        serde_json::json!({"commits":2,"head":{"sha":format!("{:040x}",1)}}),
+        serde_json::json!({}),
+    ] {
+        std::fs::write(root.join("detail-after-page"), changed.to_string()).unwrap();
+        std::fs::write(root.join("detail"), &valid_detail).unwrap();
+        assert!(matches!(
+            detect_open_pr_for_spec_github(root, &canonical),
+            PrLookup::GhFailed(_)
+        ));
+        std::fs::write(root.join("detail"), &valid_detail).unwrap();
+        assert!(all_open_prs_for_spec_via_forge(root, &canonical).is_err());
+    }
+    std::fs::remove_file(root.join("detail-after-page")).unwrap();
+    std::fs::write(root.join("detail"), &valid_detail).unwrap();
+
     // Typed failures never prove absence. An earlier unreadable candidate
     // must not prevent inspection of a later commit-associated match.
     for (message, network) in [
@@ -246,6 +287,90 @@ esac
     ));
     assert!(all_open_prs_for_spec_via_forge(root, &canonical).is_err());
     std::fs::remove_file(root.join("fail-page-2")).unwrap();
+    // An early matching first page must still be bound to the final head.
+    let mut early_page = first_page.clone();
+    early_page[0] = commit(1, "early work (BUG-2392)");
+    std::fs::write(
+        root.join("commits-1"),
+        serde_json::to_vec(&early_page).unwrap(),
+    )
+    .unwrap();
+    std::fs::write(
+        root.join("commits-2"),
+        serde_json::to_vec(&vec![commit(101, "work")]).unwrap(),
+    )
+    .unwrap();
+    assert!(
+        matches!(detect_open_pr_for_spec_github(root, &canonical), PrLookup::Found(pr) if pr.number == 3200)
+    );
+    assert_eq!(
+        all_open_prs_for_spec_via_forge(root, &canonical)
+            .ok()
+            .unwrap(),
+        vec![(3200, "unscoped".into())]
+    );
+    std::fs::write(root.join("fail-page-2"), "").unwrap();
+    assert!(matches!(
+        detect_open_pr_for_spec_github(root, &canonical),
+        PrLookup::GhFailed(_)
+    ));
+    assert!(all_open_prs_for_spec_via_forge(root, &canonical).is_err());
+    std::fs::remove_file(root.join("fail-page-2")).unwrap();
+    let stable_detail = std::fs::read(root.join("detail")).unwrap();
+    for changed in [
+        serde_json::json!({"commits":101,"head":{"sha":format!("{:040x}",999)}}),
+        serde_json::json!({"commits":102,"head":{"sha":format!("{:040x}",101)}}),
+    ] {
+        std::fs::write(root.join("detail-after-page"), changed.to_string()).unwrap();
+        std::fs::write(root.join("detail"), &stable_detail).unwrap();
+        assert!(matches!(
+            detect_open_pr_for_spec_github(root, &canonical),
+            PrLookup::GhFailed(_)
+        ));
+        std::fs::write(root.join("detail"), &stable_detail).unwrap();
+        assert!(all_open_prs_for_spec_via_forge(root, &canonical).is_err());
+    }
+    std::fs::remove_file(root.join("detail-after-page")).unwrap();
+    std::fs::write(root.join("detail"), &stable_detail).unwrap();
+    // Exact 250 succeeds; the endpoint's 250/251 truncation is unknown even
+    // with an early match, rather than a claimed positive or complete set.
+    std::fs::write(
+        root.join("commits-2"),
+        serde_json::to_vec(&(101..=200).map(|n| commit(n, "work")).collect::<Vec<_>>()).unwrap(),
+    )
+    .unwrap();
+    std::fs::write(
+        root.join("commits-3"),
+        serde_json::to_vec(&(201..=250).map(|n| commit(n, "work")).collect::<Vec<_>>()).unwrap(),
+    )
+    .unwrap();
+    for count in [250, 251] {
+        std::fs::write(
+            root.join("detail"),
+            serde_json::json!({"commits":count,"head":{"sha":format!("{count:040x}")}}).to_string(),
+        )
+        .unwrap();
+        let lookup = detect_open_pr_for_spec_github(root, &canonical);
+        if count == 250 {
+            assert!(matches!(lookup, PrLookup::Found(pr) if pr.number == 3200));
+            assert_eq!(
+                all_open_prs_for_spec_via_forge(root, &canonical)
+                    .ok()
+                    .unwrap(),
+                vec![(3200, "unscoped".into())]
+            );
+        } else {
+            assert!(matches!(lookup, PrLookup::GhFailed(_)));
+            assert!(all_open_prs_for_spec_via_forge(root, &canonical).is_err());
+        }
+    }
+    std::fs::write(root.join("detail"), &stable_detail).unwrap();
+    std::fs::write(
+        root.join("commits-1"),
+        serde_json::to_vec(&first_page).unwrap(),
+    )
+    .unwrap();
+
     // Successful malformed JSON/schema, duplicate pages and endpoint ceilings
     // are unknown. None of these empty/short responses proves absence.
     for bad in [

@@ -537,7 +537,8 @@ fn spec_lookup_binary(
 /// REST commit pages avoid gh pr view's silent first-100 projection. A short
 /// validated page plus the PR's declared count/head proves exhaustion. The
 /// REST endpoint's own commit ceiling or ten pages yields typed unknown.
-/// A positive trailer proves association without requiring remaining pages.
+/// Trailer matches are retained until the complete collection reaches the pinned
+/// head and a second detail read confirms the same head/count snapshot.
 // trace:BUG-2400 | ai:codex
 fn pr_commit_ids_before(
     project_root: &std::path::Path,
@@ -567,6 +568,7 @@ fn pr_commit_ids_before(
         return Err(invalid());
     }
     let mut seen = std::collections::HashSet::new();
+    let mut matched = false;
     for page in 1..=10 {
         let remaining = deadline.saturating_duration_since(std::time::Instant::now());
         if remaining.is_zero() {
@@ -579,7 +581,6 @@ fn pr_commit_ids_before(
         if rows.len() > 100 {
             return Err(invalid());
         }
-        let mut matched = false;
         for row in rows {
             let sha = row
                 .get("sha")
@@ -607,9 +608,6 @@ fn pr_commit_ids_before(
         if seen.len() as u64 > count {
             return Err(invalid());
         }
-        if matched {
-            return Ok(true);
-        }
         if seen.len() as u64 == count {
             if count == 0
                 || rows
@@ -618,7 +616,23 @@ fn pr_commit_ids_before(
                     .and_then(|v| v.as_str())
                     == Some(head)
             {
-                return Ok(false);
+                // The PR-number commit endpoint can move while we page. Even
+                // an early matching trailer must reach the declared terminal
+                // head and survive this bounded snapshot recheck before it can
+                // establish association (or complete absence).
+                // trace:BUG-2400 | ai:codex
+                let current = commit_api_json_before(
+                    project_root,
+                    gh_bin,
+                    &format!("repos/{{owner}}/{{repo}}/pulls/{pr}"),
+                    deadline,
+                )?;
+                if current.get("commits").and_then(|v| v.as_u64()) != Some(count)
+                    || current.pointer("/head/sha").and_then(|v| v.as_str()) != Some(head)
+                {
+                    return Err(invalid());
+                }
+                return Ok(matched);
             }
             return Err(invalid());
         }
