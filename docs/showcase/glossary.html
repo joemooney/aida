@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Glossary — AIDA</title>
+<link rel="stylesheet" href="styles.css"><link rel="stylesheet" href="guide.css">
+
+</head>
+<body>
+<!-- trace:TASK-B6B1278890774EF993D2EBC327862470-106 | ai:codex -->
+<a class="skip" href="#main">Skip to content</a>
+<header class="guide-header"><a class="brand" href="index.html"><span aria-hidden="true">✳</span> AIDA</a><nav aria-label="Product navigation"><a href="index.html">Product</a><a href="library.html">Library</a><a href="getting-started.html">Get started</a><a href="configuration.html">Configuration</a><a href="workflow.html">Workflow</a><a href="autonomy.html">Autonomy</a><a href="trust.html">Trust</a><a href="metrics.html">Metrics</a><a href="setup.html">Setup</a><a href="capabilities.html">Capabilities</a><a href="integrations.html">Integrations</a><a href="air-gapped.html">Air-gapped</a><a href="glossary.html" aria-current="page">Glossary</a></nav></header>
+<main id="main" class="guide"><p class="eyebrow">THE GOVERNED SOFTWARE FACTORY</p><h1 id="product-glossary">Product glossary</h1>
+<p>Plain-language definitions of the words AIDA uses in its guides, commands and messages. Each entry says what you see or do, and links to the page that explains it in depth where one exists. Developer-facing machinery terms (orchestrator, drain, lease, worktree and others) are defined in the <a href="../../aida-core/templates/.aida/discipline/machinery-glossary.md">machinery glossary</a>, and lifecycle states (committed, pushed, merged, completed, released) in the <a href="../../aida-core/templates/.aida/discipline/lifecycle-vocabulary.md">lifecycle vocabulary</a>.</p>
+<h2 id="terms">Terms</h2>
+<h3 id="agreed-id">Agreed ID</h3>
+<p>The short ID a spec keeps for good: its type and a number, such as <code>TASK-&lt;number&gt;</code>. It is unique across every clone of the project, because each number is handed out once from a shared range. See <a href="air-gapped.html">Support for air-gapped development</a>.</p>
+<h3 id="block">Block</h3>
+<p>A small range of spec numbers set aside for one clone. The clone gives new specs short agreed IDs from its own blocks, so it never has to ask anyone else first. Blocks are carved from a <a href="#pool">pool</a>. See <a href="air-gapped.html#the-parts">Support for air-gapped development</a>.</p>
+<h3 id="brief">Brief</h3>
+<p>A short note that assigns a piece of work to a named agent, such as &quot;pick up this spec next&quot;. The agent reads it, does the work, and acknowledges it so it stops showing up. A brief goes one way; for a conversation, use the <a href="#mailbox">mailbox</a>. See <a href="../cli/06-roles-sessions.md#aida-brief"><code>aida brief</code></a>.</p>
+<h3 id="child-grant">Child grant</h3>
+<p>A <a href="#grant">grant</a> that a launcher gives an agent it starts, for one named seat. Your session can hand out only the seats you listed when you entered your own seat, and a child grant cannot be passed on again. See <a href="../cli/06-roles-sessions.md#entering-seats-and-delegating-child-seats">Entering seats and delegating child seats</a>.</p>
+<h3 id="commit-trailer">Commit trailer</h3>
+<p>The spec ID in parentheses at the end of a commit subject, as in <code>fix(api): handle missing ids (SPEC-ID)</code>. When that commit lands on the main branch, AIDA marks the named spec completed. See the <a href="../commit-trailer-convention.md">commit trailer convention</a>.</p>
+<h3 id="control-plane">Control plane</h3>
+<p>The part of AIDA that decides whether work may move forward and reports what is in flight: the queue, seats, leases, reviews, merge holds and the status views. The spec records themselves are the data it acts on, not part of it.</p>
+<h3 id="deputy">Deputy</h3>
+<p>A helper you start in your own terminal with <code>aida deputy</code>. Agents hand it commands to run under your seat grant, and it runs only what you allowed, records each job and tells the submitting agent the result. See <a href="../cli/06-roles-sessions.md#aida-deputy"><code>aida deputy</code></a>.</p>
+<h3 id="grant">Grant</h3>
+<p>The authority your terminal session holds to act in a <a href="#seat">seat</a>. You get one by running <code>aida role enter &lt;seat&gt;</code> at an interactive terminal; it expires after a set time (24 hours by default) and works only for processes started from that terminal. See <a href="../cli/06-roles-sessions.md#entering-seats-and-delegating-child-seats">Entering seats and delegating child seats</a>.</p>
+<h3 id="handoff">Handoff</h3>
+<p>A note a session writes before it ends so the next session can carry on without the conversation that came before: what was done, what is open and what to do next. AIDA keeps handoff notes in the project&#x27;s <code>.aida/</code> folder.</p>
+<h3 id="hub">Hub</h3>
+<p>A Git server that the requirement store syncs through, such as GitHub, GitLab or a repository on an internal host. A mirror that only copies another hub counts as the same hub. See <a href="air-gapped.html#the-parts">Support for air-gapped development</a>.</p>
+<h3 id="local-id">Local ID</h3>
+<p>A longer spec ID that also names the clone that made it, used when that clone has no <a href="#block">block</a> to draw short numbers from. Local IDs never collide, so they need no coordination, and a spec can later be given an <a href="#agreed-id">agreed ID</a>. You can give the clone a friendly label with <code>aida node alias</code>. See <a href="air-gapped.html#the-parts">Support for air-gapped development</a>.</p>
+<h3 id="mailbox">Mailbox</h3>
+<p>AIDA&#x27;s message channel between agents and people, for things that are not a change of state: a heads-up, a question, a warning about a shared file. Messages are kept, so a different agent can read them the next day. See <a href="../mailbox.md">the inter-agent mailbox</a>.</p>
+<h3 id="mandate">Mandate</h3>
+<p>Time-limited permission, started by a person at a terminal with <code>aida mandate start</code>, for the advisor seat to do named things while that person is away, such as shipping held pull requests. It lasts 8 hours by default and at most 24, and never covers <a href="#operator-only">operator-only</a> specs. See <a href="../cli/04-git-lifecycle.md#aida-mandate"><code>aida mandate</code></a>.</p>
+<h3 id="merge-hold">Merge hold</h3>
+<p>A stop placed on a pull request so it cannot merge, even when its checks and review pass. It shows as the <code>aida:merge-hold</code> label and a failing required check. It stays until a person clears it with <code>aida merge-hold clear</code>, or AIDA releases it in the narrow cases it allows, such as under a <a href="#mandate">mandate</a>. See <a href="../what-is-aida.html">What is AIDA</a>.</p>
+<h3 id="operator-only">Operator-only</h3>
+<p>A tag that keeps a spec in human hands. No <a href="#mandate">mandate</a> covers it, so its pull request waits for a person to merge, and the tag&#x27;s effect remains even if the tag is later removed. See <a href="../cli/04-git-lifecycle.md#aida-mandate"><code>aida mandate</code></a>.</p>
+<h3 id="pool">Pool</h3>
+<p>A range of one spec type&#x27;s numbers given to one hub. Clones that sync through that hub take their <a href="#block">blocks</a> from it, so two hubs never hand out the same number. See <a href="air-gapped.html#the-parts">Support for air-gapped development</a>.</p>
+<h3 id="ref">Ref</h3>
+<p>Git&#x27;s name for a pointer to a commit, such as a branch. AIDA keeps its records on the <code>aida-store</code> branch, called the store ref; a push to it succeeds only if nobody else moved it first. See <a href="air-gapped.html#the-parts">Support for air-gapped development</a>.</p>
+<h3 id="review-story">Review story</h3>
+<p>The story AIDA files when it opens a pull request, titled <code>Review PR-&lt;number&gt;: …</code> and routed to the reviewer seat. Whoever picks it up reviews that pull request and records a verdict. See <a href="../review-process.md">the review process</a>.</p>
+<h3 id="rework-round">Rework round</h3>
+<p>One trip back to the implementer after a reviewer asks for changes. <code>aida rework</code> returns the spec to active work with the reviewer&#x27;s reasons, and the implementer pushes fixes to the same pull request for another review. See <a href="../cli/04-git-lifecycle.md#aida-rework"><code>aida rework</code></a>.</p>
+<h3 id="role">Role</h3>
+<p>A named job in AIDA&#x27;s workflow, such as advisor, implementer, reviewer or integrator. Work can be routed to a role, and the role decides what a session wearing it is expected and allowed to do. See <a href="../cli/06-roles-sessions.md">Roles and sessions</a>.</p>
+<h3 id="root">Root</h3>
+<p>The one clone of a project that owns every spec number not yet handed out. You choose it once with <code>aida node enroll-root</code>; it splits the numbers into <a href="#pool">pools</a>. See <a href="air-gapped.html#the-parts">Support for air-gapped development</a>.</p>
+<h3 id="roster">Roster</h3>
+<p>The list of seats each person is allowed to take, kept per project. It is a ceiling: <code>aida role enter</code> refuses a seat that is not on your roster, and <code>aida team allow-seat</code> adds one. See <a href="../cli/06-roles-sessions.md#entering-seats-and-delegating-child-seats">Entering seats and delegating child seats</a>.</p>
+<h3 id="seat">Seat</h3>
+<p>A <a href="#role">role</a> as a place in the workflow that a session occupies, such as the advisor seat. A seat can receive work and hold sessions, and some seats allow only one active occupant at a time. See <a href="../cli/06-roles-sessions.md">Roles and sessions</a>.</p>
+<h3 id="supervised-spec">Supervised spec</h3>
+<p>A sensitive spec, such as one touching security, containment, review or merge authority, or one marked guided or keystone. A <a href="#mandate">mandate</a> leaves its <a href="#merge-hold">merge hold</a> for a person unless that person started the mandate with <code>--include-supervised</code>. See <a href="../cli/04-git-lifecycle.md#aida-mandate"><code>aida mandate</code></a>.</p>
+<h2 id="how-to-add-a-term">How to add a term</h2>
+<p>This file is the canonical source for AIDA&#x27;s product vocabulary. It is the template master <code>aida-core/templates/.aida/discipline/product-glossary.md</code>. Two outputs are generated from it: the CLI glossary (<code>aida docs glossary</code>, published as the book&#x27;s Glossary chapter by <code>make book-glossary</code>) and the website glossary page (<code>python3 docs/showcase/build.py</code>). The terms that earlier lived as <code>type=term</code> specs (local ID, role, seat, control plane) have been folded in here; add new product vocabulary here, not as a term spec.</p>
+<p>Each entry follows the same rules. (The website renderer reads one list item per line.)</p>
+<ul>
+<li><strong>Heading.</strong> Add a <code>###</code> heading under Terms, in alphabetical order. The heading becomes the anchor: <code>### Merge hold</code> is <code>glossary.html#merge-hold</code>. Do not rename a heading once pages link to it.</li>
+<li><strong>Wording.</strong> Write 1 to 3 plain sentences about what the reader sees or does, not how it is built. Do not cite spec IDs.</li>
+<li><strong>Links.</strong> Link the page that explains the term in depth, relative to this file (<code>../../../../docs/&lt;page&gt;.md</code>), and other terms as <code>#anchor</code>.</li>
+<li><strong>Outputs.</strong> Copy the master to <code>.aida/discipline/</code> (<code>make sync-templates</code>), rebuild the binary, run <code>make book-glossary</code> and <code>python3 docs/showcase/build.py</code>, and commit the regenerated files.</li>
+</ul></main>
+<footer class="guide-footer"><p>Generated from <a href="../../aida-core/templates/.aida/discipline/product-glossary.md">the source guide</a>. Alpha software · Linux only.</p><a href="index.html">Back to product</a></footer>
+</body>
+</html>

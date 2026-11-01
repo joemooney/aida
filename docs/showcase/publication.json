@@ -61,6 +61,13 @@
       "output": "air-gapped.html",
       "label": "Air-gapped",
       "category": "operator"
+    },
+    {
+      "source": "../aida-core/templates/.aida/discipline/product-glossary.md",
+      "output": "glossary.html",
+      "label": "Glossary",
+      "category": "human",
+      "glossary": true
     }
   ]
 }

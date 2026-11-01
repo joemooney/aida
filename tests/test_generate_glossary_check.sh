@@ -5,8 +5,9 @@ set -euo pipefail
 # for the generated AIDA Book glossary page (docs/cli/12-glossary.md).
 #
 # A stub AIDA_BIN stands in for `aida docs glossary`; it reproduces
-# render_discipline_glossary: the two embedded discipline templates (trailing
-# newline trimmed, as build.rs embeds them) joined by a blank line. The real
+# render_discipline_glossary: the three embedded discipline templates (product,
+# machinery, lifecycle; trailing newline trimmed, as build.rs embeds them)
+# joined by a blank line. trace:STORY-2219 | ai:claude The real
 # binary is exercised by CI's "Book glossary drift guard" step.
 # trace:BUG-1950 | ai:claude
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -18,11 +19,18 @@ cat >"$TMP/aida" <<'SH'
 #!/usr/bin/env bash
 [ "$*" = "docs glossary --format human" ] || { echo "stub: unexpected args: $*" >&2; exit 64; }
 D="${STUB_TEMPLATE_DIR:?}"
-printf '%s\n\n%s' "$(cat "$D/machinery-glossary.md")" "$(cat "$D/lifecycle-vocabulary.md")"
+printf '%s\n\n%s\n\n%s' "$(cat "$D/product-glossary.md")" "$(cat "$D/machinery-glossary.md")" "$(cat "$D/lifecycle-vocabulary.md")"
 SH
 chmod +x "$TMP/aida"
 
 mkdir -p "$TMP/tpl"
+cat >"$TMP/tpl/product-glossary.md" <<'MD'
+# Product glossary
+
+### Hub
+
+A Git server. See [the guide](../../../../docs/air-gapped-development.md#the-parts).
+MD
 cat >"$TMP/tpl/machinery-glossary.md" <<'MD'
 # Machinery glossary
 
@@ -51,6 +59,8 @@ if ! gen --check; then
   exit 1
 fi
 grep -Fx "## Machinery glossary" "$PAGE" >/dev/null
+grep -Fx "## Product glossary" "$PAGE" >/dev/null
+grep -Fx "A Git server. See [the guide](../air-gapped-development.md#the-parts)." "$PAGE" >/dev/null
 grep -Fx "Works the ready set." "$PAGE" >/dev/null
 grep -F 'Say "PR opened for `<spec-id>`".' "$PAGE" >/dev/null
 if grep -F "trace:" "$PAGE" >/dev/null; then

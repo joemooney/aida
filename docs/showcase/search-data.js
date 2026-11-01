@@ -75,10 +75,234 @@ window.AIDA_DOCS = [
   },
   {
     "category": "operator",
-    "sha256": "172b52d6793d5c4df80cdffb0da29656eed15295733780092b070813351f6277",
+    "sha256": "60d178ed7b6bedb4583d2cb12fd09e7a06ed0317a5e14e0e8e77a3f01f3e60e3",
     "source": "../air-gapped-development.md",
     "text": "Support for air-gapped development AIDA keeps requirements in Git, so a team on an isolated network can use it with an internal Git server. Its records travel the way code does. The one thing that needs planning is how short spec IDs such as TASK-42 stay unique when two networks hand them out without seeing each other. This page explains the parts involved, shows where a collision comes from, and answers one question: does your project need an ID root? Some of what follows is built and some is planned. Each section says which. Anything marked Planned is not available in the current release. The parts Status: built. Each part below exists today as a record or a setting, with checks on it. What is still planned is the commands that grant a pool to a hub and claim blocks from an upstream. The sections that follow say where each one fits. - Hub. A Git server the requirement store syncs through: GitHub, GitLab, or a bare repository on an internal host. A mirror that only copies another hub's records, listed under [store.sync] mirror_remotes, is the same hub, not a second one. - Store ref. The aida-store branch on a hub. A push to it succeeds only if nobody else moved it first, so one hub settles any race between two clones. - Root. The one clone per store that owns every number not yet handed out. You make a clone the root with aida node enroll-root. - Pool. A range of one spec type's numbers granted to a holder and homed on one hub's store ref. Claims against a pool are pushed to that hub and nowhere else. - Block. A smaller range carved from a pool and bound to one clone. A clone mints short IDs from its own blocks. Every clone also has a node identity: a random identifier with no host, user or email in it. When a clone has no block it can use, it mints node-local IDs of the form \u003cTYPE>-\u003cnode>-\u003cn>. Those never collide, because no two clones share a node, so they need no coordination at all. You can give a node a friendly label with aida node alias, so TASK-\u003cnode>-95 displays as TASK-HOME-95. One hub: the push will order every claim Status: planned. Today only the root can claim a block. On any other clone a block claim refuses and aida add mints a node-local ID instead. What is true today is the ordering this mechanism will rely on: a push to the store ref succeeds only if nobody else moved the ref first. One hub will order every claim (planned) Once clones can claim blocks from their upstream, a hub that every clone pushes to will decide who got there first. If two clones try to claim the same block, both push; the first push lands and the second is rejected because the store ref has moved. The losing clone will fetch, see that the block is taken, and claim another. No claim will be accepted twice. Two hubs without a root: why the root exists Status: illustration, not something the current release lets you do. A clone that is not the root cannot claim a block, so it mints node-local IDs and this collision cannot arise as drawn. The scenario shows what would go wrong if each hub handed out the same numbers on its own, which is why claiming blocks requires a root. The sync-time conflict check described after the diagram is built today. Why a root is needed: two hubs without one would collide An air-gapped network has its own hub. Suppose a clone outside could claim a block through the outside hub and a clone inside could claim the same block through the inside hub. Each push would succeed, because each moves a different ref. Nothing would compare the two claims until the stores met again, and then both would say they own the same numbers. AIDA guards that boundary today. Before every store sync it reads the allocation claims on both sides and refuses the sync if any two conflict. A refusal changes nothing: no counters, history or refs move and nothing is pushed. There is no override. aida db audit-ids --against \u003cref> lists each conflict and a manual repair plan. Repair keeps every record and its old ID as an alias; nothing is renumbered automatically. The check prevents silent damage, but the repair is work you would rather not do. Two hubs with a root: split the space first Status: partly built. Built today: the root, each clone's declared upstream hub, the pool and block records, and the checks on them. Planned: the command that grants a pool to a hub, and claiming blocks from the upstream automatically during aida push or on request. A root will split the number space between hubs (planned) The root prevents the collision instead of catching it. It owns the unallocated numbers and, once pool grants ship, will hand each hub its own pool before anyone on that hub claims a block. Clones will claim blocks only from the pool homed on their own hub, so the outside and inside ranges cannot overlap, and the two stores merge cleanly when they meet. How the number space is divided Status: built. The pool and block records, the lineage checks and the spend rules below work today. Because no command grants a pool yet, these rules today mainly decide whether a clone can use a block it holds or falls back to node-local IDs. Nested ranges: root, pools, blocks Each spec type has its own number space, divided as a tree. The root holds the whole range. A pool is a grant carved from the root's range, and a block is carved from a pool. Each grant records the pool it came from, so the chain from any block back to the root can be checked. Free space is never stored: it is worked out from the grants, so two stores merged from different hubs add up cleanly instead of disagreeing about a counter. A clone may spend a block only when all of these hold: - the block is bound to that clone's node; - the block's chain of pools reaches a root pool held by the enrolled root; - off the root, the block's pool is homed on the hub the clone declared as its upstream. A block that merely appears in a store imported from elsewhere is never spendable. When a clone cannot spend a block, aida add falls back to a node-local ID and prints the reason once per session: no upstream declared, no block from the upstream yet, no pool lineage, or the block is used up. aida node show lists the clone's role, its upstream, the store's root, every pool with its free space, and each of the clone's blocks with whether it can be spent and why not. Inconsistent grants, such as two pools that overlap, a block outside its pool or a pool whose parent is unknown, are reported as conflicts and never resolved automatically. Does your project need an ID root? - You are content with node-local IDs. No. They work on any number of hubs, offline, with no setup. - You want short IDs and the store lives on one hub. Today, yes: short agreed IDs require an enrolled root on every project. Planned: a single-hub mode in which the hub's store ref is the authority, so a one-hub project gets short IDs with no root and no enrollment step. - The store lives on more than one hub that clones push to independently, such as an air-gapped network with its own Git server. Yes. Only a root can split the numbers between hubs before either hub sees a claim. A mirror never counts as a second hub. aida node upstream refuses to name a mirror, because a mirror copies records and never grants blocks. Bringing an air-gapped team online This walkthrough shows the intended sequence. Each step says whether it works today. Step 1: enroll the root outside Status: works today. On the primary clone outside the gap, preview and then enroll: aida node enroll-root --dry-run aida node enroll-root The root is recorded in the store, and the command refuses if another clone already holds the role. Running it again on the root changes nothing. Choose this clone carefully: handing the root role to another clone is planned, not yet available. Step 2: point outside clones at the outside hub Status: works today. On each other outside clone: aida node upstream origin aida node show Step 3: grant the inside hub its own pool Status: planned. The root will grant a pool for each spec type, homed on the inside hub's store ref, so that its range is reserved before the store crosses the gap. The pool records and their checks exist today, but no command creates a grant yet. Step 4: carry the store across the gap Status: untested. Git can carry the store branch on removable media as a bundle file: git bundle create aida-store.bundle aida-store Inside, fetch the branch from the bundle and push it to the inside hub. Whether a pool that arrives this way counts as granted, rather than as a record in an imported store that is never spendable, has not been tested yet. This page will be updated when it has. Step 5: point inside clones at the inside hub Status: works today, with node-local IDs. On each inside clone, declare the inside hub as the upstream: aida node upstream \u003cinside-remote> Claiming a block from that hub is planned. Until it ships, inside clones mint node-local IDs, and aida add says why once per session. Work is not blocked; the IDs are just longer. Step 6: bring the work back out Status: the checks work today; the bundle crossing is untested. Carry the inside store out the same way, fetch it into a local ref, and audit it before you sync: aida db audit-ids --against \u003cref> The audit exits cleanly when no claim conflicts. Every store sync runs the same check and refuses any overlap, so a mistake in the earlier steps stops at the boundary instead of spreading. To keep more than one connected hub level in day-to-day use, see Multi-hub sync. Know the boundary - Node-local IDs, the root, upstream declarations, pool and block records, the spend checks and the sync-time conflict check are built. - Granting a pool to a hub, claiming blocks from the upstream, single-hub mode without a root and handing over the root role are planned. - Carrying a pool across an air gap in a Git bundle has not been tested. The storage reference, Storage and the requirement store, documents the current commands and checks in full.",
     "title": "Support for air-gapped development",
     "url": "air-gapped.html"
+  },
+  {
+    "category": "human",
+    "sha256": "29b2c5424ac748dfcb616c4d0d76dc4143c19df27782886e8948dd0cb5e13a53",
+    "source": "../../aida-core/templates/.aida/discipline/product-glossary.md",
+    "text": "Product glossary Plain-language definitions of the words AIDA uses in its guides, commands and messages. Each entry says what you see or do, and links to the page that explains it in depth where one exists. Developer-facing machinery terms (orchestrator, drain, lease, worktree and others) are defined in the machinery glossary, and lifecycle states (committed, pushed, merged, completed, released) in the lifecycle vocabulary. Terms Agreed ID The short ID a spec keeps for good: its type and a number, such as TASK-\u003cnumber>. It is unique across every clone of the project, because each number is handed out once from a shared range. See Support for air-gapped development. Block A small range of spec numbers set aside for one clone. The clone gives new specs short agreed IDs from its own blocks, so it never has to ask anyone else first. Blocks are carved from a pool. See Support for air-gapped development. Brief A short note that assigns a piece of work to a named agent, such as \"pick up this spec next\". The agent reads it, does the work, and acknowledges it so it stops showing up. A brief goes one way; for a conversation, use the mailbox. See aida brief. Child grant A grant that a launcher gives an agent it starts, for one named seat. Your session can hand out only the seats you listed when you entered your own seat, and a child grant cannot be passed on again. See Entering seats and delegating child seats. Commit trailer The spec ID in parentheses at the end of a commit subject, as in fix(api): handle missing ids (SPEC-ID). When that commit lands on the main branch, AIDA marks the named spec completed. See the commit trailer convention. Control plane The part of AIDA that decides whether work may move forward and reports what is in flight: the queue, seats, leases, reviews, merge holds and the status views. The spec records themselves are the data it acts on, not part of it. Deputy A helper you start in your own terminal with aida deputy. Agents hand it commands to run under your seat grant, and it runs only what you allowed, records each job and tells the submitting agent the result. See aida deputy. Grant The authority your terminal session holds to act in a seat. You get one by running aida role enter \u003cseat> at an interactive terminal; it expires after a set time (24 hours by default) and works only for processes started from that terminal. See Entering seats and delegating child seats. Handoff A note a session writes before it ends so the next session can carry on without the conversation that came before: what was done, what is open and what to do next. AIDA keeps handoff notes in the project's .aida/ folder. Hub A Git server that the requirement store syncs through, such as GitHub, GitLab or a repository on an internal host. A mirror that only copies another hub counts as the same hub. See Support for air-gapped development. Local ID A longer spec ID that also names the clone that made it, used when that clone has no block to draw short numbers from. Local IDs never collide, so they need no coordination, and a spec can later be given an agreed ID. You can give the clone a friendly label with aida node alias. See Support for air-gapped development. Mailbox AIDA's message channel between agents and people, for things that are not a change of state: a heads-up, a question, a warning about a shared file. Messages are kept, so a different agent can read them the next day. See the inter-agent mailbox. Mandate Time-limited permission, started by a person at a terminal with aida mandate start, for the advisor seat to do named things while that person is away, such as shipping held pull requests. It lasts 8 hours by default and at most 24, and never covers operator-only specs. See aida mandate. Merge hold A stop placed on a pull request so it cannot merge, even when its checks and review pass. It shows as the aida:merge-hold label and a failing required check. It stays until a person clears it with aida merge-hold clear, or AIDA releases it in the narrow cases it allows, such as under a mandate. See What is AIDA. Operator-only A tag that keeps a spec in human hands. No mandate covers it, so its pull request waits for a person to merge, and the tag's effect remains even if the tag is later removed. See aida mandate. Pool A range of one spec type's numbers given to one hub. Clones that sync through that hub take their blocks from it, so two hubs never hand out the same number. See Support for air-gapped development. Ref Git's name for a pointer to a commit, such as a branch. AIDA keeps its records on the aida-store branch, called the store ref; a push to it succeeds only if nobody else moved it first. See Support for air-gapped development. Review story The story AIDA files when it opens a pull request, titled Review PR-\u003cnumber>: \u2026 and routed to the reviewer seat. Whoever picks it up reviews that pull request and records a verdict. See the review process. Rework round One trip back to the implementer after a reviewer asks for changes. aida rework returns the spec to active work with the reviewer's reasons, and the implementer pushes fixes to the same pull request for another review. See aida rework. Role A named job in AIDA's workflow, such as advisor, implementer, reviewer or integrator. Work can be routed to a role, and the role decides what a session wearing it is expected and allowed to do. See Roles and sessions. Root The one clone of a project that owns every spec number not yet handed out. You choose it once with aida node enroll-root; it splits the numbers into pools. See Support for air-gapped development. Roster The list of seats each person is allowed to take, kept per project. It is a ceiling: aida role enter refuses a seat that is not on your roster, and aida team allow-seat adds one. See Entering seats and delegating child seats. Seat A role as a place in the workflow that a session occupies, such as the advisor seat. A seat can receive work and hold sessions, and some seats allow only one active occupant at a time. See Roles and sessions. Supervised spec A sensitive spec, such as one touching security, containment, review or merge authority, or one marked guided or keystone. A mandate leaves its merge hold for a person unless that person started the mandate with --include-supervised. See aida mandate. How to add a term This file is the canonical source for AIDA's product vocabulary. It is the template master aida-core/templates/.aida/discipline/product-glossary.md. Two outputs are generated from it: the CLI glossary (aida docs glossary, published as the book's Glossary chapter by make book-glossary) and the website glossary page (python3 docs/showcase/build.py). The terms that earlier lived as type=term specs (local ID, role, seat, control plane) have been folded in here; add new product vocabulary here, not as a term spec. Each entry follows the same rules. (The website renderer reads one list item per line.) - Heading. Add a ### heading under Terms, in alphabetical order. The heading becomes the anchor: ### Merge hold is glossary.html#merge-hold. Do not rename a heading once pages link to it. - Wording. Write 1 to 3 plain sentences about what the reader sees or does, not how it is built. Do not cite spec IDs. - Links. Link the page that explains the term in depth, relative to this file (../../../../docs/\u003cpage>.md), and other terms as #anchor. - Outputs. Copy the master to .aida/discipline/ (make sync-templates), rebuild the binary, run make book-glossary and python3 docs/showcase/build.py, and commit the regenerated files.",
+    "title": "Product glossary",
+    "url": "glossary.html"
+  },
+  {
+    "category": "human",
+    "kind": "term",
+    "sha256": "c0050b72883a101193242a95fe9db3948673c3d02a54bfe4f1b42297c33e19a5",
+    "source": "../../aida-core/templates/.aida/discipline/product-glossary.md",
+    "text": "The short ID a spec keeps for good: its type and a number, such as TASK-\u003cnumber>. It is unique across every clone of the project, because each number is handed out once from a shared range. See Support for air-gapped development.",
+    "title": "Agreed ID",
+    "url": "glossary.html#agreed-id"
+  },
+  {
+    "category": "human",
+    "kind": "term",
+    "sha256": "dc5ed754c0b1ea8f0104b20ddd24087b2e39a78df0d2c60a6fd9c155c719e1be",
+    "source": "../../aida-core/templates/.aida/discipline/product-glossary.md",
+    "text": "A small range of spec numbers set aside for one clone. The clone gives new specs short agreed IDs from its own blocks, so it never has to ask anyone else first. Blocks are carved from a pool. See Support for air-gapped development.",
+    "title": "Block",
+    "url": "glossary.html#block"
+  },
+  {
+    "category": "human",
+    "kind": "term",
+    "sha256": "28835c0b50d23646fbfa75e4c81a41fcb68cdc5b47f8f810013b858068aad136",
+    "source": "../../aida-core/templates/.aida/discipline/product-glossary.md",
+    "text": "A short note that assigns a piece of work to a named agent, such as \"pick up this spec next\". The agent reads it, does the work, and acknowledges it so it stops showing up. A brief goes one way; for a conversation, use the mailbox. See aida brief.",
+    "title": "Brief",
+    "url": "glossary.html#brief"
+  },
+  {
+    "category": "human",
+    "kind": "term",
+    "sha256": "757bd79f0a6b48fee7a5f92698127b3adc79056b2f6a174646d70171c698f9b1",
+    "source": "../../aida-core/templates/.aida/discipline/product-glossary.md",
+    "text": "A grant that a launcher gives an agent it starts, for one named seat. Your session can hand out only the seats you listed when you entered your own seat, and a child grant cannot be passed on again. See Entering seats and delegating child seats.",
+    "title": "Child grant",
+    "url": "glossary.html#child-grant"
+  },
+  {
+    "category": "human",
+    "kind": "term",
+    "sha256": "05a229c15c26cb6987b276ecf5b3e5b3373faa3f97fe385e830147d9fb961e93",
+    "source": "../../aida-core/templates/.aida/discipline/product-glossary.md",
+    "text": "The spec ID in parentheses at the end of a commit subject, as in fix(api): handle missing ids (SPEC-ID). When that commit lands on the main branch, AIDA marks the named spec completed. See the commit trailer convention.",
+    "title": "Commit trailer",
+    "url": "glossary.html#commit-trailer"
+  },
+  {
+    "category": "human",
+    "kind": "term",
+    "sha256": "ee7d3ef2ca7f5f265d2a411803e6047f226d0cfa5d33a2db02471cd4a4446885",
+    "source": "../../aida-core/templates/.aida/discipline/product-glossary.md",
+    "text": "The part of AIDA that decides whether work may move forward and reports what is in flight: the queue, seats, leases, reviews, merge holds and the status views. The spec records themselves are the data it acts on, not part of it.",
+    "title": "Control plane",
+    "url": "glossary.html#control-plane"
+  },
+  {
+    "category": "human",
+    "kind": "term",
+    "sha256": "fb510beed9cb92fbb6ff61e4f51282595c65cb16a33d2a36452715f819e89c9f",
+    "source": "../../aida-core/templates/.aida/discipline/product-glossary.md",
+    "text": "A helper you start in your own terminal with aida deputy. Agents hand it commands to run under your seat grant, and it runs only what you allowed, records each job and tells the submitting agent the result. See aida deputy.",
+    "title": "Deputy",
+    "url": "glossary.html#deputy"
+  },
+  {
+    "category": "human",
+    "kind": "term",
+    "sha256": "c11f673cda524ef29b5d24deb45bf1c95a231ea402d12e1ade22acb5caca7b9b",
+    "source": "../../aida-core/templates/.aida/discipline/product-glossary.md",
+    "text": "The authority your terminal session holds to act in a seat. You get one by running aida role enter \u003cseat> at an interactive terminal; it expires after a set time (24 hours by default) and works only for processes started from that terminal. See Entering seats and delegating child seats.",
+    "title": "Grant",
+    "url": "glossary.html#grant"
+  },
+  {
+    "category": "human",
+    "kind": "term",
+    "sha256": "a4e8a28ad0c29d7b4196c4559d9e3d78f47d6a22c383b4a56932782c998870e6",
+    "source": "../../aida-core/templates/.aida/discipline/product-glossary.md",
+    "text": "A note a session writes before it ends so the next session can carry on without the conversation that came before: what was done, what is open and what to do next. AIDA keeps handoff notes in the project's .aida/ folder.",
+    "title": "Handoff",
+    "url": "glossary.html#handoff"
+  },
+  {
+    "category": "human",
+    "kind": "term",
+    "sha256": "0a9f8ac30459d7053a6664aaf890bf84a1725680b4e48c0b70e26bcef27b1d99",
+    "source": "../../aida-core/templates/.aida/discipline/product-glossary.md",
+    "text": "A Git server that the requirement store syncs through, such as GitHub, GitLab or a repository on an internal host. A mirror that only copies another hub counts as the same hub. See Support for air-gapped development.",
+    "title": "Hub",
+    "url": "glossary.html#hub"
+  },
+  {
+    "category": "human",
+    "kind": "term",
+    "sha256": "0944137793b30e60beeb4f6e5772421e2bd0f93c03d066e4d837dd751a99352c",
+    "source": "../../aida-core/templates/.aida/discipline/product-glossary.md",
+    "text": "A longer spec ID that also names the clone that made it, used when that clone has no block to draw short numbers from. Local IDs never collide, so they need no coordination, and a spec can later be given an agreed ID. You can give the clone a friendly label with aida node alias. See Support for air-gapped development.",
+    "title": "Local ID",
+    "url": "glossary.html#local-id"
+  },
+  {
+    "category": "human",
+    "kind": "term",
+    "sha256": "758bc867f1e41cda70a15e6e03c29d5622366550e1d50bf411c032256bdf6205",
+    "source": "../../aida-core/templates/.aida/discipline/product-glossary.md",
+    "text": "AIDA's message channel between agents and people, for things that are not a change of state: a heads-up, a question, a warning about a shared file. Messages are kept, so a different agent can read them the next day. See the inter-agent mailbox.",
+    "title": "Mailbox",
+    "url": "glossary.html#mailbox"
+  },
+  {
+    "category": "human",
+    "kind": "term",
+    "sha256": "901030a3cc3c765651178b5c29e7bd80f105a7c66fd3dee7391658c225f88e89",
+    "source": "../../aida-core/templates/.aida/discipline/product-glossary.md",
+    "text": "Time-limited permission, started by a person at a terminal with aida mandate start, for the advisor seat to do named things while that person is away, such as shipping held pull requests. It lasts 8 hours by default and at most 24, and never covers operator-only specs. See aida mandate.",
+    "title": "Mandate",
+    "url": "glossary.html#mandate"
+  },
+  {
+    "category": "human",
+    "kind": "term",
+    "sha256": "45ff813dfdc6e0b292788d80b5877a886798ebd6dd5fe24e08a75e6aadafae4b",
+    "source": "../../aida-core/templates/.aida/discipline/product-glossary.md",
+    "text": "A stop placed on a pull request so it cannot merge, even when its checks and review pass. It shows as the aida:merge-hold label and a failing required check. It stays until a person clears it with aida merge-hold clear, or AIDA releases it in the narrow cases it allows, such as under a mandate. See What is AIDA.",
+    "title": "Merge hold",
+    "url": "glossary.html#merge-hold"
+  },
+  {
+    "category": "human",
+    "kind": "term",
+    "sha256": "378dd5a0de81ebe226051e002a558da62f1a3e263ee206ab364c1f6bfd32626f",
+    "source": "../../aida-core/templates/.aida/discipline/product-glossary.md",
+    "text": "A tag that keeps a spec in human hands. No mandate covers it, so its pull request waits for a person to merge, and the tag's effect remains even if the tag is later removed. See aida mandate.",
+    "title": "Operator-only",
+    "url": "glossary.html#operator-only"
+  },
+  {
+    "category": "human",
+    "kind": "term",
+    "sha256": "b2d644099a6036a0abb16bbcae6d455294eb5eb2333b1e618a2d75900a4fdc37",
+    "source": "../../aida-core/templates/.aida/discipline/product-glossary.md",
+    "text": "A range of one spec type's numbers given to one hub. Clones that sync through that hub take their blocks from it, so two hubs never hand out the same number. See Support for air-gapped development.",
+    "title": "Pool",
+    "url": "glossary.html#pool"
+  },
+  {
+    "category": "human",
+    "kind": "term",
+    "sha256": "79bd9da7ec2919275808103c136c40e5f9666fcc9df79d49c454bd7f8f22dcce",
+    "source": "../../aida-core/templates/.aida/discipline/product-glossary.md",
+    "text": "Git's name for a pointer to a commit, such as a branch. AIDA keeps its records on the aida-store branch, called the store ref; a push to it succeeds only if nobody else moved it first. See Support for air-gapped development.",
+    "title": "Ref",
+    "url": "glossary.html#ref"
+  },
+  {
+    "category": "human",
+    "kind": "term",
+    "sha256": "43c29ff9cd69ab3f28afa13904065d2d148e996c9db6687bb4b7f2d11b6c065b",
+    "source": "../../aida-core/templates/.aida/discipline/product-glossary.md",
+    "text": "The story AIDA files when it opens a pull request, titled Review PR-\u003cnumber>: \u2026 and routed to the reviewer seat. Whoever picks it up reviews that pull request and records a verdict. See the review process.",
+    "title": "Review story",
+    "url": "glossary.html#review-story"
+  },
+  {
+    "category": "human",
+    "kind": "term",
+    "sha256": "5951b86e465da109bc884040e192b309b0b8aaf210704cf900ac4e6f5cf67128",
+    "source": "../../aida-core/templates/.aida/discipline/product-glossary.md",
+    "text": "One trip back to the implementer after a reviewer asks for changes. aida rework returns the spec to active work with the reviewer's reasons, and the implementer pushes fixes to the same pull request for another review. See aida rework.",
+    "title": "Rework round",
+    "url": "glossary.html#rework-round"
+  },
+  {
+    "category": "human",
+    "kind": "term",
+    "sha256": "f11abe232f14f6c582a1cb3c1555376d649617ba820ddf2f883e1134c2c88718",
+    "source": "../../aida-core/templates/.aida/discipline/product-glossary.md",
+    "text": "A named job in AIDA's workflow, such as advisor, implementer, reviewer or integrator. Work can be routed to a role, and the role decides what a session wearing it is expected and allowed to do. See Roles and sessions.",
+    "title": "Role",
+    "url": "glossary.html#role"
+  },
+  {
+    "category": "human",
+    "kind": "term",
+    "sha256": "2dfa64979257c7412708ad0534e5231200020f2588ec8fb66b7101e1c1e2fe1c",
+    "source": "../../aida-core/templates/.aida/discipline/product-glossary.md",
+    "text": "The one clone of a project that owns every spec number not yet handed out. You choose it once with aida node enroll-root; it splits the numbers into pools. See Support for air-gapped development.",
+    "title": "Root",
+    "url": "glossary.html#root"
+  },
+  {
+    "category": "human",
+    "kind": "term",
+    "sha256": "e78068f70305a2701d2b4e48c69a2e05ac3525077a048c18972a30f52facf59f",
+    "source": "../../aida-core/templates/.aida/discipline/product-glossary.md",
+    "text": "The list of seats each person is allowed to take, kept per project. It is a ceiling: aida role enter refuses a seat that is not on your roster, and aida team allow-seat adds one. See Entering seats and delegating child seats.",
+    "title": "Roster",
+    "url": "glossary.html#roster"
+  },
+  {
+    "category": "human",
+    "kind": "term",
+    "sha256": "84893b69cecc2232da7717c24364af0daabcd809ac5b703eeccebd0d2357442d",
+    "source": "../../aida-core/templates/.aida/discipline/product-glossary.md",
+    "text": "A role as a place in the workflow that a session occupies, such as the advisor seat. A seat can receive work and hold sessions, and some seats allow only one active occupant at a time. See Roles and sessions.",
+    "title": "Seat",
+    "url": "glossary.html#seat"
+  },
+  {
+    "category": "human",
+    "kind": "term",
+    "sha256": "2ae94648243732c3abb5e81a4f681ca1327ba94ebe2588ff1e10903111d0400a",
+    "source": "../../aida-core/templates/.aida/discipline/product-glossary.md",
+    "text": "A sensitive spec, such as one touching security, containment, review or merge authority, or one marked guided or keystone. A mandate leaves its merge hold for a person unless that person started the mandate with --include-supervised. See aida mandate.",
+    "title": "Supervised spec",
+    "url": "glossary.html#supervised-spec"
   }
 ];

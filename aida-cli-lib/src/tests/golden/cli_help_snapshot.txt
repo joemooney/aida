@@ -22424,7 +22424,7 @@ Commands:
             `docs/aida/`
   check     Verify the docs tree on disk matches what the graph would render. Exits non-zero on
             drift. Suitable for a CI / pre-commit check
-  glossary  Print AIDA's machinery + lifecycle glossary from the binary's embedded copy
+  glossary  Print AIDA's product, machinery and lifecycle glossary from the binary's embedded copy
   help      Print this message or the help of the given subcommand(s)
 
 Options:
@@ -22499,16 +22499,20 @@ Options:
   -h, --help
           Print help (see a summary with '-h')
 ===== aida docs glossary
-Print AIDA's machinery + lifecycle glossary from the binary's embedded copy.
+Print AIDA's product, machinery and lifecycle glossary from the binary's embedded copy.
 
-Surfaces the canonical vocabulary (orchestrator, phase, drain, lease, role, scope, worktree, …) and
-the spec-lifecycle verbs (committed, pushed, merged, completed, released) without hunting for the
-file under .aida/discipline/ — and stays correct even if the project's scaffolded copy is missing or
-stale. Default prints both sections.
+Surfaces the plain-language product terms (merge hold, mandate, grant, hub, …), the machinery
+vocabulary (orchestrator, phase, drain, lease, role, scope, worktree, …) and the spec-lifecycle
+verbs (committed, pushed, merged, completed, released) without hunting for the file under
+.aida/discipline/ — and stays correct even if the project's scaffolded copy is missing or stale.
+Default prints all three sections; any section flag prints only the sections named.
 
 Usage: aida docs glossary [OPTIONS]
 
 Options:
+      --product
+          Print only the product glossary (merge hold, mandate, grant, hub, …)
+
       --machinery
           Print only the machinery glossary (orchestrator, drain, lease, …)
 
@@ -52024,7 +52028,7 @@ Working on aida itself
       "docs",
       "glossary"
     ],
-    "about": "Print AIDA's machinery + lifecycle glossary from the binary's embedded copy",
+    "about": "Print AIDA's product, machinery and lifecycle glossary from the binary's embedded copy",
     "flags": [
       {
         "name": "canonical-ids",
@@ -52050,6 +52054,11 @@ Working on aida itself
         "name": "machinery",
         "takes_value": false,
         "help": "Print only the machinery glossary (orchestrator, drain, lease, …)"
+      },
+      {
+        "name": "product",
+        "takes_value": false,
+        "help": "Print only the product glossary (merge hold, mandate, grant, hub, …)"
       }
     ],
     "hidden": false
