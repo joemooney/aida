@@ -13,16 +13,15 @@ description: |
   4. States the threat model plainly: sessions are separated, not OS users. A same-user process that forges files is out of scope (ADR-66).
   5. End-user prose only: no internal spec IDs or seat-process jargon beyond the terms the page defines.
   6. Deployed per docs/showcase/README.md: a gh-pages snapshot from an approved merged revision.
-status: Done
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T22:20:21.225603942Z
-modified_at: 2026-11-01T08:18:03.233819829Z
+modified_at: 2026-11-01T08:18:06.416216525Z
 req_type: Task
 tags:
 - authority
-- closure:pending
 - docs
 - website
 comments:
@@ -196,6 +195,13 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a1962f-efd0-7e61-aa7e-2857b80d89a2
+  author: joe
+  timestamp: 2026-11-01T08:18:06.416212621Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
 filed_at:
   code_sha: 0506fa2eb862db100dffbc80b0c5cfdedec28522
   branch: main
@@ -207,3 +213,4 @@ implementation_info:
   implemented: true
   implemented_at: 2026-11-01T06:29:15.024101215Z
   implemented_by: joe
+  completed_at: 2026-11-01T08:18:06.416197977Z
