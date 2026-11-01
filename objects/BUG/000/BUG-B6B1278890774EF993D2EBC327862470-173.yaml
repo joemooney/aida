@@ -18,7 +18,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T08:28:54.983776375Z
-modified_at: 2026-11-01T16:44:54.929723253Z
+modified_at: 2026-11-01T16:44:55.754412128Z
 req_type: Bug
 tags:
 - forge
@@ -189,6 +189,11 @@ comments:
     Actor32 terminal, oldlease01a197d895f1 safelyretired ONLY after root verified four source/public/archive SHA256s and onlytwopublishedtrackedchanges dirty, cargo0/2slots0queued. Preserved /tmp/aida-BUG2400-head-binding-public-source.tar0600 +identitymanifest; no borroweddeadcontext. New strict pickup ownlease/grant required. SourcepublicationifnativeGitRO may use boundedtmpcheckoutofsameadvertisedbranch baseline+fullblobdiffidentityproof andnormalpush, no alternativepolicy/cache/rootauthority orfakesource. Owncontextmetadata only via HOSTexactPID/ancestry, same-shell rolecheckbeforemutations/no keyselectoroutput. Output /tmp/aida-BUG2400-timing-result.md with provenance/publichead/coverage map/local/CI/currentgates. Endafterreport, no poller.
   created_at: 2026-11-01T16:44:53.540228721Z
   modified_at: 2026-11-01T16:44:53.540228721Z
+- id: 01a197ff-f1ca-74f1-808f-adb3a9d92d06
+  author: joe
+  content: Exact-head CI timing failure after independent source approval; preserve all regressions and default10s budget in same PR.
+  created_at: 2026-11-01T16:44:55.626695685Z
+  modified_at: 2026-11-01T16:44:55.626695685Z
 history:
 - id: 01a1963a-2b42-7cd2-a795-0772bcc408d1
   author: joe
