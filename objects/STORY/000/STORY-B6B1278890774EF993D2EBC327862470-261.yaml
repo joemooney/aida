@@ -25,7 +25,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T22:58:37.964636963Z
-modified_at: 2026-11-01T07:24:40.076171752Z
+modified_at: 2026-11-01T07:31:31.705598720Z
 req_type: Story
 tags:
 - docs
@@ -138,6 +138,11 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-01T06:48:41.621716440Z
   modified_at: 2026-11-01T06:48:41.621716440Z
+- id: 01a19605-4a19-77a2-93ea-1d0b9b9d2fba
+  author: joe
+  content: 'Advisor ruling: ADVISOR REWORK BRIEF: fix the single GNU-only sed -i site in tests/test_generate_glossary_check.sh:157 using a portable fixture restore/rewrite (no allowlist addition). Verify bash tests/test_generate_glossary_check.sh and scripts/check-portability.sh, plus showcase build check and make check-ci-fast if available. This is FASTTRACK; no direct cargo. If the fast gate compiles beyond sandbox support, report unavailable once rather than repeated short builds. Push one small commit on the existing PR then stop for independent review. Optional contributor-section finding ACCEPTED as-is: accurate and clearly labeled contributor instructions are useful to readers who want glossary corrections; no follow-up task or PR.'
+  created_at: 2026-11-01T07:31:31.481455453Z
+  modified_at: 2026-11-01T07:31:31.481455453Z
 history:
 - id: 01a19517-7d5f-7092-83c8-b303944f0e16
   author: joe
