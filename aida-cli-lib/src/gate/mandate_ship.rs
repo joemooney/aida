@@ -209,12 +209,37 @@ pub(crate) fn cleared_by_human_facts(
     }
 }
 
+/// BUG-056: the store evidence one exclusion collection read, for the
+/// stability check. Every judged spec contributes its ID and its aliases: a
+/// spec named by its `agreed_id` has its object at the canonical `spec_id`
+/// path, which only the alias puts in scope. A store that did not load
+/// (`loaded == false`) read no known scope, so it is judged by the strict
+/// rule (fail closed).
+// trace:BUG-B6B1278890774EF993D2EBC327862470-056 | ai:claude
+pub(in crate::gate) fn collection_evidence_scope(
+    loaded: bool,
+    specs: &[crate::gate::mandate::ShipSpec],
+) -> crate::gate::mandate_traces::EvidenceScope {
+    if !loaded {
+        return crate::gate::mandate_traces::EvidenceScope::strict();
+    }
+    crate::gate::mandate_traces::EvidenceScope::of_ids(
+        specs
+            .iter()
+            .flat_map(|spec| std::iter::once(&spec.id).chain(spec.aliases.iter())),
+    )
+}
+
 /// BUG-2179: how many times the mandate cover rebuilds its store evidence when
 /// a concurrent writer changes the store mid-collection, before refusing.
-const MANDATE_COLLECT_ATTEMPTS: u32 = 3;
+/// BUG-056: five, with a growing pause, so a burst of fleet writes to the
+/// excluded specs themselves is outlasted (~5 s in all) before refusing.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-056 | ai:claude
+const MANDATE_COLLECT_ATTEMPTS: u32 = 5;
 
 /// TASK-2019: the pause before the next attempt after a dirty or moving store,
-/// so an in-flight store write can commit.
+/// so an in-flight store write can commit. BUG-056: attempt `n` waits `n`
+/// times this.
 // trace:TASK-2067 | ai:antigravity
 const MANDATE_COLLECT_BACKOFF: std::time::Duration = std::time::Duration::from_millis(500);
 
@@ -228,12 +253,14 @@ const MANDATE_COLLECT_BACKOFF: std::time::Duration = std::time::Duration::from_m
 /// instead of refusing at once; a store still dirty on the last attempt
 /// refuses. BUG-2195: `stable` decides whether two snapshots are the same
 /// store version for the exclusion reader, so an unrelated ref move does not
-/// count as a change.
+/// count as a change. BUG-056: `stable` also sees what was collected, so only a
+/// change to the evidence that collection read discards it.
 // trace:BUG-2179 | ai:claude
 // trace:TASK-2067 | ai:antigravity
+// trace:BUG-B6B1278890774EF993D2EBC327862470-056 | ai:claude
 fn collect_on_stable_store<S, T>(
     mut snapshot: impl FnMut() -> std::result::Result<Option<S>, crate::gate::mandate::MandateRefusal>,
-    mut stable: impl FnMut(&S, &S) -> bool,
+    mut stable: impl FnMut(&S, &S, &T) -> bool,
     mut collect: impl FnMut() -> T,
     backoff: std::time::Duration,
 ) -> std::result::Result<T, crate::gate::mandate::MandateRefusal> {
@@ -245,7 +272,7 @@ fn collect_on_stable_store<S, T>(
             Some(before) => {
                 let collected = collect();
                 match snapshot()? {
-                    Some(after) if stable(&before, &after) => return Ok(collected),
+                    Some(after) if stable(&before, &after, &collected) => return Ok(collected),
                     Some(_) => false,
                     None => true,
                 }
@@ -265,7 +292,7 @@ fn collect_on_stable_store<S, T>(
                 }),
             );
         }
-        std::thread::sleep(backoff);
+        std::thread::sleep(backoff * attempt);
     }
 }
 
@@ -409,11 +436,22 @@ pub(in crate::gate) fn mandate_ship_cover(
         Err(e) if e.is::<crate::gate::mandate_traces::StoreDirty>() => Ok(None),
         Err(e) => Err(unreadable(e)),
     };
+    // BUG-056: the before snapshot pins the store version; only a change to
+    // the evidence this collection read (its specs' objects and ID lines)
+    // discards it, so concurrent commits of unrelated specs no longer count
+    // as a change. Uncommitted dirt anywhere under `objects/` still makes a
+    // snapshot retry (`StoreDirty`), so a long enough burst of in-flight
+    // object writes can still exhaust the bound. A store that did not load
+    // is judged by the strict rule.
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-056 | ai:claude
     let stable = |before: &crate::gate::mandate_traces::StoreSnapshot,
-                  after: &crate::gate::mandate_traces::StoreSnapshot| {
-        crate::gate::mandate_traces::store_snapshot_stable(&store_root, before, after)
+                  after: &crate::gate::mandate_traces::StoreSnapshot,
+                  collected: &(bool, Vec<crate::gate::mandate::ShipSpec>, _)| {
+        let (loaded, specs, _) = collected;
+        let scope = collection_evidence_scope(*loaded, specs);
+        crate::gate::mandate_traces::store_snapshot_stable(&store_root, before, after, &scope)
     };
-    let (specs, ledger) = collect_on_stable_store(
+    let (_, specs, ledger) = collect_on_stable_store(
         snapshot,
         stable,
         || {
@@ -452,7 +490,7 @@ pub(in crate::gate) fn mandate_ship_cover(
                 Ok(dir) => crate::gate::mandate::read_exclusions(dir),
                 Err(e) => Err(format!("{e:#}")),
             };
-            (specs, ledger)
+            (store.is_some(), specs, ledger)
         },
         MANDATE_COLLECT_BACKOFF,
     )?;

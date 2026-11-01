@@ -600,6 +600,8 @@ jobs:
           # trace:TASK-B6B1278890774EF993D2EBC327862470-111 | ai:codex
           python3 -m unittest tests/test_showcase_build.py
           python3 docs/showcase/build.py --check
+          # trace:TASK-2604 | ai:claude
+          python3 -m unittest tests/test_showcase_publish.py
 
       # trace:STORY-1352 | ai:codex
       #

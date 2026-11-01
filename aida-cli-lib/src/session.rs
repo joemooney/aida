@@ -1680,7 +1680,24 @@ pub(crate) fn spawn_vendor_headless_with_seat_granted(
     let status = reviewer_status_with_handle_guard(cmd.stdout(Stdio::from(log)), &mut handle_guard)
         .with_context(|| format!("failed to spawn {}", vendor.program()))?;
     tee.stop();
+    // The child has exited: end its registry row now. Its prompts are its only
+    // heartbeats and a `-p` lane gets one, so gc would end it at its start.
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-151 | ai:claude
+    record_headless_session_end(&headless_worktree_root(), session_id);
     Ok((status, child_grant.id))
+}
+
+/// End the registry row of the headless session `session_id`, which ran from
+/// `worktree_root`, at its real exit. Warns, never fails the phase.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-151 | ai:claude
+pub(crate) fn record_headless_session_end(worktree_root: &Path, session_id: &str) {
+    let project_root = crate::main_worktree_root_from(worktree_root);
+    if let Err(err) = crate::agent_registry::mark_session_ended(&project_root, session_id) {
+        eprintln!(
+            "{} failed to mark the headless session's registry entry ended: {err}",
+            "warning:".yellow().bold()
+        );
+    }
 }
 
 /// STORY-612: the worktree root a non-resume headless drain runs in — its
@@ -5382,6 +5399,8 @@ pub(crate) fn spawn_claude_headless_resume_granted(
     let status = reviewer_status_with_handle_guard(cmd.stdout(Stdio::from(log)), &mut handle_guard)
         .context("failed to spawn claude")?;
     tee.stop();
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-151 | ai:claude
+    record_headless_session_end(cwd, session_id);
     Ok((status, child_grant.id))
 }
 
