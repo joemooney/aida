@@ -23,7 +23,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-01T06:48:25.173889038Z
-modified_at: 2026-11-01T06:48:25.173889038Z
+modified_at: 2026-11-01T08:20:05.025758455Z
 req_type: Bug
 tags:
 - audit
@@ -34,6 +34,12 @@ relationships:
 - rel_type: Child
   target_id: 01a19499-932e-79f0-a3e1-1299dfe355ad
   created_at: 2026-11-01T06:48:32.461977559Z
+comments:
+- id: 01a19631-bf21-7f61-bc4a-fea4ab5047b3
+  author: joe
+  content: 'PROXY DECISION: approve SKETCH ONLY before code because hook-to-tool grant transport is an authority boundary. Source confirms Codex init-only hook writer and Claude-only generated merge/header paths. Sketch must separate portable scaffold/diagnostic fixes from supported Codex hook persistence; never mint/recover a grant from writable project context, assume child hook eval affects a parent, invent CODEX_ENV_FILE, or copy credentials/bearer tokens into project files. Reuse BUG2398 explicit managed child transport and preserve ungranted refusal. Independent advisor must approve supported hook API and tests before code. Coordinate STORY2256 session-start arming and TASK2689 generated guidance; fixtures/fakeHOME only, no real hook/settings edits in tests. Preserve user-managed hook merge boundaries and executable shebang/header behavior.'
+  created_at: 2026-11-01T08:20:05.025758455Z
+  modified_at: 2026-11-01T08:20:05.025758455Z
 history:
 - id: 01a195dd-f3fe-78f1-905f-d5b9c92b6293
   author: joe
