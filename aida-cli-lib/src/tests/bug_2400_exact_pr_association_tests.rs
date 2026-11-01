@@ -2,52 +2,62 @@
 // trace:BUG-2400 | ai:codex
 use super::*;
 
-#[test]
-fn bug_2400_search_candidates_require_exact_store_association() {
-    if crate::test_env::run_path_isolated_test() {
-        return;
-    }
-    let dir = tempfile::tempdir().unwrap();
-    let root = dir.path();
-    let init = crate::test_git::git_command()
-        .args(["init", "-q"])
-        .arg(root)
-        .output()
-        .unwrap();
-    assert!(init.status.success(), "{init:?}");
-    std::fs::create_dir(root.join(".aida")).unwrap();
-    std::fs::write(
-        root.join(".aida/config.toml"),
-        "[deployment]\nmode = 'distributed'\nstore_path = '.aida-store'\n",
-    )
-    .unwrap();
-    let node = "b6b1278890774ef993d2ebc327862470";
-    let canonical = format!("BUG-{node}-166");
-    let old = format!("BUG-{node}-165");
-    let unrelated = format!("BUG-{node}-057");
-    let mut map = aida_core::node_alias::NodeAliasMap::default();
-    map.set("HOME", node).unwrap();
-    map.rename("HOME", "DESK").unwrap();
-    map.retired_ids
-        .insert(aida_core::id_identity::id_key(&old), canonical.clone());
-    let _map = aida_core::node_alias::install_for_thread(map);
-    let backend = crate::test_env::home_fixture_backend(&root.join(".aida-store"))
-        .unwrap()
-        .with_auto_commit(false);
-    let mut wanted = aida_core::Requirement::new("wanted".into(), String::new());
-    wanted.spec_id = Some(canonical.clone());
-    wanted.agreed_id = Some("BUG-2392".into());
-    let mut other = aida_core::Requirement::new("other".into(), String::new());
-    other.spec_id = Some(unrelated.clone());
-    let mut store = RequirementsStore::new();
-    store.requirements = vec![wanted, other];
-    backend.save(&store).unwrap();
+// Construct only after run_path_isolated_test; retain both the map and EnvLock
+// guards until the isolated test finishes. Each test owns its fake store/forge.
+struct Fixture {
+    dir: tempfile::TempDir,
+    canonical: String,
+    old: String,
+    unrelated: String,
+    backend: aida_core::GitBackend,
+    store: RequirementsStore,
+    _map: aida_core::node_alias::ThreadMapGuard,
+    gh_guard: Option<crate::test_env::EnvVarGuard>,
+}
 
-    let gh = root.join("gh");
-    crate::test_exec::write_executable(
-        &gh,
-        r#"#!/bin/sh
-base=$(dirname "$0")
+impl Fixture {
+    fn new() -> Self {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        let init = crate::test_git::git_command()
+            .args(["init", "-q"])
+            .arg(root)
+            .output()
+            .unwrap();
+        assert!(init.status.success(), "{init:?}");
+        std::fs::create_dir(root.join(".aida")).unwrap();
+        std::fs::write(
+            root.join(".aida/config.toml"),
+            "[deployment]\nmode = 'distributed'\nstore_path = '.aida-store'\n",
+        )
+        .unwrap();
+        let node = "b6b1278890774ef993d2ebc327862470";
+        let canonical = format!("BUG-{node}-166");
+        let old = format!("BUG-{node}-165");
+        let unrelated = format!("BUG-{node}-057");
+        let mut map = aida_core::node_alias::NodeAliasMap::default();
+        map.set("HOME", node).unwrap();
+        map.rename("HOME", "DESK").unwrap();
+        map.retired_ids
+            .insert(aida_core::id_identity::id_key(&old), canonical.clone());
+        let _map = aida_core::node_alias::install_for_thread(map);
+        let backend = crate::test_env::home_fixture_backend(&root.join(".aida-store"))
+            .unwrap()
+            .with_auto_commit(false);
+        let mut wanted = aida_core::Requirement::new("wanted".into(), String::new());
+        wanted.spec_id = Some(canonical.clone());
+        wanted.agreed_id = Some("BUG-2392".into());
+        let mut other = aida_core::Requirement::new("other".into(), String::new());
+        other.spec_id = Some(unrelated.clone());
+        let mut store = RequirementsStore::new();
+        store.requirements = vec![wanted, other];
+        backend.save(&store).unwrap();
+
+        let gh = root.join("gh");
+        crate::test_exec::write_executable(
+            &gh,
+            r#"#!/bin/sh
+base=${0%/*}
 printf '%s\n' "$*" >> "$base/args"
 case "$*" in
   api*)
@@ -59,32 +69,63 @@ case "$*" in
         page=${2##*page=}
         if [ -f "$base/fail-page-$page" ]; then echo 'page failed' >&2; exit 1; fi
         if [ "$pr" = 3200 ]; then
-          cat "$base/commits-$page"
-          if [ -f "$base/detail-after-page" ]; then cp "$base/detail-after-page" "$base/detail"; fi
+          if [ -f "$base/detail-after-page" ]; then
+            cat "$base/commits-$page"
+            cp "$base/detail-after-page" "$base/detail"
+          else exec cat "$base/commits-$page"; fi
         else echo '[]'; fi ;;
-      *) if [ "$pr" = 3200 ]; then cat "$base/detail";
+      *) if [ "$pr" = 3200 ]; then exec cat "$base/detail";
          else echo '{"commits":0,"head":{"sha":"0000000000000000000000000000000000000000"}}'; fi ;;
     esac ;;
-  *'--search'*) cat "$base/search" ;;
-  *) cat "$base/all" ;;
+  *'--search'*) exec cat "$base/search" ;;
+  *) exec cat "$base/all" ;;
 esac
 "#,
-    );
-    let _gh = crate::test_env::EnvVarGuard::set("AIDA_TEST_GH_BINARY", &gh);
-    std::fs::write(root.join("commits-1"), "[]").unwrap();
-    std::fs::write(
-        root.join("detail"),
-        r#"{"commits":0,"head":{"sha":"0000000000000000000000000000000000000000"}}"#,
-    )
-    .unwrap();
-    std::fs::write(root.join("all"), "").unwrap();
-    let row = |n, title: &str, branch: &str| {
-        format!("{n}\t{title}\thttps://example.test/pr/{n}\t{branch}\n")
-    };
+        );
+        let _gh = crate::test_env::EnvVarGuard::set("AIDA_TEST_GH_BINARY", &gh);
+        std::fs::write(root.join("commits-1"), "[]").unwrap();
+        std::fs::write(
+            root.join("detail"),
+            r#"{"commits":0,"head":{"sha":"0000000000000000000000000000000000000000"}}"#,
+        )
+        .unwrap();
+        std::fs::write(root.join("all"), "").unwrap();
+        std::fs::write(root.join("search"), "").unwrap();
+        Self {
+            dir,
+            canonical,
+            old,
+            unrelated,
+            backend,
+            store,
+            _map,
+            gh_guard: Some(_gh),
+        }
+    }
+}
+
+fn row(n: u64, title: &str, branch: &str) -> String {
+    format!("{n}\t{title}\thttps://example.test/pr/{n}\t{branch}\n")
+}
+
+fn commit(n: u64, message: &str) -> serde_json::Value {
+    serde_json::json!({"sha":format!("{n:040x}"),"commit":{"message":message}})
+}
+
+// trace:BUG-2400 | ai:codex
+#[test]
+fn bug_2400_aliases_tokens_and_literal_ownership() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let mut f = Fixture::new();
+    let root = f.dir.path();
+    let canonical = f.canonical.clone();
+    let old = f.old.clone();
     let noise = row(
         3177,
-        &format!("fix ({unrelated})"),
-        &format!("codex/{unrelated}"),
+        &format!("fix ({})", f.unrelated),
+        &format!("codex/{}", f.unrelated),
     );
     for requested in [&canonical, "BUG-2392", "BUG-HOME-166", "BUG-DESK-166", &old] {
         for (title, branch) in [
@@ -141,8 +182,50 @@ esac
             .unwrap(),
         vec![(3200, "codex/bug-2392-work".into())]
     );
+    // A literal owner of an alias wins over label expansion. Do not claim
+    // that owner's PR on behalf of the canonical target.
+    let mut literal = aida_core::Requirement::new("literal".into(), String::new());
+    literal.spec_id = Some("BUG-HOME-166".into());
+    f.store.requirements.push(literal);
+    f.backend.save(&f.store).unwrap();
+    std::fs::write(
+        root.join("search"),
+        row(3206, "fix (BUG-HOME-166)", "codex/bug-home-166-work"),
+    )
+    .unwrap();
+    std::fs::write(root.join("all"), "").unwrap();
+    std::fs::write(root.join("commits-1"), "[]").unwrap();
+    std::fs::write(
+        root.join("detail"),
+        r#"{"commits":0,"head":{"sha":"0000000000000000000000000000000000000000"}}"#,
+    )
+    .unwrap();
+    assert!(matches!(
+        detect_open_pr_for_spec_github(root, &canonical),
+        PrLookup::NoOpenPr
+    ));
+    assert!(all_open_prs_for_spec_via_forge(root, &canonical)
+        .ok()
+        .unwrap()
+        .is_empty());
+}
+
+// trace:BUG-2400 | ai:codex
+#[test]
+fn bug_2400_commit_paging_head_binding_and_schema() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let f = Fixture::new();
+    let root = f.dir.path();
+    let canonical = f.canonical.clone();
+    let noise = row(
+        3177,
+        &format!("fix ({})", f.unrelated),
+        &format!("codex/{}", f.unrelated),
+    );
+    std::fs::write(root.join("search"), &noise).unwrap();
     std::fs::write(root.join("all"), row(3200, "fix", "unscoped")).unwrap();
-    let commit = |n: u64, message: &str| serde_json::json!({"sha":format!("{n:040x}"),"commit":{"message":message}});
     std::fs::write(
         root.join("commits-1"),
         serde_json::to_vec(&vec![commit(1, "fix: actual work (BUG-2392)")]).unwrap(),
@@ -201,44 +284,6 @@ esac
     }
     std::fs::remove_file(root.join("detail-after-page")).unwrap();
     std::fs::write(root.join("detail"), &valid_detail).unwrap();
-
-    // Typed failures never prove absence. An earlier unreadable candidate
-    // must not prevent inspection of a later commit-associated match.
-    for (message, network) in [
-        ("authentication failed", false),
-        ("could not resolve host: api.github.com", true),
-    ] {
-        std::fs::write(root.join("search"), &noise).unwrap();
-        std::fs::write(root.join("fail-3200"), message).unwrap();
-        let lookup = detect_open_pr_for_spec_github(root, &canonical);
-        assert!(if network {
-            matches!(lookup, PrLookup::GhUnreachable(_))
-        } else {
-            matches!(lookup, PrLookup::GhFailed(_))
-        });
-        assert!(all_open_prs_for_spec_via_forge(root, &canonical).is_err());
-        std::fs::remove_file(root.join("fail-3200")).unwrap();
-    }
-    std::fs::write(root.join("slow-3200"), "").unwrap();
-    assert!(matches!(
-        with_forge_lookup_timeout(std::time::Duration::from_millis(100), || {
-            detect_open_pr_for_spec_github(root, &canonical)
-        }),
-        PrLookup::GhUnreachable(_)
-    ));
-    assert!(
-        with_forge_lookup_timeout(std::time::Duration::from_millis(100), || {
-            all_open_prs_for_spec_via_forge(root, &canonical)
-        })
-        .is_err()
-    );
-    std::fs::remove_file(root.join("slow-3200")).unwrap();
-    std::fs::write(root.join("fail-3177"), "authentication failed").unwrap();
-    assert!(
-        matches!(detect_open_pr_for_spec_github(root, &canonical), PrLookup::Found(pr) if pr.number == 3200)
-    );
-    assert!(all_open_prs_for_spec_via_forge(root, &canonical).is_err());
-    std::fs::remove_file(root.join("fail-3177")).unwrap();
 
     // Commit 101 must protect the PR, including a title-visible duplicate.
     let first_page: Vec<_> = (1..=100).map(|n| commit(n, "ordinary work")).collect();
@@ -466,7 +511,22 @@ esac
     assert!(all_open_prs_for_spec_via_forge(root, &canonical).is_err());
     let args = std::fs::read_to_string(root.join("args")).unwrap();
     assert!(!args.contains("&page=11"));
+}
 
+// trace:BUG-2400 | ai:codex
+#[test]
+fn bug_2400_saturation_and_duplicate_enumeration() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let f = Fixture::new();
+    let root = f.dir.path();
+    let canonical = f.canonical.clone();
+    let noise = row(
+        3177,
+        &format!("fix ({})", f.unrelated),
+        &format!("codex/{}", f.unrelated),
+    );
     // Keep every real duplicate for the existing canonical-selection policy.
     std::fs::write(
         root.join("search"),
@@ -502,48 +562,94 @@ esac
         .collect::<String>();
     std::fs::write(root.join("search"), "").unwrap();
     std::fs::write(root.join("all"), saturated).unwrap();
+    const CAP: &str = "open PR candidate limit reached; association enumeration is incomplete";
     assert!(matches!(
         detect_open_pr_for_spec_github(root, &canonical),
-        PrLookup::GhFailed(_)
+        PrLookup::GhFailed(message) if message == CAP
     ));
-    assert!(all_open_prs_for_spec_via_forge(root, &canonical).is_err());
+    assert!(matches!(
+        all_open_prs_for_spec_via_forge(root, &canonical),
+        Err(PrLookup::GhFailed(message)) if message == CAP
+    ));
     let args = std::fs::read_to_string(root.join("args")).unwrap();
     assert!(args
         .lines()
         .filter(|l| l.contains("--search"))
         .all(|l| l.contains("--limit 101")));
+}
 
-    // A literal owner of an alias wins over label expansion. Do not claim
-    // that owner's PR on behalf of the canonical target.
-    let mut literal = aida_core::Requirement::new("literal".into(), String::new());
-    literal.spec_id = Some("BUG-HOME-166".into());
-    store.requirements.push(literal);
-    backend.save(&store).unwrap();
+// trace:BUG-2400 | ai:codex
+#[test]
+fn bug_2400_real_resolver_deadlines_and_errors() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let mut f = Fixture::new();
+    let root = f.dir.path();
+    let canonical = f.canonical.clone();
+    let noise = row(
+        3177,
+        &format!("fix ({})", f.unrelated),
+        &format!("codex/{}", f.unrelated),
+    );
+    let gh = root.join("gh");
+    std::fs::write(root.join("all"), row(3200, "fix", "unscoped")).unwrap();
     std::fs::write(
-        root.join("search"),
-        row(3206, "fix (BUG-HOME-166)", "codex/bug-home-166-work"),
+        root.join("commits-1"),
+        serde_json::to_vec(&vec![commit(1, "fix: actual work (BUG-2392)")]).unwrap(),
     )
     .unwrap();
-    std::fs::write(root.join("all"), "").unwrap();
-    std::fs::write(root.join("commits-1"), "[]").unwrap();
     std::fs::write(
         root.join("detail"),
-        r#"{"commits":0,"head":{"sha":"0000000000000000000000000000000000000000"}}"#,
+        serde_json::json!({"commits":1,"head":{"sha":format!("{:040x}",1)}}).to_string(),
     )
     .unwrap();
+    // Typed failures never prove absence. An earlier unreadable candidate
+    // must not prevent inspection of a later commit-associated match.
+    for (message, network) in [
+        ("authentication failed", false),
+        ("could not resolve host: api.github.com", true),
+    ] {
+        std::fs::write(root.join("search"), &noise).unwrap();
+        std::fs::write(root.join("fail-3200"), message).unwrap();
+        let lookup = detect_open_pr_for_spec_github(root, &canonical);
+        assert!(if network {
+            matches!(lookup, PrLookup::GhUnreachable(_))
+        } else {
+            matches!(lookup, PrLookup::GhFailed(_))
+        });
+        assert!(all_open_prs_for_spec_via_forge(root, &canonical).is_err());
+        std::fs::remove_file(root.join("fail-3200")).unwrap();
+    }
+    std::fs::write(root.join("slow-3200"), "").unwrap();
     assert!(matches!(
-        detect_open_pr_for_spec_github(root, &canonical),
-        PrLookup::NoOpenPr
+        with_forge_lookup_timeout(std::time::Duration::from_millis(100), || {
+            detect_open_pr_for_spec_github(root, &canonical)
+        }),
+        PrLookup::GhUnreachable(_)
     ));
-    assert!(all_open_prs_for_spec_via_forge(root, &canonical)
-        .ok()
-        .unwrap()
-        .is_empty());
+    assert!(
+        with_forge_lookup_timeout(std::time::Duration::from_millis(100), || {
+            all_open_prs_for_spec_via_forge(root, &canonical)
+        })
+        .is_err()
+    );
+    std::fs::remove_file(root.join("slow-3200")).unwrap();
+    std::fs::write(root.join("fail-3177"), "authentication failed").unwrap();
+    assert!(
+        matches!(detect_open_pr_for_spec_github(root, &canonical), PrLookup::Found(pr) if pr.number == 3200)
+    );
+    assert!(all_open_prs_for_spec_via_forge(root, &canonical).is_err());
+    std::fs::remove_file(root.join("fail-3177")).unwrap();
 
+    // Restore the empty-candidate state used by the resolver and list-error
+    // cases in the original fixture; no prior commit match may mask an error.
+    std::fs::write(root.join("search"), "").unwrap();
+    std::fs::write(root.join("all"), "").unwrap();
     let original_gh = std::fs::read(&gh).unwrap();
     // Exercise actual PATH resolution, without the test-binary shortcut.
     // The fallback policy is preserved and one collection probes only once.
-    drop(_gh);
+    drop(f.gh_guard.take());
     let mut production_env = crate::test_env::EnvVarsGuard::set(&[
         ("PATH", root.to_str().unwrap()),
         ("AIDA_TEST_FORGE_FALLBACK_DIRS", root.to_str().unwrap()),
