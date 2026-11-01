@@ -13,12 +13,24 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T23:00:22.284758314Z
-modified_at: 2026-10-31T23:57:10.430106275Z
+modified_at: 2026-11-01T00:03:49.177279392Z
 req_type: Bug
 tags:
 - epic-home-003
 - ids
 - store-sync
+comments:
+- id: 01a1946b-6739-7d73-b23e-78e3fccad888
+  author: joe
+  content: |-
+    ADVISOR REWORK BRIEF round 2 (17:05), PR-3182. Fix EVERY finding in the review verdict and PR comment (they are authoritative); the key items:
+    1. CI is red at head: Run tests fails in lib-0, cli-0, cli-1 and rest. Reproduce each failing test locally with a targeted filter and fix the cause; do not edit tests to pass.
+    2. The ancestor-tip pruning regresses BUG-2017's fast-forward duplicate refusal: keep that refusal intact (its tests must pass unchanged) and restrict the pruning to what the root-registration fix needs.
+    3. AC2 (lease and commit stamps use the root node) and AC3 (the one-time doctor repair, dry-run then apply) need tests.
+    Gate: STRICT. Targeted cargo test per failing test, plus the BUG-2017 tests, plus make check-ci-fast. This is the priority lane: it blocks the GitLab store reconcile.
+  created_at: 2026-11-01T00:03:49.177279392Z
+  modified_at: 2026-11-01T00:03:49.177279392Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
 history:
 - id: 01a1943a-492b-7f72-9377-cfc786176bec
   author: aida-session-start
