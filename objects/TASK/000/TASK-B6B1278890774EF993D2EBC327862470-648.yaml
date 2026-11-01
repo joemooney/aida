@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T00:55:07.917269049Z
-modified_at: 2026-11-01T07:11:51.546658353Z
+modified_at: 2026-11-01T07:22:14.276276490Z
 req_type: Task
 tags:
 - closure:pending
@@ -180,6 +180,11 @@ comments:
   content: '[aida:closure-held] Code merged to the default branch (commit 53c8970), but completion is held at Done: the spec''s own declared closure criteria are unmet: "tag `closure:pending` is set". Whoever owns those criteria (the spec''s owner or the advisor) resolves them by checking the box in the spec''s Closure section, or removing the tag, via `aida edit TASK-2631 --description ...` / `aida edit TASK-2631 --remove-tag closure:pending`. The next `aida pull` completes it once nothing holds it; to replay by hand, run `aida db reconcile-status --spec TASK-2631 --since 53c8970^`. If the blockers form a cycle, or you decide to ship regardless, a human runs `aida edit TASK-2631 --status completed`. (merge sha: 53c89700b4da50b5593a2079ed4cc3abaae5cdfe)'
   created_at: 2026-11-01T07:11:51.570281943Z
   modified_at: 2026-11-01T07:11:51.570281943Z
+- id: 01a195fc-c984-7c62-be61-e62889eb7a99
+  author: joe
+  content: 'POST-MERGE LIVE CHECK VERIFIED 2026-11-01T07:22Z: PR-3188 merged as 53c89700b4da50b5593a2079ed4cc3abaae5cdfe after exact-head Build success on 74daab5561a8. aida dev build compiled and smoke-tested then promoted 53c8970 (live status confirmed). Native launch preview resolves --sandbox workspace-write --ask-for-approval never; config permissions show reports Codex native sandbox, not AIDA-contained, with Claude still AIDA-contained and no dangerous inconsistency finding. Started managed Codex implementer BUG-2397, lease01a195fb1400, actual PID2792783. Its JSONL log /home/joe/ai/aida/.aida/headless-logs/codex/bug-2397-mail-wake-01a195fa-5336-78f2-9e9b-5b51d5ca5f40.jsonl contains authenticated agent_message and tool-execution events (not merely thread acceptance). codex login status reports Logged in using ChatGPT. No API-key credential flow was exercised in this live check; that endpoint evidence remains the already reviewed static installed-binary analysis accepted in the round-2 ruling. The separate cache-write/active-role problems observed inside this native lane remain workflow gaps, not a claim of full EPIC-612 parity. This satisfies the advisor-accepted first-native-lane post-merge check; resolving closure:pending for TASK-2631 only.'
+  created_at: 2026-11-01T07:22:14.276276490Z
+  modified_at: 2026-11-01T07:22:14.276276490Z
 history:
 - id: 01a1949a-7ffe-78a3-8011-c5c0c44dc2d3
   author: joe
