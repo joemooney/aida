@@ -11,7 +11,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-01T09:06:06.223993645Z
-modified_at: 2026-11-01T09:06:06.223993645Z
+modified_at: 2026-11-01T09:16:03.374166423Z
 req_type: Task
 tags:
 - architecture
@@ -22,10 +22,18 @@ relationships:
 - rel_type: Child
   target_id: 01a1949a-191b-7113-bb06-9bfc8dce2c27
   created_at: 2026-11-01T09:06:20.901799893Z
+- rel_type: BlockedBy
+  target_id: 01a1965b-ab56-7033-9381-508eb11738ed
+  created_at: 2026-11-01T09:16:03.374163660Z
+  created_by: joe
 history:
 - id: 01a1965c-1e90-7483-8313-1b32a588eaef
   author: joe
   timestamp: 2026-11-01T09:06:21.968854512Z
+  changes: []
+- id: 01a19665-01b6-7212-bcd8-45565a61258b
+  author: joe
+  timestamp: 2026-11-01T09:16:04.406308752Z
   changes: []
 filed_at:
   code_sha: 4ce0af750fcb68d4adf57496e4e002aefd8ace77
