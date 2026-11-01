@@ -1,0 +1,18 @@
+id: 01a19600-3f6f-7672-b6b2-6611ff226175
+spec_id: SPEC-b6b1278890774ef993d2ebc327862470-001
+title: Codex native implementer sandbox cannot stage in assigned worktree or mutate shared AIDA cache
+description: 'Observed during BUG-2397 standalone Codex implementation after TASK-2631. Assigned worktree /home/joe/ai/aida-worktrees/aida-seat-aida-bug-b6b1278890774ef993d2ebc327862470-171 is writable but its .git is explicitly read-only in the native sandbox. git add fails: Unable to create ''<worktree>/.git/index.lock'': Read-only file system. aida edit BUG-2397 --status in-progress separately refuses because .aida/cache.db symlinks to /home/joe/ai/aida/.aida/cache.db outside writable roots. Initial role show reports no active role despite routed implementer/launcher lease. Use an approved native sandbox launch configuration that supports the intended git/index/refs and AIDA store/cache mutations without broadening unrelated authority. Temporary writable /tmp publishing checkout is the workaround for this PR; source worktree remains dirty at base HEAD, so the launcher should not infer the published head from its local HEAD.'
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-01T07:26:01.071265913Z
+modified_at: 2026-11-01T07:26:01.071265913Z
+req_type: Task
+tags:
+- from-implementer:BUG-2397
+- kind:bug-spotted
+- severity:major
+filed_at:
+  aida_version: 0.16.0
+  aida_build_sha: 53c89700b4d
