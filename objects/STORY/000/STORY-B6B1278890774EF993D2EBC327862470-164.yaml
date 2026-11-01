@@ -34,7 +34,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T19:23:04.998731220Z
-modified_at: 2026-11-01T01:05:05.734650669Z
+modified_at: 2026-11-01T01:24:20.130485292Z
 req_type: Story
 tags:
 - architecture
@@ -269,6 +269,12 @@ history:
   - field_name: status
     old_value: Done
     new_value: NeedsAttention
+- id: 01a194b5-1e77-7cd3-8574-1bf42faaa21e
+  author: joe
+  timestamp: 2026-11-01T01:24:20.215853247Z
+  session_id: 01a194a86680
+  harness_version: 2.1.316 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 53817a25ee83981f919be3dbcee742234338ab9a
   branch: main
@@ -284,7 +290,7 @@ failure_reason:
   phase: reviewer
   phase_index: 3
   kind: verdict:request-changes
-  detail: Single-hub claim path, NotOnHub spendability, multi-hub refusal, node show/doctor and docs are solid, but AC2 fails on a realistic fresh project (backfill guard), AC5 leaves non-root clones' existing blocks unspendable after enroll-root, and a local-only config commit counts as a declared hub; AC6 untested
+  detail: Round-2 rework addresses all six round-1 findings and every in-scope AC has a test, but PR CI is red at the head (lib-0 and cli-1 'Run tests' failed; main is green), and promoted hub pools skip the on-hub check after enroll-root
   recovery_hint: address the review findings, move STORY-2204 back to In Progress, and clear the PR hold only after approval
   shelved_by: reviewer
-  shelved_at: 2026-11-01T00:44:47.568000699Z
+  shelved_at: 2026-11-01T01:24:20.130485292Z
