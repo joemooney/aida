@@ -20,12 +20,12 @@ description: |-
   1. Remove `--sandbox=danger-full-access` from `.aida/agents.toml:68-69` (or align `[agents.codex] default_flags` with `workspace-write` / `[contained.vendors] codex = "native"` from TASK-2631) so `aida config permissions show` reports zero high-severity findings on this repo.
   2. Add the verified OpenAI endpoints from TASK-2631 to `aida-core/templates/contained.toml:7-12` and `aida-core/src/scaffolding/settings.rs:19, 29, 418` so newly initialized and scaffold-upgraded projects include OpenAI egress hosts.
   3. Add a unit test in `aida-core/src/scaffolding/settings.rs` verifying the template's `allowed_hosts`.
-status: Draft
+status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-01T06:47:26.114384272Z
-modified_at: 2026-11-01T06:47:26.114384272Z
+modified_at: 2026-11-01T07:01:22.770093059Z
 req_type: Bug
 tags:
 - audit
@@ -42,6 +42,13 @@ history:
   timestamp: 2026-11-01T06:47:33.190025054Z
   session_id: 01a194b1bcfb
   changes: []
+- id: 01a195e9-b0d2-7af0-9167-552fe0fce2ef
+  author: joe
+  timestamp: 2026-11-01T07:01:22.770090473Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: 6dc7d4977ac5e47c42ddfb26597fe3ec5fb70b60
   branch: main
