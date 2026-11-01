@@ -1,0 +1,40 @@
+id: 01a195db-d850-76f2-8081-8167651fd4d6
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-162
+agreed_id: BUG-2388
+title: aida skill render (and mcp skill render) and aida skill lint hardcode .claude/skills/<name>.md and ignore .agents/skills/
+description: |-
+  Why
+  ───
+  Discovered by SPIKE-710 audit. `aida skill render <name>`, `aida mcp skill render <name>`, and `aida skill lint` hardcode flat `.claude/skills/<name>.md` lookups:
+
+  • `aida-cli-lib/src/skill_cmd.rs:32-37` & `aida-cli-lib/src/mcp_cmd.rs:39-44`: look only at `project_root.join(".claude").join("skills").join(format!("{name}.md"))` and bail with `"Error: skill '{}' not found under .claude/skills/"`.
+  • `aida-cli-lib/src/plan_report.rs:702-721` (`collect_skill_files` for `aida skill lint`): reads only `project_root.join(".claude").join("skills")` and only matches top-level `*.md` files (`name.ends_with(".md")`), ignoring `.agents/skills/<name>/SKILL.md` and `.claude/skills/<name>/SKILL.md`.
+
+  Reproduction on this repo:
+  • `aida skill render aida-pickup` exits 1: `Error: Error: skill 'aida-pickup' not found under .claude/skills/`.
+  • `aida skill lint` prints `Linting skills: 0 skill(s) scanned, 0 reference a plan`.
+
+  Acceptance
+  ──────────
+  1. `aida skill render` and `aida mcp skill render` resolve skills from `.agents/skills/<name>/SKILL.md` and `.claude/skills/<name>/SKILL.md` (plus legacy flat `.claude/skills/<name>.md` and local overlays), working on Codex-only repos without `.claude/`.
+  2. `aida skill lint` scans `.agents/skills/*/SKILL.md` and `.claude/skills/*/SKILL.md` (not just flat `.claude/skills/*.md`) so skills are actually linted.
+  3. Regression tests cover a Codex-only repo layout (`.agents/skills/<name>/SKILL.md`, no `.claude/`).
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-01T06:46:15.376021939Z
+modified_at: 2026-11-01T06:46:15.376021939Z
+req_type: Bug
+tags:
+- audit
+- skills
+- vendor:codex
+filed_at:
+  code_sha: 6dc7d4977ac5e47c42ddfb26597fe3ec5fb70b60
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 962ca07af25
+  vendor: antigravity
+  session: 01a194b1bcfb
