@@ -519,17 +519,19 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         // BUG-2383 AC3: a headless implementer that ran no local test to
         // completion says so in phase 1's result, as a standalone lane does.
         // trace:BUG-2383 | ai:claude
+        // trace:BUG-2383 | ai:codex
         if headless_impl {
-            if let Ok((lease_id, _, _)) = self.discover_orchestrated_lease(&session_uuid) {
-                let main_root = crate::main_worktree_root_from(&self.project_root);
-                if crate::lane_job::lane_was_untested(&main_root, &lease_id) {
-                    println!(
-                        "  {} {}: the implementer ran no local test to completion \
-                         (untested=true); its push reaches CI untested",
-                        crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
-                        self.spec,
-                    );
-                }
+            let lease = self
+                .discover_orchestrated_lease(&session_uuid)
+                .ok()
+                .map(|(id, _, _)| id);
+            let main_root = crate::main_worktree_root_from(&self.project_root);
+            if let Some(line) = crate::lane_job::phase_test_warning(&main_root, lease.as_deref()) {
+                println!(
+                    "  {} {}: {line}",
+                    crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
+                    self.spec
+                );
             }
         }
         // BUG-420: the watchdog killed a degenerate headless session — surface

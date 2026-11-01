@@ -287,8 +287,9 @@ pub(crate) fn offer(main_root: &Path, seat: &Path, lease_id: &str) -> Option<Lan
 }
 
 /// Record whether `lease_id`'s lane ran a local test: leave
-/// [`UNTESTED_MARKER`] when it did not, remove a stale one when it did.
+/// explicit true/false evidence in [`UNTESTED_MARKER`]. Missing evidence is untested.
 // trace:BUG-2383 | ai:claude
+// trace:BUG-2383 | ai:codex
 pub(crate) fn record_untested(main_root: &Path, lease_id: &str, untested: bool) {
     let dir = results_dir(main_root, lease_id);
     let marker = dir.join(UNTESTED_MARKER);
@@ -297,15 +298,28 @@ pub(crate) fn record_untested(main_root: &Path, lease_id: &str, untested: bool) 
             let _ = std::fs::write(&marker, "untested=true\n");
         }
     } else {
-        let _ = std::fs::remove_file(&marker);
+        let _ = std::fs::write(&marker, "untested=false\n");
     }
 }
 
-/// Whether `lease_id`'s lane left [`UNTESTED_MARKER`].
+/// Only an explicit tested result clears untested; absence/read failure refuses.
 pub(crate) fn lane_was_untested(main_root: &Path, lease_id: &str) -> bool {
-    results_dir(main_root, lease_id)
-        .join(UNTESTED_MARKER)
-        .is_file()
+    std::fs::read_to_string(results_dir(main_root, lease_id).join(UNTESTED_MARKER))
+        .map(|value| value != "untested=false\n")
+        .unwrap_or(true)
+}
+
+/// Phase output fails closed on absent/unreadable evidence or lease discovery.
+// trace:BUG-2383 | ai:codex
+pub(crate) fn phase_test_warning(main_root: &Path, lease: Option<&str>) -> Option<&'static str> {
+    if lease
+        .map(|lease| lane_was_untested(main_root, lease))
+        .unwrap_or(true)
+    {
+        Some("the implementer has no completed local test evidence (untested=true); its push reaches CI untested")
+    } else {
+        None
+    }
 }
 
 /// The output and exit-code files of job `id`.
@@ -337,19 +351,46 @@ pub(crate) struct Tally {
 }
 
 impl Tally {
-    /// Whether the lane ran no `cargo test` to an exit code of its own: its
+    /// Whether the lane has no executed-test result evidence: its
     /// result line says `untested=true`.
     pub(crate) fn untested(&self) -> bool {
         self.tested.load(Ordering::Relaxed) == 0
     }
 
     /// Count a job that exited with an exit code of its own.
-    pub(crate) fn record_exit(&self, job: &JobRequest) {
+    pub(crate) fn record_exit(&self, job: &JobRequest, output: impl std::io::Read) {
         self.completed.fetch_add(1, Ordering::Relaxed);
-        if runs_tests(job) {
+        if runs_tests(job) && executed_tests(output) {
             self.tested.fetch_add(1, Ordering::Relaxed);
         }
     }
+}
+
+/// Require a libtest result with at least one executed test, passing or failing.
+/// Cargo errors and zero-match/ignored-only runs supply no such evidence. Read
+/// at most 16 MiB; missing, unreadable or truncated evidence stays untested.
+// trace:BUG-2383 | ai:codex
+fn executed_tests(output: impl std::io::Read) -> bool {
+    use std::io::{BufRead, BufReader, Read};
+    BufReader::new(output.take(16 * 1024 * 1024))
+        .lines()
+        .map_while(Result::ok)
+        .any(|line| {
+            let Some(summary) = line.strip_prefix("test result: ") else {
+                return false;
+            };
+            let Some((verdict, counts)) = summary.split_once(". ") else {
+                return false;
+            };
+            if !matches!(verdict, "ok" | "FAILED") {
+                return false;
+            }
+            counts.split(';').any(|field| {
+                let mut words = field.split_whitespace();
+                matches!((words.next().and_then(|n| n.parse::<u64>().ok()), words.next()),
+                    (Some(n), Some("passed" | "failed")) if n > 0)
+            })
+        })
 }
 
 /// Whether `job` runs tests: a `cargo test` without `--no-run` (cargo's
@@ -950,7 +991,10 @@ fn run_one(
         std::thread::sleep(POLL);
     };
     if how == "exited" {
-        tally.record_exit(&job);
+        match std::fs::File::open(&out_file) {
+            Ok(output) => tally.record_exit(&job, output),
+            Err(_) => tally.record_exit(&job, std::io::empty()),
+        }
     } else {
         tally.incomplete.fetch_add(1, Ordering::Relaxed);
         use std::io::Write;

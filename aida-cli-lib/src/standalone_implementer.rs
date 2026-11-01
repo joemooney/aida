@@ -97,6 +97,7 @@ a design fork, run `aida punt`; to push the branch but hold the PR for a manual 
 /// BUG-2383: how a standalone implementer runs its local tests. Appended to
 /// its prompt when the launcher's lane job runner is up.
 // trace:BUG-2383 | ai:claude
+// trace:BUG-2383 | ai:codex
 pub(crate) const LANE_JOB_CONTRACT: &str = "\n\nLocal tests in this lane: a tool call is capped \
 at 60 seconds and anything you detach (`setsid nohup ...`, `&`) dies with the call, so do not run \
 cargo yourself and do not background it. Hand the run to the launcher instead: \
@@ -107,7 +108,8 @@ timeout: 900 seconds on a seeded target, 3600 when the output says `not seeded` 
 can take half an hour); set `AIDA_CARGO_TIMEOUT=<secs>` only to override it. When \
 it finishes it prints the output tail and exits with cargo's exit code; while it still runs it \
 prints the job id and exits 75, and you continue with `aida lane job wait <id>` until it \
-finishes. Only a `cargo test` run counts as tested. If it reports that this session has no lane \
+finishes. Only a `cargo test` with an executed-test result counts as tested; compile errors, \
+zero-match filters, `--no-run` and `--list` do not. If it reports that this session has no lane \
 job runner, or refuses the run, say `untested=true` in your final result.";
 
 /// Append `untested=true` to a result line when the lane ran no local test

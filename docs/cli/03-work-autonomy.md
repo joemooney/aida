@@ -244,12 +244,18 @@ The command waits at most 50 seconds. It exits with cargo's exit code when the
 run finishes, and otherwise prints the job id and exits 75; `aida lane job wait
 <id>` keeps waiting. Output and exit codes are kept under the main checkout's
 `.aida/lane-jobs/<lease>/`, with one line per job in its `jobs.log`. Only a
-`cargo test` that ran to its own exit code counts as tested: a lane that ran
-only `cargo check` or `cargo build` still says `untested=true`.
+`cargo test` with a libtest result reporting at least one passed or failed test
+counts as tested. Genuine test failures count; manifest, offline dependency,
+compile, argument and test-process startup errors do not. Zero-match filters,
+ignored-only runs, `cargo test --no-run`, `cargo test -- --list`, and signal
+exits remain `untested=true`,
+as do `cargo check` and `cargo build`. Missing or unreadable result evidence
+also reports `untested=true`.
 
 Both headless implementer launches get the runner: a standalone implementer
 (`aida queue work <SPEC> --no-human`) and the `--auto-complete --no-human`
-drain's implementer phase. A drain whose implementer ran no test to completion
+drain's implementer phase, for Claude, Codex and Antigravity alike. Claude's
+resume policy remains separate. A drain whose implementer ran no test to completion
 says `untested=true` in that phase's output.
 
 A seat clone's cargo target is seeded from the primary's agent-profile target

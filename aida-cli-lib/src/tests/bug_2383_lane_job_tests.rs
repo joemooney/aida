@@ -168,12 +168,10 @@ fn seat_side_job_carries_only_allow_listed_env() {
 /// passes a test filter named `passing` and fails any other.
 #[cfg(unix)]
 fn fixture_lane(tmp: &Path) -> LaneJobs {
-    use std::os::unix::fs::PermissionsExt;
     let seat = tmp.join("aida-seat-fixture");
     std::fs::create_dir_all(&seat).unwrap();
     let fake = tmp.join("fake-cargo");
-    std::fs::write(
-        &fake,
+    crate::test_exec::write_executable(&fake,
         "#!/bin/sh\n\
          filter=\"\"\n\
          seen=0\n\
@@ -187,9 +185,7 @@ fn fixture_lane(tmp: &Path) -> LaneJobs {
            echo \"test $filter ... ok\"; echo \"test result: ok. 1 passed; 0 failed\"; exit 0\n\
          fi\n\
          echo \"test $filter ... FAILED\"; echo \"test result: FAILED. 0 passed; 1 failed\"; exit 101\n",
-    )
-    .unwrap();
-    std::fs::set_permissions(&fake, std::fs::Permissions::from_mode(0o755)).unwrap();
+    );
     let lane = LaneJobs {
         inbox: seat.join(INBOX_RELATIVE),
         results: results_dir(&tmp.join("main"), "lease-fixture"),
@@ -382,12 +378,10 @@ fn runner_refuses_non_allow_listed_argv_and_never_runs_it() {
 #[cfg(unix)]
 #[test]
 fn a_job_still_running_at_lane_end_is_stopped() {
-    use std::os::unix::fs::PermissionsExt;
     let tmp = tempfile::tempdir().unwrap();
     let mut lane = fixture_lane(tmp.path());
     let slow = tmp.path().join("slow-cargo");
-    std::fs::write(&slow, "#!/bin/sh\necho started\nexec sleep 30\n").unwrap();
-    std::fs::set_permissions(&slow, std::fs::Permissions::from_mode(0o755)).unwrap();
+    crate::test_exec::write_executable(&slow, "#!/bin/sh\necho started\nexec sleep 30\n");
     lane.program = slow.display().to_string();
     let runner = Runner::start(lane.clone());
     let id = new_id();
@@ -483,14 +477,12 @@ fn job_env_carries_only_allow_listed_keys() {
 #[cfg(unix)]
 #[test]
 fn a_job_that_prints_its_env_shows_only_allow_listed_keys() {
-    use std::os::unix::fs::PermissionsExt;
     let tmp = tempfile::tempdir().unwrap();
     let mut lane = fixture_lane(tmp.path());
     // Unscrubbed, so the run itself (env_clear) is what keeps them out.
     lane.host_env = dirty_host_env(tmp.path());
     let printer = tmp.path().join("env-cargo");
-    std::fs::write(&printer, "#!/bin/sh\necho ENV-BEGIN\nenv\necho ENV-END\n").unwrap();
-    std::fs::set_permissions(&printer, std::fs::Permissions::from_mode(0o755)).unwrap();
+    crate::test_exec::write_executable(&printer, "#!/bin/sh\necho ENV-BEGIN\nenv\necho ENV-END\n");
     lane.program = printer.display().to_string();
     let runner = Runner::start(lane.clone());
     let (rc, out) = run_through(&lane, &job(&["cargo", "test", "--profile", "agent"]));
@@ -545,7 +537,6 @@ fn os_wrap_off_refuses_the_job_and_nothing_runs() {
 #[cfg(unix)]
 #[test]
 fn a_job_takes_the_cargo_slot_through_the_limiter_on_path() {
-    use std::os::unix::fs::PermissionsExt;
     let tmp = tempfile::tempdir().unwrap();
     let mut lane = fixture_lane(tmp.path());
     let bin = tmp.path().join("bin");
@@ -553,13 +544,11 @@ fn a_job_takes_the_cargo_slot_through_the_limiter_on_path() {
     std::fs::create_dir_all(&bin).unwrap();
     std::fs::create_dir_all(&run).unwrap();
     let limiter = bin.join("cargo");
-    std::fs::write(
+    crate::test_exec::write_executable(
         &limiter,
         "#!/bin/sh\necho \"slot taken: $*\" >> \"$XDG_RUNTIME_DIR/slots.log\"\n\
          echo \"running 1 test\"\nexit 0\n",
-    )
-    .unwrap();
-    std::fs::set_permissions(&limiter, std::fs::Permissions::from_mode(0o755)).unwrap();
+    );
     lane.program = "cargo".into();
     lane.host_env = scrub_host_env(vec![
         (
@@ -698,15 +687,23 @@ fn bwrap_usable() -> bool {
 // (unprivileged user namespaces off). trace:BUG-2383 | ai:claude
 #[cfg(unix)]
 #[test]
-fn a_sandboxed_job_cannot_change_a_host_dependency_build_script() {
+fn bug_2383_bwrap_host_cargo_is_read_only() {
     if !bwrap_usable() {
-        eprintln!("skipped: bubblewrap cannot create a sandbox on this host");
+        assert!(
+            std::env::var_os("AIDA_REQUIRE_BWRAP_LIVE").is_none(),
+            "AIDA_REQUIRE_BWRAP_LIVE requires the lane job isolation test to run"
+        );
+        eprintln!("SKIP (bwrap unavailable)");
         return;
     }
     // Not under /tmp: the profile mounts a private tmpfs there, which would
     // hide the fixture and let the write "fail" for the wrong reason.
-    let exe = std::env::current_exe().unwrap();
-    let base = tempfile::tempdir_in(exe.parent().unwrap()).unwrap();
+    let base_dir = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .unwrap()
+        .join("target/bug-2383-bwrap");
+    std::fs::create_dir_all(&base_dir).unwrap();
+    let base = tempfile::tempdir_in(base_dir).unwrap();
     let home = base.path().join("home");
     let cargo_home = home.join(".cargo");
     let seat = base.path().join("seat");
@@ -715,6 +712,13 @@ fn a_sandboxed_job_cannot_change_a_host_dependency_build_script() {
     std::fs::create_dir_all(&target).unwrap();
     let original = "fn main() {}\n";
     let scripts = [
+        cargo_home.join("bin/cargo"),
+        cargo_home.join("bin/rustc"),
+        cargo_home.join("bin/rustup"),
+        cargo_home.join("config"),
+        cargo_home.join("config.toml"),
+        cargo_home.join("registry/cache/index.crates.io-0/dep-1.0.0.crate"),
+        cargo_home.join("git/db/dep-0/objects/probe"),
         cargo_home.join("registry/src/index.crates.io-0/dep-1.0.0/build.rs"),
         cargo_home.join("git/checkouts/dep-0/abc/build.rs"),
     ];
@@ -776,22 +780,30 @@ fn a_sandboxed_job_cannot_change_a_host_dependency_build_script() {
 #[test]
 fn only_a_test_job_counts_as_tested() {
     let tally = Tally::default();
-    tally.record_exit(&job(&["cargo", "check", "--profile", "agent"]));
-    tally.record_exit(&job(&["cargo", "build", "--profile", "agent"]));
+    tally.record_exit(
+        &job(&["cargo", "check", "--profile", "agent"]),
+        &b"test result: ok. 1 passed; 0 failed"[..],
+    );
+    tally.record_exit(
+        &job(&["cargo", "build", "--profile", "agent"]),
+        &b"test result: ok. 1 passed; 0 failed"[..],
+    );
     assert_eq!(tally.completed.load(Ordering::Relaxed), 2);
     assert!(tally.untested(), "check and build alone are untested");
     // Round-3 finding 6: a test build that runs no test is not a test.
-    tally.record_exit(&job(&["cargo", "test", "--profile", "agent", "--no-run"]));
-    tally.record_exit(&job(&[
-        "cargo",
-        "test",
-        "--profile",
-        "agent",
-        "--",
-        "--list",
-    ]));
+    tally.record_exit(
+        &job(&["cargo", "test", "--profile", "agent", "--no-run"]),
+        &b"test result: ok. 1 passed; 0 failed"[..],
+    );
+    tally.record_exit(
+        &job(&["cargo", "test", "--profile", "agent", "--", "--list"]),
+        &b"test result: ok. 1 passed; 0 failed"[..],
+    );
     assert!(tally.untested(), "--no-run and --list run no test");
-    tally.record_exit(&job(&["cargo", "test", "--profile", "agent"]));
+    tally.record_exit(
+        &job(&["cargo", "test", "--profile", "agent"]),
+        &b"test result: ok. 1 passed; 0 failed"[..],
+    );
     assert!(!tally.untested());
     // `--no-run` after `--` is a test filter, and `--list` before it is not
     // the harness's flag.
@@ -810,12 +822,10 @@ fn only_a_test_job_counts_as_tested() {
 #[cfg(unix)]
 #[test]
 fn a_job_killed_by_a_signal_is_not_tested() {
-    use std::os::unix::fs::PermissionsExt;
     let tmp = tempfile::tempdir().unwrap();
     let mut lane = fixture_lane(tmp.path());
     let killed = tmp.path().join("killed-cargo");
-    std::fs::write(&killed, "#!/bin/sh\necho \"running 1 test\"\nkill -9 $$\n").unwrap();
-    std::fs::set_permissions(&killed, std::fs::Permissions::from_mode(0o755)).unwrap();
+    crate::test_exec::write_executable(&killed, "#!/bin/sh\necho \"running 1 test\"\nkill -9 $$\n");
     lane.program = killed.display().to_string();
     let runner = Runner::start(lane.clone());
     let (rc, out) = run_through(&lane, &job(&["cargo", "test", "--profile", "agent"]));
@@ -913,10 +923,173 @@ fn implementer_prompt_names_the_sanctioned_path() {
 fn a_drain_lane_records_whether_it_ran_a_test() {
     let tmp = tempfile::tempdir().unwrap();
     let main = tmp.path();
-    assert!(!lane_was_untested(main, "lease-d"));
+    assert!(lane_was_untested(main, "lease-d"));
     record_untested(main, "lease-d", true);
     assert!(lane_was_untested(main, "lease-d"));
-    assert!(!lane_was_untested(main, "lease-other"));
+    assert!(lane_was_untested(main, "lease-other"));
     record_untested(main, "lease-d", false);
     assert!(!lane_was_untested(main, "lease-d"));
+}
+
+// trace:BUG-2383 | ai:codex
+#[cfg(unix)]
+#[test]
+fn pre_test_failures_and_zero_matches_stay_untested() {
+    for (name, output, rc) in [
+        ("manifest", "error: failed to parse manifest", 101),
+        ("offline", "error: no matching package found (offline)", 101),
+        ("compile", "error: could not compile crate", 101),
+        ("start", "error: could not execute test process", 101),
+        ("argv", "error: unexpected argument", 1),
+        (
+            "zero",
+            "running 0 tests\ntest result: ok. 0 passed; 0 failed; 9 filtered out",
+            0,
+        ),
+        (
+            "ignored",
+            "test result: ok. 0 passed; 0 failed; 1 ignored",
+            0,
+        ),
+        ("list", "a_test: test\n1 test, 0 benchmarks", 0),
+        ("no_run", "Finished test profile\nExecutable unittests", 0),
+        ("started_only", "running 1 test", 101),
+        (
+            "failed_test",
+            "test a_test ... FAILED\ntest result: FAILED. 0 passed; 1 failed; 0 ignored",
+            101,
+        ),
+    ] {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut lane = fixture_lane(tmp.path());
+        let cargo = tmp.path().join("cargo-result");
+        crate::test_exec::write_executable(
+            &cargo,
+            format!("#!/bin/sh\ncat <<'OUTPUT'\n{output}\nOUTPUT\nexit {rc}\n"),
+        );
+        lane.program = cargo.display().to_string();
+        let runner = Runner::start(lane.clone());
+        let (actual, _) = run_through(&lane, &job(&["cargo", "test", "--profile", "agent"]));
+        let tally = runner.stop();
+        assert_eq!(actual, rc, "{name}");
+        assert_eq!(tally.untested(), name != "failed_test", "{name}");
+    }
+    let tally = Tally::default();
+    tally.record_exit(
+        &job(&["cargo", "test", "--profile", "agent"]),
+        std::io::empty(),
+    );
+    assert!(tally.untested());
+    struct Unreadable;
+    impl std::io::Read for Unreadable {
+        fn read(&mut self, _: &mut [u8]) -> std::io::Result<usize> {
+            Err(std::io::Error::new(
+                std::io::ErrorKind::PermissionDenied,
+                "fixture",
+            ))
+        }
+    }
+    tally.record_exit(&job(&["cargo", "test", "--profile", "agent"]), Unreadable);
+    assert!(
+        tally.untested(),
+        "unreadable output supplies no test evidence"
+    );
+}
+
+// Exercise the production drain launch boundary with a real child submitting a
+// job through the env it receives; the vendor-specific resume loop stays separate.
+// trace:BUG-2383 | ai:codex
+#[cfg(unix)]
+#[test]
+fn drain_launcher_supplies_jobs_for_all_implementer_vendors_and_reports_evidence() {
+    use crate::session::{
+        drain_resume_lane, implementer_job_lane, with_implementer_jobs, HeadlessVendor,
+    };
+    for vendor in [
+        HeadlessVendor::Claude,
+        HeadlessVendor::Codex,
+        HeadlessVendor::Agy,
+    ] {
+        for refused in [false, true] {
+            let tmp = tempfile::tempdir().unwrap();
+            let lane = fixture_lane(tmp.path());
+            let main = tmp.path().join("main");
+            let lease = "lease-fixture";
+            let eligible =
+                implementer_job_lane("implementer", Some(lease), Some((&lane.seat, "branch")));
+            assert!(eligible.is_some());
+            assert_eq!(
+                drain_resume_lane(
+                    vendor,
+                    "implementer",
+                    Some(lease),
+                    Some((&lane.seat, "branch"))
+                )
+                .is_some(),
+                vendor == HeadlessVendor::Claude
+            );
+            let request = if refused {
+                job(&["sh", "-c", "false"])
+            } else {
+                job(&["cargo", "test", "--profile", "agent", "--", "passing"])
+            };
+            let request_file = tmp.path().join("request");
+            std::fs::write(&request_file, serde_json::to_vec(&request).unwrap()).unwrap();
+            with_implementer_jobs(
+                &main,
+                "implementer",
+                Some(lease),
+                Some((&lane.seat, "branch")),
+                "implement this",
+                |root, tree, offered_lease| {
+                    assert_eq!(root, main);
+                    assert_eq!(tree, lane.seat);
+                    assert_eq!(offered_lease, lease);
+                    Some(lane.clone())
+                },
+                |prompt, apply| {
+                    assert!(prompt.contains("aida lane job run -- cargo test --profile agent"));
+                    let mut cmd = std::process::Command::new("/bin/sh");
+                    cmd.arg("-c").arg("test -d \"$AIDA_LANE_JOBS_RESULTS\" && cp \"$1\" \"$AIDA_LANE_JOBS_INBOX/drain.tmp\" && mv \"$AIDA_LANE_JOBS_INBOX/drain.tmp\" \"$AIDA_LANE_JOBS_INBOX/drain.job\"")
+                    .arg("fixture").arg(&request_file);
+                    apply(&mut cmd);
+                    assert!(cmd.status().unwrap().success());
+                    let deadline = Instant::now() + Duration::from_secs(10);
+                    while read_rc(&lane.results, "drain").is_none() {
+                        assert!(Instant::now() < deadline);
+                        std::thread::sleep(Duration::from_millis(20));
+                    }
+                    assert_eq!(
+                        read_rc(&lane.results, "drain"),
+                        Some(if refused { REFUSED_RC } else { 0 })
+                    );
+                },
+            );
+            let warning = phase_test_warning(&main, Some(lease));
+            assert_eq!(warning.is_some(), refused);
+            if let Some(line) = warning {
+                assert!(line.contains("untested=true"));
+            }
+        }
+    }
+    let tmp = tempfile::tempdir().unwrap();
+    with_implementer_jobs(
+        tmp.path(),
+        "implementer",
+        Some("no-runner"),
+        Some((tmp.path(), "branch")),
+        "prompt",
+        |_, _, _| None,
+        |prompt, _| {
+            assert!(prompt.contains("untested=true"));
+        },
+    );
+    assert!(phase_test_warning(tmp.path(), Some("no-runner")).is_some());
+    assert!(phase_test_warning(tmp.path(), Some("missing")).is_some());
+    assert!(phase_test_warning(tmp.path(), None).is_some());
+    let marker = results_dir(tmp.path(), "unreadable").join(UNTESTED_MARKER);
+    std::fs::create_dir_all(&marker).unwrap();
+    assert!(phase_test_warning(tmp.path(), Some("unreadable")).is_some());
+    assert!(implementer_job_lane("reviewer", Some("x"), Some((tmp.path(), "b"))).is_none());
+    assert!(implementer_job_lane("implementer", None, Some((tmp.path(), "b"))).is_none());
 }

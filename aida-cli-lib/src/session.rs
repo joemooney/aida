@@ -4647,67 +4647,52 @@ pub(crate) fn exec_vendor_headless(
     // This process is the seat's host side (it launches the sandboxed
     // vendor), so the runner runs here. trace:BUG-2383 | ai:claude
     let main_root = crate::main_worktree_root_from(&headless_worktree_root());
-    let lane_jobs = drain_lane
-        .and_then(|(lease, (worktree, _))| crate::lane_job::offer(&main_root, worktree, lease));
-    let apply_lane_env = |cmd: &mut std::process::Command| {
-        if let Some(lane_jobs) = &lane_jobs {
-            lane_jobs.apply_env(cmd);
-        }
-    };
-    let prompt = if lane_jobs.is_some() {
-        format!(
-            "{prompt}{}",
-            crate::standalone_implementer::LANE_JOB_CONTRACT
-        )
-    } else {
-        prompt.to_string()
-    };
-    let run_once = |prompt: &str, log: &Path, resume: bool, hold: Option<&dyn Fn() -> bool>| {
-        run_vendor_headless_child(
-            vendor,
-            prompt,
-            session_id,
-            log,
-            tee_opts,
-            contained,
-            lease_id,
-            seat,
-            child_grant.env_value(),
-            &HeadlessChildHooks {
-                customize: Some(&apply_lane_env),
-                resume,
-                hold_reap: hold,
-                ..HeadlessChildHooks::default()
-            },
-        )
-    };
-    let runner = lane_jobs.clone().map(crate::lane_job::Runner::start);
-    // BUG-050: the `--auto-complete` drain's phase-1 implementer gets the
-    // standalone launch's resume safety net, through the same loop: a lane
-    // that parks on its own build is waited for and resumed, bounded.
-    // trace:BUG-B6B1278890774EF993D2EBC327862470-050 | ai:claude
-    let result = match drain_lane {
-        None => run_once(&prompt, log_path, false, None),
-        Some((lease, (worktree, branch))) => {
-            drain_lane_with_resume(lease, worktree, branch, &prompt, log_path, |p, l, r, h| {
-                run_once(p, l, r, Some(h))
-            })
-        }
-    };
-    // BUG-2383 AC3: an implementer lane that ran no local test to completion
-    // (no runner, or no `cargo test` finished) leaves the untested marker for
-    // the drain to report. trace:BUG-2383 | ai:claude
-    if let Some((lease, _)) = drain_lane {
-        let untested = runner.map(|r| r.stop().untested()).unwrap_or(true);
-        crate::lane_job::record_untested(&main_root, lease, untested);
-        if untested {
-            eprintln!(
-                "{} the implementer ran no local test to completion (untested=true); \
-                 its push reaches CI untested",
-                "Warning:".yellow().bold()
-            );
-        }
-    }
+    let result = with_implementer_jobs(
+        &main_root,
+        seat,
+        lease_id,
+        lane_tree,
+        prompt,
+        crate::lane_job::offer,
+        |prompt, apply_lane_env| {
+            let run_once =
+                |prompt: &str, log: &Path, resume: bool, hold: Option<&dyn Fn() -> bool>| {
+                    run_vendor_headless_child(
+                        vendor,
+                        prompt,
+                        session_id,
+                        log,
+                        tee_opts,
+                        contained,
+                        lease_id,
+                        seat,
+                        child_grant.env_value(),
+                        &HeadlessChildHooks {
+                            customize: Some(apply_lane_env),
+                            resume,
+                            hold_reap: hold,
+                            ..HeadlessChildHooks::default()
+                        },
+                    )
+                };
+            // BUG-050: the `--auto-complete` drain's phase-1 implementer gets the
+            // standalone launch's resume safety net, through the same loop: a lane
+            // that parks on its own build is waited for and resumed, bounded.
+            // trace:BUG-B6B1278890774EF993D2EBC327862470-050 | ai:claude
+            let result = match drain_lane {
+                None => run_once(prompt, log_path, false, None),
+                Some((lease, (worktree, branch))) => drain_lane_with_resume(
+                    lease,
+                    worktree,
+                    branch,
+                    prompt,
+                    log_path,
+                    |p, l, r, h| run_once(p, l, r, Some(h)),
+                ),
+            };
+            result
+        },
+    );
     // BUG-2139: the child's grant dies with the child — on a normal or
     // nonzero exit and on a spawn failure alike. A failed revoke only warns:
     // the grant still expires with its parent, and the lease end/reap revokes
@@ -4717,6 +4702,66 @@ pub(crate) fn exec_vendor_headless(
     }
     let status = result?;
     std::process::exit(status.code().unwrap_or(1));
+}
+
+/// Job eligibility is vendor-neutral; resume eligibility below remains Claude-only.
+// trace:BUG-2383 | ai:codex
+pub(crate) fn implementer_job_lane<'a>(
+    seat: &str,
+    lease_id: Option<&'a str>,
+    lane_tree: Option<(&'a Path, &'a str)>,
+) -> Option<(&'a str, (&'a Path, &'a str))> {
+    lease_id
+        .zip(lane_tree)
+        .filter(|_| crate::canonical_role_name(seat) == "implementer")
+}
+
+/// The actual drain launch boundary: prompt/env, runner lifetime and result
+/// evidence are shared by every implementer vendor, independently of resume.
+// trace:BUG-2383 | ai:codex
+pub(crate) fn with_implementer_jobs<T>(
+    main_root: &Path,
+    seat: &str,
+    lease_id: Option<&str>,
+    lane_tree: Option<(&Path, &str)>,
+    prompt: &str,
+    offer: impl FnOnce(&Path, &Path, &str) -> Option<crate::lane_job::LaneJobs>,
+    run: impl FnOnce(&str, &dyn Fn(&mut std::process::Command)) -> T,
+) -> T {
+    let lane = implementer_job_lane(seat, lease_id, lane_tree);
+    let jobs = lane.and_then(|(lease, (tree, _))| offer(main_root, tree, lease));
+    let lease = lane.map(|(lease, _)| lease);
+    let prompt = if jobs.is_some() {
+        format!(
+            "{prompt}{}",
+            crate::standalone_implementer::LANE_JOB_CONTRACT
+        )
+    } else if lease.is_some() {
+        format!(
+            "{prompt}\n\nLocal test runner unavailable. Report untested=true in your final result."
+        )
+    } else {
+        prompt.to_string()
+    };
+    let apply = |cmd: &mut std::process::Command| {
+        if let Some(jobs) = &jobs {
+            jobs.apply_env(cmd);
+        }
+    };
+    // Invalidate previous evidence before launching, including a failed spawn.
+    if let Some(lease) = lease {
+        crate::lane_job::record_untested(main_root, lease, true);
+    }
+    let runner = jobs.clone().map(crate::lane_job::Runner::start);
+    let result = run(&prompt, &apply);
+    let untested = runner.map(|r| r.stop().untested()).unwrap_or(true);
+    if let Some(lease) = lease {
+        crate::lane_job::record_untested(main_root, lease, untested);
+        if let Some(line) = crate::lane_job::phase_test_warning(main_root, Some(lease)) {
+            eprintln!("{line}");
+        }
+    }
+    result
 }
 
 /// BUG-050: which [`exec_vendor_headless`] launches get the drain resume
