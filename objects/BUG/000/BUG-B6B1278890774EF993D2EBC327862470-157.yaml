@@ -19,7 +19,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T02:25:46.947809262Z
-modified_at: 2026-11-01T08:50:32.192330508Z
+modified_at: 2026-11-01T08:53:41.659962376Z
 req_type: Bug
 tags:
 - area:agents
@@ -181,6 +181,11 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Independent full sweep: 3 confirmed CI failures plus false tested tally, Claude-only drain job setup, and non-mandatory live containment regression; CI remains a ship blocker.. No triage reason was given.'
   created_at: 2026-11-01T08:50:30.853913612Z
   modified_at: 2026-11-01T08:50:30.853913612Z
+- id: 01a19650-849b-7980-a958-2ffdd2ab8672
+  author: joe
+  content: 'Advisor recurrence gate handled: reviewed the new independent full-sweep b48c verdict and actual source for all six blockers; latest concrete ruling is the required work, not a request to repeat unchanged approval. Explicit manual queue insertion by advisor follows that disposition after queue-rework recurrence escalation. Keep hold, no completion or review waived. Doer must produce changes for all6 or punt specific disagreement.'
+  created_at: 2026-11-01T08:53:41.659962376Z
+  modified_at: 2026-11-01T08:53:41.659962376Z
 history:
 - id: 01a19525-88eb-79e3-aab8-8d511ad2f605
   author: aida-session-start
