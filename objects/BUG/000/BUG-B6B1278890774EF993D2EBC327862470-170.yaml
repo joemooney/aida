@@ -28,7 +28,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-01T06:49:16.503535709Z
-modified_at: 2026-11-01T06:49:16.503535709Z
+modified_at: 2026-11-01T08:20:17.944077903Z
 req_type: Bug
 tags:
 - audit
@@ -39,6 +39,12 @@ relationships:
 - rel_type: Child
   target_id: 01a19499-932e-79f0-a3e1-1299dfe355ad
   created_at: 2026-11-01T06:49:28.574443975Z
+comments:
+- id: 01a19631-f198-78a0-9a4c-e7daf2c299fb
+  author: joe
+  content: 'PROXY DECISION: approve every listed hint/status surface AND actual compete judge Codex path, preserving explicit vendor override and deliberate vendor-specific sections. Reuse shared vendor/launch helpers and enforce read-only judge; no raw unsandboxed child or new grant rules. Current emitted workflow hints visibly still recommend /aida-pr, and worktree next block still prints Claude despite Codex lane. Cover Codex-only, Claude and mixed fixture outputs, unsupported vendor truthful hints, real Codex rollout attribution and existing doctor failure semantics. Sequence session/queue overlaps after BUG2385/2387/2398. If more than10files, required touched-test/compile gates apply; otherwise LIGHT one targeted filter plus fast gates, no whole-workspace suite.'
+  created_at: 2026-11-01T08:20:17.944077903Z
+  modified_at: 2026-11-01T08:20:17.944077903Z
 history:
 - id: 01a195de-cf31-72b1-94fc-417a657ca801
   author: joe
