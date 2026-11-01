@@ -1,4 +1,11 @@
 - user_id: role:implementer
+  requirement_id: 01a195d9-336e-7223-b445-3e72671493bc
+  position: 250000
+  added_by: role:implementer
+  note: 'PR3210 exact head5a27494 CI41332027707 gates/Build fail: two hardcoded /tmp cleanup cwd paths in bug_2385_vendor_routing_tests.rs:217,274. Other lanes passed. Repair same bug/PR without ratchet waiver or lost16-case coverage. Complete concrete brief /tmp/aida-BUG2385-portability-rework-brief.txt and generated Codex pickup brief; preserved source/publication10-file byte identity freshly verified, no live source process. Normal own-session adoption only; no source cleanup or borrowed context.'
+  added_at: 2026-11-01T18:24:33.171048268Z
+  for_role: implementer
+- user_id: role:implementer
   requirement_id: 01a19639-d547-7300-9a70-befaedad7e96
   position: 251000
   added_by: role:implementer
