@@ -13,12 +13,12 @@ description: |
   4. States the threat model plainly: sessions are separated, not OS users. A same-user process that forges files is out of scope (ADR-66).
   5. End-user prose only: no internal spec IDs or seat-process jargon beyond the terms the page defines.
   6. Deployed per docs/showcase/README.md: a gh-pages snapshot from an approved merged revision.
-status: Approved
+status: InProgress
 priority: Medium
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T22:20:21.225603942Z
-modified_at: 2026-11-01T06:17:05.071961290Z
+modified_at: 2026-11-01T06:17:44.960120733Z
 req_type: Task
 tags:
 - authority
@@ -55,6 +55,14 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a195c1-bf00-78d3-b4c6-a115a863d4e2
+  author: aida-session-start
+  timestamp: 2026-11-01T06:17:44.960118279Z
+  session_id: a31b25d9-60a5-4347-a85b-4c74ab06f274
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 0506fa2eb862db100dffbc80b0c5cfdedec28522
   branch: main
