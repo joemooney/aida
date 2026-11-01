@@ -38,7 +38,16 @@ fn all_three_wrappers_launch_both_vendors_and_preserve_explicit_precedence() {
         return;
     }
     for vendor in ["codex", "claude"] {
-        for surface in ["new", "start", "bare", "role", "spec", "explicit"] {
+        for surface in [
+            "new",
+            "start",
+            "bare",
+            "role",
+            "spec",
+            "explicit",
+            "bypass-new",
+            "bypass-start",
+        ] {
             let tmp = tempfile::tempdir().unwrap();
             let root = tmp.path().join("project");
             let home = tmp.path().join("home");
@@ -84,7 +93,13 @@ fn all_three_wrappers_launch_both_vendors_and_preserve_explicit_precedence() {
                     "refs/remotes/origin/main",
                 ],
             );
-            if vendor == "codex" {
+            if surface.starts_with("bypass-") {
+                std::fs::write(
+                    root.join(".aida/agents.toml"),
+                    "[agents]\nbypass = true\n[agents.codex]\nmail_wake = false\n",
+                )
+                .unwrap();
+            } else if vendor == "codex" {
                 std::fs::write(
                     root.join(".aida/agents.toml"),
                     "[agents]\ncontained = true\n[agents.codex]\nmail_wake = false\n",
@@ -124,7 +139,7 @@ fn all_three_wrappers_launch_both_vendors_and_preserve_explicit_precedence() {
                 "#!/bin/sh\necho 'aida 0.16.0 fixture'\n",
             );
             let args = match surface {
-                "new" => vec![
+                "new" | "bypass-new" => vec![
                     "aida",
                     "session",
                     "new",
@@ -134,7 +149,7 @@ fn all_three_wrappers_launch_both_vendors_and_preserve_explicit_precedence() {
                     "implementer",
                     "--no-title",
                 ],
-                "start" => vec![
+                "start" | "bypass-start" => vec![
                     "aida",
                     "session",
                     "start",
@@ -178,7 +193,7 @@ fn all_three_wrappers_launch_both_vendors_and_preserve_explicit_precedence() {
                 assert!(!fields[5].is_empty());
                 assert_ne!(fields[5], parent, "child must hold its own grant");
                 assert!(!args.contains("dangerously-bypass"));
-                if vendor == "codex" {
+                if vendor == "codex" && !surface.starts_with("bypass-") {
                     assert!(
                         args.contains("--sandbox\nworkspace-write\n--ask-for-approval\nnever"),
                         "{args}"
@@ -190,12 +205,12 @@ fn all_three_wrappers_launch_both_vendors_and_preserve_explicit_precedence() {
                 assert!(!args.contains("--sandbox\n"));
                 assert!(!args.contains("bypassPermissions"));
                 // session new/start preserve Claude's existing direct launch contract.
-                if !matches!(surface, "new" | "start") {
+                if !matches!(surface, "new" | "start" | "bypass-new" | "bypass-start") {
                     assert_eq!(fields[0], "claude");
                     assert_ne!(fields[5], parent);
                 }
             }
-            if matches!(surface, "start" | "spec") && actual_vendor == "codex" {
+            if matches!(surface, "start" | "spec" | "bypass-start") && actual_vendor == "codex" {
                 assert_eq!(fields[2], "BUG-2385");
                 assert_eq!(crate::list_leases(&root).len(), 1);
             }

@@ -987,7 +987,9 @@ pub(crate) fn new_session_for_vendor(
             crate::AgentDefaultFlagOptions::new(false, Vec::new(), None),
             None,
             title,
-            true,
+            // Configured bypass retains the shared launcher's consent downgrade.
+            // Only a selected sandbox posture is explicit on this wrapper.
+            contained,
         );
     }
     // BUG-2157: fail closed — a contained parent never launches an
