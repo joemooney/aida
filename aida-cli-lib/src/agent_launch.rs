@@ -3657,6 +3657,14 @@ pub(crate) fn agent_initial_prompt_args(
     let Some(prompt) = prompt else {
         return Vec::new();
     };
+    // De-risk launches carry an invocation after the launch-context preamble.
+    // Keep previews and real launches on the same Codex renderer.
+    // trace:BUG-2387 | ai:codex
+    let prompt = if config.agent_type == "codex" {
+        session::codex_interactive_prompt(&prompt)
+    } else {
+        prompt
+    };
     match config.prompt_style {
         AgentPromptStyle::Positional => vec![prompt],
         AgentPromptStyle::Flag(flag) => vec![flag.to_string(), prompt],

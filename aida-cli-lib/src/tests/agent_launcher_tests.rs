@@ -4785,3 +4785,51 @@ fn task_117_agent_list_and_aliases_keep_their_flags_and_avoid_launch_rewrite() {
     let list = agent.find_subcommand("list").unwrap();
     assert!(list.get_visible_aliases().any(|alias| alias == "ls"));
 }
+
+// trace:BUG-2387 | ai:codex
+#[test]
+fn codex_derisk_agent_argv_expands_workflow_after_context_preamble() {
+    let tmp = TempDir::new().unwrap();
+    let plan =
+        prepare_agent_launch_dry(tmp.path(), Some("advisor".into()), None, "codex", None).unwrap();
+    let launch = derisk_launch_request("BUG-2387");
+    let options = AgentPromptOptions::new(Some(launch.prompt.clone()), false);
+    for vendor in ["codex", "claude"] {
+        let config = AgentLaunchConfig {
+            agent_type: vendor,
+            binary: vendor,
+            default_args: Vec::new(),
+            prompt_style: AgentPromptStyle::Positional,
+            contained: false,
+        };
+        let args = agent_initial_prompt_args(&config, &plan, &options);
+        assert_eq!(args.len(), 1);
+        let body = &args[0];
+        if vendor == "claude" {
+            assert_eq!(body, &launch.prompt);
+        } else {
+            assert!(body.starts_with("Read your AIDA launch context first:"));
+            assert!(body.contains("cat \"$AIDA_AGENT_CONTEXT_FILE\""));
+            assert!(body.contains("# De-risk a Supervised Spec"));
+            assert!(body.contains("decision risk"));
+            assert!(body.contains("Codex prompt arguments: `BUG-2387`"));
+            assert!(!body.lines().any(|line| line.starts_with("/aida-")));
+            assert!(body.ends_with("Do not implement the spec."));
+            assert!(render_agent_show_prompt(&options, &args).contains(body));
+        }
+    }
+    let guided = guided_review_launch_request("BUG-2387");
+    let config = AgentLaunchConfig {
+        agent_type: "codex",
+        binary: "codex",
+        default_args: Vec::new(),
+        prompt_style: AgentPromptStyle::Positional,
+        contained: false,
+    };
+    let args = agent_initial_prompt_args(
+        &config,
+        &plan,
+        &AgentPromptOptions::new(Some(guided.prompt.clone()), false),
+    );
+    assert_eq!(args, vec![guided.prompt]);
+}
