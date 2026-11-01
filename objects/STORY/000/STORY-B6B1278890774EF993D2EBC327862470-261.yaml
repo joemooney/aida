@@ -25,7 +25,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T22:58:37.964636963Z
-modified_at: 2026-11-01T08:05:33.429480301Z
+modified_at: 2026-11-01T09:45:59.855838380Z
 req_type: Story
 tags:
 - docs
@@ -172,6 +172,11 @@ comments:
   content: 'Round 4: pushed commit 78523cf165b to existing PR #3193. Replaced GNU-only sed -i fixture cleanup with cp save/restore; no allowlist change. Passed bash tests/test_generate_glossary_check.sh, scripts/check-portability.sh, python3 docs/showcase/build.py --check and git diff --check. make check-ci-fast attempted once; interrupted after it started a substantial dependency compile in the no-default-features check, per advisor sandbox limit (unavailable locally). Contributor instructions retained per binding ruling. Push succeeded remotely; updating the local remote-tracking ref reported a read-only filesystem. Stopping for independent review; no ship or review record.'
   created_at: 2026-11-01T07:57:08.803094249Z
   modified_at: 2026-11-01T07:57:08.803094249Z
+- id: 01a19680-66a4-7fb2-9e0c-5fa69251db81
+  author: joe
+  content: 'Advisor ruling: PR3193 e20ca36 already has independent PASS and all prior blockers fixed. It now conflicts with main after authority explainer landed. Next task ONLY: merge current origin/main on existing branch, preserve both reviewed authority guide/pages and canonical glossary/23anchors/search/library/CLI/book outputs. Resolve generated artifacts by rebuilding from their source templates/manifest, never drop either feature or handpatch generated outputs. Source authority guide may now link first-use defined terms to stable glossary anchors perAC4 during this update, preserving all reviewed mandate/grant TTL wording. No old blocker replay or followup chain. FASTTRACK docs-only conflict delta: glossary fixture, portability, showcase build/check/tests, fastgates; no directcargo unless actualRustbehavior changes (thenLIGHT once). Push and stop for fresh independent affected-delta review and exactheadCI; existing review does not cover conflictresolution. Bounded tmp publication allowed under current native sandbox, no permissions relaxation.'
+  created_at: 2026-11-01T09:45:59.716016680Z
+  modified_at: 2026-11-01T09:45:59.716016680Z
 history:
 - id: 01a19517-7d5f-7092-83c8-b303944f0e16
   author: joe
