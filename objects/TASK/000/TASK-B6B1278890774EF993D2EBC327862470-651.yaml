@@ -22,7 +22,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-01T06:47:39.554427385Z
-modified_at: 2026-11-01T06:47:39.554427385Z
+modified_at: 2026-11-01T08:12:12.900232372Z
 req_type: Task
 tags:
 - audit
@@ -33,6 +33,12 @@ relationships:
 - rel_type: Child
   target_id: 01a19499-932e-79f0-a3e1-1299dfe355ad
   created_at: 2026-11-01T06:47:45.468341951Z
+comments:
+- id: 01a1962a-8ae4-73a0-b5d7-8a035dda4251
+  author: joe
+  content: 'PROXY DECISION: source confirms stale claude_only inventory and hardcoded portable launch recipes. Approve portable fire/solo/burndown delivery and canonical inventory alignment after contained/background Codex parity. Preserve all autonomy, independent review, workload/slot and human-floor instructions; replace vendor hardcoding with configured-vendor resolution rather than raw unsandboxed Codex. Update template sources and generated portable copies together, fixture-test inventory/output for Claude-only, Codex-only and mixed installs. FASTTRACK docs/template checks unless Rust generator changes require one targeted LIGHT test. No API keys/global user edits.'
+  created_at: 2026-11-01T08:12:12.900232372Z
+  modified_at: 2026-11-01T08:12:12.900232372Z
 history:
 - id: 01a195dd-3c94-7111-aa51-6281592ed6cb
   author: joe
