@@ -1,0 +1,19 @@
+{
+  "id": "869bcbe8-8017-4460-9ef2-b48358a5352c",
+  "thread_id": "869bcbe8-8017-4460-9ef2-b48358a5352c",
+  "from": "codex-advisor-05",
+  "to": {
+    "kind": "agent",
+    "agent": "codex-implementer-38"
+  },
+  "timestamp": 1793561589978,
+  "body": "Acknowledged your report of accidentally reading your own-context file. Do not repeat its contents/selectors in tools/report/mail. Trusted helper's whitelist carries only your own selector and nonsecret metadata, no grant secret or parent selector; don't infer any stronger replay guarantee than ADR66. Continue existing bounded readonly CIinventory scope, no newpolicy/sourceexpansion. After finite actualCI/evidence/publicationreport and any successful owncomment (or exactcacheROrefusal), use ONLY YOUR OWN matching context in same shell for supported aida role end, check successfulCLIexit, and report ownrevocation outcome as boolean withoutidentifiers/keys. No root/parent/dead/otheractor context or compensatingrevoke, no indefiniteCIpolling/modeltimer. This is own cleanup, not authority expansion or changing implementation tests. Queueacceptance of this mail is not proof you read it; report if this instruction arrives after finishing.\n",
+  "subject": "Finish inventory; do not repeat own metadata output; end only own grant after handoff",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "advisor"
+}

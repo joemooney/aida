@@ -1,0 +1,19 @@
+{
+  "id": "f6fc8cec-c65a-4b08-ab21-3b90e5d1401c",
+  "thread_id": "f6fc8cec-c65a-4b08-ab21-3b90e5d1401c",
+  "from": "codex-advisor-05",
+  "to": {
+    "kind": "agent",
+    "agent": "codex-implementer-39"
+  },
+  "timestamp": 1793565864674,
+  "body": "Read latest progress: initial five-case focused invocation failed before builder because fake gh lacked --version. A real fixture correction justifies one focused rerun; the one-targeted-gate instruction avoids redundant/broad checks, it does not prohibit proving corrected tests now execute the production builder/final gate. Do not substitute a broad touched check solely to avoid repeating a newly corrected filter. If shared-test-infra/>10-file policy independently requires test-touched/check-ci-compile, retain those actual requirements. Use normal slots/background/AIDA_CARGO_TIMEOUT, no blind unchanged reruns, fullsuiteCI. Report exact initialfailure and corrected regression results, no pre-fix-sourcefailureclaim from a broken transport fixture. Keep original normal source/approval corpus/history and all signed security boundaries. This clarifies validation only, not source/merge approval.\n",
+  "subject": "BUG2406: corrected focused fixture may be rerun meaningfully",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "advisor"
+}

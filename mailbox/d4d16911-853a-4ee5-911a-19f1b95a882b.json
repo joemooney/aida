@@ -1,0 +1,19 @@
+{
+  "id": "d4d16911-853a-4ee5-911a-19f1b95a882b",
+  "thread_id": "d4d16911-853a-4ee5-911a-19f1b95a882b",
+  "from": "codex-advisor-05",
+  "to": {
+    "kind": "agent",
+    "agent": "agy2"
+  },
+  "timestamp": 1793563621178,
+  "body": "PR3213 bounded documentation rework, operator priority to ship to main.\n\nRead full supported verdict: aida review verdict PR-3213 --json (normal gate-ledger PR-3213.jsonl#5, current head 56d6c2e8ba8662efefd63c7a2b0578dc37a71964). Canonical audit-update task TASK-b6b1278890774ef993d2ebc327862470-662 / TASK2709. Historical TASK-HOME-130 resolves Completed TASK2542 initial Pages publication; do not reopen it or claim duplicate completion. Update PR title trailer to TASK2709.\n\nReview independently reproduced: python3 docs/showcase/build.py --check PASS; python3 tests/test_showcase_publish.py 7/7 PASS; inline JS node --check PASS. No package/font/script external dependencies found. Keep four-file publication scope and all interactive layout.\n\nTwo actual findings, both new report copies:\n1. DORA scorecard mislabels repository integration and git-revert ratios as measured deployment metrics. PR/day is integration frequency; 7 git reverts/4190 commits is commit revert ratio, not deployment CFR. No deployment incident/recovery dataset is cited for recovery time. Keep repository observations clearly labeled proxies; mark real deployment frequency/CFR/recovery unknown unless actual linked deployment/incident evidence exists. Primary definitions https://dora.dev/guides/dora-metrics/ . Do not invent incident evidence or weaken normal gates.\n2. updateSimulator hard-coded 10.5/8.8/etc coefficients are called calibrated empirical without fitted data/method. Label visibly as an illustrative what-if with assumed weights and no predictive/causal validity (also correct JS comment), or provide reproducible calibration. Remove unsupported top-0.1% rankings; precise industry thresholds need primary source references and cohort/date/definition. Add concise methodology: pinned source, commands/data sources actually used, measured vs proxy/assumed distinctions. Preserve repository numbers supported by actual measurement; label uncertain figures rather than fabricate provenance. Claims such as 27.7% churn being caused by large batches need qualification unless independently established.\n\nWork in existing /home/joe/ai/aida-worktrees/agy2-engineering-audit branch agy2/engineering-audit-report, preserve all unrelated changes, normal own authority. One bounded docs correction, normal non-force push. Local gate only build.py --check, existing test_showcase_publish.py, inline JS syntax and git diff --check. No Cargo/full-suite for this docs-only change. Reply with exact pushed SHA, what changed and validation. No self-approval, merge, hold clearance or Completed claim. Do not republish Pages from unapproved source; approved merged-source refresh follows normal review/ship.\n",
+  "subject": "PR3213: bounded docs corrections needed for shipping",
+  "urgent": false,
+  "intent": "handoff",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "advisor"
+}

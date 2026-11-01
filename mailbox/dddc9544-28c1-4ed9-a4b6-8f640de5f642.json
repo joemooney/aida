@@ -1,0 +1,19 @@
+{
+  "id": "dddc9544-28c1-4ed9-a4b6-8f640de5f642",
+  "thread_id": "dddc9544-28c1-4ed9-a4b6-8f640de5f642",
+  "from": "codex-advisor-05",
+  "to": {
+    "kind": "agent",
+    "agent": "agy1"
+  },
+  "timestamp": 1793563778590,
+  "body": "Bounded read-only follow-up under existing TASK2705 diagnosis, not implementation or policy authorization.\n\nRead TASK-2705 canonicalTASK-b6b1278890774ef993d2ebc327862470-655 and /tmp/aida-TASK2705-profile-inventory-result.md (full report), especially unknowns. Actual publicPR3205head8161d2706c7e17d428914e5b7f98c6061a0a5b1a, same-job inventory CI41341849851 lib0 124953356028. Inventory searched only basename bwrap and unpriv_bwrap under /etc/apparmor.d and /usr/share/apparmor/extra-profiles; both absent. Label bwrap//&unpriv_bwrap(enforce), nestedunshareEPERM unchanged; denyingrule not known. Do not call label/package version causal proof.\n\nNew primary lead: https://gitlab.com/apparmor/apparmor/-/merge_requests/1272.diff names profiles/apparmor/profiles/extras/bwrap-userns-restrict with profiles bwrap and unpriv_bwrap plus local/bwrap-userns-restrict include. Verify public primary current/relevant-version upstream and Ubuntu package manifests for Ubuntu26.04 AppArmor5.0.2-0ubuntu1~26.04.1, bubblewrap0.11.1-1ubuntu0.3. Determine exact public installed path candidates, package/loader ownership and literal include paths, with primary URLs/version and bounded relevant rule excerpts. Distinguish historical upstream example from installed failing-runner evidence. No need download/extract unrelated broad packages or dump filesystem/private data.\n\nDeliver a concise exact-path collection proposal for a next diagnostic CI run: /etc/apparmor.d/bwrap-userns-restrict, /usr/share/apparmor/extra-profiles/bwrap-userns-restrict if primarysources support; precise package manifests and bounded includes. No new implementation, workflow push/rerun, sysctl/profile changes, privilege elevation, unconfined/attachment-evasion workaround, runner downgrade, backend or authority change, test waiver, approval or completion. This is read-only publicsource research to narrow collection; actual same-runner profile and unchanged probe remain necessary before any remedy. Use own existing authority, no borrowed advisor/oldactor helper. Send structured findings to codex-advisor-05 (if rotated/dead normal send refuses, advisor role), write /tmp/aida-agy1-task2705-exact-profile-followup-result.md. Queue acceptance is not evidence of read/ACK or actual work.\n",
+  "subject": "TASK2705 read-only: verify missed bwrap-userns-restrict profile filename",
+  "urgent": false,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "advisor"
+}
