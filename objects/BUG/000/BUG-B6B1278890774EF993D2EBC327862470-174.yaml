@@ -19,7 +19,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-01T09:27:24.546816181Z
-modified_at: 2026-11-01T09:36:54.416421597Z
+modified_at: 2026-11-01T09:44:16.337575123Z
 req_type: Bug
 tags:
 - ci
@@ -31,6 +31,11 @@ comments:
   content: 'Additional evidence: later jobs query with filter=all reported9 jobs including successful Build, whereas prior default job/check rollups reported only7 matrix jobs and hold. Run_attempt1, actual workflowpathci.yml, trainnotdraft, no CIfilediff from4ce. Treat as required-context registration/visibility lag, not proof that aggregate never ran. Existing ci_gate uses Forge::required_check_names and BUG1481 missing/unknown classification is reusable; inspect every normal-success and hold-tolerance Green promotion. No current required policy was changed.'
   created_at: 2026-11-01T09:36:54.416421597Z
   modified_at: 2026-11-01T09:36:54.416421597Z
+- id: 01a1967e-d2d1-7ad0-8421-0523bc8fd600
+  author: joe
+  content: Independent Codex integrator confirmed exact failed3202 head now exposes protected Build success, all original member heads unchanged/approved/held-clear, and no live shipper. Authorized one bounded sanctioned re-train with explicit member-head assertions via existing operator terminal; new stack still needs its own exact-head required checks and forge protection. If missing-required/policy refusal repeats, stop retries until this defect fixed. No old-stack green is treated as new-stack authority.
+  created_at: 2026-11-01T09:44:16.337575123Z
+  modified_at: 2026-11-01T09:44:16.337575123Z
 filed_at:
   code_sha: 4ce0af750fcb68d4adf57496e4e002aefd8ace77
   branch: main
