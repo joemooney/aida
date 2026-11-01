@@ -13,12 +13,12 @@ description: |-
   Must not weaken the boundary: no prompt (refuse as today) when not a TTY, under AIDA_HEADLESS, under any agent harness env (CLAUDECODE, CODEX_*, AIDA_AGENT_*), inside a contained seat, or when a grant is present but invalid/expired (that path keeps its existing message). A --yes flag does not skip the prompt (the human keystroke is the proof); '--grant-inline=no' restores pure refusal for scripts.
 
   Acceptance: (1) TTY, no grant, answer y: child launches with a child-specific grant, the role-enter audit event is recorded with principal and seat, the parent shell env is unchanged afterwards; (2) answer n: today's refusal text, exit non-zero; (3) non-TTY / headless / agent env / contained: no prompt, today's refusal; (4) an existing valid grant: no prompt, today's behaviour; (5) the BUG-052 picker marks still apply (undelegable seats refused before the prompt); (6) docs: agent new section + FAQ-42 updated to say a human terminal is offered the inline grant. Tests: PTY-driven CLI test for (1)(2), env-matrix unit test for (3). Architecture/security-adjacent: implementer posts a short sketch of the in-process mint path and gets advisor signoff before coding.
-status: Done
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T22:17:06.607335957Z
-modified_at: 2026-11-01T00:34:25.558319052Z
+modified_at: 2026-11-01T00:53:13.604024263Z
 req_type: Story
 tags:
 - agent-new
@@ -159,6 +159,15 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a19498-a304-7ae2-bdc7-a7db989cd298
+  author: aida-orchestrator
+  timestamp: 2026-11-01T00:53:13.604048326Z
+  session_id: 01a1948b689a
+  harness_version: 2.1.316 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: NeedsAttention
 filed_at:
   code_sha: 0506fa2eb862db100dffbc80b0c5cfdedec28522
   branch: main
@@ -171,3 +180,11 @@ implementation_info:
   implemented: true
   implemented_at: 2026-11-01T00:34:25.558319052Z
   implemented_by: joe
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: Implementation meets all 6 acceptance criteria and the advisor rulings Q1-Q4, but CI (lib-1) is red at the PR head (Run tests step); main and sibling PRs pass lib-1, so it is probably caused by this PR. Plus three minor ordering/test gaps.
+  recovery_hint: address the review findings, move STORY-2215 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-11-01T00:53:13.604024263Z
