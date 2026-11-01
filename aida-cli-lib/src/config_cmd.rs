@@ -1021,13 +1021,20 @@ pub(crate) fn handle_config_permissions_command(cmd: &ConfigPermissionsCommand) 
         ConfigPermissionsCommand::Probe { vendor, json } => {
             let project_root = main_worktree_root_from(&find_project_root()?);
             let report = crate::containment::probe(&project_root, vendor);
-            if *json || output_format_is_json() || aida_agent_output_truthy() {
+            let structured = *json || output_format_is_json() || aida_agent_output_truthy();
+            if structured {
                 println!("{}", serde_json::to_string_pretty(&report)?);
             } else {
                 println!("{}: {:?}: {}", vendor, report.status, report.cause);
                 println!("Shared backend vendor launch: unsupported; probe AIDA containment applied: false");
             }
             if report.status != crate::containment::ProbeStatus::Ready {
+                // The report already contains the refusal cause. Preserve the
+                // nonzero exit without appending an agent-mode TOON error to JSON.
+                // trace:TASK-2705 | ai:codex
+                if structured {
+                    return Err(crate::TypedPayloadEmitted.into());
+                }
                 anyhow::bail!("containment probe did not pass: {}", report.cause);
             }
         }
