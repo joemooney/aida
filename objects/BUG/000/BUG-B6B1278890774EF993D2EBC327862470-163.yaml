@@ -17,12 +17,12 @@ description: |-
   1. `aida burndown run`, `aida intake`/`assess`, `aida dryrun --ai`, `aida intent`, `aida questions research`, and `aida questions clarify` resolve the configured vendor via `resolve_headless_vendor` / `resolve_default_vendor` and route through `spawn_vendor_headless_with_seat` (or vendor-aware interactive launch for `questions clarify`).
   2. All six commands work on a Codex-only host with `[agents] vendor = "codex"` and no `claude` binary installed.
   3. Tests verify argv/vendor selection for both `claude` and `codex`.
-status: Approved
+status: InProgress
 priority: High
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T06:46:36.168832796Z
-modified_at: 2026-11-01T08:09:49.028962909Z
+modified_at: 2026-11-01T21:27:42.440923223Z
 req_type: Bug
 tags:
 - audit
@@ -51,6 +51,13 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a19902-d668-7e30-a36e-7d0dc31da470
+  author: aida-session-start
+  timestamp: 2026-11-01T21:27:42.440920726Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 6dc7d4977ac5e47c42ddfb26597fe3ec5fb70b60
   branch: main
