@@ -1,0 +1,27 @@
+id: 01a1965b-e10f-7bb0-bdaf-18ab8392312a
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-657
+agreed_id: TASK-2707
+title: 'Contained Codex tracer: own grant, authenticated launch, writable git/store/cache and detached lifecycle'
+description: |-
+  Acceptance: (1) Integrate A/B and BUG2398 into actual interactive/headless implementer/reviewer Codex and STORY2254 background, AIDA-applied reporting only with wrapper evidence. (2) Installed native workspace layer/private daemon lifecycle composes with own delegated keyring/context/companion semantics; host daemon cannot execute outside wrapper, valid reviewer attests and ungranted/wrong-seat fails authority. (3) Own git/index/refs, store/cache and required own-grant stamps work, protected hooks/config/unrelated metadata stay immutable. Credential leaves only; P3 exact refresh storage and signed C7 choice must be resolved before credential code, no silent API-key-only replacement for ChatGPT. (4) Actual model-free plus authenticated host evidence covers these paths and all earlier write/egress/FD/IPC negatives; no socket failure waived. Layers: launch/grants/auth, storage/git boundary, background supervisor, diagnostics and live tests. Signed sliceC.
+
+  All signed STORY2238 sketch C1-C12 and BUG2398 B1-B4 apply. Linux only, fakeHOME/synthetic tests, no global user settings or schedules. No partial backend may report AIDA containment applied or launch ordinary agents until all required protections are ready; named refusal, no fallback. STRICT independent review, operator merge floor. LIGHT one targeted test plus fast gates; shared infra or >10files adds touched-test/compile, fullsuiteCI only. Longcargo background, no slotbypass. Parent all7AC remain open until final installed-tool evidence; no slice alone completes parent.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-01T09:06:06.223993645Z
+modified_at: 2026-11-01T09:06:06.223993645Z
+req_type: Task
+tags:
+- architecture
+- containment
+- vendor:codex
+- vertical-slice
+filed_at:
+  code_sha: 4ce0af750fcb68d4adf57496e4e002aefd8ace77
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 4ce0af750fc
+  vendor: codex
