@@ -313,6 +313,33 @@ impl CachedGitBackend {
                     .into());
             }
         }
+        // trace:BUG-2402 | ai:codex
+        // A read candidate is only a locator. Preserve the inner resolver's
+        // literal/padded-file precedence, then validate the located object's
+        // current UUID and identities before avoiding its global agreed-ID scan.
+        // Stale/deleted/malformed locators keep the original fallback; writes
+        // never enter this shortcut.
+        if !strict && candidates.len() == 1 {
+            if let Some(req) = self.inner.get_requirement_by_object_file(id)? {
+                return Ok(Some(req));
+            }
+            let candidate = &candidates[0];
+            if let Some(file) = candidate.spec_id.as_deref() {
+                let objects_root = self.inner.path().join("objects");
+                if let Ok(req) = crate::object_store::read_object(&objects_root, file) {
+                    let row = crate::id_collisions::IdRow::from(&req);
+                    if req.id == candidate.uuid
+                        && req
+                            .spec_id
+                            .as_deref()
+                            .is_some_and(|s| crate::id_identity::same_id(s, file))
+                        && !crate::id_collisions::candidates_for_id([&row], id).is_empty()
+                    {
+                        return Ok(Some(req));
+                    }
+                }
+            }
+        }
         self.get_requirement_by_spec_id(id)
     }
 
@@ -2347,6 +2374,211 @@ mod tests {
             test_counts().get("agreed_id_store_scan").is_some(),
             "a write's lookup keeps the authoritative agreed-id fallback"
         );
+    }
+
+    // trace:BUG-2402 | ai:codex
+    mod bug2402_locator {
+        use super::super::super::cache_refresh::{test_counts, CacheReadScope, ReadBudget};
+        use super::*;
+
+        #[test]
+        fn canonical_hits_and_stale_locator_effects() {
+            const NODE: &str = "b6b1278890774ef993d2ebc327862470";
+            let dir = tempdir().unwrap();
+            // Existing explicit temporary HOME authority, committed canonical
+            // graph and a normal projection; no real HOME/cache is modified.
+            let (backend, store, cache) = task_1515_backend(dir.path());
+            let objects = store.join("objects");
+            let native = format!("BUG-{NODE}-175").to_ascii_uppercase();
+            let mut target = sample_req(&native, "projected");
+            target.agreed_id = Some("BUG-2402".into());
+            crate::object_store::write_object(&objects, &target).unwrap();
+            for n in 10000..10256 {
+                crate::object_store::write_object(
+                    &objects,
+                    &sample_req(&format!("TASK-{n}"), "unrelated"),
+                )
+                .unwrap();
+            }
+            crate::git_ops::add_all(&store, "objects").unwrap();
+            crate::git_ops::commit(&store, "committed locator graph").unwrap();
+            backend.rebuild_cache().unwrap();
+            assert_eq!(backend.id_candidates("BUG-2402").unwrap().len(), 1);
+            let mut aliases = crate::node_alias::NodeAliasMap::default();
+            aliases.set("ZQ", NODE).unwrap();
+            let _aliases = crate::node_alias::install_for_thread(aliases);
+
+            target.title = "current canonical content".into();
+            crate::object_store::write_object(&objects, &target).unwrap();
+            crate::git_ops::add_all(&store, "objects").unwrap();
+            crate::git_ops::commit(&store, "canonical advanced after projection").unwrap();
+            let (stop, holder) = held_refresh(cache);
+            let scope = CacheReadScope::new();
+            scope.configure(false, Some(ReadBudget(std::time::Duration::ZERO)));
+            test_counts();
+            for id in [
+                target.id.to_string(),
+                native.clone(),
+                "BUG-2402".into(),
+                "bug-0002402".into(),
+                "BUG-ZQ-000175".into(),
+            ] {
+                let found = backend
+                    .get_requirement_unambiguous_for_read(&id)
+                    .unwrap()
+                    .unwrap();
+                assert_eq!(found.id, target.id, "{id}");
+                assert_eq!(found.title, target.title, "{id}");
+            }
+            assert_eq!(scope.metadata()["stale"], true);
+            assert_eq!(scope.metadata()["refreshing"], "worker_running");
+            let counts = test_counts();
+            assert_eq!(counts.get("agreed_id_store_scan"), None, "{counts:?}");
+            assert_eq!(counts.get("write_attempt"), None, "{counts:?}");
+            assert_eq!(counts.get("retry_sleep"), None, "{counts:?}");
+            assert!(backend
+                .get_requirement_unambiguous_for_read("BUG-999999")
+                .unwrap()
+                .is_none());
+
+            let path = crate::object_store::object_path(&objects, &native).unwrap();
+            // Agreed-ID fallback historically tolerates malformed unrelated
+            // files; native-file parse failures remain errors.
+            std::fs::write(&path, "not: [valid yaml").unwrap();
+            assert!(backend
+                .get_requirement_unambiguous_for_read("BUG-2402")
+                .unwrap()
+                .is_none());
+            assert!(backend
+                .get_requirement_unambiguous_for_read(&native)
+                .is_err());
+            std::fs::remove_file(&path).unwrap();
+            assert!(backend
+                .get_requirement_unambiguous_for_read("BUG-2402")
+                .unwrap()
+                .is_none());
+
+            // A locator whose file now declares a different native identity
+            // must be rejected even if its UUID and agreed ID still match.
+            let mut changed_native = target.clone();
+            changed_native.spec_id = Some(format!("BUG-{NODE}-177"));
+            std::fs::write(&path, serde_yaml::to_string(&changed_native).unwrap()).unwrap();
+            test_counts();
+            assert_eq!(
+                backend
+                    .get_requirement_unambiguous_for_read("BUG-2402")
+                    .unwrap()
+                    .unwrap()
+                    .spec_id,
+                changed_native.spec_id
+            );
+            assert_eq!(test_counts().get("agreed_id_store_scan"), Some(&1));
+
+            let mut replacement = target.clone();
+            replacement.id = Uuid::new_v4();
+            replacement.title = "changed UUID, authoritative fallback".into();
+            crate::object_store::write_object(&objects, &replacement).unwrap();
+            test_counts();
+            assert_eq!(
+                backend
+                    .get_requirement_unambiguous_for_read("BUG-2402")
+                    .unwrap()
+                    .unwrap()
+                    .id,
+                replacement.id
+            );
+            assert_eq!(test_counts().get("agreed_id_store_scan"), Some(&1));
+
+            replacement.agreed_id = Some("BUG-2403".into());
+            crate::object_store::write_object(&objects, &replacement).unwrap();
+            assert!(backend
+                .get_requirement_unambiguous_for_read("BUG-2402")
+                .unwrap()
+                .is_none());
+            // The stale candidate cannot hide a moved authoritative owner.
+            let mut moved = target.clone();
+            moved.spec_id = Some(format!("BUG-{NODE}-176"));
+            crate::object_store::write_object(&objects, &moved).unwrap();
+            assert_eq!(
+                backend
+                    .get_requirement_unambiguous_for_read("BUG-2402")
+                    .unwrap()
+                    .unwrap()
+                    .spec_id,
+                moved.spec_id
+            );
+
+            // A literal file wins over an agreed locator, even when it was
+            // created after projection, exactly as in the existing fallback.
+            let literal = sample_req("BUG-2402", "literal owner");
+            crate::object_store::write_object(&objects, &literal).unwrap();
+            assert_eq!(
+                backend
+                    .get_requirement_unambiguous_for_read("BUG-2402")
+                    .unwrap()
+                    .unwrap()
+                    .id,
+                literal.id
+            );
+            backend.cache.upsert_requirement(&literal).unwrap();
+            backend.cache.upsert_requirement(&moved).unwrap();
+            assert!(backend
+                .get_requirement_unambiguous_for_read("BUG-2402")
+                .unwrap_err()
+                .downcast_ref::<crate::id_collisions::AmbiguousIdError>()
+                .is_some());
+            // Existing-but-unreadable collision evidence still refuses.
+            std::fs::write(
+                crate::object_store::object_path(&objects, "BUG-2402").unwrap(),
+                "not: [valid yaml",
+            )
+            .unwrap();
+            assert!(backend
+                .get_requirement_unambiguous_for_read("BUG-2402")
+                .unwrap_err()
+                .downcast_ref::<crate::id_collisions::AmbiguousIdError>()
+                .is_some());
+            // A vanished collision row no longer blocks the surviving owner.
+            std::fs::remove_file(crate::object_store::object_path(&objects, "BUG-2402").unwrap())
+                .unwrap();
+            assert_eq!(
+                backend
+                    .get_requirement_unambiguous_for_read("BUG-2402")
+                    .unwrap()
+                    .unwrap()
+                    .id,
+                moved.id
+            );
+            // Literal alias-shaped agreed ownership still precedes expansion.
+            let mut alias_owner = sample_req("BUG-900010", "literal alias owner");
+            alias_owner.agreed_id = Some("BUG-ZQ-175".into());
+            crate::object_store::write_object(&objects, &alias_owner).unwrap();
+            backend.cache.upsert_requirement(&alias_owner).unwrap();
+            assert_eq!(
+                backend
+                    .get_requirement_unambiguous_for_read("BUG-ZQ-175")
+                    .unwrap()
+                    .unwrap()
+                    .id,
+                alias_owner.id
+            );
+            stop.send(()).unwrap();
+            holder.join().unwrap();
+            drop(scope);
+            // Strict writes still use the original agreed-ID scan.
+            crate::git_ops::add_all(&store, "objects").unwrap();
+            crate::git_ops::commit(&store, "canonical case effects").unwrap();
+            test_counts();
+            assert_eq!(
+                backend
+                    .get_requirement_unambiguous("BUG-2402")
+                    .unwrap()
+                    .unwrap()
+                    .id,
+                moved.id
+            );
+            assert_eq!(test_counts().get("agreed_id_store_scan"), Some(&1));
+        }
     }
 
     /// Ruling A: a bare id resolves to the agreed spec only. When this node
