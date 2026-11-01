@@ -14,12 +14,12 @@ description: |
   4. Add truthful diagnostic/refusal for an unusable requested seat before model work when possible. Document any native keyring limitation rather than silently granting a fallback.
 
   Sketch and independent advisor signoff before code; strict review for authority plumbing. This finding is separate from the native cache path writable-root refusal, which is recorded on STORY-2238. User's global Codex config must remain unchanged. Codex implementer lane after signoff; LIGHT targeted grant/launch test plus make check-ci-fast, CI is the full gate.
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T07:26:20.914223641Z
-modified_at: 2026-11-01T08:14:53.124156628Z
+modified_at: 2026-11-01T08:29:54.417219367Z
 req_type: Bug
 tags:
 - architecture
@@ -278,6 +278,13 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1963a-bd71-7c22-9f3f-04b41469f287
+  author: joe
+  timestamp: 2026-11-01T08:29:54.417252064Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 53c89700b4da50b5593a2079ed4cc3abaae5cdfe
   branch: main
@@ -285,3 +292,8 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: 53c89700b4d
   vendor: codex
+attention_reason:
+  category: design-fork
+  detail: 'AC3 conflicts with the existing review recorder contract: lib_part5.rs handle_review_record_at explicitly permits absent grants for named agents and records unattested verdicts. A real Codex inherit=core fixture successfully recorded a granted reviewer verdict, then also recorded an ungranted verdict with the same agent identity. The accepted adapter-only scope preserves existing validators, so refusal at recording time needs an advisor decision or separately authorized policy tightening. The native workspace fixture is additionally blocked inside this seat by the Codex app-server socket-directory ownership/mode refusal.'
+  lean: Keep the Codex adapter scoped; clarify AC3 to test downstream authority refusal or authorize a separate recorder-policy change. Keep the native host fixture as a required manual gate.
+  raised_at: 2026-11-01T08:29:54.417219367Z
