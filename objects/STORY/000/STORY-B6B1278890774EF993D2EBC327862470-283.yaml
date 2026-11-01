@@ -1,0 +1,34 @@
+id: 01a195d6-f2ac-7871-96c2-817d60761e43
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-283
+agreed_id: STORY-2267
+title: 'Review PR-3195: [AI:claude] feat(goal): aida goal advisor set/show/check/history keeps the operator''s standing advisor goal in the store (STORY-2243)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a1956c`) for branch `story-b6b1278890774ef993d2ebc327862470-272`.
+
+  - PR: <https://github.com/joemooney/aida/pull/3195>
+  - Branch: `story-b6b1278890774ef993d2ebc327862470-272` → `main`
+
+  ## Covers
+
+  - STORY-2243
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 3195` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-01T06:40:54.444799560Z
+modified_at: 2026-11-01T06:40:54.444799560Z
+req_type: Story
+filed_at:
+  code_sha: 6dc7d4977ac5e47c42ddfb26597fe3ec5fb70b60
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 962ca07af25
+  vendor: claude
+  session: a31b25d9-60a5-4347-a85b-4c74ab06f274
