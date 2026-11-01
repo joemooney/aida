@@ -5,3 +5,5 @@ last_by:
   vendor: codex
 result: done
 note: 'Checked ps, all 10 open PRs and 8 relay.status files. Old blocked relays are historical: BUG-2162/TASK-1981/TASK-2053 Completed; PR2667/2796/2836/2839 MERGED. Current rework and fresh reviews dispatched; 3188 serial ship waits exact-head CI, 3182 timing-only retry queued. Codex backlog staged behind live launch fix; human-only spikes preserved. Live mail-wake repaired; source BUG2397 queued. No gate waived.'
+due_since: 2026-11-01T08:03:55.008420222Z
+due_reason: every 1h
