@@ -23,7 +23,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T06:43:22.094949183Z
-modified_at: 2026-11-01T18:24:30.628136530Z
+modified_at: 2026-11-01T18:59:34.939967427Z
 req_type: Bug
 tags:
 - audit
@@ -50,6 +50,14 @@ comments:
   content: 'PR3210 exact head5a27494 CI41332027707 gates/Build fail: two hardcoded /tmp cleanup cwd paths in bug_2385_vendor_routing_tests.rs:217,274. Other lanes passed. Repair same bug/PR without ratchet waiver or lost16-case coverage. Complete concrete brief /tmp/aida-BUG2385-portability-rework-brief.txt and generated Codex pickup brief; preserved source/publication10-file byte identity freshly verified, no live source process. Normal own-session adoption only; no source cleanup or borrowed context.'
   created_at: 2026-11-01T18:24:30.509256257Z
   modified_at: 2026-11-01T18:24:30.509256257Z
+- id: 01a1987b-399b-7571-b072-6b11b134e47c
+  author: joe
+  content: |
+    Advisor read FULL portability report /tmp/aida-BUG2385-portability-rework-result.md and FULL fresh independent source review /tmp/aida-review3210-scoped-result.md. Same PR3210 now published at5ee926e04a7aadb294632b3143cdd626ffac47a3, ordinary nonforced push; all10source files match public blobs, fullpatchID975cb6e5cd5395592bf44602cad723b4c8be58c9. Actual log listed FOUR cleanup literals, all fixed by four savedcwd captures and restorations in one test file, with all16launch cases and original assertions/productionbytes retained. ONE focused4PASS0FAIL, compile5m52/test17.67s; fast36PASS, format/diffPASS, tracked portability+pinnedbase allowlistPASS. Root independently queried exacthead CI41337266294: gates and aggregateBuild SUCCESS (previous source report's pending state superseded by actualforge observation).
+    Fresh reviewer26 normal own reviewlease/session anchor and own reviewergrant/binding checks passed, source recommendation APPROVE after full10file audit, but canonical --pr3210 normal writer failed exit1 'could not write the review verdict'. Supported canonical/PR/friendly readbacks null. NO actual approval receipt/attestation/GHreviewcomment exists; normalreviewgate UNRESOLVED, no restamp/alternatecache/borrowedidentity. STORY2274 deliverable remains unfinished. Implementation is published and locally/CI validated, pending real authorized review recording and normal merge; no Completed or ship credit.
+  created_at: 2026-11-01T18:59:34.939967427Z
+  modified_at: 2026-11-01T18:59:34.939967427Z
+  relayed_from: codex-implementer-37
 history:
 - id: 01a195d9-57f7-7021-8c44-245d62d9af7d
   author: joe
