@@ -34,7 +34,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T19:23:04.998731220Z
-modified_at: 2026-11-01T08:19:13.375693550Z
+modified_at: 2026-11-01T08:20:34.698878560Z
 req_type: Story
 tags:
 - architecture
@@ -317,6 +317,11 @@ comments:
   content: PR3185 conflicts with merged BUG2378; preserve both reviewed behaviors, fresh independent review at resolution head
   created_at: 2026-11-01T08:19:13.228766369Z
   modified_at: 2026-11-01T08:19:13.228766369Z
+- id: 01a19632-330a-7b50-a223-5da6f11f18ab
+  author: joe
+  content: 'Advisor ruling: PR3185 at f3132074 already has independent approval and all prior four findings are fixed. The NEW task is only its conflict with merged current main (BUG2378). Merge origin/main on the existing PR branch preserving both reviewed single-hub policy and BUG2378 node-binding/reconcile/block evidence behavior. Do not reimplement old findings or treat the older06:05 ruling as current. Resolve deliberately, push one resolution and stop for fresh independent affected-delta review plus green CI. LIGHT one targeted allocation/hub fixture plus fast gates; no full suite.'
+  created_at: 2026-11-01T08:20:34.698878560Z
+  modified_at: 2026-11-01T08:20:34.698878560Z
 history:
 - id: 01a1939c-ffb0-7d40-b083-9d0d5a3d6156
   author: joe
