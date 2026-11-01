@@ -18,10 +18,11 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T22:20:21.225603942Z
-modified_at: 2026-11-01T06:48:50.517066216Z
+modified_at: 2026-11-01T06:49:13.717706749Z
 req_type: Task
 tags:
 - authority
+- closure:pending
 - docs
 - website
 comments:
@@ -160,6 +161,10 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
+- id: 01a195de-92bd-7721-981f-1f47c8eb59de
+  author: joe
+  timestamp: 2026-11-01T06:49:14.173818465Z
+  changes: []
 filed_at:
   code_sha: 0506fa2eb862db100dffbc80b0c5cfdedec28522
   branch: main
