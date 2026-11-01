@@ -23,7 +23,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-01T06:45:38.111981577Z
-modified_at: 2026-11-01T07:03:43.764291089Z
+modified_at: 2026-11-01T07:03:45.574942302Z
 req_type: Bug
 tags:
 - architecture
@@ -35,6 +35,12 @@ relationships:
 - rel_type: Child
   target_id: 01a19499-932e-79f0-a3e1-1299dfe355ad
   created_at: 2026-11-01T06:45:46.529996649Z
+comments:
+- id: 01a195eb-dea6-7692-aba7-4f0df033d9d0
+  author: joe
+  content: 'ADVISOR DISPOSITION: APPROVED for SKETCH ONLY before code. Confirmed exec_resume_command merely prints Codex resume, queue work resumes only Claude, and role/TUI paths are separate. Cover every listed acceptance surface without mixing fresh launches or losing parent containment/grant binding. Correct CLI wording: role enter has a resume offer, not a --resume flag. Post a sketch naming shared vendor resume contract, transcript lookup/evidence, interactive vs headless argv, child grant/seat identity, background/punt continuation, refusal cases and tests. Obtain independent advisor signoff before implementation. Sequence after BUG-2385/2387 session edits; coordinate with STORY-2255 fork and STORY-2254 detached launch. No authority or bypass expansion is pre-approved.'
+  created_at: 2026-11-01T07:03:45.574942302Z
+  modified_at: 2026-11-01T07:03:45.574942302Z
 history:
 - id: 01a195db-6c30-7600-a068-211ab6c2eed8
   author: joe
