@@ -486,6 +486,7 @@ fn single_hub_blocks(root: &Path) -> Result<Option<(String, Vec<crate::node::Agr
 /// that ref or its `registry/blocks.yaml` does not exist (nothing is on the
 /// hub yet).
 // trace:STORY-B6B1278890774EF993D2EBC327862470-164 | ai:claude
+// remote-creds-ok(TASK-2001): reads the local remote-tracking ref only; no network
 fn hub_ref_blocks(root: &Path, remote: &str) -> Result<Vec<crate::node::AgreedIdBlock>> {
     let branch = crate::git_ops::current_branch(root).unwrap_or_else(|_| "aida-store".to_string());
     let out = crate::git_ops::host_git_command(root)

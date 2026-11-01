@@ -211,11 +211,15 @@ pub fn committed(store_path: &Path) -> Result<HubSet> {
     let repo = code_repo_for(store_path);
     let branch = crate::git_ops::default_branch_name(&repo);
     let mut revs = Vec::new();
+    // `rev-parse refs/heads/<b>@{upstream}` fails ("no such branch"), so the
+    // upstream is read with for-each-ref, which takes the full ref name and
+    // never confuses the branch with a tag. A clone that renamed `origin`
+    // (e.g. to `upstream`) still finds the declaration.
     if let Ok(out) = crate::git_ops::host_git_command(&repo)
         .args([
-            "rev-parse",
-            "--symbolic-full-name",
-            &format!("refs/heads/{branch}@{{upstream}}"),
+            "for-each-ref",
+            "--format=%(upstream)",
+            &format!("refs/heads/{branch}"),
         ])
         .output()
     {
@@ -250,6 +254,7 @@ pub fn working(store_path: &Path) -> Result<HubSet> {
 }
 
 /// Every URL `remote` fetches from or pushes to, as configured in `repo`.
+// remote-creds-ok(TASK-2001): reads local remote config only; no network
 pub fn remote_urls(repo: &Path, remote: &str) -> Vec<String> {
     let mut urls = Vec::new();
     for args in [

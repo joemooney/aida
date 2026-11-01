@@ -74,6 +74,47 @@ fn hub_pool_ids_round_trip() {
     assert_eq!(parse_hub_pool_id("hub:a:b:c"), None);
 }
 
+/// A clone that renamed `origin` (here to `upstream`) still reads the hub
+/// declaration from its default branch's configured upstream: the lookup
+/// must not depend on the `origin/<default>` fallback.
+#[test]
+fn the_declaration_is_read_from_a_renamed_upstream() {
+    let dir = tempfile::tempdir().unwrap();
+    let repo = dir.path();
+    let git = |args: &[&str]| {
+        let out = crate::test_git::git_command()
+            .current_dir(repo)
+            .args(["-c", "commit.gpgSign=false"])
+            .args(args)
+            .env("GIT_AUTHOR_NAME", "t")
+            .env("GIT_AUTHOR_EMAIL", "t@example.invalid")
+            .env("GIT_COMMITTER_NAME", "t")
+            .env("GIT_COMMITTER_EMAIL", "t@example.invalid")
+            .output()
+            .unwrap();
+        assert!(
+            out.status.success(),
+            "git {args:?}: {}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+    };
+    git(&["init", "-q", "-b", "main"]);
+    std::fs::create_dir_all(repo.join(".aida")).unwrap();
+    std::fs::write(
+        repo.join(".aida/config.toml"),
+        "[store.hubs]\nhub = '/srv/hub.git'\n",
+    )
+    .unwrap();
+    git(&["add", ".aida/config.toml"]);
+    git(&["commit", "-qm", "config"]);
+    git(&["remote", "add", "upstream", "/srv/hub.git"]);
+    git(&["update-ref", "refs/remotes/upstream/main", "HEAD"]);
+    git(&["branch", "--set-upstream-to=upstream/main", "main"]);
+    let set = committed(repo).unwrap();
+    assert_eq!(set.hubs.len(), 1, "{set:?}");
+    assert_eq!(set.hubs[0].name, "hub");
+}
+
 #[test]
 fn a_mirror_remote_that_is_also_a_hub_is_a_config_error() {
     let dir = tempfile::tempdir().unwrap();
