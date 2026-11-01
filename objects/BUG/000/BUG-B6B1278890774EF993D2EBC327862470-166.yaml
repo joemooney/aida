@@ -25,7 +25,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T06:47:26.114384272Z
-modified_at: 2026-11-01T08:41:30.750847747Z
+modified_at: 2026-11-01T08:42:57.956090453Z
 req_type: Bug
 tags:
 - audit
@@ -52,6 +52,11 @@ comments:
   content: 'Advisor ruling: Recover prepared author patch /tmp/aida-BUG2392-prepared-author.patch and finish publication on codex/bug-2392-default-config. Prior Codex doer made the fix and passed14 focused tests but native .git readonly prevented commit. Apply/review preserved patch in your own fresh leased checkout; preserve tested Rust/template changes. Do NOT start tracking the ignored user-owned .aida/agents.toml or alter .gitignore to publish that whole local config. Template safety is committed; the advisor will update ONLY the authorized raw flag in the main local config after merge, with backup already retained. Preserve other user choices. Publish own code through a temporary writable publication checkout under allowed tmp if needed, without widening sandbox, disabling hooks/grants, or writing source .git. This is the same bounded workflow used successfully for BUG2397. Reuse prior14 focused result if Rust patch unchanged; run fast gates once, then push/open PR and stop for independent review. If metadata writes refuse, report actual forge head truthfully; never end merely because source git add is readonly.'
   created_at: 2026-11-01T08:40:34.175914908Z
   modified_at: 2026-11-01T08:40:34.175914908Z
+- id: 01a19646-b224-74c1-b534-108541ae76d5
+  author: mcp
+  content: 'Recovery under the 2026-11-01 advisor ruling: publication checkout /tmp/aida-BUG2392-publication-20261101 uses the assigned branch and source session 01a196455947. Recovered only aida-core/src/scaffolding/settings.rs and templates/{agents,contained}.toml; their Git blob hashes exactly match the preserved tested patch (22b940553dc, 1cc52c406fd, 458c43fdaf0). Reusing the recorded 14/14 focused test result as authorized. Excluded all local-config and gitignore changes; advisor owns the single raw local flag update after merge. Formatting/diff checks passed; fast gates running once before publication. No merge or self-review will be performed.'
+  created_at: 2026-11-01T08:42:57.956073303Z
+  modified_at: 2026-11-01T08:42:57.956073303Z
 history:
 - id: 01a195dd-0846-7b42-9f84-f4128c00ca5d
   author: joe
