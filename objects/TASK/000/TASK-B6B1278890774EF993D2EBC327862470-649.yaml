@@ -1,0 +1,28 @@
+id: 01a194a1-7afd-76f2-83cb-bc1136c9a0be
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-649
+agreed_id: TASK-2633
+title: Raise the standalone implementer cap from the default 3 to 4
+description: |-
+  FASTTRACK. Operator approved 2026-10-31 18:02. On 2026-10-31 headless lanes queued 5-7 deep and were refused at the cap of 3 repeatedly while lane time was mostly model time, not cargo. Add to tracked .aida/config.toml:
+  [queue]
+  standalone_implementer_cap = 4
+  (keep any existing [queue] keys; add a one-line comment with the reason). Not higher: the host has 2 cargo build slots shared with reviewers and dev builds. Gate: make check-ci-fast only (no cargo). Open the PR via aida ship.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-01T01:02:53.181015351Z
+modified_at: 2026-11-01T01:02:53.181015351Z
+req_type: Task
+tags:
+- config
+- fasttrack
+- queue
+filed_at:
+  code_sha: 43d9f95803036ec22350e5a210d8c1cae20b9fe5
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 43d9f958030
+  vendor: claude
+  session: f5694f22-ff09-4e87-8934-e79adca4efba
