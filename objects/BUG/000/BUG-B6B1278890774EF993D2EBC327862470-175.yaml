@@ -1,0 +1,31 @@
+id: 01a19691-251a-7503-85a6-9323aa409a91
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-175
+agreed_id: BUG-2402
+title: 'show latency guard recurrence: 41 of 253 calls exceed 2000ms and tail breaches 5000ms on the current lineage'
+description: |
+  ## Observed recurrence
+  Advisor performance-guard-route trip performance-guard@2026-11-01T09:16:20.283276097Z records a real SLO breach: command show, 41/253 calls over2000ms (16.206%, allowed10%), worst5459ms over independent5000ms ceiling,24h window,0excluded,lineage_scopedtrue. Confirmed matching retained schedule/performance-guard.yaml entry and current .aida/config.toml budget. Prior BUG2221 completed an earlier distinct recurrence; TASK2529 deliberately changed budgetto2000; do not reopen oldcredit or hide thistrip by changingbudget.
+  Current live is0.16.0 sha4ce0af750fc built2026-11-01 01:41:25-07. Three fresh show --formatjson invocations on BUG2397/STORY2243/TASK2631 measured1237/1608/814ms, allrc0validJSON. They do not reproduce the5.4soutlier nor prove24h recovery. IOpressure someavg10~34.49% observed duringfour parallel validationlanes, cause UNPROVEN. Need distinguish currentartifact/livefleet tail from old-window/history; no unsupported cache/lock causalclaim.
+  ## Acceptance
+  1. Reconstruct matching trip and current lineage/artifact timing distribution using existing telemetry and bounded phase timing, compare default/no-git and representative positive/negative shapes under actual load plus controlled hermetic conditions; identify accountable slow path or show with evidence that breach is wholly pre-fix historical and currentartifact satisfies unchangedbudgets. Do not require oldsamples disappear by deletion/relabel.
+  2. If currentartifact stillbreaches, fix diagnosedpath preserving canonicalcorrectness, authoritychecks, useful truthfulbounded/incomplete linkage and BUG1801 zero-refresh-wait semantics. Budgets2000ms/10%/5000ms stayunchanged. For an architectural fork postsketch and seek independent signoff beforeimplementation; routineboundedfix mayproceed.
+  3. Add decisive mechanism regression iffixneeded (fixtures/fakeHOME only); remeasure sameartifact/shapes/load and report before/after plus new-buildsamplecounts separately from old24hwindow. Never claimthreewarmcalls provefullSLO. Ifhistoricalonly, documentverifiedsupersedingmergedfix and representativefreshtelemetry instead ofcreatingunnecessarycode.
+  4. Independentreview andnormalPRgates forcode. LIGHT one targetedregressionplusfast; >10files/sharedinfrastructure addsmandatorygates; no fullsuite/slotbypass/repeatedcappedcompiles. Longcargo background. Diagnosisfirst, nopollingloop, nouserconfigedits orbenchmarkbudgetrelaxation.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-01T10:04:17.050576260Z
+modified_at: 2026-11-01T10:04:17.050576260Z
+req_type: Bug
+tags:
+- guard-recurrence
+- latency
+- performance
+filed_at:
+  code_sha: 6fefb63280c352be0194c2cfadf54a085eb55471
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 4ce0af750fc
+  vendor: codex
