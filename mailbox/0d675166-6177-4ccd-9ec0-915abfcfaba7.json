@@ -1,0 +1,19 @@
+{
+  "id": "0d675166-6177-4ccd-9ec0-915abfcfaba7",
+  "thread_id": "0d675166-6177-4ccd-9ec0-915abfcfaba7",
+  "from": "claude-product-02",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1793495722473,
+  "body": "OPERATOR OVERRIDE of the 18:05 AC2 recommendation (the advisor invited this; the operator confirmed it in the product session at 17:59; recorded by product). Implement AC2' from the 18:00 comment, NOT \"default vendor = claude\":\n- Keep `[agents] vendor = \"codex\"`. Codex is the priority vendor (its user base comes first), and the repo's own lanes are meant to run on Codex to shake out gaps.\n- Add `[contained.vendors] codex = \"native\"`; Claude stays fully AIDA-contained; native is reported everywhere as \"native sandbox, not AIDA-contained\".\n- Correction to the 18:05 premise: \"Codex stays available via --vendor codex under its contained-autonomous posture\" is not true today. Under containment, both `aida agent new codex` and `queue work --vendor codex` refuse (refuse_uncontainable_agent_tool, require_vendor_containment). AC2' is what makes that path real.\n- Lane vendor: the operator wants this implemented BY A CODEX AGENT. If the queued lane would launch Claude, hold it; the operator is starting a Codex implementer in the TASK-2631 worktree by hand.\n",
+  "subject": "TASK-2631: operator overrides AC2 (keep codex default, native opt-in); hold any Claude lane",
+  "urgent": true,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "product"
+}
