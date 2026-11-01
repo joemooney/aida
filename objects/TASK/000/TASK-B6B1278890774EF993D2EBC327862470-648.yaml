@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T00:55:07.917269049Z
-modified_at: 2026-11-01T01:14:04.462393568Z
+modified_at: 2026-11-01T01:15:55.466708289Z
 req_type: Task
 tags:
 - config
@@ -52,6 +52,41 @@ comments:
   created_at: 2026-11-01T01:03:19.065890281Z
   modified_at: 2026-11-01T01:03:19.065890281Z
   session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+- id: 01a194ac-e6da-7e23-a2b9-79ac2c36babf
+  author: joe
+  content: |-
+    OPERATOR OVERRIDE of the 18:05 AC2 recommendation (the advisor invited this; the operator confirmed it in the product session at 17:59; recorded by product). Implement AC2' from the 18:00 comment, NOT "default vendor = claude":
+    - Keep `[agents] vendor = "codex"`. Codex is the priority vendor (its user base comes first), and the repo's own lanes are meant to run on Codex to shake out gaps.
+    - Add `[contained.vendors] codex = "native"`; Claude stays fully AIDA-contained; native is reported everywhere as "native sandbox, not AIDA-contained".
+    - Correction to the 18:05 premise: "Codex stays available via --vendor codex under its contained-autonomous posture" is not true today. Under containment, both `aida agent new codex` and `queue work --vendor codex` refuse (refuse_uncontainable_agent_tool, require_vendor_containment). AC2' is what makes that path real.
+    - Lane vendor: the operator wants this implemented BY A CODEX AGENT. If the queued lane would launch Claude, hold it; the operator is starting a Codex implementer in the TASK-2631 worktree by hand.
+  created_at: 2026-11-01T01:15:21.690492245Z
+  modified_at: 2026-11-01T01:15:21.690492245Z
+  session_id: 01a19317-50be-7103-a820-408213c53b0b
+  harness_version: 2.1.316 (Claude Code)
+- id: 01a194ad-6aca-73b1-8e15-00360896e30b
+  author: joe
+  content: |-
+    ## Implementer approach
+
+    ### Acceptance criteria as tests
+    - **AC1 (no automated test):** add api.openai.com, chatgpt.com, auth.openai.com to `[contained] allowed_hosts`. Verified by static inspection of the installed codex-cli 0.166.0 binary: API-key auth calls api.openai.com/v1/responses; ChatGPT sign-in calls chatgpt.com/backend-api/codex and refreshes tokens at auth.openai.com/oauth/token. A live sign-in run cannot happen inside this sandbox (egress is filtered); the PR says so.
+    - **AC2' (unit):** `[contained.vendors]` parse (aida/native/invalid; native refused for agy/claude/unknown); `containment_posture` tri-state (aida/native/none) with `containment_applied` still false for native; `require_vendor_containment` / `require_child_containment` / `refuse_uncontainable_agent_tool` admit codex only with `codex = "native"`; under contained+native the headless codex argv drops `--dangerously-bypass-approvals-and-sandbox` for `--sandbox workspace-write`; Claude contained argv is byte-identical with and without `codex = "native"`.
+    - **AC2' reporting (unit):** `aida config permissions show` / doctor permission-posture row reads `native sandbox, not AIDA-contained` for codex under native.
+    - **AC3 (fixture):** the existing default-headless-vendor-refused finding names the vendor setting, the containment setting, and the fix (incl. `[contained.vendors] codex = "native"`); it does not fire once native is set.
+
+    ### Expected files
+    - `aida-cli-lib/src/session.rs`, `lib_part2.rs`, `config_cmd.rs`, `agent_config.rs`
+    - `.aida/config.toml`
+    - a new test module under `aida-cli-lib/src/tests/`
+
+    ### Ambiguities / conflicts as questions
+    - The launch banner and statusline surfaces are named in AC2'. If time runs out, should they be a follow-up finding? (Plan: yes, filed as kind:deviation.)
+    - The operator decision (native for codex) supersedes the advisor's vendor=claude ruling. Planned: keep `vendor = "codex"` and set `codex = "native"`.
+  created_at: 2026-11-01T01:15:55.466708289Z
+  modified_at: 2026-11-01T01:15:55.466708289Z
+  session_id: 01a194abb51e
+  harness_version: 2.1.316 (Claude Code)
 history:
 - id: 01a1949a-7ffe-78a3-8011-c5c0c44dc2d3
   author: joe
