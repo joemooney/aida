@@ -13,12 +13,12 @@ description: |
   3. Fixture regression: search for canonical166 returns unrelated057 first and true166 later; only166 selected. Unrelated-only rows give no associated PR so ordinary fresh pickup is not blocked. Existing true-open-PR collision and renamed/native/agreed ID cases still protect active work.
 
   Codex implementation lane, no global config changes. LIGHT one targeted pr_lookup/association test plus fast gates; fixtures only, CI full gate. Independent review before integration. This is a new observed operational defect, not a follow-up to a nonblocking review nit.
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T08:28:54.983776375Z
-modified_at: 2026-11-01T14:23:32.170152318Z
+modified_at: 2026-11-01T15:32:51.071267597Z
 req_type: Bug
 tags:
 - forge
@@ -120,6 +120,15 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-01T14:21:28.021032645Z
   modified_at: 2026-11-01T14:21:28.021032645Z
+- id: 01a197bd-f4ff-7d82-86ee-e72041f7063f
+  author: joe
+  content: |
+    ADVISOR BINDING LIVE REWORK sameBUG2400/PR3208 SAMEbranchcodex/bug-2400-exact-pr atab88380ae8b450f070fe26b2f9610ec1d0eac23f. ReadFULL freshindependent18 /tmp/aida-review3208-round3-result.md REQUESTCHANGESledger13, timestamp15:30:09Z. Reviewer18normalPRIMARYfetch+actualforgepinincludes6linetestguardfix; no stale0f5review. Rootverified publishedpositive-matchreturnprecedesterminalHEADcheck. B2resolverboundedonceandB1no-matchpaginationaddressed; SOLEremainingB1AC1/2 current-snapshotassociation defect:
+    pr_lookup.rs610-611 ifmatched returnOktrue runsBEFORE613-623declaredheadcheck. Detailcommits1/headA +onevalidcommitrowSHA_B/trailer(BUG2392), B!=A =>MATCH evenallmetadata contradictsHEAD. RESTpages movingPRnumberendpointnotpinned; no aftercollectiondetailrevalidation. Earlypartialpagepositivealsolacksproofmatchingcommitbelongsvalidatedcurrenthead. firstsingleFound andallopenOkcanmisassociatewronghead/duplicates. Knownexistenceneedn'tenumerateirrelevantrest, BUTmustproveassociationtoVALIDATEDPRsnapshot.
+    Implementboundedpinned-headmembership ORstablevalidatedcollection/recheck preservingexistingfiniteaggregatebudget. Head/countdrift,inconsistent/missinguncertainmembership=>typedunknown, neverwrong-headpositive. Covermatchingtrailerwithmismatchedhead,mixedtitle-visible+wrong-headduplicate, head/countchangeacrossrequests, earlymatchingpage andvalidpositive. Don'tjustmovecomparisonwherefirstpartialpagecan'tlegitmatchterminal; chooseminimalactualhead-boundproof. Keepfirst100fix/endpoint250captypedunknown/structuredschema/uniqueSHAs/pages/completelistandprovenexistencedistinction. No newglobalunknownpolicy/ownership/alias/GitLab/authoritychanges. SamePRbundle, NOnewfollowup.
+    Actor26stilllive: continueOWNexistingclone/lease/context, noleaseend/requeue/newworktree/borrowedrootgrant. SupportedreviewparkedNeedsAttention; thisrootrulingauthorizesexactrework, notstatuscompletion. ExistingfocusedEnvLockfailureandcorrectedqueuedtestsremaintruthful; oldfast36PASSwaspre-correction. Don'tkillvalidCargo orrestartbecausewait. NewchangedsourcejustifiesONEfocusedbug2400test+fastafterfixnormaladmission; existingqueuedrunifalreadystartedrepresentsitsexactsourceandisnotnewfixproof. No broadtests/unfilteredlib/slotbypass/outertimeout. Reportnewsource/publicbyteidentity/fullnewhead, normalpushSAMEPR andactualvalidation. RootthenfreshDIFFERENTSTRICTdeltareview+exactCI; noownapproval/ship/merge/holds/rawledger.
+  created_at: 2026-11-01T15:32:51.071267597Z
+  modified_at: 2026-11-01T15:32:51.071267597Z
 history:
 - id: 01a1963a-2b42-7cd2-a795-0772bcc408d1
   author: joe
@@ -182,6 +191,13 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a197bb-859b-7521-b67d-20ff4a6dbc46
+  author: aida-orchestrator
+  timestamp: 2026-11-01T15:30:11.483916304Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: ac1e318069f96c3f7e35be7ee0408f2ff4f5f284
   branch: main
@@ -189,3 +205,11 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: 9d26f95d2b3
   vendor: codex
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: Paging and production resolver improved; positive commit matches still bypass head/snapshot validation (AC1/AC2).
+  recovery_hint: address the review findings, move BUG-B6B1278890774EF993D2EBC327862470-173 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-11-01T15:30:11.483894771Z
