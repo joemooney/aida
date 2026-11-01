@@ -191,8 +191,11 @@ template master `aida-core/templates/.aida/discipline/product-glossary.md`.
 Two outputs are generated from it: the CLI glossary (`aida docs glossary`,
 published as the book's Glossary chapter by `make book-glossary`) and the
 website glossary page (`python3 docs/showcase/build.py`). The terms that
-earlier lived as `type=term` specs (local ID, role, seat, control plane) have
-been folded in here; add new product vocabulary here, not as a term spec.
+earlier lived as approved `type=term` specs (local ID, role, seat, control
+plane) have been folded in here; stakeholder persona was already in the
+machinery glossary. Draft term specs were left out on purpose: a draft term
+is folded in once it is approved. Add new product vocabulary here, not as a
+term spec.
 
 Each entry follows the same rules. (The website renderer reads one list item per line.)
 

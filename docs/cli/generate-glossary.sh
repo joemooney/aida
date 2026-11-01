@@ -43,13 +43,19 @@ if ! command -v "$AIDA" >/dev/null 2>&1; then
   exit 1
 fi
 
-# `aida docs glossary` (no section flags) emits every section: product,
-# machinery, lifecycle.
+# The book orders the sections machinery, lifecycle, product. mdBook gives a
+# repeated heading a `-1` id, so the section printed first keeps the bare ids:
+# this way links into 12-glossary.md#role or #seat still land on the machinery
+# definitions they pointed at before the product glossary existed.
+# `aida docs glossary` with no flags prints product first, so the book asks
+# for the sections in two calls. trace:STORY-2219 | ai:claude
 # Pin `--format human`: captured stdout otherwise defaults to TOON, which
 # appends a `cache:` footer that is not part of the glossary. trace:BUG-1950 | ai:claude
-GLOSSARY="$("$AIDA" docs glossary --format human)"
+DEVELOPER="$("$AIDA" docs glossary --machinery --lifecycle --format human)"
+PRODUCT="$("$AIDA" docs glossary --product --format human)"
+GLOSSARY="$(printf '%s\n\n%s' "$DEVELOPER" "$PRODUCT")"
 
-if [ -z "$GLOSSARY" ]; then
+if [ -z "$DEVELOPER" ] || [ -z "$PRODUCT" ]; then
   echo "error: 'aida docs glossary' produced no output" >&2
   exit 1
 fi
@@ -65,14 +71,14 @@ fi
   echo "     rebuild the binary, then re-run. -->"
   echo
   echo "> The shared vocabulary AIDA's docs, error messages, and agent-to-agent"
-  echo "> handoffs lean on — the plain-language **product** terms (merge hold,"
-  echo "> mandate, grant, hub, …), the **machinery** terms (orchestrator, phase, drain,"
-  echo "> lease, role, session, scope, worktree, sentinel, batch, autonomy mode)"
-  echo "> and the **lifecycle** verbs (committed / pushed / merged / completed /"
-  echo "> released). This page is generated from \`aida docs glossary\`, so it can"
-  echo "> never drift from the definitions the binary ships."
+  echo "> handoffs lean on — the **machinery** terms (orchestrator, phase, drain,"
+  echo "> lease, role, session, scope, worktree, sentinel, batch, autonomy mode),"
+  echo "> the **lifecycle** verbs (committed / pushed / merged / completed /"
+  echo "> released) and the plain-language **product** terms (merge hold, mandate,"
+  echo "> grant, hub, …). This page is generated from \`aida docs glossary\`, so it"
+  echo "> can never drift from the definitions the binary ships."
   echo
-  # Three transforms on the embedded glossary before it lands in the
+  # Four transforms on the embedded glossary before it lands in the
   # user-facing book:
   #
   #  1. Demote the three embedded H1s ("# Product glossary", "# Machinery
@@ -92,13 +98,24 @@ fi
   #  3. The product glossary links pages relative to its template master
   #     (`../../../../docs/<page>.md`); rewrite those to `../<page>.md`, which
   #     is the same page relative to docs/cli/. trace:STORY-2219 | ai:claude
+  #
+  #  4. (After assembly, below.) Point every in-page link at the right heading
+  #     on the one combined page.
   printf '%s\n' "$GLOSSARY" \
     | sed -E \
         -e 's/^# (Product glossary|Machinery glossary|Lifecycle vocabulary)$/## \1/' \
         -e 's#\]\(\.\./\.\./\.\./\.\./docs/#](../#g' \
+        -e '/^<!-- trace:[A-Za-z0-9_| :+-]* -->$/d' \
         -e 's/[[:space:]]*trace:[A-Za-z0-9_| :+-]*$//' \
         -e 's/\b(STORY|TASK|BUG|EPIC|SPIKE|ADR|FR|PRIN|VIS|CON|TERM|CR)-[0-9]+/`<spec-id>`/g'
 } >"$TMP"
+
+# Transform 4: links between the templates (`machinery-glossary.md`,
+# `lifecycle-vocabulary.md#frag`) become in-page anchors, and a bare `#anchor`
+# is pointed at the heading in its own section when two sections share a
+# heading name. A link with no matching heading fails here, so a broken
+# anchor fails --check instead of shipping. trace:STORY-2219 | ai:claude
+python3 "$CLI_DIR/glossary-anchors.py" "$TMP"
 
 if [ "$CHECK" -eq 1 ]; then
   if diff -u "$OUT" "$TMP"; then
