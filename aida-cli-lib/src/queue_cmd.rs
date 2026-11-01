@@ -10731,13 +10731,7 @@ pub(crate) const RULING_TAG: &str = "Advisor ruling";
 /// `[` bracket).
 // trace:BUG-B6B1278890774EF993D2EBC327862470-021 | ai:claude
 pub(crate) fn is_ruling_comment(content: &str) -> bool {
-    let first = content
-        .lines()
-        .map(str::trim)
-        .find(|l| !l.is_empty())
-        .unwrap_or("")
-        .trim_start_matches(['#', '*', '_', '[', ' '])
-        .to_ascii_lowercase();
+    let first = crate::rework_direction::lead_line(content);
     first.starts_with("ruling") || first.starts_with("advisor ruling")
 }
 

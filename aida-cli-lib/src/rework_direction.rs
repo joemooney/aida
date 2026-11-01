@@ -1,7 +1,8 @@
 //! What a rework pickup prompt leads with (BUG-057).
 //!
 //! An advisor steers a relaunched lane with spec comments: rulings
-//! (`Advisor ruling …`, BUG-021) and briefs (`ADVISOR BRIEF …` /
+//! (`Advisor ruling …`, BUG-021) and briefs (`ADVISOR BRIEF …`,
+//! `ADVISOR REWORK BRIEF round N …` /
 //! `REWORK BRIEF …`). The newest brief written after the last review verdict
 //! is the current task, whatever rulings came before or after it. The prompt
 //! puts it first and marks the older verdict's findings as superseded
@@ -16,7 +17,7 @@ use chrono::{DateTime, Utc};
 
 /// The first non-empty line of a comment, lowercased, with leading markdown
 /// emphasis / heading / bracket characters stripped.
-fn lead_line(content: &str) -> String {
+pub(crate) fn lead_line(content: &str) -> String {
     content
         .lines()
         .map(str::trim)
@@ -27,11 +28,15 @@ fn lead_line(content: &str) -> String {
 }
 
 /// Whether a comment is an advisor brief: its first line starts with
-/// `Advisor brief` or `Rework brief` (any case).
+/// `Advisor brief`, `Advisor rework brief` or `Rework brief` (any case,
+/// after markdown heading / emphasis). `ADVISOR REWORK BRIEF round N` is
+/// the header the advisor actually writes.
 // trace:BUG-B6B1278890774EF993D2EBC327862470-057 | ai:claude
 pub(crate) fn is_brief_comment(content: &str) -> bool {
     let first = lead_line(content);
-    first.starts_with("advisor brief") || first.starts_with("rework brief")
+    ["advisor brief", "advisor rework brief", "rework brief"]
+        .iter()
+        .any(|p| first.starts_with(p))
 }
 
 /// Every comment on the spec, replies included.
@@ -152,6 +157,10 @@ pub(crate) struct MainConflict {
     pub files: Vec<String>,
 }
 
+/// How long the best-effort conflict-forecast fetch may run.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-057 | ai:claude
+const CONFLICT_FETCH_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(20);
+
 /// Forecast whether the rework PR's branch merges cleanly into the default
 /// branch. Fetches both first (best effort), then runs `git merge-tree`
 /// without touching any worktree. A clean or unknown result returns `None`.
@@ -166,15 +175,16 @@ pub(crate) fn detect_main_conflict(
     // Never prompt for credentials: with no terminal a prompt would hang the
     // launch (or a test) instead of failing the best-effort fetch. Stored
     // remote credentials are routed off argv like every other remote call.
-    let _ = aida_core::git_ops::host_remote_git_command(project_root, "origin")
+    // The forecast is best-effort, so a stalled connection must not block
+    // the launch either: the fetch is bounded and its outcome ignored.
+    let mut fetch = aida_core::git_ops::host_remote_git_command(project_root, "origin");
+    fetch
         .args(["fetch", "--quiet", "origin", "--"])
         .arg(&base_name)
         .arg(head_branch)
         .env("GIT_TERMINAL_PROMPT", "0")
-        .stdin(std::process::Stdio::null())
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .status();
+        .stdin(std::process::Stdio::null());
+    let _ = crate::command_output_with_timeout_detail(fetch, CONFLICT_FETCH_TIMEOUT);
     let head = format!("origin/{head_branch}");
     match crate::worktree_gc::forecast_rebase_onto(project_root, &base, &head) {
         crate::integrate::RebaseForecast::Conflict(files) => Some(MainConflict {

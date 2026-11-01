@@ -94,6 +94,43 @@ fn brief_comments_are_advisor_direction() {
     assert!(is_brief_comment("## ADVISOR BRIEF\nmerge"));
     assert!(!is_brief_comment("Advisor ruling: keep it"));
     assert!(!is_brief_comment("Returned from NeedsAttention"));
+    // The header the advisor actually writes, plain / H2 / bold, any case.
+    assert!(is_brief_comment(REWORK_BRIEF));
+    assert!(is_brief_comment(&format!("## {REWORK_BRIEF}")));
+    assert!(is_brief_comment(
+        "**Advisor Rework Brief round 2**\nmerge main"
+    ));
+    assert!(is_brief_comment("advisor rework brief round 1: rebase"));
+}
+
+/// The exact header the advisor writes on a relaunched lane.
+const REWORK_BRIEF: &str =
+    "ADVISOR REWORK BRIEF round 6 (21:10), PR-3177. FIRST TASK: git merge origin/main, resolve, push";
+
+/// Acceptance (1), real-world header: an `ADVISOR REWORK BRIEF round N`
+/// written after the verdict leads and supersedes it, end to end.
+#[test]
+fn advisor_rework_brief_header_supersedes_the_older_verdict_end_to_end() {
+    let _g = no_gate();
+    let plan = item_plan();
+    for header in [
+        REWORK_BRIEF.to_string(),
+        format!("## {REWORK_BRIEF}"),
+        format!("**{REWORK_BRIEF}**"),
+    ] {
+        let comments = vec![comment(90, FINDINGS), comment(10, &header)];
+        let prompt = assemble(&plan, Some(FINDINGS), &comments, None);
+        assert!(
+            prompt.starts_with("ADVISOR BRIEF ("),
+            "the rework brief leads: {prompt}"
+        );
+        assert!(prompt.contains("FIRST TASK: git merge origin/main"));
+        assert!(prompt.contains("SUPERSEDED CONTEXT"), "{prompt}");
+        assert!(
+            !prompt.contains("AUTHORITATIVE TASK"),
+            "the stale verdict is not the task: {prompt}"
+        );
+    }
 }
 
 /// Acceptance (1), end to end: the brief leads, the findings are relabelled
