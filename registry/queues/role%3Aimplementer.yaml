@@ -1,4 +1,11 @@
 - user_id: role:implementer
+  requirement_id: 01a19434-2aa8-74d0-bccf-38faf512e4c7
+  position: 274000
+  added_by: role:implementer
+  note: 'PR-3194 review: CHANGES REQUESTED'
+  added_at: 2026-11-01T06:16:44.014587911Z
+  for_role: implementer
+- user_id: role:implementer
   requirement_id: 01a193e5-6e71-77a2-8c2c-bd433eb2f055
   position: 275000
   added_by: role:implementer
@@ -590,10 +597,4 @@
   position: 593000
   added_by: role:implementer
   added_at: 2026-11-01T03:35:14.171155326Z
-  for_role: advisor
-- user_id: role:implementer
-  requirement_id: 01a19434-2aa8-74d0-bccf-38faf512e4c7
-  position: 594000
-  added_by: role:implementer
-  added_at: 2026-11-01T03:36:44.401313192Z
   for_role: advisor
