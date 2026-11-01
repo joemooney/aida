@@ -19,7 +19,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T02:25:46.947809262Z
-modified_at: 2026-11-01T06:05:43.778000893Z
+modified_at: 2026-11-01T06:05:44.785070622Z
 req_type: Bug
 tags:
 - area:agents
@@ -121,6 +121,26 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Round-2 containment rulings mostly implemented (cleared env, bwrap-only, reflink-only seed, test-only tally), but CI is red on 3 PR-caused gates and the job sandbox binds ~/.cargo read-write, a host-persistence escape. Triage reason: PR-3192 delta review round 2: CHANGES REQUESTED'
   created_at: 2026-11-01T06:05:43.777998182Z
   modified_at: 2026-11-01T06:05:43.777998182Z
+  session_id: a31b25d9-60a5-4347-a85b-4c74ab06f274
+- id: 01a195b6-c153-7780-8839-ab383663ba88
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2383):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 31aa35c3d9f4
+    Recorded: 2026-11-01T05:58:24.469717036+00:00
+    Findings:
+    1. CI lib-0 red: help_surface_matches_golden_snapshot (story_1728_command_registry_tests.rs:103). golden/cli_help_snapshot.txt was hand-written and does not match. Regenerate with AIDA_UPDATE_SNAPSHOTS=1 cargo test --profile agent -p aida-cli-lib help_surface_matches_golden_snapshot, through 'aida lane job run' or have the advisor run it, and commit the result.
+    2. CI gates red, step 'Check Rust test portability ratchet' (reproduced locally with scripts/check-portability.sh): new /tmp literals at aida-cli-lib/src/tests/bug_2383_lane_job_tests.rs:71 (/tmp/x/Cargo.toml), :79 (/tmp/t), :188 (/tmp/verdict). Use tempdir-derived or non-/tmp placeholder paths, or put them behind cfg(unix).
+    3. CI gates also reported 'test shard left untracked root entries: stray/'. Main is green at this base (0 commits behind), so a test in this PR probably creates ./stray in the checkout root. Find it and make it write under a tempdir. The cause was not confirmed locally because the job logs could not be downloaded.
+    4. CI contracts red, step 'CLI-manual drift-guard (every command documented)' (python3 docs/cli/verify-manual.py against the built binary): the new 'aida lane' section in docs/cli/03-work-autonomy.md, or the 'aida lane job' citations, fail the guard. Run verify-manual.py with the PR binary and fix what it reports. The exact message was not visible because the CI logs were unreachable.
+    5. Containment (major): sandbox_rw_paths (lane_job.rs:379-401) binds CARGO_HOME (default ~/.cargo) read-write into the job sandbox, and the test sandbox_writes_only_the_target_cargo_home_and_slot_state locks that in. A seat-written build.rs or test can then overwrite ~/.cargo/bin/cargo or rustc (the rustup proxies) or ~/.cargo/config.toml (for example build.rustc-wrapper), and the next host cargo the operator or the primary runs executes that code unsandboxed. This defeats ruling 3 ('never run a job unsandboxed'). Bind only $CARGO_HOME/registry and $CARGO_HOME/git read-write, keep bin/ and config ro, or run with --offline and CARGO_HOME read-only. Add a test asserting that ~/.cargo/bin and ~/.cargo/config.toml are not writable binds.
+    6. AC3 (minor): Tally::record_exit (lane_job.rs:270-275) counts any 'cargo test' that exits by itself as tested. 'cargo test --no-run' and 'cargo test -- --list' are allowed by validate() and run no test, so they clear untested=true. A job killed by a signal (status.code() None maps to 137 but how=='exited') also counts. Do not count --no-run or --list, and do not count a signal exit.
+    7. AC2/AC1 practical gap (minor): the operator's target is on ext4 (stat -f: ext2/ext3), so the reflink-only seed always skips and every seat builds cold (~27 min for aida-cli-lib, per seat_target_seed.rs's own doc). Yet LANE_JOB_CONTRACT and the docs tell the seat to use AIDA_CARGO_TIMEOUT=900, so the first job on this host times out (rc 124, untested=true). Either tell the prompt to use a longer first-run timeout when the job output says 'not seeded', or let the default rise to MAX_TIMEOUT_SECS for an unseeded target. Name the ext4 limitation in the PR.
+    8. AC3 follow-up (minor, acknowledged in the implementer's 2026-11-01 comment): the --auto-complete drain's phase-1 implementer (auto_complete.rs) gets no runner, no AIDA_LANE_JOBS_* env, no LANE_JOB_CONTRACT and no untested=true in its result. Those lanes still reach CI untested with no flag. File this as a tracked follow-up if this PR does not wire it.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-01T06:05:44.659326476Z
+  modified_at: 2026-11-01T06:05:44.659326476Z
   session_id: a31b25d9-60a5-4347-a85b-4c74ab06f274
 history:
 - id: 01a19525-88eb-79e3-aab8-8d511ad2f605
