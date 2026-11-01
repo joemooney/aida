@@ -545,6 +545,10 @@ pub(crate) fn handle_docs_with_store(cmd: &DocsCommand, store: &RequirementsStor
                 render_discipline_glossary(*product, *machinery, *lifecycle)?
             );
         }
+        // Dispatched in `run_docs` before the store is consulted.
+        DocsCommand::Sweep { .. } => {
+            anyhow::bail!("`aida docs sweep` runs from the command dispatcher")
+        }
     }
     Ok(())
 }
@@ -567,6 +571,22 @@ fn run_docs(
 ) -> anyhow::Result<crate::command_registry::Flow> {
     use crate::*;
     let args = <DocsArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    // The sweep reads the working tree and git, not the requirements graph,
+    // so it runs the same under every store backend. trace:STORY-2220 | ai:claude
+    if let crate::cli::DocsCommand::Sweep {
+        since,
+        report_only,
+        json,
+    } = &args.inner
+    {
+        return crate::command_registry::returned(crate::docs_sweep::run(
+            crate::docs_sweep::SweepOpts {
+                since: since.as_deref(),
+                report_only: *report_only,
+                json: *json,
+            },
+        ));
+    }
     match &ctx.store {
         None => Ok(crate::command_registry::Flow::Continue),
         Some(crate::command_registry::StoreCtx::Distributed { .. }) => {
