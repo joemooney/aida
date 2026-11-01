@@ -1,0 +1,34 @@
+id: 01a194ea-14a3-7e93-b5dd-03d8d7f157ec
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-156
+agreed_id: BUG-2382
+title: 'aida ps reports a live hand-started Codex session as dead and salvageable: the lease binds only the exited ''aida session start'' pid'
+description: |
+  ## Observed (2026-10-31 18:51, advisor claude-advisor-11; operator confirmed the session is live)
+  `aida ps` reports the operator's interactive Codex implementer on TASK-2631 (session 01a194b1, seat clone ~/ai/aida-worktrees/aida-seat-aida-task-2631, GPT-6.1-Sol, about 56% context used) as `live=dormant`, `dispatch_state=salvageable`, "dead process, uncommitted work". It also prints a salvage-commit plus `aida queue work TASK-2631` rebrief recipe and lists the spec under `orphaned`. Following that recipe would commit and relaunch over a live session's work.
+
+  ## Cause (verified)
+  The lease `.aida/sessions/01a194b1bcfb.toml` records `creator_pid = 4058768`, which is the `aida session start --owns TASK-2631` process. That process exits once the clone is created. The operator then starts `codex` by hand inside the clone, and nothing binds the lease to that process. BUG-741 and BUG-2010 fixed the same symptom for headless and factory Codex lanes, where AIDA spawns the agent. The hand-started path, which the Codex-first workflow now uses (EPIC-612), was never covered.
+
+  ## Acceptance
+  1. A session started with `aida session start --owns <ID>` and then joined by an interactive codex (or claude) process in that clone/worktree reads `live` in `aida ps` while the agent runs. Re-bind it on the agent's first AIDA call or hook, or use the vendor activity adapter (STORY-1054), for example the Codex session's rollout file mtime or a process whose cwd is the clone.
+  2. A process-dead verdict that rests only on the creator pid never emits a salvage recipe while a vendor process has the clone as its cwd. In that case it says "unbound agent in clone" and names the pid.
+  3. Tests: a creator pid that exited plus a live vendor process in the clone gives live; no vendor process gives the current salvageable output (regression).
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-01T02:22:11.107502056Z
+modified_at: 2026-11-01T02:22:11.107502056Z
+req_type: Bug
+tags:
+- area:agents
+- area:codex
+- area:liveness
+filed_at:
+  code_sha: 7518617e469376bbe5debebd7cadd980e08656e5
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: c2b2539263a
+  vendor: claude
+  session: 77a7a933-9a3f-4243-9a44-892bcedf206c
