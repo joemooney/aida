@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-057
 agreed_id: BUG-2374
 title: Headless rework lane ignores the newest advisor brief comment when an older review verdict prescribes different work (merge-only brief skipped twice)
 description: 'Observed 2026-10-31 (advisor): BUG-HOME-051 lanes launched 12:31 and 13:16 with a spec comment ''ADVISOR BRIEF 13:10 (merge-only, retry): PR-3169 CONFLICTS with main ... git merge origin/main, resolve, push''. Both lanes instead re-ran the earlier review''s bwrap test instructions, reported they could not run cargo in the sandbox, and exited at the old head f976c90 with no merge (logs /tmp/aida_lane_bug-051-merge2.log, /tmp/aida_lane_bug-051-merge4.log). The advisor resolved the conflict by hand. BUG-HOME-021 (lanes read only the description) is completed, so comments are now read, but the brief is not ranked above the stale verdict. Expected: the lane prompt puts the newest advisor brief (ADVISOR BRIEF / REWORK BRIEF comments newer than the last verdict) first and labels older verdict findings as superseded context. Also: a PR with merge conflicts against main should be surfaced to the lane as the first task. Acceptance: (1) prompt-assembly test: a spec with a verdict then a newer brief yields a prompt whose first task is the brief; (2) a conflicting PR adds a ''resolve conflicts with main first'' item; (3) BUG-021''s tests still pass.'
-status: Approved
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T21:37:29.201146410Z
-modified_at: 2026-11-01T06:08:28.346642828Z
+modified_at: 2026-11-01T06:20:35.671307358Z
 req_type: Bug
 tags:
 - epic-home-003
@@ -98,6 +98,36 @@ comments:
   created_at: 2026-11-01T06:08:28.228336992Z
   modified_at: 2026-11-01T06:08:28.228336992Z
   session_id: a31b25d9-60a5-4347-a85b-4c74ab06f274
+- id: 01a195c1-5c7b-71c0-8ac1-231b7973bf7a
+  author: joe
+  content: |-
+    ## Implementer approach (round 8, PR-3177 at 7a4f77c)
+
+    ### Acceptance criteria as tests
+    - **Unit:** `brief_comments_are_advisor_direction` gains `ADVISOR REWORK BRIEF round 6 (21:10)` and `## **Advisor rework brief**` cases (finding 1).
+    - **Command-level (assemble_pickup_prompt):** new `advisor_rework_brief_header_leads_end_to_end` uses the exact header `ADVISOR REWORK BRIEF round 6 (21:10), PR-3177. FIRST TASK: ...` posted after the verdict and asserts it leads and the findings become superseded context; fails without the matcher fix.
+    - **Finding 3:** conflict-forecast fetch runs through `command_output_with_timeout` (20s bound); existing `detect_main_conflict_forecasts_through_fetch_and_merge_tree` still covers the path. No automated stall test (would need a hanging remote).
+    - **Finding 4:** `is_ruling_comment` reuses `rework_direction::lead_line`; existing ruling tests cover it.
+    - **Finding 2 (flaky CI rest):** the new push re-runs CI; test not touched.
+
+    ### Expected files
+    - `aida-cli-lib/src/rework_direction.rs`
+    - `aida-cli-lib/src/tests/rework_direction_tests.rs`
+    - `aida-cli-lib/src/queue_cmd.rs`
+
+    ### Ambiguities / conflicts as questions
+    - None
+  created_at: 2026-11-01T06:17:19.739627716Z
+  modified_at: 2026-11-01T06:17:19.739627716Z
+  session_id: 01a195c021a4
+  harness_version: 2.1.316 (Claude Code)
+- id: 01a195c4-424e-7d21-afbd-d117d1a99c02
+  author: joe
+  content: "ROUND 8 PATCH (implementer lane 01a195c021a4, unpublished — lane git metadata is read-only). Base: 7a4f77c. Apply with `git apply` on the PR branch, then commit as\n[AI:claude] fix(rework): the brief matcher recognises 'ADVISOR REWORK BRIEF round N'; the conflict-forecast fetch is bounded (BUG-B6B1278890774EF993D2EBC327862470-057)\nrustfmt clean; make check-ci-fast green except the cargo-check step (read-only target, BUG-2383); not compiled locally.\n\n```diff\ndiff --git a/aida-cli-lib/src/queue_cmd.rs b/aida-cli-lib/src/queue_cmd.rs\nindex 1fac720ef72..37678059a52 100644\n--- a/aida-cli-lib/src/queue_cmd.rs\n+++ b/aida-cli-lib/src/queue_cmd.rs\n@@ -10731,13 +10731,8 @@ pub(crate) const RULING_TAG: &str = \"Advisor ruling\";\n /// `[` bracket).\n // trace:BUG-B6B1278890774EF993D2EBC327862470-021 | ai:claude\n pub(crate) fn is_ruling_comment(content: &str) -> bool {\n-    let first = content\n-        .lines()\n-        .map(str::trim)\n-        .find(|l| !l.is_empty())\n-        .unwrap_or(\"\")\n-        .trim_start_matches(['#', '*', '_', '[', ' '])\n-        .to_ascii_lowercase();\n+    // trace:BUG-B6B1278890774EF993D2EBC327862470-057 | ai:claude\n+    let first = crate::rework_direction::lead_line(content);\n     first.starts_with(\"ruling\") || first.starts_with(\"advisor ruling\")\n }\n \ndiff --git a/aida-cli-lib/src/rework_direction.rs b/aida-cli-lib/src/rework_direction.rs\nindex c9a1fe400b1..e2d16ff7995 100644\n--- a/aida-cli-lib/src/rework_direction.rs\n+++ b/aida-cli-lib/src/rework_direction.rs\n@@ -1,8 +1,8 @@\n //! What a rework pickup prompt leads with (BUG-057).\n //!\n //! An advisor steers a relaunched lane with spec comments: rulings\n-//! (`Advisor ruling …`, BUG-021) and briefs (`ADVISOR BRIEF …` /\n-//! `REWORK BRIEF …`). The newest brief written after the last review verdict\n+//! (`Advisor ruling …`, BUG-021) and briefs (`ADVISOR BRIEF …`,\n+//! `ADVISOR REWORK BRIEF round N …` or `REWORK BRIEF …`). The newest brief written after the last review verdict\n //! is the current task, whatever rulings came before or after it. The prompt\n //! puts it first and marks the older verdict's findings as superseded\n //! context. A brief recorded before the last verdict is shown as context\n@@ -15,8 +15,10 @@\n use chrono::{DateTime, Utc};\n \n /// The first non-empty line of a comment, lowercased, with leading markdown\n-/// emphasis / heading / bracket characters stripped.\n-fn lead_line(content: &str) -> String {\n+/// emphasis / heading / bracket characters stripped. Shared with\n+/// `queue_cmd::is_ruling_comment` so the two matchers cannot drift.\n+// trace:BUG-B6B1278890774EF993D2EBC327862470-057 | ai:claude\n+pub(crate) fn lead_line(content: &str) -> String {\n     content\n         .lines()\n         .map(str::trim)\n@@ -27,11 +29,15 @@ fn lead_line(content: &str) -> String {\n }\n \n /// Whether a comment is an advisor brief: its first line starts with\n-/// `Advisor brief` or `Rework brief` (any case).\n+/// `Advisor brief`, `Advisor rework brief` (the header the advisor writes,\n+/// e.g. `ADVISOR REWORK BRIEF round 6 (21:10), PR-3177. …`) or\n+/// `Rework brief`, in any case, optionally as a heading or bold line.\n // trace:BUG-B6B1278890774EF993D2EBC327862470-057 | ai:claude\n pub(crate) fn is_brief_comment(content: &str) -> bool {\n     let first = lead_line(content);\n-    first.starts_with(\"advisor brief\") || first.starts_with(\"rework brief\")\n+    [\"advisor brief\", \"advisor rework brief\", \"rework brief\"]\n+        .iter()\n+        .any(|p| first.starts_with(p))\n }\n \n /// Every comment on the spec, replies included.\n@@ -152,6 +158,10 @@ pub(crate) struct MainConflict {\n     pub files: Vec<String>,\n }\n \n+/// How long the conflict forecast's fetch may run before it is killed.\n+// trace:BUG-B6B1278890774EF993D2EBC327862470-057 | ai:claude\n+const CONFLICT_FETCH_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(20);\n+\n /// Forecast whether the rework PR's branch merges cleanly into the default\n /// branch. Fetches both first (best effort), then runs `git merge-tree`\n /// without touching any worktree. A clean or unknown result returns `None`.\n@@ -166,15 +176,16 @@ pub(crate) fn detect_main_conflict(\n     // Never prompt for credentials: with no terminal a prompt would hang the\n     // launch (or a test) instead of failing the best-effort fetch. Stored\n     // remote credentials are routed off argv like every other remote call.\n-    let _ = aida_core::git_ops::host_remote_git_command(project_root, \"origin\")\n+    // The fetch is bounded: a stalled connection must not hold up the\n+    // launch, and the forecast is best effort anyway.\n+    let mut fetch = aida_core::git_ops::host_remote_git_command(project_root, \"origin\");\n+    fetch\n         .args([\"fetch\", \"--quiet\", \"origin\", \"--\"])\n         .arg(&base_name)\n         .arg(head_branch)\n         .env(\"GIT_TERMINAL_PROMPT\", \"0\")\n-        .stdin(std::process::Stdio::null())\n-        .stdout(std::process::Stdio::null())\n-        .stderr(std::process::Stdio::null())\n-        .status();\n+        .stdin(std::process::Stdio::null());\n+    let _ = crate::command_output_with_timeout(fetch, CONFLICT_FETCH_TIMEOUT);\n     let head = format!(\"origin/{head_branch}\");\n     match crate::worktree_gc::forecast_rebase_onto(project_root, &base, &head) {\n         crate::integrate::RebaseForecast::Conflict(files) => Some(MainConflict {\ndiff --git a/aida-cli-lib/src/tests/rework_direction_tests.rs b/aida-cli-lib/src/tests/rework_direction_tests.rs\nindex 95698e7a1eb..a79853bec1b 100644\n--- a/aida-cli-lib/src/tests/rework_direction_tests.rs\n+++ b/aida-cli-lib/src/tests/rework_direction_tests.rs\n@@ -94,6 +94,40 @@ fn brief_comments_are_advisor_direction() {\n     assert!(is_brief_comment(\"## ADVISOR BRIEF\\nmerge\"));\n     assert!(!is_brief_comment(\"Advisor ruling: keep it\"));\n     assert!(!is_brief_comment(\"Returned from NeedsAttention\"));\n+    // The header the advisor actually writes (round 8 finding 1).\n+    assert!(is_brief_comment(\n+        \"ADVISOR REWORK BRIEF round 6 (21:10), PR-3177 at a79ba6d. FIRST TASK: merge main\"\n+    ));\n+    assert!(is_brief_comment(\n+        \"## **Advisor rework brief** round 2\\nfix it\"\n+    ));\n+    assert!(!is_brief_comment(\"advisor reworked the brief\"));\n+}\n+\n+/// The exact header the advisor writes, posted after the verdict, leads the\n+/// prompt end to end and turns the verdict into superseded context.\n+// trace:BUG-B6B1278890774EF993D2EBC327862470-057 | ai:claude\n+#[test]\n+fn advisor_rework_brief_header_leads_end_to_end() {\n+    let _g = no_gate();\n+    let comments = vec![\n+        comment(90, FINDINGS),\n+        comment(\n+            10,\n+            \"ADVISOR REWORK BRIEF round 6 (21:10), PR-3177. FIRST TASK: merge origin/main, \\\n+             resolve the queue_cmd.rs conflict, push\",\n+        ),\n+    ];\n+    let plan = item_plan();\n+    let prompt = assemble(&plan, Some(FINDINGS), &comments, None);\n+    assert!(prompt.starts_with(\"ADVISOR BRIEF (\"), \"{prompt}\");\n+    assert!(prompt.contains(\"This is your task\"), \"{prompt}\");\n+    let brief_at = prompt.find(\"resolve the queue_cmd.rs conflict\").unwrap();\n+    let ctx_at = prompt\n+        .find(\"SUPERSEDED CONTEXT\")\n+        .expect(\"findings superseded\");\n+    assert!(brief_at < ctx_at, \"{prompt}\");\n+    assert!(!prompt.contains(\"AUTHORITATIVE TASK\"), \"{prompt}\");\n }\n \n /// Acceptance (1), end to end: the brief leads, the findings are relabelled\n```"
+  created_at: 2026-11-01T06:20:29.646120604Z
+  modified_at: 2026-11-01T06:20:29.646120604Z
+  session_id: 01a195c021a4
+  harness_version: 2.1.316 (Claude Code)
 history:
 - id: 01a193e8-1070-7260-a5d0-2973465ae4a2
   author: aida-session-start
@@ -165,6 +195,24 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
+- id: 01a195c1-5acb-70f3-b97b-cf27fcc884bc
+  author: joe
+  timestamp: 2026-11-01T06:17:19.307910200Z
+  session_id: 01a195c021a4
+  harness_version: 2.1.316 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
+- id: 01a195c4-59d7-74d3-9a2d-71ad6edf3d08
+  author: joe
+  timestamp: 2026-11-01T06:20:35.671323785Z
+  session_id: 01a195c021a4
+  harness_version: 2.1.316 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: b0d9035fbf3276de24d95845c0b50320ead426bd
   branch: main
@@ -177,3 +225,9 @@ implementation_info:
   implemented: true
   implemented_at: 2026-10-31T22:19:24.538102755Z
   implemented_by: joe
+attention_reason:
+  category: other
+  detail: 'round-8 rework complete locally but unable to publish: this lane''s worktree gitdir /home/joe/ai/aida/.git/worktrees/aida-pr-31771 is read-only in the sandbox (index.lock, FETCH_HEAD, refs locks all EROFS), so commit and push fail; cargo also cannot build (BUG-2383). The lane was launched for STORY-2216 (review) in a contained review worktree; PR-3177 head 7a4f77c already has a recorded request-changes verdict, so no second review was due.'
+  lean: apply the ROUND 8 PATCH comment on this spec (git apply on 7a4f77c), commit with the message it gives, push; CI is the test gate. Launch rework lanes in an implementer worktree with a writable gitdir.
+  raised_by: implementer
+  raised_at: 2026-11-01T06:20:35.671307358Z

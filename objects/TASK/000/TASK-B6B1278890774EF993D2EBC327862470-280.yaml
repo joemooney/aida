@@ -18,7 +18,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T22:20:21.225603942Z
-modified_at: 2026-11-01T06:17:44.960120733Z
+modified_at: 2026-11-01T06:18:59.794539113Z
 req_type: Task
 tags:
 - authority
@@ -38,6 +38,33 @@ comments:
   created_at: 2026-10-31T22:23:51.852426783Z
   modified_at: 2026-10-31T22:23:51.852426783Z
   session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+- id: 01a195c2-e352-74d1-8afc-5c78e6fb4547
+  author: joe
+  content: |-
+    ## Implementer approach
+
+    ### Acceptance criteria as tests
+    - **Fixture (build check):** AC1 — new source `docs/authority-and-seats.md` registered in `docs/showcase/publication.json` as `authority.html`; `python3 docs/showcase/build.py --check` passes (page, library.html and search-data.js regenerated); trust-and-evidence.md "Grants and mandates" links to it. Library link comes from the manifest.
+    - **Manual review:** AC2 — sections + SVG body diagrams (seeing vs allowed; roster ceiling vs grant; minting/child grants/delegation; process-tree binding + session key; mandates; deputy; human-at-terminal list). Diagrams in `docs/showcase/assets/authority*.svg`, light+dark like the air-gapped ones.
+    - **Manual review against sources:** AC3 — every claim cross-checked against docs/cli/06-roles-sessions.md, docs/cli/04-git-lifecycle.md mandate section and `aida mandate --help`; deputy command policy/submit capabilities and transfer of authority marked Planned. Refusal text quoted from the real `queue_cmd.rs` message.
+    - **Manual review:** AC4 — explicit "Threat model" section (sessions separated, not OS users; same-user forgery out of scope).
+    - **grep check:** AC5 — no `[A-Z]+-[0-9]+` spec IDs in the page prose.
+    - **Not testable in this PR:** AC6 — gh-pages deploy must come from an approved *merged* revision; stays open after merge (same as the air-gapped page).
+
+    ### Expected files
+    - `docs/authority-and-seats.md` (new)
+    - `docs/showcase/assets/authority-*.svg` (new)
+    - `docs/showcase/publication.json`, `docs/showcase/authority.html`, `library.html`, `search-data.js` (generated)
+    - `docs/trust-and-evidence.md` + regenerated `docs/showcase/trust.html`
+    - `docs/showcase/README.md` page list
+
+    ### Ambiguities / conflicts as questions
+    - The claude.ai draft artifact is not readable from this session; page is written from the CLI docs directly. Does the operator want any wording carried over from the draft?
+    - `aida merge-hold clear` help does not state a terminal check, so it is left off the terminal list (per product comment).
+  created_at: 2026-11-01T06:18:59.794539113Z
+  modified_at: 2026-11-01T06:18:59.794539113Z
+  session_id: 01a195c1bafe
+  harness_version: 2.1.316 (Claude Code)
 history:
 - id: 01a1942b-6c57-7bb1-8ec7-f77735233a6a
   author: aida-backfill-agreed-ids
