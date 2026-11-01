@@ -1,4 +1,12 @@
 - user_id: role:implementer
+  requirement_id: 01a198a0-9c82-7360-a89a-a7ecb1248f31
+  position: 248000
+  added_by: role:implementer
+  note: Independent sketch signed with binding amendments; restore existing typed train proof consumption, no authority widening or approval restamp. Samebug one bounded implementation.
+  added_at: 2026-11-01T19:53:30.612359153Z
+  for_role: implementer
+  added_by_machine: imac
+- user_id: role:implementer
   requirement_id: 01a1965b-4971-7252-abdf-997331f285fd
   position: 249000
   added_by: role:implementer
