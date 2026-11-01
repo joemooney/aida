@@ -13,7 +13,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T23:00:22.284758314Z
-modified_at: 2026-11-01T01:12:40.908233909Z
+modified_at: 2026-11-01T01:42:51.145200377Z
 req_type: Bug
 tags:
 - epic-home-003
@@ -65,6 +65,18 @@ history:
   - field_name: status
     old_value: Done
     new_value: NeedsAttention
+- id: 01a194c5-d12e-7592-9092-2b44a67f14bb
+  author: joe
+  timestamp: 2026-11-01T01:42:34.542138367Z
+  session_id: 01a194ae39f7
+  harness_version: 2.1.316 (Claude Code)
+  changes: []
+- id: 01a194c6-1266-7673-ac27-b5065c8326be
+  author: joe
+  timestamp: 2026-11-01T01:42:51.238019339Z
+  session_id: 01a194ae39f7
+  harness_version: 2.1.316 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 3b89dca55ba8a5abc5c4cc415306c23f2729d87a
   branch: main
@@ -81,7 +93,7 @@ failure_reason:
   phase: reviewer
   phase_index: 3
   kind: verdict:request-changes
-  detail: CI red at head (Run tests failed in lib-0, cli-0, cli-1, rest; clippy pending); ancestor-tip pruning regresses BUG-2017's fast-forward duplicate refusal; AC2 stamp and AC3 repair paths untested
+  detail: 'CI still red at c119fb7 (run 41260362596: lib-0 and cli-0 Run tests failed, third round); code addresses round-2 findings (pruned tips kept as bases, AC2 stamp test, AC3 repair fixture), but no AC can be verified against a green run'
   recovery_hint: address the review findings, move BUG-2378 back to In Progress, and clear the PR hold only after approval
   shelved_by: reviewer
-  shelved_at: 2026-10-31T23:57:10.430106275Z
+  shelved_at: 2026-11-01T01:42:51.145200377Z
