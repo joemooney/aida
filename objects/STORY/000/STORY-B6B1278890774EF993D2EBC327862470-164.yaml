@@ -34,7 +34,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T19:23:04.998731220Z
-modified_at: 2026-11-01T00:47:40.877152388Z
+modified_at: 2026-11-01T01:05:05.734650669Z
 req_type: Story
 tags:
 - architecture
@@ -214,6 +214,13 @@ comments:
   created_at: 2026-11-01T00:47:40.877152388Z
   modified_at: 2026-11-01T00:47:40.877152388Z
   session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+- id: 01a194a3-80c6-7f71-b073-a5aac131051a
+  author: joe
+  content: 'Round 2 (59ebd77, PR #3185) addresses all 6 findings: (1) backfill gate skipped for HubCas claims, hub claim floor = type_floors; drop_binding_specs removed. (2) promoted hub pools resolve the hub to the clone''s reaching remote (new HubUnreached reason); AC5 test adds a second clone with remote renamed ''upstream''. (3) store_hubs::committed reads only the remote-tracking default branch; tests push config. (4) allocation_conflicts sync-wrapper test with overlapping hub-stamped BUG claims, unrooted and rooted. (5) CLI cases: imported-store claim, hub pre-receive-rejected claim. (6) authoritative clone applies unpushed_hub_claim before spending, with CLI test. Local verification limited: aida-core cargo check passes and rustfmt is clean; aida-cli-lib and the test binaries could not build within the 60s per-call headless cap, so CI is the compile/test gate.'
+  created_at: 2026-11-01T01:05:05.734650669Z
+  modified_at: 2026-11-01T01:05:05.734650669Z
+  session_id: 01a194945b4b
+  harness_version: 2.1.316 (Claude Code)
 history:
 - id: 01a1939c-ffb0-7d40-b083-9d0d5a3d6156
   author: joe
