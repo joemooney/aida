@@ -74,6 +74,7 @@ fn expired_notice_rejects_changed_timestamp_or_seat() {
         expires_at: at,
         revoked_at: None,
         binding: Vec::new(),
+        origin: None,
     };
     for (expires_at, seat, emits) in [
         (at, "advisor", true),

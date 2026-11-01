@@ -46,7 +46,20 @@ pub(crate) struct SeatGrant {
     // trace:BUG-1934 | ai:claude
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub binding: Vec<String>,
+    /// How a direct grant was issued when it was not `aida role enter`:
+    /// [`INLINE_ORIGIN`] marks the one-time parent `aida agent new` mints at
+    /// a human terminal. This record is the audit trail, as for role enter.
+    // trace:STORY-2215 | ai:claude
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub origin: Option<String>,
 }
+
+/// The [`SeatGrant::origin`] of a parent grant `aida agent new` mints inline.
+// trace:STORY-2215 | ai:claude
+pub(crate) const INLINE_ORIGIN: &str = "agent-new-inline";
+/// The inline parent's lifetime ceiling (the configured seat max may lower it).
+// trace:STORY-2215 | ai:claude
+pub(crate) const INLINE_PARENT_MAX: Duration = Duration::hours(8);
 
 pub(crate) fn grant_dir() -> Result<PathBuf> {
     // BUG-1642 discipline: never resolve the home directly — `crate::gate::kernel_deps::aida_home_dir`
@@ -1750,6 +1763,30 @@ pub(crate) fn issue_direct(
             current_uid(),
         )?],
     };
+    binding.extend(key_secret.as_deref().map(|k| key_token(k.as_bytes())));
+    let grant = mint_direct(
+        project_root,
+        seat,
+        delegable_seats,
+        ttl.unwrap_or(MAX_GRANT_AGE),
+        binding,
+        None,
+    )?;
+    Ok(IssuedGrant { grant, key_secret })
+}
+
+/// The body every direct (human-issued) grant shares, `aida role enter` and
+/// the inline `agent new` parent alike: the roster check for `principal` →
+/// `seat`, the delegable-subset check, the record shape, and the write.
+// trace:STORY-2215 | ai:claude
+fn mint_direct(
+    project_root: &Path,
+    seat: &str,
+    delegable_seats: Vec<String>,
+    lifetime: Duration,
+    binding: Vec<String>,
+    origin: Option<&str>,
+) -> Result<SeatGrant> {
     // trace:TASK-1594 | ai:claude
     let subject = crate::gate::kernel_deps::current_user_id(None);
     let principal = subject.clone();
@@ -1769,7 +1806,6 @@ pub(crate) fn issue_direct(
     if delegable_seats.iter().any(|seat| !allowed.contains(seat)) {
         bail!("delegated seats must all be present in the team roster");
     }
-    let lifetime = ttl.unwrap_or(MAX_GRANT_AGE);
     let now = Utc::now();
     let grant = SeatGrant {
         id: Uuid::new_v4().to_string(),
@@ -1783,13 +1819,80 @@ pub(crate) fn issue_direct(
         issued_at: now,
         expires_at: now + lifetime,
         revoked_at: None,
-        binding: {
-            binding.extend(key_secret.as_deref().map(|k| key_token(k.as_bytes())));
-            binding
-        },
+        binding,
+        origin: origin.map(str::to_string),
     };
     write_grant(&grant)?;
-    Ok(IssuedGrant { grant, key_secret })
+    Ok(grant)
+}
+
+/// The id of the inline parent THIS process minted, the only inline parent a
+/// new child may be derived from: an inline parent is not re-derivable by any
+/// later process (a rework round, a re-derivation), which must prompt the
+/// human again. Process memory, so an exec'd worker never inherits it.
+// trace:STORY-2215 | ai:claude
+static INLINE_PARENT_ID: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+
+/// STORY-2215: mint the one-time parent grant `aida agent new` offers a human
+/// at a terminal with no grant. Same body as `aida role enter <seat>
+/// --delegate-seat <child>` ([`mint_direct`]), except:
+/// - no key secret: nothing is eval'd, so the grant never reaches the shell;
+/// - bound to this launcher process alone, so no other process in the
+///   terminal session (the shell included) can present it;
+/// - lifetime `min(8h, the configured seat max)`; children clamp to it.
+///
+/// The caller must have proven a human keystroke at this terminal.
+// trace:STORY-2215 | ai:claude
+pub(crate) fn issue_inline_parent(
+    project_root: &Path,
+    seat: &str,
+    child_seat: &str,
+) -> Result<SeatGrant> {
+    require_direct_human()?;
+    let launcher = own_process_token().context(
+        "cannot bind the one-time grant: this launcher's process start identity could not be read",
+    )?;
+    let lifetime = std::cmp::min(
+        INLINE_PARENT_MAX,
+        Duration::hours(resolve_max_grant_hours(project_root) as i64),
+    );
+    let grant = mint_direct(
+        project_root,
+        seat,
+        vec![child_seat.to_string()],
+        lifetime,
+        vec![launcher],
+        Some(INLINE_ORIGIN),
+    )?;
+    if INLINE_PARENT_ID.set(grant.id.clone()).is_err() {
+        let _ = revoke_by_id(&grant.id);
+        bail!("this launcher already minted a one-time grant");
+    }
+    Ok(grant)
+}
+
+/// Whether [`issue_inline_parent`] could mint a `seat` parent delegating
+/// `child_seat` and the child could then be derived: the roster lets this
+/// user hold both `seat` (the parent) and `child_seat` (the delegation and
+/// the child's own check). Read before the human is asked, so a launch that
+/// cannot succeed is never offered.
+// trace:STORY-2215 | ai:claude
+pub(crate) fn inline_parent_roster_allows(
+    project_root: &Path,
+    seat: &str,
+    child_seat: &str,
+) -> bool {
+    let principal = crate::gate::kernel_deps::current_user_id(None);
+    roster_check(project_root, &principal, seat).is_ok()
+        && roster_check(project_root, &principal, child_seat).is_ok()
+}
+
+/// Whether a new child may be derived from `parent` in this process: always
+/// for an ordinary grant; for an inline parent only in the process that
+/// minted it.
+// trace:STORY-2215 | ai:claude
+pub(crate) fn inline_parent_derivable(parent: &SeatGrant, minted_here: Option<&str>) -> bool {
+    parent.origin.as_deref() != Some(INLINE_ORIGIN) || minted_here == Some(parent.id.as_str())
 }
 
 /// BUG-1934 (SKETCH v2): `aida role adopt-key <id>`: install grant `id`'s
@@ -2010,6 +2113,12 @@ pub(crate) fn validate_child_delegation(
             widen_delegation_command(&parent.seat, &parent.delegable_seats, requested_seat)
         );
     }
+    // trace:STORY-2215 | ai:claude
+    if !inline_parent_derivable(&parent, INLINE_PARENT_ID.get().map(String::as_str)) {
+        bail!(
+            "the active grant is a one-time grant another `aida agent new` minted for its own launch; it cannot launch a new child. Run `aida agent new` again at your terminal"
+        );
+    }
     // trace:BUG-2200 | ai:claude
     // trace:TASK-1953, TASK-2054 | ai:claude — the refusal names the roster file read.
     // trace:TASK-2072, TASK-1667 | ai:claude
@@ -2114,6 +2223,18 @@ fn issue_child_for(
     // trace:TASK-1955 | ai:claude (advisor comment 35)
     let parent = validate_child_delegation(project_root, requested_seat)
         .map_err(|refusal| anyhow::Error::new(ChildGrantRefused(refusal)))?;
+    issue_child_from(parent, requested_seat, child_subject, sandboxed)
+}
+
+/// Mint a child of an already-validated `parent`. The env-reading entry
+/// points above validate the parent first; this takes it explicitly.
+// trace:STORY-2215 | ai:claude
+pub(crate) fn issue_child_from(
+    parent: SeatGrant,
+    requested_seat: &str,
+    child_subject: &str,
+    sandboxed: bool,
+) -> Result<SeatGrant> {
     // BUG-1934: a child grant is bound to the launcher minting it. An exec'd
     // worker keeps this pid and start; a spawned worker descends from it; a
     // detached worker is stamped with [`bind_grant_to_pid`] after spawn.
@@ -2171,6 +2292,7 @@ fn issue_child_for(
         expires_at: parent.expires_at,
         revoked_at: None,
         binding,
+        origin: None,
     };
     write_grant(&grant)?;
     Ok(grant)
@@ -2662,3 +2784,8 @@ mod bug_1934_keyring_tests;
 #[cfg(test)]
 #[path = "tests/bug_2209_roster_leak_tests.rs"]
 mod bug_2209_roster_leak_tests;
+
+// trace:STORY-2215 | ai:claude
+#[cfg(test)]
+#[path = "tests/story_2215_inline_grant_tests.rs"]
+mod story_2215_inline_grant_tests;

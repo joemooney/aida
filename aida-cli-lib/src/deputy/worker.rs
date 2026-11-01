@@ -126,6 +126,13 @@ pub(crate) fn recover_orphans(spool: &Spool, cfg: &WorkerConfig) -> Result<usize
             policy_entry: None,
             output: spool.out_path(id),
         };
+        // The deputy may have died before opening the .out file; append so
+        // any partial output is kept and the result never names a missing file.
+        // trace:TASK-2609 | ai:claude
+        write_out_note(
+            &res.output,
+            "\ndeputy died while this job ran; it was not re-run.\n",
+        );
         spool.write_result("failed", &res)?;
         let mut row = LedgerRow::new(name, id, "orphaned");
         row.requester = rec.as_ref().map(|r| r.requester.clone());
