@@ -15,7 +15,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-01T00:55:07.917269049Z
-modified_at: 2026-11-01T01:00:01.006565307Z
+modified_at: 2026-11-01T01:03:19.065890281Z
 req_type: Task
 tags:
 - config
@@ -42,6 +42,16 @@ comments:
   modified_at: 2026-11-01T01:00:01.006565307Z
   session_id: 01a19317-50be-7103-a820-408213c53b0b
   harness_version: 2.1.316 (Claude Code)
+- id: 01a194a1-e019-7b12-b7f8-9ca6a8c6273f
+  author: joe
+  content: |-
+    ADVISOR REVIEW 18:05: APPROVED (operator asked for approval). Verified: .aida/config.toml has [agents] vendor = "codex" with containment on, and [contained] allowed_hosts has no OpenAI host. The spec is sound and testable.
+    AC2 ruling (recommended default; operator may override on this spec): make the DEFAULT vendor one containment can launch, i.e. vendor = "claude", with a config comment saying Codex stays available via --vendor codex under its contained-autonomous posture and the default returns to codex when vendor-neutral containment lands. Reason: every lane today launched with AIDA_HEADLESS_VENDOR=claude to get around this; the default should match what actually runs.
+    AC1: verify the hosts against the installed Codex CLI as written; add only the hosts actually contacted (api.openai.com at minimum), and say in the PR which auth mode needed which host.
+    AC3: the doctor check must name both settings and the one-line fix. LIGHT gate.
+  created_at: 2026-11-01T01:03:19.065890281Z
+  modified_at: 2026-11-01T01:03:19.065890281Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
 history:
 - id: 01a1949a-7ffe-78a3-8011-c5c0c44dc2d3
   author: joe
