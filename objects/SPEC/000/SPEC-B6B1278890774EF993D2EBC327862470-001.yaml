@@ -1,19 +1,34 @@
 id: 01a19600-3f6f-7672-b6b2-6611ff226175
 spec_id: SPEC-b6b1278890774ef993d2ebc327862470-001
 agreed_id: TASK-2712
-title: Codex native implementer sandbox cannot stage in assigned worktree or mutate shared AIDA cache
-description: 'Observed during BUG-2397 standalone Codex implementation after TASK-2631. Assigned worktree /home/joe/ai/aida-worktrees/aida-seat-aida-bug-b6b1278890774ef993d2ebc327862470-171 is writable but its .git is explicitly read-only in the native sandbox. git add fails: Unable to create ''<worktree>/.git/index.lock'': Read-only file system. aida edit BUG-2397 --status in-progress separately refuses because .aida/cache.db symlinks to /home/joe/ai/aida/.aida/cache.db outside writable roots. Initial role show reports no active role despite routed implementer/launcher lease. Use an approved native sandbox launch configuration that supports the intended git/index/refs and AIDA store/cache mutations without broadening unrelated authority. Temporary writable /tmp publishing checkout is the workaround for this PR; source worktree remains dirty at base HEAD, so the launcher should not infer the published head from its local HEAD.'
-status: Superseded
+title: Native Codex implementers need a sanctioned Git publication and AIDA coordination path under workspace-write
+description: |
+  Observed during BUG-2397 standalone Codex implementation after TASK-2631. Assigned worktree /home/joe/ai/aida-worktrees/aida-seat-aida-bug-b6b1278890774ef993d2ebc327862470-171 is writable but its .git is explicitly read-only in the native sandbox. git add fails: Unable to create '<worktree>/.git/index.lock': Read-only file system. aida edit BUG-2397 --status in-progress separately refuses because .aida/cache.db symlinks to /home/joe/ai/aida/.aida/cache.db outside writable roots. Initial role show reports no active role despite routed implementer/launcher lease. Use an approved native sandbox launch configuration that supports the intended git/index/refs and AIDA store/cache mutations without broadening unrelated authority. Temporary writable /tmp publishing checkout is the workaround for this PR; source worktree remains dirty at base HEAD, so the launcher should not infer the published head from its local HEAD.
+
+  ## Corrected disposition and current scope — 2026-11-01
+  The previous Superseded-by-STORY2238 disposition conflated two modes. STORY2238/TASK2707 C8/C9 covers the new AIDA-contained backend; current native-sandbox/not-AIDA-contained standalone implementers also need a sanctioned end-to-end publication and coordination path. New TASK2714 reproduces the SAME still-unfixed native issue on BUG2401. Its exact21530byte/3-file patch required a separate host-authorized publication session (PR3206), despite73targetedtests+36fastgates passing. A temporary/tmpcheckout is a WORKAROUND, not a product fix. Preserve this single native workflow owner, reference future C8/C9 reuse, and retain the original observation above. BUG2398 supplies own metadata/authority but does not itself grant filesystem writes to the shared cache or source.git.
+
+  ## Acceptance
+  1. A normal native Codex implementer launched by AIDA can complete the sanctioned code-to-commit/push/PR handoff and own-scope AIDA coordination with workspace-write and approval never, without an advisor launching another publisher or asking for escalation. Demonstrate the actual tool boundary with fixture stores/forge; no claim from host Command env alone. Existing contained Claude behavior stays intact.
+  2. Select and independently sign a narrow architecture before code: supported narrowly scoped native write permissions OR an explicit typed host collection/publication channel. Preserve protected Git/hooks/config/unrelated metadata, exact clone/branch/lease/process ownership and author attribution, immutable patch/snapshot identity, original validation evidence and all independent review/CI/hold/mandate gates. No danger-full-access, blanket write roots, inherit-all, parent-grant forwarding, bearer tokens in argv or global user configuration/approval changes. The host never runs agent-controlled hooks/filters/config/commands as authority. Unknown test evidence remains untested; exit0 does not prove publication or validation.
+  3. Cover own git index/refs plus shared canonical store/cache operations under valid own child authority; For a new host-assisted channel and existing authority-requiring operations, wrong/absent/revoked/scope-mismatched grants, unrelated branches/roots, source replacement/symlink/path races, live competing owner and parent/sibling authority borrowing refuse. Existing non-authoritative baseline compatibility (including ungranted review artifact recording under BUG2398) is unchanged; this task must not invent a broader role policy. Keep original dirty work and exact recovery instructions on failure. No raw hand edits to lease, grant, ledger or canonical requirements.
+  4. Add decisive synthetic native-boundary/host-channel tests and actual host smoke evidence. Preserve source/publication byte identity and real Git/forge refusals. Tests fake HOME/store/credentials only, never user data or actual live store. No new timers/unattended run enablement. Independent strict review and normal merge floors required. This does not grant permission to bypass native SDK protections.
+
+  Architecture/sketch-first; serialize touched launcher/authority code after BUG2398. Reuse signed contained C8/C9 primitives where appropriate but do not block native delivery behind an unrelated full backend or silently treat contained-only success as native proof. A precise design dependency may be added after independent sketch judgment. LIGHT one targeted regression plus fast; >10files/sharedinfra adds required touched/compile, longcargo background, normal slots. No blind broad rebuilds.
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-01T07:26:01.071265913Z
-modified_at: 2026-11-01T11:16:08.145986739Z
+modified_at: 2026-11-01T11:20:05.734641416Z
 req_type: Task
 tags:
+- architecture
 - from-implementer:BUG-2397
 - kind:bug-spotted
 - severity:major
+- sketch-first
+- vendor:codex
 relationships:
 - rel_type: References
   target_id: 01a19600-8cf2-74f3-a6ce-b7a32fa5affc
@@ -86,6 +101,13 @@ history:
   author: joe
   timestamp: 2026-11-01T11:16:09.161167126Z
   changes: []
+- id: 01a196d6-8d66-77c2-af5b-72598ca0b9e1
+  author: joe
+  timestamp: 2026-11-01T11:20:05.734621151Z
+  changes:
+  - field_name: status
+    old_value: Superseded
+    new_value: Approved
 filed_at:
   aida_version: 0.16.0
   aida_build_sha: 53c89700b4d
