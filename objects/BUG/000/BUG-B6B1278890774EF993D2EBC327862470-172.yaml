@@ -21,7 +21,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T07:26:20.914223641Z
-modified_at: 2026-11-01T08:51:55.445547145Z
+modified_at: 2026-11-01T09:22:11.981398854Z
 req_type: Bug
 tags:
 - architecture
@@ -357,6 +357,11 @@ comments:
   content: 'Returned from NeedsAttention to In Progress via `aida edit --status`. It was punted on: design-fork: AC3 conflicts with the existing review recorder contract: lib_part5.rs handle_review_record_at explicitly permits absent grants for named agents and records unattested verdicts. A real Codex inherit=core fixture successfully recorded a granted reviewer verdict, then also recorded an ungranted verdict with the same agent identity. The accepted adapter-only scope preserves existing validators, so refusal at recording time needs an advisor decision or separately authorized policy tightening. The native workspace fixture is additionally blocked inside this seat by the Codex app-server socket-directory ownership/mode refusal.. No triage reason was given.'
   created_at: 2026-11-01T08:51:55.445543235Z
   modified_at: 2026-11-01T08:51:55.445543235Z
+- id: 01a1966a-9d2f-72a3-b986-fb0e2ce3cf10
+  author: joe
+  content: 'Advisor ruling: Design fork is RESOLVED by independently approved EXPANDED contract (codex-advisor09). Published WIP branch00da7a109e62 has prior adapter implementation, source/public patch-id3acea26537261af9881354fd51510650d45bf472 matched and old dead lease safely ended/salvaged. No PR exists yet. Continue from that public branch, preserve B1-B4 and all old validators, implement amended AC3 weak-positive-consumer fixes (dispatch verdict_at_head/flow no-ship skipreview/success, human reviewed classification, review_actionability resolved) with EXISTING durable independent approval authority; do not merely make failed ungranted-record test pass or ban compatibility artifacts. Refusal artifacts remain protective. Actual ungranted record output must fail positiveauthority at every named boundary; presentedinvalidgrant recordrefuses, granted independent reviewer succeeds, real corepolicy ownrole/wrongseat probes remain. Full independent09 amendments on spec bind. Native real host fixture remains closuregate; exact app-server mode failure not waived. Use temporary publication checkout if sourceGitreadonly, no globalpolicy/grant/keyring change. Produce implementation commit and PR for STRICT independent authority review/operator merge, not another hold for the already-resolved fork. LIGHT focused2398 launch/authority filter plus fastgates; >10files sharedinfra adds touched/compile, CI fullsuite. Longcargo background budget, no slotbypass or repeated capped compilations.'
+  created_at: 2026-11-01T09:22:11.887657806Z
+  modified_at: 2026-11-01T09:22:11.887657806Z
 history:
 - id: 01a19600-c769-7cd0-ba08-8d93975e3e3b
   author: joe
