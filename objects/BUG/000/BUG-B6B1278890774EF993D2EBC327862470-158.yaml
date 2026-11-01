@@ -17,12 +17,12 @@ description: |
   - A ship with 25 or more seat clones finishes step 5 in under 30s, or reports progress and continues in the background.
   - The merge-lease is released before the cleanup step, and a test asserts it.
   - A test covers the unpushed check with a large shipped set and no per-SHA spawn.
-status: Approved
+status: InProgress
 priority: High
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T06:30:56.167167026Z
-modified_at: 2026-11-01T07:50:10.689328644Z
+modified_at: 2026-11-01T21:27:55.112356288Z
 req_type: Bug
 tags:
 - area:ship
@@ -40,6 +40,14 @@ comments:
   content: 'ADDITIONAL LIVE EVIDENCE from advisor handoff: cleanup repeatedly refuses clean, fully-pushed seat clones with holds work origin does not have followed by an empty detail. I verified no live cwd, clean tracked status, and HEAD as ancestor of public PR head before CLI --force cleanup; CLI salvaged them and completed after minutes. PR-3177 leases01a195ce2fa7/01a195ede25f and BUG-2383 lease01a195c661e0 show this. First native BUG-2397 source tree had dirty changes whose stable patch-id aa4d8a48f47ec37dae36e54047cf07fb6bb0dca2 exactly matched public PR891f8747 before cleanup. Please check timeout/large shipped-set refusal diagnostics as part of the existing bounded unpushed-scan repair; do not weaken retention or discard work on a false dead hint. PR-3188 also spent several live preflight minutes running git log --all --format=%x00%H --no-renames --diff-filter=ACMRT --name-only -- objects in the store before merging normally.'
   created_at: 2026-11-01T07:50:10.689328644Z
   modified_at: 2026-11-01T07:50:10.689328644Z
+history:
+- id: 01a19903-07e8-75a2-b046-5be385601f6c
+  author: aida-session-start
+  timestamp: 2026-11-01T21:27:55.112354019Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 962ca07af25ca4de3426bdd951fb2d6782568184
   branch: main
