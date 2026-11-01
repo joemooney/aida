@@ -1,0 +1,18 @@
+{
+  "id": "deputy-default-01a194b4-7a5f-7fe2-874f-969f63401274",
+  "thread_id": "deputy-01a194b4-7a5f-7fe2-874f-969f63401274",
+  "from": "deputy:default",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-product-03"
+  },
+  "timestamp": 1793496219212,
+  "body": "Deputy \"default\" finished job 01a194b4-7a5f-7fe2-874f-969f63401274: rc 1 (exit).\nCommand: aida add --type bug --priority high --title session start --owns on a contained seat creates a private clone but its Next: block suggests claude + aida worktree enter, which fails --tags vendor:codex containment session --parent EPIC-612 --description ## Repro (operator, 2026-10-31 18:21)\n`aida session start --owns TASK-2631` on a contained seat creates a PRIVATE CLONE (aida-seat-aida-task-2631). Its printed Next: block still suggests `claude  # then /aida-implement` and `aida worktree enter <ID>`. Following it fails: \"held by session … not a linked worktree `aida worktree add` can re-enter\".\n\n## Acceptance\n1. When session start creates a private clone, Next: names the clone path and a command that works for a clone (cd into it); it never suggests `aida worktree enter`.\n2. The suggested launcher follows the project's default vendor (`[agents] vendor`); with vendor = codex it prints the codex launch line, not `claude`.\n3. For a linked worktree, today's output stays the same (regression test).\n4. Tests cover both branches (clone vs linked worktree) and both vendors (claude, codex).\nOutput: /home/joe/ai/aida/.aida/deputy/default/out/01a194b4-7a5f-7fe2-874f-969f63401274.out\nRead it with `aida deputy log 01a194b4-7a5f-7fe2-874f-969f63401274`.\n`aida awaiting` lists it until you run `aida deputy ack 01a194b4-7a5f-7fe2-874f-969f63401274`.\n",
+  "subject": "deputy job 01a194b4 FAILED: rc 1",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}
