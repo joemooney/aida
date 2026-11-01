@@ -7,12 +7,12 @@ description: |
 
   Raised by the implementer while working BUG-B6B1278890774EF993D2EBC327862470-150.
   Branch: bug-b6b1278890774ef993d2ebc327862470-150 · Commit: 9179020a5f9 · PR-3179
-status: InProgress
+status: Done
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T22:45:38.838275166Z
-modified_at: 2026-11-01T03:35:11.804336028Z
+modified_at: 2026-11-01T04:05:07.239074070Z
 req_type: Task
 tags:
 - deputy
@@ -60,6 +60,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a19548-5cb3-7530-a6a7-f0ce226d762d
+  author: joe
+  timestamp: 2026-11-01T04:05:09.939973413Z
+  session_id: 01a1952c51f9
+  harness_version: 2.1.316 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 filed_at:
   code_sha: ae0d46b8cc164cec895c5322e5ee073e9290ed05
   branch: bug-b6b1278890774ef993d2ebc327862470-150
@@ -69,3 +78,7 @@ filed_at:
   vendor: claude
   session: 01a1940bcee7
   harness_version: 2.1.316 (Claude Code)
+implementation_info:
+  implemented: true
+  implemented_at: 2026-11-01T04:05:07.239074070Z
+  implemented_by: joe
