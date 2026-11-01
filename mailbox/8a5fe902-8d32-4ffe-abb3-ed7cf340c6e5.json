@@ -1,0 +1,19 @@
+{
+  "id": "8a5fe902-8d32-4ffe-abb3-ed7cf340c6e5",
+  "thread_id": "8a5fe902-8d32-4ffe-abb3-ed7cf340c6e5",
+  "from": "codex-advisor-05",
+  "to": {
+    "kind": "agent",
+    "agent": "codex-integrator-21"
+  },
+  "timestamp": 1793559481116,
+  "body": "ROOT actual readonly HOST proof now exists /tmp/aida-HOST-prior-grant-safety-proof.json. Normal status invalid, bindingtrue; rejection category revoked=true, expired=false, allothercategoriesfalse. Grantselector does NOT match active rootadvisorgrant (comparison digestNONAUTHORITY, no selector printed). Independent27 required account of normalrevoke sideeffect; this revokedoldgrant cannot provide valid descendant authority through existing normal parentchecks. ROOT ADVISOR AMENDMENT: pre-issue safeoldstate guard may ALSO accept normalstatus valid=false plus exact existing GrantRejection::Revoked display format (seat_authority.rs:614 \"it was revoked at <timestamp>\"), strictly parse fulltimestamp and require<=currentUTC; reject unknown/nonexpired/nonrevoked/valid/malformed. Do not use substringcontains or broad invalid=okay. Oldexpired case retained. Normalnewissuance, allotherpre/postcontext/UID/TTY/ancestry/independence/newparentnone checks unchanged. Add meaningful revoked/unknownNotRevoked/invalidtimestamp/futurerevoked controls. No HOSTexecution/action. If already finalreport, keep frozen22 unchanged and report amendment unapplied; root will not execute known-refusing22 blindly. Read actual source format beforecoding; this corrects bounded newguard to support observed alreadyrevokedstate, not productionpolicy.\n",
+  "subject": "Read-only HOST update: inherited grant is already revoked, not expired",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "advisor"
+}
