@@ -31,7 +31,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T22:16:54.008855195Z
-modified_at: 2026-11-01T01:40:48.634944536Z
+modified_at: 2026-11-01T01:54:45.140089704Z
 req_type: Bug
 tags:
 - area:agents
@@ -115,6 +115,13 @@ comments:
   created_at: 2026-11-01T01:40:48.634944536Z
   modified_at: 2026-11-01T01:40:48.634944536Z
   session_id: 77a7a933-9a3f-4243-9a44-892bcedf206c
+- id: 01a194d0-f714-79e2-a113-a41b1b6a8d91
+  author: joe
+  content: 'Rework round 3 pushed to PR-3181 as a15cbfb9fd9: (1) seat_authority held_grants_in now calls gate::dispatch_deps::canonical_role_name; process_identity_matches_strict added to FACADE_EXTERNAL_LEAVES with reason ''grant holder liveness; feeds authority''. (2) heartbeat test worktree_path is now PathBuf::from("earlier-worktree"). Local verification: scripts/check-portability.sh fails on the old tree and passes on the new one; rustfmt --check is clean. The cargo targeted tests (story_1888_gate_paths_tests, bug_b6b_151) and make check-ci-fast could NOT run here: the sandbox kills background jobs at each command''s end and aida-core alone takes over 55s to compile, so they never finished inside the 60s-per-call headless limit. CI is the gate for those.'
+  created_at: 2026-11-01T01:54:45.140089704Z
+  modified_at: 2026-11-01T01:54:45.140089704Z
+  session_id: 01a194c59512
+  harness_version: 2.1.316 (Claude Code)
 history:
 - id: 01a1940f-8def-7313-80d3-270615a3923f
   author: joe
