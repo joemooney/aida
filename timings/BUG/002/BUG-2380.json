@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-2380",
+  "publishes": [
+    {
+      "at": "2026-11-01T03:30:11.850863937Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-01T03:30:11.677978058Z",
+      "spec": "BUG-2380",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "841206e2bdf306bd82e61ebeee931e693934744a",
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
