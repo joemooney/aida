@@ -1,0 +1,37 @@
+id: 01a195dc-7768-7d13-b38e-f9722e35059d
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-164
+agreed_id: BUG-2390
+title: aida dispatch (take and impl) defaults --vendor to Claude instead of [agents] vendor and runs Codex foreground-blocking
+description: |-
+  Why
+  ───
+  Discovered by SPIKE-710 audit. In `aida-cli-lib/src/dispatch.rs`:
+
+  1. `render_lane_prompt` (`dispatch.rs:199, 219`), `run_take_verb` (`dispatch.rs:2650`), and `run_impl_verb` (`dispatch.rs:2733`) all fall back to `vendor.unwrap_or(DispatchVendor::Claude)` when `--vendor` is omitted, instead of consulting `[agents] vendor` (`resolve_default_vendor` / `resolve_headless_vendor`). (By contrast, `run_review_verb` at `dispatch.rs:2319` omits `--vendor` so `queue work` resolves the project's configured vendor.)
+  2. In `build_implementer_launch_command` (`dispatch.rs:2551-2558`) and `launch_implementer_lane` (`dispatch.rs:2777`), `DispatchVendor::Codex` runs `codex exec --full-auto -C <wt_path> <prompt_text>` synchronously via `cmd.output()`, blocking `aida dispatch tick` / `aida dispatch serve` for the entire implementer execution instead of detaching a background Codex lane (see STORY-2254).
+  3. `dispatch.rs:2165` checks only `probe_live_claude_sessions()` for named occupancy diagnostics (`"occupied by live claude process"`).
+
+  Acceptance
+  ──────────
+  1. When `--vendor` is omitted on `aida dispatch request take` or `impl`, `dispatch` resolves the project's configured `[agents] vendor` rather than hardcoding `DispatchVendor::Claude`.
+  2. Launching a Codex implementer lane from `dispatch` detaches cleanly (integrating with STORY-2254) without blocking `dispatch tick` / `serve` to completion.
+  3. Unit tests verify default vendor resolution and non-blocking launch behavior for `take` and `impl`.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-01T06:46:56.104025446Z
+modified_at: 2026-11-01T06:46:56.104025446Z
+req_type: Bug
+tags:
+- audit
+- dispatch
+- vendor:codex
+filed_at:
+  code_sha: 6dc7d4977ac5e47c42ddfb26597fe3ec5fb70b60
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 962ca07af25
+  vendor: antigravity
+  session: 01a194b1bcfb
