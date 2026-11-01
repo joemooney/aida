@@ -25,7 +25,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T06:47:26.114384272Z
-modified_at: 2026-11-01T08:20:46.025872353Z
+modified_at: 2026-11-01T08:40:34.274036673Z
 req_type: Bug
 tags:
 - audit
@@ -47,6 +47,11 @@ comments:
   content: 'Implementation prepared in assigned checkout /home/joe/ai/aida-worktrees/aida-seat-aida-bug-b6b1278890774ef993d2ebc327862470-166, branch codex/bug-2392-default-config. Six-file diff adds portable tracked workspace-write Codex defaults and gitignore exception, replaces the unsafe template example, adds the three approved OpenAI hosts to the canonical contained template and a regression test. Existing init/upgrade helpers already consume that master; custom allowlists remain preserved. Verification: 14/14 scaffolding::settings tests passed; cargo fmt --all -- --check; git diff --check; static TOML/vendor/default-flags checks; aida config permissions show reports no dangerous inconsistencies. BLOCKED before commit: managed sandbox mounts .git read-only, and git add fails creating .git/index.lock with Read-only file system. Cannot commit/push/open PR; no PR created; left In Progress. post_punt MCP was rejected because it requires approval and policy is never. Main checkout''s old ignored .aida/agents.toml was read only, not edited. Handoff needs an authorized Git-writable session to commit/push/open PR and queue done; do not run ship or review record from this standalone implementation.'
   created_at: 2026-11-01T08:20:46.025856995Z
   modified_at: 2026-11-01T08:20:46.025856995Z
+- id: 01a19644-807f-7720-895c-96740ee6caa8
+  author: joe
+  content: 'Advisor ruling: Recover prepared author patch /tmp/aida-BUG2392-prepared-author.patch and finish publication on codex/bug-2392-default-config. Prior Codex doer made the fix and passed14 focused tests but native .git readonly prevented commit. Apply/review preserved patch in your own fresh leased checkout; preserve tested Rust/template changes. Do NOT start tracking the ignored user-owned .aida/agents.toml or alter .gitignore to publish that whole local config. Template safety is committed; the advisor will update ONLY the authorized raw flag in the main local config after merge, with backup already retained. Preserve other user choices. Publish own code through a temporary writable publication checkout under allowed tmp if needed, without widening sandbox, disabling hooks/grants, or writing source .git. This is the same bounded workflow used successfully for BUG2397. Reuse prior14 focused result if Rust patch unchanged; run fast gates once, then push/open PR and stop for independent review. If metadata writes refuse, report actual forge head truthfully; never end merely because source git add is readonly.'
+  created_at: 2026-11-01T08:40:34.175914908Z
+  modified_at: 2026-11-01T08:40:34.175914908Z
 history:
 - id: 01a195dd-0846-7b42-9f84-f4128c00ca5d
   author: joe
