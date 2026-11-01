@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T21:37:29.201146410Z
-modified_at: 2026-11-01T07:04:53.859713159Z
+modified_at: 2026-11-01T07:04:54.886969031Z
 req_type: Bug
 tags:
 - epic-home-003
@@ -143,6 +143,20 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Round-7 findings fixed (REWORK BRIEF header matched and tested, bounded fetch, shared lead_line); but the verdict time is taken from the queue-rework findings comment, so a brief written between the verdict and the requeue is demoted and BUG-057 recurs; CI pending at head.. It was punted on: other: round-8 rework complete locally but unable to publish: this lane''s worktree gitdir /home/joe/ai/aida/.git/worktrees/aida-pr-31771 is read-only in the sandbox (index.lock, FETCH_HEAD, refs locks all EROFS), so commit and push fail; cargo also cannot build (BUG-2383). The lane was launched for STORY-2216 (review) in a contained review worktree; PR-3177 head 7a4f77c already has a recorded request-changes verdict, so no second review was due.. Triage reason: PR-3177 fresh independent review found the remaining real T0/T1/T2 ordering bug: gate-ledger PR-3177.jsonl#19 at 9383d0215ddaade7388bce69f530efbfc7728353. New brief below is binding.'
   created_at: 2026-11-01T07:04:53.859711916Z
   modified_at: 2026-11-01T07:04:53.859711916Z
+- id: 01a195ec-eced-72d2-8e17-528890c72254
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-b6b1278890774ef993d2ebc327862470-057):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 9383d0215dda
+    Recorded: 2026-11-01T07:01:28.623872154+00:00
+    Findings:
+    1. BLOCKING (acceptance 1, real-world order): last_verdict_at (aida-cli-lib/src/rework_direction.rs:78-89) returns max(live block Recorded:, newest findings-comment created_at). The findings comment is written by 'aida queue rework' (queue_cmd.rs:8466-8483), not when the verdict was recorded, so it is always >= Recorded. The usual advisor order is: verdict recorded at T0, advisor posts 'ADVISOR REWORK BRIEF round N' at T1, then runs 'aida queue rework' at T2, which posts the findings comment. resolve_direction then classes the brief as PredatesVerdict (T1 < T2): it renders BELOW 'ITEMS STILL OPEN (AUTHORITATIVE TASK)' with 'the findings win', so a merge-only brief is ignored again, which is the BUG-057 failure. The spec defines the cut-off as the last verdict, which the live block's Recorded: line carries (rework_findings_comment, review_verdict_display.rs:50). Fix: when the live findings block has a Recorded: time, use it as the verdict time; fall back to findings-comment created_at only when there is no Recorded: line. Add an assemble_pickup_prompt test: block Recorded at T0, brief comment at T1, findings comment at T2 -> brief leads, findings become SUPERSEDED CONTEXT, and no AUTHORITATIVE TASK. It must fail on today's code.
+    2. CI unverified at 9383d02: all seven CI jobs (lib-0/1, cli-0/1, rest, gates, contracts) were still pending when this review was recorded (run 41282398630), so acceptance (3), that BUG-021's queue_rework tests still pass, and the round-7 CI-red item are not yet shown green. Confirm CI is green at the new head after the fix; do not weaken any test.
+    3. MINOR (non-blocking): detect_main_conflict (rework_direction.rs:371-387) ignores the fetch result. When the fetch fails or times out, merge-tree runs on stale origin/<base> and origin/<head> refs, so it can tell the lane to resolve a conflict that was already fixed on the remote (or miss a new one). Consider skipping the forecast (returning None) when the fetch did not succeed, or saying in the task text that the forecast may be stale.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-01T07:04:54.765898436Z
+  modified_at: 2026-11-01T07:04:54.765898436Z
 history:
 - id: 01a193e8-1070-7260-a5d0-2973465ae4a2
   author: aida-session-start
