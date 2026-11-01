@@ -1,0 +1,34 @@
+id: 01a19600-8cf2-74f3-a6ce-b7a32fa5affc
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-172
+agreed_id: BUG-2398
+title: Native Codex tool shells lose the delegated AIDA seat when shell_environment_policy inherits only core
+description: |
+  Observed in the first live TASK-2631 native headless lane, BUG-2397 (lease01a195fb1400, native codex PID2792783, main53c8970). The model host process has AIDA_SESSION_GRANT, AIDA_SESSION_ROLE=implementer and AIDA_CONTAINMENT_POSTURE=native, with AIDA_CONTAINED absent. Its actual tool call reports no active role. The user's ~/.codex/config.toml intentionally sets [shell_environment_policy] inherit="core", with explicit timeout variables only; no AIDA variables are passed into tool shells. Model authentication works (ChatGPT) and code work proceeds; the grant is lost at the host-to-tool boundary rather than absent at launch.
+
+  Evidence: .aida/headless-logs/codex/bug-2397-mail-wake-01a195fa-5336-78f2-9e9b-5b51d5ca5f40.jsonl includes the role-current result and model account of it. Host inspection verified only presence booleans, never secret values. No existing shell_environment_policy spec found.
+
+  Acceptance:
+  1. Managed native Codex tool calls present only their own delegated child grant/seat under restrictive shell environment policy, via the existing sanctioned grant/keyring contract. Never copy the parent advisor grant or broaden/mint authority in the tool shell.
+  2. Preserve the user's restrictive global policy and credentials exclusions; do not change inherit to all globally or pass arbitrary parent environment/secrets. Scope any launch-time metadata transport to exact AIDA-owned child context, validated with existing authority boundaries. No grant secrets in argv/logs/config or project-writable context.
+  3. A real Codex fixture/probe under inherit=core verifies implementer role current and permitted own-scope operation, and refusal of reviewer/advisor operations and unrelated parent authority. Cover reviewer verdict recording separately with a granted reviewer and an ungranted refusal; do not weaken existing grant guards.
+  4. Add truthful diagnostic/refusal for an unusable requested seat before model work when possible. Document any native keyring limitation rather than silently granting a fallback.
+
+  Sketch and independent advisor signoff before code; strict review for authority plumbing. This finding is separate from the native cache path writable-root refusal, which is recorded on STORY-2238. User's global Codex config must remain unchanged. Codex implementer lane after signoff; LIGHT targeted grant/launch test plus make check-ci-fast, CI is the full gate.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-01T07:26:20.914223641Z
+modified_at: 2026-11-01T07:26:20.914223641Z
+req_type: Bug
+tags:
+- architecture
+- grants
+- vendor:codex
+filed_at:
+  code_sha: 53c89700b4da50b5593a2079ed4cc3abaae5cdfe
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 53c89700b4d
+  vendor: codex
