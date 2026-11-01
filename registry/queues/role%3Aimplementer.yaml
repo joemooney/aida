@@ -1,4 +1,10 @@
 - user_id: role:implementer
+  requirement_id: 01a1942f-b90c-7ee1-a06c-d5856831d28e
+  position: 262000
+  added_by: role:implementer
+  added_at: 2026-11-01T09:46:03.436809415Z
+  for_role: implementer
+- user_id: role:implementer
   requirement_id: 01a19600-8cf2-74f3-a6ce-b7a32fa5affc
   position: 263000
   added_by: role:implementer
@@ -22,13 +28,6 @@
   added_by: role:implementer
   note: PR3185 conflicts with merged BUG2378; preserve both reviewed behaviors, fresh independent review at resolution head
   added_at: 2026-11-01T08:19:14.517033441Z
-  for_role: implementer
-- user_id: role:implementer
-  requirement_id: 01a1942f-b90c-7ee1-a06c-d5856831d28e
-  position: 268000
-  added_by: role:implementer
-  note: PR-3193 round-3 acceptance content passes, but portability ratchet blocks at tests/test_generate_glossary_check.sh:157 (GNU sed -i). Verdict ledger PR-3193.jsonl#11 at e8f39409662d.
-  added_at: 2026-11-01T07:31:39.059728659Z
   for_role: implementer
 - user_id: role:implementer
   requirement_id: 01a193e5-6e71-77a2-8c2c-bd433eb2f055
