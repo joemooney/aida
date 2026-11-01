@@ -50,6 +50,31 @@ pub enum DocsCommand {
         #[clap(long)]
         lifecycle: bool,
     },
+
+    /// Review documentation for drift that has built up: command text this
+    /// build no longer has, and terms the website defines with no glossary
+    /// entry. Reviews the CLI docs, the website pages, the glossary and
+    /// READMEs touched since `--since` (default: the last recorded sweep;
+    /// every one on the first sweep). A normal run follows `[docs_sweep]
+    /// mode`: `report` mails the findings to the product seat, `pr` batches
+    /// mechanical fixes into one documentation-only PR. The scheduled
+    /// `docs-sweep` job runs it daily while the queue is idle.
+    // trace:STORY-2220 | ai:claude
+    Sweep {
+        /// Review changes since this git revision instead of the last
+        /// recorded sweep.
+        #[clap(long, value_name = "REF")]
+        since: Option<String>,
+
+        /// Print the findings only: send no mail, open no PR, file no specs,
+        /// and leave the last-swept revision where it is.
+        #[clap(long)]
+        report_only: bool,
+
+        /// Emit the findings as JSON.
+        #[clap(long)]
+        json: bool,
+    },
 }
 
 /// Living-documentation entry surface.

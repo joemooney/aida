@@ -22463,6 +22463,13 @@ Commands:
   check     Verify the docs tree on disk matches what the graph would render. Exits non-zero on
             drift. Suitable for a CI / pre-commit check
   glossary  Print AIDA's product, machinery and lifecycle glossary from the binary's embedded copy
+  sweep     Review documentation for drift that has built up: command text this build no longer has,
+            and terms the website defines with no glossary entry. Reviews the CLI docs, the website
+            pages, the glossary and READMEs touched since `--since` (default: the last recorded
+            sweep; every one on the first sweep). A normal run follows `[docs_sweep] mode`: `report`
+            mails the findings to the product seat, `pr` batches mechanical fixes into one
+            documentation-only PR. The scheduled `docs-sweep` job runs it daily while the queue is
+            idle
   help      Print this message or the help of the given subcommand(s)
 
 Options:
@@ -22556,6 +22563,43 @@ Options:
 
       --lifecycle
           Print only the lifecycle vocabulary (the spec-state verbs)
+
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida docs sweep
+Review documentation for drift that has built up: command text this build no longer has, and terms
+the website defines with no glossary entry. Reviews the CLI docs, the website pages, the glossary
+and READMEs touched since `--since` (default: the last recorded sweep; every one on the first
+sweep). A normal run follows `[docs_sweep] mode`: `report` mails the findings to the product seat,
+`pr` batches mechanical fixes into one documentation-only PR. The scheduled `docs-sweep` job runs it
+daily while the queue is idle
+
+Usage: aida docs sweep [OPTIONS]
+
+Options:
+      --since <REF>
+          Review changes since this git revision instead of the last recorded sweep
+
+      --report-only
+          Print the findings only: send no mail, open no PR, file no specs, and leave the last-swept
+          revision where it is
+
+      --json
+          Emit the findings as JSON
 
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
@@ -52279,6 +52323,47 @@ Working on aida itself
         "name": "product",
         "takes_value": false,
         "help": "Print only the product glossary (merge hold, mandate, grant, hub, …)"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "docs",
+      "sweep"
+    ],
+    "about": "Review documentation for drift that has built up: command text this build no longer has, and terms the website defines with no glossary entry. Reviews the CLI docs, the website pages, the glossary and READMEs touched since `--since` (default: the last recorded sweep; every one on the first sweep). A normal run follows `[docs_sweep] mode`: `report` mails the findings to the product seat, `pr` batches mechanical fixes into one documentation-only PR. The scheduled `docs-sweep` job runs it daily while the queue is idle",
+    "flags": [
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "json",
+        "takes_value": false,
+        "help": "Emit the findings as JSON"
+      },
+      {
+        "name": "report-only",
+        "takes_value": false,
+        "help": "Print the findings only: send no mail, open no PR, file no specs, and leave the last-swept revision where it is"
+      },
+      {
+        "name": "since",
+        "takes_value": true,
+        "help": "Review changes since this git revision instead of the last recorded sweep"
       }
     ],
     "hidden": false
