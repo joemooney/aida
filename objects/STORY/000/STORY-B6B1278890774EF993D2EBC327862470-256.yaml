@@ -18,7 +18,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T22:17:06.607335957Z
-modified_at: 2026-11-01T00:54:35.658213011Z
+modified_at: 2026-11-01T01:44:01.438598943Z
 req_type: Story
 tags:
 - agent-new
@@ -114,6 +114,13 @@ comments:
   created_at: 2026-11-01T00:54:35.658213011Z
   modified_at: 2026-11-01T00:54:35.658213011Z
   session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+- id: 01a194c7-249e-7a43-ba78-729796d31bd6
+  author: joe
+  content: 'Round 2 (c5806466342): fixed review items 2-4 (--bg never offers; roster pre-check principal->advisor and ->seat before prompting; --grant-inline no, --bg and out-of-roster seat now proven on the PTY). Item 1 NOT resolved: CI run 41259881598 is green on lib-1, cli-0, cli-1, rest, contracts and gates, but lib-0 fails, and failed again on a re-run of the failed job, so it is reproducible, not a flake. On b32fe452 it was lib-1 that failed; the time-balanced lib split likely moved the failing test. This seat could not name the test: the Actions log and artifact blob host is sandbox-denied, and a local aida-cli-lib test build cannot finish inside the 60s per-call headless limit (background runs denied). Needs someone with log access: gh run view 41259881598 --log-failed (lib-0 job).'
+  created_at: 2026-11-01T01:44:01.438598943Z
+  modified_at: 2026-11-01T01:44:01.438598943Z
+  session_id: 01a1949eec59
+  harness_version: 2.1.316 (Claude Code)
 history:
 - id: 01a1940e-15d9-7e13-bbb4-79222982ffb5
   author: aida-session-start
