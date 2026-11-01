@@ -1,9 +1,9 @@
 - user_id: role:implementer
   requirement_id: 01a19639-d547-7300-9a70-befaedad7e96
-  position: 258000
+  position: 257000
   added_by: role:implementer
-  note: 'Independent reviewer14 REQUESTCHANGES9255294 PR3208 ledger#5 GH6557971101. Two verified blockers: all-open enumeration omits native/commit fallback associations and hides duplicate ambiguity; failed/timed-out commit evidence becomes NoOpenPr. Bundle bounded exhaustion/unknown handling in same PR, no new follow-up chain. Exact source bytes backed before retiring dead source lease.'
-  added_at: 2026-11-01T12:40:55.081064904Z
+  note: Fresh independent review16 requests complete commit evidence and bounded production CLI probing on same PR3208; full binding round3 ruling follows.
+  added_at: 2026-11-01T14:21:28.637989839Z
   for_role: implementer
 - user_id: role:implementer
   requirement_id: 01a19600-8cf2-74f3-a6ce-b7a32fa5affc
