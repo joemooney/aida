@@ -1,0 +1,81 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-B6B1278890774EF993D2EBC327862470-151",
+  "publishes": [
+    {
+      "at": "2026-11-01T03:50:47.311691230Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-31T22:23:32.333555408Z",
+      "spec": "BUG-b6b1278890774ef993d2ebc327862470-151",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-31T22:29:56.973145095Z",
+      "spec": "BUG-b6b1278890774ef993d2ebc327862470-151",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-11-01T03:13:19.292943031Z",
+      "spec": "BUG-B6B1278890774EF993D2EBC327862470-151",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 3181,
+        "verdict": "APPROVED",
+        "reviewed_sha": "a15cbfb9fd9b923dacaa2613f5fa0f4cafa0f730"
+      }
+    },
+    {
+      "ts": "2026-11-01T03:31:26.808299189Z",
+      "spec": "BUG-B6B1278890774EF993D2EBC327862470-151",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 3181,
+        "verdict": "APPROVED",
+        "reviewed_sha": "1c1184b206b096c9561f6630091b9615415d53fa"
+      }
+    },
+    {
+      "ts": "2026-11-01T03:50:02.033481408Z",
+      "spec": "BUG-B6B1278890774EF993D2EBC327862470-151",
+      "seat": "advisor",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-11-01T03:50:24.070970989Z",
+      "spec": "BUG-B6B1278890774EF993D2EBC327862470-151",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 3181
+      }
+    },
+    {
+      "ts": "2026-11-01T03:50:47.090135114Z",
+      "spec": "BUG-B6B1278890774EF993D2EBC327862470-151",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "c7170b4366544d7fc412f8491acbbb407089d44a",
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
