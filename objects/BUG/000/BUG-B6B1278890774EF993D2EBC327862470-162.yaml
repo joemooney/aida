@@ -24,7 +24,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T06:46:15.376021939Z
-modified_at: 2026-11-01T07:54:16.601776433Z
+modified_at: 2026-11-01T07:54:18.814691664Z
 req_type: Bug
 tags:
 - audit
@@ -76,6 +76,10 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a1961a-27c5-7512-ad88-8484d955b131
+  author: joe
+  timestamp: 2026-11-01T07:54:18.949293588Z
+  changes: []
 filed_at:
   code_sha: 6dc7d4977ac5e47c42ddfb26597fe3ec5fb70b60
   branch: main
@@ -88,3 +92,6 @@ implementation_info:
   implemented: true
   implemented_at: 2026-11-01T07:54:16.601776433Z
   implemented_by: joe
+interface_changes:
+  cli:
+  - Skill render and lint now discover .agents/skills and Claude folder skills, with legacy flat skills and local overlays preserved.
