@@ -20,12 +20,12 @@ description: |
 
   ## Out of scope
   Rewriting the developer-facing CLI glossary entries; new explainer pages.
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T22:58:37.964636963Z
-modified_at: 2026-11-01T06:22:13.788703439Z
+modified_at: 2026-11-01T06:33:45.803430404Z
 req_type: Story
 tags:
 - docs
@@ -162,6 +162,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a195d0-684b-74d2-93a5-06da7b76ba52
+  author: joe
+  timestamp: 2026-11-01T06:33:45.803450464Z
+  session_id: 01a195c5c97b
+  harness_version: 2.1.316 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 44c7b6663259478cfd02fd2f5da843720f0ee6e0
   branch: main
@@ -173,3 +182,9 @@ implementation_info:
   implemented: true
   implemented_at: 2026-11-01T04:50:52.670929625Z
   implemented_by: joe
+attention_reason:
+  category: blocked-dependency
+  detail: 'Round-2 findings 1-4 are fixed in 981fe33 (pushed to PR #3193), but docs/cli/12-glossary.md is NOT regenerated, so the book glossary drift guard and tests/test_generate_glossary_check.sh step (f) will fail. This sandbox could not build the binary: cargo build / aida dev build never finish inside the 60s per-step headless limit, background runs are refused, and cargo was later refused outright. Needed: in a session that can build, run ''aida dev build --no-promote'', then AIDA_BIN=<built aida> make book-glossary, commit the page, and confirm with ''bash tests/test_generate_glossary_check.sh''. No design question is open.'
+  lean: Regenerate the page with a built binary and push; no other change is needed.
+  raised_by: implementer
+  raised_at: 2026-11-01T06:33:45.803430404Z
