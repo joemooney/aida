@@ -132,6 +132,7 @@ pub(crate) fn mint_grant_for_with_ttl(
         // in-process check and an ancestor of every binary a test spawns.
         // trace:BUG-1934 | ai:claude
         binding: own_process_token().into_iter().collect(),
+        origin: None,
     };
     write_grant(&grant).unwrap();
     grant.id

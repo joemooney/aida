@@ -44,6 +44,7 @@ impl Fixture {
             expires_at: Utc::now() + chrono::Duration::hours(1),
             revoked_at: None,
             binding: Vec::new(),
+            origin: None,
         };
         let mut hold = mh::typed_hold(37, HoldReasonKind::Rework, "rework", Some(HEAD.into()));
         hold.verdict_ref = Some(mh::VerdictRef::new(
