@@ -24,7 +24,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T06:46:15.376021939Z
-modified_at: 2026-11-01T07:29:23.097250908Z
+modified_at: 2026-11-01T07:29:49.448280702Z
 req_type: Bug
 tags:
 - audit
@@ -60,6 +60,10 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a19603-bc00-7681-a984-19951329425d
+  author: joe
+  timestamp: 2026-11-01T07:29:49.568758987Z
+  changes: []
 filed_at:
   code_sha: 6dc7d4977ac5e47c42ddfb26597fe3ec5fb70b60
   branch: main
