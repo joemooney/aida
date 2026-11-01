@@ -8,13 +8,23 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-01T01:26:21.540218031Z
-modified_at: 2026-11-01T01:26:21.540218031Z
+modified_at: 2026-11-01T01:43:15.488404295Z
 req_type: Bug
 tags:
 - ci
 - epic-home-003
 - headless
 - regroup
+comments:
+- id: 01a194c6-7120-7b03-8824-c8f2ce3f2d74
+  author: joe
+  content: |
+    ADVISOR ROOT CAUSE (18:48, verified from a contained advisor session): `gh run view --log` and `--log-failed` download the log zip into the gh cache first. In the sandbox that path is read-only, so the call fails with "failed to get run log: creating cache entry: open ~/.cache/gh/run-log-<run>-<n>.zip: read-only file system". With `--log-failed` the error is swallowed and the output is empty, which made the round-2 and round-3 rework rounds on 3176/3182/3185 blind.
+    Workaround (works now in the sandbox): `gh api repos/<owner>/<repo>/actions/jobs/<job-id>/logs`. It streams plain text with no cache write, and `gh pr checks <N>` gives the job ids.
+    Fix options: (a) set XDG_CACHE_HOME (or GH_CACHE_DIR, if supported) to a writable per-session dir in contained lanes; (b) add a small `aida ci failures <PR>` helper that walks the failed jobs through the API and prints the panics, the `FAILED` lines and the first `##[error]` per job; (c) teach the reviewer and rework prompts the `gh api` form. (a) plus (b) is the durable fix. The "stray/" and "leak" lines in the gates job are self-test output and must not be reported as failures.
+  created_at: 2026-11-01T01:43:15.488404295Z
+  modified_at: 2026-11-01T01:43:15.488404295Z
+  session_id: 77a7a933-9a3f-4243-9a44-892bcedf206c
 filed_at:
   code_sha: 43d9f95803036ec22350e5a210d8c1cae20b9fe5
   branch: main
