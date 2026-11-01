@@ -478,6 +478,15 @@ fn single_hub_blocks(root: &Path) -> Result<Option<(String, Vec<crate::node::Agr
     }) else {
         return Ok(None);
     };
+    Ok(Some((hub, hub_ref_blocks(root, &remote)?)))
+}
+
+/// The block claims `remote`'s store ref records, as of this clone's
+/// remote-tracking copy (`refs/remotes/<remote>/<store branch>`). Empty when
+/// that ref or its `registry/blocks.yaml` does not exist (nothing is on the
+/// hub yet).
+// trace:STORY-B6B1278890774EF993D2EBC327862470-164 | ai:claude
+fn hub_ref_blocks(root: &Path, remote: &str) -> Result<Vec<crate::node::AgreedIdBlock>> {
     let branch = crate::git_ops::current_branch(root).unwrap_or_else(|_| "aida-store".to_string());
     let out = crate::git_ops::host_git_command(root)
         .args([
@@ -486,11 +495,11 @@ fn single_hub_blocks(root: &Path) -> Result<Option<(String, Vec<crate::node::Agr
         ])
         .output()?;
     if !out.status.success() {
-        return Ok(Some((hub, Vec::new())));
+        return Ok(Vec::new());
     }
     let registry: crate::node::BlockRegistry =
         serde_yaml::from_slice(&out.stdout).unwrap_or_default();
-    Ok(Some((hub, registry.blocks)))
+    Ok(registry.blocks)
 }
 
 /// The lineage inputs for this (non-root or root) clone, read from the store
@@ -545,17 +554,30 @@ fn with_lineage_view_of<T>(
     Ok(f(&view))
 }
 
-/// Each declared hub this clone reaches, with the remote it reaches it as.
+/// Each declared hub this clone reaches, with the remote it reaches it as
+/// and the claims on that remote's store ref. The refs are read only once
+/// the store has promoted pools to check against them (a root is recorded).
 // trace:STORY-B6B1278890774EF993D2EBC327862470-164 | ai:claude
-fn hub_remotes(root: &Path) -> Result<Vec<(String, String)>> {
+fn hub_remotes(root: &Path) -> Result<Vec<crate::allocation_lineage::HubReach>> {
     let hubs = crate::store_hubs::committed(root)?;
-    Ok(hubs
-        .hubs
-        .iter()
-        .filter_map(|h| {
-            crate::store_hubs::remote_reaching(root, &hubs, h).map(|r| (h.name.clone(), r))
-        })
-        .collect())
+    let rooted = crate::allocation_lineage::RootRecord::load(root)?.is_some();
+    let mut out = Vec::new();
+    for h in &hubs.hubs {
+        let Some(remote) = crate::store_hubs::remote_reaching(root, &hubs, h) else {
+            continue;
+        };
+        let on_hub = if rooted {
+            hub_ref_blocks(root, &remote)?
+        } else {
+            Vec::new()
+        };
+        out.push(crate::allocation_lineage::HubReach {
+            hub: h.name.clone(),
+            remote,
+            on_hub,
+        });
+    }
+    Ok(out)
 }
 
 /// Why `block` may not be spent in single-hub mode although the dispenser

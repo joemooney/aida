@@ -591,11 +591,23 @@ pub struct LineageView<'a> {
     /// reaches): the hub and the blocks on its store ref.
     // trace:STORY-B6B1278890774EF993D2EBC327862470-164 | ai:claude
     pub hub: Option<HubSpend<'a>>,
-    /// Each declared hub this clone reaches, and the remote it reaches it
-    /// as: `(hub, remote)`. A pool promoted from single-hub mode is homed on
-    /// a hub (by name), not on a clone's remote name.
+    /// Each declared hub this clone reaches, the remote it reaches it as,
+    /// and the claims that hub's store ref records. A pool promoted from
+    /// single-hub mode is homed on a hub (by name), not on a clone's remote
+    /// name.
     // trace:STORY-B6B1278890774EF993D2EBC327862470-164 | ai:claude
-    pub hub_remotes: &'a [(String, String)],
+    pub hub_remotes: &'a [HubReach],
+}
+
+/// A declared hub this clone reaches: the hub's name, the remote that
+/// reaches it, and the block claims on that remote's store ref (this
+/// clone's remote-tracking copy).
+// trace:STORY-B6B1278890774EF993D2EBC327862470-164 | ai:claude
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct HubReach {
+    pub hub: String,
+    pub remote: String,
+    pub on_hub: Vec<AgreedIdBlock>,
 }
 
 /// The single hub a block claim must be on to be spendable, and the claims
@@ -640,12 +652,9 @@ impl LineageView<'_> {
         promoted_hub(pool)
     }
 
-    /// The remote this clone reaches `hub` as.
-    fn remote_for_hub(&self, hub: &str) -> Option<&str> {
-        self.hub_remotes
-            .iter()
-            .find(|(h, _)| h == hub)
-            .map(|(_, r)| r.as_str())
+    /// How this clone reaches `hub`, when it does.
+    fn reach_for_hub(&self, hub: &str) -> Option<&HubReach> {
+        self.hub_remotes.iter().find(|r| r.hub == hub)
     }
 
     /// Index of the block this clone may dispense `type_prefix` from: bound
@@ -745,22 +754,34 @@ impl LineageView<'_> {
             // A pool promoted from single-hub mode is homed on its hub: the
             // clone's remote that reaches that hub is its upstream for it,
             // whatever that remote is called. A declared upstream must be it.
+            // Enrollment does not vouch for the block itself: the identical
+            // claim must be on that hub's store ref, so a pre-enrollment
+            // claim that was never pushed (deferred, local-only) or that
+            // only arrived in an imported store stays unspendable.
             // trace:STORY-B6B1278890774EF993D2EBC327862470-164 | ai:claude
             if let Some(hub) = promoted_hub(parent) {
-                return match (self.remote_for_hub(hub), self.upstream) {
-                    (None, _) => Err(Unusable::HubUnreached {
+                let Some(reach) = self.reach_for_hub(hub) else {
+                    return Err(Unusable::HubUnreached {
                         type_prefix: typ.to_string(),
                         hub: hub.to_string(),
-                    }),
-                    (Some(remote), Some(upstream)) if remote != upstream => {
-                        Err(Unusable::WrongUpstream {
+                    });
+                };
+                if let Some(upstream) = self.upstream {
+                    if reach.remote != upstream {
+                        return Err(Unusable::WrongUpstream {
                             type_prefix: typ.to_string(),
                             home_ref: parent.home_ref.clone(),
                             upstream: upstream.to_string(),
-                        })
+                        });
                     }
-                    _ => Ok(()),
-                };
+                }
+                if !reach.on_hub.iter().any(|b| same_claim(b, block)) {
+                    return Err(Unusable::NotOnHub {
+                        type_prefix: typ.to_string(),
+                        hub: hub.to_string(),
+                    });
+                }
+                return Ok(());
             }
             let upstream = self.upstream.unwrap_or_default();
             if home_remote(&parent.home_ref) != upstream {

@@ -347,6 +347,67 @@ fn single_hub_clones_claim_by_cas_and_mint_without_a_root() {
     assert!(a.ok(&["node", "show"]).contains("spendable"));
 }
 
+// AC2 through the real setup path: a fresh project runs `aida init` (no
+// hand-written node, dispenser or config files), declares its one hub under
+// [store.hubs], commits and pushes that to the hub's default branch, and its
+// first `aida add` after a claim mints a short agreed ID with no root.
+#[test]
+fn aida_init_then_a_pushed_hub_declaration_reaches_the_first_agreed_id() {
+    let dir = tempfile::tempdir().unwrap();
+    let hub = dir.path().join("hub.git");
+    let root = dir.path().join("project");
+    let home = dir.path().join("project-home");
+    fs::create_dir_all(&root).unwrap();
+    fs::create_dir_all(&home).unwrap();
+    run_git(
+        dir.path(),
+        &home,
+        &["init", "-q", "--bare", "-b", "main", hub.to_str().unwrap()],
+    );
+    run_git(&root, &home, &["init", "-q", "-b", "main"]);
+    let c = Clone {
+        store: root.join(".aida-store"),
+        root,
+        home,
+    };
+    c.ok(&["init", "--no-skills", "--no-hooks", "--no-agent-config"]);
+    assert!(c.store.is_dir(), "aida init attaches the store worktree");
+    assert!(!c.store.join("registry/root.yaml").exists());
+
+    // Declare the hub, commit it, push it (only a pushed declaration counts).
+    // The per-type counter scope is the one every other case here runs (a
+    // BUG claim backs BUG IDs); init's default shares one `*` block.
+    let config_path = c.root.join(".aida/config.toml");
+    let mut config = fs::read_to_string(&config_path)
+        .unwrap()
+        .replace("counter_scope = \"global\"", "counter_scope = \"per-type\"");
+    config.push_str(&format!("\n[store.hubs]\nhub = '{}'\n", hub.display()));
+    fs::write(&config_path, config).unwrap();
+    c.git(&c.root, &["add", ".aida/config.toml"]);
+    c.git(&c.root, &["commit", "-qm", "declare the store hub"]);
+    c.git(&c.root, &["remote", "add", "origin", hub.to_str().unwrap()]);
+    c.git(&c.root, &["push", "-q", "origin", "main", "aida-store"]);
+    let shown = c.ok(&["node", "show"]);
+    assert!(
+        shown.contains("Mode:      single-hub (hub hub → this clone reaches it as `origin`)"),
+        "{shown}"
+    );
+
+    c.ok(&["db", "block", "claim", "--type", "BUG", "--size", "100"]);
+    let node = c.node();
+    let mine = bug_blocks(&c.blocks(), &node);
+    assert_eq!(mine.len(), 1, "{:?}", c.blocks());
+    let out = c.add("first agreed bug", "bug");
+    assert!(out.status.success(), "{}", said(&out));
+    assert_eq!(
+        c.by_title("first agreed bug").agreed_id,
+        Some(format!("BUG-{}", mine[0].0)),
+        "{}",
+        said(&out)
+    );
+    assert!(!c.store.join("registry/root.yaml").exists());
+}
+
 // AC3: a claim committed locally but never pushed to the hub is not
 // spendable; add falls back to a node-local ID and says why.
 #[test]
@@ -403,9 +464,13 @@ fn a_claim_only_in_an_imported_store_is_never_spendable() {
     assert!(import.exists());
 }
 
-// AC3: a real `db block claim` whose push the hub rejects (a pre-receive
-// hook) never yields a spendable block: nothing lands on the hub, and add
-// mints no agreed ID from the refused range.
+// AC3: a real `db block claim` the hub never accepted is never spendable.
+// First the hub's pre-receive hook rejects the claim: the claim command
+// refuses, and the claim is rolled back, so nothing is on the hub or held
+// locally. Then a claim whose push fails after the claim commit is retained
+// (the push URL is unreachable): the claim stays in this clone's registry,
+// is not on the hub, and add refuses to spend it (NotOnHub) and issues a
+// node-local ID instead.
 #[test]
 fn a_claim_the_hub_rejected_is_never_spendable() {
     let w = World::new();
@@ -418,18 +483,49 @@ fn a_claim_the_hub_rejected_is_never_spendable() {
         use std::os::unix::fs::PermissionsExt;
         fs::set_permissions(&hook, fs::Permissions::from_mode(0o755)).unwrap();
     }
-    let _ = a.refused(&["db", "block", "claim", "--type", "BUG", "--size", "10"]);
+    let err = a.refused(&["db", "block", "claim", "--type", "BUG", "--size", "100"]);
+    assert!(err.contains("Could not push block claim"), "{err}");
     assert!(bug_blocks(&w.hub_blocks(), &node).is_empty());
+    assert!(
+        bug_blocks(&a.blocks(), &node).is_empty(),
+        "{:?}",
+        a.blocks()
+    );
+    fs::remove_file(&hook).unwrap();
+
+    // The claim commits, then its push fails: the commit is retained.
+    let missing = w.dir.path().join("unreachable-hub.git");
+    a.git(
+        &a.store,
+        &[
+            "remote",
+            "set-url",
+            "--push",
+            "origin",
+            missing.to_str().unwrap(),
+        ],
+    );
+    let err = a.refused(&["db", "block", "claim", "--type", "BUG", "--size", "100"]);
+    assert!(err.contains("Push failed"), "{err}");
+    a.git(&a.store, &["config", "--unset", "remote.origin.pushurl"]);
+    let held = bug_blocks(&a.blocks(), &node);
+    assert_eq!(
+        held.len(),
+        1,
+        "the unpushed claim is kept: {:?}",
+        a.blocks()
+    );
+    assert!(bug_blocks(&w.hub_blocks(), &node).is_empty());
+
     let out = a.add("rejected claim bug", "bug");
-    if out.status.success() {
-        assert_eq!(
-            a.by_title("rejected claim bug").agreed_id,
-            None,
-            "{}",
-            said(&out)
-        );
-    }
-    assert!(bug_blocks(&w.hub_blocks(), &node).is_empty());
+    assert!(out.status.success(), "{}", said(&out));
+    assert!(said(&out).contains("not on hub `hub`"), "{}", said(&out));
+    assert_eq!(
+        a.by_title("rejected claim bug").agreed_id,
+        None,
+        "{}",
+        said(&out)
+    );
 }
 
 // AC3: a legacy v1 authoritative clone in single-hub mode gets the same
@@ -452,7 +548,9 @@ fn an_authoritative_clone_does_not_spend_an_unpushed_hub_claim() {
     let out = a.add("authoritative unpushed bug", "bug");
     assert!(out.status.success(), "{}", said(&out));
     assert_ne!(
-        a.by_title("authoritative unpushed bug").agreed_id.as_deref(),
+        a.by_title("authoritative unpushed bug")
+            .agreed_id
+            .as_deref(),
         Some("BUG-500"),
         "{}",
         said(&out)

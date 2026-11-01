@@ -230,7 +230,9 @@ mod tests {
         let d = tempfile::tempdir().unwrap();
         let p = d.path();
         let git = |args: &[&str]| {
-            assert!(aida_core::git_ops::host_git_command(p)
+            assert!(crate::test_git::git_command()
+                .current_dir(p)
+                .args(["-c", "commit.gpgSign=false"])
                 .args(args)
                 .env("GIT_AUTHOR_NAME", "t")
                 .env("GIT_AUTHOR_EMAIL", "t@example.invalid")

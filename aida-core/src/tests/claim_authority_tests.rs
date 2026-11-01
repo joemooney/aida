@@ -3,7 +3,9 @@
 use super::*;
 
 fn git(dir: &Path, args: &[&str]) {
-    let out = crate::git_ops::host_git_command(dir)
+    let out = crate::test_git::git_command()
+        .current_dir(dir)
+        .args(["-c", "commit.gpgSign=false"])
         .args(args)
         .env("GIT_AUTHOR_NAME", "t")
         .env("GIT_AUTHOR_EMAIL", "t@example.invalid")

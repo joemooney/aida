@@ -975,6 +975,8 @@ impl BlockRegistry {
             kept && appended_ok,
             "a single-hub claim may only append this node's own hub-stamped blocks; registry/blocks.yaml was not written"
         );
+        // A clone's first claim may be the store's first registry write.
+        std::fs::create_dir_all(parent)?;
         let content = serde_yaml::to_string(self)?;
         crate::write_atomic(path, content)?;
         Ok(())

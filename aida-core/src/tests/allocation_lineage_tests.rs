@@ -596,7 +596,11 @@ fn a_promoted_hub_pool_is_spendable_through_the_remote_reaching_its_hub() {
     let blocks = vec![block(LEAF, "BUG", 1, 100, Some("hub:github:BUG"))];
     let pools = pools_to_materialize(&[], &blocks, ROOT);
     let r = root();
-    let reaches = [("github".to_string(), "origin".to_string())];
+    let reaches = [HubReach {
+        hub: "github".into(),
+        remote: "origin".into(),
+        on_hub: blocks.clone(),
+    }];
     let mut v = view(&pools, &blocks, Some(&r), LEAF, AllocationRole::Node, None);
     v.hub_remotes = &reaches;
     assert_eq!(v.spendable_block("BUG"), Ok(0));
@@ -618,4 +622,37 @@ fn a_promoted_hub_pool_is_spendable_through_the_remote_reaching_its_hub() {
             hub: "github".into()
         })
     );
+}
+
+// AC3 after AC5: enrollment does not launder a claim the hub never ordered.
+// A non-root clone's pre-enrollment hub claim that was never pushed
+// (deferred or local-only), or that arrived only through an imported store,
+// is not on the hub's store ref, so it stays unspendable once the root is
+// enrolled and its pool is promoted.
+// trace:STORY-B6B1278890774EF993D2EBC327862470-164 | ai:claude
+#[test]
+fn a_promoted_hub_pool_block_not_on_the_hub_ref_is_not_spendable() {
+    let blocks = vec![block(LEAF, "BUG", 1, 100, Some("hub:github:BUG"))];
+    let pools = pools_to_materialize(&[], &blocks, ROOT);
+    let r = root();
+    // The hub's ref holds another node's claim and an earlier, different
+    // range of this node's, never this one.
+    let reaches = [HubReach {
+        hub: "github".into(),
+        remote: "upstream".into(),
+        on_hub: vec![
+            block(HUB, "BUG", 101, 200, Some("hub:github:BUG")),
+            block(LEAF, "BUG", 1, 50, Some("hub:github:BUG")),
+        ],
+    }];
+    let mut v = view(&pools, &blocks, Some(&r), LEAF, AllocationRole::Node, None);
+    v.hub_remotes = &reaches;
+    let refused = Err(Unusable::NotOnHub {
+        type_prefix: "BUG".into(),
+        hub: "github".into(),
+    });
+    assert_eq!(v.spendable_block("BUG"), refused);
+    // A declared upstream that is the hub's remote does not change that.
+    v.upstream = Some("upstream");
+    assert_eq!(v.spendable_block("BUG"), refused);
 }
