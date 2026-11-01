@@ -618,7 +618,8 @@ fn canonical_clone_path(clone_path: &Path) -> String {
         .to_string()
 }
 
-/// Resolve this clone's node id. Two clones sharing one store inherit the same
+/// Resolve this clone's node id. The clone's WORK binding wins (the same
+/// rule as `allocation_authority::clone_node_id`). Without one: two clones sharing one store inherit the same
 /// `node_id` in the store worktree's `.aida/node.toml` (it rides the branch),
 /// so that is NOT a per-clone discriminator — the authoritative per-clone id is
 /// the `registry/nodes.toml` entry keyed by `clone_path`. Look that up first,
@@ -626,6 +627,20 @@ fn canonical_clone_path(clone_path: &Path) -> String {
 /// readable label; clone-identity comparisons key off `clone_path`.
 /// trace:STORY-637 | ai:claude
 fn node_id_for_clone(store_root: &Path, clone_path: &Path) -> String {
+    // The clone's WORK binding lives in its own git common dir, so it is
+    // per-clone already and outranks every shared-store guess: a clone whose
+    // legacy node was retired must not keep stamping the retired id.
+    // trace:BUG-2378 | ai:claude
+    // An unreadable binding is not "no binding": the fallbacks below may
+    // name a retired node, so say so rather than stamp it silently.
+    match aida_core::work_binding::load(store_root) {
+        Ok(Some(binding)) => return binding.node_id,
+        Ok(None) => {}
+        Err(e) => eprintln!(
+            "warning: could not read this clone's node binding ({e:#}); \
+             the lease names the node from the shared store, which may be a retired node"
+        ),
+    }
     let canon = canonical_clone_path(clone_path);
     let registry_path = store_root.join("registry").join("nodes.toml");
     if let Ok(registry) = aida_core::NodeRegistry::load(&registry_path) {
@@ -2935,6 +2950,11 @@ mod bug_2162_evidence_refusal_tests;
 #[cfg(test)]
 #[path = "tests/bug_2017_allocation_refusal_tests.rs"]
 mod bug_2017_allocation_refusal_tests;
+
+// trace:BUG-2378 | ai:claude
+#[cfg(test)]
+#[path = "tests/bug_2378_lease_stamp_tests.rs"]
+mod bug_2378_lease_stamp_tests;
 
 // trace:BUG-2188 | ai:codex
 #[cfg(test)]

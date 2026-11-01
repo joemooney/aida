@@ -410,6 +410,48 @@ mod tests {
             old
         );
     }
+    /// The real retired-clone shape after the agreed-ID backfill (the home
+    /// clone): both legacy files stay, `.aida/node.toml` is re-pointed at the
+    /// bound node, and `.aida/dispenser.toml` still names the retired node.
+    /// A node.toml without dispenser.toml never occurs there. The bound clone
+    /// never re-reads the legacy pair, so bootstrap keeps the binding and the
+    /// WORK counter instead of refusing the now-mismatched pair.
+    // trace:BUG-2378 | ai:claude
+    #[test]
+    fn bound_clone_bootstrap_ignores_the_backfill_repointed_legacy_pair() {
+        let d = tempfile::tempdir().unwrap();
+        crate::git_ops::init(d.path()).unwrap();
+        std::fs::create_dir_all(d.path().join(".aida")).unwrap();
+        std::fs::write(
+            d.path().join(".aida/node.toml"),
+            "node_id='7'\nuser_id=0\nhostname=''\nregistered_at='2026-01-01T00:00:00Z'\n",
+        )
+        .unwrap();
+        let old = "[mode.Distributed]\nnode_id='7'\n[sequences]\nBUG=91\n";
+        std::fs::write(d.path().join(".aida/dispenser.toml"), old).unwrap();
+        let bound = bootstrap(d.path()).unwrap().unwrap();
+        let next = crate::allocation_authority::dispenser(d.path(), None)
+            .unwrap()
+            .next("BUG")
+            .unwrap();
+        // The backfill's step 6: node.toml now names the bound node.
+        let mut config = crate::node::NodeConfig::load(&d.path().join(".aida/node.toml")).unwrap();
+        config.node_id = bound.node_id.clone();
+        config.save(&d.path().join(".aida/node.toml")).unwrap();
+        let again = bootstrap(d.path()).unwrap().unwrap();
+        assert_eq!(again.node_id, bound.node_id);
+        assert_eq!(
+            crate::allocation_authority::dispenser(d.path(), None)
+                .unwrap()
+                .next("BUG")
+                .unwrap(),
+            next + 1
+        );
+        assert_eq!(
+            std::fs::read_to_string(d.path().join(".aida/dispenser.toml")).unwrap(),
+            old
+        );
+    }
     #[test]
     fn legacy_bootstrap_refuses_invalid_or_incomplete_pairs_without_writes() {
         let valid = "node_id='7'\nuser_id=0\nhostname=''\nregistered_at='2026-01-01T00:00:00Z'\n";
