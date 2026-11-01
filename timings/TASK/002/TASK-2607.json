@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "spec": "TASK-2607",
+  "publishes": [
+    {
+      "at": "2026-11-01T04:19:10.916169653Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-01T04:19:10.729579247Z",
+      "spec": "TASK-2607",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "a83e05d785df667dfa986cf3eb310a3f0637b602",
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
