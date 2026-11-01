@@ -11,12 +11,12 @@ description: |-
   2. The suggested launcher follows the project's default vendor (`[agents] vendor`); with vendor = codex it prints the codex launch line, not `claude`.
   3. For a linked worktree, today's output stays the same (regression test).
   4. Tests cover both branches (clone vs linked worktree) and both vendors (claude, codex).
-status: Done
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T01:23:46.116682909Z
-modified_at: 2026-11-01T23:41:39.097216550Z
+modified_at: 2026-11-01T23:54:10.870384313Z
 req_type: Bug
 tags:
 - containment
@@ -97,6 +97,21 @@ history:
   timestamp: 2026-11-01T23:41:39.260040244Z
   session_id: 126bbd5a-a92f-452b-ab0b-2637a1db42c2
   changes: []
+- id: 01a19988-f02f-7f93-b167-d6f2a43f3b66
+  author: aida-auto-bump
+  timestamp: 2026-11-01T23:54:10.863672085Z
+  session_id: 126bbd5a-a92f-452b-ab0b-2637a1db42c2
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a19988-f036-7c21-ad9c-fadcaea2e8e1
+  timestamp: 2026-11-01T23:54:10.870379385Z
+  agent: aida
+  commit_sha: 26b143dd19334b889a1802cc7b4920373faed878
+  summary: 'All 4 BUG-2379 acceptance criteria met: pure session_next_lines builder is clone-aware (cd first, never worktree enter) and vendor-aware via resolve_default_vendor; linked-worktree claude output byte-identical; 2x2 clone/worktree x claude/codex tests; PR CI green.'
+  review_verdict: approved
 execution_mode: drain
 filed_at:
   code_sha: 43d9f95803036ec22350e5a210d8c1cae20b9fe5
@@ -109,3 +124,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-11-01T22:41:03.013633361Z
   implemented_by: joe
+  completed_at: 2026-11-01T23:54:10.863663995Z
+  completion_sha: 26b143dd19334b889a1802cc7b4920373faed878
