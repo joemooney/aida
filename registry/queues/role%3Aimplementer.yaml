@@ -1,4 +1,10 @@
 - user_id: role:implementer
+  requirement_id: 01a19434-2aa8-74d0-bccf-38faf512e4c7
+  position: 264000
+  added_by: role:implementer
+  added_at: 2026-11-01T08:44:41.355831959Z
+  for_role: implementer
+- user_id: role:implementer
   requirement_id: 01a195dc-eca2-7570-afea-e3ba747f78c3
   position: 265000
   added_by: role:implementer
@@ -10,13 +16,6 @@
   added_by: role:implementer
   note: PR3185 conflicts with merged BUG2378; preserve both reviewed behaviors, fresh independent review at resolution head
   added_at: 2026-11-01T08:19:14.517033441Z
-  for_role: implementer
-- user_id: role:implementer
-  requirement_id: 01a19434-2aa8-74d0-bccf-38faf512e4c7
-  position: 267000
-  added_by: role:implementer
-  note: 'PR-3194 round-2 verdict ledger PR-3194.jsonl#7 at 1a9bb9a73bce: one portability false-positive site and a real combined file-cap violation. Both verified against source.'
-  added_at: 2026-11-01T07:36:19.465888088Z
   for_role: implementer
 - user_id: role:implementer
   requirement_id: 01a1942f-b90c-7ee1-a06c-d5856831d28e
