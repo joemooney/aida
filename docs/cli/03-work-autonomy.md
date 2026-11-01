@@ -222,17 +222,21 @@ the job in the seat with the seat's own cargo target, through the host's
 
 A job runs code the seat wrote (build scripts, tests), so it always runs in its
 own bubblewrap sandbox. The filesystem is read-only except the seat, its cargo
-target, the `registry/` and `git/` download caches in cargo home, and the slot
-wrapper's lock and log directories. Cargo home's `bin/` (the `cargo` and
-`rustc` proxies) and its `config.toml` stay read-only, so a job cannot change
-what the host's next cargo runs. When
+target, and the slot wrapper's lock and log directories. All of cargo home is
+read-only: `bin/` (the `cargo` and `rustc` proxies), `config.toml`, the download
+caches, and the extracted dependency sources in `registry/src/` and
+`git/checkouts/`, whose build scripts the host's next cargo runs. So a job
+cannot change what the host's next cargo runs. A job runs offline
+(`CARGO_NET_OFFLINE=true`) against the dependencies the host already fetched;
+a dependency the host has not fetched fails with cargo's offline error, and the
+seat reports that work as untested. When
 `[contained] os_wrap` is off, or bubblewrap cannot run, the launcher does not
 offer the runner and the runner refuses every job. Nothing runs unsandboxed,
 and the result line says `untested=true`. A job starts from a cleared
 environment: only `PATH`, `HOME`, `USER`, `LANG`, `LC_*`, `TMPDIR`,
 `CARGO_HOME`, `RUSTUP_HOME`, `RUSTUP_TOOLCHAIN`, `CARGO_TERM_COLOR`,
 `XDG_RUNTIME_DIR` and `AIDA_CARGO_SLOTS` come from the launcher, plus the seat's
-cargo target and the lane marker. A seat may set `AIDA_CARGO_TIMEOUT`,
+cargo target, the lane marker and `CARGO_NET_OFFLINE=true`. A seat may set `AIDA_CARGO_TIMEOUT`,
 `RUST_BACKTRACE`, `RUST_TEST_THREADS` and `AIDA_UPDATE_SNAPSHOTS` for a job.
 No grant, session variable or credential reaches it.
 
@@ -242,6 +246,11 @@ run finishes, and otherwise prints the job id and exits 75; `aida lane job wait
 `.aida/lane-jobs/<lease>/`, with one line per job in its `jobs.log`. Only a
 `cargo test` that ran to its own exit code counts as tested: a lane that ran
 only `cargo check` or `cargo build` still says `untested=true`.
+
+Both headless implementer launches get the runner: a standalone implementer
+(`aida queue work <SPEC> --no-human`) and the `--auto-complete --no-human`
+drain's implementer phase. A drain whose implementer ran no test to completion
+says `untested=true` in that phase's output.
 
 A seat clone's cargo target is seeded from the primary's agent-profile target
 when the clone is created, and again before the first job. The seed copies

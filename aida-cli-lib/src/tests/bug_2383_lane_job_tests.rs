@@ -243,6 +243,7 @@ fn allowed_job_key(key: &str) -> bool {
         || BUILD_ENV_ALLOWED.contains(&key)
         || ALLOWED_ENV.contains(&key)
         || key == crate::headless_background::LANE_MARKER_ENV
+        || key == OFFLINE_ENV.0
 }
 
 #[cfg(unix)]
@@ -468,6 +469,11 @@ fn job_env_carries_only_allow_listed_keys() {
             .map(String::as_str),
         Some("lease-env")
     );
+    // Every job runs offline: cargo home is read-only in the sandbox.
+    assert_eq!(
+        env.get("CARGO_NET_OFFLINE").map(String::as_str),
+        Some("true")
+    );
     // The scrub at construction drops the same keys.
     let scrubbed = scrub_host_env(dirty_host_env(tmp.path()));
     assert!(scrubbed.iter().all(|(k, _)| host_key_allowed(k)));
@@ -585,7 +591,7 @@ fn a_job_takes_the_cargo_slot_through_the_limiter_on_path() {
 }
 
 #[test]
-fn sandbox_writes_only_the_target_cargo_home_and_slot_state() {
+fn sandbox_writes_only_the_target_and_slot_state_never_cargo_home() {
     let lane = LaneJobs {
         seat: PathBuf::from("/w/aida-seat-x"),
         inbox: PathBuf::from("/w/aida-seat-x").join(INBOX_RELATIVE),
@@ -608,8 +614,6 @@ fn sandbox_writes_only_the_target_cargo_home_and_slot_state() {
         rw,
         vec![
             PathBuf::from("/m/target/worktrees/x"),
-            PathBuf::from("/home/u/.cargo/registry"),
-            PathBuf::from("/home/u/.cargo/git"),
             PathBuf::from(&slot_dir),
             PathBuf::from("/home/u/.local/state/cargo-slots"),
         ]
@@ -633,17 +637,25 @@ fn sandbox_writes_only_the_target_cargo_home_and_slot_state() {
         vec![
             "/w/aida-seat-x",
             "/m/target/worktrees/x",
-            "/home/u/.cargo/registry",
-            "/home/u/.cargo/git",
             slot_dir.as_str(),
             "/home/u/.local/state/cargo-slots",
         ]
     );
     assert!(!argv.iter().any(|a| a.contains(".claude")), "{argv:?}");
-    // Round-3 finding 5: neither the rustup proxies in cargo home's bin/ nor
-    // its config.toml (a build.rustc-wrapper) is writable, whether as a bind
-    // of its own or under a writable parent. trace:BUG-2383 | ai:claude
-    for host_code in ["/home/u/.cargo/bin/cargo", "/home/u/.cargo/config.toml"] {
+    // Round-3 finding 5 and the round-3 ruling: no file the host's next
+    // cargo runs is writable, whether as a bind of its own or under a
+    // writable parent: the rustup proxies in bin/, config.toml (a
+    // build.rustc-wrapper), and the extracted dependency sources (their
+    // build.rs) in registry/src/ and git/checkouts/, nor the download caches
+    // they are extracted from. trace:BUG-2383 | ai:claude
+    for host_code in [
+        "/home/u/.cargo/bin/cargo",
+        "/home/u/.cargo/config.toml",
+        "/home/u/.cargo/registry/src/index.crates.io-0/serde-1.0.0/build.rs",
+        "/home/u/.cargo/registry/cache/index.crates.io-0/serde-1.0.0.crate",
+        "/home/u/.cargo/git/checkouts/dep-0/abc/build.rs",
+        "/home/u/.cargo/git/db/dep-0/objects",
+    ] {
         let covering: Vec<&&str> = rw_binds
             .iter()
             .filter(|bind| std::path::Path::new(host_code).starts_with(bind))
@@ -657,15 +669,107 @@ fn sandbox_writes_only_the_target_cargo_home_and_slot_state() {
     let mut custom = env.clone();
     custom.insert("CARGO_HOME".into(), "/opt/cargo".into());
     let rw = lane.sandbox_rw_paths(&custom);
-    assert!(rw.contains(&PathBuf::from("/opt/cargo/registry")));
-    assert!(!rw.contains(&PathBuf::from("/opt/cargo")));
-    assert!(!rw
-        .iter()
-        .any(|p| Path::new("/opt/cargo/bin").starts_with(p)));
+    assert!(
+        !rw.iter()
+            .any(|p| Path::new("/opt/cargo/registry/src").starts_with(p)
+                || p.starts_with("/opt/cargo")),
+        "{rw:?}"
+    );
     assert_eq!(
         &argv[argv.len() - 2..],
         &["/home/u/.local/bin/cargo", "test"]
     );
+}
+
+/// Whether bubblewrap can create a sandbox on this host.
+#[cfg(unix)]
+fn bwrap_usable() -> bool {
+    std::process::Command::new("bwrap")
+        .args(["--ro-bind", "/", "/", "--dev", "/dev", "true"])
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .is_ok_and(|s| s.success())
+}
+
+// Round-3 advisor ruling: a job inside the real bubblewrap profile cannot
+// change a host dependency's build.rs in registry/src/ or git/checkouts/,
+// while it can still write its seat. Skipped where bubblewrap cannot run
+// (unprivileged user namespaces off). trace:BUG-2383 | ai:claude
+#[cfg(unix)]
+#[test]
+fn a_sandboxed_job_cannot_change_a_host_dependency_build_script() {
+    if !bwrap_usable() {
+        eprintln!("skipped: bubblewrap cannot create a sandbox on this host");
+        return;
+    }
+    // Not under /tmp: the profile mounts a private tmpfs there, which would
+    // hide the fixture and let the write "fail" for the wrong reason.
+    let exe = std::env::current_exe().unwrap();
+    let base = tempfile::tempdir_in(exe.parent().unwrap()).unwrap();
+    let home = base.path().join("home");
+    let cargo_home = home.join(".cargo");
+    let seat = base.path().join("seat");
+    let target = base.path().join("target");
+    std::fs::create_dir_all(&seat).unwrap();
+    std::fs::create_dir_all(&target).unwrap();
+    let original = "fn main() {}\n";
+    let scripts = [
+        cargo_home.join("registry/src/index.crates.io-0/dep-1.0.0/build.rs"),
+        cargo_home.join("git/checkouts/dep-0/abc/build.rs"),
+    ];
+    for script in &scripts {
+        std::fs::create_dir_all(script.parent().unwrap()).unwrap();
+        std::fs::write(script, original).unwrap();
+    }
+    let lane = LaneJobs {
+        seat: seat.clone(),
+        inbox: seat.join(INBOX_RELATIVE),
+        results: base.path().join("results"),
+        lease_id: "lease-bwrap".into(),
+        build_env: vec![("CARGO_TARGET_DIR".into(), target.display().to_string())],
+        host_env: Vec::new(),
+        program: "cargo".into(),
+        sandbox: Sandbox::Bwrap,
+    };
+    let env: BTreeMap<String, String> = [("HOME".to_string(), home.display().to_string())]
+        .into_iter()
+        .collect();
+    let rw = lane.sandbox_rw_paths(&env);
+    let run = |script: &str| {
+        let argv = crate::session::lane_job_bwrap_argv(
+            &seat,
+            &rw,
+            &[],
+            "/bin/sh",
+            vec!["-c".into(), script.into()],
+        );
+        std::process::Command::new("bwrap")
+            .args(&argv)
+            .output()
+            .unwrap()
+    };
+    // Control: the seat and the target are writable, so a refusal below is
+    // the profile's doing.
+    let wrote = run(&format!(
+        "echo ok > '{}/probe' && echo ok > '{}/probe'",
+        seat.display(),
+        target.display()
+    ));
+    assert!(wrote.status.success(), "{wrote:?}");
+    for script in &scripts {
+        let attempt = run(&format!(
+            "test -f '{0}' || exit 3; echo 'compile_error!(\"pwned\");' > '{0}' || exit 1; exit 0",
+            script.display()
+        ));
+        assert_eq!(
+            attempt.status.code(),
+            Some(1),
+            "the write to {} was not refused: {attempt:?}",
+            script.display()
+        );
+        assert_eq!(std::fs::read_to_string(script).unwrap(), original);
+    }
 }
 
 // Finding 5: a check or build is not a test. trace:BUG-2383 | ai:claude
@@ -800,4 +904,19 @@ fn implementer_prompt_names_the_sanctioned_path() {
     assert!(contract.contains("untested=true"));
     assert!(contract.contains("do not run cargo yourself"));
     assert!(contract.contains("setsid nohup"), "names what it replaces");
+}
+
+// Finding 8 / round-3 ruling: the drain's phase-1 launcher leaves the
+// untested marker for the orchestrator, and clears a stale one when the
+// lane did run a test. trace:BUG-2383 | ai:claude
+#[test]
+fn a_drain_lane_records_whether_it_ran_a_test() {
+    let tmp = tempfile::tempdir().unwrap();
+    let main = tmp.path();
+    assert!(!lane_was_untested(main, "lease-d"));
+    record_untested(main, "lease-d", true);
+    assert!(lane_was_untested(main, "lease-d"));
+    assert!(!lane_was_untested(main, "lease-other"));
+    record_untested(main, "lease-d", false);
+    assert!(!lane_was_untested(main, "lease-d"));
 }

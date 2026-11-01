@@ -4193,8 +4193,8 @@ pub(crate) fn os_wrapped_program_and_args(
 /// tests, a seat-written `.cargo/config.toml` runner), so it never runs
 /// unsandboxed and never gets the seat's wider launch profile (`~/.claude`,
 /// the store, the mailbox): the filesystem is read-only except `seat` and the
-/// `rw` paths the caller names (the seat's cargo target, cargo home's download
-/// caches, the slot limiter's state). Fails closed, with the remediation, when `[contained]
+/// `rw` paths the caller names (the seat's cargo target and the slot
+/// limiter's state; never cargo home). Fails closed, with the remediation, when `[contained]
 /// os_wrap` is off for the seat or bubblewrap cannot run.
 // trace:BUG-2383 | ai:claude
 pub(crate) fn lane_job_wrapped_program_and_args(
@@ -4477,6 +4477,28 @@ pub(crate) fn exec_vendor_headless(
     child_grant: &crate::gate::seat_authority::HeadlessChildGrant,
     lane_tree: Option<(&Path, &str)>,
 ) -> Result<()> {
+    let drain_lane = drain_resume_lane(vendor, seat, lease_id, lane_tree);
+    // BUG-2383: the drain's phase-1 implementer gets the standalone launch's
+    // lane job runner too, so it can run its targeted tests outside its
+    // 60-second tool-call cap, and a lane that ran none is reported untested.
+    // This process is the seat's host side (it launches the sandboxed
+    // vendor), so the runner runs here. trace:BUG-2383 | ai:claude
+    let main_root = crate::main_worktree_root_from(&headless_worktree_root());
+    let lane_jobs = drain_lane
+        .and_then(|(lease, (worktree, _))| crate::lane_job::offer(&main_root, worktree, lease));
+    let apply_lane_env = |cmd: &mut std::process::Command| {
+        if let Some(lane_jobs) = &lane_jobs {
+            lane_jobs.apply_env(cmd);
+        }
+    };
+    let prompt = if lane_jobs.is_some() {
+        format!(
+            "{prompt}{}",
+            crate::standalone_implementer::LANE_JOB_CONTRACT
+        )
+    } else {
+        prompt.to_string()
+    };
     let run_once = |prompt: &str, log: &Path, resume: bool, hold: Option<&dyn Fn() -> bool>| {
         run_vendor_headless_child(
             vendor,
@@ -4489,24 +4511,40 @@ pub(crate) fn exec_vendor_headless(
             seat,
             child_grant.env_value(),
             &HeadlessChildHooks {
+                customize: Some(&apply_lane_env),
                 resume,
                 hold_reap: hold,
                 ..HeadlessChildHooks::default()
             },
         )
     };
+    let runner = lane_jobs.clone().map(crate::lane_job::Runner::start);
     // BUG-050: the `--auto-complete` drain's phase-1 implementer gets the
     // standalone launch's resume safety net, through the same loop: a lane
     // that parks on its own build is waited for and resumed, bounded.
     // trace:BUG-B6B1278890774EF993D2EBC327862470-050 | ai:claude
-    let result = match drain_resume_lane(vendor, seat, lease_id, lane_tree) {
-        None => run_once(prompt, log_path, false, None),
+    let result = match drain_lane {
+        None => run_once(&prompt, log_path, false, None),
         Some((lease, (worktree, branch))) => {
-            drain_lane_with_resume(lease, worktree, branch, prompt, log_path, |p, l, r, h| {
+            drain_lane_with_resume(lease, worktree, branch, &prompt, log_path, |p, l, r, h| {
                 run_once(p, l, r, Some(h))
             })
         }
     };
+    // BUG-2383 AC3: an implementer lane that ran no local test to completion
+    // (no runner, or no `cargo test` finished) leaves the untested marker for
+    // the drain to report. trace:BUG-2383 | ai:claude
+    if let Some((lease, _)) = drain_lane {
+        let untested = runner.map(|r| r.stop().untested()).unwrap_or(true);
+        crate::lane_job::record_untested(&main_root, lease, untested);
+        if untested {
+            eprintln!(
+                "{} the implementer ran no local test to completion (untested=true); \
+                 its push reaches CI untested",
+                "Warning:".yellow().bold()
+            );
+        }
+    }
     // BUG-2139: the child's grant dies with the child — on a normal or
     // nonzero exit and on a spawn failure alike. A failed revoke only warns:
     // the grant still expires with its parent, and the lease end/reap revokes

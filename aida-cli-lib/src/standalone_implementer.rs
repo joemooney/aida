@@ -602,28 +602,10 @@ pub(crate) fn run(launch: Launch<'_>) -> Result<()> {
     // BUG-2383: the lane job runner, so the seat can run its tests here,
     // outside its 60-second tool-call cap. trace:BUG-2383 | ai:claude
     let worktree = lease_worktree(launch.project_root, launch.lease_id);
-    let lane_jobs = crate::lane_job::LaneJobs::for_lease(&main_root, &worktree, launch.lease_id);
     // A job runs seat-written code, so it runs only inside bubblewrap: with
     // os_wrap off the runner would refuse every job, so it is not offered and
     // the lane reports untested=true.
-    let lane_jobs = match lane_jobs.prepare() {
-        Ok(()) if !crate::session::os_wrap_enabled(&worktree) => {
-            eprintln!(
-                "{} the lane job runner needs `[contained] os_wrap` (jobs run only inside \
-                 bubblewrap), so the implementer cannot run tests and its result says untested=true",
-                "Warning:".yellow().bold()
-            );
-            None
-        }
-        Ok(()) => Some(lane_jobs),
-        Err(e) => {
-            eprintln!(
-                "{} the lane job runner is unavailable, so the implementer cannot run tests: {e:#}",
-                "Warning:".yellow().bold()
-            );
-            None
-        }
-    };
+    let lane_jobs = crate::lane_job::offer(&main_root, &worktree, launch.lease_id);
     let prompt = format!(
         "{}{STOP_CONTRACT}{}",
         launch.prompt,

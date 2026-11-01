@@ -13,9 +13,10 @@
 //!   and, when it ends, its exit code in `<id>.rc`. It also appends one line
 //!   per job to `jobs.log` there.
 //!
-//! The launcher of a standalone implementer (`aida queue work <SPEC>
-//! --no-human`) runs [`Runner`] on a thread for as long as it waits for the
-//! lane. The runner takes one job at a time and runs it in the seat's
+//! The launcher of a headless implementer (a standalone `aida queue work
+//! <SPEC> --no-human`, or the `--auto-complete --no-human` drain's phase-1
+//! implementer, see [`offer`]) runs [`Runner`] on a thread for as long as it
+//! waits for the lane. The runner takes one job at a time and runs it in the seat's
 //! directory, with the seat's build environment (its own cargo target, no
 //! compiler wrapper), and through the host `cargo` on `PATH`, which is the
 //! cargo slot-limiting wrapper on a configured host. Each job's output names
@@ -32,9 +33,12 @@
 //!   seat-written `.cargo/config.toml` runner), so it always runs inside its
 //!   own minimal bubblewrap profile
 //!   ([`crate::session::lane_job_wrapped_program_and_args`]): the filesystem
-//!   is read-only except the seat, its cargo target, cargo home's `registry/`
-//!   and `git/` download caches (never its `bin/` or `config.toml`) and the
-//!   slot limiter's state. When `[contained] os_wrap` is off or bubblewrap cannot
+//!   is read-only except the seat, its cargo target and the slot limiter's
+//!   state. All of cargo home is read-only, including `registry/src/` and
+//!   `git/checkouts/` (the extracted dependency sources whose `build.rs` the
+//!   host's next cargo runs unsandboxed), and the job runs offline
+//!   (`CARGO_NET_OFFLINE=true`) against the dependencies the host already
+//!   fetched (advisor ruling, round 3). When `[contained] os_wrap` is off or bubblewrap cannot
 //!   run, the job is refused and nothing runs; the lane reports
 //!   `untested=true`.
 //! - A job starts from a cleared environment plus [`HOST_ENV_ALLOWED`], the
@@ -129,10 +133,11 @@ pub(crate) fn scrub_host_env(
         .collect()
 }
 
-/// The only cargo-home subdirectories a job's sandbox may write: the
-/// registry and git download caches. Everything else there (`bin/`,
-/// `config.toml`, `credentials.toml`, `env`) stays read-only.
-pub(crate) const CARGO_HOME_RW: &[&str] = &["registry", "git"];
+/// Set on every job: cargo must not download. Cargo home is read-only in
+/// the sandbox, so a job builds only against dependencies the host already
+/// fetched and extracted, and a missing one fails with cargo's own offline
+/// error instead of a write into the host's cache.
+pub(crate) const OFFLINE_ENV: (&str, &str) = ("CARGO_NET_OFFLINE", "true");
 
 /// The cargo subcommands a job may run.
 pub(crate) const ALLOWED_SUBCOMMANDS: &[&str] = &["test", "check", "build"];
@@ -244,6 +249,63 @@ pub(crate) fn timeout_for(job: &JobRequest, cold: bool) -> Duration {
 /// The results directory for lease `lease_id`.
 pub(crate) fn results_dir(main_root: &Path, lease_id: &str) -> PathBuf {
     main_root.join(".aida").join("lane-jobs").join(lease_id)
+}
+
+/// The marker a lane's launcher leaves in its results directory when the
+/// lane ran no local test to completion, for a launcher above it (the
+/// `--auto-complete` drain) to report.
+pub(crate) const UNTESTED_MARKER: &str = "untested";
+
+/// The lane job runner for `lease_id`'s seat at `seat`, when it can be
+/// offered: its directories are ready and `[contained] os_wrap` is on (a job
+/// runs only inside bubblewrap, so with it off the runner would refuse every
+/// job). Otherwise warns why and returns `None`; the lane then reports
+/// `untested=true`. Shared by the standalone implementer and the drain's
+/// phase-1 implementer.
+// trace:BUG-2383 | ai:claude
+pub(crate) fn offer(main_root: &Path, seat: &Path, lease_id: &str) -> Option<LaneJobs> {
+    use colored::Colorize;
+    let lane_jobs = LaneJobs::for_lease(main_root, seat, lease_id);
+    match lane_jobs.prepare() {
+        Ok(()) if !crate::session::os_wrap_enabled(seat) => {
+            eprintln!(
+                "{} the lane job runner needs `[contained] os_wrap` (jobs run only inside \
+                 bubblewrap), so the implementer cannot run tests and its result says untested=true",
+                "Warning:".yellow().bold()
+            );
+            None
+        }
+        Ok(()) => Some(lane_jobs),
+        Err(e) => {
+            eprintln!(
+                "{} the lane job runner is unavailable, so the implementer cannot run tests: {e:#}",
+                "Warning:".yellow().bold()
+            );
+            None
+        }
+    }
+}
+
+/// Record whether `lease_id`'s lane ran a local test: leave
+/// [`UNTESTED_MARKER`] when it did not, remove a stale one when it did.
+// trace:BUG-2383 | ai:claude
+pub(crate) fn record_untested(main_root: &Path, lease_id: &str, untested: bool) {
+    let dir = results_dir(main_root, lease_id);
+    let marker = dir.join(UNTESTED_MARKER);
+    if untested {
+        if std::fs::create_dir_all(&dir).is_ok() {
+            let _ = std::fs::write(&marker, "untested=true\n");
+        }
+    } else {
+        let _ = std::fs::remove_file(&marker);
+    }
+}
+
+/// Whether `lease_id`'s lane left [`UNTESTED_MARKER`].
+pub(crate) fn lane_was_untested(main_root: &Path, lease_id: &str) -> bool {
+    results_dir(main_root, lease_id)
+        .join(UNTESTED_MARKER)
+        .is_file()
 }
 
 /// The output and exit-code files of job `id`.
@@ -405,19 +467,24 @@ impl LaneJobs {
             crate::headless_background::LANE_MARKER_ENV.to_string(),
             self.lease_id.clone(),
         );
+        // trace:BUG-2383 | ai:claude
+        env.insert(OFFLINE_ENV.0.to_string(), OFFLINE_ENV.1.to_string());
         env
     }
 
     /// The paths a job's sandbox may write besides the seat: its cargo
-    /// target, cargo home's download caches, and the host cargo wrapper's
-    /// slot locks and slot log, so the job queues for a slot with every other
-    /// cargo on the host and its run is recorded.
+    /// target and the host cargo wrapper's slot locks and slot log, so the
+    /// job queues for a slot with every other cargo on the host and its run
+    /// is recorded.
     ///
-    /// Only [`CARGO_HOME_RW`] (`registry/`, `git/`) is writable in cargo
-    /// home. `bin/` holds the rustup proxies (`cargo`, `rustc`) and
-    /// `config.toml` can name a `build.rustc-wrapper`; a job that could write
-    /// either would run its code on the host's next cargo, unsandboxed
-    /// (round-3 finding 5).
+    /// Nothing in cargo home is writable. `bin/` holds the rustup proxies
+    /// (`cargo`, `rustc`), `config.toml` can name a `build.rustc-wrapper`,
+    /// and `registry/src/` and `git/checkouts/` hold the extracted
+    /// dependency sources, `build.rs` included, that the host's next cargo
+    /// compiles and runs. A job that could write any of them would run its
+    /// code on the host, unsandboxed. The download caches are not writable
+    /// either: cargo does not re-verify a cached `.crate` before extracting
+    /// it. Jobs run offline instead ([`OFFLINE_ENV`]).
     // trace:BUG-2383 | ai:claude
     pub(crate) fn sandbox_rw_paths(&self, env: &BTreeMap<String, String>) -> Vec<PathBuf> {
         let mut rw = Vec::new();
@@ -425,13 +492,6 @@ impl LaneJobs {
             rw.push(target);
         }
         let home = env.get("HOME").map(PathBuf::from);
-        if let Some(cargo_home) = env
-            .get("CARGO_HOME")
-            .map(PathBuf::from)
-            .or_else(|| home.as_ref().map(|h| h.join(".cargo")))
-        {
-            rw.extend(CARGO_HOME_RW.iter().map(|sub| cargo_home.join(sub)));
-        }
         let runtime = env
             .get("XDG_RUNTIME_DIR")
             .map(PathBuf::from)
