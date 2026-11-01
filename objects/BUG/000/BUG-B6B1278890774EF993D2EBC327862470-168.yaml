@@ -1,0 +1,38 @@
+id: 01a195dd-8f62-7b90-9aa4-7d66a5828944
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-168
+agreed_id: BUG-2394
+title: 'Codex permission and MCP posture gaps: queue work --plan-only, [agents] mcp = off|aida, and doctor worktree-folder-trust assume Claude'
+description: |-
+  Why
+  ───
+  Discovered by SPIKE-710 audit:
+
+  1. `--plan-only` pickup on Codex does not enforce read-only posture (`aida-cli-lib/src/queue_cmd.rs:11315-11334, 13522` & `aida-cli-lib/src/session.rs:3380-3411`): `resolve_queue_work_posture` maps `--plan-only` to `permission_mode = Some("plan")`. On Claude this passes `--permission-mode plan`, but on Codex `let codex_bypass = permission_mode.as_deref() == Some("bypassPermissions");` treats `Some("plan")` identically to `None` (ordinary write posture) instead of passing `--sandbox read-only`.
+  2. `[agents] mcp = "off" | "aida"` is only enforced on Claude (`aida-cli-lib/src/lib_part2.rs:791-796`, `aida-cli-lib/src/agent_launch.rs:5671-5678`, `aida-cli-lib/src/session.rs:3135`, `.aida/agents.toml:55-58`): `claude_mcp_flags` passes `--strict-mcp-config` to Claude, while Codex launches ignore the setting and load all MCP servers from `~/.codex/config.toml` (incurring the 1.8-2x MCP token tax measured in SPIKE-73).
+  3. `scan_agent_worktree_trust` (`aida-cli-lib/src/doctor_cmd.rs:3092-3360`, `aida-cli-lib/src/claude_trust.rs:1-538`) unconditionally reads `~/.claude.json` and emits `worktree-folder-trust` (`"worktrees are created under ..., which has no Claude Code folder-trust record — an interactive aida agent new claude --spec <ID> there stops on a folder-trust modal"`) even when `[agents] vendor = "codex"` and Claude is disabled or unused. Also `queue_cmd.rs:13015-13021` only runs `preflight_contained_reviewer` for `HeadlessVendor::Claude`.
+
+  Acceptance
+  ──────────
+  1. `aida queue work <SPEC> --plan-only` on Codex enforces read-only sandbox posture (`--sandbox read-only`) instead of normal write flags.
+  2. Investigate/wire Codex CLI `-c` config overrides for `[agents] mcp = "off" | "aida"` (or surface clearly in `aida config permissions show` when `mcp` cannot be enforced for the active vendor).
+  3. Gate `scan_agent_worktree_trust` (`~/.claude.json` folder trust doctor findings) on Claude being an active/enabled vendor for the project, and support Codex worktree trust if applicable.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-01T06:48:07.778727918Z
+modified_at: 2026-11-01T06:48:07.778727918Z
+req_type: Bug
+tags:
+- audit
+- doctor
+- permissions
+- vendor:codex
+filed_at:
+  code_sha: 6dc7d4977ac5e47c42ddfb26597fe3ec5fb70b60
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 962ca07af25
+  vendor: antigravity
+  session: 01a194b1bcfb
