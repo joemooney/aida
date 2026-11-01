@@ -23,7 +23,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-01T00:54:15.086953992Z
-modified_at: 2026-11-01T00:54:15.086953992Z
+modified_at: 2026-11-01T11:15:37.998560971Z
 req_type: Epic
 tags:
 - from-operator
@@ -107,6 +107,10 @@ relationships:
 - rel_type: Parent
   target_id: 01a19639-d547-7300-9a70-befaedad7e96
   created_at: 2026-11-01T08:29:05.908481525Z
+- rel_type: Parent
+  target_id: 01a19600-3f6f-7672-b6b2-6611ff226175
+  created_at: 2026-11-01T11:15:37.998558734Z
+  created_by: joe
 history:
 - id: 01a1949a-4b0e-7423-93d1-e6fa4aba1d93
   author: joe
@@ -228,6 +232,10 @@ history:
 - id: 01a1963a-334e-7722-88cb-7bef708f0373
   author: joe
   timestamp: 2026-11-01T08:29:19.055001283Z
+  changes: []
+- id: 01a196d2-9aa5-7220-9030-fcae0132e027
+  author: joe
+  timestamp: 2026-11-01T11:15:46.981235175Z
   changes: []
 filed_at:
   code_sha: 43d9f95803036ec22350e5a210d8c1cae20b9fe5
