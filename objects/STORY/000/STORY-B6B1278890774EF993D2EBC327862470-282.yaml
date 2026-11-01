@@ -1,0 +1,34 @@
+id: 01a195b3-e8de-7002-8704-0e333214deee
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-282
+agreed_id: STORY-2264
+title: 'Review PR-3194: [AI:claude] feat(docs): aida docs sweep and an idle-only daily docs-sweep job, report-only by default with a batched docs PR mode (STORY-2220)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a1952f`) for branch `story-b6b1278890774ef993d2ebc327862470-262`.
+
+  - PR: <https://github.com/joemooney/aida/pull/3194>
+  - Branch: `story-b6b1278890774ef993d2ebc327862470-262` → `main`
+
+  ## Covers
+
+  - STORY-2220
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 3194` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-01T06:02:38.174567972Z
+modified_at: 2026-11-01T06:02:38.174567972Z
+req_type: Story
+filed_at:
+  code_sha: a83e05d785df667dfa986cf3eb310a3f0637b602
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: a83e05d785d
+  vendor: claude
+  session: a31b25d9-60a5-4347-a85b-4c74ab06f274
