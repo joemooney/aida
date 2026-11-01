@@ -3,27 +3,32 @@ spec_id: STORY-b6b1278890774ef993d2ebc327862470-291
 agreed_id: STORY-2275
 title: 'Review PR-3213: [AI:antigravity+codex] docs(showcase): publish interactive engineering audit (TASK-b6b1278890774ef993d2ebc327862470-662)'
 description: |
-  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `agy2/engineering-audit-report`.
-
-  - PR: <https://github.com/joemooney/aida/pull/3213>
-  - Branch: `agy2/engineering-audit-report` → `main`
+  Independent review of PR https://github.com/joemooney/aida/pull/3213, branch agy2/engineering-audit-report -> main.
 
   ## Covers
 
-  - TASK-B6B1278890774EF993D2EBC327862470-130
+  - TASK-b6b1278890774ef993d2ebc327862470-662 (TASK-2709), the engineering audit update.
+
+  The old initial Pages task TASK-b6b1278890774ef993d2ebc327862470-130 / TASK-2542 is already Completed. Its old commit trailer is historical, not new completion credit or the owning requirement for this update. The auto-queue generator selected that historical trailer and failed its queue insertion; this description repairs that metadata without replacing the review story.
 
   ## Acceptance
 
-  - Generate a structured review prompt with `aida review prompt --pr 3213` and verify each spec's acceptance criteria.
-  - Approve and merge, or request changes by spec id.
-  - Mark this story `completed` once the PR is merged.
+  - Independently inspect the actual current PR head and all four changed documentation files against TASK-2709 and the recorded PR-3213 findings. Review corrected claim labels and simulator assumptions in both report copies; preserve working static layout/navigation.
+  - Record an actual normal AIDA verdict for TASK-b6b1278890774ef993d2ebc327862470-662 and PR-3213 at the exact reviewed head, with own independent authority. Prose source approval alone is not completion.
+  - Do not author implementation, run Cargo, self-ship, waive holds, or mark the story completed before the PR is actually merged. CI may run in parallel; independent integrator ships only after approved head and required green CI with normal clearance.
+  - Mark this review story Completed only after a verified normal merge of PR-3213, or leave the exact requested-change finding and current state for rework.
 status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-01T20:43:37.964823856Z
-modified_at: 2026-11-01T20:43:37.964823856Z
+modified_at: 2026-11-01T20:45:07.699771563Z
 req_type: Story
+history:
+- id: 01a198db-db6c-72f1-b6f0-b44f6641a5d2
+  author: joe
+  timestamp: 2026-11-01T20:45:07.820310268Z
+  changes: []
 filed_at:
   code_sha: 6a3f67671a974703590efde5ae2a323f3f7471fa
   branch: main
