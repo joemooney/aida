@@ -122,3 +122,47 @@ fn a_grant_that_does_not_delegate_keeps_the_bug_052_refusal() {
         "{text}"
     );
 }
+
+/// The offer's card names what a yes mints: the launched seat, the advisor
+/// parent delegating only that seat, the expiry, and the one-time binding.
+// trace:STORY-2215 | ai:claude
+#[test]
+fn inline_grant_card_states_what_is_granted() {
+    use chrono::TimeZone;
+    let now = chrono::Local
+        .with_ymd_and_hms(2026, 11, 1, 9, 0, 0)
+        .unwrap();
+    let card = inline_grant_card("reviewer", 8, now);
+    let text = card.render();
+    assert!(text.contains("Launched seat: reviewer"), "{text}");
+    assert!(
+        text.contains("Parent seat: advisor, delegating only the reviewer seat"),
+        "{text}"
+    );
+    assert!(
+        text.contains("Expires: 8h after you answer (about 2026-11-01 17:00"),
+        "{text}"
+    );
+    assert!(
+        text.contains("bound to this launcher process only, never exported to your shell"),
+        "{text}"
+    );
+    assert!(text.contains("Recommended default: n"), "{text}");
+}
+
+#[test]
+fn inline_grant_lifetime_is_capped_by_max_grant_hours() {
+    let dir = tempfile::tempdir().unwrap();
+    let empty_home = tempfile::tempdir().unwrap();
+    let _env = crate::test_env::EnvVarsGuard::apply(&[(
+        "AIDA_HOME",
+        Some(empty_home.path().to_str().unwrap()),
+    )]);
+    std::fs::create_dir_all(dir.path().join(".aida")).unwrap();
+    std::fs::write(
+        dir.path().join(".aida/config.toml"),
+        "[seat]\nmax_grant_hours = 3\n",
+    )
+    .unwrap();
+    assert_eq!(inline_grant_lifetime_hours(dir.path()), 3);
+}

@@ -3891,15 +3891,21 @@ fn offer_inline_parent_grant(project_root: &std::path::Path, seat: &str) -> Resu
     if !inline_grant_eligible(&ctx) {
         return Ok(());
     }
+    let card = inline_grant_card(
+        seat,
+        inline_grant_lifetime_hours(project_root),
+        chrono::Local::now(),
+    );
     let question = format!(
         "No parent grant in this shell. Launch the {seat} under a one-time grant from you (operator)?"
     );
-    let yes = match inquire::Confirm::new(&question).with_default(true).prompt() {
-        Ok(answer) => answer,
-        Err(inquire::InquireError::OperationCanceled)
-        | Err(inquire::InquireError::OperationInterrupted) => false,
-        Err(e) => return Err(anyhow::anyhow!("one-time grant prompt failed: {e}")),
-    };
+    // The grant facts print before the question, not only on `?`: the answer
+    // mints authority, so the operator sees what it mints. Default no: an
+    // empty line or end of input (Ctrl-D) mints nothing; a read error
+    // (no usable terminal) is a no too.
+    // trace:STORY-2215 | ai:claude
+    println!("{}", card.render());
+    let yes = crate::context_prompt::confirm_with_context(&question, false, &card).unwrap_or(false);
     if !yes {
         return Ok(());
     }
@@ -3910,6 +3916,45 @@ fn offer_inline_parent_grant(project_root: &std::path::Path, seat: &str) -> Resu
         Err(cause) => eprintln!("Could not mint the one-time grant: {cause:#}"),
     }
     Ok(())
+}
+
+/// Hours the one-time grant lasts: min(8h, `[seat] max_grant_hours`), the
+/// same bound `issue_inline_parent` applies when it mints.
+// trace:STORY-2215 | ai:claude
+fn inline_grant_lifetime_hours(project_root: &std::path::Path) -> i64 {
+    std::cmp::min(
+        crate::gate::seat_authority::INLINE_PARENT_MAX.num_hours(),
+        crate::gate::seat_authority::resolve_max_grant_hours(project_root) as i64,
+    )
+}
+
+/// What a yes to the one-time grant offer mints: the launched seat, the
+/// parent seat and its delegation scope, the expiry, and the binding.
+// trace:STORY-2215 | ai:claude
+fn inline_grant_card(
+    seat: &str,
+    hours: i64,
+    now: chrono::DateTime<chrono::Local>,
+) -> crate::context_prompt::ContextCard {
+    let until = now + chrono::Duration::hours(hours);
+    crate::context_prompt::ContextCard {
+        decision: format!("whether to launch the {seat} under a one-time grant you issue now"),
+        provenance: vec![
+            format!("Launched seat: {seat} (it receives its own child grant)"),
+            format!("Parent seat: advisor, delegating only the {seat} seat"),
+            format!(
+                "Expires: {hours}h after you answer (about {})",
+                until.format("%Y-%m-%d %H:%M %Z")
+            ),
+            "One-time: bound to this launcher process only, never exported to your shell; the next launch asks again".to_string(),
+        ],
+        answers: vec![
+            format!("y: issue the grant and launch the {seat}"),
+            "n (or Enter): issue nothing and refuse with the recovery command".to_string(),
+            "?: show this context again".to_string(),
+        ],
+        recommended_default: "n: nothing is issued unless you type y".to_string(),
+    }
 }
 
 /// The `agent new` delegation refusal, with exactly one recovery command.

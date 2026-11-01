@@ -164,9 +164,12 @@ a delegated launch.
 
 **No grant at a human terminal.** When `aida agent new --role <seat>` (or a
 `--spec` launch) runs at an interactive terminal with no seat grant at all, it
-asks: *No parent grant in this shell. Launch the `<seat>` under a one-time grant
-from you (operator)? [Y/n]*. Only a keystroke answers it: that is the proof a
-person is present. On yes, AIDA issues an `advisor` grant
+first prints what a yes would issue (the launched seat; the parent `advisor`
+seat, delegating only that seat; when it expires; that it is one-time, bound to
+this launcher and never exported to your shell), then asks: *No parent grant in
+this shell. Launch the `<seat>` under a one-time grant from you (operator)?
+[y/N/?]*. Only a typed `y` issues the grant: that is the proof a person is
+present. Enter, `n` or end of input issues nothing; `?` shows the details again. On yes, AIDA issues an `advisor` grant
 the same way `aida role enter advisor --delegate-seat <seat>` does (your
 roster must allow both seats), marked `origin: agent-new-inline` in its grant
 record. That grant lasts at most 8 hours (less if `[seat] max_grant_hours` is
