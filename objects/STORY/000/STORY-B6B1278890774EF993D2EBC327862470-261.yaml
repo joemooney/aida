@@ -20,12 +20,12 @@ description: |
 
   ## Out of scope
   Rewriting the developer-facing CLI glossary entries; new explainer pages.
-status: InProgress
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T22:58:37.964636963Z
-modified_at: 2026-11-01T12:25:13.566106973Z
+modified_at: 2026-11-01T13:14:54.980766474Z
 req_type: Story
 tags:
 - docs
@@ -303,6 +303,20 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1973f-ac80-7ca3-bf68-bb096eff863b
+  author: aida-auto-bump
+  timestamp: 2026-11-01T13:14:54.976695604Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1973f-ac84-79b0-9c22-01e44aa85a92
+  timestamp: 2026-11-01T13:14:54.980762397Z
+  agent: aida
+  commit_sha: 6a3f67671a974703590efde5ae2a323f3f7471fa
+  summary: 'Independent conflict/full AC review PASS: authority wording preserved, canonical glossary/23 anchors/search/library/CLI/book reproduce; 21 showcase tests, glossary/anchors/portability pass. Exact-head Build and lanes green. Review only.'
+  review_verdict: approved
 filed_at:
   code_sha: 44c7b6663259478cfd02fd2f5da843720f0ee6e0
   branch: main
@@ -314,3 +328,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-11-01T04:50:52.670929625Z
   implemented_by: joe
+  completed_at: 2026-11-01T13:14:54.976689506Z
+  completion_sha: 6a3f67671a974703590efde5ae2a323f3f7471fa
