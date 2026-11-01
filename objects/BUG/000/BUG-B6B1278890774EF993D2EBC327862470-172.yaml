@@ -16,12 +16,12 @@ description: |
   Sketch and independent advisor signoff before code; strict review for authority plumbing. This finding is separate from the native cache path writable-root refusal, which is recorded on STORY-2238. User's global Codex config must remain unchanged. Codex implementer lane after signoff; LIGHT targeted grant/launch test plus make check-ci-fast, CI is the full gate.
 
   Scope amendment: the initial adapter-only sketch expands only to the weak positive-approval consumers identified in codex-advisor08 ruling: gate/dispatch_authority::verdict_at_head + dispatch_flow, human reviewed classification and gate/review_verdict::review_actionability consumers. Preserve named ungranted record artifacts as nonauthoritative; do not change roster, issuance, grants, direct-human receipts or protected merge policy. Independent design signoff on this amendment and strict implementation review are required before completion.
-status: NeedsAttention
+status: InProgress
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T07:26:20.914223641Z
-modified_at: 2026-11-01T08:51:53.901039788Z
+modified_at: 2026-11-01T08:51:55.445547145Z
 req_type: Bug
 tags:
 - architecture
@@ -352,6 +352,11 @@ comments:
   content: 'Advisor ruling: expanded consumer-policy sketch now has independent ADVISOR SIGNOFF APPROVED from codex-advisor09, as posted and verified on this spec. Adopt all its binding amendments together with B1-B4 and the explicit amended AC3. Keep absent-grant record compatibility; fix weak positive dispatch/reviewed/resolved readers using existing durable authority, protective refusal records stay usable. Real ungranted artifact through every named boundary must fail positive authority; invalid presented grants refuse record; granted independent reviewer succeeds. Native workspace/app-server failure remains manual completion gate. Return existing live doer on lease01a19624a1e1 to this amended work, no duplicate lane. Author may retain prior tested adapter code, but must add consumer fixes and production-path negatives before claiming completion. Different strict reviewer and operator merge floor remain. This is design approval, not implementation approval.'
   created_at: 2026-11-01T08:51:53.901039788Z
   modified_at: 2026-11-01T08:51:53.901039788Z
+- id: 01a1964e-e5b5-7681-8844-df5d952722da
+  author: joe
+  content: 'Returned from NeedsAttention to In Progress via `aida edit --status`. It was punted on: design-fork: AC3 conflicts with the existing review recorder contract: lib_part5.rs handle_review_record_at explicitly permits absent grants for named agents and records unattested verdicts. A real Codex inherit=core fixture successfully recorded a granted reviewer verdict, then also recorded an ungranted verdict with the same agent identity. The accepted adapter-only scope preserves existing validators, so refusal at recording time needs an advisor decision or separately authorized policy tightening. The native workspace fixture is additionally blocked inside this seat by the Codex app-server socket-directory ownership/mode refusal.. No triage reason was given.'
+  created_at: 2026-11-01T08:51:55.445543235Z
+  modified_at: 2026-11-01T08:51:55.445543235Z
 history:
 - id: 01a19600-c769-7cd0-ba08-8d93975e3e3b
   author: joe
@@ -382,6 +387,13 @@ history:
   author: joe
   timestamp: 2026-11-01T08:48:12.463615630Z
   changes: []
+- id: 01a1964e-e5b5-7681-8844-df4c05403b73
+  author: joe
+  timestamp: 2026-11-01T08:51:55.445519662Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: InProgress
 filed_at:
   code_sha: 53c89700b4da50b5593a2079ed4cc3abaae5cdfe
   branch: main
@@ -389,8 +401,3 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: 53c89700b4d
   vendor: codex
-attention_reason:
-  category: design-fork
-  detail: 'AC3 conflicts with the existing review recorder contract: lib_part5.rs handle_review_record_at explicitly permits absent grants for named agents and records unattested verdicts. A real Codex inherit=core fixture successfully recorded a granted reviewer verdict, then also recorded an ungranted verdict with the same agent identity. The accepted adapter-only scope preserves existing validators, so refusal at recording time needs an advisor decision or separately authorized policy tightening. The native workspace fixture is additionally blocked inside this seat by the Codex app-server socket-directory ownership/mode refusal.'
-  lean: Keep the Codex adapter scoped; clarify AC3 to test downstream authority refusal or authorize a separate recorder-policy change. Keep the native host fixture as a required manual gate.
-  raised_at: 2026-11-01T08:29:54.417219367Z
