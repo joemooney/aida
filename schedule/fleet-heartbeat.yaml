@@ -5,3 +5,5 @@ last_by:
   vendor: codex
 result: done
 note: 'Fleet sweep: 45open before publication closure; active native docs-sweep/metadata/config fixers and independent reviewers verified via ps plus live tool handles. Eight old relay status files refer to previously completed work, no duplicate relays restarted. Acted: new reviews3193/3198, metadata signoff amendments,3185 conflict routing,3177 genuine grant-stamped re-review/release,3190 failed-job rerun;3196 landed+published. No new human request; operator terminal runner executes independently assessed trains. Next authoritative duty in1h.'
+due_since: 2026-11-01T09:20:59.733119969Z
+due_reason: every 1h
