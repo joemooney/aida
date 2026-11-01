@@ -1,0 +1,13 @@
+claim_id = "44effda9-f47a-4984-877d-6ae3000945dd"
+scope = "SPIKE-710"
+node_id = "1"
+clone_path = "/home/joe/ai/aida"
+host = "imac"
+pid = 2484967
+pid_start_time = "linux-starttime:10729443"
+agent = "implementer"
+started_at = "2026-11-01T06:50:48.654498811+00:00"
+heartbeat_at = "2026-11-01T06:50:48.654498811+00:00"
+ttl_secs = 1800
+process_backed = false
+review_verb = false
