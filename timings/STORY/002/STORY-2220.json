@@ -1,0 +1,119 @@
+{
+  "schema_version": 1,
+  "spec": "STORY-2220",
+  "publishes": [
+    {
+      "at": "2026-11-01T21:15:42.785349172Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-01T06:16:43.328345547Z",
+      "spec": "STORY-2220",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-01T07:36:18.516850852Z",
+      "spec": "STORY-2220",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-01T10:05:01.786469092Z",
+      "spec": "STORY-2220",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "STRICT AC1-7 review: B2 canonical dedup and prior cap/portability fixes pass source review; B1 still accepts empty/comment-only local queue documents as idle. No Cargo; parser probe reproduced defect.",
+        "recovery_hint": "address the review findings, move STORY-B6B1278890774EF993D2EBC327862470-262 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-11-01T10:08:42.301942412Z",
+      "spec": "STORY-2220",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-01T12:23:02.444557539Z",
+      "spec": "STORY-2220",
+      "seat": "reviewer",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "verdict": "APPROVED",
+        "reviewed_sha": "2c786c12e3b6dfb113ce5ea6e2cfa8d14bf5442a"
+      }
+    },
+    {
+      "ts": "2026-11-01T12:48:57.769975595Z",
+      "spec": "STORY-2220",
+      "seat": "reviewer",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "verdict": "APPROVED",
+        "reviewed_sha": "2c786c12e3b6dfb113ce5ea6e2cfa8d14bf5442a"
+      }
+    },
+    {
+      "ts": "2026-11-01T14:59:31.499522442Z",
+      "spec": "STORY-2220",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-01T16:10:34.402914371Z",
+      "spec": "STORY-2220",
+      "seat": "reviewer",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "verdict": "APPROVED",
+        "reviewed_sha": "fca209a47044780d20148271865614377c7afd10"
+      }
+    },
+    {
+      "ts": "2026-11-01T21:15:24.718507773Z",
+      "spec": "STORY-2220",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 3194
+      }
+    },
+    {
+      "ts": "2026-11-01T21:15:42.636413716Z",
+      "spec": "STORY-2220",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "4691cc8c0f223385b3255b80b0c66afb5655deea",
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
