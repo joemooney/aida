@@ -483,6 +483,10 @@ pub(crate) fn handle_statusline_command(
     if let Some(segment) = regeneration_statusline_segment(&project_root, chrono::Utc::now()) {
         parts.push(segment);
     }
+    // trace:TASK-2631 | ai:codex
+    if let Some(segment) = native_containment_statusline_segment(&project_root, client) {
+        parts.push(segment);
+    }
     let aida_segment = parts.join(&separator);
     // trace:TASK-1479 | ai:claude — opt-in client-live merge. Only reads
     // stdin when a client was named; plain `aida statusline` (client: None)
@@ -1306,3 +1310,30 @@ pub(crate) static STATUSLINE: crate::command_registry::CommandReg =
         },
         run: crate::command_registry::Handler::Early(run_statusline),
     };
+
+// trace:TASK-2631 | ai:codex
+pub(crate) fn native_containment_statusline_segment(
+    root: &std::path::Path,
+    client: Option<&str>,
+) -> Option<String> {
+    // AIDA's actual containment marker wins over an inherited native display hint.
+    // trace:TASK-2631 | ai:codex
+    if session::aida_contained_env().unwrap_or(true) {
+        return None;
+    }
+    // A stamped child reports its actual argv posture, not a later config edit.
+    if let Ok(posture) = std::env::var("AIDA_CONTAINMENT_POSTURE") {
+        return (posture == "native")
+            .then(|| session::ContainmentPosture::Native.label().to_string());
+    }
+    let vendor = client
+        .map(str::to_string)
+        .or_else(|| std::env::var("AIDA_AGENT_TYPE").ok())
+        .unwrap_or_else(|| session::resolve_headless_vendor(root).as_str().to_string());
+    let requested = session::drain_contained(root).ok()?;
+    matches!(
+        session::containment_posture_in(root, &vendor, requested),
+        Ok(session::ContainmentPosture::Native)
+    )
+    .then(|| format!("{vendor}: {}", session::ContainmentPosture::Native.label()))
+}

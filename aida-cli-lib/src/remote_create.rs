@@ -2973,9 +2973,27 @@ fn merge_and_validate(
         Ok(out.lines().map(str::to_string).collect())
     };
     let union_objects = ls_objects(&union)?;
-    for tip in tips {
-        let lost: Vec<String> = ls_objects(tip)?
+    let tip_objects: Vec<(&String, std::collections::BTreeSet<String>)> = tips
+        .iter()
+        .map(|t| ls_objects(t).map(|o| (t, o)))
+        .collect::<Result<_>>()?;
+    for (tip, objects) in &tip_objects {
+        // A path a descendant tip already dropped is history, not a loss of
+        // the merge: a hub behind a store whose agreed-ID backfill renamed a
+        // legacy spec still holds the old path, and its fast-forward must
+        // not read the rename as a lost spec. Any path no descendant removed
+        // that the union lacks is still refused.
+        // trace:BUG-2378 | ai:claude
+        let dropped_later = |path: &String| {
+            tip_objects.iter().any(|(other, other_objects)| {
+                other != tip
+                    && !other_objects.contains(path)
+                    && git_ops::is_ancestor(store_dir, tip, other).unwrap_or(false)
+            })
+        };
+        let lost: Vec<String> = objects
             .difference(&union_objects)
+            .filter(|p| !dropped_later(p))
             .cloned()
             .collect();
         if !lost.is_empty() {

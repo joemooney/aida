@@ -1251,3 +1251,27 @@ thread. Quiet scans use no model inference. Uncertain
 queue results require explicit recovery; a queue receipt is not mail read/ack
 evidence. See [installation and recovery](docs/agents/codex-mail-wake.md).
 <!-- trace:TASK-2347 | ai:codex -->
+
+### Explicit vendor containment policy
+
+When containment is requested, `[contained.vendors]` in the trusted default-branch
+`.aida/config.toml` selects `"aida"` or `"native"` per vendor. Claude defaults to AIDA containment
+and keeps its existing settings, sandbox and parent protections. Non-Claude
+vendors without a key still refuse. Branch-local opt-ins are ignored; this
+repository’s opt-in becomes trusted when merged into `origin/main`. Only Codex supports `"native"`: it receives
+`--sandbox workspace-write --ask-for-approval never`, including headless children,
+and is reported as **native sandbox, not AIDA-contained**. `"aida"` for Codex and
+`"native"` for Claude, agy or unknown tools refuse. Native policy overrides
+conflicting per-tool posture defaults and refuses posture passthrough flags;
+an explicit operator launch-posture override retains its existing precedence.
+A native child does not receive `AIDA_CONTAINED=1` or AIDA containment credit.
+Permission reports, doctor, launch output and statusline distinguish the posture;
+`AIDA_CONTAINMENT_POSTURE` stamps actual child posture for display only.
+
+This repository keeps `[agents] vendor = "codex"` and explicitly opts into its
+native sandbox until vendor-neutral containment (STORY-2238). Its AIDA network
+allowlist includes `api.openai.com` for API-key use and `chatgpt.com` plus
+`auth.openai.com` for ChatGPT inference and authentication, verified by static
+inspection of installed codex-cli 0.166.0. Native sandbox egress remains Codex's
+own policy; the AIDA allowlist does not configure it.
+<!-- trace:TASK-2631 | ai:codex -->

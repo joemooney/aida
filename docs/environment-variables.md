@@ -650,3 +650,9 @@ variables and AIDA never reads them from the environment:
 
 *Source of truth: this chapter is derived from the read sites in the AIDA
 workspace. If you add a new `AIDA_*` read, add a row here in the same change.*
+
+`AIDA_CONTAINMENT_POSTURE` is a launch-stamped, informational `aida`, `native`,
+or `none` value used by the statusline. It grants no containment or authority.
+Native means “native sandbox, not AIDA-contained”; native children do not receive
+`AIDA_CONTAINED=1`.
+<!-- trace:TASK-2631 | ai:codex -->
