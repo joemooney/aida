@@ -22,7 +22,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T06:47:10.885136620Z
-modified_at: 2026-11-01T16:44:14.160694624Z
+modified_at: 2026-11-01T16:47:49.534238217Z
 req_type: Bug
 tags:
 - audit
@@ -1298,6 +1298,11 @@ comments:
     No Cargo/tests, live probe, model/auth/credential/service/restart/kill/config/queue/status/ship/merge action occurred. No review record was created. No unrelated follow-up was filed. Stop after the allowed own comment/readback/report; no monitoring.
   created_at: 2026-11-01T16:44:14.160694624Z
   modified_at: 2026-11-01T16:44:14.160694624Z
+- id: 01a19802-991e-7f12-89aa-abfe26c1d928
+  author: joe
+  content: 'Advisor adoption 2026-11-01: FULL author22 private-endpoint amendment and FULL independent advisor23 signoff /tmp/aida-BUG2391-private-endpoint-signoff-result.md read, including canonical own comment01a197ff-4fd0-7183-9cd8-2502e733567f and exact-body readback. Concrete private foreground server/HOST parentfd connector-or-refusal architecture is independently APPROVED for selected NEW managed lanes within signed STORY2238 whole-worker backend. This resolves the former endpoint design fork only. All10 enumerated actual backend/connector/origin/worker/lifetime/authority/auth/transaction/coverage gates remain mandatory BEFORE BUG2391 production code; TASK2705 composed raw EPERM and TASK2706/2707/2708 capability gaps are not waived. No current global daemon change/restart/adoption, new stack/service/uid/credential owner, speculative implementation, deployment/metric/AC completion or TASK2712 availability credit. Prior full named tests and advisor19 B2391-1 ordinary-User correction retained.'
+  created_at: 2026-11-01T16:47:49.534238217Z
+  modified_at: 2026-11-01T16:47:49.534238217Z
 history:
 - id: 01a195dc-cb7c-7693-b0fc-4f832c1863f5
   author: joe
