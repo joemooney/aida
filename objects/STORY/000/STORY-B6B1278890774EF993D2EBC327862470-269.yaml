@@ -1,0 +1,48 @@
+id: 01a1949a-191b-7113-bb06-9bfc8dce2c27
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-269
+agreed_id: STORY-2238
+title: 'Vendor-neutral containment on Linux: AIDA''s own bubblewrap sandbox, egress allow-list and grant keyring for any agent, so Codex runs contained'
+description: |
+  ## Why
+  AIDA's `[contained]` mode is assembled from Claude Code: its bubblewrap sandbox, AIDA-generated deny rules in Claude settings, `[contained] allowed_hosts` enforced through Claude's network proxy, and the session-keyring grant key that sandboxed tool calls present. Codex has a real native sandbox (`--sandbox workspace-write`) but none of AIDA's layer, so `refuse_uncontainable_agent_tool` (aida-cli-lib/src/lib_part2.rs:681) refuses every Codex launch under containment (BUG-2144: containment never silently downgrades). For a Codex-first user base (EPIC-612) this is the blocker.
+
+  A head start exists: AIDA already builds its own bubblewrap argv, `bwrap_confinement_args_inner` (session.rs:3905, STORY-612/617). It gives a read-only root, a writable worktree and store, an optional strict read allow-list, and `bwrap_preflight` / `bwrap_availability` with remediation hints. Today it wraps only headless Claude drains, and it never isolates the network.
+
+  ## Proposal (architecture: sketch and advisor signoff before code; Linux only)
+  Containment becomes an AIDA property, applied the same way to any vendor:
+  1. AIDA launches the agent process inside its own bubblewrap sandbox: the same write roots, the same protected-path denials (enforced as read-only binds, not vendor settings), and an optional strict read allow-list.
+  2. Network: an AIDA-run egress proxy enforces `[contained] allowed_hosts` for everything inside the sandbox (the sandbox's network is unshared except the proxy socket, or an equivalent design chosen at the sketch).
+  3. Grants: the session keyring is inherited into the sandbox, so tool calls present the child grant's key as they do today under Claude.
+  4. The vendor's native sandbox runs inside as a second layer where it composes (Codex `workspace-write`; Claude's own sandbox). Whether nested user namespaces work for each vendor is a sketch question.
+  5. `containment_applied(vendor)` reports true for every vendor that launches through this wrapper, so the BUG-2144 refusal is lifted for Codex by meeting the bar, not by lowering it.
+
+  ## Acceptance
+  1. Under `[agents] contained`, `aida agent new codex` (interactive and `--bg`) and `aida queue work --vendor codex` (implementer and reviewer, headless) launch inside the AIDA sandbox. `aida config permissions show` and `doctor --category permission-posture` report the sandbox as AIDA-applied.
+  2. Write containment test: a contained Codex lane cannot write outside its worktree, the store worktree and the listed caches, or write a protected path inside the worktree (e.g. `.aida/`, agent settings).
+  3. Network test: a contained Codex lane reaches a host in `allowed_hosts` and is refused for a host not in it.
+  4. Grant test: a sandboxed Codex tool call presents its child grant (e.g. a reviewer lane records a review) and an ungranted one is refused.
+  5. Fail closed: if bubblewrap is unavailable (or user namespaces are blocked) the launch refuses with the existing remediation hint, never runs uncontained.
+  6. Claude parity: Claude lanes either move to the same wrapper or are proven equivalent; one containment contract is documented in docs/cli and the website trust page.
+  7. The vendor list for containment is data, not a Claude/Codex if: adding OpenCode (SPIKE-HOME-003) needs no new containment code.
+
+  ## Out of scope
+  macOS or other OS backends (operator, 2026-10-31: Linux only for now).
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-01T00:54:49.371776631Z
+modified_at: 2026-11-01T00:54:49.371776631Z
+req_type: Story
+tags:
+- architecture
+- containment
+- security
+- vendor:codex
+filed_at:
+  code_sha: 43d9f95803036ec22350e5a210d8c1cae20b9fe5
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 43d9f958030
+  vendor: claude
