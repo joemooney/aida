@@ -11,7 +11,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T09:05:27.409838422Z
-modified_at: 2026-11-01T14:59:16.345776985Z
+modified_at: 2026-11-01T15:29:34.961439860Z
 req_type: Task
 tags:
 - architecture
@@ -125,6 +125,12 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-01T14:57:13.963129876Z
   modified_at: 2026-11-01T14:57:13.963129876Z
+- id: 01a197ba-f6f1-7942-8a38-350978a82591
+  author: joe
+  content: |
+    PROXY RULING after FULL implementer30 finalsame-runner report: two exacthead disposable CI A/B experiments show existing AppArmor userns sysctl prerequisite fixes outside controls but composed raw unshare stillEPERM before mount-positive/unmount-positive/protected-negative. No acceptance credit or setting-only repair. Authoritative next step is bounded READ-ONLY failing-runner AppArmor attachment/profile/include/package evidence collection on SAMEPR, retaining all original strict controls and failures; fixed named sources <=64KiB, no environment/credential/syslog dump. NO policy/sysctl/profile/namespace/cap change, attachment evasion by executable copy/aa-exec, runner downgrade, skip, alternative nested contract or ordinary-launch enablement authorized. A measured minimal disposable-CI prerequisite proposal needs a separate ruling. Actual profile name alone is not causal rule evidence. Fresh authorized reviewer18 now independently checks currenta359 CI/support delta and unmet acceptance; earlier ungranted authorreader is not attestation.
+  created_at: 2026-11-01T15:29:34.961439860Z
+  modified_at: 2026-11-01T15:29:34.961439860Z
 history:
 - id: 01a1965b-7cae-7260-83dd-5767f6772d90
   author: joe
