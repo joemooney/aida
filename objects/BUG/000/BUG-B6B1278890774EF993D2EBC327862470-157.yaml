@@ -19,7 +19,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T02:25:46.947809262Z
-modified_at: 2026-11-01T08:41:13.787876539Z
+modified_at: 2026-11-01T08:50:28.756042369Z
 req_type: Bug
 tags:
 - area:agents
@@ -171,6 +171,11 @@ comments:
   modified_at: 2026-11-01T07:13:20.170837798Z
   session_id: 01a195e996cb
   harness_version: 2.1.316 (Claude Code)
+- id: 01a1964d-929c-7890-acbe-ead47ac38f80
+  author: joe
+  content: 'Advisor ruling: Independent Codex full-sweep verdict at b48cde8e70b9 is REQUEST CHANGES; complete review https://github.com/joemooney/aida/pull/3192#issuecomment-6555655634 and gate ledger PR3192 seq13. All SIX blockers in samePR, preserve prior security rulings: (1) regenerate full help golden from actual CLI, no handpatch first mismatch; (2) bug_2383_lane_job_tests708 raw current_exe must use sanctioned resolver/fixture without ratchet weakening; (3) five executable-mode sites192/390/493/562/818 use test_exec::mark_executable; actual gates failure, stray stderr is expected passing fixture output; (4) Tally::record_exit currently marks cargo test parse/offline/compile/pre-test failure and zero-match as tested based on argv+exit. Require evidence at least one test actually executed while preserving genuine failing-test results; add all negative cases, no-run/list/signal behavior; (5) split vendor-neutral implementer job offer/env/prompt/tally from Claude-only drain_resume_lane. Codex/AGY eligible implementers need same runner and explicit untested output. Add real launcher/drain wiring regression, missing/unreadable marker cannot imply tested. Keep resume policy unchanged; (6) live sandbox source/bin/config isolation test must join required AIDA_REQUIRE_BWRAP_LIVE selection+count, refuse silent skip, attack all protected host cargo source/bin/config paths plus allow own seat. Whole host cargo home staysRO/offline, reflinkonly warmseed, clear env, no authority/token forwarding, no unconfined fallback. Update PRbody to actual final design. Root verified source for tally/drain/live gate; CI confirms first3. STRICT authority/confinement review after push. LIGHT one focused lane_job filter and fast gates; changed CI/testinfra justifies touched-test/compile gates, full suite onlyCI. Long cargo background with budget, no slot bypass/repeated cap retries. Native source git limitation: bounded tmp publication as existing2397 workflow, no sandbox relaxation.'
+  created_at: 2026-11-01T08:50:28.636528229Z
+  modified_at: 2026-11-01T08:50:28.636528229Z
 history:
 - id: 01a19525-88eb-79e3-aab8-8d511ad2f605
   author: aida-session-start
