@@ -11,7 +11,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T09:05:27.409838422Z
-modified_at: 2026-11-01T13:03:55.622896193Z
+modified_at: 2026-11-01T13:13:51.901527772Z
 req_type: Task
 tags:
 - architecture
@@ -81,6 +81,11 @@ comments:
   content: 'Rework disposition checkpoint: TASK is Needs Attention, not Done. Formal post_punt write was rejected with `MCP tool call requires approval, but approval policy is never`; no borrowed parent grant or alternate punt writer used. Preserve advisor fork in PR#3205: CI run41307852175 / lib-0 job124851844485 at5f026b97 measures nested_stage=unshare, errno=1 (EPERM) before mount_positive; lane entry/file/dir/socket/reaper FD assertions now pass. The no-new-host/user-permissions ruling prevents enabling a runner prerequisite or skipping the C12 test without a fresh advisor ruling. Existing gates-only CI changes the AppArmor userns sysctl; whether to establish that prerequisite for lib-0 needs a precise advisor decision, with AppArmor cause still an inference. Public head acb177db657a03c5057ecfc9572f7a6b775ac768 additionally fixes structured probe refusal output via existing TypedPayloadEmitted (nonzero exit, one JSON object). Actual latest-head CI cli-0 job124852420977 passed the BUG1502 real-binary audit. Required-live local task_2705_ ran six tests with both flags: 6 passed; fast gates36 passed; actual make check-ci-compile passed. Initial make test-touched failed before tests with slot-wrapper exit200; serial retry is now compiling normally. No test assertion/skip, FD-type waiver, permission/sysctl change, ordinary backend enablement, own review/merge or parent completion.'
   created_at: 2026-11-01T12:56:04.970634458Z
   modified_at: 2026-11-01T12:56:04.970634458Z
+- id: 01a1973e-b61d-7141-9640-08214227d622
+  author: mcp
+  content: 'Final blocked handoff: public PR#3205 head acb177db657a03c5057ecfc9572f7a6b775ac768 is verified OPEN; public commit/tree and all17 author-diff file bytes match the publication checkout. B2 actual CI is green: cli-0 job124852420977 (real BUG1502 audit), lib-1 job124852421223 (grant-owner guard), gates job124852421256 (help co-change/root hygiene); help golden passes in lib-0. B1 FD assertions now pass, but latest-head lib-0 job124852421203 confirms nested_stage=unshare, errno=1 (EPERM), before mount_positive, so acceptance remains blocked on an advisor environment-policy ruling; no C12 waiver/skip or permission change. Local required-live6 passed; fast36 passed; actual make check-ci-compile passed. Actual make test-touched initial attempt failed before tests with slot-wrapper exit200; serial retry compiled/listed final library tests (6m53s) but filtered execution remained queued at13:13UTC; local touched/integration pass is NOT claimed. Full suite CI only. Source oldlease cleanup attempted after all files backed: command exit0 but readonly shared-session metadata prevented deleting01a19701e905; source retained. Formal post_punt write was approval-rejected under policy never; fork is preserved in PR body/spec comments and task is Needs Attention. No borrowed parent grant, own review/ship/merge/hold clearance, ordinary-backend enablement or parent completion.'
+  created_at: 2026-11-01T13:13:51.901518507Z
+  modified_at: 2026-11-01T13:13:51.901518507Z
 history:
 - id: 01a1965b-7cae-7260-83dd-5767f6772d90
   author: joe
