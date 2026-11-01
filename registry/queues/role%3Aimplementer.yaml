@@ -1,4 +1,11 @@
 - user_id: role:implementer
+  requirement_id: 01a193e5-6e71-77a2-8c2c-bd433eb2f055
+  position: 275000
+  added_by: role:implementer
+  note: 'PR-3177 review round 7: CHANGES REQUESTED'
+  added_at: 2026-11-01T06:08:28.811157993Z
+  for_role: implementer
+- user_id: role:implementer
   requirement_id: 01a194ed-5fc3-71b1-8d17-9838ef33e8eb
   position: 276000
   added_by: role:implementer
@@ -505,12 +512,6 @@
   position: 578000
   added_by: role:implementer
   added_at: 2026-10-31T21:38:00.071870774Z
-  for_role: advisor
-- user_id: role:implementer
-  requirement_id: 01a193e5-6e71-77a2-8c2c-bd433eb2f055
-  position: 579000
-  added_by: role:implementer
-  added_at: 2026-10-31T21:39:32.312236755Z
   for_role: advisor
 - user_id: role:implementer
   requirement_id: 01a193fa-1350-7212-97b7-75db269a461c
