@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T00:55:07.917269049Z
-modified_at: 2026-11-01T04:29:19.172986270Z
+modified_at: 2026-11-01T04:29:21.324398339Z
 req_type: Task
 tags:
 - config
@@ -146,6 +146,12 @@ comments:
     Local gate (LIGHT): `cargo test --profile agent -p aida-cli-lib --lib -- task_2631 presentation_env bug_1723 story_1917`, then `make check-ci-fast`, then push to the same branch (merge main if behind; no force-push).
   created_at: 2026-11-01T04:29:19.172986270Z
   modified_at: 2026-11-01T04:29:19.172986270Z
+  session_id: 77a7a933-9a3f-4243-9a44-892bcedf206c
+- id: 01a1955e-822c-7183-8661-7c8eef2d37a9
+  author: joe
+  content: 'ADVISOR: operator ruling of record (AC .acb620e9). On 2026-10-31 at about 18:20 the operator overrode the advisor''s 18:05 AC2 ruling (default vendor=claude). Keep [agents] vendor = codex and resolve the contradiction with [contained.vendors] codex = "native". The advisor accepted the override at 18:20 (see the operator OVERRIDE comment on this spec). Under the 21:35 brief item B, that setting must come from the trusted config, not the branch.'
+  created_at: 2026-11-01T04:29:21.324398339Z
+  modified_at: 2026-11-01T04:29:21.324398339Z
   session_id: 77a7a933-9a3f-4243-9a44-892bcedf206c
 history:
 - id: 01a1949a-7ffe-78a3-8011-c5c0c44dc2d3
