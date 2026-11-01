@@ -12,12 +12,12 @@ description: |
   4. Preserve exact-thread arming, opt-outs, notification deduplication, watcher locking and grant boundaries.
 
   Source: aida-cli-lib/src/mailbox_wake_run.rs unit_text/systemd_quote/systemctl; tests in mailbox_wake_run_tests.rs. Local gate LIGHT: one mailbox_wake_run filtered cargo test plus make check-ci-fast, long cargo in tool background with AIDA_CARGO_TIMEOUT. Independent review, green CI and ordinary ship gates remain required. Codex implementer lane after TASK-2631 is live.
-status: InProgress
+status: Done
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T06:55:52.004339498Z
-modified_at: 2026-11-01T07:35:04.186387902Z
+modified_at: 2026-11-01T07:37:46.594884436Z
 req_type: Bug
 tags:
 - closure:pending
@@ -65,6 +65,13 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1960b-0362-7560-a4d4-74800ce0f1d8
+  author: joe
+  timestamp: 2026-11-01T07:37:46.594882117Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 filed_at:
   code_sha: 6dc7d4977ac5e47c42ddfb26597fe3ec5fb70b60
   branch: main
