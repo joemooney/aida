@@ -378,14 +378,19 @@ pub enum Command {
 /// Stock and local skill tooling.
 #[derive(Subcommand, Debug)]
 pub enum SkillCommand {
-    /// Render a stock skill merged with its optional local override (.claude/skills/<name>.md + .local.md) to stdout.
+    /// Render a skill with its optional local overlay to stdout. Prefers
+    /// `.agents/skills/<name>/SKILL.md`, then `.claude/skills/<name>/SKILL.md`,
+    /// then legacy `.claude/skills/<name>.md`. Folder overlays use
+    /// `SKILL.local.md`, falling back to `<name>.local.md` in the same pack.
+    // trace:BUG-2388 | ai:codex
     Render {
         /// The name of the skill to render (e.g. `agent-contract`).
         name: String,
     },
 
     /// Lint skills that reference an implementation plan. Scans every skill
-    /// under `.claude/skills/` for plan references (`docs/plans/*.md`
+    /// under `.agents/skills/` and `.claude/skills/` (folder prompts and
+    /// legacy Claude flat files) for plan references (`docs/plans/*.md`
     /// paths); for each skill that references a plan it runs the same
     /// checks `aida plan verify` runs on each referenced plan (drifted
     /// refs / missing files / absent sections) and a raw-glyph check on
@@ -394,8 +399,8 @@ pub enum SkillCommand {
     /// it can run as a CI gate.
     // trace:TASK-927 | ai:claude
     Lint {
-        /// Lint a single skill file instead of the whole `.claude/skills/`
-        /// tree. Path may be absolute or relative to the project root.
+        /// Lint a single skill file instead of both skill trees.
+        /// Path may be absolute or relative to the project root.
         #[clap(value_name = "SKILL")]
         skill: Option<PathBuf>,
 
