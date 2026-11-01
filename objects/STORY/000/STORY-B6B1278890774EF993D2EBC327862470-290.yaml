@@ -15,11 +15,17 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T18:37:17.579510150Z
-modified_at: 2026-11-01T18:59:39.595611781Z
+modified_at: 2026-11-01T21:34:02.871685380Z
 req_type: Story
 tags:
 - review
 - vendor:codex
+relationships:
+- rel_type:
+    custom: implements
+  target_id: 01a195d9-336e-7223-b445-3e72671493bc
+  created_at: 2026-11-01T21:34:02.871677001Z
+  created_by: joe
 comments:
 - id: 01a1987b-4701-7c01-95ce-80641ccea0f2
   author: joe
@@ -43,6 +49,11 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a19908-be4d-7ef1-bbe1-824102b0893f
+  author: joe
+  timestamp: 2026-11-01T21:34:09.485573245Z
+  session_id: 126bbd5a-a92f-452b-ab0b-2637a1db42c2
+  changes: []
 filed_at:
   code_sha: 6a3f67671a974703590efde5ae2a323f3f7471fa
   branch: main
