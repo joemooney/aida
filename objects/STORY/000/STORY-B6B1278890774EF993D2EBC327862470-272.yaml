@@ -34,7 +34,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T03:24:07.798418309Z
-modified_at: 2026-11-01T06:53:06.615760945Z
+modified_at: 2026-11-01T06:53:09.469555240Z
 req_type: Story
 tags:
 - advisor
@@ -94,6 +94,23 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: AC1-AC7 verified by traced tests; AC8 (Regression) and AC9 (Vendor-neutral) have no traced test, plus a dead-code leftover and a toon gap in check. CI still queued at head, not yet green.. Triage reason: PR-3195 verdict at e796e01e61f106956eeef59a2d2dd4d89856bb80: gate-ledger PR-3195.jsonl#2. Bundle meaningful regression/Codex-seat evidence, dead-code cleanup, toon check rendering, and check exit-status coverage.'
   created_at: 2026-11-01T06:53:06.615756279Z
   modified_at: 2026-11-01T06:53:06.615756279Z
+- id: 01a195e2-25db-7803-a11a-1a9094a1d652
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #3195):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: e796e01e61f1
+    Recorded: 2026-11-01T06:48:07.995447802+00:00
+    Review comment: https://github.com/joemooney/aida/pull/3195#issuecomment-6554608826
+    Findings:
+    1. AC8 (STORY-b6b1278890774ef993d2ebc327862470-272.Regression) is untraced: aida-cli-lib/src/tests/story_2243_advisor_goal_tests.rs:341 bare_goal_flags_are_unchanged covers it but has no trace comment, so aida criteria reports it untested. Add '// trace:STORY-b6b1278890774ef993d2ebc327862470-272.Regression | ai:claude'. Better still, assert the actual run_goal --invoke output (the test currently rebuilds '/goal {}' itself via format!, so a regression in the --invoke printer would slip through).
+    2. AC9 (STORY-b6b1278890774ef993d2ebc327862470-272.Vendor-neutral) has no test. The launch-context test (story_2243_advisor_goal_tests.rs:227) never involves a vendor, and only the whoami view() fixture sets agent_type 'codex', with nothing traced to the criterion. Add a test traced to .Vendor-neutral that proves a Codex seat gets the goal, e.g. whoami/launch-context rendering with agent_type codex and no CLAUDECODE/Claude /goal input, asserting goal: X and the ## Goal section.
+    3. Dead code: session_misc.rs:1051 now calls compose_handoff_show_with_goal, which leaves seat_rotation::compose_handoff_show_with_mandate (seat_rotation.rs:435) with no non-test caller, so a non-test build warns dead_code, and the two near-duplicate composers can drift. Make compose_handoff_show_with_mandate delegate to compose_handoff_show_with_goal(mandate, None, ...), or remove it and move its story_1700 tests onto the new function.
+    4. check has no toon rendering: render_check (goal_advisor.rs:499) falls through to the human layout for Fmt::Toon, while show and history each have a toon form. An agent seat running 'aida goal advisor check' gets human prose instead of toon. Add a toon branch (met/checkable plus a clauses[N] list with met/unmet/detail) and a test.
+    5. check's exit-code path is untested end to end: AC4 requires 'exits 0 with all clauses met and non-zero naming each unmet clause'. The tests cover check_goal/render_check with an injected evaluator, but handle()'s Check arm (goal_advisor.rs:179-193) decides the exit through std::process::exit(1), including the no-goal case, and no test reaches it. Factor the arm into a function that returns the exit status (or an Err), and test met -> 0, unmet -> non-zero, free-text -> non-zero.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-01T06:53:08.443941626Z
+  modified_at: 2026-11-01T06:53:08.443941626Z
 history:
 - id: 01a1955e-d0d4-75f2-a078-b22ee5383ce4
   author: joe
