@@ -19,7 +19,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T09:27:24.546816181Z
-modified_at: 2026-11-01T09:47:02.504305652Z
+modified_at: 2026-11-01T09:54:20.676806055Z
 req_type: Bug
 tags:
 - ci
@@ -36,6 +36,11 @@ comments:
   content: Independent Codex integrator confirmed exact failed3202 head now exposes protected Build success, all original member heads unchanged/approved/held-clear, and no live shipper. Authorized one bounded sanctioned re-train with explicit member-head assertions via existing operator terminal; new stack still needs its own exact-head required checks and forge protection. If missing-required/policy refusal repeats, stop retries until this defect fixed. No old-stack green is treated as new-stack authority.
   created_at: 2026-11-01T09:44:16.337575123Z
   modified_at: 2026-11-01T09:44:16.337575123Z
+- id: 01a19688-0b84-7ee2-a706-1976831c9950
+  author: mcp
+  content: 'Implementation is present in the sanctioned worktree codex/bug-2401-required-ci. GitHub train readiness now reads fresh base-specific branch protection plus effective ruleset status contexts (including absent checks), fails closed on unavailable/malformed/unsupported workflow policy, brackets row reads with exact head/base/open-state assertions, and classifies required checks before informational/hold exceptions. Missing contexts retain the 600s registration bound; registered pending checks use the ordinary CI absolute ceiling. Final merge port rereads policy/rows/head with no hold tolerance. Genuine red checks still take the rerun/bisection path. New tests cover the exact prior #3202 seven-green-plus-hold/no-Build shape, delayed registration/success, failure, no-CI, malformed/unavailable policy, rulesets, moving head, and final recheck. Targeted pr_train filter and fast gates are still compiling. Git add is blocked by sandbox read-only .git (finding SPEC-b6b1278890774ef993d2ebc327862470-002); no commit/push/PR yet. CLI mutations also cannot write shared cache; this comment uses MCP. Live sanctioned recovery (acceptance 4) remains for the independent reviewer/merge seat after the implementation is integrated; this standalone launch is prohibited from shipping/recording review. No protection/admin/check-injection action was taken.'
+  created_at: 2026-11-01T09:54:20.676794293Z
+  modified_at: 2026-11-01T09:54:20.676794293Z
 history:
 - id: 01a19681-5be8-7f43-92cc-a5b427eacd3f
   author: aida-session-start
