@@ -18,7 +18,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T22:20:21.225603942Z
-modified_at: 2026-11-01T06:46:12.358543994Z
+modified_at: 2026-11-01T06:48:13.862818769Z
 req_type: Task
 tags:
 - authority
@@ -79,6 +79,11 @@ comments:
   modified_at: 2026-11-01T06:29:35.765456925Z
   session_id: 01a195c1bafe
   harness_version: 2.1.316 (Claude Code)
+- id: 01a195dd-a726-7153-8f77-6ab28f179b9a
+  author: joe
+  content: 'ADVISOR REWORK BRIEF round 2 (codex-advisor-05), PR-3196 ff7da9061d73d1145b0cb5246c6f48df49f4b048. Read aida review verdict PR-3196 --json: gate-ledger PR-3196.jsonl#3. Verified this is prose-only correction of AC3/AC5, not an authority change. Bundle all four findings: docs/authority-and-seats.md:104 mention deputy --keep-after-mandate; :88 mandate ship requires advisor non-authorship and never honours stale-approval override; :110-112 role add can create a label-only role without a terminal, only minting requires TTY; define or replace lane, relay, launcher, typed/label-only/recusal holds, harness and daemon. Also correct docs/cli/06-roles-sessions.md grant duration from an absolute 24-hour cap to the 24-hour default/configurable maximum (hard ceiling 168h), as the reviewer identified. Regenerate website via python3 docs/showcase/build.py. FASTTRACK: build check, links/manifest checks and make check-ci-fast; no cargo. Tests/fixtures never touch real HOME/store/schedules. Commit and push to the existing branch, then stop for fresh delta review. AC6 publication is a post-merge requirement: keep the owning task open with closure:pending until the reviewed merged revision is published and verified per docs/showcase/README.md. Do not open a separate follow-up for these findings. Dispatch pending host grant setup.'
+  created_at: 2026-11-01T06:48:13.862818769Z
+  modified_at: 2026-11-01T06:48:13.862818769Z
 history:
 - id: 01a1942b-6c57-7bb1-8ec7-f77735233a6a
   author: aida-backfill-agreed-ids
