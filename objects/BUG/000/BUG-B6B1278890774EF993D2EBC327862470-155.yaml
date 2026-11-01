@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T01:39:06.904532581Z
-modified_at: 2026-11-01T08:06:25.077093562Z
+modified_at: 2026-11-01T08:13:27.774272146Z
 req_type: Bug
 tags:
 - containment
@@ -38,6 +38,11 @@ comments:
   content: CI run41285928470 at26d4cd3551 passed all6625 lib-1 tests/ignored but failed its timing budget (799.8s aggregate; slow replay23.91s). Failed jobs rerun once; no test failure suppressed. Existing serial ship stopped cleanly on the red Build. Current head still needs a green aggregate Build before shipping.
   created_at: 2026-11-01T08:06:25.077093562Z
   modified_at: 2026-11-01T08:06:25.077093562Z
+- id: 01a1962b-af5e-7810-9e41-1f79a0f6dbe0
+  author: joe
+  content: 'Clarification of CI evidence: the precise red condition was story_1917_native_pr_ship_unheld_refuses_at_each_checkpoint_without_merging at10.2s versus the unbudgeted10s limit; all6625 passed,3ignored. The aggregate799.8s and23.91s explicitly-budgeted replay were diagnostic, not the failing gate. One failed-job rerun is active.'
+  created_at: 2026-11-01T08:13:27.774272146Z
+  modified_at: 2026-11-01T08:13:27.774272146Z
 history:
 - id: 01a19517-617d-7151-9e47-aa0da46d6e93
   author: joe
