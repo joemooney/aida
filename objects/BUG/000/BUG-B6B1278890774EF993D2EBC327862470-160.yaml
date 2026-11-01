@@ -1,0 +1,40 @@
+id: 01a195db-46bf-7663-922c-79ab2a65098b
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-160
+agreed_id: BUG-2386
+title: Session resume (session resume, queue work --resume, role enter, tui, and drain punt/bg resume) is Claude-only or fails to exec Codex
+description: |-
+  Why
+  ───
+  Discovered by SPIKE-710 audit. Even though `codex-cli` supports `codex resume <SESSION_ID>` and `codex exec resume <SESSION_ID> <PROMPT>`, AIDA's resume paths either refuse Codex or only print the command without executing it:
+
+  • `aida-cli-lib/src/session.rs:6725-6736` (`exec_resume_command`): when `target.agent == "claude"`, it execs `claude --resume <id>`, but when `target.agent == "codex"`, it only runs `println!("codex resume {}", target.id)` and exits 0 without launching Codex. Also `session.rs:637, 668` checks only `aida_contained_env()?` (`AIDA_CONTAINED`) and refuses non-Claude sessions in `build_contained_resume_command`.
+  • `aida-cli-lib/src/session.rs:1540-1544` (`compose_headless_command_for`) & `aida-cli-lib/src/queue_cmd.rs:11637-11669, 13554-13616, 13931-14013` (`resolve_queue_work_launch` / `handle_queue_work`): bails with `"only a claude session can be resumed headless, not codex"` and `"headless resume currently supports only the Claude session model, but the enabled launch vendor resolved to codex"` (blocking both interactive and headless `aida queue work --resume`).
+  • `aida-cli-lib/src/phase_driver_trait.rs:3248-3256` (`resume_implementer_with_advisor_answer`): after a headless advisor answers an implementer's design-fork punt, it unconditionally calls `session::spawn_claude_headless_resume` (`claude -p --resume`), breaking punt-resume on a Codex drain.
+  • `aida-cli-lib/src/standalone_implementer.rs:628`: `let can_resume = launch.vendor == HeadlessVendor::Claude;` disables background-build wait/resume (`bg::ResumeLoop`) for Codex implementer lanes.
+  • `aida-cli-lib/src/role_cmd.rs:514-549, 937-939` (`prompt_role_session_resume`) & `aida-tui/src/dispatch.rs:68-77` & `aida-tui/src/app.rs:1384-1391`: only scan `~/.claude/projects` and hardcode `claude --resume <id>`.
+
+  Acceptance
+  ──────────
+  1. `aida session resume` actually execs `codex resume <id>` (with resolved posture/containment) when resuming a Codex session.
+  2. `aida queue work --resume` (interactive and headless), `standalone_implementer` background-wait resume, and `phase_driver_trait::resume_implementer_with_advisor_answer` support `HeadlessVendor::Codex` via `codex resume` / `codex exec resume` and `~/.codex/sessions` lookup.
+  3. `aida role enter --resume` and `aida tui` (`Intent::Resume`, `TabVendor::Codex`) support resuming Codex sessions alongside Claude.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-01T06:45:38.111981577Z
+modified_at: 2026-11-01T06:45:38.111981577Z
+req_type: Bug
+tags:
+- audit
+- resume
+- session
+- vendor:codex
+filed_at:
+  code_sha: 6dc7d4977ac5e47c42ddfb26597fe3ec5fb70b60
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 962ca07af25
+  vendor: antigravity
+  session: 01a194b1bcfb
