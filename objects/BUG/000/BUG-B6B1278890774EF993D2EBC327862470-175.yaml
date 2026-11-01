@@ -16,7 +16,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T10:04:17.050576260Z
-modified_at: 2026-11-01T18:09:36.732398160Z
+modified_at: 2026-11-01T18:09:38.084799436Z
 req_type: Bug
 tags:
 - closure:pending
@@ -41,6 +41,11 @@ comments:
     Authorize next bounded routine fix within same BUG2402: NONSTRICT read path may reuse existing unambiguous derived candidate ONLY as locator for authoritative targeted objectread with fullcurrent identity/literal-first/alias/UUID/ambiguity validation and truthful stale/error fallback, avoiding the observed redundant agreed-ID full-store scan. Strict WRITE resolver and all canonical/authority/ambiguity policy unchanged. This reuses existing locator-plus-authoritative-read design, no new cache/store format, authority policy or architecture. Any required semantic/fork change stops for separately signed sketch. Establish complete valid fakeHOME positive/nativeUUID/nativeID/agreed/padded/alias plus canonicalmutate/delete/malformed/collision/stale/held-refresh-lock cases and existing scan-counter proof; do not substitute timing-only test or return cache rows as truth. Add only bounded existing-style attribution for unaccounted linkage operations; no deadline/budget/partialtruth relaxation. Remeasure exact artifact/shapes/load with finite count; lookup-only improvement is not full incident completion if linkage/SLOstillfails. One same-spec PR, independent STRICT exact-head review and normal CI. LIGHT one decisive aida-core targetedfixture+fast, sharedinfra/>10file extras as required. No productioncodeauthorizations from diagnostic controls that failed.
   created_at: 2026-11-01T17:15:27.442480489Z
   modified_at: 2026-11-01T17:15:27.442480489Z
+- id: 01a1984d-7f24-7d00-a021-0f88c167778d
+  author: joe
+  content: 'Advisor disposition on FULL implementer36 report and FULL reviewer24 source critique: bounded lookup+attribution fix accepted for independent attested review, not whole incident completion. Targeted canonical current identity/read-only scan-counter regression and exact8e38 libraryCI support mechanism; finalCI Build/hold SUCCESS. Nine finite low-load successfulAGENT calls and an older different-profile/high-load comparison do not prove original fullSLO/loadedlinkage tail criterion. Keep remaining evidence/work within SAME BUG2402/PR3211, no followup chain or budget change. closure:pending added to prevent merge auto-completing the incident until deployed exactartifact/profile/digest, representative comparable-load default/no-git positive/negative evidence, accountable remaining loaded linkage tails and sufficient unchanged-budget telemetry are verified. Review24 source recommendations were NOT recorded/attested: its own normal key-backed reviewer presentation validated, but it added a HOSTPID visibility constraint beyond the supplied authoritative HOSTsetup. Root clarifies own verified setup+same-shell normalrolecurrent/status and supported writer are the governing path; no raw/proxy authority workaround. Fresh granted independent reviewer will verify currenthead and attempt normal records; actual writer refusals remainbinding.'
+  created_at: 2026-11-01T18:09:38.084799436Z
+  modified_at: 2026-11-01T18:09:38.084799436Z
 history:
 - id: 01a19809-e494-74a2-9ac1-332231d47592
   author: aida-session-start
