@@ -37,6 +37,7 @@ fn all_three_wrappers_launch_both_vendors_and_preserve_explicit_precedence() {
     if crate::test_env::run_path_isolated_test() {
         return;
     }
+    let original_cwd = std::env::current_dir().unwrap();
     for vendor in ["codex", "claude"] {
         for surface in [
             "new",
@@ -214,7 +215,7 @@ fn all_three_wrappers_launch_both_vendors_and_preserve_explicit_precedence() {
                 assert_eq!(fields[2], "BUG-2385");
                 assert_eq!(crate::list_leases(&root).len(), 1);
             }
-            std::env::set_current_dir("/tmp").unwrap();
+            std::env::set_current_dir(&original_cwd).unwrap();
         }
     }
 }
@@ -224,6 +225,7 @@ fn missing_vendor_refuses_all_wrappers_without_setup() {
     if crate::test_env::run_path_isolated_test() {
         return;
     }
+    let original_cwd = std::env::current_dir().unwrap();
     for vendor in ["codex", "claude"] {
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path().join("project");
@@ -271,7 +273,7 @@ fn missing_vendor_refuses_all_wrappers_without_setup() {
             .unwrap_err()
             .to_string()
             .contains("unsupported"));
-        std::env::set_current_dir("/tmp").unwrap();
+        std::env::set_current_dir(&original_cwd).unwrap();
     }
 }
 
@@ -280,6 +282,7 @@ fn absent_default_keeps_existing_noninteractive_help() {
     if crate::test_env::run_path_isolated_test() {
         return;
     }
+    let original_cwd = std::env::current_dir().unwrap();
     let tmp = tempfile::tempdir().unwrap();
     let _env = crate::test_env::EnvVarsGuard::apply(&[
         ("HOME", tmp.path().to_str()),
@@ -291,7 +294,7 @@ fn absent_default_keeps_existing_noninteractive_help() {
     assert_eq!(session::interactive_session_vendor().unwrap(), "claude");
     dispatch(&["aida", "agent", "new"]).unwrap();
     assert!(!tmp.path().join(".aida/agents").exists());
-    std::env::set_current_dir("/tmp").unwrap();
+    std::env::set_current_dir(&original_cwd).unwrap();
 }
 
 #[test]
@@ -299,6 +302,7 @@ fn trusted_native_and_parent_refusals_precede_session_setup() {
     if crate::test_env::run_path_isolated_test() {
         return;
     }
+    let original_cwd = std::env::current_dir().unwrap();
     let tmp = tempfile::tempdir().unwrap();
     let root = tmp.path().join("project");
     let home = tmp.path().join("home");
@@ -372,5 +376,5 @@ fn trusted_native_and_parent_refusals_precede_session_setup() {
         .to_string();
     assert!(error.contains("contained"), "{error}");
     assert!(!root.join(".aida/sessions").exists());
-    std::env::set_current_dir("/tmp").unwrap();
+    std::env::set_current_dir(&original_cwd).unwrap();
 }
