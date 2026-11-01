@@ -157,6 +157,36 @@ fn brief_older_than_the_verdict_defers_to_the_findings() {
         .expect("brief shown as context");
     assert!(brief_line.contains("OLDER CONTEXT"));
     assert!(brief_line.contains("the findings win"));
+    let task_at = prompt
+        .find("ITEMS STILL OPEN (AUTHORITATIVE TASK)")
+        .unwrap();
+    let older_at = prompt.find("OLDER CONTEXT").unwrap();
+    assert!(
+        task_at < older_at,
+        "the findings come first; the stale brief is background below them: {prompt}"
+    );
+    assert!(prompt.ends_with("/aida-pickup BUG-051"));
+}
+
+/// Brief item 3(d), end to end: findings with no verdict time at all stay
+/// the authoritative task, and any brief is older context below them.
+#[test]
+fn untimed_findings_stay_authoritative_over_a_brief_end_to_end() {
+    let _g = no_gate();
+    let comments = vec![comment(1, "ADVISOR BRIEF (merge-only): just merge main")];
+    let prompt = assemble(&item_plan(), Some(FINDINGS), &comments, None);
+    let task_at = prompt
+        .find("ITEMS STILL OPEN (AUTHORITATIVE TASK)")
+        .unwrap_or_else(|| panic!("findings stay the task: {prompt}"));
+    assert!(!prompt.contains("SUPERSEDED CONTEXT"), "{prompt}");
+    assert!(!prompt.contains("This is your task"), "{prompt}");
+    let older_at = prompt
+        .find("OLDER CONTEXT")
+        .unwrap_or_else(|| panic!("brief labelled older context: {prompt}"));
+    assert!(
+        task_at < older_at,
+        "brief sits below the findings: {prompt}"
+    );
     assert!(prompt.ends_with("/aida-pickup BUG-051"));
 }
 

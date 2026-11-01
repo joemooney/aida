@@ -222,7 +222,7 @@ fn brief_block(brief: &aida_core::Comment, standing: BriefStanding) -> String {
         }
         BriefStanding::PredatesVerdict => {
             "OLDER CONTEXT, recorded before the latest review verdict. The review findings \
-             below are the current task; where this brief differs from them, the findings win"
+             above are the current task; where this brief differs from them, the findings win"
         }
     };
     comment_block("ADVISOR BRIEF", brief, scope)
@@ -247,9 +247,10 @@ fn superseded_block(findings: &str) -> String {
 
 /// Lead a pickup prompt with what the lane must do first: a conflict with
 /// main; then a post-verdict (or binding) brief; then the newest ruling;
-/// then a pre-verdict brief as deferring context; then, when a brief
-/// supersedes the verdict, the old findings as superseded context. The
-/// pickup prompt stays last, so the skill line is still the final line.
+/// then, when a brief supersedes the verdict, the old findings as
+/// superseded context; then the pickup prompt. A pre-verdict brief is not a
+/// lead: it goes after the pickup prompt's authoritative findings, as older
+/// context, just above the final skill line, which stays last.
 /// Agent gates have a stricter verdict contract and get the prompt as-is.
 // trace:BUG-B6B1278890774EF993D2EBC327862470-057 | ai:claude
 pub(crate) fn lead_rework_prompt(
@@ -274,17 +275,35 @@ pub(crate) fn lead_rework_prompt(
     if let Some(r) = direction.ruling {
         blocks.push(ruling_block(r));
     }
-    if let Some((b, s @ BriefStanding::PredatesVerdict)) = direction.brief {
-        blocks.push(brief_block(b, s));
-    }
     if let Some(f) = superseded_findings.filter(|_| direction.supersedes_verdict()) {
         blocks.push(superseded_block(f));
     }
+    let prompt = match direction.brief {
+        Some((b, s @ BriefStanding::PredatesVerdict)) => {
+            append_before_skill_line(prompt, &brief_block(b, s))
+        }
+        _ => prompt,
+    };
     if blocks.is_empty() {
         return prompt;
     }
     blocks.push(prompt);
     blocks.join("\n\n")
+}
+
+/// Insert `block` after the body of `prompt` but before its final
+/// `/aida-…` skill line, so background context follows the findings and the
+/// skill line stays last.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-057 | ai:claude
+fn append_before_skill_line(prompt: String, block: &str) -> String {
+    let trimmed = prompt.trim_end();
+    match trimmed.rsplit_once('\n') {
+        Some((body, last)) if last.trim_start().starts_with("/aida-") => {
+            format!("{}\n\n{block}\n\n{last}", body.trim_end())
+        }
+        _ if trimmed.trim_start().starts_with("/aida-") => format!("{block}\n\n{trimmed}"),
+        _ => format!("{trimmed}\n\n{block}"),
+    }
 }
 
 /// Everything the queue-work pickup prompt is built from, gathered by

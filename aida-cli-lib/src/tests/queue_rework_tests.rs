@@ -2010,4 +2010,3 @@ fn rework_ruling_is_recorded_as_a_tagged_spec_comment() {
     assert_eq!(ruling.content, "Advisor ruling: widen to the test");
     assert!(crate::queue_cmd::record_rework_ruling(&storage, "BUG-021", "  ").is_err());
 }
-
