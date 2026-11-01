@@ -1,0 +1,77 @@
+{
+  "schema_version": 1,
+  "spec": "STORY-2219",
+  "publishes": [
+    {
+      "at": "2026-11-01T13:15:03.615360352Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-01T06:05:33.459710516Z",
+      "spec": "STORY-2219",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-01T06:48:41.546844577Z",
+      "spec": "STORY-2219",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-01T07:31:37.538202378Z",
+      "spec": "STORY-2219",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-01T12:48:23.934859006Z",
+      "spec": "STORY-2219",
+      "seat": "reviewer",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "verdict": "APPROVED",
+        "reviewed_sha": "cda8b50138481b9795fd8a9995d472c9711270b3"
+      }
+    },
+    {
+      "ts": "2026-11-01T13:14:34.884217641Z",
+      "spec": "STORY-2219",
+      "seat": "integrator",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 3193
+      }
+    },
+    {
+      "ts": "2026-11-01T13:15:03.472478508Z",
+      "spec": "STORY-2219",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "6a3f67671a974703590efde5ae2a323f3f7471fa",
+        "pr": 3193,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
