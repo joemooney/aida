@@ -6,12 +6,12 @@ description: |-
   Acceptance: (1) Common data-driven vendor capability/trusted-policy/launch-boundary contract and a closed model-free doctor/config probe, with precise ready/unsupported/refused cause. No arbitrary harness or stored shell through partial backend. (2) Same intended production filesystem/supervisor builder executes fixed synthetic lane with private namespaces/proc, capdrop, terminal-injection refusal, FD hygiene, typed own-write roots/protected paths and teardown. (3) Required-live fixture proves permitted synthetic writes, denied outside/proc/FD/protected-path writes and process teardown; unavailable bwrap/userns/TTY/channel fails closed. (4) Current real-vendor behavior unchanged and unsupported partial backend remains unselectable. Layers: trusted config/capability data, public diagnostics, runtime supervisor/filesystem, integration tests. Signed sliceA.
 
   All signed STORY2238 sketch C1-C12 and BUG2398 B1-B4 apply. Linux only, fakeHOME/synthetic tests, no global user settings or schedules. No partial backend may report AIDA containment applied or launch ordinary agents until all required protections are ready; named refusal, no fallback. STRICT independent review, operator merge floor. LIGHT one targeted test plus fast gates; shared infra or >10files adds touched-test/compile, fullsuiteCI only. Longcargo background, no slotbypass. Parent all7AC remain open until final installed-tool evidence; no slice alone completes parent.
-status: Approved
+status: InProgress
 priority: High
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T09:05:27.409838422Z
-modified_at: 2026-11-01T09:05:27.409838422Z
+modified_at: 2026-11-01T09:23:34.259758735Z
 req_type: Task
 tags:
 - architecture
@@ -27,6 +27,13 @@ history:
   author: joe
   timestamp: 2026-11-01T09:05:40.526128307Z
   changes: []
+- id: 01a1966b-def3-7981-8184-92e047445905
+  author: aida-session-start
+  timestamp: 2026-11-01T09:23:34.259755684Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 4ce0af750fcb68d4adf57496e4e002aefd8ace77
   branch: main
