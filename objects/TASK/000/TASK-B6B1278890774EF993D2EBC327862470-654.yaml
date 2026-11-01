@@ -1,5 +1,6 @@
 id: 01a1964d-a402-77e2-83ea-e67d5e5b6287
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-654
+agreed_id: TASK-2713
 title: 'Repeated unchanged review findings: BUG-2383'
 description: |-
   Identical reviewer findings recurred twice for BUG-2383; do not requeue a third implementer round until an advisor chooses a different implementer/seat or resolves the dispute.
@@ -46,6 +47,10 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Completed
+- id: 01a1968f-8ccf-7791-8034-75e5f5d0afe2
+  author: joe
+  timestamp: 2026-11-01T10:02:32.527463475Z
+  changes: []
 filed_at:
   code_sha: 4ce0af750fcb68d4adf57496e4e002aefd8ace77
   branch: main
