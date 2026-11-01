@@ -7,6 +7,8 @@
 allowed_hosts = [
   "github.com", "api.github.com", "objects.githubusercontent.com", "codeload.github.com",
   "api.anthropic.com", "statsig.anthropic.com",
+  # trace:BUG-2392 | ai:codex
+  "api.openai.com", "chatgpt.com", "auth.openai.com",
   "static.crates.io", "index.crates.io", "crates.io",
   "registry.npmjs.org",
 ]
