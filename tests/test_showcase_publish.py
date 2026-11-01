@@ -46,7 +46,7 @@ class ShowcasePublishTests(unittest.TestCase):
         self.assertEqual(result.returncode, expected, result.stdout + result.stderr)
         return result
 
-    # trace:TASK-2604.ac3fcca5 | ai:claude
+    # trace:TASK-b6b1278890774ef993d2ebc327862470-278.ac3fcca5 | ai:claude
     def test_selects_published_set_and_rewrites_links(self):
         out = Path(self.temp.name) / 'public'
         self.run_publish('--out', str(out))
@@ -66,7 +66,7 @@ class ShowcasePublishTests(unittest.TestCase):
         self.assertIn('href="index.html"', overview)
         self.assertIn('blob/main/docs/cli/02-specs.md', overview)
 
-    # trace:TASK-2604.ac834331 | ai:claude
+    # trace:TASK-b6b1278890774ef993d2ebc327862470-278.ac834331 | ai:claude
     def test_output_is_deterministic_and_compare_detects_drift(self):
         out = Path(self.temp.name) / 'public'
         self.run_publish('--out', str(out))
@@ -119,7 +119,7 @@ class GitlabPagesJobTests(unittest.TestCase):
         return [line.strip() for line in match.group(1).splitlines()
                 if line.strip().startswith('- ')]
 
-    # trace:TASK-2604.ac3fcca5 | ai:claude
+    # trace:TASK-b6b1278890774ef993d2ebc327862470-278.ac3fcca5 | ai:claude
     def test_publishes_only_from_tags_or_explicit_manual_run(self):
         rules = self.section('rules')
         self.assertEqual(rules, [
@@ -130,13 +130,26 @@ class GitlabPagesJobTests(unittest.TestCase):
         self.assertNotIn('merge_request', self.job)
         self.assertNotIn('"push"', self.job)
 
-    # trace:TASK-2604.ac3fcca5 | ai:claude
+    # trace:TASK-b6b1278890774ef993d2ebc327862470-278.ac3fcca5 | ai:claude
     def test_clears_previous_public_before_publishing(self):
         # The runner keeps its checkout between pipelines, so public/ from the
         # last publish survives and publish.py --out refuses a non-empty dir.
         script = self.section('script')
         publish = next(i for i, s in enumerate(script) if 'publish.py' in s and '--out public' in s)
         self.assertIn('- rm -rf public', script[:publish])
+
+
+class ShowcaseReadmePagesSectionTests(unittest.TestCase):
+    # trace:TASK-b6b1278890774ef993d2ebc327862470-278.acd71ee8 | ai:claude
+    def test_documents_trigger_url_and_admin_prerequisites(self):
+        readme = (REPO / 'docs/showcase/README.md').read_text()
+        match = re.search(r'^## GitLab Pages site\n(.*?)(?=^## |\Z)', readme, re.MULTILINE | re.DOTALL)
+        self.assertIsNotNone(match, 'README has no "## GitLab Pages site" section')
+        section = match.group(1)
+        self.assertIn('PUBLISH_PAGES', section)
+        self.assertIn('https://<namespace>.<pages-domain>/<project>/', section)
+        self.assertIn('pages_external_url', section)
+        self.assertIn('wildcard DNS', section)
 
 
 if __name__ == '__main__':
