@@ -11,12 +11,12 @@ description: |
   2. If currentartifact stillbreaches, fix diagnosedpath preserving canonicalcorrectness, authoritychecks, useful truthfulbounded/incomplete linkage and BUG1801 zero-refresh-wait semantics. Budgets2000ms/10%/5000ms stayunchanged. For an architectural fork postsketch and seek independent signoff beforeimplementation; routineboundedfix mayproceed.
   3. Add decisive mechanism regression iffixneeded (fixtures/fakeHOME only); remeasure sameartifact/shapes/load and report before/after plus new-buildsamplecounts separately from old24hwindow. Never claimthreewarmcalls provefullSLO. Ifhistoricalonly, documentverifiedsupersedingmergedfix and representativefreshtelemetry instead ofcreatingunnecessarycode.
   4. Independentreview andnormalPRgates forcode. LIGHT one targetedregressionplusfast; >10files/sharedinfrastructure addsmandatorygates; no fullsuite/slotbypass/repeatedcappedcompiles. Longcargo background. Diagnosisfirst, nopollingloop, nouserconfigedits orbenchmarkbudgetrelaxation.
-status: InProgress
+status: Done
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T10:04:17.050576260Z
-modified_at: 2026-11-01T18:23:07.137532960Z
+modified_at: 2026-11-01T23:28:44.176391958Z
 req_type: Bug
 tags:
 - closure:pending
@@ -53,6 +53,11 @@ comments:
   created_at: 2026-11-01T18:23:07.137532960Z
   modified_at: 2026-11-01T18:23:07.137532960Z
   relayed_from: codex-reviewer-25
+- id: 01a19971-a611-7911-a21d-d7f9f7d204d1
+  author: aida-auto-bump
+  content: '[aida:closure-held] Code merged to the default branch (commit c0110e5), but completion is held at Done: the spec''s own declared closure criteria are unmet: "tag `closure:pending` is set". Whoever owns those criteria (the spec''s owner or the advisor) resolves them by checking the box in the spec''s Closure section, or removing the tag, via `aida edit BUG-2402 --description ...` / `aida edit BUG-2402 --remove-tag closure:pending`. The next `aida pull` completes it once nothing holds it; to replay by hand, run `aida db reconcile-status --spec BUG-2402 --since c0110e5^`. If the blockers form a cycle, or you decide to ship regardless, a human runs `aida edit BUG-2402 --status completed`. (merge sha: c0110e5db66c985b4c16fff2db8591fb512136ab)'
+  created_at: 2026-11-01T23:28:44.561733643Z
+  modified_at: 2026-11-01T23:28:44.561733643Z
 history:
 - id: 01a19809-e494-74a2-9ac1-332231d47592
   author: aida-session-start
@@ -65,6 +70,13 @@ history:
   author: joe
   timestamp: 2026-11-01T18:09:36.811095563Z
   changes: []
+- id: 01a19971-a611-7911-a21d-d7e3927f0528
+  author: aida-auto-bump
+  timestamp: 2026-11-01T23:28:44.561707949Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 filed_at:
   code_sha: 6fefb63280c352be0194c2cfadf54a085eb55471
   branch: main
