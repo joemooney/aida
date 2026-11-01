@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T21:37:29.201146410Z
-modified_at: 2026-11-01T06:20:35.671307358Z
+modified_at: 2026-11-01T06:53:38.593154879Z
 req_type: Bug
 tags:
 - epic-home-003
@@ -128,6 +128,11 @@ comments:
   modified_at: 2026-11-01T06:20:29.646120604Z
   session_id: 01a195c021a4
   harness_version: 2.1.316 (Claude Code)
+- id: 01a195e2-9ba1-7180-bb6d-00d0b4e2a40f
+  author: joe
+  content: 'ADVISOR RECOVERY EVIDENCE: old PR-scope lease 01a195c021a4 at aida-pr-3177 had no process with cwd in that tree, but three dirty tracked files. Preserved all changes using git stash before ending that clean lease. Recovery object: 8cb6afc91edf540fe5e3c4c31b164214a4a35722 (AIDA preservation: stale PR-3177 worktree before independent review; advisor05 2026-11-01). The PR already has its round-3 fix plus a normal merge from main at 9383d0215dda. No branch deleted and no dirty work discarded. Fresh independent review is being launched in a separate path.'
+  created_at: 2026-11-01T06:53:38.593154879Z
+  modified_at: 2026-11-01T06:53:38.593154879Z
 history:
 - id: 01a193e8-1070-7260-a5d0-2973465ae4a2
   author: aida-session-start
