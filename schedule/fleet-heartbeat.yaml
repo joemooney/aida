@@ -1,9 +1,7 @@
 job: fleet-heartbeat
-last_run: 2026-11-01T07:02:42.597685259Z
+last_run: 2026-11-01T08:20:37.067890526Z
 last_by:
   seat: advisor
   vendor: codex
 result: done
-note: 'Checked ps, all 10 open PRs and 8 relay.status files. Old blocked relays are historical: BUG-2162/TASK-1981/TASK-2053 Completed; PR2667/2796/2836/2839 MERGED. Current rework and fresh reviews dispatched; 3188 serial ship waits exact-head CI, 3182 timing-only retry queued. Codex backlog staged behind live launch fix; human-only spikes preserved. Live mail-wake repaired; source BUG2397 queued. No gate waived.'
-due_since: 2026-11-01T08:03:55.008420222Z
-due_reason: every 1h
+note: 'Fleet sweep: 45open before publication closure; active native docs-sweep/metadata/config fixers and independent reviewers verified via ps plus live tool handles. Eight old relay status files refer to previously completed work, no duplicate relays restarted. Acted: new reviews3193/3198, metadata signoff amendments,3185 conflict routing,3177 genuine grant-stamped re-review/release,3190 failed-job rerun;3196 landed+published. No new human request; operator terminal runner executes independently assessed trains. Next authoritative duty in1h.'
