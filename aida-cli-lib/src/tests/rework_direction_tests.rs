@@ -279,6 +279,16 @@ fn git(dir: &std::path::Path, args: &[&str]) {
     );
 }
 
+fn rev_parse(dir: &std::path::Path, rev: &str) -> String {
+    let out = crate::test_git::git_command()
+        .arg("-C")
+        .arg(dir)
+        .args(["rev-parse", "--verify", rev])
+        .output()
+        .expect("git runs");
+    String::from_utf8_lossy(&out.stdout).trim().to_string()
+}
+
 fn commit_file(dir: &std::path::Path, content: &str, msg: &str) {
     std::fs::write(dir.join("f.txt"), content).unwrap();
     git(dir, &["add", "f.txt"]);
@@ -307,13 +317,37 @@ fn detect_main_conflict_forecasts_through_fetch_and_merge_tree() {
         .arg(&clone)
         .output()
         .unwrap();
-    assert!(out.status.success());
+    assert!(
+        out.status.success(),
+        "clone: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
 
+    // Each step asserts on its own, so a failure names the step: a refused
+    // or failed git run otherwise surfaces only as a `None` forecast.
+    assert_eq!(
+        crate::worktree_gc::detect_default_branch_ref(&clone).as_deref(),
+        Some("origin/main"),
+        "default branch of the clone"
+    );
+    assert!(
+        matches!(
+            crate::worktree_gc::forecast_rebase_onto(&clone, "origin/main", "origin/pr-branch"),
+            crate::integrate::RebaseForecast::Clean
+        ),
+        "merge-tree forecast before main moves"
+    );
     assert_eq!(detect_main_conflict(&clone, 7, "pr-branch"), None);
 
     // main moves on origin only; the clone learns of it through the fetch.
     commit_file(&origin, "main change\n", "main");
-    let conflict = detect_main_conflict(&clone, 7, "pr-branch").expect("conflict forecast");
+    let conflict = detect_main_conflict(&clone, 7, "pr-branch");
+    assert_eq!(
+        rev_parse(&clone, "origin/main"),
+        rev_parse(&origin, "main"),
+        "the forecast's fetch updated origin/main in the clone"
+    );
+    let conflict = conflict.expect("conflict forecast");
     assert_eq!(conflict.pr, 7);
     assert_eq!(conflict.base, "main");
     assert_eq!(conflict.files, vec!["f.txt".to_string()]);
