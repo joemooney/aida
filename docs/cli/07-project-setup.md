@@ -632,3 +632,28 @@ above. The client guard does not enforce hub receiving hooks or PUBLIC
 forwarding, and raw Git, other AIDA writers that do not go through the store
 backend, and foreign writers can bypass it. No history rewrite, clean export,
 live hub hook or automatic forwarding is provided.
+
+#### Per-vendor containment posture
+
+With containment enabled, opt Codex into its native sandbox in the trusted
+default-branch `.aida/config.toml` (the committed `origin/<default>` copy read
+through `trusted_config`; local default branch only when no remote ref exists):
+
+```toml
+[contained.vendors]
+codex = "native"
+```
+
+Branch-local edits cannot grant this opt-in. Merge the configuration into the
+default branch before launching Codex under containment. Missing or unreadable
+trusted config preserves refusal.
+
+The allowed values are `"aida"` and `"native"`. Claude keeps AIDA containment
+by default; other vendors without a key refuse. Only Codex supports the native
+option, using `--sandbox workspace-write --ask-for-approval never` for interactive
+and headless launches. It is shown as “native sandbox, not AIDA-contained” by
+permission reports, doctor, launch banners and statusline. Native sandboxing
+does not apply AIDA's tool rules, write boundaries or network allowlist.
+`aida doctor --category permission-posture` reports an incompatible default
+`[agents] vendor`, the active containment setting and the configuration fix.
+<!-- trace:TASK-2631 | ai:codex -->
