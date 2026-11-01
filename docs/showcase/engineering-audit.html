@@ -336,13 +336,13 @@
 
       <aside class="verdict-card" aria-label="Executive Audit Diagnosis">
         <div class="card-kicker">EXECUTIVE DIAGNOSIS</div>
-        <h3>Top 0.1% Trunk Throughput Taxed by Batch Size &amp; Hub Coupling</h3>
+        <h3>High Trunk Integration Velocity Paired with Batch-Size &amp; Hub Coupling Friction</h3>
         <p>
-          AIDA integrates <strong>13.9–14.4 PRs/day</strong> (peaking at <strong>834 PRs/month</strong> in June 2026) and compresses
-          LinearB's #1 industry bottleneck—<strong>PR Pickup Time</strong>—from 4–36 hours down to <strong>&lt;2 minutes</strong> via
+          AIDA merges <strong>13.9–14.4 PRs/day</strong> onto <code>main</code> (peaking at <strong>834 PRs/month</strong> in June 2026) and compresses
+          <strong>PR Pickup Time</strong>—often 4–36 hours in human orgs (<a href="https://linearb.io/blog/git-analytics" target="_blank" rel="noopener" style="color:var(--accent);">LinearB</a>)—down to <strong>&lt;2 minutes</strong> via
           <code>aida review watch</code>. However, <strong>78.3% of all Rust code</strong> resides in a single crate
-          (<code>aida-cli-lib</code>), and <strong>49.8% of PRs exceed GitClear's 400-LoC review ceiling</strong>, driving a
-          <strong>27.7% &lt;21-day code churn rate</strong> and <strong>31.6% forward-fix (<code>BUG-</code>/<code>fix:</code>) commit share</strong>.
+          (<code>aida-cli-lib</code>), and <strong>49.8% of PRs exceed 400 LoC</strong>, co-occurring with a
+          <strong>27.7% &lt;21-day file-touch churn proxy</strong> and a <strong>31.6% <code>BUG-</code>/<code>fix:</code> commit share</strong>.
         </p>
         <div class="verdict-pills">
           <div class="v-pill good">
@@ -376,12 +376,12 @@
     <div class="kpi-cell">
       <div class="kpi-label">MR Velocity (60d Avg)</div>
       <div class="kpi-value">14.4/d</div>
-      <div class="kpi-foot"><span class="badge badge-elite">Hyper-Elite</span> 431.5 PRs/mo</div>
+      <div class="kpi-foot"><span class="badge badge-elite">Repo Proxy</span> 431.5 PRs/mo</div>
     </div>
     <div class="kpi-cell">
       <div class="kpi-label">PR Pickup Latency</div>
       <div class="kpi-value">&lt;2 min</div>
-      <div class="kpi-foot"><span class="badge badge-elite">Top 0.1%</span> vs 4–13h human</div>
+      <div class="kpi-foot"><span class="badge badge-elite">Automated</span> vs 4–13h human</div>
     </div>
     <div class="kpi-cell">
       <div class="kpi-label">PRs Over 400 LoC</div>
@@ -391,12 +391,12 @@
     <div class="kpi-cell">
       <div class="kpi-label">&lt;21d Rework Churn</div>
       <div class="kpi-value">27.7%</div>
-      <div class="kpi-foot"><span class="badge badge-crit">Needs Focus</span> Elite &lt;8.0%</div>
+      <div class="kpi-foot"><span class="badge badge-crit">File Proxy</span> Target &lt;8.0%</div>
     </div>
     <div class="kpi-cell">
-      <div class="kpi-label">Hard Revert Rate</div>
+      <div class="kpi-label">Commit Revert Ratio</div>
       <div class="kpi-value">0.17%</div>
-      <div class="kpi-foot"><span class="badge badge-elite">7 / 4,190</span> 31.6% forward-fix</div>
+      <div class="kpi-foot"><span class="badge badge-info">Repo Proxy</span> 7 / 4,190 commits</div>
     </div>
   </section>
 
@@ -432,9 +432,9 @@
               <td><strong>Trunk PR Merge Frequency</strong></td>
               <td class="code-cell">git log main</td>
               <td class="num"><strong>13.9 – 14.4 PRs/day</strong> (100.7/wk)</td>
-              <td class="num">1.5 – 2.5 PRs/day</td>
-              <td class="num">4.0 – 6.0 PRs/day</td>
-              <td><span class="badge badge-elite">Hyper-Elite Strength</span> 2.5x–6x human 8-engineer squad throughput</td>
+              <td class="num">1.5 – 2.5 PRs/day*</td>
+              <td class="num">4.0 – 6.0 PRs/day*</td>
+              <td><span class="badge badge-elite">High Merge Cadence</span> Repo integration proxy (*illustrative 8-dev reference)</td>
             </tr>
             <tr data-kind="strength">
               <td><strong>PR Pickup Time (Wait for Reviewer)</strong></td>
@@ -442,7 +442,7 @@
               <td class="num"><strong>5 sec – 2 min</strong></td>
               <td class="num">13.0 hours</td>
               <td class="num">&lt; 1.0 hour</td>
-              <td><span class="badge badge-elite">Hyper-Elite Strength</span> Eliminates #1 human cycle-time dead zone</td>
+              <td><span class="badge badge-elite">Automated Dispatch</span> Daemon-spawned reviewer vs. LinearB human queue wait</td>
             </tr>
             <tr data-kind="strength">
               <td><strong>Unreviewed PR Merge Rate</strong></td>
@@ -456,32 +456,32 @@
               <td><strong>Dedicated Rust Test Density</strong></td>
               <td class="code-cell">tokei</td>
               <td class="num"><strong>27.9%</strong> (240,863 LoC / 641 files)</td>
-              <td class="num">12% – 18%</td>
-              <td class="num">&gt; 25.0%</td>
-              <td><span class="badge badge-elite">Architectural Strength</span> High regression protection + 72 Python suites</td>
+              <td class="num">12% – 18%*</td>
+              <td class="num">&gt; 25.0%*</td>
+              <td><span class="badge badge-elite">Architectural Strength</span> Dedicated Rust test files + 72 Python suites (*heuristic)</td>
             </tr>
             <tr data-kind="strength">
-              <td><strong>Hard Trunk Revert Rate &amp; MTTR</strong></td>
+              <td><strong>Trunk Commit Revert Ratio (Repo Proxy)</strong></td>
               <td class="code-cell">git log main</td>
-              <td class="num"><strong>0.17% reverts</strong> (&lt;2h MTTR)</td>
-              <td class="num">5% – 15% CFR</td>
-              <td class="num">&lt; 5.0% CFR</td>
-              <td><span class="badge badge-elite">Elite Stability Gate</span> Pre-ship gates block broken builds before merge</td>
+              <td class="num"><strong>0.17% commit reverts</strong> (7 / 4,190)</td>
+              <td class="num">N/A (Deploy CFR: 15–30%)</td>
+              <td class="num">Deploy CFR &lt; 5.0%</td>
+              <td><span class="badge badge-info">Repo Proxy Only</span> Commit revert ratio (actual deployment CFR &amp; MTTR unknown)</td>
             </tr>
             <tr data-kind="weakness">
               <td><strong>Crate Monolith Concentration</strong></td>
               <td class="code-cell">tokei / Cargo</td>
               <td class="num"><strong>78.3%</strong> in <code>aida-cli-lib</code> (675.6k LoC)</td>
-              <td class="num">35% – 50%</td>
-              <td class="num">&lt; 25% per crate</td>
-              <td><span class="badge badge-crit">Critical Weakness</span> Penalizes incremental compile/link &amp; fault isolation</td>
+              <td class="num">35% – 50%*</td>
+              <td class="num">&lt; 25% per crate*</td>
+              <td><span class="badge badge-crit">Critical Weakness</span> Penalizes incremental compile/link (*architectural heuristic)</td>
             </tr>
             <tr data-kind="weakness">
               <td><strong>Cross-File AST Hub Fan-In (<code>models.rs</code>)</strong></td>
               <td class="code-cell">codegraph</td>
               <td class="num"><strong>1,003 caller files</strong> (69.7% of Rust)</td>
-              <td class="num">15% – 25%</td>
-              <td class="num">&lt; 15% of files</td>
+              <td class="num">15% – 25%*</td>
+              <td class="num">&lt; 15% of files*</td>
               <td><span class="badge badge-crit">Critical Weakness</span> 10,402 cross-file edges; only 33 traits across 862.6k LoC</td>
             </tr>
             <tr data-kind="weakness">
@@ -490,26 +490,49 @@
               <td class="num"><strong>49.8% of PRs</strong> (median 400 LoC)</td>
               <td class="num">26.0% of PRs</td>
               <td class="num">&lt; 15.0% of PRs</td>
-              <td><span class="badge badge-warn">Batch-Size Weakness</span> 24.9% of PRs exceed 1,000 LoC (GitClear danger zone)</td>
+              <td><span class="badge badge-warn">Batch-Size Weakness</span> 24.9% of PRs exceed 1,000 LoC (SmartBear/GitClear ceiling)</td>
             </tr>
             <tr data-kind="weakness">
               <td><strong>LinearB &lt;21-Day Rework Churn (30d)</strong></td>
               <td class="code-cell">git numstat</td>
-              <td class="num"><strong>27.7%</strong> (351,760 LoC churned)</td>
+              <td class="num"><strong>27.7%</strong> (351,760 LoC file-window proxy)</td>
               <td class="num">11% – 15%</td>
               <td class="num">&lt; 8.0%</td>
-              <td><span class="badge badge-crit">High Churn Weakness</span> Driven by 12 hub files touched 2–7 times/day</td>
+              <td><span class="badge badge-crit">High Churn Proxy</span> Co-occurs with 12 hub files touched 2–7x/day (file-level proxy)</td>
             </tr>
             <tr data-kind="weakness">
               <td><strong>Forward-Fix (<code>BUG-</code> / <code>fix:</code>) Commit Ratio</strong></td>
               <td class="code-cell">git log main</td>
               <td class="num"><strong>31.6%</strong> (1,326 / 4,190 commits)</td>
-              <td class="num">18% – 25%</td>
-              <td class="num">&lt; 15.0%</td>
-              <td><span class="badge badge-info">Dual Signal</span> Healthy scoped follow-up capture + &lt;21d batch rework</td>
+              <td class="num">18% – 25%*</td>
+              <td class="num">&lt; 15.0%*</td>
+              <td><span class="badge badge-info">Dual Signal</span> Combines healthy audit follow-up capture + post-merge bug fixes</td>
             </tr>
           </tbody>
         </table>
+      </div>
+
+      <!-- Methodology, Primary Sources & Measured vs. Proxy/Unknown Distinctions -->
+      <div style="margin-top: 18px; padding-top: 16px; border-top: 1px dashed var(--line-strong); font-size: 12.5px; color: var(--ink-secondary); line-height: 1.55;">
+        <div style="font-family:var(--mono); font-size:11px; font-weight:700; letter-spacing:0.06em; text-transform:uppercase; color:var(--accent); margin-bottom:8px;">
+          METHODOLOGY, PRIMARY BENCHMARK SOURCES &amp; MEASURED VS. PROXY / ASSUMED DISTINCTIONS
+        </div>
+        <div style="display:grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px;">
+          <div>
+            <strong style="color:var(--ink);">1. Pinned Repository Evidence &amp; Collection Commands:</strong><br/>
+            Evaluated against <code>main</code> at <code>6a3f67671a974703590efde5ae2a323f3f7471fa</code> (window <code>2025-11-23</code> → <code>2026-11-01</code>, 343.4 days):
+            <code>tokei --output json</code> (static line census); <code>sqlite3 .codegraph/codegraph.db</code> (56,257 AST nodes / 268,598 edges);
+            <code>git log main --oneline / --shortstat / --numstat --since="30 days ago"</code> (4,190 commits, 2,436 <code>(#NNNN)</code> PR merges over 175.4 days since 2026-05-10);
+            and <code>.aida/review-verdicts/**/*.json</code> (3,824 attested verdict files across 2,959 targets).
+          </div>
+          <div>
+            <strong style="color:var(--ink);">2. Primary External Reference Sources &amp; Caveats:</strong><br/>
+            • <strong>DORA Four Keys:</strong> <a href="https://dora.dev/guides/dora-metrics/" target="_blank" rel="noopener" style="color:var(--accent);">dora.dev/guides/dora-metrics/</a> (2023–2024 <em>Accelerate State of DevOps</em> production deployment &amp; incident definitions).<br/>
+            • <strong>LinearB Git Analytics:</strong> <a href="https://linearb.io/blog/git-analytics" target="_blank" rel="noopener" style="color:var(--accent);">linearb.io/blog/git-analytics</a> (2023–2024 dataset across 6.1M+ PRs / 3,000+ orgs for Cycle Time phases, Pickup Time, and &lt;21d Rework).<br/>
+            • <strong>Review Size Studies:</strong> SmartBear/Cisco Systems peer-review study (Cohen et al., 2,500 reviews; defect detection drops above 200–400 LoC) &amp; <a href="https://www.gitclear.com/" target="_blank" rel="noopener" style="color:var(--accent);">GitClear (2024)</a>.<br/>
+            • <strong>Proxies, Unknowns &amp; Hypotheses:</strong> Actual production deployment frequency, deployment CFR, and incident MTTR are <strong>Unknown</strong> (no deployment/incident dataset is linked in the repo). The 27.7% &lt;21d churn figure is a <em>file-level commit-window proxy</em> (files touched multiple times within 21d in <code>git log --numstat</code>), not line-by-line <code>git blame</code> survival. Rows marked <code>*</code> use illustrative 8-developer squad scaling (~0.2–0.75 PRs/dev/day) or architectural heuristics. Co-occurrence between &gt;400-LoC batches, hub files, and churn is an architectural hypothesis rather than proved causation.
+          </div>
+        </div>
       </div>
     </div>
   </section>
@@ -698,8 +721,8 @@
         </div>
         <div class="svg-chart-wrap" id="sizing-svg-container"></div>
         <div class="callout weakness">
-          <div class="callout-title">⚠ GitClear Review Ceiling Breach (&gt;400 LoC)</div>
-          GitClear &amp; SmartBear studies prove reviewer defect detection drops by <strong>&gt;50% above 400 LoC</strong>. AIDA's
+          <div class="callout-title">⚠ SmartBear &amp; GitClear Review Ceiling (&gt;400 LoC)</div>
+          Empirical peer-review studies (SmartBear/Cisco Systems, Cohen et al., 2,500 reviews; <a href="https://www.gitclear.com/" target="_blank" rel="noopener" style="color:var(--crimson);">GitClear 2024</a>) observe that human reviewer defect detection drops sharply above <strong>200–400 LoC</strong>. AIDA's
           median PR is <strong>400 LoC</strong> (mean <strong>938.6 LoC</strong>, p90 <strong>2,325 LoC</strong>), with <strong>24.9% of PRs exceeding 1,000 LoC</strong>.
         </div>
       </div>
@@ -710,7 +733,7 @@
       <div class="card-header">
         <div>
           <h3 class="card-title">PR / MR Velocity &amp; Diff Size Percentile Breakdown</h3>
-          <p class="card-subtitle">Contrasting Median &amp; Elite 8-Engineer Human Teams against AIDA Empirical Windows</p>
+          <p class="card-subtitle">Contrasting illustrative 8-developer human squad reference ranges (~0.2–0.75 PRs/dev/day) against AIDA repository windows</p>
         </div>
       </div>
       <div class="table-wrap">
@@ -799,11 +822,10 @@
     <div class="section-head">
       <div>
         <div class="section-num">04 / DORA STATE OF DEVOPS BENCHMARK MAPPING</div>
-        <h2>Throughput Excellence &amp; Disciplined Follow-Up Capture</h2>
+        <h2>DORA Deployment Metrics vs. Measured Repository Proxies</h2>
       </div>
       <p class="section-desc">
-        Benchmarking Deployment Frequency, Change Lead Time, Change Failure Rate (Hard Reverts vs. Scoped Follow-Up &amp; Rework Slices),
-        and Failed Deployment Recovery Time (MTTR).
+        Per <a href="https://dora.dev/guides/dora-metrics/" target="_blank" rel="noopener" style="color:var(--accent);">dora.dev/guides/dora-metrics/</a>, DORA's Four Keys measure production deployments and incidents. Because no production deployment or incident log is linked in this repository, actual deployment metrics are marked <strong>Unknown</strong> and separated from measured Git trunk proxies.
       </p>
     </div>
 
@@ -812,49 +834,55 @@
         <div class="card-header">
           <div>
             <h3 class="card-title">DORA Four-Key Metrics Scorecard</h3>
-            <p class="card-subtitle">Elite across speed &amp; recovery; 0.17% hard reverts with 31.6% tracked follow-up/rework commits</p>
+            <p class="card-subtitle">Primary definitions: <a href="https://dora.dev/guides/dora-metrics/" target="_blank" rel="noopener" style="color:var(--accent);">dora.dev/guides/dora-metrics/</a> · Production telemetry vs. repository proxies</p>
           </div>
         </div>
         <div class="table-wrap">
           <table>
             <thead>
               <tr>
-                <th>DORA Metric</th>
-                <th>DORA Elite Standard</th>
-                <th>AIDA Empirical Performance</th>
-                <th>Tier</th>
+                <th>DORA Metric (<a href="https://dora.dev/guides/dora-metrics/" target="_blank" rel="noopener" style="color:inherit;">dora.dev</a>)</th>
+                <th>DORA Elite Standard (Prod)</th>
+                <th>Actual Prod Metric</th>
+                <th>Measured Repository Proxy (<code>main</code>)</th>
+                <th>Status</th>
               </tr>
             </thead>
             <tbody>
               <tr>
                 <td><strong>1. Deployment / Integration Frequency</strong></td>
-                <td>On-demand (multiple/day)</td>
-                <td><strong>12.8 – 14.4 PRs/day</strong> (26.6–27.9 commits/day)</td>
-                <td><span class="badge badge-elite">ELITE</span></td>
+                <td>On-demand (multiple deploys/day)</td>
+                <td><strong>Unknown</strong> (no prod deploy log)</td>
+                <td><strong>12.8 – 14.4 PRs/day</strong> merged to <code>main</code> (26.6–27.9 commits/d; integration proxy)</td>
+                <td><span class="badge badge-info">REPO PROXY</span></td>
               </tr>
               <tr>
                 <td><strong>2. Change Lead Time</strong></td>
-                <td>&lt; 1 day (&lt; 1 hour ideal)</td>
-                <td><strong>~40 mins – 2.2 hours</strong> (commit to <code>main</code>)</td>
-                <td><span class="badge badge-elite">ELITE</span></td>
+                <td>&lt; 1 day (commit to prod)</td>
+                <td><strong>Unknown</strong> (no prod release log)</td>
+                <td><strong>14.5m median</strong> non-zero CI ship settlement (~40m–2.2h commit-to-merge proxy)</td>
+                <td><span class="badge badge-info">REPO PROXY</span></td>
               </tr>
               <tr>
                 <td><strong>3a. Change Failure Rate (Hard Reverts)</strong></td>
-                <td>0% – 5%</td>
-                <td><strong>0.17%</strong> (7 reverts in 4,190 commits)</td>
-                <td><span class="badge badge-elite">ELITE</span></td>
+                <td>0% – 5% of prod deployments</td>
+                <td><strong>Unknown</strong> (no incident log)</td>
+                <td><strong>0.17% commit revert ratio</strong> (7 git reverts / 4,190 commits; not deployment CFR)</td>
+                <td><span class="badge badge-info">REPO PROXY</span></td>
               </tr>
               <tr>
                 <td><strong>3b. Effective Defect Rework (<code>fix:</code>/<code>BUG-</code>)</strong></td>
-                <td>&lt; 15% unscheduled rework</td>
-                <td><strong>31.6%</strong> (1,326 commits: audit follow-ups + rework)</td>
-                <td><span class="badge badge-info">HYBRID</span></td>
+                <td>N/A (commit-intent proxy)</td>
+                <td><strong>Unknown</strong> (not prod CFR)</td>
+                <td><strong>31.6%</strong> (1,326 / 4,190 commits: 1,163 <code>BUG-</code> + 163 <code>fix:</code> — audit follow-ups + fixes)</td>
+                <td><span class="badge badge-info">HYBRID PROXY</span></td>
               </tr>
               <tr>
                 <td><strong>4. Failed Deployment Recovery (MTTR)</strong></td>
-                <td>&lt; 1 hour</td>
-                <td><strong>&lt; 1 – 3 hours</strong> (forward-fix + <code>doctor --heal</code>)</td>
-                <td><span class="badge badge-elite">ELITE</span></td>
+                <td>&lt; 1 hour prod restoration</td>
+                <td><strong>Unknown</strong> (no incident dataset)</td>
+                <td><strong>Unmeasured</strong> (remediated via forward-fix <code>BUG-</code> slices &amp; <code>doctor --heal</code>; no MTTR log)</td>
+                <td><span class="badge badge-warn">UNKNOWN</span></td>
               </tr>
             </tbody>
           </table>
@@ -865,7 +893,7 @@
         <div class="card-header">
           <div>
             <h3 class="card-title">Trunk Commit Intent Breakdown (N = 4,190 Commits)</h3>
-            <p class="card-subtitle">1,326 BUG-/fix commits combine proactive audit hardening with post-merge rework</p>
+            <p class="card-subtitle">1,326 BUG-/fix commits combine proactive audit hardening with post-merge bug fixes</p>
           </div>
         </div>
         <div class="bar-list" style="margin-top: 10px;">
@@ -890,14 +918,14 @@
             <div class="bar-val">716 (17.1%)</div>
           </div>
           <div class="bar-row">
-            <div class="bar-label">Hard Git Reverts</div>
+            <div class="bar-label">Git Commit Reverts (Proxy)</div>
             <div class="bar-track"><div class="bar-fill" style="width: 1.5%;"></div></div>
             <div class="bar-val">7 (0.17%)</div>
           </div>
         </div>
         <div class="callout strength" style="margin-top: 22px;">
-          <div class="callout-title">⚖ Disciplined Follow-Up Capture vs. Batch-Size Rework</div>
-          Filing follow-up <code>BUG-XXXX</code> tickets is a <strong>deliberate governance strength</strong>: reviewers, <code>aida doctor</code>, and security audits capture newly discovered edge cases as tracked, bounded slices rather than bloating in-flight PRs or accumulating silent tech debt. The actionable opportunity is shrinking only the <strong>preventable &lt;21-day rework share (27.7%)</strong> caused by merging &gt;400-LoC batches into shared hub files.
+          <div class="callout-title">⚖ Disciplined Follow-Up Capture vs. Co-Occurring Rework</div>
+          Filing follow-up <code>BUG-XXXX</code> tickets is a <strong>deliberate governance practice</strong>: reviewers, <code>aida doctor</code>, and security audits capture newly discovered edge cases as tracked, bounded slices rather than bloating in-flight PRs or leaving silent tech debt. While &gt;400-LoC batches and shared hub files co-occur with the <strong>27.7% &lt;21-day file-touch churn proxy</strong>, causal attribution is an architectural hypothesis rather than proved causation (rapid iterative feature slicing on shared files also contributes).
         </div>
       </div>
     </div>
@@ -947,64 +975,65 @@
         </div>
         <div class="svg-chart-wrap" id="evolution-svg-container"></div>
         <div class="callout weakness">
-          <div class="callout-title">⚠ 27.7% &lt;21-Day Churn vs. 0.8% &gt;21-Day Legacy Refactor</div>
-          LinearB flags <strong>&gt;15% &lt;21-day Rework</strong> as high instability (Elite target is <strong>&lt;8%</strong>). Because
-          <code>lib.rs</code> (216 touches/30d), <code>pr_cmd.rs</code> (82 touches), <code>queue_cmd.rs</code> (73 touches), and
-          <code>cli.rs</code> (72 touches) are modified <strong>2 to 7 times per day</strong>, 27.7% of all code changes rewrite code landed within the prior 21 days.
+          <div class="callout-title">⚠ 27.7% &lt;21-Day File-Touch Churn Proxy vs. 0.8% &gt;21-Day Touch Share</div>
+          In <a href="https://linearb.io/blog/git-analytics" target="_blank" rel="noopener" style="color:var(--crimson);">LinearB's Git Analytics</a> framework, <strong>&gt;15% &lt;21-day Rework</strong> is flagged for attention (Elite target <strong>&lt;8%</strong>). Measured via <code>git log --numstat</code> file-touch windows over the last 30 days, <code>lib.rs</code> (216 touches), <code>pr_cmd.rs</code> (82), <code>queue_cmd.rs</code> (73), and <code>cli.rs</code> (72) are modified <strong>2 to 7 times per day</strong>, placing 27.7% of touched lines in files modified again within &lt;21 days (reflecting both rework and rapid iterative feature additions to shared hubs).
         </div>
       </div>
     </div>
 
-    <!-- Interactive Simulator -->
+    <!-- Interactive Simulator (Illustrative What-If) -->
     <div class="card" style="margin-top: 28px;">
       <div class="card-header">
         <div>
-          <h3 class="card-title">Interactive Architecture &amp; Batch-Size Impact Simulator</h3>
-          <p class="card-subtitle">Model the projected reduction in &lt;21d Rework Churn and Multi-Round Review Bounce as Actions 1–4 are executed</p>
+          <h3 class="card-title">Illustrative Architecture &amp; Batch-Size What-If Explorer</h3>
+          <p class="card-subtitle">Illustrative linear scenario explorer anchored to current baselines — uses assumed heuristic weights with no empirical calibration or predictive/causal validity</p>
         </div>
-        <span class="badge badge-info">Interactive Model</span>
+        <span class="badge badge-warn">Illustrative What-If (Assumed Weights)</span>
       </div>
       <div class="sim-grid">
         <div>
           <div class="slider-group">
             <div class="slider-head">
-              <span><strong>1. Share of PRs Exceeding 400 LoC</strong> (Current: 49.8% → Target: 12%)</span>
+              <span><strong>1. Share of PRs Exceeding 400 LoC</strong> (Current: 49.8% → Assumed Target: 12%)</span>
               <strong id="sim-pr-label" style="color:var(--accent);">49.8%</strong>
             </div>
             <input type="range" id="sim-pr-slider" min="8" max="55" step="0.2" value="49.8" oninput="updateSimulator()" />
           </div>
           <div class="slider-group">
             <div class="slider-head">
-              <span><strong>2. Rust LoC Concentrated in <code>aida-cli-lib</code></strong> (Current: 78.3% → Target: 15%)</span>
+              <span><strong>2. Rust LoC Concentrated in <code>aida-cli-lib</code></strong> (Current: 78.3% → Assumed Target: 15%)</span>
               <strong id="sim-crate-label" style="color:var(--accent);">78.3%</strong>
             </div>
             <input type="range" id="sim-crate-slider" min="12" max="80" step="0.3" value="78.3" oninput="updateSimulator()" />
           </div>
-          <div style="display:flex;gap:10px;margin-top:14px;">
-            <button class="btn-ghost" type="button" onclick="setSimPreset(49.8, 78.3)">Reset to Current Baseline</button>
-            <button class="btn-ghost" type="button" onclick="setSimPreset(14.0, 18.0)" style="border-color:var(--emerald);color:var(--emerald);">Apply Elite Target Preset</button>
+          <div style="display:flex;gap:10px;margin-top:14px;flex-wrap:wrap;align-items:center;">
+            <button class="btn-ghost" type="button" onclick="setSimPreset(49.8, 78.3)">Reset to Measured Baseline</button>
+            <button class="btn-ghost" type="button" onclick="setSimPreset(14.0, 18.0)" style="border-color:var(--emerald);color:var(--emerald);">Apply Illustrative Target Scenario</button>
+          </div>
+          <div style="font-size:11.5px;color:var(--ink-secondary);margin-top:10px;">
+            <strong>Methodology Disclaimer:</strong> Slider weights (<code>10.5</code>, <code>8.8</code>, <code>11.2</code>, <code>6.4</code>, <code>11.5</code>, <code>4.2</code>) are illustrative heuristic assumptions anchored to measured repository baselines (<code>49.8%</code>, <code>78.3%</code>, <code>27.7%</code>, <code>31.6%</code>, <code>73.5%</code>). They are not fitted regression parameters and do not establish causal or predictive outcomes.
           </div>
         </div>
         <div class="sim-outputs">
           <div class="sim-box">
-            <small>PROJECTED &lt;21D REWORK CHURN</small>
+            <small>ILLUSTRATIVE &lt;21D CHURN SCENARIO</small>
             <strong id="sim-out-churn">27.7%</strong>
-            <div style="font-family:var(--mono);font-size:10.5px;color:var(--ink-secondary);margin-top:4px;" id="sim-out-churn-sub">Baseline: 27.7% (Needs Focus &gt;15%)</div>
+            <div style="font-family:var(--mono);font-size:10.5px;color:var(--ink-secondary);margin-top:4px;" id="sim-out-churn-sub">Baseline: 27.7% (Assumed linear weight)</div>
           </div>
           <div class="sim-box">
-            <small>PROJECTED FORWARD-FIX (BUG-) SHARE</small>
+            <small>ILLUSTRATIVE BUG-/FIX SHARE</small>
             <strong id="sim-out-bug">31.6%</strong>
             <div style="font-family:var(--mono);font-size:10.5px;color:var(--ink-secondary);margin-top:4px;" id="sim-out-bug-sub">Baseline: 31.6% of main commits</div>
           </div>
           <div class="sim-box">
-            <small>1ST-PASS REVIEW APPROVAL RATE</small>
+            <small>ILLUSTRATIVE 1ST-PASS APPROVAL</small>
             <strong id="sim-out-pass">73.5%</strong>
             <div style="font-family:var(--mono);font-size:10.5px;color:var(--ink-secondary);margin-top:4px;" id="sim-out-pass-sub">Baseline: 73.5% (26.5% multi-round)</div>
           </div>
           <div class="sim-box">
-            <small>RECLAIMED FEATURE CAPACITY / MO</small>
+            <small>ILLUSTRATIVE SHIFTED PR CAPACITY</small>
             <strong id="sim-out-saved">+0 PRs/mo</strong>
-            <div style="font-family:var(--mono);font-size:10.5px;color:var(--ink-secondary);margin-top:4px;" id="sim-out-saved-sub">Shifted from BUG- rework to STORY- delivery</div>
+            <div style="font-family:var(--mono);font-size:10.5px;color:var(--ink-secondary);margin-top:4px;" id="sim-out-saved-sub">Assumed shift at 416.6 PRs/mo cadence</div>
           </div>
         </div>
       </div>
@@ -1019,8 +1048,8 @@
         <h2>Four High-Impact Engineering Interventions</h2>
       </div>
       <p class="section-desc">
-        Concrete steps to preserve AIDA's top-0.1% trunk throughput while eliminating monolithic crate coupling,
-        shrinking PR batch sizes below 400 LoC, and halving forward-fix churn.
+        Concrete steps to preserve AIDA's high trunk integration cadence while reducing monolithic crate coupling,
+        shrinking PR batch sizes below 400 LoC, and lowering post-merge rework.
       </p>
     </div>
 
@@ -1062,8 +1091,8 @@
           <div class="action-num">ACTION 03 · SMALL-BATCH PR RATCHET</div>
           <h3>Enforce a &lt;400 Production-LoC Budget at Decomposition &amp; Ship</h3>
           <p>
-            <strong>49.8% of merged PRs</strong> exceed GitClear's 400-LoC effective review ceiling (and 24.9% exceed 1,000 LoC),
-            saturating reviewer context windows and driving multi-round review bounces.
+            <strong>49.8% of merged PRs</strong> exceed the 400-LoC review threshold (and 24.9% exceed 1,000 LoC),
+            increasing reviewer context load and co-occurring with multi-round review cycles.
           </p>
           <ul>
             <li>Separate <strong>Production Rust LoC</strong> from <strong>Test &amp; Doc LoC</strong> in <code>aida pr ship</code> and <code>aida review watch</code> so test thoroughness is never penalized.</li>
@@ -1564,7 +1593,7 @@
       </svg>`;
   }
 
-  // 8. Interactive What-If Simulator
+  // 8. Illustrative What-If Scenario Explorer (Assumed Heuristic Weights)
   function updateSimulator() {
     const prOver400 = parseFloat(document.getElementById('sim-pr-slider').value);
     const crateShare = parseFloat(document.getElementById('sim-crate-slider').value);
@@ -1572,9 +1601,9 @@
     document.getElementById('sim-pr-label').textContent = prOver400.toFixed(1) + '%';
     document.getElementById('sim-crate-label').textContent = crateShare.toFixed(1) + '%';
 
-    // Calibrated empirical model anchored at (49.8%, 78.3%) -> Churn 27.7%, Bug 31.6%, 1st-pass 73.5%
-    const prDelta = (49.8 - prOver400) / 37.8;       // 0 at baseline, ~1 at target
-    const crateDelta = (78.3 - crateShare) / 63.3;   // 0 at baseline, ~1 at target
+    // Illustrative linear what-if formula using assumed weights anchored at measured baselines (no fitted calibration or causal/predictive validity)
+    const prDelta = (49.8 - prOver400) / 37.8;       // 0 at baseline, ~1 at assumed target
+    const crateDelta = (78.3 - crateShare) / 63.3;   // 0 at baseline, ~1 at assumed target
 
     const projChurn = Math.max(5.5, 27.7 - (prDelta * 10.5 + crateDelta * 8.8));
     const projBug = Math.max(10.5, 31.6 - (prDelta * 11.2 + crateDelta * 6.4));
@@ -1583,13 +1612,13 @@
 
     document.getElementById('sim-out-churn').textContent = projChurn.toFixed(1) + '%';
     document.getElementById('sim-out-churn-sub').textContent =
-      projChurn < 8.5 ? 'LinearB ELITE Tier (<8.5%)' : (projChurn < 15 ? 'LinearB GOOD/FAIR Tier (<15%)' : 'LinearB Needs Focus (>15%)');
+      projChurn < 8.5 ? 'Illustrative <8.5% band (assumed weights)' : (projChurn < 15 ? 'Illustrative <15% band (assumed weights)' : 'Baseline >15% band (assumed weights)');
 
     document.getElementById('sim-out-bug').textContent = projBug.toFixed(1) + '%';
-    document.getElementById('sim-out-bug-sub').textContent = `Down from 31.6% baseline (${(31.6 - projBug).toFixed(1)}% reduction)`;
+    document.getElementById('sim-out-bug-sub').textContent = `Illustrative ${(31.6 - projBug).toFixed(1)}% delta vs 31.6% baseline`;
 
     document.getElementById('sim-out-pass').textContent = projPass.toFixed(1) + '%';
-    document.getElementById('sim-out-pass-sub').textContent = `Multi-round review bounce drops to ${(100 - projPass).toFixed(1)}%`;
+    document.getElementById('sim-out-pass-sub').textContent = `Illustrative multi-round share: ${(100 - projPass).toFixed(1)}%`;
 
     document.getElementById('sim-out-saved').textContent = '+' + reclaimedPRs + ' PRs/mo';
   }
@@ -1643,29 +1672,29 @@
       body: "Percentage of touched lines that modify or delete code written within the previous 21 days. High <21-day churn signals post-merge bug remediation, shifting specs, or concurrent collisions on shared monolith files.",
       meta: "LinearB Elite: <8.0% · Needs Focus: >15.0% · AIDA 30d: 27.7% (351,760 LoC)"
     },
-    "Hard Revert Rate": {
-      kicker: "DORA STABILITY & ROLLBACK METRIC",
-      title: "Hard Git Revert Rate (0.17%) vs. Forward-Fix Share (31.6%)",
-      body: "Percentage of commits on main that explicitly revert a prior commit (7 / 4,190). While pre-ship gates prevent broken builds from needing rollbacks, AIDA exhibits a 31.6% forward-fix ('fix:' / 'BUG-') commit rate.",
-      meta: "Hard Reverts: 0.17% (7 commits) · Forward-Fix (BUG-/fix): 31.6% (1,326 commits)"
+    "Commit Revert Ratio": {
+      kicker: "REPOSITORY COMMIT REVERT PROXY (NOT DEPLOYMENT CFR)",
+      title: "Trunk Commit Revert Ratio (0.17% — 7 / 4,190 Commits)",
+      body: "Percentage of commits on main that explicitly revert a prior git commit (7 / 4,190). This is a repository commit-revert proxy, not DORA Deployment Change Failure Rate (which requires production deployment/incident logs, currently unmeasured/unknown).",
+      meta: "Repo Commit Reverts: 0.17% (7/4,190) · Actual Prod Deployment CFR: Unknown"
     },
     "Trunk PR Merge Frequency": {
-      kicker: "DORA & LINEARB THROUGHPUT",
-      title: "Trunk PR Merge Frequency",
-      body: "Daily and weekly rate of PRs merged to main. High merge frequency paired with small batch sizes is the hallmark of Elite DORA continuous integration.",
+      kicker: "REPOSITORY INTEGRATION PROXY",
+      title: "Trunk PR Merge Frequency (Repository Integration Proxy)",
+      body: "Daily and weekly rate of Pull Requests merged onto main (13.9/day over 175.4d; 14.4/day over 60d). Measures repository trunk integration cadence; actual production deployment frequency is unmeasured/unknown.",
       meta: "AIDA 175d Era: 2,436 PRs merged (13.9/day · 97.2/week · 416.6/month)"
     },
     "PR Pickup Time (Wait for Reviewer)": {
       kicker: "LINEARB CYCLE TIME BOTTLENECK",
       title: "PR Pickup Time (Wait for Reviewer)",
       body: "Time elapsed between PR creation and the start of independent code review. AIDA's 'aida review watch' daemon eliminates human queue wait by spawning attested reviewers immediately on branch push.",
-      meta: "99%+ latency compression vs. human engineering teams"
+      meta: "LinearB Benchmark (linearb.io/blog/git-analytics): Median 13h, Elite <1h"
     },
     "Unreviewed PR Merge Rate": {
       kicker: "LINEARB GOVERNANCE HYGIENE",
       title: "Unreviewed PR Merge Rate (~0.0%)",
       body: "Share of PRs merged into main without an independent peer review. AIDA enforces cryptographic/attested reviewer verdicts (.aida/review-verdicts/) via 'pr ship' and 'merge-hold-gate'.",
-      meta: "Industry Avg: 15–30% unreviewed · AIDA: ~0.0% (3,824 recorded JSON verdicts)"
+      meta: "Measured Repo Corpus: 3,824 recorded JSON verdicts across 2,959 targets"
     },
     "Dedicated Rust Test Density": {
       kicker: "STATIC TEST INVESTMENT",
@@ -1673,17 +1702,17 @@
       body: "Proportion of total Rust source code located in dedicated test modules and suites (240,863 LoC across 641 Rust test files, plus 72 Python CLI integration test suites).",
       meta: "Production/Mixed Rust: 621,711 LoC (799 files) · Dedicated Tests: 240,863 LoC"
     },
-    "Hard Trunk Revert Rate & MTTR": {
-      kicker: "DORA RELIABILITY METRICS",
-      title: "Hard Revert Rate & Mean Time to Recovery (MTTR)",
-      body: "Measures how often trunk integrations require emergency rollback and how quickly regressions are remediated via forward-fix slices or 'aida doctor --heal'.",
-      meta: "DORA Elite MTTR: <1 hr · AIDA MTTR: <1–3 hrs via autonomous BUG- dispatch"
+    "Trunk Commit Revert Ratio (Repo Proxy)": {
+      kicker: "REPOSITORY PROXY VS. DORA CFR/MTTR",
+      title: "Trunk Commit Revert Ratio (0.17% Repo Proxy; Prod CFR/MTTR Unknown)",
+      body: "Counts git revert commits on main (7 / 4,190 = 0.17%). Per dora.dev/guides/dora-metrics/, actual Change Failure Rate and Failed Deployment Recovery Time require production deployment and incident telemetry, which are unmeasured (Unknown) in this repository.",
+      meta: "Repo Commit Reverts: 0.17% · Prod Deployment CFR & Incident MTTR: Unknown"
     },
     "Crate Monolith Concentration": {
       kicker: "CARGO WORKSPACE TOPOLOGY",
       title: "Crate Monolith Concentration (78.3% in aida-cli-lib)",
       body: "Measures how evenly code is partitioned across workspace crates. Having 675,558 LoC (1,115 files) inside 'aida-cli-lib' forces massive relinking and broadens blast radius on every edit.",
-      meta: "Recommended Crate Cap: <25% of workspace LoC · Current aida-cli-lib: 78.3%"
+      meta: "Architectural Target Heuristic: <25% of workspace LoC · Current aida-cli-lib: 78.3%"
     },
     "Cross-File AST Hub Fan-In (models.rs)": {
       kicker: "CODEGRAPH AST DEPENDENCY METRIC",
@@ -1692,52 +1721,52 @@
       meta: "CodeGraph DB: 56,257 AST nodes · 268,598 edges · Only 33 traits across 862.6k LoC"
     },
     "Oversized PR Rate (>400 LoC Diff)": {
-      kicker: "GITCLEAR BATCH-SIZE METRIC",
+      kicker: "SMARTBEAR/CISCO & GITCLEAR BATCH-SIZE METRIC",
       title: "Oversized PR Rate (>400 LoC Diff)",
-      body: "Share of merged pull requests exceeding 400 changed lines (insertions + deletions). Large diffs obscure subtle state-machine bugs and increase multi-round review bounce.",
+      body: "Share of merged pull requests exceeding 400 changed lines (insertions + deletions). Peer-review studies (SmartBear/Cisco Systems, Cohen et al.; GitClear 2024) observe that human defect detection drops sharply above 200–400 LoC.",
       meta: "AIDA PRs: 49.8% >400 LoC · First-Parent Commits: 58.3% >400 LoC"
     },
     "LinearB <21-Day Rework Churn (30d)": {
-      kicker: "LINEARB QUALITY & STABILITY METRIC",
-      title: "LinearB <21-Day Rework Churn (27.7%)",
-      body: "Lines modified or deleted in files that were touched within the trailing 21 days. Driven by 12 ultra-hot files (led by lib.rs with 216 touches in 30 days) edited 2–7 times daily.",
+      kicker: "FILE-LEVEL <21D COMMIT-WINDOW PROXY",
+      title: "<21-Day File-Touch Churn Proxy (27.7%)",
+      body: "Computed from git log --numstat over 30 days as the share of touched lines in files modified multiple times within 21 days (co-occurring with lib.rs touched 216x/30d). This is a file-level commit-window proxy rather than line-by-line git blame survival.",
       meta: "30d Total Touched: 1,270,201 LoC (+951.4k / -318.8k) across 795 commits"
     },
     "Forward-Fix (BUG- / fix:) Commit Ratio": {
       kicker: "DUAL SIGNAL: FOLLOW-UP HYGIENE + REWORK",
       title: "Forward-Fix (BUG- / fix:) Commit Ratio (31.6%)",
-      body: "Combines two distinct behaviors: (1) Disciplined Follow-Up Capture (Good) — reviewers and audits filing bounded BUG-XXXX specs for newly discovered edge cases instead of bloating in-flight PRs or ignoring tech debt; and (2) Preventable <21d Rework — fixing regressions from oversized >400-LoC merges.",
-      meta: "1,326 fix/BUG commits (1,163 explicit BUG-) · Zero untracked debt + <1–3h roll-forward recovery"
+      body: "Combines two distinct behaviors: (1) Disciplined Follow-Up Capture (Good) — reviewers and audits filing bounded BUG-XXXX specs for newly discovered edge cases instead of bloating in-flight PRs or ignoring tech debt; and (2) Post-merge bug fixes.",
+      meta: "1,326 fix/BUG commits (1,163 explicit BUG-) out of 4,190 commits on main"
     },
     "1. Deployment / Integration Frequency": {
-      kicker: "DORA KEY METRIC #1 (THROUGHPUT)",
-      title: "Deployment / Trunk Integration Frequency",
-      body: "How often code is successfully integrated and released to trunk/production. DORA Elite teams integrate continuously on-demand multiple times per day.",
-      meta: "AIDA: 12.8–14.4 PRs/day (26.6–27.9 commits/day) — DORA Elite"
+      kicker: "DORA KEY METRIC #1 (dora.dev/guides/dora-metrics/)",
+      title: "DORA Deployment Frequency (Prod Unknown · Repo Proxy 14.4 PRs/d)",
+      body: "DORA defines Deployment Frequency as how often an organization successfully releases to production. Actual production deployment frequency is Unknown (no deployment log in repo); the measured repository proxy is trunk PR merge rate (12.8–14.4 PRs/day onto main).",
+      meta: "Prod Deployment Frequency: Unknown · Repo Integration Proxy: 12.8–14.4 PRs/day"
     },
     "2. Change Lead Time": {
-      kicker: "DORA KEY METRIC #2 (VELOCITY)",
-      title: "Change Lead Time (Commit to Merge)",
-      body: "Time required for a committed change to pass automated testing, independent review, and merge gates onto main.",
-      meta: "DORA Elite: <24 hours · AIDA: ~40 mins to 2.2 hours"
+      kicker: "DORA KEY METRIC #2 (dora.dev/guides/dora-metrics/)",
+      title: "DORA Lead Time for Changes (Prod Unknown · Repo CI Proxy 14.5m)",
+      body: "DORA defines Lead Time for Changes as the time from code committed to code running in production. Actual commit-to-production time is Unknown; the measured repository proxy is commit-to-main merge settlement (14.5 mins median non-zero CI ship time).",
+      meta: "Prod Lead Time: Unknown · Repo Commit-to-Merge Proxy: 14.5m median CI (~40m–2.2h w/ review)"
     },
     "3a. Change Failure Rate (Hard Reverts)": {
-      kicker: "DORA KEY METRIC #3A (STABILITY)",
-      title: "Change Failure Rate — Hard Reverts (0.17%)",
-      body: "Percentage of trunk integrations requiring an immediate rollback/revert. Kept near zero by pre-ship CI and review-verdict gates.",
-      meta: "DORA Elite: 0–5% · AIDA Hard Reverts: 0.17% (7 / 4,190)"
+      kicker: "DORA KEY METRIC #3A (dora.dev/guides/dora-metrics/)",
+      title: "DORA Change Failure Rate (Prod Unknown · Repo Revert Proxy 0.17%)",
+      body: "DORA defines CFR as the percentage of production deployments causing degraded service or requiring remediation. Actual deployment CFR is Unknown; the repository proxy is the git commit revert ratio on main (7 / 4,190 = 0.17%).",
+      meta: "Prod Deployment CFR: Unknown · Repo Git Revert Ratio: 0.17% (7 / 4,190 commits)"
     },
     "3b. Effective Defect Rework (fix:/BUG-)": {
-      kicker: "DORA KEY METRIC #3B (FOLLOW-UP + REWORK)",
-      title: "Scoped Follow-Up Capture & Defect Rework (31.6%)",
-      body: "Standard Git analytics group all fix:/BUG- commits together. In AIDA, this 31.6% combines a major governance strength — filing tracked BUG-XXXX follow-ups for newly discovered audit/review edge cases — with preventable <21d rework from >400-LoC batches.",
-      meta: "1,163 explicit BUG- commits + 163 fix: commits · Zero silent tech debt"
+      kicker: "REPOSITORY COMMIT-INTENT PROXY",
+      title: "Scoped Follow-Up Capture & Defect Commit Share (31.6%)",
+      body: "Repository commit-intent share of fix:/BUG- commits (1,326 / 4,190). Not a DORA deployment failure rate: combines proactive audit/review follow-up capture (BUG-XXXX tickets filed to keep PRs bounded) with post-merge bug fixes.",
+      meta: "1,163 explicit BUG- commits + 163 fix: commits · Actual Prod CFR: Unknown"
     },
     "4. Failed Deployment Recovery (MTTR)": {
-      kicker: "DORA KEY METRIC #4 (RESILIENCE)",
-      title: "Failed Deployment Recovery Time / MTTR (<1–3 Hours)",
-      body: "Time required to restore service or remediate a trunk regression once detected. Accelerated by autonomous BUG- queue pickup and 'aida doctor --heal'.",
-      meta: "DORA Elite: <1 hour · AIDA: <1–3 hours"
+      kicker: "DORA KEY METRIC #4 (dora.dev/guides/dora-metrics/)",
+      title: "DORA Failed Deployment Recovery Time (Unknown — No Incident Dataset)",
+      body: "DORA defines Failed Deployment Recovery Time (formerly MTTR) as the time to restore service after a production deployment failure. Because no production incident or recovery dataset exists in the repository, this metric is Unknown.",
+      meta: "Prod Recovery Time: Unknown · Repo defects use forward-fix BUG- PRs & doctor --heal"
     },
     "CodeGraph AST Coupling & Hotspot Explorer": {
       kicker: "CODEGRAPH SQLITE AST INDEX",
@@ -1746,28 +1775,34 @@
       meta: "Source: .codegraph/codegraph.db · 1,697 indexed files"
     },
     "PR Diff Size vs. GitClear Review Ceiling": {
-      kicker: "GITCLEAR REVIEW EFFECTIVENESS RESEARCH",
-      title: "GitClear 400-LoC Code Review Ceiling",
-      body: "Empirical threshold above which code review defect-detection rates drop by >50%. Diffs between 100–400 LoC yield optimal defect discovery; diffs >1,000 LoC suffer rubber-stamping or multi-round rework.",
+      kicker: "SMARTBEAR/CISCO & GITCLEAR REVIEW RESEARCH",
+      title: "SmartBear & GitClear 400-LoC Code Review Ceiling",
+      body: "Empirical peer-review threshold (SmartBear/Cisco Systems, Cohen et al., 2,500 reviews; GitClear 2024) above which human defect-detection rates drop sharply. Diffs between 100–400 LoC yield more thorough inspection than >1,000-LoC batches.",
       meta: "AIDA Median PR: 400 LoC · Mean: 938.6 LoC · 49.8% >400 LoC"
     },
     "Anatomy of Cycle Time: AIDA vs. LinearB Tiers": {
-      kicker: "LINEARB GIT ANALYTICS FRAMEWORK",
+      kicker: "LINEARB GIT ANALYTICS FRAMEWORK (linearb.io/blog/git-analytics)",
       title: "LinearB Four-Stage Cycle Time Decomposition",
-      body: "Breaks delivery lead time into: (1) Coding Time (first commit to PR open), (2) PR Pickup Time (wait for reviewer), (3) Review Time (review start to approval), and (4) Deploy/Ship Time (approval to trunk merge).",
-      meta: "LinearB Elite Total: <26 hrs · AIDA Total: ~45 to 130 mins"
+      body: "Breaks delivery lead time into: (1) Coding Time, (2) PR Pickup Time (wait for reviewer), (3) Review Time, and (4) Ship/CI Time. AIDA's 14.5m Ship/CI median is measured from non-zero commit-to-merge timestamps; <2m pickup reflects review watch daemon dispatch.",
+      meta: "LinearB Elite Total: <26 hrs · AIDA Repo Cycle Proxy: ~45 to 130 mins"
     },
     "30-Day Code Evolution: New vs. Rework vs. Refactor": {
-      kicker: "LINEARB CODE INVESTMENT PROFILE",
-      title: "New Work vs. <21d Rework Churn vs. >21d Legacy Refactor",
-      body: "Classifies every touched line over the trailing 30 days into net expansion (New Work: 71.6%), rewriting code landed <21 days ago (Rework: 27.7%), or restructuring code stable for >21 days (Refactor: 0.8%).",
-      meta: "Healthy Target: ~65% New · <8% Rework (<21d) · 20–27% Legacy Refactor (>21d)"
+      kicker: "LINEARB CODE INVESTMENT PROFILE (FILE-WINDOW PROXY)",
+      title: "New Work vs. <21d File-Touch Churn Proxy vs. >21d Touch Share",
+      body: "Computed from git log --numstat over the trailing 30 days (795 commits, 1,270,201 LoC touched): net expansion (71.6%), lines in files modified multiple times within <21 days (27.7% file-level proxy), and files stable >21 days (0.8%).",
+      meta: "LinearB Reference: ~65% New · <8% Rework (<21d) · 20–27% Refactor (>21d)"
     },
     "DORA Four-Key Metrics Scorecard": {
-      kicker: "GOOGLE CLOUD / DORA RESEARCH",
-      title: "DORA State of DevOps Four-Key Metrics",
-      body: "The industry-standard benchmark measuring software delivery throughput (Deployment Frequency, Change Lead Time) and stability (Change Failure Rate, Failed Deployment Recovery Time / MTTR).",
-      meta: "AIDA ranks Elite in 3.5 of 4 keys, with Forward-Fix Rework (31.6%) as the primary tax"
+      kicker: "DORA RESEARCH (dora.dev/guides/dora-metrics/)",
+      title: "DORA State of DevOps Four-Key Metrics vs. Repository Proxies",
+      body: "DORA's Four Keys (Deployment Frequency, Lead Time for Changes, Change Failure Rate, Failed Deployment Recovery Time) measure production deployments and incidents. Because no production deployment/incident dataset is linked in this repo, production DORA metrics are marked Unknown and paired with measured Git trunk proxies.",
+      meta: "Primary Definitions: https://dora.dev/guides/dora-metrics/"
+    },
+    "Illustrative Architecture & Batch-Size What-If Explorer": {
+      kicker: "ILLUSTRATIVE WHAT-IF SCENARIO MODEL (ASSUMED WEIGHTS)",
+      title: "Illustrative Scenario Explorer (Not Empirically Calibrated)",
+      body: "Interactive linear formula anchored to measured repository baselines (49.8% PRs >400 LoC, 78.3% crate share) using assumed heuristic weights for directional exploration only. Carries no fitted regression calibration or causal/predictive validity.",
+      meta: "Assumed weights: 10.5, 8.8, 11.2, 6.4, 11.5, 4.2 · Illustrative only"
     }
   };
 
@@ -2020,5 +2055,6 @@
   bindGlossaryTooltips();
   initPresentationSystem();
 </script>
+<!-- trace:TASK-2709 | ai:antigravity -->
 </body>
 </html>
