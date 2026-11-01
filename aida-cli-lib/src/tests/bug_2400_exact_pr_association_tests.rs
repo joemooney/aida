@@ -59,7 +59,11 @@ impl Fixture {
             r#"#!/bin/sh
 base=${0%/*}
 printf '%s\n' "$*" >> "$base/args"
+if [ -f "$base/latency" ]; then sleep 0.2; fi
 case "$*" in
+  'api graphql'*)
+    if [ -f "$base/graphql" ]; then exec cat "$base/graphql"; fi
+    echo '{}' ;;
   api*)
     pr=${2#*/pulls/}; pr=${pr%%/*}
     if [ -f "$base/fail-$pr" ]; then cat "$base/fail-$pr" >&2; exit 1; fi
@@ -717,4 +721,194 @@ fn bug_2400_real_resolver_deadlines_and_errors() {
             matches!(lookup, PrLookup::GhFailed(_))
         });
     }
+}
+
+fn batched_pr(head: u64, commits: &[(u64, &str)], total: usize) -> serde_json::Value {
+    serde_json::json!({
+        "headRefOid": format!("{head:040x}"),
+        "commits": {
+            "totalCount": total,
+            "nodes": commits
+                .iter()
+                .map(|(n, m)| serde_json::json!({"commit":{"oid":format!("{n:040x}"),"message":m}}))
+                .collect::<Vec<_>>(),
+        }
+    })
+}
+
+// Batched evidence decides only a complete, head-bound, duplicate-free page;
+// everything else is left to the exact REST probe, never read as absence.
+// trace:BUG-2400 | ai:claude
+#[test]
+fn bug_2400_batched_commit_evidence_shapes() {
+    let ids = vec!["BUG-2392".to_string()];
+    let numbers = [1, 2, 3, 4, 5, 6, 7, 8];
+    let value = serde_json::json!({"data":{"repository":{
+        "p1": batched_pr(11, &[(10, "work"), (11, "fix (BUG-2392)\n\nbody")], 2),
+        "p2": batched_pr(21, &[(20, "work"), (21, "more work")], 2),
+        // Head drift between commits and head: undecided.
+        "p3": batched_pr(99, &[(30, "fix (BUG-2392)")], 1),
+        // Declared total exceeds the page (truncated last:100): undecided.
+        "p4": batched_pr(40, &[(40, "work")], 101),
+        // Duplicate commit: undecided.
+        "p5": batched_pr(50, &[(50, "work"), (50, "work")], 2),
+        // Zero commits proves nothing here: the REST probe decides.
+        "p6": batched_pr(60, &[], 0),
+        "p7": {"headRefOid": "bad", "commits": {"totalCount": 1, "nodes": []}},
+        // p8 missing entirely.
+    }}});
+    let evidence = batched_commit_evidence(&value, &numbers, &ids);
+    use BatchedCommitEvidence::*;
+    assert_eq!(evidence[&1], Complete(true));
+    assert_eq!(evidence[&2], Complete(false));
+    for n in 3..=8 {
+        assert_eq!(evidence[&n], Undecided, "p{n}");
+    }
+    // A response of any other shape leaves every candidate undecided.
+    for other in [serde_json::json!({}), serde_json::json!({"commits":0})] {
+        let evidence = batched_commit_evidence(&other, &numbers, &ids);
+        assert!(evidence.values().all(|e| *e == Undecided));
+    }
+    let query = batched_commit_query(&[3177, 3200]);
+    assert!(query.contains("p3177:pullRequest(number:3177)"));
+    assert!(query.contains("p3200:pullRequest(number:3200)"));
+    assert!(query.contains(&format!("commits(last:{BATCHED_COMMITS_PER_PR})")));
+}
+
+// Realistic per-call latency with many unrelated open PRs: absence and the
+// complete duplicate set are reachable inside the deadline because commit
+// evidence is one batched read, not three REST calls per candidate.
+// trace:BUG-2400 | ai:claude
+#[test]
+fn bug_2400_many_unrelated_open_prs_under_latency() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let f = Fixture::new();
+    let root = f.dir.path();
+    let canonical = f.canonical.clone();
+    let noise = row(
+        3177,
+        &format!("fix ({})", f.unrelated),
+        &format!("codex/{}", f.unrelated),
+    );
+    let unrelated: Vec<u64> = (5000..5013).collect();
+    let all = unrelated
+        .iter()
+        .map(|n| row(*n, "fix", &format!("codex/other-{n}")))
+        .collect::<String>();
+    let mut repo = serde_json::Map::new();
+    for n in unrelated.iter().chain([3177].iter()) {
+        repo.insert(format!("p{n}"), batched_pr(*n, &[(*n, "ordinary work")], 1));
+    }
+    let write_graphql = |repo: &serde_json::Map<String, serde_json::Value>| {
+        std::fs::write(
+            root.join("graphql"),
+            serde_json::json!({"data":{"repository":repo}}).to_string(),
+        )
+        .unwrap();
+    };
+    write_graphql(&repo);
+    std::fs::write(root.join("all"), &all).unwrap();
+    std::fs::write(root.join("latency"), "").unwrap();
+    let logged = || std::fs::read_to_string(root.join("args")).unwrap_or_default();
+    let rest_calls = || {
+        logged()
+            .lines()
+            .filter(|l| l.starts_with("api repos/"))
+            .count()
+    };
+
+    // Duplicates are still fully enumerated beside 14 unrelated open PRs.
+    std::fs::write(
+        root.join("search"),
+        format!(
+            "{noise}{}{}",
+            row(3200, "fix (BUG-2392)", "first"),
+            row(3204, "fix", "bug-2392-rework")
+        ),
+    )
+    .unwrap();
+    let started = std::time::Instant::now();
+    assert_eq!(
+        all_open_prs_for_spec_via_forge(root, &canonical)
+            .ok()
+            .unwrap(),
+        vec![(3200, "first".into()), (3204, "bug-2392-rework".into())]
+    );
+    assert_eq!(rest_calls(), 0);
+
+    // The single lookup stops at the first exact title/branch match: one
+    // search list call, no open-list enumeration and no commit reads.
+    std::fs::remove_file(root.join("args")).unwrap();
+    assert!(
+        matches!(detect_open_pr_for_spec_github(root, &canonical), PrLookup::Found(pr) if pr.number == 3200)
+    );
+    let calls: Vec<String> = logged()
+        .lines()
+        .filter(|l| l.starts_with("pr ") || l.starts_with("api "))
+        .map(str::to_string)
+        .collect();
+    assert_eq!(calls.len(), 1, "{calls:?}");
+    assert!(calls[0].contains("--search"));
+
+    // Absence is reachable: NoOpenPr, not a timeout, with no REST probes.
+    std::fs::write(root.join("search"), &noise).unwrap();
+    assert!(matches!(
+        detect_open_pr_for_spec_github(root, &canonical),
+        PrLookup::NoOpenPr
+    ));
+    assert!(all_open_prs_for_spec_via_forge(root, &canonical)
+        .ok()
+        .unwrap()
+        .is_empty());
+    assert_eq!(rest_calls(), 0);
+
+    // A batched commit trailer associates an otherwise unmatched PR.
+    repo.insert(
+        "p5005".into(),
+        batched_pr(5006, &[(5005, "work"), (5006, "fix: late (BUG-2392)")], 2),
+    );
+    write_graphql(&repo);
+    assert!(
+        matches!(detect_open_pr_for_spec_github(root, &canonical), PrLookup::Found(pr) if pr.number == 5005)
+    );
+    assert_eq!(
+        all_open_prs_for_spec_via_forge(root, &canonical)
+            .ok()
+            .unwrap(),
+        vec![(5005, "codex/other-5005".into())]
+    );
+    assert_eq!(rest_calls(), 0);
+    // Sequential per-PR probing would cost 3 calls x 14 PRs x 0.2s per lookup.
+    assert!(
+        started.elapsed() < std::time::Duration::from_secs(6),
+        "{:?}",
+        started.elapsed()
+    );
+
+    // An undecidable batch entry falls back to the exact REST probe for that
+    // PR alone; the probe (zero commits in this fixture) decides it.
+    std::fs::remove_file(root.join("latency")).unwrap();
+    repo.insert("p5005".into(), batched_pr(5005, &[(5005, "work")], 101));
+    write_graphql(&repo);
+    std::fs::remove_file(root.join("args")).unwrap();
+    assert!(matches!(
+        detect_open_pr_for_spec_github(root, &canonical),
+        PrLookup::NoOpenPr
+    ));
+    let args = logged();
+    assert!(
+        args.contains("api repos/{owner}/{repo}/pulls/5005"),
+        "{args}"
+    );
+    assert!(!args.contains("pulls/5000"), "{args}");
+    // A failed batch read is not absence either: every candidate goes to the
+    // exact probe, which still decides each one.
+    std::fs::remove_file(root.join("graphql")).unwrap();
+    assert!(matches!(
+        detect_open_pr_for_spec_github(root, &canonical),
+        PrLookup::NoOpenPr
+    ));
+    assert!(logged().contains("pulls/5000"));
 }

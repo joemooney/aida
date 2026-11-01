@@ -463,16 +463,37 @@ pub(crate) fn branch_name_references_spec(branch: &str, spec: &str) -> bool {
     branch.match_indices(&slug).any(|(at, m)| {
         let before_ok = branch[..at].chars().next_back().is_none_or(is_sep);
         let rest = &branch[at + m.len()..];
-        // A numeric continuation belongs to a longer ID (BUG-1-042),
-        // rather than a branch description following BUG-1.
-        // trace:BUG-2400 | ai:codex
-        let extends_id = rest.strip_prefix('-').is_some_and(|tail| {
-            let segment = tail.split(is_sep).next().unwrap_or_default();
-            !segment.is_empty() && segment.chars().all(|c| c.is_ascii_digit())
-        });
-        let after_ok = rest.chars().next().is_none_or(is_sep) && !extends_id;
+        let after_ok = rest.chars().next().is_none_or(is_sep) && !continuation_extends_id(rest);
         before_ok && after_ok
     })
+}
+
+/// Whether the text after a matched slug continues it into a longer ID
+/// (`bug-1-042` is BUG-1-042, not a description following BUG-1). Only an
+/// ID-shaped sequence counts: minted sequences are at least
+/// [`aida_core::id_identity::DEFAULT_MINT_WIDTH`] digits. AIDA's own session
+/// branch suffixes stay positive: collision counters `-2`..`-10` are shorter,
+/// and a dated `-YYYY-MM-DD` suffix is recognised by its full date shape.
+// trace:BUG-2400 | ai:claude
+fn continuation_extends_id(rest: &str) -> bool {
+    let Some(tail) = rest.strip_prefix('-') else {
+        return false;
+    };
+    let mut segments = tail.split(['/', '-', '.', '_']);
+    let segment = segments.next().unwrap_or_default();
+    if segment.len() < aida_core::id_identity::DEFAULT_MINT_WIDTH
+        || !segment.bytes().all(|c| c.is_ascii_digit())
+    {
+        return false;
+    }
+    let two_digits =
+        |s: Option<&str>| s.is_some_and(|s| s.len() == 2 && s.bytes().all(|c| c.is_ascii_digit()));
+    let dated = segment.len() == 4
+        && tail.as_bytes().get(4) == Some(&b'-')
+        && two_digits(segments.next())
+        && tail.as_bytes().get(7) == Some(&b'-')
+        && two_digits(segments.next());
+    !dated
 }
 
 #[cfg(test)]
@@ -490,6 +511,22 @@ mod bug_1525_branch_match_tests {
         assert!(!m("claude/bug-1525", "BUG-152"));
         assert!(!m("xbug-15", "BUG-15"));
         assert!(!m("bug-1-042-work", "BUG-1"));
+        assert!(!m("bug-1-042", "BUG-1"));
+        assert!(!m("bug-1-1234-work", "BUG-1"));
+    }
+
+    // AIDA's own collision and dated session branches keep their association.
+    // trace:BUG-2400 | ai:claude
+    #[test]
+    fn session_branch_suffixes_still_match() {
+        assert!(m("bug-1164-2", "BUG-1164"));
+        assert!(m("all/bug-1164-2", "BUG-1164"));
+        assert!(m("story-1028-10", "STORY-1028"));
+        assert!(m("bug-2400-2026-11-01", "BUG-2400"));
+        assert!(m("bug-2400-2026-11-01-3", "BUG-2400"));
+        assert!(m("codex/bug-2400-2026-11-01", "BUG-2400"));
+        // A four-digit sequence that is not a full date still extends the ID.
+        assert!(!m("bug-1-2026-work", "BUG-1"));
     }
 }
 
@@ -507,11 +544,7 @@ fn open_pr_commit_headlines_reference_ids(
     pr: u64,
     ids: &[String],
 ) -> std::result::Result<bool, PrLookup> {
-    let budget = FORGE_LOOKUP_TIMEOUT
-        .with(|c| c.get())
-        .unwrap_or(std::time::Duration::from_secs(10))
-        .min(std::time::Duration::from_secs(10));
-    let deadline = std::time::Instant::now() + budget;
+    let deadline = spec_lookup_deadline();
     let gh_bin = spec_lookup_binary(deadline)?;
     pr_commit_ids_before(project_root, pr, ids, &gh_bin, deadline)
 }
@@ -686,7 +719,154 @@ struct SpecPrCollection {
     unknown: Option<PrLookup>,
 }
 
-fn collect_spec_prs(project_root: &std::path::Path, spec: &str) -> SpecPrCollection {
+/// The single-PR lookup needs one proven association; the all-open path
+/// needs the complete set (TASK-843 duplicate handling).
+// trace:BUG-2400 | ai:claude
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum SpecPrScope {
+    First,
+    All,
+}
+
+/// Shared deadline for one spec collection: resolution, the search and open
+/// list calls, one batched commit-evidence query and any exact REST probes.
+/// Sized for real GitHub latency (~1-2s per call), not a fake gh.
+// trace:BUG-2400 | ai:claude
+const SPEC_LOOKUP_BUDGET: std::time::Duration = std::time::Duration::from_secs(20);
+
+fn spec_lookup_deadline() -> std::time::Instant {
+    let budget = FORGE_LOOKUP_TIMEOUT
+        .with(|c| c.get())
+        .unwrap_or(SPEC_LOOKUP_BUDGET)
+        .min(SPEC_LOOKUP_BUDGET);
+    std::time::Instant::now() + budget
+}
+
+/// Per-candidate commit evidence from one batched GraphQL read.
+// trace:BUG-2400 | ai:claude
+#[derive(Debug, PartialEq, Eq)]
+enum BatchedCommitEvidence {
+    /// Every commit was returned in one snapshot that ends at the PR head.
+    Complete(bool),
+    /// Truncated, malformed or missing: only the exact REST probe can decide.
+    Undecided,
+}
+
+/// Commits per PR the batched query reads. GraphQL caps `last` at 100; a PR
+/// with more commits is decided by the exact REST paging probe instead.
+const BATCHED_COMMITS_PER_PR: usize = 100;
+
+fn batched_commit_query(numbers: &[u64]) -> String {
+    let mut query =
+        String::from("query($owner:String!,$name:String!){repository(owner:$owner,name:$name){");
+    for n in numbers {
+        query.push_str(&format!(
+            "p{n}:pullRequest(number:{n}){{headRefOid commits(last:{BATCHED_COMMITS_PER_PR}){{totalCount nodes{{commit{{oid message}}}}}}}}"
+        ));
+    }
+    query.push_str("}}");
+    query
+}
+
+/// Decide each candidate from a batched response. A PR is decided only when
+/// the declared total fits the page, every node is a distinct valid SHA and
+/// the last node is the head read in the same response; anything else
+/// (including a response that is not this shape at all) stays undecided.
+// trace:BUG-2400 | ai:claude
+fn batched_commit_evidence(
+    value: &serde_json::Value,
+    numbers: &[u64],
+    ids: &[String],
+) -> std::collections::HashMap<u64, BatchedCommitEvidence> {
+    let is_sha = |s: &str| s.len() == 40 && s.bytes().all(|c| c.is_ascii_hexdigit());
+    let decide = |pr: &serde_json::Value| -> Option<bool> {
+        let head = pr.get("headRefOid")?.as_str().filter(|s| is_sha(s))?;
+        let commits = pr.get("commits")?;
+        let total = commits.get("totalCount")?.as_u64()?;
+        let nodes = commits.get("nodes")?.as_array()?;
+        if total == 0 || total as usize > BATCHED_COMMITS_PER_PR || nodes.len() as u64 != total {
+            return None;
+        }
+        let mut seen = std::collections::HashSet::new();
+        let mut matched = false;
+        let mut last = None;
+        for node in nodes {
+            let commit = node.get("commit")?;
+            let oid = commit.get("oid")?.as_str().filter(|s| is_sha(s))?;
+            if !seen.insert(oid) {
+                return None;
+            }
+            let headline = commit
+                .get("message")?
+                .as_str()?
+                .lines()
+                .next()
+                .unwrap_or_default();
+            matched |= extract_spec_ids_from_commit(headline)
+                .into_iter()
+                .any(|token| {
+                    ids.iter()
+                        .any(|id| aida_core::id_identity::same_id(&token, id))
+                });
+            last = Some(oid);
+        }
+        (last == Some(head)).then_some(matched)
+    };
+    let repo = value.pointer("/data/repository");
+    numbers
+        .iter()
+        .map(|n| {
+            let evidence = repo
+                .and_then(|r| r.get(format!("p{n}")))
+                .and_then(decide)
+                .map_or(
+                    BatchedCommitEvidence::Undecided,
+                    BatchedCommitEvidence::Complete,
+                );
+            (*n, evidence)
+        })
+        .collect()
+}
+
+/// One GraphQL call carrying commit headlines for every candidate the cheap
+/// title/branch filters could not rule in. Any failure leaves every
+/// candidate undecided, so the exact per-PR probe keeps its typed results.
+// trace:BUG-2400 | ai:claude
+fn batched_commit_evidence_before(
+    project_root: &std::path::Path,
+    gh_bin: &std::path::Path,
+    numbers: &[u64],
+    ids: &[String],
+    deadline: std::time::Instant,
+) -> std::collections::HashMap<u64, BatchedCommitEvidence> {
+    let remaining = deadline.saturating_duration_since(std::time::Instant::now());
+    if numbers.is_empty() || remaining.is_zero() {
+        return Default::default();
+    }
+    let mut cmd = std::process::Command::new(gh_bin);
+    cmd.current_dir(project_root).args([
+        "api",
+        "graphql",
+        "-F",
+        "owner={owner}",
+        "-F",
+        "name={repo}",
+        "-f",
+        &format!("query={}", batched_commit_query(numbers)),
+    ]);
+    match with_forge_lookup_timeout(remaining, || forge_lookup_output(cmd)) {
+        Ok(Some(out)) if out.status.success() => serde_json::from_slice(&out.stdout)
+            .map(|value| batched_commit_evidence(&value, numbers, ids))
+            .unwrap_or_default(),
+        _ => Default::default(),
+    }
+}
+
+fn collect_spec_prs(
+    project_root: &std::path::Path,
+    spec: &str,
+    scope: SpecPrScope,
+) -> SpecPrCollection {
     let mut result = SpecPrCollection {
         matched: Vec::new(),
         unknown: None,
@@ -700,15 +880,12 @@ fn collect_spec_prs(project_root: &std::path::Path, spec: &str) -> SpecPrCollect
             return result;
         }
     };
-    // Resolution, two list calls and bounded commit pages share one command
-    // deadline. The output collector adds its existing bounded pipe allowance.
-    // gh list paginates internally to the limit. A saturated result is unknown,
-    // even if the repository happens to have exactly that many open PRs.
-    let budget = FORGE_LOOKUP_TIMEOUT
-        .with(|c| c.get())
-        .unwrap_or(std::time::Duration::from_secs(10))
-        .min(std::time::Duration::from_secs(10));
-    let deadline = std::time::Instant::now() + budget;
+    // Resolution, two list calls, one batched commit query and any exact
+    // commit pages share one command deadline. The output collector adds its
+    // existing bounded pipe allowance. gh list paginates internally to the
+    // limit. A saturated result is unknown, even if the repository happens
+    // to have exactly that many open PRs.
+    let deadline = spec_lookup_deadline();
     let gh_bin = match spec_lookup_binary(deadline) {
         Ok(binary) => binary,
         Err(error) => {
@@ -746,21 +923,55 @@ fn collect_spec_prs(project_root: &std::path::Path, spec: &str) -> SpecPrCollect
             }
             Err(error) => result.unknown = Some(error),
         }
+        // One exact title/branch match answers the single lookup; only the
+        // all-open path needs the remaining list and commit evidence.
+        // trace:BUG-2400 | ai:claude
+        if scope == SpecPrScope::First {
+            if let Some(at) = candidates
+                .iter()
+                .position(|pr| pr_references_spec_ids(pr, &ids))
+            {
+                result.matched.push(candidates.swap_remove(at));
+                result.unknown = None;
+                return result;
+            }
+        }
     }
+    let unmatched: Vec<u64> = candidates
+        .iter()
+        .filter(|pr| !pr_references_spec_ids(pr, &ids))
+        .map(|pr| pr.number)
+        .collect();
+    let evidence =
+        batched_commit_evidence_before(project_root, &gh_bin, &unmatched, &ids, deadline);
     for pr in candidates {
         if pr_references_spec_ids(&pr, &ids) {
             result.matched.push(pr);
             continue;
         }
-        let remaining = deadline.saturating_duration_since(std::time::Instant::now());
-        if remaining.is_zero() {
-            result.unknown = Some(PrLookup::GhUnreachable(FORGE_LOOKUP_TIMED_OUT.into()));
-            continue;
-        }
-        match with_forge_lookup_timeout(remaining, || {
-            pr_commit_ids_before(project_root, pr.number, &ids, &gh_bin, deadline)
-        }) {
-            Ok(true) => result.matched.push(pr),
+        let commit_match = match evidence.get(&pr.number) {
+            Some(BatchedCommitEvidence::Complete(matched)) => Ok(*matched),
+            _ => {
+                let remaining = deadline.saturating_duration_since(std::time::Instant::now());
+                if remaining.is_zero() {
+                    Err(PrLookup::GhUnreachable(FORGE_LOOKUP_TIMED_OUT.into()))
+                } else {
+                    with_forge_lookup_timeout(remaining, || {
+                        pr_commit_ids_before(project_root, pr.number, &ids, &gh_bin, deadline)
+                    })
+                }
+            }
+        };
+        match commit_match {
+            Ok(true) => {
+                result.matched.push(pr);
+                if scope == SpecPrScope::First {
+                    // A proven association answers the single lookup even
+                    // when an earlier candidate was unreadable.
+                    result.unknown = None;
+                    return result;
+                }
+            }
             Ok(false) => {}
             Err(error) => result.unknown = Some(error),
         }
@@ -781,7 +992,7 @@ pub(crate) fn detect_open_pr_for_spec_by_head_or_commit(
     project_root: &std::path::Path,
     spec: &str,
 ) -> PrLookup {
-    first_spec_pr(collect_spec_prs(project_root, spec))
+    first_spec_pr(collect_spec_prs(project_root, spec, SpecPrScope::First))
 }
 
 /// Fallback PR lookup for BUG-223/BUG-876: find an open PR that references
@@ -805,7 +1016,7 @@ pub(crate) fn detect_open_pr_for_spec_github(
     project_root: &std::path::Path,
     spec: &str,
 ) -> PrLookup {
-    first_spec_pr(collect_spec_prs(project_root, spec))
+    first_spec_pr(collect_spec_prs(project_root, spec, SpecPrScope::First))
 }
 
 /// Complete associated set, or typed unknown. The integrate caller explicitly
@@ -816,7 +1027,7 @@ pub(crate) fn all_open_prs_for_spec_via_forge(
     project_root: &std::path::Path,
     spec: &str,
 ) -> std::result::Result<Vec<(u64, String)>, PrLookup> {
-    let result = collect_spec_prs(project_root, spec);
+    let result = collect_spec_prs(project_root, spec, SpecPrScope::All);
     if let Some(error) = result.unknown {
         return Err(error);
     }
