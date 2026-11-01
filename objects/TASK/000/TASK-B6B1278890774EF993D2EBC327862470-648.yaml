@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T00:55:07.917269049Z
-modified_at: 2026-11-01T04:27:35.068289458Z
+modified_at: 2026-11-01T04:29:19.172986270Z
 req_type: Task
 tags:
 - config
@@ -130,6 +130,23 @@ comments:
     OpenAI host verification is recorded in the earlier AC1 comment and PR body: installed codex-cli 0.166.0 static binary/parser evidence, not live authenticated traffic capture. Native is never credited as AIDA containment. Codex remains this repository's default vendor with explicit native opt-in.
   created_at: 2026-11-01T03:31:12.480736296Z
   modified_at: 2026-11-01T03:31:12.480736296Z
+- id: 01a1955e-79c4-77c1-915b-1a5da9fcaaca
+  author: joe
+  content: |
+    ADVISOR REWORK BRIEF round 2 (21:35), PR-3188 at 63c02eb. Reviewer verdict CHANGES REQUESTED. Advisor rulings:
+    A. SPLIT the `aida agent new --bg` Codex background launcher OUT of this PR. Remove agent_codex_background.rs and its call sites from TASK-2631. It moves to STORY-2254 (filed, sketch-first, under EPIC-612), with commit 2bb95a7 as its starting point. This also clears failures 1 and 2 below.
+    B. SECURITY, blocking: `[contained.vendors]` decides between "launch codex natively" and "refuse under containment", so it must NOT be read from the branch-local .aida/config.toml, or a branch commit could downgrade containment. Read it through `trusted_config` (the BUG-1723 trusted read: the primary's committed config on the default branch) or from ~/.aida. Add a test: a branch-local `codex = "native"` opt-in is ignored when the trusted config doesn't carry it. NOTE: this repo's own `codex = "native"` line then has to reach the trusted source. Say in the PR body which source the operator sets, and add one line to the config comment.
+    C. Operator ruling: cited on the spec now (the advisor comment below). Not your item.
+    D. Auth verification (API key and ChatGPT sign-in through the OpenAI hosts): ACCEPTED as a post-merge check. The first contained Codex lane after merge is the live test; record the result on the spec. No code change.
+    CI failures this diff causes (6):
+    1. story_1917 `no_code_path_outside_role_enter_writes_grant_binding_or_calls_bind_grant_to_pid`: agent_launch.rs:6771 calls bind_grant_to_pid. Removed with A; if any of it remains outside the bg launcher, route it through role_lifecycle/seat_authority.
+    2. task1169 `every_headless_spawn_site_disables_background_tasks` / `..._sets_the_background_wait_ceiling`: agent_codex_background.rs:83 and the is_headless env branch. Removed with A; any headless spawn left must use `headless_wait_envs(...)`.
+    3. presentation_env_tests.rs:347 `noexec_preview_shows_none_set_when_no_presentation_vars_are_present`: AIDA_CONTAINMENT_POSTURE was put FIRST in agent_launch_env_inputs. Move it after the presentation vars (or out of the presentation set), so the preview contract stays unchanged.
+    4. bug_1723 config-trust guard: agent_config.rs has 1 config.toml site but the inventory says 2. Update scripts/config-trust.toml to match the B change (a trusted read).
+    Local gate (LIGHT): `cargo test --profile agent -p aida-cli-lib --lib -- task_2631 presentation_env bug_1723 story_1917`, then `make check-ci-fast`, then push to the same branch (merge main if behind; no force-push).
+  created_at: 2026-11-01T04:29:19.172986270Z
+  modified_at: 2026-11-01T04:29:19.172986270Z
+  session_id: 77a7a933-9a3f-4243-9a44-892bcedf206c
 history:
 - id: 01a1949a-7ffe-78a3-8011-c5c0c44dc2d3
   author: joe
