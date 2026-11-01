@@ -23,7 +23,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-01T08:50:33.090001741Z
-modified_at: 2026-11-01T08:50:33.090001741Z
+modified_at: 2026-11-01T09:36:56.156260164Z
 req_type: Task
 tags:
 - from-advisor:BUG-2383
@@ -32,6 +32,12 @@ tags:
 - loop-guard
 - review-recurrence
 - severity:major
+comments:
+- id: 01a19678-1b5c-7e61-a9bf-cb86eb17af5b
+  author: joe
+  content: 'Advisor escalation handled: selected a DIFFERENT implementer vendor (Codex instead of original Claude) and independently re-reviewed actual b48c head, yielding six current blockers. Old observation body echoes31aa findings and is historical; latest concrete ruling is authoritative and explicitly rejects the old stray stderr false lead. Manually requeued after this judgment, new live implementer lease01a1965132bd established for actual fixes. This closes the escalation handling task, not BUG2383 implementation or review.'
+  created_at: 2026-11-01T09:36:56.156260164Z
+  modified_at: 2026-11-01T09:36:56.156260164Z
 filed_at:
   code_sha: 4ce0af750fcb68d4adf57496e4e002aefd8ace77
   branch: main
