@@ -28,6 +28,16 @@ tags:
 - audit
 - containment
 - vendor:codex
+relationships:
+- rel_type: Child
+  target_id: 01a19499-932e-79f0-a3e1-1299dfe355ad
+  created_at: 2026-11-01T06:47:59.880030647Z
+history:
+- id: 01a195dd-7495-70a1-9fe4-3bf923e003f5
+  author: joe
+  timestamp: 2026-11-01T06:48:00.917201916Z
+  session_id: 01a194b1bcfb
+  changes: []
 filed_at:
   code_sha: 6dc7d4977ac5e47c42ddfb26597fe3ec5fb70b60
   branch: main
