@@ -18,12 +18,12 @@ description: |-
   1. `aida session new` and `aida session start <ID> --launch` resolve `[agents] vendor` (via `resolve_default_vendor`) and launch `codex` with the resolved posture when `vendor = "codex"`.
   2. Bare `aida agent new` (including with `--role` / `--spec`) defaults to `[agents] vendor` when configured instead of requiring the vendor subcommand or defaulting the picker to Claude.
   3. Unit/CLI tests cover `vendor = "codex"` and `vendor = "claude"` for `session new`, `session start --launch`, and `agent new`.
-status: Approved
+status: InProgress
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T06:43:22.094949183Z
-modified_at: 2026-11-01T23:44:43.118216251Z
+modified_at: 2026-11-01T23:46:13.332858821Z
 req_type: Bug
 tags:
 - audit
@@ -136,6 +136,13 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
+- id: 01a19981-a6d4-7463-bf90-29213abb496e
+  author: aida-session-start
+  timestamp: 2026-11-01T23:46:13.332855400Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 execution_mode: drain
 filed_at:
   code_sha: 6dc7d4977ac5e47c42ddfb26597fe3ec5fb70b60
