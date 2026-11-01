@@ -21,7 +21,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T07:26:20.914223641Z
-modified_at: 2026-11-01T14:29:24.385182869Z
+modified_at: 2026-11-01T14:53:23.531131302Z
 req_type: Bug
 tags:
 - architecture
@@ -418,6 +418,12 @@ comments:
   content: 'Round 2 checkpoint: make check-ci-fast passed 36 gates; make check-ci-compile passed all workspace test targets (cold checkout, 1649.1s). The actual fresh-authorized dispatch (--no-ship) and all four reported CI ratchets pass in the compiled checkpoint artifact. Real-probe fake launchers exposed missing fixture cwd/store topology: role current intentionally resolves its roster from cwd, while these tests used declarative project roots and bare sibling directories. Correcting only isolated fixture cwd/config links to their existing scratch roster, without modifying seats/grants or weakening preflight. Quoted lowercase CLI error envelopes are normalized to closed diagnostic cause labels. Broader read-only synthetic-HOME failures remain retained, not green. Publication commit exists in authorized /tmp checkout; push awaits local outcomes.'
   created_at: 2026-11-01T13:13:45.892388484Z
   modified_at: 2026-11-01T13:13:45.892388484Z
+- id: 01a19799-d4cb-7321-8d25-950ac8b584a1
+  author: joe
+  content: |
+    PROXY EVIDENCE UPDATE: Read FULL fresh independent reviewer17 REQUEST_CHANGES /tmp/aida-review3207-2f9-result.md, attested PR3207 ledger13/GH6559301737. Root executed BOTH requested exact current-artifact HOST tests outside native outer socket mask/PID namespace, serially, verified byteidentical source2f9c56bb56bb5790e6a52d1b423ef0ef25f992aa and test SHA256e07e340f1633e5ff1f601f3809febabf882af7c4b64aab2cc558dab4cfa45981/matching CLI d2d97c761eba8efd39696c33c90d341e8c99d797949b64aa08c3ebb9468a0253. Both actual native Codex core/delegated-role/recorder fixture and exact lifecycle cleanup fixture PASSED1/0 each, noSKIP. Real installed Codex, no model call. Fresh0700fake HOME/AIDA_HOME/CODEX_HOME/XDG/TMP paths, no inherited role/selector/context/auth, isolated ANONYMOUS sessionkeyring in short-lived child WITHOUT linking previous host ring; no realkeys read, socket chmod, policy/trust waiver or production-grant reuse. Safe manifest /tmp/aida-2398-2f9-host-proof.json; full bounded logs /tmp/aida-2398-host-2f9-fl_koo_3/native.log and cleanup.log. This closes the newhead model-FREE native HOST evidence gap, NOT model-tool/full native-parity completion. Required Build remains RED for actual missing hidden-option help snapshot entry. Same-PR rework still required before freshdelta review and exactheadCI. All46localfailures remain a failed run; reviewer17 reconciles all against currentCI, not blanketwaiver. Preserve full acceptance/security floors and existing verdict/hold until normal new approval.
+  created_at: 2026-11-01T14:53:23.531131302Z
+  modified_at: 2026-11-01T14:53:23.531131302Z
 history:
 - id: 01a19600-c769-7cd0-ba08-8d93975e3e3b
   author: joe
