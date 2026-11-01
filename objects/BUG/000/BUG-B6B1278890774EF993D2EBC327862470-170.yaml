@@ -1,0 +1,45 @@
+id: 01a195de-9bd7-73c2-a050-98639899dde2
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-170
+agreed_id: BUG-2396
+title: CLI next-step, recovery, and status surfaces (worktree, queue work, ps, supervise, session reap, mandate, workflow_hints, compete, status) hardcode claude and /aida-*
+description: |-
+  Why
+  ───
+  Discovered by SPIKE-710 audit. Multiple user- and advisor-facing CLI hints, notifications, defaults, and status sections hardcode `claude` or `/aida-*` slash commands without checking `[agents] vendor`:
+
+  • `aida-cli-lib/src/worktree_gc.rs:3346-3396` (`print_worktree_next` for `aida worktree add` and `aida worktree enter`): hardcodes `claude    # then /aida-implement <ID>` (`3358, 3368`) and `# cd in, then /aida-implement <ID>` (`3375`).
+  • `aida-cli-lib/src/queue_cmd.rs:11146-11153` (`queue_work_manual_continuation`): prints `claude "/{skill} {id}"` (`11152`) on setup recovery.
+  • `aida-cli-lib/src/dispatch_health_ps.rs:988-991`: suggests `aida agent new claude --cwd {wt}` (`990`) for spec-less worktrees in `aida ps`.
+  • `aida-cli-lib/src/supervise_cmd.rs:347-351`: prints `start one: aida agent new claude --role advisor` (`349`).
+  • `aida-cli-lib/src/gate/mandate_drive.rs:1229-1231`: mails the advisor to run `aida agent new claude --spec {} --bg` (`1230`).
+  • `aida-cli-lib/src/session_reap.rs:2013-2021`: prints `aida agent new claude --spec {spec}` (`2017`) after reaping dead sessions.
+  • `aida-cli-lib/src/workflow_hints.rs:231, 254, 576` & `aida-cli-lib/src/phase_driver_trait.rs:3223`: instruct the user/agent to run `/aida-pr` (which is not in `.agents/skills/`).
+  • `aida-cli-lib/src/phase_driver_trait.rs:1835`: posts `@claude review once` on `--review-via pr-comment`.
+  • `aida-cli-lib/src/compete_cmd.rs:1519` & `aida-cli-lib/src/compete.rs:94-115, 480-483`: `aida compete --judge` defaults `--judge-vendor` to `"claude"`, and `compete::ask_ai_argv` returns `None` for `"codex"`.
+  • `aida-cli-lib/src/status_cmd.rs:625, 658`, `aida-cli-lib/src/doctor_cmd.rs:7525`, & `aida-cli-lib/src/status_sections.rs:2759-2860`: `status` prints `─── Claude Code ───` from `~/.claude/projects` with no corresponding Codex sessions section, and suggests `/aida-triage` (`625`).
+
+  Acceptance
+  ──────────
+  1. Resolve `[agents] vendor` (and render `$aida-*` or `aida pr create` when vendor is Codex) across `worktree_gc.rs`, `queue_cmd.rs`, `dispatch_health_ps.rs`, `supervise_cmd.rs`, `mandate_drive.rs`, `session_reap.rs`, and `workflow_hints.rs`.
+  2. Resolve default `--judge-vendor` in `aida compete` from `[agents] vendor`, implement `compete::ask_ai_argv` for Codex (`codex exec --sandbox read-only`), and surface Codex session rollouts in `aida status`.
+  3. Add unit tests verifying Codex output when `[agents] vendor = "codex"`.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-01T06:49:16.503535709Z
+modified_at: 2026-11-01T06:49:16.503535709Z
+req_type: Bug
+tags:
+- audit
+- cli
+- ux
+- vendor:codex
+filed_at:
+  code_sha: 6dc7d4977ac5e47c42ddfb26597fe3ec5fb70b60
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 962ca07af25
+  vendor: antigravity
+  session: 01a194b1bcfb
