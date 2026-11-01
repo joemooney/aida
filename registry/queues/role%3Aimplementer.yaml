@@ -1,4 +1,11 @@
 - user_id: role:implementer
+  requirement_id: 01a194ed-5fc3-71b1-8d17-9838ef33e8eb
+  position: 276000
+  added_by: role:implementer
+  note: 'PR-3192 delta review round 2: CHANGES REQUESTED'
+  added_at: 2026-11-01T06:05:45.282931933Z
+  for_role: implementer
+- user_id: role:implementer
   requirement_id: 01a1942f-b90c-7ee1-a06c-d5856831d28e
   position: 277000
   added_by: role:implementer
@@ -564,12 +571,6 @@
   position: 589000
   added_by: role:implementer
   added_at: 2026-11-01T01:52:26.919265265Z
-  for_role: advisor
-- user_id: role:implementer
-  requirement_id: 01a194ed-5fc3-71b1-8d17-9838ef33e8eb
-  position: 590000
-  added_by: role:implementer
-  added_at: 2026-11-01T03:26:14.096546025Z
   for_role: advisor
 - user_id: role:implementer
   requirement_id: 01a194c2-a618-7a43-936b-fc06bceb3bce
