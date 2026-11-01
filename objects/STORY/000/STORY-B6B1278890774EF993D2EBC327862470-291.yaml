@@ -1,0 +1,33 @@
+id: 01a198da-7c6c-71c0-9f46-10ada7369c00
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-291
+agreed_id: STORY-2275
+title: 'Review PR-3213: [AI:antigravity+codex] docs(showcase): publish interactive engineering audit (TASK-b6b1278890774ef993d2ebc327862470-662)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `agy2/engineering-audit-report`.
+
+  - PR: <https://github.com/joemooney/aida/pull/3213>
+  - Branch: `agy2/engineering-audit-report` → `main`
+
+  ## Covers
+
+  - TASK-B6B1278890774EF993D2EBC327862470-130
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 3213` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-01T20:43:37.964823856Z
+modified_at: 2026-11-01T20:43:37.964823856Z
+req_type: Story
+filed_at:
+  code_sha: 6a3f67671a974703590efde5ae2a323f3f7471fa
+  branch: main
+  dirty: true
+  aida_version: 0.16.0
+  aida_build_sha: 6a3f67671a9
+  vendor: codex
