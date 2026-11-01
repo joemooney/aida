@@ -31,7 +31,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T22:16:54.008855195Z
-modified_at: 2026-11-01T00:46:40.029903327Z
+modified_at: 2026-11-01T01:40:48.634944536Z
 req_type: Bug
 tags:
 - area:agents
@@ -98,6 +98,23 @@ comments:
   modified_at: 2026-11-01T00:42:04.738196617Z
   session_id: 01a194888fca
   harness_version: 2.1.316 (Claude Code)
+- id: 01a194c4-337a-7ba3-af22-e9a3b2846cb5
+  author: joe
+  content: |
+    ADVISOR REWORK BRIEF round 3 (18:45), PR-3181. Round 2 PASSED at 72dc72a; after update-branch to fea56cb, CI run 41258273438 is RED on two jobs. Main is green, so both failures belong to this PR. No design change is needed: fix both, push, and a delta review follows.
+
+    1. CI (lib-1): two gate-boundary tests fail (story_1888_gate_paths_tests):
+       - gate_kernels_reach_outside_only_through_listed_leaves (story_1888_gate_paths_tests.rs:3655): gate/seat_authority.rs reaches `aida_core::liveness::process_identity_matches_strict` and `crate::canonical_role_name` directly.
+       - gate_dispatch_reaches_outside_only_through_the_facade_or_listed_leaves (:2998): gate/seat_authority.rs (named from gate/dispatch_*) reaches `crate::canonical_role_name`.
+       Source: the new `held_grants_in` / HeldGrant code in gate/seat_authority.rs (diff lines with `crate::canonical_role_name(&g.seat) == crate::canonical_role_name(seat)` and `aida_core::liveness::process_identity_matches_strict(pid, start)`).
+       Fix: call `canonical_role_name` through `gate/dispatch_deps.rs`, which already defines `pub(crate) fn canonical_role_name`, so use `super::dispatch_deps::canonical_role_name` or the module's existing import path. For the liveness probe, add a `FACADE_EXTERNAL_LEAVES` entry for `aida_core::liveness::process_identity_matches_strict` with a reason, next to `process_identity_is_alive` ("grant holder liveness; feeds authority"). Alternatively, route it through kernel_deps.rs like the other kernel leaves. Do not weaken the tests.
+    2. CI (gates), portability ratchet: aida-cli-lib/src/tests/bug_b6b_151_registry_heartbeat_tests.rs:137 has a tmp literal, `worktree_path: PathBuf::from("/tmp/earlier")`. Use a tempdir-derived path or a non-/tmp placeholder (for example `PathBuf::from("earlier-worktree")`). Do not grow the allowlist.
+
+    Local gate (LIGHT): `AIDA_CARGO_TIMEOUT=900 cargo test --profile agent -p aida-cli-lib --lib -- story_1888_gate_paths_tests bug_b6b_151` (run it in the background), then `make check-ci-fast`, then push. After a timeout, check `cargo ps`; don't retry blindly.
+    Read CI logs with `gh api repos/joemooney/aida/actions/jobs/<job-id>/logs`. `gh run view --log` fails in the sandbox because ~/.cache/gh is read-only (BUG-2380).
+  created_at: 2026-11-01T01:40:48.634944536Z
+  modified_at: 2026-11-01T01:40:48.634944536Z
+  session_id: 77a7a933-9a3f-4243-9a44-892bcedf206c
 history:
 - id: 01a1940f-8def-7313-80d3-270615a3923f
   author: joe
