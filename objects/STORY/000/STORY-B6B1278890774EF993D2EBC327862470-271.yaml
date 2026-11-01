@@ -1,0 +1,34 @@
+id: 01a19515-c7b5-7f22-a0db-8aa261ca70cf
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-271
+agreed_id: STORY-2242
+title: 'Review PR-3187: [AI:claude] fix(ci): rework and reviewer prompts carry the PR head''s failing tests and panic lines, fetched by the launcher through gh api (BUG-2380)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a194cf`) for branch `bug-b6b1278890774ef993d2ebc327862470-154`.
+
+  - PR: <https://github.com/joemooney/aida/pull/3187>
+  - Branch: `bug-b6b1278890774ef993d2ebc327862470-154` → `main`
+
+  ## Covers
+
+  - BUG-2380
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 3187` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-01T03:09:54.997988995Z
+modified_at: 2026-11-01T03:09:54.997988995Z
+req_type: Story
+filed_at:
+  code_sha: 7518617e469376bbe5debebd7cadd980e08656e5
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 7518617e469
+  vendor: claude
+  session: 77a7a933-9a3f-4243-9a44-892bcedf206c
