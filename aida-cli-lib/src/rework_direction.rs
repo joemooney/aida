@@ -164,8 +164,9 @@ pub(crate) fn detect_main_conflict(
     let base = crate::worktree_gc::detect_default_branch_ref(project_root)?;
     let base_name = base.strip_prefix("origin/").unwrap_or(&base).to_string();
     // Never prompt for credentials: with no terminal a prompt would hang the
-    // launch (or a test) instead of failing the best-effort fetch.
-    let _ = aida_core::git_ops::host_git_command(project_root)
+    // launch (or a test) instead of failing the best-effort fetch. Stored
+    // remote credentials are routed off argv like every other remote call.
+    let _ = aida_core::git_ops::host_remote_git_command(project_root, "origin")
         .args(["fetch", "--quiet", "origin", "--"])
         .arg(&base_name)
         .arg(head_branch)
