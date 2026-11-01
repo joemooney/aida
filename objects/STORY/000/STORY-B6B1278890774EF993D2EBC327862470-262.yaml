@@ -27,7 +27,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T23:03:29.192827531Z
-modified_at: 2026-11-01T17:49:45.578624890Z
+modified_at: 2026-11-01T18:11:52.657302341Z
 req_type: Story
 tags:
 - docs
@@ -216,6 +216,11 @@ comments:
   content: 'Prepared-body review correction: rootFULLread17report/helper/HOSTguard/decodedinner/manifest. Existing normal issue_direct/direct_issue_binding at seat_authority.rs1730/1935 binds roleenter immediate invoking shell plus POSIX terminal SID (and key). Captured roleenter runs in a command-substitution subshell; normal valid resulting presentation may use terminal SID rather than the later bodyBashPID. Current own-tty helper requiring only exact executingBashPID would falsely reject normal issuance. A fresh independent operational correction must validate actual normal rolecurrent/status + fresh non-child integrator grant + verified genuine loop ancestry/UID/FDs and matching kernel SID/start at the authorized loop (or actual executingBash proc/start if present), while retaining full author/reviewer independence. Do not add --bind-pid, fabricate PID/SID, alterissuer/keyring, exportparentcontext or weaken normalhumanpolicy. This corrects only private check to existingnormalissuer semantics; sourceauthority implementation unchanged. Freshuniqueartifacts/fullrootreview/actualHOSTchecks still required before authorizedplacement. No17batch/grant/slot/train consumed.'
   created_at: 2026-11-01T17:49:45.578624890Z
   modified_at: 2026-11-01T17:49:45.578624890Z
+- id: 01a1984f-8cd1-7aa2-aceb-aee012f58b64
+  author: joe
+  content: 'Actual HOST18 read-only gate results: complete body prechecks PASS, but HOST process census falsely treats readable /proc executable links as missing HOST filesystem paths. Root privately identified existing ordinary container processes whose executable path is inside their mount namespace (e.g.GitLab/Traefik) and three existing aida readers executing deleted/replaced old binaries. Their /proc/PID/exe objects remain readable; resolving readlink text with HOST Path.resolve(strict=True) is not a valid executable-existence probe. Fresh independent operational correction must observe actual kernel proc-exe handle/stat identity, classify readable link metadata without requiring its text to exist in HOSTnamespace, preserve unknown/unreadable writer refusal, all actualsource/config/hook/index/ref writer checks and fixedtrustedservicepins, and treat verified exited/zombie race as terminal only after freshkernelcheck. No service restart/kill/newauthority/namespaceentry or blanketcontainerexemption. This fixes only operational reader semantics, not role/source/human/merge gates. No18batch/grant/slot/train consumed; bothloops independentlyverifiedgenuineUID1000 Bash/Terminator/user-systemd chain withoutagentancestor, SID/start/FDs/directsleep60 andemptyinitialidentityenv.'
+  created_at: 2026-11-01T18:11:52.657302341Z
+  modified_at: 2026-11-01T18:11:52.657302341Z
 history:
 - id: 01a19517-853a-7dc1-addd-62b1b73de3be
   author: joe
