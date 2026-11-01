@@ -33,13 +33,12 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T18:29:27.417907915Z
-modified_at: 2026-11-01T06:31:58.840617878Z
+modified_at: 2026-11-01T06:32:36.802052559Z
 req_type: Story
 tags:
 - audit
 - authority
 - keyboard
-- operator-held
 - parent:EPIC-62
 - parent:EPIC-69
 - proxy
@@ -343,8 +342,10 @@ comments:
   created_at: 2026-11-01T06:31:58.840617878Z
   modified_at: 2026-11-01T06:31:58.840617878Z
   session_id: a31b25d9-60a5-4347-a85b-4c74ab06f274
-deferred: true
-deferred_at: 2026-10-10T20:35:17.686575903Z
-deferred_until: when grant expiry or unattended-session authority becomes a real operational need (e.g. long-lived relays holding seats)
-deferred_reason: 'Time-boxed seat grants aren''t needed now: per-shell grants are adequate for current operation. Deferred so EPIC-69 can close (operator decision 2026-10-10).'
+history:
+- id: 01a195cf-5bc3-7c00-b31c-8e83195f8209
+  author: joe
+  timestamp: 2026-11-01T06:32:37.059917223Z
+  session_id: a31b25d9-60a5-4347-a85b-4c74ab06f274
+  changes: []
 execution_mode: guided
