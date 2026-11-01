@@ -16,12 +16,12 @@ description: |
   Sketch and independent advisor signoff before code; strict review for authority plumbing. This finding is separate from the native cache path writable-root refusal, which is recorded on STORY-2238. User's global Codex config must remain unchanged. Codex implementer lane after signoff; LIGHT targeted grant/launch test plus make check-ci-fast, CI is the full gate.
 
   Scope amendment: the initial adapter-only sketch expands only to the weak positive-approval consumers identified in codex-advisor08 ruling: gate/dispatch_authority::verdict_at_head + dispatch_flow, human reviewed classification and gate/review_verdict::review_actionability consumers. Preserve named ungranted record artifacts as nonauthoritative; do not change roster, issuance, grants, direct-human receipts or protected merge policy. Independent design signoff on this amendment and strict implementation review are required before completion.
-status: Approved
+status: InProgress
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T07:26:20.914223641Z
-modified_at: 2026-11-01T09:22:13.298759786Z
+modified_at: 2026-11-01T09:22:53.158132597Z
 req_type: Bug
 tags:
 - architecture
@@ -406,6 +406,13 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Approved
+- id: 01a1966b-3e66-70f1-a83c-342b9d36e8e5
+  author: aida-session-start
+  timestamp: 2026-11-01T09:22:53.158128794Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 53c89700b4da50b5593a2079ed4cc3abaae5cdfe
   branch: main
