@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "spec": "TASK-2709",
+  "publishes": [
+    {
+      "at": "2026-11-01T22:45:10.347928248Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-01T20:06:32.949031175Z",
+      "spec": "TASK-2709",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "Static publication checks pass; correct unsupported deployment metric equivalence and empirical simulator claims before approval.",
+        "recovery_hint": "address the review findings, move TASK-B6B1278890774EF993D2EBC327862470-662 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-11-01T22:44:52.604806970Z",
+      "spec": "TASK-2709",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 3213
+      }
+    },
+    {
+      "ts": "2026-11-01T22:45:10.189765034Z",
+      "spec": "TASK-2709",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "4e8e63b03ff3c32f3799af8829e1ef9e2f28fc1f",
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
