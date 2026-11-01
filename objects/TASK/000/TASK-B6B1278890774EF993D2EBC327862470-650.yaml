@@ -12,13 +12,20 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-01T01:29:36.212889548Z
-modified_at: 2026-11-01T01:29:36.212889548Z
+modified_at: 2026-11-01T03:11:52.724942833Z
 req_type: Task
 tags:
 - carried-from:BUG-B6B1278890774EF993D2EBC327862470-056
 - finding-hash:4e82bb6d
 - from-review:BUG-B6B1278890774EF993D2EBC327862470-056
 - kind:carried-forward
+comments:
+- id: 01a19517-9394-7f92-b53d-573496f63ee1
+  author: joe
+  content: 'ADVISOR RULING (20:15): REJECTED under the 10-28 ruled-once rule. The reviewer of BUG-056 accepted this cosmetic doc-comment wrap as non-blocking, so it doesn''t need its own spec. Rewrap it when that file is next touched.'
+  created_at: 2026-11-01T03:11:52.724942833Z
+  modified_at: 2026-11-01T03:11:52.724942833Z
+  session_id: 77a7a933-9a3f-4243-9a44-892bcedf206c
 history:
 - id: 01a194c8-c774-7953-b2b5-143f8c967f51
   author: joe
