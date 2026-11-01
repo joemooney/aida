@@ -536,10 +536,14 @@ pub(crate) fn handle_docs_with_store(cmd: &DocsCommand, store: &RequirementsStor
         // TASK-589: surface the embedded discipline glossary from the CLI.
         // trace:TASK-589 | ai:claude
         DocsCommand::Glossary {
+            product,
             machinery,
             lifecycle,
         } => {
-            print!("{}", render_discipline_glossary(*machinery, *lifecycle)?);
+            print!(
+                "{}",
+                render_discipline_glossary(*product, *machinery, *lifecycle)?
+            );
         }
     }
     Ok(())

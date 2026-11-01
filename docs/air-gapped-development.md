@@ -1,6 +1,7 @@
 # Support for air-gapped development
 
 <!-- trace:TASK-B6B1278890774EF993D2EBC327862470-277 | ai:claude -->
+<!-- trace:STORY-2219 | ai:claude -->
 
 AIDA keeps requirements in Git, so a team on an isolated network can use it with an internal Git server. Its records travel the way code does. The one thing that needs planning is how short spec IDs such as `TASK-42` stay unique when two networks hand them out without seeing each other. This page explains the parts involved, shows where a collision comes from, and answers one question: does your project need an ID root?
 
@@ -10,13 +11,13 @@ AIDA keeps requirements in Git, so a team on an isolated network can use it with
 
 **Status: built.** Each part below exists today as a record or a setting, with checks on it. What is still planned is the commands that grant a pool to a hub and claim blocks from an upstream. The sections that follow say where each one fits.
 
-- **Hub.** A Git server the requirement store syncs through: GitHub, GitLab, or a bare repository on an internal host. A mirror that only copies another hub's records, listed under `[store.sync] mirror_remotes`, is the same hub, not a second one.
-- **Store ref.** The `aida-store` branch on a hub. A push to it succeeds only if nobody else moved it first, so one hub settles any race between two clones.
-- **Root.** The one clone per store that owns every number not yet handed out. You make a clone the root with `aida node enroll-root`.
-- **Pool.** A range of one spec type's numbers granted to a holder and homed on one hub's store ref. Claims against a pool are pushed to that hub and nowhere else.
-- **Block.** A smaller range carved from a pool and bound to one clone. A clone mints short IDs from its own blocks.
+- **[Hub](../aida-core/templates/.aida/discipline/product-glossary.md#hub).** A Git server the requirement store syncs through: GitHub, GitLab, or a bare repository on an internal host. A mirror that only copies another hub's records, listed under `[store.sync] mirror_remotes`, is the same hub, not a second one.
+- **[Store ref](../aida-core/templates/.aida/discipline/product-glossary.md#ref).** The `aida-store` branch on a hub. A push to it succeeds only if nobody else moved it first, so one hub settles any race between two clones.
+- **[Root](../aida-core/templates/.aida/discipline/product-glossary.md#root).** The one clone per store that owns every number not yet handed out. You make a clone the root with `aida node enroll-root`.
+- **[Pool](../aida-core/templates/.aida/discipline/product-glossary.md#pool).** A range of one spec type's numbers granted to a holder and homed on one hub's store ref. Claims against a pool are pushed to that hub and nowhere else.
+- **[Block](../aida-core/templates/.aida/discipline/product-glossary.md#block).** A smaller range carved from a pool and bound to one clone. A clone mints short IDs from its own blocks.
 
-Every clone also has a node identity: a random identifier with no host, user or email in it. When a clone has no block it can use, it mints node-local IDs of the form `<TYPE>-<node>-<n>`. Those never collide, because no two clones share a node, so they need no coordination at all. You can give a node a friendly label with `aida node alias`, so `TASK-<node>-95` displays as `TASK-HOME-95`.
+Every clone also has a node identity: a random identifier with no host, user or email in it. When a clone has no block it can use, it mints [node-local IDs](../aida-core/templates/.aida/discipline/product-glossary.md#local-id) of the form `<TYPE>-<node>-<n>`. Those never collide, because no two clones share a node, so they need no coordination at all. You can give a node a friendly label with `aida node alias`, so `TASK-<node>-95` displays as `TASK-HOME-95`.
 
 ## One hub: the push will order every claim
 
@@ -65,7 +66,7 @@ Inconsistent grants, such as two pools that overlap, a block outside its pool or
 ## Does your project need an ID root?
 
 - **You are content with node-local IDs.** No. They work on any number of hubs, offline, with no setup.
-- **You want short IDs and the store lives on one hub.** Today, yes: short agreed IDs require an enrolled root on every project. **Planned:** a single-hub mode in which the hub's store ref is the authority, so a one-hub project gets short IDs with no root and no enrollment step.
+- **You want short IDs and the store lives on one hub.** Today, yes: short [agreed IDs](../aida-core/templates/.aida/discipline/product-glossary.md#agreed-id) require an enrolled root on every project. **Planned:** a single-hub mode in which the hub's store ref is the authority, so a one-hub project gets short IDs with no root and no enrollment step.
 - **The store lives on more than one hub that clones push to independently**, such as an air-gapped network with its own Git server. Yes. Only a root can split the numbers between hubs before either hub sees a claim.
 
 A mirror never counts as a second hub. `aida node upstream` refuses to name a mirror, because a mirror copies records and never grants blocks.

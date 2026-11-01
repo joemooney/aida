@@ -95,7 +95,8 @@ does not compare against GitHub itself.
 `python3 docs/showcase/build.py` renders every manifest-selected guide into the
 shared `page-template.html` layout: `getting-started.html`, `configuration.html`,
 `workflow.html`, `autonomy.html`, `trust.html`, `metrics.html`, `setup.html`,
-`capabilities.html`, `integrations.html`, `air-gapped.html` and `authority.html`,
+`capabilities.html`, `integrations.html`, `air-gapped.html`, `authority.html`
+and `glossary.html`,
 plus `library.html` and `search-data.js`. Edit the corresponding Markdown,
 templates or `guide.css`, then rebuild; do not hand-edit derived outputs.
 Python 3 with its standard library and Git are required. The renderer intentionally supports
@@ -106,6 +107,19 @@ the body; the path is relative to `docs/`, so the Markdown also renders on the f
 Alt text comes from the SVG's `<title>` and `<desc>`. Body diagrams carry a light
 palette and a `prefers-color-scheme: dark` style block so they read in either scheme.
 <!-- trace:TASK-B6B1278890774EF993D2EBC327862470-277 | ai:claude -->
+`glossary.html` is the one page whose source is outside `docs/`: it renders
+`aida-core/templates/.aida/discipline/product-glossary.md`, the single source
+that `aida docs glossary` also embeds. Its manifest entry carries
+`"glossary": true`. The builder accepts a source outside `docs/` only in that
+case and only from that directory. Links in the glossary resolve relative to the
+template master. Each `###` entry under `## Terms` keeps its heading anchor
+(`glossary.html#merge-hold`) and becomes a term record in `search-data.js`.
+The library lists the glossary page, and a term's card appears there only when
+a search matches it. A guide links a term with
+`[merge hold](../aida-core/templates/.aida/discipline/product-glossary.md#merge-hold)`,
+which works on the forge and becomes `glossary.html#merge-hold` here. How to add
+a term is in that file's last section.
+<!-- trace:STORY-2219 | ai:claude -->
 Generated files are committed and can be read directly from disk.
 Run `python3 docs/showcase/build.py --check` to report every drifted generated
 page and search artifact without writing files; the fast CI gate runs this check.
@@ -113,7 +127,7 @@ page and search artifact without writing files; the fast CI gate runs this check
 ## Curated library and publication scope
 
 `publication.json` is the explicit source allowlist and audience classification.
-It currently selects eleven tracked product guides, classified as human or operator
+It currently selects eleven tracked product guides and the product glossary, classified as human or operator
 reading. Technical references remain links; historical, internal, archived,
 plan/spike/security/agent material and runtime data are not republished or indexed.
 The manifest keeps publication scope explicit; adding a source requires checking its audience, currentness and references.
