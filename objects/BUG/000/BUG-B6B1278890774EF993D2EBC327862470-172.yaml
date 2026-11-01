@@ -19,7 +19,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-01T07:26:20.914223641Z
-modified_at: 2026-11-01T07:34:24.888551018Z
+modified_at: 2026-11-01T07:34:39.617631574Z
 req_type: Bug
 tags:
 - architecture
@@ -57,6 +57,50 @@ comments:
     S5. Docs: a Codex setup note saying AIDA does not need shell_environment_policy relaxed, plus the Q1 limitation branch.
   created_at: 2026-11-01T07:34:24.888551018Z
   modified_at: 2026-11-01T07:34:24.888551018Z
+  session_id: 01a19602-239f-70a0-950a-ec6d76a57cb6
+  harness_version: 2.1.316 (Claude Code)
+- id: 01a19608-2901-7190-9c07-e39804775c1f
+  author: joe
+  content: |
+    SKETCH (awaiting independent advisor signoff) — BUG-2398, part 2/2: security, tests, open questions
+
+    ## Security / races / fail-closed
+    - No startup race: pre_exec installs the pointer before codex's first instruction, so there is no post-spawn stamping window.
+    - Revocation is unchanged. A revoked or expired grant fails grant_check_for_at, and revoke_by_id also invalidates a reachable pointer.
+    - A same-user process outside the tree gets EACCES on the possessor-only keyring.
+    - Pre-existing, NOT widened (file separately; do not fix here): children possess the parent's and siblings' aida-grant keys through the linked or reused launcher keyring, and match the parent's proc binding by ancestry. A child that learns a parent grant id (the grant dir is readable) can present it today. This design exposes no new ids.
+    - Writes from inside the native sandbox (grant locks/stamps under ~/.aida) may be refused by the writable roots. Resolution is read-only. Anything that writes is reported, not worked around (sibling of STORY-2238).
+
+    ## Tests (LIGHT gate: one targeted cargo run + make check-ci-fast; CI is the full gate)
+    Unit, in gate/tests/bug_2398_seat_pointer_tests.rs:
+    - env_present_empty_never_reads_pointer
+    - absent_env_resolves_direct_pointer_only (the parent pointer in the linked keyring loses)
+    - two_direct_pointers_refuse_ambiguous
+    - malformed_or_wrong_version_pointer_refuses_named
+    - pointer_to_revoked_or_expired_child_refuses
+    - pointer_for_other_project_root_refuses
+    - baseline_tombstone_masks_inherited_pointer
+    - pointer_cannot_name_unpresentable_grant (PresenterNotBound)
+    - pre_exec_installer_forked_child_smoke
+    - a cfg(test) seam that ignores real pointers unless injected, so cargo test inside a Codex shell is not contaminated
+    - ratchet no_grant_env_on_command_outside_seat_authority
+    Actual-tool regression (acceptance 3): Linux, gated on codex in PATH, NO model call. It runs codex sandbox with a temporary CODEX_HOME whose config sets shell_environment_policy inherit=core. The user's file is never touched, and no auth is needed:
+    - codex_core_implementer_role_current
+    - codex_core_implementer_permitted_own_scope
+    - codex_core_implementer_denied_advisor_op
+    - codex_core_parent_authority_not_reachable
+    - codex_core_reviewer_verdict_recorded (a granted reviewer)
+    - codex_core_ungranted_reviewer_verdict_refused
+    - native_preflight_refuses_when_keyring_blocked
+    Retain unchanged: bug_1934_keyring_tests, bug_1983_grant_verdict_tests, story_1662_standalone_implementer_tests, story_1917_dispatch_*, BUG-2139 headless-child tests, TASK-2631 posture tests.
+
+    ## Open questions for the signing advisor
+    Q1 (evidence, then branch). Does the codex-cli 0.166 native Linux sandbox allow keyctl/add_key and keep the session keyring, and does it unshare PID? The implementer confirms this from the codex sandbox source/flags plus the S4 preflight on a scratch CODEX_HOME. If keyctl is blocked: native posture is REFUSED for granted seats with a named reason, granted Codex seats use posture=aida until upstream allows it, and there is no fallback.
+    Q2. Does codex sandbox apply shell_environment_policy identically to exec tool calls? If not, the true actual-tool fixture needs codex exec (a model call). Make that one operator-run, and keep the sandbox fixture as the CI proxy.
+    Q3. Carry AIDA_AGENT_REGISTRY_TOKEN in the pointer? Default no (it is a bearer token).
+    Q4. Should the identity fallbacks (mailbox AIDA_USER, lease, scope) land in the same PR? Recommendation: yes. The permitted own-scope test needs the lease identity, and the root cause is the same.
+  created_at: 2026-11-01T07:34:39.617631574Z
+  modified_at: 2026-11-01T07:34:39.617631574Z
   session_id: 01a19602-239f-70a0-950a-ec6d76a57cb6
   harness_version: 2.1.316 (Claude Code)
 history:

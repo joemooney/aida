@@ -17,7 +17,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T06:55:52.004339498Z
-modified_at: 2026-11-01T07:34:36.610316315Z
+modified_at: 2026-11-01T07:35:04.186387902Z
 req_type: Bug
 tags:
 - closure:pending
@@ -44,6 +44,11 @@ comments:
   content: 'Implementation committed and pushed: 891f8747f52 on codex/bug-2397-mail-wake (https://github.com/joemooney/aida/commit/891f8747f52). WorkingDirectory now uses its literal single-path semantics with %% specifier escaping, independently of ExecStart; unsafe unit-line paths refuse. Existing nonzero manager error propagation is covered, install verifies active after enable --now, and status distinguishes file presence from runtime states/unknown. Validation: CARGO_TARGET_DIR="$PWD/target" AIDA_CARGO_TIMEOUT=15m cargo test -p aida-cli-lib --profile agent mailbox_wake_run --lib: 15 passed, 0 failed (including systemd-analyze generated fixtures and isolated fake HOME/stub systemctl); make check-ci-fast: 36 gates passed; cargo fmt --all -- --check and git diff --check passed. No live service state changed. Publishing checkout: /tmp/aida-bug-2397-publish; assigned source worktree retains edits at base HEAD because its .git is read-only. Draft finding filed for sandbox/cache limitation. Marking branch implementation Done is not live closure: retain closure:pending; after independent review, green CI and merge, install the reviewed merged binary, verify active, and record evidence. Preserve the mitigation backup described in the earlier comment. Standalone launcher stops after PR open; no ship or review record.'
   created_at: 2026-11-01T07:34:36.610249200Z
   modified_at: 2026-11-01T07:34:36.610249200Z
+- id: 01a19608-88fa-7cd1-87f3-38d14e2895cb
+  author: mcp
+  content: 'Correction to preceding handoff: queue_done was attempted with the recorded verification and CLI-interface changes, but the MCP approval layer refused it: ''MCP tool call requires approval, but approval policy is never''. No Done transition or dequeue occurred; BUG-2397 remains In Progress. The local CLI mutation path also refuses its unwritable symlinked cache. PR publication can proceed from the pushed implementation commit; launcher/operator should reconcile queue/status. closure:pending remains unchanged for the post-merge live reinstall.'
+  created_at: 2026-11-01T07:35:04.186378567Z
+  modified_at: 2026-11-01T07:35:04.186378567Z
 history:
 - id: 01a195e4-cb21-7b43-b55f-eef4611d9957
   author: joe
