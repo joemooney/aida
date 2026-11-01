@@ -935,6 +935,51 @@ impl BlockRegistry {
         Ok(())
     }
 
+    /// Save after a block claim. The root (or a file outside a clone) takes
+    /// the ordinary [`save`](Self::save) path. In single-hub mode a non-root
+    /// clone may write only appended claims of its own node, each stamped
+    /// with the hub's pool id; the hub orders them when the claim is pushed.
+    // trace:STORY-B6B1278890774EF993D2EBC327862470-164 | ai:claude
+    #[cfg(feature = "native")]
+    pub fn save_claimed(&self, path: &Path, node_id: &str) -> anyhow::Result<()> {
+        use crate::allocation_authority as authority;
+        let parent = path.parent().unwrap_or(Path::new("."));
+        let root = parent.parent().unwrap_or(parent);
+        if authority::resolve(root).is_ok_and(|m| m.authoritative)
+            || !authority::in_git_clone(root).unwrap_or(true)
+        {
+            return self.save(path);
+        }
+        let authority = authority::claim_authority(root)?;
+        anyhow::ensure!(
+            matches!(authority, authority::ClaimAuthority::HubCas { .. }),
+            "only the allocation root may claim blocks on this store; registry/blocks.yaml was not written"
+        );
+        #[cfg(unix)]
+        crate::transport_policy::refuse_unsupported(path)?;
+        let on_disk = Self::load(path)?;
+        let kept = on_disk.blocks.len() <= self.blocks.len()
+            && on_disk.blocks.iter().zip(&self.blocks).all(|(old, new)| {
+                let mut moved = new.clone();
+                moved.next = old.next;
+                moved == *old
+                    && (new.next == old.next || (new.node_id == node_id && new.next > old.next))
+            });
+        let appended_ok = self.blocks[on_disk.blocks.len().min(self.blocks.len())..]
+            .iter()
+            .all(|b| {
+                b.node_id == node_id
+                    && b.pool_id.as_deref() == authority.pool_id(&b.type_prefix).as_deref()
+            });
+        anyhow::ensure!(
+            kept && appended_ok,
+            "a single-hub claim may only append this node's own hub-stamped blocks; registry/blocks.yaml was not written"
+        );
+        let content = serde_yaml::to_string(self)?;
+        crate::write_atomic(path, content)?;
+        Ok(())
+    }
+
     /// Run `f` while holding an exclusive advisory lock tied to the block
     /// registry at `blocks_path`.
     ///

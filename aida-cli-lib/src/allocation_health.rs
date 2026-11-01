@@ -29,7 +29,7 @@ pub(crate) fn scan_store(store: &Path) -> Vec<crate::DoctorFinding> {
     // An authoritative clone never runs the WORK reader, but its legacy
     // dispenser must still record this clone's node.
     let authoritative = authority::resolve(store).is_ok_and(|m| m.authoritative);
-    let mut findings = Vec::new();
+    let mut findings = hub_findings(store);
     let node_toml = store.join(".aida/node.toml");
     let legacy = store.join(".aida/dispenser.toml");
     let common = authority::common_dir(store).ok();
@@ -129,6 +129,41 @@ pub(crate) fn scan_store(store: &Path) -> Vec<crate::DoctorFinding> {
     findings
 }
 
+/// Declared-hub config errors: a remote that is both a store mirror and a
+/// declared hub, and more than one hub with no enrolled root (claims are
+/// refused until a root splits the number space).
+// trace:STORY-B6B1278890774EF993D2EBC327862470-164 | ai:claude
+fn hub_findings(store: &Path) -> Vec<crate::DoctorFinding> {
+    let Ok(hubs) = aida_core::store_hubs::committed(store) else {
+        return Vec::new();
+    };
+    let mut out: Vec<_> = aida_core::store_hubs::config_conflicts(store, &hubs)
+        .into_iter()
+        .enumerate()
+        .map(|(i, problem)| {
+            finding(
+                format!("mirror-and-hub:{i}"),
+                problem,
+                "remove the remote from [store.sync] mirror_remotes, or remove its URL from [store.hubs], in .aida/config.toml".to_string(),
+            )
+        })
+        .collect();
+    if let Ok(aida_core::allocation_authority::StoreMode::MultiHubNoRoot { hubs }) =
+        aida_core::allocation_authority::store_mode(store)
+    {
+        out.push(finding(
+            "multi-hub-no-root".to_string(),
+            format!(
+                "block claims refuse: [store.hubs] declares {} hubs ({}) and the store has no allocation root",
+                hubs.len(),
+                hubs.join(", ")
+            ),
+            aida_core::allocation_authority::MULTI_HUB_NEEDS_ROOT.to_string(),
+        ));
+    }
+    out
+}
+
 /// The node an unregistered clone allocates as (`rel_cards::load_node_id`).
 const DEFAULT_NODE: &str = "1";
 
@@ -187,6 +222,47 @@ mod tests {
             0o644,
         );
         d
+    }
+
+    // trace:STORY-B6B1278890774EF993D2EBC327862470-164 | ai:claude
+    #[test]
+    fn a_remote_that_is_mirror_and_hub_and_two_unrooted_hubs_are_reported() {
+        let d = tempfile::tempdir().unwrap();
+        let p = d.path();
+        let git = |args: &[&str]| {
+            assert!(aida_core::git_ops::host_git_command(p)
+                .args(args)
+                .env("GIT_AUTHOR_NAME", "t")
+                .env("GIT_AUTHOR_EMAIL", "t@example.invalid")
+                .env("GIT_COMMITTER_NAME", "t")
+                .env("GIT_COMMITTER_EMAIL", "t@example.invalid")
+                .status()
+                .unwrap()
+                .success())
+        };
+        git(&["init", "-q", "-b", "main"]);
+        git(&[
+            "remote",
+            "add",
+            "gitlab",
+            "ssh://git@gitlab.joemooney.com:2222/ai/aida.git",
+        ]);
+        std::fs::create_dir_all(p.join(".aida")).unwrap();
+        std::fs::write(
+            p.join(".aida/config.toml"),
+            "[store.hubs]\ngithub = 'https://github.com/joemooney/aida.git'\ngitlab = 'https://gitlab.joemooney.com/ai/aida'\n[store.sync]\nmirror_remotes = ['gitlab']\n",
+        )
+        .unwrap();
+        git(&["add", ".aida/config.toml"]);
+        git(&["commit", "-qm", "config"]);
+        let findings = hub_findings(p);
+        let ids: Vec<_> = findings.iter().map(|f| f.id.as_str()).collect();
+        assert_eq!(
+            ids,
+            ["mirror-and-hub:0", "multi-hub-no-root"],
+            "{findings:?}"
+        );
+        assert!(findings[1].action.contains("aida node enroll-root"));
     }
 
     fn make_authoritative(d: &tempfile::TempDir) {

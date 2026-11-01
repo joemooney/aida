@@ -226,7 +226,7 @@ You've seen the floor the whole system stands on — the git-canonical store and
 Global allocation requires an explicit local setting in the clone's common Git
 directory, shared by its linked worktrees. `aida-allocation.toml` version 1 holds
 an `authoritative` boolean. Version 2 holds a role and an upstream (see
-[Block delegation](#block-delegation-root-upstream-and-lineage)), and only the
+[Block delegation](#block-delegation-for-more-than-one-hub-root-upstream-and-lineage)), and only the
 root is authoritative. Missing means non-authoritative; malformed or
 unsafe files refuse allocation. A normal Git clone does not inherit this file.
 Store contents, cached blocks, transport enrollment, forge URLs, user preferences
@@ -252,11 +252,69 @@ automatically. Do not create an authority setting merely to make an unproven
 global allocation succeed. The writer checklist is in the
 [allocation inventory](../plans/2026-10-24-bug-2017-allocation-writer-inventory.md).
 
-#### Block delegation: root, upstream and lineage
+#### Short agreed IDs on one hub (the usual case)
+
+<!-- trace:STORY-B6B1278890774EF993D2EBC327862470-164 | ai:claude -->
+
+Most projects sync their store through **one hub**: a single git server such as
+GitHub, GitLab or a bare repository. A store mirror counts as the same hub. On
+one hub, `git push` already orders every block claim, because the push is a
+compare-and-swap on the hub's `aida-store` ref. No root clone and no enrollment
+are needed.
+
+Declare the hub in the tracked `.aida/config.toml` and commit it on the default
+branch:
+
+```toml
+[store.hubs]
+github = { urls = ["https://github.com/acme/app.git", "git@github.com:acme/app.git"] }
+```
+
+A hub is identified by URL, because remote names are local to each clone. URLs
+are compared without scheme, user, port or `.git`, so ssh and https forms of one
+server count as one hub. The declaration takes effect only once it is committed
+on the default branch. If two clones each assumed their own `origin` was the hub,
+they could mint on two different refs. Remotes listed in `[store.sync]
+mirror_remotes` are never hubs. A remote that is both a mirror and a declared hub
+is a config error, reported by `aida node show` and `aida doctor check
+allocation`.
+
+With exactly one hub declared and no root enrolled:
+
+- Any clone with a remote that reaches the hub can run `aida db block claim`.
+  The claim is pushed to that remote by compare-and-swap. If another clone
+  claimed first, the push is rejected, and the claim is pulled, recomputed and
+  retried. Every block is stamped with the pool `hub:<hub>:<TYPE>`. This pool is
+  implicit: it is never written to `registry/pools.yaml`.
+- `aida add` mints the agreed ID from the clone's block, beside its local ID.
+- A block is spendable only while the identical claim is on the hub's store ref,
+  as recorded by the clone's remote-tracking copy. A claim committed locally but
+  never pushed, or one that only appears in an imported store, is not
+  spendable. `aida add` issues a node-local ID instead and says why.
+- A clone with no remote that reaches the hub cannot claim. The refusal names
+  the hub's URLs.
+- `aida node show` prints the mode, for example `Mode: single-hub (hub github →
+  this clone reaches it as origin)`, followed by the hubs and mirrors.
+
+With no hub declared, only an authoritative clone (below) claims blocks, as
+before. Every other clone issues node-local IDs.
+
+**More than one hub** means the store is pushed independently to separate git
+servers, typically an air-gapped network with its own internal server. Claims
+pushed to different hubs move different refs, so nothing orders them. That
+case needs a root (next section). If a second non-mirror hub is declared with no
+root enrolled, every claim is refused and the refusal names `aida node
+enroll-root`. Blocks a clone already holds keep dispensing. Run `aida node
+enroll-root --dry-run`, then `aida node enroll-root`, on the primary clone. Each
+implicit `hub:` pool in use becomes a real root pool with the same id, so every
+existing block and agreed ID stays valid and nothing is renumbered. Granting a
+pool to the new hub is not available yet.
+
+#### Block delegation for more than one hub: root, upstream and lineage
 
 <!-- trace:STORY-B6B1278890774EF993D2EBC327862470-095 | ai:claude -->
 
-ID blocks are handed down a tree. Exactly one node per store is the **root**: it
+When the store has more than one hub, ID blocks are handed down a tree. Exactly one node per store is the **root**: it
 owns the unallocated ID space. Every other clone declares one **upstream**, a
 git remote it takes blocks from. The clone-local setting is now version 2:
 `version = 2`, `role = "root"` or `"node"`, and for a node an optional

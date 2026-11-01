@@ -230,10 +230,26 @@ pub(crate) fn fold_run(run: &[&aida_core::AgreedIdBlock]) -> MergedBlockRow {
 /// allocation claims) stops the claim before it commits or publishes.
 // trace:BUG-2162 | ai:claude
 // trace:BUG-2017 | ai:claude
-fn pull_unless_refused(store_path: &std::path::Path, branch: &str) -> Result<()> {
-    match aida_core::git_ops::pull_rebase(store_path, "origin", branch) {
+fn pull_unless_refused(store_path: &std::path::Path, remote: &str, branch: &str) -> Result<()> {
+    match aida_core::git_ops::pull_rebase(store_path, remote, branch) {
         Err(e) if aida_core::git_ops::is_sync_refusal(&e) => Err(e),
         _ => Ok(()),
+    }
+}
+
+/// Stamp the claim just appended to `registry` (and its returned copy)
+/// with the pool it was ordered against: the hub's pool in single-hub mode.
+// trace:STORY-B6B1278890774EF993D2EBC327862470-164 | ai:claude
+fn stamp_last_claim(
+    registry: &mut aida_core::BlockRegistry,
+    block: &mut aida_core::AgreedIdBlock,
+    authority: &aida_core::allocation_authority::ClaimAuthority,
+) {
+    if let Some(pool_id) = authority.pool_id(&block.type_prefix) {
+        block.pool_id = Some(pool_id.clone());
+        if let Some(last) = registry.blocks.last_mut() {
+            last.pool_id = Some(pool_id);
+        }
     }
 }
 
@@ -246,7 +262,11 @@ pub(crate) fn handle_block_command(cmd: &BlockCommand, store_path: &std::path::P
     match cmd {
         BlockCommand::Claim { r#type, size } => {
             // trace:BUG-2017 | ai:codex
-            aida_core::allocation_authority::require_global(store_path)?;
+            // Single-hub mode lets any clone that reaches the hub claim by
+            // CAS push; otherwise only the root claims.
+            // trace:STORY-B6B1278890774EF993D2EBC327862470-164 | ai:claude
+            let authority = aida_core::allocation_authority::claim_authority(store_path)?;
+            let remote = authority.remote().to_string();
             let type_prefix = r#type.to_uppercase();
 
             // Load or create registry, push-wins loop
@@ -260,7 +280,7 @@ pub(crate) fn handle_block_command(cmd: &BlockCommand, store_path: &std::path::P
                 let (block, committed_sha) =
                     aida_core::db::with_store_write_lock(store_path, || {
                         if attempt > 0 {
-                            pull_unless_refused(store_path, &branch)?;
+                            pull_unless_refused(store_path, &remote, &branch)?;
                         }
                         // A retired node claims nothing; a bound root claims
                         // only after the agreed-ID backfill, which claims its
@@ -279,7 +299,7 @@ pub(crate) fn handle_block_command(cmd: &BlockCommand, store_path: &std::path::P
                             // BUG-715: redact the hostname before it lands in blocks.yaml.
                             let (block_host, _) =
                                 aida_core::git_ops::redacted_identity(&hostname(), None);
-                            let block = registry.claim_block_with_floor(
+                            let mut block = registry.claim_block_with_floor(
                                 node_id.clone(),
                                 std::env::var("USER").unwrap_or_else(|_| "unknown".into()),
                                 block_host,
@@ -287,7 +307,8 @@ pub(crate) fn handle_block_command(cmd: &BlockCommand, store_path: &std::path::P
                                 *size,
                                 counter_floor,
                             );
-                            registry.save(&blocks_path)?;
+                            stamp_last_claim(&mut registry, &mut block, &authority);
+                            registry.save_claimed(&blocks_path, &node_id)?;
 
                             // Commit the new block
                             aida_core::git_ops::add(store_path, &["registry/blocks.yaml"])?;
@@ -304,8 +325,7 @@ pub(crate) fn handle_block_command(cmd: &BlockCommand, store_path: &std::path::P
                     })?;
 
                 // Push — retry on rejection
-                match aida_core::git_ops::push_exact(store_path, "origin", &committed_sha, &branch)
-                {
+                match aida_core::git_ops::push_exact(store_path, &remote, &committed_sha, &branch) {
                     Ok(true) => {
                         println!(
                             "{} Claimed {}-{}..{} for node {} ({})",
@@ -893,7 +913,9 @@ pub(crate) fn auto_allocate_block_inner(
     reason: BlockClaimReason,
 ) -> Result<Option<String>> {
     // trace:BUG-2017 | ai:codex
-    aida_core::allocation_authority::require_global(store_path)?;
+    // trace:STORY-B6B1278890774EF993D2EBC327862470-164 | ai:claude
+    let authority = aida_core::allocation_authority::claim_authority(store_path)?;
+    let remote = authority.remote().to_string();
 
     use aida_core::BlockRegistry;
 
@@ -906,7 +928,7 @@ pub(crate) fn auto_allocate_block_inner(
     // claim the block on the local orphan branch and let the next
     // `aida push` upload it.
     let deferred = aida_core::git_ops::store_commit_deferred_to_host(store_path);
-    let local_only = !aida_core::git_ops::has_remote(store_path, "origin") || deferred;
+    let local_only = !aida_core::git_ops::has_remote(store_path, &remote) || deferred;
 
     let max_retries = 3;
     for attempt in 0..max_retries {
@@ -918,7 +940,7 @@ pub(crate) fn auto_allocate_block_inner(
             store_path,
             || -> Result<Option<(String, Option<String>)>> {
                 if attempt > 0 && !local_only {
-                    pull_unless_refused(store_path, &branch)?;
+                    pull_unless_refused(store_path, &remote, &branch)?;
                 }
                 // trace:STORY-B6B1278890774EF993D2EBC327862470-105 | ai:claude
                 aida_core::allocation_authority::refuse_retired_node(store_path, node_id)?;
@@ -949,7 +971,7 @@ pub(crate) fn auto_allocate_block_inner(
                     let raw_hn = hn.to_string();
                     let (block_host, block_owner) =
                         aida_core::git_ops::redacted_identity(&raw_hn, Some(raw_owner.as_str()));
-                    let block = registry.claim_block_with_floor(
+                    let mut block = registry.claim_block_with_floor(
                         node_id.to_string(),
                         block_owner.unwrap_or(raw_owner),
                         block_host,
@@ -957,7 +979,8 @@ pub(crate) fn auto_allocate_block_inner(
                         size,
                         counter_floor,
                     );
-                    registry.save(&blocks_path)?;
+                    stamp_last_claim(&mut registry, &mut block, &authority);
+                    registry.save_claimed(&blocks_path, node_id)?;
 
                     let commit_subject = match reason {
                         BlockClaimReason::OnAcquire => format!(
@@ -1001,7 +1024,7 @@ pub(crate) fn auto_allocate_block_inner(
         let Some(committed_sha) = committed_sha else {
             return Ok(Some(label));
         };
-        match aida_core::git_ops::push_exact(store_path, "origin", &committed_sha, &branch) {
+        match aida_core::git_ops::push_exact(store_path, &remote, &committed_sha, &branch) {
             Ok(true) => {
                 return Ok(Some(label));
             }
@@ -1185,7 +1208,9 @@ pub(crate) fn ensure_block_capacity(
     type_prefix: &str,
 ) -> Result<Option<AutoClaimOutcome>> {
     // trace:BUG-2017 | ai:codex — implicit refill is disabled on WORK.
-    if !aida_core::allocation_authority::resolve(store_path)?.authoritative {
+    // A single-hub clone that reaches the hub may claim like the root.
+    // trace:STORY-B6B1278890774EF993D2EBC327862470-164 | ai:claude
+    if aida_core::allocation_authority::claim_authority(store_path).is_err() {
         return Ok(None);
     }
 
@@ -1290,7 +1315,9 @@ pub(crate) fn claim_first_block(
     size: u32,
 ) -> Result<Option<AutoClaimOutcome>> {
     // trace:BUG-2017 | ai:codex — implicit refill is disabled on WORK.
-    if !aida_core::allocation_authority::resolve(store_path)?.authoritative {
+    // A single-hub clone that reaches the hub may claim like the root.
+    // trace:STORY-B6B1278890774EF993D2EBC327862470-164 | ai:claude
+    if aida_core::allocation_authority::claim_authority(store_path).is_err() {
         return Ok(None);
     }
 
@@ -1300,7 +1327,8 @@ pub(crate) fn claim_first_block(
         return Ok(None);
     }
     let blocks_path = store_path.join("registry").join("blocks.yaml");
-    let has_remote = aida_core::git_ops::has_remote(store_path, "origin");
+    let has_remote = aida_core::allocation_authority::claim_authority(store_path)
+        .is_ok_and(|a| aida_core::git_ops::has_remote(store_path, a.remote()));
 
     // trace:TASK-1930 | ai:agy — A1 lock order: store_write_lock -> blocks.lock,
     // and never hold blocks.lock across network pull/push in auto_allocate_block_inner.
@@ -1398,6 +1426,10 @@ fn rollback_unpushed_claim(
     type_prefix: &str,
 ) {
     let blocks_path = store_path.join("registry").join("blocks.yaml");
+    // trace:STORY-B6B1278890774EF993D2EBC327862470-164 | ai:claude
+    let claim_remote = aida_core::allocation_authority::claim_authority(store_path)
+        .map(|a| a.remote().to_string())
+        .unwrap_or_else(|_| "origin".to_string());
     // trace:TASK-1930 | ai:agy — A1 lock order: store_write_lock -> blocks.lock.
     let _ = aida_core::db::with_store_write_lock(store_path, || -> Result<()> {
         aida_core::BlockRegistry::with_dispense_lock(&blocks_path, || -> Result<()> {
@@ -1424,7 +1456,7 @@ fn rollback_unpushed_claim(
                     "merge-base",
                     "--is-ancestor",
                     "HEAD",
-                    &format!("refs/remotes/origin/{}", branch),
+                    &format!("refs/remotes/{}/{}", claim_remote, branch),
                 ])
                 .map(|o| o.status.success())
                 .unwrap_or(false);

@@ -233,6 +233,7 @@ fn view<'a>(
         node,
         role,
         upstream,
+        hub: None,
     }
 }
 
@@ -459,4 +460,127 @@ fn cycle_message_tells_on_cycle_pools_from_pools_that_reach_one() {
         messages.contains(&"the lineage of pool c reaches a cycle at pool a".to_string()),
         "{messages:?}"
     );
+}
+
+// --- Single-hub mode: virtual hub pools, NotOnHub, materialization ---
+// trace:STORY-B6B1278890774EF993D2EBC327862470-164 | ai:claude
+
+fn hub_view<'a>(
+    blocks: &'a [AgreedIdBlock],
+    root: Option<&'a RootRecord>,
+    on_hub: &'a [AgreedIdBlock],
+) -> LineageView<'a> {
+    LineageView {
+        pools: &[],
+        blocks,
+        root,
+        node: LEAF,
+        role: AllocationRole::Node,
+        upstream: None,
+        hub: Some(HubSpend {
+            hub: "github",
+            on_hub,
+        }),
+    }
+}
+
+#[test]
+fn single_hub_block_on_the_hub_ref_is_spendable_without_a_root_or_upstream() {
+    let blocks = vec![block(LEAF, "BUG", 1, 100, Some("hub:github:BUG"))];
+    let v = hub_view(&blocks, None, &blocks);
+    assert_eq!(v.spendable_block("BUG"), Ok(0));
+    assert!(check_invariants(&[], &blocks, None).is_empty());
+}
+
+#[test]
+fn single_hub_claim_not_on_the_hub_ref_is_not_spendable() {
+    let blocks = vec![block(LEAF, "BUG", 1, 100, Some("hub:github:BUG"))];
+    // Never pushed: the hub's ref has no such claim.
+    let v = hub_view(&blocks, None, &[]);
+    assert_eq!(
+        v.spendable_block("BUG"),
+        Err(Unusable::NotOnHub {
+            type_prefix: "BUG".into(),
+            hub: "github".into()
+        })
+    );
+    // A claim for another hub, or with a different range, is not this one.
+    let other = vec![block(LEAF, "BUG", 1, 100, Some("hub:gitlab:BUG"))];
+    let v = hub_view(&other, None, &other);
+    assert_eq!(
+        v.spendable_block("BUG"),
+        Err(Unusable::NoLineage("BUG".into()))
+    );
+    let moved = vec![block(LEAF, "BUG", 1, 99, Some("hub:github:BUG"))];
+    let v = hub_view(&blocks, None, &moved);
+    assert!(matches!(
+        v.spendable_block("BUG"),
+        Err(Unusable::NotOnHub { .. })
+    ));
+}
+
+#[test]
+fn hub_claims_still_list_overlaps_and_type_mismatches() {
+    let blocks = vec![
+        block(LEAF, "BUG", 1, 100, Some("hub:github:BUG")),
+        block(HUB, "BUG", 50, 150, Some("hub:gitlab:BUG")),
+        block(HUB, "TASK", 1, 10, Some("hub:github:BUG")),
+    ];
+    let conflicts = check_invariants(&[], &blocks, None);
+    assert!(
+        conflicts
+            .iter()
+            .any(|c| matches!(c, LineageConflict::Overlap { .. })),
+        "{conflicts:?}"
+    );
+    assert!(
+        conflicts
+            .iter()
+            .any(|c| matches!(c, LineageConflict::TypeMismatch { .. })),
+        "{conflicts:?}"
+    );
+}
+
+#[test]
+fn with_a_root_an_unmaterialized_hub_pool_is_an_unknown_parent() {
+    let blocks = vec![block(LEAF, "BUG", 1, 100, Some("hub:github:BUG"))];
+    let r = root();
+    let conflicts = check_invariants(&[], &blocks, Some(&r));
+    assert!(matches!(
+        conflicts.as_slice(),
+        [LineageConflict::UnknownParent { .. }]
+    ));
+    // The hub context only applies while no root is recorded.
+    let v = hub_view(&blocks, Some(&r), &blocks);
+    assert!(v.spendable_block("BUG").is_err());
+}
+
+#[test]
+fn materialized_pools_keep_every_block_lineage_and_free_space_excludes_them() {
+    let blocks = vec![
+        block(LEAF, "BUG", 1, 100, Some("hub:github:BUG")),
+        block(HUB, "BUG", 101, 200, Some("hub:github:BUG")),
+        block(LEAF, "TASK", 1, 100, Some("hub:github:TASK")),
+        block(LEAF, "FR", 1, 100, None),
+    ];
+    let pools = pools_to_materialize(&[], &blocks, ROOT);
+    assert_eq!(
+        pools.iter().map(|p| p.pool_id.as_str()).collect::<Vec<_>>(),
+        ["hub:github:BUG", "hub:github:TASK"]
+    );
+    assert!(pools
+        .iter()
+        .all(|p| p.parent_pool_id.is_none() && p.holder_node == ROOT && p.range_start == 1));
+    assert_eq!(pools[0].home_ref, "github/aida-store");
+    let r = root();
+    assert!(check_invariants(&pools, &blocks, Some(&r)).is_empty());
+    for b in blocks.iter().filter(|b| b.pool_id.is_some()) {
+        let chain = lineage(&pools, b.pool_id.as_deref().unwrap()).unwrap();
+        assert_eq!(chain.last().unwrap().holder_node, ROOT);
+    }
+    // A later grant carved from the root pool can never reuse an earlier ID.
+    let free = free_ranges(&pools[0], &pools, &blocks);
+    assert_eq!(free.first(), Some(&(201, u32::MAX)));
+    // Already-recorded pools are not materialized again.
+    assert!(pools_to_materialize(&pools, &blocks, ROOT).is_empty());
 }
