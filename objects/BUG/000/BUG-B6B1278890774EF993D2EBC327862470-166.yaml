@@ -25,11 +25,10 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T06:47:26.114384272Z
-modified_at: 2026-11-01T10:53:26.789651481Z
+modified_at: 2026-11-01T10:53:42.535461665Z
 req_type: Bug
 tags:
 - audit
-- closure:pending
 - config
 - containment
 - vendor:codex
@@ -118,6 +117,10 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a196be-6605-76e2-84ed-51109bc5c666
+  author: joe
+  timestamp: 2026-11-01T10:53:42.789894737Z
+  changes: []
 filed_at:
   code_sha: 6dc7d4977ac5e47c42ddfb26597fe3ec5fb70b60
   branch: main
