@@ -11,7 +11,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T09:05:27.409838422Z
-modified_at: 2026-11-01T09:23:34.259758735Z
+modified_at: 2026-11-01T09:40:06.550890115Z
 req_type: Task
 tags:
 - architecture
@@ -22,6 +22,12 @@ relationships:
 - rel_type: Child
   target_id: 01a1949a-191b-7113-bb06-9bfc8dce2c27
   created_at: 2026-11-01T09:05:39.475174881Z
+comments:
+- id: 01a1967b-0316-7bf0-aba4-a43fa8cbabb4
+  author: mcp
+  content: 'Slice-A implementation in progress: closed `config permissions probe --vendor ...` route, shipped typed descriptor data (including no-native OpenCode), one pinned trusted policy snapshot, descriptor-pinned required synthetic mounts with denials last, strict unshare-all + explicit user/cgroup, cap drop/new-session/FD CLOEXEC hygiene, bounded owned supervisor and readiness/teardown channel. Synthetic fixture exercises actual writes/denials, proc isolation, leaked host socket absence and nested-userns protected-mount refusal; no ordinary vendor path changed or enabled, no containment-applied credit. Real egress/IPC/grant/native/vendor lifecycle remain explicitly unsupported. Direct fixed-lane development checks passed; Cargo targeted compile and fast gates are still running, so no Rust-validation or completion claim yet. CLI status edit hit the known shared-cache sandbox denial; MCP status update succeeded. Preparing a temporary publication checkout because source Git metadata is read-only.'
+  created_at: 2026-11-01T09:40:06.550873731Z
+  modified_at: 2026-11-01T09:40:06.550873731Z
 history:
 - id: 01a1965b-7cae-7260-83dd-5767f6772d90
   author: joe
