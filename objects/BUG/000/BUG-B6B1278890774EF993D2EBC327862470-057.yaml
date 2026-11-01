@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-057
 agreed_id: BUG-2374
 title: Headless rework lane ignores the newest advisor brief comment when an older review verdict prescribes different work (merge-only brief skipped twice)
 description: 'Observed 2026-10-31 (advisor): BUG-HOME-051 lanes launched 12:31 and 13:16 with a spec comment ''ADVISOR BRIEF 13:10 (merge-only, retry): PR-3169 CONFLICTS with main ... git merge origin/main, resolve, push''. Both lanes instead re-ran the earlier review''s bwrap test instructions, reported they could not run cargo in the sandbox, and exited at the old head f976c90 with no merge (logs /tmp/aida_lane_bug-051-merge2.log, /tmp/aida_lane_bug-051-merge4.log). The advisor resolved the conflict by hand. BUG-HOME-021 (lanes read only the description) is completed, so comments are now read, but the brief is not ranked above the stale verdict. Expected: the lane prompt puts the newest advisor brief (ADVISOR BRIEF / REWORK BRIEF comments newer than the last verdict) first and labels older verdict findings as superseded context. Also: a PR with merge conflicts against main should be surfaced to the lane as the first task. Acceptance: (1) prompt-assembly test: a spec with a verdict then a newer brief yields a prompt whose first task is the brief; (2) a conflicting PR adds a ''resolve conflicts with main first'' item; (3) BUG-021''s tests still pass.'
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T21:37:29.201146410Z
-modified_at: 2026-11-01T06:08:25.172396782Z
+modified_at: 2026-11-01T06:08:27.021173534Z
 req_type: Bug
 tags:
 - epic-home-003
@@ -76,6 +76,12 @@ comments:
   created_at: 2026-11-01T06:08:25.077591652Z
   modified_at: 2026-11-01T06:08:25.077591652Z
   session_id: a31b25d9-60a5-4347-a85b-4c74ab06f274
+- id: 01a195b9-3b8d-7983-af7f-fe6050fc31bd
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Ordering, conflict task and tests are sound, but the brief matcher misses the ''ADVISOR REWORK BRIEF'' header the advisor actually writes, so production briefs are still ignored (the BUG-057 failure recurs); CI red at head.. Triage reason: PR-3177 review round 7: CHANGES REQUESTED'
+  created_at: 2026-11-01T06:08:27.021171054Z
+  modified_at: 2026-11-01T06:08:27.021171054Z
+  session_id: a31b25d9-60a5-4347-a85b-4c74ab06f274
 history:
 - id: 01a193e8-1070-7260-a5d0-2973465ae4a2
   author: aida-session-start
@@ -135,6 +141,14 @@ history:
   session_id: 01a195b5baf6
   harness_version: 2.1.316 (Claude Code)
   changes: []
+- id: 01a195b9-3b8d-7983-af7f-fe562d108b2a
+  author: joe
+  timestamp: 2026-11-01T06:08:27.021156272Z
+  session_id: a31b25d9-60a5-4347-a85b-4c74ab06f274
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: b0d9035fbf3276de24d95845c0b50320ead426bd
   branch: main
@@ -147,11 +161,3 @@ implementation_info:
   implemented: true
   implemented_at: 2026-10-31T22:19:24.538102755Z
   implemented_by: joe
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: Ordering, conflict task and tests are sound, but the brief matcher misses the 'ADVISOR REWORK BRIEF' header the advisor actually writes, so production briefs are still ignored (the BUG-057 failure recurs); CI red at head.
-  recovery_hint: address the review findings, move BUG-2374 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-01T06:06:24.512338673Z
