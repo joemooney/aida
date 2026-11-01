@@ -19,12 +19,12 @@ description: |-
   1. Adapt portable skills generated into `.agents/skills/*/SKILL.md` so `AskUserQuestion`, `CLAUDE.md`, `.claude/skills/`, and `/aida-*` references have vendor-neutral / Codex equivalents (`AGENTS.md`, `.agents/skills/`, `$aida-*`).
   2. Parameterize `generate_aida_md_for_agents` (`aida_md.rs`) and `memory_lane_agents_md` (`init_cmd.rs:1137`) so `AGENTS.md` uses `$aida-*` skill syntax and references `.agents/skills/` rather than `.claude/AIDA.md` and `.claude/settings.json`.
   3. Update `looks_like_memory_lane`, `write_memory_lane_scaffolding`, and the seeded onboarding task in `init_cmd.rs` to respect Codex-only agent selection.
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-01T06:48:41.135327120Z
-modified_at: 2026-11-01T08:12:30.668573771Z
+modified_at: 2026-11-01T08:12:33.470066757Z
 req_type: Task
 tags:
 - audit
@@ -47,6 +47,13 @@ history:
   timestamp: 2026-11-01T06:49:04.257668881Z
   session_id: 01a194b1bcfb
   changes: []
+- id: 01a1962a-db3e-7df0-a0f5-b170a589b963
+  author: joe
+  timestamp: 2026-11-01T08:12:33.470063932Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: 6dc7d4977ac5e47c42ddfb26597fe3ec5fb70b60
   branch: main
