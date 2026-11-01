@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T00:55:07.917269049Z
-modified_at: 2026-11-01T01:41:45.544848624Z
+modified_at: 2026-11-01T03:19:48.073936265Z
 req_type: Task
 tags:
 - config
@@ -102,6 +102,14 @@ comments:
     Operator approved proceeding with the task's current in-progress state in this Codex session after I reported the mismatch with the requested approved-state prerequisite. Latest advisor comment accepts the per-vendor native opt-in override; Claude remains AIDA-contained.
   created_at: 2026-11-01T01:36:28.240974741Z
   modified_at: 2026-11-01T01:36:28.240974741Z
+- id: 01a1951e-d469-75d3-8bd9-33b58bdbc9e8
+  author: joe
+  content: |
+    Operator follow-up in the Codex implementer session (2026-10-31 20:06 MST): explicitly requested adding Codex --bg as well, after learning the existing option was Claude-only. This extends TASK-2631 rather than deferring it.
+
+    Implementation sketch: reuse foreground agent-new preflight, worktree/setup receipts, native flags, child grants, identity/env, and actual-PID registry tracking. Codex --bg converts the final argv to detached codex exec --json with null stdin and private 0600 output log. Before acceptance the launcher binds the child grant and lease liveness to the actual PID and registers it; an acceptance failure stops and reaps that child and revokes its newly issued grant. Native remains explicitly not AIDA-contained. Claude --bg keeps its existing supervisor path. Background Codex requires a fresh prompted run; resume/rotation/unprompted combinations refuse. Logs/context remain inspection artifacts, and ordinary registry liveness observes completion. No new daemon or model polling.
+  created_at: 2026-11-01T03:19:48.073936265Z
+  modified_at: 2026-11-01T03:19:48.073936265Z
 history:
 - id: 01a1949a-7ffe-78a3-8011-c5c0c44dc2d3
   author: joe
