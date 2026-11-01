@@ -21,7 +21,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T07:26:20.914223641Z
-modified_at: 2026-11-01T12:41:02.717477854Z
+modified_at: 2026-11-01T13:13:45.892397948Z
 req_type: Bug
 tags:
 - architecture
@@ -413,6 +413,11 @@ comments:
   content: Round 2 rework is on the existing PR3207 branch at f05e1b9. Final bundle read, withdrawn companion-constructor finding respected. Implementing effective explicit-child context integrity through the existing seat probe (public metadata digest, existing grant/current_grant_id validation only), the four accurate CI ratchets, matching CLI recorder execution, and fake Codex protocol support that executes the real authority probe. All 21 unique failures in retained CI run41301174931 classified (4 ratchets, 1 dispatch, 16 lifecycle); original negative/cleanup assertions retained. No BUG2401 concurrent edits, BUG2403 projection changes, review recording, hold clearance or merge. Normal build/fast/compile gates are running; no green claim yet.
   created_at: 2026-11-01T12:41:02.717458156Z
   modified_at: 2026-11-01T12:41:02.717458156Z
+- id: 01a1973e-9ea4-7610-99b0-8b3542f444fa
+  author: mcp
+  content: 'Round 2 checkpoint: make check-ci-fast passed 36 gates; make check-ci-compile passed all workspace test targets (cold checkout, 1649.1s). The actual fresh-authorized dispatch (--no-ship) and all four reported CI ratchets pass in the compiled checkpoint artifact. Real-probe fake launchers exposed missing fixture cwd/store topology: role current intentionally resolves its roster from cwd, while these tests used declarative project roots and bare sibling directories. Correcting only isolated fixture cwd/config links to their existing scratch roster, without modifying seats/grants or weakening preflight. Quoted lowercase CLI error envelopes are normalized to closed diagnostic cause labels. Broader read-only synthetic-HOME failures remain retained, not green. Publication commit exists in authorized /tmp checkout; push awaits local outcomes.'
+  created_at: 2026-11-01T13:13:45.892388484Z
+  modified_at: 2026-11-01T13:13:45.892388484Z
 history:
 - id: 01a19600-c769-7cd0-ba08-8d93975e3e3b
   author: joe

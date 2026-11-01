@@ -13,12 +13,12 @@ description: |
   3. Fixture regression: search for canonical166 returns unrelated057 first and true166 later; only166 selected. Unrelated-only rows give no associated PR so ordinary fresh pickup is not blocked. Existing true-open-PR collision and renamed/native/agreed ID cases still protect active work.
 
   Codex implementation lane, no global config changes. LIGHT one targeted pr_lookup/association test plus fast gates; fixtures only, CI full gate. Independent review before integration. This is a new observed operational defect, not a follow-up to a nonblocking review nit.
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T08:28:54.983776375Z
-modified_at: 2026-11-01T12:58:47.469563607Z
+modified_at: 2026-11-01T13:03:37.513388544Z
 req_type: Bug
 tags:
 - forge
@@ -123,6 +123,13 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a19735-5629-7010-98cf-befcd5935840
+  author: aida-orchestrator
+  timestamp: 2026-11-01T13:03:37.513406123Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: ac1e318069f96c3f7e35be7ee0408f2ff4f5f284
   branch: main
@@ -130,3 +137,11 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: 9d26f95d2b3
   vendor: codex
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: Shared lookup and typed failures improved; commit-page completeness and aggregate timeout remain incomplete.
+  recovery_hint: address the review findings, move BUG-B6B1278890774EF993D2EBC327862470-173 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-11-01T13:03:37.513388544Z
