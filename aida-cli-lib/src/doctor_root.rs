@@ -526,12 +526,21 @@ pub(crate) fn detect_store_missing_staging_ignores(project_root: &std::path::Pat
 /// Whether a store-worktree-relative path is a per-clone runtime file that must
 /// never be tracked on the orphan `aida-store` branch: `.aida/node.toml`,
 /// `.aida/dispenser.toml`, any `.aida/*.lock`, or any `.aida/cache.db*`
-/// (`cache.db`, `cache.db-journal`, `cache.db-wal`, `cache.db-shm`). Scoped to
-/// the top-level `.aida/` dir only — never matches nested paths or shared,
+/// (`cache.db`, `cache.db-journal`, `cache.db-wal`, `cache.db-shm`), plus a
+/// `registry/*.lock` dispense lock. Scoped to the top-level `.aida/` and
+/// `registry/` dirs only — never matches nested paths or shared,
 /// legitimately-tracked store files (`config.toml`, `metadata.yaml`, the
 /// `objects/`/`registry/` trees, requirement yaml).
 // trace:BUG-563 | ai:claude
 pub(crate) fn is_store_tracked_runtime_path(path: &str) -> bool {
+    // `registry/<name>.lock` (the agreed-id dispense lock, `blocks.lock`, sits
+    // beside `blocks.yaml`) is per-process runtime too: untracked and not
+    // ignored, it dirties the store and `aida remote reconcile --execute`
+    // refuses after the agreed-id backfill takes it.
+    // trace:BUG-2378 | ai:claude
+    if let Some(name) = path.strip_prefix("registry/") {
+        return !name.contains('/') && name.ends_with(".lock");
+    }
     // Only files directly under a top-level `.aida/` dir.
     let Some(name) = path.strip_prefix(".aida/") else {
         return false;

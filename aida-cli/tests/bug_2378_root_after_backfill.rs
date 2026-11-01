@@ -66,9 +66,12 @@ impl Fixture {
         // first `aida add` (an origin remote exists) commits them, the
         // backfill's identity re-point dirties the store worktree, and
         // `aida remote reconcile --execute` refuses the uncommitted change.
+        // `registry/*.lock` is the dispense lock the backfill takes beside
+        // `registry/blocks.yaml`; `aida doctor` writes it into a store's
+        // runtime ignores (and `aida init` covers it with `*.lock`).
         fs::write(
             f.store.join(".gitignore"),
-            ".aida/node.toml\n.aida/dispenser.toml\n.aida/*.lock\n",
+            ".aida/node.toml\n.aida/dispenser.toml\n.aida/*.lock\nregistry/*.lock\n",
         )
         .unwrap();
         // The store carries an older clone's legacy node, like node 1 on
@@ -258,6 +261,19 @@ fn bug_2378_root_registered_by_label_verifies_identifies_and_syncs_after_backfil
     let verify = f.aida_ok(&["db", "block", "verify"]);
     assert!(!verify.contains("not registered"), "{verify}");
     assert!(!verify.contains(&format!("node `{node}` owns")), "{verify}");
+    // The retired node 7 owns no block by design; under blocks-only it is
+    // still not a "registered node with no claimed block".
+    let config_path = f.root.join(".aida/config.toml");
+    let config_before = fs::read_to_string(&config_path).unwrap();
+    fs::write(
+        &config_path,
+        format!("{config_before}[id_format]\npolicy='blocks-only'\n"),
+    )
+    .unwrap();
+    let strict = f.aida_ok(&["db", "block", "verify"]);
+    assert!(strict.contains("blocks-only"), "{strict}");
+    assert!(!strict.contains("with no claimed block"), "{strict}");
+    fs::write(&config_path, config_before).unwrap();
 
     // (2) This clone's identity is the root node, never the retired node 7.
     let shown = f.aida_ok(&["node", "show"]);

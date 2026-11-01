@@ -9079,6 +9079,9 @@ const STORE_RUNTIME_GITIGNORE_PATTERNS: &[&str] = &[
     ".aida/cache.db-journal",
     ".aida/cache.db-shm",
     ".aida/cache.db-wal",
+    // The agreed-id dispense lock beside `registry/blocks.yaml`.
+    // trace:BUG-2378 | ai:claude
+    "registry/*.lock",
 ];
 
 fn ensure_store_tracked_runtime_gitignore(store_worktree: &std::path::Path) -> Result<bool> {
@@ -13861,6 +13864,10 @@ User content.
         assert!(is_store_tracked_runtime_path(".aida/cache.db-journal"));
         assert!(is_store_tracked_runtime_path(".aida/cache.db-wal"));
         assert!(is_store_tracked_runtime_path(".aida/cache.db-shm"));
+        // BUG-2378: the dispense lock beside blocks.yaml, one level only.
+        assert!(is_store_tracked_runtime_path("registry/blocks.lock"));
+        assert!(!is_store_tracked_runtime_path("registry/blocks.yaml"));
+        assert!(!is_store_tracked_runtime_path("registry/sub/blocks.lock"));
         // Shared, legitimately-tracked store files never match.
         assert!(!is_store_tracked_runtime_path(".aida/config.toml"));
         assert!(!is_store_tracked_runtime_path("metadata.yaml"));

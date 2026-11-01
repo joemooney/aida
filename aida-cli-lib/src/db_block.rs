@@ -599,10 +599,14 @@ pub(crate) fn handle_block_command(cmd: &BlockCommand, store_path: &std::path::P
                 .filter(|id| !known.contains(&id.to_ascii_lowercase()))
                 .map(|s| s.as_str())
                 .collect();
-            let nodes_without_block: Vec<&str> = registered
+            // A retired row (the backfill retires the legacy node) owns no
+            // block by design, so it never counts as a node missing one.
+            // trace:BUG-2378 | ai:claude
+            let nodes_without_block: Vec<&str> = nodes_registry
+                .nodes
                 .iter()
-                .filter(|id| !block_owners.contains(*id))
-                .map(|s| s.as_str())
+                .filter(|n| n.retired_at.is_none() && !block_owners.contains(&n.id))
+                .map(|n| n.id.as_str())
                 .collect();
 
             // Whether to flag nodes_without_block as a problem depends on
