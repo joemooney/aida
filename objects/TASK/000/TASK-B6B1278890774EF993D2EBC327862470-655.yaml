@@ -11,7 +11,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T09:05:27.409838422Z
-modified_at: 2026-11-01T12:55:17.638944348Z
+modified_at: 2026-11-01T12:56:04.970644357Z
 req_type: Task
 tags:
 - architecture
@@ -76,6 +76,11 @@ comments:
   content: 'B1 root-cause evidence now reproduced without FD payload access: diagnostic CI 41305313299 / lib-0 job124844394775 reports Python3.14.4 FD3 regular/read-only FD_CLOEXEC (F_GETFD=1,F_GETFL=32768) at startup and failure. With extracted Ubuntu bwrap0.11.1-1ubuntu0.3 + Python3.14.4 + libffi3.5.2-4, a private /tmp reproduction identifies that FD as the system libffi shared library opened by `import ctypes` for static trampolines; same failure under bwrap0.9.0. This is post-exec library allocation, not evidence of inherited host socket access. Production fixed lane now loads ctypes only in its existing forked nested-userns worker, where FFI is actually used: no descriptor is sanitized/closed inside the lane and no channel/type is waived. Original lane/reaper assertions remain; new entry assertion plus non-CLOEXEC synthetic regular-file/directory controls join the original socket control at the actual outer bwrap exec boundary. Direct static-trampoline reproduction then passes both bwrap versions (66 checks). Required local task_2705_ command with both live envs is queued behind the once-invoked actual make check-ci-compile. Full help regeneration passed and is public in5b49cba0; real binary audit generation/test and touched/fast gates still pending. No final acceptance claim.'
   created_at: 2026-11-01T12:29:21.397587567Z
   modified_at: 2026-11-01T12:29:21.397587567Z
+- id: 01a1972e-6e6a-7051-a8bd-b8c350d2f4a5
+  author: mcp
+  content: 'Rework disposition checkpoint: TASK is Needs Attention, not Done. Formal post_punt write was rejected with `MCP tool call requires approval, but approval policy is never`; no borrowed parent grant or alternate punt writer used. Preserve advisor fork in PR#3205: CI run41307852175 / lib-0 job124851844485 at5f026b97 measures nested_stage=unshare, errno=1 (EPERM) before mount_positive; lane entry/file/dir/socket/reaper FD assertions now pass. The no-new-host/user-permissions ruling prevents enabling a runner prerequisite or skipping the C12 test without a fresh advisor ruling. Existing gates-only CI changes the AppArmor userns sysctl; whether to establish that prerequisite for lib-0 needs a precise advisor decision, with AppArmor cause still an inference. Public head acb177db657a03c5057ecfc9572f7a6b775ac768 additionally fixes structured probe refusal output via existing TypedPayloadEmitted (nonzero exit, one JSON object). Actual latest-head CI cli-0 job124852420977 passed the BUG1502 real-binary audit. Required-live local task_2705_ ran six tests with both flags: 6 passed; fast gates36 passed; actual make check-ci-compile passed. Initial make test-touched failed before tests with slot-wrapper exit200; serial retry is now compiling normally. No test assertion/skip, FD-type waiver, permission/sysctl change, ordinary backend enablement, own review/merge or parent completion.'
+  created_at: 2026-11-01T12:56:04.970634458Z
+  modified_at: 2026-11-01T12:56:04.970634458Z
 history:
 - id: 01a1965b-7cae-7260-83dd-5767f6772d90
   author: joe
