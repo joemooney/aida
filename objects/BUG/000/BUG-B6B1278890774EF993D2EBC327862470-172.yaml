@@ -21,7 +21,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T07:26:20.914223641Z
-modified_at: 2026-11-01T14:53:23.531131302Z
+modified_at: 2026-11-01T14:55:30.155627845Z
 req_type: Bug
 tags:
 - architecture
@@ -424,6 +424,16 @@ comments:
     PROXY EVIDENCE UPDATE: Read FULL fresh independent reviewer17 REQUEST_CHANGES /tmp/aida-review3207-2f9-result.md, attested PR3207 ledger13/GH6559301737. Root executed BOTH requested exact current-artifact HOST tests outside native outer socket mask/PID namespace, serially, verified byteidentical source2f9c56bb56bb5790e6a52d1b423ef0ef25f992aa and test SHA256e07e340f1633e5ff1f601f3809febabf882af7c4b64aab2cc558dab4cfa45981/matching CLI d2d97c761eba8efd39696c33c90d341e8c99d797949b64aa08c3ebb9468a0253. Both actual native Codex core/delegated-role/recorder fixture and exact lifecycle cleanup fixture PASSED1/0 each, noSKIP. Real installed Codex, no model call. Fresh0700fake HOME/AIDA_HOME/CODEX_HOME/XDG/TMP paths, no inherited role/selector/context/auth, isolated ANONYMOUS sessionkeyring in short-lived child WITHOUT linking previous host ring; no realkeys read, socket chmod, policy/trust waiver or production-grant reuse. Safe manifest /tmp/aida-2398-2f9-host-proof.json; full bounded logs /tmp/aida-2398-host-2f9-fl_koo_3/native.log and cleanup.log. This closes the newhead model-FREE native HOST evidence gap, NOT model-tool/full native-parity completion. Required Build remains RED for actual missing hidden-option help snapshot entry. Same-PR rework still required before freshdelta review and exactheadCI. All46localfailures remain a failed run; reviewer17 reconciles all against currentCI, not blanketwaiver. Preserve full acceptance/security floors and existing verdict/hold until normal new approval.
   created_at: 2026-11-01T14:53:23.531131302Z
   modified_at: 2026-11-01T14:53:23.531131302Z
+- id: 01a1979b-c2f9-7bc3-ae40-92fe2a19e9e6
+  author: joe
+  content: |-
+    Advisor ruling: ADVISOR REWORK sameBUG2398 canonicalBUG-b6b1278890774ef993d2ebc327862470-172 SAMEPR3207/samebranchbug-b6b1278890774ef993d2ebc327862470-172 at2f9c56bb56bb5790e6a52d1b423ef0ef25f992aa. FULL freshSTRICT reviewer17 /tmp/aida-review3207-2f9-result.md attestedPR3207ledger13/GH6559301737. Root verified exactsource role_cmd_args122 vs golden commandcatalog and actualCI41312920588/job124866879942 failure. Remaining CODE fix ONLY legitimate hidden probe expect-context-sha256 addition is MISSINGfromgoldencli_help_snapshot. Existing render_help_snapshot explicitlyincludes hiddenargs61-64. Regenerate/review intendedsnapshot throughEXISTINGworkflow, keephelp_surface_matches_golden_snapshot/assertions/inventories/authoritychecks. No hide/testwaiver/newprotocolpolicy.
+    Acceptanceevidence blockNOWCLOSED atthishead: actualcurrentartifact HOST native+cleanup exacttests both1PASS0FAIL/noSKIP, verified sourcepublic2f9/testbinarye07e340f...45981/matchingCLId2d97c...a0253. /tmp/aida-2398-2f9-host-proof.json; logs /tmp/aida-2398-host-2f9-fl_koo_3/native.log cleanup.log. Fakeprivatehomes/noinheritedcontext/freshanonymouschildsessionkeyringwithoutoldringlink, no realkeys/socketchmod/policytrustwaiver. Model-FREEtestonly, no model-tool/fullparitycredit. Newdeltaonlygoldensnapshot mayretainthissourceevidenceif reviewer independentlyverifies runtime/testcodeunchanged; no oldf05orCIcodexSKIPcredit. Rootcanonical evidencecommentrecorded.
+    RetainALL originalfullAC/B1B4/expandedpositiveconsumers, checksumNONAUTHORITY/ADR66residual/companionrefusal/ungrantedNONAUTHORITATIVEartifactcompat/invalidpresentrefusal/durableindependence/record-dispatch-actionability-ship-holdfloors. PreviouspreliminarycompanionconstructorfindingWITHDRAWN. No reimplementationofacceptedruntime/no broadrefactor. All46failedlocaltouchedremainfailed; reviewer17currentCIreconciliationnotwaiver. Existing4story1917BUG2401fixtureworkSEPARATEserializedafter2398. BUG2403receiptprojectionblockedafter2398, notpartthissnapshotfix.
+    Oldlease01a197150ed0supportedendedonlyAFTER14filesbyteequalpublic2f9archive0600 /tmp/aida-BUG2398-2f9-reviewed-source.tar andhostproofcaptured. Keep sourcebaselinePUBLIC2f9/SAMEPR, normalnonforcedfetch+normalpush, noforce/reset/newbranch. Native.gitRO approvedbounded/tmp publicationcheckout onlyexactbytes/stablepatch/baseidentity thennormalpushSAMEbranch, notproductfix.
+    LocalgateONEfocusedexistinghelp_snapshot test+make check-ci-fast, normalCargo AIDA_CARGO_TIMEOUT=10m backgroundiflong. No newbroadtouched/compile obligationforonegolden-onlydelta unlessadditionalsharedinfra/>10fileschanges; don'trepeatfullsuite. No slotbypass/unfilteredlib/outertimeout/repeatedshortbuild. PushsamePRthenreportfullhead/diff/actualfocused+fast+CIstatus. FreshindependentDELTAreviewstillrequired; noownapproval/merge/holdclear. If anyunexpectednoncatalogsourcechange required,reportbeforeexpanding.
+  created_at: 2026-11-01T14:55:30.041211502Z
+  modified_at: 2026-11-01T14:55:30.041211502Z
 history:
 - id: 01a19600-c769-7cd0-ba08-8d93975e3e3b
   author: joe
