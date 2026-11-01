@@ -18,7 +18,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-01T04:46:21.481096158Z
-modified_at: 2026-11-01T06:58:26.736514450Z
+modified_at: 2026-11-01T15:12:37.744608193Z
 req_type: Story
 tags:
 - mail-wake
@@ -33,6 +33,13 @@ comments:
   content: 'HANDOFF LIVE ACTION: mail-wake user service installed through the operator-provided terminal runner, pinned to native codex-cli 0.166.0 at /home/joe/.codex/packages/app-server-daemon/current/bin/codex. Installation exposed BUG-2397 (invalid quoted WorkingDirectory plus false success); the managed unit was backed up and narrowly repaired. systemd verification/restart succeeded; is-active returned active at 2026-11-01T06:57Z. This completes only the service setup handoff action; this story still needs all-session arming, doctor behavior and end-to-end fixture implementation.'
   created_at: 2026-11-01T06:58:26.736514450Z
   modified_at: 2026-11-01T06:58:26.736514450Z
+- id: 01a197ab-7170-73f3-b643-2fa71b5f4f65
+  author: joe
+  content: |
+    PROXY LIVE EVIDENCE 2026-11-01~08:13MST: agy1 request054e3cef (SPIKE710complete) highlighted rootcodex-advisor05 WAKE=-. Actualprojectserviceaida-mail-wake-2b20e8a3bd225e89.service installedANDactive/running/Resultsuccess, verified normaluserbus with XDG_RUNTIME_DIR=/run/user/1000 DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus (defaulttoolenvmissingthosegaveNoMedium,notservicefailure). Rootrowlackedwake;29alreadyarmed. SUPPORTEDown-selfarmSUCCEEDED via aida --format toon agent wake arm codex-advisor-05, owncontextsame-shell/realhandlerrequire_wake_authority; no registry/manualedit/identityrewrite/newservice/timer. Actualqueueacceptance/modelturn/inboxACKremainseparate/unproven.
+    Concrete EXISTING-STORY recovery defect: lib_part1.rs::rewrite_agent_default_new KNOWN_SUBCOMMANDS1444..1450 omits hidden Wake despite AgentCommand::Wake being real agent_launch_args1028/agent_launch369. Thus documented aida agent wake arm/retire rewrites to agent new wake and exit2 unknownsubcommand. aida agent help wake renders real command; leading GLOBAL --format toon prevents erroneousrewrite and executescorrecthandlerWITHallownershipchecks. Bundle parser passthrough+actualCLIregression into this EXISTINGSTORY2256, notnewfollowupchain; retaindefault-new,hiddenwake,self-vs-other/humanauthority andexactthreadbinding floors. Do not claim currentserviceabsence fromWAKE=- or idle fromthatcolumn. No sourceedited byroot.
+  created_at: 2026-11-01T15:12:37.744608193Z
+  modified_at: 2026-11-01T15:12:37.744608193Z
 history:
 - id: 01a1956e-3853-7f43-9567-c23a3a329cab
   author: joe
