@@ -27,7 +27,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T23:03:29.192827531Z
-modified_at: 2026-11-01T16:53:12.397197456Z
+modified_at: 2026-11-01T17:10:58.229330013Z
 req_type: Story
 tags:
 - docs
@@ -196,6 +196,11 @@ comments:
   content: 'PROXY PREPARATION DECISION 2026-11-01: accept integrator14 fork B ONLY for exact existing .codex/config.toml91bytes SHA96678b647e07df8ac125d3f98a4170f006705fcaf56f945a738fba5105fa3a76 mode0644/inode39483261. Preserve this user/runtime dirt; refuse every other dirty tracked/untracked source path. Root HOST evidence /tmp/aida-3194-HOST-preservation-evidence-0952.json confirms committed member/main file is identical, normal train builds committed object trees, normal postpull uses git merge --ff-only, merge.autostash absent, hooksPath exact installed hooks and postmerge SHA91fdd98d875678599db8bcf5a87c22c2e555082cee53bf06d7b9e42a710bdeda exits while target/debug/examples/agent_skill_pack is nonexecutable. This replaces only the private extra whole-source-clean preparation premise, not any production gate or root author disqualification. Fresh independent preparer must validate complete path/config/hook preservation, refuse changed pins/config override environment/other writers, retain exact bytes/mode/identity, require actual newly independent genuineTTY integrator grant plus all normal train admission/review/corpus/hold/CI/merge gates, and prepare fresh unique single-car3194 body for full root review before exclusive authorized HOST placement. Do not run oldbody or drop postpull, stash/reset/commit/delete config, change hooks or clear/include3207. Evidence is current read-only fact, not landing/whole-HOST exclusivity proof; revalidate before execution.'
   created_at: 2026-11-01T16:53:12.397197456Z
   modified_at: 2026-11-01T16:53:12.397197456Z
+- id: 01a19817-c9b5-7ee0-a792-332ed88024b2
+  author: joe
+  content: 'HOST preservation clarification: actual new15 body was FULLY root-reviewed but remains UNEXECUTED/UNPLACED. HOST read-only guard refused because exe/cmdline access is protected for four ordinary trusted HOST services: user systemd, sd-pam, gpg-agent, ssh-agent; exact UID/PID/start/comm captured in /tmp/aida-3194-HOST-census-clarification.json. No service content/keys/argv were read or authority changed. ADR66 ordinary trusted HOST-service residual applies; requiring these services to be inspectable or stopped adds no product gate. A fresh independent preparer may recognize ONLY these exact pinned existing service identities before exe read, refuse reused/unknown/unreadable identities, and preserve actual project/source-writer exclusion plus all production floors. Old authorship manifest bytes are an exact current prefix; only2 appended BUG2385 scope159 rows differ, unrelated to3194/3207. Refresh ONLY through renewed independent review/current provenance, never in-loop. Normal member/source/CI/review/grant/hold/policy/code-config preservation gates remain mandatory. Keep unique fresh batch and root full body review; no oldbatch reuse, occupied slot overwrite, key/grant borrowing, service termination or sourceconfig editing. This is operational preparation correction, not implementation/merge authority.'
+  created_at: 2026-11-01T17:10:58.229330013Z
+  modified_at: 2026-11-01T17:10:58.229330013Z
 history:
 - id: 01a19517-853a-7dc1-addd-62b1b73de3be
   author: joe
