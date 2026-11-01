@@ -49,6 +49,9 @@ pub(crate) struct GateEvent {
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(tag = "kind", rename_all = "kebab-case")]
 pub(crate) enum EventBody {
+    /// Invocation evidence only. Never deserialized into merge authorization.
+    // trace:BUG-b6b1278890774ef993d2ebc327862470-179 | ai:codex
+    TrainCoverage { proof: serde_json::Value },
     /// A review verdict: the full record exactly as the verdict writer built
     /// it, so `parse_recorded_verdict` reads it unchanged.
     Verdict { record: JsonObj },
