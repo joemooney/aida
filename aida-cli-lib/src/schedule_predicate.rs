@@ -44,6 +44,9 @@ pub(crate) enum Field {
     QueueDrainModeReady,
     /// `queue.depth` — queue entries routed to the seat (count).
     QueueDepth,
+    /// Project-wide local and global feature queues; unknown evidence refuses.
+    // trace:STORY-2220 | ai:codex
+    ProjectWorkIdle,
     /// `sessions.finished_unreaped` — finished sessions `aida session reap`
     /// would tear down (count).
     SessionsFinishedUnreaped,
@@ -83,12 +86,13 @@ pub(crate) enum FieldType {
 
 impl Field {
     /// Every field, in documentation order.
-    pub(crate) const ALL: [Field; 12] = [
+    pub(crate) const ALL: [Field; 13] = [
         Field::MailUnread,
         Field::MailOldestUnreadAge,
         Field::DrainLockFree,
         Field::QueueDrainModeReady,
         Field::QueueDepth,
+        Field::ProjectWorkIdle,
         Field::SessionsFinishedUnreaped,
         Field::CiRedPrs,
         Field::FindingsOpen,
@@ -106,6 +110,7 @@ impl Field {
             Field::DrainLockFree => "drain.lock_free",
             Field::QueueDrainModeReady => "queue.drain_mode_ready",
             Field::QueueDepth => "queue.depth",
+            Field::ProjectWorkIdle => "queue.project_work_idle",
             Field::SessionsFinishedUnreaped => "sessions.finished_unreaped",
             Field::CiRedPrs => "ci.red_prs",
             Field::FindingsOpen => "findings.open",
@@ -119,9 +124,10 @@ impl Field {
     pub(crate) fn field_type(self) -> FieldType {
         match self {
             Field::MailOldestUnreadAge => FieldType::Duration,
-            Field::DrainLockFree | Field::MandateDriveActive | Field::MandateDispatchActive => {
-                FieldType::Flag
-            }
+            Field::DrainLockFree
+            | Field::ProjectWorkIdle
+            | Field::MandateDriveActive
+            | Field::MandateDispatchActive => FieldType::Flag,
             _ => FieldType::Count,
         }
     }
@@ -213,6 +219,7 @@ pub(crate) struct Snapshot {
     pub drain_lock_free: bool,
     pub queue_drain_mode_ready: i64,
     pub queue_depth: i64,
+    pub project_work_idle: Option<bool>,
     pub sessions_finished_unreaped: i64,
     pub ci_red_prs: i64,
     pub findings_open: i64,
@@ -233,6 +240,7 @@ impl Snapshot {
             Field::DrainLockFree => Value::Flag(self.drain_lock_free),
             Field::QueueDrainModeReady => Value::Count(self.queue_drain_mode_ready),
             Field::QueueDepth => Value::Count(self.queue_depth),
+            Field::ProjectWorkIdle => Value::Flag(self.project_work_idle.unwrap_or(false)),
             Field::SessionsFinishedUnreaped => Value::Count(self.sessions_finished_unreaped),
             Field::CiRedPrs => Value::Count(self.ci_red_prs),
             Field::FindingsOpen => Value::Count(self.findings_open),
@@ -251,24 +259,29 @@ pub(crate) fn eval(expr: &Expr, snap: &Snapshot) -> Result<bool> {
     Ok(match expr {
         Expr::And(a, b) => eval(a, snap)? && eval(b, snap)?,
         Expr::Or(a, b) => eval(a, snap)? || eval(b, snap)?,
-        Expr::Term(t) => match (snap.get(t.field), t.value) {
-            (Value::Count(l), Value::Count(r)) => t.op.apply(l, r),
-            (Value::Duration(l), Value::Duration(r)) => t.op.apply(l, r),
-            (Value::Flag(l), Value::Flag(r)) => match t.op {
-                Op::Eq => l == r,
-                Op::Ne => l != r,
-                _ => bail!(
-                    "predicate field `{}` is a flag; only == and != apply",
-                    t.field.name()
+        Expr::Term(t) => {
+            if t.field == Field::ProjectWorkIdle && snap.project_work_idle.is_none() {
+                bail!("project feature-work queue evidence is unknown");
+            }
+            match (snap.get(t.field), t.value) {
+                (Value::Count(l), Value::Count(r)) => t.op.apply(l, r),
+                (Value::Duration(l), Value::Duration(r)) => t.op.apply(l, r),
+                (Value::Flag(l), Value::Flag(r)) => match t.op {
+                    Op::Eq => l == r,
+                    Op::Ne => l != r,
+                    _ => bail!(
+                        "predicate field `{}` is a flag; only == and != apply",
+                        t.field.name()
+                    ),
+                },
+                (have, want) => bail!(
+                    "predicate field `{}` is {:?} but the literal is {:?}",
+                    t.field.name(),
+                    have,
+                    want
                 ),
-            },
-            (have, want) => bail!(
-                "predicate field `{}` is {:?} but the literal is {:?}",
-                t.field.name(),
-                have,
-                want
-            ),
-        },
+            }
+        }
     })
 }
 

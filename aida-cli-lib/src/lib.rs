@@ -179,6 +179,8 @@ mod autoprogress;
 mod do_dispatch;
 mod doc_cmd;
 mod docs;
+// trace:STORY-2220 | ai:claude
+mod docs_sweep;
 // trace:STORY-B6B1278890774EF993D2EBC327862470-105 | ai:claude
 mod doctor_backfill_agreed;
 mod doctor_cmd;
