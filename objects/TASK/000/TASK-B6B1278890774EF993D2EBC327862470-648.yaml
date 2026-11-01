@@ -10,12 +10,12 @@ description: |
   1. Add the OpenAI endpoints Codex needs to `[contained] allowed_hosts`, verified against the installed Codex CLI with both API-key and ChatGPT sign-in auth (at least api.openai.com; confirm whether chatgpt.com and auth.openai.com are needed).
   2. Resolve the vendor/containment contradiction until vendor-neutral containment lands: either the default vendor is one containment can launch, or containment is scoped so Codex launches with the contained-autonomous posture (STORY-1124 / ADR-31). The operator chooses which; record the choice in the config comment.
   3. `aida doctor` flags a project whose default `[agents] vendor` cannot launch under its own containment setting, naming both settings and the fix. Test with a fixture config.
-status: InProgress
+status: Done
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T00:55:07.917269049Z
-modified_at: 2026-11-01T07:08:38.087706314Z
+modified_at: 2026-11-01T07:11:51.546658353Z
 req_type: Task
 tags:
 - closure:pending
@@ -175,6 +175,11 @@ comments:
   content: 'ADVISOR POST-MERGE GATE: all PR-3188 CI including Build is green at 74daab5561a8a8dcdd289642aaee01d0d1cce689 and the existing serial ship is now running. Added closure:pending so merge does not claim the separately required first live authenticated native Codex lane has already run. After merge, rebuild/promote clean main, verify trusted native posture and Claude parity display, launch BUG-2397 as the first Codex lane, record its actual authenticated model execution, then resolve this post-merge gate. No duplicate ship or bypass started.'
   created_at: 2026-11-01T07:08:38.087706314Z
   modified_at: 2026-11-01T07:08:38.087706314Z
+- id: 01a195f3-4912-7613-a60d-db28fbc9cd51
+  author: aida-auto-bump
+  content: '[aida:closure-held] Code merged to the default branch (commit 53c8970), but completion is held at Done: the spec''s own declared closure criteria are unmet: "tag `closure:pending` is set". Whoever owns those criteria (the spec''s owner or the advisor) resolves them by checking the box in the spec''s Closure section, or removing the tag, via `aida edit TASK-2631 --description ...` / `aida edit TASK-2631 --remove-tag closure:pending`. The next `aida pull` completes it once nothing holds it; to replay by hand, run `aida db reconcile-status --spec TASK-2631 --since 53c8970^`. If the blockers form a cycle, or you decide to ship regardless, a human runs `aida edit TASK-2631 --status completed`. (merge sha: 53c89700b4da50b5593a2079ed4cc3abaae5cdfe)'
+  created_at: 2026-11-01T07:11:51.570281943Z
+  modified_at: 2026-11-01T07:11:51.570281943Z
 history:
 - id: 01a1949a-7ffe-78a3-8011-c5c0c44dc2d3
   author: joe
@@ -242,6 +247,13 @@ history:
   author: joe
   timestamp: 2026-11-01T07:08:36.650342226Z
   changes: []
+- id: 01a195f3-4912-7613-a60d-db1592cca175
+  author: aida-auto-bump
+  timestamp: 2026-11-01T07:11:51.570252710Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 filed_at:
   code_sha: 43d9f95803036ec22350e5a210d8c1cae20b9fe5
   branch: main
