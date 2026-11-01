@@ -19159,13 +19159,44 @@ Inspect the effective launch permission posture for managed agents
 Usage: aida config permissions [OPTIONS] <COMMAND>
 
 Commands:
-  show  Show the resolved per-agent posture and diagnostics. Read-only
-  set   Apply a named agent permission posture to local or user config files. `bypass` must be
-        confirmed by a person at an interactive terminal; it is refused when stdin or stdout is not
-        a terminal
-  help  Print this message or the help of the given subcommand(s)
+  probe  Run the fixed, model-free filesystem/supervisor containment tracer. This does not enable
+         vendor launches or change permission policy
+  show   Show the resolved per-agent posture and diagnostics. Read-only
+  set    Apply a named agent permission posture to local or user config files. `bypass` must be
+         confirmed by a person at an interactive terminal; it is refused when stdin or stdout is not
+         a terminal
+  help   Print this message or the help of the given subcommand(s)
 
 Options:
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida config permissions probe
+Run the fixed, model-free filesystem/supervisor containment tracer. This does not enable vendor
+launches or change permission policy
+
+Usage: aida config permissions probe [OPTIONS] --vendor <VENDOR>
+
+Options:
+      --vendor <VENDOR>
+          
+
+      --json
+          
+
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
           compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
@@ -48658,6 +48689,43 @@ Working on aida itself
         "name": "help",
         "takes_value": false,
         "help": "Print help (see more with '--help')"
+      }
+    ],
+    "hidden": true
+  },
+  {
+    "path": [
+      "aida",
+      "config",
+      "permissions",
+      "probe"
+    ],
+    "about": "Run the fixed, model-free filesystem/supervisor containment tracer. This does not enable vendor launches or change permission policy",
+    "flags": [
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "json",
+        "takes_value": false,
+        "help": ""
+      },
+      {
+        "name": "vendor",
+        "takes_value": true,
+        "help": ""
       }
     ],
     "hidden": true

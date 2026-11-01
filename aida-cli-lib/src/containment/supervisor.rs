@@ -68,6 +68,13 @@ def fd_metadata():
                   else 'socket' if stat.S_ISSOCK(mode) else 'pipe' if stat.S_ISFIFO(mode) else 'other')
             # Only fixed kernel-generated labels are safe to publish verbatim.
             label=target if target in ('anon_inode:[eventfd]', 'anon_inode:[signalfd]', 'anon_inode:[eventpoll]') else '<redacted>'
+            # Publish only a fixed system-library origin, never arbitrary paths.
+            if target.startswith('/usr/lib/') and target.rsplit('/',1)[-1].startswith('libffi.so.'):
+                label='system-libffi-trampoline'
+            elif target.startswith('/usr/lib/locale/'):
+                label='system-locale'
+            elif target == '/proc/'+str(os.getpid())+'/status':
+                label='own-proc-status'
             result.append(dict(fd=n, kind=kind, target=label,
                                fd_flags=fcntl.fcntl(n,fcntl.F_GETFD),
                                status_flags=fcntl.fcntl(n,fcntl.F_GETFL)))
