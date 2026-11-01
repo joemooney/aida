@@ -27,7 +27,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T23:03:29.192827531Z
-modified_at: 2026-11-01T06:16:42.544475561Z
+modified_at: 2026-11-01T06:16:43.550911193Z
 req_type: Story
 tags:
 - docs
@@ -79,6 +79,31 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: CI red at head (5 jobs, all ratchet/inventory gates this PR trips); PR-mode light-review routing unimplemented; PR-mode/mail/run-state paths untested. Triage reason: PR-3194 review: CHANGES REQUESTED'
   created_at: 2026-11-01T06:16:42.544473242Z
   modified_at: 2026-11-01T06:16:42.544473242Z
+  session_id: a31b25d9-60a5-4347-a85b-4c74ab06f274
+- id: 01a195c0-cea1-7f62-9dd5-ae84b7fa90ac
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (STORY-2220):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: f8cac25dad04
+    Recorded: 2026-11-01T06:07:27.309786506+00:00
+    Findings:
+    1. CI lib-0 task_2001_every_host_remote_call_routes_its_credentials: docs_sweep.rs:1461 (git fetch origin), :1519 and :1524 (git push origin) contact a remote via host_git_command without .remote_credentials(dir, remote); route credentials (or justify with remote-creds-ok).
+    2. CI lib-1 bug_1723 every_config_toml_site_is_inventoried: docs_sweep.rs:148 load_config reads .aida/config.toml ([docs_sweep]) and is not in the BUG-1723 config-trust inventory; add the site and classify mode/max_files/regenerate (regenerate runs shell commands from config — must be policy/primary-trusted, not worktree-overridable).
+    3. CI lib-1 time_bound_flags_tests every_time_bound_flag_is_classified: new 'aida docs sweep --since <REF>' (doc_cmd_args.rs) is unclassified; list it in classified_flags() as NotATimeBound("git revision, not a time").
+    4. CI cli-0 bug_1502 checked_in_audit_is_exhaustive: 'docs sweep' (which has --json) is missing from docs/cli-format-json-audit.md; regenerate the audit.
+    5. CI gates: 'test shard left untracked root entries: stray/' — main is green at a83e05d, so this is presumably PR-introduced (possibly a side effect of a test that panicked mid-way in the same shard, or a test running 'docs sweep' against the real checkout); identify it and fix it.
+    6. AC acca0100 (PR mode 'routed to the light review tier') unmet: docs_sweep.rs:1466-1475 only writes 'light review' into prose; the filed spec carries tags docs-sweep,docs-only, which route nothing. Apply the real routing signal (e.g. the fasttrack/express tag, auto_complete.rs EXPRESS_TIER_TAG, or whatever the light-tier mechanism is) and test it.
+    7. AC acca0100 untested: open_or_extend_pr/open_sweep_pr/file_drafts (one PR per run, next run extends the open sweep PR, non-mechanical findings become draft specs, dedup via docs-sweep-key tag) have no test; add a test with a fake gh/remote or factor out the decision logic so it can be tested.
+    8. docs_sweep.rs:1466 open_or_extend_pr files an Approved 'batched documentation fixes' spec BEFORE it knows any edit applies; when every edit is skipped (line moved), changed is empty and it returns an empty URL, leaving an orphan Approved spec in the queue plus state.pr_url=Some("") and a mail saying 'Sweep PR:  (N fixes)'. Create the spec only after a commit exists; treat an empty URL as no PR.
+    9. docs_sweep.rs:1464 when an open sweep PR exists but this clone's state.pr_spec is None (state file is per-clone; PR opened elsewhere or state lost), a new Approved spec is filed and later commits trail a different spec than the PR. Derive the spec from the open PR (title trailer) instead.
+    10. AC ac53d172/acff396d untested end to end: no test runs run_in without --report-only to prove it records last_swept_rev=head, sends exactly one mail (send_report) with only fresh findings, and sends none when clean; add one using a tempdir mailbox.
+    11. AC ac5f3842 partially tested: status_detail is tested, but the maintenance_schedule.rs with_detail wiring (matches row.command == "aida docs sweep") and the 'aida schedule status' output are not; add a status/list test showing the detail line for the docs-sweep job.
+    12. AC acec3f70: regenerate commands (docs_sweep.rs:1497) followed by 'git add -A' can commit files outside the file cap and outside path_editable (any file a regenerate step touches); bound or verify the staged set against the docs-only/cap rule before committing.
+    13. lib_part1.rs:1555-1569 builtin_alias_rewrites was inserted between rewrite_personal_view_alias's TASK-862 doc comment and its fn, so that doc comment (and trace:TASK-862) now attaches to the new function; move the new fn above the TASK-862 block.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-01T06:16:43.425086727Z
+  modified_at: 2026-11-01T06:16:43.425086727Z
   session_id: a31b25d9-60a5-4347-a85b-4c74ab06f274
 history:
 - id: 01a19517-853a-7dc1-addd-62b1b73de3be
