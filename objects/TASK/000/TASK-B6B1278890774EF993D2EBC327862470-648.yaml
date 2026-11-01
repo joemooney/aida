@@ -10,12 +10,12 @@ description: |
   1. Add the OpenAI endpoints Codex needs to `[contained] allowed_hosts`, verified against the installed Codex CLI with both API-key and ChatGPT sign-in auth (at least api.openai.com; confirm whether chatgpt.com and auth.openai.com are needed).
   2. Resolve the vendor/containment contradiction until vendor-neutral containment lands: either the default vendor is one containment can launch, or containment is scoped so Codex launches with the contained-autonomous posture (STORY-1124 / ADR-31). The operator chooses which; record the choice in the config comment.
   3. `aida doctor` flags a project whose default `[agents] vendor` cannot launch under its own containment setting, naming both settings and the fix. Test with a fixture config.
-status: NeedsAttention
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T00:55:07.917269049Z
-modified_at: 2026-11-01T04:29:21.324398339Z
+modified_at: 2026-11-01T04:31:05.351260133Z
 req_type: Task
 tags:
 - config
@@ -153,6 +153,12 @@ comments:
   created_at: 2026-11-01T04:29:21.324398339Z
   modified_at: 2026-11-01T04:29:21.324398339Z
   session_id: 77a7a933-9a3f-4243-9a44-892bcedf206c
+- id: 01a19560-1887-7382-9046-005fea23d21d
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: CI red at head with 6 test failures this diff causes; the containment-downgrade switch is read from the branch-local config; an unrequested --bg codex launcher is bundled in. No triage reason was given.'
+  created_at: 2026-11-01T04:31:05.351256227Z
+  modified_at: 2026-11-01T04:31:05.351256227Z
+  session_id: 77a7a933-9a3f-4243-9a44-892bcedf206c
 history:
 - id: 01a1949a-7ffe-78a3-8011-c5c0c44dc2d3
   author: joe
@@ -201,6 +207,14 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a19560-1887-7382-9046-0041143ff9d0
+  author: joe
+  timestamp: 2026-11-01T04:31:05.351247680Z
+  session_id: 77a7a933-9a3f-4243-9a44-892bcedf206c
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: 43d9f95803036ec22350e5a210d8c1cae20b9fe5
   branch: main
@@ -208,11 +222,3 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: 43d9f958030
   vendor: claude
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: CI red at head with 6 test failures this diff causes; the containment-downgrade switch is read from the branch-local config; an unrequested --bg codex launcher is bundled in
-  recovery_hint: address the review findings, move TASK-2631 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-01T04:27:35.068289458Z
