@@ -24,7 +24,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-01T06:46:15.376021939Z
-modified_at: 2026-11-01T06:51:03.806368804Z
+modified_at: 2026-11-01T06:51:06.221198949Z
 req_type: Bug
 tags:
 - audit
@@ -34,6 +34,12 @@ relationships:
 - rel_type: Child
   target_id: 01a19499-932e-79f0-a3e1-1299dfe355ad
   created_at: 2026-11-01T06:46:27.636951747Z
+comments:
+- id: 01a195e0-486d-7772-bfe4-ab269076b340
+  author: joe
+  content: 'ADVISOR DISPOSITION: APPROVED. Verified stock_path in skill_cmd.rs and collect_skill_files in plan_report.rs hardcode .claude/skills and flat Markdown. Implement common layout discovery used by CLI render, MCP render and lint; preserve deterministic precedence and local overlays and add Codex-only fixture coverage. No changes to grants, containment or trust sources. Run on a Codex lane once TASK-2631 reaches the live trusted build.'
+  created_at: 2026-11-01T06:51:06.221198949Z
+  modified_at: 2026-11-01T06:51:06.221198949Z
 history:
 - id: 01a195dc-0e68-73b0-b950-a0f3ab5b3b3f
   author: joe
