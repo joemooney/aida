@@ -2584,6 +2584,20 @@ every = "2m"
 while = "mandate.dispatch_active == true && dispatch.pending > 0"
 enabled = true
 
+# STORY-2220: the background docs sweep. Daily, and only while the queue is
+# idle and the drain lock is free, so it never takes a lane from feature work;
+# when the `while` gate is closed the run is skipped, not queued. It reviews
+# the docs touched since the last sweep and, in the default report mode, mails
+# the findings to the product seat (one mail per run, none when clean).
+# `[docs_sweep] mode = "pr"` batches mechanical fixes into one docs-only PR.
+# trace:STORY-2220 | ai:claude
+[[schedule.jobs]]
+name = "docs-sweep"
+command = "docs sweep"
+every = "1d"
+while = "queue.project_work_idle == true && drain.lock_free == true"
+enabled = true
+
 # STORY-HOME-128: the mail-backlog guard. Every 30m it looks for unread
 # [request]/[handoff] mail older than [doctor.mail_backlog] max_age_mins
 # (default 30) addressed to a live agent or a role one holds, and nudges each
@@ -2853,7 +2867,8 @@ mod story_1226_init_schedule_section_tests {
         // trace:STORY-1661 | ai:codex
         // trace:STORY-1917 | ai:agy
         // trace:STORY-HOME-128 | ai:claude
-        assert_eq!(jobs.len(), 7);
+        // trace:STORY-2220 | ai:claude — plus the idle-only docs-sweep.
+        assert_eq!(jobs.len(), 8);
         assert!(jobs
             .iter()
             .all(|job| job["enabled"].as_bool() == Some(true)));
