@@ -3283,3 +3283,8 @@ mod task_1750_liveness_primitive_guard_tests;
 #[cfg(test)]
 #[path = "tests/bug_2148_liveness_kill_signal_tests.rs"]
 mod bug_2148_liveness_kill_signal_tests;
+
+// trace:TASK-2631 | ai:codex
+#[cfg(test)]
+#[path = "tests/task_2631_containment_tests.rs"]
+mod task_2631_containment_tests;
