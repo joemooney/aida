@@ -34,7 +34,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T19:23:04.998731220Z
-modified_at: 2026-11-01T00:44:47.568000699Z
+modified_at: 2026-11-01T00:47:40.877152388Z
 req_type: Story
 tags:
 - architecture
@@ -202,6 +202,18 @@ comments:
   modified_at: 2026-11-01T00:16:03.307247152Z
   session_id: 01a194506f98
   harness_version: 2.1.316 (Claude Code)
+- id: 01a19493-8f4d-7a03-80c3-76b5dfc65556
+  author: joe
+  content: |-
+    ADVISOR REWORK BRIEF round 2 (17:48), PR-3185. The claim path, NotOnHub, multi-hub refusal, node show/doctor and docs are solid. Fix these four (all from the verdict, which is authoritative):
+    1. AC2 on a realistic FRESH project: the backfill guard blocks single-hub claims on a new store. A project with one declared hub and no legacy local-only specs must claim and mint with no backfill step; add a CLI fixture from 'aida init' through the first agreed ID.
+    2. AC5: after enroll-root, existing blocks held by NON-root clones must stay spendable (materialized pools keep their lineage); add the test.
+    3. A [store.hubs] entry counts only when committed AND reachable from the code default branch on the hub (sketch section 1); a local-only config commit must not count. Test it.
+    4. AC6 (overlapping claims from two unrooted hubs refused at sync in both modes) needs its test.
+    Gate STRICT: cargo test -p aida-core allocation_ ; cargo test -p aida-cli --test story_164_single_hub --test story_095_block_delegation --test story_105_agreed_and_local_ids ; make check-ci-fast.
+  created_at: 2026-11-01T00:47:40.877152388Z
+  modified_at: 2026-11-01T00:47:40.877152388Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
 history:
 - id: 01a1939c-ffb0-7d40-b083-9d0d5a3d6156
   author: joe
