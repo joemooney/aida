@@ -34,7 +34,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T03:24:07.798418309Z
-modified_at: 2026-11-01T04:44:59.906357447Z
+modified_at: 2026-11-01T04:48:34.282795268Z
 req_type: Story
 tags:
 - advisor
@@ -54,6 +54,36 @@ comments:
   created_at: 2026-11-01T04:43:37.611288937Z
   modified_at: 2026-11-01T04:43:37.611288937Z
   session_id: 77a7a933-9a3f-4243-9a44-892bcedf206c
+- id: 01a19570-19ea-7a43-8199-207666725ab0
+  author: joe
+  content: |-
+    ## Implementer approach
+
+    ### Acceptance criteria as tests
+    - **AC1 (unit + render):** `advisor_goal` record round-trips text, ordered clauses (description + verify + structured kind/arg), set_by, set_at; `render_show` tests for human, toon and json all carry X, both clauses' verify commands, setter, timestamp.
+    - **AC2 (core fixture, git):** bare origin + clone A + clone B: `set_goal_cas` in A pushes; `git pull` in B then `load` returns the same goal. The record lives at `registry/advisor_goal.yaml` on the store branch (added to the transport file grammar so relays carry it).
+    - **AC3 (unit):** `render_launch_goal_section` returns a `## Goal` section only for role advisor; whoami `goal_line`/render tests: advisor seat prints `goal: <text>` and `purpose: <purpose>` on its own line; implementer seat output unchanged (no goal). Handoff `--show` composer test includes an ADVISOR GOAL block for seat advisor only.
+    - **AC4 (unit, injected evaluator):** `check` over a fixture with one met + one unmet clause returns non-zero naming the unmet one; all met → exit 0; free-text-only → "no checkable clauses", non-zero.
+    - **AC5 (core unit):** two `set`s → active is the second, `history` lists both newest first.
+    - **AC6 (unit):** pure `operator_set_refusal(...)` refuses when not a TTY, when AIDA_AGENT_NAME/TYPE, AIDA_SESSION_GRANT, CLAUDECODE/CODEX_* markers, or an agent-harness ancestor is present; message says the operator sets it. show/check/history have no authority check.
+    - **AC7 (core unit):** serialized record has `scope: <default branch>`; test pins the field name and value.
+    - **AC8 (unit):** existing `goal_command_tests` unchanged; bare `aida goal --epic X --invoke` still parses as the derive path (clap test that no subcommand is set).
+    - **AC9:** nothing reads Claude `/goal`; launch context section is vendor-neutral (rendered for every agent type). Verified by the launch-context test using agent type codex.
+
+    ### Expected files
+    - `aida-core/src/advisor_goal.rs` (new), `aida-core/src/lib.rs`, `aida-core/src/transport_sanitization.rs`
+    - `aida-cli-lib/src/goal_cmd.rs` (+ `goal_advisor.rs` new for set/show/check/history)
+    - `aida-cli-lib/src/whoami_view.rs` + its tests
+    - `aida-cli-lib/src/agent_launch.rs` (Goal section), `aida-cli-lib/src/seat_rotation.rs` / `session_misc.rs` (handoff show)
+    - `aida-cli-lib/src/tests/golden/cli_help_snapshot.txt`, docs/cli if a goal page exists
+
+    ### Ambiguities / conflicts as questions
+    - `check` evaluates each clause in-process (store + queue + `gh`/`glab` for PRs) rather than parsing the prose verify string; the verify command is still shown per clause. Same semantics as the verify text.
+    - Mandate stays on the `goal:` line in whoami after the advisor goal; purpose moves to `purpose:` in the advisor seat only.
+  created_at: 2026-11-01T04:48:34.282795268Z
+  modified_at: 2026-11-01T04:48:34.282795268Z
+  session_id: 01a1956ccb82
+  harness_version: 2.1.316 (Claude Code)
 history:
 - id: 01a1955e-d0d4-75f2-a078-b22ee5383ce4
   author: joe
