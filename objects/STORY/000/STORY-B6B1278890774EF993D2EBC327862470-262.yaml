@@ -27,12 +27,19 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-31T23:03:29.192827531Z
-modified_at: 2026-11-01T03:11:49.050439686Z
+modified_at: 2026-11-01T03:11:59.196421653Z
 req_type: Story
 tags:
 - docs
 - from-operator
 - schedule
+comments:
+- id: 01a19517-acdc-77e3-8e82-d4a97674cb19
+  author: joe
+  content: 'ADVISOR DISPOSITION (20:15): APPROVED per the operator''s ruling. Ship it as a job plus a command (no seat), report-only for about 2 weeks before it opens any batched docs PR, and idle-only scheduling.'
+  created_at: 2026-11-01T03:11:59.196421653Z
+  modified_at: 2026-11-01T03:11:59.196421653Z
+  session_id: 77a7a933-9a3f-4243-9a44-892bcedf206c
 history:
 - id: 01a19517-853a-7dc1-addd-62b1b73de3be
   author: joe
