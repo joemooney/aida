@@ -21,7 +21,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T07:26:20.914223641Z
-modified_at: 2026-11-01T08:50:19.171806422Z
+modified_at: 2026-11-01T08:51:53.901039788Z
 req_type: Bug
 tags:
 - architecture
@@ -347,6 +347,11 @@ comments:
     Disposition: the expanded design fork is approved with these binding amendments. A different independent reviewer must gate implementation against the entire contract and evidence; any deviation needs a new ruling. Operator merge floor remains. Local implementation gate remains one targeted launch/grant/authority test plus make check-ci-fast, long cargo in background; full suite belongs to CI. This comment does not change status, dispatch work, approve an implementation head, clear a hold or authorize a merge.
   created_at: 2026-11-01T08:50:19.171784291Z
   modified_at: 2026-11-01T08:50:19.171784291Z
+- id: 01a1964e-dfad-7551-85e7-0736c2df60ab
+  author: joe
+  content: 'Advisor ruling: expanded consumer-policy sketch now has independent ADVISOR SIGNOFF APPROVED from codex-advisor09, as posted and verified on this spec. Adopt all its binding amendments together with B1-B4 and the explicit amended AC3. Keep absent-grant record compatibility; fix weak positive dispatch/reviewed/resolved readers using existing durable authority, protective refusal records stay usable. Real ungranted artifact through every named boundary must fail positive authority; invalid presented grants refuse record; granted independent reviewer succeeds. Native workspace/app-server failure remains manual completion gate. Return existing live doer on lease01a19624a1e1 to this amended work, no duplicate lane. Author may retain prior tested adapter code, but must add consumer fixes and production-path negatives before claiming completion. Different strict reviewer and operator merge floor remain. This is design approval, not implementation approval.'
+  created_at: 2026-11-01T08:51:53.901039788Z
+  modified_at: 2026-11-01T08:51:53.901039788Z
 history:
 - id: 01a19600-c769-7cd0-ba08-8d93975e3e3b
   author: joe
