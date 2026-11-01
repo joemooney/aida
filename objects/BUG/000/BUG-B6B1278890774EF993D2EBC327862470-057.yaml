@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T21:37:29.201146410Z
-modified_at: 2026-11-01T02:25:25.475575395Z
+modified_at: 2026-11-01T04:08:36.801165196Z
 req_type: Bug
 tags:
 - epic-home-003
@@ -59,6 +59,16 @@ comments:
     Local gate (LIGHT): `AIDA_CARGO_TIMEOUT=900 cargo test --profile agent -p aida-cli-lib --lib -- bug_2181_host_remote_credentials rework_direction` in the background, then `make check-ci-fast`, then push. If cargo is denied, CI is the gate. Read CI logs with `gh api repos/joemooney/aida/actions/jobs/<id>/logs` (BUG-2380).
   created_at: 2026-11-01T02:25:25.475575395Z
   modified_at: 2026-11-01T02:25:25.475575395Z
+  session_id: 77a7a933-9a3f-4243-9a44-892bcedf206c
+- id: 01a1954b-84c1-7f02-bda1-0a3a2647df22
+  author: joe
+  content: |
+    ADVISOR REWORK BRIEF round 6 (21:10), PR-3177 at a79ba6d. FIRST TASK: PR-3177 conflicts with main and cannot be reviewed or shipped until that's resolved.
+    Conflict: aida-cli-lib/src/queue_cmd.rs only (lib.rs auto-merges). Main gained BUG-2380 (841206e: the rework/reviewer prompts carry the PR head's failing CI tests, see ci_failures.rs) and other changes in the same pickup-prompt assembly this PR reorders.
+    Resolve by merging origin/main into the branch (no rebase or force-push). Keep BOTH behaviours: this PR's ordering (a brief newer than the last verdict leads; a main conflict is the first task) and main's CI-failure section. The CI-failure section stays next to the review findings it annotates, after the brief when the brief is newer. Then check that the round 5 fix (remote_credentials on the conflict-forecast fetch, rework_direction.rs) is still present.
+    Local gate: cargo can't run in the lane yet (BUG-2383). Run `make check-ci-fast` and push; CI is the gate.
+  created_at: 2026-11-01T04:08:36.801165196Z
+  modified_at: 2026-11-01T04:08:36.801165196Z
   session_id: 77a7a933-9a3f-4243-9a44-892bcedf206c
 history:
 - id: 01a193e8-1070-7260-a5d0-2973465ae4a2
