@@ -1,0 +1,33 @@
+id: 01a19611-ecf1-7c33-b61e-f1f54fb441ef
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-285
+agreed_id: STORY-2269
+title: 'Review PR-3197: [AI:codex] fix(mailbox): generate valid wake units and report runtime state (BUG-2397)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a195fb`) for branch `codex/bug-2397-mail-wake`.
+
+  - PR: <https://github.com/joemooney/aida/pull/3197>
+  - Branch: `codex/bug-2397-mail-wake` → `main`
+
+  ## Covers
+
+  - BUG-2397
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 3197` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-01T07:45:19.601729795Z
+modified_at: 2026-11-01T07:45:19.601729795Z
+req_type: Story
+filed_at:
+  code_sha: 9d26f95d2b36d75678a4b37e279e2b175be2f0a9
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 53c89700b4d
+  vendor: codex
