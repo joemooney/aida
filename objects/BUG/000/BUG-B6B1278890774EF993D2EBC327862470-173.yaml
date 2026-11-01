@@ -18,7 +18,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T08:28:54.983776375Z
-modified_at: 2026-11-01T12:45:08.053275250Z
+modified_at: 2026-11-01T12:55:51.983785921Z
 req_type: Bug
 tags:
 - forge
@@ -76,6 +76,11 @@ comments:
   content: 'Rework approach: share bounded search/all-open candidates and exact store-resolving title/branch/commit association; retain typed commit errors while checking later candidates. Single lookup reports proven match or typed unknown; checked all-open refuses incomplete enumeration. Integrate retains explicit best-effort primary-path fallback with diagnostic. Detect saturation as unknown and impose aggregate budget. Extend existing fake-store/forge regression for fallback duplicates, errors/timeouts, later matches and saturation; focused test plus fast gates. No ownership/canonical policy changes.'
   created_at: 2026-11-01T12:45:08.053257373Z
   modified_at: 2026-11-01T12:45:08.053257373Z
+- id: 01a1972e-3baf-70b3-b61e-33fac3421002
+  author: mcp
+  content: 'Round-2 rework pushed to SAME PR #3208 / codex/bug-2400-exact-pr: 9d881dbcd16bda48e38ad729b2c7f88e6efa9d0c. GH head and origin advertised ref independently verified. Both B1 and B2 addressed with shared search/all-open exact association collection, typed commit unknowns (continue inspecting later candidates), checked all-open Result and explicit existing integrate primary-path fallback diagnostic. Finite candidate saturation returns unknown; maximum aggregate 10s network budget. Focused fake-store/forge regression PASSED 1/1 in 5.09s after actual CLI library test compilation; fmt and diff checks pass. make check-ci-fast is still queued at its no-default-features cargo check; no green claim yet. Advisor-approved /tmp publication baseline and all three source/committed file bytes plus full patch verified; /tmp/bug-2400-rework-identity.json. Original source remains preserved with same bytes. Fresh independent review required; no review record, ship, merge, hold release or Done claim.'
+  created_at: 2026-11-01T12:55:51.983767517Z
+  modified_at: 2026-11-01T12:55:51.983767517Z
 history:
 - id: 01a1963a-2b42-7cd2-a795-0772bcc408d1
   author: joe
