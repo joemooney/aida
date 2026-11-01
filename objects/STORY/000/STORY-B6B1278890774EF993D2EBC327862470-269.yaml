@@ -32,7 +32,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T00:54:49.371776631Z
-modified_at: 2026-11-01T09:03:06.885806858Z
+modified_at: 2026-11-01T09:06:27.529391095Z
 req_type: Story
 tags:
 - architecture
@@ -223,6 +223,11 @@ comments:
   content: 'HOST P2 DECISION: deployed kernel reports Landlock ABI8. Official Linux kernel documentation https://docs.kernel.org/userspace-api/landlock.html states pathname Unix-socket resolution right LANDLOCK_ACCESS_FS_RESOLVE_UNIX begins at ABI9; TCP/abstract-scope support is not pathname-connect confinement. This host therefore requires the already-approved C5 broker branch, or named refusal, for full contained launches. Do not silently omit the Unix-socket bar. The stricter namespace P1 probe succeeded for default and no-daemon installed CLI; real credential refresh P3 and own-grant/model lifecycle proofs remain gates. New backend C2 hardening stays binding; existing legacy escape remains unproven by actual host negative probe.'
   created_at: 2026-11-01T09:03:06.885806858Z
   modified_at: 2026-11-01T09:03:06.885806858Z
+- id: 01a1965c-3449-7270-8a08-3381a0cb76f6
+  author: joe
+  content: 'P1 evidence precision: first host probe established nested native composition and UID/PID isolation, but did not itself inspect the keyring. The required nested keyring visibility/readability probe is recorded separately; real delegated presenter/role operation still needs the sliceC live fixture. Do not treat an available syscall as proof of granted authority.'
+  created_at: 2026-11-01T09:06:27.529391095Z
+  modified_at: 2026-11-01T09:06:27.529391095Z
 history:
 - id: 01a1949a-3f43-7b12-bc6b-0d5bf40ee2f2
   author: joe
