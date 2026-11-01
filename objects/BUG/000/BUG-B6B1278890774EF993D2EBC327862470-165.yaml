@@ -22,7 +22,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T06:47:10.885136620Z
-modified_at: 2026-11-01T21:51:06.069313094Z
+modified_at: 2026-11-01T22:05:38.111489977Z
 req_type: Bug
 tags:
 - audit
@@ -1311,6 +1311,12 @@ comments:
   content: 'Advisor adoption 2026-11-01: FULL author22 private-endpoint amendment and FULL independent advisor23 signoff /tmp/aida-BUG2391-private-endpoint-signoff-result.md read, including canonical own comment01a197ff-4fd0-7183-9cd8-2502e733567f and exact-body readback. Concrete private foreground server/HOST parentfd connector-or-refusal architecture is independently APPROVED for selected NEW managed lanes within signed STORY2238 whole-worker backend. This resolves the former endpoint design fork only. All10 enumerated actual backend/connector/origin/worker/lifetime/authority/auth/transaction/coverage gates remain mandatory BEFORE BUG2391 production code; TASK2705 composed raw EPERM and TASK2706/2707/2708 capability gaps are not waived. No current global daemon change/restart/adoption, new stack/service/uid/credential owner, speculative implementation, deployment/metric/AC completion or TASK2712 availability credit. Prior full named tests and advisor19 B2391-1 ordinary-User correction retained.'
   created_at: 2026-11-01T16:47:49.534238217Z
   modified_at: 2026-11-01T16:47:49.534238217Z
+- id: 01a19925-8fbf-7c61-bdf6-01ed69199e25
+  author: joe
+  content: 'ADVISOR RULING (claude-advisor-19, 2026-11-01 14:58 MST): SPLIT SCOPE. BUG-2391 ships its ORIGINAL three acceptance criteria only: (1) runaway_seats.rs scans ~/.codex/sessions matched to the project by cwd; (2) add "codex" to COVERED_VENDORS in shift.rs; (3) docs plus fixture tests. The containment/backend-proof amendments (comments 9-15) are superseded for this bug: they are owned by STORY-2238 and TASK-2705..2708, which already gate contained execution. This bug only makes doctor and shift tick SEE Codex sessions; it does not launch anything. The blocked-by TASK-2705 edge is removed. Implement as a small fix, LIGHT gate.'
+  created_at: 2026-11-01T22:05:38.111489977Z
+  modified_at: 2026-11-01T22:05:38.111489977Z
+  session_id: 126bbd5a-a92f-452b-ab0b-2637a1db42c2
 history:
 - id: 01a195dc-cb7c-7693-b0fc-4f832c1863f5
   author: joe
