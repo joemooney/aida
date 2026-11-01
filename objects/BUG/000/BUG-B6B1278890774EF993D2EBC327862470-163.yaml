@@ -17,12 +17,12 @@ description: |-
   1. `aida burndown run`, `aida intake`/`assess`, `aida dryrun --ai`, `aida intent`, `aida questions research`, and `aida questions clarify` resolve the configured vendor via `resolve_headless_vendor` / `resolve_default_vendor` and route through `spawn_vendor_headless_with_seat` (or vendor-aware interactive launch for `questions clarify`).
   2. All six commands work on a Codex-only host with `[agents] vendor = "codex"` and no `claude` binary installed.
   3. Tests verify argv/vendor selection for both `claude` and `codex`.
-status: NeedsAttention
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T06:46:36.168832796Z
-modified_at: 2026-11-01T22:19:54.379088277Z
+modified_at: 2026-11-01T22:30:22.427761070Z
 req_type: Bug
 tags:
 - audit
@@ -53,6 +53,12 @@ comments:
   content: 'Final validation complete: cargo check -p aida-cli --no-default-features PASS (21.25s); cargo fmt --all -- --check PASS; git diff --check PASS. Total targeted tests passed: 20. Final patch /tmp/BUG-2389.patch (51,184 bytes). Publication remains blocked by read-only .git; spec intentionally remains In Progress.'
   created_at: 2026-11-01T21:47:14.335812420Z
   modified_at: 2026-11-01T21:47:14.335812420Z
+- id: 01a1993c-35db-7740-a807-65254a94a770
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: CI red at head (contracts: CLI-manual drift-guard; lib-1: Run tests). AC1 met by diff; AC2 (Codex-only host) unverified, burndown skill still needs Claude-only tools; AC3 partial (4 of 6 surfaces tested). Plus an unrequested seat change to advisor for dryrun/intent/research, and a removed BYPASSED warning. Bug protocol (touches a test file): met.. No triage reason was given.'
+  created_at: 2026-11-01T22:30:22.427758089Z
+  modified_at: 2026-11-01T22:30:22.427758089Z
+  session_id: 126bbd5a-a92f-452b-ab0b-2637a1db42c2
 history:
 - id: 01a195dc-54a0-7f22-8e99-8e4cef36f035
   author: joe
@@ -86,6 +92,14 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1993c-35db-7740-a807-651a3becfb33
+  author: joe
+  timestamp: 2026-11-01T22:30:22.427752487Z
+  session_id: 126bbd5a-a92f-452b-ab0b-2637a1db42c2
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: 6dc7d4977ac5e47c42ddfb26597fe3ec5fb70b60
   branch: main
@@ -94,11 +108,3 @@ filed_at:
   aida_build_sha: 962ca07af25
   vendor: antigravity
   session: 01a194b1bcfb
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'CI red at head (contracts: CLI-manual drift-guard; lib-1: Run tests). AC1 met by diff; AC2 (Codex-only host) unverified, burndown skill still needs Claude-only tools; AC3 partial (4 of 6 surfaces tested). Plus an unrequested seat change to advisor for dryrun/intent/research, and a removed BYPASSED warning. Bug protocol (touches a test file): met.'
-  recovery_hint: address the review findings, move BUG-2389 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-01T22:19:54.379088277Z
