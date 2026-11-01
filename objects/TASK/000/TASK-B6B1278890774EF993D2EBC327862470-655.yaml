@@ -11,7 +11,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T09:05:27.409838422Z
-modified_at: 2026-11-01T13:13:51.901527772Z
+modified_at: 2026-11-01T13:19:29.836567749Z
 req_type: Task
 tags:
 - architecture
@@ -86,6 +86,11 @@ comments:
   content: 'Final blocked handoff: public PR#3205 head acb177db657a03c5057ecfc9572f7a6b775ac768 is verified OPEN; public commit/tree and all17 author-diff file bytes match the publication checkout. B2 actual CI is green: cli-0 job124852420977 (real BUG1502 audit), lib-1 job124852421223 (grant-owner guard), gates job124852421256 (help co-change/root hygiene); help golden passes in lib-0. B1 FD assertions now pass, but latest-head lib-0 job124852421203 confirms nested_stage=unshare, errno=1 (EPERM), before mount_positive, so acceptance remains blocked on an advisor environment-policy ruling; no C12 waiver/skip or permission change. Local required-live6 passed; fast36 passed; actual make check-ci-compile passed. Actual make test-touched initial attempt failed before tests with slot-wrapper exit200; serial retry compiled/listed final library tests (6m53s) but filtered execution remained queued at13:13UTC; local touched/integration pass is NOT claimed. Full suite CI only. Source oldlease cleanup attempted after all files backed: command exit0 but readonly shared-session metadata prevented deleting01a19701e905; source retained. Formal post_punt write was approval-rejected under policy never; fork is preserved in PR body/spec comments and task is Needs Attention. No borrowed parent grant, own review/ship/merge/hold clearance, ordinary-backend enablement or parent completion.'
   created_at: 2026-11-01T13:13:51.901518507Z
   modified_at: 2026-11-01T13:13:51.901518507Z
+- id: 01a19743-de2c-79f2-af87-35e2aaaf07e9
+  author: mcp
+  content: 'Final local validation completed: serial actual make test-touched retry passed72 selected unit tests plus all9 BUG1502 real-binary JSON audit integration tests, with no failures/ignores. Initial slot-wrapper exit200-before-tests remains recorded; no bypass, outer timeout or repeated capped compile was used. Required-live task_2705_ with both flags passed6; make check-ci-fast passed36; actual make check-ci-compile passed. Public code remains acb177db657a03c5057ecfc9572f7a6b775ac768 on same open PR#3205, all17 author-diff file bytes verified. B2 help/JSON/grant-owner integration checks are green in actual CI. B1 FD checks now pass, but required CI still fails nested unshare with EPERM before mount_positive; Needs Attention remains for an advisor environment-policy ruling under no-new-permissions/no-skip constraints. No parent completion, ordinary launch enablement, permission change, own review or merge. Formal post_punt write remains approval-blocked (policy never), with evidence in PR/spec comments. Own MCP lease01a197079d92 released; old CLI sourcelease01a19701e905 cleanup attempted but retained because shared metadata is read-only; source and implementation are safely backed.'
+  created_at: 2026-11-01T13:19:29.836558716Z
+  modified_at: 2026-11-01T13:19:29.836558716Z
 history:
 - id: 01a1965b-7cae-7260-83dd-5767f6772d90
   author: joe
