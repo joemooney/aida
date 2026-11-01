@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-057
 agreed_id: BUG-2374
 title: Headless rework lane ignores the newest advisor brief comment when an older review verdict prescribes different work (merge-only brief skipped twice)
 description: 'Observed 2026-10-31 (advisor): BUG-HOME-051 lanes launched 12:31 and 13:16 with a spec comment ''ADVISOR BRIEF 13:10 (merge-only, retry): PR-3169 CONFLICTS with main ... git merge origin/main, resolve, push''. Both lanes instead re-ran the earlier review''s bwrap test instructions, reported they could not run cargo in the sandbox, and exited at the old head f976c90 with no merge (logs /tmp/aida_lane_bug-051-merge2.log, /tmp/aida_lane_bug-051-merge4.log). The advisor resolved the conflict by hand. BUG-HOME-021 (lanes read only the description) is completed, so comments are now read, but the brief is not ranked above the stale verdict. Expected: the lane prompt puts the newest advisor brief (ADVISOR BRIEF / REWORK BRIEF comments newer than the last verdict) first and labels older verdict findings as superseded context. Also: a PR with merge conflicts against main should be surfaced to the lane as the first task. Acceptance: (1) prompt-assembly test: a spec with a verdict then a newer brief yields a prompt whose first task is the brief; (2) a conflicting PR adds a ''resolve conflicts with main first'' item; (3) BUG-021''s tests still pass.'
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T21:37:29.201146410Z
-modified_at: 2026-11-01T07:04:52.038026228Z
+modified_at: 2026-11-01T07:04:53.859713159Z
 req_type: Bug
 tags:
 - epic-home-003
@@ -138,6 +138,11 @@ comments:
   content: 'Advisor ruling: ADVISOR REWORK BRIEF: source verified. last_verdict_at in rework_direction.rs78-89 incorrectly maxes the actual Recorded timestamp with the later queue-rework findings-comment creation time. Use a valid live Recorded timestamp as the verdict cutoff; use findings-comment created_at only when Recorded is unavailable. Add actual assemble_pickup_prompt regression: verdict T0, ADVISOR REWORK BRIEF at T1, queue findings comment T2 -> brief leads, findings SUPERSEDED CONTEXT, no AUTHORITATIVE TASK. Preserve older-brief behavior. Bundle the nonblocking fetch finding now: if bounded fetch fails/times out, skip conflict forecast rather than running merge-tree on stale refs, and test it. Do not open another follow-up. One targeted rework_direction test filter with AIDA_CARGO_TIMEOUT and tool background mode plus make check-ci-fast; if sandbox cannot run the gate, report unavailable and let CI prove it, never repeat 55s cargo attempts. Push one commit to same PR then stop for independent delta review. No gate waiver.'
   created_at: 2026-11-01T07:04:51.948515908Z
   modified_at: 2026-11-01T07:04:51.948515908Z
+- id: 01a195ec-e963-7e13-861d-b1bf3bce93e4
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Round-7 findings fixed (REWORK BRIEF header matched and tested, bounded fetch, shared lead_line); but the verdict time is taken from the queue-rework findings comment, so a brief written between the verdict and the requeue is demoted and BUG-057 recurs; CI pending at head.. It was punted on: other: round-8 rework complete locally but unable to publish: this lane''s worktree gitdir /home/joe/ai/aida/.git/worktrees/aida-pr-31771 is read-only in the sandbox (index.lock, FETCH_HEAD, refs locks all EROFS), so commit and push fail; cargo also cannot build (BUG-2383). The lane was launched for STORY-2216 (review) in a contained review worktree; PR-3177 head 7a4f77c already has a recorded request-changes verdict, so no second review was due.. Triage reason: PR-3177 fresh independent review found the remaining real T0/T1/T2 ordering bug: gate-ledger PR-3177.jsonl#19 at 9383d0215ddaade7388bce69f530efbfc7728353. New brief below is binding.'
+  created_at: 2026-11-01T07:04:53.859711916Z
+  modified_at: 2026-11-01T07:04:53.859711916Z
 history:
 - id: 01a193e8-1070-7260-a5d0-2973465ae4a2
   author: aida-session-start
@@ -229,6 +234,13 @@ history:
   session_id: 01a195e6dabe
   harness_version: 2.1.316 (Claude Code)
   changes: []
+- id: 01a195ec-e963-7e13-861d-b1ad3131193a
+  author: joe
+  timestamp: 2026-11-01T07:04:53.859690798Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: b0d9035fbf3276de24d95845c0b50320ead426bd
   branch: main
@@ -241,17 +253,3 @@ implementation_info:
   implemented: true
   implemented_at: 2026-10-31T22:19:24.538102755Z
   implemented_by: joe
-attention_reason:
-  category: other
-  detail: 'round-8 rework complete locally but unable to publish: this lane''s worktree gitdir /home/joe/ai/aida/.git/worktrees/aida-pr-31771 is read-only in the sandbox (index.lock, FETCH_HEAD, refs locks all EROFS), so commit and push fail; cargo also cannot build (BUG-2383). The lane was launched for STORY-2216 (review) in a contained review worktree; PR-3177 head 7a4f77c already has a recorded request-changes verdict, so no second review was due.'
-  lean: apply the ROUND 8 PATCH comment on this spec (git apply on 7a4f77c), commit with the message it gives, push; CI is the test gate. Launch rework lanes in an implementer worktree with a writable gitdir.
-  raised_by: implementer
-  raised_at: 2026-11-01T06:20:35.671307358Z
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: Round-7 findings fixed (REWORK BRIEF header matched and tested, bounded fetch, shared lead_line); but the verdict time is taken from the queue-rework findings comment, so a brief written between the verdict and the requeue is demoted and BUG-057 recurs; CI pending at head.
-  recovery_hint: address the review findings, move BUG-2374 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-01T07:01:29.045314498Z
