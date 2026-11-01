@@ -11,12 +11,12 @@ description: |-
   2. The suggested launcher follows the project's default vendor (`[agents] vendor`); with vendor = codex it prints the codex launch line, not `claude`.
   3. For a linked worktree, today's output stays the same (regression test).
   4. Tests cover both branches (clone vs linked worktree) and both vendors (claude, codex).
-status: Draft
+status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-01T01:23:46.116682909Z
-modified_at: 2026-11-01T01:23:46.116682909Z
+modified_at: 2026-11-01T02:23:06.688749616Z
 req_type: Bug
 tags:
 - containment
@@ -31,6 +31,14 @@ history:
   author: joe
   timestamp: 2026-11-01T01:23:55.471444144Z
   changes: []
+- id: 01a194ea-edc0-7581-8710-328097a2cdcf
+  author: joe
+  timestamp: 2026-11-01T02:23:06.688741452Z
+  session_id: 77a7a933-9a3f-4243-9a44-892bcedf206c
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: 43d9f95803036ec22350e5a210d8c1cae20b9fe5
   branch: main
