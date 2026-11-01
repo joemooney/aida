@@ -1499,6 +1499,7 @@ fn product_grant(delegable: &[&str]) -> crate::gate::seat_authority::SeatGrant {
         expires_at: now + chrono::Duration::hours(1),
         revoked_at: None,
         binding: Vec::new(),
+        origin: None,
     }
 }
 
