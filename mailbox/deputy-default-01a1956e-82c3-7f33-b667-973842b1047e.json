@@ -1,0 +1,18 @@
+{
+  "id": "deputy-default-01a1956e-82c3-7f33-b667-973842b1047e",
+  "thread_id": "deputy-01a1956e-82c3-7f33-b667-973842b1047e",
+  "from": "deputy:default",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-product-03"
+  },
+  "timestamp": 1793508429912,
+  "body": "Deputy \"default\" finished job 01a1956e-82c3-7f33-b667-973842b1047e: rc 0 (ok).\nCommand: aida add --type spike --priority high --parent EPIC-612 --tags vendor:codex,audit --title Audit: where AIDA still assumes Claude on Codex-first Linux; one finding per gap, filed under EPIC-612 --description ## Why\nCodex is the priority vendor, but Claude-only assumptions keep surfacing one at a time: `session start` Next: says `claude` (BUG-2379), containment refused Codex (TASK-2631), fork-from-live cited a missing API that now exists, and seat-parity.md says `queue work --vendor codex` **Works** although containment refuses it. A single bounded sweep is cheaper than finding them by hitting them.\n\n## Scope (time-box: one session)\nSweep user- and agent-facing paths for anything that hardcodes Claude or only works with it:\n- printed next-step and help text that names `claude`, `/aida-*` slash commands, CLAUDE.md or `.claude/` without a Codex equivalent;\n- launch, fork, resume, rotate, headless and scheduled-tick paths that pick claude without reading `[agents] vendor`;\n- containment and permission posture checks;\n- hooks and templates generated only for `.claude/` (`aida-core/templates/`);\n- docs whose Works/Degraded claims are wrong under this repo's config (seat-parity.md).\n\n## Acceptance\n1. A findings table on this spike: path:line, what assumes Claude, user impact, severity, and a proposed fix.\n2. Each finding above cosmetic is filed as its own draft bug or task under EPIC-612, linked from the table. Duplicates of open specs are linked, not refiled.\n3. Seat-parity.md cells found wrong under containment are listed with the evidence (the refusal message or command output).\n4. No code changes in this spike.\nOutput: /home/joe/ai/aida/.aida/deputy/default/out/01a1956e-82c3-7f33-b667-973842b1047e.out\nRead it with `aida deputy log 01a1956e-82c3-7f33-b667-973842b1047e`.\n",
+  "subject": "deputy job 01a1956e done: rc 0",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}
