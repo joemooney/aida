@@ -48,8 +48,19 @@ By hand:
 aida mailbox wake-service install --dry-run   # print the user unit
 aida mailbox wake-service install             # from the main checkout
 aida agent wake arm codex-agent-02            # once the agent has started
-aida mailbox wake-service status              # unit + armed agents
+aida mailbox wake-service status              # unit + runtime state + armed agents
 ```
+
+Installation reports success only after daemon reload, enable/start, and an
+active-state check succeed; a failed manager command returns an error. A unit
+file may remain after a failed install. Status keeps `installed` as file presence
+and reports `runtime.running`, `runtime.failed`, and the manager's load, active,
+substate and result fields separately. If the user manager cannot be queried,
+runtime booleans are `null` with an error. Re-run install from the main checkout
+after correcting the failure. Generated working directories retain literal
+internal spaces and dollar signs and escape percent specifiers; paths that unit
+line parsing cannot preserve safely are refused.
+<!-- trace:BUG-2397 | ai:codex -->
 
 Each armed agent is woken for mail addressed to its handle or to its role (for
 example `codex-agent-02` and `implementer`), never for another seat's mail. The

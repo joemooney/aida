@@ -41,6 +41,11 @@ sites = 1
 channels = ["worktree"]
 sites = 2
 
+# STORY-164: a doctor finding's remedy text names the file; no access.
+[readers."aida-cli-lib/src/allocation_health.rs"]
+channels = ["prose"]
+sites = 1
+
 [readers."aida-cli-lib/src/autoprogress.rs"]
 channels = ["probe"]
 sites = 1
@@ -413,6 +418,17 @@ sites = 1
 channels = ["other-file"]
 sites = 1
 
+# STORY-164: [store.hubs] + [store.sync] mirror_remotes. The authoritative
+# read is the shared default branch's committed copy (`git show
+# <upstream>:.aida/config.toml`), so an unpushed branch-local edit never
+# declares a hub; the working copy is read only for the `node show` "not
+# committed yet" hint, plus one existence probe and one error-context string.
+# A hub only picks which already-configured git remote a claim pushes to;
+# authority stays push permission on the hub. trace:STORY-B6B1278890774EF993D2EBC327862470-164
+[readers."aida-core/src/store_hubs.rs"]
+channels = ["worktree", "probe", "prose"]
+sites = 4
+
 [readers."aida-core/src/store_locate.rs"]
 channels = ["worktree"]
 sites = 1
@@ -573,6 +589,11 @@ auto_push = "policy"
 periodic_threshold = "policy"
 periodic_interval = "policy"
 mirror_remotes = "policy" # each entry must already be a configured git remote
+
+# STORY-164: hub name -> URL(s); only matched against already-configured git
+# remotes, and counted only from the pushed default-branch copy.
+[keys.worktree."store.hubs"]
+"*" = "policy"
 
 [keys.worktree."store.allocation"]
 retry_max = "policy"

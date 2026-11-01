@@ -28,15 +28,21 @@ pub enum DocsCommand {
         output: Option<PathBuf>,
     },
 
-    /// Print AIDA's machinery + lifecycle glossary from the binary's
-    /// embedded copy.
+    /// Print AIDA's product, machinery and lifecycle glossary from the
+    /// binary's embedded copy.
     ///
-    /// Surfaces the canonical vocabulary (orchestrator, phase, drain, lease,
+    /// Surfaces the plain-language product terms (merge hold, mandate, grant,
+    /// hub, …), the machinery vocabulary (orchestrator, phase, drain, lease,
     /// role, scope, worktree, …) and the spec-lifecycle verbs (committed,
     /// pushed, merged, completed, released) without hunting for the file under
     /// .aida/discipline/ — and stays correct even if the project's
-    /// scaffolded copy is missing or stale. Default prints both sections.
+    /// scaffolded copy is missing or stale. Default prints all three sections;
+    /// any section flag prints only the sections named.
+    // trace:STORY-2219 | ai:claude
     Glossary {
+        /// Print only the product glossary (merge hold, mandate, grant, hub, …).
+        #[clap(long)]
+        product: bool,
         /// Print only the machinery glossary (orchestrator, drain, lease, …).
         #[clap(long)]
         machinery: bool,

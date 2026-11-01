@@ -501,6 +501,7 @@ fn sample() -> WhoamiView {
             age_secs: Some(150),
         },
         goal: Some(GoalLine {
+            advisor_goal: None,
             mandate: Some("MANDATE ship-held · 5h50m left · by joe · gates: none".into()),
             purpose: Some("product intake".into()),
         }),
@@ -600,6 +601,7 @@ fn goal_line_omitted_when_absent() {
     v.goal = None;
     assert!(!v.render_toon().contains("goal:"));
     v.goal = Some(GoalLine {
+        advisor_goal: None,
         mandate: None,
         purpose: Some("triage".into()),
     });

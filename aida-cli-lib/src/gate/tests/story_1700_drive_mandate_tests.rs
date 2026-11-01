@@ -1255,8 +1255,9 @@ fn line_and_notice_lines() {
 // trace:STORY-1700.Durability | ai:claude
 #[test]
 fn handoff_show_order_is_mandate_then_standing_orders_then_handoff() {
-    let out = crate::seat_rotation::compose_handoff_show_with_mandate(
+    let out = crate::seat_rotation::compose_handoff_show_with_goal(
         Some("MANDATE drive · 1h left · by joe · gates: none"),
+        None,
         Some("STANDING ORDERS (x)\nobey"),
         Some("handoff body\n"),
         "advisor",
@@ -1266,7 +1267,13 @@ fn handoff_show_order_is_mandate_then_standing_orders_then_handoff() {
     let h = out.find("handoff body").unwrap();
     assert!(m < s && s < h, "{out}");
     assert_eq!(
-        crate::seat_rotation::compose_handoff_show_with_mandate(None, None, Some("b\n"), "advisor"),
+        crate::seat_rotation::compose_handoff_show_with_goal(
+            None,
+            None,
+            None,
+            Some("b\n"),
+            "advisor"
+        ),
         "b\n"
     );
 }

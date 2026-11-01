@@ -295,7 +295,8 @@ fn story_home_096_unit_quotes_specifiers_and_carries_its_marker() {
         Path::new("/home/u/100%$proj"),
         Path::new("/bin/aida"),
         Path::new("/bin/codex"),
-    );
+    )
+    .unwrap();
     assert!(text.starts_with(&format!("# {UNIT_MARKER}\n")));
     assert!(text.contains("\"/home/u/100%%$$proj\""));
     assert!(text.contains(
@@ -421,4 +422,140 @@ fn story_home_096_wake_arm_is_the_owner_or_the_operator_only() {
     assert!(format!("{err:#}").contains("only the session itself or the operator"));
     assert!(require_wake_authority(&row, None, no_human).is_err());
     assert!(require_wake_authority(&row, Some("codex-agent-07"), || Ok(())).is_ok());
+}
+
+// trace:BUG-2397 | ai:codex
+#[test]
+fn bug_2397_working_directory_is_literal_and_exec_keeps_argv_escaping() {
+    let text = unit_text(
+        Path::new("/home/joe/ai/aida"),
+        Path::new("/bin/true"),
+        Path::new("/bin/true"),
+    )
+    .unwrap();
+    assert!(text.contains("\nWorkingDirectory=/home/joe/ai/aida\n"));
+    let text = unit_text(
+        Path::new("/home/u/a space/100%$proj"),
+        Path::new("/bin/true"),
+        Path::new("/bin/true"),
+    )
+    .unwrap();
+    assert!(text.contains("\nWorkingDirectory=/home/u/a space/100%%$proj\n"));
+    assert!(text.contains("\"/home/u/a space/100%%$$proj\""));
+    for path in ["relative", "/p\n[Service]", "/p\r", "/p\t", "/p ", "/p\\"] {
+        assert!(working_directory(Path::new(path)).is_err(), "{path:?}");
+    }
+}
+
+// This only parses temporary fixtures; it never loads a unit into a manager.
+// trace:BUG-2397 | ai:codex
+#[test]
+fn bug_2397_generated_units_pass_systemd_analyze_when_available() {
+    if which("systemd-analyze").is_none() {
+        eprintln!("SKIP systemd-analyze is unavailable");
+        return;
+    }
+    let dir = tempfile::tempdir().unwrap();
+    for project in ["/home/joe/ai/aida", "/home/u/a space/100%$proj"] {
+        let path = dir.path().join("mail-wake.service");
+        std::fs::write(
+            &path,
+            unit_text(
+                Path::new(project),
+                Path::new("/bin/true"),
+                Path::new("/bin/true"),
+            )
+            .unwrap(),
+        )
+        .unwrap();
+        let output = std::process::Command::new("systemd-analyze")
+            .args(["verify", "--man=no"])
+            .arg(&path)
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+}
+
+// All manager calls go to a stub under a fake HOME in a one-test child.
+// Failed installs must return before printing their success announcement.
+// trace:BUG-2397 | ai:codex
+#[test]
+fn bug_2397_install_failures_and_runtime_status_use_stub_manager() {
+    if let Some(output) = crate::test_env::run_path_isolated_test_output() {
+        assert!(!String::from_utf8_lossy(&output.stdout).contains("installed aida-mail-wake-"));
+        return;
+    }
+    let r = mail_repo();
+    let home = tempfile::tempdir().unwrap();
+    let bin = home.path().join("bin");
+    std::fs::create_dir(&bin).unwrap();
+    let stub = bin.join("systemctl");
+    let log = home.path().join("calls");
+    let path = format!("{}:{}", bin.display(), std::env::var("PATH").unwrap());
+    let mut env = crate::test_env::EnvVarsGuard::set(&[
+        ("HOME", home.path().to_str().unwrap()),
+        ("XDG_CONFIG_HOME", home.path().to_str().unwrap()),
+        ("PATH", &path),
+    ]);
+    let write_stub = |body: &str| {
+        std::fs::write(
+            &stub,
+            format!("#!/bin/sh\necho \"$*\" >> '{}'\n{}\n", log.display(), body),
+        )
+        .unwrap();
+        std::fs::set_permissions(&stub, std::fs::Permissions::from_mode(0o700)).unwrap();
+    };
+    for (fail, expected) in [("daemon-reload", 1), ("enable", 2), ("is-active", 3)] {
+        std::fs::write(&log, "").unwrap();
+        write_stub(&format!(
+            "if [ \"$2\" = '{fail}' ]; then exit 9; fi\nexit 0"
+        ));
+        let error = service(
+            &r.main,
+            crate::mailbox_cmd::WakeServiceAction::Install,
+            Some(Path::new("/bin/true")),
+            false,
+        )
+        .unwrap_err();
+        assert!(format!("{error:#}").contains(fail), "{error:#}");
+        assert_eq!(
+            std::fs::read_to_string(&log).unwrap().lines().count(),
+            expected
+        );
+        assert!(
+            unit_path(&unit_name(&r.main)).is_file(),
+            "file presence survives activation failure"
+        );
+    }
+    write_stub("exit 0");
+    install_unit(
+        &unit_path(&unit_name(&r.main)),
+        &unit_name(&r.main),
+        "fixture",
+    )
+    .unwrap();
+    for (active, sub, result, running, failed) in [
+        ("active", "running", "success", true, false),
+        ("inactive", "dead", "success", false, false),
+        ("failed", "failed", "exit-code", false, true),
+    ] {
+        write_stub(&format!("printf 'LoadState=loaded\\nActiveState={active}\\nSubState={sub}\\nResult={result}\\n'"));
+        let runtime = service_runtime(&unit_name(&r.main));
+        assert_eq!(runtime["running"], running);
+        assert_eq!(runtime["failed"], failed);
+        assert_eq!(runtime["result"], result);
+    }
+    write_stub("exit 7");
+    let runtime = service_runtime(&unit_name(&r.main));
+    assert!(runtime["running"].is_null());
+    assert!(runtime["error"].as_str().unwrap().contains("show"));
+    std::fs::remove_file(&stub).unwrap();
+    env.set_key("PATH", &bin);
+    let error = systemctl(&["daemon-reload"]).unwrap_err();
+    assert!(format!("{error:#}").contains("systemctl --user daemon-reload"));
 }

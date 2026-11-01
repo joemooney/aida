@@ -22311,14 +22311,17 @@ Manage and render agent skills
 Usage: aida mcp skill [OPTIONS] <COMMAND>
 
 Commands:
-  render  Render a stock skill merged with its optional local override (.claude/skills/<name>.md +
-          .local.md) to stdout
+  render  Render a skill with its optional local overlay to stdout. Prefers
+          `.agents/skills/<name>/SKILL.md`, then `.claude/skills/<name>/SKILL.md`, then legacy
+          `.claude/skills/<name>.md`. Folder overlays use `SKILL.local.md`, falling back to
+          `<name>.local.md` in the same pack
   lint    Lint skills that reference an implementation plan. Scans every skill under
-          `.claude/skills/` for plan references (`docs/plans/*.md` paths); for each skill that
-          references a plan it runs the same checks `aida plan verify` runs on each referenced plan
-          (drifted refs / missing files / absent sections) and a raw-glyph check on the skill body.
-          A skill pointing at a drifted or missing plan is an error. Read-only; never rewrites.
-          Exits non-zero on any error so it can run as a CI gate
+          `.agents/skills/` and `.claude/skills/` (folder prompts and legacy Claude flat files) for
+          plan references (`docs/plans/*.md` paths); for each skill that references a plan it runs
+          the same checks `aida plan verify` runs on each referenced plan (drifted refs / missing
+          files / absent sections) and a raw-glyph check on the skill body. A skill pointing at a
+          drifted or missing plan is an error. Read-only; never rewrites. Exits non-zero on any
+          error so it can run as a CI gate
   help    Print this message or the help of the given subcommand(s)
 
 Options:
@@ -22339,8 +22342,9 @@ Options:
   -h, --help
           Print help (see a summary with '-h')
 ===== aida mcp skill render
-Render a stock skill merged with its optional local override (.claude/skills/<name>.md + .local.md)
-to stdout
+Render a skill with its optional local overlay to stdout. Prefers `.agents/skills/<name>/SKILL.md`,
+then `.claude/skills/<name>/SKILL.md`, then legacy `.claude/skills/<name>.md`. Folder overlays use
+`SKILL.local.md`, falling back to `<name>.local.md` in the same pack
 
 Usage: aida mcp skill render [OPTIONS] <NAME>
 
@@ -22366,18 +22370,19 @@ Options:
   -h, --help
           Print help (see a summary with '-h')
 ===== aida mcp skill lint
-Lint skills that reference an implementation plan. Scans every skill under `.claude/skills/` for
-plan references (`docs/plans/*.md` paths); for each skill that references a plan it runs the same
-checks `aida plan verify` runs on each referenced plan (drifted refs / missing files / absent
-sections) and a raw-glyph check on the skill body. A skill pointing at a drifted or missing plan is
-an error. Read-only; never rewrites. Exits non-zero on any error so it can run as a CI gate
+Lint skills that reference an implementation plan. Scans every skill under `.agents/skills/` and
+`.claude/skills/` (folder prompts and legacy Claude flat files) for plan references
+(`docs/plans/*.md` paths); for each skill that references a plan it runs the same checks `aida plan
+verify` runs on each referenced plan (drifted refs / missing files / absent sections) and a
+raw-glyph check on the skill body. A skill pointing at a drifted or missing plan is an error.
+Read-only; never rewrites. Exits non-zero on any error so it can run as a CI gate
 
 Usage: aida mcp skill lint [OPTIONS] [SKILL]
 
 Arguments:
   [SKILL]
-          Lint a single skill file instead of the whole `.claude/skills/` tree. Path may be absolute
-          or relative to the project root
+          Lint a single skill file instead of both skill trees. Path may be absolute or relative to
+          the project root
 
 Options:
       --json
@@ -22457,7 +22462,7 @@ Commands:
             `docs/aida/`
   check     Verify the docs tree on disk matches what the graph would render. Exits non-zero on
             drift. Suitable for a CI / pre-commit check
-  glossary  Print AIDA's machinery + lifecycle glossary from the binary's embedded copy
+  glossary  Print AIDA's product, machinery and lifecycle glossary from the binary's embedded copy
   sweep     Review documentation for drift that has built up: command text this build no longer has,
             and terms the website defines with no glossary entry. Reviews the CLI docs, the website
             pages, the glossary and READMEs touched since `--since` (default: the last recorded
@@ -22539,16 +22544,20 @@ Options:
   -h, --help
           Print help (see a summary with '-h')
 ===== aida docs glossary
-Print AIDA's machinery + lifecycle glossary from the binary's embedded copy.
+Print AIDA's product, machinery and lifecycle glossary from the binary's embedded copy.
 
-Surfaces the canonical vocabulary (orchestrator, phase, drain, lease, role, scope, worktree, …) and
-the spec-lifecycle verbs (committed, pushed, merged, completed, released) without hunting for the
-file under .aida/discipline/ — and stays correct even if the project's scaffolded copy is missing or
-stale. Default prints both sections.
+Surfaces the plain-language product terms (merge hold, mandate, grant, hub, …), the machinery
+vocabulary (orchestrator, phase, drain, lease, role, scope, worktree, …) and the spec-lifecycle
+verbs (committed, pushed, merged, completed, released) without hunting for the file under
+.aida/discipline/ — and stays correct even if the project's scaffolded copy is missing or stale.
+Default prints all three sections; any section flag prints only the sections named.
 
 Usage: aida docs glossary [OPTIONS]
 
 Options:
+      --product
+          Print only the product glossary (merge hold, mandate, grant, hub, …)
+
       --machinery
           Print only the machinery glossary (orchestrator, drain, lease, …)
 
@@ -27548,9 +27557,19 @@ Options:
 Derive a machine-checkable completion condition from AIDA metadata, ready to paste into `/goal` (or
 `/schedule`). Each flag contributes one clause; multiple flags compose with `AND`. Every clause
 carries an explicit verification command so a small evaluator can check it deterministically — no
-vague "make the tests pass" conditions that loop forever
+vague "make the tests pass" conditions that loop forever.
+
+`aida goal advisor …` keeps the operator's standing goal for the advisor seat in the store (see
+`aida goal advisor --help`).
 
 Usage: aida goal [OPTIONS]
+       aida goal <COMMAND>
+
+Commands:
+  advisor  The operator's standing goal for the advisor seat, kept in the requirements store so a
+           new or rotated advisor session (any vendor) reads the same goal. Only the operator sets
+           it, from their own terminal; any seat can show, check and list it
+  help     Print this message or the help of the given subcommand(s)
 
 Options:
       --batch <NAME>
@@ -27572,6 +27591,16 @@ Options:
       --copy
           Copy the assembled `/goal` line to the system clipboard
 
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
       --invoke
           Print only the bare `/goal <condition>` line, no framing — for scripting / command
           substitution
@@ -27579,6 +27608,148 @@ Options:
       --as-deep-link
           Print a `claude-cli://open` deep link with the `/goal …` line pre-filled. Click → Claude
           Code opens in cwd with the prompt ready (inert until Enter). Requires Claude Code v2.1.91+
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida goal advisor
+The operator's standing goal for the advisor seat, kept in the requirements store so a new or
+rotated advisor session (any vendor) reads the same goal. Only the operator sets it, from their own
+terminal; any seat can show, check and list it
+
+Usage: aida goal advisor [OPTIONS] <COMMAND>
+
+Commands:
+  set      Set the advisor's goal: free text plus optional checkable clauses. Replaces the active
+           goal; the previous one stays in history. Operator only, at an interactive terminal
+           outside any agent session
+  show     Show the active goal: text, clauses with their verify commands, who set it and when
+  check    Check each clause and print met/unmet. Exits 0 only when every clause is met; a goal with
+           no checkable clauses, or no goal, is never met
+  history  Every goal set, newest first
+  help     Print this message or the help of the given subcommand(s)
+
+Options:
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida goal advisor set
+Set the advisor's goal: free text plus optional checkable clauses. Replaces the active goal; the
+previous one stays in history. Operator only, at an interactive terminal outside any agent session
+
+Usage: aida goal advisor set [OPTIONS] <TEXT>
+
+Arguments:
+  <TEXT>
+          The goal, in your words
+
+Options:
+      --batch <NAME>
+          Clause: all specs tagged `batch:<NAME>` are resolved
+
+      --epic <ID>
+          Clause: all direct children of `<ID>` are resolved
+
+      --spec <SPEC-ID>
+          Clause: spec `<SPEC-ID>` is Completed
+
+      --pr <N>
+          Clause: PR `<N>` is merged
+
+      --queue-empty <ROLE>
+          Clause: the given role's queue is empty
+
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida goal advisor show
+Show the active goal: text, clauses with their verify commands, who set it and when
+
+Usage: aida goal advisor show [OPTIONS]
+
+Options:
+      --json
+          Emit JSON
+
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida goal advisor check
+Check each clause and print met/unmet. Exits 0 only when every clause is met; a goal with no
+checkable clauses, or no goal, is never met
+
+Usage: aida goal advisor check [OPTIONS]
+
+Options:
+      --json
+          Emit JSON
+
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida goal advisor history
+Every goal set, newest first
+
+Usage: aida goal advisor history [OPTIONS]
+
+Options:
+      --json
+          Emit JSON
 
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
@@ -27989,14 +28160,17 @@ Stock and local skill tooling
 Usage: aida skill [OPTIONS] <COMMAND>
 
 Commands:
-  render  Render a stock skill merged with its optional local override (.claude/skills/<name>.md +
-          .local.md) to stdout
+  render  Render a skill with its optional local overlay to stdout. Prefers
+          `.agents/skills/<name>/SKILL.md`, then `.claude/skills/<name>/SKILL.md`, then legacy
+          `.claude/skills/<name>.md`. Folder overlays use `SKILL.local.md`, falling back to
+          `<name>.local.md` in the same pack
   lint    Lint skills that reference an implementation plan. Scans every skill under
-          `.claude/skills/` for plan references (`docs/plans/*.md` paths); for each skill that
-          references a plan it runs the same checks `aida plan verify` runs on each referenced plan
-          (drifted refs / missing files / absent sections) and a raw-glyph check on the skill body.
-          A skill pointing at a drifted or missing plan is an error. Read-only; never rewrites.
-          Exits non-zero on any error so it can run as a CI gate
+          `.agents/skills/` and `.claude/skills/` (folder prompts and legacy Claude flat files) for
+          plan references (`docs/plans/*.md` paths); for each skill that references a plan it runs
+          the same checks `aida plan verify` runs on each referenced plan (drifted refs / missing
+          files / absent sections) and a raw-glyph check on the skill body. A skill pointing at a
+          drifted or missing plan is an error. Read-only; never rewrites. Exits non-zero on any
+          error so it can run as a CI gate
   help    Print this message or the help of the given subcommand(s)
 
 Options:
@@ -28017,8 +28191,9 @@ Options:
   -h, --help
           Print help (see a summary with '-h')
 ===== aida skill render
-Render a stock skill merged with its optional local override (.claude/skills/<name>.md + .local.md)
-to stdout
+Render a skill with its optional local overlay to stdout. Prefers `.agents/skills/<name>/SKILL.md`,
+then `.claude/skills/<name>/SKILL.md`, then legacy `.claude/skills/<name>.md`. Folder overlays use
+`SKILL.local.md`, falling back to `<name>.local.md` in the same pack
 
 Usage: aida skill render [OPTIONS] <NAME>
 
@@ -28044,18 +28219,19 @@ Options:
   -h, --help
           Print help (see a summary with '-h')
 ===== aida skill lint
-Lint skills that reference an implementation plan. Scans every skill under `.claude/skills/` for
-plan references (`docs/plans/*.md` paths); for each skill that references a plan it runs the same
-checks `aida plan verify` runs on each referenced plan (drifted refs / missing files / absent
-sections) and a raw-glyph check on the skill body. A skill pointing at a drifted or missing plan is
-an error. Read-only; never rewrites. Exits non-zero on any error so it can run as a CI gate
+Lint skills that reference an implementation plan. Scans every skill under `.agents/skills/` and
+`.claude/skills/` (folder prompts and legacy Claude flat files) for plan references
+(`docs/plans/*.md` paths); for each skill that references a plan it runs the same checks `aida plan
+verify` runs on each referenced plan (drifted refs / missing files / absent sections) and a
+raw-glyph check on the skill body. A skill pointing at a drifted or missing plan is an error.
+Read-only; never rewrites. Exits non-zero on any error so it can run as a CI gate
 
 Usage: aida skill lint [OPTIONS] [SKILL]
 
 Arguments:
   [SKILL]
-          Lint a single skill file instead of the whole `.claude/skills/` tree. Path may be absolute
-          or relative to the project root
+          Lint a single skill file instead of both skill trees. Path may be absolute or relative to
+          the project root
 
 Options:
       --json
@@ -51921,7 +52097,7 @@ Working on aida itself
       "skill",
       "render"
     ],
-    "about": "Render a stock skill merged with its optional local override (.claude/skills/<name>.md + .local.md) to stdout",
+    "about": "Render a skill with its optional local overlay to stdout. Prefers `.agents/skills/<name>/SKILL.md`, then `.claude/skills/<name>/SKILL.md`, then legacy `.claude/skills/<name>.md`. Folder overlays use `SKILL.local.md`, falling back to `<name>.local.md` in the same pack",
     "flags": [
       {
         "name": "canonical-ids",
@@ -51948,7 +52124,7 @@ Working on aida itself
       "skill",
       "lint"
     ],
-    "about": "Lint skills that reference an implementation plan. Scans every skill under `.claude/skills/` for plan references (`docs/plans/*.md` paths); for each skill that references a plan it runs the same checks `aida plan verify` runs on each referenced plan (drifted refs / missing files / absent sections) and a raw-glyph check on the skill body. A skill pointing at a drifted or missing plan is an error. Read-only; never rewrites. Exits non-zero on any error so it can run as a CI gate",
+    "about": "Lint skills that reference an implementation plan. Scans every skill under `.agents/skills/` and `.claude/skills/` (folder prompts and legacy Claude flat files) for plan references (`docs/plans/*.md` paths); for each skill that references a plan it runs the same checks `aida plan verify` runs on each referenced plan (drifted refs / missing files / absent sections) and a raw-glyph check on the skill body. A skill pointing at a drifted or missing plan is an error. Read-only; never rewrites. Exits non-zero on any error so it can run as a CI gate",
     "flags": [
       {
         "name": "canonical-ids",
@@ -52116,7 +52292,7 @@ Working on aida itself
       "docs",
       "glossary"
     ],
-    "about": "Print AIDA's machinery + lifecycle glossary from the binary's embedded copy",
+    "about": "Print AIDA's product, machinery and lifecycle glossary from the binary's embedded copy",
     "flags": [
       {
         "name": "canonical-ids",
@@ -52142,6 +52318,11 @@ Working on aida itself
         "name": "machinery",
         "takes_value": false,
         "help": "Print only the machinery glossary (orchestrator, drain, lease, …)"
+      },
+      {
+        "name": "product",
+        "takes_value": false,
+        "help": "Print only the product glossary (merge hold, mandate, grant, hub, …)"
       }
     ],
     "hidden": false
@@ -56961,6 +57142,180 @@ Working on aida itself
   {
     "path": [
       "aida",
+      "goal",
+      "advisor"
+    ],
+    "about": "The operator's standing goal for the advisor seat, kept in the requirements store so a new or rotated advisor session (any vendor) reads the same goal. Only the operator sets it, from their own terminal; any seat can show, check and list it",
+    "flags": [
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "goal",
+      "advisor",
+      "set"
+    ],
+    "about": "Set the advisor's goal: free text plus optional checkable clauses. Replaces the active goal; the previous one stays in history. Operator only, at an interactive terminal outside any agent session",
+    "flags": [
+      {
+        "name": "batch",
+        "takes_value": true,
+        "help": "Clause: all specs tagged `batch:<NAME>` are resolved"
+      },
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "epic",
+        "takes_value": true,
+        "help": "Clause: all direct children of `<ID>` are resolved"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "pr",
+        "takes_value": true,
+        "help": "Clause: PR `<N>` is merged"
+      },
+      {
+        "name": "queue-empty",
+        "takes_value": true,
+        "help": "Clause: the given role's queue is empty"
+      },
+      {
+        "name": "spec",
+        "takes_value": true,
+        "help": "Clause: spec `<SPEC-ID>` is Completed"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "goal",
+      "advisor",
+      "show"
+    ],
+    "about": "Show the active goal: text, clauses with their verify commands, who set it and when",
+    "flags": [
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "json",
+        "takes_value": false,
+        "help": "Emit JSON"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "goal",
+      "advisor",
+      "check"
+    ],
+    "about": "Check each clause and print met/unmet. Exits 0 only when every clause is met; a goal with no checkable clauses, or no goal, is never met",
+    "flags": [
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "json",
+        "takes_value": false,
+        "help": "Emit JSON"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "goal",
+      "advisor",
+      "history"
+    ],
+    "about": "Every goal set, newest first",
+    "flags": [
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "json",
+        "takes_value": false,
+        "help": "Emit JSON"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
       "human"
     ],
     "about": "The 'human' role vector — the front door to \"what needs a person?\". Bare `aida human [--short]` shows the bottleneck view (every spec a human must decide, review, or triage), the same set as `aida list human`, grouped by WHY. `aida human unblock` emits a paste-ready advisor prompt that grooms the open items keeping themselves out of the burndown. `aida human away/home/presence` names the operator-presence verbs under the same role vector while keeping the top-level aliases. The human is the permanent terminus of the escalation cascade (implementer → advisor → human); this gives that role a first-class home symmetric with the agent roles",
@@ -57373,7 +57728,7 @@ Working on aida itself
       "skill",
       "render"
     ],
-    "about": "Render a stock skill merged with its optional local override (.claude/skills/<name>.md + .local.md) to stdout",
+    "about": "Render a skill with its optional local overlay to stdout. Prefers `.agents/skills/<name>/SKILL.md`, then `.claude/skills/<name>/SKILL.md`, then legacy `.claude/skills/<name>.md`. Folder overlays use `SKILL.local.md`, falling back to `<name>.local.md` in the same pack",
     "flags": [
       {
         "name": "canonical-ids",
@@ -57399,7 +57754,7 @@ Working on aida itself
       "skill",
       "lint"
     ],
-    "about": "Lint skills that reference an implementation plan. Scans every skill under `.claude/skills/` for plan references (`docs/plans/*.md` paths); for each skill that references a plan it runs the same checks `aida plan verify` runs on each referenced plan (drifted refs / missing files / absent sections) and a raw-glyph check on the skill body. A skill pointing at a drifted or missing plan is an error. Read-only; never rewrites. Exits non-zero on any error so it can run as a CI gate",
+    "about": "Lint skills that reference an implementation plan. Scans every skill under `.agents/skills/` and `.claude/skills/` (folder prompts and legacy Claude flat files) for plan references (`docs/plans/*.md` paths); for each skill that references a plan it runs the same checks `aida plan verify` runs on each referenced plan (drifted refs / missing files / absent sections) and a raw-glyph check on the skill body. A skill pointing at a drifted or missing plan is an error. Read-only; never rewrites. Exits non-zero on any error so it can run as a CI gate",
     "flags": [
       {
         "name": "canonical-ids",

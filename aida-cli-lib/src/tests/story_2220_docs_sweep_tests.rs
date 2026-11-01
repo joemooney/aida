@@ -614,6 +614,47 @@ fn project(tmp: &Path, with_origin: bool) -> std::path::PathBuf {
     root
 }
 
+// Main's product glossary remains the website's canonical feed; a sweep
+// reads all vocabulary sections and sends new stubs to that source only.
+// trace:STORY-2220 | ai:codex
+#[test]
+fn the_product_glossary_is_the_single_source_for_website_stubs() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = project(tmp.path(), false);
+    let product = "aida-core/templates/.aida/discipline/product-glossary.md";
+    let machinery = "aida-core/templates/.aida/discipline/machinery-glossary.md";
+    commit_files(
+        &root,
+        &[
+            (product, "# Product glossary\n\n## Terms\n\n### Merge hold\n\nA gate.\n\n## How to add a term\n\nEdit the master.\n"),
+            (machinery, "# Machinery glossary\n\n### Drain\n\nA worker.\n"),
+            ("docs/showcase/a.html", "<dfn>Merge hold</dfn><dfn>Drain</dfn><dfn>New term</dfn>"),
+        ],
+        "vocabulary",
+    );
+    let (findings, _, _, _) = sweep(&root, &SweepConfig::default(), None).unwrap();
+    let gaps: Vec<_> = findings
+        .iter()
+        .filter(|f| f.kind == FindingKind::GlossaryGap)
+        .collect();
+    assert_eq!(gaps.len(), 1, "{gaps:?}");
+    assert!(
+        matches!(&gaps[0].fix, Some(Fix::GlossaryStub { source, term }) if source == product && term == "new term")
+    );
+    let before = std::fs::read_to_string(root.join(machinery)).unwrap();
+    let p = plan(&findings, 20);
+    assert_eq!(
+        apply_edits(&root, &p.edits).unwrap(),
+        [product.to_string()].into()
+    );
+    let text = std::fs::read_to_string(root.join(product)).unwrap();
+    assert!(text.find("### new term").unwrap() < text.find("## How to add a term").unwrap());
+    assert_eq!(
+        std::fs::read_to_string(root.join(machinery)).unwrap(),
+        before
+    );
+}
+
 fn mails(root: &Path) -> Vec<aida_core::mailbox::Message> {
     crate::mailbox_store::read_local_messages(root).unwrap()
 }

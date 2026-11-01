@@ -42,7 +42,12 @@ const DEFAULT_WEBSITE_DIR: &str = "docs/showcase";
 const DEFAULT_RECIPIENT: &str = "product";
 /// Glossary sources, first existing wins: the template master in AIDA's own
 /// repository, then the scaffolded copy every downstream project carries.
+/// Prefer the product vocabulary used by the website; older projects fall
+/// back to their machinery glossary.
+// trace:STORY-2220 | ai:codex
 const GLOSSARY_CANDIDATES: &[&str] = &[
+    "aida-core/templates/.aida/discipline/product-glossary.md",
+    ".aida/discipline/product-glossary.md",
     "aida-core/templates/.aida/discipline/machinery-glossary.md",
     ".aida/discipline/machinery-glossary.md",
 ];
@@ -1283,7 +1288,11 @@ pub(crate) fn sweep(
     let mut known = BTreeSet::new();
     if let Some(src) = &glossary_source {
         let dir = Path::new(src).parent().unwrap_or(Path::new(""));
-        for name in ["machinery-glossary.md", "lifecycle-vocabulary.md"] {
+        for name in [
+            "product-glossary.md",
+            "machinery-glossary.md",
+            "lifecycle-vocabulary.md",
+        ] {
             if let Ok(text) = std::fs::read_to_string(project_root.join(dir).join(name)) {
                 known.extend(glossary_terms_from(&text));
             }
