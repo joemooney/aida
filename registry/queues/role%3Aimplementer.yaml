@@ -1,4 +1,11 @@
 - user_id: role:implementer
+  requirement_id: 01a19522-caf6-7ed2-b79e-13167544f557
+  position: 270000
+  added_by: role:implementer
+  note: 'PR-3195 verdict at e796e01e61f106956eeef59a2d2dd4d89856bb80: gate-ledger PR-3195.jsonl#2. Bundle meaningful regression/Codex-seat evidence, dead-code cleanup, toon check rendering, and check exit-status coverage.'
+  added_at: 2026-11-01T06:53:10.127320808Z
+  for_role: implementer
+- user_id: role:implementer
   requirement_id: 01a194ed-5fc3-71b1-8d17-9838ef33e8eb
   position: 271000
   added_by: role:implementer
