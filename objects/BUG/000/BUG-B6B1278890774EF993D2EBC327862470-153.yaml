@@ -16,7 +16,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T01:23:46.116682909Z
-modified_at: 2026-11-01T22:08:40.601750977Z
+modified_at: 2026-11-01T22:09:59.197060244Z
 req_type: Bug
 tags:
 - containment
@@ -33,6 +33,26 @@ comments:
   created_at: 2026-11-01T04:32:04.865485485Z
   modified_at: 2026-11-01T04:32:04.865485485Z
   session_id: 77a7a933-9a3f-4243-9a44-892bcedf206c
+- id: 01a19929-8b9d-7533-b7c7-2de1b30d9c5f
+  author: joe
+  content: |-
+    ## Implementer approach
+
+    ### Acceptance criteria as tests
+    - **Unit:** `session_next_lines` for a clone names `cd <clone>` and never contains `aida worktree enter` (AC1).
+    - **Unit:** vendor = codex prints `codex    # then $aida-implement <ID>`; claude prints today's `claude    # then /aida-implement <ID>` (AC2), for both clone and worktree.
+    - **Unit:** linked worktree + claude reproduces today's exact lines, with and without the warm-cache `aida worktree enter` line (AC3).
+    - AC4 covered by the 2x2 matrix above.
+
+    ### Expected files
+    - `aida-cli-lib/src/session_start.rs` (pure line builder + call site + tests)
+
+    ### Ambiguities / conflicts as questions
+    - The 2026-11-01 comment asks for a new acceptance: re-running session start while the spec has an open PR should check out that PR's head branch. That changes branch selection (needs gh lookup), not the Next: block; I will leave it out of this fix and file it as a follow-up finding unless told otherwise.
+  created_at: 2026-11-01T22:09:59.197060244Z
+  modified_at: 2026-11-01T22:09:59.197060244Z
+  session_id: 01a199285248
+  harness_version: 2.1.316 (Claude Code)
 history:
 - id: 01a194b4-bdcf-7f81-9c1c-ea158e65306d
   author: joe
