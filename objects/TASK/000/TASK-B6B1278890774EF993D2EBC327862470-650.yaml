@@ -1,0 +1,27 @@
+id: 01a194b9-f0d4-7221-bcb8-94b9add24619
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-650
+title: 'cosmetic: mandate_traces.rs store_snapshot_stable doc comment has one line well…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on BUG-B6B1278890774EF993D2EBC327862470-056, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  cosmetic: mandate_traces.rs store_snapshot_stable doc comment has one line well past 100 columns ('either way — so a concurrent fleet write of an unrelated spec is stable, while a write'); rewrap on a future touch
+  Reviewed sha: fbd81085b465f460a0db02c57c77882852e3d6d7
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-01T01:29:36.212889548Z
+modified_at: 2026-11-01T01:29:36.212889548Z
+req_type: Task
+tags:
+- carried-from:BUG-B6B1278890774EF993D2EBC327862470-056
+- finding-hash:4e82bb6d
+- from-review:BUG-B6B1278890774EF993D2EBC327862470-056
+- kind:carried-forward
+filed_at:
+  code_sha: cdcdfaedb7a364fc109031fcf9c4ebc854d66738
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 43d9f958030
+  vendor: claude
