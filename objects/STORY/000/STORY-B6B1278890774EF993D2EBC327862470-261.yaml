@@ -25,7 +25,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T22:58:37.964636963Z
-modified_at: 2026-11-01T04:26:53.314533428Z
+modified_at: 2026-11-01T04:49:56.814195195Z
 req_type: Story
 tags:
 - docs
@@ -63,6 +63,24 @@ comments:
     - Should TERM specs keep rendering in `docs/aida/10-glossary.md`? That generator is project-generic, so it stays unchanged. AIDA's own vocabulary moves to the product glossary, and the TERM content is folded into it.
   created_at: 2026-11-01T04:26:53.314533428Z
   modified_at: 2026-11-01T04:26:53.314533428Z
+  session_id: 01a195596c6b
+  harness_version: 2.1.316 (Claude Code)
+- id: 01a19571-5c4e-79a2-9c70-adab927d5a2f
+  author: joe
+  content: |-
+    ## Implementer findings (could not file as draft TASKs: `aida add` hit a read-only filesystem during ID allocation, and MCP file_finding was denied)
+
+    1. **kind:deviation, severity:minor.** Rust tests were not run locally. The sandbox kills background jobs and caps each call at 60s, so aida-cli-lib never finished compiling. The `aida docs glossary` entries in cli_help_snapshot.txt were edited by hand: about line, long help re-wrapped with a greedy wrap that reproduces the old text exactly, `--product`, and the JSON flag. CI is the first run of glossary_render_tests, help_surface_matches_golden_snapshot and context_budget. The discipline README gained 117 bytes. Every non-cargo gate passed locally.
+    2. **kind:followup-suggestion, severity:minor.** Slice 2 work:
+       - AC4: link the authority explainer (TASK-HOME-280) once it is in the repo, using `[term](../aida-core/templates/.aida/discipline/product-glossary.md#anchor)`.
+       - AC5: a report-only term-coverage check.
+       The STORY-2219 trailer completes this story on merge, so file both as new specs.
+    3. **kind:design-choice, severity:cosmetic.**
+       - In docs/cli/12-glossary.md, the product Role, Seat and "How to add a term" headings now take mdBook's bare anchors ahead of the machinery glossary's, so machinery `[role](#role)` links land on the product entry. The website is unaffected.
+       - build.py allows exactly one non-docs source: a manifest entry with `"glossary": true` whose file sits directly in the discipline template dir.
+       - The TERM specs were folded into the product glossary; the generic docs/aida/10-glossary.md renderer is unchanged.
+  created_at: 2026-11-01T04:49:56.814195195Z
+  modified_at: 2026-11-01T04:49:56.814195195Z
   session_id: 01a195596c6b
   harness_version: 2.1.316 (Claude Code)
 history:
