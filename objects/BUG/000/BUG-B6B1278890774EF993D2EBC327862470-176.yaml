@@ -1,0 +1,32 @@
+id: 01a19698-4606-76d3-afb4-3998866e4cd8
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-176
+agreed_id: BUG-2403
+title: Canonical and friendly spec keys select different retained review verdicts, blocking fresh approvals and replaying obsolete rework findings
+description: |
+  ## Production evidence
+  Current native reviewers record canonical spec IDs while older holds/rework were armed under friendly IDs. PR3185 fresh independently granted APPROVED e0b7d02846577c9fd8406f07cbc796af9551b18e is retained in gate ledgerPR3185#20(canonical)/#21(phase3) at08:53Z, yet `aida review verdict STORY-2204` returns oldf3132074 from#19; auto-release correctly refusesstalehead. PR3194 fresh independent REQUEST_CHANGES6b1fd1a at10:04Z ledger#13 has one empty-local-YAMLqueue blocker, but `aida queue rework STORY-2220` imports obsolete1a9bb9a findings(portability and combinedcap, alreadyfixedandverified) and files repeated-unchanged-review observationTASK...661 instead of routingcurrentfinding. Sourcequeue_cmd8480+ recurrenceguard is operatingon selectedstaleevidence. Root manually resolveddispute, preservednewruling and requeued; no ledgerpatch/holdwaiver. Prior BUG2332aliascommand-resolution completed, but gateledger projection across canonical/friendlyaliases isstillinconsistent.
+  ## Required behavior
+  1. Diagnose authoritative selection for supported review record/verdict/rework/hold readers when the SAME store-resolved requirement has canonical, nativealias and friendlylabels. Select current applicable retained verdict consistently; preserve history/archives/attestation/headbinding and refusal precedence. A stalealias must not override a later record for the same provedidentity. No prefix/stringguess linking unrelatedspecs, PRs or UUIDs.
+  2. Regression fixtures record oldfriendly verdict, newer canonical/phase3 verdict atchangedhead; friendly/canonical reads agree. Cover approve→requestchanges and refusal→approve, reworkfindings + recurrenceguard, holdstillrefuseswronghead/invalidgrant/unrelatedspec and accepts only lawfulfreshidentityevidence. Both GitHub PR and GitLab MR handshakes mustretain existingmappingcontracts.
+  3. Repair only supported resolution/projection, never direct JSON/ledgerediting, forgedattestation or manualbypass. Existing security/hold/authority and bounded nonsymlink handle reads stayintact. No globalrole/grantsandboxchange.
+  4. Sensitivegate code: SKETCHONLY first, independentadvisorsignoff beforeimplementation. Avoid concurrentgate/review_verdict overlap with activeBUG2398; diagnose/read now, codeafter. Independentfreshreview andnormalgates. LIGHTtargetedfilter+fast, >10/sharedinfraadditionalgates, nofullsuite/slotbypass.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-01T10:12:04.230556201Z
+modified_at: 2026-11-01T10:12:04.230556201Z
+req_type: Bug
+tags:
+- alias
+- architecture
+- gate-ledger
+- review
+- sketch-first
+filed_at:
+  code_sha: 6fefb63280c352be0194c2cfadf54a085eb55471
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 4ce0af750fc
+  vendor: codex
