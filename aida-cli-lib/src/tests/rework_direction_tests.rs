@@ -264,6 +264,42 @@ fn untimed_findings_stay_authoritative_over_a_brief_end_to_end() {
     assert!(prompt.ends_with("/aida-pickup BUG-051"));
 }
 
+/// Round 3, finding 1, the real-world order: verdict recorded at T0, the
+/// advisor posts `ADVISOR REWORK BRIEF round N` at T1, then `aida queue
+/// rework` posts the findings comment at T2. The cut-off is the block's
+/// `Recorded:` time, not the later findings comment, so the brief leads.
+#[test]
+fn brief_between_recorded_verdict_and_queue_rework_comment_leads() {
+    let _g = no_gate();
+    let recorded_at = Utc::now() - chrono::Duration::minutes(30);
+    let findings = format!(
+        "REVIEW FINDINGS TO ADDRESS (PR #3177):\nVerdict: CHANGES REQUESTED\n\
+         Recorded: {}\n- run the bwrap tests",
+        recorded_at.to_rfc3339()
+    );
+    let comments = vec![comment(20, REWORK_BRIEF), comment(10, &findings)];
+    let prompt = assemble(&item_plan(), Some(findings.as_str()), &comments, None);
+    assert!(
+        prompt.starts_with("ADVISOR BRIEF ("),
+        "the brief written after the recorded verdict leads: {prompt}"
+    );
+    assert!(prompt.contains("SUPERSEDED CONTEXT"), "{prompt}");
+    assert!(
+        !prompt.contains("AUTHORITATIVE TASK"),
+        "the recorded verdict predates the brief: {prompt}"
+    );
+
+    // Older-brief behaviour holds: a brief before `Recorded:` still defers.
+    let older = vec![comment(40, REWORK_BRIEF), comment(10, &findings)];
+    let prompt = assemble(&item_plan(), Some(findings.as_str()), &older, None);
+    assert!(
+        prompt.contains("ITEMS STILL OPEN (AUTHORITATIVE TASK)"),
+        "{prompt}"
+    );
+    assert!(prompt.contains("OLDER CONTEXT"), "{prompt}");
+    assert!(!prompt.contains("SUPERSEDED CONTEXT"), "{prompt}");
+}
+
 #[test]
 fn verdict_time_comes_from_the_recorded_line_or_comments() {
     let brief = vec![comment(60, "ADVISOR BRIEF: merge main")];
@@ -425,4 +461,20 @@ fn detect_main_conflict_forecasts_through_fetch_and_merge_tree() {
     assert_eq!(conflict.pr, 7);
     assert_eq!(conflict.base, "main");
     assert_eq!(conflict.files, vec!["f.txt".to_string()]);
+
+    // Round 3, finding 3: the fetch fails, so the stale refs (which still
+    // conflict) are not trusted and the forecast is skipped.
+    let gone = tmp.path().join("gone");
+    git(
+        &clone,
+        &["remote", "set-url", "origin", gone.to_str().unwrap()],
+    );
+    assert!(
+        matches!(
+            crate::worktree_gc::forecast_rebase_onto(&clone, "origin/main", "origin/pr-branch"),
+            crate::integrate::RebaseForecast::Conflict(_)
+        ),
+        "the stale refs alone would still forecast a conflict"
+    );
+    assert_eq!(detect_main_conflict(&clone, 7, "pr-branch"), None);
 }

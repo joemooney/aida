@@ -80,21 +80,24 @@ fn parse_recorded_line(findings: &str) -> Option<DateTime<Utc>> {
     None
 }
 
-/// When the last review verdict landed: the latest of the live findings
-/// block's `Recorded:` time and the newest findings block recorded as a
-/// spec comment. `None` when neither gives a time.
+/// When the last review verdict landed: the live findings block's
+/// `Recorded:` time. Only when the block has no usable `Recorded:` line does
+/// the newest findings block recorded as a spec comment stand in. That
+/// comment is written by `aida queue rework`, usually after the advisor's
+/// brief, so it must never push the cut-off past a real `Recorded:` time.
+/// `None` when neither gives a time.
 // trace:BUG-B6B1278890774EF993D2EBC327862470-057 | ai:claude
 pub(crate) fn last_verdict_at(
     findings: Option<&str>,
     comments: &[aida_core::Comment],
 ) -> Option<DateTime<Utc>> {
-    let from_block = findings.and_then(parse_recorded_line);
-    let from_comments = flatten(comments)
-        .into_iter()
-        .filter(|c| crate::review_verdict_display::is_findings_block(&c.content))
-        .map(|c| c.created_at)
-        .max();
-    from_block.max(from_comments)
+    findings.and_then(parse_recorded_line).or_else(|| {
+        flatten(comments)
+            .into_iter()
+            .filter(|c| crate::review_verdict_display::is_findings_block(&c.content))
+            .map(|c| c.created_at)
+            .max()
+    })
 }
 
 /// How the newest brief stands against the review findings.
@@ -162,8 +165,9 @@ pub(crate) struct MainConflict {
 const CONFLICT_FETCH_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(20);
 
 /// Forecast whether the rework PR's branch merges cleanly into the default
-/// branch. Fetches both first (best effort), then runs `git merge-tree`
-/// without touching any worktree. A clean or unknown result returns `None`.
+/// branch. Fetches both first, then runs `git merge-tree` without touching
+/// any worktree. A clean or unknown result, or a fetch that failed or timed
+/// out, returns `None`.
 // trace:BUG-B6B1278890774EF993D2EBC327862470-057 | ai:claude
 pub(crate) fn detect_main_conflict(
     project_root: &std::path::Path,
@@ -176,7 +180,9 @@ pub(crate) fn detect_main_conflict(
     // launch (or a test) instead of failing the best-effort fetch. Stored
     // remote credentials are routed off argv like every other remote call.
     // The forecast is best-effort, so a stalled connection must not block
-    // the launch either: the fetch is bounded and its outcome ignored.
+    // the launch either: the fetch is bounded. A failed or timed-out fetch
+    // skips the forecast: merge-tree on stale refs could report a conflict
+    // already fixed on the remote, or miss a new one.
     let mut fetch = aida_core::git_ops::host_remote_git_command(project_root, "origin");
     fetch
         .args(["fetch", "--quiet", "origin", "--"])
@@ -184,7 +190,10 @@ pub(crate) fn detect_main_conflict(
         .arg(head_branch)
         .env("GIT_TERMINAL_PROMPT", "0")
         .stdin(std::process::Stdio::null());
-    let _ = crate::command_output_with_timeout_detail(fetch, CONFLICT_FETCH_TIMEOUT);
+    match crate::command_output_with_timeout_detail(fetch, CONFLICT_FETCH_TIMEOUT) {
+        crate::BoundedCommandOutput::Completed(out) if out.status.success() => {}
+        _ => return None,
+    }
     let head = format!("origin/{head_branch}");
     match crate::worktree_gc::forecast_rebase_onto(project_root, &base, &head) {
         crate::integrate::RebaseForecast::Conflict(files) => Some(MainConflict {
