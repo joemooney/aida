@@ -168,6 +168,8 @@ fn sweep_cancel_requests(spool: &Spool, cfg: &WorkerConfig, active: &Arc<Mutex<A
                 output: spool.out_path(&id),
             };
             if std::fs::rename(&queued, spool.job_path("failed", &id)).is_ok() {
+                // trace:BUG-B6B1278890774EF993D2EBC327862470-150 | ai:claude
+                write_out_note(&res.output, "deputy cancelled this job before it ran.\n");
                 let _ = spool.write_result("failed", &res);
                 let mut row = LedgerRow::new(&cfg.name, &id, "cancelled");
                 row.requester = rec.as_ref().map(|r| r.requester.clone());
@@ -483,6 +485,9 @@ fn refuse(
         policy_entry: None,
         output: spool.out_path(id),
     };
+    // The result names an output file, so write one: the refusal, the job
+    // it refused, and what would let it run. trace:BUG-B6B1278890774EF993D2EBC327862470-150 | ai:claude
+    write_out_note(&res.output, &refusal_note(reason, rec));
     let _ = spool.write_result("failed", &res);
     let mut row = LedgerRow::new(&cfg.name, id, "refused");
     row.requester = rec.map(|r| r.requester.clone());
@@ -494,6 +499,43 @@ fn refuse(
     let _ = std::fs::rename(spool.job_path(from, id), spool.job_path("failed", id));
     eprintln!("deputy {}: refused job {id}: {reason}", cfg.name);
     notify(spool, cfg, rec, &res);
+}
+
+/// Append `text` to a job's output file, creating it (0600) if needed. Best
+/// effort: the result and ledger row are the record of the job.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-150 | ai:claude
+fn write_out_note(path: &Path, text: &str) {
+    if let Ok(mut f) = open_out(path) {
+        let _ = f.write_all(text.as_bytes());
+    }
+}
+
+/// The output-file text for a refused job: the refusal, the job, the remedy.
+pub(crate) fn refusal_note(reason: &str, rec: Option<&JobRecord>) -> String {
+    let mut note = format!("deputy refused this job; it did not run.\n{reason}\n");
+    if let Some(rec) = rec {
+        note.push_str(&format!("job: {}\n", rec.body.summary()));
+    }
+    if let Some(fix) = refusal_remedy(reason) {
+        note.push_str(&format!("to run it: {fix}\n"));
+    }
+    note
+}
+
+fn refusal_remedy(reason: &str) -> Option<&'static str> {
+    let code = reason.strip_prefix("refused:")?;
+    let code = code.split([' ', '(']).next().unwrap_or_default();
+    Some(match code {
+        "exec-not-allowed" => {
+            "run it through `aida`, or restart the deputy with `aida deputy --allow-exec <path>` naming the executable by path"
+        }
+        "script-jobs-disabled" => "restart the deputy with `aida deputy --allow-scripts`",
+        "bypass-flag" => "run the command yourself in your own terminal",
+        "empty-argv" => "submit a command: `aida deputy submit -- <command> [args]`",
+        "policy-unreadable" => "fix the deputy's policy file, then submit the job again",
+        "command-policy-unsupported" => "remove the command policy file, then submit the job again",
+        _ => return None,
+    })
 }
 
 /// Mail the requester a job's result (AC2 of slice 2), and ledger whether it
