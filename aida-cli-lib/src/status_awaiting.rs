@@ -1261,22 +1261,51 @@ pub(crate) fn notice_hook_session(
             // launch asked for. Never blocks or fails the session.
             // trace:STORY-HOME-096 | ai:claude
             if let Ok(entry) = entry {
-                let armed = crate::mail_wake::arm_pending(
-                    &project_root,
-                    &entry,
-                    crate::mailbox_wake_run::ensure_service,
-                );
-                if let Some(warning) = armed.and_then(|a| a.warning) {
-                    eprintln!("warning: {warning}");
-                }
+                arm_launch_mail_wake(&project_root, &entry);
             }
             // Hooks run outside the command sandbox, so this is where dead
             // rows get ended before a sandboxed sender counts them as
             // unverified mail readers. trace:STORY-1843 | ai:claude
             let _ = agent_registry::gc_dead_agents(&project_root, false, None);
         }
+    } else if session_id.is_some() {
+        // Every later prompt refreshes the session's row, and registers it
+        // again when its row is missing. Fail-open: a hook never blocks on it.
+        // trace:BUG-B6B1278890774EF993D2EBC327862470-151 | ai:claude
+        if let Some(worktree_root) = cwd.and_then(|cwd| find_aida_project_root_from(cwd).ok()) {
+            let project_root = main_worktree_root_from(&worktree_root);
+            let binary = agent_registry::AgentBinaryIdentity::new(
+                env!("CARGO_PKG_VERSION").to_string(),
+                env!("AIDA_BUILD_GIT_SHA").to_string(),
+            );
+            let beat = agent_registry::heartbeat_session_agent(
+                &project_root,
+                &worktree_root,
+                session_id.as_deref(),
+                &binary,
+            );
+            // A row registered here stands in for the SessionStart write that
+            // was lost, so it gets that write's mail wake too.
+            if let Ok(agent_registry::Heartbeat::Reregistered(entry)) = beat {
+                arm_launch_mail_wake(&project_root, &entry);
+            }
+        }
     }
     (session_id, is_session_start)
+}
+
+/// Arm the mail wake a session's launch asked for, now that the session's
+/// thread is on its registry row. Warns, never blocks or fails the session.
+// trace:STORY-HOME-096 BUG-B6B1278890774EF993D2EBC327862470-151 | ai:claude
+fn arm_launch_mail_wake(
+    project_root: &std::path::Path,
+    entry: &agent_registry::AgentRegistryEntry,
+) {
+    let armed =
+        crate::mail_wake::arm_pending(project_root, entry, crate::mailbox_wake_run::ensure_service);
+    if let Some(warning) = armed.and_then(|a| a.warning) {
+        eprintln!("warning: {warning}");
+    }
 }
 
 /// STORY-741: render the unified "Awaiting you" report as a first-class
@@ -3990,6 +4019,13 @@ mod task_2253_agy_session_start_gc_tests {
         let payload = r#"{"conversationId":"agy-live-conv"}"#;
         let (_, start) = notice_hook_session(payload, None, Some(&proj));
         assert!(!start);
-        assert!(load_entries(&proj)[0].1.ended_at.is_none());
+        // A prompt-turn heartbeat may register the test's own agent client
+        // beside it; the dead agy row is the one that must stay un-ended.
+        let dead_id = format!("antigravity-{}", u32::MAX - 1);
+        let dead = load_entries(&proj)
+            .into_iter()
+            .find(|(_, e)| e.id == dead_id)
+            .expect("dead agy row");
+        assert!(dead.1.ended_at.is_none());
     }
 }
