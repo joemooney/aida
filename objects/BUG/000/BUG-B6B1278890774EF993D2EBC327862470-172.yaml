@@ -21,7 +21,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T07:26:20.914223641Z
-modified_at: 2026-11-01T08:48:13.858985501Z
+modified_at: 2026-11-01T08:50:19.171806422Z
 req_type: Bug
 tags:
 - architecture
@@ -309,6 +309,44 @@ comments:
   content: 'PROXY SCOPE AMENDMENT, pending fresh independent signoff: adopt codex-advisor08 source-grounded correction and exact proposed AC3. Initial recording-time-refusal wording was my acceptance-authoring error against explicit existing compatibility. This is not a waiver: actual ungranted artifact must now be rejected at every named positive authority boundary, including the demonstrated dispatch no-ship review-skip/success and reviewed/resolved classifications. Existing strong collection/ship/hold validation remains required; refusal artifacts stay protective. Scope expands only those weak consumers using existing durable validation, with real production-path tests. Description amended explicitly; keep NeedsAttention until separate independent advisor signs this expanded design. No recorder policy change, no invented privilege, no dropped acceptance. Native host gate remains.'
   created_at: 2026-11-01T08:48:13.858985501Z
   modified_at: 2026-11-01T08:48:13.858985501Z
+- id: 01a1964d-6da3-7d02-9338-bde368593f5d
+  author: mcp
+  content: |-
+    ADVISOR SIGNOFF APPROVED — BUG-2398 expanded design, with the following binding amendments.
+
+    Independent Codex advisor judgment, 2026-11-01, source HEAD 4ce0af750fcb68d4adf57496e4e002aefd8ace77. I did not author the proposal or prior ruling. I read the latest description and amended AC3, all ten preceding comments including codex-advisor08's detailed ruling and root's explicit scope adoption, B1-B4, ADR-66, and the actual weak/strong reader source and relevant existing tests. This approves the design and required test contract; it does not certify implementation or passing tests. No code, dispatch, merge, cargo, model call, nested sandbox probe, live grant manipulation or configuration change was performed.
+
+    Source findings:
+    - dispatch_authority::verdict_at_head (1577) checks open state and SHA, then returns kind without authority validation. dispatch_flow (611-630, 681-690) can skip review and report Done/exit 0 under --no-ship from that result. The later shipping gate does not cure this earlier semantic success.
+    - human::pr_has_approved_verdict and spec_review_approved accept parsed approval; the latter also accepts spec-keyed files and review comments. review_actionability (2783) returns Resolved for head-matching nonblocking verdicts, and has an earlier closed-record Resolved branch. review_gates::reviewer_row_actionability and queue_cmd consume the result for annotations/counts.
+    - handle_review_record_at explicitly rejects presented invalid grants but permits absence. record_seat_allowed(None) is true. RecorderAttestation::authorizes/authority_key, review_authority::verified_authority_keys and ship::approval_authority_refusal distinguish an artifact from positive review authority.
+    - Standalone collection requires a grant-stamped source and StandaloneVerdictChecks checks this launch's live reviewer child grant. Automatic hold release requires release_grant and invokes durable approval authority before eligibility/mandate. Collection's present-time origin validation and ship's historical recording-time validation are distinct; keep both.
+
+    Binding contract:
+
+    1. The latest AC3 and root's narrow consumer-policy scope amendment are accepted. Preserve named absent-grant recording as a nonauthoritative artifact. Presented invalid grants still refuse recording. Never substitute blanket recorder denial for fixing readers; pre-existing artifacts remain part of the threat case. Do not introduce grant issuance, roster, receipt, human-TTY, independence, or protected merge policy changes.
+
+    2. A positive approval may suppress fresh review, report dispatch approval success (including --no-ship), classify live work as reviewed/awaiting merge, or reduce reviewed/resolved actionable counts ONLY after existing durable positive authority validates for the relevant commit and recorder. Reuse the existing durable grant/receipt validation and independence checks; parsed labels, seat hints, authorizes() alone, or a fabricated verified_authority map are insufficient. Missing/unreadable/invalid authority remains needs-review/unattested or an explicit refusal.
+
+    Apply this to verdict_at_head/dispatch_flow, human reviewed classification and review_actionability callers. For human classification, cover PR records, spec/alias records and comment-derived approval candidates: an unvalidated alternative source must not restore the same reviewed claim. Existing durable evidence can support a candidate; prose alone cannot confer authority. This is a correction of the named reader, not a new receipt mechanism. Inspect the closed-record shortcut too: closure alone must not launder an unattested approval into authoritative reviewed/resolved credit. Preserve genuine completed-work lifecycle handling without claiming independent review from closure alone.
+
+    3. Preserve refusal/protection semantics. Request-changes/rejected artifacts must remain usable as protective evidence under existing rules; do not require positive approval attestation before honoring them or discard them through a generic authority filter. Keep existing corpus/conflict ordering, head checks, hold restrictions and rechecks. Do not treat phase handshake parsing or queue-done Proceed as evidence of independent approval.
+
+    4. B1-B4 remain binding in full. Finalize every managed Codex launch at the actual spawn/exec boundary AFTER child grant issuance, subject/identity assignment and customize. Read only explicit Command::get_envs; no parent std::env fallback. Insert correctly encoded exact-key overrides inside Codex's own argv, including wrapped launches. A requested non-baseline seat with missing/invalid explicit child grant refuses before launch. Preserve absent versus present-empty baseline. Include AIDA_ROLE_INSTANCE with driver|companion validation and prove companion stays companion. Exclude AIDA_HANDLE_LAUNCH_TOKEN, AIDA_AGENT_REGISTRY_TOKEN, grant files, key payloads, AIDA_CONTAINED and arbitrary environment. Preserve existing user set entries and global policy; assert other-vendor argv unchanged. No new resolver, keyring layout or authority pre_exec. Prove the adapter forwards only the child's selector/context, never the parent grant; retain ADR-66's same-uid replay residual without claiming to fix it.
+
+    5. Required implementation evidence is additive, not waived:
+    (a) Full real-Codex inherit=core fixture with temporary config and actual launch finalization: own delegated subject/seat/context, own-scope success, advisor/wrong-seat refusal, companion preservation, existing user set preservation and PRESENT-empty baseline. A whitelist-only unit test or synthetic restored variable is insufficient.
+    (b) Use the actual supported recorder output from a named ungranted non-TTY agent, without hand-editing in authority. Drive that artifact through production collection, dispatch, human classification, actionability/count callers, ship and automatic hold-release paths. Standalone collection must fail without this launch's reviewer grant; dispatch must not skip required review or return approval success from it; classification/counts retain needs-review/unattested; ship refuses; hold marker/labels remain intact. Dispatch may succeed only after a fresh genuinely authorized review, with that invocation demonstrated.
+    (c) Presented invalid grant refuses recording. A legitimate independent granted reviewer under core records successfully; its actual artifact validates through durable authority and passes the applicable positive review/classification/ship-authority paths when other prerequisites hold. Do not use a blanket deny-all fix. Protective ungranted refusal artifacts must still block/protect as before.
+    (d) Exercise persisted old/unattested artifacts as well as newly recorded output, the human reader's alternate sources and actionability shortcuts, and the existing invalid/stale/wrong-head/self-review checks. Keep bug_1934, bug_1983, story_1662, story_1917, BUG-2139 and TASK-2631 regression coverage.
+
+    I inspected the existing bug_1918 authority/revalidation tests, ledger revoked/foreign/expired collection tests, story_1697 unattested-release test and bug_1983 rejected-grant recorder test. They support individual boundaries; they do not prove the new production-path matrix or real Codex fixture. I ran none.
+
+    6. Native host fixture remains an explicit MANUAL COMPLETION GATE. The reported app-server socket-directory ownership/mode failure remains unresolved evidence, not a passing fixture. Preserve its exact diagnostic and environment; require the real native host case to pass or return the grounded incompatibility for judgment. Prior synthetic host evidence and a proxy sandbox test do not waive it. Real model-backed exec remains operator-run. Requested-seat preflight must report cause-specific inability with no fallback authority or permission broadening. STORY-2238 and BUG-2394 remain separate.
+
+    Disposition: the expanded design fork is approved with these binding amendments. A different independent reviewer must gate implementation against the entire contract and evidence; any deviation needs a new ruling. Operator merge floor remains. Local implementation gate remains one targeted launch/grant/authority test plus make check-ci-fast, long cargo in background; full suite belongs to CI. This comment does not change status, dispatch work, approve an implementation head, clear a hold or authorize a merge.
+  created_at: 2026-11-01T08:50:19.171784291Z
+  modified_at: 2026-11-01T08:50:19.171784291Z
 history:
 - id: 01a19600-c769-7cd0-ba08-8d93975e3e3b
   author: joe
