@@ -1,13 +1,10 @@
 job: hub-drift-guard
-last_run: 2026-11-01T11:18:59.996380484Z
+last_run: 2026-11-01T17:30:19.946199286Z
 last_by:
   seat: substrate
   vendor: tick
 result: failed:1
 failure_trips:
-- trip_id: hub-drift-guard@2026-10-27T15:04:00.790917471Z
-  at: 2026-10-27T15:04:00.790917471Z
-  status: 1
 - trip_id: hub-drift-guard@2026-10-27T21:12:00.809197619Z
   at: 2026-10-27T21:12:00.809197619Z
   status: 1
@@ -64,5 +61,8 @@ failure_trips:
   status: 1
 - trip_id: hub-drift-guard@2026-11-01T11:18:59.996380484Z
   at: 2026-11-01T11:18:59.996380484Z
+  status: 1
+- trip_id: hub-drift-guard@2026-11-01T17:30:19.946199286Z
+  at: 2026-11-01T17:30:19.946199286Z
   status: 1
 note: 'Resolved 2026-10-02: aida-store had unpushed store writes (new specs BUG-1773/1774, comments). ''aida db sync --push'' fanned out to origin + gitlab; ''aida remote status'' now reports all remotes agree on main, aida-store and the v0.15.0 tag. Same BUG-1746 shape as before: routine store writes reach origin only.'
