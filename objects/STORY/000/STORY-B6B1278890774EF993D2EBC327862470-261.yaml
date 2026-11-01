@@ -20,17 +20,26 @@ description: |
 
   ## Out of scope
   Rewriting the developer-facing CLI glossary entries; new explainer pages.
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-31T22:58:37.964636963Z
-modified_at: 2026-10-31T22:58:37.964636963Z
+modified_at: 2026-11-01T03:11:47.039734559Z
 req_type: Story
 tags:
 - docs
 - glossary
 - website
+history:
+- id: 01a19517-7d5f-7092-83c8-b303944f0e16
+  author: joe
+  timestamp: 2026-11-01T03:11:47.039731749Z
+  session_id: 77a7a933-9a3f-4243-9a44-892bcedf206c
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: 44c7b6663259478cfd02fd2f5da843720f0ee6e0
   branch: main
