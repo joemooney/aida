@@ -1,4 +1,11 @@
 - user_id: role:implementer
+  requirement_id: 01a19639-d547-7300-9a70-befaedad7e96
+  position: 253000
+  added_by: role:implementer
+  note: 'Fresh reviewer18 ledger13 sole remaining blocker: positive matching trailer bypasses current PR head/snapshot validation. Same PR3208 rework; previous actor terminal and reviewed source preserved before normal lease cleanup.'
+  added_at: 2026-11-01T15:57:37.258173962Z
+  for_role: implementer
+- user_id: role:implementer
   requirement_id: 01a19434-2aa8-74d0-bccf-38faf512e4c7
   position: 254000
   added_by: role:implementer
@@ -18,13 +25,6 @@
   added_by: role:implementer
   note: Fresh reviewer17 finds only hidden-option help snapshot regression; current-head native HOST and cleanup tests now genuinely pass. Same-PR focused fix, all floors retained.
   added_at: 2026-11-01T14:55:35.450273907Z
-  for_role: implementer
-- user_id: role:implementer
-  requirement_id: 01a19639-d547-7300-9a70-befaedad7e96
-  position: 257000
-  added_by: role:implementer
-  note: Fresh independent review16 requests complete commit evidence and bounded production CLI probing on same PR3208; full binding round3 ruling follows.
-  added_at: 2026-11-01T14:21:28.637989839Z
   for_role: implementer
 - user_id: role:implementer
   requirement_id: 01a1942f-b90c-7ee1-a06c-d5856831d28e
