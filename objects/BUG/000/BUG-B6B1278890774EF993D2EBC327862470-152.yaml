@@ -13,7 +13,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T23:00:22.284758314Z
-modified_at: 2026-11-01T04:21:38.013673343Z
+modified_at: 2026-11-01T04:52:53.064130337Z
 req_type: Bug
 tags:
 - epic-home-003
@@ -92,6 +92,18 @@ comments:
   modified_at: 2026-11-01T04:00:44.858187362Z
   session_id: 01a1953f7978
   harness_version: 2.1.316 (Claude Code)
+- id: 01a19574-0cc8-76d0-abb7-6cf67d1d1940
+  author: joe
+  content: |
+    ADVISOR REWORK BRIEF round 5 (21:55), PR-3182 at 399e4d1. Progress: the store tree is now clean after the repair, and the failure moved from :292 to :308. CI cli-0 (job 124746283629): `bug_2378_root_registered_by_label_verifies_identifies_and_syncs_after_backfill` panics at aida-cli/tests/bug_2378_root_after_backfill.rs:308 with error "reconcile refused; nothing was pushed; the local store is back at <sha>".
+    That is the ORIGINAL BUG-2378 symptom (reconcile refused after the backfill), now reproduced end to end. So the fix is not yet complete for the label-registered root + second hub case (AC1).
+    1. First make the refusal say WHY. `aida remote reconcile` must include the underlying refusal (the allocation-claims check name, the node id it rejected, the hub) in its error, not only "refused". Do this as part of this PR; it's a diagnosability gap the fixture just exposed.
+    2. Then fix the cause the reason points at (expect the claims check still not to recognise the label- or root-registered node after the backfill re-points the clone identity), so :308 passes with both hubs at the same tip.
+    3. Keep the fixture's clean-tree assertion from round 4.
+    Local gate: run the cli-0 test through `aida lane job run` if BUG-2383 has merged by then; otherwise run `make check-ci-fast` and push, and CI is the gate.
+  created_at: 2026-11-01T04:52:53.064130337Z
+  modified_at: 2026-11-01T04:52:53.064130337Z
+  session_id: 77a7a933-9a3f-4243-9a44-892bcedf206c
 history:
 - id: 01a1943a-492b-7f72-9377-cfc786176bec
   author: aida-session-start
