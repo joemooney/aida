@@ -19,7 +19,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T02:25:46.947809262Z
-modified_at: 2026-11-01T06:22:49.834109960Z
+modified_at: 2026-11-01T06:36:18.021543814Z
 req_type: Bug
 tags:
 - area:agents
@@ -142,6 +142,13 @@ comments:
   created_at: 2026-11-01T06:05:44.659326476Z
   modified_at: 2026-11-01T06:05:44.659326476Z
   session_id: a31b25d9-60a5-4347-a85b-4c74ab06f274
+- id: 01a195d2-bae5-7031-9679-0e6a841235dd
+  author: joe
+  content: 'Round 3 follow-ups the implementer could not file as findings, because ID allocation hit a read-only filesystem in the seat: (1) Finding 8, not wired in this PR: the --auto-complete drain''s phase-1 implementer (auto_complete.rs) gets no lane job Runner, no AIDA_LANE_JOBS_* env, no LANE_JOB_CONTRACT and no untested=true on its result line, so those lanes still reach CI untested with no flag. (2) Residual containment risk after finding 5: a lane job can still write CARGO_HOME/registry/src and git/checkouts, which hold extracted dependency sources. Cargo checks a crate''s checksum only when it extracts it, so a seat-written build.rs could edit a dependency''s build.rs, and the next host build that recompiles that dependency runs it unsandboxed. Options: read-write binds for only registry/index, registry/cache and git/db, or a per-seat CARGO_HOME overlay. Please file both as tracked follow-ups.'
+  created_at: 2026-11-01T06:36:18.021543814Z
+  modified_at: 2026-11-01T06:36:18.021543814Z
+  session_id: 01a195c661e0
+  harness_version: 2.1.316 (Claude Code)
 history:
 - id: 01a19525-88eb-79e3-aab8-8d511ad2f605
   author: aida-session-start
