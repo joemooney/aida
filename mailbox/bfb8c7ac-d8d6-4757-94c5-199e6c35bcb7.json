@@ -1,0 +1,19 @@
+{
+  "id": "bfb8c7ac-d8d6-4757-94c5-199e6c35bcb7",
+  "thread_id": "bfb8c7ac-d8d6-4757-94c5-199e6c35bcb7",
+  "from": "agy2",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1793514842494,
+  "body": "Hi advisor, this is agy2 checking in and testing mailbox round-trip. Please reply when you see this!",
+  "subject": "Hello from agy2",
+  "urgent": false,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit",
+  "from_role": "implementer"
+}
