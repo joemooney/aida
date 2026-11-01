@@ -2209,6 +2209,33 @@ impl RealPhaseDriver {
             vendor,
             self.contained,
         );
+        // trace:BUG-2398 | ai:codex — Codex tools get their own delegation,
+        // never the consult launcher's ambient advisor selector.
+        let codex_grant = if vendor == session::HeadlessVendor::Codex {
+            let grant = crate::gate::seat_authority::issue_launch_child(
+                &self.project_root,
+                "advisor",
+                &crate::current_user_id(None),
+                false,
+            )
+            .map_err(|e| {
+                PhaseFailure::of(FailureKind::Spawn, format!("advisor delegation: {e:#}"))
+            })?;
+            child_cmd
+                .env(crate::gate::seat_authority::GRANT_ENV, &grant.id)
+                .env("AIDA_USER", crate::current_user_id(None))
+                .env("AIDA_PROJECT_ROOT", &self.project_root);
+            if let Err(error) = crate::codex_tool_env::prepare_launch(&mut child_cmd) {
+                session::revoke_headless_child_grant(&grant.id);
+                return Err(PhaseFailure::of(
+                    FailureKind::Spawn,
+                    format!("advisor seat preflight: {error:#}"),
+                ));
+            }
+            Some(grant.id)
+        } else {
+            None
+        };
         let status = child_cmd
             .stdout(std::process::Stdio::from(log))
             .status_retrying_etxtbsy()
@@ -2217,7 +2244,11 @@ impl RealPhaseDriver {
                     FailureKind::Spawn,
                     format!("advisor tier: could not launch the advisor session: {e}"),
                 )
-            })?;
+            });
+        if let Some(id) = codex_grant {
+            session::revoke_headless_child_grant(&id);
+        }
+        let status = status?;
         tee_handle.stop();
         self.commit_contained_child_store_changes("advisor tier")?;
 

@@ -394,3 +394,55 @@ the first refresh brings it current and saves the previous copy alongside as
 - Headless drains have the same binary-staleness caveat. If an existing `target/debug/aida` or `target/release/aida` binary predates a merged orchestrator reliability fix, that running binary will not enforce the new behavior. Rebuild/relaunch and use `aida dev status` when runtime behavior disagrees with current source.
 
 trace:STORY-398 | ai:codex
+
+## Delegated seats with a restrictive tool-shell environment
+
+<!-- trace:BUG-2398 | ai:codex -->
+AIDA-managed Codex launches preserve `shell_environment_policy.inherit = "core"`
+and the user's credential exclusions. The launcher adds per-invocation
+`shell_environment_policy.set.<name>` overrides for an exact whitelist of its
+child's grant selector, subject, role, agent name/type, project root, lease,
+scope, context-file path, containment posture and headless marker. Existing
+user `set` entries remain intact. Absent child assignments stay absent; a
+baseline child's grant is explicitly empty. No global Codex config is edited.
+
+The grant UUID is a public selector and is visible in the process arguments.
+It grants no authority by itself: the existing subject, roster, key possession
+or ancestry, parent, expiry and revocation checks still apply. Grant key
+payloads and registry bearer tokens are never put in these overrides. This
+adapter does not change ADR-66's residual same-uid replay boundary: a process
+that deliberately discovers a different selector and already possesses its
+key is outside this adapter's isolation claim.
+
+Before starting a granted Codex seat, AIDA runs a model-free `codex sandbox`
+probe of `aida role current --probe-seat --expect <seat>`, with the launch's
+configuration and corresponding permission profile. Only a validated matching
+grant passes; role labels alone do not. The probe has a ten-second deadline.
+A refusal reports the underlying sandbox or grant failure instead of starting
+a roleless model. Baseline launches do not require a grant probe. Unsupported
+sandbox option spellings or profiles refuse; they do not acquire fallback
+authority. This requires a Codex release supporting `sandbox -P` profiles.
+
+Host evidence with Codex 0.166.0 confirmed session-keyring access inside the
+native workspace sandbox and exact `set` merging under `inherit = "core"`.
+A nested sandbox can still fail to create its user namespace, or key access
+can be denied by a host filter; those environments cannot launch a requested
+granted seat through this path. There is no AIDA bubblewrap backend for Codex
+in this slice. Cache/Git writable roots and MCP approval policy are separate
+setup constraints; this adapter does not repair them.
+
+The targeted `bug_2398` Rust fixture uses temporary Codex config and real
+`codex sandbox` calls without model authentication. A real `codex exec` check
+remains operator-run: launch an implementer with `aida agent new codex` from a
+role terminal under `inherit = "core"`, ask it to run `aida role current`, an
+own-spec comment, and an advisor-only operation (which must refuse). Repeat
+review recording in a separately granted reviewer session, then without a
+grant (which must refuse). Keep the real user's config unchanged.
+
+`AIDA_ROLE_INSTANCE` is also transported, restricted to `driver` or `companion`,
+so companion tool shells retain their existing restrictions. Overrides are
+inserted before Codex's subcommand/prompt, after the wrapped Codex executable
+when a bubblewrap command is supplied. Finalization precedes stdio setup.
+Neither `AIDA_HANDLE_LAUNCH_TOKEN` nor `AIDA_AGENT_REGISTRY_TOKEN` is transported:
+a tool shell cannot bind or claim its handle reservation or registry row using
+these bearer tokens. That binding remains the launcher's or hook's job.

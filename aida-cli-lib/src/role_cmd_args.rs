@@ -107,6 +107,15 @@ pub enum RoleCommand {
         /// Exit 1 (instead of 0) when no role is active.
         #[clap(long)]
         check: bool,
+        /// Validate a delegated seat without printing selectors or secrets.
+        // trace:BUG-2398 | ai:codex
+        #[clap(long, requires = "expect")]
+        probe_seat: bool,
+        #[clap(long, requires = "probe_seat")]
+        expect: Option<String>,
+        /// Require the launch's driver/companion restriction to survive.
+        #[clap(long, requires = "probe_seat")]
+        expect_role_instance: Option<String>,
     },
 
     /// Report how close this session's seat grant is to expiry. By default
