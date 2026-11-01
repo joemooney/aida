@@ -24,7 +24,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-01T04:46:50.627557978Z
-modified_at: 2026-11-01T04:51:49.628943300Z
+modified_at: 2026-11-01T06:27:52.275389768Z
 req_type: Spike
 tags:
 - audit
@@ -33,6 +33,13 @@ relationships:
 - rel_type: Child
   target_id: 01a19499-932e-79f0-a3e1-1299dfe355ad
   created_at: 2026-11-01T04:46:59.550343842Z
+comments:
+- id: 01a195cb-0353-7853-b220-b4064644fbcb
+  author: joe
+  content: 'Advisor 2026-10-31 23:27: the operator assigned this spike to an agy agent by hand. Do not dispatch another lane. Findings land as children under EPIC-612. The advisor triages them for Codex lanes once PR-3188 (TASK-2631) merges.'
+  created_at: 2026-11-01T06:27:52.275389768Z
+  modified_at: 2026-11-01T06:27:52.275389768Z
+  session_id: a31b25d9-60a5-4347-a85b-4c74ab06f274
 history:
 - id: 01a1956e-af77-70f2-bf2e-992d6bf8d97b
   author: joe
