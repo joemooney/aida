@@ -21,7 +21,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T07:26:20.914223641Z
-modified_at: 2026-11-01T09:34:39.100989165Z
+modified_at: 2026-11-01T10:18:37.577938149Z
 req_type: Bug
 tags:
 - architecture
@@ -367,6 +367,11 @@ comments:
   content: Implementation resumed from public 00da7a109e62 under the binding expanded contract. Consumer fixes reuse durable grant/receipt and independence checks for dispatch, human PR/spec/alias classification and actionability, preserving absent-grant recording and protective refusal artifacts. Added actual recorder-output production-path matrix plus dispatch fresh-review invocation cases. Local Cargo checks run through normal slots; building this branch's CLI because installed aida lacks --probe-seat. Native host completion gate remains separate and unwaived. CLI comment refused due read-only linked cache; using the connected AIDA surface for this progress note. Preparing an implementation PR for strict independent authority review/operator merge.
   created_at: 2026-11-01T09:34:39.100970995Z
   modified_at: 2026-11-01T09:34:39.100970995Z
+- id: 01a1969e-4689-7d32-b2fd-6e489bd98eda
+  author: joe
+  content: 'HOST DIAGNOSTIC REPRODUCED2026-11-01~03:16MST: synthetic model-free installedNPMCodex sandbox -P :workspace succeeds on host without outer mask, but an outer bwrap masking /tmp/codex-daemon-1000 as mode000 reproduces EXACT app-server socket directory must be user-owned mode0700. SamefakeHOME/CODEX_HOME/XDG_RUNTIME_DIR underprivate0700scratch; privateTMPDIR does NOT resolve it. Separately fakeCODEX_HOME modes0755 and0700 bothpass unmaskedhost, disproving CODEX_HOME mode as solecause. Scratch /tmp/aida-2398-masked-socket-probe-akkmlyf3 and /tmp/aida-2398-host-mode-check-0kj8m6h5. This is evidence of nestedCodextoolmask interference, not hostinability or grantfailure. Preserve nativecompletiongate; authorized actualhost exactcompiledsyntheticfixture run outside the nested tool mask may provide required realnative proof, no globalpolicy/socketpermissions relaxation. No keys/auth/model/userfiles touched inprobe.'
+  created_at: 2026-11-01T10:18:37.577938149Z
+  modified_at: 2026-11-01T10:18:37.577938149Z
 history:
 - id: 01a19600-c769-7cd0-ba08-8d93975e3e3b
   author: joe
