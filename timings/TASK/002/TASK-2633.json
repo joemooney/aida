@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "spec": "TASK-2633",
+  "publishes": [
+    {
+      "at": "2026-11-01T02:21:14.265587656Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-01T02:04:56.200881565Z",
+      "spec": "TASK-2633",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 3186,
+        "verdict": "APPROVED",
+        "reviewed_sha": "84d2abf78b356185199a1543a4dcda82d72618e3"
+      }
+    },
+    {
+      "ts": "2026-11-01T02:21:14.133330237Z",
+      "spec": "TASK-2633",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "7518617e469376bbe5debebd7cadd980e08656e5",
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
