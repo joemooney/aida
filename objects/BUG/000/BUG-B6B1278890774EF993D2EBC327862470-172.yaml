@@ -21,7 +21,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T07:26:20.914223641Z
-modified_at: 2026-11-01T16:04:28.389396812Z
+modified_at: 2026-11-01T18:31:04.682301659Z
 req_type: Bug
 tags:
 - architecture
@@ -465,6 +465,12 @@ comments:
     PROXY RECEIPT RECOVERY: reviewer19 source-APPROVED f20 and all7CI+BuildSUCCESS, but friendly/canonical-without-PR followups REFUSED because PRIMARY LOCAL branch was still2f9 while fetchedorigin/currentforge=f20. Canonical--pr normal14+phase3record15 exists, latestphase3lacks top-level release_grant and friendly remainsolder; no completed pair claimed. RootnowNORMALNONFORCEDREMOTEfast-forwarded actualPRIMARY LOCAL branch to advertisedf20 (and3194branch2c→fca), no force/ledger/ref-fabrication/oldsignature/projectionedit/authorityborrow. Both actualrefsresolveexactpublicpins. Fresh DIFFERENT reviewer will independently confirm current source/meta and make own supported records after this real repository-state correction. Existing closure:pending manualmodeltoolgate nowexplicit. Keystoneholdremainsrequiresgenuineoperatorclear, neverassertautoreleased.
   created_at: 2026-11-01T16:04:28.389396812Z
   modified_at: 2026-11-01T16:04:28.389396812Z
+- id: 01a19861-20ea-72c1-a924-68a9be498f45
+  author: joe
+  content: |
+    Additional actual native workflow evidence, not completion: fresh independent reviewer25 reviewed PR3211 at8e38fdd and passed own normal key-backed rolecurrent/status checks, then normal canonical --pr3211 approval writer refused exit1: no identity AIDA can bind an approval to (no agent session id and no process ancestry). Complete report /tmp/aida-review3211-attested-result.md was read by advisor; no recorder receipt exists. Current main lib_part5.rs:3103-3117 requires has_identity_anchor independently of role grant; review_authority.rs current session source recognizes AIDA_SESSION_ID/CLAUDE_CODE_SESSION_ID. Metadata-only own-grant restoration therefore does not establish a native recordable session anchor by itself. This evidence must inform the existing full real-model tool workflow acceptance for BUG2398; don't broaden role/grant authority, invent identities, restamp old approvals or treat greenCI/fixturePASS as this workflow proof. PR3207 human hold unchanged; no new dependency waiver or followup chain.
+  created_at: 2026-11-01T18:31:04.682301659Z
+  modified_at: 2026-11-01T18:31:04.682301659Z
 history:
 - id: 01a19600-c769-7cd0-ba08-8d93975e3e3b
   author: joe
