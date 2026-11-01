@@ -1118,6 +1118,27 @@ mod worker_fixtures {
         assert!(r.reason.starts_with("orphaned"));
         assert!(spool.job_path("failed", &a.id).exists());
         assert!(!spool.root.join("ran").exists());
+        // The deputy died before opening the .out file: the result still
+        // names a file that exists. trace:TASK-2609 | ai:claude
+        assert!(out(&spool, &a.id).contains("deputy died while this job ran"));
+    }
+
+    #[test]
+    fn an_orphans_partial_output_survives_with_the_note_appended() {
+        let dir = tempfile::tempdir().unwrap();
+        let spool = spool_in(&dir);
+        let a = job(sh("true"), None, 30);
+        spool.submit(&a).unwrap();
+        std::fs::rename(
+            spool.job_path("incoming", &a.id),
+            spool.job_path("running", &a.id),
+        )
+        .unwrap();
+        std::fs::write(spool.out_path(&a.id), "partial line").unwrap();
+        run(&spool, &cfg(0));
+        let text = out(&spool, &a.id);
+        assert!(text.starts_with("partial line\n"));
+        assert!(text.contains("deputy died while this job ran"));
     }
 
     #[test]
