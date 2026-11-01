@@ -18,7 +18,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T08:28:54.983776375Z
-modified_at: 2026-11-01T16:01:57.412250291Z
+modified_at: 2026-11-01T16:17:22.194506681Z
 req_type: Bug
 tags:
 - forge
@@ -169,6 +169,12 @@ comments:
   content: 'Context correction only: actor26 terminal, old lease normally ended after exact public-ab source preservation. New strict pickup required; sole head-binding finding and all protections unchanged.'
   created_at: 2026-11-01T15:58:16.404178880Z
   modified_at: 2026-11-01T15:58:16.404178880Z
+- id: 01a197e6-b712-7811-801d-a96b8b78962a
+  author: joe
+  content: |
+    PROXY IMPLEMENTATION RECEIPT: actor32 published1677ad5dd74c5d1e3f0564777f630dcda489fe2c SAMEPR3208/branch afterab, with two-file stable collection/recheck change. RootreadFULL /tmp/aida-BUG2400-head-binding-result.md6800bytes and actualpublichead. Positive commit trailers no longer return before full validated count/terminalHEAD and second detail identicalHEAD/count; typedunknown on drift/incomplete/errors retained. No approval yet; fresh different strict review needed. Actualfocused exactregression1PASS0FAIL44.78s after5m08debug-profilecompile (notagentprofile; reporttruthful), fastpendingatthen-readback. Old26EnvLockfailure/correctedqueuedrunsnotnewproof. Source/public4filebytes andnormalpushidentitymanifestretained, owncommentfailednothingwrittenreadonlylinkedcache. RootnormalNONFORCEDLOCALbranchFFtoactual1677 beforefreshreview so unscopedrecordchecksseeREALcurrenthead; no force/fakeobjects/ledgermodifications/signaturereuse. Existingallauthority/queueunknown/alias/GitLabfloors unchanged.
+  created_at: 2026-11-01T16:17:22.194506681Z
+  modified_at: 2026-11-01T16:17:22.194506681Z
 history:
 - id: 01a1963a-2b42-7cd2-a795-0772bcc408d1
   author: joe
