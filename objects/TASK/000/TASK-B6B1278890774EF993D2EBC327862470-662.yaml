@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-662
 agreed_id: TASK-2709
 title: Merge the engineering audit documentation and verify its public publication
 description: 'Operator explicitly requested PR #3213 shipped to main on 2026-11-01. Scope: engineering-audit.html in showcase and standalone report, plus landing-page and README links. Acceptance: (1) static page and navigation work without external dependencies; generated showcase check and existing publication tests pass; (2) published quantitative claims distinguish measured repository statistics from deployment metrics and illustrative assumptions, with source/methodology references or explicit unknowns; (3) independently approved current head passes required CI and ships through normal AIDA gates to main, with public publication verified against approved source. This is the new audit update; do not reopen or grant duplicate completion to the historical completed initial Pages task TASK-2542/TASK-HOME-130.'
-status: NeedsAttention
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T20:06:03.816039190Z
-modified_at: 2026-11-01T20:53:28.461596581Z
+modified_at: 2026-11-01T21:08:18.623759897Z
 req_type: Task
 relationships:
 - rel_type:
@@ -22,6 +22,12 @@ comments:
   content: Operator reports eight hours without a main commit; prioritize this explicit docs ship. Existing agy2 has no automatic wake and no correction head has appeared. Dispatching a bounded finite Codex exec in a separate own scope, preserving original worktree and updating the same PR only by normal non-force push. Agent-new workflow redirect refused because the spec is groomed drain; source config_init::drain_mode_agent_new_guard explicitly documents --force for a manual launch. This invocation is finite exec (not an idle TUI), and the full independent review, green CI, hold clearance and separate integrator ship cascade is retained. No execution-mode, authority, permission, CI or merge gate is changed. Root becomes a dispatcher/author and will not approve or merge this implementation itself.
   created_at: 2026-11-01T20:41:29.237341214Z
   modified_at: 2026-11-01T20:41:29.237341214Z
+- id: 01a198f1-143f-70c1-b00d-b79485012104
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: AC1 met (build.py --check clean, publish.py assembles engineering-audit.html, tests/test_showcase_publish.py 7/7, CI green except expected merge-hold). AC2 partial: headline PR-size statistics do not reproduce from the stated git shortstat method, several ''measured'' figures have no collection method, and many industry benchmark numbers are unsourced or attributed to pages that do not carry them. Same fixes needed in both HTML copies.. No triage reason was given.'
+  created_at: 2026-11-01T21:08:18.623755913Z
+  modified_at: 2026-11-01T21:08:18.623755913Z
+  session_id: 126bbd5a-a92f-452b-ab0b-2637a1db42c2
 history:
 - id: 01a198b8-8656-7f43-b7e5-1057b826ee4b
   author: joe
@@ -59,6 +65,14 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a198f1-143f-70c1-b00d-b780a659b868
+  author: joe
+  timestamp: 2026-11-01T21:08:18.623722694Z
+  session_id: 126bbd5a-a92f-452b-ab0b-2637a1db42c2
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 execution_mode: drain
 filed_at:
   code_sha: 6a3f67671a974703590efde5ae2a323f3f7471fa
@@ -67,11 +81,3 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: 6a3f67671a9
   vendor: codex
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'AC1 met (build.py --check clean, publish.py assembles engineering-audit.html, tests/test_showcase_publish.py 7/7, CI green except expected merge-hold). AC2 partial: headline PR-size statistics do not reproduce from the stated git shortstat method, several ''measured'' figures have no collection method, and many industry benchmark numbers are unsourced or attributed to pages that do not carry them. Same fixes needed in both HTML copies.'
-  recovery_hint: address the review findings, move TASK-2709 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-01T20:53:28.461596581Z
