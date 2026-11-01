@@ -488,7 +488,7 @@ pub(crate) fn open_pr_commit_headlines_reference_spec(
     pr: u64,
     spec: &str,
 ) -> bool {
-    open_pr_commit_headlines_reference_ids(project_root, pr, &[spec.to_string()])
+    open_pr_commit_headlines_reference_ids(project_root, pr, &[spec.to_string()]).unwrap_or(false)
 }
 
 // trace:BUG-2400 | ai:codex
@@ -496,10 +496,8 @@ fn open_pr_commit_headlines_reference_ids(
     project_root: &std::path::Path,
     pr: u64,
     ids: &[String],
-) -> bool {
-    let Some(gh_bin) = resolve_forge_cli(crate::forge::ForgeKind::GitHub) else {
-        return false;
-    };
+) -> std::result::Result<bool, PrLookup> {
+    let gh_bin = resolve_forge_cli(crate::forge::ForgeKind::GitHub).ok_or(PrLookup::GhMissing)?;
     let mut cmd = std::process::Command::new(&gh_bin);
     cmd.current_dir(project_root).args([
         "pr",
@@ -510,44 +508,134 @@ fn open_pr_commit_headlines_reference_ids(
         "-q",
         ".commits[].messageHeadline",
     ]);
-    let Ok(Some(out)) = forge_lookup_output(cmd) else {
-        return false;
+    let out = match forge_lookup_output(cmd) {
+        Ok(Some(out)) => out,
+        Ok(None) => return Err(PrLookup::GhUnreachable(FORGE_LOOKUP_TIMED_OUT.into())),
+        Err(e) => {
+            return Err(PrLookup::GhFailed(gh_spawn_error(
+                &gh_bin,
+                project_root,
+                &e,
+            )))
+        }
     };
     if !out.status.success() {
-        return false;
+        let stderr = String::from_utf8_lossy(&out.stderr).trim().to_string();
+        let message = if stderr.is_empty() {
+            format!("gh exited {}", out.status)
+        } else {
+            stderr
+        };
+        return Err(if gh_stderr_is_network_error(&message) {
+            PrLookup::GhUnreachable(message)
+        } else {
+            PrLookup::GhFailed(message)
+        });
     }
-    String::from_utf8_lossy(&out.stdout).lines().any(|line| {
+    Ok(String::from_utf8_lossy(&out.stdout).lines().any(|line| {
         extract_spec_ids_from_commit(line).into_iter().any(|token| {
             ids.iter()
                 .any(|id| aida_core::id_identity::same_id(&token, id))
         })
-    })
+    }))
+}
+
+// A known match proves existence even when another candidate is unreadable.
+// Complete enumeration, however, requires every probe to succeed.
+// trace:BUG-2400 | ai:codex
+struct SpecPrCollection {
+    matched: Vec<OpenPrInfo>,
+    unknown: Option<PrLookup>,
+}
+
+fn collect_spec_prs(project_root: &std::path::Path, spec: &str) -> SpecPrCollection {
+    let mut result = SpecPrCollection {
+        matched: Vec::new(),
+        unknown: None,
+    };
+    let ids = match pr_spec_association_ids(project_root, spec) {
+        Ok(ids) => ids,
+        Err(e) => {
+            result.unknown = Some(PrLookup::GhFailed(format!(
+                "resolve PR spec association: {e:#}"
+            )));
+            return result;
+        }
+    };
+    // Two finite list calls and at most 202 commit probes share one budget.
+    // gh list paginates internally to the limit. A saturated result is unknown,
+    // even if the repository happens to have exactly that many open PRs.
+    let budget = FORGE_LOOKUP_TIMEOUT
+        .with(|c| c.get())
+        .unwrap_or(std::time::Duration::from_secs(10))
+        .min(std::time::Duration::from_secs(10));
+    let deadline = std::time::Instant::now() + budget;
+    let mut candidates = Vec::new();
+    let mut seen = std::collections::HashSet::new();
+    for filter in [
+        &["--search", spec, "--state", "open"][..],
+        &["--state", "open"][..],
+    ] {
+        let remaining = deadline.saturating_duration_since(std::time::Instant::now());
+        if remaining.is_zero() {
+            result.unknown = Some(PrLookup::GhUnreachable(FORGE_LOOKUP_TIMED_OUT.into()));
+            break;
+        }
+        let rows = with_forge_lookup_timeout(remaining, || {
+            gh_pr_list_candidates(project_root, filter, "101")
+        });
+        match rows {
+            Ok(rows) => {
+                if rows.len() >= 101 {
+                    result.unknown = Some(PrLookup::GhFailed(
+                        "open PR candidate limit reached; association enumeration is incomplete"
+                            .into(),
+                    ));
+                }
+                for pr in rows {
+                    if seen.insert(pr.number) {
+                        candidates.push(pr);
+                    }
+                }
+            }
+            Err(error) => result.unknown = Some(error),
+        }
+    }
+    for pr in candidates {
+        if pr_references_spec_ids(&pr, &ids) {
+            result.matched.push(pr);
+            continue;
+        }
+        let remaining = deadline.saturating_duration_since(std::time::Instant::now());
+        if remaining.is_zero() {
+            result.unknown = Some(PrLookup::GhUnreachable(FORGE_LOOKUP_TIMED_OUT.into()));
+            continue;
+        }
+        match with_forge_lookup_timeout(remaining, || {
+            open_pr_commit_headlines_reference_ids(project_root, pr.number, &ids)
+        }) {
+            Ok(true) => result.matched.push(pr),
+            Ok(false) => {}
+            Err(error) => result.unknown = Some(error),
+        }
+    }
+    result
+}
+
+fn first_spec_pr(result: SpecPrCollection) -> PrLookup {
+    result
+        .matched
+        .into_iter()
+        .next()
+        .map(PrLookup::Found)
+        .unwrap_or_else(|| result.unknown.unwrap_or(PrLookup::NoOpenPr))
 }
 
 pub(crate) fn detect_open_pr_for_spec_by_head_or_commit(
     project_root: &std::path::Path,
     spec: &str,
 ) -> PrLookup {
-    let ids = match pr_spec_association_ids(project_root, spec) {
-        Ok(ids) => ids,
-        Err(e) => return PrLookup::GhFailed(format!("resolve PR spec association: {e:#}")),
-    };
-    let candidates = match gh_pr_list_candidates(project_root, &["--state", "open"], "100") {
-        Ok(prs) => prs,
-        Err(error) => return error,
-    };
-    if let Some(index) = candidates
-        .iter()
-        .position(|pr| pr_references_spec_ids(pr, &ids))
-    {
-        return PrLookup::Found(candidates.into_iter().nth(index).unwrap());
-    }
-    for pr in candidates {
-        if open_pr_commit_headlines_reference_ids(project_root, pr.number, &ids) {
-            return PrLookup::Found(pr);
-        }
-    }
-    PrLookup::NoOpenPr
+    first_spec_pr(collect_spec_prs(project_root, spec))
 }
 
 /// Fallback PR lookup for BUG-223/BUG-876: find an open PR that references
@@ -571,39 +659,26 @@ pub(crate) fn detect_open_pr_for_spec_github(
     project_root: &std::path::Path,
     spec: &str,
 ) -> PrLookup {
-    let ids = match pr_spec_association_ids(project_root, spec) {
-        Ok(ids) => ids,
-        Err(e) => return PrLookup::GhFailed(format!("resolve PR spec association: {e:#}")),
-    };
-    match gh_pr_list_candidates(project_root, &["--search", spec, "--state", "open"], "100") {
-        Ok(prs) => match prs.into_iter().find(|pr| pr_references_spec_ids(pr, &ids)) {
-            Some(pr) => PrLookup::Found(pr),
-            None => detect_open_pr_for_spec_by_head_or_commit(project_root, spec),
-        },
-        Err(error) => error,
-    }
+    first_spec_pr(collect_spec_prs(project_root, spec))
 }
 
-/// All associated open PRs, preserving duplicates for canonical-PR selection.
-/// Best-effort as before: errors leave selection to the typed single-PR path.
+/// Complete associated set, or typed unknown. The integrate caller explicitly
+/// retains its existing best-effort primary-path policy on unknown.
 // trace:TASK-843 | ai:claude
 // trace:BUG-2400 | ai:codex
 pub(crate) fn all_open_prs_for_spec_via_forge(
     project_root: &std::path::Path,
     spec: &str,
-) -> Vec<(u64, String)> {
-    let Ok(ids) = pr_spec_association_ids(project_root, spec) else {
-        return Vec::new();
-    };
-    let Ok(prs) =
-        gh_pr_list_candidates(project_root, &["--search", spec, "--state", "open"], "100")
-    else {
-        return Vec::new();
-    };
-    prs.into_iter()
-        .filter(|pr| pr_references_spec_ids(pr, &ids))
+) -> std::result::Result<Vec<(u64, String)>, PrLookup> {
+    let result = collect_spec_prs(project_root, spec);
+    if let Some(error) = result.unknown {
+        return Err(error);
+    }
+    Ok(result
+        .matched
+        .into_iter()
         .map(|pr| (pr.number, pr.head_branch.unwrap_or_default()))
-        .collect()
+        .collect())
 }
 
 /// Look up the head branch of an open PR by number — used by the BUG-223

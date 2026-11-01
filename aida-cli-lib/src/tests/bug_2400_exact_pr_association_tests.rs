@@ -47,7 +47,10 @@ fn bug_2400_search_candidates_require_exact_store_association() {
 base=$(dirname "$0")
 printf '%s\n' "$*" >> "$base/args"
 case "$*" in
-  *'pr view'*) cat "$base/commits" ;;
+  *'pr view'*)
+    if [ -f "$base/fail-$3" ]; then cat "$base/fail-$3" >&2; exit 1; fi
+    if [ -f "$base/slow-$3" ]; then sleep 2; fi
+    if [ "$3" = 3200 ]; then cat "$base/commits"; fi ;;
   *'--search'*) cat "$base/search" ;;
   *) cat "$base/all" ;;
 esac
@@ -82,7 +85,9 @@ esac
                 "{requested}: {title}, {branch}"
             );
             assert_eq!(
-                all_open_prs_for_spec_via_forge(root, requested),
+                all_open_prs_for_spec_via_forge(root, requested)
+                    .ok()
+                    .unwrap(),
                 vec![(3200, branch)]
             );
         }
@@ -101,18 +106,72 @@ esac
         detect_open_pr_for_spec_github(root, &canonical),
         PrLookup::NoOpenPr
     ));
-    assert!(all_open_prs_for_spec_via_forge(root, &canonical).is_empty());
+    assert!(all_open_prs_for_spec_via_forge(root, &canonical)
+        .ok()
+        .unwrap()
+        .is_empty());
 
     // Alias searches may miss; an exact branch or commit trailer still protects work.
     std::fs::write(root.join("all"), row(3200, "fix", "codex/bug-2392-work")).unwrap();
     assert!(
         matches!(detect_open_pr_for_spec_github(root, &canonical), PrLookup::Found(pr) if pr.number == 3200)
     );
+    assert_eq!(
+        all_open_prs_for_spec_via_forge(root, &canonical)
+            .ok()
+            .unwrap(),
+        vec![(3200, "codex/bug-2392-work".into())]
+    );
     std::fs::write(root.join("all"), row(3200, "fix", "unscoped")).unwrap();
     std::fs::write(root.join("commits"), "fix: actual work (BUG-2392)\n").unwrap();
     assert!(
         matches!(detect_open_pr_for_spec_github(root, &canonical), PrLookup::Found(pr) if pr.number == 3200)
     );
+
+    assert_eq!(
+        all_open_prs_for_spec_via_forge(root, &canonical)
+            .ok()
+            .unwrap(),
+        vec![(3200, "unscoped".into())]
+    );
+
+    // Typed failures never prove absence. An earlier unreadable candidate
+    // must not prevent inspection of a later commit-associated match.
+    for (message, network) in [
+        ("authentication failed", false),
+        ("could not resolve host: api.github.com", true),
+    ] {
+        std::fs::write(root.join("search"), &noise).unwrap();
+        std::fs::write(root.join("fail-3200"), message).unwrap();
+        let lookup = detect_open_pr_for_spec_github(root, &canonical);
+        assert!(if network {
+            matches!(lookup, PrLookup::GhUnreachable(_))
+        } else {
+            matches!(lookup, PrLookup::GhFailed(_))
+        });
+        assert!(all_open_prs_for_spec_via_forge(root, &canonical).is_err());
+        std::fs::remove_file(root.join("fail-3200")).unwrap();
+    }
+    std::fs::write(root.join("slow-3200"), "").unwrap();
+    assert!(matches!(
+        with_forge_lookup_timeout(std::time::Duration::from_millis(100), || {
+            detect_open_pr_for_spec_github(root, &canonical)
+        }),
+        PrLookup::GhUnreachable(_)
+    ));
+    assert!(
+        with_forge_lookup_timeout(std::time::Duration::from_millis(100), || {
+            all_open_prs_for_spec_via_forge(root, &canonical)
+        })
+        .is_err()
+    );
+    std::fs::remove_file(root.join("slow-3200")).unwrap();
+    std::fs::write(root.join("fail-3177"), "authentication failed").unwrap();
+    assert!(
+        matches!(detect_open_pr_for_spec_github(root, &canonical), PrLookup::Found(pr) if pr.number == 3200)
+    );
+    assert!(all_open_prs_for_spec_via_forge(root, &canonical).is_err());
+    std::fs::remove_file(root.join("fail-3177")).unwrap();
 
     // Keep every real duplicate for the existing canonical-selection policy.
     std::fs::write(
@@ -124,15 +183,41 @@ esac
         ),
     )
     .unwrap();
+    std::fs::write(
+        root.join("all"),
+        format!(
+            "{}{}",
+            row(3204, "fix", "bug-2392-rework"),
+            row(3207, "fix", "bug-desk-166-work")
+        ),
+    )
+    .unwrap();
     assert_eq!(
-        all_open_prs_for_spec_via_forge(root, &canonical),
-        vec![(3200, "first".into()), (3204, "bug-2392-rework".into())]
+        all_open_prs_for_spec_via_forge(root, &canonical)
+            .ok()
+            .unwrap(),
+        vec![
+            (3200, "first".into()),
+            (3204, "bug-2392-rework".into()),
+            (3207, "bug-desk-166-work".into())
+        ]
     );
+    // A finite list ceiling cannot prove absence or a complete duplicate set.
+    let saturated = (4000..4101)
+        .map(|n| row(n, "fix", "unscoped"))
+        .collect::<String>();
+    std::fs::write(root.join("search"), "").unwrap();
+    std::fs::write(root.join("all"), saturated).unwrap();
+    assert!(matches!(
+        detect_open_pr_for_spec_github(root, &canonical),
+        PrLookup::GhFailed(_)
+    ));
+    assert!(all_open_prs_for_spec_via_forge(root, &canonical).is_err());
     let args = std::fs::read_to_string(root.join("args")).unwrap();
     assert!(args
         .lines()
         .filter(|l| l.contains("--search"))
-        .all(|l| l.contains("--limit 100")));
+        .all(|l| l.contains("--limit 101")));
 
     // A literal owner of an alias wins over label expansion. Do not claim
     // that owner's PR on behalf of the canonical target.
@@ -151,7 +236,10 @@ esac
         detect_open_pr_for_spec_github(root, &canonical),
         PrLookup::NoOpenPr
     ));
-    assert!(all_open_prs_for_spec_via_forge(root, &canonical).is_empty());
+    assert!(all_open_prs_for_spec_via_forge(root, &canonical)
+        .ok()
+        .unwrap()
+        .is_empty());
 
     // Malformed rows and forge failures are unknown/error, never absence.
     std::fs::write(root.join("search"), "bad row\n").unwrap();
