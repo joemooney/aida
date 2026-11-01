@@ -19,7 +19,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T02:25:46.947809262Z
-modified_at: 2026-11-01T04:16:11.053995296Z
+modified_at: 2026-11-01T04:18:45.537638475Z
 req_type: Bug
 tags:
 - area:agents
@@ -73,6 +73,21 @@ comments:
   created_at: 2026-11-01T03:44:57.711501925Z
   modified_at: 2026-11-01T03:44:57.711501925Z
   session_id: 77a7a933-9a3f-4243-9a44-892bcedf206c
+- id: 01a19554-cea1-7bc3-beea-4e37d33cb4ea
+  author: joe
+  content: |-
+    ## Implementer findings (could not file as draft TASKs: `aida add` cannot allocate an ID from the sandbox, and the MCP file_finding tool is denied)
+
+    Commit d12af68f664 on bug-b6b1278890774ef993d2ebc327862470-157.
+
+    1. **design-choice, major:** the lane job runner runs seat-authored build.rs and test code as the operator on the host. With `[contained] os_wrap` on, it uses the seat's bwrap profile. With os_wrap off (the default), a contained seat gets an unsandboxed host run of code it wrote. CI runs off-host, so this is not the same trust level. Consider always wrapping jobs in a minimal bwrap, or refusing jobs from contained lanes when os_wrap is off.
+    2. **followup, minor:** only the standalone implementer launch starts the runner. The `--auto-complete` drain's phase-1 implementer gets no runner, env or prompt contract yet.
+    3. **deviation, minor:** nothing was compiled or run locally. aida-cli-lib cannot be checked within one 60s tool call, and a killed check keeps no progress. The help golden snapshot was hand-written, so CI may show a wrap or whitespace diff; regenerate it with AIDA_UPDATE_SNAPSHOTS=1. The seed hardlinks only deps artifacts, copies .d, .fingerprint and build, and skips incremental, rather than `cp -al` everything. The host wrapper warns that whole-tree hardlinks corrupt main's cache.
+    4. **followup, minor:** `make check-ci-fast` opens with a cargo check (aida-cli without default features), so a headless lane can never run it. Either allow it as a lane job or move that check out of the fast tier.
+  created_at: 2026-11-01T04:18:45.537638475Z
+  modified_at: 2026-11-01T04:18:45.537638475Z
+  session_id: 01a1953ec6c3
+  harness_version: 2.1.316 (Claude Code)
 history:
 - id: 01a19525-88eb-79e3-aab8-8d511ad2f605
   author: aida-session-start
