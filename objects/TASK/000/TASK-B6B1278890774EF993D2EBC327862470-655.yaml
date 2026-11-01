@@ -11,7 +11,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T09:05:27.409838422Z
-modified_at: 2026-11-01T09:40:06.550890115Z
+modified_at: 2026-11-01T10:20:25.683856865Z
 req_type: Task
 tags:
 - architecture
@@ -28,6 +28,11 @@ comments:
   content: 'Slice-A implementation in progress: closed `config permissions probe --vendor ...` route, shipped typed descriptor data (including no-native OpenCode), one pinned trusted policy snapshot, descriptor-pinned required synthetic mounts with denials last, strict unshare-all + explicit user/cgroup, cap drop/new-session/FD CLOEXEC hygiene, bounded owned supervisor and readiness/teardown channel. Synthetic fixture exercises actual writes/denials, proc isolation, leaked host socket absence and nested-userns protected-mount refusal; no ordinary vendor path changed or enabled, no containment-applied credit. Real egress/IPC/grant/native/vendor lifecycle remain explicitly unsupported. Direct fixed-lane development checks passed; Cargo targeted compile and fast gates are still running, so no Rust-validation or completion claim yet. CLI status edit hit the known shared-cache sandbox denial; MCP status update succeeded. Preparing a temporary publication checkout because source Git metadata is read-only.'
   created_at: 2026-11-01T09:40:06.550873731Z
   modified_at: 2026-11-01T09:40:06.550873731Z
+- id: 01a1969f-ecd3-7f50-912e-683f9cd37029
+  author: mcp
+  content: 'Recovery checkpoint: implementation commit c9f713903db is pushed to origin/task-b6b1278890774ef993d2ebc327862470-655. Source/native Git metadata is read-only; commit/push used /tmp/aida-task2705-publication, whose 12-file snapshot matches the assigned worktree. No PR is open yet and TASK remains In Progress. `make check-ci-fast` passed all 36 gates, including no-default-features CLI compile and TUI seam checks. The initial targeted task_2705_closed_containment_tracer passed (and compiled library/integration targets). Final exact-source validation is still running: AIDA_REQUIRE_BWRAP_LIVE=1 AIDA_REQUIRE_CODEX_CONTAINMENT_LIVE=1 cargo test -p aida-cli-lib --profile agent --lib task_2705_ -- --nocapture; log /tmp/task2705-required-live.log. It has reached code generation, not an acceptance result yet. Final source uses crate-local immutable vendors.toml (packaging-safe), local-only pinned trusted refs, redacted policy parse errors, strict namespaces, protected mounts, FD/reaper hygiene, normal and timeout teardown checks. Do not credit final six-case/live acceptance or mark Done until that gate passes. All parent ACs and independent strict/operator merge gates remain open; no ship or review record run.'
+  created_at: 2026-11-01T10:20:25.683846182Z
+  modified_at: 2026-11-01T10:20:25.683846182Z
 history:
 - id: 01a1965b-7cae-7260-83dd-5767f6772d90
   author: joe
