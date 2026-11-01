@@ -1,8 +1,8 @@
 job: mail-backlog-guard-route-operator
-note: 'agy2: unread [request] from codex-advisor-05, 12h47m old: BUG-2384 progress and ship preflight observation; agy1: unread [handoff] from codex-advisor-05, 4h14m old: Next bounded research: Ubuntu CI bwrap/AppArmor profile sources for TASK2705'
+note: 'agy1: unread [handoff] from codex-advisor-05, 5h28m old: Next bounded research: Ubuntu CI bwrap/AppArmor profile sources for TASK2705; agy1: unread [request] from codex-advisor-05, 61m old: TASK2705 read-only: verify missed bwrap-userns-restrict profile filename'
 due_since: 2026-11-01T08:10:03.941191562Z
 due_reason: on CronJobFired:mail-backlog-guard-route-operator
 due_failure:
-  trip_id: mail-backlog-guard-route-operator@2026-11-01T19:57:02Z
+  trip_id: mail-backlog-guard-route-operator@2026-11-01T21:11:11Z
   job: mail-backlog
-  error: 'agy2: unread [request] from codex-advisor-05, 12h47m old: BUG-2384 progress and ship preflight observation; agy1: unread [handoff] from codex-advisor-05, 4h14m old: Next bounded research: Ubuntu CI bwrap/AppArmor profile sources for TASK2705'
+  error: 'agy1: unread [handoff] from codex-advisor-05, 5h28m old: Next bounded research: Ubuntu CI bwrap/AppArmor profile sources for TASK2705; agy1: unread [request] from codex-advisor-05, 61m old: TASK2705 read-only: verify missed bwrap-userns-restrict profile filename'
