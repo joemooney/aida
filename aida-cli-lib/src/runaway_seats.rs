@@ -15,12 +15,19 @@
 //!   (stream-json). These usually carry NO per-line timestamps, so they count
 //!   toward the daily budget at the file's mtime, and their hourly rates are
 //!   reported as unknown, never as ok.
+//! - Codex session logs under `~/.codex/sessions/**/*.jsonl` (or
+//!   `AIDA_CODEX_SESSIONS_DIR`). That tree is machine-global, so a file
+//!   counts only when its first-line `session_meta` cwd is the project root,
+//!   a registered worktree or a clone seat (or under one). Token counts come
+//!   from `token_count` events, wakes and repeated prompts from
+//!   `user_message`, replies from `task_complete`, compactions from
+//!   `compacted` lines; Codex has no model-side mail-poll tool to detect.
 //! - The agent registry (`.aida/agents/*.toml`), only to name a seat and pid
 //!   for a session id.
 //!
 //! Deliberately NOT read: `~/.aida/usage.jsonl` (machine-global, no session
-//! id) and Codex sessions (`~/.codex/sessions`, not project-scoped). The
-//! coverage report says so rather than implying they were checked.
+//! id). The coverage report says so rather than implying it was checked.
+// trace:BUG-2391 | ai:claude
 //!
 //! Calibration (backtest over 2026-09-17..23 of this repo's transcripts): an
 //! ordinary lead seat peaked at 229M tokens/h, 34 wakes/h, 19 repeats of one
@@ -205,6 +212,12 @@ pub(crate) struct Sources {
     pub(crate) transcript_dirs: Vec<PathBuf>,
     /// Headless / burndown stream-json log directories.
     pub(crate) headless_dirs: Vec<PathBuf>,
+    /// Codex session-log trees (machine-global, filtered by `codex_roots`).
+    // trace:BUG-2391 | ai:claude
+    pub(crate) codex_dirs: Vec<PathBuf>,
+    /// A Codex session file is this project's when its `session_meta` cwd is
+    /// one of these directories or under one.
+    pub(crate) codex_roots: Vec<PathBuf>,
     /// State file; `None` = stateless (full re-read, no dedupe).
     pub(crate) state_path: Option<PathBuf>,
 }
@@ -243,6 +256,11 @@ pub(crate) fn default_sources(project_root: &Path) -> Sources {
             project_root.join(".aida").join("headless-logs"),
             project_root.join(".aida").join("burndown"),
         ],
+        // trace:BUG-2391 | ai:claude
+        codex_dirs: crate::vendor_activity::codex_sessions_root()
+            .into_iter()
+            .collect(),
+        codex_roots: roots,
         state_path: Some(
             project_root
                 .join(".aida")
@@ -425,6 +443,12 @@ struct State {
     last_run_at: Option<DateTime<Utc>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     last_verdict: Option<String>,
+    /// Codex session file -> its session id when it is this project's,
+    /// `None` when its `session_meta` cwd is another project's. Holds only
+    /// files seen in the last run, so it never grows with `~/.codex`.
+    // trace:BUG-2391 | ai:claude
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    codex_scope: BTreeMap<String, Option<String>>,
 }
 
 fn load_state(path: Option<&Path>) -> State {
@@ -503,6 +527,209 @@ struct Line {
     message: Option<Message>,
     cron: Option<String>,
     prompt: Option<String>,
+}
+
+/// Which log format a file holds, and for Codex the session it belongs to
+/// (its `session_meta` sits on the first line, which a resumed read skips).
+// trace:BUG-2391 | ai:claude
+#[derive(Clone, Copy)]
+enum LogKind<'a> {
+    Claude,
+    Codex { session: &'a str },
+}
+
+/// One Codex rollout line: `{timestamp, type, payload}`. Only the fields the
+/// rules read; everything else is skipped unparsed.
+// trace:BUG-2391 | ai:claude
+#[derive(Deserialize, Default)]
+struct CodexLine {
+    #[serde(rename = "type")]
+    kind: Option<String>,
+    timestamp: Option<String>,
+    payload: Option<CodexPayload>,
+}
+
+#[derive(Deserialize, Default)]
+struct CodexPayload {
+    #[serde(rename = "type")]
+    kind: Option<String>,
+    /// `user_message` text.
+    message: Option<serde_json::Value>,
+    /// `task_complete` final reply.
+    last_agent_message: Option<String>,
+    /// `token_count` usage.
+    info: Option<CodexInfo>,
+}
+
+#[derive(Deserialize, Default)]
+struct CodexInfo {
+    last_token_usage: Option<CodexUsage>,
+    total_token_usage: Option<CodexUsage>,
+}
+
+/// Codex's `input_tokens` already includes `cached_input_tokens`, and
+/// `output_tokens` includes reasoning.
+#[derive(Deserialize, Default)]
+struct CodexUsage {
+    #[serde(default)]
+    input_tokens: u64,
+    #[serde(default)]
+    output_tokens: u64,
+    #[serde(default)]
+    total_tokens: u64,
+}
+
+/// First-line `session_meta`: which project a Codex session file is.
+#[derive(Deserialize)]
+struct CodexMeta {
+    #[serde(rename = "type")]
+    kind: Option<String>,
+    payload: Option<CodexMetaPayload>,
+}
+
+#[derive(Deserialize)]
+struct CodexMetaPayload {
+    id: Option<String>,
+    session_id: Option<String>,
+    cwd: Option<String>,
+}
+
+/// `Some(Some(id))` when `path` is a session of a project under `roots`,
+/// `Some(None)` when it is another project's (or carries no cwd), `None`
+/// when its first line is still being written (decide on a later run).
+// trace:BUG-2391 | ai:claude
+fn codex_session_scope(path: &Path, roots: &[PathBuf]) -> Option<Option<String>> {
+    use std::io::Read;
+    let file = fs::File::open(path).ok()?;
+    let mut reader = BufReader::new(file).take(MAX_LINE_BYTES as u64 + 1);
+    let mut buf = Vec::new();
+    reader.read_until(b'\n', &mut buf).ok()?;
+    if buf.last() != Some(&b'\n') {
+        // Over the line cap is never going to parse: not attributable.
+        return (buf.len() > MAX_LINE_BYTES).then_some(None);
+    }
+    let Ok(meta) = serde_json::from_slice::<CodexMeta>(&buf) else {
+        return Some(None);
+    };
+    let Some(payload) = meta
+        .payload
+        .filter(|_| meta.kind.as_deref() == Some("session_meta"))
+    else {
+        return Some(None);
+    };
+    let Some(cwd) = payload.cwd.as_deref().map(Path::new) else {
+        return Some(None);
+    };
+    if !roots.iter().any(|r| cwd.starts_with(r)) {
+        return Some(None);
+    }
+    let id = payload.session_id.or(payload.id).unwrap_or_else(|| {
+        path.file_stem()
+            .unwrap_or_default()
+            .to_string_lossy()
+            .to_string()
+    });
+    Some(Some(id))
+}
+
+/// Byte gate for Codex lines: only the four event kinds the rules read.
+// trace:BUG-2391 | ai:claude
+fn codex_worth_parsing(line: &[u8]) -> bool {
+    static TYPE_TAG: std::sync::OnceLock<regex::bytes::Regex> = std::sync::OnceLock::new();
+    TYPE_TAG
+        .get_or_init(|| {
+            regex::bytes::Regex::new(
+                r#""type":"(token_count|user_message|task_complete|compacted)""#,
+            )
+            .expect("static regex")
+        })
+        .is_match(line)
+}
+
+/// Fold one Codex line into `session`'s aggregates. Codex lines all carry a
+/// timestamp; a line without one is skipped rather than guessed.
+// trace:BUG-2391 | ai:claude
+fn fold_codex_line(
+    line: &CodexLine,
+    session: &str,
+    policy: &WatchdogPolicy,
+    day_start: DateTime<Utc>,
+    sessions: &mut BTreeMap<String, SessionAgg>,
+) {
+    let Some(ts) = line
+        .timestamp
+        .as_deref()
+        .and_then(|t| DateTime::parse_from_rfc3339(t).ok())
+        .map(|t| t.with_timezone(&Utc))
+    else {
+        return;
+    };
+    if ts < day_start {
+        return;
+    }
+    let s = sessions.entry(session.to_string()).or_default();
+    s.timed = true;
+    s.last_written_at = Some(s.last_written_at.map_or(ts, |prev| prev.max(ts)));
+    let minute = minute_of(ts);
+    s.last_activity_minute = Some(s.last_activity_minute.unwrap_or(minute).max(minute));
+    if line.kind.as_deref() == Some("compacted") {
+        s.minutes.entry(minute).or_default().compactions += 1;
+        return;
+    }
+    if line.kind.as_deref() != Some("event_msg") {
+        return;
+    }
+    let Some(p) = &line.payload else { return };
+    match p.kind.as_deref() {
+        Some("token_count") => {
+            let Some(info) = &p.info else { return };
+            let Some(last) = &info.last_token_usage else {
+                return;
+            };
+            // Codex re-emits an unchanged checkpoint (e.g. a rate-limit
+            // update): the cumulative total names the call.
+            let key = info
+                .total_token_usage
+                .as_ref()
+                .map(|t| format!("codex-total:{}", t.total_tokens));
+            if key.is_some() && key == s.last_msg {
+                return;
+            }
+            s.last_msg = key;
+            let b = s.minutes.entry(minute).or_default();
+            b.calls += 1;
+            b.tokens += last.input_tokens + last.output_tokens;
+            let at = ts.timestamp().max(0) as u64;
+            if at >= b.last_ctx_ts {
+                b.last_ctx_ts = at;
+                b.last_ctx = last.input_tokens;
+            }
+        }
+        Some("user_message") => {
+            let text = match &p.message {
+                Some(serde_json::Value::String(t)) => t.as_str(),
+                _ => "",
+            };
+            s.minutes.entry(minute).or_default().wakes += 1;
+            // Codex does not mark injected prompts, so every prompt counts
+            // toward the repeat rule; a human retyping one prompt 60 times
+            // an hour is not an ordinary seat either.
+            *s.prompts
+                .entry(prompt_hash(text))
+                .or_default()
+                .entry(minute)
+                .or_default() += 1;
+        }
+        Some("task_complete") => {
+            let text = p.last_agent_message.as_deref().unwrap_or("");
+            let b = s.minutes.entry(minute).or_default();
+            b.replies += 1;
+            if text.trim().chars().count() <= policy.noop_reply_max_chars {
+                b.noop += 1;
+            }
+        }
+        _ => {}
+    }
 }
 
 /// Short, content-free key for an injected prompt: a hash of its collapsed
@@ -761,6 +988,7 @@ fn fold_line(
 /// offset reached — the next run resumes exactly there.
 fn scan_file(
     path: &Path,
+    kind: LogKind<'_>,
     start: Option<u64>,
     policy: &WatchdogPolicy,
     day_start: DateTime<Utc>,
@@ -804,7 +1032,19 @@ fn scan_file(
         }
         budget.bytes += n as u64;
         offset += n as u64;
-        if n > MAX_LINE_BYTES || !worth_parsing(&buf) {
+        if n > MAX_LINE_BYTES {
+            continue;
+        }
+        // trace:BUG-2391 | ai:claude
+        if let LogKind::Codex { session } = kind {
+            if codex_worth_parsing(&buf) {
+                if let Ok(line) = serde_json::from_slice::<CodexLine>(&buf) {
+                    fold_codex_line(&line, session, policy, day_start, sessions);
+                }
+            }
+            continue;
+        }
+        if !worth_parsing(&buf) {
             continue;
         }
         if let Ok(line) = serde_json::from_slice::<Line>(&buf) {
@@ -1140,6 +1380,7 @@ pub(crate) fn scan(
                 let start = state.files.get(&key).copied();
                 if let Ok(offset) = scan_file(
                     &file,
+                    LogKind::Claude,
                     start,
                     policy,
                     day_start,
@@ -1176,12 +1417,70 @@ pub(crate) fn scan(
         detail: "machine-global and carries no session id, so it cannot attribute a rate to a seat"
             .into(),
     });
-    coverage.sources.push(SourceStatus {
-        source: "codex-sessions".into(),
-        path: "~/.codex/sessions".into(),
-        state: "not-read".into(),
-        detail: "not project-scoped; Codex seats are not covered by this check".into(),
-    });
+    // Codex: one machine-global tree, kept to this project's sessions by the
+    // first-line cwd. Only files touched in the last day are opened, and a
+    // file's scope is decided once and carried in the state.
+    // trace:BUG-2391 | ai:claude
+    let mut codex_scope = BTreeMap::new();
+    for dir in &sources.codex_dirs {
+        if !dir.is_dir() {
+            coverage.sources.push(SourceStatus {
+                source: "codex-sessions".into(),
+                path: dir.display().to_string(),
+                state: "unavailable".into(),
+                detail: "directory not present".into(),
+            });
+            continue;
+        }
+        let mut files = Vec::new();
+        walk_jsonl(dir, &mut files);
+        files.sort();
+        let (mut read, mut in_project) = (0usize, 0usize);
+        for file in files {
+            if file_mtime(&file).is_none_or(|m| m < day_start) {
+                continue;
+            }
+            if budget.exhausted(policy) {
+                break;
+            }
+            let key = file.display().to_string();
+            let scope = match state.codex_scope.get(&key) {
+                Some(known) => known.clone(),
+                None => match codex_session_scope(&file, &sources.codex_roots) {
+                    Some(decided) => decided,
+                    None => continue,
+                },
+            };
+            codex_scope.insert(key.clone(), scope.clone());
+            let Some(session) = scope else { continue };
+            in_project += 1;
+            let start = state.files.get(&key).copied();
+            if let Ok(offset) = scan_file(
+                &file,
+                LogKind::Codex { session: &session },
+                start,
+                policy,
+                day_start,
+                &mut state.sessions,
+                &mut budget,
+            ) {
+                if start != Some(offset) {
+                    read += 1;
+                }
+                state.files.insert(key, offset);
+            }
+        }
+        coverage.files_scanned += read;
+        coverage.sources.push(SourceStatus {
+            source: "codex-sessions".into(),
+            path: dir.display().to_string(),
+            state: "available".into(),
+            detail: format!(
+                "{read} file(s) with new bytes; {in_project} session file(s) of this project active in the last 24h"
+            ),
+        });
+    }
+    state.codex_scope = codex_scope;
 
     prune(&mut state.sessions, minute_of(day_start));
     let tripped = judge(project_label, &state.sessions, policy, now, seats);
@@ -1427,7 +1726,195 @@ mod tests {
             transcript_dirs: vec![root.join("claude")],
             headless_dirs: vec![root.join("headless")],
             state_path: Some(root.join("state").join("state.json")),
+            ..Default::default()
         }
+    }
+
+    /// The BUG-1589 storm shape as a Codex rollout: a `session_meta` naming
+    /// `cwd`, then a mail tick every 8s answered "mail tick: quiet" on a
+    /// ~520k context over 3 calls, each checkpoint re-emitted once unchanged
+    /// (which must count once), and a compaction every 50 ticks.
+    // trace:BUG-2391 | ai:claude
+    fn codex_storm(session: &str, cwd: &Path, ticks: i64) -> String {
+        let mut out = String::new();
+        let line = |v: serde_json::Value| format!("{v}\n");
+        out.push_str(&line(serde_json::json!({"timestamp":ts(0),"type":"session_meta",
+            "payload":{"id":session,"timestamp":ts(0),"cwd":cwd,"originator":"codex_exec","instructions":"x"}})));
+        let mut total = 0u64;
+        for i in 0..ticks {
+            let at = 8 * i + 1;
+            out.push_str(&line(
+                serde_json::json!({"timestamp":ts(at),"type":"event_msg",
+                "payload":{"type":"user_message","message":TICK,"kind":"plain"}}),
+            ));
+            out.push_str(&line(serde_json::json!({"timestamp":ts(at),"type":"response_item",
+                "payload":{"type":"message","role":"user","content":[{"type":"input_text","text":TICK}]}})));
+            for call in 0..3 {
+                total += 520_020;
+                let tc = serde_json::json!({"timestamp":ts(at + 1 + call),"type":"event_msg",
+                    "payload":{"type":"token_count","info":{
+                        "total_token_usage":{"input_tokens":total - 20,"cached_input_tokens":0,"output_tokens":20,"total_tokens":total},
+                        "last_token_usage":{"input_tokens":520_000,"cached_input_tokens":518_000,"output_tokens":20,"total_tokens":520_020}},
+                        "rate_limits":null}});
+                out.push_str(&line(tc.clone()));
+                out.push_str(&line(tc));
+            }
+            out.push_str(&line(
+                serde_json::json!({"timestamp":ts(at + 4),"type":"event_msg",
+                "payload":{"type":"task_complete","last_agent_message":"mail tick: quiet"}}),
+            ));
+            if i % 50 == 49 {
+                out.push_str(&line(
+                    serde_json::json!({"timestamp":ts(at + 5),"type":"compacted",
+                    "payload":{"message":"summary"}}),
+                ));
+            }
+        }
+        out
+    }
+
+    /// Sources reading only a Codex tree whose project root is `project`.
+    // trace:BUG-2391 | ai:claude
+    fn codex_sources(root: &Path, project: &Path) -> Sources {
+        Sources {
+            codex_dirs: vec![root.join("codex").join("sessions")],
+            codex_roots: vec![project.to_path_buf()],
+            state_path: Some(root.join("state").join("state.json")),
+            ..Default::default()
+        }
+    }
+
+    /// A Codex storm in this project trips the same rules as a Claude one;
+    /// the identical storm from another project's cwd is not this project's.
+    // trace:BUG-2391 | ai:claude
+    #[test]
+    fn codex_storm_in_project_trips_and_foreign_cwd_is_ignored() {
+        let tmp = tempfile::tempdir().unwrap();
+        let project = tmp.path().join("repo");
+        let day = tmp.path().join("codex/sessions/2026/09/21");
+        let src = codex_sources(tmp.path(), &project);
+        write(
+            &day,
+            "rollout-a.jsonl",
+            &codex_storm("codex-mine", &project.join("sub"), 450),
+        );
+        write(
+            &day,
+            "rollout-b.jsonl",
+            &codex_storm("codex-other", &tmp.path().join("other"), 450),
+        );
+        // The inclusive 60m window ending at minute 59 holds every tick.
+        let now = t0() + Duration::minutes(59);
+        let (findings, cov) = scan(
+            "aida",
+            &src,
+            &WatchdogPolicy::default(),
+            now,
+            &HashMap::new(),
+        );
+        assert_eq!(
+            rules(&findings, "codex-mine"),
+            vec![
+                "compactions",
+                "idle-ratio",
+                "repeated-prompt",
+                "token-rate",
+                "wake-rate"
+            ]
+        );
+        assert!(rules(&findings, "codex-other").is_empty());
+        assert_eq!(cov.verdict, "tripped");
+        assert_eq!(cov.sessions, 1);
+        let codex = cov
+            .sources
+            .iter()
+            .find(|s| s.source == "codex-sessions")
+            .unwrap();
+        assert_eq!(codex.state, "available");
+        assert!(codex.detail.contains("1 session file(s) of this project"));
+        // Duplicate checkpoints count once: 450 ticks * 3 calls * 520,020.
+        let token = findings
+            .iter()
+            .find(|f| f.id == "token-rate:codex-mine")
+            .unwrap();
+        assert!(
+            token.summary.contains("over 1350 calls"),
+            "{}",
+            token.summary
+        );
+    }
+
+    /// An ordinary Codex seat stays quiet, a tick reads only appended bytes,
+    /// and the scope decision is carried in the state, not re-read.
+    // trace:BUG-2391 | ai:claude
+    #[test]
+    fn codex_ordinary_seat_is_quiet_and_resumes_from_its_offset() {
+        let tmp = tempfile::tempdir().unwrap();
+        let project = tmp.path().join("repo");
+        let day = tmp.path().join("codex/sessions/2026/09/21");
+        let src = codex_sources(tmp.path(), &project);
+        let path = write(
+            &day,
+            "rollout-c.jsonl",
+            &codex_storm("codex-calm", &project, 19),
+        );
+        let now = t0() + Duration::minutes(30);
+        let (findings, first) = scan(
+            "aida",
+            &src,
+            &WatchdogPolicy::default(),
+            now,
+            &HashMap::new(),
+        );
+        assert!(findings.is_empty(), "{findings:?}");
+        assert_eq!(first.verdict, "ok");
+        assert_eq!(first.files_scanned, 1);
+        let (_, idle) = scan(
+            "aida",
+            &src,
+            &WatchdogPolicy::default(),
+            now,
+            &HashMap::new(),
+        );
+        assert_eq!((idle.files_scanned, idle.bytes_read), (0, 0));
+        let more = codex_storm("ignored", &project, 20);
+        let tail = more.lines().last().unwrap();
+        append(&path, &format!("{tail}\n"));
+        let (_, next) = scan(
+            "aida",
+            &src,
+            &WatchdogPolicy::default(),
+            now,
+            &HashMap::new(),
+        );
+        assert_eq!(next.files_scanned, 1);
+        assert_eq!(next.bytes_read, tail.len() as u64 + 1);
+    }
+
+    /// A rollout whose first line is still being written is decided later,
+    /// not filed as foreign forever.
+    // trace:BUG-2391 | ai:claude
+    #[test]
+    fn codex_scope_waits_for_a_complete_session_meta() {
+        let tmp = tempfile::tempdir().unwrap();
+        let project = tmp.path().join("repo");
+        let f = tmp.path().join("rollout-d.jsonl");
+        let body = codex_storm("codex-late", &project, 1);
+        let first = body.lines().next().unwrap();
+        fs::write(&f, &first[..first.len() / 2]).unwrap();
+        assert_eq!(
+            codex_session_scope(&f, std::slice::from_ref(&project)),
+            None
+        );
+        fs::write(&f, &body).unwrap();
+        assert_eq!(
+            codex_session_scope(&f, std::slice::from_ref(&project)),
+            Some(Some("codex-late".to_string()))
+        );
+        assert_eq!(
+            codex_session_scope(&f, &[tmp.path().join("elsewhere")]),
+            Some(None)
+        );
     }
 
     fn rules(findings: &[DoctorFinding], sid: &str) -> Vec<String> {
@@ -2055,6 +2542,7 @@ mod tests {
             transcript_dirs: vec![tmp.path().join("claude")],
             headless_dirs: vec![tmp.path().join("headless")],
             state_path: None,
+            ..Default::default()
         };
         let (findings, coverage) = scan(
             "aida",
@@ -2208,6 +2696,7 @@ mod tests {
             transcript_dirs: vec![tmp.path().join("claude")],
             headless_dirs: vec![tmp.path().join("headless")],
             state_path: Some(tmp.path().join("state").join("state.json")),
+            ..Default::default()
         };
         let policy = WatchdogPolicy {
             blind_alert_after: 3,
@@ -2274,6 +2763,7 @@ mod tests {
             transcript_dirs: vec![tmp.path().join("claude")],
             headless_dirs: vec![tmp.path().join("headless")],
             state_path: Some(tmp.path().join("state").join("state.json")),
+            ..Default::default()
         };
         let policy = WatchdogPolicy {
             blind_alert_after: 0,
@@ -2705,7 +3195,16 @@ mod tests {
             partial: false,
         };
         let policy = WatchdogPolicy::default();
-        scan_file(&path, None, &policy, t0(), &mut sessions, &mut budget).unwrap();
+        scan_file(
+            &path,
+            LogKind::Claude,
+            None,
+            &policy,
+            t0(),
+            &mut sessions,
+            &mut budget,
+        )
+        .unwrap();
         assert_eq!(sessions[sid].last_written_at, Some(pinned));
     }
 

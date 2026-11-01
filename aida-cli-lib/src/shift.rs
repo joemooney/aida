@@ -96,8 +96,10 @@ pub(crate) const NOTIFY_TIMEOUT: StdDuration = StdDuration::from_secs(15);
 /// The role whose queue view the wave drains. The wave passes `--role` with
 /// it, and selection reads the same role-routed view.
 const WAVE_ROLE: &str = "implementer";
-/// Vendors whose spend the runaway-seat watchdog aggregates measure.
-const COVERED_VENDORS: &[&str] = &["claude"];
+/// Vendors whose spend the runaway-seat watchdog aggregates measure: Claude
+/// transcripts, and Codex sessions matched to the project by cwd.
+// trace:BUG-2391 | ai:claude
+const COVERED_VENDORS: &[&str] = &["claude", "codex"];
 /// The registry command of the watchdog job.
 const WATCHDOG_COMMAND: &str = "doctor check runaway-seats --fail-on-findings";
 /// The registry command of the tick job itself.

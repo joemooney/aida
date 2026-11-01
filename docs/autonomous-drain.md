@@ -1611,8 +1611,10 @@ Safety floors that hold in every configuration:
 - Budget: refuses at or above 80% of the daily token budget (the runaway-seat
   watchdog's, 6B by default), and refuses when the watchdog's aggregates are
   missing, more than an hour old, degraded or unknown, or blind to the wave's
-  vendor (Codex spend is not measured; a local
-  `allow_uncovered_vendors = ["codex"]` overrides that one case). Each wave is
+  vendor. Claude and Codex spend are both measured: Codex sessions under
+  `~/.codex/sessions` count when their `session_meta` cwd is the project, a
+  worktree or a clone seat. Any other vendor needs a local
+  `allow_uncovered_vendors = ["<vendor>"]` override. Each wave is
   also capped by `--max-tokens`, `--max-iterations` and `--max-runtime`.
 - Circuit breakers in `.aida/shift-state.json`: at most 8 waves per 24h; two
   consecutive zero-progress waves stop launches until `aida shift resume` or a
