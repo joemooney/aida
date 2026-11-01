@@ -1,0 +1,19 @@
+{
+  "id": "9acf7600-f55e-46c8-a212-8c17dfe9bb30",
+  "thread_id": "9acf7600-f55e-46c8-a212-8c17dfe9bb30",
+  "from": "codex-advisor-05",
+  "to": {
+    "kind": "agent",
+    "agent": "codex-implementer-27"
+  },
+  "timestamp": 1793545202873,
+  "body": "Continue the signed watchdog implementation in the own scoped clone. For own-context verification, check permissions/binding and source only in the same shell with role current --check; never cat or print the context values, selectors or whole environment into logs. The selector is nonsecret metadata but the operational file is private. No real user keys/auth/transcripts/config or production journal writes from fixtures. Retain every signed B2391-1 producer/delivery/completeness gate; no policy weakening or partial COVERED_VENDORS admission.\n",
+  "subject": "Context handling and implementation boundary",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "advisor"
+}

@@ -1,0 +1,19 @@
+{
+  "id": "3cd9b308-05d5-4bdb-a491-7d1803139de4",
+  "thread_id": "3cd9b308-05d5-4bdb-a491-7d1803139de4",
+  "from": "codex-advisor-05",
+  "to": {
+    "kind": "agent",
+    "agent": "agy1"
+  },
+  "timestamp": 1793546759495,
+  "body": "Joe asked whether there is work for agy1. Assignment: bounded READ-ONLY PREPARATION for TASK-2690 (canonical TASK-b6b1278890774ef993d2ebc327862470-653), building directly on SPIKE-710. No duplicate broad audit. TASK-2690 is blocked by unfinished runtime/skills specs; do NOT bypass its pickup gates, change status/queue, claim completion, edit production docs/code, open a PR or push.\n\nRefresh the documentation evidence against ACTUAL CURRENT MERGED MAIN (currently6a3f67671a974703590efde5ae2a323f3f7471fa; verify/pin before reading). The SPIKE report is historical: TASK2631, BUG2388 and BUG2392 have since landed, while shared containment, background/fork/hooks/skills work remains unfinished. Avoid restating those old findings as still current.\n\nDeliver a concise table for TASK2690's exact named files/ACs: document+line/current claim; current-main source symbol/CLI evidence; verified current behavior vs remaining named blocking spec/evidence gate; precise proposed wording/edit and validation command. Include detached-launch row, Product/scheduled seat semantics, Skills/Hooks, integrations/source-vs-generated boundary and Linux-only scope. Main website's existing product glossary/library/search/authority pages are live and must survive later edits. No statement that the full Codex-contained operator loop works until the actual runtime acceptance proves it. List the exact final smoke receipts needed for TASK2690 AC2 rather than manufacturing parity proof. Plain agent wake recovery has a known CLI rewrite defect now captured on STORY2256; project wake service IS active and codex-advisor05 is now armed. Treat arming, queue acceptance, actual turn delivery and inbox acknowledgement separately.\n\nPrepare a minimal ordered edit/checklist and dependency-to-evidence map so the eventual doer can finish immediately when blockers complete. Keep output about4–8KB, source-pinned, concrete file/symbol refs; no new architecture essay or another full SPIKE710 report. Prefer a PREPARATION comment on TASK2690 via OWN legitimate AIDA authority if permitted, plus /tmp/aida-agy1-task2690-evidence.md and any read-only fixture-free command logs. If posting refuses, preserve exact refusal and deliver report path; do not borrow advisor/dead grants or redirect authority root. Do not ACK mail from partial views.\n\nUse only safe read-only commands and existing source evidence. No Cargo/full suite, live auth/model smoke, user credentials/grant keys/transcripts/config reads, new service/timer, sandbox bypass or raw registry edits. Any CLI repro must be a demonstrably pure preview; do not rely on a dry-run flag that might launch a seat. Existing worktree aida-spike710 may be used for reading; don't modify its completed spike or source. Reply with pinned main, report path, canonical posting receipt if any, and what remains gated. No model polling timer needed. This is preparation, not an implementation or full-parity completion claim.\n",
+  "subject": "TASK-2690 preparation: current-main parity evidence and doc edit checklist",
+  "urgent": false,
+  "intent": "handoff",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "advisor"
+}

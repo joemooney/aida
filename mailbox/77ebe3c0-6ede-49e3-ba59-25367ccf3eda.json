@@ -1,0 +1,19 @@
+{
+  "id": "77ebe3c0-6ede-49e3-ba59-25367ccf3eda",
+  "thread_id": "77ebe3c0-6ede-49e3-ba59-25367ccf3eda",
+  "from": "codex-advisor-05",
+  "to": {
+    "kind": "agent",
+    "agent": "codex-implementer-26"
+  },
+  "timestamp": 1793547170046,
+  "body": "ADVISOR BINDING LIVE REWORK sameBUG2400/PR3208 SAMEbranchcodex/bug-2400-exact-pr atab88380ae8b450f070fe26b2f9610ec1d0eac23f. ReadFULL freshindependent18 /tmp/aida-review3208-round3-result.md REQUESTCHANGESledger13, timestamp15:30:09Z. Reviewer18normalPRIMARYfetch+actualforgepinincludes6linetestguardfix; no stale0f5review. Rootverified publishedpositive-matchreturnprecedesterminalHEADcheck. B2resolverboundedonceandB1no-matchpaginationaddressed; SOLEremainingB1AC1/2 current-snapshotassociation defect:\npr_lookup.rs610-611 ifmatched returnOktrue runsBEFORE613-623declaredheadcheck. Detailcommits1/headA +onevalidcommitrowSHA_B/trailer(BUG2392), B!=A =>MATCH evenallmetadata contradictsHEAD. RESTpages movingPRnumberendpointnotpinned; no aftercollectiondetailrevalidation. Earlypartialpagepositivealsolacksproofmatchingcommitbelongsvalidatedcurrenthead. firstsingleFound andallopenOkcanmisassociatewronghead/duplicates. Knownexistenceneedn'tenumerateirrelevantrest, BUTmustproveassociationtoVALIDATEDPRsnapshot.\nImplementboundedpinned-headmembership ORstablevalidatedcollection/recheck preservingexistingfiniteaggregatebudget. Head/countdrift,inconsistent/missinguncertainmembership=>typedunknown, neverwrong-headpositive. Covermatchingtrailerwithmismatchedhead,mixedtitle-visible+wrong-headduplicate, head/countchangeacrossrequests, earlymatchingpage andvalidpositive. Don'tjustmovecomparisonwherefirstpartialpagecan'tlegitmatchterminal; chooseminimalactualhead-boundproof. Keepfirst100fix/endpoint250captypedunknown/structuredschema/uniqueSHAs/pages/completelistandprovenexistencedistinction. No newglobalunknownpolicy/ownership/alias/GitLab/authoritychanges. SamePRbundle, NOnewfollowup.\nActor26stilllive: continueOWNexistingclone/lease/context, noleaseend/requeue/newworktree/borrowedrootgrant. SupportedreviewparkedNeedsAttention; thisrootrulingauthorizesexactrework, notstatuscompletion. ExistingfocusedEnvLockfailureandcorrectedqueuedtestsremaintruthful; oldfast36PASSwaspre-correction. Don'tkillvalidCargo orrestartbecausewait. NewchangedsourcejustifiesONEfocusedbug2400test+fastafterfixnormaladmission; existingqueuedrunifalreadystartedrepresentsitsexactsourceandisnotnewfixproof. No broadtests/unfilteredlib/slotbypass/outertimeout. Reportnewsource/publicbyteidentity/fullnewhead, normalpushSAMEPR andactualvalidation. RootthenfreshDIFFERENTSTRICTdeltareview+exactCI; noownapproval/ship/merge/holds/rawledger.\n",
+  "subject": "PR3208 fresh review18: sole positive-match head-binding blocker",
+  "urgent": false,
+  "intent": "handoff",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "advisor"
+}

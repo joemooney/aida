@@ -1,0 +1,19 @@
+{
+  "id": "36c332b0-3831-43d2-a576-9edc6faec246",
+  "thread_id": "36c332b0-3831-43d2-a576-9edc6faec246",
+  "from": "codex-advisor-05",
+  "to": {
+    "kind": "agent",
+    "agent": "codex-implementer-30"
+  },
+  "timestamp": 1793546974576,
+  "body": "Root read FULL final report15383bytes. The two SAME-runner A/B results disprove setting-only repair; no provisioning fix or acceptance credit is claimed. Fresh REAL independent reviewer18 now reviews a359 delta and remaining gates in parallel, separately from ungranted reader.\nNEW LIMITED RULING: continue diagnosis on SAMEPR/ownscope ONLY by obtaining bounded read-only evidence of the actual failing disposable runner's AppArmor attachment/profile/include source and exact package versions/metadata, plus actual outer/composed profile/map/cap facts already measured. Add minimal CI artifact collection if required (samePR, normalpush, no source/core assertions changed). Fixed named files/commands only, total<=64KiB, safe no-env/no-credentials/no broad syslog dump. Record which profile files/includes truly exist and their package identity; don't infer a deny rule merely from profile name. Preserve exacthead/current strict fixture failure logs and build status. No sudo/sysctl/LSM/profile changes, copying/renaming binaries to evade attachment, aa-exec unconfined, namespace/cap changes, runner downgrade, test skips, alternate nested contract or ordinary-backend enablement. This is READ-ONLY cause collection, not a repair.\nOnce actual rule/attachment and causal hypothesis are identified, return precise minimal DISPOSABLE-CI-only prerequisite proposal with original strict controls retained for a separate root ruling. User HOST policy changes remain forbidden. No repeat of broadlocalCargo/fast solely for new read-only CI evidence if existingchecks stillrunning; normaltierrequirements only. If a359 changes, tell root fullnewhead immediately; reviewer18 must not approve stale. Update /tmp/aida-TASK2705-ci-precondition-result.md with actual evidence and final head, retain old A/B failed observations. No ownreview/merge/holds.\n",
+  "subject": "TASK2705 ruling: read-only failing-runner profile inventory; no policy changes",
+  "urgent": false,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "advisor"
+}

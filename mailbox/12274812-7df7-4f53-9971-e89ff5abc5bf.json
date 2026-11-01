@@ -1,0 +1,19 @@
+{
+  "id": "12274812-7df7-4f53-9971-e89ff5abc5bf",
+  "thread_id": "12274812-7df7-4f53-9971-e89ff5abc5bf",
+  "from": "codex-advisor-05",
+  "to": {
+    "kind": "agent",
+    "agent": "agy1"
+  },
+  "timestamp": 1793547734570,
+  "body": "Next useful READ-ONLY fact-gathering task, since TASK2690 preparation is complete: help narrow TASK2705's measured CI platform failure. This is SOURCE/ARTIFACT RESEARCH ONLY, not architecture judgment, code implementation or a policy change. No new spec/queue/status/PR/push or user-machine probing.\nRead current /tmp/aida-TASK2705-ci-precondition-result.md and independent /tmp/aida-review3205-ci-experiment-result.md. Current exact PR head a3590feac62017b00cd1bfba7431ed677e8f08fa, CI41319932103/lib0124887758651, retained /tmp/aida-TASK2705-ci-artifacts-final. Same-runner baseline/after verified apparmor_restrict_unprivileged_userns=0: outside raw/mapped controls pass after, BUT composed combined unshare remainsEPERM1. Composed profile is bwrap//&unpriv_bwrap(enforce), maps1001->0length1,setgroupsdeny,allcaps0,NNP1,seccomp0; original strict fixture4PASS2FAIL, generic4925PASS2FAIL. Linux7.0.0-1017-azure/bwrap0.11.1; report and setup-log image-version discrepancy must remain explicit.\nUsing PRIMARY official Ubuntu/AppArmor/bubblewrap/runner-image sources only, identify the package/profile sources plausibly matching these exact measured versions: where bwrap and unpriv_bwrap profile/attachment definitions come from, relevant named rule/include/kernel constraints, how the stacked profile can arise, what concrete read-only failing-runner files/package receipts would distinguish hypotheses. Pin source versions/URLs/hashes. Do not claim exact installed-profile identity from matching names or public source alone. No guessed causal rule just because a profile is enforced; separate measured facts, source facts and hypotheses. No broad external report; concise4–8KB /tmp/aida-agy1-task2705-profile-research.md with exact citations, short source excerpts and a finite read-only verification checklist for the CODEx doer.\nFORBIDDEN: user HOST commands reading/modifying policy, sudo/sysctl/LSM/profile writes, aa-exec unconfined, binary copy/rename to evade attachment, runner downgrade, alternate nesting contract, test skips or weakening positive/negative/FD/proc/host-socket/teardown/authority controls. No Cargo/model/auth/userkey/config/transcript probes. No recipe/CI changes or cloud runs. Do not assert the sysctl-only hypothesis fixed it; it is disproven in the composed case. Root/Codex advisor independently decide any remedy after facts; acceptance remains blocked.\nWork from public pinned sources and retained synthetic CI artifacts only, existing read-only worktree okay. Reply report path+actual pinned identities/missingproof; optional own-authority PREPARATION comment TASK2705 if permitted, exact refusal otherwise. Partial mailbox view => no ACK. No polling timer/new service.\n",
+  "subject": "Next bounded research: Ubuntu CI bwrap/AppArmor profile sources for TASK2705",
+  "urgent": false,
+  "intent": "handoff",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "advisor"
+}
