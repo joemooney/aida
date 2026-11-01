@@ -631,8 +631,15 @@ fn node_id_for_clone(store_root: &Path, clone_path: &Path) -> String {
     // per-clone already and outranks every shared-store guess: a clone whose
     // legacy node was retired must not keep stamping the retired id.
     // trace:BUG-2378 | ai:claude
-    if let Ok(Some(binding)) = aida_core::work_binding::load(store_root) {
-        return binding.node_id;
+    // An unreadable binding is not "no binding": the fallbacks below may
+    // name a retired node, so say so rather than stamp it silently.
+    match aida_core::work_binding::load(store_root) {
+        Ok(Some(binding)) => return binding.node_id,
+        Ok(None) => {}
+        Err(e) => eprintln!(
+            "warning: could not read this clone's node binding ({e:#}); \
+             the lease names the node from the shared store, which may be a retired node"
+        ),
     }
     let canon = canonical_clone_path(clone_path);
     let registry_path = store_root.join("registry").join("nodes.toml");

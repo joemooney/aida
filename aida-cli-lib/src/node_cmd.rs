@@ -97,8 +97,17 @@ pub(crate) fn handle_node_command(cmd: &NodeCommand, store_path: &std::path::Pat
             let registry = NodeRegistry::load(&registry_path).unwrap_or_default();
             // This clone's identity is its WORK binding first, the legacy
             // `.aida/node.toml` only without one, so a retired legacy node
-            // never shows as this clone's node. trace:BUG-2378 | ai:claude
-            let local_id = aida_core::allocation_authority::clone_node_id(store_path)?;
+            // never shows as this clone's node. With an explicit id the
+            // local identity only decorates the display ("Active on this
+            // clone"), so an unreadable binding or node.toml degrades to "not
+            // this clone" instead of failing `aida node show <id>`.
+            // trace:BUG-2378 | ai:claude
+            let local_id = match id {
+                Some(_) => aida_core::allocation_authority::clone_node_id(store_path)
+                    .ok()
+                    .flatten(),
+                None => aida_core::allocation_authority::clone_node_id(store_path)?,
+            };
             let target_id: String = match id {
                 Some(i) => i.clone(),
                 None => local_id.clone().ok_or_else(|| {

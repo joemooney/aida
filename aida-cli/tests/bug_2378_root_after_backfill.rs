@@ -134,6 +134,13 @@ impl Fixture {
         self.git(&full)
     }
 
+    /// The store worktree has no uncommitted change, so a leak is reported at
+    /// the step that leaks rather than as a later reconcile refusal.
+    fn assert_store_clean(&self, step: &str) {
+        let status = self.store_git(&["status", "--porcelain"]);
+        assert!(status.is_empty(), "store dirty after {step}:\n{status}");
+    }
+
     fn hub_tip(&self, i: usize) -> String {
         let hub = self.hubs[i].to_str().unwrap();
         self.git(&["--git-dir", hub, "rev-parse", "refs/heads/aida-store"])
@@ -214,6 +221,7 @@ fn bug_2378_root_registered_by_label_verifies_identifies_and_syncs_after_backfil
         "{dry}"
     );
     f.aida_ok(&["doctor", "--fix", "agreed-ids", "--yes"]);
+    f.assert_store_clean("the backfill");
     let nodes = fs::read_to_string(registry.join("nodes.toml")).unwrap();
     assert!(nodes.contains("retired_at"), "{nodes}");
     assert!(
@@ -247,6 +255,7 @@ fn bug_2378_root_registered_by_label_verifies_identifies_and_syncs_after_backfil
     assert!(!repair.contains("nothing to backfill"), "{repair}");
     let nodes_before = fs::read_to_string(registry.join("nodes.toml")).unwrap();
     f.aida_ok(&["doctor", "--fix", "agreed-ids", "--yes"]);
+    f.assert_store_clean("the one-time repair");
     let config = aida_core::NodeConfig::load(&f.store.join(".aida/node.toml")).unwrap();
     assert_eq!(config.node_id, node, "the repair re-points the identity");
     assert_eq!(
@@ -299,6 +308,7 @@ fn bug_2378_root_registered_by_label_verifies_identifies_and_syncs_after_backfil
         &stale,
     ]);
     assert!(audit.contains("clean"), "{audit}");
+    f.assert_store_clean("verify, node show and audit-ids");
     let out = f.aida(&["remote", "reconcile", "--execute", "--yes"]);
     let said = format!(
         "{}{}",
