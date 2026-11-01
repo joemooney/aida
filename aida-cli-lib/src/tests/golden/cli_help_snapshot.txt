@@ -27504,9 +27504,19 @@ Options:
 Derive a machine-checkable completion condition from AIDA metadata, ready to paste into `/goal` (or
 `/schedule`). Each flag contributes one clause; multiple flags compose with `AND`. Every clause
 carries an explicit verification command so a small evaluator can check it deterministically — no
-vague "make the tests pass" conditions that loop forever
+vague "make the tests pass" conditions that loop forever.
+
+`aida goal advisor …` keeps the operator's standing goal for the advisor seat in the store (see
+`aida goal advisor --help`).
 
 Usage: aida goal [OPTIONS]
+       aida goal <COMMAND>
+
+Commands:
+  advisor  The operator's standing goal for the advisor seat, kept in the requirements store so a
+           new or rotated advisor session (any vendor) reads the same goal. Only the operator sets
+           it, from their own terminal; any seat can show, check and list it
+  help     Print this message or the help of the given subcommand(s)
 
 Options:
       --batch <NAME>
@@ -27528,6 +27538,16 @@ Options:
       --copy
           Copy the assembled `/goal` line to the system clipboard
 
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
       --invoke
           Print only the bare `/goal <condition>` line, no framing — for scripting / command
           substitution
@@ -27535,6 +27555,148 @@ Options:
       --as-deep-link
           Print a `claude-cli://open` deep link with the `/goal …` line pre-filled. Click → Claude
           Code opens in cwd with the prompt ready (inert until Enter). Requires Claude Code v2.1.91+
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida goal advisor
+The operator's standing goal for the advisor seat, kept in the requirements store so a new or
+rotated advisor session (any vendor) reads the same goal. Only the operator sets it, from their own
+terminal; any seat can show, check and list it
+
+Usage: aida goal advisor [OPTIONS] <COMMAND>
+
+Commands:
+  set      Set the advisor's goal: free text plus optional checkable clauses. Replaces the active
+           goal; the previous one stays in history. Operator only, at an interactive terminal
+           outside any agent session
+  show     Show the active goal: text, clauses with their verify commands, who set it and when
+  check    Check each clause and print met/unmet. Exits 0 only when every clause is met; a goal with
+           no checkable clauses, or no goal, is never met
+  history  Every goal set, newest first
+  help     Print this message or the help of the given subcommand(s)
+
+Options:
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida goal advisor set
+Set the advisor's goal: free text plus optional checkable clauses. Replaces the active goal; the
+previous one stays in history. Operator only, at an interactive terminal outside any agent session
+
+Usage: aida goal advisor set [OPTIONS] <TEXT>
+
+Arguments:
+  <TEXT>
+          The goal, in your words
+
+Options:
+      --batch <NAME>
+          Clause: all specs tagged `batch:<NAME>` are resolved
+
+      --epic <ID>
+          Clause: all direct children of `<ID>` are resolved
+
+      --spec <SPEC-ID>
+          Clause: spec `<SPEC-ID>` is Completed
+
+      --pr <N>
+          Clause: PR `<N>` is merged
+
+      --queue-empty <ROLE>
+          Clause: the given role's queue is empty
+
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida goal advisor show
+Show the active goal: text, clauses with their verify commands, who set it and when
+
+Usage: aida goal advisor show [OPTIONS]
+
+Options:
+      --json
+          Emit JSON
+
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida goal advisor check
+Check each clause and print met/unmet. Exits 0 only when every clause is met; a goal with no
+checkable clauses, or no goal, is never met
+
+Usage: aida goal advisor check [OPTIONS]
+
+Options:
+      --json
+          Emit JSON
+
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida goal advisor history
+Every goal set, newest first
+
+Usage: aida goal advisor history [OPTIONS]
+
+Options:
+      --json
+          Emit JSON
 
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
@@ -56869,6 +57031,180 @@ Working on aida itself
         "name": "spec",
         "takes_value": true,
         "help": "Condition: spec `<SPEC-ID>` reaches status Completed"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "goal",
+      "advisor"
+    ],
+    "about": "The operator's standing goal for the advisor seat, kept in the requirements store so a new or rotated advisor session (any vendor) reads the same goal. Only the operator sets it, from their own terminal; any seat can show, check and list it",
+    "flags": [
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "goal",
+      "advisor",
+      "set"
+    ],
+    "about": "Set the advisor's goal: free text plus optional checkable clauses. Replaces the active goal; the previous one stays in history. Operator only, at an interactive terminal outside any agent session",
+    "flags": [
+      {
+        "name": "batch",
+        "takes_value": true,
+        "help": "Clause: all specs tagged `batch:<NAME>` are resolved"
+      },
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "epic",
+        "takes_value": true,
+        "help": "Clause: all direct children of `<ID>` are resolved"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "pr",
+        "takes_value": true,
+        "help": "Clause: PR `<N>` is merged"
+      },
+      {
+        "name": "queue-empty",
+        "takes_value": true,
+        "help": "Clause: the given role's queue is empty"
+      },
+      {
+        "name": "spec",
+        "takes_value": true,
+        "help": "Clause: spec `<SPEC-ID>` is Completed"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "goal",
+      "advisor",
+      "show"
+    ],
+    "about": "Show the active goal: text, clauses with their verify commands, who set it and when",
+    "flags": [
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "json",
+        "takes_value": false,
+        "help": "Emit JSON"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "goal",
+      "advisor",
+      "check"
+    ],
+    "about": "Check each clause and print met/unmet. Exits 0 only when every clause is met; a goal with no checkable clauses, or no goal, is never met",
+    "flags": [
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "json",
+        "takes_value": false,
+        "help": "Emit JSON"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "goal",
+      "advisor",
+      "history"
+    ],
+    "about": "Every goal set, newest first",
+    "flags": [
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "json",
+        "takes_value": false,
+        "help": "Emit JSON"
       }
     ],
     "hidden": false
