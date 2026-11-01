@@ -5,3 +5,5 @@ last_by:
   vendor: codex
 result: done
 note: 8PR exact heads/CI, all8relay.status, current actor PIDs and approved ready view inspected; sameBUG2385 concrete rework delegated37; reviewer25 actual identity refusal and human floors retained.
+due_since: 2026-11-01T19:32:45.027899870Z
+due_reason: every 1h
