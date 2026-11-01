@@ -16,12 +16,12 @@ description: |
   Sketch and independent advisor signoff before code; strict review for authority plumbing. This finding is separate from the native cache path writable-root refusal, which is recorded on STORY-2238. User's global Codex config must remain unchanged. Codex implementer lane after signoff; LIGHT targeted grant/launch test plus make check-ci-fast, CI is the full gate.
 
   Scope amendment: the initial adapter-only sketch expands only to the weak positive-approval consumers identified in codex-advisor08 ruling: gate/dispatch_authority::verdict_at_head + dispatch_flow, human reviewed classification and gate/review_verdict::review_actionability consumers. Preserve named ungranted record artifacts as nonauthoritative; do not change roster, issuance, grants, direct-human receipts or protected merge policy. Independent design signoff on this amendment and strict implementation review are required before completion.
-status: NeedsAttention
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T07:26:20.914223641Z
-modified_at: 2026-11-01T14:55:30.155627845Z
+modified_at: 2026-11-01T14:55:32.414192985Z
 req_type: Bug
 tags:
 - architecture
@@ -434,6 +434,11 @@ comments:
     LocalgateONEfocusedexistinghelp_snapshot test+make check-ci-fast, normalCargo AIDA_CARGO_TIMEOUT=10m backgroundiflong. No newbroadtouched/compile obligationforonegolden-onlydelta unlessadditionalsharedinfra/>10fileschanges; don'trepeatfullsuite. No slotbypass/unfilteredlib/outertimeout/repeatedshortbuild. PushsamePRthenreportfullhead/diff/actualfocused+fast+CIstatus. FreshindependentDELTAreviewstillrequired; noownapproval/merge/holdclear. If anyunexpectednoncatalogsourcechange required,reportbeforeexpanding.
   created_at: 2026-11-01T14:55:30.041211502Z
   modified_at: 2026-11-01T14:55:30.041211502Z
+- id: 01a1979b-cc3e-70c3-bc58-c100ba6b82f1
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: STRICT: effective-context and authority rework conforms; new hidden-option golden snapshot breaks required CI, and exact-newhead native host completion proof remains absent.. Triage reason: Fresh reviewer17 finds only hidden-option help snapshot regression; current-head native HOST and cleanup tests now genuinely pass. Same-PR focused fix, all floors retained.'
+  created_at: 2026-11-01T14:55:32.414191261Z
+  modified_at: 2026-11-01T14:55:32.414191261Z
 history:
 - id: 01a19600-c769-7cd0-ba08-8d93975e3e3b
   author: joe
@@ -521,6 +526,13 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1979b-cc3e-70c3-bc58-c0fb7097d498
+  author: joe
+  timestamp: 2026-11-01T14:55:32.414177131Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: 53c89700b4da50b5593a2079ed4cc3abaae5cdfe
   branch: main
@@ -528,11 +540,3 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: 53c89700b4d
   vendor: codex
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'STRICT: effective-context and authority rework conforms; new hidden-option golden snapshot breaks required CI, and exact-newhead native host completion proof remains absent.'
-  recovery_hint: address the review findings, move BUG-B6B1278890774EF993D2EBC327862470-172 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-01T14:29:24.385182869Z
