@@ -2071,3 +2071,114 @@ fn bug_b6b_049_bwrap_destroy_drops_the_clone_trust_entry_only_when_on() {
     }
     assert!(read_projects().get(&off_key).is_some());
 }
+
+// Exercise the actual sandbox script with real git, logging child invocations
+// without mutating this test process's PATH. Includes missing objects and a blob
+// so the batch must not turn either into evidence that work is already shipped.
+// trace:BUG-2384 | ai:codex
+#[test]
+fn bug_2384_large_shipped_set_uses_one_batch_per_clone() {
+    use std::os::unix::fs::PermissionsExt;
+    let temp = tempfile::tempdir().unwrap();
+    let seed = temp.path().join("seed");
+    std::fs::create_dir(&seed).unwrap();
+    seat_git(&seed, &["init", "-q", "-b", "main"]);
+    seat_git(&seed, &["config", "user.name", "Test"]);
+    seat_git(&seed, &["config", "user.email", "test@example.com"]);
+    std::fs::write(seed.join("file"), "base\n").unwrap();
+    seat_git(&seed, &["add", "."]);
+    seat_git(&seed, &["commit", "-qm", "base"]);
+    let base = seat_git(&seed, &["rev-parse", "HEAD"]);
+    std::fs::write(seed.join("file"), "unshipped\n").unwrap();
+    seat_git(&seed, &["commit", "-qam", "unshipped"]);
+    let head = seat_git(&seed, &["rev-parse", "HEAD"]);
+    let blob = seat_git(&seed, &["rev-parse", "HEAD:file"]);
+    let bin = temp.path().join("bin");
+    std::fs::create_dir(&bin).unwrap();
+    let real_git = std::process::Command::new("sh")
+        .args(["-c", "command -v git"])
+        .output()
+        .unwrap();
+    assert!(real_git.status.success());
+    let wrapper = bin.join("git");
+    std::fs::write(
+        &wrapper,
+        "#!/bin/sh\nprintf '%s\\n' \"$*\" >> \"$GIT_TEST_CALLS\"\nexec \"$GIT_TEST_REAL\" \"$@\"\n",
+    )
+    .unwrap();
+    std::fs::set_permissions(&wrapper, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let inherited = std::env::var_os("PATH").unwrap_or_default();
+    let path = std::env::join_paths(std::iter::once(bin).chain(std::env::split_paths(&inherited)))
+        .unwrap();
+    let calls = temp.path().join("calls");
+    let mut shipped: Vec<String> = (1..=6400).map(|i| format!("{i:040x}")).collect();
+    shipped.extend([base.trim().to_string(), blob.trim().to_string()]);
+    for index in 0..25 {
+        let clone = temp.path().join(format!("clone-{index}"));
+        seat_git(
+            temp.path(),
+            &[
+                "clone",
+                "-q",
+                seed.to_str().unwrap(),
+                clone.to_str().unwrap(),
+            ],
+        );
+        // Its origin has only the pinned base: the last commit must be kept.
+        seat_git(
+            &clone,
+            &["update-ref", "refs/remotes/origin/main", base.trim()],
+        );
+        let run = |ids: &[String]| {
+            let out = std::process::Command::new("sh")
+                .current_dir(&clone)
+                .args(["-c", UNPUSHED_COUNT_SCRIPT, "aida-seat-unpushed", ""])
+                .args(ids)
+                .env("PATH", &path)
+                .env("GIT_TEST_CALLS", &calls)
+                .env(
+                    "GIT_TEST_REAL",
+                    String::from_utf8_lossy(&real_git.stdout).trim(),
+                )
+                .output()
+                .unwrap();
+            assert!(
+                out.status.success(),
+                "{}",
+                String::from_utf8_lossy(&out.stderr)
+            );
+            parse_unpushed_count(&String::from_utf8(out.stdout).unwrap()).unwrap()
+        };
+        let (count, refs) = run(&shipped);
+        assert_eq!(count, 1);
+        assert!(refs.iter().any(|r| r.contains("refs/heads/main")));
+        // A real shipped commit excuses its ancestors, without losing the
+        // diagnostic on a later genuinely unshipped commit above it.
+        let mut all_shipped = shipped.clone();
+        all_shipped.push(head.trim().to_string());
+        assert_eq!(run(&all_shipped), (0, vec![]));
+    }
+    let calls = std::fs::read_to_string(calls).unwrap();
+    assert_eq!(
+        calls.lines().filter(|l| l.starts_with("cat-file ")).count(),
+        50
+    );
+    assert!(calls.lines().all(|l| !l.starts_with("cat-file -e")));
+    assert!(
+        calls.lines().count() < 25 * 20,
+        "git invocation count must scale with refs, not shipped SHAs"
+    );
+}
+
+// An elapsed budget is unknown evidence, never an empty/zero commit result.
+// This exercises refusal before bwrap needs to be available on the host.
+// trace:BUG-2384 | ai:codex
+#[test]
+fn bug_2384_expired_clone_scan_keeps_unknown_diagnostic() {
+    let fx = fixture();
+    let clone = seat(&fx, "expired-budget", "01bug2384expired");
+    match probe_until(&fx.main, &clone, &[], Some(std::time::Instant::now())) {
+        Probe::Unknown(why) => assert!(why.contains("deadline elapsed"), "{why}"),
+        other => panic!("an elapsed budget must retain the clone: {other:?}"),
+    }
+}
