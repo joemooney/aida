@@ -27,7 +27,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T23:03:29.192827531Z
-modified_at: 2026-11-01T08:01:47.876682674Z
+modified_at: 2026-11-01T08:14:13.324508604Z
 req_type: Story
 tags:
 - docs
@@ -136,6 +136,11 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-01T07:36:18.594926162Z
   modified_at: 2026-11-01T07:36:18.594926162Z
+- id: 01a1962c-614c-7b32-aaf9-cf8bfb1420ce
+  author: mcp
+  content: 'Round 3: commit 2bb68624ff7 addresses both authoritative findings. Reworded the invalid docs_sweep mode diagnostic to preserve the invalid value without resembling a TOML assignment; no portability allowlist exception. check_staged now bounds the entire staged source-plus-derived-copy set by max_files and reports total, configured cap and excess before any spec filing or commit. Extended a_regenerate_step_that_reaches_past_the_docs_commits_nothing: source plus mirror at cap 1 refuses with no local commit, remote push, filed spec or PR; cap 2 commits exactly those two files. Validation: scripts/check-portability.sh passed; cargo fmt --all -- --check and git diff --check passed; AIDA_CARGO_TIMEOUT=1800 timeout 1800 cargo test --profile agent -p aida-cli-lib docs_sweep --lib passed 36 tests (background session, 10m31s cold compile); make check-ci-fast passed all 36 gates. Existing trusted config/commands, credential routing, docs-only boundary, PR reuse/dedup and report-only default preserved. Updating existing PR #3194 and stopping for independent delta review; no ship or review record.'
+  created_at: 2026-11-01T08:14:13.324489272Z
+  modified_at: 2026-11-01T08:14:13.324489272Z
 history:
 - id: 01a19517-853a-7dc1-addd-62b1b73de3be
   author: joe
