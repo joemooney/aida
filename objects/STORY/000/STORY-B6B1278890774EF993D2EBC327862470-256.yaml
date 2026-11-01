@@ -13,12 +13,12 @@ description: |-
   Must not weaken the boundary: no prompt (refuse as today) when not a TTY, under AIDA_HEADLESS, under any agent harness env (CLAUDECODE, CODEX_*, AIDA_AGENT_*), inside a contained seat, or when a grant is present but invalid/expired (that path keeps its existing message). A --yes flag does not skip the prompt (the human keystroke is the proof); '--grant-inline=no' restores pure refusal for scripts.
 
   Acceptance: (1) TTY, no grant, answer y: child launches with a child-specific grant, the role-enter audit event is recorded with principal and seat, the parent shell env is unchanged afterwards; (2) answer n: today's refusal text, exit non-zero; (3) non-TTY / headless / agent env / contained: no prompt, today's refusal; (4) an existing valid grant: no prompt, today's behaviour; (5) the BUG-052 picker marks still apply (undelegable seats refused before the prompt); (6) docs: agent new section + FAQ-42 updated to say a human terminal is offered the inline grant. Tests: PTY-driven CLI test for (1)(2), env-matrix unit test for (3). Architecture/security-adjacent: implementer posts a short sketch of the in-process mint path and gets advisor signoff before coding.
-status: NeedsAttention
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T22:17:06.607335957Z
-modified_at: 2026-11-01T03:53:11.795605156Z
+modified_at: 2026-11-01T06:08:04.297538173Z
 req_type: Story
 tags:
 - agent-new
@@ -214,6 +214,20 @@ history:
   session_id: 01a19529e1cd
   harness_version: 2.1.316 (Claude Code)
   changes: []
+- id: 01a195b8-e2c4-73b0-bf14-8a6e5d9e681c
+  author: aida-auto-bump
+  timestamp: 2026-11-01T06:08:04.292283917Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Completed
+processing_record:
+- id: 01a195b8-e2c9-7b80-982e-0ac780cc6958
+  timestamp: 2026-11-01T06:08:04.297535279Z
+  agent: aida
+  commit_sha: 962ca07af25ca4de3426bdd951fb2d6782568184
+  summary: 'All 6 ACs and advisor rulings Q1-Q4 met: ContextCard-adopted default-no offer, eligibility env matrix, inline advisor parent (origin=agent-new-inline, 8h cap, launcher-bound, not re-derivable), PTY y/n/no/--bg/out-of-roster tests, docs + FAQ-42; CI green at head (only merge-hold-gate, the supervised hold).'
+  review_verdict: approved
 filed_at:
   code_sha: 0506fa2eb862db100dffbc80b0c5cfdedec28522
   branch: main
@@ -226,11 +240,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-11-01T00:34:25.558319052Z
   implemented_by: joe
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'ACs 1-6 and rulings Q1-Q4 met, and round-2 items F2-F4 are fixed. Still blocking: the new one-time grant prompt is a bare inquire::Confirm with no ContextCard, so the STORY-809 coverage test fails in CI (lib). The advisor''s round-3 ruling (adopt a ContextCard) is not implemented at 2a57578.'
-  recovery_hint: address the review findings, move STORY-2215 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-01T03:33:06.172325234Z
+  completed_at: 2026-11-01T06:08:04.292278787Z
+  completion_sha: 962ca07af25ca4de3426bdd951fb2d6782568184
