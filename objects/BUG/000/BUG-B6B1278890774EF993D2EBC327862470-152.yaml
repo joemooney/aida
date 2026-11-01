@@ -13,7 +13,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T23:00:22.284758314Z
-modified_at: 2026-11-01T03:33:28.099520803Z
+modified_at: 2026-11-01T03:53:09.900213469Z
 req_type: Bug
 tags:
 - epic-home-003
@@ -71,6 +71,20 @@ comments:
   modified_at: 2026-11-01T03:21:37.773274235Z
   session_id: 01a195181686
   harness_version: 2.1.316 (Claude Code)
+- id: 01a1953d-600c-7460-aa87-2b6f39470a03
+  author: joe
+  content: |
+    ADVISOR REWORK BRIEF round 4 (20:55), PR-3182 at c1011f4. Round 3 fixed the lease-stamp fixture, and lib-0/lib-1/cli-1 are green. ONE failure remains, in CI cli-0 (run 41268853682):
+    `bug_2378_root_registered_by_label_verifies_identifies_and_syncs_after_backfill` panics at aida-cli/tests/bug_2378_root_after_backfill.rs:292 with: error "the store worktree at <tmp>/project/.aida-store has uncommitted changes — commit or clean them first".
+    The commit at :135 now succeeds, but a later step (the reconcile or verify at :292) finds the store tree dirty. Something the repair or backfill writes is still left uncommitted, most likely `registry/blocks.lock` or a re-written `.aida/node.toml` / `dispenser.toml`. Fix:
+    - The repair commits every tracked file it writes.
+    - Runtime lock files are removed when released, or ignored by the store's .gitignore.
+    - After `doctor --fix agreed-ids --yes`, `git -C .aida-store status --porcelain` is empty. Add that assertion to the fixture right after the repair, so the failure points at the leaking step.
+    Do not make the reconcile/verify tolerate a dirty tree.
+    Local gate: cargo can't run in the lane yet (BUG-2383). Run `make check-ci-fast` and push; CI is the gate.
+  created_at: 2026-11-01T03:53:09.900213469Z
+  modified_at: 2026-11-01T03:53:09.900213469Z
+  session_id: 77a7a933-9a3f-4243-9a44-892bcedf206c
 history:
 - id: 01a1943a-492b-7f72-9377-cfc786176bec
   author: aida-session-start
