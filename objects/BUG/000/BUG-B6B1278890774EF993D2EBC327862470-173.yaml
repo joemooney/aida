@@ -18,7 +18,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T08:28:54.983776375Z
-modified_at: 2026-11-01T15:58:15.114705349Z
+modified_at: 2026-11-01T15:58:16.525088646Z
 req_type: Bug
 tags:
 - forge
@@ -164,6 +164,11 @@ comments:
     CONTEXT CORRECTION08:58: actor26TERMINAL0. Oldlease01a1977e7b3cNORMALCLIendedwithoutinclude-in-use AFTERall4cumulativesourcefilesbyteequalpublicabarchive0600 /tmp/aida-BUG2400-ab-reviewed-source.tar plus /tmp/aida-BUG2400-ab-preservation.json. No source lost; CLIalsoauto-salvaged anddigested8mailmessages. StartNEWstrictscopedpickup atPUBLICab88380 SAMEbranch/SAMEPR, ownNEWgrant/lease/context; NEVERsource26deadcontext/rootgrant. SupportedreviewparkedNeedsAttention; advisorreworkpromotesclaimableApproved, newpickupownsInProgress. No completionclaim. ExistingfocusedEnvLockfailureandcorrectedqueuedtestsremaintruthful; oldfast36PASSwaspre-correction. Don'tkillvalidCargo orrestartbecausewait. NewchangedsourcejustifiesONEfocusedbug2400test+fastafterfixnormaladmission; existingqueuedrunifalreadystartedrepresentsitsexactsourceandisnotnewfixproof. No broadtests/unfilteredlib/slotbypass/outertimeout. Reportnewsource/publicbyteidentity/fullnewhead, normalpushSAMEPR andactualvalidation. RootthenfreshDIFFERENTSTRICTdeltareview+exactCI; noownapproval/ship/merge/holds/rawledger.
   created_at: 2026-11-01T15:58:15.023931215Z
   modified_at: 2026-11-01T15:58:15.023931215Z
+- id: 01a197d5-3b54-7962-83fa-33e79ead9287
+  author: joe
+  content: 'Context correction only: actor26 terminal, old lease normally ended after exact public-ab source preservation. New strict pickup required; sole head-binding finding and all protections unchanged.'
+  created_at: 2026-11-01T15:58:16.404178880Z
+  modified_at: 2026-11-01T15:58:16.404178880Z
 history:
 - id: 01a1963a-2b42-7cd2-a795-0772bcc408d1
   author: joe
