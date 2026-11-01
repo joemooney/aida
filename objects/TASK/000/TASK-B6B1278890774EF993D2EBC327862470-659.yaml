@@ -1,0 +1,29 @@
+id: 01a19690-30e7-7c62-b10e-c340f7fc7e0f
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-659
+title: 'Non-blocking (minor): tests/test_skill_discovery.py (CLI/MCP end-to-end fixture…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on BUG-2388, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  Non-blocking (minor): tests/test_skill_discovery.py (CLI/MCP end-to-end fixture) is not invoked by .github/workflows/ci.yml, so it only runs manually; AC3 is still covered in CI by the Rust unit test skill_discovery_codex_only_render_and_lint (aida-cli-lib/src/skill_cmd.rs).
+
+  PR: #3198
+  Reviewed sha: fa636d0aa1a686935b4f8aaf11071d056b58147b
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-01T10:03:14.535523367Z
+modified_at: 2026-11-01T10:03:14.535523367Z
+req_type: Task
+tags:
+- carried-from:BUG-2388
+- finding-hash:d6c28bb4
+- from-review:PR-3198
+- kind:carried-forward
+filed_at:
+  code_sha: 6fefb63280c352be0194c2cfadf54a085eb55471
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 4ce0af750fc
+  vendor: claude
