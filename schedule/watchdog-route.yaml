@@ -1,13 +1,7 @@
 job: watchdog-route
-last_run: 2026-10-31T20:23:05.977863069Z
+last_run: 2026-11-01T12:20:12.747476675Z
 last_by:
   seat: advisor
-  session: f5694f22-ff09-4e87-8934-e79adca4efba
-  vendor: claude
+  vendor: codex
 result: done
-due_since: 2026-11-01T11:11:15.169545929Z
-due_reason: on CronJobFailed:watchdog
-due_failure:
-  trip_id: watchdog@2026-11-01T11:04:06.455114281Z
-  job: watchdog
-  error: 'exit 1: '
+note: Exact doctor check runaway-seats --fail-on-findings --json exited0 at current471540a; zero findings in covered Claude sources, historical trip lacks actor/rule metrics, Codex explicitly not-read and missing transcript directories retained. BUG2391 sketch independent changes requested and amendment delegated; no fabricated Codex health or new poll.
