@@ -11,7 +11,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T09:05:27.409838422Z
-modified_at: 2026-11-01T15:30:37.130887954Z
+modified_at: 2026-11-01T19:22:33.802382791Z
 req_type: Task
 tags:
 - architecture
@@ -131,6 +131,11 @@ comments:
     PROXY RULING after FULL implementer30 finalsame-runner report: two exacthead disposable CI A/B experiments show existing AppArmor userns sysctl prerequisite fixes outside controls but composed raw unshare stillEPERM before mount-positive/unmount-positive/protected-negative. No acceptance credit or setting-only repair. Authoritative next step is bounded READ-ONLY failing-runner AppArmor attachment/profile/include/package evidence collection on SAMEPR, retaining all original strict controls and failures; fixed named sources <=64KiB, no environment/credential/syslog dump. NO policy/sysctl/profile/namespace/cap change, attachment evasion by executable copy/aa-exec, runner downgrade, skip, alternative nested contract or ordinary-launch enablement authorized. A measured minimal disposable-CI prerequisite proposal needs a separate ruling. Actual profile name alone is not causal rule evidence. Fresh authorized reviewer18 now independently checks currenta359 CI/support delta and unmet acceptance; earlier ungranted authorreader is not attestation.
   created_at: 2026-11-01T15:29:34.961439860Z
   modified_at: 2026-11-01T15:29:34.961439860Z
+- id: 01a19890-4370-7c60-b3d3-aa653b3833c9
+  author: joe
+  content: 'Advisor ruling: Bounded CI instrumentation and READONLY exact failing-runner profile/package/attachment inventory ONLY. Preserve production backend and all signed protections/tests/typed refusal, no LSM/policy/sysctl/unconfined/profile renaming/skip changes. Same TASK2705/PR3205, base advertiseda3590fe. New own-session adoption of preserved strictclone permitted after freshly verified20-file public byte proof; no actor30context reuse or source cleanup. Full /tmp/aida-TASK2705-profile-inventory-brief.txt. Obtain same-instance unchanged synthetic failure plus profile/package facts, not infer cause from profile label. Architecture or host-policy remedy still requires separate grounded judgment/signoff. No completion claim from diagnostic evidence.'
+  created_at: 2026-11-01T19:22:33.712016108Z
+  modified_at: 2026-11-01T19:22:33.712016108Z
 history:
 - id: 01a1965b-7cae-7260-83dd-5767f6772d90
   author: joe
