@@ -71,7 +71,7 @@ Around that core sit the **launchers** and the **comms**. `aida agent new` and `
 | `aida role add` | Mints a direct grant for the new role (interactive TTY, seat in your roster) with no delegation set, and revokes the previous grant. If it cannot mint one, it creates the role as a label only and unsets the shell's grant variable. | Not applicable: the role name is required. |
 | `aida session new` | Issues no grant: `--role` only labels the session. The agent inherits the parent's grant from the environment. | Issues no grant. The agent inherits the parent's grant from the environment. |
 | `aida session resume` | Not applicable: there is no seat option. | Issues no grant. The resumed agent inherits the parent's grant from the environment. |
-| `aida agent new` | Removes the parent's grant from the agent's environment and issues a child grant for the `--role` seat. With `--bg`, the session runs under the agent's background daemon, outside the launcher's process tree, so no grant can be bound to it: an implementer seat runs ungranted (it needs none) and any other seat is refused before launch. | No grant: the parent's grant is removed from the environment. With `--spec`, the session records a default seat (implementer, or reviewer for a PR) and the agent gets a child grant for it. |
+| `aida agent new` | Removes the parent's grant from the agent's environment and issues a child grant for the `--role` seat. With `--bg`, the session runs under the agent's background daemon, outside the launcher's process tree, so no grant can be bound to it: an implementer seat runs ungranted (it needs none) and any other seat is refused before launch. | No grant: the parent's grant is removed from the environment. With `--spec`, the session records a default seat (implementer, or reviewer for a PR) and the agent gets a child grant for it. When a seated launch finds no grant at all and you are at an interactive terminal (not headless, not inside an agent session or a contained seat), it asks whether to launch that seat under a one-time grant from you; see below. |
 | `aida queue work` (drain phases also launch through it) | Issues a child grant for the seat. Two paths issue none and leave the parent's grant in the environment: a fresh `--no-human` launch that is not a PR review, and a resumed interactive PR review. | There is no seatless launch: it picks a seat from the queued items' routing, else implementer (reviewer for a PR), then behaves as in the previous column. |
 
 **Reach for it when**
@@ -162,9 +162,34 @@ advisor grant. An ambient `AIDA_SESSION_ROLE=implementer` alone does not authori
 a delegated launch.
 <!-- trace:BUG-2188 BUG-2168 | ai:codex -->
 
+**No grant at a human terminal.** When `aida agent new --role <seat>` (or a
+`--spec` launch) runs at an interactive terminal with no seat grant at all, it
+first prints what a yes would issue (the launched seat; the parent `advisor`
+seat, delegating only that seat; when it expires; that it is one-time, bound to
+this launcher and never exported to your shell), then asks: *No parent grant in
+this shell. Launch the `<seat>` under a one-time grant from you (operator)?
+[y/N/?]*. Only a typed `y` issues the grant: that is the proof a person is
+present. Enter, `n` or end of input issues nothing; `?` shows the details again. On yes, AIDA issues an `advisor` grant
+the same way `aida role enter advisor --delegate-seat <seat>` does (your
+roster must allow both seats), marked `origin: agent-new-inline` in its grant
+record. That grant lasts at most 8 hours (less if `[seat] max_grant_hours` is
+lower), is bound to this one `agent new` process, and is never exported to your
+shell. The agent gets its own child grant from it as usual. Launching another
+agent asks again. On no, the launch is refused with the recovery command above.
+The question is never asked when the terminal is not interactive, under
+`AIDA_HEADLESS`, inside an agent session (`CLAUDECODE`, `CODEX_*`,
+`AIDA_AGENT_*`), inside a contained seat, with `--bg` (a background seat either
+cannot carry a grant or needs none), when your roster does not allow `advisor`
+or the requested seat (a yes could not launch), or when the shell has a grant
+that is invalid, expired, or does not delegate the seat; those cases refuse as
+before.
+Scripts that want only the refusal pass `--grant-inline no`.
+<!-- trace:STORY-2215 | ai:claude -->
+
 **Key options (rationale only).**
 - `new <claude|codex|antigravity>` — the tool is a subcommand, not a flag, because each agent has a slightly different spawn shape. `list-roles` enumerates the supported role taxonomy.
 - `new claude --spec <ID>` — creates a scoped worktree + lease *before* launch, so the agent starts already isolated on its spec. An ownership conflict is checked before bypass/resume prompts. To re-enter an inactive same-role lease, pass `--cwd` with its exact owning worktree; the existing session identity is retained. Live agents, branch/role mismatches, and reasoned holds refuse re-entry. Inspect with `aida session leases --all`; do not end the session just to redispatch it. <!-- trace:BUG-2002 | ai:codex -->
+- `new <tool> --grant-inline no` — never offer the one-time grant at a terminal that has no seat grant; refuse with the recovery command instead (the default, `auto`, offers it to a person at an interactive terminal). <!-- trace:STORY-2215 | ai:claude -->
 - For non-interactive background rework, first set `[agents] confirm_bypass = false` in `~/.aida/config.toml` (trusted project config can still require confirmation). Then run: `aida agent new claude --bg --role implementer --spec <ID> --cwd <WORKTREE> --prompt-file <FILE> --no-resume --permission-mode bypassPermissions`. <!-- trace:BUG-2002 | ai:codex -->
 - `new claude --show-context` / `--no-context` — print, or suppress, the launch-context snapshot. The snapshot is a *startup* picture only; a launched agent must keep polling briefs/MCP for work filed after launch.
 - `new claude --no-exec` (aliases `--noexec`, `--print-command`) — print the **complete resolved launch contract** (argv, active role, prompt source, the launch-context snapshot path it *would* write, the `AIDA_*` environment the child would see, and which repository guidance files — `CLAUDE.md`/`AGENTS.md` — are present) and exit. A pure dry preview: no process, worktree, lease, status transition, or network sync. Pairs with `--show-context` (the full snapshot *body*, still a preview) and the narrower `--show-prompt` (just the initial message). <!-- trace:TASK-1467 | ai:claude -->
