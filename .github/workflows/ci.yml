@@ -236,21 +236,24 @@ jobs:
                         'bubblewrap', 'apparmor', 'apparmor-utils', 'libapparmor1',
                         'apparmor-profiles', 'apparmor-profiles-extra'],
                        ['dpkg-query', '-S', '/usr/bin/bwrap', '/etc/apparmor.d/bwrap',
-                        '/etc/apparmor.d/unpriv_bwrap']]:
+                        '/etc/apparmor.d/unpriv_bwrap', '/etc/apparmor.d/bwrap-userns-restrict',
+                        '/usr/share/apparmor/extra-profiles/bwrap-userns-restrict']]:
               command(argv)
 
           # Only exact package-owned profile basenames are candidates, never a directory dump.
-          profiles = ['/etc/apparmor.d/bwrap', '/etc/apparmor.d/unpriv_bwrap']
+          profiles = ['/etc/apparmor.d/bwrap', '/etc/apparmor.d/unpriv_bwrap',
+                      '/etc/apparmor.d/bwrap-userns-restrict',
+                      '/usr/share/apparmor/extra-profiles/bwrap-userns-restrict']
           for package in ['bubblewrap', 'apparmor']:
               listing = command(['dpkg-query', '-L', package])
               if listing['status'] == 'readable':
                   profiles.extend(p for p in listing['output'].splitlines()
-                                  if Path(p).name in ('bwrap', 'unpriv_bwrap')
+                                  if Path(p).name in ('bwrap', 'unpriv_bwrap', 'bwrap-userns-restrict')
                                   and p.startswith(('/etc/apparmor.d/', '/usr/share/apparmor/')))
               # Retain only the relevant paths from this bounded package query.
               if listing['status'] == 'readable':
                   listing['output'] = '\n'.join(p for p in listing['output'].splitlines()
-                                                if 'apparmor' in p and Path(p).name in ('bwrap', 'unpriv_bwrap'))
+                                                if 'apparmor' in p and Path(p).name in ('bwrap', 'unpriv_bwrap', 'bwrap-userns-restrict'))
 
           queue = list(dict.fromkeys(profiles))
           seen = set()
