@@ -1,0 +1,39 @@
+id: 01a195dd-2122-7882-bf53-38dace4e81da
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-651
+agreed_id: TASK-2688
+title: skill-inventory.toml withholds aida-burndown, aida-solo, and aida-fire as claude_only for stale reasons, and portable skills hardcode --vendor claude
+description: |-
+  Why
+  ───
+  Discovered by SPIKE-710 audit:
+
+  1. `aida-core/templates/skill-inventory.toml:19-30` withholds `aida-burndown`, `aida-solo`, and `aida-fire` from `.agents/skills/` as `[[claude_only]]` with pre-STORY-1662 reasons (`"drives Agent(isolation: worktree) implementer fan-out"`). In reality, STORY-1662 already rewrote all three skills to forbid `Agent`-tool fan-out and instead spawn standalone `aida queue work` CLI processes (`aida-burndown.md:19-25, 108-125`, `aida-solo.md:87-96`, `aida-fire.md:113-128`). Also `aida-core/src/scaffolding/codex_prompts.rs:33-57` (`CLAUDE_ONLY_COMMANDS`) additionally excludes `aida-insights` and `aida-advise`.
+  2. Both the portable `aida-orchestrate` skill (`aida-core/templates/skills-portable/aida-orchestrate.md:78, 134, 273, 348, 361, 450` / `.agents/skills/aida-orchestrate/SKILL.md`), `aida-review` (`aida-core/templates/skills/aida-review.md:125-128`), and `aida-{burndown,solo,fire}.md` hardcode `--vendor claude` (`"Always pass --vendor claude: under AIDA_CONTAINED the codex vendor refuses"`) and `aida agent new claude --bg`.
+
+  On a Codex-only Linux machine, `$aida-burndown`, `$aida-solo`, and `$aida-fire` are missing from `.agents/skills/`, and `$aida-orchestrate` / `$aida-review` instruct Codex to spawn `claude`.
+
+  Acceptance
+  ──────────
+  1. Once TASK-2631 / STORY-2238 and STORY-2254 land, remove `--vendor claude` and `aida agent new claude --bg` hardcoding from `skills-portable/aida-orchestrate.md`, `skills/aida-orchestrate.md`, `skills/aida-review.md`, `skills/aida-burndown.md`, `skills/aida-solo.md`, and `skills/aida-fire.md` (and their `commands/` counterparts) so `[agents] vendor` governs.
+  2. Ship `aida-burndown`, `aida-solo`, and `aida-fire` to `.agents/skills/` (either by removing them from `[[claude_only]]` in `skill-inventory.toml` or providing `skills-portable/` bodies) and align `codex_prompts.rs:33-57` with `skill-inventory.toml`.
+  3. Refresh `.agents/skills/` in this repository and update `docs/agents/seat-parity.md:49-53, 85-93`.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-01T06:47:39.554427385Z
+modified_at: 2026-11-01T06:47:39.554427385Z
+req_type: Task
+tags:
+- audit
+- skills
+- templates
+- vendor:codex
+filed_at:
+  code_sha: 6dc7d4977ac5e47c42ddfb26597fe3ec5fb70b60
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 962ca07af25
+  vendor: antigravity
+  session: 01a194b1bcfb
