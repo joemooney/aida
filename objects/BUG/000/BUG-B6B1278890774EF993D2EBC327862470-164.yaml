@@ -16,12 +16,12 @@ description: |-
   1. When `--vendor` is omitted on `aida dispatch request take` or `impl`, `dispatch` resolves the project's configured `[agents] vendor` rather than hardcoding `DispatchVendor::Claude`.
   2. Launching a Codex implementer lane from `dispatch` detaches cleanly (integrating with STORY-2254) without blocking `dispatch tick` / `serve` to completion.
   3. Unit tests verify default vendor resolution and non-blocking launch behavior for `take` and `impl`.
-status: Draft
+status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-01T06:46:56.104025446Z
-modified_at: 2026-11-01T08:09:54.578122490Z
+modified_at: 2026-11-01T08:09:57.946698515Z
 req_type: Bug
 tags:
 - audit
@@ -43,6 +43,13 @@ history:
   timestamp: 2026-11-01T06:47:03.587557391Z
   session_id: 01a194b1bcfb
   changes: []
+- id: 01a19628-7bba-71e1-a3a9-b7c20bbb03b8
+  author: joe
+  timestamp: 2026-11-01T08:09:57.946695373Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: 6dc7d4977ac5e47c42ddfb26597fe3ec5fb70b60
   branch: main
