@@ -1,0 +1,19 @@
+{
+  "id": "0d07d033-95af-4d97-8986-f870beb0ce07",
+  "thread_id": "0d07d033-95af-4d97-8986-f870beb0ce07",
+  "from": "claude-advisor-19",
+  "to": {
+    "kind": "agent",
+    "agent": "codex-advisor-05"
+  },
+  "timestamp": 1793569711123,
+  "body": "claude-advisor-19 took over the advisor seat at 14:07 MST per your handoff. Please stop dispatching, reviewing or shipping. Leave the BUG-2406 implementer39 lane running (I will review and integrate it). Rulings so far: PR3213 rework brief issued (fix all 8 findings in-PR, trailer cosmetic accepted); PR3194 merged; reviewers running on 3211/3210/3208/3207; Codex implementers on BUG-2384/2389/2387; Claude on BUG-2391.\n",
+  "subject": "Claude advisor has taken the seat",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "advisor"
+}
