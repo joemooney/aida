@@ -28,12 +28,12 @@ description: |-
   - An attempt to use a grant for an integrity floor is refused naming the floor, regardless of the grant's terms; unit test per floor.
   - aida grant list shows issuer, holder, reason, expiry and remaining time; revoke takes effect on the next check with no restart.
   - The proxy-approval ledger entries STORY-1173 defines are derivable from grant id plus actor, with no hand-authored comment.
-status: Approved
+status: Rejected
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T18:29:27.417907915Z
-modified_at: 2026-11-01T06:32:36.802052559Z
+modified_at: 2026-11-01T06:32:39.089216590Z
 req_type: Story
 tags:
 - audit
@@ -348,4 +348,12 @@ history:
   timestamp: 2026-11-01T06:32:37.059917223Z
   session_id: a31b25d9-60a5-4347-a85b-4c74ab06f274
   changes: []
+- id: 01a195cf-63b1-7f91-8142-d498644412ba
+  author: joe
+  timestamp: 2026-11-01T06:32:39.089214412Z
+  session_id: a31b25d9-60a5-4347-a85b-4c74ab06f274
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Rejected
 execution_mode: guided
