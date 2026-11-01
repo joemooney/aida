@@ -22,7 +22,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T06:46:36.168832796Z
-modified_at: 2026-11-01T21:46:52.673688536Z
+modified_at: 2026-11-01T21:47:14.335820465Z
 req_type: Bug
 tags:
 - audit
@@ -43,6 +43,11 @@ comments:
   content: 'Local implementation is ready in branch bug-b6b1278890774ef993d2ebc327862470-163. All six surfaces resolve the headless vendor: burndown/intake share the sanctioned vendor command adapter with preserved quiet/stream output and child grants; dryrun/intent/research explicitly launch advisor children; clarify reuses the interactive vendor plan. Embedded burndown child commands inherit the chosen vendor, and non-Claude prompts are materialized before dispatch/context seeding. Intent''s missing-model fallback uses advisor tuning/vendor. Tests pin their projects/vendor mocks. Validation so far: default library cargo check PASS; feature-disabled library cargo check PASS; new Claude/Codex routing fixture PASS; existing contained-builders 12 PASS, child-grant isolation 6 PASS, inherited-containment stripping 1 PASS; rustfmt/whitespace PASS. Feature-disabled CLI package check is finishing. Publication BLOCKED: git add cannot create .git/index.lock (Read-only file system); native sandbox mounts checkout .git read-only. Draft finding filed. Shared cache CLI writes also refuse, while MCP works. Patch saved at /tmp/BUG-2389.patch. No commit/push/PR/queue-done; retaining In Progress until the host publication handoff completes. Proposed commit/PR title: [AI:codex] fix(headless): honor configured vendor in auxiliary commands (BUG-2389).'
   created_at: 2026-11-01T21:46:52.673679925Z
   modified_at: 2026-11-01T21:46:52.673679925Z
+- id: 01a19914-b81f-7593-aa91-aa84100a3744
+  author: mcp
+  content: 'Final validation complete: cargo check -p aida-cli --no-default-features PASS (21.25s); cargo fmt --all -- --check PASS; git diff --check PASS. Total targeted tests passed: 20. Final patch /tmp/BUG-2389.patch (51,184 bytes). Publication remains blocked by read-only .git; spec intentionally remains In Progress.'
+  created_at: 2026-11-01T21:47:14.335812420Z
+  modified_at: 2026-11-01T21:47:14.335812420Z
 history:
 - id: 01a195dc-54a0-7f22-8e99-8e4cef36f035
   author: joe
