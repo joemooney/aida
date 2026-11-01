@@ -14,12 +14,12 @@ description: |
   2. The lane's target dir is warm on first use: seeded or shared with the primary's agent-profile target, so the first targeted run isn't a cold full build.
   3. The implementer prompt names that path in place of `setsid nohup`, and a lane that cannot run it says so in its result line (`untested=true`) so the advisor knows.
   4. Test: a headless lane fixture runs one filtered cargo test via the sanctioned path and reports its pass/fail.
-status: NeedsAttention
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T02:25:46.947809262Z
-modified_at: 2026-11-01T06:05:41.894826163Z
+modified_at: 2026-11-01T06:05:43.778000893Z
 req_type: Bug
 tags:
 - area:agents
@@ -116,6 +116,12 @@ comments:
   created_at: 2026-11-01T06:05:41.778872149Z
   modified_at: 2026-11-01T06:05:41.778872149Z
   session_id: a31b25d9-60a5-4347-a85b-4c74ab06f274
+- id: 01a195b6-bde1-7fa0-8bbd-b7d915c1f4fd
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Round-2 containment rulings mostly implemented (cleared env, bwrap-only, reflink-only seed, test-only tally), but CI is red on 3 PR-caused gates and the job sandbox binds ~/.cargo read-write, a host-persistence escape. Triage reason: PR-3192 delta review round 2: CHANGES REQUESTED'
+  created_at: 2026-11-01T06:05:43.777998182Z
+  modified_at: 2026-11-01T06:05:43.777998182Z
+  session_id: a31b25d9-60a5-4347-a85b-4c74ab06f274
 history:
 - id: 01a19525-88eb-79e3-aab8-8d511ad2f605
   author: aida-session-start
@@ -186,6 +192,14 @@ history:
   session_id: 01a195acc09c
   harness_version: 2.1.316 (Claude Code)
   changes: []
+- id: 01a195b6-bde1-7fa0-8bbd-b7cfa937f39d
+  author: joe
+  timestamp: 2026-11-01T06:05:43.777977059Z
+  session_id: a31b25d9-60a5-4347-a85b-4c74ab06f274
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: 7518617e469376bbe5debebd7cadd980e08656e5
   branch: main
@@ -198,11 +212,3 @@ implementation_info:
   implemented: true
   implemented_at: 2026-11-01T04:19:25.125387348Z
   implemented_by: joe
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: Round-2 containment rulings mostly implemented (cleared env, bwrap-only, reflink-only seed, test-only tally), but CI is red on 3 PR-caused gates and the job sandbox binds ~/.cargo read-write, a host-persistence escape
-  recovery_hint: address the review findings, move BUG-2383 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-01T05:58:24.859989411Z
