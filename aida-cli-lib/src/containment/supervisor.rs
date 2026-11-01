@@ -169,12 +169,16 @@ if nested==0:
     # Nothing closes or waives an inherited FD: both parent assertions stay.
     import ctypes
     libc=ctypes.CDLL(None, use_errno=True)
-    if libc.unshare(0x10000000 | 0x00020000) != 0: os._exit(10)
+    def nested_refusal(stage, code):
+        print(json.dumps(dict(nested_stage=stage, errno=ctypes.get_errno())), file=sys.stderr, flush=True)
+        os._exit(code)
+    if libc.unshare(0x10000000 | 0x00020000) != 0: nested_refusal('unshare', 10)
     os.mkdir('/tmp/nested-control')
-    if libc.mount(b'tmpfs', b'/tmp/nested-control', b'tmpfs', 0, None) != 0: os._exit(11)
-    if libc.umount2(b'/tmp/nested-control', 2) != 0: os._exit(12)
+    if libc.mount(b'tmpfs', b'/tmp/nested-control', b'tmpfs', 0, None) != 0: nested_refusal('mount_positive', 11)
+    if libc.umount2(b'/tmp/nested-control', 2) != 0: nested_refusal('unmount_positive', 12)
     rc=libc.umount2(b'/lane/workspace/.aida', 2)
-    os._exit(0 if rc == -1 and ctypes.get_errno() in (errno.EPERM, errno.EINVAL) else 13)
+    if rc != -1 or ctypes.get_errno() not in (errno.EPERM, errno.EINVAL): nested_refusal('protected_unmount', 13)
+    os._exit(0)
 _,nested_status=os.waitpid(nested,0)
 ok('nested_userns_cannot_unmount_protected', nested_status == 0)
 # Leave a descendant alive with SIGTERM ignored. Namespace-init exit must reap
