@@ -1,0 +1,36 @@
+id: 01a1955d-f0bf-7eb3-a641-15bbd93b5c11
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-277
+agreed_id: STORY-2254
+title: 'aida agent new codex --bg: a detached Codex lane with the same lease, grant delegation and containment as claude --bg'
+description: |
+  ## Why
+  PR-3188 (TASK-2631) bundled a 348-line `aida agent new codex --bg` background launcher (agent_codex_background.rs). Review split it out (2026-10-31): it touches grants and seats, it called `bind_grant_to_pid` outside role_lifecycle.rs / gate/seat_authority.rs (the STORY-1917 gate), and its headless spawn skipped `headless_wait_envs` (TASK-1169 / BUG-050). Codex `--bg` parity is still an EPIC-612 goal: Claude has `claude --bg` lanes and Codex doesn't.
+
+  ## Proposal (architecture: sketch and advisor signoff before code)
+  `aida agent new codex --bg` launches a detached Codex implementer or reviewer under the same lease, worktree, grant-delegation and containment posture as the Claude `--bg` path. Grant binding goes through the gate's sanctioned path, never a direct `bind_grant_to_pid`.
+
+  ## Acceptance
+  1. `aida agent new codex --role implementer --bg <SPEC>` starts a detached Codex session bound to its own child grant and lease. `aida ps` shows it live (see BUG-2382).
+  2. Grant binding happens only in role_lifecycle.rs / gate/seat_authority.rs (the story_1917 test passes unchanged).
+  3. Every headless spawn applies `headless_wait_envs` (the task1169 guardrails pass unchanged).
+  4. Under `[agents] contained` it uses the posture TASK-2631 resolves (native for codex, or AIDA's sandbox once STORY-2238 lands). It never launches uncontained silently.
+  5. Recover the code from PR-3188's history (commit 2bb95a7, agent_codex_background.rs) as a starting point.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-01T04:28:44.095278434Z
+modified_at: 2026-11-01T04:28:44.095278434Z
+req_type: Story
+tags:
+- architecture
+- area:agents
+- area:codex
+filed_at:
+  code_sha: a83e05d785df667dfa986cf3eb310a3f0637b602
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: c7170b43665
+  vendor: claude
+  session: 77a7a933-9a3f-4243-9a44-892bcedf206c
