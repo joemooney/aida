@@ -8,12 +8,24 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T01:39:06.904532581Z
-modified_at: 2026-11-01T04:17:17.822501185Z
+modified_at: 2026-11-01T04:18:06.084850320Z
 req_type: Bug
 tags:
 - containment
 - kind:finding
 - tests
+comments:
+- id: 01a19554-3484-7f71-a579-fab8813ab6b9
+  author: joe
+  content: |
+    ADVISOR REWORK BRIEF round 2 (21:20), PR-3190. Round 1 fixed the ambient seat-clone refusal path (cfg(test)-only, production unchanged, with a regression test). Blocking, plus two minors bundled under the 10-28 rule:
+    1. BLOCKING: the spec's store-lock symptom is still open. The bug_2169 fixture's `session_start` takes the live shared store lock (the operator's main checkout). Make the fixture resolve its store from its own hermetic root (temp project + its own .aida-store), so no test path can take a lock on /home/joe/ai/aida. Add a test: the store-lock path the fixture takes is under its tempdir. Assert on the resolved lock path, not on timing.
+    2. BUNDLED: the hermetic checkout leaks its temp dir. Hold the TempDir for the fixture's lifetime (or clean it up in Drop).
+    3. BUNDLED: the hermetic checkout inherits the global git config. Set GIT_CONFIG_GLOBAL to a file in the tempdir and GIT_CONFIG_NOSYSTEM=1 on the fixture's git commands, the same way other hermetic fixtures do (grep GIT_CONFIG_GLOBAL in the tests).
+    Local gate: cargo can't run in the lane yet (BUG-2383). Run `make check-ci-fast` and push; CI is the gate.
+  created_at: 2026-11-01T04:18:06.084850320Z
+  modified_at: 2026-11-01T04:18:06.084850320Z
+  session_id: 77a7a933-9a3f-4243-9a44-892bcedf206c
 history:
 - id: 01a19517-617d-7151-9e47-aa0da46d6e93
   author: joe
