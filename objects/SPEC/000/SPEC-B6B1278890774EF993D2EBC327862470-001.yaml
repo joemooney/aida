@@ -8,12 +8,18 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-01T07:26:01.071265913Z
-modified_at: 2026-11-01T07:26:01.071265913Z
+modified_at: 2026-11-01T08:13:19.648075060Z
 req_type: Task
 tags:
 - from-implementer:BUG-2397
 - kind:bug-spotted
 - severity:major
+comments:
+- id: 01a1962b-8fa0-7ea1-b58e-d7e7da66a1ce
+  author: joe
+  content: 'Disposition: duplicate observation of the already-owned native write-root acceptance on STORY2238 and tool-seat metadata loss on BUG2398, with explicit live evidence recorded on both. Preserve this report and temporary-publish workaround as evidence; do not start a competing third implementation or claim the issue fixed. STORY2238 must prove own git/index/ref workflow plus shared store/cache and protected-path boundaries; BUG2398 must prove own delegated metadata transport. Closing this duplicate does not discharge those owners.'
+  created_at: 2026-11-01T08:13:19.648075060Z
+  modified_at: 2026-11-01T08:13:19.648075060Z
 history:
 - id: 01a1960f-6ca8-7313-8a94-63b0b98a4e44
   author: joe
