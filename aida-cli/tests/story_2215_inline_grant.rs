@@ -130,6 +130,13 @@ fn fixture() -> Fixture {
 /// answer the offer with `answer`, then have the SAME shell print its own
 /// `AIDA_SESSION_GRANT`. Returns (agent-new exit code, full terminal output).
 fn run_agent_new(fx: &Fixture, answer: &str) -> (i32, String) {
+    run_agent_new_with(fx, "--role implementer", Some(answer))
+}
+
+/// [`run_agent_new`] with `args` in place of `--role implementer`. With no
+/// `answer` the offer must not appear: the run is awaited to its end and the
+/// caller asserts the prompt is absent from the terminal output.
+fn run_agent_new_with(fx: &Fixture, args: &str, answer: Option<&str>) -> (i32, String) {
     let pair = native_pty_system()
         .openpty(PtySize {
             rows: 40,
@@ -151,11 +158,11 @@ fn run_agent_new(fx: &Fixture, answer: &str) -> (i32, String) {
     cmd.env("PATH", path_env(&fx.bin));
     cmd.cwd(&fx.repo);
     cmd.arg("-c");
-    cmd.arg(
-        "\"$0\" agent new claude --role implementer --no-resume --no-context --no-title \
+    cmd.arg(format!(
+        "\"$0\" agent new claude {args} --no-resume --no-context --no-title \
          --no-prompt --no-duplicate-check --no-default-flags; \
-         code=$?; echo \"AGENT_NEW_EXIT=$code\"; echo \"SHELL_GRANT=[$AIDA_SESSION_GRANT]\"",
-    );
+         code=$?; echo \"AGENT_NEW_EXIT=$code\"; echo \"SHELL_GRANT=[$AIDA_SESSION_GRANT]\""
+    ));
     cmd.arg(env!("CARGO_BIN_EXE_aida"));
     let mut child = pair.slave.spawn_command(cmd).unwrap();
     drop(pair.slave);
@@ -175,19 +182,21 @@ fn run_agent_new(fx: &Fixture, answer: &str) -> (i32, String) {
         }
     });
     let mut writer = pair.master.take_writer().unwrap();
-    let deadline = Instant::now() + Duration::from_secs(60);
-    while !output.lock().unwrap().contains(PROMPT) {
-        assert!(
-            Instant::now() < deadline,
-            "the one-time grant offer never appeared:\n{}",
-            output.lock().unwrap()
-        );
-        std::thread::sleep(Duration::from_millis(100));
+    if let Some(answer) = answer {
+        let deadline = Instant::now() + Duration::from_secs(60);
+        while !output.lock().unwrap().contains(PROMPT) {
+            assert!(
+                Instant::now() < deadline,
+                "the one-time grant offer never appeared:\n{}",
+                output.lock().unwrap()
+            );
+            std::thread::sleep(Duration::from_millis(100));
+        }
+        std::thread::sleep(Duration::from_millis(200));
+        writer.write_all(answer.as_bytes()).unwrap();
+        writer.write_all(b"\r").unwrap();
+        writer.flush().unwrap();
     }
-    std::thread::sleep(Duration::from_millis(200));
-    writer.write_all(answer.as_bytes()).unwrap();
-    writer.write_all(b"\r").unwrap();
-    writer.flush().unwrap();
 
     let deadline = Instant::now() + Duration::from_secs(60);
     loop {
@@ -278,43 +287,36 @@ fn answering_no_refuses_with_todays_text() {
     assert!(text.contains("SHELL_GRANT=[]"), "{text}");
 }
 
-#[test]
-fn grant_inline_no_refuses_without_prompting() {
+/// Each case runs on the same PTY as the y/n cases, where the offer WOULD
+/// appear without the flag or condition under test, and must refuse with
+/// today's text without asking and without launching a child.
+fn assert_refused_without_prompting(args: &str) {
     let fx = fixture();
-    let mut cmd = std::process::Command::new(env!("CARGO_BIN_EXE_aida"));
-    for (name, _) in std::env::vars() {
-        if scrubbed(&name) {
-            cmd.env_remove(name);
-        }
-    }
-    let out = cmd
-        .current_dir(&fx.repo)
-        .env("HOME", &fx.home)
-        .env("AIDA_HOME", &fx.home)
-        .env("AIDA_USER", TEST_USER)
-        .env("AIDA_TELEMETRY", "0")
-        .env("PATH", path_env(&fx.bin))
-        .args([
-            "agent",
-            "new",
-            "claude",
-            "--role",
-            "implementer",
-            "--no-resume",
-            "--grant-inline",
-            "no",
-        ])
-        .output()
-        .unwrap();
-    let text = format!(
-        "{}{}",
-        String::from_utf8_lossy(&out.stdout),
-        String::from_utf8_lossy(&out.stderr)
-    );
-    assert!(!out.status.success(), "{text}");
-    assert!(!text.contains(PROMPT), "{text}");
+    let (code, text) = run_agent_new_with(&fx, args, None);
+    assert_ne!(code, 0, "{args}:\n{text}");
+    assert!(!text.contains(PROMPT), "{args} must not prompt:\n{text}");
     assert!(
         text.contains("no valid parent seat grant is active"),
-        "{text}"
+        "{args}:\n{text}"
     );
+    assert!(!fx.calls.exists(), "{args}: no child may launch");
+    assert!(text.contains("SHELL_GRANT=[]"), "{text}");
+}
+
+#[test]
+fn grant_inline_no_refuses_without_prompting() {
+    assert_refused_without_prompting("--role implementer --grant-inline no");
+}
+
+/// A `--bg` child either cannot carry a grant or needs none: never offered.
+#[test]
+fn bg_launch_refuses_without_prompting() {
+    assert_refused_without_prompting("--role implementer --bg");
+}
+
+/// The roster gives this user no `reviewer` seat to delegate: asking would
+/// only end in a failed mint and the same refusal.
+#[test]
+fn seat_outside_the_roster_refuses_without_prompting() {
+    assert_refused_without_prompting("--role reviewer");
 }

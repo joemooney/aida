@@ -100,6 +100,31 @@ fn inline_parent_is_not_re_derivable_by_another_process() {
     );
 }
 
+/// Review round 2: the roster is read before the human is asked. A seat the
+/// roster does not give this user (or a parent seat it lacks) is never
+/// offered, so a `y` cannot end in a mint failure and the same refusal.
+#[test]
+fn roster_pre_check_matches_what_the_mint_and_child_would_accept() {
+    let tmp = tempfile::tempdir().unwrap();
+    let _env = pinned_env();
+    seed_roster(tmp.path());
+    assert!(inline_parent_roster_allows(
+        tmp.path(),
+        "advisor",
+        "implementer"
+    ));
+    assert!(!inline_parent_roster_allows(
+        tmp.path(),
+        "advisor",
+        "reviewer"
+    ));
+    assert!(!inline_parent_roster_allows(
+        tmp.path(),
+        "integrator",
+        "implementer"
+    ));
+}
+
 #[test]
 fn derivable_only_for_ordinary_grants_or_the_minting_process() {
     let base = SeatGrant {

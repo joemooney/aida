@@ -14,6 +14,7 @@ fn human_terminal() -> InlineGrantContext {
         stdout_tty: true,
         stderr_tty: true,
         contained: false,
+        roster_allows: true,
         env: vec![
             ("HOME".into(), "/home/person".into()),
             ("AIDA_SESSION_ROLE".into(), "advisor".into()),
@@ -38,6 +39,10 @@ fn each_missing_condition_withholds_the_offer() {
         ("stdout not a TTY", |c| c.stdout_tty = false),
         ("stderr not a TTY", |c| c.stderr_tty = false),
         ("contained seat", |c| c.contained = true),
+        (
+            "the roster cannot back the grant or delegate the seat",
+            |c| c.roster_allows = false,
+        ),
     ];
     for (label, edit) in cases {
         let mut ctx = human_terminal();
@@ -65,6 +70,16 @@ fn headless_and_agent_harness_env_withhold_the_offer() {
     let mut ctx = human_terminal();
     ctx.env.push(("AIDA_HEADLESS".into(), " ".into()));
     assert!(inline_grant_eligible(&ctx));
+}
+
+/// `--bg` never offers: its child either cannot carry a grant or needs none.
+#[test]
+fn bg_launches_and_grant_inline_no_never_enable_the_offer() {
+    use crate::agent_launch_args::GrantInline;
+    assert!(inline_offer_enabled(GrantInline::Auto, false));
+    assert!(!inline_offer_enabled(GrantInline::Auto, true));
+    assert!(!inline_offer_enabled(GrantInline::No, false));
+    assert!(!inline_offer_enabled(GrantInline::No, true));
 }
 
 /// Without `aida agent new` turning it on, no launcher prompts: other paths

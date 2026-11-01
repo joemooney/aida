@@ -1070,8 +1070,9 @@ pub(crate) fn dispatch_agent_new(cmd: &AgentNewCommand) -> Result<()> {
     let (AgentNewCommand::Claude { grant_inline, .. }
     | AgentNewCommand::Codex { grant_inline, .. }
     | AgentNewCommand::Antigravity { grant_inline, .. }) = cmd;
+    let bg = matches!(cmd, AgentNewCommand::Claude { bg: true, .. });
     GRANT_INLINE_OFFER.store(
-        *grant_inline == crate::agent_launch_args::GrantInline::Auto,
+        inline_offer_enabled(*grant_inline, bg),
         std::sync::atomic::Ordering::Relaxed,
     );
     match cmd {
@@ -3795,6 +3796,15 @@ fn preflight_agent_new_delegation(
 static GRANT_INLINE_OFFER: std::sync::atomic::AtomicBool =
     std::sync::atomic::AtomicBool::new(false);
 
+/// Whether `aida agent new` turns the offer on. Never for `--bg`: a
+/// background child of a seat that needs a grant is refused anyway (its grant
+/// could not be bound to it), and one of a baseline seat runs ungranted, so a
+/// grant minted for either would be asked for and never used.
+// trace:STORY-2215 | ai:claude
+pub(crate) fn inline_offer_enabled(mode: crate::agent_launch_args::GrantInline, bg: bool) -> bool {
+    mode == crate::agent_launch_args::GrantInline::Auto && !bg
+}
+
 /// Everything that decides whether `agent new` may offer the one-time grant.
 // trace:STORY-2215 | ai:claude
 #[derive(Debug, Clone, Default)]
@@ -3808,6 +3818,9 @@ pub(crate) struct InlineGrantContext {
     pub stderr_tty: bool,
     /// This shell is a contained seat (`AIDA_CONTAINED`, or unparseable).
     pub contained: bool,
+    /// The roster lets this user hold the inline parent's seat and delegate
+    /// the requested one, so a yes could actually launch.
+    pub roster_allows: bool,
     /// The process environment, `(name, value)`.
     pub env: Vec<(String, String)>,
 }
@@ -3832,6 +3845,7 @@ pub(crate) fn inline_grant_eligible(ctx: &InlineGrantContext) -> bool {
         && ctx.stdout_tty
         && ctx.stderr_tty
         && !ctx.contained
+        && ctx.roster_allows
         && !ctx
             .env
             .iter()
@@ -3847,12 +3861,22 @@ pub(crate) fn inline_grant_eligible(ctx: &InlineGrantContext) -> bool {
 // trace:STORY-2215 | ai:claude
 fn offer_inline_parent_grant(project_root: &std::path::Path, seat: &str) -> Result<()> {
     use crate::gate::kernel_deps as k;
+    let offer_enabled = GRANT_INLINE_OFFER.load(std::sync::atomic::Ordering::Relaxed);
+    let grant_absent = matches!(
+        crate::gate::seat_authority::grant_check(project_root),
+        crate::gate::seat_authority::GrantCheck::Absent
+    );
     let ctx = InlineGrantContext {
-        offer_enabled: GRANT_INLINE_OFFER.load(std::sync::atomic::Ordering::Relaxed),
-        grant_absent: matches!(
-            crate::gate::seat_authority::grant_check(project_root),
-            crate::gate::seat_authority::GrantCheck::Absent
-        ),
+        offer_enabled,
+        grant_absent,
+        // Read only when an offer is otherwise possible.
+        roster_allows: offer_enabled
+            && grant_absent
+            && crate::gate::seat_authority::inline_parent_roster_allows(
+                project_root,
+                "advisor",
+                seat,
+            ),
         stdin_tty: k::authority_stdin_is_terminal(),
         stdout_tty: k::authority_stdout_is_terminal(),
         stderr_tty: k::authority_stderr_is_terminal(),

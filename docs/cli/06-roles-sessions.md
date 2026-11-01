@@ -175,8 +175,11 @@ shell. The agent gets its own child grant from it as usual. Launching another
 agent asks again. On no, the launch is refused with the recovery command above.
 The question is never asked when the terminal is not interactive, under
 `AIDA_HEADLESS`, inside an agent session (`CLAUDECODE`, `CODEX_*`,
-`AIDA_AGENT_*`), inside a contained seat, or when the shell has a grant that is
-invalid, expired, or does not delegate the seat; those cases refuse as before.
+`AIDA_AGENT_*`), inside a contained seat, with `--bg` (a background seat either
+cannot carry a grant or needs none), when your roster does not allow `advisor`
+or the requested seat (a yes could not launch), or when the shell has a grant
+that is invalid, expired, or does not delegate the seat; those cases refuse as
+before.
 Scripts that want only the refusal pass `--grant-inline no`.
 <!-- trace:STORY-2215 | ai:claude -->
 

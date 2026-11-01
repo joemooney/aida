@@ -1774,6 +1774,22 @@ pub(crate) fn issue_inline_parent(
     Ok(grant)
 }
 
+/// Whether [`issue_inline_parent`] could mint a `seat` parent delegating
+/// `child_seat` and the child could then be derived: the roster lets this
+/// user hold both `seat` (the parent) and `child_seat` (the delegation and
+/// the child's own check). Read before the human is asked, so a launch that
+/// cannot succeed is never offered.
+// trace:STORY-2215 | ai:claude
+pub(crate) fn inline_parent_roster_allows(
+    project_root: &Path,
+    seat: &str,
+    child_seat: &str,
+) -> bool {
+    let principal = crate::gate::kernel_deps::current_user_id(None);
+    roster_check(project_root, &principal, seat).is_ok()
+        && roster_check(project_root, &principal, child_seat).is_ok()
+}
+
 /// Whether a new child may be derived from `parent` in this process: always
 /// for an ordinary grant; for an inline parent only in the process that
 /// minted it.
