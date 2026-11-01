@@ -22,12 +22,12 @@ description: |
 
   ## Related
   ADR-5 (docs generated from spec intent, drift guards), STORY-2219 (glossary), TASK-HOME-277 / TASK-HOME-280 (explainer pages).
-status: Approved
+status: InProgress
 priority: Medium
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T23:03:29.192827531Z
-modified_at: 2026-11-01T03:11:59.196421653Z
+modified_at: 2026-11-01T03:37:37.427327527Z
 req_type: Story
 tags:
 - docs
@@ -49,6 +49,14 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a1952f-2593-7881-b245-47028199f6c3
+  author: aida-session-start
+  timestamp: 2026-11-01T03:37:37.427324082Z
+  session_id: 77a7a933-9a3f-4243-9a44-892bcedf206c
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 3b89dca55ba8a5abc5c4cc415306c23f2729d87a
   branch: main
