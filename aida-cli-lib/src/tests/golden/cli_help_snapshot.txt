@@ -27575,7 +27575,7 @@ Commands:
            outside any agent session
   show     Show the active goal: text, clauses with their verify commands, who set it and when
   check    Check each clause and print met/unmet. Exits 0 only when every clause is met; a goal with
-           no checkable clauses is never met
+           no checkable clauses, or no goal, is never met
   history  Every goal set, newest first
   help     Print this message or the help of the given subcommand(s)
 
@@ -27644,6 +27644,9 @@ Show the active goal: text, clauses with their verify commands, who set it and w
 Usage: aida goal advisor show [OPTIONS]
 
 Options:
+      --json
+          Emit JSON
+
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
           compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
@@ -27662,11 +27665,14 @@ Options:
           Print help (see a summary with '-h')
 ===== aida goal advisor check
 Check each clause and print met/unmet. Exits 0 only when every clause is met; a goal with no
-checkable clauses is never met
+checkable clauses, or no goal, is never met
 
 Usage: aida goal advisor check [OPTIONS]
 
 Options:
+      --json
+          Emit JSON
+
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
           compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
@@ -27689,6 +27695,9 @@ Every goal set, newest first
 Usage: aida goal advisor history [OPTIONS]
 
 Options:
+      --json
+          Emit JSON
+
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
           compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
@@ -57127,6 +57136,11 @@ Working on aida itself
         "name": "help",
         "takes_value": false,
         "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "json",
+        "takes_value": false,
+        "help": "Emit JSON"
       }
     ],
     "hidden": false
@@ -57138,7 +57152,7 @@ Working on aida itself
       "advisor",
       "check"
     ],
-    "about": "Check each clause and print met/unmet. Exits 0 only when every clause is met; a goal with no checkable clauses is never met",
+    "about": "Check each clause and print met/unmet. Exits 0 only when every clause is met; a goal with no checkable clauses, or no goal, is never met",
     "flags": [
       {
         "name": "canonical-ids",
@@ -57154,6 +57168,11 @@ Working on aida itself
         "name": "help",
         "takes_value": false,
         "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "json",
+        "takes_value": false,
+        "help": "Emit JSON"
       }
     ],
     "hidden": false
@@ -57181,6 +57200,11 @@ Working on aida itself
         "name": "help",
         "takes_value": false,
         "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "json",
+        "takes_value": false,
+        "help": "Emit JSON"
       }
     ],
     "hidden": false

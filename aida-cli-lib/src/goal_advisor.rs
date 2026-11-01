@@ -27,8 +27,9 @@ pub(crate) const OPERATOR_ONLY: &str = "only the operator sets the advisor's goa
 const AGENT_SESSION_MARKERS: &[&str] = &[
     "AIDA_AGENT_NAME",
     "AIDA_AGENT_TYPE",
-    "AIDA_SESSION_GRANT",
-    "AIDA_SESSION_GRANT_FILE",
+    // The seat-grant handles, named by their owner (TASK-1752).
+    crate::gate::seat_authority::GRANT_ENV,
+    crate::gate::seat_authority::GRANT_FILE_ENV,
     "AIDA_HEADLESS",
     "CLAUDECODE",
     "CLAUDE_CODE_SESSION_ID",
@@ -104,8 +105,9 @@ pub(crate) enum Fmt {
 }
 
 impl Fmt {
-    fn observed() -> Self {
-        if crate::output_format_is_json() {
+    /// `--json` (or `--format json`) is JSON; an agent seat gets toon.
+    fn observed(json: bool) -> Self {
+        if json || crate::output_format_is_json() {
             Fmt::Json
         } else if crate::agent_output_mode() {
             Fmt::Toon
@@ -165,29 +167,29 @@ pub(crate) fn handle(action: &AdvisorGoalAction) -> Result<()> {
             print!("{}", render_goal(Some(&goal), Fmt::Human));
             Ok(())
         }
-        AdvisorGoalAction::Show => {
+        AdvisorGoalAction::Show { json } => {
             let log = advisor_goal::load(&store_root(&main_root()?))?;
-            print!("{}", render_goal(log.active(), Fmt::observed()));
+            print!("{}", render_goal(log.active(), Fmt::observed(*json)));
             Ok(())
         }
-        AdvisorGoalAction::History => {
+        AdvisorGoalAction::History { json } => {
             let log = advisor_goal::load(&store_root(&main_root()?))?;
             let goals: Vec<&AdvisorGoal> = log.history().collect();
-            print!("{}", render_history(&goals, Fmt::observed()));
+            print!("{}", render_history(&goals, Fmt::observed(*json)));
             Ok(())
         }
-        AdvisorGoalAction::Check => {
+        AdvisorGoalAction::Check { json } => {
             let root = main_root()?;
             let log = advisor_goal::load(&store_root(&root))?;
-            let Some(goal) = log.active() else {
-                println!("No advisor goal set.");
-                std::process::exit(1);
-            };
             let mut evaluator = StoreEvaluator::new(&root);
-            let report = check_goal(goal, |c| evaluator.evaluate(c));
-            print!("{}", render_check(&report, Fmt::observed()));
-            if !report.met() {
-                std::process::exit(1);
+            let outcome = run_check(
+                log.active(),
+                |c| evaluator.evaluate(c),
+                Fmt::observed(*json),
+            );
+            print!("{}", outcome.output);
+            if outcome.exit_code != 0 {
+                std::process::exit(outcome.exit_code);
             }
             Ok(())
         }
@@ -241,6 +243,35 @@ pub(crate) fn check_goal(
                 }
             })
             .collect(),
+    }
+}
+
+/// What `aida goal advisor check` prints and the status it exits with.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct CheckOutcome {
+    pub output: String,
+    /// 0 only when the goal has clauses and every one is met; 1 when a
+    /// clause is unmet, the goal is free text only, or no goal is set.
+    pub exit_code: i32,
+}
+
+/// The whole `check` action for `goal` (`None`: no goal set), with `eval`
+/// deciding each clause. `handle` prints `output` and exits `exit_code`.
+pub(crate) fn run_check(
+    goal: Option<&AdvisorGoal>,
+    eval: impl FnMut(&GoalClauseRecord) -> std::result::Result<(), String>,
+    fmt: Fmt,
+) -> CheckOutcome {
+    let Some(goal) = goal else {
+        return CheckOutcome {
+            output: render_check_no_goal(fmt),
+            exit_code: 1,
+        };
+    };
+    let report = check_goal(goal, eval);
+    CheckOutcome {
+        output: render_check(&report, fmt),
+        exit_code: if report.met() { 0 } else { 1 },
     }
 }
 
@@ -511,12 +542,33 @@ pub(crate) fn render_check(report: &CheckReport, fmt: Fmt) -> String {
                 serde_json::to_string_pretty(&value).unwrap_or_default()
             )
         }
-        _ if report.clauses.is_empty() => format!(
+        Fmt::Toon => {
+            let mut out = format!(
+                "goal: {}\nmet: {}\ncheckable: {}\nclauses[{}]:\n",
+                report.text,
+                report.met(),
+                !report.clauses.is_empty(),
+                report.clauses.len()
+            );
+            for c in &report.clauses {
+                let state = if c.met { "met" } else { "unmet" };
+                out.push_str(&format!("  - {state} | {}", c.description));
+                if let Some(d) = &c.detail {
+                    out.push_str(&format!(" | detail: {d}"));
+                }
+                if !c.met {
+                    out.push_str(&format!(" | verify: {}", c.verify));
+                }
+                out.push('\n');
+            }
+            out
+        }
+        Fmt::Human if report.clauses.is_empty() => format!(
             "Goal: {}\nno checkable clauses: this goal is free text only and is never \
              reported met\n",
             report.text
         ),
-        _ => {
+        Fmt::Human => {
             let mut out = format!("Goal: {}\n", report.text);
             for c in &report.clauses {
                 let mark = if c.met { "met  " } else { "UNMET" };
@@ -539,6 +591,26 @@ pub(crate) fn render_check(report: &CheckReport, fmt: Fmt) -> String {
             }
             out
         }
+    }
+}
+
+/// The `check` output when no goal is set.
+fn render_check_no_goal(fmt: Fmt) -> String {
+    match fmt {
+        Fmt::Json => {
+            let value = serde_json::json!({
+                "goal": null,
+                "met": false,
+                "checkable": false,
+                "clauses": [],
+            });
+            format!(
+                "{}\n",
+                serde_json::to_string_pretty(&value).unwrap_or_default()
+            )
+        }
+        Fmt::Toon => "goal: none\nmet: false\ncheckable: false\nclauses[0]:\n".to_string(),
+        Fmt::Human => format!("{NO_GOAL}\n"),
     }
 }
 

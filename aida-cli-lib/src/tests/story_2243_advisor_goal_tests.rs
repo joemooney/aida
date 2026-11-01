@@ -201,7 +201,7 @@ fn set_is_operator_only() {
         let why = set_refusal(&facts).unwrap_or_else(|| panic!("{marker} refused"));
         assert!(why.contains(marker) && why.contains("operator"), "{why}");
     }
-    assert!(AGENT_SESSION_MARKERS.contains(&"AIDA_SESSION_GRANT"));
+    assert!(AGENT_SESSION_MARKERS.contains(&crate::gate::seat_authority::GRANT_ENV));
 
     let harness = SetterFacts {
         under_harness: true,
@@ -337,21 +337,105 @@ fn parse(argv: &[&str]) -> GoalArgs {
     <GoalArgs as clap::Parser>::try_parse_from(argv).unwrap()
 }
 
-// AC8: bare `aida goal --epic … --invoke` still derives a `/goal` line.
+// AC8: bare `aida goal --epic … --invoke` still parses as the bare form and
+// prints the same `/goal` line, through the printer `--invoke` uses.
+// trace:STORY-b6b1278890774ef993d2ebc327862470-272.Regression | ai:claude
 #[test]
 fn bare_goal_flags_are_unchanged() {
     let args = parse(&["goal", "--epic", "EPIC-612", "--invoke"]);
     assert!(args.command.is_none());
-    assert_eq!(args.epic.as_deref(), Some("EPIC-612"));
     assert!(args.invoke);
-    let c =
-        build_goal_clauses_for_forge(None, Some("EPIC-612"), None, None, None, ForgeKind::GitHub)
-            .unwrap();
+    let printed = crate::goal_cmd::invoke_output(
+        args.batch.as_deref(),
+        args.epic.as_deref(),
+        args.spec.as_deref(),
+        args.pr,
+        args.queue_empty.as_deref(),
+        ForgeKind::GitHub,
+    )
+    .unwrap();
     assert_eq!(
-        format!("/goal {}", crate::goal_cmd::assemble_goal_condition(&c)),
+        printed,
         "/goal all direct children of EPIC-612 are resolved (Completed or Rejected) \
-         (verify: `aida list --parent EPIC-612` returns no rows)"
+         (verify: `aida list --parent EPIC-612` returns no rows)\n"
     );
+    // A bare `aida goal` flag and an `advisor` subcommand cannot mix.
+    assert!(<GoalArgs as clap::Parser>::try_parse_from([
+        "goal", "--epic", "EPIC-612", "advisor", "show"
+    ])
+    .is_err());
+}
+
+// AC9: a Codex (or any non-Claude) advisor seat gets the goal on whoami and
+// in its launch context, with no Claude harness in the environment and no
+// harness `/goal` involved: both read the store alone.
+// trace:STORY-b6b1278890774ef993d2ebc327862470-272.Vendor-neutral | ai:claude
+#[test]
+fn a_codex_advisor_seat_gets_the_goal_without_claude() {
+    for vendor in ["codex", "antigravity", "claude"] {
+        let _env = crate::test_env::EnvVarsGuard::apply(&[
+            ("AIDA_USER", Some("operator-under-test")),
+            ("AIDA_HANDLE", None),
+            ("AIDA_AGENT_NAME", None),
+            ("AIDA_SESSION_ROLE", None),
+            ("AIDA_AGENT_TYPE", Some(vendor)),
+            ("AIDA_SESSION_ID", None),
+            ("AIDA_SESSION_PURPOSE", None),
+            ("AIDA_HOOK_PAYLOAD", None),
+            ("CLAUDECODE", None),
+            ("CLAUDE_CODE_SESSION_ID", None),
+        ]);
+        let project = tempfile::tempdir().unwrap();
+        let store = project.path().join(".aida-store");
+        let path = store.join(advisor_goal::ADVISOR_GOAL_REL);
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        let log = advisor_goal::AdvisorGoalLog {
+            goals: vec![goal("X", clauses())],
+        };
+        std::fs::write(&path, serde_yaml::to_string(&log).unwrap()).unwrap();
+
+        let entry = crate::agent_registry::register_existing_agent(
+            project.path(),
+            vendor,
+            std::process::id(),
+            "advisor".into(),
+            None,
+            project.path().to_path_buf(),
+            Some(format!("{vendor}-advisor-01")),
+            None,
+        )
+        .unwrap();
+        let env = aida_core::mailbox_identity::IdentityEnv::observed();
+        let row = crate::agent_registry::registry_path(project.path(), &entry.id);
+        let facts = aida_core::mailbox_identity::MailIdentityFacts::observed(
+            crate::session_binding_from_row(Some(&row), &env),
+            &aida_core::mailbox_identity::PeopleCatalogView::default(),
+            env,
+        );
+        let inputs = crate::whoami_view::SessionInputs {
+            entry: Some(entry),
+            lease_id: None,
+            purpose: None,
+            mandate: crate::gate::mandate::MandateState::None,
+            user: "operator-under-test".into(),
+        };
+        let view = crate::whoami_view::collect_with(
+            project.path(),
+            project.path(),
+            &facts,
+            inputs,
+            chrono::Utc::now(),
+        );
+        assert_eq!(view.agent_type, vendor);
+        assert_eq!(view.role, "advisor", "{vendor}");
+        let toon = view.render_toon();
+        assert!(toon.contains("\ngoal: X\n"), "{vendor}: {toon}");
+
+        let section = render_launch_goal_section(&store, "advisor")
+            .unwrap_or_else(|| panic!("{vendor}: the launch context carries the goal"));
+        assert!(section.starts_with("## Goal\n"), "{vendor}: {section}");
+        assert!(section.contains("  X\n"), "{vendor}: {section}");
+    }
 }
 
 #[test]
@@ -384,5 +468,113 @@ fn advisor_subcommands_parse() {
     }
     for action in ["show", "check", "history"] {
         assert!(parse(&["goal", "advisor", action]).command.is_some());
+        assert!(parse(&["goal", "advisor", action, "--json"])
+            .command
+            .is_some());
     }
+}
+
+// AC4: check's toon form carries met/checkable and each clause's state,
+// detail and verify command.
+// trace:STORY-b6b1278890774ef993d2ebc327862470-272.ac73038d | ai:claude
+#[test]
+fn check_renders_toon() {
+    let g = goal("X", clauses());
+    let report = check_goal(&g, |c| match c.kind {
+        ClauseKind::Epic => Ok(()),
+        _ => Err("2 queued for implementer: TASK-1, TASK-2".into()),
+    });
+    let toon = render_check(&report, Fmt::Toon);
+    assert!(
+        toon.starts_with("goal: X\nmet: false\ncheckable: true\nclauses[2]:\n"),
+        "{toon}"
+    );
+    assert!(
+        toon.contains("  - met | all direct children of EPIC-612"),
+        "{toon}"
+    );
+    assert!(
+        toon.contains(
+            "  - unmet | the implementer queue is empty | detail: 2 queued for implementer: \
+             TASK-1, TASK-2 | verify: `aida queue list --for implementer --no-in-flight`"
+        ),
+        "{toon}"
+    );
+    let all = render_check(&check_goal(&g, |_| Ok(())), Fmt::Toon);
+    assert!(all.contains("met: true\n"), "{all}");
+    assert!(!all.contains("verify:"), "{all}");
+    let free = render_check(&check_goal(&goal("t", Vec::new()), |_| Ok(())), Fmt::Toon);
+    assert!(
+        free.starts_with("goal: t\nmet: false\ncheckable: false\nclauses[0]:\n"),
+        "{free}"
+    );
+}
+
+// AC4: the check action exits 0 with every clause met and non-zero naming
+// each unmet clause; a free-text goal and no goal at all exit non-zero.
+// trace:STORY-b6b1278890774ef993d2ebc327862470-272.ac73038d | ai:claude
+#[test]
+fn check_exit_status_is_zero_only_when_every_clause_is_met() {
+    let g = goal("X", clauses());
+
+    let met = run_check(Some(&g), |_| Ok(()), Fmt::Human);
+    assert_eq!(met.exit_code, 0, "{}", met.output);
+    assert!(met.output.contains("All clauses met."), "{}", met.output);
+
+    let unmet = run_check(
+        Some(&g),
+        |c| match c.kind {
+            ClauseKind::Epic => Err("1 unresolved: TASK-9".into()),
+            _ => Err("2 queued for implementer: TASK-1, TASK-2".into()),
+        },
+        Fmt::Human,
+    );
+    assert_ne!(unmet.exit_code, 0);
+    assert!(
+        unmet
+            .output
+            .contains("  UNMET all direct children of EPIC-612"),
+        "{}",
+        unmet.output
+    );
+    assert!(
+        unmet
+            .output
+            .contains("  UNMET the implementer queue is empty"),
+        "{}",
+        unmet.output
+    );
+    assert!(
+        unmet.output.contains("2 of 2 clauses unmet."),
+        "{}",
+        unmet.output
+    );
+
+    let free = run_check(
+        Some(&goal("get the open list to zero", Vec::new())),
+        |_| panic!("no clause to evaluate"),
+        Fmt::Human,
+    );
+    assert_ne!(free.exit_code, 0);
+    assert!(
+        free.output.contains("no checkable clauses"),
+        "{}",
+        free.output
+    );
+
+    let none = run_check(None, |_| panic!("no goal"), Fmt::Human);
+    assert_ne!(none.exit_code, 0);
+    assert!(
+        none.output.contains("No advisor goal set"),
+        "{}",
+        none.output
+    );
+    let json: serde_json::Value =
+        serde_json::from_str(&run_check(None, |_| Ok(()), Fmt::Json).output).unwrap();
+    assert!(json["goal"].is_null());
+    assert_eq!(json["met"], false);
+    assert_eq!(
+        run_check(None, |_| Ok(()), Fmt::Toon).output,
+        "goal: none\nmet: false\ncheckable: false\nclauses[0]:\n"
+    );
 }

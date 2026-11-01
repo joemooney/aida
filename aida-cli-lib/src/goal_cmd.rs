@@ -141,6 +141,25 @@ pub(crate) fn assemble_goal_condition(clauses: &[GoalClause]) -> String {
         .join(" AND ")
 }
 
+fn goal_line(clauses: &[GoalClause]) -> String {
+    format!("/goal {}", assemble_goal_condition(clauses))
+}
+
+/// Exactly what `aida goal --invoke` prints: the bare `/goal` line.
+// trace:TASK-242 | ai:claude
+// trace:STORY-2243 | ai:claude
+pub(crate) fn invoke_output(
+    batch: Option<&str>,
+    epic: Option<&str>,
+    spec: Option<&str>,
+    pr: Option<u64>,
+    queue_empty: Option<&str>,
+    forge: ForgeKind,
+) -> Result<String> {
+    let clauses = build_goal_clauses_for_forge(batch, epic, spec, pr, queue_empty, forge)?;
+    Ok(format!("{}\n", goal_line(&clauses)))
+}
+
 /// `aida goal` handler — emit the condition framed, bare (`--invoke`),
 /// or to the clipboard (`--copy`).
 // trace:TASK-242 | ai:claude
@@ -159,15 +178,16 @@ pub(crate) fn handle_goal_command(
     let forge = crate::forge::resolve_forge_kind(
         &std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from(".")),
     );
-    let clauses = build_goal_clauses_for_forge(batch, epic, spec, pr, queue_empty, forge)?;
-    let condition = assemble_goal_condition(&clauses);
-    let goal_line = format!("/goal {}", condition);
-
     // --invoke: bare line only, for `$(aida goal --invoke ...)`.
     if invoke {
-        println!("{}", goal_line);
+        print!(
+            "{}",
+            invoke_output(batch, epic, spec, pr, queue_empty, forge)?
+        );
         return Ok(());
     }
+    let clauses = build_goal_clauses_for_forge(batch, epic, spec, pr, queue_empty, forge)?;
+    let goal_line = goal_line(&clauses);
 
     // SPIKE-33: emit a claude-cli:// deep link whose `q=` is the assembled
     // /goal line. Opens Claude Code in the current dir with the prompt
@@ -452,12 +472,24 @@ pub(crate) enum AdvisorGoalAction {
     },
     /// Show the active goal: text, clauses with their verify commands, who
     /// set it and when.
-    Show,
+    Show {
+        /// Emit JSON.
+        #[clap(long)]
+        json: bool,
+    },
     /// Check each clause and print met/unmet. Exits 0 only when every clause
-    /// is met; a goal with no checkable clauses is never met.
-    Check,
+    /// is met; a goal with no checkable clauses, or no goal, is never met.
+    Check {
+        /// Emit JSON.
+        #[clap(long)]
+        json: bool,
+    },
     /// Every goal set, newest first.
-    History,
+    History {
+        /// Emit JSON.
+        #[clap(long)]
+        json: bool,
+    },
 }
 
 // `aida goal` is a pure condition generator — no store needed.

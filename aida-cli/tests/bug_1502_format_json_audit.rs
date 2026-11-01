@@ -512,6 +512,9 @@ fn checked_in_audit_is_exhaustive_and_every_honoured_probe_parses() {
         ("aida fleet drive", &["fleet", "drive"]),
         // trace:STORY-B6B1278890774EF993D2EBC327862470-098 | ai:claude
         ("aida whoami", &["whoami"]),
+        // trace:STORY-2243 | ai:claude
+        ("aida goal advisor show", &["goal", "advisor", "show"]),
+        ("aida goal advisor history", &["goal", "advisor", "history"]),
     ];
     for (path, args) in probes {
         let mut via_format = args.to_vec();

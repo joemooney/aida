@@ -698,6 +698,11 @@ hermetic audit. `JSON not honoured` means unsupported and explicitly rejected.
 | `aida ultraplan` | COULD NOT VERIFY | Dedicated --json exists; needs command-specific state or external service |
 | `aida import-plan` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida goal` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
+| `aida goal advisor` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
+| `aida goal advisor set` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
+| `aida goal advisor show` | JSON honoured | goal advisor show |
+| `aida goal advisor check` | COULD NOT VERIFY | Dedicated --json exists; needs command-specific state or external service |
+| `aida goal advisor history` | JSON honoured | goal advisor history |
 | `aida human` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida human away` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida human home` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
