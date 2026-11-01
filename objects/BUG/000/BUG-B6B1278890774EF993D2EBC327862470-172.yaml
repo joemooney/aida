@@ -19,7 +19,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T07:26:20.914223641Z
-modified_at: 2026-11-01T08:05:47.355065507Z
+modified_at: 2026-11-01T08:10:47.904522320Z
 req_type: Bug
 tags:
 - architecture
@@ -186,6 +186,63 @@ comments:
     Implementation authorized on Codex only, STRICT independent authority review and operator merge floor. LIGHT one targeted launch/grant test plus make check-ci-fast; long cargo in tool background, no repeated capped compiles, CI full gate. Cache/write-root repair remains STORY2238; MCP permission policy remains BUG2394; never relax user config to work around either.
   created_at: 2026-11-01T08:04:16.550828967Z
   modified_at: 2026-11-01T08:04:16.550828967Z
+- id: 01a19629-3ee0-78e2-bea2-c9a13c68df83
+  author: joe
+  content: |
+    ADVISOR SIGNOFF: CHANGES REQUESTED (BUG-2398). Four small blocking amendments; adopting them verbatim clears the gate without another advisor round.
+
+    Reviewer: independent claude advisor. I did not write the sketch, advisor14's A1-A6, or the root amendment, and I have not implemented, dispatched or merged anything. I read the spec in full, comments 0-3, ADR-66, and source at 9d26f95: session.rs (build_codex_session_command, exec_codex_session, headless_vendor_args{,_contained_in}, the reviewer plan ~2060, spawn_reviewer_launch_plan_granted ~2111, run_vendor_headless_child ~4958, os_wrapped_program_and_args ~4274), agent_launch.rs (the codex arm ~2512, the bg child ~6036, the foreground child ~6711-6807, tool_contained_flags), seat_authority grant_check_for_at, agent_handle::apply_launch_env, role.rs current_role_instance_is_companion, mail_wake and mailbox_wake_run.
+
+    ## What I accept as sound
+    - The direction: the narrow Codex launch adapter (A1-A6 plus the root clarifications in comment 3). I also accept the rejection of the pointer, resolver and pre_exec approach.
+    - No global policy change. A per-launch `-c shell_environment_policy.set.<exact key>` merges with the user's config; it is not an edit. inherit=all stays banned.
+    - No change to the resolver, the keyring, or any Claude, Gemini or Agy argv.
+    - IDs are selectors, not secrets (D1). The key payload, registry/handle tokens and grant files are never carried.
+    - Subject: the child's AIDA_USER=plan.name is forwarded. This resolves D2, because grant_check_for_at compares grant.subject against the caller derived from AIDA_USER.
+    - ADR-66 residual: same-uid replay of a separately discovered parent selector or key is the accepted residual. Record it truthfully and do not claim it is fixed. Agreed.
+    - Mail wake is NOT a separate launch path. `codex queue --thread` (mailbox_wake_run.rs ~230) only enqueues a message into the already-running Codex process, so its tool shells inherit that process's launch-time overrides. Covering the launch argv covers wake turns.
+
+    ## Blocking amendments
+
+    B1. Ordering and mechanism: the overrides must be computed at the final pre-spawn point, not inside the pure argv builders. In the current source the argv is fixed BEFORE the child's own grant exists, on every path:
+    - agent_launch foreground: `Command::new(&program).args(&exec_args)` at ~6711. `issue_launch_child` and `.env(GRANT_ENV, grant.id)` come only at ~6797-6807.
+    - run_vendor_headless_child: `build_exec_vendor_headless_command_for`, then `hooks.customize` (STORY-1662 standalone, which may rewrite or scrub GRANT_ENV), then the lane marker, then spawn.
+    - spawn_reviewer_launch_plan_granted: `plan.args` is built before `issue_launch_child`.
+    - exec_codex_session native arm: the grant env is set after the args.
+
+    So "read from the child Command" in A2 cannot be satisfied by `headless_vendor_args`, `codex_session_args` or `codex_headless_args_*`. Required:
+    - One helper, `apply_codex_tool_env(&mut Command)` or equivalent. It is called exactly once per Codex child, AFTER every env mutation including grant issuance and `customize`, and immediately before spawn/exec.
+    - It rebuilds the argv, so the `-c` pairs land in codex's OWN argv. That means directly after the codex program token and before the `exec`/`queue`/positional prompt. Under os_wrap/bwrap they go after the wrapped `codex` token, never before `bwrap`.
+    - It reads ONLY explicit Command env entries (`get_envs`). `Some(v)` means forward v. A removed entry or a non-explicit entry means absent. It NEVER falls back to `std::env`, because doing so would forward the PARENT's AIDA_SESSION_GRANT or identity.
+    - If the launch requested a non-baseline seat and the explicit grant is absent or invalid at that point, refuse the launch before spawn. Never launch roleless.
+    - Add a ratchet or unit test: every Codex Command constructor in session.rs, agent_launch.rs, queue_cmd.rs (the exec_codex_session caller) and phase_driver_trait.rs (the CI-fix child) reaches spawn through this helper. Add a test that the os_wrap argv has the overrides after the codex token.
+
+    B2. Add AIDA_ROLE_INSTANCE to the A2 whitelist. agent_launch sets it on the child (~6738). `role::current_role_instance_is_companion()` (role.rs ~1495) reads it from env and treats absent as NOT companion. If the adapter restores the grant and role but drops this, a companion Codex instance's tool shell gets driver-seat semantics while holding a real grant. The adapter would be creating that widening; it is not pre-existing. Value set: driver|companion only; refuse anything else. Test: a companion launch forwards companion, and its tool shell reports companion.
+
+    B3. Be explicit that the deny list applies by name: AIDA_HANDLE_LAUNCH_TOKEN and AIDA_AGENT_REGISTRY_TOKEN are never forwarded, and the existing *TOKEN* ratchet covers both. In the docs, record the consequence: a Codex tool shell cannot bind or claim its handle reservation or registry entry from inside the tool shell. Handle binding stays the launcher's or hook's job. That is a truthful limitation, not something to work around with a token.
+
+    B4. Prove explicit-empty in the real-tool test. The host evidence in comment 3 showed `set` restoring a NON-empty synthetic value. It did not show that `set.AIDA_SESSION_GRANT=""` reaches the tool shell as PRESENT-empty rather than dropped. The real `codex sandbox` fixture (temporary CODEX_HOME, inherit=core) must assert `[ "${AIDA_SESSION_GRANT+x}" = x ] && [ -z "$AIDA_SESSION_GRANT" ]` for a baseline launch. If Codex drops empty values, the baseline path must still resolve to Absent (no parent grant can reach it under core), and the docs must say so. It must not become an argv fallback.
+
+    ## Unchanged and still binding
+    Everything else in comment 3 still applies:
+    - whitelist values come from the child's own explicit env only
+    - TOML-string encoding, with NUL and newline refused
+    - KEEP_ME and other user set entries preserved
+    - never carry AIDA_CONTAINED, AIDA_SESSION_GRANT_FILE, key payloads or non-AIDA vars
+    - every managed Codex launch path, every posture
+    - a model-free preflight that uses the installed CLI's real permission-profile syntax, with cause-specific refusal and no fallback authority
+    - tests: own subject and role; own-scope permitted (lease/mailbox); advisor and wrong-seat denied; ungranted denied; a granted reviewer records a verdict while an ungranted one is refused; the adapter never emits a parent ID; no adversarial-replay claim (ADR-66 residual)
+    - bug_1934, bug_1983, story_1662, story_1917, the BUG-2139 tests and the TASK-2631 tests kept green
+    - Claude, Gemini and Agy argv byte-identical, and asserted
+    - STRICT independent authority review, operator merge floor
+    - LIGHT gate: one targeted launch/grant test plus `make check-ci-fast`; CI is the full gate
+    - STORY-2238 (write roots/cache) and BUG-2394 (MCP approval policy) stay out of scope; never relax the user's ~/.codex config
+
+    Gate rule: when root records adoption of B1-B4 as a contract amendment on this spec, this verdict becomes ADVISOR SIGNOFF APPROVED for the amended contract, and the Codex implementer lane may start. A deviation from B1-B4 needs a new advisor verdict.
+  created_at: 2026-11-01T08:10:47.904522320Z
+  modified_at: 2026-11-01T08:10:47.904522320Z
+  session_id: 01a19625-ef32-7a71-8d3f-363556b2591b
+  harness_version: 2.1.316 (Claude Code)
 history:
 - id: 01a19600-c769-7cd0-ba08-8d93975e3e3b
   author: joe
