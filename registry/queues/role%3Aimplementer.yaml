@@ -1,4 +1,11 @@
 - user_id: role:implementer
+  requirement_id: 01a1965b-4971-7252-abdf-997331f285fd
+  position: 255000
+  added_by: role:implementer
+  note: Independent review16 retains required nested-positive gate; reviewed HOST diagnostic passes. Obtain finite same-CI-runner A/B and original strict fixture without waiver, same PR3205.
+  added_at: 2026-11-01T14:57:14.696422352Z
+  for_role: implementer
+- user_id: role:implementer
   requirement_id: 01a19600-8cf2-74f3-a6ce-b7a32fa5affc
   position: 256000
   added_by: role:implementer
@@ -19,13 +26,6 @@
   added_at: 2026-11-01T12:21:40.598767707Z
   for_role: implementer
   added_by_machine: imac
-- user_id: role:implementer
-  requirement_id: 01a1965b-4971-7252-abdf-997331f285fd
-  position: 261000
-  added_by: role:implementer
-  note: 'Fresh independent recorded REQUEST_CHANGES atc9f PR3205#5: CI lane FD audit fails plus publichelp/JSONaudit/grantconstant integrity gaps. Root sourceverified and publishedsnapshot backed.'
-  added_at: 2026-11-01T12:04:56.611243293Z
-  for_role: implementer
 - user_id: role:implementer
   requirement_id: 01a195dc-eca2-7570-afea-e3ba747f78c3
   position: 265000
