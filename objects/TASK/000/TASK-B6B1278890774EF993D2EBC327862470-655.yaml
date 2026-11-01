@@ -11,7 +11,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T09:05:27.409838422Z
-modified_at: 2026-11-01T12:07:28.259442200Z
+modified_at: 2026-11-01T12:14:52.503291844Z
 req_type: Task
 tags:
 - architecture
@@ -61,6 +61,11 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-01T12:04:55.984560123Z
   modified_at: 2026-11-01T12:04:55.984560123Z
+- id: 01a19708-b457-7a23-b2fc-67bb647499b0
+  author: mcp
+  content: 'Rework checkpoint: public diagnostic commit 31b1d364d73a7c274921c950cab6541c22e2a703 is on the same PR #3205 branch after cleanly merging actual origin/main 471540a. It adds bounded, redacted FD type/F_GETFD/F_GETFL metadata at Python startup and on the unchanged standard-FD assertion, and uses seat_authority::GRANT_ENV for the synthetic selector. B1 is still unresolved; no host-socket exploit or backend readiness claim. Failed CI 41297289880 ran Ubuntu 26.04 bwrap 0.11.1-1ubuntu0.3; host is 0.9.0/Python3.12. Direct fixed-lane reproductions with extracted exact CI bwrap package and Python3.14.4 pass, including info-fd, so no platform cause is established yet. Local normal-slot help regeneration and actual make check-ci-compile are running in /tmp/aida-task2705-rework; full help/format audit correction is in progress. All 12 original source files were verified byte-identical to public c9f713903db9 before using the authorized normal-origin publication clone. No own-review, ship, merge or authority change.'
+  created_at: 2026-11-01T12:14:52.503283625Z
+  modified_at: 2026-11-01T12:14:52.503283625Z
 history:
 - id: 01a1965b-7cae-7260-83dd-5767f6772d90
   author: joe
