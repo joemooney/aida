@@ -8,6 +8,8 @@ AIDA keeps requirements in Git, so a team on an isolated network can use it with
 
 ## The parts
 
+**Status: built.** Each part below exists today as a record or a setting, with checks on it. What is still planned is the commands that grant a pool to a hub and claim blocks from an upstream. The sections that follow say where each one fits.
+
 - **Hub.** A Git server the requirement store syncs through: GitHub, GitLab, or a bare repository on an internal host. A mirror that only copies another hub's records, listed under `[store.sync] mirror_remotes`, is the same hub, not a second one.
 - **Store ref.** The `aida-store` branch on a hub. A push to it succeeds only if nobody else moved it first, so one hub settles any race between two clones.
 - **Root.** The one clone per store that owns every number not yet handed out. You make a clone the root with `aida node enroll-root`.
@@ -16,29 +18,35 @@ AIDA keeps requirements in Git, so a team on an isolated network can use it with
 
 Every clone also has a node identity: a random identifier with no host, user or email in it. When a clone has no block it can use, it mints node-local IDs of the form `<TYPE>-<node>-<n>`. Those never collide, because no two clones share a node, so they need no coordination at all. You can give a node a friendly label with `aida node alias`, so `TASK-<node>-95` displays as `TASK-HOME-95`.
 
-## One hub: the push orders every claim
+## One hub: the push will order every claim
 
-![One hub orders every claim](showcase/assets/air-gapped-one-hub.svg)
+**Status: planned.** Today only the root can claim a block. On any other clone a block claim refuses and `aida add` mints a node-local ID instead. What is true today is the ordering this mechanism will rely on: a push to the store ref succeeds only if nobody else moved the ref first.
 
-When every clone pushes the store to the same hub, the hub decides who got there first. Two clones that try to claim the same block both push; the first push lands and the second is rejected because the store ref has moved. The losing clone fetches, sees the block is taken, and claims another. No claim is ever accepted twice.
+![One hub will order every claim (planned)](showcase/assets/air-gapped-one-hub.svg)
 
-## Two hubs without a root: claims collide
+Once clones can claim blocks from their upstream, a hub that every clone pushes to will decide who got there first. If two clones try to claim the same block, both push; the first push lands and the second is rejected because the store ref has moved. The losing clone will fetch, see that the block is taken, and claim another. No claim will be accepted twice.
 
-![Two hubs without a root collide](showcase/assets/air-gapped-two-hubs-no-root.svg)
+## Two hubs without a root: why the root exists
 
-An air-gapped network has its own hub. A clone outside pushes to the outside hub, a clone inside pushes to the inside hub, and each push succeeds because each moves a different ref. Nothing compares the two claims until the stores meet again, and then both say they own the same numbers.
+**Status: illustration, not something the current release lets you do.** A clone that is not the root cannot claim a block, so it mints node-local IDs and this collision cannot arise as drawn. The scenario shows what would go wrong if each hub handed out the same numbers on its own, which is why claiming blocks requires a root. The sync-time conflict check described after the diagram is built today.
 
-AIDA catches this. Before every store sync it reads the allocation claims on both sides and refuses the sync if any two conflict. A refusal changes nothing: no counters, history or refs move and nothing is pushed. There is no override. `aida db audit-ids --against <ref>` lists each conflict and a manual repair plan. Repair keeps every record and its old ID as an alias; nothing is renumbered automatically. The check prevents silent damage, but the repair is work you would rather not do.
+![Why a root is needed: two hubs without one would collide](showcase/assets/air-gapped-two-hubs-no-root.svg)
+
+An air-gapped network has its own hub. Suppose a clone outside could claim a block through the outside hub and a clone inside could claim the same block through the inside hub. Each push would succeed, because each moves a different ref. Nothing would compare the two claims until the stores met again, and then both would say they own the same numbers.
+
+AIDA guards that boundary today. Before every store sync it reads the allocation claims on both sides and refuses the sync if any two conflict. A refusal changes nothing: no counters, history or refs move and nothing is pushed. There is no override. `aida db audit-ids --against <ref>` lists each conflict and a manual repair plan. Repair keeps every record and its old ID as an alias; nothing is renumbered automatically. The check prevents silent damage, but the repair is work you would rather not do.
 
 ## Two hubs with a root: split the space first
 
+**Status: partly built.** Built today: the root, each clone's declared upstream hub, the pool and block records, and the checks on them. **Planned:** the command that grants a pool to a hub, and claiming blocks from the upstream automatically during `aida push` or on request.
+
 ![A root splits the number space between hubs](showcase/assets/air-gapped-two-hubs-root.svg)
 
-The root prevents the collision instead of catching it. It owns the unallocated numbers and hands each hub its own pool before anyone on that hub claims a block. Clones claim blocks only from the pool homed on their own hub, so the outside and inside ranges cannot overlap, and the two stores merge cleanly when they meet.
-
-**Built today:** the root, each clone's declared upstream hub, the pool and block records, and the checks on them. **Planned:** the command that grants a pool to a hub, and claiming blocks from the upstream automatically during `aida push` or on request.
+The root prevents the collision instead of catching it. It owns the unallocated numbers and, once pool grants ship, will hand each hub its own pool before anyone on that hub claims a block. Clones will claim blocks only from the pool homed on their own hub, so the outside and inside ranges cannot overlap, and the two stores merge cleanly when they meet.
 
 ## How the number space is divided
+
+**Status: built.** The pool and block records, the lineage checks and the spend rules below work today. Because no command grants a pool yet, these rules today mainly decide whether a clone can use a block it holds or falls back to node-local IDs.
 
 ![Nested ranges: root, pools, blocks](showcase/assets/air-gapped-number-space.svg)
 
