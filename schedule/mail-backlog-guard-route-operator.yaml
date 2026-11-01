@@ -1,0 +1,8 @@
+job: mail-backlog-guard-route-operator
+note: 'agy2: unread [request] from codex-advisor-05, 60m old: BUG-2384 progress and ship preflight observation'
+due_since: 2026-11-01T08:10:03.941191562Z
+due_reason: on CronJobFired:mail-backlog-guard-route-operator
+due_failure:
+  trip_id: mail-backlog-guard-route-operator@2026-11-01T08:10:03Z
+  job: mail-backlog
+  error: 'agy2: unread [request] from codex-advisor-05, 60m old: BUG-2384 progress and ship preflight observation'
