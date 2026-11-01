@@ -21,7 +21,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T07:26:20.914223641Z
-modified_at: 2026-11-01T16:02:45.829093613Z
+modified_at: 2026-11-01T16:02:47.358154144Z
 req_type: Bug
 tags:
 - architecture
@@ -453,6 +453,12 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-01T14:55:34.686007597Z
   modified_at: 2026-11-01T14:55:34.686007597Z
+- id: 01a197d9-5dbe-73d0-bce1-a125ff80089f
+  author: joe
+  content: |
+    PROXY COMPLETION GATE: preserve the EXISTING signed operator-run real model-backed codex exec check explicitly with closure:pending before merge reconciliation. Fresh reviewer19 source approval and actual model-FREE native/cleanup HOST passes do not discharge that check. After approved code lands and a matching normal binary is live (or an approved reviewed candidate workflow), verify actual inherit=core model tools retain the OWN implementer subject/role/scope, own-spec comment succeeds and advisor-only act refuses; separately granted independent reviewer actual model-tool recording and durable validation. No parent/dead grant, global core-policy relaxation, fixture borrowed auth/key, public-selector-as-authority, or source-only/model-free-as-model credit. Source may proceed through ordinary independent review/exact CI/hold/operator ship floors; spec must stay Done/pending closure until the documented real-workflow receipts actually exist. This records an existing gate, not acceptance reduction or a new full-EPIC parity demand.
+  created_at: 2026-11-01T16:02:47.358154144Z
+  modified_at: 2026-11-01T16:02:47.358154144Z
 history:
 - id: 01a19600-c769-7cd0-ba08-8d93975e3e3b
   author: joe
