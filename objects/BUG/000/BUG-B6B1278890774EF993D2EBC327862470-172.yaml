@@ -21,7 +21,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T07:26:20.914223641Z
-modified_at: 2026-11-01T12:26:38.602994412Z
+modified_at: 2026-11-01T12:26:39.727730752Z
 req_type: Bug
 tags:
 - architecture
@@ -389,6 +389,20 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Final STRICT full review: effective child metadata override/probe integrity gap, four CI ratchets and fresh authorized dispatch/reviewer lifecycle failures. Preliminary exec-companion finding withdrawn: caller forbids companion. Native host fixture pass acknowledged.. Triage reason: Independent final reviewer13 attested REQUESTCHANGES at f05e1b9 PR3207 ledger#9 GH6557881420. Three blocking groups: effective own child metadata integrity vs later Codex overrides; four existing ratchets; actual fresh-authorized dispatch and lifecycle fixtures. Preliminary companion-constructor finding explicitly withdrawn after caller refusal verified. Full binding rework preserves all signed authority floors and same PR, /tmp/aida-BUG2398-rework-ruling.txt.'
   created_at: 2026-11-01T12:26:38.602992842Z
   modified_at: 2026-11-01T12:26:38.602992842Z
+- id: 01a19713-7e68-7301-8bb8-5b34bb448727
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-b6b1278890774ef993d2ebc327862470-172):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: f05e1b9e6a22
+    Recorded: 2026-11-01T12:24:22.626868554+00:00
+    Findings:
+    1. P1 AC1/2/4 B1/B2: codex_tool_env.rs::prepare_launch/preflight prefix precedes later custom exact-key/full-table overrides; role_cmd::handle_role_seat_probe checks seat/optional instance but not intended selector/subject/scope/posture. Real Codex probe confirms scope overrides; refuse conflicting effective child context without new authority.
+    2. P2 CI: codex_tool_env literal grant names, unclassified gate/review_approval.rs, new raw current_exe test lookup and stale pr_cmd raw-git ratchet fail existing guards in run41301174931. Preserve protected floor and use existing constants/resolver/inventories.
+    3. P2 expanded AC3: fresh authorized dispatch PR603 exits127 in new story1917 test; unadapted fake Codex preflight intercepts harness-version/BUG1607/2185/2149/2150 lifecycle tests before original assertions. Restore matching recorder execution and retained authority/collector assertions; CI has21 unique failures.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-01T12:26:39.592881313Z
+  modified_at: 2026-11-01T12:26:39.592881313Z
 history:
 - id: 01a19600-c769-7cd0-ba08-8d93975e3e3b
   author: joe
