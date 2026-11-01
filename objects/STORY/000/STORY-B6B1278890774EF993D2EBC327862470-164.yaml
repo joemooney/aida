@@ -34,7 +34,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T19:23:04.998731220Z
-modified_at: 2026-11-01T02:33:35.776961279Z
+modified_at: 2026-11-01T03:11:01.698372473Z
 req_type: Story
 tags:
 - architecture
@@ -256,6 +256,22 @@ comments:
   modified_at: 2026-11-01T02:33:35.776961279Z
   session_id: 01a194cd4400
   harness_version: 2.1.316 (Claude Code)
+- id: 01a19516-cc42-7fd3-ba55-0563d811dbfc
+  author: joe
+  content: |
+    ADVISOR REWORK BRIEF round 4 (20:10), PR-3185 at c01183a. Round 3 items 2-4 are addressed. CI is still red, and these are the exact failing tests. The advisor fetched them on the host; you can't reach the Actions log hosts from the sandbox, so don't try. Main is green.
+
+    1. cli-1: aida-cli/tests/story_164_single_hub.rs:231 `enroll_root_promotes_the_implicit_pools_without_renumbering`. After enroll-root, `aida db block claim --type BUG --size 10` still refuses with "this store declares no hub, so this clone may allocate only node-local IDs ... (or enroll a root with `aida node enroll-root`)". The refusal itself names enroll-root as the remedy, so after enroll-root the no-hub refusal must not fire. Find the hub/root check in the claim path (db_block.rs / allocation_authority.rs) and make an enrolled root satisfy it. A root is the authority on a single hub; that's the point of AC2/AC5. If the fixture is what's wrong (for example the root enrolls in a different clone than the one claiming), fix the fixture and say so in the PR body.
+    2. lib-0: bug_2181_host_remote_credentials_tests.rs:565 `task_2001_every_host_remote_call_routes_its_credentials` flags TWO sites:
+       - aida-core/src/store_hubs.rs:253 (`remote_urls`, `git remote get-url --all`).
+       - aida-core/src/allocation_authority.rs:489 (`hub_ref_blocks`, `git show refs/remotes/<remote>/<branch>:registry/blocks.yaml`).
+       Neither contacts the network: both read local config or local refs. Annotate each with `// remote-creds-ok(TASK-2001): reads local <config|remote-tracking ref> only; no network`.
+    3. lib-1: bug_1723_config_trust_tests.rs:509 `every_config_toml_site_is_inventoried_and_every_worktree_key_is_policy`. Add `[readers]` entries to scripts/config-trust.toml for aida-cli-lib/src/allocation_health.rs (1 site) and aida-core/src/store_hubs.rs (4 sites). Classify each read per BUG-1723: the tracked `[store.hubs]` declaration is a policy read, and the local-only hub config is a clone-local read. Follow the format of the neighbouring entries.
+
+    Local gate: you can't build within the 60s cap (BUG-2383), so don't try cargo. Run `make check-ci-fast` only, which covers fmt and the ratchets, then push. CI is the gate; say "untested locally (BUG-2383)" in the PR comment.
+  created_at: 2026-11-01T03:11:01.698372473Z
+  modified_at: 2026-11-01T03:11:01.698372473Z
+  session_id: 77a7a933-9a3f-4243-9a44-892bcedf206c
 history:
 - id: 01a1939c-ffb0-7d40-b083-9d0d5a3d6156
   author: joe
