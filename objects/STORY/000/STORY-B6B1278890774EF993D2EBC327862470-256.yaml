@@ -18,7 +18,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T22:17:06.607335957Z
-modified_at: 2026-11-01T03:28:18.240452361Z
+modified_at: 2026-11-01T03:33:06.172325234Z
 req_type: Story
 tags:
 - agent-new
@@ -198,6 +198,12 @@ history:
   - field_name: status
     old_value: Done
     new_value: NeedsAttention
+- id: 01a1952b-025c-7960-8980-20ea63d2f636
+  author: joe
+  timestamp: 2026-11-01T03:33:06.268867268Z
+  session_id: 01a19529e1cd
+  harness_version: 2.1.316 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 0506fa2eb862db100dffbc80b0c5cfdedec28522
   branch: main
@@ -214,7 +220,7 @@ failure_reason:
   phase: reviewer
   phase_index: 3
   kind: verdict:request-changes
-  detail: Implementation meets all 6 acceptance criteria and the advisor rulings Q1-Q4, but CI (lib-1) is red at the PR head (Run tests step); main and sibling PRs pass lib-1, so it is probably caused by this PR. Plus three minor ordering/test gaps.
+  detail: 'ACs 1-6 and rulings Q1-Q4 met, and round-2 items F2-F4 are fixed. Still blocking: the new one-time grant prompt is a bare inquire::Confirm with no ContextCard, so the STORY-809 coverage test fails in CI (lib). The advisor''s round-3 ruling (adopt a ContextCard) is not implemented at 2a57578.'
   recovery_hint: address the review findings, move STORY-2215 back to In Progress, and clear the PR hold only after approval
   shelved_by: reviewer
-  shelved_at: 2026-11-01T00:53:13.604024263Z
+  shelved_at: 2026-11-01T03:33:06.172325234Z

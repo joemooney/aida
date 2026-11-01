@@ -13,7 +13,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T23:00:22.284758314Z
-modified_at: 2026-11-01T03:23:50.936855326Z
+modified_at: 2026-11-01T03:33:28.099520803Z
 req_type: Bug
 tags:
 - epic-home-003
@@ -121,6 +121,12 @@ history:
   timestamp: 2026-11-01T03:23:52.009743304Z
   session_id: 77a7a933-9a3f-4243-9a44-892bcedf206c
   changes: []
+- id: 01a1952b-5806-7e53-b5a0-79630627230a
+  author: joe
+  timestamp: 2026-11-01T03:33:28.198484087Z
+  session_id: 01a1952410e4
+  harness_version: 2.1.316 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 3b89dca55ba8a5abc5c4cc415306c23f2729d87a
   branch: main
@@ -143,7 +149,7 @@ failure_reason:
   phase: reviewer
   phase_index: 3
   kind: verdict:request-changes
-  detail: 'CI still red at c119fb7 (run 41260362596: lib-0 and cli-0 Run tests failed, third round); code addresses round-2 findings (pruned tips kept as bases, AC2 stamp test, AC3 repair fixture), but no AC can be verified against a green run'
+  detail: CI cli-0 still red at c1011f4 (run 41268853682; lib-0, lib-1, cli-1, rest, contracts green); the lease-stamp fixture fix works, but the CLI fixture that alone proves AC1, AC2 (node show), AC3 end-to-end and AC4 still fails, probably because registry/blocks.lock is left untracked and remote reconcile then refuses
   recovery_hint: address the review findings, move BUG-2378 back to In Progress, and clear the PR hold only after approval
   shelved_by: reviewer
-  shelved_at: 2026-11-01T01:42:51.145200377Z
+  shelved_at: 2026-11-01T03:33:28.099520803Z
