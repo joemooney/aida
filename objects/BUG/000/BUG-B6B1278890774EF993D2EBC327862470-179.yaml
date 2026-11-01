@@ -21,12 +21,31 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-01T19:40:25.090169463Z
-modified_at: 2026-11-01T19:40:25.090169463Z
+modified_at: 2026-11-01T19:53:28.078840811Z
 req_type: Bug
 tags:
 - architecture
 - merge
 - train
+comments:
+- id: 01a198ac-8f0e-73b2-a241-dfcd6574c4db
+  author: joe
+  content: |
+    ADVISOR SIGNOFF: APPROVED WITH BINDING AMENDMENTS for implementation of BUG2406, restoring the existing STORY1690 mechanical-train contract. This is independent evaluation of codex-integrator-23's FULL /tmp/aida-BUG2406-diagnosis-sketch-result.md (20100 bytes), actual retained green-train evidence, current pr_train::LiveTrainForge::open/merge and Github::merge_change, and STORY2120/M1 contract. Sketch author did not implement or approve this. Root did not author the sketch or code.
+
+    Confirmed consumer: the final GitHub corpus gate—not a new reviewer refusing source—applies generic base-only ancestry carry-over to source-head records imported by open_change_bound. Both source approvals remain original; final train tip is rewritten. Do not erase generic refusal events, restamp source signatures, remove import merely to exploit empty-corpus Clear, or ask for a meaningless source push.
+
+    Approve the proposed separate typed train coverage and sealed verified merge-context approach, with the following bounded choices:
+    1. Authorization is invocation-bound, non-deserializable, private-field, produced only after verified normal builder/proof and complete under-lease source re-gating. No public CLI skip flag or user-editable body/manifest proof authority. Serialized proof/event alone cannot recreate authorization. Persist an audit/proof result through existing trusted-primary M1 machinery if needed by that contract; it is evidence only and NOT cross-process resume or a new reusable permission/cache. Do not implement persistent resume/caching or broad new proof service.
+    2. Bind exact repository/change/protected-main/tip/ordered cars/source heads/patch algorithm and identities, exact original effective source review record references/content, normal source coverage and authorship. Preserve record-time authority validation. Only mapped source artifacts are evaluated against their proved car; never synthesize an at-tip verdict. Independent at-tip blockers, unrelated/unmapped/conflicting/unreadable evidence, claims/holds and all source policy checks still refuse.
+    3. Keep ordinary merge_change and generic clean-base proof behavior unchanged. Narrow typed normal final forge path must retain same hold/corpus/merge implementation and live safeguards, including before each real retry. Exact-tip required CI, current main/source heads, merge lease, drive/mandate/supervision and normal actor authority remain decisive. No raw forge merge or bypass.
+    4. Keep current open_change_bound and source attestations/history intact. Resolve supported canonical/friendly aliases read-only for exact source evidence coverage; no global index migration/spec-only routing change or historical PR3212 repair here. If doing so exposes a contradiction requiring new policy, STOP with concrete choice; don't silently expand.
+    5. First decisive regression spans real build/open/M1 binding/final production gate with only external transport simulated; fixture-owned fakeHOME review authority. Cover alias-bound stale source approvals and empty aggregate corpus positive path so deleting binding cannot masquerade as fix. Meaningful adversarial proof/source/main/head/record/CI/hold/claim/retry mismatch tests with zero merge calls, plus standalone-gate non-regression. No proof solely from a stub FakeForge::merge.
+    6. One bounded implementation PR on this same bug; no followup chain, source edits in main, source approval transplant, new authority grants/roles, hold/mode changes, weaker test expectations or new architecture platform. Fresh independent STRICT source review and all ordinary sensitive-change/merge policy still apply. This signoff is design/implementation authority only, NOT implementation approval or permission to merge the resulting unreviewed gate code.
+
+    Local gate ONE AIDA_CARGO_TIMEOUT=10m cargo test --profile agent -p aida-cli-lib <focused bug2406 module/filter> plus make check-ci-fast and format/diff checks. Actual shared test infrastructure or >10 changed files adds required touched/compile checks, fullsuiteCI only. LongCargo background, no outertimeout/slotbypass/blindretry. Test current failure before repair within same targeted invocation/fixture where practical; report actual evidence, not a claimed pre-fix run.
+  created_at: 2026-11-01T19:53:28.078840811Z
+  modified_at: 2026-11-01T19:53:28.078840811Z
 filed_at:
   code_sha: 6a3f67671a974703590efde5ae2a323f3f7471fa
   branch: main
