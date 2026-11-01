@@ -18,7 +18,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-01T12:33:50.987786326Z
-modified_at: 2026-11-01T12:34:19.325938437Z
+modified_at: 2026-11-01T12:42:26.951194948Z
 req_type: Bug
 tags:
 - forge
@@ -29,6 +29,12 @@ relationships:
   target_id: 01a19639-d547-7300-9a70-befaedad7e96
   created_at: 2026-11-01T12:34:19.325934751Z
   created_by: joe
+comments:
+- id: 01a19721-f307-7b73-8f5c-58410b1c0360
+  author: joe
+  content: 'Additional live output: aida add --canonical-ids STILL printed Added: BUG-2404 (BUG-B6B1278890774EF993D2EBC327862470-177) - title. Therefore do not assume that flag alone fixes the current parser. Use actual supported stored identity or strict parsing/resolution of the complete supported display forms; no JSON add projection currently exists. The initial --format json attempt refused before creation, exact-title search returned empty, then one ordinary add succeeded; no duplicate requirement was filed.'
+  created_at: 2026-11-01T12:42:26.951194948Z
+  modified_at: 2026-11-01T12:42:26.951194948Z
 history:
 - id: 01a1971a-87d1-7701-a3aa-f40a198b947d
   author: joe
