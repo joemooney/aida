@@ -25,7 +25,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T22:58:37.964636963Z
-modified_at: 2026-11-01T06:48:39.508558474Z
+modified_at: 2026-11-01T06:48:41.760393226Z
 req_type: Story
 tags:
 - docs
@@ -126,6 +126,18 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Round-2 rework fixes the generator (in-page anchors, machinery-first order, wording, trace line), but docs/cli/12-glossary.md was not regenerated, so the committed book chapter still has the broken links and wrong-section anchors and tests/test_generate_glossary_check.sh fails. It was punted on: blocked-dependency: Round-2 findings 1-4 are fixed in 981fe33 (pushed to PR #3193), but docs/cli/12-glossary.md is NOT regenerated, so the book glossary drift guard and tests/test_generate_glossary_check.sh step (f) will fail. This sandbox could not build the binary: cargo build / aida dev build never finish inside the 60s per-step headless limit, background runs are refused, and cargo was later refused outright. Needed: in a session that can build, run ''aida dev build --no-promote'', then AIDA_BIN=<built aida> make book-glossary, commit the page, and confirm with ''bash tests/test_generate_glossary_check.sh''. No design question is open.. Triage reason: PR-3193 round-2 generator fix omitted its generated output; see newest ADVISOR REWORK BRIEF and gate-ledger PR-3193.jsonl#7.'
   created_at: 2026-11-01T06:48:39.508553540Z
   modified_at: 2026-11-01T06:48:39.508553540Z
+- id: 01a195de-1395-7b72-a226-0afc78b4579e
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (STORY-2219):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 3d45dd02d1af
+    Recorded: 2026-11-01T06:38:30.826397870+00:00
+    Findings:
+    1. blocking: docs/cli/12-glossary.md is stale. Commit 981fe33 changes generate-glossary.sh (machinery+lifecycle first, glossary-anchors.py rewrite) but does not regenerate the chapter. Reproduced at 3d45dd02: 'bash tests/test_generate_glossary_check.sh' exits 1 at the drift step ('docs/cli/12-glossary.md is stale against the template masters'), and 'python3 docs/cli/glossary-anchors.py --verify docs/cli/12-glossary.md' reports 8 errors: unpublished-page links at lines 26, 28, 232, 629, 631, 768, and #role / #seat landing in the product section at lines 401 and 420. So round-1 findings 1 and 2 are still visible in the published output, and CI's Book glossary drift guard / gates job will fail. Fix: regenerate with 'make book-glossary' from a binary built from this tree, then commit. A run of the generator with the test's stub (AIDA_BIN=<stub> STUB_TEMPLATE_DIR=aida-core/templates/.aida/discipline GLOSSARY_OUT=/tmp/x bash docs/cli/generate-glossary.sh) gives a 787-line page that passes --verify, so this is the only change needed. If the binary still cannot be built in the sandbox, the stub output equals render_discipline_glossary and can be committed, provided CI's drift guard is green afterwards.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-01T06:48:41.621716440Z
+  modified_at: 2026-11-01T06:48:41.621716440Z
 history:
 - id: 01a19517-7d5f-7092-83c8-b303944f0e16
   author: joe
