@@ -3862,6 +3862,12 @@ pub(crate) fn inline_grant_eligible(ctx: &InlineGrantContext) -> bool {
 fn offer_inline_parent_grant(project_root: &std::path::Path, seat: &str) -> Result<()> {
     use crate::gate::kernel_deps as k;
     let offer_enabled = GRANT_INLINE_OFFER.load(std::sync::atomic::Ordering::Relaxed);
+    // Every launcher but an interactive `aida agent new` (and every `--bg` or
+    // `--grant-inline no` one) stops here, before any grant or roster read,
+    // so its preflight is exactly the pre-STORY-2215 refusal path.
+    if !offer_enabled {
+        return Ok(());
+    }
     let grant_absent = matches!(
         crate::gate::seat_authority::grant_check(project_root),
         crate::gate::seat_authority::GrantCheck::Absent
@@ -3870,8 +3876,7 @@ fn offer_inline_parent_grant(project_root: &std::path::Path, seat: &str) -> Resu
         offer_enabled,
         grant_absent,
         // Read only when an offer is otherwise possible.
-        roster_allows: offer_enabled
-            && grant_absent
+        roster_allows: grant_absent
             && crate::gate::seat_authority::inline_parent_roster_allows(
                 project_root,
                 "advisor",
