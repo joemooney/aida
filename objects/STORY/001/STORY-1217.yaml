@@ -33,7 +33,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-18T18:29:27.417907915Z
-modified_at: 2026-10-10T20:35:17.686575903Z
+modified_at: 2026-11-01T06:31:58.840617878Z
 req_type: Story
 tags:
 - audit
@@ -337,6 +337,12 @@ comments:
   content: 'SKETCH UPDATE (awaiting advisor signoff): Updated sketch drafted at docs/plans/2026-10-04-story-1217-grant-mechanism-sketch.md. It incorporates the requested changes: holder keyed on per-session seat (STORY-1473), archive/reject dropped from v1 enum, never-grantable list updated, DAG verification atomic commit specified with require_signed knob reserved, and 5(c) stamping struck.'
   created_at: 2026-10-04T20:52:39.444549417Z
   modified_at: 2026-10-04T20:52:39.444549417Z
+- id: 01a195ce-c678-7753-bdf6-ce5d9491bd26
+  author: joe
+  content: 'Advisor regroup 2026-10-31: superseded by session-bound grants (STORY-1473), the TASK-1787 grant cap, aida mandate and aida deputy. No aida grant verb is needed.'
+  created_at: 2026-11-01T06:31:58.840617878Z
+  modified_at: 2026-11-01T06:31:58.840617878Z
+  session_id: a31b25d9-60a5-4347-a85b-4c74ab06f274
 deferred: true
 deferred_at: 2026-10-10T20:35:17.686575903Z
 deferred_until: when grant expiry or unattended-session authority becomes a real operational need (e.g. long-lived relays holding seats)
