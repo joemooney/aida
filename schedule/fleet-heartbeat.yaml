@@ -5,3 +5,5 @@ last_by:
   vendor: codex
 result: done
 note: '4 live moving implementers (2383/2398/2705/2401), 1 independent reviewer3194 and integrator08; train3203 nowMERGED3members.8 old relaystatuses inspected, linked2162/1981/2053 Completed, no duplicate restarts. Acted: fresh3194review, nextbatchassessment,2402incidentroute.3185friendlykey reconciliation review next after current reviewer scope frees;3193conflict rework queued. Human-only707/708 unchanged; next due heartbeat.'
+due_since: 2026-11-01T11:11:15.169545929Z
+due_reason: every 1h

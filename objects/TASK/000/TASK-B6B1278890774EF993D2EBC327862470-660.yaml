@@ -14,13 +14,19 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-01T10:03:18.988200380Z
-modified_at: 2026-11-01T10:03:18.988200380Z
+modified_at: 2026-11-01T11:11:26.409749139Z
 req_type: Task
 tags:
 - carried-from:BUG-B6B1278890774EF993D2EBC327862470-057
 - finding-hash:729e7a2f
 - from-review:PR-3177
 - kind:carried-forward
+comments:
+- id: 01a196ce-a0c9-7f62-b248-32dc37d3110f
+  author: joe
+  content: 'Disposition under operator one-ruling/no-followup-chain order: exact carried minor from completed BUG2374 review. Redundant reviewer fetch was explicitly accepted once as bounded20s/no observed failure; owning precedence/conflict fix independently reviewed and landed914b22f via3203. No new blocking evidence here, no newcode requested. Supersededby completedowningBUG2374; historicalfinding remainsqueryable.'
+  created_at: 2026-11-01T11:11:26.409749139Z
+  modified_at: 2026-11-01T11:11:26.409749139Z
 history:
 - id: 01a196b7-3289-7731-a37f-5195ed9cf692
   author: joe

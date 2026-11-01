@@ -5,3 +5,9 @@ last_by:
   session: f5694f22-ff09-4e87-8934-e79adca4efba
   vendor: claude
 result: done
+due_since: 2026-11-01T11:11:15.169545929Z
+due_reason: on CronJobFailed:watchdog
+due_failure:
+  trip_id: watchdog@2026-11-01T11:04:06.455114281Z
+  job: watchdog
+  error: 'exit 1: '
