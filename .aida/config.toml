@@ -65,6 +65,11 @@ retry_transient = 2
 # whatever is causing that before it multiplies throughput.
 pipeline_depth = 2
 
+# TASK-2633 (2026-10-31): headless lanes queued 5-7 deep and hit the default cap of 3
+# while lane time was mostly model time; not higher — 2 cargo slots shared with reviewers/dev builds.
+[queue]
+standalone_implementer_cap = 4
+
 # TASK-1289: names resolve to the command bodies in ci.yml, so local preflight
 # cannot silently drift from CI when a guard command changes.
 [preflight]

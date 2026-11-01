@@ -166,3 +166,79 @@ fn a_removed_line_at_a_non_canonical_old_path_refuses() {
     assert!(err.contains("outside a canonical object path"), "{err}");
     assert!(err.contains("objects/BUG/BUG-1-040.yaml"), "{err}");
 }
+
+/// BUG-056 (review finding 2): a spec named by its `agreed_id` has its object
+/// at the canonical `spec_id` path, which only the alias chain puts in the
+/// collection's evidence scope — so a concurrent write to that object is a
+/// change, not stable (fail closed), while a write to another spec is stable.
+/// A store that did not load is judged by the strict rule.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-056 | ai:claude
+#[test]
+fn bug_056_an_agreed_id_named_spec_scopes_its_canonical_object() {
+    use crate::gate::mandate_traces::{store_snapshot, store_snapshot_stable, EvidenceScope};
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    git(root, &["init", "-q"]);
+    write(root, "BUG-1-040", Some("BUG-26"));
+    write(root, "BUG-1-051", None);
+    git(root, &["add", "-A"]);
+    git(root, &["commit", "-qm", "v1"]);
+    let body = std::fs::read_to_string(object(root, "BUG-1-040")).unwrap();
+    let mut store = aida_core::RequirementsStore::default();
+    store
+        .requirements
+        .push(serde_yaml::from_str(&body).unwrap());
+
+    let specs = resolve_exclusion_specs(
+        Some(&store),
+        root,
+        &["BUG-26".to_string()],
+        Default::default(),
+    );
+    let [spec] = &specs[..] else {
+        panic!("{specs:?}")
+    };
+    assert_eq!(spec.id, "BUG-26");
+    assert_eq!(spec.aliases, vec!["BUG-1-040".to_string()]);
+    let scope = collection_evidence_scope(true, &specs);
+    assert_ne!(scope, EvidenceScope::strict());
+    assert_eq!(
+        collection_evidence_scope(false, &specs),
+        EvidenceScope::strict(),
+        "an unloaded store has no known scope"
+    );
+
+    // A write to another spec is stable under the collection's scope.
+    let before = store_snapshot(root).unwrap();
+    let mut req: aida_core::Requirement =
+        serde_yaml::from_str(&std::fs::read_to_string(object(root, "BUG-1-051")).unwrap()).unwrap();
+    req.tags.insert("other".into());
+    std::fs::write(
+        object(root, "BUG-1-051"),
+        serde_yaml::to_string(&req).unwrap(),
+    )
+    .unwrap();
+    git(root, &["commit", "-qam", "unrelated"]);
+    let after = store_snapshot(root).unwrap();
+    assert!(store_snapshot_stable(root, &before, &after, &scope));
+
+    // A write to the named spec's canonical object is a change.
+    let before = after;
+    let mut req: aida_core::Requirement = serde_yaml::from_str(&body).unwrap();
+    req.tags.insert("security".into());
+    std::fs::write(
+        object(root, "BUG-1-040"),
+        serde_yaml::to_string(&req).unwrap(),
+    )
+    .unwrap();
+    git(root, &["commit", "-qam", "tag"]);
+    let after = store_snapshot(root).unwrap();
+    assert!(
+        !store_snapshot_stable(root, &before, &after, &scope),
+        "the alias puts the canonical object in scope"
+    );
+    assert!(
+        store_snapshot_stable(root, &before, &after, &EvidenceScope::of_ids(["BUG-26"])),
+        "without the alias the write would have counted as stable"
+    );
+}
