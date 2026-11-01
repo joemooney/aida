@@ -27,7 +27,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T23:03:29.192827531Z
-modified_at: 2026-11-01T07:25:27.232904555Z
+modified_at: 2026-11-01T07:36:14.576351142Z
 req_type: Story
 tags:
 - docs
@@ -113,6 +113,11 @@ comments:
   modified_at: 2026-11-01T06:59:51.414123406Z
   session_id: 01a195d2e490
   harness_version: 2.1.316 (Claude Code)
+- id: 01a19609-9b6d-78a1-b678-f2963a9b7bdc
+  author: joe
+  content: 'Advisor ruling: ADVISOR REWORK BRIEF: docs_sweep.rs128 error text resembles a hand-built TOML assignment and trips portability. Reword the diagnostic so it cannot be mistaken for TOML, preserving invalid-mode detail; run scripts/check-portability.sh without a broad allowlist exception. check_staged at1668-1694 currently admits max_files source edits PLUS max_files derived copies. Count all staged source/mirror files against the single configured cap, preserve no-partial-commit/refusal behavior and report excess. Extend regenerate boundary integration fixture to prove combined staged count never exceeds max_files; reserve room for known mirrors or refuse/replan safely. Bundle both now on the same PR, no follow-up. LIGHT: one targeted docs_sweep filter plus make check-ci-fast; long cargo uses AIDA_CARGO_TIMEOUT and tool background mode; if denied/unavailable report once, no repeated short compiles. Preserve trusted config/commands, credential routing, docs-only boundary, one-PR reuse/dedup, report-only default and existing security rulings. Push and stop for independent delta review.'
+  created_at: 2026-11-01T07:36:14.445162100Z
+  modified_at: 2026-11-01T07:36:14.445162100Z
 history:
 - id: 01a19517-853a-7dc1-addd-62b1b73de3be
   author: joe
