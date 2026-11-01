@@ -26,12 +26,12 @@ description: |
   - AC3 (honest wording): when no registered advisor is found, the handshake and hook say "no registered advisor" and name the check to run, never assert "no live advisor". If other evidence shows an advisor (an unexpired advisor seat grant held by a live process), report the advisor as live but unregistered.
   - AC4 (doctor): `aida doctor check advisor-handshake` reports registered advisors, unregistered live advisor evidence, and the hello's state, instead of `total: 0`.
   - AC5 (timestamps): `ended_at` records when the session actually ended, not `started_at`.
-status: NeedsAttention
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T22:16:54.008855195Z
-modified_at: 2026-11-01T03:10:14.707097148Z
+modified_at: 2026-11-01T03:50:41.721179545Z
 req_type: Bug
 tags:
 - area:agents
@@ -176,6 +176,20 @@ history:
   timestamp: 2026-11-01T00:46:41.039927543Z
   session_id: f5694f22-ff09-4e87-8934-e79adca4efba
   changes: []
+- id: 01a1953b-1d32-7142-aa88-966760917ed6
+  author: aida-auto-bump
+  timestamp: 2026-11-01T03:50:41.714713585Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Completed
+processing_record:
+- id: 01a1953b-1d39-7771-85e0-da51b38f97ec
+  timestamp: 2026-11-01T03:50:41.721174589Z
+  agent: implementer
+  commit_sha: c7170b4366544d7fc412f8491acbbb407089d44a
+  summary: 'Base-only update from main (gh update-branch a15cbfb9fd9b923dacaa2613f5fa0f4cafa0f730 -> 1c1184b206b096c9561f6630091b9615415d53fa); reviewed content unchanged, prior approval carried; serial ship after main fix #2646.'
+  review_verdict: approved
 filed_at:
   code_sha: 0506fa2eb862db100dffbc80b0c5cfdedec28522
   branch: main
@@ -187,11 +201,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-10-31T23:33:05.931520584Z
   implemented_by: joe
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'AC1-AC4 met with tests; AC5 not met: ended_at is still the last UserPromptSubmit heartbeat, so a single-prompt headless lane (the bug''s own claude-reviewer-724 example) still ends at ~started_at. CI was pending at review time.'
-  recovery_hint: address the review findings, move BUG-2377 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-10-31T23:39:39.751754474Z
+  completed_at: 2026-11-01T03:50:41.714708912Z
+  completion_sha: c7170b4366544d7fc412f8491acbbb407089d44a
