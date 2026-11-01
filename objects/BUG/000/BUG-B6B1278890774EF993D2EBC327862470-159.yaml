@@ -1,0 +1,40 @@
+id: 01a195d9-336e-7223-b445-3e72671493bc
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-159
+agreed_id: BUG-2385
+title: aida session new, session start --launch, and bare agent new hardcode claude instead of [agents] vendor
+description: |-
+  Why
+  ───
+  Discovered by SPIKE-710 audit. Even when `.aida/config.toml` sets `[agents] vendor = "codex"`, several interactive launch entry points hardcode `"claude"` and `exec claude`:
+
+  • `aida-cli-lib/src/agent_launch.rs:52-92` & `aida-cli-lib/src/session.rs:861-934` (`aida session new`): passes `"claude"` to `gate_agent_bypass`, prints `session new ... → claude`, and calls `run_claude_session`.
+  • `aida-cli-lib/src/agent_launch.rs:115-165` & `aida-cli-lib/src/session_start.rs:3388-3468` (`aida session start <ID> --launch`): passes `"claude"` to `gate_agent_bypass`, prints `launching claude in <worktree>`, and delegates to `session::new_session` (`run_claude_session`).
+  • `aida-cli-lib/src/agent_launch.rs:851-857, 1018-1062` & `aida-cli-lib/src/agent_launch_args.rs:889-892` (bare `aida agent new` without a tool subcommand): prints clap help in non-TTY mode or opens an interactive picker defaulting to `"Claude"` (`853`) instead of resolving `[agents] vendor`, and rejects `--role` / `--spec` unless the tool subcommand is named.
+
+  On a Codex-only Linux machine (no `claude` binary on PATH), `aida session new` and `aida session start --launch` fail outright.
+
+  Acceptance
+  ──────────
+  1. `aida session new` and `aida session start <ID> --launch` resolve `[agents] vendor` (via `resolve_default_vendor`) and launch `codex` with the resolved posture when `vendor = "codex"`.
+  2. Bare `aida agent new` (including with `--role` / `--spec`) defaults to `[agents] vendor` when configured instead of requiring the vendor subcommand or defaulting the picker to Claude.
+  3. Unit/CLI tests cover `vendor = "codex"` and `vendor = "claude"` for `session new`, `session start --launch`, and `agent new`.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-01T06:43:22.094949183Z
+modified_at: 2026-11-01T06:43:22.094949183Z
+req_type: Bug
+tags:
+- audit
+- launch
+- session
+- vendor:codex
+filed_at:
+  code_sha: 6dc7d4977ac5e47c42ddfb26597fe3ec5fb70b60
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 962ca07af25
+  vendor: antigravity
+  session: 01a194b1bcfb
