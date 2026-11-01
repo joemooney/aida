@@ -31,7 +31,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T22:16:54.008855195Z
-modified_at: 2026-10-31T23:40:53.406473719Z
+modified_at: 2026-11-01T00:42:04.738196617Z
 req_type: Bug
 tags:
 - area:agents
@@ -85,6 +85,13 @@ comments:
   created_at: 2026-10-31T23:40:53.406473719Z
   modified_at: 2026-10-31T23:40:53.406473719Z
   session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+- id: 01a1948e-6e42-7a81-bc6f-dbdd442eac08
+  author: joe
+  content: 'Root-cause confidence (review round 2, finding 3): AC1 names SessionStart registry-write lock contention (the 250ms lock_namespace budget, fail-open) as the cause of the 9b4a9d0a advisor having no registry row. That is the MOST LIKELY cause, not a confirmed one: the test reproduces the mechanism, but no log or artifact ties it to that incident. With per-prompt heartbeats (re-registration) and launcher-recorded headless ends now in place, a recurrence of a live seat reported as having no registered advisor must be re-triaged as a NEW cause, not closed as this bug.'
+  created_at: 2026-11-01T00:42:04.738196617Z
+  modified_at: 2026-11-01T00:42:04.738196617Z
+  session_id: 01a194888fca
+  harness_version: 2.1.316 (Claude Code)
 history:
 - id: 01a1940f-8def-7313-80d3-270615a3923f
   author: joe
