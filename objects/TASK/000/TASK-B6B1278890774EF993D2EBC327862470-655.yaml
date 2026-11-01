@@ -11,7 +11,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T09:05:27.409838422Z
-modified_at: 2026-11-01T12:14:52.503291844Z
+modified_at: 2026-11-01T12:29:21.397596456Z
 req_type: Task
 tags:
 - architecture
@@ -66,6 +66,11 @@ comments:
   content: 'Rework checkpoint: public diagnostic commit 31b1d364d73a7c274921c950cab6541c22e2a703 is on the same PR #3205 branch after cleanly merging actual origin/main 471540a. It adds bounded, redacted FD type/F_GETFD/F_GETFL metadata at Python startup and on the unchanged standard-FD assertion, and uses seat_authority::GRANT_ENV for the synthetic selector. B1 is still unresolved; no host-socket exploit or backend readiness claim. Failed CI 41297289880 ran Ubuntu 26.04 bwrap 0.11.1-1ubuntu0.3; host is 0.9.0/Python3.12. Direct fixed-lane reproductions with extracted exact CI bwrap package and Python3.14.4 pass, including info-fd, so no platform cause is established yet. Local normal-slot help regeneration and actual make check-ci-compile are running in /tmp/aida-task2705-rework; full help/format audit correction is in progress. All 12 original source files were verified byte-identical to public c9f713903db9 before using the authorized normal-origin publication clone. No own-review, ship, merge or authority change.'
   created_at: 2026-11-01T12:14:52.503283625Z
   modified_at: 2026-11-01T12:14:52.503283625Z
+- id: 01a19715-f675-7930-b3a2-b96697b809d1
+  author: mcp
+  content: 'B1 root-cause evidence now reproduced without FD payload access: diagnostic CI 41305313299 / lib-0 job124844394775 reports Python3.14.4 FD3 regular/read-only FD_CLOEXEC (F_GETFD=1,F_GETFL=32768) at startup and failure. With extracted Ubuntu bwrap0.11.1-1ubuntu0.3 + Python3.14.4 + libffi3.5.2-4, a private /tmp reproduction identifies that FD as the system libffi shared library opened by `import ctypes` for static trampolines; same failure under bwrap0.9.0. This is post-exec library allocation, not evidence of inherited host socket access. Production fixed lane now loads ctypes only in its existing forked nested-userns worker, where FFI is actually used: no descriptor is sanitized/closed inside the lane and no channel/type is waived. Original lane/reaper assertions remain; new entry assertion plus non-CLOEXEC synthetic regular-file/directory controls join the original socket control at the actual outer bwrap exec boundary. Direct static-trampoline reproduction then passes both bwrap versions (66 checks). Required local task_2705_ command with both live envs is queued behind the once-invoked actual make check-ci-compile. Full help regeneration passed and is public in5b49cba0; real binary audit generation/test and touched/fast gates still pending. No final acceptance claim.'
+  created_at: 2026-11-01T12:29:21.397587567Z
+  modified_at: 2026-11-01T12:29:21.397587567Z
 history:
 - id: 01a1965b-7cae-7260-83dd-5767f6772d90
   author: joe
