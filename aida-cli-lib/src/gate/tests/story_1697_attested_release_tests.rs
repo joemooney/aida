@@ -36,6 +36,7 @@ fn mandate(include_supervised: bool) -> Mandate {
         revoked_by: None,
         scopes: Default::default(),
         kind: None,
+        renewals: Vec::new(),
     }
 }
 
