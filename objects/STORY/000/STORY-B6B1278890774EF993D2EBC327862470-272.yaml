@@ -29,12 +29,12 @@ description: |-
 
   ## Out of scope
   Goals for other seats; a scope flag before EPIC-74; anything that reorders the queue.
-status: InProgress
+status: Done
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T03:24:07.798418309Z
-modified_at: 2026-11-01T04:48:34.282795268Z
+modified_at: 2026-11-01T06:05:12.077516587Z
 req_type: Story
 tags:
 - advisor
@@ -110,6 +110,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a195b6-4271-77d0-b7a3-3f5a685dceee
+  author: joe
+  timestamp: 2026-11-01T06:05:12.177114960Z
+  session_id: 01a1956ccb82
+  harness_version: 2.1.316 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 filed_at:
   code_sha: 7518617e469376bbe5debebd7cadd980e08656e5
   branch: main
@@ -117,3 +126,7 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: 7518617e469
   vendor: claude
+implementation_info:
+  implemented: true
+  implemented_at: 2026-11-01T06:05:12.077516587Z
+  implemented_by: joe
