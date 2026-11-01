@@ -6,12 +6,12 @@ description: |-
   Acceptance: (1) Common data-driven vendor capability/trusted-policy/launch-boundary contract and a closed model-free doctor/config probe, with precise ready/unsupported/refused cause. No arbitrary harness or stored shell through partial backend. (2) Same intended production filesystem/supervisor builder executes fixed synthetic lane with private namespaces/proc, capdrop, terminal-injection refusal, FD hygiene, typed own-write roots/protected paths and teardown. (3) Required-live fixture proves permitted synthetic writes, denied outside/proc/FD/protected-path writes and process teardown; unavailable bwrap/userns/TTY/channel fails closed. (4) Current real-vendor behavior unchanged and unsupported partial backend remains unselectable. Layers: trusted config/capability data, public diagnostics, runtime supervisor/filesystem, integration tests. Signed sliceA.
 
   All signed STORY2238 sketch C1-C12 and BUG2398 B1-B4 apply. Linux only, fakeHOME/synthetic tests, no global user settings or schedules. No partial backend may report AIDA containment applied or launch ordinary agents until all required protections are ready; named refusal, no fallback. STRICT independent review, operator merge floor. LIGHT one targeted test plus fast gates; shared infra or >10files adds touched-test/compile, fullsuiteCI only. Longcargo background, no slotbypass. Parent all7AC remain open until final installed-tool evidence; no slice alone completes parent.
-status: NeedsAttention
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T09:05:27.409838422Z
-modified_at: 2026-11-01T14:57:10.577958414Z
+modified_at: 2026-11-01T14:57:12.740952638Z
 req_type: Task
 tags:
 - architecture
@@ -108,6 +108,11 @@ comments:
     LocalLIGHT ONEtargetedfixture/filter withrequiredliveflags+make check-ci-fast, ordinaryslots/AIDA_CARGO_TIMEOUT=10m longbackground; actualtouched/compileonlyifadditionalsharedinfra/>10files. Earlier17filedeltaactualchecksretained withtimestamp limitations; don'trerunwholesuite/unfilteredlib/slotbypass/outertimeout/repeatedshortbuild. TheCIrunnerA/B isessentialnewmeasuredgate, notalocalbroadsuite. PushsamePRandreportactualfullhead/CIrunlogs/artifacts/unresolvedgates /tmp/aida-TASK2705-ci-precondition-result.md. FreshindependentSTRICTdelta review parallelCI, noownapproval/ship/merge/manualhold/authorityrelaxation.
   created_at: 2026-11-01T14:57:10.462987701Z
   modified_at: 2026-11-01T14:57:10.462987701Z
+- id: 01a1979d-5424-7903-9047-6dbc8c0fdf0c
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Typed stdout B2 fixed; required nested-userns positive control fails EPERM on exact-head CI, so slice AC3 remains unaccepted.. Triage reason: Independent review16 retains required nested-positive gate; reviewed HOST diagnostic passes. Obtain finite same-CI-runner A/B and original strict fixture without waiver, same PR3205.'
+  created_at: 2026-11-01T14:57:12.740950932Z
+  modified_at: 2026-11-01T14:57:12.740950932Z
 history:
 - id: 01a1965b-7cae-7260-83dd-5767f6772d90
   author: joe
@@ -156,6 +161,13 @@ history:
   author: joe
   timestamp: 2026-11-01T13:03:55.707720879Z
   changes: []
+- id: 01a1979d-5424-7903-9047-6da311547ffa
+  author: joe
+  timestamp: 2026-11-01T14:57:12.740934344Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: 4ce0af750fcb68d4adf57496e4e002aefd8ace77
   branch: main
@@ -163,11 +175,3 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: 4ce0af750fc
   vendor: codex
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: Typed stdout B2 fixed; required nested-userns positive control fails EPERM on exact-head CI, so slice AC3 remains unaccepted.
-  recovery_hint: address the review findings, move TASK-B6B1278890774EF993D2EBC327862470-655 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-01T13:03:55.622896193Z
