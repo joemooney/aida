@@ -18,12 +18,22 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-01T12:33:50.987786326Z
-modified_at: 2026-11-01T12:33:50.987786326Z
+modified_at: 2026-11-01T12:34:19.325938437Z
 req_type: Bug
 tags:
 - forge
 - queue
 - review
+relationships:
+- rel_type: BlockedBy
+  target_id: 01a19639-d547-7300-9a70-befaedad7e96
+  created_at: 2026-11-01T12:34:19.325934751Z
+  created_by: joe
+history:
+- id: 01a1971a-87d1-7701-a3aa-f40a198b947d
+  author: joe
+  timestamp: 2026-11-01T12:34:20.753539867Z
+  changes: []
 filed_at:
   code_sha: 471540a8c477a50a81170f338d81532cb5dbd329
   branch: main
