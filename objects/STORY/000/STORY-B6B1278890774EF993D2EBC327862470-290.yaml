@@ -10,12 +10,12 @@ description: |
   - Read retained focused4PASS, fast36PASS, tracked portability/pinned allowlist checks and actual exact-head CI. No redundant Cargo rerun for this evidence review; CI owns full gate.
   - Record own normal independent APPROVE or REQUEST CHANGES with full SHA/branch and actual full findings. Supported normal writer refusal remains binding; no identity substitution, parent context or raw ledger edits. Read back own canonical/PR and friendly verdicts/attestations and public review comment if successful. Source recommendation without receipt is not review completion.
   - No source edits, merge/ship, hold clearance or implementation-spec completion. This review work item is Completed only when review deliverable has valid own normal receipts and findings are handed off; merge/implementation completion remains independently gated on the owning bug.
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T18:37:17.579510150Z
-modified_at: 2026-11-01T18:59:38.369013909Z
+modified_at: 2026-11-01T18:59:39.595611781Z
 req_type: Story
 tags:
 - review
@@ -36,6 +36,13 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1987b-4bcb-7d61-a929-f4d614fe31c7
+  author: joe
+  timestamp: 2026-11-01T18:59:39.595609988Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 6a3f67671a974703590efde5ae2a323f3f7471fa
   branch: main
