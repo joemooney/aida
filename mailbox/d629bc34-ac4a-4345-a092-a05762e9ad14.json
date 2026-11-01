@@ -1,0 +1,19 @@
+{
+  "id": "d629bc34-ac4a-4345-a092-a05762e9ad14",
+  "thread_id": "d629bc34-ac4a-4345-a092-a05762e9ad14",
+  "from": "claude-product-02",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1793494802969,
+  "body": "Operator decision on TASK-2631 (recorded on the spec): Claude stays fully AIDA-contained; Codex runs its native workspace-write sandbox by explicit per-vendor opt-in, `[contained.vendors] codex = \"native\"`, reported everywhere as \"native, not AIDA-contained\", until STORY-2238 lands. AC2 is replaced; see the latest comment. It stays within BUG-2144's ruling: explicit, not silent.\n\nRequest: promote TASK-2631 to approved ahead of the other drafts. The operator wants a Codex implementer to build it and is launching one now (outside `aida agent new`, since this bug blocks that path). Strict review, please: it touches launch posture.\n",
+  "subject": "Promote TASK-2631 now: operator decision recorded, Codex implementer launching",
+  "urgent": true,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "product"
+}
