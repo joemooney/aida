@@ -1153,7 +1153,10 @@ fn awaiting_you_drops_a_file_the_ledger_supersedes() {
     ledger_holds(&root, ChangeKey::pr(46), record("approved", &ts(-60), None));
     // Written after the ledger record (later mtime), but an older round.
     file_holds(&root, "PR-46", &record("request-changes", &ts(-3600), None));
-    assert!(human_approved(&root));
+    assert!(
+        !human_approved(&root),
+        "ledger parsing alone is not positive authority"
+    );
 
     file_holds(&root, "PR-46", &record("request-changes", &ts(0), None));
     assert!(!human_approved(&root));

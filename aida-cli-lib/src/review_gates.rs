@@ -504,7 +504,12 @@ pub(crate) fn reviewer_row_actionability(
             head.as_deref(),
             ancestry,
         );
-        match crate::gate::review_verdict::review_actionability(verdict.as_ref(), relation) {
+        match crate::gate::review_verdict::review_actionability(
+            project_root,
+            spec_id,
+            verdict.as_ref(),
+            relation,
+        ) {
             crate::gate::review_verdict::ReviewActionability::NeedsReview => {
                 return crate::gate::review_verdict::ReviewActionability::NeedsReview;
             }

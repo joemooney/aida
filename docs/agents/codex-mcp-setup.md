@@ -436,8 +436,19 @@ The targeted `bug_2398` Rust fixture uses temporary Codex config and real
 remains operator-run: launch an implementer with `aida agent new codex` from a
 role terminal under `inherit = "core"`, ask it to run `aida role current`, an
 own-spec comment, and an advisor-only operation (which must refuse). Repeat
-review recording in a separately granted reviewer session, then without a
-grant (which must refuse). Keep the real user's config unchanged.
+review recording in a separately granted independent reviewer session. A named
+agent without a grant may still record a compatibility artifact; that artifact
+must fail standalone collection, dispatch approval success (including
+`--no-ship`), reviewed/resolved classification, ship authority and automatic
+hold release. A presented invalid grant must refuse recording. Protective
+request-changes/rejected artifacts keep their existing effect. Keep the real
+user's config unchanged.
+
+The native host fixture is a completion gate, separate from the full-access
+proxy and the operator-run model check. A nested launch previously failed with
+`error building bubblewrap command: app-server socket directory must be a user-owned directory with mode 0700`
+under the Cargo fixture's `/dev/shm/cargo-tmp-*` environment. Preserve that exact
+cause and environment when reproducing it. A proxy pass does not waive a native failure.
 
 `AIDA_ROLE_INSTANCE` is also transported, restricted to `driver` or `companion`,
 so companion tool shells retain their existing restrictions. Overrides are

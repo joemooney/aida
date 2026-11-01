@@ -136,6 +136,9 @@ fn sandbox_args(child: &Command) -> Result<Vec<std::ffi::OsString>> {
     while i < args.len() {
         let arg = args[i].to_string_lossy();
         match arg.as_ref() {
+            // The target tool argv (or positional prompt after --) is not
+            // Codex configuration, even if it contains a shell's -c flag.
+            "--" => break,
             "-c" | "--config" | "-p" | "--profile" | "-P" | "--permission-profile" | "-C" | "--cd" | "--enable" | "--disable" => {
                 anyhow::ensure!(i + 1 < args.len(), "incomplete Codex configuration option");
                 out.extend([args[i].to_owned(), args[i + 1].to_owned()]);

@@ -111,6 +111,7 @@ pub enum RoleCommand {
         // trace:BUG-2398 | ai:codex
         #[clap(long, requires = "expect")]
         probe_seat: bool,
+        /// Seat the delegated child grant must hold.
         #[clap(long, requires = "probe_seat")]
         expect: Option<String>,
         /// Require the launch's driver/companion restriction to survive.

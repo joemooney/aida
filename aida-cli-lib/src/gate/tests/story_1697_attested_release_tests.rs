@@ -547,3 +547,93 @@ fn a_failed_mandate_covered_release_is_ledgered_as_refused() {
     assert!(format!("{:#}", result.unwrap_err()).contains("gh down"));
     assert!(held, "a failed release keeps the hold");
 }
+
+/// The automatic release seam receives byte-for-byte output of the supported
+/// absent-grant recorder, with real durable authority lookup and no forged map.
+// trace:BUG-2398 | ai:codex
+#[test]
+fn bug_2398_actual_ungranted_record_keeps_auto_release_marker_and_labels() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    let _ambient = crate::test_env::AmbientGuard::hermetic_and(
+        root,
+        None,
+        &[
+            ("AIDA_AGENT_NAME", Some("codex-reviewer-fixture")),
+            ("AIDA_AGENT_TYPE", Some("codex")),
+            ("AIDA_SESSION_ID", Some("independent-2398")),
+            ("AIDA_ROLE_INSTANCE", Some("driver")),
+            ("AIDA_REVIEW_VERDICT_FILE", None),
+        ],
+    );
+    let head = crate::test_git::commit_fixture(root);
+    crate::handle_review_record_at(
+        root.to_path_buf(),
+        "TASK-37",
+        "approved",
+        Some(&head),
+        Some("main"),
+        Some("named ungranted compatibility output"),
+        &[],
+        &[],
+        None,
+    )
+    .unwrap();
+    let body = rv::current_verdict(root, "TASK-37").unwrap().body;
+    let obj: Value = serde_json::from_str(&body).unwrap();
+    assert!(obj.get("release_grant").is_none());
+    let v = rv::parse_recorded_verdict(&body).unwrap();
+    let policy = crate::gate::approval::ship_approval_policy(
+        root,
+        &["TASK-37".into()],
+        Some("main"),
+        std::slice::from_ref(&v),
+    );
+    let mut hold = mh::typed_hold(PR, HoldReasonKind::Rework, "findings", Some(head.clone()));
+    hold.spec = Some("TASK-37".into());
+    hold.verdict_ref = Some(mh::VerdictRef::new(
+        "TASK-37",
+        Some(PR),
+        Some(head.clone()),
+        Some("reviewer".into()),
+    ));
+    mh::place_hold(root, &hold).unwrap();
+    let mut req = aida_core::Requirement::new("Improve a list".into(), "fixture".into());
+    req.spec_id = Some("TASK-37".into());
+    req.req_type = aida_core::RequirementType::Task;
+    req.execution_mode = Some(aida_core::ExecutionMode::Drive);
+    let mut store = aida_core::RequirementsStore::default();
+    store.requirements.push(req);
+    let result = auto_release_with(
+        root,
+        &hold,
+        AutoReleaseIo {
+            live_head: &|| {
+                Ok(Some(mh::PinnedChange {
+                    merged: false,
+                    state: mh::ChangeState::Open,
+                    head_sha: Some(head.clone()),
+                    hold_label: true,
+                    recorded_label: true,
+                    cleared_label: false,
+                }))
+            },
+            read_hold: &|| mh::read_hold_record(root, PR),
+            covered_specs: &|| Ok((vec!["TASK-37".into()], store.clone())),
+            read_body: &|_| Ok(obj.clone()),
+            read_history: &|_| Ok(RetainedHistory::default()),
+            read_corpus: &|_| Ok(vec![("TASK-37".into(), body.clone())]),
+            grant_check: &|id, subject| sa::grant_check_for(root, id, subject),
+            approval_authority: &|live| {
+                approval_attested(std::slice::from_ref(&v), &policy, live, PR)
+            },
+            mandate: &|| panic!("ungranted artifact reached mandate"),
+            refusal_release: &|_, _| held_check(),
+            comment: &|_| panic!("ungranted artifact posted clearance"),
+            labels: &|| panic!("ungranted artifact removed hold labels"),
+        },
+    );
+    assert!(result.is_err());
+    assert!(mh::hold_is_open(root, PR));
+    assert!(mh::recorded_clearance(root, PR).is_none());
+}

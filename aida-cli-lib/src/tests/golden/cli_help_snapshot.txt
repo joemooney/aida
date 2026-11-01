@@ -13011,6 +13011,15 @@ Options:
       --check
           Exit 1 (instead of 0) when no role is active
 
+      --probe-seat
+          Validate a delegated seat without printing selectors or secrets
+
+      --expect <EXPECT>
+          Seat the delegated child grant must hold
+
+      --expect-role-instance <EXPECT_ROLE_INSTANCE>
+          Require the launch's driver/companion restriction to survive
+
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
           compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
@@ -42214,6 +42223,16 @@ Working on aida itself
         "help": "Exit 1 (instead of 0) when no role is active"
       },
       {
+        "name": "expect",
+        "takes_value": true,
+        "help": "Seat the delegated child grant must hold"
+      },
+      {
+        "name": "expect-role-instance",
+        "takes_value": true,
+        "help": "Require the launch's driver/companion restriction to survive"
+      },
+      {
         "name": "format",
         "takes_value": true,
         "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
@@ -42222,6 +42241,11 @@ Working on aida itself
         "name": "help",
         "takes_value": false,
         "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "probe-seat",
+        "takes_value": false,
+        "help": "Validate a delegated seat without printing selectors or secrets"
       }
     ],
     "hidden": false

@@ -2781,12 +2781,33 @@ impl ReviewActionability {
 /// answer: absent evidence is never read as good evidence.
 // trace:BUG-1508 | ai:claude
 pub fn review_actionability(
+    project_root: &Path,
+    key: &str,
     verdict: Option<&RecordedVerdict>,
     relation: TipRelation,
 ) -> ReviewActionability {
     let Some(v) = verdict else {
         return ReviewActionability::NeedsReview;
     };
+    // Closure and parsed approval labels cannot confer review authority.
+    // Keep closed refusal lifecycle handling below, without laundering an
+    // unattested approval through that shortcut.
+    // trace:BUG-2398 | ai:codex
+    if !v.kind.blocks_done() {
+        // For a completed approval, validate the original review independently
+        // of its lifecycle close. The close itself supplies no authority.
+        let mut approval = v.clone();
+        approval.closed_by_merge = None;
+        approval.closed_at = None;
+        if !crate::gate::approval::independent_approval_authorized(
+            project_root,
+            &[key.to_string()],
+            v.reviewed_branch.as_deref(),
+            &approval,
+        ) {
+            return ReviewActionability::NeedsReview;
+        }
+    }
     // BUG-1529: a refusal that was closed out by a merge is not something the
     // reviewer role still owes rework on — the branch that would have
     // answered it already shipped. Checked ahead of the sha relation so a

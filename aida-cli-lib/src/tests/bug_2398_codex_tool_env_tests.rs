@@ -72,7 +72,33 @@ fn bug_2398_only_explicit_child_selector_and_sandbox_options() {
         sandbox_args(&cmd).unwrap(),
         ["sandbox", "-P", ":workspace", "--include-managed-config"]
     );
+    let mut sandbox = Command::new("codex");
+    sandbox.args([
+        "sandbox",
+        "-P",
+        ":workspace",
+        "--",
+        "sh",
+        "-c",
+        "target shell script",
+    ]);
+    assert_eq!(
+        sandbox_args(&sandbox).unwrap(),
+        ["sandbox", "-P", ":workspace", "--include-managed-config"]
+    );
     // Pure argv builders for other vendors retain their prior behavior.
+    assert_eq!(
+        crate::session::headless_vendor_args(
+            crate::session::HeadlessVendor::Agy,
+            "fixture",
+            "session",
+            false,
+            None,
+            None
+        )
+        .unwrap(),
+        crate::session::agy_headless_args("fixture")
+    );
     let claude =
         crate::session::claude_session_args(None, None, Some("hello"), None, false, None).unwrap();
     assert!(!claude.join(" ").contains("shell_environment_policy"));
@@ -118,9 +144,32 @@ fn run_codex_sandbox(
     } else {
         cmd.args(["-c", "sandbox_mode=\"danger-full-access\""]);
     }
-    cmd.args(codex_tool_env_overrides(child).unwrap())
-        .arg("--")
-        .args(argv);
+    cmd.arg("--").args(argv);
+    // Exercise the actual finalizer, including requested-seat preflight.
+    if child
+        .get_envs()
+        .any(|(key, value)| key == "BUG2398_INVALID_RECORDER_PROBE" && value.is_some())
+    {
+        let overrides = codex_tool_env_overrides(child).unwrap();
+        let original: Vec<_> = cmd.get_args().map(|arg| arg.to_owned()).collect();
+        let mut raw = Command::new(cmd.get_program());
+        raw.current_dir(root)
+            .env("CODEX_HOME", home)
+            .args(overrides)
+            .args(original);
+        for (key, value) in cmd.get_envs() {
+            match value {
+                Some(value) => {
+                    raw.env(key, value);
+                }
+                None => {
+                    raw.env_remove(key);
+                }
+            }
+        }
+        return output(&mut raw);
+    }
+    prepare_launch(&mut cmd).unwrap();
     output(&mut cmd)
 }
 
@@ -145,7 +194,7 @@ fn real_codex_roles(native: bool) {
         eprintln!("SKIP: codex is not installed");
         return;
     }
-    let _env = crate::test_env::EnvVarsGuard::apply(&[("AIDA_USER", Some("bug2398-parent"))]);
+    let mut env = crate::test_env::EnvVarsGuard::apply(&[("AIDA_USER", Some("bug2398-parent"))]);
     let tmp = tempfile::tempdir().unwrap();
     let root = tmp.path();
     let config = root.join("codex-config");
@@ -186,7 +235,21 @@ fn real_codex_roles(native: bool) {
         .env("AIDA_AGENT_NAME", "codex-implementer-fixture")
         .env("AIDA_AGENT_REGISTRY_TOKEN", "fixture-excluded-bearer")
         .env("UNRELATED_PARENT", "fixture-excluded-value");
-    let aida = crate::session::resolve_agent_program("aida");
+    // The fixture must exercise this implementation's probe, never an older
+    // installed CLI that lacks --probe-seat. CI builds the sibling binary.
+    let aida_path = std::env::current_exe()
+        .unwrap()
+        .parent()
+        .unwrap()
+        .parent()
+        .unwrap()
+        .join("aida");
+    assert!(
+        aida_path.is_file(),
+        "build the current CLI before running the real-tool fixture"
+    );
+    let _aida_probe = crate::kernel::test_aida_exe::set(aida_path.clone());
+    let aida = aida_path.to_string_lossy().into_owned();
     let out = sandbox(
         &config,
         root,
@@ -269,7 +332,12 @@ fn real_codex_roles(native: bool) {
         "granted reviewer: {}",
         String::from_utf8_lossy(&out.stdout)
     );
+    env.set_key("AIDA_USER", "bug2398-reviewer");
+    assert_recorded_authority_boundaries(root, &reviewer.id, true);
     authority::revoke_by_id(&reviewer.id).unwrap();
+    // Direct tool probes intentionally present invalid authority; a managed
+    // launch would already refuse it in preflight.
+    child.env("BUG2398_INVALID_RECORDER_PROBE", "1");
     let out = sandbox(
         &config,
         root,
@@ -277,7 +345,21 @@ fn real_codex_roles(native: bool) {
         &[&aida, "role", "current", "--check"],
     );
     assert!(!out.status.success(), "revoked reviewer must refuse");
-    child.env("AIDA_SESSION_GRANT", "");
+    // Presented invalid grants must refuse the recorder, not merely role display.
+    let out = sandbox(
+        &config,
+        root,
+        &child,
+        &[&aida, "review", "record", "TASK-1", "--verdict", "approved"],
+    );
+    assert!(
+        !out.status.success(),
+        "presented revoked grant must refuse recording"
+    );
+    child
+        .env("AIDA_SESSION_GRANT", "")
+        .env_remove("AIDA_SESSION_ROLE")
+        .env_remove("BUG2398_INVALID_RECORDER_PROBE");
     let out = sandbox(
         &config,
         root,
@@ -295,7 +377,12 @@ fn real_codex_roles(native: bool) {
         &child,
         &[&aida, "review", "record", "TASK-1", "--verdict", "approved"],
     );
-    assert!(!out.status.success(), "ungranted reviewer must refuse");
+    assert!(
+        out.status.success(),
+        "named absent-grant compatibility record: {}",
+        String::from_utf8_lossy(&out.stdout)
+    );
+    assert_recorded_authority_boundaries(root, &reviewer.id, false);
     assert_eq!(
         std::fs::read_to_string(config.join("config.toml")).unwrap(),
         contents
@@ -408,4 +495,271 @@ fn bug_2398_final_spawn_boundary_ratchet() {
         run.find("customize(&mut child_cmd)").unwrap()
             < run.find("crate::codex_tool_env::prepare_launch").unwrap()
     );
+}
+
+// Actual supported recorder output, copied byte-for-byte to the PR key.
+// No attestation or verified-authority map is fabricated by this matrix.
+// trace:BUG-2398 | ai:codex
+fn assert_recorded_authority_boundaries(root: &Path, child_grant: &str, authorized: bool) {
+    use crate::gate::{review_verdict as rv, ship};
+    let body = rv::current_verdict(root, "TASK-1").unwrap().body;
+    let v = rv::parse_recorded_verdict(&body).unwrap();
+    let head = v.reviewed_sha.as_deref().unwrap();
+    let pr_path = rv::verdict_path(root, "PR-2398");
+    std::fs::create_dir_all(pr_path.parent().unwrap()).unwrap();
+    std::fs::write(&pr_path, &body).unwrap();
+    let mut req = aida_core::Requirement::new("fixture".into(), "desc".into());
+    req.spec_id = Some("TASK-1".into());
+
+    // Prose must not restore the same positive claim via an alternate source.
+    req.comments.push(aida_core::Comment::new(
+        "reviewer".into(),
+        "Review: APPROVED".into(),
+    ));
+    assert_eq!(
+        crate::gate::dispatch_authority::verdict_at_head(root, 2398, head),
+        authorized.then_some(rv::VerdictKind::Approved)
+    );
+    assert_eq!(
+        crate::human::spec_review_approved_at_head(
+            root,
+            &req,
+            "TASK-1",
+            2398,
+            Some(head),
+            Some("main")
+        ),
+        authorized
+    );
+    assert_eq!(
+        crate::human::pr_has_approved_verdict(root, 2398),
+        authorized
+    );
+    let action = rv::review_actionability(root, "TASK-1", Some(&v), rv::TipRelation::AtReviewedSha);
+    assert_eq!(action == rv::ReviewActionability::Resolved, authorized);
+    let (_, display, _) =
+        crate::review_verdict_show_body(root, "TASK-1", |_| rv::TipRelation::AtReviewedSha)
+            .unwrap();
+    assert_eq!(
+        display["actionability"],
+        if authorized {
+            "resolved"
+        } else {
+            "needs-review"
+        }
+    );
+    assert_eq!(
+        crate::review_gates::reviewer_row_actionability(root, &req, &[], |_| None)
+            == rv::ReviewActionability::Resolved,
+        authorized
+    );
+    let policy = crate::gate::approval::ship_approval_policy(
+        root,
+        &["TASK-1".into()],
+        Some("main"),
+        std::slice::from_ref(&v),
+    );
+    assert_eq!(
+        ship::approval_authority_refusal(std::slice::from_ref(&v), &policy).is_none(),
+        authorized
+    );
+    assert_eq!(
+        crate::gate::rework_hold_release::approval_attested(
+            std::slice::from_ref(&v),
+            &policy,
+            head,
+            2398
+        )
+        .is_ok(),
+        authorized
+    );
+    // Collection additionally requires THIS launch's currently live grant.
+    let mut checks = crate::queue_cmd::StandaloneVerdictChecks {
+        project_root: root,
+        pr: 2398,
+        head_sha: Some(head.into()),
+        launcher_grant: None,
+        child_grant: Some(child_grant.into()),
+    };
+    let collected = rv::collect_standalone_verdict(
+        root,
+        root,
+        &pr_path,
+        &["TASK-1".into()],
+        std::time::UNIX_EPOCH,
+        &checks,
+    );
+    assert_eq!(collected.is_ok(), authorized, "{collected:?}");
+    checks.child_grant = None;
+    assert!(rv::collect_standalone_verdict(
+        root,
+        root,
+        &pr_path,
+        &["TASK-1".into()],
+        std::time::UNIX_EPOCH,
+        &checks
+    )
+    .is_err());
+    assert!(crate::gate::dispatch_authority::verdict_at_head(
+        root,
+        2398,
+        "ffffffffffffffffffffffffffffffffffffffff"
+    )
+    .is_none());
+    assert_eq!(
+        rv::review_actionability(root, "TASK-1", Some(&v), rv::TipRelation::Rewritten),
+        rv::ReviewActionability::NeedsReview
+    );
+    if authorized {
+        let mut closed = v.clone();
+        closed.closed_by_merge = Some(head.into());
+        assert_eq!(
+            rv::review_actionability(root, "TASK-1", Some(&closed), rv::TipRelation::Unknown),
+            rv::ReviewActionability::Resolved
+        );
+        // Persisted authorship must defeat approval labels even after the
+        // author's lease is gone. The recorder's actual identity is reused.
+        let authorship = crate::gate::review_authority::AuthorshipRecord {
+            scope: "TASK-1".into(),
+            lease_id: "old-author-lease".into(),
+            branch: "main".into(),
+            tokens: v.attestation.as_ref().unwrap().identity.clone(),
+            recorded_at: chrono::Utc::now().to_rfc3339(),
+            launch: None,
+        };
+        let ledger = root.join(".aida/review-authorship.jsonl");
+        assert!(!ledger.exists());
+        std::fs::write(
+            &ledger,
+            format!("{}\n", serde_json::to_string(&authorship).unwrap()),
+        )
+        .unwrap();
+        assert!(crate::gate::dispatch_authority::verdict_at_head(root, 2398, head).is_none());
+        assert!(!crate::human::spec_review_approved_at_head(
+            root,
+            &req,
+            "TASK-1",
+            2398,
+            Some(head),
+            Some("main")
+        ));
+        let mut no_branch = v.clone();
+        no_branch.reviewed_branch = None;
+        assert_eq!(
+            rv::review_actionability(
+                root,
+                "PR-2398",
+                Some(&no_branch),
+                rv::TipRelation::AtReviewedSha
+            ),
+            rv::ReviewActionability::NeedsReview
+        );
+        std::fs::remove_file(ledger).unwrap();
+    }
+    if !authorized {
+        // Persisted compatibility artifacts and the closed-approval shortcut.
+        let mut closed = v.clone();
+        closed.closed_by_merge = Some(head.into());
+        assert_eq!(
+            rv::review_actionability(root, "TASK-1", Some(&closed), rv::TipRelation::Unknown),
+            rv::ReviewActionability::NeedsReview
+        );
+        let alias_root = tempfile::tempdir().unwrap();
+        req.agreed_id = Some("TASK-2".into());
+        let alias = rv::verdict_path(alias_root.path(), "TASK-2");
+        std::fs::create_dir_all(alias.parent().unwrap()).unwrap();
+        std::fs::write(alias, &body).unwrap();
+        assert!(!crate::human::spec_review_approved_at_head(
+            alias_root.path(),
+            &req,
+            "TASK-1",
+            2398,
+            Some(head),
+            Some("main")
+        ));
+    }
+}
+
+/// This command-level matrix runs in CI even when Codex is unavailable.
+/// The real-tool fixture above adds the core-policy crossing to the same checks.
+#[test]
+fn bug_2398_actual_recorder_artifacts_require_durable_independent_authority() {
+    use crate::gate::{review_authority as ra, seat_authority as sa};
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    let mut ambient = crate::test_env::AmbientGuard::hermetic_and(
+        root,
+        None,
+        &[
+            ("AIDA_AGENT_NAME", Some("codex-reviewer-fixture")),
+            ("AIDA_AGENT_TYPE", Some("codex")),
+            ("AIDA_SESSION_ID", Some("independent-fixture-reviewer")),
+            ("AIDA_REVIEW_VERDICT_FILE", None),
+            ("AIDA_ROLE_INSTANCE", Some("driver")),
+        ],
+    );
+    let head = crate::test_git::commit_fixture(root);
+    let record = || {
+        crate::handle_review_record_at(
+            root.to_path_buf(),
+            "TASK-1",
+            "approved",
+            Some(&head),
+            Some("main"),
+            Some("actual recorder output"),
+            &[],
+            &[],
+            None,
+        )
+    };
+    let identity = ra::IdentitySource {
+        session_ids: vec!["independent-fixture-reviewer".into()],
+        ..Default::default()
+    };
+    ra::with_identity_source(identity.clone(), record).unwrap();
+    assert_recorded_authority_boundaries(root, "no-launched-reviewer", false);
+    ambient.set_key(sa::GRANT_ENV, uuid::Uuid::new_v4().to_string());
+    assert!(
+        ra::with_identity_source(identity.clone(), record).is_err(),
+        "presented invalid grant refuses recording"
+    );
+    let grant = sa::test_support::mint_grant_for(
+        root,
+        crate::test_env::HERMETIC_TEST_USER,
+        "reviewer",
+        &[],
+    );
+    ambient.set_key(sa::GRANT_ENV, &grant);
+    ra::with_identity_source(identity, record).unwrap();
+    assert_recorded_authority_boundaries(root, &grant, true);
+    // Persisted legacy refusals carry no positive attestation, yet retain
+    // their protective dispatch/actionability meaning.
+    for refusal in ["request-changes", "rejected"] {
+        crate::gate::review_verdict::record_verdict(
+            root,
+            "PR-2399",
+            Some(refusal),
+            Some(&head),
+            Some("main"),
+            Some("protective compatibility artifact"),
+            &[],
+            "ungranted-reviewer",
+        )
+        .unwrap();
+        let v = crate::gate::review_verdict::read_recorded_verdict(root, "PR-2399").unwrap();
+        assert!(v.attestation.is_none());
+        assert_eq!(
+            crate::gate::dispatch_authority::verdict_at_head(root, 2399, &head),
+            Some(v.kind)
+        );
+        assert_eq!(
+            crate::gate::review_verdict::review_actionability(
+                root,
+                "PR-2399",
+                Some(&v),
+                crate::gate::review_verdict::TipRelation::AtReviewedSha
+            ),
+            crate::gate::review_verdict::ReviewActionability::AwaitingRework
+        );
+    }
 }

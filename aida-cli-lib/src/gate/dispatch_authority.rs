@@ -1580,12 +1580,28 @@ pub(crate) fn verdict_at_head(
     head_oid: &str,
 ) -> Option<VerdictKind> {
     let key = format!("PR-{pr}");
-    let v = review_verdict::read_recorded_verdict(main_worktree, &key)?;
+    let current = review_verdict::current_verdict(main_worktree, &key)?;
+    let v = review_verdict::parse_recorded_verdict(&current.body)?;
     if v.is_closed() {
         return None;
     }
     let rev_sha = v.reviewed_sha.as_deref()?;
     if !review_verdict::same_reviewed_sha(rev_sha, head_oid) {
+        return None;
+    }
+    // Positive review credit needs durable independent authority. Refusals
+    // remain protective even when recorded without an approval grant.
+    // trace:BUG-2398 | ai:codex
+    if v.kind.approves()
+        && (review_verdict::reconcile_artifacts_for_sha([current.body.as_str()], head_oid).ok()
+            != Some(Some(VerdictKind::Approved))
+            || !crate::gate::approval::independent_approval_authorized(
+                main_worktree,
+                &[],
+                v.reviewed_branch.as_deref(),
+                &v,
+            ))
+    {
         return None;
     }
     Some(v.kind)

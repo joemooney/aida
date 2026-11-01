@@ -4139,6 +4139,8 @@ pub(crate) fn review_verdict_show_body(
     let current = crate::gate::review_verdict::current_verdict(project_root, key)?;
     let v = crate::gate::review_verdict::parse_recorded_verdict(&current.body)?;
     let actionability = crate::gate::review_verdict::review_actionability(
+        project_root,
+        key,
         Some(&v),
         relation(v.reviewed_sha.as_deref()),
     );
@@ -4189,7 +4191,12 @@ pub(crate) fn handle_review_list(json: bool) -> Result<()> {
     for (spec, v) in verdicts {
         let relation =
             verdict_tip_relation(&project_root, branch.as_deref(), v.reviewed_sha.as_deref());
-        let actionability = crate::gate::review_verdict::review_actionability(Some(&v), relation);
+        let actionability = crate::gate::review_verdict::review_actionability(
+            &project_root,
+            &spec,
+            Some(&v),
+            relation,
+        );
         let spec_upper = spec.to_ascii_uppercase();
         let verdict_str = format!("{:?}", v.kind);
         let action_str = actionability.as_str().to_string();

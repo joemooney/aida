@@ -26,14 +26,23 @@ pub(crate) struct ReviewAwaiting {
 /// the same verdict-file convention the orchestrator-resume probe reads:
 /// `.aida/review-verdicts/PR-{n}.json`. trace:STORY-611 | ai:claude
 pub(crate) fn pr_has_approved_verdict(project_root: &std::path::Path, pr_number: u64) -> bool {
-    // M1: read through the gate ledger, where a collected verdict lives.
-    // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
-    let path = crate::gate::review_verdict::verdict_path(project_root, &format!("PR-{pr_number}"));
+    let key = format!("PR-{pr_number}");
+    let Some(current) = crate::gate::review_verdict::current_verdict(project_root, &key) else {
+        return false;
+    };
+    let Some(v) = crate::gate::review_verdict::parse_recorded_verdict(&current.body) else {
+        return false;
+    };
     matches!(
-        read_verdict_file(&path),
+        crate::phase_gates::outcome_of_verdict_body(&current.body),
         Ok(auto_complete::ReviewerOutcome::Verdict(
             auto_complete::Verdict::Approved
         ))
+    ) && crate::gate::approval::independent_approval_authorized(
+        project_root,
+        &[],
+        v.reviewed_branch.as_deref(),
+        &v,
     )
 }
 
@@ -137,12 +146,13 @@ pub(crate) fn latest_review_comment_verdict(
 
 /// BUG-1672: has an open PR for `req` already been approved by an independent
 /// review? The one predicate `reviews_awaiting_human` uses to split
-/// awaiting-review from awaiting-merge. Three records can approve:
+/// awaiting-review from awaiting-merge. Durable approval records are required;
+/// parsed comment approvals alone never establish review authority:
 ///  1. the drain's PR-keyed verdict (`PR-<n>`, the original signal);
 ///  2. the spec-keyed verdict `aida review <SPEC>` records (not one a
 ///     merge has already closed out);
-///  3. the latest review comment on the spec (the fresh-reviewer flow posts
-///     only a comment).
+///  3. review comments retain protective refusals and ordering information;
+///     an approval comment needs supporting durable evidence from (1)/(2).
 ///
 /// The newest review wins across all eligible sources. An approval must be
 /// strictly newer than every blocking candidate; ties or missing timestamps
@@ -155,9 +165,34 @@ pub(crate) fn spec_review_approved(
     spec_id: &str,
     pr_number: u64,
 ) -> bool {
+    let head = crate::resolve_commit_sha(project_root, "HEAD");
+    spec_review_approved_at_head(project_root, req, spec_id, pr_number, head.as_deref(), None)
+}
+
+// All alternate sources must meet the same positive-authority floor. Prose
+// remains protective, but only durable independent evidence can approve.
+// trace:BUG-2398 | ai:codex
+pub(crate) fn spec_review_approved_at_head(
+    project_root: &std::path::Path,
+    req: &aida_core::Requirement,
+    spec_id: &str,
+    pr_number: u64,
+    head: Option<&str>,
+    branch: Option<&str>,
+) -> bool {
     let mut candidates = Vec::new();
-    if let Some((kind, at)) = latest_review_comment_verdict(&req.comments) {
-        candidates.push((kind.approves(), Some(at)));
+    // Ignoring an unverified prose approval must not hide an older refusal.
+    if let Some(at) = req
+        .comments
+        .iter()
+        .filter_map(|c| {
+            review_comment_verdict(&c.content)
+                .filter(|kind| !kind.approves())
+                .map(|_| c.created_at)
+        })
+        .max()
+    {
+        candidates.push((false, Some(at)));
     }
 
     // M1: each key contributes ONE candidate, the record the gates weigh for
@@ -171,12 +206,17 @@ pub(crate) fn spec_review_approved(
         // Preserve the drain reader's conflict/escalation checks. An unknown
         // or unreadable verdict is blocking evidence, never an approval.
         candidates.push((
-            matches!(
-                crate::phase_gates::outcome_of_verdict_body(&current.body),
-                Ok(auto_complete::ReviewerOutcome::Verdict(
-                    auto_complete::Verdict::Approved
-                ))
-            ),
+            crate::gate::review_verdict::parse_recorded_verdict(&current.body)
+                .as_ref()
+                .is_some_and(|v| {
+                    human_approval_authorized(project_root, req, spec_id, head, branch, v)
+                })
+                && matches!(
+                    crate::phase_gates::outcome_of_verdict_body(&current.body),
+                    Ok(auto_complete::ReviewerOutcome::Verdict(
+                        auto_complete::Verdict::Approved
+                    ))
+                ),
             current
                 .written_at
                 .map(chrono::DateTime::<chrono::Utc>::from),
@@ -202,13 +242,40 @@ pub(crate) fn spec_review_approved(
             continue;
         }
         candidates.push((
-            record.is_some_and(|v| v.kind.approves()),
+            record.as_ref().is_some_and(|v| {
+                human_approval_authorized(project_root, req, spec_id, head, branch, v)
+                    && matches!(
+                        crate::phase_gates::outcome_of_verdict_body(&current.body),
+                        Ok(auto_complete::ReviewerOutcome::Verdict(
+                            auto_complete::Verdict::Approved
+                        ))
+                    )
+            }),
             current
                 .written_at
                 .map(chrono::DateTime::<chrono::Utc>::from),
         ));
     }
     review_candidates_approved(&candidates)
+}
+
+// trace:BUG-2398 | ai:codex
+fn human_approval_authorized(
+    root: &std::path::Path,
+    req: &aida_core::Requirement,
+    spec: &str,
+    head: Option<&str>,
+    branch: Option<&str>,
+    verdict: &crate::gate::review_verdict::RecordedVerdict,
+) -> bool {
+    let ids: Vec<String> = [Some(spec), req.spec_id.as_deref(), req.agreed_id.as_deref()]
+        .into_iter()
+        .flatten()
+        .map(str::to_string)
+        .collect();
+    matches!((verdict.reviewed_sha.as_deref(), head), (Some(a), Some(b))
+        if crate::gate::review_verdict::same_reviewed_sha(a, b))
+        && crate::gate::approval::independent_approval_authorized(root, &ids, branch, verdict)
 }
 
 // trace:BUG-1672 | ai:codex
@@ -505,11 +572,20 @@ pub(crate) fn reviews_awaiting_human(
                 }
                 let forge = crate::forge::resolve_forge_kind(project_root);
                 // BUG-1672: the PR-keyed file is only the drain's record; a
-                // keyboard `aida review` writes the spec-keyed file and a
-                // fresh-reviewer subagent posts only a comment. Read all three
-                // so an already-approved spec lands under awaiting-merge, not
-                // back on the operator's review seat. trace:BUG-1672 | ai:claude
-                let reviewed = spec_review_approved(project_root, req, &spec_id, number);
+                // Read PR/spec evidence and protective comment history, then
+                // require durable independent approval at the snapshot's head.
+                // trace:BUG-2398 | ai:codex
+                let reviewed = spec_review_approved_at_head(
+                    project_root,
+                    req,
+                    &spec_id,
+                    number,
+                    open_prs
+                        .by_branch
+                        .get(branch)
+                        .and_then(|pr| pr.head_sha.as_deref()),
+                    Some(branch),
+                );
                 out.push(ReviewAwaiting {
                     spec_id,
                     surface: format!("{}-{}", forge.change_noun(), number),
