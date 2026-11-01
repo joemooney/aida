@@ -22,12 +22,19 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-01T06:30:56.167167026Z
-modified_at: 2026-11-01T06:30:56.167167026Z
+modified_at: 2026-11-01T06:34:08.907725085Z
 req_type: Bug
 tags:
 - area:ship
 - merge-lease
 - performance
+comments:
+- id: 01a195d0-c28b-7d92-8490-74b84838f30e
+  author: joe
+  content: 'Measured 2026-10-31: step 5 of the PR-3184 ship ran about 26 minutes (from about 23:07 to 23:33) and finished by itself. The serial ship of PR-3191, waiting on the merge-lease, merged within a minute of the lease''s release.'
+  created_at: 2026-11-01T06:34:08.907725085Z
+  modified_at: 2026-11-01T06:34:08.907725085Z
+  session_id: a31b25d9-60a5-4347-a85b-4c74ab06f274
 filed_at:
   code_sha: 962ca07af25ca4de3426bdd951fb2d6782568184
   branch: main
