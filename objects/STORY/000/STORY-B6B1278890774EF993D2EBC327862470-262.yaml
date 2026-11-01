@@ -27,7 +27,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T23:03:29.192827531Z
-modified_at: 2026-11-01T08:53:22.583067488Z
+modified_at: 2026-11-01T09:05:05.741036076Z
 req_type: Story
 tags:
 - docs
@@ -152,6 +152,11 @@ comments:
   content: 'Advisor ruling: PR3194 at5d1d8d76189f has independent Codex CHANGES REQUESTED review5727231837; keep existing hold. Prior portability and combined staged-cap fixes PASS and must remain. NEW B1 idle-only: maintenance snapshot QueueDepth calls read_queue_depth(project,None), which counts only scheduler user local queue, excludes other users/global role queues and unwraps failures to0. Use a strict project-wide relevant feature-work predicate for this daily docs job (preserve other jobs documented meter semantics), count other-user and global implementer/reviewer work for this project, and unreadable/corrupt evidence must be unknown/refusal, never idle. Test real snapshot plus schedule tick with other-user/global work and failure evidence, not only scaffold string. NEW B2 dedup: docs_sweep LiveHost::filed_keys1633 uses advisory list_summaries().unwrap_or_default(), allowing stale/error lookup to file duplicates. Use authoritative current dedup read and propagate refusal before filing, preserving one-run/no-partial side effects and existing locking. Add stale/error evidence regression with an already-filed docs-sweep-key; test production adapter seam rather than only fake always-current set. Root verified both sources against pinnedhead. Bundle both in samePR, no followup. LIGHT one targeted docs_sweep/schedule boundary regression plus fast gates; background cargo, no broad suite or repeated capped compiles. Use bounded tmp publication checkout if native source .git readonly, no sandbox or authority relaxation.'
   created_at: 2026-11-01T08:44:38.569695589Z
   modified_at: 2026-11-01T08:44:38.569695589Z
+- id: 01a1965a-f4cd-7fd1-becc-8d0a04c319ec
+  author: mcp
+  content: 'Advisor ruling B1/B2 addressed together in PR #3194, commit 6b1fd1a1ce2 (pushed from bounded /tmp/aida-story2220-publication-20261101 because native source Git metadata is read-only). Daily docs-sweep scaffold and repository config now use strict queue.project_work_idle plus drain.lock_free. Real snapshot/tick evidence includes other-user local feature work and global implementer/reviewer work for this project; corrupt/unreadable evidence remains unknown and refuses. Existing queue.depth semantics unchanged. LiveHost dedup now enumerates/parses current canonical objects strictly, includes archived/deferred keys, and propagates refusal before filing rather than using stale advisory cache/default-empty errors; existing mutation locking preserved. Prior portability wording and combined source+mirror cap remain intact. Validation: no-default-features focused docs_schedule_boundary_regression passed (1 test; 11471 filtered), including a real stale cache hiding an already-filed key and corrupt/unreadable production dedup evidence with no new spec/mail/run-state side effects. Formatting, portability, external-prose inventory, executable-fixture, Git-maintenance, trace-header gates passed; root hygiene passed in publication checkout (native checkout has pre-existing .aws entry). Existing PR hold retained; no ship, verdict record, or hold clearance performed.'
+  created_at: 2026-11-01T09:05:05.741020060Z
+  modified_at: 2026-11-01T09:05:05.741020060Z
 history:
 - id: 01a19517-853a-7dc1-addd-62b1b73de3be
   author: joe
