@@ -1,5 +1,7 @@
 //! Exact-child metadata transport; real Codex sandbox fixtures make no model call.
 // trace:BUG-2398 | ai:codex
+#![cfg(target_os = "linux")]
+
 use super::*;
 use std::path::Path;
 
@@ -390,6 +392,7 @@ fn real_codex_roles(native: bool) {
 }
 
 #[test]
+#[cfg(target_os = "linux")]
 fn bug_2398_preflight_refuses_cause_before_model_and_baseline_skips_probe() {
     let tmp = tempfile::tempdir().unwrap();
     let fake = tmp.path().join("codex");
