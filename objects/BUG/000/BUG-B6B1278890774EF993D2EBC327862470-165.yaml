@@ -22,7 +22,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-01T06:47:10.885136620Z
-modified_at: 2026-11-01T08:10:12.491034086Z
+modified_at: 2026-11-01T11:09:56.150714568Z
 req_type: Bug
 tags:
 - audit
@@ -39,6 +39,114 @@ comments:
   content: 'PROXY DECISION: source confirms shift COVERED_VENDORS only Claude and runaway_seats explicitly not-reads Codex. Approve Codex watchdog coverage using existing project/worktree session attribution, all configured byte/token/line/window thresholds and missing/corrupt evidence semantics, then covered-vendor admission. Synthetic session JSONL only; no live shift/timer enablement or user config edits. Cover real Codex event formats, out-of-project exclusion, subagent/parent duplication and historical silent-session aging. LIGHT targeted watchdog filter plus fast gates, no full suite.'
   created_at: 2026-11-01T08:10:09.599722979Z
   modified_at: 2026-11-01T08:10:09.599722979Z
+- id: 01a196cd-4036-73a2-8278-f9b7d6b11e99
+  author: joe
+  content: |
+    # SKETCH (awaiting advisor signoff): BUG-2391
+
+    Sketch only. This document is not approval, implementation authorization, or proof of coverage. A DIFFERENT independent advisor must sign off on the owning spec before any code. Preserve the existing Approved status, High native priority, complete acceptance scope, and proxy decision; no status, queue, hold, dispatch, merge, Cargo, shift/timer enablement, or user configuration actions are part of this task.
+
+    ## Authority and posting receipt
+
+    The required child-own context `/tmp/aida-BUG2391-sketch-own-context.sh` was initially absent, then appeared during the source review. It was inspected and sourced; its context document was read and `aida role current` returned `advisor` successfully. Posting uses only that supplied child context with `AIDA_ROLE_INSTANCE=companion`, with the current-role check repeated immediately before mutation. No parent context/grant was borrowed and no authority was fabricated. All companion restrictions and the sketch-only boundary remain binding. Posting outcome is reported separately after the CLI returns.
+
+    ## Owner, trigger, and surface
+
+    Owning requirement: BUG-2391 (canonical origin BUG-b6b1278890774ef993d2ebc327862470-165), High. Latest spec comment is Joe's PROXY DECISION: implement existing project/worktree attribution and all configured watchdog thresholds/evidence semantics, then covered-vendor admission; synthetic fixtures only; no live shift/timer or user config changes; LIGHT local gates. This sketch proposes the mechanics for independent judgment, without self-approving them.
+
+    The existing `doctor check runaway-seats --fail-on-findings` invocation, including the already-configured watchdog schedule, remains the only trigger. The doctor aggregates disk evidence and emits findings/coverage; `shift tick` and `shift status` consume persisted budget evidence through the existing guard. No model call, added poller, enabled schedule, timer installation, process termination, or automatic healing.
+
+    Read: project AGENTS.md, two-seat protocol, rework craft and recovery discipline, owning spec/proxy comment, actual runaway_seats.rs, shift.rs, vendor_activity.rs and usage.rs; inspected session.rs, status_prs.rs, token_ledger.rs and seat_rotation.rs to locate current format/attribution behavior.
+
+    ## Source findings that constrain the design
+
+    * `runaway_seats::default_sources` already collects project root, `git_ops::list_worktree_paths`, and `clone_seat_trees` (TASK-2053). Reuse that root inventory for Codex, including seat clones outside the normal sibling naming convention.
+    * `vendor_activity::codex_sessions_root` supports `AIDA_CODEX_SESSIONS_DIR` and HOME fallback. Its `visit_rollouts` currently matches filenames or arbitrary body substrings for a session and returns mtime. It is liveness evidence, not trustworthy spend/project attribution; do not reuse that substring match as an admission proof.
+    * Current `usage.rs` is machine-global CLI telemetry, not a Codex cwd adapter. Current structured Codex usage parsing is in `token_ledger::parse_codex_file`; metadata/scoping is in `session::parse_session_meta_counted` and `session_cwd_in_project`. The latter includes a sibling-name heuristic and its metadata parser also scans raw cwd substrings. Neither raw prose matching nor the sibling-name heuristic alone is adequate for unattended spend admission.
+    * `runaway_seats::scan_file` retains offsets, defers unfinished trailing lines, skips lines above 8 MiB, and uses byte/time budgets. Today malformed/skipped records, swallowed walk/read errors, and an initial bounded tail can coexist with an aggregate `ok`; `scan` uses any available source. Merely adding Codex to that loop and to `COVERED_VENDORS` would permit false clean admission.
+    * Current `BudgetEvidence` has trailing-day spend and one run time/verdict, no vendor-specific measurement proof. `shift::budget_evidence_verdict` accepts other recorded verdict strings after checking only degraded/unknown/unrecorded. Old Claude-only state must never establish Codex coverage.
+
+    ## Project and seat attribution adapter
+
+    Add an injectable Codex source root and allowed-root inventory to `Sources`. Production derives these from the existing HOME/root resolver and `default_sources`; tests pass paths explicitly. Keep all discovery and head probes inside the same bounded scan budget. Prefer a small focused adapter module, not another full usage-rebuild or liveness scan.
+
+    Before folding a rollout, parse a complete, bounded top-level `type: session_meta` record and its structured payload. Read `payload.cwd` and thread identity (`payload.id`, with legacy `payload.session_id` fallback); retain root `session_id` separately when both exist. Modern root session IDs and child thread IDs are not interchangeable. A filename may locate a candidate but cannot establish its project or identity. Never inspect instructions, user/developer messages, tool outputs, quoted JSON, or arbitrary cwd prose for attribution.
+
+    Match absolute, normalized path components against the real project/worktree/leased-clone inventory, including subdirectories. Use canonical spellings for existing roots and cwd; unresolved or conflicting identity/path evidence is explicitly unknown. A same-prefix sibling project is excluded unless actually in the inventory. This preserves the real worktrees/clones covered by existing watchdog helpers without importing session-list display heuristics. Snapshot the root inventory once per scan; a changed/unreadable inventory must not produce positive coverage for omitted seats. Launch-cwd attribution remains the boundary; later prose or turn cwd does not silently reassign a session to another project. Unsupported cross-project movement is reported, not guessed.
+
+    Registry native-session correlation supplies seat/PID labels using `registry_attribution` and `attribute_entries` live-holder precedence, not authority to import a foreign rollout. Unregistered but correctly attributed sessions still count. Reject conflicting metadata within a file. Avoid following session-tree symlink directories or opening special files; bound file/head reads through regular-file handles.
+
+    ## Real JSONL formats and normalization
+
+    Support repository-evidenced rollout envelopes: `session_meta`; `event_msg` / `payload.type: token_count`, with nullable `info`, `total_token_usage`, and `last_token_usage`; stable `token_usage_record` / payload response/thread/session IDs and `usage`; and `response_item` messages/tool calls plus supported structured user/assistant events. Synthetic fixtures must use actual whitespace/field nesting, not Claude-shaped records labeled Codex. `turn.completed` / top-level `usage` is a separate exec stream format, supported only in a positively correlated headless stream, not assumed to exist in native rollout files.
+
+    The upstream Codex protocol explicitly distinguishes `usage`, `turn_token_usage`, `thread_token_usage`, cumulative `total_token_usage`, and `last_token_usage`; metadata can distinguish root session and thread plus parent/fork history. Source reference: [Codex protocol](https://github.com/openai/codex/blob/main/codex-rs/protocol/src/protocol.rs). This is schema evidence, not proof that every installed harness emits every variant. Pin the format/version evidence used for fixtures at implementation time; do not read real user transcripts to discover it.
+
+    Normalize typed events to the existing minute buckets and judge rules. One logical user delivery is one wake, not both an event mirror and response-item copy. Count an assistant final reply once; commentary, reasoning, streaming deltas and tool results are not final replies. Count structured compaction once. Hash repeated injected prompts only when structured provenance identifies injection; do not classify ordinary human prompts as injected by their prose. Map supported scheduling/tool envelopes to poll evidence without broadening the existing poll rule. Surface unknown capabilities when a harness omits provenance/final/compaction evidence; never present absent fields as measured zeros.
+
+    ## Token accounting, rolling windows, overlap
+
+    1. Stable response usage is per response. Use vendor + actual producing thread + response ID for identity. Same identity/same usage suppresses duplicates across appends, copies and headless mirrors; conflicting usage makes that evidence incomplete. Never deduplicate distinct requests merely because their token counts are equal.
+    2. In Codex, cached input is included in input and reasoning output in output. Count input + output once, with separately documented cache-write treatment only when the harness schema shows it is additional. Validate nonnegative integers, subset relationships and arithmetic overflow. Do not add cached or reasoning tokens a second time. The latest request's input supplies context size; lifetime totals do not.
+    3. `total_token_usage` is a cumulative checkpoint, never an amount to sum per line. Maintain persisted per-thread/segment checkpoints and compute increments only across validated monotone checkpoints with adequate timing/baseline evidence. Repeated checkpoints produce no additional spend. `last_token_usage` describes the latest request; prefer its exact timed request evidence when available. Reconcile cumulative increments and response-level events for the SAME covered interval; never sum both representations.
+    4. When an interval contains multiple requests but only cumulative endpoints, the increment is known for that interval, not necessarily one minute. If it crosses a rate/day boundary without per-request timing, mark the affected budget/rate interval incomplete instead of placing lifetime usage at the newest timestamp. A first checkpoint after a bounded-tail start is a baseline, not fresh spend. An explicit reset/fork/context-window segment starts a new baseline; an unexplained counter decrease is incomplete. Do not subtract to a negative number or re-charge the prior total.
+    5. Resume/revert/fork files may replay earlier history. Deduplicate by producing identity and stable ordinal/history lineage where present. Child threads retain separate identities even when `session_id` names the root. Exclude inherited parent history from a child's new spend; count new child responses once. Never add thread/turn/root rollups to their constituent responses. When parent cumulative usage includes child spend, reconcile using actual lineage/response coverage; if overlap cannot be established, report unknown and refuse admission rather than taking max, summing, or silently dropping the child. Multiple genuine children count toward the project day budget.
+    6. Persist offset, file identity/generation, thread identity, segment baseline, dedupe evidence and affected coverage intervals coherently. Retain baselines needed to subtract the next checkpoint even when old minute buckets are pruned. Do not prune identity information in a way that recounts copied history on the next scan.
+
+    Use the same `WatchdogPolicy`, `judge` window boundaries, strict threshold comparisons, daily budget/alert percentage, wake/repeat/idle minimums, compaction and optional context rules. No default or configured threshold is weakened. There are no current byte-rate or line-rate finding thresholds: max_bytes_per_file/max_total_bytes/time_budget_ms and MAX_LINE_BYTES are scan limits, not synthetic spend counters. Apply them equivalently to Codex, including metadata probes, skipped oversized bytes and discovery work; do not add a new line threshold or configuration knob. Bounded streaming must avoid allocating an unbounded line before checking its size.
+
+    ## Missing, malformed, incomplete and aging semantics
+
+    Track Codex evidence quality explicitly in coverage and persisted budget state: measured/complete, incomplete with reason, or unavailable/unknown. Missing source root/HOME, unreadable traversal/entry/file, unresolved project identity, malformed usage, missing token components, unknown accounting variant, lost checkpoint baseline, oversized relevant line, truncated head, or exhausted budget cannot yield a clean Codex proof. Known unrelated sessions are excluded without penalizing the project's coverage; unclassifiable recent candidates remain unknown. A complete empty traversal is distinct from a missing directory, but metadata-only/no-usage activity must not claim measured spend. Known live Codex registry sessions without corresponding evidence remain unknown.
+
+    Unfinished trailing records are held at their start offset and retried; until completed, positive coverage is withheld. A run may report validated lower-bound findings while incomplete, but must retain the incomplete flag independently of `tripped`. Existing once-per-crossing findings and watchdog-blind behavior remain; incomplete evidence must not clear active findings or reset blindness merely because Claude is readable or a known rule tripped. This is an evidence failure, not proof a seat ran away.
+
+    Keep bounded 24h buckets and exact latest real-event activity separate from file mtime. Mtime supports untimed daily evidence and age labels only; it does not manufacture timed activity or hourly health. Token/wake/idle/repeat findings age by their configured trailing window; daily spend/compactions age by the day. Poll-setup evidence uses existing BUG-2120 semantics: silence beyond window or a known dead holder clears it; recent unregistered activity remains evidence, and future stamps do not conceal a live poll. A checkpoint baseline is not ongoing activity. Historical files and unchanged offsets cannot keep a silent session active or renew a clean proof after it expires.
+
+    ## Persistence, admission order and races
+
+    Extend watchdog state with explicit schema/adapter capability version and per-vendor completeness plus interval coverage; absent fields in old v1 state mean Codex unproven. Preserve supported Claude aggregates where safe, but never promote an old `ok` to new Codex coverage. State upgrade/backfill is bounded and incomplete until the required trailing day is accounted for. Deleted/replaced sources invalidate the corresponding evidence rather than preserving a fresh completeness stamp.
+
+    Concurrent doctor runs must serialize the load/fold/save transaction on a permanent watchdog lock with bounded acquisition; lock failure cannot refresh positive evidence. Use an invocation-private atomic replacement file; readers get either a complete old or new snapshot. Validate opened file identity/length across scan: append is normal, partial append retries; shrink, same-size rewrite or inode replacement invalidates the generation/baseline and forces a bounded re-read, never double-folding retained buckets. Persist aggregates/checkpoints/offsets together; failed persistence cannot mint fresh coverage. These are scoped watchdog changes, not a shared store-writer redesign.
+
+    Only AFTER actual adapter coverage and synthetic proof exists may `shift::COVERED_VENDORS` add `codex`. `budget_evidence` must carry the explicit measured-vendor capability and completeness; `budget_evidence_verdict` requires fresh complete Codex evidence in addition to existing age/verdict/budget checks. A static list is necessary but insufficient. Unknown verdict values refuse rather than pass. Claude-only, old-schema, partial-but-tripped, or unreadable Codex snapshots refuse. No `allow_uncovered_vendors` override is used to obtain acceptance; the Codex measured path must not use that escape hatch. Other vendors' policy is outside this bug.
+
+    Gate proof is a snapshot at watchdog run time, subject to the existing one-hour freshness bound; it does not promise instantaneous visibility of future session writes. Do not extend that bound. Relevant unknown evidence at the observed snapshot blocks admission.
+
+    ## Files and symbols proposed
+
+    * `aida-cli-lib/src/runaway_seats.rs`: Sources/default_sources, Coverage/SourceStatus, State/SessionAgg, Budget, scan_file/scan, prune/judge, load_state/save_state, BudgetEvidence/budget_evidence/render_coverage and tests. Preserve legacy finding IDs and Claude dedupe unless explicitly required by namespaced new Codex IDs.
+    * A focused new `aida-cli-lib/src/runaway_seats_codex.rs` adapter (or private child module under runaway_seats): bounded structured metadata parser, native event normalization, checkpoint/response reconciliation and lineage state. Include BUG-2391 traces.
+    * `aida-cli-lib/src/shift.rs`: COVERED_VENDORS and budget_evidence_verdict, plus test-only guard cases callable under the single watchdog filter. Do not modify enabled defaults, timer commands, scheduler cadence or local-layer values.
+    * `vendor_activity.rs`: at most share its source-root resolver; do not import visit_rollouts substring attribution or alter independent liveness semantics. `usage.rs` remains telemetry. `token_ledger.rs` and `seat_rotation.rs` provide format/accounting references, not a mandate to rewrite reporting.
+    * `docs/autonomous-drain.md` budget coverage paragraph: document measured Codex evidence and failure behavior, remove the implication that this feature needs the Codex uncovered override. No routine AGENTS/OVERVIEW prepend.
+
+    ## Named synthetic proof tests (proposed, not run)
+
+    Use `runaway_seats::tests::bug2391_*` names, with all HOME/XDG/session/registry/worktree/clone/config/state trees under fresh tempdirs; inject Sources and use scoped env guards only where resolver coverage needs HOME. Never enumerate real HOME, transcripts or session files. No real timers, drains or vendor processes.
+
+    * `bug2391_scopes_main_registered_worktree_and_seat_clone`: actual fake Git inventory and fake clone lease, cwd subdirectories, native IDs and registry label; `bug2391_excludes_foreign_prefix_and_cwd_prose`: unregistered same-prefix siblings, foreign JSON quoting cwd, tools/messages and malicious metadata conflicts.
+    * `bug2391_native_envelopes_and_null_info`: session_meta id/session_id compatibility, whitespace, event_msg, response_item and stable token_usage_record; null info alone is not zero spend.
+    * `bug2391_same_policy_window_and_token_thresholds`: configured equality/over-threshold boundaries, cache/reasoning subsets, daily budget and optional context; `bug2391_wakes_replies_compactions_are_not_mirrors`: duplicate surfaces count once, tool/analysis events do not become human wakes or final replies.
+    * `bug2391_cumulative_is_not_per_message`: checkpoints 100,100,160 yield known increment 60 after baseline, not 360; full-origin history and exact last-usage evidence separately prove legitimate initial spend. `bug2391_equal_distinct_responses_both_count`; `bug2391_response_and_checkpoint_overlap_count_once`; `bug2391_gap_across_window_is_unknown`.
+    * `bug2391_reset_fork_resume_and_replay`: explicit segments, unexplained decreases, file copies/reverts and state reload; `bug2391_parent_child_root_session_ids_do_not_collapse_threads`; `bug2391_parent_rollup_child_overlap_unknown_blocks_admission` and a provably disjoint child case whose daily sum is exact.
+    * `bug2391_append_partial_tail_and_restart_no_double_count`: two scans/reload, finish trailing record, exact persisted offsets/baselines; `bug2391_rotation_and_same_size_replacement_invalidates`; `bug2391_concurrent_scan_lock_cannot_publish_lost_progress`.
+    * `bug2391_missing_malformed_oversize_unreadable_are_not_clean`: traversal and entry failures via deterministic injected I/O errors, absent HOME/root, invalid/negative/overflow tokens, truncated metadata and unsupported usage; `bug2391_claude_ok_cannot_mask_codex_incomplete`; `bug2391_tripped_partial_retains_blindness_and_active_rules`.
+    * `bug2391_byte_line_time_limits_resume`: tiny synthetic budgets for initial tails, metadata probes and global limits, deterministic injected clock, giant-line discard with bounded memory. No threshold/config changes.
+    * `bug2391_silent_session_window_aging_and_dead_holder`: advance fake now, recent registered/unregistered activity, untimed mtime, future stamp, one-hour rate clearance vs 24h budget retention, poll setup expiry and last-write labels.
+    * `bug2391_shift_requires_fresh_complete_measured_codex`: invoke actual guard with snapshots derived from synthetic scans; complete Codex succeeds with empty override; old Claude-only state, no proof, stale, missing, incomplete, unknown and partial-tripped states refuse. Use pure guard/recording mocks; never execute a live shift tick.
+
+    Future local gate ONLY: one targeted watchdog filter, e.g. `AIDA_CARGO_TIMEOUT=10m cargo test --profile agent -p aida-cli-lib runaway_seats`, plus `make check-ci-fast`. Place admission regression cases under that same filter or a watchdog-named test submodule so the one run exercises the production shift guard too. Run potentially long Cargo in tool background mode; after timeout/KILLED inspect `cargo ps` before retry. Add `make test-touched` and `make check-ci-compile` only for >10 changed files or shared test infrastructure edits. No full suite, unfiltered --lib, outer timeout, or AIDA_CARGO_NO_SLOT bypass. None are run during this sketch.
+
+    ## Independent advisor decisions/open questions
+
+    The proposed default for each uncertainty is refusal; no user question is needed under this delegation. The next independent advisor must explicitly accept or revise: (1) requiring real registered root inventory rather than session-list sibling-name guesses; (2) the explicit per-vendor completeness/state compatibility contract; (3) interval-unknown treatment of unallocatable cumulative deltas and parent rollups; (4) the minimum native event capability needed to call Codex covered, including missing injection provenance; (5) the scoped lock/generation safeguards needed to prevent false clean state. Any supported harness variant lacking sufficient format/lineage evidence stays unproven until synthetic source-grounded evidence exists. Unresolved overlap or missing capabilities blocks COVERED_VENDORS admission; it does not justify dropping acceptance scope.
+
+    ## Out of scope and stopping condition
+
+    No implementation, approval, priority/status mutation, queue/hold action, dispatch, merge, commit/push, Cargo run, real transcript read, user-config edit, shift enablement, timer change, uncovered override, threshold weakening, new spend policy, price estimation or automatic process stopping. No unrelated liveness/usage refactor. Stop after saving and, only under the required verified child-own context, posting this SKETCH awaiting advisor signoff. Author does not self-approve; a different independent advisor's recorded signoff is required before code.
+  created_at: 2026-11-01T11:09:56.150714568Z
+  modified_at: 2026-11-01T11:09:56.150714568Z
 history:
 - id: 01a195dc-cb7c-7693-b0fc-4f832c1863f5
   author: joe
