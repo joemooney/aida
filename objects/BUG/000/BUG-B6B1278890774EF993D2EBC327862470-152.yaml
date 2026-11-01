@@ -13,7 +13,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T23:00:22.284758314Z
-modified_at: 2026-11-01T01:42:51.145200377Z
+modified_at: 2026-11-01T01:44:25.330805186Z
 req_type: Bug
 tags:
 - epic-home-003
@@ -38,6 +38,26 @@ comments:
   modified_at: 2026-11-01T01:12:40.908233909Z
   session_id: 01a194854611
   harness_version: 2.1.316 (Claude Code)
+- id: 01a194c7-81f2-71f0-b112-229d0c182ce7
+  author: joe
+  content: |
+    ADVISOR REWORK BRIEF round 3 (18:55), PR-3182 at c119fb7, CI run 41260362596. The reviewer's finding 1 asked for the failing test names; the advisor fetched them with `gh api .../actions/jobs/<id>/logs` (BUG-2380: `gh run view --log` fails in the sandbox). The round-2 findings are fixed in code. Only these remain:
+
+    1. CI (lib-0), job 124712170986: `coordination::bug_2378_lease_stamp_tests::bug_2378_a_new_lease_stamps_the_bound_node_not_the_retired_legacy_node` panics at bug_2378_lease_stamp_tests.rs:21. `aida_core::work_binding::bootstrap(&store).unwrap()` returns Err "incomplete legacy node/provider pair; explicit recovery required". The fixture writes only `.aida/node.toml` (node_id='7') and no provider half. Decide which shape is real by looking at an actual retired clone: this host's backup at ~/.local/share/aida/ops/node.toml.node1.bak, plus whatever provider file sits next to it in a real clone.
+       - If a real retired clone carries both halves, write both in the fixture.
+       - If real clones can carry node.toml alone after the backfill, then bootstrap must accept a retired legacy node.toml without a provider. Otherwise production hits this same error on the clone the fix is meant to repair. Add a test for that case.
+       State which case it was in the PR body.
+    2. CI (cli-0), job 124712171006: `bug_2378_root_registered_by_label_verifies_identifies_and_syncs_after_backfill` (aida-cli/tests/bug_2378_root_after_backfill.rs:135). `aida doctor --fix agreed-ids --yes` fails with "git commit failed ... On branch aida-store | Changes not staged: modified: .aida/node.toml | Untracked: registry/blocks.lock | no changes added to commit". The repair (`repoint_identity` in doctor_backfill_agreed.rs) modifies the tracked store file `.aida/node.toml` but never stages it. It also leaves the `registry/blocks.lock` lock file in the store tree. Fix:
+       - Stage exactly the files the repair writes.
+       - Keep the lock file out of the commit and out of the tree: clean it up, or ignore it if it is a normal runtime lock.
+       - If a no-op repair has nothing to commit, skip the commit instead of failing.
+    3. Reviewer finding 2 (minor, ruled now under the 10-28 rule): BUNDLE it, since this round pushes anyway. In allocation_conflicts.rs:845-858 a pruned stale tip must not become an extra baseline when a newer merge-base exists. Add one unit test: one side reverts a claim to the stale hub's value, and the conflict is still reported.
+
+    Local gate (LIGHT): run `AIDA_CARGO_TIMEOUT=900 cargo test --profile agent -p aida-cli-lib --lib -- bug_2378` in the background. Then run `AIDA_CARGO_TIMEOUT=1200 cargo test --profile agent -p aida-cli --test bug_2378_root_after_backfill`, also in the background; this round's defect lives in that integration binary, so run it. Then `make check-ci-fast`, then push. Do not use `timeout N`; after a timeout, check `cargo ps`.
+    PRIORITY: this unblocks the GitLab store hub (stuck at 0de1131).
+  created_at: 2026-11-01T01:44:25.330805186Z
+  modified_at: 2026-11-01T01:44:25.330805186Z
+  session_id: 77a7a933-9a3f-4243-9a44-892bcedf206c
 history:
 - id: 01a1943a-492b-7f72-9377-cfc786176bec
   author: aida-session-start
