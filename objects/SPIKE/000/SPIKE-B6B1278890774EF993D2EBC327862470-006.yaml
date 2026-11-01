@@ -1,0 +1,39 @@
+id: 01a1956e-8503-72b3-9d45-f4f73739026c
+spec_id: SPIKE-b6b1278890774ef993d2ebc327862470-006
+agreed_id: SPIKE-710
+title: 'Audit: where AIDA still assumes Claude on Codex-first Linux; one finding per gap, filed under EPIC-612'
+description: |-
+  ## Why
+  Codex is the priority vendor, but Claude-only assumptions keep surfacing one at a time: `session start` Next: says `claude` (BUG-2379), containment refused Codex (TASK-2631), fork-from-live cited a missing API that now exists, and seat-parity.md says `queue work --vendor codex` **Works** although containment refuses it. A single bounded sweep is cheaper than finding them by hitting them.
+
+  ## Scope (time-box: one session)
+  Sweep user- and agent-facing paths for anything that hardcodes Claude or only works with it:
+  - printed next-step and help text that names `claude`, `/aida-*` slash commands, CLAUDE.md or `.claude/` without a Codex equivalent;
+  - launch, fork, resume, rotate, headless and scheduled-tick paths that pick claude without reading `[agents] vendor`;
+  - containment and permission posture checks;
+  - hooks and templates generated only for `.claude/` (`aida-core/templates/`);
+  - docs whose Works/Degraded claims are wrong under this repo's config (seat-parity.md).
+
+  ## Acceptance
+  1. A findings table on this spike: path:line, what assumes Claude, user impact, severity, and a proposed fix.
+  2. Each finding above cosmetic is filed as its own draft bug or task under EPIC-612, linked from the table. Duplicates of open specs are linked, not refiled.
+  3. Seat-parity.md cells found wrong under containment are listed with the evidence (the refusal message or command output).
+  4. No code changes in this spike.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-01T04:46:50.627557978Z
+modified_at: 2026-11-01T04:46:50.627557978Z
+req_type: Spike
+tags:
+- audit
+- vendor:codex
+filed_at:
+  code_sha: a83e05d785df667dfa986cf3eb310a3f0637b602
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: a83e05d785d
+  vendor: claude
+human_only: true
