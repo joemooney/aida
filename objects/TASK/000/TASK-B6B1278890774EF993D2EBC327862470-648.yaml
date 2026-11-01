@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T00:55:07.917269049Z
-modified_at: 2026-11-01T01:20:51.580183984Z
+modified_at: 2026-11-01T01:36:28.240974741Z
 req_type: Task
 tags:
 - config
@@ -93,6 +93,14 @@ comments:
   created_at: 2026-11-01T01:20:51.580183984Z
   modified_at: 2026-11-01T01:20:51.580183984Z
   session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+- id: 01a194c0-3a50-7ad2-a6e1-cb3f45508da6
+  author: joe
+  content: |
+    AC1 verification by Codex implementer: installed `codex --version` reports codex-cli 0.166.0. Read-only inspection of its installed Linux binary (`.../@openai/codex/node_modules/@openai/codex-linux-x64/vendor/x86_64-unknown-linux-musl/bin/codex`) found `https://api.openai.com/v1`, `https://chatgpt.com/backend-api/codex`, `https://auth.openai.com/api/accounts`, and `/oauth/token`. API-key model calls need api.openai.com; ChatGPT model calls use chatgpt.com and ChatGPT authentication/token refresh needs auth.openai.com. Added these three exact hosts to the repository allowlist. `codex --sandbox workspace-write --ask-for-approval never exec --help` succeeds, confirming the installed CLI accepts native posture flags before the exec subcommand. Verification is static binary/CLI-parser evidence, not a live authenticated traffic capture; no credentials were read and no live sign-in/model request was performed. Official authentication documentation also confirms both auth modes: https://learn.chatgpt.com/docs/auth?surface=cli .
+
+    Operator approved proceeding with the task's current in-progress state in this Codex session after I reported the mismatch with the requested approved-state prerequisite. Latest advisor comment accepts the per-vendor native opt-in override; Claude remains AIDA-contained.
+  created_at: 2026-11-01T01:36:28.240974741Z
+  modified_at: 2026-11-01T01:36:28.240974741Z
 history:
 - id: 01a1949a-7ffe-78a3-8011-c5c0c44dc2d3
   author: joe
