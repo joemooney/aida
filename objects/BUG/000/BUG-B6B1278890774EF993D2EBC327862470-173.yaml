@@ -13,12 +13,12 @@ description: |
   3. Fixture regression: search for canonical166 returns unrelated057 first and true166 later; only166 selected. Unrelated-only rows give no associated PR so ordinary fresh pickup is not blocked. Existing true-open-PR collision and renamed/native/agreed ID cases still protect active work.
 
   Codex implementation lane, no global config changes. LIGHT one targeted pr_lookup/association test plus fast gates; fixtures only, CI full gate. Independent review before integration. This is a new observed operational defect, not a follow-up to a nonblocking review nit.
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T08:28:54.983776375Z
-modified_at: 2026-11-01T17:27:07.913984381Z
+modified_at: 2026-11-01T22:50:55.484015423Z
 req_type: Bug
 tags:
 - forge
@@ -296,6 +296,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1994f-067c-7351-a75d-8adcdf8e0ece
+  author: aida-orchestrator
+  timestamp: 2026-11-01T22:50:55.484043095Z
+  session_id: 01a1994b1b41
+  harness_version: 2.1.316 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: ac1e318069f96c3f7e35be7ee0408f2ff4f5f284
   branch: main
@@ -303,3 +312,11 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: 9d26f95d2b3
   vendor: codex
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: Fixture logic is exact and CI is green at 3d06aed, but in production the fixed 10s sequential probe budget makes 'no associated PR' unreachable (measured 29.7s for 13 open PRs), all-open duplicate selection degrades to unknown, and the new numeric-continuation branch rule rejects AIDA's own -N/dated session branches (AC1-AC3).
+  recovery_hint: address the review findings, move BUG-2400 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-11-01T22:50:55.484015423Z
