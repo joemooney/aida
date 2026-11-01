@@ -15,7 +15,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-01T10:12:04.230556201Z
-modified_at: 2026-11-01T10:18:58.420108703Z
+modified_at: 2026-11-01T10:19:48.100821754Z
 req_type: Bug
 tags:
 - alias
@@ -29,6 +29,11 @@ comments:
   content: 'Additional supported-writer evidence: fresh reviewer08 record friendlySTORY2204 --pr3185 writes normalledger22 with release_grant then phase3ledger23 without release_grant; friendlyprojection nowselects#23. Root lawfulauto-release changed refusal from stalehead to approval lacks record-time grant provenance. NoJSONediting. Need projection/receipt selection preserve correct recorded approval authority, not merely synchronizealiasSHA. Native2398authorityconsumerfix overlap remainsserialized.'
   created_at: 2026-11-01T10:18:58.420108703Z
   modified_at: 2026-11-01T10:18:58.420108703Z
+- id: 01a1969f-5a04-72c2-8425-f8f6a31e875d
+  author: joe
+  content: 'PROXY DISPOSITION: approved high-priority real coordination regression with two independent production examples. SKETCH FIRST and independent signoff; no gate/identity policy waiver, no direct ledger edits. Serialize code with active BUG2398 review_verdict changes. Earlier add reported filed locally but publish refused under concurrent store activity; retain existing canonical176, do not duplicate.'
+  created_at: 2026-11-01T10:19:48.100821754Z
+  modified_at: 2026-11-01T10:19:48.100821754Z
 filed_at:
   code_sha: 6fefb63280c352be0194c2cfadf54a085eb55471
   branch: main
