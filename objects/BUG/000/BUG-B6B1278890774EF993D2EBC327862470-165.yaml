@@ -29,6 +29,16 @@ tags:
 - doctor
 - shift
 - vendor:codex
+relationships:
+- rel_type: Child
+  target_id: 01a19499-932e-79f0-a3e1-1299dfe355ad
+  created_at: 2026-11-01T06:47:16.475599741Z
+history:
+- id: 01a195dc-cb7c-7693-b0fc-4f832c1863f5
+  author: joe
+  timestamp: 2026-11-01T06:47:17.628060472Z
+  session_id: 01a194b1bcfb
+  changes: []
 filed_at:
   code_sha: 6dc7d4977ac5e47c42ddfb26597fe3ec5fb70b60
   branch: main
