@@ -10,12 +10,12 @@ description: |
   - Read retained focused4PASS, fast36PASS, tracked portability/pinned allowlist checks and actual exact-head CI. No redundant Cargo rerun for this evidence review; CI owns full gate.
   - Record own normal independent APPROVE or REQUEST CHANGES with full SHA/branch and actual full findings. Supported normal writer refusal remains binding; no identity substitution, parent context or raw ledger edits. Read back own canonical/PR and friendly verdicts/attestations and public review comment if successful. Source recommendation without receipt is not review completion.
   - No source edits, merge/ship, hold clearance or implementation-spec completion. This review work item is Completed only when review deliverable has valid own normal receipts and findings are handed off; merge/implementation completion remains independently gated on the owning bug.
-status: NeedsAttention
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T18:37:17.579510150Z
-modified_at: 2026-11-01T21:34:02.871685380Z
+modified_at: 2026-11-01T21:44:30.225533064Z
 req_type: Story
 tags:
 - review
@@ -34,6 +34,12 @@ comments:
   created_at: 2026-11-01T18:59:38.369013909Z
   modified_at: 2026-11-01T18:59:38.369013909Z
   relayed_from: codex-reviewer-26
+- id: 01a19912-3711-7ad0-bf43-85bab629da9c
+  author: joe
+  content: Returned from NeedsAttention to Approved via `aida edit --status`. No triage reason was given.
+  created_at: 2026-11-01T21:44:30.225528757Z
+  modified_at: 2026-11-01T21:44:30.225528757Z
+  session_id: 126bbd5a-a92f-452b-ab0b-2637a1db42c2
 history:
 - id: 01a19868-53c4-7b21-bb5f-437df0c02389
   author: aida-session-start
@@ -54,6 +60,14 @@ history:
   timestamp: 2026-11-01T21:34:09.485573245Z
   session_id: 126bbd5a-a92f-452b-ab0b-2637a1db42c2
   changes: []
+- id: 01a19912-3711-7ad0-bf43-85aa9f277dfd
+  author: joe
+  timestamp: 2026-11-01T21:44:30.225524796Z
+  session_id: 126bbd5a-a92f-452b-ab0b-2637a1db42c2
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: 6a3f67671a974703590efde5ae2a323f3f7471fa
   branch: main
