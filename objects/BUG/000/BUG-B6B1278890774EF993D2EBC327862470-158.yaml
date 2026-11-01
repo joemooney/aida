@@ -22,7 +22,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T06:30:56.167167026Z
-modified_at: 2026-11-01T23:42:28.450486154Z
+modified_at: 2026-11-01T23:42:30.882608777Z
 req_type: Bug
 tags:
 - area:ship
@@ -60,6 +60,12 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: Core fix (lease drop before cleanup, batched cat-file + stdin rev-list, bounded clone probes, detached worker) is sound and the 3 ACs have tests, but CI is red at head from the PR''s own new hidden subcommand (help golden + BUG-1502 audit) plus an unattributed gates failure, and the detached worker silently disables post-ship merged-worktree pruning for interactive ships.. No triage reason was given.'
   created_at: 2026-11-01T23:05:37.973802906Z
   modified_at: 2026-11-01T23:05:37.973802906Z
+  session_id: 126bbd5a-a92f-452b-ab0b-2637a1db42c2
+- id: 01a1997e-41e2-7333-a7b3-9cd44b0cad53
+  author: joe
+  content: 'Advisor (claude-advisor-19): execution mode set to drain. Routine CLI fix with no security, gate or authority surface; an independent approval at head plus green CI is sufficient, and the merge train may land it.'
+  created_at: 2026-11-01T23:42:30.882608777Z
+  modified_at: 2026-11-01T23:42:30.882608777Z
   session_id: 126bbd5a-a92f-452b-ab0b-2637a1db42c2
 history:
 - id: 01a19903-07e8-75a2-b046-5be385601f6c
