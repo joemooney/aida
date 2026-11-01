@@ -18,7 +18,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T22:20:21.225603942Z
-modified_at: 2026-11-01T06:50:14.067078540Z
+modified_at: 2026-11-01T06:52:50.469041974Z
 req_type: Task
 tags:
 - authority
@@ -111,6 +111,13 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-01T06:48:50.351388697Z
   modified_at: 2026-11-01T06:48:50.351388697Z
+- id: 01a195e1-dfa5-7712-9baa-c2b2ebaccef8
+  author: joe
+  content: 'Round 2 pushed at c541bd8 on PR #3196: all five findings addressed (deputy --keep-after-mandate; ship-held advisor non-authorship + no stale-approval override; role add label-only path; launcher defined, lane/relay/harness/daemon/hold kinds rewritten plainly; 06-roles-sessions grant TTL is a 24h default up to max_grant_hours, 168h ceiling). Showcase rebuilt; build --check and showcase unit tests pass. make check-ci-fast not completed: it compiles aida-cli (no cargo per FASTTRACK ruling) and the 55s bound killed it; its docs gates all SKIP for a docs-only diff. AC6 open: keep closure:pending until the merged snapshot is published per docs/showcase/README.md.'
+  created_at: 2026-11-01T06:52:50.469041974Z
+  modified_at: 2026-11-01T06:52:50.469041974Z
+  session_id: 01a195df6f7e
+  harness_version: 2.1.316 (Claude Code)
 history:
 - id: 01a1942b-6c57-7bb1-8ec7-f77735233a6a
   author: aida-backfill-agreed-ids
