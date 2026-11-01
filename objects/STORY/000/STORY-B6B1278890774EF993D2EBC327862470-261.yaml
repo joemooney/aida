@@ -25,7 +25,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T22:58:37.964636963Z
-modified_at: 2026-11-01T13:14:54.980766474Z
+modified_at: 2026-11-01T13:35:22.364730236Z
 req_type: Story
 tags:
 - docs
@@ -182,6 +182,11 @@ comments:
   content: 'Advisor conflict-only delta complete: pushed merge commit cda8b50138481b9795fd8a9995d472c9711270b3 to existing PR #3193. Merged current origin/main 471540a8c477a50a81170f338d81532cb5dbd329 into e20ca36. Resolved manifest/README with both Authority and Glossary, rebuilt showcase outputs from sources. Authority Markdown (including reviewed mandate/grant TTL wording), glossary templates, CLI implementation and book chapter unchanged by resolution; make book-glossary regenerated via approved render_discipline_glossary fixture with identical output. Passed glossary fixture, anchor verification, portability, showcase build/check, all 21 showcase build/publication tests, all 23 required term anchors/search records, and whitespace check. make check-ci-fast attempted once, interrupted after feature-disabled check began substantial dependency compilation per FASTTRACK ruling; incomplete locally. GitHub confirmed new head; no checks registered at immediate snapshot. Stopped for fresh independent affected-delta review and exact-head CI; no ship or review record. Sandbox checkout .git is read-only; used advisor-authorized temporary Git metadata /tmp/aida-3193-git.Cmmm3J for merge/commit/push. Workspace files contain merged tree, but original read-only local HEAD remains e20ca36; recovery/inspection: GIT_DIR=/tmp/aida-3193-git.Cmmm3J git status. No permissions relaxed.'
   created_at: 2026-11-01T12:25:13.566092605Z
   modified_at: 2026-11-01T12:25:13.566092605Z
+- id: 01a19752-66fc-7842-827b-5c49bd70cb6d
+  author: joe
+  content: 'Integration audit: fresh independent reviewer15 approved exact cda8b50138481b9795fd8a9995d472c9711270b3 (canonical22/friendly21); independent integrator12 batch and genuine TTY own grant used normal train3209, all7CI/Build/hold green at e7eab6cac1b788a7892ad516f43a941d31e8073e. Landed6a3f67671a974703590efde5ae2a323f3f7471fa afterc83511b, main trailer/parent verified, sourcePR3193 CLOSED/nullmergeCommit expected train. SourceCompleted verified by aida pull; ACTUALpublicPages refresh from this exactapprovedmergedrevision delegated separately, /tmp/aida-glossary-live-publication-result.md pending; no livepublication claimed yet. Overall trainrc1 means fullrequestedbatchnotlanded(3194excluded), not thismemberunmerged.'
+  created_at: 2026-11-01T13:35:22.364730236Z
+  modified_at: 2026-11-01T13:35:22.364730236Z
 history:
 - id: 01a19517-7d5f-7092-83c8-b303944f0e16
   author: joe
