@@ -15,12 +15,12 @@ description: |
   3. Every headless spawn applies `headless_wait_envs` (the task1169 guardrails pass unchanged).
   4. Under `[agents] contained` it uses the posture TASK-2631 resolves (native for codex, or AIDA's sandbox once STORY-2238 lands). It never launches uncontained silently.
   5. Recover the code from PR-3188's history (commit 2bb95a7, agent_codex_background.rs) as a starting point.
-status: Approved
+status: InProgress
 priority: High
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T04:28:44.095278434Z
-modified_at: 2026-11-01T04:28:44.095278434Z
+modified_at: 2026-11-01T08:23:01.299699141Z
 req_type: Story
 tags:
 - architecture
@@ -36,6 +36,13 @@ history:
   timestamp: 2026-11-01T04:28:53.861217482Z
   session_id: 77a7a933-9a3f-4243-9a44-892bcedf206c
   changes: []
+- id: 01a19634-6fb3-7741-81e8-6213d9f55da3
+  author: aida-session-start
+  timestamp: 2026-11-01T08:23:01.299694409Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: a83e05d785df667dfa986cf3eb310a3f0637b602
   branch: main
