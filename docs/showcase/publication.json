@@ -67,6 +67,13 @@
       "output": "authority.html",
       "label": "Authority",
       "category": "human"
+    },
+    {
+      "source": "../aida-core/templates/.aida/discipline/product-glossary.md",
+      "output": "glossary.html",
+      "label": "Glossary",
+      "category": "human",
+      "glossary": true
     }
   ]
 }
