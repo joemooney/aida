@@ -1,4 +1,11 @@
 - user_id: role:implementer
+  requirement_id: 01a193e5-6e71-77a2-8c2c-bd433eb2f055
+  position: 269000
+  added_by: role:implementer
+  note: 'PR-3177 fresh independent review found the remaining real T0/T1/T2 ordering bug: gate-ledger PR-3177.jsonl#19 at 9383d0215ddaade7388bce69f530efbfc7728353. New brief below is binding.'
+  added_at: 2026-11-01T07:04:55.374499750Z
+  for_role: implementer
+- user_id: role:implementer
   requirement_id: 01a19522-caf6-7ed2-b79e-13167544f557
   position: 270000
   added_by: role:implementer
@@ -32,13 +39,6 @@
   added_by: role:implementer
   note: 'PR-3194 review: CHANGES REQUESTED'
   added_at: 2026-11-01T06:16:44.014587911Z
-  for_role: implementer
-- user_id: role:implementer
-  requirement_id: 01a193e5-6e71-77a2-8c2c-bd433eb2f055
-  position: 275000
-  added_by: role:implementer
-  note: 'PR-3177 review round 7: CHANGES REQUESTED'
-  added_at: 2026-11-01T06:08:28.811157993Z
   for_role: implementer
 - user_id: role:implementer
   requirement_id: 01a1936a-61a6-73a0-a35d-c22c1ce50b32
