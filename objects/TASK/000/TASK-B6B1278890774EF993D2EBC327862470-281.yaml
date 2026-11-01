@@ -6,12 +6,12 @@ description: |
   docs/what-is-aida.md:169 and docs/what-is-aida.html:719 say "Starting and stopping a mandate are refused unless the process has an interactive terminal...". `aida mandate renew` has the same floor (STORY-166 AC1); add it to that sentence.
 
   Raised in review of PR-3175: https://github.com/joemooney/aida/pull/3175#issuecomment-6549936924
-status: Done
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T22:23:49.044464609Z
-modified_at: 2026-11-01T03:43:14.224235540Z
+modified_at: 2026-11-01T04:19:05.939738881Z
 req_type: Task
 tags:
 - docs
@@ -51,6 +51,20 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a19555-1e4d-7df2-8168-c3698f4338af
+  author: aida-auto-bump
+  timestamp: 2026-11-01T04:19:05.933082441Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a19555-1e53-70f0-a75b-a8021a4e14cb
+  timestamp: 2026-11-01T04:19:05.939734472Z
+  agent: aida
+  commit_sha: a83e05d785df667dfa986cf3eb310a3f0637b602
+  summary: 'Docs-only: both remaining what-is-aida sentences (md:219/264, html:839/921) now name renew; the line-169 sentence the spec cites already said it on main (STORY-166). Renew''s floor checked in code: renew_as_human -> require_mandate_human (gate/mandate.rs:576,1709). CI green at head.'
+  review_verdict: approved
 filed_at:
   code_sha: 9b13e9e400ff1a829ee90c0a3a45136a5bc48fda
   branch: pr-3175
@@ -64,3 +78,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-11-01T03:43:14.224235540Z
   implemented_by: joe
+  completed_at: 2026-11-01T04:19:05.933074921Z
+  completion_sha: a83e05d785df667dfa986cf3eb310a3f0637b602
