@@ -101,6 +101,11 @@ branches on the exit code:
 | 33 | `implementer: held branch=<branch>` | The branch is pushed and the PR is held (`aida pr hold`). |
 | 34 | (none) | Refused before any setup: the concurrency cap is reached. |
 
+Every line except `punted` ends with ` untested=true` when the implementer ran
+no local test to completion, so its push reached CI untested.
+
+Its local tests run through `aida lane job` (below).
+
 The child runs in its own lease and worktree as `implementer`. If the
 launcher's grant delegates `implementer`, it gets a child grant. Otherwise
 (no grant, or a grant that does not delegate it) it runs at baseline
@@ -199,6 +204,30 @@ The same recipe is embedded in every phase-failure comment, so the reader who de
 **Chains with** — `backlog groom` fills it; `queue work` empties it into sessions; `drain status` watches an `--auto-complete` run draining it.
 
 ---
+
+### `aida lane`
+
+**A headless implementer runs its local tests through its launcher.** A
+headless tool call is capped at 60 seconds, and a process it detaches dies
+with the call, so the launcher runs a lane job runner for as long as it waits.
+In the seat, `aida lane job run --` followed by a cargo command hands the run
+to it, for example
+`AIDA_CARGO_TIMEOUT=900 aida lane job run -- <cargo command>` with
+`cargo test --profile agent -p <crate> --lib -- <filter>` as the cargo command.
+The runner accepts only `cargo test`, `cargo check` and `cargo build` with the
+agent profile, and refuses options that point cargo at other config, another
+manifest or target directory, unstable flags or another toolchain. It runs
+the job in the seat with the seat's own cargo target, through the host's
+`cargo` (the slot-limiting wrapper), and under the seat's OS wrap when
+`[contained] os_wrap` is on. The command waits at most 50 seconds. It exits
+with cargo's exit code when the run finishes, and otherwise prints the job id
+and exits 75; `aida lane job wait <id>` keeps waiting. Output and exit codes
+are kept under the main checkout's `.aida/lane-jobs/<lease>/`, with one line
+per job in its `jobs.log`. A seat clone's cargo target is seeded from the
+primary's agent-profile target when the clone is created, and again before
+the first job: dependency artifacts are hardlinked, cargo's metadata and
+build-script output are copied, and incremental state is skipped.
+<!-- trace:BUG-2383 | ai:claude -->
 
 ### `aida backlog`
 

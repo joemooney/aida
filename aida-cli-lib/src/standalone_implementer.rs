@@ -94,6 +94,31 @@ to whoever started it, and a separate reviewer and the merge seat take it from t
 a design fork, run `aida punt`; to push the branch but hold the PR for a manual gate, run \
 `aida pr hold`.";
 
+/// BUG-2383: how a standalone implementer runs its local tests. Appended to
+/// its prompt when the launcher's lane job runner is up.
+// trace:BUG-2383 | ai:claude
+pub(crate) const LANE_JOB_CONTRACT: &str = "\n\nLocal tests in this lane: a tool call is capped \
+at 60 seconds and anything you detach (`setsid nohup ...`, `&`) dies with the call, so do not run \
+cargo yourself and do not background it. Hand the run to the launcher instead: \
+`AIDA_CARGO_TIMEOUT=900 aida lane job run -- cargo test --profile agent -p <crate> --lib -- \
+<filter>`. It accepts `cargo test|check|build --profile agent ...`, runs in this seat with its own \
+warm target under the cargo slot limiter, and returns within 50 seconds. When it finishes it \
+prints the output tail and exits with cargo's exit code; while it still runs it prints the job \
+id and exits 75, and you continue with `aida lane job wait <id>` until it finishes. If it \
+reports that this session has no lane job runner, say `untested=true` in your final result.";
+
+/// Append `untested=true` to a result line when the lane ran no local test
+/// to completion (BUG-2383 AC3), so whoever launched it knows the push
+/// reached CI untested. A punt's line is left alone: nothing was shipped.
+// trace:BUG-2383 | ai:claude
+pub(crate) fn with_untested(line: String, outcome: &Outcome, untested: bool) -> String {
+    if untested && !matches!(outcome, Outcome::Punted { .. }) {
+        format!("{line} untested=true")
+    } else {
+        line
+    }
+}
+
 /// Remove every [`LAUNCHER_ONLY_ENV`] variable from `cmd`, then set the
 /// child's marker and its punt and hold signal files.
 pub(crate) fn apply_standalone_child_env(
@@ -571,7 +596,29 @@ pub(crate) fn run(launch: Launch<'_>) -> Result<()> {
         }
         let _ = std::fs::remove_file(path);
     }
-    let prompt = format!("{}{STOP_CONTRACT}", launch.prompt);
+    // BUG-2383: the lane job runner, so the seat can run its tests here,
+    // outside its 60-second tool-call cap. trace:BUG-2383 | ai:claude
+    let worktree = lease_worktree(launch.project_root, launch.lease_id);
+    let lane_jobs = crate::lane_job::LaneJobs::for_lease(&main_root, &worktree, launch.lease_id);
+    let lane_jobs = match lane_jobs.prepare() {
+        Ok(()) => Some(lane_jobs),
+        Err(e) => {
+            eprintln!(
+                "{} the lane job runner is unavailable, so the implementer cannot run tests: {e:#}",
+                "Warning:".yellow().bold()
+            );
+            None
+        }
+    };
+    let prompt = format!(
+        "{}{STOP_CONTRACT}{}",
+        launch.prompt,
+        if lane_jobs.is_some() {
+            LANE_JOB_CONTRACT
+        } else {
+            ""
+        }
+    );
     let log_path = launch
         .project_root
         .join(".aida")
@@ -601,7 +648,10 @@ pub(crate) fn run(launch: Launch<'_>) -> Result<()> {
     let store_commit =
         crate::child_store_commit::ChildStoreCommit::arm(launch.project_root, "implementer");
     let customize = |cmd: &mut std::process::Command| {
-        apply_standalone_child_env(cmd, launch.lease_id, &punt_signal, &hold_signal)
+        apply_standalone_child_env(cmd, launch.lease_id, &punt_signal, &hold_signal);
+        if let Some(lane_jobs) = &lane_jobs {
+            lane_jobs.apply_env(cmd);
+        }
     };
     // The child is spawned, not exec'd: stamp it on the lease for every
     // vendor, so `aida ps` reads the lane as live (signoff C6), and record
@@ -634,7 +684,6 @@ pub(crate) fn run(launch: Launch<'_>) -> Result<()> {
     // (`launch_head`), so finding the PR open afterwards proves nothing:
     // only the seat's git state says whether this run pushed.
     // trace:BUG-B6B1278890774EF993D2EBC327862470-050 | ai:claude
-    let worktree = lease_worktree(launch.project_root, launch.lease_id);
     let launch_head = bg::seat_head(&worktree);
     let launch_pr = lookup_pr_with(launch.project_root, launch.branch, 1);
     let launch_seat = LaunchSeat {
@@ -650,6 +699,7 @@ pub(crate) fn run(launch: Launch<'_>) -> Result<()> {
         on_waiting: &|| mark_slot_waiting(launch.project_root),
         on_log: &|log| record_slot_log(launch.project_root, log),
     };
+    let runner = lane_jobs.clone().map(crate::lane_job::Runner::start);
     let finished = lane.run(
         prompt,
         |prompt, log, resume, hold| {
@@ -686,6 +736,8 @@ pub(crate) fn run(launch: Launch<'_>) -> Result<()> {
             (outcome, done)
         },
     );
+    // trace:BUG-2383 | ai:claude
+    let untested = runner.map(|r| r.stop().untested()).unwrap_or(true);
     crate::session::revoke_standalone_implementer_grant(launch.child_grant);
     let bg::LoopEnd {
         status,
@@ -700,7 +752,7 @@ pub(crate) fn run(launch: Launch<'_>) -> Result<()> {
     let seat = bg::SeatState::read(&worktree, launch.branch);
     let (outcome, unshipped) = settle_outcome(outcome, &launch_seat, &seat);
     let (line, code) = report(&outcome, status.code(), unshipped.as_ref());
-    println!("{line}");
+    println!("{}", with_untested(line, &outcome, untested));
     if code == 0 {
         return Ok(());
     }
