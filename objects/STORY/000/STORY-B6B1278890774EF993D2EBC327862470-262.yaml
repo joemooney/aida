@@ -27,7 +27,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T23:03:29.192827531Z
-modified_at: 2026-11-01T06:07:28.022419560Z
+modified_at: 2026-11-01T06:16:40.748071792Z
 req_type: Story
 tags:
 - docs
@@ -68,6 +68,12 @@ comments:
   modified_at: 2026-11-01T03:41:58.187727122Z
   session_id: 01a1952f2068
   harness_version: 2.1.316 (Claude Code)
+- id: 01a195c0-c3d4-7e72-8133-b529b966d3b8
+  author: joe
+  content: 'Advisor ruling: Turn the 5 red CI gates green: they are all ratchet or inventory gates this PR trips, so register the new surfaces rather than raising baselines without cause. Implement PR-mode light-review routing, and add tests for the PR-mode, mail and run-state paths. Address every finding in the PR-3194 verdict in one push. LIGHT gate.'
+  created_at: 2026-11-01T06:16:40.660518146Z
+  modified_at: 2026-11-01T06:16:40.660518146Z
+  session_id: a31b25d9-60a5-4347-a85b-4c74ab06f274
 history:
 - id: 01a19517-853a-7dc1-addd-62b1b73de3be
   author: joe
