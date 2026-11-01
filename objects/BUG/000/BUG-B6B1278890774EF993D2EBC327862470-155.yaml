@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T01:39:06.904532581Z
-modified_at: 2026-11-01T08:39:34.046307764Z
+modified_at: 2026-11-01T08:39:37.507580916Z
 req_type: Bug
 tags:
 - closure:pending
@@ -44,6 +44,11 @@ comments:
   content: 'Clarification of CI evidence: the precise red condition was story_1917_native_pr_ship_unheld_refuses_at_each_checkpoint_without_merging at10.2s versus the unbudgeted10s limit; all6625 passed,3ignored. The aggregate799.8s and23.91s explicitly-budgeted replay were diagnostic, not the failing gate. One failed-job rerun is active.'
   created_at: 2026-11-01T08:13:27.774272146Z
   modified_at: 2026-11-01T08:13:27.774272146Z
+- id: 01a19643-a323-76d2-9307-abd8be6f7024
+  author: joe
+  content: 'Disposition of approved review minors: accept process-wide fixture scratch sharing and unrelated resolver scope as bounded limitations of this targeted test-isolation fix, without follow-up chains. The reported end-to-end seat-clone session_start symptom needs a direct filtered seat-clone verification after merge, so closure:pending is now set. CI and the lock-path regression are green but are not claimed to prove that host-specific case. No test may deliberately write the live store; run that verification with a read-only live-store boundary. Complete only on that evidence, or return concrete remaining failure to this same spec.'
+  created_at: 2026-11-01T08:39:37.507580916Z
+  modified_at: 2026-11-01T08:39:37.507580916Z
 history:
 - id: 01a19517-617d-7151-9e47-aa0da46d6e93
   author: joe
