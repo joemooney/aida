@@ -16,7 +16,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-01T10:04:17.050576260Z
-modified_at: 2026-11-01T10:05:17.060333645Z
+modified_at: 2026-11-01T16:47:51.047469366Z
 req_type: Bug
 tags:
 - guard-recurrence
@@ -28,6 +28,11 @@ comments:
   content: 'PROXY DECISION: matching performance-guard trip and configured 2000ms/10%/5000ms budgets verified. Treat as real recorded SLO incident requiring diagnosis, no budget change; three fresh under-budget calls do not establish recovery. Approved bounded diagnosis/fix scope, priority behind EPIC612 native parity. Historical-only closure requires representative fresh artifact evidence and an identified already-merged remedy.'
   created_at: 2026-11-01T10:05:17.060333645Z
   modified_at: 2026-11-01T10:05:17.060333645Z
+- id: 01a19802-9f07-72c1-9437-fc849a0a62cd
+  author: joe
+  content: 'Current recurrence update: schedule trip performance-guard@2026-11-01T15:26:40.081371253Z reports123/494 show calls over2000ms (24.899%, allowed10%), worst40380ms (ceiling5000ms),24h,0excluded,lineage_scopedtrue. The later breach remains covered by this existing approved incident, not a new follow-up or budget change. Actual current liveartifact6a3f676, default/no-git/path-shape and controlled fakeHOME/load/phase evidence still needed; earlier three warm samples and old-artifact description do not close current acceptance. No doctor exit0 or missing new samples proves SLO recovery.'
+  created_at: 2026-11-01T16:47:51.047469366Z
+  modified_at: 2026-11-01T16:47:51.047469366Z
 filed_at:
   code_sha: 6fefb63280c352be0194c2cfadf54a085eb55471
   branch: main
