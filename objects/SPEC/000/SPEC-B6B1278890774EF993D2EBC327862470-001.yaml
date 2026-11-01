@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-01T07:26:01.071265913Z
-modified_at: 2026-11-01T11:15:29.936070197Z
+modified_at: 2026-11-01T11:15:53.336610536Z
 req_type: Task
 tags:
 - from-implementer:BUG-2397
@@ -22,6 +22,10 @@ relationships:
 - rel_type: Child
   target_id: 01a19499-932e-79f0-a3e1-1299dfe355ad
   created_at: 2026-11-01T11:15:29.936067405Z
+  created_by: joe
+- rel_type: BlockedBy
+  target_id: 01a19600-8cf2-74f3-a6ce-b7a32fa5affc
+  created_at: 2026-11-01T11:15:53.336607899Z
   created_by: joe
 comments:
 - id: 01a1962b-8fa0-7ea1-b58e-d7e7da66a1ce
@@ -61,6 +65,10 @@ history:
 - id: 01a196d2-5bf4-72d3-b0a2-0a699c53ce36
   author: joe
   timestamp: 2026-11-01T11:15:30.932092481Z
+  changes: []
+- id: 01a196d2-b752-7d90-913b-25fc9a4e6372
+  author: joe
+  timestamp: 2026-11-01T11:15:54.322668532Z
   changes: []
 filed_at:
   aida_version: 0.16.0
