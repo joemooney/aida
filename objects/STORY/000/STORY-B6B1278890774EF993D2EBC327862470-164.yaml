@@ -34,7 +34,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T19:23:04.998731220Z
-modified_at: 2026-11-01T01:26:31.820761407Z
+modified_at: 2026-11-01T01:41:08.392842178Z
 req_type: Story
 tags:
 - architecture
@@ -227,6 +227,21 @@ comments:
   created_at: 2026-11-01T01:26:31.820761407Z
   modified_at: 2026-11-01T01:26:31.820761407Z
   session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+- id: 01a194c4-80a8-79a2-ac03-a7268430b329
+  author: joe
+  content: |
+    ADVISOR ADDENDUM to the round 3 brief (18:46), PR-3185 at 59ebd77, CI run 41259539962. These are the failing tests the 18:27 brief left blank. Every red job is below; main is green.
+
+    1. CI (cli-1): aida-cli/tests/story_164_single_hub.rs:231, `enroll_root_promotes_the_implicit_pools_without_renumbering`. `aida db block claim --type BUG --size 10` fails with "this store declares no hub, so this clone may allocate only node-local IDs ... (or enroll a root with `aida node enroll-root`)". After enroll-root the claim must succeed. Either the test fixture never declares a hub, or enroll-root leaves the no-hub refusal in force. This is the same area as round 3 item (2): fix it there.
+    2. CI (lib-0): aida-cli-lib/src/tests/bug_2181_host_remote_credentials_tests.rs:565, `task_2001_every_host_remote_call_routes_its_credentials`. It flags aida-core/src/store_hubs.rs:253 (`remote_urls`: `git remote get-url --all`). get-url reads local config and never contacts the remote, so mark it with `// remote-creds-ok(TASK-2001): reads local remote config only; no network`.
+    3. CI (lib-1): aida-cli-lib/src/tests/bug_1723_config_trust_tests.rs:509, `every_config_toml_site_is_inventoried_and_every_worktree_key_is_policy`. aida-cli-lib/src/allocation_health.rs (1 site) and aida-core/src/store_hubs.rs (4 sites) read config.toml, but scripts/config-trust.toml has no [readers] entry for them. Add the [readers] entries. [store.hubs] is the tracked hub declaration, so classify each read per BUG-1723; the local-only hub config from round 2 is a clone-local read.
+    4. CI (gates): `cargo fmt --all -- --check` reports a diff in aida-cli/tests/story_164_single_hub.rs:452 (the `a.by_title("authoritative unpushed bug").agreed_id.as_deref()` chain). Run `cargo fmt --all`.
+    Ignore the "stray/" and "leak" lines in the gates log. They are expected output from the shard script's self-test.
+
+    Local gate (LIGHT): `AIDA_CARGO_TIMEOUT=1200 cargo test --profile agent -p aida-cli --test story_164_single_hub` (run it in the background), then `make check-ci-fast` (it covers fmt and the ratchets), then push. Read CI logs with `gh api repos/joemooney/aida/actions/jobs/<job-id>/logs`. `gh run view --log` fails in the sandbox (BUG-2380).
+  created_at: 2026-11-01T01:41:08.392842178Z
+  modified_at: 2026-11-01T01:41:08.392842178Z
+  session_id: 77a7a933-9a3f-4243-9a44-892bcedf206c
 history:
 - id: 01a1939c-ffb0-7d40-b083-9d0d5a3d6156
   author: joe
