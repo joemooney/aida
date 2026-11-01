@@ -1,5 +1,6 @@
 id: 01a196d6-0ddb-7f00-ac2e-2a61a245b4d9
 spec_id: SPEC-b6b1278890774ef993d2ebc327862470-003
+agreed_id: TASK-2718
 title: BUG-2400 native implementer checkout cannot stage implementation for PR handoff
 description: 'In assigned codex/bug-2400-exact-pr checkout /home/joe/ai/aida-worktrees/aida-seat-aida-bug-b6b1278890774ef993d2ebc327862470-173, git add aida-cli-lib/src/pr_lookup.rs aida-cli-lib/src/tests/bug_2400_exact_pr_association_tests.rs exits 128: cannot create .git/index.lock: Read-only file system. Native sandbox explicitly marks .git read-only, approvals disabled. Shared .aida/cache.db is also symlinked into main outside writable roots; MCP coordination works. This prevents required commit/push/PR handoff after implementation. Related existing launch-boundary findings TASK-2712 and TASK-2714. Correct launcher write grants and resume the same checkout; do not reimplement or bypass the sandbox.'
 status: Superseded
@@ -35,6 +36,10 @@ history:
 - id: 01a1970e-9ba3-7c90-a5ee-b099293eded6
   author: joe
   timestamp: 2026-11-01T12:21:19.395509215Z
+  changes: []
+- id: 01a1973f-891e-7b53-987c-f9aecb00acc1
+  author: joe
+  timestamp: 2026-11-01T13:14:45.918981256Z
   changes: []
 filed_at:
   aida_version: 0.16.0
