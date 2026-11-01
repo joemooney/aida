@@ -19,7 +19,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T02:25:46.947809262Z
-modified_at: 2026-11-01T08:58:22.187881314Z
+modified_at: 2026-11-01T09:32:44.817919630Z
 req_type: Bug
 tags:
 - area:agents
@@ -191,6 +191,11 @@ comments:
   content: 'Round-4 approach (resuming the existing implementer approach under the 08:50 advisor ruling): regenerate the entire help snapshot with the snapshot test; retain resolver/executable ratchets and replace all flagged fixture patterns. AC1/AC3 fixture tests exercise the production drain launch boundary (env, prompt, runner lifetime, completion/refusal and phase warning) for Claude/Codex/AGY separately from unchanged Claude resume policy. Tally runner tests cover manifest/offline/compile/argument/start failures, zero tests, ignored-only, no-run/list/signal and genuine failing tests. AC2 retains reflink-only seeding and cold-target timeout. Mandatory live-bwrap test attacks host cargo sources/cache/bin/config while permitting own seat/target. Expected files: lane_job.rs, session.rs, phase_driver_trait.rs, lane-job tests, help golden, ci.yml and lane-job manual/prompt. No unresolved design questions; preserve every confinement floor and active hold. LIGHT focused lane_job run plus fast gates; touched/compile checks justified by CI test selection. This round had begun edits before reading the pickup workflow; this comment records the resumed implementation approach without claiming it preceded those edits.'
   created_at: 2026-11-01T08:58:22.187865835Z
   modified_at: 2026-11-01T08:58:22.187865835Z
+- id: 01a19674-4591-74a2-84a9-d28fe36f861a
+  author: joe
+  content: 'Advisor ruling addendum to blocker5 actual native integration: restrictive Codex inherit=core drops ordinary AIDA_LANE_JOB_* and CARGO_TARGET_DIR env as well as role metadata. BUG2398 fixed whitelist is intentionally public seat context and forbids bearer tokens; do not assume runner path/token reaches tools merely because host Command env has it. The required real Codex launcher/drain fixture must prove job submission/result/tally across that boundary. Reuse approved explicit own-context/typed lease channel safely; no inherit-all or token-in-argv workaround. If this needs a new capability transport decision, punt that precise fork before claiming vendor-neutral runtime coverage. Direct native async Cargo and host-witnessed runner evidence must be reported distinctly and truthfully.'
+  created_at: 2026-11-01T09:32:44.817919630Z
+  modified_at: 2026-11-01T09:32:44.817919630Z
 history:
 - id: 01a19525-88eb-79e3-aab8-8d511ad2f605
   author: aida-session-start
