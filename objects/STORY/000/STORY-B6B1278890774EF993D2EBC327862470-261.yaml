@@ -25,7 +25,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T22:58:37.964636963Z
-modified_at: 2026-11-01T05:57:30.193813065Z
+modified_at: 2026-11-01T06:05:30.769122393Z
 req_type: Story
 tags:
 - docs
@@ -83,6 +83,12 @@ comments:
   modified_at: 2026-11-01T04:49:56.814195195Z
   session_id: 01a195596c6b
   harness_version: 2.1.316 (Claude Code)
+- id: 01a195b6-8a97-7933-ba97-1d5579c61ae5
+  author: joe
+  content: 'Advisor ruling: Regenerate docs/cli/12-glossary.md from the single glossary source so AC2 holds, and fix every other finding in the PR-3193 verdict in one push. LIGHT gate.'
+  created_at: 2026-11-01T06:05:30.647670192Z
+  modified_at: 2026-11-01T06:05:30.647670192Z
+  session_id: a31b25d9-60a5-4347-a85b-4c74ab06f274
 history:
 - id: 01a19517-7d5f-7092-83c8-b303944f0e16
   author: joe
