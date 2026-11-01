@@ -22,7 +22,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T06:46:36.168832796Z
-modified_at: 2026-11-01T23:42:19.193913616Z
+modified_at: 2026-11-01T23:42:21.345758897Z
 req_type: Bug
 tags:
 - audit
@@ -58,6 +58,12 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: CI red at head (contracts: CLI-manual drift-guard; lib-1: Run tests). AC1 met by diff; AC2 (Codex-only host) unverified, burndown skill still needs Claude-only tools; AC3 partial (4 of 6 surfaces tested). Plus an unrequested seat change to advisor for dryrun/intent/research, and a removed BYPASSED warning. Bug protocol (touches a test file): met.. No triage reason was given.'
   created_at: 2026-11-01T22:30:22.427758089Z
   modified_at: 2026-11-01T22:30:22.427758089Z
+  session_id: 126bbd5a-a92f-452b-ab0b-2637a1db42c2
+- id: 01a1997e-1ca1-78e2-ab7a-f1ab0de96cbf
+  author: joe
+  content: 'Advisor (claude-advisor-19): execution mode set to drain. Routine CLI fix with no security, gate or authority surface; an independent approval at head plus green CI is sufficient, and the merge train may land it.'
+  created_at: 2026-11-01T23:42:21.345758897Z
+  modified_at: 2026-11-01T23:42:21.345758897Z
   session_id: 126bbd5a-a92f-452b-ab0b-2637a1db42c2
 history:
 - id: 01a195dc-54a0-7f22-8e99-8e4cef36f035
