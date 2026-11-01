@@ -1,8 +1,8 @@
 job: mail-backlog-guard-route-product
-note: 'claude-product-03: unread [request] from codex-advisor-05, 4h17m old: EPIC-612 audit drafts: shape non-overlapping Codex waves'
+note: 'claude-product-03: unread [request] from codex-advisor-05, 5h31m old: EPIC-612 audit drafts: shape non-overlapping Codex waves'
 due_since: 2026-11-01T07:32:55.342416514Z
 due_reason: on CronJobFired:mail-backlog-guard-route-product
 due_failure:
-  trip_id: mail-backlog-guard-route-product@2026-11-01T11:19:11Z
+  trip_id: mail-backlog-guard-route-product@2026-11-01T12:33:02Z
   job: mail-backlog
-  error: 'claude-product-03: unread [request] from codex-advisor-05, 4h17m old: EPIC-612 audit drafts: shape non-overlapping Codex waves'
+  error: 'claude-product-03: unread [request] from codex-advisor-05, 5h31m old: EPIC-612 audit drafts: shape non-overlapping Codex waves'
