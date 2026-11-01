@@ -17,12 +17,12 @@ description: |-
   1. `runaway_seats.rs` scans `~/.codex/sessions` filtered by project/worktree `cwd` (matching `usage.rs` / `vendor_activity.rs`) and evaluates the same window token/byte/line thresholds for Codex sessions.
   2. `shift.rs:100` includes `"codex"` in `COVERED_VENDORS` once `runaway-seats` covers Codex, so `aida shift tick` runs on `[agents] vendor = "codex"` without requiring `allow_uncovered_vendors`.
   3. Update `docs/autonomous-drain.md:1613-1615` to reflect Codex watchdog coverage, and add unit tests with synthetic `~/.codex/sessions` JSONL fixtures.
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T06:47:10.885136620Z
-modified_at: 2026-11-01T21:49:29.700149485Z
+modified_at: 2026-11-01T21:50:20.631570450Z
 req_type: Bug
 tags:
 - audit
@@ -33,6 +33,10 @@ relationships:
 - rel_type: Child
   target_id: 01a19499-932e-79f0-a3e1-1299dfe355ad
   created_at: 2026-11-01T06:47:16.475599741Z
+- rel_type: BlockedBy
+  target_id: 01a1965b-4971-7252-abdf-997331f285fd
+  created_at: 2026-11-01T21:50:20.631565851Z
+  created_by: joe
 comments:
 - id: 01a19628-a93f-78a3-8f9c-becd53fd3887
   author: joe
@@ -1344,6 +1348,21 @@ history:
   session_id: 01a199167b16
   harness_version: 2.1.316 (Claude Code)
   changes: []
+- id: 01a19917-6c69-72f2-8239-274ae179208a
+  author: joe
+  timestamp: 2026-11-01T21:50:11.561758587Z
+  session_id: 01a199167b16
+  harness_version: 2.1.316 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
+- id: 01a19917-9428-76a2-8535-a2e8357fbcdf
+  author: joe
+  timestamp: 2026-11-01T21:50:21.736083633Z
+  session_id: 01a199167b16
+  harness_version: 2.1.316 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 6dc7d4977ac5e47c42ddfb26597fe3ec5fb70b60
   branch: main
@@ -1352,3 +1371,9 @@ filed_at:
   aida_build_sha: 962ca07af25
   vendor: antigravity
   session: 01a194b1bcfb
+attention_reason:
+  category: blocked-dependency
+  detail: The latest adopted direction on this spec (2026-11-01T16:47Z, after advisor23's signoff) says all 10 backend/connector/origin/worker gates remain mandatory BEFORE any BUG-2391 production code, forbids speculative implementation, and says TASK-2705/2706/2707/2708 capability gaps are not waived. All four of those tasks are still 'approved' (not done), and STORY-2238 is in progress. So no code can land under the approved architecture yet. Also, the approved scope (private per-launch foreground app-server endpoint, HOST parentfd connector, typed producer ops) has grown far beyond the three original acceptance criteria (scan ~/.codex/sessions by cwd in runaway_seats.rs, add codex to COVERED_VENDORS, update docs + fixture tests).
+  lean: Either (a) re-queue after TASK-2705..2708 land with independently reviewed capability artifacts, or (b) if the advisor wants the original narrow fix (runaway_seats scans ~/.codex/sessions with the cwd attribution vendor_activity.rs already uses, plus codex in COVERED_VENDORS), split that into its own spec with the original 3 ACs and say explicitly that it is separate from the containment architecture. That narrow fix is about heft 3 and could ship on its own.
+  raised_by: implementer
+  raised_at: 2026-11-01T21:50:11.561736177Z
