@@ -18,7 +18,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T22:17:06.607335957Z
-modified_at: 2026-11-01T02:25:24.093414381Z
+modified_at: 2026-11-01T03:28:18.240452361Z
 req_type: Story
 tags:
 - agent-new
@@ -131,6 +131,13 @@ comments:
   created_at: 2026-11-01T02:25:24.093414381Z
   modified_at: 2026-11-01T02:25:24.093414381Z
   session_id: 77a7a933-9a3f-4243-9a44-892bcedf206c
+- id: 01a19526-9d40-7811-8032-3e4318f0e41b
+  author: joe
+  content: 'Review round 3 (PR-3184, head 2a57578): F2-F4 already fixed in c5806466 (--bg never enables the offer; roster pre-check principal->advisor and principal->seat inside the eligibility gate; --grant-inline no, --bg and out-of-roster cases run on the PTY). F1 (lib CI): job logs unreadable from the implementer sandbox (results-receiver host denied) and a local lib build cannot finish within the bounded-step limit, so the failing test is not named. Evidence it is not this PR: main green, lib-1 green at c5806466, unrelated PR-3185 red on lib-0 at the same time. Defensive change: offer_inline_parent_grant returns before any grant/roster read when the offer is off. CI re-running on 2a57578; if lib-0 is still red, the next round needs someone who can read the log.'
+  created_at: 2026-11-01T03:28:18.240452361Z
+  modified_at: 2026-11-01T03:28:18.240452361Z
+  session_id: 01a1951a5403
+  harness_version: 2.1.316 (Claude Code)
 history:
 - id: 01a1940e-15d9-7e13-bbb4-79222982ffb5
   author: aida-session-start
