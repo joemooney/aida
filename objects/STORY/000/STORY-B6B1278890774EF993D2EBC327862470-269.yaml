@@ -27,12 +27,12 @@ description: |
 
   ## Out of scope
   macOS or other OS backends (operator, 2026-10-31: Linux only for now).
-status: Approved
+status: InProgress
 priority: High
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T00:54:49.371776631Z
-modified_at: 2026-11-01T07:26:23.126598421Z
+modified_at: 2026-11-01T08:08:00.879354934Z
 req_type: Story
 tags:
 - architecture
@@ -68,6 +68,13 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a19626-b26f-70b3-af56-de1b219c9ca8
+  author: aida-session-start
+  timestamp: 2026-11-01T08:08:00.879351788Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 43d9f95803036ec22350e5a210d8c1cae20b9fe5
   branch: main
