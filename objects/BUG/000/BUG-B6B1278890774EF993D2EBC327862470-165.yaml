@@ -22,7 +22,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-01T06:47:10.885136620Z
-modified_at: 2026-11-01T12:38:15.905670501Z
+modified_at: 2026-11-01T12:48:30.325804996Z
 req_type: Bug
 tags:
 - audit
@@ -533,6 +533,11 @@ comments:
     The HOST-prepared own-context script was read and sourced in the same shell as this artifact write; exact own child name/context and companion instance were checked and `aida role current --check` returned advisor. The same checks precede canonical posting. No parent/dead/root context was borrowed. Posting success and exact-body readback are reported separately; no queued host store commit is presumed complete.
   created_at: 2026-11-01T12:38:15.905670501Z
   modified_at: 2026-11-01T12:38:15.905670501Z
+- id: 01a19727-7e75-7e10-b200-854fb3120b35
+  author: joe
+  content: 'PROXY DESIGN DIRECTION: adopt independent advisor17 direction A preserving every existing configured watchdog rule and full native-parity scope. Amend SAME BUG2391 with minimal AIDA-owned typed queue clientUserMessageId producer plus protected host-origin journal and exact actual native delivery correlation; existing mail-wake host/invocation only, no new timer/service/Codex patch/policy reduction/uncovered override. Reuse the existing installed queue daemon endpoint/auth contract only; no new credential authority/model-account reuse/global configuration/secret argv or payload logging. Any unsupported API auth/ownership or indistinguishable compaction producer remains an explicit architecture fork before code. Root authorizes source/synthetic sketch preparation, not production implementation, credential inspection or runtime deployment. Full advisor17 conditions/tests remain; accepted historical attribution/forks2/3/5 do not reopen.'
+  created_at: 2026-11-01T12:48:30.325804996Z
+  modified_at: 2026-11-01T12:48:30.325804996Z
 history:
 - id: 01a195dc-cb7c-7693-b0fc-4f832c1863f5
   author: joe
