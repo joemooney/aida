@@ -22,7 +22,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T06:30:56.167167026Z
-modified_at: 2026-11-01T21:55:42.652897011Z
+modified_at: 2026-11-01T21:56:36.713293624Z
 req_type: Bug
 tags:
 - area:ship
@@ -50,6 +50,11 @@ comments:
   content: 'Implemented and pushed commit 5ea7431157d on branch bug-b6b1278890774ef993d2ebc327862470-158. Merge lease now drops after pull and before cleanup. An internal detached worker serializes session end/reap/prune under a separate cleanup flock; ship waits at most 20s then reports its PID/private log. Clone probes share a 10s deadline and retain unknown evidence; Git object checks use one batch and stdin exclusions. Existing retention/salvage/protected-lease gates remain, including doctor TTY restrictions. Validation: 101 targeted Rust tests passed (4 BUG-2384, 88 ship helpers, 6 GC regressions, 2 live bwrap lifecycle, 1 real CLI fixture); formatting and diff checks passed. The 25-clone regression covers 6,400 IDs and preservation of unshipped work. Committed/pushed from /tmp/bug2384-publish because native seat Git metadata is read-only; source edits remain in the seat. Opening the standalone implementation PR next, without shipping or recording a review.'
   created_at: 2026-11-01T21:55:42.652889405Z
   modified_at: 2026-11-01T21:55:42.652889405Z
+- id: 01a1991d-4ce9-7ef0-95d9-acbc14f1a105
+  author: mcp
+  content: 'Bookkeeping blocker after successful implementation/push: MCP queue_done was refused with `MCP tool call requires approval, but approval policy is never`. No queue-done mutation occurred; BUG-2384 remains In Progress and queued. CLI writes from this native seat had already refused its linked read-only cache. Headless instructions prohibit waiting for approval, so the implementation PR will be opened with this explicit blocker recorded for the launcher/advisor. Code is committed/pushed at 5ea7431157d and all 101 targeted tests plus formatting passed.'
+  created_at: 2026-11-01T21:56:36.713225590Z
+  modified_at: 2026-11-01T21:56:36.713225590Z
 history:
 - id: 01a19903-07e8-75a2-b046-5be385601f6c
   author: aida-session-start
