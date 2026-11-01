@@ -21,7 +21,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T07:26:20.914223641Z
-modified_at: 2026-11-01T08:48:12.380023836Z
+modified_at: 2026-11-01T08:48:13.858985501Z
 req_type: Bug
 tags:
 - architecture
@@ -304,6 +304,11 @@ comments:
     Disposition: no doer return claiming this fork cleared. Root must explicitly adopt and obtain independent signoff for the consumer-policy scope change, or return for a different grounded policy ruling. STRICT independent authority review and operator merge floor remain. Local implementation gate stays one targeted launch/grant/authority test plus make check-ci-fast (long cargo background; CI full gate). No gate was waived. This judgment does not dispatch work or change status.
   created_at: 2026-11-01T08:46:17.775237713Z
   modified_at: 2026-11-01T08:46:17.775237713Z
+- id: 01a1964b-8422-76a1-8347-06e7348c2021
+  author: joe
+  content: 'PROXY SCOPE AMENDMENT, pending fresh independent signoff: adopt codex-advisor08 source-grounded correction and exact proposed AC3. Initial recording-time-refusal wording was my acceptance-authoring error against explicit existing compatibility. This is not a waiver: actual ungranted artifact must now be rejected at every named positive authority boundary, including the demonstrated dispatch no-ship review-skip/success and reviewed/resolved classifications. Existing strong collection/ship/hold validation remains required; refusal artifacts stay protective. Scope expands only those weak consumers using existing durable validation, with real production-path tests. Description amended explicitly; keep NeedsAttention until separate independent advisor signs this expanded design. No recorder policy change, no invented privilege, no dropped acceptance. Native host gate remains.'
+  created_at: 2026-11-01T08:48:13.858985501Z
+  modified_at: 2026-11-01T08:48:13.858985501Z
 history:
 - id: 01a19600-c769-7cd0-ba08-8d93975e3e3b
   author: joe
