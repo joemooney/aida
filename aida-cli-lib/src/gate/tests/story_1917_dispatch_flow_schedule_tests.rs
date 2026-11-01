@@ -2897,7 +2897,7 @@ fn bug_2398_dispatch_flow_ungranted_artifact_requires_fresh_authorized_review() 
     for (pr, no_ship) in [(601, false), (602, true), (603, true)] {
         std::fs::write(rv::verdict_path(&f.root, &format!("PR-{pr}")), &ungranted).unwrap();
         if pr == 603 {
-            let aida = crate::session::resolve_agent_program("aida");
+            let aida = crate::test_exec::matching_aida_cli().display().to_string();
             let fresh = f.write_executable_script("review-fresh-authority", &format!(
                 "#!/bin/sh\nset -eu\necho authorized >> '{}'\nAIDA_SESSION_GRANT='{}' AIDA_USER='{}' AIDA_SESSION_ID=independent-2398-reviewer AIDA_ROLE_INSTANCE=driver AIDA_PROJECT_ROOT='{}' '{}' review record TASK-100 --verdict approved --sha '{}'\nAIDA_PROJECT_ROOT='{}' '{}' review verdict TASK-100 --json > '{}/PR-603.json'\n",
                 calls.display(), reviewer, f.principal, f.root.display(), aida, head,

@@ -160,7 +160,7 @@ fn run_mock_reviewer_in(
         &mut env,
     );
     env.set_key(crate::gate::seat_authority::GRANT_ENV, &launcher_grant);
-    crate::test_exec::write_executable(&mock, script);
+    crate::test_exec::write_executable(&mock, crate::test_exec::codex_probe_script(script));
     crate::session::set_headless_vendor_override(None);
     let launch_vendor = crate::session::resolve_enabled_headless_vendor(&project).unwrap();
 

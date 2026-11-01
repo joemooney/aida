@@ -11031,9 +11031,9 @@ mod tests {
         for vendor in ["claude", "codex"] {
             crate::test_exec::write_executable(
                 &bin.path().join(vendor),
-                format!(
+                crate::test_exec::codex_probe_script(format!(
                     "#!/bin/sh\n[ \"$1\" = --version ] && {{ echo '{vendor} 9.9.9'; exit 0; }}\nprintf 'HV=%s\\n' \"${{AIDA_HARNESS_VERSION-unset}}\"\n"
-                ),
+                )),
             );
         }
         let path = format!(

@@ -417,7 +417,13 @@ key is outside this adapter's isolation claim.
 Before starting a granted Codex seat, AIDA runs a model-free `codex sandbox`
 probe of `aida role current --probe-seat --expect <seat>`, with the launch's
 configuration and corresponding permission profile. Only a validated matching
-grant passes; role labels alone do not. The probe has a ten-second deadline.
+grant passes; role labels alone do not. The probe also compares a digest of
+this launch's explicit nonsecret whitelist with the effective tool environment,
+including selector, subject, seat, scope, driver/companion instance and posture.
+Later exact-key, set-table or full-policy overrides that change protected context
+refuse before model work. Profile-only and unrelated custom configuration stay
+usable when the intended context survives. This is adapter integrity, with the
+same ADR-66 residual boundary described above. The probe has a ten-second deadline.
 A refusal reports the underlying sandbox or grant failure instead of starting
 a roleless model. Baseline launches do not require a grant probe. Unsupported
 sandbox option spellings or profiles refuse; they do not acquire fallback

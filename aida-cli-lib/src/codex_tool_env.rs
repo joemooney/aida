@@ -1,11 +1,12 @@
 //! Codex-only transport of an already-selected child seat into tool shells.
 //! Selectors are public; grant key payloads stay in the existing keyring.
 // trace:BUG-2398 | ai:codex
+use crate::gate::seat_authority::GRANT_ENV;
 use anyhow::{Context, Result};
 use std::process::{Command, Stdio};
 
 const TOOL_ENV: &[&str] = &[
-    "AIDA_SESSION_GRANT",
+    GRANT_ENV,
     "AIDA_SESSION_ROLE",
     "AIDA_ROLE_INSTANCE",
     "AIDA_USER",
@@ -18,6 +19,29 @@ const TOOL_ENV: &[&str] = &[
     "AIDA_CONTAINMENT_POSTURE",
     "AIDA_HEADLESS",
 ];
+
+/// A transport integrity checksum, never authority evidence. Encode presence
+/// separately from empty and use a fixed order and length-delimited values.
+/// Only the public metadata whitelist enters this digest (no bearer/key data).
+// trace:BUG-2398 | ai:codex
+pub(crate) fn context_digest(mut value: impl FnMut(&str) -> Option<std::ffi::OsString>) -> String {
+    use sha2::{Digest, Sha256};
+    use std::os::unix::ffi::OsStrExt;
+    let mut hash = Sha256::new();
+    hash.update(b"aida-codex-child-context-v1");
+    for key in TOOL_ENV {
+        match value(key) {
+            None => hash.update([0]),
+            Some(value) => {
+                hash.update([1]);
+                let bytes = value.as_os_str().as_bytes();
+                hash.update((bytes.len() as u64).to_be_bytes());
+                hash.update(bytes);
+            }
+        }
+    }
+    format!("{:x}", hash.finalize())
+}
 
 /// Only explicit child assignments qualify. Never consult the parent env.
 /// Removed/absent entries stay absent; an explicit empty grant stays empty.
@@ -41,7 +65,7 @@ pub(crate) fn codex_tool_env_overrides(child: &Command) -> Result<Vec<String>> {
                 "Codex child role instance must be driver or companion"
             );
         }
-        if key == "AIDA_SESSION_GRANT" && !value.is_empty() {
+        if key == GRANT_ENV && !value.is_empty() {
             anyhow::ensure!(
                 uuid::Uuid::parse_str(value).is_ok(),
                 "Codex child grant selector is not a UUID"
@@ -64,7 +88,7 @@ pub(crate) fn prepare_launch(child: &mut Command) -> Result<()> {
     let overrides = codex_tool_env_overrides(child)?;
     let grant = child
         .get_envs()
-        .find(|(key, _)| *key == "AIDA_SESSION_GRANT")
+        .find(|(key, _)| *key == GRANT_ENV)
         .and_then(|(_, value)| value);
     anyhow::ensure!(grant.is_some(), "Codex child has no explicit grant decision; provide its delegated grant or an explicit empty baseline");
     if let Some(seat) = child
@@ -77,6 +101,9 @@ pub(crate) fn prepare_launch(child: &mut Command) -> Result<()> {
             crate::gate::seat_authority::is_baseline_seat(seat) || !grant.unwrap().is_empty(),
             "Codex requested seat requires its own nonempty delegated grant"
         );
+    }
+    if grant.unwrap().is_empty() {
+        refuse_baseline_conflicts(child)?;
     }
     preflight(child, &overrides)?;
     let prefix = codex_argv_start(child)?;
@@ -164,7 +191,20 @@ fn sandbox_args(child: &Command) -> Result<Vec<std::ffi::OsString>> {
             "--dangerously-bypass-approvals-and-sandbox" => {
                 out.extend(["-c".into(), "sandbox_mode=\"danger-full-access\"".into()]);
             }
-            _ if arg.starts_with("--config=") || arg.starts_with("--profile=") || arg.starts_with("--permission-profile=") || arg.starts_with("--cd=") => out.push(args[i].to_owned()),
+            _ if arg.starts_with("-p") && !arg.starts_with("--") && arg.len() > 2 => {
+                out.extend(["--profile".into(), arg[2..].into()]);
+            }
+            _ if arg.starts_with("-P") && arg.len() > 2 => {
+                out.extend(["--permission-profile".into(), arg[2..].into()]);
+            }
+            _ if arg.starts_with("-C") && arg.len() > 2 => {
+                out.extend(["--cd".into(), arg[2..].into()]);
+            }
+            _ if arg.starts_with("-c") && !arg.starts_with("--") && arg.len() > 2 => {
+                out.extend(["-c".into(), arg[2..].into()]);
+            }
+            _ if arg.starts_with("--config=") => out.extend(["-c".into(), arg[9..].into()]),
+            _ if arg.starts_with("--profile=") || arg.starts_with("--permission-profile=") || arg.starts_with("--cd=") => out.push(args[i].to_owned()),
             _ if arg.starts_with("--sandbox=") || (arg.starts_with("-s") && arg.len() > 2) => anyhow::bail!("unsupported Codex sandbox option spelling for seat preflight; use --sandbox <mode>"),
             _ => {}
         }
@@ -181,6 +221,65 @@ fn sandbox_args(child: &Command) -> Result<Vec<std::ffi::OsString>> {
     Ok(out)
 }
 
+/// Baseline launches have no grant to validate. Still refuse later policy
+/// replacements that could unmask ambient authority or replace their explicit
+/// empty selector. Profiles remain below the exact-key CLI prefix precedence.
+// trace:BUG-2398 | ai:codex
+fn refuse_baseline_conflicts(child: &Command) -> Result<()> {
+    let args = sandbox_args(child)?;
+    for pair in args
+        .windows(2)
+        .filter(|pair| pair[0] == "-c" || pair[0] == "--config")
+    {
+        let Some(raw) = pair[1].to_str() else {
+            continue;
+        };
+        let table: toml::Value = match toml::from_str(raw) {
+            Ok(table) => table,
+            Err(_) => {
+                anyhow::ensure!(
+                    !raw.contains("shell_environment_policy"),
+                    "Codex baseline context conflict: invalid shell environment override"
+                );
+                continue;
+            }
+        };
+        let Some(policy) = table.get("shell_environment_policy") else {
+            continue;
+        };
+        let key: String = raw
+            .split('=')
+            .next()
+            .unwrap_or("")
+            .chars()
+            .filter(|c| !c.is_whitespace() && !matches!(c, '\'' | '"'))
+            .collect();
+        anyhow::ensure!(
+            key != "shell_environment_policy" && key != "shell_environment_policy.set",
+            "Codex baseline context conflict: shell environment table replacement"
+        );
+        let Some(set) = policy.get("set").and_then(toml::Value::as_table) else {
+            continue;
+        };
+        for (key, value) in set
+            .iter()
+            .filter(|(key, _)| TOOL_ENV.contains(&key.as_str()))
+        {
+            let intended = child
+                .get_envs()
+                .find(|(k, _)| *k == key.as_str())
+                .and_then(|(_, v)| v);
+            anyhow::ensure!(
+                value
+                    .as_str()
+                    .is_some_and(|value| intended.and_then(|v| v.to_str()) == Some(value)),
+                "Codex baseline context conflict: protected child metadata override"
+            );
+        }
+    }
+    Ok(())
+}
+
 fn preflight(child: &Command, overrides: &[String]) -> Result<()> {
     use std::ffi::OsStr;
     let explicit = |key: &str| {
@@ -189,7 +288,7 @@ fn preflight(child: &Command, overrides: &[String]) -> Result<()> {
             .find(|(k, _)| *k == key)
             .and_then(|(_, v)| v)
     };
-    let Some(grant) = explicit("AIDA_SESSION_GRANT").filter(|v| !v.is_empty()) else {
+    let Some(_) = explicit(GRANT_ENV).filter(|v| !v.is_empty()) else {
         return Ok(());
     };
     let seat = explicit("AIDA_SESSION_ROLE").context("Codex granted child has no explicit seat")?;
@@ -221,6 +320,9 @@ fn preflight(child: &Command, overrides: &[String]) -> Result<()> {
             OsStr::new("--expect"),
             seat,
         ]);
+    probe
+        .arg("--expect-context-sha256")
+        .arg(context_digest(|key| explicit(key).map(|v| v.to_owned())));
     if let Some(instance) = explicit("AIDA_ROLE_INSTANCE") {
         probe.arg("--expect-role-instance").arg(instance);
     }
@@ -236,10 +338,9 @@ fn preflight(child: &Command, overrides: &[String]) -> Result<()> {
     let mut message = String::new();
     log.take(4096).read_to_string(&mut message)?;
     if !status.success() {
-        let message = message.replace(grant.to_string_lossy().as_ref(), "<grant>");
         anyhow::bail!(
             "Codex requested-seat preflight refused ({status}): {}",
-            message.trim()
+            safe_probe_failure(&message)
         );
     }
     anyhow::ensure!(
@@ -249,6 +350,56 @@ fn preflight(child: &Command, overrides: &[String]) -> Result<()> {
         "Codex requested-seat preflight returned no validated seat evidence"
     );
     Ok(())
+}
+
+// Only fixed diagnostics escape the private, unlinked probe capture. In
+// particular a config parser may echo user -c values: never relay that output.
+// trace:BUG-2398 | ai:codex
+fn safe_probe_failure(message: &str) -> &'static str {
+    if message.lines().any(|line| {
+        line.trim().strip_prefix("Error: ").unwrap_or(line.trim())
+            == "seat_grant_valid=true expected_seat=false"
+    }) {
+        return "ExpectedSeatMismatch";
+    }
+    for cause in [
+        "ChildContextMismatch",
+        "RoleInstanceMismatch",
+        "Absent",
+        "BadHandle",
+        "Unreadable",
+        "Malformed",
+        "Revoked",
+        "Expired",
+        "SubjectMismatch",
+        "RosterDenied",
+        "ParentPrincipalMismatch",
+        "ParentNotDelegating",
+        "Parent",
+        "Unbound",
+        "PresenterNotBound",
+        "ForeignNamespace",
+        "KeyringUnavailable",
+    ] {
+        if message.lines().any(|line| {
+            line.trim().strip_prefix("Error: ").unwrap_or(line.trim())
+                == format!("seat_grant_valid=false cause={cause}")
+        }) {
+            return cause;
+        }
+    }
+    for cause in [
+        "No permissions to create new namespace",
+        "app-server socket directory must be a user-owned directory with mode 0700",
+        "app-server socket directory must be user-owned",
+        "Operation not permitted",
+        "Permission denied",
+    ] {
+        if message.contains(cause) {
+            return cause;
+        }
+    }
+    "sandbox/configuration or seat validation failed (diagnostic values suppressed)"
 }
 
 /// Regular-file diagnostics avoid pipe deadlocks. Kill the probe group on
@@ -289,3 +440,8 @@ fn bounded_status(
 #[cfg(test)]
 #[path = "tests/bug_2398_codex_tool_env_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+pub(crate) fn tool_env_keys_for_test() -> &'static [&'static str] {
+    TOOL_ENV
+}

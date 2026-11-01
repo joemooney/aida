@@ -61,11 +61,13 @@ pub(crate) fn handle_role_command(cmd: &RoleCommand) -> Result<()> {
             probe_seat,
             expect,
             expect_role_instance,
+            expect_context_sha256,
         } => {
             if *probe_seat {
                 handle_role_seat_probe(
                     expect.as_deref().unwrap_or_default(),
                     expect_role_instance.as_deref(),
+                    expect_context_sha256.as_deref(),
                 )
             } else {
                 handle_role_current(*check)
@@ -998,7 +1000,24 @@ fn handle_role_active() -> Result<()> {
 // can capture the value and branch on exit code separately.
 // trace:STORY-64 | ai:claude
 // trace:BUG-2398 | ai:codex
-fn handle_role_seat_probe(expected: &str, expected_instance: Option<&str>) -> Result<()> {
+fn handle_role_seat_probe(
+    expected: &str,
+    expected_instance: Option<&str>,
+    expected_context: Option<&str>,
+) -> Result<()> {
+    if let Some(expected_context) = expected_context {
+        anyhow::ensure!(
+            expected_context
+                == crate::codex_tool_env::context_digest(|key| {
+                    if key == crate::gate::seat_authority::GRANT_ENV {
+                        crate::gate::seat_authority::current_grant_id().map(Into::into)
+                    } else {
+                        std::env::var_os(key)
+                    }
+                }),
+            "seat_grant_valid=false cause=ChildContextMismatch"
+        );
+    }
     if let Some(instance) = expected_instance {
         anyhow::ensure!(
             matches!(instance, "driver" | "companion")
@@ -1022,7 +1041,7 @@ fn handle_role_seat_probe(expected: &str, expected_instance: Option<&str>) -> Re
             // subject, binding, timestamps or selector values.
             let detail = format!("{reason:?}");
             let cause = detail.split([' ', '{', '(']).next().unwrap_or("Rejected");
-            anyhow::bail!("seat_grant_valid=false cause={cause}: {reason}")
+            anyhow::bail!("seat_grant_valid=false cause={cause}")
         }
     }
 }

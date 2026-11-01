@@ -231,6 +231,10 @@ fn real_codex_roles(native: bool) {
         .env("AIDA_USER", "bug2398-child")
         .env("AIDA_PROJECT_ROOT", root)
         .env("AIDA_SESSION_SCOPE", "TASK-1")
+        .env(
+            "AIDA_CONTAINMENT_POSTURE",
+            if native { "native" } else { "aida" },
+        )
         .env("AIDA_SESSION_ID", "bug2398-independent-session")
         .env("AIDA_AGENT_TYPE", "codex")
         .env("AIDA_ROLE_INSTANCE", "companion")
@@ -239,17 +243,7 @@ fn real_codex_roles(native: bool) {
         .env("UNRELATED_PARENT", "fixture-excluded-value");
     // The fixture must exercise this implementation's probe, never an older
     // installed CLI that lacks --probe-seat. CI builds the sibling binary.
-    let aida_path = std::env::current_exe()
-        .unwrap()
-        .parent()
-        .unwrap()
-        .parent()
-        .unwrap()
-        .join("aida");
-    assert!(
-        aida_path.is_file(),
-        "build the current CLI before running the real-tool fixture"
-    );
+    let aida_path = crate::test_exec::matching_aida_cli();
     let _aida_probe = crate::kernel::test_aida_exe::set(aida_path.clone());
     let aida = aida_path.to_string_lossy().into_owned();
     let out = sandbox(
@@ -263,6 +257,7 @@ fn real_codex_roles(native: bool) {
         out.status.success() && text.lines().any(|l| l == "implementer"),
         "actual Codex sandbox role probe: {text}"
     );
+    assert_effective_child_context(&config, root, &child, &parent, native);
     let out = sandbox(&config, root, &child, &["sh", "-c", "test \"$KEEP_ME\" = preserved && test \"$AIDA_USER\" = bug2398-child && test \"$AIDA_SESSION_SCOPE\" = TASK-1 && test -z \"${AIDA_AGENT_REGISTRY_TOKEN-}\""]);
     assert!(
         out.status.success(),
@@ -398,7 +393,7 @@ fn bug_2398_preflight_refuses_cause_before_model_and_baseline_skips_probe() {
     let fake = tmp.path().join("codex");
     crate::test_exec::write_executable(
         &fake,
-        "#!/bin/sh\necho 'bwrap: No permissions to create new namespace' >&2\nexit 1\n",
+        "#!/bin/sh\necho 'password=must-never-be-relayed' >&2\necho 'bwrap: No permissions to create new namespace' >&2\nexit 1\n",
     );
     let mut cmd = Command::new(&fake);
     cmd.args(["exec", "--sandbox", "workspace-write", "do work"])
@@ -409,6 +404,7 @@ fn bug_2398_preflight_refuses_cause_before_model_and_baseline_skips_probe() {
         error.contains("No permissions to create new namespace"),
         "{error}"
     );
+    assert!(!error.contains("must-never-be-relayed"));
     assert!(!cmd.get_args().any(|arg| arg
         .to_string_lossy()
         .starts_with("shell_environment_policy.set.")));
@@ -765,4 +761,150 @@ fn bug_2398_actual_recorder_artifacts_require_durable_independent_authority() {
             crate::gate::review_verdict::ReviewActionability::AwaitingRework
         );
     }
+}
+
+// Real installed Codex policy merging, including later custom overrides. The
+// second grant is valid for the same seat: ordinary seat validity alone must
+// not accept its different selector/subject as this intended child.
+// trace:BUG-2398 | ai:codex
+fn assert_effective_child_context(
+    config: &Path,
+    root: &Path,
+    child: &Command,
+    parent: &crate::gate::seat_authority::SeatGrant,
+    native: bool,
+) {
+    let other = crate::gate::seat_authority::issue_child_from(
+        parent.clone(),
+        "implementer",
+        "bug2398-other-child",
+        true,
+    )
+    .unwrap();
+    let mut other_child = Command::new("codex");
+    for (key, value) in child.get_envs() {
+        if let Some(value) = value {
+            other_child.env(key, value);
+        }
+    }
+    other_child
+        .env(crate::gate::seat_authority::GRANT_ENV, &other.id)
+        .env("AIDA_USER", "bug2398-other-child");
+    let aida = crate::test_exec::matching_aida_cli();
+    let out = run_codex_sandbox(
+        config,
+        root,
+        &other_child,
+        &[aida.to_str().unwrap(), "role", "current", "--check"],
+        native,
+    );
+    assert!(
+        out.status.success(),
+        "the alternative same-seat child must itself be valid"
+    );
+    let invoke = |extra: &[String]| {
+        let mut cmd = Command::new("codex");
+        cmd.current_dir(root).env("CODEX_HOME", config);
+        for (key, value) in child.get_envs() {
+            match value {
+                Some(v) => {
+                    cmd.env(key, v);
+                }
+                None => {
+                    cmd.env_remove(key);
+                }
+            }
+        }
+        cmd.arg("exec");
+        if native {
+            cmd.args(["--sandbox", "workspace-write"]);
+        } else {
+            cmd.args(["-c", "sandbox_mode=\"danger-full-access\""]);
+        }
+        cmd.args(extra).arg("unused model prompt");
+        prepare_launch(&mut cmd)
+    };
+    let original = std::fs::read_to_string(config.join("config.toml")).unwrap();
+    std::fs::write(config.join("fixture.config.toml"), "[shell_environment_policy]\ninherit = \"core\"\n[shell_environment_policy.set]\nAIDA_SESSION_SCOPE = \"TASK-profile\"\n").unwrap();
+    for profile in [false, true] {
+        let base = if profile {
+            vec!["--profile".into(), "fixture".into()]
+        } else {
+            vec![]
+        };
+        invoke(&base).expect("profile-only control preserves exact prefix overrides");
+        for assignment in [
+            "shell_environment_policy.set.AIDA_SESSION_SCOPE=\"TASK-other\"".to_string(),
+            "shell_environment_policy.set={AIDA_SESSION_SCOPE=\"TASK-table\"}".to_string(),
+            "shell_environment_policy={inherit=\"core\",set={AIDA_SESSION_SCOPE=\"TASK-full\"}}"
+                .to_string(),
+            "shell_environment_policy.set.AIDA_ROLE_INSTANCE=\"driver\"".to_string(),
+            "shell_environment_policy.set.AIDA_CONTAINMENT_POSTURE=\"different\"".to_string(),
+            "shell_environment_policy.set.AIDA_SESSION_ROLE=\"reviewer\"".to_string(),
+            format!(
+                "shell_environment_policy.set.{}=\"{}\"",
+                crate::gate::seat_authority::GRANT_ENV,
+                other.id
+            ),
+            "shell_environment_policy.set.AIDA_USER=\"bug2398-other-child\"".to_string(),
+        ] {
+            let mut args = base.clone();
+            args.extend(["-c".into(), assignment]);
+            let err = invoke(&args).unwrap_err().to_string();
+            assert!(err.contains("ChildContextMismatch"), "{err}");
+            assert!(
+                !err.contains(&other.id),
+                "selector must not enter diagnostics"
+            );
+        }
+        let mut args = base.clone();
+        args.extend([
+            "-c".into(),
+            format!(
+                "shell_environment_policy.set.{}=\"{}\"",
+                crate::gate::seat_authority::GRANT_ENV,
+                other.id
+            ),
+            "-c".into(),
+            "shell_environment_policy.set.AIDA_USER=\"bug2398-other-child\"".into(),
+        ]);
+        assert!(invoke(&args)
+            .unwrap_err()
+            .to_string()
+            .contains("ChildContextMismatch"));
+        let mut args = base;
+        args.extend([
+            "-c".into(),
+            "model_reasoning_effort=\"low\"".into(),
+            "-c".into(),
+            "shell_environment_policy.set.CUSTOM_OK=\"preserved\"".into(),
+        ]);
+        invoke(&args).expect("nonprotected custom configuration remains usable");
+    }
+    std::fs::write(config.join("config.toml"), original).unwrap();
+}
+
+#[test]
+fn bug_2398_baseline_cannot_be_replaced_by_later_child_context() {
+    for override_value in [
+        "shell_environment_policy.set.AIDA_SESSION_GRANT=\"11111111-1111-1111-1111-111111111111\"",
+        "shell_environment_policy.set={KEEP_ME=\"preserved\"}",
+        "shell_environment_policy={inherit=\"all\",set={KEEP_ME=\"preserved\"}}",
+    ] {
+        let mut child = Command::new("codex");
+        child
+            .env(crate::gate::seat_authority::GRANT_ENV, "")
+            .args(["exec", "-c", override_value]);
+        assert!(prepare_launch(&mut child)
+            .unwrap_err()
+            .to_string()
+            .contains("baseline context conflict"));
+    }
+    let mut child = Command::new("codex");
+    child.env(crate::gate::seat_authority::GRANT_ENV, "").args([
+        "exec",
+        "-c",
+        "shell_environment_policy.set.KEEP_ME=\"preserved\"",
+    ]);
+    prepare_launch(&mut child).unwrap();
 }

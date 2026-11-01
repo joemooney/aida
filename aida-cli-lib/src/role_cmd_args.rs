@@ -117,6 +117,9 @@ pub enum RoleCommand {
         /// Require the launch's driver/companion restriction to survive.
         #[clap(long, requires = "probe_seat")]
         expect_role_instance: Option<String>,
+        /// Integrity digest of this launch's explicit nonsecret child context.
+        #[clap(long, requires = "probe_seat", hide = true)]
+        expect_context_sha256: Option<String>,
     },
 
     /// Report how close this session's seat grant is to expiry. By default

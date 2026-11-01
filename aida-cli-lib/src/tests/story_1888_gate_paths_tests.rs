@@ -3501,6 +3501,7 @@ const GATE_KERNELS: &[&str] = &[
     "orchestrator_leaves.rs",
     "relay_launch.rs",
     "review_author.rs",
+    "review_approval.rs",
     "review_marker.rs",
     "review_verdict.rs",
     "role_authority.rs",

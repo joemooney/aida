@@ -3197,10 +3197,10 @@ fn bug_2185_standalone_reviewer_commits_child_store_writes_on_its_error_exit() {
     let mock = tmp.path().join("mock-agent.sh");
     crate::test_exec::write_executable(
         &mock,
-        format!(
+        crate::test_exec::codex_probe_script(format!(
             "#!/bin/sh\n{}exit 0\n",
             bug_2185_child_store_writes(&store_root)
-        ),
+        )),
     );
     let mut env = crate::test_env::EnvVarsGuard::apply(&[
         ("AIDA_HEADLESS_VENDOR", None),
