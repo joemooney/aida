@@ -448,11 +448,17 @@ pub fn claim_authority(root: &Path) -> Result<ClaimAuthority> {
         } => Ok(ClaimAuthority::HubCas { remote, hub }),
         StoreMode::SingleHub { hub, remote: None } => {
             let hubs = crate::store_hubs::committed(root)?;
-            let urls = hubs
-                .get(&hub)
-                .map(|h| h.urls.join(", "))
+            let declared = hubs.get(&hub);
+            let urls = declared.map(|h| h.urls.join(", ")).unwrap_or_default();
+            let why = declared
+                .map(|h| crate::store_hubs::partial_reach_problems(root, &hubs, h))
                 .unwrap_or_default();
-            bail!("no git remote of this clone reaches the store's hub `{hub}` ({urls}); claims are ordered only on the hub. Push to the declared hub, or declare a second hub (that needs `aida node enroll-root`)")
+            let why = if why.is_empty() {
+                String::new()
+            } else {
+                format!(" ({})", why.join("; "))
+            };
+            bail!("no git remote of this clone reaches the store's hub `{hub}` ({urls}){why}; claims are ordered only on the hub, so a remote counts only when every URL it fetches from and pushes to is the hub's and store pushes to it are not redirected. Push to the declared hub, or declare a second hub (that needs `aida node enroll-root`)")
         }
         StoreMode::MultiHubNoRoot { hubs } => bail!(
             "this store declares more than one hub ({}) and has no allocation root, so nothing orders their block claims; {MULTI_HUB_NEEDS_ROOT}. Blocks already held keep dispensing",
@@ -461,12 +467,33 @@ pub fn claim_authority(root: &Path) -> Result<ClaimAuthority> {
     }
 }
 
-/// The hub context for spendability checks: the first declared hub this
-/// clone reaches and the blocks its store ref records, as of this clone's
-/// remote-tracking copy. `None` once a root is recorded (lineage decides
-/// then) or when no declared hub is reached. A store that gained a second
-/// hub without a root refuses new claims, but blocks already ordered on
-/// the hub keep dispensing.
+/// The claims declared hub `hub`'s store ref records, as of this clone's
+/// remote-tracking copy, while the store records no root. `None` once a
+/// root is recorded (lineage decides then), when `hub` is not declared on
+/// the shared default branch, or when no remote of this clone reaches it
+/// (see [`crate::store_hubs::remote_reaching`]). Each hub-stamped block is
+/// checked against its own stamped hub, so a clone reaching several
+/// declared hubs keeps every block it holds; a store that gained a second
+/// hub without a root refuses new claims, but blocks already ordered on a
+/// hub keep dispensing.
+// trace:STORY-B6B1278890774EF993D2EBC327862470-164 | ai:claude
+fn hub_claims(root: &Path, hub: &str) -> Result<Option<Vec<crate::node::AgreedIdBlock>>> {
+    if crate::allocation_lineage::RootRecord::load(root)?.is_some() {
+        return Ok(None);
+    }
+    let hubs = crate::store_hubs::committed(root)?;
+    let Some(declared) = hubs.get(hub) else {
+        return Ok(None);
+    };
+    match crate::store_hubs::remote_reaching(root, &hubs, declared) {
+        Some(remote) => Ok(Some(hub_ref_blocks(root, &remote)?)),
+        None => Ok(None),
+    }
+}
+
+/// The hub context the lineage view's single-hub field carries: the first
+/// declared hub this clone reaches, with its claims. Blocks stamped for any
+/// other reached hub resolve through [`hub_remotes`].
 // trace:STORY-B6B1278890774EF993D2EBC327862470-164 | ai:claude
 fn single_hub_blocks(root: &Path) -> Result<Option<(String, Vec<crate::node::AgreedIdBlock>)>> {
     if crate::allocation_lineage::RootRecord::load(root)?.is_some() {
@@ -556,22 +583,18 @@ fn with_lineage_view_of<T>(
 }
 
 /// Each declared hub this clone reaches, with the remote it reaches it as
-/// and the claims on that remote's store ref. The refs are read only once
-/// the store has promoted pools to check against them (a root is recorded).
+/// and the claims on that remote's store ref: promoted pools are checked
+/// against them once a root is recorded, and before that each hub-stamped
+/// block is checked against its own stamped hub's claims.
 // trace:STORY-B6B1278890774EF993D2EBC327862470-164 | ai:claude
 fn hub_remotes(root: &Path) -> Result<Vec<crate::allocation_lineage::HubReach>> {
     let hubs = crate::store_hubs::committed(root)?;
-    let rooted = crate::allocation_lineage::RootRecord::load(root)?.is_some();
     let mut out = Vec::new();
     for h in &hubs.hubs {
         let Some(remote) = crate::store_hubs::remote_reaching(root, &hubs, h) else {
             continue;
         };
-        let on_hub = if rooted {
-            hub_ref_blocks(root, &remote)?
-        } else {
-            Vec::new()
-        };
+        let on_hub = hub_ref_blocks(root, &remote)?;
         out.push(crate::allocation_lineage::HubReach {
             hub: h.name.clone(),
             remote,
@@ -603,19 +626,22 @@ pub fn unpushed_hub_claim(
     if !typ.eq_ignore_ascii_case(&block.type_prefix) {
         return Ok(None);
     }
-    let Some((hub, on_hub)) = single_hub_blocks(root)? else {
+    if crate::allocation_lineage::RootRecord::load(root)?.is_some() {
         return Ok(None);
-    };
-    if name != hub
-        || on_hub
-            .iter()
-            .any(|b| crate::allocation_lineage::same_claim(b, block))
+    }
+    // Checked against the block's own stamped hub. A stamped hub this clone
+    // does not reach (no remote whose every fetch and push URL is the hub's)
+    // cannot vouch for the claim, so the block is not spent.
+    let on_hub = hub_claims(root, name)?.unwrap_or_default();
+    if on_hub
+        .iter()
+        .any(|b| crate::allocation_lineage::same_claim(b, block))
     {
         return Ok(None);
     }
     Ok(Some(crate::allocation_lineage::Unusable::NotOnHub {
         type_prefix: block.type_prefix.to_ascii_uppercase(),
-        hub,
+        hub: name.to_string(),
     }))
 }
 

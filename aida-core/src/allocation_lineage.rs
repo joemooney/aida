@@ -629,13 +629,30 @@ pub(crate) fn same_claim(a: &AgreedIdBlock, b: &AgreedIdBlock) -> bool {
 }
 
 impl LineageView<'_> {
-    /// The single hub `block` was claimed on, when this view is in
-    /// single-hub mode and the block carries that hub's pool id.
-    fn hub_of(&self, block: &AgreedIdBlock) -> Option<HubSpend<'_>> {
-        let hub = self.hub?;
+    /// The hub `block` is stamped for (`hub:<hub>:<TYPE>` of its own type)
+    /// while the store records no root.
+    // trace:STORY-B6B1278890774EF993D2EBC327862470-164 | ai:claude
+    fn hub_stamp<'b>(&self, block: &'b AgreedIdBlock) -> Option<&'b str> {
         let (name, typ) = crate::store_hubs::parse_hub_pool_id(block.pool_id.as_deref()?)?;
-        (self.root.is_none() && name == hub.hub && typ.eq_ignore_ascii_case(&block.type_prefix))
-            .then_some(hub)
+        (self.root.is_none() && typ.eq_ignore_ascii_case(&block.type_prefix)).then_some(name)
+    }
+
+    /// The hub `block` was claimed on and that hub's claims, resolved from
+    /// the block's own stamp: the single-hub field when it names that hub,
+    /// else whichever reached hub the stamp names. A clone reaching several
+    /// declared hubs (multi-hub, no root) keeps blocks stamped for any of
+    /// them. `None` when the block is not hub-stamped or its hub is not
+    /// reached.
+    // trace:STORY-B6B1278890774EF993D2EBC327862470-164 | ai:claude
+    fn hub_of(&self, block: &AgreedIdBlock) -> Option<HubSpend<'_>> {
+        let name = self.hub_stamp(block)?;
+        if let Some(hub) = self.hub.filter(|h| h.hub == name) {
+            return Some(hub);
+        }
+        self.reach_for_hub(name).map(|r| HubSpend {
+            hub: &r.hub,
+            on_hub: &r.on_hub,
+        })
     }
 
     fn needs_upstream(&self) -> bool {
@@ -689,7 +706,14 @@ impl LineageView<'_> {
                 && b.type_prefix.eq_ignore_ascii_case(&typ)
                 && self.promoted_hub_of(b).is_some()
         });
-        if self.needs_upstream() && !promoted {
+        // A hub-stamped block is ordered on its hub, never through an
+        // upstream, so its own reason (NotOnHub) is the one reported.
+        let stamped = self.blocks.iter().any(|b| {
+            b.node_id == self.node
+                && b.type_prefix.eq_ignore_ascii_case(&typ)
+                && self.hub_stamp(b).is_some()
+        });
+        if self.needs_upstream() && !promoted && !stamped {
             return Err(Unusable::NoUpstream);
         }
         Err(reason)
@@ -699,6 +723,18 @@ impl LineageView<'_> {
     pub fn block_status(&self, block: &AgreedIdBlock) -> Result<(), Unusable> {
         let typ = block.type_prefix.to_ascii_uppercase();
         let hub = self.hub_of(block);
+        // Stamped for a hub this clone does not reach (no remote whose every
+        // fetch and push URL is that hub's): nothing vouches the claim is on
+        // the hub, so it is not spent.
+        // trace:STORY-B6B1278890774EF993D2EBC327862470-164 | ai:claude
+        if let (None, Some(name)) = (hub, self.hub_stamp(block)) {
+            if block.node_id == self.node {
+                return Err(Unusable::NotOnHub {
+                    type_prefix: typ,
+                    hub: name.to_string(),
+                });
+            }
+        }
         if hub.is_none() && self.promoted_hub_of(block).is_none() && self.needs_upstream() {
             return Err(Unusable::NoUpstream);
         }

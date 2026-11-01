@@ -306,6 +306,7 @@ fn hub_claim_yaml(node: &str) -> String {
 // that has no agreed ID; the second clone's stale claim is rejected by the
 // hub and retried, the ranges are disjoint, and `aida add` mints an agreed
 // ID from the block.
+// trace:STORY-B6B1278890774EF993D2EBC327862470-164.ac180ae1 | ai:claude
 #[test]
 fn single_hub_clones_claim_by_cas_and_mint_without_a_root() {
     let w = World::new();
@@ -351,6 +352,7 @@ fn single_hub_clones_claim_by_cas_and_mint_without_a_root() {
 // hand-written node, dispenser or config files), declares its one hub under
 // [store.hubs], commits and pushes that to the hub's default branch, and its
 // first `aida add` after a claim mints a short agreed ID with no root.
+// trace:STORY-B6B1278890774EF993D2EBC327862470-164.ac180ae1 | ai:claude
 #[test]
 fn aida_init_then_a_pushed_hub_declaration_reaches_the_first_agreed_id() {
     let dir = tempfile::tempdir().unwrap();
@@ -410,6 +412,7 @@ fn aida_init_then_a_pushed_hub_declaration_reaches_the_first_agreed_id() {
 
 // AC3: a claim committed locally but never pushed to the hub is not
 // spendable; add falls back to a node-local ID and says why.
+// trace:STORY-B6B1278890774EF993D2EBC327862470-164.ac00342e | ai:claude
 #[test]
 fn a_claim_not_on_the_hub_ref_is_never_spendable() {
     let w = World::new();
@@ -431,6 +434,7 @@ fn a_claim_not_on_the_hub_ref_is_never_spendable() {
 // AC3: a hub-stamped claim that only arrives through an imported store (a
 // store repository that is not the hub, merged into this clone's store) is
 // not spendable either.
+// trace:STORY-B6B1278890774EF993D2EBC327862470-164.ac00342e | ai:claude
 #[test]
 fn a_claim_only_in_an_imported_store_is_never_spendable() {
     let w = World::new();
@@ -471,6 +475,7 @@ fn a_claim_only_in_an_imported_store_is_never_spendable() {
 // (the push URL is unreachable): the claim stays in this clone's registry,
 // is not on the hub, and add refuses to spend it (NotOnHub) and issues a
 // node-local ID instead.
+// trace:STORY-B6B1278890774EF993D2EBC327862470-164.ac00342e | ai:claude
 #[test]
 fn a_claim_the_hub_rejected_is_never_spendable() {
     let w = World::new();
@@ -493,21 +498,13 @@ fn a_claim_the_hub_rejected_is_never_spendable() {
     );
     fs::remove_file(&hook).unwrap();
 
-    // The claim commits, then its push fails: the commit is retained.
-    let missing = w.dir.path().join("unreachable-hub.git");
-    a.git(
-        &a.store,
-        &[
-            "remote",
-            "set-url",
-            "--push",
-            "origin",
-            missing.to_str().unwrap(),
-        ],
-    );
+    // The claim commits, then its push fails (the hub is briefly gone): the
+    // commit is retained.
+    let away = w.dir.path().join("hub-away.git");
+    fs::rename(&w.hub, &away).unwrap();
     let err = a.refused(&["db", "block", "claim", "--type", "BUG", "--size", "100"]);
+    fs::rename(&away, &w.hub).unwrap();
     assert!(err.contains("Push failed"), "{err}");
-    a.git(&a.store, &["config", "--unset", "remote.origin.pushurl"]);
     let held = bug_blocks(&a.blocks(), &node);
     assert_eq!(
         held.len(),
@@ -528,8 +525,73 @@ fn a_claim_the_hub_rejected_is_never_spendable() {
     );
 }
 
+// AC3: a remote whose fetch URL is the hub but whose pushurl is another bare
+// repository does not reach the hub. A push to it would advance
+// `refs/remotes/origin/aida-store` while the claim lands off the hub, so the
+// claim is refused before anything is committed, and a claim pushed there
+// by hand is never spendable (NotOnHub).
+// trace:STORY-B6B1278890774EF993D2EBC327862470-164.ac00342e | ai:claude
+#[test]
+fn a_remote_pushing_off_the_hub_neither_claims_nor_spends() {
+    let w = World::new();
+    let a = w.clone("a");
+    let node = a.node();
+    let elsewhere = w.dir.path().join("elsewhere.git");
+    a.git(
+        w.dir.path(),
+        &["init", "-q", "--bare", elsewhere.to_str().unwrap()],
+    );
+    a.git(
+        &a.store,
+        &[
+            "remote",
+            "set-url",
+            "--push",
+            "origin",
+            elsewhere.to_str().unwrap(),
+        ],
+    );
+    let err = a.refused(&["db", "block", "claim", "--type", "BUG", "--size", "100"]);
+    assert!(err.contains("reaches the store's hub `hub`"), "{err}");
+    assert!(err.contains("pushes to"), "{err}");
+    assert!(
+        bug_blocks(&a.blocks(), &node).is_empty(),
+        "{:?}",
+        a.blocks()
+    );
+    assert!(bug_blocks(&w.hub_blocks(), &node).is_empty());
+
+    // A hub-stamped claim pushed through that remote lands off the hub but
+    // moves the remote-tracking ref; it is still not spent.
+    let path = a.store.join("registry/blocks.yaml");
+    fs::create_dir_all(path.parent().unwrap()).unwrap();
+    fs::write(&path, hub_claim_yaml(&node)).unwrap();
+    a.git(&a.store, &["add", "registry/blocks.yaml"]);
+    a.git(&a.store, &["commit", "-qm", "claim pushed off the hub"]);
+    a.git(&a.store, &["push", "-q", "origin", "HEAD:aida-store"]);
+    let tracked = a.git(
+        &a.store,
+        &[
+            "show",
+            "refs/remotes/origin/aida-store:registry/blocks.yaml",
+        ],
+    );
+    assert!(tracked.contains("range_start: 500"), "{tracked}");
+    assert!(w.hub_blocks().iter().all(|b| b.range_start != 500));
+    let out = a.add("off-hub push bug", "bug");
+    assert!(out.status.success(), "{}", said(&out));
+    assert_eq!(
+        a.by_title("off-hub push bug").agreed_id,
+        None,
+        "{}",
+        said(&out)
+    );
+    assert!(said(&out).contains("not on hub `hub`"), "{}", said(&out));
+}
+
 // AC3: a legacy v1 authoritative clone in single-hub mode gets the same
 // on-hub check: its unpushed hub-stamped claim is not spent either.
+// trace:STORY-B6B1278890774EF993D2EBC327862470-164.ac00342e | ai:claude
 #[test]
 fn an_authoritative_clone_does_not_spend_an_unpushed_hub_claim() {
     let w = World::new();
@@ -561,6 +623,7 @@ fn an_authoritative_clone_does_not_spend_an_unpushed_hub_claim() {
 // AC4: a second non-mirror hub with no root, once on the shared default
 // branch, refuses claims and names the enroll command; a block already held
 // keeps dispensing.
+// trace:STORY-B6B1278890774EF993D2EBC327862470-164.ac9679fe | ai:claude
 #[test]
 fn a_second_hub_without_a_root_refuses_claims_but_held_blocks_dispense() {
     let w = World::new();
@@ -582,6 +645,7 @@ fn a_second_hub_without_a_root_refuses_claims_but_held_blocks_dispense() {
 // AC1 / design Q2: a second hub committed only on a clone's local main
 // (never pushed) does not switch that clone's mode: it still claims on the
 // one shared hub.
+// trace:STORY-B6B1278890774EF993D2EBC327862470-164.ac3ed745 | ai:claude
 #[test]
 fn a_hub_declared_only_on_local_main_does_not_count() {
     let w = World::new();
@@ -601,6 +665,7 @@ fn a_hub_declared_only_on_local_main_does_not_count() {
 // implicit pools into root pools: same ids, nothing renumbered, every
 // earlier ID still resolves and the lineage is conflict-free. Another
 // clone's pre-enrollment block stays spendable through its own remote.
+// trace:STORY-B6B1278890774EF993D2EBC327862470-164.ac2f7ade | ai:claude
 #[test]
 fn enroll_root_promotes_the_implicit_pools_without_renumbering() {
     let w = World::new();
@@ -657,6 +722,7 @@ fn enroll_root_promotes_the_implicit_pools_without_renumbering() {
 }
 
 // AC1: a mirror remote that is also a declared hub is reported.
+// trace:STORY-B6B1278890774EF993D2EBC327862470-164.ac3ed745 | ai:claude
 #[test]
 fn node_show_reports_a_remote_that_is_both_mirror_and_hub() {
     let w = World::new();

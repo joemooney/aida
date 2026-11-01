@@ -219,42 +219,9 @@ You've seen the floor the whole system stands on — the git-canonical store and
 - **[Chapter 1 — Getting started](01-getting-started.md)**: `aida init`, which creates the store, cache, and worktree described here in the first place.
 - **[Chapter 7 — Project setup](07-project-setup.md)**: `node` identity, remotes, and the rest of the per-clone setup the distributed store relies on.
 
-### Clone-local allocation authority
+### Short agreed IDs on one hub (the usual case)
 
-<!-- trace:BUG-2017 | ai:codex -->
-
-Global allocation requires an explicit local setting in the clone's common Git
-directory, shared by its linked worktrees. `aida-allocation.toml` version 1 holds
-an `authoritative` boolean. Version 2 holds a role and an upstream (see
-[Block delegation](#block-delegation-for-more-than-one-hub-root-upstream-and-lineage)), and only the
-root is authoritative. Missing means non-authoritative; malformed or
-unsafe files refuse allocation. A normal Git clone does not inherit this file.
-Store contents, cached blocks, transport enrollment, forge URLs, user preferences
-and environment variables do not grant authority.
-
-`aida node team --format json` includes the
-allocation scope and its clone-local source. Human output shows the same mode.
-Inspection does not enroll or change a clone. The allocation guard is also
-applied in core backend, bulk/import, repair, block persistence and canonical
-promotion entry points.
-
-A non-authoritative clone uses its existing explicit node binding and persistent
-node-local dispenser. New IDs have the existing `<TYPE>-<node>-<n>` form; imported
-canonical IDs remain readable and editable by UUID. Explicit global IDs, new
-global aliases, block claims, and `blocks-only` allocation refuse. Other tracked
-block policies are effectively node-aware-only on that clone. Missing/broken
-bindings or dispensers refuse without internal-global-counter fallback.
-
-A clone's node binding is a pseudonymous UUID with no host, user, email or path
-field, and canonical promotion from a WORK clone to HOME keeps every UUID and old
-ID as an alias. The operator enrolls HOME explicitly; nothing enrolls a clone
-automatically. Do not create an authority setting merely to make an unproven
-global allocation succeed. The writer checklist is in the
-[allocation inventory](../plans/2026-10-24-bug-2017-allocation-writer-inventory.md).
-
-#### Short agreed IDs on one hub (the usual case)
-
-<!-- trace:STORY-B6B1278890774EF993D2EBC327862470-164 | ai:claude -->
+<!-- trace:STORY-B6B1278890774EF993D2EBC327862470-164.acdcccc2 | ai:claude -->
 
 Most projects sync their store through **one hub**: a single git server such as
 GitHub, GitLab or a bare repository. A store mirror counts as the same hub. On
@@ -298,8 +265,14 @@ With exactly one hub declared and no root enrolled:
   as recorded by the clone's remote-tracking copy. A claim committed locally but
   never pushed, or one that only appears in an imported store, is not
   spendable. This holds for an authoritative (legacy root) clone too. `aida add` issues a node-local ID instead and says why.
+- A remote reaches the hub only when every URL it fetches from and every URL
+  it pushes to is one of the hub's URLs, and this clone's store push policy
+  does not redirect or refuse store pushes to it. A push advances the
+  remote-tracking ref whichever server accepted it, so a remote whose
+  `pushurl` points elsewhere would make an off-hub claim look like it is on
+  the hub.
 - A clone with no remote that reaches the hub cannot claim. The refusal names
-  the hub's URLs.
+  the hub's URLs and why each remote that names one of them does not count.
 - `aida node show` prints the mode, for example `Mode: single-hub (hub github →
   this clone reaches it as origin)`, followed by the hubs and mirrors.
 
@@ -319,6 +292,46 @@ pool is homed on the hub, not on a remote name: every clone's existing block in
 it stays spendable through whichever of its remotes reaches that hub, whatever
 the remote is called. Granting a
 pool to the new hub is not available yet.
+
+### Clone-local allocation authority
+
+<!-- trace:BUG-2017 | ai:codex -->
+
+On a single-hub store (above), push permission on the hub is the authority and
+no clone-local setting is needed. This section covers the other two cases: a
+store that declares no hub, and a store with an enrolled root.
+
+There, global allocation requires an explicit local setting in the clone's
+common Git directory, shared by its linked worktrees. `aida-allocation.toml`
+version 1 holds an `authoritative` boolean. Version 2 holds a role and an
+upstream (see
+[Block delegation](#block-delegation-for-more-than-one-hub-root-upstream-and-lineage)),
+and only the root is authoritative. Missing means non-authoritative; malformed
+or unsafe files refuse allocation. A normal Git clone does not inherit this
+file. Store contents, cached blocks, transport enrollment, forge URLs, user
+preferences and environment variables do not grant authority.
+
+`aida node team --format json` includes the
+allocation scope and its clone-local source. Human output shows the same mode.
+Inspection does not enroll or change a clone. The allocation guard is also
+applied in core backend, bulk/import, repair, block persistence and canonical
+promotion entry points.
+
+On a store with no hub or with a root, a non-authoritative clone uses its
+existing explicit node binding and persistent node-local dispenser, except for
+blocks delegated to it through its upstream. New IDs have the existing
+`<TYPE>-<node>-<n>` form; imported canonical IDs remain readable and editable by
+UUID. Explicit global IDs, new global aliases, block claims, and `blocks-only`
+allocation refuse. Other tracked block policies are effectively
+node-aware-only on that clone. Missing/broken bindings or dispensers refuse
+without internal-global-counter fallback.
+
+A clone's node binding is a pseudonymous UUID with no host, user, email or path
+field, and canonical promotion from a WORK clone to HOME keeps every UUID and old
+ID as an alias. The operator enrolls HOME explicitly; nothing enrolls a clone
+automatically. Do not create an authority setting merely to make an unproven
+global allocation succeed. The writer checklist is in the
+[allocation inventory](../plans/2026-10-24-bug-2017-allocation-writer-inventory.md).
 
 #### Block delegation for more than one hub: root, upstream and lineage
 

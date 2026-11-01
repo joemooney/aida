@@ -224,7 +224,7 @@ mod tests {
         d
     }
 
-    // trace:STORY-B6B1278890774EF993D2EBC327862470-164 | ai:claude
+    // trace:STORY-B6B1278890774EF993D2EBC327862470-164.ac3ed745 | ai:claude
     #[test]
     fn a_remote_that_is_mirror_and_hub_and_two_unrooted_hubs_are_reported() {
         let d = tempfile::tempdir().unwrap();

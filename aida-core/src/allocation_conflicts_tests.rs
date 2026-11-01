@@ -598,7 +598,7 @@ fn hub_blocks_yaml(rows: &[(&str, &str, u32, u32)]) -> String {
 // AC6: the sync claim check still refuses two overlapping hub-stamped BUG
 // claims, both in single-hub mode (no root record) and once a root is
 // enrolled with the hub pool promoted (root record + pools.yaml).
-// trace:STORY-B6B1278890774EF993D2EBC327862470-164 | ai:claude
+// trace:STORY-B6B1278890774EF993D2EBC327862470-164.ac47d5e9 | ai:claude
 #[test]
 fn story_164_overlapping_hub_stamped_claims_refuse_every_sync_unrooted_and_rooted() {
     for rooted in [false, true] {

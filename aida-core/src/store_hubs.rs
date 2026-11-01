@@ -254,46 +254,100 @@ pub fn working(store_path: &Path) -> Result<HubSet> {
 }
 
 /// Every URL `remote` fetches from or pushes to, as configured in `repo`.
-// remote-creds-ok(TASK-2001): reads local remote config only; no network
 pub fn remote_urls(repo: &Path, remote: &str) -> Vec<String> {
-    let mut urls = Vec::new();
-    for args in [
-        &["remote", "get-url", "--all", "--end-of-options", remote][..],
-        &[
-            "remote",
-            "get-url",
-            "--push",
-            "--all",
-            "--end-of-options",
-            remote,
-        ][..],
-    ] {
-        if let Ok(out) = crate::git_ops::host_git_command(repo).args(args).output() {
-            if out.status.success() {
-                urls.extend(
-                    String::from_utf8_lossy(&out.stdout)
-                        .lines()
-                        .map(str::trim)
-                        .filter(|l| !l.is_empty())
-                        .map(str::to_string),
-                );
-            }
-        }
-    }
+    let mut urls = remote_get_urls(repo, remote, false);
+    urls.extend(remote_get_urls(repo, remote, true));
     urls
 }
 
-/// The first non-mirror remote of `repo` that reaches `hub` (by any fetch
-/// or push URL).
+/// The fetch (`push == false`) or push URLs of `remote`. Git reports the
+/// fetch URL as the push URL when no `pushurl` is set.
+// remote-creds-ok(TASK-2001): reads local remote config only; no network
+fn remote_get_urls(repo: &Path, remote: &str, push: bool) -> Vec<String> {
+    let mut args = vec!["remote", "get-url"];
+    if push {
+        args.push("--push");
+    }
+    args.extend(["--all", "--end-of-options", remote]);
+    match crate::git_ops::host_git_command(repo).args(&args).output() {
+        Ok(out) if out.status.success() => String::from_utf8_lossy(&out.stdout)
+            .lines()
+            .map(str::trim)
+            .filter(|l| !l.is_empty())
+            .map(str::to_string)
+            .collect(),
+        _ => Vec::new(),
+    }
+}
+
+/// Why `remote` does not reach `hub` for ordering claims, or `None` when it
+/// does. A remote reaches the hub only when every URL it fetches from and
+/// every URL it pushes to is the hub's, and this clone's store push policy
+/// pushes the store to it as asked. A successful push advances
+/// `refs/remotes/<remote>/aida-store` whatever server took it, so a remote
+/// whose `pushurl` (or push policy) sends the store elsewhere would make an
+/// off-hub claim look like it is on the hub.
+// trace:STORY-B6B1278890774EF993D2EBC327862470-164 | ai:claude
+pub fn reach_problem(repo: &Path, hub: &Hub, remote: &str) -> Option<String> {
+    let fetch = remote_get_urls(repo, remote, false);
+    let push = remote_get_urls(repo, remote, true);
+    if fetch.is_empty() || push.is_empty() {
+        return Some(format!("remote `{remote}` has no URL"));
+    }
+    let off_hub = |urls: &[String]| {
+        urls.iter()
+            .find(|u| !hub.urls.contains(&normalize_url(u)))
+            .cloned()
+    };
+    if let Some(url) = off_hub(&fetch) {
+        return Some(format!(
+            "remote `{remote}` fetches from {url}, which is not hub `{}`",
+            hub.name
+        ));
+    }
+    if let Some(url) = off_hub(&push) {
+        return Some(format!(
+            "remote `{remote}` pushes to {url}, which is not hub `{}`",
+            hub.name
+        ));
+    }
+    match crate::git_ops::store_push_route(repo, remote, "aida-store") {
+        crate::git_ops::StorePushRoute::Allow => None,
+        crate::git_ops::StorePushRoute::Redirect(to) => Some(format!(
+            "this clone's push policy sends store pushes for `{remote}` to {} instead",
+            to.join(", ")
+        )),
+        crate::git_ops::StorePushRoute::Refuse(why) => Some(format!(
+            "this clone's push policy refuses store pushes to `{remote}`: {why}"
+        )),
+    }
+}
+
+/// The first non-mirror remote of `repo` that reaches `hub`: every fetch
+/// and push URL is the hub's and push policy allows it (see
+/// [`reach_problem`]).
+// trace:STORY-B6B1278890774EF993D2EBC327862470-164 | ai:claude
 pub fn remote_reaching(repo: &Path, hubs: &HubSet, hub: &Hub) -> Option<String> {
     crate::git_ops::list_remotes(repo)
         .into_iter()
         .filter(|r| !hubs.mirror_remotes.contains(r))
-        .find(|r| {
+        .find(|r| reach_problem(repo, hub, r).is_none())
+}
+
+/// Why each non-mirror remote that names one of `hub`'s URLs still does not
+/// reach it (see [`reach_problem`]).
+// trace:STORY-B6B1278890774EF993D2EBC327862470-164 | ai:claude
+pub fn partial_reach_problems(repo: &Path, hubs: &HubSet, hub: &Hub) -> Vec<String> {
+    crate::git_ops::list_remotes(repo)
+        .into_iter()
+        .filter(|r| !hubs.mirror_remotes.contains(r))
+        .filter(|r| {
             remote_urls(repo, r)
                 .iter()
                 .any(|u| hub.urls.contains(&normalize_url(u)))
         })
+        .filter_map(|r| reach_problem(repo, hub, &r))
+        .collect()
 }
 
 /// Config errors a clone can see: a remote listed as a store mirror whose
