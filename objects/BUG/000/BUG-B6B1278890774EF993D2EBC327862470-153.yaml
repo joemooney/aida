@@ -11,12 +11,12 @@ description: |-
   2. The suggested launcher follows the project's default vendor (`[agents] vendor`); with vendor = codex it prints the codex launch line, not `claude`.
   3. For a linked worktree, today's output stays the same (regression test).
   4. Tests cover both branches (clone vs linked worktree) and both vendors (claude, codex).
-status: Approved
+status: InProgress
 priority: High
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T01:23:46.116682909Z
-modified_at: 2026-11-01T04:32:04.865485485Z
+modified_at: 2026-11-01T22:08:40.601750977Z
 req_type: Bug
 tags:
 - containment
@@ -46,6 +46,13 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a19928-5899-74b0-9d59-ad338fc91ee0
+  author: aida-session-start
+  timestamp: 2026-11-01T22:08:40.601748924Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 43d9f95803036ec22350e5a210d8c1cae20b9fe5
   branch: main
