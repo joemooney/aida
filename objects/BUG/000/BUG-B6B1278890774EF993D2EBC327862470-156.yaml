@@ -18,7 +18,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-01T02:22:11.107502056Z
-modified_at: 2026-11-01T02:22:11.107502056Z
+modified_at: 2026-11-01T05:58:16.927195754Z
 req_type: Bug
 tags:
 - area:agents
@@ -28,6 +28,13 @@ relationships:
 - rel_type: Child
   target_id: 01a19499-932e-79f0-a3e1-1299dfe355ad
   created_at: 2026-11-01T02:22:29.228868550Z
+comments:
+- id: 01a195af-ec5f-7422-8fb4-a888fd1798cc
+  author: joe
+  content: 'Advisor evidence 2026-10-31 22:57: the bug is wider than hand-started Codex. aida ps listed headless lane 01a1956ccb82 (STORY-2243, claude -p pid 1271645, alive 1h12m and running cargo test) as ''dead process, salvageable'' and suggested a salvage-commit. The advisor followed the hint and committed under the live lane, then reverted with reset --mixed. The fix must check every process whose cwd is inside the worktree, not only the lease pid, before printing a salvage hint.'
+  created_at: 2026-11-01T05:58:16.927195754Z
+  modified_at: 2026-11-01T05:58:16.927195754Z
+  session_id: a31b25d9-60a5-4347-a85b-4c74ab06f274
 history:
 - id: 01a194ea-5f72-7e03-8745-ebc42cce4fcf
   author: joe
