@@ -49,12 +49,22 @@ impl VerifiedTrainMerge<'_> {
         anyhow::ensure!(ledger::project::events(&store, ledger::ChangeKey::pr(change.id))
             .iter().any(|e| matches!(&e.body, ledger::EventBody::TrainCoverage { proof } if proof == &self.evidence)),
             "train coverage audit missing or changed");
-        let hints: Vec<String> = self.evidence["specs"]
+        let mut hints: Vec<String> = self.evidence["specs"]
             .as_array()
             .context("train specs missing")?
             .iter()
             .filter_map(|v| v.as_str().map(str::to_owned))
             .collect();
+        // Never narrower than the standalone gate: union the source aliases
+        // with the ordinary hints for the train change itself (its branch,
+        // title and commit-trailer ids).
+        // trace:BUG-b6b1278890774ef993d2ebc327862470-179 | ai:claude
+        hints.extend(crate::forge::corpus_gate_spec_hints(root, change));
+        hints
+            .iter_mut()
+            .for_each(|id| *id = id.to_ascii_uppercase());
+        hints.sort();
+        hints.dedup();
         let bodies = read_bodies(root, change.id, &hints)?;
         let live_bodies: Vec<String> = bodies
             .iter()
@@ -452,7 +462,7 @@ fn aliases(root: &Path, ids: &[String]) -> Result<Vec<String>> {
             [
                 req.spec_id.clone(),
                 req.agreed_id.clone(),
-                Some(req.display_id()),
+                Some(req.display_id()), // canonical-id: alias set for gate matching
                 Some(req.friendly_id()),
             ]
             .into_iter()

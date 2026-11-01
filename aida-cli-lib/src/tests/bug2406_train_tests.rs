@@ -99,12 +99,22 @@ struct Fixture {
     dir: tempfile::TempDir,
     _origin: tempfile::TempDir,
     _real_subject: crate::ReviewPrTransportGuard,
-    _env: crate::test_env::EnvVarsGuard,
+    _env: Option<crate::test_env::EnvVarsGuard>,
+    path: String,
     records: Vec<Value>,
 }
 impl Fixture {
     fn root(&self) -> &Path {
         self.dir.path()
+    }
+    /// Re-apply the fixture PATH plus `extra` (the env lock is not reentrant,
+    /// so the old guard is dropped first).
+    fn reenv(&mut self, extra: &[(&'static str, Option<&str>)]) {
+        self._env = None;
+        let mut pairs = vec![("PATH", Some(self.path.as_str()))];
+        pairs.extend_from_slice(extra);
+        let guard = crate::test_env::EnvVarsGuard::apply(&pairs);
+        self._env = Some(guard);
     }
     fn new(bound: bool) -> Self {
         let dir = tempfile::tempdir().unwrap();
@@ -228,7 +238,8 @@ impl Fixture {
             dir,
             _origin: origin,
             _real_subject: crate::review_pr_transport_fixture(),
-            _env: env,
+            _env: Some(env),
+            path,
             records,
         }
     }
@@ -244,6 +255,9 @@ impl Fixture {
         }
     }
     fn opened(&self, live: &mut LiveTrainForge<'_>) -> (Built, ChangeRef) {
+        self.opened_on(live, "train/bug2406-fixture")
+    }
+    fn opened_on(&self, live: &mut LiveTrainForge<'_>, branch: &str) -> (Built, ChangeRef) {
         let members: Vec<_> = [11, 12]
             .into_iter()
             .map(|n| live.gate(n).unwrap())
@@ -251,7 +265,7 @@ impl Fixture {
         let base = live.fetch_main().unwrap();
         let train = live.build(&base, &members).unwrap();
         assert_eq!(train.cars.len(), 2);
-        let change = live.open(&train, "train/bug2406-fixture").unwrap();
+        let change = live.open(&train, branch).unwrap();
         assert_eq!(live.wait_ci(&change, &train).unwrap(), CiVerdict::Green);
         (train, change)
     }
@@ -889,4 +903,206 @@ fn bug2406_source_grant_is_validated_at_original_recording_time() {
         "{error:#}"
     );
     assert!(calls(f.root()).is_empty());
+}
+
+fn hold_on(pr: u64, head: &str) -> crate::gate::merge_hold_core::MergeHoldRecord {
+    use crate::gate::merge_hold_core as hold;
+    hold::MergeHoldRecord {
+        schema_version: 2,
+        pr,
+        reason_kind: hold::HoldReasonKind::Supervision,
+        detail: format!("fixture supervision hold on PR-{pr}"),
+        recused_principals: vec![],
+        routed_to: vec![],
+        routing_state: hold::HoldRoutingState::Pending,
+        target_head_sha: Some(head.into()),
+        label_state: None,
+        legacy: false,
+        verdict_ref: None,
+        release_condition: None,
+        spec: None,
+        placed_by: Some("fixture reviewer".into()),
+        absorbed: vec![],
+    }
+}
+
+/// An active ship-held mandate in the fixture's isolated HOME.
+fn plant_mandate() -> crate::gate::mandate_ship::MandateCover {
+    use crate::gate::mandate;
+    let principal = crate::gate::kernel_deps::current_user_id(None);
+    let m = mandate::Mandate {
+        id: uuid::Uuid::new_v4().to_string(),
+        principal: principal.clone(),
+        seat: mandate::MANDATE_SEAT.into(),
+        scope: mandate::SCOPE_SHIP_HELD.into(),
+        include_supervised: false,
+        reason: Some("fixture fire".into()),
+        issued_at: chrono::Utc::now() - chrono::Duration::minutes(1),
+        expires_at: chrono::Utc::now() + chrono::Duration::hours(1),
+        revoked_at: None,
+        revoked_by: None,
+        scopes: Default::default(),
+        kind: None,
+        renewals: Vec::new(),
+    };
+    let dir = mandate::mandate_dir().unwrap();
+    fs::create_dir_all(&dir).unwrap();
+    mandate::write_private(
+        &dir.join(format!("{}.json", m.id)),
+        &serde_json::to_vec(&m).unwrap(),
+    )
+    .unwrap();
+    assert!(crate::gate::mandate_ship::mandate_still_active(&m.id));
+    crate::gate::mandate_ship::MandateCover {
+        id: m.id,
+        principal,
+    }
+}
+
+// BUG-2214 release-under-mandate through the verified final gate: the land
+// step released the member's hold under an active mandate before merging, and
+// collect() re-runs the member gate, labels and the mandate AFTER that release.
+#[test]
+fn bug2406_held_member_released_under_mandate_lands() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let f = Fixture::new(true);
+    let forge = GitHubForge::new(f.root());
+    let mut live = f.live(&forge);
+    let (mut train, change) = f.opened(&mut live);
+    let cover = plant_mandate();
+    let record = hold_on(11, &train.cars[0].member.head);
+    crate::gate::merge_hold_core::place_hold(f.root(), &record).unwrap();
+    assert!(crate::gate::merge_hold_core::read_hold(f.root(), 11).is_some());
+    crate::gate::merge_hold_core::release_hold_under_mandate(
+        f.root(),
+        &record,
+        &cover.principal,
+        &cover.id,
+        None,
+    )
+    .unwrap();
+    assert!(crate::gate::merge_hold_core::read_hold(f.root(), 11).is_none());
+    train.cars[0].member.release = Some(cover);
+    let lease = live.lease(change.id).unwrap();
+    live.merge_verified(&change, &train, lease.as_ref())
+        .unwrap();
+    let transport = calls(f.root());
+    assert_eq!(transport.len(), 1);
+    assert!(transport[0].contains(&format!("--match-head-commit {}", train.tip)));
+    let audit = ledger::project::events(f.root(), ledger::ChangeKey::pr(77));
+    assert!(audit.iter().any(|e| matches!(&e.body,
+        ledger::EventBody::TrainCoverage { proof } if !proof["cars"][0]["release_cover"].is_null())));
+}
+
+fixture_case!(
+    bug2406_train_gate_refuses_live_drive,
+    bug2406_train_gate_refuses,
+    "drive"
+);
+fixture_case!(
+    bug2406_train_gate_refuses_train_hold,
+    bug2406_train_gate_refuses,
+    "train-hold"
+);
+fn bug2406_train_gate_refuses(fault: &str) {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let mut f = Fixture::new(true);
+    let forge = GitHubForge::new(f.root());
+    let mut live = f.live(&forge);
+    let (train, change) = f.opened(&mut live);
+    let lease = live.lease(change.id).unwrap();
+    let expect = match fault {
+        // A drive seat may not land its own pipeline (probe_ship_drive_block).
+        "drive" => {
+            f.reenv(&[("AIDA_HEADLESS", Some("1"))]);
+            "a live drive owns the train"
+        }
+        "train-hold" => {
+            crate::gate::merge_hold_core::place_hold(f.root(), &hold_on(77, &train.tip)).unwrap();
+            "train has a merge hold"
+        }
+        _ => unreachable!(),
+    };
+    let error = live
+        .merge_verified(&change, &train, lease.as_ref())
+        .unwrap_err();
+    assert!(format!("{error:#}").contains(expect), "{fault}: {error:#}");
+    assert!(calls(f.root()).is_empty(), "{fault}");
+}
+
+// The verified final gate judges the train change's OWN ordinary hints (its
+// branch/title/trailer ids) too, so it is never narrower than the standalone
+// corpus gate: a refusal recorded only under the train branch's id holds it.
+#[test]
+fn bug2406_final_gate_includes_the_train_change_hints() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let f = Fixture::new(true);
+    let forge = GitHubForge::new(f.root());
+    let mut live = f.live(&forge);
+    let (train, change) = f.opened_on(&mut live, "train/TASK-9001-fixture");
+    assert!(
+        crate::forge::corpus_gate_spec_hints(f.root(), &change)
+            .iter()
+            .any(|id| id.eq_ignore_ascii_case("TASK-9001")),
+        "fixture premise: the train branch names TASK-9001"
+    );
+    let mut record = f.records[0].clone();
+    record["recorded_at"] = json!(chrono::Utc::now().to_rfc3339());
+    record["verdict"] = json!("request-changes");
+    record["reviewed_sha"] = json!(train.tip);
+    ledger::record_verdict_at(
+        &rv::verdict_path(f.root(), "TASK-9001"),
+        record.as_object().unwrap(),
+        None,
+    )
+    .unwrap();
+    let lease = live.lease(change.id).unwrap();
+    assert!(live
+        .merge_verified(&change, &train, lease.as_ref())
+        .is_err());
+    assert!(calls(f.root()).is_empty());
+}
+
+#[test]
+fn bug2406_required_check_read_classifies_gh_output() {
+    use crate::forge::required_checks_from_output as read;
+    // gh's literal answer for a repository without required checks is an
+    // empty policy, not a failed read; the exact-tip judgment still requires
+    // every reported check to pass and at least one check to exist.
+    assert_eq!(
+        read(
+            false,
+            "",
+            "no required checks reported on the 'train/x' branch\n"
+        )
+        .unwrap(),
+        Vec::<String>::new()
+    );
+    // Every other failure stays fail-closed.
+    assert!(read(false, "", "HTTP 502: Bad Gateway").is_err());
+    assert!(read(false, "", "").is_err());
+    assert!(read(true, "not json", "").is_err());
+    assert_eq!(
+        read(
+            true,
+            r#"[{"name":"Build","bucket":"pass","workflow":"CI","link":""}]"#,
+            ""
+        )
+        .unwrap(),
+        vec!["Build".to_string()]
+    );
+    let none = crate::forge::CommitChecks {
+        sha: "a".repeat(40),
+        checks: Vec::new(),
+    };
+    assert_ne!(
+        crate::forge::judge_commit_checks(&none, &[]),
+        crate::forge::CommitCi::Green
+    );
 }

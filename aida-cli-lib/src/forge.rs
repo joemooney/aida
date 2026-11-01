@@ -1540,7 +1540,7 @@ pub fn forge_for_open_change(project_root: &Path) -> Box<dyn Forge> {
 /// chokepoint never weighs a verdict under a foreign bare id.
 // trace:BUG-1774 | ai:claude
 // trace:BUG-B6B1278890774EF993D2EBC327862470-048 | ai:claude
-fn corpus_gate_spec_hints(project_root: &Path, c: &ChangeRef) -> Vec<String> {
+pub(crate) fn corpus_gate_spec_hints(project_root: &Path, c: &ChangeRef) -> Vec<String> {
     let mut ids = crate::pr_ship::extract_spec_ids_from_text(&c.branch);
     if let Some(title) = c.title.as_deref() {
         for id in crate::pr_ship::extract_spec_ids_from_text(title) {
@@ -1579,9 +1579,36 @@ pub(crate) fn github_required_checks(root: &Path, change: &ChangeRef) -> Result<
             "name,bucket,workflow,link",
         ])
         .output_retrying_etxtbsy()?;
-    anyhow::ensure!(out.status.success(), "train required-check read failed");
-    let rows = crate::ci_gate::parse_check_rows(&String::from_utf8_lossy(&out.stdout))
-        .context("cannot read train required checks")?;
+    required_checks_from_output(
+        out.status.success(),
+        &String::from_utf8_lossy(&out.stdout),
+        &String::from_utf8_lossy(&out.stderr),
+    )
+}
+
+/// Classify `gh pr checks --required` output. A repository without required
+/// status checks makes gh exit non-zero with its literal "no required checks
+/// reported" answer: that is a positive empty policy, not a failed read, and
+/// the exact-tip judgment still requires every reported check to pass. Any
+/// other non-zero exit stays a failed read (fail closed).
+// trace:BUG-b6b1278890774ef993d2ebc327862470-179 | ai:claude
+pub(crate) fn required_checks_from_output(
+    success: bool,
+    stdout: &str,
+    stderr: &str,
+) -> Result<Vec<String>> {
+    if !success {
+        // prose-ok: matches gh's literal 'no required checks reported' answer
+        anyhow::ensure!(
+            stderr
+                .to_ascii_lowercase()
+                .contains("no required checks reported"),
+            "train required-check read failed"
+        );
+        return Ok(Vec::new());
+    }
+    let rows =
+        crate::ci_gate::parse_check_rows(stdout).context("cannot read train required checks")?;
     Ok(rows.into_iter().map(|r| r.name).collect())
 }
 
