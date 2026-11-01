@@ -20,6 +20,20 @@ fn get_cmd_env<'a>(cmd: &'a std::process::Command, key: &str) -> Option<Option<&
 
 #[test]
 fn burndown_quiet_command_applies_implementer_grant_and_scrubs_purpose() {
+    // Pin the vendor and project: these builders now resolve real launch config.
+    // trace:BUG-2389 | ai:codex
+    let root = tempfile::tempdir().unwrap();
+    std::fs::create_dir(root.path().join(".git")).unwrap();
+    let _ambient = crate::test_env::AmbientGuard::hermetic_and(
+        root.path(),
+        None,
+        &[
+            ("AIDA_HEADLESS_VENDOR", Some("claude")),
+            ("AIDA_AGENT_CMD", Some("/bin/true")),
+            ("AIDA_OS_WRAP", Some("0")),
+            ("AIDA_CONTAINED", None),
+        ],
+    );
     let cmd = build_burndown_quiet_command(
         "test prompt",
         "bypassPermissions",
@@ -53,6 +67,20 @@ fn burndown_quiet_command_applies_implementer_grant_and_scrubs_purpose() {
 
 #[test]
 fn burndown_quiet_command_supports_baseline_child() {
+    // Pin the vendor and project: these builders now resolve real launch config.
+    // trace:BUG-2389 | ai:codex
+    let root = tempfile::tempdir().unwrap();
+    std::fs::create_dir(root.path().join(".git")).unwrap();
+    let _ambient = crate::test_env::AmbientGuard::hermetic_and(
+        root.path(),
+        None,
+        &[
+            ("AIDA_HEADLESS_VENDOR", Some("claude")),
+            ("AIDA_AGENT_CMD", Some("/bin/true")),
+            ("AIDA_OS_WRAP", Some("0")),
+            ("AIDA_CONTAINED", None),
+        ],
+    );
     let cmd = build_burndown_quiet_command(
         "test prompt",
         "bypassPermissions",
@@ -82,6 +110,20 @@ fn burndown_quiet_command_supports_baseline_child() {
 
 #[test]
 fn burndown_verbose_command_applies_implementer_grant_and_scrubs_purpose() {
+    // Pin the vendor and project: these builders now resolve real launch config.
+    // trace:BUG-2389 | ai:codex
+    let root = tempfile::tempdir().unwrap();
+    std::fs::create_dir(root.path().join(".git")).unwrap();
+    let _ambient = crate::test_env::AmbientGuard::hermetic_and(
+        root.path(),
+        None,
+        &[
+            ("AIDA_HEADLESS_VENDOR", Some("claude")),
+            ("AIDA_AGENT_CMD", Some("/bin/true")),
+            ("AIDA_OS_WRAP", Some("0")),
+            ("AIDA_CONTAINED", None),
+        ],
+    );
     let cmd = build_burndown_verbose_command(
         "test prompt",
         "bypassPermissions",

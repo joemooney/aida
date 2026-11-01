@@ -113,6 +113,20 @@ fn uncontained_autopilot_intake_preserves_mode_or_defaults_to_bypass() {
 
 #[test]
 fn burndown_quiet_builder_argv_and_env_contained_vs_uncontained() {
+    // Pin the vendor and project: these builders now resolve real launch config.
+    // trace:BUG-2389 | ai:codex
+    let root = tempfile::tempdir().unwrap();
+    std::fs::create_dir(root.path().join(".git")).unwrap();
+    let _ambient = crate::test_env::AmbientGuard::hermetic_and(
+        root.path(),
+        None,
+        &[
+            ("AIDA_HEADLESS_VENDOR", Some("claude")),
+            ("AIDA_AGENT_CMD", Some("/bin/true")),
+            ("AIDA_OS_WRAP", Some("0")),
+            ("AIDA_CONTAINED", None),
+        ],
+    );
     // Contained
     let cmd =
         build_burndown_quiet_command("prompt-quiet", "dontAsk", "", "CEILING_KEY", "10", true)
@@ -168,6 +182,20 @@ fn burndown_quiet_builder_argv_and_env_contained_vs_uncontained() {
 
 #[test]
 fn burndown_verbose_builder_argv_and_env_contained_vs_uncontained() {
+    // Pin the vendor and project: these builders now resolve real launch config.
+    // trace:BUG-2389 | ai:codex
+    let root = tempfile::tempdir().unwrap();
+    std::fs::create_dir(root.path().join(".git")).unwrap();
+    let _ambient = crate::test_env::AmbientGuard::hermetic_and(
+        root.path(),
+        None,
+        &[
+            ("AIDA_HEADLESS_VENDOR", Some("claude")),
+            ("AIDA_AGENT_CMD", Some("/bin/true")),
+            ("AIDA_OS_WRAP", Some("0")),
+            ("AIDA_CONTAINED", None),
+        ],
+    );
     // Contained
     let cmd = build_burndown_verbose_command(
         "prompt-verbose",
@@ -239,6 +267,20 @@ fn burndown_verbose_builder_argv_and_env_contained_vs_uncontained() {
 
 #[test]
 fn autopilot_intake_builder_argv_and_env_contained_vs_uncontained() {
+    // Pin the vendor and project: these builders now resolve real launch config.
+    // trace:BUG-2389 | ai:codex
+    let root = tempfile::tempdir().unwrap();
+    std::fs::create_dir(root.path().join(".git")).unwrap();
+    let _ambient = crate::test_env::AmbientGuard::hermetic_and(
+        root.path(),
+        None,
+        &[
+            ("AIDA_HEADLESS_VENDOR", Some("claude")),
+            ("AIDA_AGENT_CMD", Some("/bin/true")),
+            ("AIDA_OS_WRAP", Some("0")),
+            ("AIDA_CONTAINED", None),
+        ],
+    );
     let cfg = crate::intake::IntakeConfig::default();
 
     // Contained
@@ -316,6 +358,20 @@ fn autopilot_intake_builder_argv_and_env_contained_vs_uncontained() {
 
 #[test]
 fn questions_clarify_builder_argv_and_env_contained_vs_uncontained() {
+    // Pin the vendor and project: these builders now resolve real launch config.
+    // trace:BUG-2389 | ai:codex
+    let root = tempfile::tempdir().unwrap();
+    std::fs::create_dir(root.path().join(".git")).unwrap();
+    let _ambient = crate::test_env::AmbientGuard::hermetic_and(
+        root.path(),
+        None,
+        &[
+            ("AIDA_HEADLESS_VENDOR", Some("claude")),
+            ("AIDA_AGENT_CMD", Some("/bin/true")),
+            ("AIDA_OS_WRAP", Some("0")),
+            ("AIDA_CONTAINED", None),
+        ],
+    );
     // Contained
     let cmd =
         build_questions_clarify_command("prompt-clarify", "child-clarify-grant", true).unwrap();

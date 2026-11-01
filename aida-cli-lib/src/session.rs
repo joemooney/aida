@@ -2182,6 +2182,44 @@ pub(crate) fn interactive_reviewer_launch_plan(
     }
 }
 
+/// Use the shared interactive vendor plan with an advisor's own child grant.
+// trace:BUG-2389 | ai:codex
+pub(crate) fn build_advisor_interactive_command(
+    prompt: &str,
+    grant_env: &str,
+    contained: bool,
+) -> Result<std::process::Command> {
+    let contained = aida_contained_env()? || contained;
+    let root = headless_worktree_root();
+    let vendor = resolve_headless_vendor(&root);
+    let prompt =
+        crate::intake::materialize_skill_invocation(prompt, vendor == HeadlessVendor::Claude);
+    let plan = interactive_reviewer_launch_plan(
+        vendor,
+        None,
+        None,
+        &prompt,
+        &uuid::Uuid::now_v7().to_string(),
+        contained,
+    )?;
+    let (program, args) = os_wrapped_program_and_args(&root, &plan.program, plan.args)?;
+    if plan.contained {
+        prepare_contained_mailbox_for_launch(&root)?;
+    }
+    let mut cmd = std::process::Command::new(program);
+    cmd.args(args);
+    apply_headless_child_seat_env(&mut cmd, "advisor", grant_env);
+    apply_child_agent_identity(&mut cmd, vendor, "advisor");
+    apply_headless_harness_version(&mut cmd, vendor, &root);
+    if plan.contained {
+        cmd.env("AIDA_CONTAINED", "1");
+    } else {
+        cmd.env_remove("AIDA_CONTAINED");
+    }
+    stamp_containment_posture(&mut cmd, containment_posture(vendor, contained)?);
+    Ok(cmd)
+}
+
 /// Spawn (not exec) an [`interactive_reviewer_launch_plan`] and wait,
 /// returning the exit status — the only place an interactive reviewer
 /// launch plan is actually turned into a process.
@@ -4620,11 +4658,84 @@ fn build_exec_vendor_headless_command_for(
     grant_env: &str,
     resume: bool,
 ) -> Result<std::process::Command> {
+    build_coordinator_headless_command_inner(
+        vendor, prompt, session_id, contained, model, effort, seat, grant_env, resume, None, true,
+    )
+}
+
+/// Launch coordinators through the same vendor, identity and containment adapter
+/// as queue phases, retaining their permission override and output mode.
+// trace:BUG-2389 | ai:codex
+pub(crate) fn build_coordinator_headless_command(
+    prompt: &str,
+    mode: &str,
+    seat: aida_core::agents_config::AgentSeat,
+    grant_env: &str,
+    contained: bool,
+    stream: bool,
+) -> Result<std::process::Command> {
+    let root = headless_worktree_root();
+    let vendor = resolve_headless_vendor(&root);
+    let tuning = resolve_agent_tuning(&root, vendor, seat);
+    let prompt =
+        crate::intake::materialize_skill_invocation(prompt, vendor == HeadlessVendor::Claude);
+    let mut command = build_coordinator_headless_command_inner(
+        vendor,
+        &prompt,
+        &uuid::Uuid::now_v7().to_string(),
+        contained,
+        tuning.model.as_deref(),
+        tuning.effort.as_deref(),
+        seat.as_str(),
+        grant_env,
+        false,
+        Some(mode),
+        stream,
+    )?;
+    command.env("AIDA_HEADLESS_VENDOR", vendor.as_str());
+    Ok(command)
+}
+
+// trace:BUG-2389 | ai:codex
+#[allow(clippy::too_many_arguments)]
+fn build_coordinator_headless_command_inner(
+    vendor: HeadlessVendor,
+    prompt: &str,
+    session_id: &str,
+    contained: bool,
+    model: Option<&str>,
+    effort: Option<&str>,
+    seat: &str,
+    grant_env: &str,
+    resume: bool,
+    mode: Option<&str>,
+    stream: bool,
+) -> Result<std::process::Command> {
     use std::process::Command;
     // trace:BUG-2172 | ai:codex
     let contained = aida_contained_env()? || contained;
-    let (program, args) =
+    let (program, mut args) =
         compose_headless_command_for(vendor, prompt, session_id, contained, model, effort, resume)?;
+    if vendor == HeadlessVendor::Claude {
+        if let Some(mode) = mode {
+            let resolved = if contained { "dontAsk" } else { mode }.to_string();
+            if let Some(i) = args.iter().position(|arg| arg == "--permission-mode") {
+                args[i + 1] = resolved;
+            }
+        }
+        if !stream {
+            if let Some(i) = args.iter().position(|arg| arg == "--output-format") {
+                args.drain(i..i + 2);
+            }
+            args.retain(|arg| arg != "--verbose");
+        } else if mode.is_some() {
+            // Burndown's live progress includes partial message events.
+            let i = args.iter().position(|arg| arg == "--verbose").unwrap();
+            args.insert(i, "--include-partial-messages".to_string());
+        }
+    } else if !stream {
+        args.retain(|arg| arg != "--json");
+    }
     // TASK-1169 / ADR-22: same bounded ceiling as the spawn path — the exec
     // path is the `--no-human` phase-1 implementer, which must not diverge.
     // trace:TASK-1169 | ai:claude
@@ -9610,6 +9721,128 @@ mod tests {
             cargs.contains(&"/aida-review --pr 7".to_string()),
             "claude expands its own skills — its path must be byte-identical"
         );
+    }
+
+    // trace:BUG-2389 | ai:codex
+    #[test]
+    fn bug_2389_coordinators_route_configured_vendor_and_keep_child_contracts() {
+        for vendor in [HeadlessVendor::Claude, HeadlessVendor::Codex] {
+            let root = tempfile::tempdir().unwrap();
+            assert!(std::process::Command::new("git")
+                .args(["init", "--quiet"])
+                .arg(root.path())
+                .status()
+                .unwrap()
+                .success());
+            let _ambient = crate::test_env::AmbientGuard::hermetic_and(
+                root.path(),
+                None,
+                &[
+                    ("AIDA_HEADLESS_VENDOR", None),
+                    ("AIDA_AGENT_CMD", Some("/bin/true")),
+                    ("AIDA_OS_WRAP", Some("0")),
+                    ("AIDA_CONTAINED", None),
+                    ("AIDA_SESSION_PURPOSE", Some("parent-purpose")),
+                ],
+            );
+            let _cwd = contained_cwd_seam::pin(root.path());
+            set_headless_vendor_override(None);
+            std::fs::create_dir_all(root.path().join(".aida")).unwrap();
+            std::fs::write(
+                root.path().join(".aida/agents.toml"),
+                format!("[agents]\nvendor = {:?}\n", vendor.as_str()),
+            )
+            .unwrap();
+            assert_eq!(resolve_headless_vendor(root.path()), vendor);
+            let intake = crate::intake::IntakeConfig::default();
+            let commands = [
+                crate::burndown_run::build_burndown_quiet_command(
+                    "/aida-burndown --max 2",
+                    "bypassPermissions",
+                    "child-grant",
+                    "CEILING",
+                    "10",
+                    false,
+                )
+                .unwrap(),
+                crate::burndown_run::build_burndown_verbose_command(
+                    "/aida-burndown --max 2",
+                    "bypassPermissions",
+                    "child-grant",
+                    "CEILING",
+                    "10",
+                    false,
+                )
+                .unwrap(),
+                crate::autopilot_intake::build_autopilot_intake_command(
+                    "/aida-assess",
+                    "bypassPermissions",
+                    "child-grant",
+                    false,
+                    &[],
+                    &[],
+                    &intake,
+                    "stop",
+                    crate::backlog::RiskLevel::Low,
+                    None,
+                    false,
+                )
+                .unwrap(),
+                crate::questions::build_questions_clarify_command(
+                    "/aida-clarify BUG-2389",
+                    "child-grant",
+                    false,
+                )
+                .unwrap(),
+            ];
+            for (i, command) in commands.iter().enumerate() {
+                let args: Vec<_> = command
+                    .get_args()
+                    .map(|a| a.to_string_lossy().into_owned())
+                    .collect();
+                assert_eq!(command.get_program(), "/bin/true");
+                let env = |key: &str| {
+                    command
+                        .get_envs()
+                        .find(|(k, _)| *k == key)
+                        .map(|(_, v)| v.map(|v| v.to_string_lossy().into_owned()))
+                };
+                assert_eq!(
+                    env(crate::gate::seat_authority::GRANT_ENV),
+                    Some(Some("child-grant".into()))
+                );
+                assert_eq!(env("AIDA_SESSION_PURPOSE"), Some(None));
+                assert_eq!(
+                    env("AIDA_SESSION_ROLE"),
+                    Some(Some(if i < 2 { "implementer" } else { "advisor" }.into()))
+                );
+                if i < 3 {
+                    assert_eq!(env("AIDA_HEADLESS"), Some(Some("1".into())));
+                    assert_eq!(
+                        env("AIDA_HEADLESS_VENDOR"),
+                        Some(Some(vendor.as_str().into()))
+                    );
+                }
+                if vendor == HeadlessVendor::Codex {
+                    assert!(!args.iter().any(|a| a == "-p" || a == "--permission-mode"));
+                    assert_eq!(args.first().map(String::as_str) == Some("exec"), i < 3);
+                    assert_eq!(args.iter().any(|a| a == "--json"), i == 1);
+                    let prompt = args.last().unwrap();
+                    assert!(!prompt.starts_with("/aida-"), "{prompt}");
+                    if i < 2 {
+                        assert!(prompt.contains("--max 2"));
+                        assert!(!prompt.contains("--vendor claude"));
+                    }
+                } else if i < 3 {
+                    assert!(args.iter().any(|a| a == "-p"));
+                    assert_eq!(args.iter().any(|a| a == "stream-json"), i == 1);
+                    assert_eq!(
+                        args.iter().any(|a| a == "--include-partial-messages"),
+                        i == 1
+                    );
+                }
+            }
+        }
     }
 
     #[test]

@@ -4475,9 +4475,20 @@ fn build_agent_new_bg_command_exports_when_contained_and_strips_when_uncontained
 // trace:BUG-2124 | ai:antigravity
 #[test]
 fn uncontained_launchers_strip_inherited_aida_contained() {
-    let _env = crate::test_env::EnvVarsGuard::apply(&[("AIDA_CONTAINED", None)]);
     let tmp = tempfile::tempdir().unwrap();
     let project = tmp.path().to_path_buf();
+
+    // trace:BUG-2389 | ai:codex
+    let _ambient = crate::test_env::AmbientGuard::hermetic_and(
+        &project,
+        None,
+        &[
+            ("AIDA_HEADLESS_VENDOR", Some("claude")),
+            ("AIDA_AGENT_CMD", Some("/bin/true")),
+            ("AIDA_OS_WRAP", Some("0")),
+            ("AIDA_CONTAINED", None),
+        ],
+    );
 
     // 1. phase_driver advisor
     let advisor_cmd = crate::phase_driver::build_phase_driver_advisor_command(
