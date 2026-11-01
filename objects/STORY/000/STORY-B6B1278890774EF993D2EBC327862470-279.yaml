@@ -18,7 +18,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-01T04:46:21.481096158Z
-modified_at: 2026-11-01T04:52:00.342049472Z
+modified_at: 2026-11-01T06:58:26.736514450Z
 req_type: Story
 tags:
 - mail-wake
@@ -27,6 +27,12 @@ relationships:
 - rel_type: Child
   target_id: 01a19499-932e-79f0-a3e1-1299dfe355ad
   created_at: 2026-11-01T04:46:29.308670259Z
+comments:
+- id: 01a195e7-0130-7230-be26-f2379796c18a
+  author: joe
+  content: 'HANDOFF LIVE ACTION: mail-wake user service installed through the operator-provided terminal runner, pinned to native codex-cli 0.166.0 at /home/joe/.codex/packages/app-server-daemon/current/bin/codex. Installation exposed BUG-2397 (invalid quoted WorkingDirectory plus false success); the managed unit was backed up and narrowly repaired. systemd verification/restart succeeded; is-active returned active at 2026-11-01T06:57Z. This completes only the service setup handoff action; this story still needs all-session arming, doctor behavior and end-to-end fixture implementation.'
+  created_at: 2026-11-01T06:58:26.736514450Z
+  modified_at: 2026-11-01T06:58:26.736514450Z
 history:
 - id: 01a1956e-3853-7f43-9567-c23a3a329cab
   author: joe
