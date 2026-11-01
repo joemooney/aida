@@ -19,7 +19,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T07:26:20.914223641Z
-modified_at: 2026-11-01T08:38:17.177369542Z
+modified_at: 2026-11-01T08:46:17.775253750Z
 req_type: Bug
 tags:
 - architecture
@@ -264,6 +264,44 @@ comments:
   content: 'Operational evidence after Claude weekly quota exhaustion: launched independent native Codex reviewer02 via AIDA. Host captured an exact fixed nonsecret whitelist from that reviewers OWN model host PID, validated name/role and distinct own child grant versus advisor, and wrote a private0400 /tmp context (no key payload/bearer tokens/parent grant). Sourcing only that own-context in reviewer tool shell made aida role current --check return reviewer. This is bounded interim recovery of existing child context, not a new authority resolver or user-policy change. Reviewer completed real PR3194 independent judgment. Supported refusal recording was not attempted because my prompt overrestricted automatic hold/status effects; future reviewer prompts explicitly permit supported recorder effects. Old private context removed after child ended. Permanent BUG2398 finalizer and full record tests remain required.'
   created_at: 2026-11-01T08:38:17.177369542Z
   modified_at: 2026-11-01T08:38:17.177369542Z
+- id: 01a19649-beaf-7380-a5ed-3a5d2b2236a8
+  author: mcp
+  content: |-
+    ADVISOR RULING — BUG-2398: CHANGES REQUESTED on the proposed wording-only resolution. Independent source judgment at code HEAD 4ce0af750fcb68d4adf57496e4e002aefd8ace77. Read full description, all eight comments, attention_reason, ADR-66 and relevant production paths. No implementation, dispatch, merge, cargo, live grant manipulation, parent-grant borrowing or configuration change performed. The doer's real-tool result is evidence relayed in attention_reason/user request, not a probe I reran.
+
+    Decision:
+    The original AC3 phrase "ungranted reviewer ... refusal" is an acceptance-authoring error if interpreted as requiring review record itself to fail for an absent grant. That is not the existing recorder contract. lib_part5.rs handle_review_record_at (~2994-3003) explicitly permits absent grants, while rejecting presented invalid grants; record_seat_allowed(None) is true (gate/rework_hold_release.rs:28). A named identity can therefore record an artifact without acquiring review authority. Its RecorderAttestation has no grant/seat and no human receipt. Named reviewer labels or AIDA_SESSION_ROLE do not confer authority under ADR-66.
+
+    However, I cannot approve the stronger substitute claim that EVERY relevant downstream consumer already refuses unattested review authority. The source disproves it:
+    1. gate/dispatch_authority.rs:1577 verdict_at_head checks open state and head SHA, then returns kind, without authority validation. dispatch_flow.rs:611-630 uses this to skip run_review_verb when any head-matching verdict exists. At ~681-690, --no-ship returns Done, exit 0, "approved at head ... with green CI" from that unvalidated approval. This is a concrete semantic review-success/fresh-review bypass. Ordinary shipping subsequently calls ship_or_train_single_pr and its authority gate; I found no forge merge bypass here. The misleading Step 3 "attested" comment is not enforcement.
+    2. human.rs:29 pr_has_approved_verdict, and the PR-record leg around :175, use phase_gates outcome parsing without authority and can classify the work as reviewed/awaiting merge. gate/review_verdict.rs:2783 review_actionability also labels a head-matching approval Resolved without authority; review_gates.rs:460-518 and queue_cmd.rs:1694/1853 consume it for annotations/actionable counts. Rows are annotated, not removed. These are weak semantic readers, not merge authorization.
+    3. phase_gates.rs:799/877 handshake parsing and queue_done_verdict_gate (~2830) do not authenticate approval. The phase-3 handshake is NOT the final merge gate: phase_driver_trait.rs:2579-2593 builds durable authority inputs and runs drain_merge_approval_gate before merge_change. Queue done is a separate completion/refusal check (no recorded verdict can already Proceed), not proof of independent review. Do not cite either parser as a negative-authority test.
+
+    Strong downstream boundaries verified by source:
+    - RecorderAttestation.authorizes and authority_key (gate/review_verdict.rs:250-292) require the appropriate seat/human evidence and bind SHA; absent grant/non-TTY named-agent recording has no authority key.
+    - review_authority::verified_authority_keys (:1160-1200) revalidates durable grant/time/binding through grant_authorized_at or a stored human receipt. ship::approval_authority_refusal (:787-850) refuses absent/unverified authority, missing identity anchor, implementer/self-review, wrong SHA and invalid time. approval.rs:98/138 makes this precede head override/carry-over. pr_cmd.rs:1996 and :3103 call the ship gate; drain, release/burndown and train use the same authority check (approval.rs:31/:351, phase_driver_trait.rs:2579; pr_ship_batch.rs:321; mandate.rs:1379).
+    - Standalone collection (review_verdict.rs:2491-2521) requires a stamped source and checks EVERY named grant. queue_cmd.rs:14468-14527 checks recognized verdict/current PR head and ONLY this launch's live reviewer child grant, rejecting launcher/foreign/invalid grants. An entirely unstamped ungranted run cannot supply its source. An unstamped agreeing handshake may accompany a checked source; collection is origin authentication, not complete ship-time attestation validation. Grant validity here is checked now; historical ship authorization is checked as of recording. Do not conflate them.
+    - Hold release removes any old release_grant before stamping a new valid one (:rework_hold_release.rs:33). auto_release_with requires release_grant id/subject and invokes approval_authority before eligibility/mandate (:839-856); production auto_release supplies merge_approval_inputs + approval_attested (:660). Unattested approval cannot release a hold. Eligibility/rechecks retain the remaining hold restrictions.
+
+    Existing tests read, NOT run:
+    gate/tests/bug_1918_approval_authority_tests.rs: unverified_authority_refuses_whatever_the_stored_booleans_say; attestation_that_does_not_authorize_refuses.
+    gate/tests/bug_1918_review_authority_tests.rs: operator_label_without_a_receipt_is_unattested_at_ship; seat_grant_is_revalidated_against_the_grant_store; ship_refuses_grant_attestation_whose_binding_does_not_overlap; release_burndown_and_drain_merges_pass_the_authority_gate (last is a source-wiring ratchet).
+    gate/ledger/tests.rs: a_revoked_or_foreign_grant_is_refused_at_collection; an_expired_grant_is_refused_at_collection.
+    gate/tests/story_1697_attested_release_tests.rs: an_approval_without_a_recorder_attestation_does_not_release.
+    tests/bug_1983_grant_verdict_tests.rs: review_record_refuses_a_rejected_grant; one_rejection_table_drives_the_edit_gate_and_review_record.
+    These establish the named boundaries, not universal reader coverage or this unrun real Codex case.
+
+    Required policy correction / gate:
+    Keep the recorder's compatibility contract: absent-grant artifacts remain nonauthoritative, rejected presented grants still fail, implementer self-review and human TTY/receipt rules stay intact. A blanket recorder refusal is NOT authorized by the signed adapter-only sketch, and would not repair old artifacts or weak readers. Before claiming semantic negative authority, require the dispatch success/skip-review boundary and reviewed/resolved semantic classifications to validate durable approval authority (or explicitly retain an UNATTESTED/needs-review state). Keep refusal/protection artifacts usable without turning them into positive authority. Add production-path tests using the actual ungranted recorder output: flow --no-ship must not return approval success/skip required review, reviewed/resolved surfaces must not claim an authoritative review, standalone collection must fail without its child grant, and ship/auto-release must refuse with holds retained. Also cover a presented invalid grant and an otherwise valid granted reviewer. Do not replace this with merely checking a label/seat or fabricating verified_authority entries.
+
+    No pure acceptance amendment is approved now. Exact replacement AC3 proposed ONLY WITH that explicit consumer-policy scope amendment and independent design signoff:
+    "Under temporary inherit=core configuration, the real Codex fixture restores only its own delegated subject, seat and context; own-scope operation succeeds and wrong-seat/advisor operations refuse. A granted reviewer records a verdict that validates as authorized independent review. A named ungranted agent may retain a nonauthoritative record artifact under the existing recorder compatibility contract; that actual artifact must not satisfy standalone collection without the launched reviewer grant, authoritative reviewed/resolved classification, dispatch review-success/skip-review decisions, ship, or automatic hold release. Presented invalid grants refuse recording. Assert the adapter never forwards a parent grant; do not claim deliberate same-uid parent-selector/key replay resistance beyond ADR-66."
+
+    The user's goal remains restoring their OWN AIDA-managed Codex seat through restrictive tool-shell policy, not inventing new reviewer privileges. B1-B4, exact explicit-child metadata whitelist, companion semantics, no parent fallback, no bearer tokens, other-vendor compatibility and global config remain unchanged. ADR-66's same-uid residual remains documented, not repaired or widened. The real native workspace fixture is still a required host/operator gate: preserve the exact socket ownership/mode failure in the doer environment; earlier host evidence does not make that fixture pass. Real codex exec remains operator-run. BUG-2394 and STORY-2238 stay separate.
+
+    Disposition: no doer return claiming this fork cleared. Root must explicitly adopt and obtain independent signoff for the consumer-policy scope change, or return for a different grounded policy ruling. STRICT independent authority review and operator merge floor remain. Local implementation gate stays one targeted launch/grant/authority test plus make check-ci-fast (long cargo background; CI full gate). No gate was waived. This judgment does not dispatch work or change status.
+  created_at: 2026-11-01T08:46:17.775237713Z
+  modified_at: 2026-11-01T08:46:17.775237713Z
 history:
 - id: 01a19600-c769-7cd0-ba08-8d93975e3e3b
   author: joe
