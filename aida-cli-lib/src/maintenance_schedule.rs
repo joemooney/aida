@@ -1805,6 +1805,31 @@ fn with_detail(mut row: StatusRow, project_root: &Path) -> StatusRow {
     row
 }
 
+/// The `status` / `list` rows: each task's schedule state plus its own
+/// last-run detail.
+// trace:STORY-2220 | ai:claude
+fn status_rows(project_root: &Path, tasks: &[Task], now: DateTime<Utc>) -> Result<Vec<StatusRow>> {
+    let state = load_state(project_root)?;
+    let ledgers = schedule_ledger::load_all(&store_root(project_root));
+    Ok(tasks
+        .iter()
+        .map(|t| {
+            with_detail(
+                status_row(t, ledgers.get(&t.name), state.tasks.get(&t.name), now),
+                project_root,
+            )
+        })
+        .collect())
+}
+
+/// One `<job>: <detail>` paragraph per row that carries a detail.
+// trace:STORY-2220 | ai:claude
+fn detail_lines(rows: &[StatusRow]) -> String {
+    rows.iter()
+        .filter_map(|row| Some(format!("\n{}: {}\n", row.name, row.detail.as_ref()?)))
+        .collect()
+}
+
 fn last_by_label(by: &LastBy) -> String {
     match &by.vendor {
         Some(v) => format!("{}/{v}", by.seat),
@@ -1858,18 +1883,7 @@ fn status(project_root: &Path, json: bool) -> Result<()> {
         }
         return Ok(());
     }
-    let state = load_state(project_root)?;
-    let ledgers = schedule_ledger::load_all(&store_root(project_root));
-    let now = Utc::now();
-    let rows: Vec<StatusRow> = tasks
-        .iter()
-        .map(|t| {
-            with_detail(
-                status_row(t, ledgers.get(&t.name), state.tasks.get(&t.name), now),
-                project_root,
-            )
-        })
-        .collect();
+    let rows = status_rows(project_root, &tasks, Utc::now())?;
     if json {
         println!("{}", serde_json::to_string_pretty(&rows)?);
         return Ok(());
@@ -1891,13 +1905,8 @@ fn status(project_root: &Path, json: bool) -> Result<()> {
             row.command
         );
     }
-    // trace:STORY-2220 | ai:claude
-    for row in &rows {
-        if let Some(detail) = &row.detail {
-            println!("\n{}: {detail}", row.name);
-        }
-    }
-    // trace:BUG-1655 | ai:claude
+    print!("{}", detail_lines(&rows)); // trace:STORY-2220 | ai:claude
+                                       // trace:BUG-1655 | ai:claude
     for row in rows.iter().filter(|r| r.problem.is_some()) {
         println!(
             "\nwarning: {} is not running: {}",
@@ -1932,18 +1941,7 @@ fn list(project_root: &Path, seat: Option<&str>, json: bool) -> Result<()> {
         }
         return Ok(());
     }
-    let state = load_state(project_root)?;
-    let ledgers = schedule_ledger::load_all(&store_root(project_root));
-    let now = Utc::now();
-    let rows: Vec<StatusRow> = tasks
-        .iter()
-        .map(|t| {
-            with_detail(
-                status_row(t, ledgers.get(&t.name), state.tasks.get(&t.name), now),
-                project_root,
-            )
-        })
-        .collect();
+    let rows = status_rows(project_root, &tasks, Utc::now())?;
     if json {
         println!("{}", serde_json::to_string_pretty(&rows)?);
         return Ok(());
@@ -1966,6 +1964,7 @@ fn list(project_root: &Path, seat: Option<&str>, json: bool) -> Result<()> {
             row.command
         );
     }
+    print!("{}", detail_lines(&rows)); // trace:STORY-2220 | ai:claude
     if rows.iter().any(|r| r.kind == "fires_task") {
         println!(
             "\nnote: `fires_task` rows come from .aida/schedules.toml (deprecated); \
@@ -4161,6 +4160,60 @@ mod tests {
 
     fn at(hour: u32) -> DateTime<Utc> {
         Utc.with_ymd_and_hms(2026, 9, 11, hour, 0, 0).unwrap()
+    }
+
+    /// STORY-2220 AC7: `aida schedule status` / `list` show the docs-sweep
+    /// job's last run, findings count and mode, and no other job grows a
+    /// detail line.
+    // trace:STORY-2220 | ai:claude
+    #[test]
+    fn story_2220_status_shows_the_docs_sweep_detail_line() {
+        let tmp = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(tmp.path().join(".aida")).unwrap();
+        std::fs::write(
+            tmp.path().join(".aida/config.toml"),
+            "[[schedule.jobs]]\nname = \"docs-sweep\"\ncommand = \"docs sweep\"\nevery = \"1d\"\n\
+             enabled = true\n\n[[schedule.jobs]]\nname = \"watchdog\"\ncommand = \"doctor\"\n\
+             every = \"15m\"\nenabled = true\n",
+        )
+        .unwrap();
+        let home = tempfile::tempdir().unwrap();
+        let tasks = {
+            let _guard = crate::test_env::EnvVarGuard::set("AIDA_HOME", home.path());
+            all_tasks(tmp.path()).unwrap()
+        };
+        let before = status_rows(tmp.path(), &tasks, at(12)).unwrap();
+        assert!(before.iter().all(|r| r.detail.is_none()), "no sweep yet");
+        assert_eq!(detail_lines(&before), "");
+
+        crate::docs_sweep::save_state(
+            tmp.path(),
+            &crate::docs_sweep::SweepState {
+                last_swept_rev: Some("0123456789abcdef".into()),
+                last_run_at: Some(at(9)),
+                findings: 2,
+                mode: Some(crate::docs_sweep::SweepMode::Report),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        let rows = status_rows(tmp.path(), &tasks, at(12)).unwrap();
+        let sweep = rows.iter().find(|r| r.name == "docs-sweep").unwrap();
+        let detail = sweep.detail.as_deref().expect("docs-sweep detail");
+        assert!(detail.contains("2 findings · mode report"), "{detail}");
+        assert!(
+            rows.iter()
+                .filter(|r| r.name != "docs-sweep")
+                .all(|r| r.detail.is_none()),
+            "only the docs-sweep job carries a detail"
+        );
+        let text = detail_lines(&rows);
+        assert_eq!(
+            text,
+            "\ndocs-sweep: last sweep 2026-09-11 09:00 UTC · 2 findings · mode report · swept to 0123456789\n"
+        );
+        let json = serde_json::to_value(sweep).unwrap();
+        assert_eq!(json["detail"].as_str(), Some(detail));
     }
 
     fn task(name: &str, interval: &str, command: &str) -> Task {

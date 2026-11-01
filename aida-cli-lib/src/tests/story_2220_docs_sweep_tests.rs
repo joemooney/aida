@@ -477,11 +477,12 @@ fn a_report_only_run_finds_stale_text_since_a_ref_and_records_nothing() {
     git_ok(root, &["commit", "-qam", "two"]);
 
     let cfg = SweepConfig::default();
-    let (all, _, since) = sweep(root, &cfg, None).unwrap();
+    let (all, _, since, _) = sweep(root, &cfg, None).unwrap();
     assert_eq!(since, None);
     assert_eq!(all.len(), 2, "{all:?}");
 
-    let (recent, head, since) = sweep(root, &cfg, Some("HEAD~1")).unwrap();
+    let (recent, head, since, scope) = sweep(root, &cfg, Some("HEAD~1")).unwrap();
+    assert_eq!(scope, s(&["README.md"]));
     assert!(since.is_some());
     assert_eq!(recent.len(), 1, "{recent:?}");
     assert_eq!((recent[0].file.as_str(), recent[0].line), ("README.md", 1));
@@ -547,4 +548,426 @@ fn a_finding_keeps_its_key_when_its_line_and_history_move() {
     let mut c = a.clone();
     c.file = "docs/cli/b.md".into();
     assert_ne!(a.key(), c.key());
+}
+
+// --- Full runs: the mail, the state, and PR mode against a fake forge -------
+
+fn git_out(dir: &Path, args: &[&str]) -> String {
+    let out = crate::test_git::git_command()
+        .current_dir(dir)
+        .args(args)
+        .output()
+        .unwrap();
+    assert!(
+        out.status.success(),
+        "git {args:?}: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    String::from_utf8_lossy(&out.stdout).trim().to_string()
+}
+
+/// Write `files`, commit only them (the sweep's own `.aida/` runtime files
+/// stay untracked), and push `main` when there is an `origin`.
+fn commit_files(root: &Path, files: &[(&str, &str)], msg: &str) {
+    for (path, body) in files {
+        let p = root.join(path);
+        std::fs::create_dir_all(p.parent().unwrap()).unwrap();
+        std::fs::write(p, body).unwrap();
+        git_ok(root, &["add", "--", path]);
+    }
+    git_ok(root, &["commit", "-qm", msg]);
+    if !git_out(root, &["remote"]).is_empty() {
+        git_ok(root, &["push", "-q", "origin", "main"]);
+    }
+}
+
+/// A project repository under `tmp/work`, optionally with a bare
+/// `tmp/origin.git` it pushes `main` to.
+fn project(tmp: &Path, with_origin: bool) -> std::path::PathBuf {
+    let root = tmp.join("work");
+    std::fs::create_dir_all(&root).unwrap();
+    git_ok(&root, &["init", "-q", "-b", "main"]);
+    git_ok(&root, &["config", "user.email", "t@example.com"]);
+    git_ok(&root, &["config", "user.name", "t"]);
+    if with_origin {
+        let origin = tmp.join("origin.git");
+        git_ok(
+            tmp,
+            &[
+                "init",
+                "-q",
+                "--bare",
+                "-b",
+                "main",
+                origin.to_str().unwrap(),
+            ],
+        );
+        git_ok(
+            &root,
+            &["remote", "add", "origin", origin.to_str().unwrap()],
+        );
+    }
+    root
+}
+
+fn mails(root: &Path) -> Vec<aida_core::mailbox::Message> {
+    crate::mailbox_store::read_local_messages(root).unwrap()
+}
+
+fn normal_run() -> SweepOpts<'static> {
+    SweepOpts {
+        since: None,
+        report_only: false,
+        json: true,
+    }
+}
+
+/// A forge and spec store that record what a run asked of them.
+#[derive(Default)]
+struct FakeHost {
+    open: std::cell::RefCell<Option<OpenPr>>,
+    created: std::cell::RefCell<Vec<(String, String)>>,
+    specs: std::cell::RefCell<Vec<NewSpec>>,
+}
+
+impl SweepHost for FakeHost {
+    fn open_sweep_pr(&self, _: &Path) -> Result<Option<OpenPr>> {
+        Ok(self.open.borrow().clone())
+    }
+    fn create_pr(&self, _: &Path, base: &str, title: &str, _: &str) -> Result<String> {
+        self.created
+            .borrow_mut()
+            .push((base.to_string(), title.to_string()));
+        let url = format!("https://forge.example/pr/{}", self.created.borrow().len());
+        *self.open.borrow_mut() = Some(OpenPr {
+            url: url.clone(),
+            title: title.to_string(),
+        });
+        Ok(url)
+    }
+    fn filed_keys(&self, _: &Path) -> Result<BTreeSet<String>> {
+        Ok(self
+            .specs
+            .borrow()
+            .iter()
+            .flat_map(|s| s.tags.clone())
+            .filter(|t| t.starts_with(KEY_TAG_PREFIX))
+            .collect())
+    }
+    fn file_spec(&self, _: &Path, spec: NewSpec) -> Result<String> {
+        self.specs.borrow_mut().push(spec);
+        Ok(format!("TASK-{}", self.specs.borrow().len()))
+    }
+}
+
+impl FakeHost {
+    fn ids_with(&self, status: aida_core::RequirementStatus) -> Vec<String> {
+        self.specs
+            .borrow()
+            .iter()
+            .enumerate()
+            .filter(|(_, s)| s.status == status)
+            .map(|(i, _)| format!("TASK-{}", i + 1))
+            .collect()
+    }
+}
+
+/// AC2/AC3: a normal report-mode run records the swept revision and sends
+/// exactly one mail with the fresh findings; a clean rerun sends none; a
+/// later run mails only what is new.
+#[test]
+fn a_report_run_records_the_revision_and_mails_only_fresh_findings_once() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = project(tmp.path(), false);
+    commit_files(
+        &root,
+        &[("docs/cli/a.md", "Run `aida schedule statsu`.\n")],
+        "one",
+    );
+    let host = FakeHost::default();
+
+    run_with(&root, normal_run(), &host).unwrap();
+    let state = load_state(&root);
+    assert_eq!(
+        state.last_swept_rev.as_deref(),
+        Some(git_out(&root, &["rev-parse", "HEAD"]).as_str())
+    );
+    assert_eq!((state.findings, state.mode), (1, Some(SweepMode::Report)));
+    let first = mails(&root);
+    assert_eq!(first.len(), 1, "one mail per run");
+    assert_eq!(
+        first[0].to,
+        aida_core::mailbox::Recipient::Agent("product".into())
+    );
+    assert!(
+        first[0].body.contains("docs/cli/a.md:1 ["),
+        "{}",
+        first[0].body
+    );
+    assert!(host.specs.borrow().is_empty() && host.created.borrow().is_empty());
+
+    // Nothing changed since the recorded revision: no findings, no mail.
+    run_with(&root, normal_run(), &host).unwrap();
+    assert_eq!(mails(&root).len(), 1, "a clean run sends no mail");
+    assert_eq!(load_state(&root).findings, 0);
+
+    // A new stale line beside the already-reported one: only it is mailed.
+    commit_files(
+        &root,
+        &[(
+            "docs/cli/a.md",
+            "Run `aida schedule statsu`.\nThen `aida shwo X`.\n",
+        )],
+        "two",
+    );
+    run_with(&root, normal_run(), &host).unwrap();
+    let seen: BTreeSet<String> = first.iter().map(|m| m.id.clone()).collect();
+    let new: Vec<_> = mails(&root)
+        .into_iter()
+        .filter(|m| !seen.contains(&m.id))
+        .collect();
+    assert_eq!(new.len(), 1);
+    assert!(new[0].body.contains("docs/cli/a.md:2 ["), "{}", new[0].body);
+    assert!(
+        !new[0].body.contains("docs/cli/a.md:1 ["),
+        "{}",
+        new[0].body
+    );
+    assert_eq!(new[0].subject.as_deref(), Some("Docs sweep: 1 finding"));
+    assert_eq!(load_state(&root).findings, 2);
+}
+
+fn commits_on_sweep_branch(origin: &Path) -> Vec<String> {
+    lines_of(git_out(
+        origin,
+        &["log", "--format=%s", &format!("main..{SWEEP_BRANCH}")],
+    ))
+    .into_iter()
+    .filter(|s| s.starts_with("[AI:aida]"))
+    .collect()
+}
+
+/// AC4/AC5: one PR per run, the next run extends the open PR (even when
+/// this clone lost the spec it recorded), judgment calls become draft specs
+/// filed once, and the batch spec takes the light review tier.
+#[test]
+fn pr_mode_opens_one_pr_then_extends_it_and_files_drafts_once() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = project(tmp.path(), true);
+    let origin = tmp.path().join("origin.git");
+    let inv = hidden_alias_invocation(&cli());
+    let canonical = match check_invocation(&cli(), &inv) {
+        Some(CommandProblem::HiddenAlias { new, .. }) => new,
+        other => panic!("{other:?}"),
+    };
+    commit_files(
+        &root,
+        &[
+            (".aida/config.toml", "[docs_sweep]\nmode = \"pr\"\n"),
+            (
+                "docs/cli/a.md",
+                &format!("Run `{inv}`.\nAnd `aida schedule statsu`.\n"),
+            ),
+        ],
+        "one",
+    );
+    let host = FakeHost::default();
+
+    // Run 1: a new PR from the default branch, one draft, one batch spec.
+    run_with(&root, normal_run(), &host).unwrap();
+    let batch = host.ids_with(aida_core::RequirementStatus::Approved);
+    let drafts = host.ids_with(aida_core::RequirementStatus::Draft);
+    assert_eq!((batch.len(), drafts.len()), (1, 1), "{:?}", host.specs);
+    let batch = batch[0].clone();
+    {
+        let specs = host.specs.borrow();
+        let batch_spec = specs
+            .iter()
+            .find(|s| s.status == aida_core::RequirementStatus::Approved);
+        let tags = &batch_spec.unwrap().tags;
+        assert!(tags.contains(&"batch:fasttrack".to_string()), "{tags:?}");
+        let skip = crate::auto_complete::LifecycleSkip::from_tags(tags.iter().map(String::as_str));
+        assert!(
+            skip.no_review,
+            "the batch spec skips the reviewer model phase"
+        );
+    }
+    assert_eq!(
+        host.created.borrow().clone(),
+        vec![(
+            "main".to_string(),
+            format!("[AI:aida] docs(sweep): batched documentation fixes ({batch})")
+        )]
+    );
+    assert_eq!(commits_on_sweep_branch(&origin).len(), 1);
+    let fixed = git_out(&origin, &["show", &format!("{SWEEP_BRANCH}:docs/cli/a.md")]);
+    assert!(fixed.contains(&format!("`{canonical}`")) && !fixed.contains(&format!("`{inv}`")));
+    let mut state = load_state(&root);
+    assert_eq!(state.pr_url.as_deref(), Some("https://forge.example/pr/1"));
+    assert_eq!(state.pr_spec.as_deref(), Some(batch.as_str()));
+    let body = &mails(&root)[0].body;
+    assert!(
+        body.contains("Sweep PR: https://forge.example/pr/1"),
+        "{body}"
+    );
+    assert!(body.contains("filed as draft specs"), "{body}");
+
+    // Run 2: a new doc on main while the PR is open, and this clone has
+    // lost the spec it recorded. The run extends the PR and keeps the spec
+    // its title names.
+    state.pr_spec = None;
+    save_state(&root, &state).unwrap();
+    commit_files(
+        &root,
+        &[("docs/cli/b.md", &format!("Use `{inv}`.\n"))],
+        "two",
+    );
+    run_with(&root, normal_run(), &host).unwrap();
+    assert_eq!(host.created.borrow().len(), 1, "the open PR is extended");
+    assert_eq!(
+        host.ids_with(aida_core::RequirementStatus::Approved),
+        vec![batch.clone()]
+    );
+    let commits = commits_on_sweep_branch(&origin);
+    assert_eq!(commits.len(), 2, "{commits:?}");
+    assert!(
+        commits.iter().all(|c| c.ends_with(&format!("({batch})"))),
+        "{commits:?}"
+    );
+    assert_eq!(load_state(&root).pr_spec.as_deref(), Some(batch.as_str()));
+
+    // Run 3: a full sweep again (the state is gone). The draft is not filed
+    // twice, and every fix is already on the branch, so nothing is
+    // committed or filed.
+    std::fs::remove_file(root.join(STATE_FILE)).unwrap();
+    run_with(&root, normal_run(), &host).unwrap();
+    assert_eq!(load_state(&root).findings, 3, "both docs were reviewed");
+    assert_eq!(host.specs.borrow().len(), 2, "{:?}", host.specs);
+    assert_eq!(commits_on_sweep_branch(&origin).len(), 2);
+    assert_eq!(host.created.borrow().len(), 1);
+}
+
+/// Review round 1: an edit whose line moved applies nothing, so no spec is
+/// filed and no PR is opened.
+#[test]
+fn a_run_whose_edits_all_skip_files_no_spec_and_opens_no_pr() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = project(tmp.path(), true);
+    commit_files(&root, &[("docs/cli/a.md", "Nothing stale here.\n")], "one");
+    let host = FakeHost::default();
+    let p = plan(
+        &[finding(
+            "docs/cli/a.md",
+            1,
+            replace("aida gone", "aida here"),
+        )],
+        20,
+    );
+    assert_eq!(p.edits.len(), 1);
+    let out = open_or_extend_pr(&root, &SweepConfig::default(), &host, &p).unwrap();
+    assert_eq!(out, None);
+    assert!(host.specs.borrow().is_empty());
+    assert!(host.created.borrow().is_empty());
+}
+
+/// AC acec3f70: a regenerate step that touches anything beyond the edited
+/// docs (and same-named doc copies) commits, pushes and files nothing.
+#[test]
+fn a_regenerate_step_that_reaches_past_the_docs_commits_nothing() {
+    let changed: BTreeSet<String> =
+        ["aida-core/templates/.aida/discipline/machinery-glossary.md".to_string()].into();
+    let mirror = ".aida/discipline/machinery-glossary.md".to_string();
+    assert!(check_staged(
+        &[changed.first().unwrap().clone(), mirror.clone()],
+        &changed,
+        20
+    )
+    .is_ok());
+    assert!(
+        check_staged(&[mirror.clone()], &changed, 0).is_err(),
+        "derived copies count against the cap"
+    );
+    assert!(check_staged(&["src/lib.rs".into()], &changed, 20).is_err());
+    assert!(check_staged(&["docs/other.md".into()], &changed, 20).is_err());
+
+    let tmp = tempfile::tempdir().unwrap();
+    let root = project(tmp.path(), true);
+    let origin = tmp.path().join("origin.git");
+    commit_files(&root, &[("docs/cli/a.md", "Run `aida old`.\n")], "one");
+    let host = FakeHost::default();
+    let cfg = SweepConfig {
+        regenerate: vec!["echo x > touched.rs".into()],
+        ..SweepConfig::default()
+    };
+    let p = plan(
+        &[finding("docs/cli/a.md", 1, replace("aida old", "aida new"))],
+        20,
+    );
+    let err = open_or_extend_pr(&root, &cfg, &host, &p).unwrap_err();
+    assert!(err.to_string().contains("touched.rs"), "{err}");
+    assert!(host.specs.borrow().is_empty());
+    assert!(host.created.borrow().is_empty());
+    let branch = crate::test_git::git_command()
+        .current_dir(&origin)
+        .args(["rev-parse", "--verify", "--quiet", SWEEP_BRANCH])
+        .output()
+        .unwrap();
+    assert!(!branch.status.success(), "nothing was pushed");
+}
+
+#[test]
+fn a_file_not_reviewed_again_keeps_its_reported_findings() {
+    let a = finding("docs/cli/a.md", 1, None);
+    let b = finding("docs/cli/b.md", 1, None);
+    let previous = vec![a.state_key(), b.state_key(), "legacy-bare-key".into()];
+    // Only b.md was reviewed, and it is clean now: a.md's finding stays
+    // reported, b.md's is forgotten, and the pre-file key format is dropped.
+    assert_eq!(
+        next_reported(&previous, &s(&["docs/cli/b.md"]), &[]),
+        vec![a.state_key()]
+    );
+    let c = finding("docs/cli/b.md", 2, replace("x", "y"));
+    let mut c = c;
+    c.proposed_fix = "other".into();
+    let mut want = vec![a.state_key(), c.state_key()];
+    want.sort();
+    assert_eq!(next_reported(&previous, &s(&["docs/cli/b.md"]), &[c]), want);
+}
+
+#[test]
+fn a_replacement_matches_whole_words_only() {
+    assert_eq!(find_bounded("Run `aida st` now.", "aida st"), Some(5));
+    assert_eq!(find_bounded("Run `aida status` now.", "aida st"), None);
+    assert_eq!(find_bounded("`xaida st`, `aida st`", "aida st"), Some(13));
+}
+
+#[test]
+fn the_open_prs_spec_comes_from_its_title_trailer() {
+    assert_eq!(
+        spec_from_title("[AI:aida] docs(sweep): batched documentation fixes (TASK-12)"),
+        Some("TASK-12".into())
+    );
+    assert_eq!(spec_from_title("docs: something (draft)"), None);
+    assert_eq!(spec_from_title("no trailer"), None);
+}
+
+/// `[docs_sweep]` comes from the default branch's copy: a branch-local edit
+/// (say, a `regenerate` command) is not honoured.
+#[test]
+fn the_sweep_config_is_read_from_the_default_branch_not_the_worktree() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = project(tmp.path(), false);
+    commit_files(
+        &root,
+        &[(".aida/config.toml", "[docs_sweep]\nmode = \"pr\"\n")],
+        "one",
+    );
+    std::fs::write(
+        root.join(".aida/config.toml"),
+        "[docs_sweep]\nmode = \"report\"\nregenerate = [\"rm -rf /\"]\n",
+    )
+    .unwrap();
+    let cfg = load_config(&root).unwrap();
+    assert_eq!(cfg.mode, SweepMode::Pr);
+    assert!(cfg.regenerate.is_empty());
 }

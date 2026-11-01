@@ -866,6 +866,16 @@ solo_human_self_approval = "policy" # STORY-1655: presence probed for an "ignore
 [keys.trusted.worktree_pool]
 trust_seat_worktrees = "policy"
 
+# STORY-2220: the docs sweep reads its whole table from the default-branch
+# copy (trusted_config, local refs), because `regenerate` runs shell commands.
+# trace:STORY-2220 | ai:claude
+[keys.trusted.docs_sweep]
+mode = "policy"
+max_files = "policy"
+website_dir = "policy"
+recipient = "policy"
+regenerate = "command"
+
 # trace:TASK-1730 | ai:codex
 [keys.trusted.regen]
 oracle_paths = "policy" # frozen held-out inputs, read at the same trusted SHA

@@ -1552,17 +1552,6 @@ pub(crate) const LIST_LENS_ALIASES: &[ListLensAlias] = &[
     },
 ];
 
-/// TASK-862: top-level personal-view shortcuts. `aida mylist` rewrites to
-/// `aida list me` (the current user's owned/assigned specs — STORY-662's `me`
-/// filter), forwarding any extra flags (`aida mylist --status open`). `aida
-/// myqueue` rewrites to `aida queue list`, which is already user-scoped via
-/// `current_user_id()` (BUG-89) — so `myqueue` is just a discoverable alias for
-/// "my queue". Both are pre-clap argv rewrites, the same idiom as
-/// `rewrite_list_alias` / `rewrite_advisor_assess`, so every downstream flag
-/// passes through unchanged. They deliberately do NOT touch the `aida list`
-/// default scope (`aida list` still shows ALL) — the default-scope question is
-/// recorded on the spec for the operator, not actioned here.
-// trace:TASK-862 | ai:claude
 /// Every built-in pre-clap argv rewrite, in dispatch order, returning the
 /// rewritten argv and the deprecated groom verb typed (if any). One function so
 /// `aida docs sweep` checks documented commands exactly as dispatch reads them.
@@ -1575,6 +1564,17 @@ pub(crate) fn builtin_alias_rewrites(args: &[String]) -> (Vec<String>, Option<St
     )))
 }
 
+/// TASK-862: top-level personal-view shortcuts. `aida mylist` rewrites to
+/// `aida list me` (the current user's owned/assigned specs — STORY-662's `me`
+/// filter), forwarding any extra flags (`aida mylist --status open`). `aida
+/// myqueue` rewrites to `aida queue list`, which is already user-scoped via
+/// `current_user_id()` (BUG-89) — so `myqueue` is just a discoverable alias for
+/// "my queue". Both are pre-clap argv rewrites, the same idiom as
+/// `rewrite_list_alias` / `rewrite_advisor_assess`, so every downstream flag
+/// passes through unchanged. They deliberately do NOT touch the `aida list`
+/// default scope (`aida list` still shows ALL) — the default-scope question is
+/// recorded on the spec for the operator, not actioned here.
+// trace:TASK-862 | ai:claude
 pub(crate) fn rewrite_personal_view_alias(args: &[String]) -> Vec<String> {
     if args.len() >= 2 {
         match args[1].as_str() {

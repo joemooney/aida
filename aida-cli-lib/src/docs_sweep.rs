@@ -117,7 +117,7 @@ pub(crate) fn parse_config(body: &str) -> Result<SweepConfig> {
     struct File {
         docs_sweep: Option<RawSweepConfig>,
     }
-    let file: File = toml::from_str(body).context("parsing .aida/config.toml")?;
+    let file: File = toml::from_str(body).context("parsing the project config")?;
     let raw = file.docs_sweep.unwrap_or_default();
     let mut cfg = SweepConfig::default();
     if let Some(mode) = raw.mode {
@@ -144,11 +144,16 @@ pub(crate) fn parse_config(body: &str) -> Result<SweepConfig> {
     Ok(cfg)
 }
 
+/// `[docs_sweep]` is read from the default branch's copy of the project
+/// config, never the branch-local file: `regenerate` runs shell commands, so
+/// a branch must not be able to set it (BUG-1723). The table's other keys come
+/// from the same copy so it stays one unit. Local refs only, so a scheduled
+/// run makes no forge call just to read its settings.
+// trace:STORY-2220 | ai:claude
 pub(crate) fn load_config(project_root: &Path) -> Result<SweepConfig> {
-    let path = project_root.join(".aida/config.toml");
-    match std::fs::read_to_string(&path) {
-        Ok(body) => parse_config(&body),
-        Err(_) => Ok(SweepConfig::default()),
+    match crate::trusted_config::read_trusted_config_toml_local(project_root) {
+        Some(body) => parse_config(&body),
+        None => Ok(SweepConfig::default()),
     }
 }
 
@@ -273,6 +278,33 @@ impl Finding {
         let digest = h.finalize();
         digest[..6].iter().map(|b| format!("{b:02x}")).collect()
     }
+
+    /// The key the sweep state remembers: `<file>#<key>`, so a run can forget
+    /// exactly the findings of the files it reviewed again.
+    fn state_key(&self) -> String {
+        format!("{}#{}", self.file, self.key())
+    }
+}
+
+/// The reported set after a run: what it found, plus what earlier runs
+/// found in files this run did not review (an incremental run says nothing
+/// about them, so a clean one must not make their findings new again).
+pub(crate) fn next_reported(
+    previous: &[String],
+    scope: &[String],
+    findings: &[Finding],
+) -> Vec<String> {
+    let scanned: BTreeSet<&str> = scope.iter().map(String::as_str).collect();
+    let mut out: BTreeSet<String> = previous
+        .iter()
+        .filter(|k| {
+            k.rsplit_once('#')
+                .is_some_and(|(file, _)| !scanned.contains(file))
+        })
+        .cloned()
+        .collect();
+    out.extend(findings.iter().map(Finding::state_key));
+    out.into_iter().collect()
 }
 
 // ---------------------------------------------------------------------------
@@ -1005,10 +1037,10 @@ pub(crate) fn apply_edits(dir: &Path, edits: &[Finding]) -> Result<BTreeSet<Stri
                 let Some(line) = lines.get_mut(f.line.saturating_sub(1)) else {
                     continue;
                 };
-                if !line.contains(old.as_str()) {
+                let Some(at) = find_bounded(line, old) else {
                     continue;
-                }
-                *line = line.replacen(old.as_str(), new, 1);
+                };
+                line.replace_range(at..at + old.len(), new);
                 std::fs::write(&path, lines.join("\n"))?;
                 changed.insert(f.file.clone());
             }
@@ -1041,6 +1073,16 @@ pub(crate) fn apply_edits(dir: &Path, edits: &[Finding]) -> Result<BTreeSet<Stri
         changed.insert(source);
     }
     Ok(changed)
+}
+
+/// Where `old` occurs in `line` as whole words: not inside a longer name, so
+/// a line already fixed to `aida status` never matches `aida st` again.
+pub(crate) fn find_bounded(line: &str, old: &str) -> Option<usize> {
+    let word = |c: char| c.is_alphanumeric() || c == '-' || c == '_';
+    line.match_indices(old).map(|(at, _)| at).find(|&at| {
+        !line[..at].chars().next_back().is_some_and(word)
+            && !line[at + old.len()..].chars().next().is_some_and(word)
+    })
 }
 
 /// Insert new entries before the glossary's trailing non-term sections (the
@@ -1130,7 +1172,19 @@ pub(crate) struct SweepOpts<'a> {
 }
 
 fn git(dir: &Path, args: &[&str]) -> Result<String> {
-    let out = aida_core::git_ops::host_git_command(dir)
+    run_git(aida_core::git_ops::host_git_command(dir), args)
+}
+
+/// [`git`] for a call that contacts `origin`, with its credentials routed.
+fn git_origin(dir: &Path, args: &[&str]) -> Result<String> {
+    run_git(
+        aida_core::git_ops::host_remote_git_command(dir, "origin"),
+        args,
+    )
+}
+
+fn run_git(mut cmd: std::process::Command, args: &[&str]) -> Result<String> {
+    let out = cmd
         .args(args)
         .output()
         .with_context(|| format!("running git {}", args.join(" ")))?;
@@ -1152,13 +1206,16 @@ fn lines_of(s: String) -> Vec<String> {
         .collect()
 }
 
-/// Review the documentation and return the findings, the reviewed revision,
-/// and the reference revision used.
+/// What [`sweep`] returns: the findings, the reviewed revision, the
+/// reference revision used, and the files it reviewed.
+pub(crate) type SweepOutcome = (Vec<Finding>, String, Option<String>, Vec<String>);
+
+/// Review the documentation.
 pub(crate) fn sweep(
     project_root: &Path,
     cfg: &SweepConfig,
     since: Option<&str>,
-) -> Result<(Vec<Finding>, String, Option<String>)> {
+) -> Result<SweepOutcome> {
     let head = git(project_root, &["rev-parse", "HEAD"])?;
     let since = match since {
         Some(rev) => Some(
@@ -1262,7 +1319,7 @@ pub(crate) fn sweep(
         }
     }
     findings.sort_by(|a, b| (&a.file, a.line, a.kind).cmp(&(&b.file, b.line, b.kind)));
-    Ok((findings, head, since))
+    Ok((findings, head, since, scope))
 }
 
 /// `aida docs sweep`.
@@ -1272,13 +1329,22 @@ pub(crate) fn run(opts: SweepOpts<'_>) -> Result<()> {
 }
 
 pub(crate) fn run_in(project_root: &Path, opts: SweepOpts<'_>) -> Result<()> {
+    run_with(project_root, opts, &LiveHost)
+}
+
+/// The run, with the forge and the spec store behind `host`.
+pub(crate) fn run_with(
+    project_root: &Path,
+    opts: SweepOpts<'_>,
+    host: &dyn SweepHost,
+) -> Result<()> {
     let cfg = load_config(project_root)?;
     let mut state = load_state(project_root);
     let since = opts
         .since
         .map(str::to_string)
         .or_else(|| state.last_swept_rev.clone());
-    let (findings, head, since) = sweep(project_root, &cfg, since.as_deref())?;
+    let (findings, head, since, scope) = sweep(project_root, &cfg, since.as_deref())?;
 
     if opts.json {
         println!(
@@ -1307,33 +1373,32 @@ pub(crate) fn run_in(project_root: &Path, opts: SweepOpts<'_>) -> Result<()> {
     let seen: BTreeSet<&str> = state.reported.iter().map(String::as_str).collect();
     let fresh: Vec<Finding> = findings
         .iter()
-        .filter(|f| !seen.contains(f.key().as_str()))
+        .filter(|f| !seen.contains(f.state_key().as_str()))
         .cloned()
         .collect();
-    let mut pr_note = None;
+    let mut notes = Vec::new();
     let mut over_cap = 0;
     if cfg.mode == SweepMode::Pr {
         let p = plan(&findings, cfg.max_files);
         over_cap = p.over_cap.len();
-        let drafts = file_drafts(project_root, &p.drafts)?;
+        let drafts = file_drafts(project_root, host, &p.drafts)?;
         if !p.edits.is_empty() {
-            let (url, spec) = open_or_extend_pr(project_root, &cfg, &state, &p)?;
-            pr_note = Some(format!(
-                "Sweep PR: {url} ({} fix(es) across {} file(s)).",
-                p.edits.len(),
-                p.files.len()
-            ));
-            state.pr_url = Some(url);
-            state.pr_spec = Some(spec);
+            if let Some(pr) = open_or_extend_pr(project_root, &cfg, host, &p)? {
+                notes.push(format!(
+                    "Sweep PR: {} ({} file(s) changed this run).",
+                    pr.url, pr.files
+                ));
+                state.pr_url = Some(pr.url);
+                state.pr_spec = Some(pr.spec);
+            }
         }
         if drafts > 0 {
-            let note = format!("{drafts} finding(s) need judgment and were filed as draft specs (tag `{SWEEP_TAG}`).");
-            pr_note = Some(match pr_note {
-                Some(n) => format!("{n}\n{note}"),
-                None => note,
-            });
+            notes.push(format!(
+                "{drafts} finding(s) need judgment and were filed as draft specs (tag `{SWEEP_TAG}`)."
+            ));
         }
     }
+    let pr_note = (!notes.is_empty()).then(|| notes.join("\n"));
     if let Some(body) = report_mail_body(
         &fresh,
         cfg.mode,
@@ -1343,7 +1408,7 @@ pub(crate) fn run_in(project_root: &Path, opts: SweepOpts<'_>) -> Result<()> {
     ) {
         send_report(project_root, &cfg.recipient, fresh.len(), &body)?;
     }
-    state.reported = findings.iter().map(Finding::key).collect();
+    state.reported = next_reported(&state.reported, &scope, &findings);
     state.last_swept_rev = Some(head);
     state.last_run_at = Some(Utc::now());
     state.findings = findings.len();
@@ -1387,19 +1452,13 @@ fn open_backend(project_root: &Path) -> Result<aida_core::CachedGitBackend> {
     Ok(aida_core::CachedGitBackend::with_inner(inner, &cache_path)?)
 }
 
-fn add_spec(
-    backend: &aida_core::CachedGitBackend,
-    title: String,
-    description: String,
-    status: aida_core::RequirementStatus,
-    tags: &[String],
-) -> Result<String> {
+fn add_spec(backend: &aida_core::CachedGitBackend, spec: NewSpec) -> Result<String> {
     use aida_core::DatabaseBackend;
-    let mut req = aida_core::Requirement::new(title, description);
+    let mut req = aida_core::Requirement::new(spec.title, spec.description);
     req.req_type = aida_core::RequirementType::Task;
-    req.status = status;
+    req.status = spec.status;
     req.owner = crate::get_default_author();
-    req.tags.extend(tags.iter().cloned());
+    req.tags.extend(spec.tags);
     aida_core::provenance::stamp_if_absent(&mut req);
     let store = backend.update_atomically(|store| {
         let prefix = store.get_type_prefix(&req.req_type);
@@ -1414,68 +1473,255 @@ fn add_spec(
 
 /// File one draft spec per finding that needs judgment, skipping findings a
 /// previous run already filed. Returns how many were filed now.
-fn file_drafts(project_root: &Path, drafts: &[Finding]) -> Result<usize> {
-    use aida_core::DatabaseBackend;
+fn file_drafts(project_root: &Path, host: &dyn SweepHost, drafts: &[Finding]) -> Result<usize> {
     if drafts.is_empty() {
         return Ok(0);
     }
-    let backend = open_backend(project_root)?;
-    let existing: BTreeSet<String> = backend
-        .list_summaries(&aida_core::ListFilter::default())
-        .unwrap_or_default()
-        .into_iter()
-        .flat_map(|s| s.tags.into_iter())
-        .filter(|t| t.starts_with("docs-sweep-key:"))
-        .collect();
+    let existing = host.filed_keys(project_root)?;
     let mut filed = 0;
     for f in drafts {
-        let key_tag = format!("docs-sweep-key:{}", f.key());
+        let key_tag = format!("{KEY_TAG_PREFIX}{}", f.key());
         if existing.contains(&key_tag) {
             continue;
         }
-        add_spec(
-            &backend,
-            format!("Docs sweep: {}:{} needs a fix", f.file, f.line),
-            format!(
-                "Found by `aida docs sweep`.\n\nFile: {}:{}\nEvidence: {}\nProposed fix: {}\n",
-                f.file, f.line, f.evidence, f.proposed_fix
-            ),
-            aida_core::RequirementStatus::Draft,
-            &[SWEEP_TAG.to_string(), "docs-only".to_string(), key_tag],
+        host.file_spec(
+            project_root,
+            NewSpec {
+                title: format!("Docs sweep: {}:{} needs a fix", f.file, f.line),
+                description: format!(
+                    "Found by `aida docs sweep`.\n\nFile: {}:{}\nEvidence: {}\nProposed fix: {}\n",
+                    f.file, f.line, f.evidence, f.proposed_fix
+                ),
+                status: aida_core::RequirementStatus::Draft,
+                tags: vec![SWEEP_TAG.to_string(), "docs-only".to_string(), key_tag],
+            },
         )?;
         filed += 1;
     }
     Ok(filed)
 }
 
-/// Open the sweep PR, or add a commit to the one still open. Returns the PR
-/// URL and the spec its commits trail.
-fn open_or_extend_pr(
+/// Tag prefix carrying a finding's stable key, so a rerun files no duplicate.
+const KEY_TAG_PREFIX: &str = "docs-sweep-key:";
+
+/// Tags on the spec a sweep PR's commits trail. Documentation-only fixes
+/// take the light review tier, which is the fasttrack lane: its own filing
+/// tags (`batch:fasttrack`, `lifecycle:no-review`) skip the reviewer model
+/// phase; CI and an independent approval still gate the merge.
+pub(crate) fn batch_spec_tags() -> Vec<String> {
+    let (bucket, lane_tag, _mode) = crate::leases::fasttrack_lane_filing(false);
+    let mut tags = vec![SWEEP_TAG.to_string(), "docs-only".to_string()];
+    tags.extend(bucket.map(|b| format!("batch:{b}")));
+    tags.extend(lane_tag);
+    tags
+}
+
+fn batch_spec() -> NewSpec {
+    NewSpec {
+        title: "Docs sweep: batched documentation fixes".to_string(),
+        description: "Mechanical documentation fixes batched by `aida docs sweep`. \
+                      Documentation only, so it takes the light review tier."
+            .to_string(),
+        status: aida_core::RequirementStatus::Approved,
+        tags: batch_spec_tags(),
+    }
+}
+
+// ---------------------------------------------------------------------------
+// The forge and the spec store
+// ---------------------------------------------------------------------------
+
+/// An open sweep PR.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct OpenPr {
+    pub url: String,
+    pub title: String,
+}
+
+/// The spec a sweep PR's commits trail: the parenthesized ID ending its
+/// title (`… batched documentation fixes (TASK-12)`).
+pub(crate) fn spec_from_title(title: &str) -> Option<String> {
+    let inner = title.trim_end().strip_suffix(')')?;
+    let id = inner[inner.rfind('(')? + 1..].trim();
+    (id.contains('-')
+        && id
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_'))
+    .then(|| id.to_string())
+}
+
+/// A spec a sweep files.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct NewSpec {
+    pub title: String,
+    pub description: String,
+    pub status: aida_core::RequirementStatus,
+    pub tags: Vec<String>,
+}
+
+/// What a PR-mode run needs from outside the repository: the forge (`gh`)
+/// and the spec store. [`LiveHost`] is the real one; tests use a fake.
+pub(crate) trait SweepHost {
+    /// The open PR on [`SWEEP_BRANCH`], if there is one.
+    fn open_sweep_pr(&self, project_root: &Path) -> Result<Option<OpenPr>>;
+    /// Open a PR from [`SWEEP_BRANCH`] into `base`; returns its URL.
+    fn create_pr(&self, dir: &Path, base: &str, title: &str, body: &str) -> Result<String>;
+    /// Every `docs-sweep-key:` tag a filed spec already carries.
+    fn filed_keys(&self, project_root: &Path) -> Result<BTreeSet<String>>;
+    /// File a spec; returns its ID.
+    fn file_spec(&self, project_root: &Path, spec: NewSpec) -> Result<String>;
+}
+
+pub(crate) struct LiveHost;
+
+impl SweepHost for LiveHost {
+    fn open_sweep_pr(&self, project_root: &Path) -> Result<Option<OpenPr>> {
+        let out = std::process::Command::new("gh")
+            .current_dir(project_root)
+            .args([
+                "pr",
+                "list",
+                "--head",
+                SWEEP_BRANCH,
+                "--state",
+                "open",
+                "--json",
+                "url,title",
+                "--jq",
+                ".[0] // empty | [.url, .title] | @tsv",
+            ])
+            .output()
+            .context("running gh pr list")?;
+        if !out.status.success() {
+            anyhow::bail!(
+                "gh pr list failed: {}",
+                String::from_utf8_lossy(&out.stderr).trim()
+            );
+        }
+        let line = String::from_utf8_lossy(&out.stdout).trim().to_string();
+        let (url, title) = line.split_once('\t').unwrap_or((line.as_str(), ""));
+        Ok((!url.trim().is_empty()).then(|| OpenPr {
+            url: url.trim().to_string(),
+            title: title.trim().to_string(),
+        }))
+    }
+
+    fn create_pr(&self, dir: &Path, base: &str, title: &str, body: &str) -> Result<String> {
+        let out = std::process::Command::new("gh")
+            .current_dir(dir)
+            .args([
+                "pr",
+                "create",
+                "--head",
+                SWEEP_BRANCH,
+                "--base",
+                base,
+                "--title",
+                title,
+                "--body",
+                body,
+            ])
+            .output()
+            .context("running gh pr create")?;
+        if !out.status.success() {
+            anyhow::bail!(
+                "gh pr create failed: {}",
+                String::from_utf8_lossy(&out.stderr).trim()
+            );
+        }
+        Ok(String::from_utf8_lossy(&out.stdout).trim().to_string())
+    }
+
+    fn filed_keys(&self, project_root: &Path) -> Result<BTreeSet<String>> {
+        use aida_core::DatabaseBackend;
+        Ok(open_backend(project_root)?
+            .list_summaries(&aida_core::ListFilter::default())
+            .unwrap_or_default()
+            .into_iter()
+            .flat_map(|s| s.tags.into_iter())
+            .filter(|t| t.starts_with(KEY_TAG_PREFIX))
+            .collect())
+    }
+
+    fn file_spec(&self, project_root: &Path, spec: NewSpec) -> Result<String> {
+        add_spec(&open_backend(project_root)?, spec)
+    }
+}
+
+/// Whether a path is documentation a sweep commit may carry.
+fn is_doc_path(path: &str) -> bool {
+    (path.ends_with(".md") || path.ends_with(".html"))
+        && !path.contains("/tests/")
+        && !path.starts_with("target/")
+        && !path.starts_with(".aida-store/")
+}
+
+fn file_name_of(path: &str) -> &str {
+    path.rsplit('/').next().unwrap_or(path)
+}
+
+/// What a sweep commit may contain: the files its edits changed, plus at most
+/// `max_files` documentation copies a `regenerate` step derived from them
+/// (same file name, still Markdown or HTML outside tests and the store).
+/// Anything else (code, a test, an unrelated file) means a regenerate step
+/// reached past the docs-only, capped edit set, so nothing is committed.
+pub(crate) fn check_staged(
+    staged: &[String],
+    changed: &BTreeSet<String>,
+    max_files: usize,
+) -> Result<()> {
+    let names: BTreeSet<&str> = changed.iter().map(|p| file_name_of(p)).collect();
+    let (derived, outside): (Vec<&String>, Vec<&String>) = staged
+        .iter()
+        .filter(|p| !changed.contains(*p))
+        .partition(|p| is_doc_path(p) && names.contains(file_name_of(p)));
+    if !outside.is_empty() {
+        anyhow::bail!(
+            "a regenerate step changed files outside the documentation edits; nothing was committed: {}",
+            outside
+                .iter()
+                .map(|s| s.as_str())
+                .collect::<Vec<_>>()
+                .join(", ")
+        );
+    }
+    if derived.len() > max_files {
+        anyhow::bail!(
+            "a regenerate step changed {} derived files, over the per-run cap of {max_files}; nothing was committed",
+            derived.len()
+        );
+    }
+    Ok(())
+}
+
+/// The sweep PR a run opened or extended.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct PrOutcome {
+    pub url: String,
+    /// The spec the PR's commits trail.
+    pub spec: String,
+    /// Files this run's commit changed.
+    pub files: usize,
+}
+
+/// Open the sweep PR, or add a commit to the one still open. `None` when no
+/// edit applied (every planned line had moved), so nothing was committed,
+/// pushed, or filed.
+pub(crate) fn open_or_extend_pr(
     project_root: &Path,
     cfg: &SweepConfig,
-    state: &SweepState,
+    host: &dyn SweepHost,
     p: &Plan,
-) -> Result<(String, String)> {
-    let existing = open_sweep_pr(project_root)?;
+) -> Result<Option<PrOutcome>> {
+    let existing = host.open_sweep_pr(project_root)?;
     let default_branch = aida_core::git_ops::default_branch_name(project_root);
-    let _ = git(project_root, &["fetch", "--quiet", "origin"]);
+    let _ = git_origin(project_root, &["fetch", "--quiet", "origin"]);
     let base = match &existing {
         Some(_) => format!("origin/{SWEEP_BRANCH}"),
         None => format!("origin/{default_branch}"),
     };
-    let spec = match (&existing, &state.pr_spec) {
-        (Some(_), Some(spec)) => spec.clone(),
-        _ => add_spec(
-            &open_backend(project_root)?,
-            "Docs sweep: batched documentation fixes".to_string(),
-            "Mechanical documentation fixes batched by `aida docs sweep` (STORY-2220). \
-             Documentation only: light review."
-                .to_string(),
-            aida_core::RequirementStatus::Approved,
-            &[SWEEP_TAG.to_string(), "docs-only".to_string()],
-        )?,
-    };
-    let dir = std::env::temp_dir().join(format!("aida-docs-sweep-{}", std::process::id()));
+    let scratch = tempfile::tempdir().context("creating the sweep worktree directory")?;
+    let dir = scratch.path().join("worktree");
     let dir_s = dir.to_string_lossy().to_string();
     git(
         project_root,
@@ -1489,10 +1735,18 @@ fn open_or_extend_pr(
             &base,
         ],
     )?;
-    let result = (|| -> Result<String> {
+    let result = (|| -> Result<Option<PrOutcome>> {
+        if existing.is_some() {
+            // Bring the open PR up to date so a doc added since it opened can
+            // be fixed too; a conflict leaves the branch as it was.
+            let target = format!("origin/{default_branch}");
+            if git(&dir, &["merge", "--quiet", "--no-edit", &target]).is_err() {
+                let _ = git(&dir, &["merge", "--abort"]);
+            }
+        }
         let changed = apply_edits(&dir, &p.edits)?;
         if changed.is_empty() {
-            return Ok(existing.clone().unwrap_or_default());
+            return Ok(None);
         }
         for cmd in &cfg.regenerate {
             let status = std::process::Command::new("sh")
@@ -1506,82 +1760,67 @@ fn open_or_extend_pr(
             }
         }
         git(&dir, &["add", "-A"])?;
+        let staged = lines_of(git(&dir, &["diff", "--cached", "--name-only"])?);
+        if staged.is_empty() {
+            return Ok(None);
+        }
+        check_staged(&staged, &changed, cfg.max_files)?;
+        // The spec is filed only now that there is a commit to trail it, and
+        // an open PR keeps the spec its title already names.
+        let spec = match existing.as_ref().and_then(|pr| spec_from_title(&pr.title)) {
+            Some(spec) => spec,
+            None => host.file_spec(project_root, batch_spec())?,
+        };
+        let applied: Vec<Finding> = p
+            .edits
+            .iter()
+            .filter(|f| {
+                f.fix
+                    .as_ref()
+                    .is_some_and(|x| changed.contains(x.target(&f.file)))
+            })
+            .cloned()
+            .collect();
+        let title = format!("[AI:aida] docs(sweep): batched documentation fixes ({spec})");
         let message = format!(
-            "[AI:aida] docs(sweep): batched documentation fixes ({spec})\n\n{}",
-            p.edits
+            "{title}\n\n{}",
+            applied
                 .iter()
                 .map(|f| format!("- {}:{} {}", f.file, f.line, f.proposed_fix))
                 .collect::<Vec<_>>()
                 .join("\n")
         );
         git(&dir, &["commit", "--quiet", "-m", &message])?;
-        if existing.is_some() {
-            git(&dir, &["push", "--quiet", "origin", SWEEP_BRANCH])?;
-            return Ok(existing.clone().unwrap_or_default());
+        let url = match &existing {
+            Some(pr) => {
+                git_origin(&dir, &["push", "--quiet", "origin", SWEEP_BRANCH])?;
+                pr.url.clone()
+            }
+            None => {
+                git_origin(
+                    &dir,
+                    &["push", "--quiet", "--force", "-u", "origin", SWEEP_BRANCH],
+                )?;
+                let body = format!(
+                    "Batched documentation fixes from `aida docs sweep`. Documentation \
+                     only (light review); spec {spec}.\n\n{}",
+                    render_findings(&applied)
+                );
+                host.create_pr(&dir, &default_branch, &title, &body)?
+            }
+        };
+        if url.trim().is_empty() {
+            anyhow::bail!("the sweep branch was pushed but the forge returned no PR URL");
         }
-        git(
-            &dir,
-            &["push", "--quiet", "--force", "-u", "origin", SWEEP_BRANCH],
-        )?;
-        let body = format!(
-            "Batched documentation fixes from `aida docs sweep`. Documentation only \
-             (light review); spec {spec}.\n\n{}",
-            render_findings(&p.edits)
-        );
-        let out = std::process::Command::new("gh")
-            .current_dir(&dir)
-            .args([
-                "pr",
-                "create",
-                "--head",
-                SWEEP_BRANCH,
-                "--base",
-                &default_branch,
-                "--title",
-                &format!("[AI:aida] docs(sweep): batched documentation fixes ({spec})"),
-                "--body",
-                &body,
-            ])
-            .output()
-            .context("running gh pr create")?;
-        if !out.status.success() {
-            anyhow::bail!(
-                "gh pr create failed: {}",
-                String::from_utf8_lossy(&out.stderr).trim()
-            );
-        }
-        Ok(String::from_utf8_lossy(&out.stdout).trim().to_string())
+        Ok(Some(PrOutcome {
+            url,
+            spec,
+            files: staged.len(),
+        }))
     })();
     let _ = git(project_root, &["worktree", "remove", "--force", &dir_s]);
-    Ok((result?, spec))
-}
-
-/// The URL of the open sweep PR, if there is one.
-fn open_sweep_pr(project_root: &Path) -> Result<Option<String>> {
-    let out = std::process::Command::new("gh")
-        .current_dir(project_root)
-        .args([
-            "pr",
-            "list",
-            "--head",
-            SWEEP_BRANCH,
-            "--state",
-            "open",
-            "--json",
-            "url",
-            "--jq",
-            ".[0].url // empty",
-        ])
-        .output()
-        .context("running gh pr list")?;
-    if !out.status.success() {
-        anyhow::bail!(
-            "gh pr list failed: {}",
-            String::from_utf8_lossy(&out.stderr).trim()
-        );
-    }
-    let url = String::from_utf8_lossy(&out.stdout).trim().to_string();
-    Ok((!url.is_empty()).then_some(url))
+    let _ = git(project_root, &["worktree", "prune"]);
+    result
 }
 
 #[cfg(test)]
