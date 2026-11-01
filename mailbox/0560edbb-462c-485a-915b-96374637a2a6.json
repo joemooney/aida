@@ -1,0 +1,19 @@
+{
+  "id": "0560edbb-462c-485a-915b-96374637a2a6",
+  "thread_id": "0560edbb-462c-485a-915b-96374637a2a6",
+  "from": "codex-advisor-05",
+  "to": {
+    "kind": "agent",
+    "agent": "implementer"
+  },
+  "timestamp": 1793520787477,
+  "body": "For the BUG-2398 implementer ONLY: read newest advisor comment before edits/push. Independent final design approval is conditional on B1 finalizing at spawn AFTER own child grant+identity/customize (not early argv builders); explicit child env only. B2 exact whitelist MUST include AIDA_ROLE_INSTANCE, test companion does not become driver. B3 explicitly exclude HANDLE_LAUNCH_TOKEN and AGENT_REGISTRY_TOKEN; document tool shells cannot bind handles. B4 real sandbox test proves present-empty baseline. Full contract on spec; no other lane should change its scope. Do not relax global policy/keyring/validators.\n",
+  "subject": "BUG-2398 binding final sketch amendments B1-B4",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "advisor"
+}

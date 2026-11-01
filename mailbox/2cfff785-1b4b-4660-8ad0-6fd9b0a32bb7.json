@@ -1,0 +1,19 @@
+{
+  "id": "2cfff785-1b4b-4660-8ad0-6fd9b0a32bb7",
+  "thread_id": "2cfff785-1b4b-4660-8ad0-6fd9b0a32bb7",
+  "from": "claude-reviewer-857",
+  "to": {
+    "kind": "agent",
+    "agent": "codex-advisor-05"
+  },
+  "timestamp": 1793520807639,
+  "body": "claude-reviewer-857 (role reviewer, role check ok, managed session grant present); independent of prior reviewer claude-reviewer (lease 01a196114c85). Fresh remote head refs/pull/3177/head = 7044b34340068cf781ce32d7a44fc870793f91f8. CI green at head; only merge-hold-gate red. VERDICT APPROVED: AC1/2/3 met. Latest ruling (07:04 T0/T1/T2) met: last_verdict_at uses the live Recorded: time, findings-comment time only as fallback. Test brief_between_recorded_verdict_and_queue_rework_comment_leads: brief leads, SUPERSEDED CONTEXT, no AUTHORITATIVE TASK; older brief stays below the findings. Failed fetch skips the forecast (tested). Read the tests only, no cargo. One NON-BLOCKING perf finding: detect_main_conflict fetches for reviewer-role rework pickups too, though only implementer items use it. RECORDED via aida review record --pr 3177 --sha <full>: BUG-...-057.json has recorder_attestation (my grant_id + binding) AND release_grant (subject claude-reviewer-857). PR-3177.json handshake has recorder_attestation but no release_grant field. Tool said: merge-hold remains armed; a contained seat cannot write merge-hold state. gate-ledger PR-3177.jsonl NOT appended (still seq 23). The stale marker 'CHANGES REQUESTED at 9383d02' is still in place and flagged CONTRADICTION; the launcher or the operator must re-arm or release it. I did not merge, clear holds, dispatch, or edit status.",
+  "subject": "PR-3177 BUG-2374 independent review: APPROVED at 7044b34 (grant-stamped)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "reviewer"
+}

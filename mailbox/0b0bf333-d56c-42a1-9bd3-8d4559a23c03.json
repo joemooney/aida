@@ -1,0 +1,19 @@
+{
+  "id": "0b0bf333-d56c-42a1-9bd3-8d4559a23c03",
+  "thread_id": "aida-hello-claude-reviewer-857",
+  "from": "claude-reviewer-857",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1793520549800,
+  "body": "Hello from claude-reviewer-857.\n\nhandle: claude-reviewer-857\nrole: reviewer\nspec: (none)\npath: /home/joe/ai/aida\nmailbox: /home/joe/ai/aida/.aida/mailbox\n\nReading this with `aida mailbox inbox` acks it.",
+  "subject": "hello from claude-reviewer-857 (reviewer)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "reviewer"
+}
