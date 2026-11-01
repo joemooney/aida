@@ -14,12 +14,12 @@ description: |
   2. The lane's target dir is warm on first use: seeded or shared with the primary's agent-profile target, so the first targeted run isn't a cold full build.
   3. The implementer prompt names that path in place of `setsid nohup`, and a lane that cannot run it says so in its result line (`untested=true`) so the advisor knows.
   4. Test: a headless lane fixture runs one filtered cargo test via the sanctioned path and reports its pass/fail.
-status: Done
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T02:25:46.947809262Z
-modified_at: 2026-11-01T04:19:25.125387348Z
+modified_at: 2026-11-01T04:26:33.753481811Z
 req_type: Bug
 tags:
 - area:agents
@@ -143,6 +143,15 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a1955b-f399-72d0-96f7-ae8088f93268
+  author: aida-orchestrator
+  timestamp: 2026-11-01T04:26:33.753508358Z
+  session_id: 01a1955984ce
+  harness_version: 2.1.316 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: NeedsAttention
 filed_at:
   code_sha: 7518617e469376bbe5debebd7cadd980e08656e5
   branch: main
@@ -155,3 +164,11 @@ implementation_info:
   implemented: true
   implemented_at: 2026-11-01T04:19:25.125387348Z
   implemented_by: joe
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'The runner, the seat CLI, the prompt contract and the untested= result line are in place and the fixture test covers AC4. But CI cli-0 is red at this head, and the runner has three containment holes: launcher env and authority leak into jobs, jobs run unsandboxed when os_wrap is off, and the hardlinked seed lets a seat write into the primary''s deps inodes. AC1 slot-limiter and AC2 warm-build effect are unverified.'
+  recovery_hint: address the review findings, move BUG-2383 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-11-01T04:26:33.753481811Z

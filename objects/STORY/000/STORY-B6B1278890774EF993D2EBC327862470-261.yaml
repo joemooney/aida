@@ -25,7 +25,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T22:58:37.964636963Z
-modified_at: 2026-11-01T04:23:49.679310265Z
+modified_at: 2026-11-01T04:26:53.314533428Z
 req_type: Story
 tags:
 - docs
@@ -38,6 +38,33 @@ comments:
   created_at: 2026-11-01T03:12:01.011813208Z
   modified_at: 2026-11-01T03:12:01.011813208Z
   session_id: 77a7a933-9a3f-4243-9a44-892bcedf206c
+- id: 01a1955c-4002-71e2-b382-7c13e55f8e9e
+  author: joe
+  content: |-
+    ## Implementer approach
+
+    ### Acceptance criteria as tests
+    - **AC1, one source (fixture + unit):** a new template master `aida-core/templates/.aida/discipline/product-glossary.md` holds the end-user terms. Its "How to add a term" section names it as canonical for AIDA product vocabulary and says the TERM specs were folded in (TERM-1 becomes "local ID", TERM-3 becomes "role"/"seat", TERM-5 becomes "control plane"). Unit test: `render_discipline_glossary` default output contains `# Product glossary` ahead of the machinery section.
+    - **AC2, two outputs (fixture + command-level):**
+      - CLI: `aida docs glossary` (no flags) emits the product glossary first. `docs/cli/generate-glossary.sh` demotes its H1 and rewrites its repo-relative links for the book. `tests/test_generate_glossary_check.sh` gets a stub for the third file, and its (f) drift slice keeps `docs/cli/12-glossary.md` honest.
+      - Website: `build.py` renders `glossary.html` from the same file through a manifest entry. That entry's source is allowed outside `docs/` only for this discipline dir. Each `### Term` heading gets a slug anchor (`#merge-hold`). Each term becomes a `kind: term` record in `search-data.js`, and the glossary card appears in `library.html`. `tests/test_showcase_build.py` adds fixture tests for term anchors, term search records, and the library link. `build.py --check` passes.
+    - **AC3, first batch of terms (fixture):** all 23 listed terms are present; a showcase test asserts each anchor exists in `glossary.html`. Plain wording and 1-3 sentences per entry can only be checked by review.
+    - **AC4, explainer links:** link the first use of defined terms on the air-gapped page (hub, pool, agreed ID, local ID) where they occur. The authority page is not in the repo/manifest yet, so it is left for when it ships. This is verified by a build check that the links resolve to `glossary.html#…`.
+    - **AC5:** optional later slice; not done here.
+
+    ### Expected files
+    - `aida-core/templates/.aida/discipline/product-glossary.md` (new) + `README.md` index row; mirrors via `make sync-templates`
+    - `aida-cli-lib/src/lib_part2.rs`, `aida-cli-lib/src/tests/glossary_render_tests.rs`
+    - `docs/cli/generate-glossary.sh`, `docs/cli/12-glossary.md`, `tests/test_generate_glossary_check.sh`
+    - `docs/showcase/{build.py,publication.json,library.js,glossary.html,library.html,search-data.js,*.html nav}`, `docs/showcase/README.md`, `tests/test_showcase_build.py`
+    - `docs/air-gapped-development.md` (+ regenerated `air-gapped.html`)
+
+    ### Ambiguities / conflicts as questions
+    - Should TERM specs keep rendering in `docs/aida/10-glossary.md`? That generator is project-generic, so it stays unchanged. AIDA's own vocabulary moves to the product glossary, and the TERM content is folded into it.
+  created_at: 2026-11-01T04:26:53.314533428Z
+  modified_at: 2026-11-01T04:26:53.314533428Z
+  session_id: 01a195596c6b
+  harness_version: 2.1.316 (Claude Code)
 history:
 - id: 01a19517-7d5f-7092-83c8-b303944f0e16
   author: joe
