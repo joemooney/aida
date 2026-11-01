@@ -22,7 +22,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T06:47:10.885136620Z
-modified_at: 2026-11-01T22:33:55.306330809Z
+modified_at: 2026-11-01T23:28:12.122296202Z
 req_type: Bug
 tags:
 - audit
@@ -1315,6 +1315,13 @@ comments:
   created_at: 2026-11-01T22:06:06.463318608Z
   modified_at: 2026-11-01T22:06:06.463318608Z
   session_id: 126bbd5a-a92f-452b-ab0b-2637a1db42c2
+- id: 01a19971-275a-75a1-acc8-84c25b7bb5af
+  author: joe
+  content: 'PR #3220 opened (original 3 ACs only, per the advisor''s split ruling). Unit tests were not run locally because the test-binary link ran past the 10-minute per-command cap; cargo check --tests is clean and make check-ci-fast passed 36/36. CI is the first test run.'
+  created_at: 2026-11-01T23:28:12.122296202Z
+  modified_at: 2026-11-01T23:28:12.122296202Z
+  session_id: 01a1993f2378
+  harness_version: 2.1.316 (Claude Code)
 history:
 - id: 01a195dc-cb7c-7693-b0fc-4f832c1863f5
   author: joe
