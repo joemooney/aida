@@ -1178,8 +1178,7 @@ fn run_sandboxed_until(
             "bwrap is not available to sandbox the probe".to_string(),
         )),
         crate::BoundedCommandOutput::TimedOut => Err(failed(format!(
-            "the sandboxed {program} did not finish within {}s",
-            timeout.as_secs()
+            "the sandboxed {program} did not finish within {timeout:?}"
         ))),
     }
 }
@@ -1201,6 +1200,15 @@ fn probe_run(
 /// from main (host-owned), never from the clone.
 // trace:TASK-2053 | ai:claude
 pub(crate) fn pinned_base(main: &Path, clone: &Path) -> Option<String> {
+    pinned_base_until(main, clone, None)
+}
+
+// trace:BUG-2384 | ai:codex
+fn pinned_base_until(
+    main: &Path,
+    clone: &Path,
+    deadline: Option<std::time::Instant>,
+) -> Option<String> {
     let pin = pin_ref(clone)?;
     let mut cmd = git(main);
     cmd.args([
@@ -1210,8 +1218,8 @@ pub(crate) fn pinned_base(main: &Path, clone: &Path) -> Option<String> {
         crate::git_arg_guard::END_OF_OPTIONS,
         &format!("{pin}^{{commit}}"),
     ]);
-    run(cmd, "read the seat's base pin")
-        .ok()
+    run_bounded(cmd, "", deadline)
+        .map(|s| s.trim().to_string())
         .filter(|sha| !sha.is_empty())
 }
 
@@ -1247,6 +1255,10 @@ pub(crate) fn probe_until(
     shipped: &[String],
     deadline: Option<std::time::Instant>,
 ) -> Probe {
+    // trace:BUG-2384 | ai:codex
+    let scan_end = std::time::Instant::now() + std::time::Duration::from_secs(10);
+    let deadline = Some(deadline.map_or(scan_end, |end| end.min(scan_end)));
+    eprintln!("  inspecting seat clone {} (bounded scan)", clone.display());
     let probe_run = |clone: &Path, main: &Path, args: &[&std::ffi::OsStr], program: &str| {
         run_sandboxed_until(clone, main, program, args, PROBE_OUTPUT_CAP, deadline)
             .map(|out| String::from_utf8_lossy(&out).into_owned())
@@ -1305,7 +1317,7 @@ pub(crate) fn probe_until(
     facts
         .dirty
         .retain(|line| !is_runtime_noise_entry(clone, line));
-    let base = pinned_base(main, clone).unwrap_or_default();
+    let base = pinned_base_until(main, clone, deadline).unwrap_or_default();
     // BUG-2224: a seat clone inherits refs (tags, `wip/*` branches) whose
     // commits the main checkout already holds; removing the clone loses none
     // of them. The clone's ref tips main reaches from its own refs (host git,
@@ -1545,6 +1557,10 @@ pub(crate) fn probe_counting_origin(
     shipped: &[String],
     deadline: Option<std::time::Instant>,
 ) -> Probe {
+    // Share the clone budget with an optional origin refresh and second probe.
+    // trace:BUG-2384 | ai:codex
+    let scan_end = std::time::Instant::now() + std::time::Duration::from_secs(10);
+    let deadline = Some(deadline.map_or(scan_end, |end| end.min(scan_end)));
     let first = probe_until(main, clone, shipped, deadline);
     let Probe::Known(facts) = &first else {
         return first;
@@ -1785,9 +1801,16 @@ const TIPS_SEPARATOR: &str = "--";
 const UNPUSHED_COUNT_SCRIPT: &str = concat!(
     "set -u\n",
     stash_entries_sh!(),
+    // One batch checks all excused heads. Only commit objects become negative
+    // revisions; absent objects and tags never excuse work. Keep the large set
+    // on stdin to rev-list rather than expanding it into each process's argv.
+    // trace:BUG-2384 | ai:codex
     "base=$1\nshift\nshipped=''\n",
-    "for t in \"$@\"; do\n  if git cat-file -e \"$t^{commit}\" 2>/dev/null; then shipped=\"$shipped $t\"; fi\ndone\n",
-    "total=$(git rev-list --count --all $s --not --remotes=origin ${base:+\"$base\"} $shipped) || exit 1\n",
+    "if [ \"$#\" -gt 0 ]; then\n",
+    "  objects=$(printf '%s\\n' \"$@\" | git cat-file --batch-check='%(objectname) %(objecttype)') || exit 1\n",
+    "  shipped=$(printf '%s\\n' \"$objects\" | awk '$2 == \"commit\" {print \"^\" $1}') || exit 1\n",
+    "fi\n",
+    "total=$(printf '%s\\n' \"$shipped\" | git rev-list --stdin --count --all $s --not --remotes=origin ${base:+\"$base\"}) || exit 1\n",
     "printf '%s\\n' \"$total\"\n",
     "if [ \"$total\" -eq 0 ]; then exit 0; fi\n",
     "refs=$(git for-each-ref --format='%(refname)') || exit 1\n",
@@ -1796,11 +1819,11 @@ const UNPUSHED_COUNT_SCRIPT: &str = concat!(
     "fi\n",
     "printf '%s\\n' \"$refs\" | while IFS= read -r r; do\n",
     "  case $r in ''|refs/remotes/origin/*|refs/stash) continue;; esac\n",
-    "  n=$(git rev-list --count \"$r\" --not --remotes=origin ${base:+\"$base\"} $shipped) || exit 1\n",
+    "  n=$(printf '%s\\n' \"$shipped\" | git rev-list --stdin --count \"$r\" --not --remotes=origin ${base:+\"$base\"}) || exit 1\n",
     "  if [ \"$n\" -gt 0 ]; then printf '%s %s\\n' \"$n\" \"$r\"; fi\n",
     "done || exit 1\n",
     "if [ -n \"$s\" ]; then\n",
-    "  n=$(git rev-list --count $s --not --remotes=origin ${base:+\"$base\"} $shipped) || exit 1\n",
+    "  n=$(printf '%s\\n' \"$shipped\" | git rev-list --stdin --count $s --not --remotes=origin ${base:+\"$base\"}) || exit 1\n",
     "  if [ \"$n\" -gt 0 ]; then printf '%s refs/stash\\n' \"$n\"; fi\n",
     "fi\n"
 );

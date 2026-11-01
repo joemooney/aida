@@ -226,6 +226,20 @@ fn ship_by_number_from_main_matches_the_lease_on_the_pr_head_branch() {
         String::from_utf8_lossy(&output.stderr)
     );
 
+    // The real CLI must dispatch the detached worker using this build, not an
+    // older installed binary that does not know the internal subcommand.
+    // trace:BUG-2384 | ai:codex
+    assert!(text.contains("cleanup: pid"), "cleanup must start: {text}");
+    let logs = std::fs::read_dir(repo.join(".aida/cleanup-logs")).unwrap();
+    assert!(
+        logs.filter_map(Result::ok).any(|entry| {
+            std::fs::read_to_string(entry.path())
+                .unwrap_or_default()
+                .contains("cleanup: acquired the cleanup lock")
+        }),
+        "the current binary must dispatch the cleanup worker: {text}"
+    );
+
     assert!(state.join("merged").exists(), "the PR must merge: {text}");
     assert!(
         !text.contains("no AIDA lease for branch main"),
