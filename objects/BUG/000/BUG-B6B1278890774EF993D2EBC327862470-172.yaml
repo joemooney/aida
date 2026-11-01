@@ -19,7 +19,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-01T07:26:20.914223641Z
-modified_at: 2026-11-01T07:26:20.914223641Z
+modified_at: 2026-11-01T07:34:24.888551018Z
 req_type: Bug
 tags:
 - architecture
@@ -29,6 +29,36 @@ relationships:
 - rel_type: Child
   target_id: 01a19499-932e-79f0-a3e1-1299dfe355ad
   created_at: 2026-11-01T07:26:34.503067746Z
+comments:
+- id: 01a19607-ef78-7663-b1e6-b30c4d96f412
+  author: joe
+  content: |
+    SKETCH (awaiting independent advisor signoff) — BUG-2398, part 1/2: root cause and design
+
+    Author: claude advisor (sketch author only; did not implement, approve, change status, or launch anything). The implementation goes to a Codex lane after an independent advisor signs this off.
+
+    ## Root cause (code read at 53c8970)
+    - The child grant's authority is already in the tool shell. issue_child_from (gate/seat_authority.rs) binds the child to proc:<launcher> plus key:<sha256>. It installs the secret as the possessor-only key aida-grant:<id> in the launcher's session keyring (grant_keyring.rs install). Keyrings are inherited across fork/exec, PID namespaces and user namespaces, so Codex's tool shells already possess the key.
+    - What is lost is the HANDLE. grant_check_at, current_grant_id and display_grant_lookup find the grant only through std::env::var(GRANT_ENV). Codex inherit=core keeps only HOME/PATH/SHELL/USER/LOGNAME/TMPDIR, so every AIDA_* variable is dropped. The tool sees GrantCheck::Absent, which is the "no active role" in the BUG-2397 mail-wake log.
+    - GRANT_FILE_ENV (AIDA_SESSION_GRANT_FILE) is only a name that gets scrubbed (standalone_implementer, dispatch.rs:2566). Nothing reads it, and as an env var it would be stripped anyway. AIDA_AGENT_CONTEXT_FILE is prompt context, not authority, and is lost too: the launch prompt tells the model to cat that variable.
+    - Same-class loss, not authority: AIDA_USER (BUG-558 mailbox identity falls back to the human's USER), AIDA_PROJECT_ROOT, AIDA_AGENT_NAME, lease WORKER_SESSION_ENV, AIDA_SESSION_SCOPE, AIDA_SESSION_ROLE.
+
+    ## Rejected alternatives
+    1. -c shell_environment_policy.set.AIDA_SESSION_GRANT=<id>, or inherit=all: puts the handle in argv and logs, effectively edits the user policy, and violates acceptance 2.
+    2. A per-launch CODEX_HOME or a project .codex/config.toml: config or project-writable files are banned, and a separate CODEX_HOME splits the ChatGPT auth.
+    3. Ambient discovery (scan session-grants for an ancestor-bound grant, or enumerate aida-grant:* keys): REFUSED. The launcher keyring LINKS the previous one, so the child also possesses the parent advisor's key. TASK-2195 keyring reuse makes sibling keys direct members of the same keyring, and the parent's proc binding matches the child's ancestry. Discovery would pick up parent or sibling authority.
+
+    ## Design: a per-child seat-pointer key in the child's own session keyring
+    Owner: gate/seat_authority.rs + grant_keyring.rs (authority plumbing; strict review). Trigger: every spawn/exec that hands a child its grant decision.
+    S1. grant_keyring::install_seat_pointer_pre_exec runs in a CommandExt::pre_exec hook, in the CHILD after fork and before exec. It joins a FRESH anonymous session keyring (linking the old one, as sys::install does), sets POSSESSOR_ONLY, and adds one user key named aida-seat. The payload is a small versioned JSON object with these fields: v=1; grant = the child id, or empty for baseline; seat; agent; project_root; lease; scope. TTL = child grant ttl. The code is alloc-free (buffers built before fork, raw syscalls only). Only the child's tree possesses it; siblings get separate keyrings. The existing aida-grant install and the TASK-2195 quota behavior are untouched. The payload is a handle plus non-secret metadata: the secret stays only in aida-grant:<id>. Nothing goes to argv, logs, config, or a project-writable file. The registry bearer token is NOT carried (Q3).
+    S2. Resolver, in seat_authority only: grant_handle() uses env GRANT_ENV if PRESENT; present-but-empty means explicit baseline and is never overridden. Only when env is ABSENT does it read aida-seat as a DIRECT member of the current session keyring (KEYCTL_READ for the serial list, then KEYCTL_DESCRIBE). Never KEYCTL_SEARCH, which recurses into the linked parent keyring. More than one direct pointer → refuse as ambiguous. A malformed payload, a wrong version, or a foreign project_root → a named refusal, not Absent. The handle is then validated EXACTLY as today: grant_check_for_at plus with_presenter(presenter_tokens_for). Lifetime, revocation, roster, parent chain, and binding including key possession are unchanged. A pointer can only name a grant this process can already present, so it never mints, broadens, or reaches the parent. grant_check_at, current_grant_id, display_grant_lookup, revoke_current and role display all route through it. The identity resolvers (AIDA_USER mailbox, project root, lease worker, scope) fall back to the pointer only when their own env var is absent and the same pointer resolved a valid grant.
+    S3. One choke point: seat_authority::apply_child_authority(cmd, Grant or Baseline). It sets GRANT_ENV (to the id, or to empty) AND installs the pointer, or a baseline tombstone pointer. Every current child site that sets or removes GRANT_ENV converts to it: agent_launch.rs ~5931/6056/6728/6807; session.rs build_codex_session_command, exec_codex_session, run_vendor_headless_child; burndown_run ~613/2114; autopilot_intake ~1036; questions ~1691; drain_gate ~1941-1963; dispatch.rs ~2565; team.rs ~619; the standalone_implementer scrub. Without this, a grandchild launched from an implementer's tool shell would inherit the implementer's pointer. Non-launch scrubs (lane_env, test_env, queue_cmd) switch env_remove to set-empty; present-empty already means Absent, so behavior is preserved. A ratchet test forbids GRANT_ENV on a Command outside seat_authority.
+    S4. Fail closed before model work: for a granted seat under posture=native, the launcher runs a model-free preflight, codex sandbox (the lane's own flags) -- aida role current --probe-seat --expect SEAT. This uses the user's real config, so inherit=core applies. It prints booleans only and never echoes the id. On failure the lane is refused with a named cause: keyring unreachable (errno), pointer not visible, or PID namespace without key binding. A non-baseline seat is never silently downgraded, and there is never an argv fallback. Baseline seats keep today's Baseline path with a notice.
+    S5. Docs: a Codex setup note saying AIDA does not need shell_environment_policy relaxed, plus the Q1 limitation branch.
+  created_at: 2026-11-01T07:34:24.888551018Z
+  modified_at: 2026-11-01T07:34:24.888551018Z
+  session_id: 01a19602-239f-70a0-950a-ec6d76a57cb6
+  harness_version: 2.1.316 (Claude Code)
 history:
 - id: 01a19600-c769-7cd0-ba08-8d93975e3e3b
   author: joe

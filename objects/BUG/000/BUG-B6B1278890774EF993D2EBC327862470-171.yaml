@@ -17,7 +17,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T06:55:52.004339498Z
-modified_at: 2026-11-01T07:22:35.417721653Z
+modified_at: 2026-11-01T07:34:36.610316315Z
 req_type: Bug
 tags:
 - closure:pending
@@ -39,6 +39,11 @@ comments:
   content: 'Implementer pickup on codex/bug-2397-mail-wake. Preserving closure:pending and In Progress: acceptance 3 requires reinstall of reviewed merged binary after independent review/CI, outside this standalone PR-only launch. Current source already propagates nonzero systemctl exits; adding regression coverage plus explicit activation check and runtime status. CLI status edit was refused because worktree cache symlinks point outside native sandbox.'
   created_at: 2026-11-01T07:22:35.417703049Z
   modified_at: 2026-11-01T07:22:35.417703049Z
+- id: 01a19608-1d42-7621-b845-ab261868c0d7
+  author: mcp
+  content: 'Implementation committed and pushed: 891f8747f52 on codex/bug-2397-mail-wake (https://github.com/joemooney/aida/commit/891f8747f52). WorkingDirectory now uses its literal single-path semantics with %% specifier escaping, independently of ExecStart; unsafe unit-line paths refuse. Existing nonzero manager error propagation is covered, install verifies active after enable --now, and status distinguishes file presence from runtime states/unknown. Validation: CARGO_TARGET_DIR="$PWD/target" AIDA_CARGO_TIMEOUT=15m cargo test -p aida-cli-lib --profile agent mailbox_wake_run --lib: 15 passed, 0 failed (including systemd-analyze generated fixtures and isolated fake HOME/stub systemctl); make check-ci-fast: 36 gates passed; cargo fmt --all -- --check and git diff --check passed. No live service state changed. Publishing checkout: /tmp/aida-bug-2397-publish; assigned source worktree retains edits at base HEAD because its .git is read-only. Draft finding filed for sandbox/cache limitation. Marking branch implementation Done is not live closure: retain closure:pending; after independent review, green CI and merge, install the reviewed merged binary, verify active, and record evidence. Preserve the mitigation backup described in the earlier comment. Standalone launcher stops after PR open; no ship or review record.'
+  created_at: 2026-11-01T07:34:36.610249200Z
+  modified_at: 2026-11-01T07:34:36.610249200Z
 history:
 - id: 01a195e4-cb21-7b43-b55f-eef4611d9957
   author: joe
