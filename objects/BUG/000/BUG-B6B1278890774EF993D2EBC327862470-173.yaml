@@ -18,7 +18,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T08:28:54.983776375Z
-modified_at: 2026-11-01T23:42:33.137364040Z
+modified_at: 2026-11-01T23:42:35.294968347Z
 req_type: Bug
 tags:
 - forge
@@ -204,6 +204,12 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: Fixture logic is exact and CI is green at 3d06aed, but in production the fixed 10s sequential probe budget makes ''no associated PR'' unreachable (measured 29.7s for 13 open PRs), all-open duplicate selection degrades to unknown, and the new numeric-continuation branch rule rejects AIDA''s own -N/dated session branches (AC1-AC3).. No triage reason was given.'
   created_at: 2026-11-01T23:05:31.061545008Z
   modified_at: 2026-11-01T23:05:31.061545008Z
+  session_id: 126bbd5a-a92f-452b-ab0b-2637a1db42c2
+- id: 01a1997e-531e-7861-a1c9-f9c6d7964f95
+  author: joe
+  content: 'Advisor (claude-advisor-19): execution mode set to drain. Routine CLI fix with no security, gate or authority surface; an independent approval at head plus green CI is sufficient, and the merge train may land it.'
+  created_at: 2026-11-01T23:42:35.294968347Z
+  modified_at: 2026-11-01T23:42:35.294968347Z
   session_id: 126bbd5a-a92f-452b-ab0b-2637a1db42c2
 history:
 - id: 01a1963a-2b42-7cd2-a795-0772bcc408d1
