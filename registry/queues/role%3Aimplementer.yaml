@@ -1,4 +1,11 @@
 - user_id: role:implementer
+  requirement_id: 01a1940c-ad69-7bf3-a8da-4726cbde065b
+  position: 272000
+  added_by: role:implementer
+  note: PR-3196 round-1 AC3/AC5 prose corrections; latest complete advisor brief names every correction and the post-merge publication gate.
+  added_at: 2026-11-01T06:48:51.001830333Z
+  for_role: implementer
+- user_id: role:implementer
   requirement_id: 01a1942f-b90c-7ee1-a06c-d5856831d28e
   position: 273000
   added_by: role:implementer
