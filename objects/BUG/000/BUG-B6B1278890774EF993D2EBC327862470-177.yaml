@@ -1,0 +1,33 @@
+id: 01a1971a-138b-7732-9ff8-a747fc340dda
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-177
+agreed_id: BUG-2404
+title: Session-end autoqueue parses a decorated agreed/native display ID as the entire new review story ID
+description: |
+  Observed twice on installed main471540a during legitimate session end: TASK2705 PR3205 and BUG2398 PR3207. `aida add --type story` succeeds and returns a human display ID with native alias, e.g. `STORY-2272 (STORY-HOME-288)`. `pr_lookup.rs::parse_spec_id_from_add_output` strips Added: then splits only ` - `, so it passes the entire display-plus-parenthesized-alias to `spec_arg::canonical`. Session-end subsequently calls rel add and queue add with that whole string. Both relationship commands and reviewer queue insertion fail. Review story exists Approved but has no relationships and is not queued. Actual receipt: session-end01a1966b3a04 ended at2026-11-01T12:25Z, files story2272 canonical STORY-b6b1278890774ef993d2ebc327862470-288, warning `aida queue add STORY-2272 (STORY-HOME-288)` failed. Earlier same issue created2271 canonical...287 for3205. Advisor repaired those actual rows via supported canonical-ID rel/queue commands; this is operational recovery, not a fix.
+
+  This is a newly observed production autoqueue failure, not a nonblocking review follow-up. Existing BUG-2323 covered trailer parsing; current failure is parsing `aida add` output. `aida search auto-queue`/`queue insertion` found no open equivalent.
+
+  Acceptance:
+  1. Autoqueue must use an unambiguous machine/stored identity for the requirement it just created, regardless of human agreed/native alias decoration, ANSI, titles, backend display mode or duplicate ID-like text in diagnostics. Use the existing --canonical-ids contract or a typed internal result, with strict exact-ID parsing for supported text forms. Current `aida add --format json` explicitly refuses: do not assume a structured projection exists or invent a new public command solely for this fix. Never accept a whole decorated display string, arbitrary title/diagnostic token, or shared UUID prefix as identity. Refuse missing/malformed/ambiguous output rather than guessing or filing a second story.
+  2. End-to-end fixture of session-end/autoqueue with agreed ID plus native alias creates exactly one review story, links it to the owning spec and inserts its exact canonical ID into reviewer queue. Cover no alias, canonical node-local identity, legacy supported output, misleading/ANSI/invalid/ambiguous output and existing-review-story retry. Preserve existing GitHub PR/GitLab MR behavior, real errors/refusals and no duplicate filing if queue fails.
+  3. Original durable retry behavior remains when downstream relationship/queue operations fail; do not claim queued from add success. Tests use fake HOME/store/forge only. Existing ordinary role/author/reviewer/hold floors remain; no authority expansion or global configuration.
+
+  Implementation touches pr_lookup.rs also changed by BUG2400, so serialize after BUG2400 completes. LIGHT one focused autoqueue/parser regression plus fast; >10/sharedinfra adds actual touched/compile only as required. No full-suite/slot bypass. Push normal, independent review before merge.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-01T12:33:50.987786326Z
+modified_at: 2026-11-01T12:33:50.987786326Z
+req_type: Bug
+tags:
+- forge
+- queue
+- review
+filed_at:
+  code_sha: 471540a8c477a50a81170f338d81532cb5dbd329
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 471540a8c47
+  vendor: codex
