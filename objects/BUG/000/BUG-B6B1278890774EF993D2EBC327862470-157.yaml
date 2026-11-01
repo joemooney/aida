@@ -1,0 +1,35 @@
+id: 01a194ed-5fc3-71b1-8d17-9838ef33e8eb
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-157
+agreed_id: BUG-2383
+title: 'Headless implementer lanes cannot run the LIGHT gate: cold target dir, 60s tool cap, and detached cargo denied, so every rework push reaches CI untested'
+description: |
+  ## Observed (2026-10-31, advisor claude-advisor-11)
+  Headless implementer lanes (`aida queue work <SPEC> --role implementer --no-human --sandbox`) cannot run the LIGHT local gate the standing orders require (one targeted cargo test plus make check-ci-fast). Evidence:
+  - BUG-152 round 3 lane (/tmp/aida_lane_bug-152-r3.log): "One 55-second build attempt timed out against an empty target directory, and later cargo runs, including detached ones, were denied." It pushed 0b18c5e untested; CI stayed red on the same two tests.
+  - STORY-164 round 2 (PR-3185, 18:07): "new tests NOT run locally, cargo denied".
+  The causes compound: the lane's per-worktree target dir starts cold; the HEADLESS WAITING RULE caps a tool call at 60s; and a detached `setsid nohup cargo test` (the documented background mode) is denied. Every rework round therefore goes to CI blind, and costs ~15-20 min of CI per round (3176, 3177, 3182 and 3185 each took 3-5 rounds today).
+
+  ## Acceptance
+  1. A headless sandboxed implementer can run `AIDA_CARGO_TIMEOUT=900 cargo test --profile agent -p <crate> --lib -- <filter>` to completion, through a sanctioned background path (for example `aida cargo run-bg` with polling) that the sandbox and permission mode allow, and that respects the cargo slot limiter.
+  2. The lane's target dir is warm on first use: seeded or shared with the primary's agent-profile target, so the first targeted run isn't a cold full build.
+  3. The implementer prompt names that path in place of `setsid nohup`, and a lane that cannot run it says so in its result line (`untested=true`) so the advisor knows.
+  4. Test: a headless lane fixture runs one filtered cargo test via the sanctioned path and reports its pass/fail.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-01T02:25:46.947809262Z
+modified_at: 2026-11-01T02:25:46.947809262Z
+req_type: Bug
+tags:
+- area:agents
+- area:cargo
+- area:headless
+filed_at:
+  code_sha: 7518617e469376bbe5debebd7cadd980e08656e5
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: c2b2539263a
+  vendor: claude
+  session: 77a7a933-9a3f-4243-9a44-892bcedf206c
