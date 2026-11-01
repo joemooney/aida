@@ -1681,6 +1681,10 @@ struct StatusRow {
     source: &'static str,
     #[serde(skip_serializing_if = "Option::is_none")]
     problem: Option<String>,
+    /// Job-specific outcome of the last run (the docs sweep's findings count
+    /// and mode). trace:STORY-2220 | ai:claude
+    #[serde(skip_serializing_if = "Option::is_none")]
+    detail: Option<String>,
 }
 
 fn effective_last_run(
@@ -1788,7 +1792,42 @@ fn status_row(
         due_reason: reason,
         source: task.source.as_str(),
         problem,
+        detail: None,
     }
+}
+
+/// Attach a job's own last-run outcome to its status row.
+// trace:STORY-2220 | ai:claude
+fn with_detail(mut row: StatusRow, project_root: &Path) -> StatusRow {
+    if row.command == "aida docs sweep" {
+        row.detail = crate::docs_sweep::status_detail(project_root);
+    }
+    row
+}
+
+/// The `status` / `list` rows: each task's schedule state plus its own
+/// last-run detail.
+// trace:STORY-2220 | ai:claude
+fn status_rows(project_root: &Path, tasks: &[Task], now: DateTime<Utc>) -> Result<Vec<StatusRow>> {
+    let state = load_state(project_root)?;
+    let ledgers = schedule_ledger::load_all(&store_root(project_root));
+    Ok(tasks
+        .iter()
+        .map(|t| {
+            with_detail(
+                status_row(t, ledgers.get(&t.name), state.tasks.get(&t.name), now),
+                project_root,
+            )
+        })
+        .collect())
+}
+
+/// One `<job>: <detail>` paragraph per row that carries a detail.
+// trace:STORY-2220 | ai:claude
+fn detail_lines(rows: &[StatusRow]) -> String {
+    rows.iter()
+        .filter_map(|row| Some(format!("\n{}: {}\n", row.name, row.detail.as_ref()?)))
+        .collect()
 }
 
 fn last_by_label(by: &LastBy) -> String {
@@ -1844,13 +1883,7 @@ fn status(project_root: &Path, json: bool) -> Result<()> {
         }
         return Ok(());
     }
-    let state = load_state(project_root)?;
-    let ledgers = schedule_ledger::load_all(&store_root(project_root));
-    let now = Utc::now();
-    let rows: Vec<StatusRow> = tasks
-        .iter()
-        .map(|t| status_row(t, ledgers.get(&t.name), state.tasks.get(&t.name), now))
-        .collect();
+    let rows = status_rows(project_root, &tasks, Utc::now())?;
     if json {
         println!("{}", serde_json::to_string_pretty(&rows)?);
         return Ok(());
@@ -1872,7 +1905,8 @@ fn status(project_root: &Path, json: bool) -> Result<()> {
             row.command
         );
     }
-    // trace:BUG-1655 | ai:claude
+    print!("{}", detail_lines(&rows)); // trace:STORY-2220 | ai:claude
+                                       // trace:BUG-1655 | ai:claude
     for row in rows.iter().filter(|r| r.problem.is_some()) {
         println!(
             "\nwarning: {} is not running: {}",
@@ -1907,13 +1941,7 @@ fn list(project_root: &Path, seat: Option<&str>, json: bool) -> Result<()> {
         }
         return Ok(());
     }
-    let state = load_state(project_root)?;
-    let ledgers = schedule_ledger::load_all(&store_root(project_root));
-    let now = Utc::now();
-    let rows: Vec<StatusRow> = tasks
-        .iter()
-        .map(|t| status_row(t, ledgers.get(&t.name), state.tasks.get(&t.name), now))
-        .collect();
+    let rows = status_rows(project_root, &tasks, Utc::now())?;
     if json {
         println!("{}", serde_json::to_string_pretty(&rows)?);
         return Ok(());
@@ -1936,6 +1964,7 @@ fn list(project_root: &Path, seat: Option<&str>, json: bool) -> Result<()> {
             row.command
         );
     }
+    print!("{}", detail_lines(&rows)); // trace:STORY-2220 | ai:claude
     if rows.iter().any(|r| r.kind == "fires_task") {
         println!(
             "\nnote: `fires_task` rows come from .aida/schedules.toml (deprecated); \
@@ -3155,6 +3184,64 @@ pub(crate) fn maybe_offer_tick_install(project_root: &Path) {
 // Snapshot for `when` predicates
 // ---------------------------------------------------------------------------
 
+/// Strict project-wide idle evidence for opportunistic docs work. Existing
+/// seat-local queue meters retain their display semantics.
+// trace:STORY-2220 | ai:codex
+fn project_work_idle(project_root: &Path) -> Result<bool> {
+    let store = crate::store_sync::detect_distributed_store_from(project_root)
+        .context("cannot resolve project queues")?;
+    let queues = store.join("registry/queues");
+    let entries = match std::fs::read_dir(&queues) {
+        Ok(entries) => Some(entries),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
+        Err(e) => return Err(e).context("cannot enumerate project queues"),
+    };
+    let mut busy = false;
+    if let Some(entries) = entries {
+        for entry in entries {
+            let path = entry?.path();
+            if path.extension().and_then(|e| e.to_str()) != Some("yaml") {
+                continue;
+            }
+            let content = std::fs::read_to_string(&path)
+                .with_context(|| format!("cannot read queue {}", path.display()))?;
+            let document: serde_yaml::Value = serde_yaml::from_str(&content)
+                .with_context(|| format!("cannot parse queue {}", path.display()))?;
+            // Empty/null YAML is invalid evidence; only an explicit sequence
+            // can establish that an existing queue contains no work.
+            // trace:STORY-2220 | ai:codex
+            anyhow::ensure!(
+                document.is_sequence(),
+                "cannot parse queue {}: expected a YAML sequence",
+                path.display()
+            );
+            let rows: Vec<aida_core::QueueEntry> = serde_yaml::from_value(document)
+                .with_context(|| format!("cannot parse queue {}", path.display()))?;
+            busy |= rows.iter().any(|row| {
+                matches!(
+                    row.for_role.as_deref(),
+                    None | Some("implementer" | "reviewer")
+                )
+            });
+        }
+    }
+    let project = project_root.canonicalize()?;
+    let home = crate::home_dir().context("cannot resolve global queue home")?;
+    for role in ["implementer", "reviewer"] {
+        let path = home.join(".aida/queue").join(format!("{role}.yaml"));
+        for row in crate::global_queue::read_queue(&path, role)? {
+            // Compare canonical store identity too, so linked worktrees count.
+            let same = row.project_root == project || row.project_root.canonicalize()? == project;
+            let same_store = crate::store_sync::detect_distributed_store_from(&row.project_root)
+                .map(|other| other.canonicalize())
+                .transpose()?
+                .is_some_and(|other| Some(other) == store.canonicalize().ok());
+            busy |= same || same_store;
+        }
+    }
+    Ok(!busy)
+}
+
 /// Build the predicate snapshot, computing only the `fields` some job
 /// references. Every column is a local-file / cache read — never git, never
 /// the network (`ci.red_prs` is therefore 0 here; the tick has no gh call).
@@ -3197,6 +3284,9 @@ pub(crate) fn collect_snapshot(
     }
     if fields.contains(&Field::DispatchPending) {
         snap.dispatch_pending = crate::dispatch::pending_request_count(project_root);
+    }
+    if fields.contains(&Field::ProjectWorkIdle) {
+        snap.project_work_idle = project_work_idle(project_root).ok();
     }
     if fields.contains(&Field::QueueDepth) {
         snap.queue_depth = crate::read_queue_depth(project_root, None).unwrap_or(0) as i64;
@@ -3523,6 +3613,17 @@ fn command_table() -> &'static [(&'static [&'static str], ScheduledCommand)] {
             ScheduledCommand {
                 display: "dispatch tick",
                 args: &["dispatch", "tick"],
+                hook_allowed: false,
+            },
+        ),
+        // STORY-2220: the background docs sweep. Off the per-turn hook path:
+        // it walks git history and, in PR mode, calls the forge.
+        // trace:STORY-2220 | ai:claude
+        (
+            &["docs sweep"],
+            ScheduledCommand {
+                display: "docs sweep",
+                args: &["docs", "sweep"],
                 hook_allowed: false,
             },
         ),
@@ -4120,6 +4221,60 @@ mod tests {
 
     fn at(hour: u32) -> DateTime<Utc> {
         Utc.with_ymd_and_hms(2026, 9, 11, hour, 0, 0).unwrap()
+    }
+
+    /// STORY-2220 AC7: `aida schedule status` / `list` show the docs-sweep
+    /// job's last run, findings count and mode, and no other job grows a
+    /// detail line.
+    // trace:STORY-2220 | ai:claude
+    #[test]
+    fn story_2220_status_shows_the_docs_sweep_detail_line() {
+        let tmp = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(tmp.path().join(".aida")).unwrap();
+        std::fs::write(
+            tmp.path().join(".aida/config.toml"),
+            "[[schedule.jobs]]\nname = \"docs-sweep\"\ncommand = \"docs sweep\"\nevery = \"1d\"\n\
+             enabled = true\n\n[[schedule.jobs]]\nname = \"watchdog\"\ncommand = \"doctor\"\n\
+             every = \"15m\"\nenabled = true\n",
+        )
+        .unwrap();
+        let home = tempfile::tempdir().unwrap();
+        let tasks = {
+            let _guard = crate::test_env::EnvVarGuard::set("AIDA_HOME", home.path());
+            all_tasks(tmp.path()).unwrap()
+        };
+        let before = status_rows(tmp.path(), &tasks, at(12)).unwrap();
+        assert!(before.iter().all(|r| r.detail.is_none()), "no sweep yet");
+        assert_eq!(detail_lines(&before), "");
+
+        crate::docs_sweep::save_state(
+            tmp.path(),
+            &crate::docs_sweep::SweepState {
+                last_swept_rev: Some("0123456789abcdef".into()),
+                last_run_at: Some(at(9)),
+                findings: 2,
+                mode: Some(crate::docs_sweep::SweepMode::Report),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        let rows = status_rows(tmp.path(), &tasks, at(12)).unwrap();
+        let sweep = rows.iter().find(|r| r.name == "docs-sweep").unwrap();
+        let detail = sweep.detail.as_deref().expect("docs-sweep detail");
+        assert!(detail.contains("2 findings · mode report"), "{detail}");
+        assert!(
+            rows.iter()
+                .filter(|r| r.name != "docs-sweep")
+                .all(|r| r.detail.is_none()),
+            "only the docs-sweep job carries a detail"
+        );
+        let text = detail_lines(&rows);
+        assert_eq!(
+            text,
+            "\ndocs-sweep: last sweep 2026-09-11 09:00 UTC · 2 findings · mode report · swept to 0123456789\n"
+        );
+        let json = serde_json::to_value(sweep).unwrap();
+        assert_eq!(json["detail"].as_str(), Some(detail));
     }
 
     fn task(name: &str, interval: &str, command: &str) -> Task {
