@@ -15,7 +15,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-01T10:12:04.230556201Z
-modified_at: 2026-11-01T10:12:04.230556201Z
+modified_at: 2026-11-01T10:18:58.420108703Z
 req_type: Bug
 tags:
 - alias
@@ -23,6 +23,12 @@ tags:
 - gate-ledger
 - review
 - sketch-first
+comments:
+- id: 01a1969e-97f4-7cf2-afc0-97cd7aa026ed
+  author: joe
+  content: 'Additional supported-writer evidence: fresh reviewer08 record friendlySTORY2204 --pr3185 writes normalledger22 with release_grant then phase3ledger23 without release_grant; friendlyprojection nowselects#23. Root lawfulauto-release changed refusal from stalehead to approval lacks record-time grant provenance. NoJSONediting. Need projection/receipt selection preserve correct recorded approval authority, not merely synchronizealiasSHA. Native2398authorityconsumerfix overlap remainsserialized.'
+  created_at: 2026-11-01T10:18:58.420108703Z
+  modified_at: 2026-11-01T10:18:58.420108703Z
 filed_at:
   code_sha: 6fefb63280c352be0194c2cfadf54a085eb55471
   branch: main
