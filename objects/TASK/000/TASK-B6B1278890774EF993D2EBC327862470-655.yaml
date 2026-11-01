@@ -11,7 +11,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T09:05:27.409838422Z
-modified_at: 2026-11-01T12:04:54.918299909Z
+modified_at: 2026-11-01T12:04:56.101909191Z
 req_type: Task
 tags:
 - architecture
@@ -48,6 +48,19 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Independent STRICT codex-reviewer-12: required CI FD-hygiene assertion fails; public help/JSON audit and grant-owner integrity guards fail. Closed synthetic slice only; no parent completion.. Triage reason: Fresh independent recorded REQUEST_CHANGES atc9f PR3205#5: CI lane FD audit fails plus publichelp/JSONaudit/grantconstant integrity gaps. Root sourceverified and publishedsnapshot backed.'
   created_at: 2026-11-01T12:04:54.918296565Z
   modified_at: 2026-11-01T12:04:54.918296565Z
+- id: 01a196ff-9a30-7d02-b2ed-948597bbc668
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (TASK-b6b1278890774ef993d2ebc327862470-655):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: c9f713903db9
+    Recorded: 2026-11-01T11:29:15.661292512+00:00
+    Findings:
+    1. P1 slice AC3/C3 supervisor.rs:107-129: exact-head run 41297289880 lib-0 job 124820689739 fails task_2705_closed_containment_tracer at tests.rs:76 with RuntimeError only_standard_fds_present. Earlier local six-pass evidence does not satisfy required CI. Extra FD target/type is unknown, no host-socket exploit established. Diagnose and close unintended descriptors; preserve lane/reaper FD denial assertions, required-live gate and typed-channel contract, with no host-socket waiver.
+    2. P1 public-command/authority integrity integration: config_cmd_args.rs:115 adds permissions probe without golden/help-format JSON audit co-change; exact-head CI fails help_surface_matches_golden_snapshot, checked_in_audit_is_exhaustive_and_every_honoured_probe_parses (missing aida config permissions probe), and Help golden snapshot co-change guard. supervisor.rs:268 synthetic setter uses grant-env literal outside its owner and fails only_seat_authority_names_or_reads_the_grant_env_var. Review/update generated surfaces and use crate::gate::seat_authority::GRANT_ENV; preserve all guards, no literal exception or skipped tests. Synthetic-only closed backend earns no full parent completion.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-01T12:04:55.984560123Z
+  modified_at: 2026-11-01T12:04:55.984560123Z
 history:
 - id: 01a1965b-7cae-7260-83dd-5767f6772d90
   author: joe
