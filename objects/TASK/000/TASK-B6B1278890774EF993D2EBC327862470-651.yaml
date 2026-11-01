@@ -22,7 +22,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-01T06:47:39.554427385Z
-modified_at: 2026-11-01T08:12:18.919906510Z
+modified_at: 2026-11-01T08:12:24.383663087Z
 req_type: Task
 tags:
 - audit
@@ -36,6 +36,10 @@ relationships:
 - rel_type: BlockedBy
   target_id: 01a1949a-191b-7113-bb06-9bfc8dce2c27
   created_at: 2026-11-01T08:12:18.919902569Z
+  created_by: joe
+- rel_type: BlockedBy
+  target_id: 01a1955d-f0bf-7eb3-a641-15bbd93b5c11
+  created_at: 2026-11-01T08:12:24.383660023Z
   created_by: joe
 comments:
 - id: 01a1962a-8ae4-73a0-b5d7-8a035dda4251
@@ -59,6 +63,10 @@ history:
 - id: 01a1962a-a9bf-7f30-8cad-6fe00d0a44ce
   author: joe
   timestamp: 2026-11-01T08:12:20.799031824Z
+  changes: []
+- id: 01a1962a-bdfb-7de1-b8a6-362d301c0e82
+  author: joe
+  timestamp: 2026-11-01T08:12:25.979058093Z
   changes: []
 filed_at:
   code_sha: 6dc7d4977ac5e47c42ddfb26597fe3ec5fb70b60
