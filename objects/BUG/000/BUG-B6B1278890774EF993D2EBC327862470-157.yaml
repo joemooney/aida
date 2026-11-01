@@ -19,7 +19,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T02:25:46.947809262Z
-modified_at: 2026-11-01T03:29:23.730897469Z
+modified_at: 2026-11-01T03:44:55.403109281Z
 req_type: Bug
 tags:
 - area:agents
@@ -52,6 +52,20 @@ comments:
   modified_at: 2026-11-01T03:29:04.802940316Z
   session_id: 01a195258405
   harness_version: 2.1.316 (Claude Code)
+- id: 01a19535-d46b-7db0-a4b3-4614455c7c4e
+  author: joe
+  content: |
+    ADVISOR SIGNOFF (20:47), design fork for BUG-2383. RULING: option (a), the host runner owned by the lane launcher. Rejected: (b), which loosens the watchdog and the headless 60s rule for every lane and is vendor-specific (Codex has a different tool model), and (c), which puts a human-gated deputy into the unattended path.
+    Design, binding:
+    1. `aida queue work` (the host-side launcher process that already waits for the lane) runs a job runner for that lane's seat. The seat writes a job file (argv limited to `cargo test|check|build` with --profile agent; no shell strings) into a per-lane inbox under the seat clone, e.g. `.aida/lane-jobs/`. The runner executes it IN the seat directory, under the cargo slot limiter, with AIDA_CARGO_TIMEOUT honoured, and writes `<id>.out` plus `<id>.rc` back. The seat polls in 60s-or-less steps. Expose it as `aida lane job run -- cargo test ...` (submit, poll and print, exit with the job's rc), so prompts and humans use one command.
+    2. Containment: the runner runs only allow-listed cargo argv in the seat's own directory, as the operator's uid, with no grant. It never runs arbitrary commands. Record each job in the lane log. This is the same trust level as the CI build the lane already triggers by pushing, so no new authority.
+    3. Vendor-neutral: Claude and Codex lanes use the same `aida lane job run`. The implementer prompt replaces the `setsid nohup` advice with it. A lane whose runner is unavailable reports `untested=true` in its result line (AC3).
+    4. Cold target (AC2): seat clones get the SAME seeding the host cargo wrapper already does for linked worktrees, invoked from seat_clone.rs at clone creation on the host side (or by calling the wrapper's seed entry point). Do NOT add a 45 GB copy. If the wrapper's mechanism can't be invoked from this repo, seed via CARGO_TARGET_DIR pointing at a per-seat dir created with `cp -al` (hardlinks, near-zero disk) from target/agent, and state it in the PR. Workspace crates recompiling is fine; the runner has no 60s cap.
+    5. Tests: AC4 as written (a fixture lane submits one filtered test through the runner and reads pass/fail), plus a refusal test for non-allow-listed argv.
+    Approved to implement; no further sketch needed. Status back to approved.
+  created_at: 2026-11-01T03:44:55.403109281Z
+  modified_at: 2026-11-01T03:44:55.403109281Z
+  session_id: 77a7a933-9a3f-4243-9a44-892bcedf206c
 history:
 - id: 01a19525-88eb-79e3-aab8-8d511ad2f605
   author: aida-session-start
