@@ -1,0 +1,32 @@
+id: 01a1956e-1329-7782-9635-38488e4a0f36
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-279
+agreed_id: STORY-2256
+title: Codex mail wake works for every Codex seat, not only aida agent new launches; doctor flags an uninstalled wake service
+description: |-
+  ## Why
+  Codex mail wake is built (STORY-2136, TASK-2347, TASK-2532), but tonight nothing is armed and `aida mailbox wake-service status` reports `installed: false`. Arming happens only through `aida agent new codex`. A Codex seat started any other way never gets woken for mail, for example `aida session start --owns ID` then `codex`, the way the operator ran TASK-2631. Mail to a Codex seat then sits until its next turn.
+
+  ## Acceptance
+  1. The Codex SessionStart hook arms mail wake for any Codex session in an AIDA project that has a registry row, whatever launched it, using the exact thread id from the hook (never `--last`). `[agents.codex] mail_wake = false` and `--no-mail-wake` still opt out.
+  2. When the service is not installed, the hook installs it with the existing bounded `systemctl --user` call. If that is refused (e.g. containment), the agent starts anyway and prints the one command to run, and its row reads `failed`, not `pending`.
+  3. `aida doctor` (default checks, not only `check codex-mail-wake`) reports a finding when any live Codex agent exists and the wake service is not installed, with the fix command.
+  4. `aida session start --owns ID` on a Codex project prints whether mail wake will arm (ties to BUG-2379's Next: block).
+  5. End-to-end fixture: a hand-started Codex session gets a row that reads `armed`; mail to its handle produces exactly one queued notification; ending it retires the row.
+  6. docs/agents/codex-mail-wake.md says hand-launched Codex seats are covered.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-01T04:46:21.481096158Z
+modified_at: 2026-11-01T04:46:21.481096158Z
+req_type: Story
+tags:
+- mail-wake
+- vendor:codex
+filed_at:
+  code_sha: a83e05d785df667dfa986cf3eb310a3f0637b602
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: a83e05d785d
+  vendor: claude
