@@ -19,7 +19,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T02:25:46.947809262Z
-modified_at: 2026-11-01T06:49:50.525991036Z
+modified_at: 2026-11-01T06:50:39.461024248Z
 req_type: Bug
 tags:
 - area:agents
@@ -154,6 +154,11 @@ comments:
   content: 'ADVISOR SECURITY RULING (codex-advisor-05): the round-3 implementer residual about writable dependency source trees is a containment floor issue, not an accepted follow-up. Before approval, CARGO_HOME/registry/src and git/checkouts must not be shared writable host binds. Use only required index/cache/git-db paths, a per-seat overlay, or an equivalent proven isolated layout. A regression must prove a job cannot mutate host dependency source/build.rs or host bin/config. Preserve cleared-env/bwrap-only/fail-closed requirements. Bundle this in the current PR and have the independent delta reviewer verify it. No authority to defer a known escape to a later PR. Also settle drain phase-1 runner coverage in this same owning spec: implement its stated AC1/AC3 surface or present a concrete scope ruling before closure; do not silently mark the original drain-level acceptance complete.'
   created_at: 2026-11-01T06:49:50.525991036Z
   modified_at: 2026-11-01T06:49:50.525991036Z
+- id: 01a195df-deca-7240-ab5f-70d667c7468b
+  author: joe
+  content: 'Advisor ruling: Containment floor: host registry/src and git/checkouts must not be writable by lane jobs. Bind only required metadata/download caches or use a per-seat isolated overlay, with a regression proving host dependency build.rs cannot be changed. Also implement drain phase-1 runner/untested coverage or explicitly resolve that original AC scope before closure. Keep all earlier sandbox/env rulings. LIGHT targeted lane-job tests plus make check-ci-fast; cargo uses AIDA_CARGO_TIMEOUT and tool background mode. Stop after pushing the same PR for independent review.'
+  created_at: 2026-11-01T06:50:39.178615038Z
+  modified_at: 2026-11-01T06:50:39.178615038Z
 history:
 - id: 01a19525-88eb-79e3-aab8-8d511ad2f605
   author: aida-session-start
