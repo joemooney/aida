@@ -13,12 +13,18 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T23:00:22.284758314Z
-modified_at: 2026-11-01T03:21:37.773274235Z
+modified_at: 2026-11-01T03:23:50.936855326Z
 req_type: Bug
 tags:
 - epic-home-003
 - ids
 - store-sync
+relationships:
+- rel_type:
+    custom: implemented-by
+  target_id: 01a19454-32ff-7392-a9f8-ef112193bd10
+  created_at: 2026-11-01T03:23:50.936851584Z
+  created_by: joe
 comments:
 - id: 01a1946b-6739-7d73-b23e-78e3fccad888
   author: joe
@@ -109,6 +115,11 @@ history:
   timestamp: 2026-11-01T01:51:12.619766106Z
   session_id: 01a194c88150
   harness_version: 2.1.316 (Claude Code)
+  changes: []
+- id: 01a19522-8d49-7bc0-8904-422e59af6d5c
+  author: joe
+  timestamp: 2026-11-01T03:23:52.009743304Z
+  session_id: 77a7a933-9a3f-4243-9a44-892bcedf206c
   changes: []
 filed_at:
   code_sha: 3b89dca55ba8a5abc5c4cc415306c23f2729d87a
