@@ -1,0 +1,29 @@
+id: 01a19866-d18b-7bc0-941d-e40043cc1b00
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-290
+agreed_id: STORY-2274
+title: 'Review PR-3210: configured interactive vendor routing and portability rework'
+description: |
+  Independent STRICT review of existing PR3210 at published head 5ee926e04a7aadb294632b3143cdd626ffac47a3, canonical implementation owner BUG-b6b1278890774ef993d2ebc327862470-159. This is a review work item, not replacement implementation or acceptance reduction. A normal scoped reviewer launch needs its own review lease/session anchor; prior unscoped reviewer25 passed grant checks but could not record an approval with no session/process anchor in native tools. Use a normal own reviewer lease/context; never fabricate or borrow session identity or keys. Keep source implementer clone and cached artifacts intact.
+
+  ## Acceptance
+  - Fresh reviewer independently examines full merge-base source diff plus precise one-file portability delta, original BUG2385 acceptance and all rulings. Verify all16 mock cases/four isolated tests, configured/explicit vendor behavior, child grant/posture and refusal boundaries. Prior author/reviewer recommendations are evidence inputs, never restamped authority.
+  - Read retained focused4PASS, fast36PASS, tracked portability/pinned allowlist checks and actual exact-head CI. No redundant Cargo rerun for this evidence review; CI owns full gate.
+  - Record own normal independent APPROVE or REQUEST CHANGES with full SHA/branch and actual full findings. Supported normal writer refusal remains binding; no identity substitution, parent context or raw ledger edits. Read back own canonical/PR and friendly verdicts/attestations and public review comment if successful. Source recommendation without receipt is not review completion.
+  - No source edits, merge/ship, hold clearance or implementation-spec completion. This review work item is Completed only when review deliverable has valid own normal receipts and findings are handed off; merge/implementation completion remains independently gated on the owning bug.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-01T18:37:17.579510150Z
+modified_at: 2026-11-01T18:37:17.579510150Z
+req_type: Story
+tags:
+- review
+- vendor:codex
+filed_at:
+  code_sha: 6a3f67671a974703590efde5ae2a323f3f7471fa
+  branch: main
+  dirty: true
+  aida_version: 0.16.0
+  aida_build_sha: 6a3f67671a9
+  vendor: codex
