@@ -2458,6 +2458,22 @@ mod tests {
                 .unwrap()
                 .is_none());
 
+            // A locator whose file now declares a different native identity
+            // must be rejected even if its UUID and agreed ID still match.
+            let mut changed_native = target.clone();
+            changed_native.spec_id = Some(format!("BUG-{NODE}-177"));
+            std::fs::write(&path, serde_yaml::to_string(&changed_native).unwrap()).unwrap();
+            test_counts();
+            assert_eq!(
+                backend
+                    .get_requirement_unambiguous_for_read("BUG-2402")
+                    .unwrap()
+                    .unwrap()
+                    .spec_id,
+                changed_native.spec_id
+            );
+            assert_eq!(test_counts().get("agreed_id_store_scan"), Some(&1));
+
             let mut replacement = target.clone();
             replacement.id = Uuid::new_v4();
             replacement.title = "changed UUID, authoritative fallback".into();
@@ -2506,6 +2522,17 @@ mod tests {
             );
             backend.cache.upsert_requirement(&literal).unwrap();
             backend.cache.upsert_requirement(&moved).unwrap();
+            assert!(backend
+                .get_requirement_unambiguous_for_read("BUG-2402")
+                .unwrap_err()
+                .downcast_ref::<crate::id_collisions::AmbiguousIdError>()
+                .is_some());
+            // Existing-but-unreadable collision evidence still refuses.
+            std::fs::write(
+                crate::object_store::object_path(&objects, "BUG-2402").unwrap(),
+                "not: [valid yaml",
+            )
+            .unwrap();
             assert!(backend
                 .get_requirement_unambiguous_for_read("BUG-2402")
                 .unwrap_err()
