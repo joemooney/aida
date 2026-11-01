@@ -1021,7 +1021,7 @@ blocks:
   type_prefix: EPIC
   range_start: 612
   range_end: 711
-  next: 612
+  next: 613
   allocated_at: 2026-10-31T22:53:56.205120938Z
 - node_id: b6b1278890774ef993d2ebc327862470
   owner: aida-backfill-agreed-ids

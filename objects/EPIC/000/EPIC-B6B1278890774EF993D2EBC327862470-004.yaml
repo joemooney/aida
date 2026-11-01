@@ -1,0 +1,37 @@
+id: 01a19499-932e-79f0-a3e1-1299dfe355ad
+spec_id: EPIC-b6b1278890774ef993d2ebc327862470-004
+agreed_id: EPIC-612
+title: 'Codex as the primary vendor on Linux: full parity with Claude for every seat, contained'
+description: |
+  ## Why
+  Operator, 2026-10-31: Codex will be AIDA's first real user base, because Claude is prohibited at the operator's workplace. Scope is Linux only for now (ADR-72). Several of AIDA's guarantees are built on Claude Code features, so on Codex they are degraded or refused outright. The trigger: with containment on, `aida agent new codex` refuses ("`codex` cannot run an AIDA-contained session"). That's correct per BUG-2144, but it leaves Codex users choosing between no containment and no AIDA lanes.
+
+  ## Scope
+  Make Codex a first-class vendor on Linux: every seat and mode that works on Claude works on Codex with the same guarantees, or the gap is documented with its user-facing consequence.
+
+  ## Children (initial)
+  - Vendor-neutral containment: AIDA's own bubblewrap sandbox for any vendor (story, architecture).
+  - This repo's config contradiction: default vendor codex with containment on, and allowed_hosts missing OpenAI (task).
+  - From docs/agents/seat-parity.md, every Codex row marked Degraded: fork-from-live for product and advisor (no Codex transcript fork; TASK-1308). Each gets a child spec or an explicit won't-fix.
+  - Mail wake on Codex (STORY-HOME-096 lineage): confirm current state.
+  - An audit pass: grep user-facing messages, docs and the website for "launch claude" style defaults that assume Claude, and file each.
+
+  ## Done when
+  A Codex-only operator on Linux can run the full product/advisor/implementer/reviewer loop contained, with no Claude installed, and the website's integrations page says so.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-01T00:54:15.086953992Z
+modified_at: 2026-11-01T00:54:15.086953992Z
+req_type: Epic
+tags:
+- from-operator
+- vendor:codex
+filed_at:
+  code_sha: 43d9f95803036ec22350e5a210d8c1cae20b9fe5
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 43d9f958030
+  vendor: claude
