@@ -1,0 +1,29 @@
+id: 01a19690-424c-7c60-80ec-c9df2f904e31
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-660
+title: 'NON-BLOCKING: detect_main_conflict runs (bounded 20s fetch) for reviewer-role r…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on BUG-B6B1278890774EF993D2EBC327862470-057, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  NON-BLOCKING: detect_main_conflict runs (bounded 20s fetch) for reviewer-role rework pickups even though assemble_pickup_prompt only uses it for implementer items; could gate on role to skip the network call.
+
+  PR: #3177
+  Reviewed sha: 7044b34340068cf781ce32d7a44fc870793f91f8
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-01T10:03:18.988200380Z
+modified_at: 2026-11-01T10:03:18.988200380Z
+req_type: Task
+tags:
+- carried-from:BUG-B6B1278890774EF993D2EBC327862470-057
+- finding-hash:729e7a2f
+- from-review:PR-3177
+- kind:carried-forward
+filed_at:
+  code_sha: 6fefb63280c352be0194c2cfadf54a085eb55471
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 4ce0af750fc
+  vendor: claude
