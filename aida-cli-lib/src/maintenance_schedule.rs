@@ -3205,7 +3205,17 @@ fn project_work_idle(project_root: &Path) -> Result<bool> {
             }
             let content = std::fs::read_to_string(&path)
                 .with_context(|| format!("cannot read queue {}", path.display()))?;
-            let rows: Vec<aida_core::QueueEntry> = serde_yaml::from_str(&content)
+            let document: serde_yaml::Value = serde_yaml::from_str(&content)
+                .with_context(|| format!("cannot parse queue {}", path.display()))?;
+            // Empty/null YAML is invalid evidence; only an explicit sequence
+            // can establish that an existing queue contains no work.
+            // trace:STORY-2220 | ai:codex
+            anyhow::ensure!(
+                document.is_sequence(),
+                "cannot parse queue {}: expected a YAML sequence",
+                path.display()
+            );
+            let rows: Vec<aida_core::QueueEntry> = serde_yaml::from_value(document)
                 .with_context(|| format!("cannot parse queue {}", path.display()))?;
             busy |= rows.iter().any(|row| {
                 matches!(

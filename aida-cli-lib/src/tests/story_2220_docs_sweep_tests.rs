@@ -1141,7 +1141,25 @@ fn docs_schedule_boundary_regression() {
     assert_eq!(runs.get(), 0);
     std::fs::remove_dir(&global_path).unwrap();
     check(Some(true));
-    tick(7);
+    // Existing empty/null documents cannot prove idle. Exercise the real
+    // snapshot and dispatcher for each spelling that Vec deserialization
+    // otherwise accepts as an empty queue.
+    // trace:STORY-2220 | ai:codex
+    for (offset, content) in ["", "# queue contents unavailable\n", "---\n"]
+        .iter()
+        .enumerate()
+    {
+        std::fs::write(&local, content).unwrap();
+        check(None);
+        assert!(tick(7 + offset as i64)
+            .iter()
+            .any(|s| s.contains("evidence is unknown")));
+        assert_eq!(runs.get(), 0, "invalid local queue: {content:?}");
+    }
+    // An explicit empty sequence is valid evidence and permits dispatch.
+    std::fs::write(&local, "[]\n").unwrap();
+    check(Some(true));
+    tick(10);
     assert_eq!(runs.get(), 1);
 
     // Build a cache before the key is filed, then hold it stale while an
