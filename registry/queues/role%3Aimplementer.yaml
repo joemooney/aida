@@ -39,13 +39,6 @@
   added_at: 2026-11-01T06:53:10.127320808Z
   for_role: implementer
 - user_id: role:implementer
-  requirement_id: 01a194ed-5fc3-71b1-8d17-9838ef33e8eb
-  position: 271000
-  added_by: role:implementer
-  note: Round-3 implementer admitted a remaining host-persistence path through writable CARGO_HOME dependency sources. New advisor security ruling requires closing it before approval, and settling original drain-level AC coverage.
-  added_at: 2026-11-01T06:50:44.754289876Z
-  for_role: implementer
-- user_id: role:implementer
   requirement_id: 01a1940c-ad69-7bf3-a8da-4726cbde065b
   position: 272000
   added_by: role:implementer
@@ -190,5 +183,12 @@
   position: 603000
   added_by: role:implementer
   added_at: 2026-11-01T08:30:01.689835867Z
+  for_role: implementer
+  added_by_machine: imac
+- user_id: role:implementer
+  requirement_id: 01a194ed-5fc3-71b1-8d17-9838ef33e8eb
+  position: 604000
+  added_by: role:implementer
+  added_at: 2026-11-01T08:53:40.326078988Z
   for_role: implementer
   added_by_machine: imac
