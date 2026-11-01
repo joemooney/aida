@@ -29,12 +29,12 @@ description: |
 
   ## Related
   STORY-HOME-095 (block delegation, done), STORY-HOME-105 (agreed IDs + backfill, PR-3170 in review), BUG-2017 (allocation authority).
-status: InProgress
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T19:23:04.998731220Z
-modified_at: 2026-11-01T08:17:33.007950396Z
+modified_at: 2026-11-01T08:19:12.505285604Z
 req_type: Story
 tags:
 - architecture
@@ -394,6 +394,13 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a19630-f266-7752-a6ce-bb00f19554e8
+  author: joe
+  timestamp: 2026-11-01T08:19:12.614802326Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Approved
 filed_at:
   code_sha: 53817a25ee83981f919be3dbcee742234338ab9a
   branch: main
