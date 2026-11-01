@@ -19,13 +19,18 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T02:25:46.947809262Z
-modified_at: 2026-11-01T10:33:26.252442458Z
+modified_at: 2026-11-01T10:34:54.041007985Z
 req_type: Bug
 tags:
 - area:agents
 - area:cargo
 - area:headless
 - docs:impacted
+relationships:
+- rel_type: BlockedBy
+  target_id: 01a19600-8cf2-74f3-a6ce-b7a32fa5affc
+  created_at: 2026-11-01T10:34:54.041005343Z
+  created_by: joe
 comments:
 - id: 01a19527-5322-7eb2-86be-d863edb90b76
   author: joe
@@ -335,6 +340,10 @@ history:
 - id: 01a196a6-8396-73b2-a063-a0d2e4b6fac2
   author: joe
   timestamp: 2026-11-01T10:27:37.494597300Z
+  changes: []
+- id: 01a196ad-30c2-78f0-8563-7e2e1a47fb98
+  author: joe
+  timestamp: 2026-11-01T10:34:55.042750175Z
   changes: []
 filed_at:
   code_sha: 7518617e469376bbe5debebd7cadd980e08656e5
