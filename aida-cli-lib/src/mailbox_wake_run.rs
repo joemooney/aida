@@ -736,7 +736,9 @@ pub(crate) fn unit_name(project: &Path) -> String {
 }
 
 /// The user unit text. Marked so install/uninstall only replace their own.
-pub(crate) fn unit_text(project: &Path, aida: &Path, codex: &Path) -> String {
+// trace:BUG-2397 | ai:codex
+pub(crate) fn unit_text(project: &Path, aida: &Path, codex: &Path) -> Result<String> {
+    let directory = working_directory(project)?;
     let argv = [
         aida.to_string_lossy().into_owned(),
         "mailbox".into(),
@@ -747,13 +749,31 @@ pub(crate) fn unit_text(project: &Path, aida: &Path, codex: &Path) -> String {
         codex.to_string_lossy().into_owned(),
     ];
     let exec: Vec<String> = argv.iter().map(|a| systemd_quote(a)).collect();
-    format!(
+    Ok(format!(
         "# {UNIT_MARKER}\n[Unit]\nDescription=AIDA mail wake for armed Codex sessions\n\
          [Service]\nType=simple\nUMask=0077\nWorkingDirectory={}\nExecStart={}\n\
          Restart=on-failure\nRestartSec=30\n[Install]\nWantedBy=default.target\n",
-        systemd_quote(&project.to_string_lossy()),
+        directory,
         exec.join(" ")
-    )
+    ))
+}
+
+// WorkingDirectory is a single literal path with specifier expansion. It does
+// not unquote or C-unescape ExecStart syntax; internal spaces and $ stay literal.
+// Refuse paths the unit line parser would trim or interpret as continuation.
+// trace:BUG-2397 | ai:codex
+fn working_directory(project: &Path) -> Result<String> {
+    let value = project
+        .to_str()
+        .context("working directory must be UTF-8")?;
+    if !project.is_absolute()
+        || value.chars().any(char::is_control)
+        || value.ends_with(char::is_whitespace)
+        || value.ends_with('\\')
+    {
+        bail!("working directory cannot be represented safely in a systemd unit");
+    }
+    Ok(value.replace('%', "%%"))
 }
 
 const UNIT_MARKER: &str = "aida-mail-wake: managed by `aida mailbox wake-service`";
@@ -784,14 +804,17 @@ fn unit_path(name: &str) -> PathBuf {
 /// hook installs the unit, and it must never hang the session.
 const SYSTEMCTL_TIMEOUT: Duration = Duration::from_secs(15);
 
-fn systemctl(args: &[&str]) -> Result<()> {
+// trace:BUG-2397 | ai:codex
+fn systemctl(args: &[&str]) -> Result<String> {
+    // A file avoids blocking on a full stdout pipe while waiting for the child.
+    let mut output = tempfile::tempfile().context("capturing systemctl output")?;
     let mut child = std::process::Command::new("systemctl")
         .arg("--user")
         .args(args)
         .stdin(std::process::Stdio::null())
-        .stdout(std::process::Stdio::null())
+        .stdout(output.try_clone()?)
         .spawn()
-        .context("running systemctl --user")?;
+        .with_context(|| format!("running systemctl --user {}", args.join(" ")))?;
     let deadline = std::time::Instant::now() + SYSTEMCTL_TIMEOUT;
     let status = loop {
         if let Some(status) = child.try_wait()? {
@@ -805,9 +828,16 @@ fn systemctl(args: &[&str]) -> Result<()> {
         std::thread::sleep(Duration::from_millis(50));
     };
     if !status.success() {
-        bail!("systemctl --user {} failed", args.join(" "));
+        bail!("systemctl --user {} failed ({status})", args.join(" "));
     }
-    Ok(())
+    use std::io::{Read, Seek, SeekFrom};
+    output.seek(SeekFrom::Start(0))?;
+    let mut text = String::new();
+    output.take(16_385).read_to_string(&mut text)?;
+    if text.len() > 16_384 {
+        bail!("systemctl output exceeded its bound");
+    }
+    Ok(text)
 }
 
 /// Make sure `project`'s watcher unit is installed: a no-op when AIDA's
@@ -824,7 +854,7 @@ pub(crate) fn ensure_service(project: &Path) -> Result<()> {
                 bail!("the mail-wake service installs from the main checkout");
             }
             let codex = which("codex").context("codex is not on PATH")?;
-            let text = unit_text(project, &crate::resolve_aida_exe(), &codex);
+            let text = unit_text(project, &crate::resolve_aida_exe(), &codex)?;
             install_unit(&path, &unit_name(project), &text)
         }
     }
@@ -837,7 +867,38 @@ fn install_unit(path: &Path, name: &str, text: &str) -> Result<()> {
     aida_core::write_atomic(path, text.as_bytes())
         .with_context(|| format!("writing {}", path.display()))?;
     systemctl(&["daemon-reload"])?;
-    systemctl(&["enable", "--now", name])
+    systemctl(&["enable", "--now", name])?;
+    // Enabling a unit file alone is not evidence that its watcher is active.
+    // trace:BUG-2397 | ai:codex
+    systemctl(&["is-active", "--quiet", name])?;
+    Ok(())
+}
+
+// Installation is file presence; runtime state comes from the user manager.
+// Manager failures are unknown, never an inactive/running assertion.
+// trace:BUG-2397 | ai:codex
+fn service_runtime(name: &str) -> serde_json::Value {
+    match systemctl(&[
+        "show",
+        name,
+        "--property=LoadState,ActiveState,SubState,Result",
+    ]) {
+        Ok(output) => {
+            let fields: BTreeMap<_, _> = output.lines().filter_map(|l| l.split_once('=')).collect();
+            let active = fields.get("ActiveState").copied();
+            serde_json::json!({
+                "load_state": fields.get("LoadState"),
+                "active_state": active,
+                "sub_state": fields.get("SubState"),
+                "result": fields.get("Result"),
+                "running": active.map(|s| s == "active"),
+                "failed": active.map(|s| s == "failed"),
+            })
+        }
+        Err(error) => serde_json::json!({
+            "running": null, "failed": null, "error": format!("{error:#}"),
+        }),
+    }
 }
 
 /// The scheduler jobs that check armed sessions' health; the operator adds
@@ -887,6 +948,7 @@ pub(crate) fn service(
                 "service": name,
                 "unit": path,
                 "installed": existing.is_some(),
+                "runtime": service_runtime(&name),
                 "state_root": state_root(project),
                 "armed": crate::agent_registry::load_active_entries(project)
                     .into_iter()
@@ -913,7 +975,7 @@ pub(crate) fn service(
                 Some(c) => c.to_path_buf(),
                 None => which("codex").context("codex is not on PATH; pass --codex <path>")?,
             };
-            let text = unit_text(project, &aida, &codex);
+            let text = unit_text(project, &aida, &codex)?;
             if dry_run {
                 println!("{}\n{text}", path.display());
                 return Ok(());

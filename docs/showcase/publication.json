@@ -61,6 +61,19 @@
       "output": "air-gapped.html",
       "label": "Air-gapped",
       "category": "operator"
+    },
+    {
+      "source": "authority-and-seats.md",
+      "output": "authority.html",
+      "label": "Authority",
+      "category": "human"
+    },
+    {
+      "source": "../aida-core/templates/.aida/discipline/product-glossary.md",
+      "output": "glossary.html",
+      "label": "Glossary",
+      "category": "human",
+      "glossary": true
     }
   ]
 }

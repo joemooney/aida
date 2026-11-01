@@ -679,10 +679,9 @@ pub(crate) fn extract_plan_refs(content: &str) -> Vec<String> {
     refs
 }
 
-/// Resolve the set of skill files to lint. With an explicit path, lint just
-/// that file; otherwise every `*.md` under `.claude/skills/` (sorted, and
-/// skipping `*.local.md` overrides which are merged at render time, not linted
-/// on their own).
+/// Resolve an explicit skill file, or discover folder prompts in both skill
+/// packs plus legacy Claude flat files. Overlays and helper files are excluded.
+// trace:BUG-2388 | ai:codex
 // trace:TASK-927 | ai:claude
 pub(crate) fn resolve_skill_files(
     explicit: Option<&std::path::Path>,
@@ -699,26 +698,7 @@ pub(crate) fn resolve_skill_files(
         }
         return Ok(vec![resolved]);
     }
-    let skills_dir = project_root.join(".claude").join("skills");
-    if !skills_dir.is_dir() {
-        anyhow::bail!(
-            "no skills directory at {} — run `aida init` to scaffold skills",
-            skills_dir.display()
-        );
-    }
-    let mut files = Vec::new();
-    for entry in std::fs::read_dir(&skills_dir)
-        .with_context(|| format!("could not read {}", skills_dir.display()))?
-    {
-        let entry = entry?;
-        let path = entry.path();
-        let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
-        if name.ends_with(".md") && !name.ends_with(".local.md") {
-            files.push(path);
-        }
-    }
-    files.sort();
-    Ok(files)
+    crate::skill_cmd::discover_skill_files(project_root)
 }
 
 /// Lint each skill: for skills that reference a `docs/plans/*.md` file, verify
