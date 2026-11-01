@@ -13,12 +13,12 @@ description: |
   4. States the threat model plainly: sessions are separated, not OS users. A same-user process that forges files is out of scope (ADR-66).
   5. End-user prose only: no internal spec IDs or seat-process jargon beyond the terms the page defines.
   6. Deployed per docs/showcase/README.md: a gh-pages snapshot from an approved merged revision.
-status: InProgress
+status: Done
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T22:20:21.225603942Z
-modified_at: 2026-11-01T06:18:59.794539113Z
+modified_at: 2026-11-01T06:29:35.765456925Z
 req_type: Task
 tags:
 - authority
@@ -65,6 +65,20 @@ comments:
   modified_at: 2026-11-01T06:18:59.794539113Z
   session_id: 01a195c1bafe
   harness_version: 2.1.316 (Claude Code)
+- id: 01a195cc-9795-7013-8140-e69cb8e240b5
+  author: joe
+  content: |-
+    IMPLEMENTER FINDINGS (could not file as draft TASKs: the sandbox blocks spec ID allocation, read-only file system)
+
+    1. kind:deviation, minor: the product seat's claude.ai draft could not be opened from this session (Claude Docs tools were denied), so the page was written directly from docs/cli/06-roles-sessions.md, docs/cli/04-git-lifecycle.md (mandate section) and `aida mandate --help`. If the operator approved particular wording in the draft, compare it side by side with PR #3196. The refusal example uses the real `aida queue` approve message. `aida merge-hold clear` is left off the terminal-only list. AC6 (gh-pages deploy) stays open until after the merge.
+
+    2. kind:bug-spotted, cosmetic: in docs/cli/06-roles-sessions.md, the Gotchas under "Entering seats and delegating child seats" say "Grants expire after at most 24 hours". The same section allows --ttl up to max_grant_hours, with a hard ceiling of 168h. It should say "24 hours by default".
+
+    Also: review autoqueue for PR #3196 failed for the same store-write reason. Re-run `aida pr auto-queue-review --branch task-b6b1278890774ef993d2ebc327862470-280` from an unsandboxed shell.
+  created_at: 2026-11-01T06:29:35.765456925Z
+  modified_at: 2026-11-01T06:29:35.765456925Z
+  session_id: 01a195c1bafe
+  harness_version: 2.1.316 (Claude Code)
 history:
 - id: 01a1942b-6c57-7bb1-8ec7-f77735233a6a
   author: aida-backfill-agreed-ids
@@ -90,6 +104,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a195cc-4736-7093-849b-cfe9bcdf35b1
+  author: joe
+  timestamp: 2026-11-01T06:29:15.190734915Z
+  session_id: 01a195c1bafe
+  harness_version: 2.1.316 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 filed_at:
   code_sha: 0506fa2eb862db100dffbc80b0c5cfdedec28522
   branch: main
@@ -97,3 +120,7 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: 584e95e4505
   vendor: claude
+implementation_info:
+  implemented: true
+  implemented_at: 2026-11-01T06:29:15.024101215Z
+  implemented_by: joe
