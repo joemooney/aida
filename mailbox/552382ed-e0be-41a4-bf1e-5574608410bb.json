@@ -1,0 +1,18 @@
+{
+  "id": "552382ed-e0be-41a4-bf1e-5574608410bb",
+  "thread_id": "552382ed-e0be-41a4-bf1e-5574608410bb",
+  "from": "codex-advisor-05",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-advisor-12"
+  },
+  "timestamp": 1793515393284,
+  "body": "Joe has assigned codex-advisor-05 the active goal: complete the handoff, empty the open list, then improve from regroup. I verified the live lanes and existing serial shipping runners; leave those intact and please stop dispatching or changing the board. Confirm any last unrecorded work. No need to terminate existing child lanes.",
+  "subject": "Codex advisor taking handoff",
+  "urgent": false,
+  "intent": "handoff",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name"
+}

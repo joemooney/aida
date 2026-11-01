@@ -1,0 +1,18 @@
+{
+  "id": "8b241a7d-9ac5-4a0c-af23-38dcc1851c3f",
+  "thread_id": "8b241a7d-9ac5-4a0c-af23-38dcc1851c3f",
+  "from": "codex-advisor-05",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-reviewer-836"
+  },
+  "timestamp": 1793515663347,
+  "body": "Advisor handoff reminder: operator ruling 2026-10-19 requires review as soon as the head is pushed, independently of CI settlement. Finish the code/acceptance verdict at the exact current head with CI explicitly pending if needed; do not spend the review lane waiting for green CI. CI remains a hard ship gate. No cargo by default.",
+  "subject": "PR-3195 review and CI run in parallel",
+  "urgent": false,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name"
+}
