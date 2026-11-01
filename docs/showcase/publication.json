@@ -55,6 +55,12 @@
       "output": "integrations.html",
       "label": "Integrations",
       "category": "operator"
+    },
+    {
+      "source": "air-gapped-development.md",
+      "output": "air-gapped.html",
+      "label": "Air-gapped",
+      "category": "operator"
     }
   ]
 }
