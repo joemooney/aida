@@ -209,7 +209,8 @@ pub(crate) fn held_grants_in(
         .filter_map(|p| std::fs::read(p).ok())
         .filter_map(|bytes| serde_json::from_slice::<SeatGrant>(&bytes).ok())
         .filter(|g| {
-            crate::canonical_role_name(&g.seat) == crate::canonical_role_name(seat)
+            crate::gate::dispatch_deps::canonical_role_name(&g.seat)
+                == crate::gate::dispatch_deps::canonical_role_name(seat)
                 && g.revoked_at.is_none()
                 && g.expires_at > now
         })
