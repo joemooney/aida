@@ -17,7 +17,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T06:55:52.004339498Z
-modified_at: 2026-11-01T07:37:49.811570657Z
+modified_at: 2026-11-01T08:02:21.109641765Z
 req_type: Bug
 tags:
 - closure:pending
@@ -54,6 +54,11 @@ comments:
   content: 'IMPLEMENTATION HANDOFF VERIFIED: native Codex standalone launcher completed with implementer: pr-opened pr=3197 head=891f8747f5285754b35a277ec40df828a97824f4. Forge confirms OPEN PR-3197 on the assigned codex/bug-2397-mail-wake branch, touching mailbox_wake_run.rs, its tests and mail-wake docs only. Implementer reports 15 filtered Rust tests and 36 fast gates passed; independent review and exact-head CI remain pending. The source worktree git metadata was read-only to the native tool, so the author published from a temporary repo; native MCP queue completion also refused under approval never. Advisor records Done for review handoff, not Completed; closure:pending remains for reviewed merged reinstall and active verification. Grant environment loss is BUG-2398; native MCP posture evidence is also being recorded on BUG-2394.'
   created_at: 2026-11-01T07:37:49.811570657Z
   modified_at: 2026-11-01T07:37:49.811570657Z
+- id: 01a19621-8335-7392-9a66-bca5850203c1
+  author: joe
+  content: 'PROXY DECISION: accept both nonblocking PR3197 review findings on this spec without follow-up. Existing active services intentionally need an explicit restart during the already-required post-merge AC3 live action; we will perform and verify that restart. Existing AIDA-owned unit regeneration remains an explicit install operation, with failed runtime now observable; automatic rewriting during ensure_service is unnecessary to this defect acceptance. closure:pending remains until merged live install/restart/status evidence.'
+  created_at: 2026-11-01T08:02:21.109641765Z
+  modified_at: 2026-11-01T08:02:21.109641765Z
 history:
 - id: 01a195e4-cb21-7b43-b55f-eef4611d9957
   author: joe
