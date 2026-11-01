@@ -115,6 +115,16 @@ fn gh_pr_list_candidates(
     limit: &str,
 ) -> std::result::Result<Vec<OpenPrInfo>, PrLookup> {
     let gh_bin = resolve_forge_cli(crate::forge::ForgeKind::GitHub).ok_or(PrLookup::GhMissing)?;
+    gh_pr_list_candidates_with_binary(project_root, filter, limit, &gh_bin)
+}
+
+// trace:BUG-2400 | ai:codex
+fn gh_pr_list_candidates_with_binary(
+    project_root: &std::path::Path,
+    filter: &[&str],
+    limit: &str,
+    gh_bin: &std::path::Path,
+) -> std::result::Result<Vec<OpenPrInfo>, PrLookup> {
     let mut args = vec!["pr", "list"];
     args.extend_from_slice(filter);
     args.extend_from_slice(&[
@@ -497,27 +507,145 @@ fn open_pr_commit_headlines_reference_ids(
     pr: u64,
     ids: &[String],
 ) -> std::result::Result<bool, PrLookup> {
-    let gh_bin = resolve_forge_cli(crate::forge::ForgeKind::GitHub).ok_or(PrLookup::GhMissing)?;
-    let mut cmd = std::process::Command::new(&gh_bin);
-    cmd.current_dir(project_root).args([
-        "pr",
-        "view",
-        &pr.to_string(),
-        "--json",
-        "commits",
-        "-q",
-        ".commits[].messageHeadline",
-    ]);
-    let out = match forge_lookup_output(cmd) {
+    let budget = FORGE_LOOKUP_TIMEOUT
+        .with(|c| c.get())
+        .unwrap_or(std::time::Duration::from_secs(10))
+        .min(std::time::Duration::from_secs(10));
+    let deadline = std::time::Instant::now() + budget;
+    let gh_bin = spec_lookup_binary(deadline)?;
+    pr_commit_ids_before(project_root, pr, ids, &gh_bin, deadline)
+}
+
+// Resolution happens once per collection. Expired resolution is unknown,
+// never "missing". Other callers retain their ordinary fallback resolver.
+// trace:BUG-2400 | ai:codex
+fn spec_lookup_binary(
+    deadline: std::time::Instant,
+) -> std::result::Result<std::path::PathBuf, PrLookup> {
+    let binary = crate::kernel::resolve_forge_binary_before(
+        "gh",
+        "AIDA_TEST_GH_BINARY",
+        "AIDA_DEBUG_GH",
+        Some(deadline),
+    );
+    if std::time::Instant::now() >= deadline {
+        return Err(PrLookup::GhUnreachable(FORGE_LOOKUP_TIMED_OUT.into()));
+    }
+    binary.ok_or(PrLookup::GhMissing)
+}
+
+/// REST commit pages avoid gh pr view's silent first-100 projection. A short
+/// validated page plus the PR's declared count/head proves exhaustion. The
+/// REST endpoint's own commit ceiling or ten pages yields typed unknown.
+/// A positive trailer proves association without requiring remaining pages.
+// trace:BUG-2400 | ai:codex
+fn pr_commit_ids_before(
+    project_root: &std::path::Path,
+    pr: u64,
+    ids: &[String],
+    gh_bin: &std::path::Path,
+    deadline: std::time::Instant,
+) -> std::result::Result<bool, PrLookup> {
+    let invalid = || PrLookup::GhFailed(format!("invalid or incomplete commit page for PR {pr}"));
+    // Pin declared count and head before paging. A short REST page alone is
+    // insufficient: GitHub also caps this endpoint's total returned commits.
+    let detail = commit_api_json_before(
+        project_root,
+        gh_bin,
+        &format!("repos/{{owner}}/{{repo}}/pulls/{pr}"),
+        deadline,
+    )?;
+    let count = detail
+        .get("commits")
+        .and_then(|v| v.as_u64())
+        .ok_or_else(invalid)?;
+    let head = detail
+        .pointer("/head/sha")
+        .and_then(|v| v.as_str())
+        .ok_or_else(invalid)?;
+    if head.len() != 40 || !head.bytes().all(|c| c.is_ascii_hexdigit()) {
+        return Err(invalid());
+    }
+    let mut seen = std::collections::HashSet::new();
+    for page in 1..=10 {
+        let remaining = deadline.saturating_duration_since(std::time::Instant::now());
+        if remaining.is_zero() {
+            return Err(PrLookup::GhUnreachable(FORGE_LOOKUP_TIMED_OUT.into()));
+        }
+        let endpoint =
+            format!("repos/{{owner}}/{{repo}}/pulls/{pr}/commits?per_page=100&page={page}");
+        let value = commit_api_json_before(project_root, gh_bin, &endpoint, deadline)?;
+        let rows = value.as_array().ok_or_else(invalid)?;
+        if rows.len() > 100 {
+            return Err(invalid());
+        }
+        let mut matched = false;
+        for row in rows {
+            let sha = row
+                .get("sha")
+                .and_then(|v| v.as_str())
+                .ok_or_else(invalid)?;
+            if sha.len() != 40
+                || !sha.bytes().all(|c| c.is_ascii_hexdigit())
+                || !seen.insert(sha.to_string())
+            {
+                return Err(invalid());
+            }
+            let message = row
+                .get("commit")
+                .and_then(|v| v.get("message"))
+                .and_then(|v| v.as_str())
+                .ok_or_else(invalid)?;
+            let headline = message.lines().next().unwrap_or_default();
+            matched |= extract_spec_ids_from_commit(headline)
+                .into_iter()
+                .any(|token| {
+                    ids.iter()
+                        .any(|id| aida_core::id_identity::same_id(&token, id))
+                });
+        }
+        if seen.len() as u64 > count {
+            return Err(invalid());
+        }
+        if matched {
+            return Ok(true);
+        }
+        if seen.len() as u64 == count {
+            if count == 0
+                || rows
+                    .last()
+                    .and_then(|v| v.get("sha"))
+                    .and_then(|v| v.as_str())
+                    == Some(head)
+            {
+                return Ok(false);
+            }
+            return Err(invalid());
+        }
+        if rows.len() < 100 {
+            return Err(invalid());
+        }
+    }
+    Err(invalid())
+}
+
+// trace:BUG-2400 | ai:codex
+fn commit_api_json_before(
+    project_root: &std::path::Path,
+    gh_bin: &std::path::Path,
+    endpoint: &str,
+    deadline: std::time::Instant,
+) -> std::result::Result<serde_json::Value, PrLookup> {
+    let remaining = deadline.saturating_duration_since(std::time::Instant::now());
+    if remaining.is_zero() {
+        return Err(PrLookup::GhUnreachable(FORGE_LOOKUP_TIMED_OUT.into()));
+    }
+    let mut cmd = std::process::Command::new(gh_bin);
+    cmd.current_dir(project_root).args(["api", endpoint]);
+    let out = match with_forge_lookup_timeout(remaining, || forge_lookup_output(cmd)) {
         Ok(Some(out)) => out,
         Ok(None) => return Err(PrLookup::GhUnreachable(FORGE_LOOKUP_TIMED_OUT.into())),
-        Err(e) => {
-            return Err(PrLookup::GhFailed(gh_spawn_error(
-                &gh_bin,
-                project_root,
-                &e,
-            )))
-        }
+        Err(e) => return Err(PrLookup::GhFailed(gh_spawn_error(gh_bin, project_root, &e))),
     };
     if !out.status.success() {
         let stderr = String::from_utf8_lossy(&out.stderr).trim().to_string();
@@ -532,12 +660,8 @@ fn open_pr_commit_headlines_reference_ids(
             PrLookup::GhFailed(message)
         });
     }
-    Ok(String::from_utf8_lossy(&out.stdout).lines().any(|line| {
-        extract_spec_ids_from_commit(line).into_iter().any(|token| {
-            ids.iter()
-                .any(|id| aida_core::id_identity::same_id(&token, id))
-        })
-    }))
+    serde_json::from_slice(&out.stdout)
+        .map_err(|_| PrLookup::GhFailed("invalid commit API JSON".into()))
 }
 
 // A known match proves existence even when another candidate is unreadable.
@@ -562,7 +686,8 @@ fn collect_spec_prs(project_root: &std::path::Path, spec: &str) -> SpecPrCollect
             return result;
         }
     };
-    // Two finite list calls and at most 202 commit probes share one budget.
+    // Resolution, two list calls and bounded commit pages share one command
+    // deadline. The output collector adds its existing bounded pipe allowance.
     // gh list paginates internally to the limit. A saturated result is unknown,
     // even if the repository happens to have exactly that many open PRs.
     let budget = FORGE_LOOKUP_TIMEOUT
@@ -570,6 +695,13 @@ fn collect_spec_prs(project_root: &std::path::Path, spec: &str) -> SpecPrCollect
         .unwrap_or(std::time::Duration::from_secs(10))
         .min(std::time::Duration::from_secs(10));
     let deadline = std::time::Instant::now() + budget;
+    let gh_bin = match spec_lookup_binary(deadline) {
+        Ok(binary) => binary,
+        Err(error) => {
+            result.unknown = Some(error);
+            return result;
+        }
+    };
     let mut candidates = Vec::new();
     let mut seen = std::collections::HashSet::new();
     for filter in [
@@ -582,7 +714,7 @@ fn collect_spec_prs(project_root: &std::path::Path, spec: &str) -> SpecPrCollect
             break;
         }
         let rows = with_forge_lookup_timeout(remaining, || {
-            gh_pr_list_candidates(project_root, filter, "101")
+            gh_pr_list_candidates_with_binary(project_root, filter, "101", &gh_bin)
         });
         match rows {
             Ok(rows) => {
@@ -612,7 +744,7 @@ fn collect_spec_prs(project_root: &std::path::Path, spec: &str) -> SpecPrCollect
             continue;
         }
         match with_forge_lookup_timeout(remaining, || {
-            open_pr_commit_headlines_reference_ids(project_root, pr.number, &ids)
+            pr_commit_ids_before(project_root, pr.number, &ids, &gh_bin, deadline)
         }) {
             Ok(true) => result.matched.push(pr),
             Ok(false) => {}
