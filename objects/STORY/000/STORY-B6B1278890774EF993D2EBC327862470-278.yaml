@@ -27,6 +27,15 @@ tags:
 - fork
 - seat-parity
 - vendor:codex
+relationships:
+- rel_type: Child
+  target_id: 01a19499-932e-79f0-a3e1-1299dfe355ad
+  created_at: 2026-11-01T04:46:03.455974823Z
+history:
+- id: 01a1956d-d26a-7a83-9ddc-67ed991509ed
+  author: joe
+  timestamp: 2026-11-01T04:46:04.906676294Z
+  changes: []
 filed_at:
   code_sha: a83e05d785df667dfa986cf3eb310a3f0637b602
   branch: main
