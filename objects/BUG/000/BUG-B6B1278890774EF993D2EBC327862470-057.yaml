@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T21:37:29.201146410Z
-modified_at: 2026-11-01T08:17:31.166723493Z
+modified_at: 2026-11-01T08:28:12.603360075Z
 req_type: Bug
 tags:
 - epic-home-003
@@ -162,6 +162,11 @@ comments:
   content: 'PROXY DECISION: accept the independent final review minor performance finding without follow-up: conflict preflight fetch may also run for reviewer pickups, bounded at20s, while only implementer prompts consume the forecast. It neither changes correctness nor authorizes work; the primary precedence and fail-fetch acceptance is verified. Fresh own-grant reviewer record now allowed merge-hold auto-release, which succeeded. No provenance was fabricated or copied by advisor.'
   created_at: 2026-11-01T08:17:31.166723493Z
   modified_at: 2026-11-01T08:17:31.166723493Z
+- id: 01a19639-2fbb-7ab2-9d9a-52e2c2b6c9c2
+  author: joe
+  content: 'PROXY DECISION: also accept final review minor possibility that a20s-killed conflict fetch leaves a Git ref lock. Existing bounded runner prevents indefinite pickup stall; Git lock creation is short and normal manual recovery exists if encountered. No concrete stale-lock event observed. Accepted once on current PR, no follow-up task/PR; fetch-on-reviewer overhead already accepted.'
+  created_at: 2026-11-01T08:28:12.603360075Z
+  modified_at: 2026-11-01T08:28:12.603360075Z
 history:
 - id: 01a193e8-1070-7260-a5d0-2973465ae4a2
   author: aida-session-start
