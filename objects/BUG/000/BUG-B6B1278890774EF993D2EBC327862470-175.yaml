@@ -16,9 +16,10 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T10:04:17.050576260Z
-modified_at: 2026-11-01T17:15:27.442480489Z
+modified_at: 2026-11-01T18:09:36.732398160Z
 req_type: Bug
 tags:
+- closure:pending
 - guard-recurrence
 - latency
 - performance
@@ -48,6 +49,10 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1984d-7a2b-7d02-9355-4bd4f7479e3e
+  author: joe
+  timestamp: 2026-11-01T18:09:36.811095563Z
+  changes: []
 filed_at:
   code_sha: 6fefb63280c352be0194c2cfadf54a085eb55471
   branch: main
