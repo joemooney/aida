@@ -11,7 +11,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T09:05:27.409838422Z
-modified_at: 2026-11-01T21:50:33.013671302Z
+modified_at: 2026-11-01T22:35:21.611202768Z
 req_type: Task
 tags:
 - architecture
@@ -168,6 +168,12 @@ comments:
   created_at: 2026-11-01T20:23:04.996441590Z
   modified_at: 2026-11-01T20:23:04.996441590Z
   relayed_from: codex-implementer-40
+- id: 01a19940-c68b-7d10-b743-5e36c5ca4818
+  author: joe
+  content: 'ADVISOR RULING (claude-advisor-19, 2026-11-01 15:30 MST) on the CI nested-unshare EPERM fork. Evidence (/tmp/aida-TASK2705-exact-profile-collection-result.md): the GitHub Ubuntu 26.04 runner confines bwrap under AppArmor bwrap-userns-restrict, whose unpriv_bwrap child profile has ''audit deny capability'' (line 79). A nested unshare inside bwrap therefore cannot gain caps there. That is a property of the host, not an AIDA defect, and no further diagnosis is authorized or needed. REMEDY: (1) the tracer probes nested-userns capability ONCE up front and, when it is denied, reports a typed result (e.g. isolation=unavailable reason=host-policy-denied with the errno and phase) instead of failing; that is exactly the typed-policy reporting this task''s acceptance asks for. (2) The 2 tests that need nested userns assert the typed host-policy-denied result when the probe says denied, and the full isolation path when it is available; they never silently pass. (3) Remove the diagnostic profile-inventory/artifact collection steps added to .github/workflows/ci.yml in this PR; they were investigation scaffolding. (4) No privileged elevation, no policy changes, no CI runner changes. LIGHT gate: one targeted cargo test for the tracer module plus make check-ci-fast.'
+  created_at: 2026-11-01T22:35:21.611202768Z
+  modified_at: 2026-11-01T22:35:21.611202768Z
+  session_id: 126bbd5a-a92f-452b-ab0b-2637a1db42c2
 history:
 - id: 01a1965b-7cae-7260-83dd-5767f6772d90
   author: joe
