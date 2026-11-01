@@ -1,0 +1,36 @@
+id: 01a1956d-98dd-74a3-aa69-08feaa0de82c
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-278
+agreed_id: STORY-2255
+title: Codex fork-from-live for product and advisor seats via codex exec fork, replacing the cold-boot fallback
+description: |-
+  ## Why
+  `docs/agents/seat-parity.md` rows 14 and 18 mark Codex fork-from-live **Degraded** because there is "no Codex transcript-copy API", and `aida advisor watch` falls back to a Codex cold boot. That premise is out of date: codex-cli 0.166.0 ships `codex fork <SESSION_ID>` and `codex exec fork <SESSION_ID> PROMPT`. A cold boot loses the live seat's context, so a Codex advisor tick is worse than a Claude one.
+
+  ## Acceptance
+  1. When the registered live seat is Codex and its thread id is known, `aida advisor watch --once` (and the product fork path) forks it with `codex exec fork <thread> <prompt>`, not a cold boot. The launch log names the forked thread.
+  2. When the thread id is unknown, or the installed codex has no `exec fork`, it cold-boots as today and prints one line saying why (no silent fallback).
+  3. A forked tick never writes into the live thread: the live session's transcript is byte-identical before and after (test with a fixture session dir).
+  4. Under containment, the fork argv uses the same posture as the TASK-2631 native/contained ruling (no `--dangerously-bypass-approvals-and-sandbox` when contained).
+  5. seat-parity.md rows 14 and 18 move to **Works** with the exact command, or stay **Degraded** naming the real remaining gap. The stale "no transcript-copy API" wording is removed.
+  6. The Claude fork path is unchanged (regression test).
+
+  ## Notes
+  TASK-1308 (deferred) stays the dogfood-wave proof; this story removes the technical gap it cites.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-01T04:45:50.173634412Z
+modified_at: 2026-11-01T04:45:50.173634412Z
+req_type: Story
+tags:
+- fork
+- seat-parity
+- vendor:codex
+filed_at:
+  code_sha: a83e05d785df667dfa986cf3eb310a3f0637b602
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: a83e05d785d
+  vendor: claude
