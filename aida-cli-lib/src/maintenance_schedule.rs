@@ -1681,6 +1681,10 @@ struct StatusRow {
     source: &'static str,
     #[serde(skip_serializing_if = "Option::is_none")]
     problem: Option<String>,
+    /// Job-specific outcome of the last run (the docs sweep's findings count
+    /// and mode). trace:STORY-2220 | ai:claude
+    #[serde(skip_serializing_if = "Option::is_none")]
+    detail: Option<String>,
 }
 
 fn effective_last_run(
@@ -1788,7 +1792,17 @@ fn status_row(
         due_reason: reason,
         source: task.source.as_str(),
         problem,
+        detail: None,
     }
+}
+
+/// Attach a job's own last-run outcome to its status row.
+// trace:STORY-2220 | ai:claude
+fn with_detail(mut row: StatusRow, project_root: &Path) -> StatusRow {
+    if row.command == "aida docs sweep" {
+        row.detail = crate::docs_sweep::status_detail(project_root);
+    }
+    row
 }
 
 fn last_by_label(by: &LastBy) -> String {
@@ -1849,7 +1863,12 @@ fn status(project_root: &Path, json: bool) -> Result<()> {
     let now = Utc::now();
     let rows: Vec<StatusRow> = tasks
         .iter()
-        .map(|t| status_row(t, ledgers.get(&t.name), state.tasks.get(&t.name), now))
+        .map(|t| {
+            with_detail(
+                status_row(t, ledgers.get(&t.name), state.tasks.get(&t.name), now),
+                project_root,
+            )
+        })
         .collect();
     if json {
         println!("{}", serde_json::to_string_pretty(&rows)?);
@@ -1871,6 +1890,12 @@ fn status(project_root: &Path, json: bool) -> Result<()> {
             row.next_due,
             row.command
         );
+    }
+    // trace:STORY-2220 | ai:claude
+    for row in &rows {
+        if let Some(detail) = &row.detail {
+            println!("\n{}: {detail}", row.name);
+        }
     }
     // trace:BUG-1655 | ai:claude
     for row in rows.iter().filter(|r| r.problem.is_some()) {
@@ -1912,7 +1937,12 @@ fn list(project_root: &Path, seat: Option<&str>, json: bool) -> Result<()> {
     let now = Utc::now();
     let rows: Vec<StatusRow> = tasks
         .iter()
-        .map(|t| status_row(t, ledgers.get(&t.name), state.tasks.get(&t.name), now))
+        .map(|t| {
+            with_detail(
+                status_row(t, ledgers.get(&t.name), state.tasks.get(&t.name), now),
+                project_root,
+            )
+        })
         .collect();
     if json {
         println!("{}", serde_json::to_string_pretty(&rows)?);
@@ -3523,6 +3553,17 @@ fn command_table() -> &'static [(&'static [&'static str], ScheduledCommand)] {
             ScheduledCommand {
                 display: "dispatch tick",
                 args: &["dispatch", "tick"],
+                hook_allowed: false,
+            },
+        ),
+        // STORY-2220: the background docs sweep. Off the per-turn hook path:
+        // it walks git history and, in PR mode, calls the forge.
+        // trace:STORY-2220 | ai:claude
+        (
+            &["docs sweep"],
+            ScheduledCommand {
+                display: "docs sweep",
+                args: &["docs", "sweep"],
                 hook_allowed: false,
             },
         ),

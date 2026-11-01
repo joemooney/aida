@@ -1563,6 +1563,18 @@ pub(crate) const LIST_LENS_ALIASES: &[ListLensAlias] = &[
 /// default scope (`aida list` still shows ALL) — the default-scope question is
 /// recorded on the spec for the operator, not actioned here.
 // trace:TASK-862 | ai:claude
+/// Every built-in pre-clap argv rewrite, in dispatch order, returning the
+/// rewritten argv and the deprecated groom verb typed (if any). One function so
+/// `aida docs sweep` checks documented commands exactly as dispatch reads them.
+// trace:STORY-2220 | ai:claude
+pub(crate) fn builtin_alias_rewrites(args: &[String]) -> (Vec<String>, Option<String>) {
+    rewrite_groom_alias(&rewrite_queue_default_list(&rewrite_agent_default_new(
+        &rewrite_list_alias(&rewrite_type_alias(&rewrite_advisor_assess(
+            &rewrite_personal_view_alias(args),
+        ))),
+    )))
+}
+
 pub(crate) fn rewrite_personal_view_alias(args: &[String]) -> Vec<String> {
     if args.len() >= 2 {
         match args[1].as_str() {
@@ -1802,12 +1814,7 @@ pub(crate) fn run() -> Result<()> {
     // the canonical `aida groom` before clap, and capture which deprecated
     // spelling (if any) the operator typed so we can print a non-blocking hint
     // once argv parsing succeeds. trace:STORY-708 | ai:claude
-    let (after_alias_rewrites, groom_deprecated_verb) =
-        rewrite_groom_alias(&rewrite_queue_default_list(&rewrite_agent_default_new(
-            &rewrite_list_alias(&rewrite_type_alias(&rewrite_advisor_assess(
-                &rewrite_personal_view_alias(&expanded),
-            ))),
-        )));
+    let (after_alias_rewrites, groom_deprecated_verb) = builtin_alias_rewrites(&expanded);
     // Git-style extensions: a head that is still not a real subcommand after
     // every built-in and user-alias stage runs `aida-<name>` from PATH.
     // trace:STORY-1641 | ai:claude
