@@ -17,7 +17,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-01T10:08:51.706551714Z
-modified_at: 2026-11-01T10:08:51.706551714Z
+modified_at: 2026-11-01T10:11:15.513753680Z
 req_type: Task
 tags:
 - from-advisor:STORY-2220
@@ -26,6 +26,12 @@ tags:
 - loop-guard
 - review-recurrence
 - severity:major
+comments:
+- id: 01a19697-87b9-7701-ac1d-23b2e72f5aaf
+  author: joe
+  content: 'ADVISOR DISPUTE RESOLVED: this recurrence imported obsolete 1a9bb9a findings from friendly STORY2220 key. Current independent reviewer07 ledger PR3194#13 is at6b1fd1a and explicitly PASSES both old portability and combined-cap findings; its one blocker is the newly demonstrated local YAML empty-document→idle case. Root inspected exact production parser and recorded a different concrete remedy + real snapshot/tick cases. Latest advisor ruling governs; no identical unchanged finding is being resent. Manual requeue authorized after safe old-source preservation/end. This observation is coordination-only; no code commit expected.'
+  created_at: 2026-11-01T10:11:15.513753680Z
+  modified_at: 2026-11-01T10:11:15.513753680Z
 filed_at:
   code_sha: 6fefb63280c352be0194c2cfadf54a085eb55471
   branch: main
