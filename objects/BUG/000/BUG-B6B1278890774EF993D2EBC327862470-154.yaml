@@ -1,0 +1,25 @@
+id: 01a194b6-f864-7631-a984-45c8c710a721
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-154
+agreed_id: BUG-2380
+title: Contained lanes and reviewers cannot read CI failure logs, so red-CI rework rounds run blind
+description: 'Observed 2026-10-31 on PR-3176, PR-3182 and PR-3185: reviewers report ''CI lib-0/cli-1 Run tests failed'' without the test names, and implementer lanes say ''someone with log access needs to run gh run view --log-failed'' (the contained sandbox blocks the log download). Rework rounds then guess, or the advisor fetches logs by hand. Expected: the rework pickup and the reviewer prompt include the failing test names and panic lines for the PR head''s failed CI jobs, fetched host-side by the launcher (gh run view --job <id> --log, filtered to FAILED/panicked lines, capped) and written into the lane''s brief file. Acceptance: (1) a lane picking up a PR with red CI gets a ''CI failures at <sha>'' section listing each failing test and its panic line; (2) a reviewer''s prompt gets the same; (3) test with a stubbed gh producing a failed job log; (4) when logs are unavailable (run in progress, expired), the section says so explicitly.'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-01T01:26:21.540218031Z
+modified_at: 2026-11-01T01:26:21.540218031Z
+req_type: Bug
+tags:
+- ci
+- epic-home-003
+- headless
+- regroup
+filed_at:
+  code_sha: 43d9f95803036ec22350e5a210d8c1cae20b9fe5
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 43d9f958030
+  vendor: claude
+  session: f5694f22-ff09-4e87-8934-e79adca4efba
