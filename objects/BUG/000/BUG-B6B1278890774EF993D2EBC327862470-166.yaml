@@ -25,7 +25,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T06:47:26.114384272Z
-modified_at: 2026-11-01T10:46:04.914146376Z
+modified_at: 2026-11-01T10:53:26.789651481Z
 req_type: Bug
 tags:
 - audit
@@ -68,6 +68,11 @@ comments:
   content: '[aida:closure-held] Code merged to the default branch (commit 471540a), but completion is held at Done: the spec''s own declared closure criteria are unmet: "tag `closure:pending` is set". Whoever owns those criteria (the spec''s owner or the advisor) resolves them by checking the box in the spec''s Closure section, or removing the tag, via `aida edit BUG-2392 --description ...` / `aida edit BUG-2392 --remove-tag closure:pending`. The next `aida pull` completes it once nothing holds it; to replay by hand, run `aida db reconcile-status --spec BUG-2392 --since 471540a^`. If the blockers form a cycle, or you decide to ship regardless, a human runs `aida edit BUG-2392 --status completed`. (merge sha: 471540a8c477a50a81170f338d81532cb5dbd329)'
   created_at: 2026-11-01T10:46:05.288371920Z
   modified_at: 2026-11-01T10:46:05.288371920Z
+- id: 01a196be-2785-7823-9678-84ceb7fde0a1
+  author: joe
+  content: 'CLOSURE VERIFIED: independently approved source10b11ddf871459e4797c4be29de7c749c487440b landedvia protectedtrain3204 as471540a8c477a50a81170f338d81532cb5dbd329. AC1 authorizedphysical localrepair removedexactly --sandbox=danger-full-access fromignored .aida/agents.toml, wholeparsedTOMLcompared before/afterallotherchoicespreserved; originalandnew0600opsbackupretained. RebuiltactualmergedCLI target/agent/aida --version reports471540a8c47. Its configpermissionsshow human/JSONcheckscomplete: zero case-insensitive finding high diagnostics, Codexinteractive/headless workspace-write, approvalnever, native sandbox not AIDA-contained. Rawflagabsenceverified separately (zeroHIGHalonewouldnotproveit). AC2 mastertemplatecontainsall3acceptedOpenAIhosts and settingsmasterreference/defaultmerge preserveexistingcustomallowlists; independentreview06 verifiedall3files and14/14authorunitresults unchanged. AC3 allowed-hosttestmerged. No liveauthclaim. AutomaticlivepromotionremainsUNPERFORMED becauseindependent smoke list timedout300s undersevereIO; live4ce unchanged. Thisdoesnotundo completedlocalconfigrepair/templateACs; retainedhandoff tracks failedpromotion separately, no false deployedclaim.'
+  created_at: 2026-11-01T10:53:26.789651481Z
+  modified_at: 2026-11-01T10:53:26.789651481Z
 history:
 - id: 01a195dd-0846-7b42-9f84-f4128c00ca5d
   author: joe
