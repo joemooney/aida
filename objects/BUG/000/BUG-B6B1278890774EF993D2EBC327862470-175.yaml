@@ -16,7 +16,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T10:04:17.050576260Z
-modified_at: 2026-11-01T18:09:38.084799436Z
+modified_at: 2026-11-01T18:23:07.137532960Z
 req_type: Bug
 tags:
 - closure:pending
@@ -46,6 +46,13 @@ comments:
   content: 'Advisor disposition on FULL implementer36 report and FULL reviewer24 source critique: bounded lookup+attribution fix accepted for independent attested review, not whole incident completion. Targeted canonical current identity/read-only scan-counter regression and exact8e38 libraryCI support mechanism; finalCI Build/hold SUCCESS. Nine finite low-load successfulAGENT calls and an older different-profile/high-load comparison do not prove original fullSLO/loadedlinkage tail criterion. Keep remaining evidence/work within SAME BUG2402/PR3211, no followup chain or budget change. closure:pending added to prevent merge auto-completing the incident until deployed exactartifact/profile/digest, representative comparable-load default/no-git positive/negative evidence, accountable remaining loaded linkage tails and sufficient unchanged-budget telemetry are verified. Review24 source recommendations were NOT recorded/attested: its own normal key-backed reviewer presentation validated, but it added a HOSTPID visibility constraint beyond the supplied authoritative HOSTsetup. Root clarifies own verified setup+same-shell normalrolecurrent/status and supported writer are the governing path; no raw/proxy authority workaround. Fresh granted independent reviewer will verify currenthead and attempt normal records; actual writer refusals remainbinding.'
   created_at: 2026-11-01T18:09:38.084799436Z
   modified_at: 2026-11-01T18:09:38.084799436Z
+- id: 01a19859-d781-7bd0-89d4-4226dbb51394
+  author: joe
+  content: |
+    Advisor read the complete fresh independent report /tmp/aida-review3211-attested-result.md (10073 bytes). Reviewer25 independently APPROVES the explicitly bounded partial source fix at 8e38fdd049860a7295b869b0f422989f8f6f3f3d; whole BUG2402 acceptance remains PARTIAL and closure:pending applies. Actual normal role current/status passed own valid reviewer/key-backed binding, then the first canonical --pr 3211 writer returned exit 1: refused because this session has no identity AIDA can bind an approval to (no agent session id and no process ancestry). This is an actual supported-writer refusal, not reviewer24's extra HOST-visibility condition. No canonical/friendly receipt, recorder attestation, release grant, GH comment or merge readiness is claimed. Stop rather than borrow identities or edit ledgers. Next session must diagnose the supported native reviewer identity presentation under existing authority policy before recording; source recommendation and green exact-head CI do not substitute for approval. Original representative-load, deployed exact artifact/profile/digest, loaded linkage and unchanged SLO evidence remain within this same BUG/PR.
+  created_at: 2026-11-01T18:23:07.137532960Z
+  modified_at: 2026-11-01T18:23:07.137532960Z
+  relayed_from: codex-reviewer-25
 history:
 - id: 01a19809-e494-74a2-9ac1-332231d47592
   author: aida-session-start
