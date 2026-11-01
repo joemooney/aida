@@ -1,0 +1,36 @@
+id: 01a198a0-9c82-7360-a89a-a7ecb1248f31
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-179
+agreed_id: BUG-2406
+title: Merge train binds member-head approvals to the train then rejects its green tested head
+description: |
+  Observed on main6a3f67671a974703590efde5ae2a323f3f7471fa, installed CLI0.16.0 SHA2561c8e31c1bd0d90570ef8d9892abf7a209ab48e9452a5b9403166c2638ef71f36. A genuine separately-authorized HOST TTY integrator obtained a fresh normal direct grant, passed normal current/status/parent-none/current-source-author and reviewer independence checks, then ran ordinary aida pr train 3194 3208 --max2. No borrowed role/key, fakeTTY, env identity scrub, hold clear, raw forge merge or approval restamp.
+
+  Normal train opened PR3212, base6a3f67671a974703590efde5ae2a323f3f7471fa, two commits05121dfa04f51cfa19e0bbd6cdf48cb7c9f38498 and4dc6d62a1463bc35e78ca7165d221c08f01ec193. Exact source member metadata is3194@fca209a47044780d20148271865614377c7afd10 and3208@abe0d027a6049e5a4a3c3786fee49d0dee804d18. PR3207 human-held was EXCLUDED and never named. Exact trainhead4dc6 CI41341280472 all7lanes+BuildSUCCESS; merge-hold-gate41341280546SUCCESS. Main never moved.
+
+  At merge, normal CLI refused PR3212 recorded verdict not approving trainhead4dc6: latest normal supported PR3212 verdict is reviewer23's original BUG2400 approval at SOURCEheadabe0 and branchcodex/bug-2400-exact-pr. Gateledger PR3212 normal events2/3 contain old member heads1677/abe0; event4carry-over-refused. No actual fresh review or attestation of trainhead is claimed. Normal train closed PR3212 and left3194/3208OPEN with refusal comments. Terminalrc1; post-train audit confirms exact dirty config91bytes still preserved and no other source dirt. Audit /tmp/aida-integrator25-87bb774eac3d4661816773fb1294d557.audit.json; supported readback /tmp/aida-train3212-supported-verdict.json; forge checks /tmp/aida-train3212-1235-status.json; publicclosedtrain https://github.com/joemooney/aida/pull/3212.
+
+  Source lead: pr_train.rs LiveTrainForge::open~1561 calls gate::ledger::open_change_bound with all car specs, binding pre-PR source verdicts to train; final forge merge traverses ordinary current-head review gate. Existing two-seat merge-train policy/ADR accepts exact patch-id-proved carry-over after source re-gating and exact tested stack/main pin. Migration/consumer wiring currently leaves source-head attestations where the final head gate expects train-head evidence. Root cause beyond this observed mismatch needs source/fixture confirmation; do not treat member approval as a signature of rewritten trainhead.
+
+  Acceptance:
+  1. Reproduce with a fixture/fakeHOME train and M1 opening/binding/final current-head consumer, not just a stubbed TrainForge merge result. Match exact typed source approvals, validated patch IDs, tested trainhead and unchanged main.
+  2. Restore the EXISTING approved train carry-over contract through typed, provenance-preserving, bounded normal wiring. No raw ledger/projection edits, copied/restamped source signatures, arbitrary skip-review flag, weakened standalone current-head gate or trust in human-editable member-line alone. Preserve all member approval/authorship/hold/mandate/supervision/drive/CI/current-main and normal merge lease checks. Independent sketch/signoff before authority/gate code.
+  3. Prove refusal for forged/manual manifests, changed patches or member heads, moved main, conflicting/non-authorized source reviews and holds; preserve current record-time authority semantics. Match positive evidence to actual normal final merge boundary.
+  4. One focused approval/ledger/train regression plus fast gate; shared test infrastructure or >10 changedfiles adds touched/compile; fullsuiteCI, no slotbypass/outertimeout/blindrebuilds. Fresh independent strict review. Do not reopen/rewrite PR3212, change existing ledger events or manually approve its rewritten head. Validate a new ordinary train only after normal reviewed fix is live.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-01T19:40:25.090169463Z
+modified_at: 2026-11-01T19:40:25.090169463Z
+req_type: Bug
+tags:
+- architecture
+- merge
+- train
+filed_at:
+  code_sha: 6a3f67671a974703590efde5ae2a323f3f7471fa
+  branch: main
+  dirty: true
+  aida_version: 0.16.0
+  aida_build_sha: 6a3f67671a9
+  vendor: codex
