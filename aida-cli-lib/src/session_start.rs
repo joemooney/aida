@@ -3470,19 +3470,24 @@ pub(crate) fn session_start_with_receipt(
     if std::env::var_os("AIDA_SUPPRESS_SESSION_NEXT").is_none() {
         eprintln!();
         eprintln!("Next:");
-        eprintln!(
-            "  {}",
-            format!("claude    # then /aida-implement {}", owns).cyan()
-        );
-        eprintln!("  {}", format!("cd {}", worktree_path.display()).cyan());
-        // Point at the filtered path, not a raw `source` of a worktree file a
-        // branch can commit. trace:BUG-1624 | ai:claude
-        if cargo_target_dir.is_some() {
-            eprintln!(
-                "  {}    {}",
-                format!("aida worktree enter {owns}").cyan(),
-                "# cd in + warm build cache (filtered session env)".dimmed()
-            );
+        // BUG-2379: a private clone cannot be re-entered with `aida worktree
+        // enter`, and the launcher follows `[agents] vendor`.
+        // trace:BUG-2379 | ai:claude
+        let vendor = aida_core::agents_config::resolve_default_vendor(&project_root)
+            .unwrap_or_else(|| "claude".to_string());
+        for line in session_next_lines(
+            owns,
+            &worktree_path,
+            tree_kind == crate::seat_clone::TreeKind::Clone,
+            &vendor,
+            cargo_target_dir.is_some(),
+        ) {
+            match line.comment {
+                Some(comment) => {
+                    eprintln!("  {}    {}", line.command.cyan(), comment.dimmed())
+                }
+                None => eprintln!("  {}", line.command.cyan()),
+            }
         }
         eprintln!();
         eprintln!("When finished:");
@@ -3499,6 +3504,76 @@ pub(crate) fn session_start_with_receipt(
         lease_id: Some(id),
         cleanup: rollback,
     })
+}
+
+/// One `Next:` line of `aida session start`: a command and an optional dimmed
+/// trailing comment.
+// trace:BUG-2379 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct NextLine {
+    pub(crate) command: String,
+    pub(crate) comment: Option<&'static str>,
+}
+
+/// The interactive launch line for `vendor`: Codex invokes skills as
+/// `$aida-…`, Claude (and anything else) as `/aida-…`.
+// trace:BUG-2379 | ai:claude
+pub(crate) fn vendor_launch_line(vendor: &str, owns: &str) -> String {
+    let vendor = vendor.trim();
+    let vendor = if vendor.is_empty() { "claude" } else { vendor };
+    let sigil = if vendor.eq_ignore_ascii_case("codex") {
+        '$'
+    } else {
+        '/'
+    };
+    format!("{vendor}    # then {sigil}aida-implement {owns}")
+}
+
+/// The `Next:` block `aida session start` prints when it does not launch.
+///
+/// A linked worktree keeps the historical shape (launcher, `cd`, and the
+/// filtered `aida worktree enter` when a build cache is shared). A contained
+/// seat's private clone is not a linked worktree, so `aida worktree enter`
+/// refuses it: the block names the clone and `cd`s into it first, then the
+/// launcher, and never suggests `aida worktree enter`.
+// trace:BUG-2379 | ai:claude
+pub(crate) fn session_next_lines(
+    owns: &str,
+    tree: &std::path::Path,
+    is_clone: bool,
+    vendor: &str,
+    shares_build_cache: bool,
+) -> Vec<NextLine> {
+    let launch = NextLine {
+        command: vendor_launch_line(vendor, owns),
+        comment: None,
+    };
+    let cd = format!("cd {}", tree.display());
+    if is_clone {
+        return vec![
+            NextLine {
+                command: cd,
+                comment: Some("# the seat's private clone (not a linked worktree)"),
+            },
+            launch,
+        ];
+    }
+    let mut lines = vec![
+        launch,
+        NextLine {
+            command: cd,
+            comment: None,
+        },
+    ];
+    // Point at the filtered path, not a raw `source` of a worktree file a
+    // branch can commit. trace:BUG-1624 | ai:claude
+    if shares_build_cache {
+        lines.push(NextLine {
+            command: format!("aida worktree enter {owns}"),
+            comment: Some("# cd in + warm build cache (filtered session env)"),
+        });
+    }
+    lines
 }
 
 /// BUG-61: enumerate live `claude` processes whose cwd is at-or-under
@@ -3555,3 +3630,7 @@ mod bug_734_empty_worktree_probe_tests;
 #[cfg(test)]
 #[path = "tests/bug_2215_session_claim_rollback_tests.rs"]
 mod claim_rollback_tests;
+
+#[cfg(test)]
+#[path = "tests/bug_2379_session_next_block_tests.rs"]
+mod bug_2379_session_next_block_tests;
