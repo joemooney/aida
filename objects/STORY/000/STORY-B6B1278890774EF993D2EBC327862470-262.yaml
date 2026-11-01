@@ -27,7 +27,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T23:03:29.192827531Z
-modified_at: 2026-11-01T06:56:19.966235767Z
+modified_at: 2026-11-01T06:59:51.414123406Z
 req_type: Story
 tags:
 - docs
@@ -106,6 +106,13 @@ comments:
   created_at: 2026-11-01T06:16:43.425086727Z
   modified_at: 2026-11-01T06:16:43.425086727Z
   session_id: a31b25d9-60a5-4347-a85b-4c74ab06f274
+- id: 01a195e8-4bf6-7003-b09f-0b3c63a27b2f
+  author: joe
+  content: 'Round 2 (9f43a10cbf0): addressed all 13 PR-3194 findings. Finding 5: the ''stray/'' line is output from the gates job''s own Python self-test (tests/test_ci_test_shards.py creates stray/ in a tempdir and check_root prints ::error::), not something this PR leaves behind. The gates job''s real failure was the doc-intent gate (CLI surface changed, no doc impact marked), fixed by adding the docs:impacted tag to this spec. The headless 60s-per-call limit kept me from running a full local compile or tests, so CI is the first full build of this commit.'
+  created_at: 2026-11-01T06:59:51.414123406Z
+  modified_at: 2026-11-01T06:59:51.414123406Z
+  session_id: 01a195d2e490
+  harness_version: 2.1.316 (Claude Code)
 history:
 - id: 01a19517-853a-7dc1-addd-62b1b73de3be
   author: joe
