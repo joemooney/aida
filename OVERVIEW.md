@@ -1254,10 +1254,11 @@ evidence. See [installation and recovery](docs/agents/codex-mail-wake.md).
 
 ### Explicit vendor containment policy
 
-When containment is requested, `[contained.vendors]` in `.aida/config.toml`
-selects `"aida"` or `"native"` per vendor. Claude defaults to AIDA containment
+When containment is requested, `[contained.vendors]` in the trusted default-branch
+`.aida/config.toml` selects `"aida"` or `"native"` per vendor. Claude defaults to AIDA containment
 and keeps its existing settings, sandbox and parent protections. Non-Claude
-vendors without a key still refuse. Only Codex supports `"native"`: it receives
+vendors without a key still refuse. Branch-local opt-ins are ignored; this
+repository’s opt-in becomes trusted when merged into `origin/main`. Only Codex supports `"native"`: it receives
 `--sandbox workspace-write --ask-for-approval never`, including headless children,
 and is reported as **native sandbox, not AIDA-contained**. `"aida"` for Codex and
 `"native"` for Claude, agy or unknown tools refuse. Native policy overrides
@@ -1273,13 +1274,4 @@ allowlist includes `api.openai.com` for API-key use and `chatgpt.com` plus
 `auth.openai.com` for ChatGPT inference and authentication, verified by static
 inspection of installed codex-cli 0.166.0. Native sandbox egress remains Codex's
 own policy; the AIDA allowlist does not configure it.
-<!-- trace:TASK-2631 | ai:codex -->
-
-`aida agent new codex --bg` runs a detached, tracked native `codex exec` process
-through foreground setup and preflight. It prints the child PID and private log
-path, stamps lease liveness and child grants on that PID, and stops/reaps a child
-whose registration or binding fails. No extra daemon or Claude supervisor is
-used. Background launches require a fresh prompt and do not rotate or resume.
-Logs and launch context are retained for inspection; registry liveness reflects
-whether the process is still running.
 <!-- trace:TASK-2631 | ai:codex -->

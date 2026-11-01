@@ -1440,7 +1440,7 @@ pub(crate) fn scan_permission_posture_findings(
                 summary: format!("{}: {} ({})", f.agent, f.summary, f.severity),
                 action: if vendor_refused {
                     format!(
-                        "set [contained.vendors] codex = \"native\" for Codex (native sandbox, not AIDA-contained), set [agents] vendor = \"claude\", or turn containment off; current source: {}",
+                        "set [contained.vendors] codex = \"native\" in the trusted default-branch config for Codex (native sandbox, not AIDA-contained), set [agents] vendor = \"claude\", or turn containment off; current source: {}",
                         f.source
                     )
                 } else {
@@ -1657,9 +1657,9 @@ fn permission_posture_for_agent(
     let (tier, tier_source, flags, flags_source) = if native {
         (
             "native".to_string(),
-            "[contained.vendors] codex = \"native\"".to_string(),
+            "trusted default-branch [contained.vendors] codex = \"native\"".to_string(),
             display_tool_contained_flags(agent),
-            "[contained.vendors]".to_string(),
+            "trusted default-branch [contained.vendors]".to_string(),
         )
     } else if let Some(flags) = per_tool {
         // trace:BUG-b6b1278890774ef993d2ebc327862470-028 | ai:claude

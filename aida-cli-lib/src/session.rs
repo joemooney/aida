@@ -2286,7 +2286,7 @@ fn vendor_containment_posture(vendor: &str, setting: Option<&str>) -> Result<Con
             "[contained.vendors] {vendor} = \"native\" is unsupported: `{vendor}` has no supported native sandbox; refusing to launch it"
         ),
         (_, None | Some("aida")) => anyhow::bail!(
-            "`{vendor}` cannot run an AIDA-contained session; refusing to launch it. Use --vendor claude, or explicitly set [contained.vendors] codex = \"native\" for Codex (native sandbox, not AIDA-contained)"
+            "`{vendor}` cannot run an AIDA-contained session; refusing to launch it. Use --vendor claude, or explicitly set [contained.vendors] codex = \"native\" in the trusted default-branch config for Codex (native sandbox, not AIDA-contained)"
         ),
         (_, Some(value)) => anyhow::bail!(
             "[contained.vendors] {vendor} = {} must be \"aida\" or \"native\"; refusing to launch it", aida_core::toml_quote::toml_string(value)

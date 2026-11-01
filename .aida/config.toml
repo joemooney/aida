@@ -98,6 +98,7 @@ allowed_hosts = [
 
 # TASK-2631 / STORY-2238: explicit interim opt-in. Claude remains AIDA-contained;
 # Codex uses its native sandbox, not AIDA containment, until vendor-neutral support.
+# This opt-in is read only from committed origin/main; branch-local edits are ignored.
 [contained.vendors]
 codex = "native"
 

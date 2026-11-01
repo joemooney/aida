@@ -12,6 +12,93 @@ fn policy(root: &Path, vendors: &str) {
     ),
     )
     .unwrap();
+    commit_trusted_policy(root);
+}
+
+fn git(root: &Path, args: &[&str]) {
+    let output = crate::test_git::git_command()
+        .arg("-C")
+        .arg(root)
+        .args(args)
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "git {args:?}: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+fn commit_trusted_policy(root: &Path) {
+    if !root.join(".git").exists() {
+        git(root, &["init", "-q", "-b", "main"]);
+        git(root, &["config", "user.name", "test"]);
+        git(root, &["config", "user.email", "test@example.com"]);
+    }
+    git(root, &["add", ".aida/config.toml"]);
+    git(
+        root,
+        &["commit", "-q", "--allow-empty", "-m", "trusted policy"],
+    );
+    git(root, &["update-ref", "refs/remotes/origin/main", "HEAD"]);
+    git(
+        root,
+        &[
+            "symbolic-ref",
+            "refs/remotes/origin/HEAD",
+            "refs/remotes/origin/main",
+        ],
+    );
+}
+
+// A committed branch-local downgrade cannot supply launch authority.
+// trace:TASK-2631 | ai:codex
+#[test]
+fn containment_branch_local_native_opt_in_is_ignored() {
+    let root = tempfile::tempdir().unwrap();
+    policy(root.path(), "");
+    git(root.path(), &["checkout", "-q", "-b", "untrusted"]);
+    std::fs::write(
+        root.path().join(".aida/config.toml"),
+        "[contained.vendors]\ncodex = \"native\"\n",
+    )
+    .unwrap();
+    git(root.path(), &["add", ".aida/config.toml"]);
+    git(root.path(), &["commit", "-q", "-m", "branch opt-in"]);
+    assert_eq!(
+        crate::agent_config::load_contained_vendor(root.path(), "codex").unwrap(),
+        None
+    );
+    assert!(session::containment_posture_in(root.path(), "codex", true).is_err());
+
+    // Missing trusted config also refuses, even with an opt-in in branch HEAD.
+    git(root.path(), &["checkout", "-q", "main"]);
+    git(root.path(), &["rm", ".aida/config.toml"]);
+    git(root.path(), &["commit", "-q", "-m", "no trusted config"]);
+    git(
+        root.path(),
+        &["update-ref", "refs/remotes/origin/main", "HEAD"],
+    );
+    git(root.path(), &["checkout", "-q", "untrusted"]);
+    assert!(session::containment_posture_in(root.path(), "codex", true).is_err());
+}
+
+#[test]
+fn containment_trusted_native_opt_in_survives_branch_edits() {
+    let root = tempfile::tempdir().unwrap();
+    policy(root.path(), "codex = \"native\"");
+    git(root.path(), &["checkout", "-q", "-b", "branch"]);
+    std::fs::write(
+        root.path().join(".aida/config.toml"),
+        "[contained.vendors]\ncodex = \"aida\"\n",
+    )
+    .unwrap();
+    git(root.path(), &["add", ".aida/config.toml"]);
+    git(root.path(), &["commit", "-q", "-m", "branch policy"]);
+    assert_eq!(
+        session::containment_posture_in(root.path(), "codex", true).unwrap(),
+        ContainmentPosture::Native
+    );
 }
 
 fn config(agent_type: &'static str) -> crate::AgentLaunchConfig {
@@ -69,10 +156,11 @@ fn containment_policy_is_explicit_and_vendor_specific() {
         "[contained.vendors\n",
     )
     .unwrap();
+    commit_trusted_policy(root.path());
     assert!(session::containment_posture_in(root.path(), "codex", true).is_err());
 }
 
-// AC2': same default-flag builder used by foreground and --bg, no widening defaults.
+// AC2': foreground default-flag builder, no widening defaults.
 // trace:TASK-2631 | ai:codex
 #[test]
 fn containment_agent_new_codex_uses_native_flags() {

@@ -635,12 +635,18 @@ live hub hook or automatic forwarding is provided.
 
 #### Per-vendor containment posture
 
-With containment enabled, opt Codex into its native sandbox explicitly:
+With containment enabled, opt Codex into its native sandbox in the trusted
+default-branch `.aida/config.toml` (the committed `origin/<default>` copy read
+through `trusted_config`; local default branch only when no remote ref exists):
 
 ```toml
 [contained.vendors]
 codex = "native"
 ```
+
+Branch-local edits cannot grant this opt-in. Merge the configuration into the
+default branch before launching Codex under containment. Missing or unreadable
+trusted config preserves refusal.
 
 The allowed values are `"aida"` and `"native"`. Claude keeps AIDA containment
 by default; other vendors without a key refuse. Only Codex supports the native

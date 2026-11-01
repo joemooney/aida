@@ -595,26 +595,25 @@ pub(crate) fn read_agents_bool_from_file(
     }
 }
 
-/// Explicit per-vendor boundary in project config; absence preserves legacy refusal.
+/// Trusted per-vendor boundary; absence preserves legacy refusal.
 // trace:TASK-2631 | ai:codex
 pub(crate) fn load_contained_vendor(
     root: &std::path::Path,
     vendor: &str,
 ) -> Result<Option<String>> {
-    let path = config_path_for_project(root);
-    let body = match std::fs::read_to_string(&path) {
-        Ok(body) => body,
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
-        Err(e) => return Err(e).with_context(|| format!("reading {}", path.display())),
+    // A branch must never grant itself permission to bypass AIDA containment.
+    // Only the reviewed default-branch config can opt a vendor into native mode.
+    let Some(body) = crate::trusted_config::read_trusted_config_toml(root) else {
+        return Ok(None);
     };
     let cfg: toml::Value =
-        toml::from_str(&body).with_context(|| format!("parsing {}", path.display()))?;
+        toml::from_str(&body).context("parsing trusted containment vendor config")?;
     let Some(vendors) = cfg.get("contained").and_then(|v| v.get("vendors")) else {
         return Ok(None);
     };
-    let table = vendors.as_table().ok_or_else(|| {
-        anyhow::anyhow!("[contained.vendors] in {} must be a table", path.display())
-    })?;
+    let table = vendors
+        .as_table()
+        .ok_or_else(|| anyhow::anyhow!("[contained.vendors] in trusted config must be a table"))?;
     let key = if vendor == "antigravity" {
         "agy"
     } else {
@@ -625,8 +624,7 @@ pub(crate) fn load_contained_vendor(
         .map(|value| match value.as_str() {
             Some(value @ ("aida" | "native")) => Ok(value.to_string()),
             _ => anyhow::bail!(
-                "[contained.vendors] {key} in {} must be \"aida\" or \"native\"",
-                path.display()
+                "[contained.vendors] {key} in trusted config must be \"aida\" or \"native\""
             ),
         })
         .transpose()

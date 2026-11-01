@@ -16768,13 +16768,12 @@ Options:
           behavior unless the operator explicitly asks for the empirical autonomous-drain posture
           used in prior dogfood runs.
 
-      --bg
-          Run a detached, tracked `codex exec` process. Output is saved to a private log under
-          .aida/headless-logs. Uses native sandboxing, not AIDA containment
-
       --model <MODEL>
           Opaque Codex model name passed through as `codex --model`. Overrides `[agents.codex]
           model`; AIDA does not validate it
+
+      --no-context
+          Do not write/inject the AIDA launch-context snapshot
 
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
@@ -16786,15 +16785,12 @@ Options:
           - toon:  Token-efficient TOON — the compact agent default when piped/captured
           - json:  Machine JSON, for commands that support a JSON projection
 
-      --no-context
-          Do not write/inject the AIDA launch-context snapshot
+      --no-title
+          Do not set the terminal/tab title for this launch
 
       --canonical-ids
           Show node-local spec IDs in their canonical form instead of the node's friendly label (for
           scripts). Also settable via AIDA_CANONICAL_IDS=1
-
-      --no-title
-          Do not set the terminal/tab title for this launch
 
       --show-context
           Print the generated launch-context snapshot before spawning
@@ -45873,11 +45869,6 @@ Working on aida itself
         "name": "allow-duplicate",
         "takes_value": false,
         "help": "Skip the live-duplicate confirmation prompt while still checking for duplicates"
-      },
-      {
-        "name": "bg",
-        "takes_value": false,
-        "help": "Run a detached, tracked `codex exec` process. Output is saved to a private log under .aida/headless-logs. Uses native sandboxing, not AIDA containment"
       },
       {
         "name": "bypass-sandbox",
