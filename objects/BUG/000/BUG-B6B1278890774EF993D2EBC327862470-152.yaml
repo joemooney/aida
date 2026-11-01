@@ -13,7 +13,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T23:00:22.284758314Z
-modified_at: 2026-11-01T01:51:12.548971102Z
+modified_at: 2026-11-01T03:21:37.773274235Z
 req_type: Bug
 tags:
 - epic-home-003
@@ -58,6 +58,13 @@ comments:
   created_at: 2026-11-01T01:44:25.330805186Z
   modified_at: 2026-11-01T01:44:25.330805186Z
   session_id: 77a7a933-9a3f-4243-9a44-892bcedf206c
+- id: 01a19520-80ed-75e1-a183-decb965da414
+  author: joe
+  content: 'Round 2 (b49eed1, merged main at c1011f4). CI logs still unreadable from this sandbox and no local build was possible (cargo denied after the first bounded run), so these causes come from reading the code, not from logs. lib-0: bug_2378_lease_stamp_tests wrote node.toml without dispenser.toml, and work_binding::bootstrap refuses that (''incomplete legacy node/provider pair''), so its unwrap panicked. Fixed the fixture. cli-0: in bug_2378_root_after_backfill the first add''s pre-allocation sync (an origin remote exists) runs ''git add .'' and commits the store''s node.toml (the fixture had no .gitignore). The re-point then dirtied the store and ''remote reconcile --execute'' bails on uncommitted changes. Fixed: the fixture now has a real store''s .gitignore, and the backfill no longer re-points a tracked node.toml (new unit test bug_2378_repoint_skips_a_tracked_legacy_identity). Finding 2 was already handled in 0b18c5e. CI on this head is the real verification.'
+  created_at: 2026-11-01T03:21:37.773274235Z
+  modified_at: 2026-11-01T03:21:37.773274235Z
+  session_id: 01a195181686
+  harness_version: 2.1.316 (Claude Code)
 history:
 - id: 01a1943a-492b-7f72-9377-cfc786176bec
   author: aida-session-start
