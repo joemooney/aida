@@ -19,7 +19,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T07:26:20.914223641Z
-modified_at: 2026-11-01T08:29:54.417219367Z
+modified_at: 2026-11-01T08:38:17.177369542Z
 req_type: Bug
 tags:
 - architecture
@@ -259,6 +259,11 @@ comments:
   content: 'Additional HOST model-free evidence with real /home/joe Codex config, minimal PATH/HOME env and actual installed0.166 CLI: codex sandbox -P :workspace -C scratch with exact empty AIDA_SESSION_GRANT set override exited0 and reported grant_present=true, grant_empty=true. Separate synthetic empty-value probe also exited0 with keyctl available. The reported app-server socket ownership/mode failure in a nested lane is therefore not a reproduced host failure; preserve its precise cause and do not broaden global permissions to suppress it. Implementation must reproduce and distinguish environment/nesting from unsupported metadata transport.'
   created_at: 2026-11-01T08:14:53.124156628Z
   modified_at: 2026-11-01T08:14:53.124156628Z
+- id: 01a19642-6959-79f1-aa9e-0c41b4e4a6d3
+  author: joe
+  content: 'Operational evidence after Claude weekly quota exhaustion: launched independent native Codex reviewer02 via AIDA. Host captured an exact fixed nonsecret whitelist from that reviewers OWN model host PID, validated name/role and distinct own child grant versus advisor, and wrote a private0400 /tmp context (no key payload/bearer tokens/parent grant). Sourcing only that own-context in reviewer tool shell made aida role current --check return reviewer. This is bounded interim recovery of existing child context, not a new authority resolver or user-policy change. Reviewer completed real PR3194 independent judgment. Supported refusal recording was not attempted because my prompt overrestricted automatic hold/status effects; future reviewer prompts explicitly permit supported recorder effects. Old private context removed after child ended. Permanent BUG2398 finalizer and full record tests remain required.'
+  created_at: 2026-11-01T08:38:17.177369542Z
+  modified_at: 2026-11-01T08:38:17.177369542Z
 history:
 - id: 01a19600-c769-7cd0-ba08-8d93975e3e3b
   author: joe
