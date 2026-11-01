@@ -17,7 +17,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T06:55:52.004339498Z
-modified_at: 2026-11-01T07:20:23.400532784Z
+modified_at: 2026-11-01T07:22:35.417721653Z
 req_type: Bug
 tags:
 - closure:pending
@@ -34,6 +34,11 @@ comments:
   content: 'LIVE MITIGATION VERIFIED 2026-11-01T06:57Z: backed up the managed unit to /home/joe/.config/systemd/user/aida-mail-wake-2b20e8a3bd225e89.service.before-advisor05, changed only WorkingDirectory to the unquoted absolute project path, ran systemd-analyze --user verify, daemon-reload and restart from the authorized host terminal runner. Verification log /tmp/aida-advisor05-wake-repair.log reports active; repair rc=0. Source fix and truthful installer/status behavior remain open. Keep the backup and avoid reinstalling the old generator, which would reintroduce the bad unit.'
   created_at: 2026-11-01T06:58:24.941230040Z
   modified_at: 2026-11-01T06:58:24.941230040Z
+- id: 01a195fd-1c19-71e3-9d58-0ecbfe39f844
+  author: mcp
+  content: 'Implementer pickup on codex/bug-2397-mail-wake. Preserving closure:pending and In Progress: acceptance 3 requires reinstall of reviewed merged binary after independent review/CI, outside this standalone PR-only launch. Current source already propagates nonzero systemctl exits; adding regression coverage plus explicit activation check and runtime status. CLI status edit was refused because worktree cache symlinks point outside native sandbox.'
+  created_at: 2026-11-01T07:22:35.417703049Z
+  modified_at: 2026-11-01T07:22:35.417703049Z
 history:
 - id: 01a195e4-cb21-7b43-b55f-eef4611d9957
   author: joe
