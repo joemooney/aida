@@ -1,4 +1,11 @@
 - user_id: role:implementer
+  requirement_id: 01a1936a-61a6-73a0-a35d-c22c1ce50b32
+  position: 278000
+  added_by: role:implementer
+  note: 'PR-3185 review round 5: CHANGES REQUESTED'
+  added_at: 2026-11-01T06:05:28.592964774Z
+  for_role: implementer
+- user_id: role:implementer
   requirement_id: 01a18a29-6886-7b50-a99b-a5e2c4e1a699
   position: 279000
   added_by: role:implementer
@@ -581,20 +588,6 @@
   added_by: role:implementer
   added_at: 2026-11-01T03:36:44.401313192Z
   for_role: advisor
-- user_id: role:implementer
-  requirement_id: 01a19522-caf6-7ed2-b79e-13167544f557
-  position: 596000
-  added_by: role:implementer
-  added_at: 2026-11-01T05:53:09.699976231Z
-  for_role: implementer
-  added_by_machine: imac
-- user_id: role:implementer
-  requirement_id: 01a1936a-61a6-73a0-a35d-c22c1ce50b32
-  position: 597000
-  added_by: role:implementer
-  added_at: 2026-11-01T06:01:01.111607522Z
-  for_role: implementer
-  added_by_machine: imac
 - user_id: role:implementer
   requirement_id: 01a1942f-b90c-7ee1-a06c-d5856831d28e
   position: 598000
