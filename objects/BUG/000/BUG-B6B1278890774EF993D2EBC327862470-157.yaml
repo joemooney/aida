@@ -14,12 +14,12 @@ description: |
   2. The lane's target dir is warm on first use: seeded or shared with the primary's agent-profile target, so the first targeted run isn't a cold full build.
   3. The implementer prompt names that path in place of `setsid nohup`, and a lane that cannot run it says so in its result line (`untested=true`) so the advisor knows.
   4. Test: a headless lane fixture runs one filtered cargo test via the sanctioned path and reports its pass/fail.
-status: Approved
+status: InProgress
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T02:25:46.947809262Z
-modified_at: 2026-11-01T03:44:57.711506787Z
+modified_at: 2026-11-01T03:54:42.991238526Z
 req_type: Bug
 tags:
 - area:agents
@@ -98,6 +98,14 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
+- id: 01a1953e-cbaf-7482-9ac4-0737f609a84a
+  author: aida-session-start
+  timestamp: 2026-11-01T03:54:42.991235219Z
+  session_id: 77a7a933-9a3f-4243-9a44-892bcedf206c
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 7518617e469376bbe5debebd7cadd980e08656e5
   branch: main
