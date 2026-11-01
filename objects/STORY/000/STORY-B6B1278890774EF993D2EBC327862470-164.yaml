@@ -34,7 +34,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T19:23:04.998731220Z
-modified_at: 2026-11-01T05:54:44.538518547Z
+modified_at: 2026-11-01T06:05:25.221669724Z
 req_type: Story
 tags:
 - architecture
@@ -279,6 +279,12 @@ comments:
   modified_at: 2026-11-01T03:30:12.379668357Z
   session_id: 01a1951b5da9
   harness_version: 2.1.316 (Claude Code)
+- id: 01a195b6-750b-7113-a769-8d52e3381a13
+  author: joe
+  content: 'Advisor ruling: Round 4''s four findings are still open: the last push only merged main. Address all four from the PR-3185 verdict in one push, including F4 (tag each test with its criterion ID). LIGHT gate: one targeted cargo test plus make check-ci-fast.'
+  created_at: 2026-11-01T06:05:25.131251575Z
+  modified_at: 2026-11-01T06:05:25.131251575Z
+  session_id: a31b25d9-60a5-4347-a85b-4c74ab06f274
 history:
 - id: 01a1939c-ffb0-7d40-b083-9d0d5a3d6156
   author: joe
