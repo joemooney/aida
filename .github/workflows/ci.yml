@@ -184,6 +184,147 @@ jobs:
             --arg image "$ImageOS/$ImageVersion" --arg kernel "$(uname -r)" \
             '{head:$head,checkout:$checkout,run:$run,attempt:$attempt,job:$job,runner:$runner,os:$os,arch:$arch,image:$image,kernel:$kernel,acceptance_credit:false}' \
             > "$evidence/identity.json"
+          # Bounded read-only runner policy facts, alongside the unchanged probe.
+          # trace:TASK-b6b1278890774ef993d2ebc327862470-655 | ai:codex
+          if ! python3 -I -S - <<'PY'
+          import hashlib
+          import json
+          import os
+          from pathlib import Path
+          import re
+          import resource
+          import stat
+          import subprocess
+          import tempfile
+          import time
+
+          # Read-only public system policy inventory; no probe or policy changes.
+          LIMIT = 65536
+          started = time.monotonic()
+          report = {'version': 1, 'acceptance_credit': False,
+                    'identity_file': 'identity.json', 'commands': [], 'files': [],
+                    'limits': {'file_bytes': LIMIT, 'command_seconds': 5,
+                               'policy_files': 24, 'fixed_system_files': 4, 'artifact_bytes': 1048576,
+                               'inventory_seconds': 90}}
+
+          def command(argv):
+              row = {'argv': argv, 'status': 'unknown'}
+              report['commands'].append(row)
+              if time.monotonic() - started > 85:
+                  row['error'] = 'inventory time budget exhausted'
+                  return row
+              def bound_output():
+                  resource.setrlimit(resource.RLIMIT_FSIZE, (LIMIT, LIMIT))
+              try:
+                  with tempfile.TemporaryFile() as output:
+                      result = subprocess.run(argv, stdout=output, stderr=subprocess.STDOUT,
+                                              timeout=5, preexec_fn=bound_output,
+                                              env={'PATH': '/usr/sbin:/usr/bin:/sbin:/bin', 'LC_ALL': 'C'})
+                      output.seek(0)
+                      data = output.read(LIMIT)
+                  row.update(exit=result.returncode, output=data.decode('utf-8', 'replace'))
+                  row['status'] = 'readable' if result.returncode == 0 and len(data) < LIMIT else 'unknown'
+                  if len(data) == LIMIT:
+                      row['error'] = 'output limit reached; incomplete'
+              except (OSError, subprocess.TimeoutExpired) as error:
+                  row['error'] = str(error)[:512]
+              return row
+
+          for argv in [['uname', '-srvm'], ['bwrap', '--version'], ['python3', '--version'],
+                       ['dpkg-query', '--version'], ['apparmor_parser', '--version'],
+                       ['dpkg-query', '-W', '-f=${binary:Package}\t${Version}\t${Status}\n',
+                        'bubblewrap', 'apparmor', 'apparmor-utils', 'libapparmor1',
+                        'apparmor-profiles', 'apparmor-profiles-extra'],
+                       ['dpkg-query', '-S', '/usr/bin/bwrap', '/etc/apparmor.d/bwrap',
+                        '/etc/apparmor.d/unpriv_bwrap']]:
+              command(argv)
+
+          # Only exact package-owned profile basenames are candidates, never a directory dump.
+          profiles = ['/etc/apparmor.d/bwrap', '/etc/apparmor.d/unpriv_bwrap']
+          for package in ['bubblewrap', 'apparmor']:
+              listing = command(['dpkg-query', '-L', package])
+              if listing['status'] == 'readable':
+                  profiles.extend(p for p in listing['output'].splitlines()
+                                  if Path(p).name in ('bwrap', 'unpriv_bwrap')
+                                  and p.startswith(('/etc/apparmor.d/', '/usr/share/apparmor/')))
+              # Retain only the relevant paths from this bounded package query.
+              if listing['status'] == 'readable':
+                  listing['output'] = '\n'.join(p for p in listing['output'].splitlines()
+                                                if 'apparmor' in p and Path(p).name in ('bwrap', 'unpriv_bwrap'))
+
+          queue = list(dict.fromkeys(profiles))
+          seen = set()
+          include_pattern = re.compile(r'^\s*#?include\s+(?:if\s+exists\s+)?[<"]([^>"\n]+)[>"]', re.M)
+          while queue and len(seen) < 24 and time.monotonic() - started < 85:
+              path = queue.pop(0)
+              if path in seen:
+                  continue
+              seen.add(path)
+              row = {'path': path, 'status': 'unknown', 'privileged_read': False}
+              report['files'].append(row)
+              try:
+                  resolved = Path(path).resolve()
+                  if not str(resolved).startswith(('/etc/apparmor.d/', '/usr/share/apparmor/')):
+                      raise ValueError('include resolves outside public policy roots')
+                  info = resolved.stat()
+                  row.update(resolved=str(resolved), mode=oct(stat.S_IMODE(info.st_mode)),
+                             uid=info.st_uid, gid=info.st_gid, size=info.st_size)
+                  if not stat.S_ISREG(info.st_mode) or info.st_size > LIMIT:
+                      raise ValueError('not a bounded regular policy file; content unknown')
+                  try:
+                      with resolved.open('rb') as handle:
+                          data = handle.read(LIMIT + 1)
+                  except PermissionError as error:
+                      row['unprivileged_error'] = str(error)[:512]
+                      # Existing CI sudo convention, exact public profile/include path only.
+                      read = command(['sudo', '-n', 'head', '-c', str(LIMIT + 1), '--', str(resolved)])
+                      row['privileged_read'] = True
+                      if read['status'] != 'readable':
+                          raise ValueError('exact privileged policy read failed; see command')
+                      data = read['output'].encode()
+                  if len(data) > LIMIT:
+                      raise ValueError('file grew beyond limit; content unknown')
+                  text = data.decode('utf-8')
+                  row.update(status='readable', sha256=hashlib.sha256(data).hexdigest(), content=text)
+                  row['ownership'] = command(['dpkg-query', '-S', str(resolved)])
+                  row['includes'] = []
+                  for ref in include_pattern.findall(text)[:24]:
+                      target = str(Path('/etc/apparmor.d') / ref)
+                      edge = {'reference': ref, 'path': target}
+                      row['includes'].append(edge)
+                      # Variable/glob/directory includes are recorded as unresolved, not expanded.
+                      if any(c in ref for c in '*?[]{}@') or Path(target).is_dir():
+                          edge['status'] = 'unknown: variable/glob/directory include not expanded'
+                      else:
+                          queue.append(target)
+              except (OSError, ValueError, UnicodeError) as error:
+                  row['error'] = str(error)[:512]
+          report['unread_include_queue'] = queue[:24]
+
+          # No sudo for kernel APIs; preserve denial as unknown. Only relevant loaded labels.
+          for path in ['/etc/os-release', '/proc/self/attr/current',
+                       '/proc/self/attr/apparmor/current', '/sys/kernel/security/apparmor/profiles']:
+              row = {'path': path, 'status': 'unknown'}
+              report['files'].append(row)
+              try:
+                  with open(path, 'rb') as handle:
+                      data = handle.read(LIMIT + 1)
+                  text = data[:LIMIT].decode('utf-8', 'replace')
+                  row.update(status='readable' if len(data) <= LIMIT else 'unknown: truncated',
+                             content='\n'.join(line for line in text.splitlines() if 'bwrap' in line)
+                             if path.endswith('/profiles') else text)
+              except OSError as error:
+                  row['error'] = str(error)[:512]
+          report['elapsed_seconds'] = round(time.monotonic() - started, 3)
+          encoded = json.dumps(report, indent=2).encode()
+          if len(encoded) > 1048576:
+              encoded = json.dumps({'status': 'unknown: inventory artifact exceeded 1 MiB',
+                                    'acceptance_credit': False}).encode()
+          Path(os.environ['RUNNER_TEMP'], 'task-2705-precondition', 'profile-inventory.json').write_bytes(encoded)
+          PY
+          then
+            printf '%s\n' '{"status":"unknown: inventory command failed","acceptance_credit":false}' > "$evidence/profile-inventory.json"
+          fi
           echo 'e5df12564cdba76aee62019053740cefa2e7f92d2131add7bff37615f7b216e3  scripts/task-2705-precondition-probe.py' | sha256sum --check
           rc=0
           env -i PATH=/usr/bin:/bin LANG=C LC_ALL=C \
