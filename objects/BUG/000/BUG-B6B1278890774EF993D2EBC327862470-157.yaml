@@ -19,7 +19,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T02:25:46.947809262Z
-modified_at: 2026-11-01T06:50:41.801553812Z
+modified_at: 2026-11-01T06:50:43.560768224Z
 req_type: Bug
 tags:
 - area:agents
@@ -159,6 +159,11 @@ comments:
   content: 'Advisor ruling: Containment floor: host registry/src and git/checkouts must not be writable by lane jobs. Bind only required metadata/download caches or use a per-seat isolated overlay, with a regression proving host dependency build.rs cannot be changed. Also implement drain phase-1 runner/untested coverage or explicitly resolve that original AC scope before closure. Keep all earlier sandbox/env rulings. LIGHT targeted lane-job tests plus make check-ci-fast; cargo uses AIDA_CARGO_TIMEOUT and tool background mode. Stop after pushing the same PR for independent review.'
   created_at: 2026-11-01T06:50:39.178615038Z
   modified_at: 2026-11-01T06:50:39.178615038Z
+- id: 01a195df-ef08-79d3-85ff-97de0aeb60d7
+  author: joe
+  content: Round-3 implementer admitted a remaining host-persistence path through writable CARGO_HOME dependency sources. New advisor security ruling requires closing it before approval, and settling original drain-level AC coverage.
+  created_at: 2026-11-01T06:50:43.336379950Z
+  modified_at: 2026-11-01T06:50:43.336379950Z
 history:
 - id: 01a19525-88eb-79e3-aab8-8d511ad2f605
   author: aida-session-start
