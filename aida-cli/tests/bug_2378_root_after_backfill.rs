@@ -215,6 +215,35 @@ fn bug_2378_root_registered_by_label_verifies_identifies_and_syncs_after_backfil
     let again = f.aida_ok(&["doctor", "--fix", "agreed-ids", "--dry-run"]);
     assert!(again.contains("nothing to backfill"), "{again}");
 
+    // (3) A store an older binary already backfilled: renames, block claims
+    // and the retirement mark are in, but `.aida/node.toml` still names the
+    // retired node 7. The one-time repair previews the re-point, applies it,
+    // and leaves nothing behind.
+    fs::write(
+        f.store.join(".aida/node.toml"),
+        "node_id='7'\nuser_id=0\nhostname=''\nregistered_at='2026-01-01T00:00:00Z'\n",
+    )
+    .unwrap();
+    let repair = f.aida_ok(&["doctor", "--fix", "agreed-ids", "--dry-run"]);
+    assert!(
+        repair.contains(&format!(
+            "This clone's .aida/node.toml identity: node 7 -> node {node}"
+        )),
+        "{repair}"
+    );
+    assert!(!repair.contains("nothing to backfill"), "{repair}");
+    let nodes_before = fs::read_to_string(registry.join("nodes.toml")).unwrap();
+    f.aida_ok(&["doctor", "--fix", "agreed-ids", "--yes"]);
+    let config = aida_core::NodeConfig::load(&f.store.join(".aida/node.toml")).unwrap();
+    assert_eq!(config.node_id, node, "the repair re-points the identity");
+    assert_eq!(
+        fs::read_to_string(registry.join("nodes.toml")).unwrap(),
+        nodes_before,
+        "the repair leaves the registry alone"
+    );
+    let again = f.aida_ok(&["doctor", "--fix", "agreed-ids", "--dry-run"]);
+    assert!(again.contains("nothing to backfill"), "{again}");
+
     // (1) The root owns blocks and is registered by its label + root record.
     let verify = f.aida_ok(&["db", "block", "verify"]);
     assert!(!verify.contains("not registered"), "{verify}");

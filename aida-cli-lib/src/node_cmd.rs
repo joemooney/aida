@@ -115,8 +115,12 @@ pub(crate) fn handle_node_command(cmd: &NodeCommand, store_path: &std::path::Pat
             // trace:STORY-B6B1278890774EF993D2EBC327862470-095 | ai:claude
             // trace:BUG-2378 | ai:claude
             if id.is_none() && registry.get(&target_id).is_none() {
-                let known = aida_core::allocation_authority::registered_node_ids(store_path)?
-                    .contains(&target_id.to_ascii_lowercase());
+                // A display command degrades on a malformed label registry
+                // (like the best-effort label lookup below) instead of failing;
+                // `aida db block verify` is the gate that fails closed on it.
+                let known = aida_core::allocation_authority::registered_node_ids(store_path)
+                    .map(|ids| ids.contains(&target_id.to_ascii_lowercase()))
+                    .unwrap_or(false);
                 if known {
                     println!("Node {target_id}");
                     let aliases = aida_core::node_alias::NodeAliasMap::load(store_path);

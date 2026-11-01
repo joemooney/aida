@@ -838,13 +838,23 @@ fn collect_with(
             })
         })
         .collect();
-    let mut flags = behind.into_iter();
-    tips.retain(|_| !flags.next().unwrap_or(false));
+    // A pruned tip is still a merge base of the tip that descends from it
+    // (a fast-forward joins exactly that pair), so it stays as baseline:
+    // a display ID two UUIDs first claim after it is still introduced.
+    // trace:BUG-2378 | ai:claude
+    let (pruned, kept): (Vec<(String, bool)>, Vec<(String, bool)>) = tips
+        .into_iter()
+        .zip(behind)
+        .partition(|(_, is_behind)| *is_behind);
+    let tips: Vec<String> = kept.into_iter().map(|(t, _)| t).collect();
+    let pruned: Vec<String> = pruned.into_iter().map(|(t, _)| t).collect();
     // A sync that joins one distinct tip introduces nothing: that tip is its
     // own baseline (an unborn local, or local already equal to incoming).
+    // A tip left alone only because the others were pruned is not that
+    // case: the pruned tips are its baseline.
     let mut bases: Vec<String> = match tips.as_slice() {
-        [only] if lone_tip_is_baseline => vec![only.clone()],
-        _ => Vec::new(),
+        [only] if lone_tip_is_baseline && pruned.is_empty() => vec![only.clone()],
+        _ => pruned,
     };
     let mut unrelated = false;
     for (i, a) in tips.iter().enumerate() {

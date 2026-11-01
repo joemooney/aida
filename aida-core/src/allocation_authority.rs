@@ -527,8 +527,9 @@ pub fn node(root: &Path) -> Result<String> {
 /// This clone's own node id, for labels and identity display: the WORK
 /// binding when there is one, else the store's legacy `.aida/node.toml`.
 /// `None` on a clone with neither. Unlike [`node`] it does not refuse a
-/// retired legacy node, so a caller can still name it. The one definition
-/// `aida node show`, `aida node list` and lease stamps share.
+/// retired legacy node, so a caller can still name it. `aida node show`
+/// reads it; lease stamps (`coordination::node_id_for_clone`) apply the same
+/// WORK-binding-first rule before their per-clone `nodes.toml` lookup.
 // trace:BUG-2378 | ai:claude
 pub fn clone_node_id(root: &Path) -> Result<Option<String>> {
     if let Some(binding) = crate::work_binding::load(root)? {
@@ -546,8 +547,13 @@ pub fn clone_node_id(root: &Path) -> Result<Option<String>> {
 /// binds (the native nodes a HOME store names by label), and the
 /// allocation root `registry/root.yaml` records. A root enrolled and given
 /// blocks by the agreed-ID backfill is registered by its label and root
-/// record and never gets a `nodes.toml` row; every registration check uses
-/// this one definition.
+/// record and never gets a `nodes.toml` row. `aida db block verify` and
+/// `aida node show` judge "registered" by it. `aida node acquire`'s taken
+/// probe is stricter on purpose (it also refuses ids a label merely names),
+/// and verify's "registered node without a block" check stays on
+/// `nodes.toml` rows, the only registrations that are expected to own blocks.
+/// Fails closed on a malformed `registry/node_aliases.toml`: a gate must not
+/// treat an unreadable registry as "no labels".
 // trace:BUG-2378 | ai:claude
 pub fn registered_node_ids(root: &Path) -> Result<std::collections::BTreeSet<String>> {
     let mut ids = std::collections::BTreeSet::new();

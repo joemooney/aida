@@ -614,3 +614,28 @@ fn bug_2378_a_hub_behind_another_tip_is_not_a_second_claimant() {
         "{report}"
     );
 }
+
+/// BUG-2378: pruning a tip that is an ancestor of another must keep it as the
+/// baseline. Every wrapper's pull of a hub that only moved ahead (local HEAD
+/// an ancestor of incoming) still refuses a display ID two UUIDs first claim
+/// in the incoming commits.
+// trace:BUG-2378 | ai:claude
+#[test]
+fn bug_2378_a_fast_forward_pull_still_refuses_a_new_duplicate() {
+    for (name, sync) in SYNCS {
+        let c = clones();
+        write_row(&c.a, &row("FR-50"));
+        let mut twin = row("FR-0123456789ABCDEF0123456789ABCDEF-1");
+        twin.agreed_id = Some("FR-50".into());
+        write_row(&c.a, &twin);
+        publish(&c.a, "a claims FR-50 for two UUIDs");
+        let before = snapshot(&c, &c.b);
+        let err = sync(&c.b).unwrap_err();
+        let report = assert_refused(name, &c, &c.b, &before, err);
+        assert_eq!(
+            kinds(&report.conflicts),
+            [ConflictKind::DisplayId],
+            "{name}"
+        );
+    }
+}
