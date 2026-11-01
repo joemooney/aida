@@ -22311,14 +22311,17 @@ Manage and render agent skills
 Usage: aida mcp skill [OPTIONS] <COMMAND>
 
 Commands:
-  render  Render a stock skill merged with its optional local override (.claude/skills/<name>.md +
-          .local.md) to stdout
+  render  Render a skill with its optional local overlay to stdout. Prefers
+          `.agents/skills/<name>/SKILL.md`, then `.claude/skills/<name>/SKILL.md`, then legacy
+          `.claude/skills/<name>.md`. Folder overlays use `SKILL.local.md`, falling back to
+          `<name>.local.md` in the same pack
   lint    Lint skills that reference an implementation plan. Scans every skill under
-          `.claude/skills/` for plan references (`docs/plans/*.md` paths); for each skill that
-          references a plan it runs the same checks `aida plan verify` runs on each referenced plan
-          (drifted refs / missing files / absent sections) and a raw-glyph check on the skill body.
-          A skill pointing at a drifted or missing plan is an error. Read-only; never rewrites.
-          Exits non-zero on any error so it can run as a CI gate
+          `.agents/skills/` and `.claude/skills/` (folder prompts and legacy Claude flat files) for
+          plan references (`docs/plans/*.md` paths); for each skill that references a plan it runs
+          the same checks `aida plan verify` runs on each referenced plan (drifted refs / missing
+          files / absent sections) and a raw-glyph check on the skill body. A skill pointing at a
+          drifted or missing plan is an error. Read-only; never rewrites. Exits non-zero on any
+          error so it can run as a CI gate
   help    Print this message or the help of the given subcommand(s)
 
 Options:
@@ -22339,8 +22342,9 @@ Options:
   -h, --help
           Print help (see a summary with '-h')
 ===== aida mcp skill render
-Render a stock skill merged with its optional local override (.claude/skills/<name>.md + .local.md)
-to stdout
+Render a skill with its optional local overlay to stdout. Prefers `.agents/skills/<name>/SKILL.md`,
+then `.claude/skills/<name>/SKILL.md`, then legacy `.claude/skills/<name>.md`. Folder overlays use
+`SKILL.local.md`, falling back to `<name>.local.md` in the same pack
 
 Usage: aida mcp skill render [OPTIONS] <NAME>
 
@@ -22366,18 +22370,19 @@ Options:
   -h, --help
           Print help (see a summary with '-h')
 ===== aida mcp skill lint
-Lint skills that reference an implementation plan. Scans every skill under `.claude/skills/` for
-plan references (`docs/plans/*.md` paths); for each skill that references a plan it runs the same
-checks `aida plan verify` runs on each referenced plan (drifted refs / missing files / absent
-sections) and a raw-glyph check on the skill body. A skill pointing at a drifted or missing plan is
-an error. Read-only; never rewrites. Exits non-zero on any error so it can run as a CI gate
+Lint skills that reference an implementation plan. Scans every skill under `.agents/skills/` and
+`.claude/skills/` (folder prompts and legacy Claude flat files) for plan references
+(`docs/plans/*.md` paths); for each skill that references a plan it runs the same checks `aida plan
+verify` runs on each referenced plan (drifted refs / missing files / absent sections) and a
+raw-glyph check on the skill body. A skill pointing at a drifted or missing plan is an error.
+Read-only; never rewrites. Exits non-zero on any error so it can run as a CI gate
 
 Usage: aida mcp skill lint [OPTIONS] [SKILL]
 
 Arguments:
   [SKILL]
-          Lint a single skill file instead of the whole `.claude/skills/` tree. Path may be absolute
-          or relative to the project root
+          Lint a single skill file instead of both skill trees. Path may be absolute or relative to
+          the project root
 
 Options:
       --json
@@ -28107,14 +28112,17 @@ Stock and local skill tooling
 Usage: aida skill [OPTIONS] <COMMAND>
 
 Commands:
-  render  Render a stock skill merged with its optional local override (.claude/skills/<name>.md +
-          .local.md) to stdout
+  render  Render a skill with its optional local overlay to stdout. Prefers
+          `.agents/skills/<name>/SKILL.md`, then `.claude/skills/<name>/SKILL.md`, then legacy
+          `.claude/skills/<name>.md`. Folder overlays use `SKILL.local.md`, falling back to
+          `<name>.local.md` in the same pack
   lint    Lint skills that reference an implementation plan. Scans every skill under
-          `.claude/skills/` for plan references (`docs/plans/*.md` paths); for each skill that
-          references a plan it runs the same checks `aida plan verify` runs on each referenced plan
-          (drifted refs / missing files / absent sections) and a raw-glyph check on the skill body.
-          A skill pointing at a drifted or missing plan is an error. Read-only; never rewrites.
-          Exits non-zero on any error so it can run as a CI gate
+          `.agents/skills/` and `.claude/skills/` (folder prompts and legacy Claude flat files) for
+          plan references (`docs/plans/*.md` paths); for each skill that references a plan it runs
+          the same checks `aida plan verify` runs on each referenced plan (drifted refs / missing
+          files / absent sections) and a raw-glyph check on the skill body. A skill pointing at a
+          drifted or missing plan is an error. Read-only; never rewrites. Exits non-zero on any
+          error so it can run as a CI gate
   help    Print this message or the help of the given subcommand(s)
 
 Options:
@@ -28135,8 +28143,9 @@ Options:
   -h, --help
           Print help (see a summary with '-h')
 ===== aida skill render
-Render a stock skill merged with its optional local override (.claude/skills/<name>.md + .local.md)
-to stdout
+Render a skill with its optional local overlay to stdout. Prefers `.agents/skills/<name>/SKILL.md`,
+then `.claude/skills/<name>/SKILL.md`, then legacy `.claude/skills/<name>.md`. Folder overlays use
+`SKILL.local.md`, falling back to `<name>.local.md` in the same pack
 
 Usage: aida skill render [OPTIONS] <NAME>
 
@@ -28162,18 +28171,19 @@ Options:
   -h, --help
           Print help (see a summary with '-h')
 ===== aida skill lint
-Lint skills that reference an implementation plan. Scans every skill under `.claude/skills/` for
-plan references (`docs/plans/*.md` paths); for each skill that references a plan it runs the same
-checks `aida plan verify` runs on each referenced plan (drifted refs / missing files / absent
-sections) and a raw-glyph check on the skill body. A skill pointing at a drifted or missing plan is
-an error. Read-only; never rewrites. Exits non-zero on any error so it can run as a CI gate
+Lint skills that reference an implementation plan. Scans every skill under `.agents/skills/` and
+`.claude/skills/` (folder prompts and legacy Claude flat files) for plan references
+(`docs/plans/*.md` paths); for each skill that references a plan it runs the same checks `aida plan
+verify` runs on each referenced plan (drifted refs / missing files / absent sections) and a
+raw-glyph check on the skill body. A skill pointing at a drifted or missing plan is an error.
+Read-only; never rewrites. Exits non-zero on any error so it can run as a CI gate
 
 Usage: aida skill lint [OPTIONS] [SKILL]
 
 Arguments:
   [SKILL]
-          Lint a single skill file instead of the whole `.claude/skills/` tree. Path may be absolute
-          or relative to the project root
+          Lint a single skill file instead of both skill trees. Path may be absolute or relative to
+          the project root
 
 Options:
       --json
@@ -52039,7 +52049,7 @@ Working on aida itself
       "skill",
       "render"
     ],
-    "about": "Render a stock skill merged with its optional local override (.claude/skills/<name>.md + .local.md) to stdout",
+    "about": "Render a skill with its optional local overlay to stdout. Prefers `.agents/skills/<name>/SKILL.md`, then `.claude/skills/<name>/SKILL.md`, then legacy `.claude/skills/<name>.md`. Folder overlays use `SKILL.local.md`, falling back to `<name>.local.md` in the same pack",
     "flags": [
       {
         "name": "canonical-ids",
@@ -52066,7 +52076,7 @@ Working on aida itself
       "skill",
       "lint"
     ],
-    "about": "Lint skills that reference an implementation plan. Scans every skill under `.claude/skills/` for plan references (`docs/plans/*.md` paths); for each skill that references a plan it runs the same checks `aida plan verify` runs on each referenced plan (drifted refs / missing files / absent sections) and a raw-glyph check on the skill body. A skill pointing at a drifted or missing plan is an error. Read-only; never rewrites. Exits non-zero on any error so it can run as a CI gate",
+    "about": "Lint skills that reference an implementation plan. Scans every skill under `.agents/skills/` and `.claude/skills/` (folder prompts and legacy Claude flat files) for plan references (`docs/plans/*.md` paths); for each skill that references a plan it runs the same checks `aida plan verify` runs on each referenced plan (drifted refs / missing files / absent sections) and a raw-glyph check on the skill body. A skill pointing at a drifted or missing plan is an error. Read-only; never rewrites. Exits non-zero on any error so it can run as a CI gate",
     "flags": [
       {
         "name": "canonical-ids",
@@ -57624,7 +57634,7 @@ Working on aida itself
       "skill",
       "render"
     ],
-    "about": "Render a stock skill merged with its optional local override (.claude/skills/<name>.md + .local.md) to stdout",
+    "about": "Render a skill with its optional local overlay to stdout. Prefers `.agents/skills/<name>/SKILL.md`, then `.claude/skills/<name>/SKILL.md`, then legacy `.claude/skills/<name>.md`. Folder overlays use `SKILL.local.md`, falling back to `<name>.local.md` in the same pack",
     "flags": [
       {
         "name": "canonical-ids",
@@ -57650,7 +57660,7 @@ Working on aida itself
       "skill",
       "lint"
     ],
-    "about": "Lint skills that reference an implementation plan. Scans every skill under `.claude/skills/` for plan references (`docs/plans/*.md` paths); for each skill that references a plan it runs the same checks `aida plan verify` runs on each referenced plan (drifted refs / missing files / absent sections) and a raw-glyph check on the skill body. A skill pointing at a drifted or missing plan is an error. Read-only; never rewrites. Exits non-zero on any error so it can run as a CI gate",
+    "about": "Lint skills that reference an implementation plan. Scans every skill under `.agents/skills/` and `.claude/skills/` (folder prompts and legacy Claude flat files) for plan references (`docs/plans/*.md` paths); for each skill that references a plan it runs the same checks `aida plan verify` runs on each referenced plan (drifted refs / missing files / absent sections) and a raw-glyph check on the skill body. A skill pointing at a drifted or missing plan is an error. Read-only; never rewrites. Exits non-zero on any error so it can run as a CI gate",
     "flags": [
       {
         "name": "canonical-ids",
