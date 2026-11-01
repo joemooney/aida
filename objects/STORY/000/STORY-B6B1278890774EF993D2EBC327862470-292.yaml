@@ -1,0 +1,34 @@
+id: 01a19905-e75a-75b2-8386-5739488b713c
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-292
+agreed_id: STORY-2276
+title: 'Review PR-3211: [AI:codex] perf(show): validate canonical read locators before fallback scans (BUG-2402)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a19809`) for branch `bug-b6b1278890774ef993d2ebc327862470-175`.
+
+  - PR: <https://github.com/joemooney/aida/pull/3211>
+  - Branch: `bug-b6b1278890774ef993d2ebc327862470-175` → `main`
+
+  ## Covers
+
+  - BUG-2402
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 3211` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-01T21:31:03.386310841Z
+modified_at: 2026-11-01T21:31:03.386310841Z
+req_type: Story
+filed_at:
+  code_sha: 4691cc8c0f223385b3255b80b0c66afb5655deea
+  branch: main
+  dirty: true
+  aida_version: 0.16.0
+  aida_build_sha: 6a3f67671a9
+  vendor: claude
+  session: 126bbd5a-a92f-452b-ab0b-2637a1db42c2
