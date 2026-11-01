@@ -18,7 +18,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T22:17:06.607335957Z
-modified_at: 2026-11-01T03:33:06.172325234Z
+modified_at: 2026-11-01T03:53:11.795605156Z
 req_type: Story
 tags:
 - agent-new
@@ -138,6 +138,16 @@ comments:
   modified_at: 2026-11-01T03:28:18.240452361Z
   session_id: 01a1951a5403
   harness_version: 2.1.316 (Claude Code)
+- id: 01a1953d-6773-7432-923c-45ca143d0456
+  author: joe
+  content: |
+    ADVISOR REWORK BRIEF round 4 (20:55), PR-3184 at 2a57578. ACs 1-6, Q1-Q4 and F2-F4 are met. ONE blocker remains, the same one as round 3, and it has not been addressed yet:
+    CI (lib): `context_prompt::story_809_coverage_tests::every_bare_confirm_is_exempted_or_adopted` fails on aida-cli-lib/src/agent_launch.rs (the one-time grant offer, `inquire::Confirm::new(&question)`).
+    REQUIRED: replace the bare Confirm with a ContextCard-adopted confirm (STORY-809). The card shows the seat being launched, the grant's scope, its expiry (the 8h cap) and "one-time, child-only". Use an existing ContextCard caller in context_prompt.rs as the pattern. A `?-exempt` annotation is NOT acceptable here, because this prompt mints authority. Keep no-TTY / cancel → false.
+    Local gate: cargo can't run in the lane yet (BUG-2383). Run `make check-ci-fast` and push; CI is the gate.
+  created_at: 2026-11-01T03:53:11.795605156Z
+  modified_at: 2026-11-01T03:53:11.795605156Z
+  session_id: 77a7a933-9a3f-4243-9a44-892bcedf206c
 history:
 - id: 01a1940e-15d9-7e13-bbb4-79222982ffb5
   author: aida-session-start
