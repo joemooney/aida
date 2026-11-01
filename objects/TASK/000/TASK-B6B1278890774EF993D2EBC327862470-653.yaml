@@ -1,0 +1,45 @@
+id: 01a195de-f8e8-7610-81d8-b5814828b4cc
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-653
+agreed_id: TASK-2690
+title: Update seat-parity.md, product-integrations.md / website showcase, and drain docs for contained Codex parity on Linux
+description: |-
+  Why
+  ───
+  Discovered by SPIKE-710 audit (and required by EPIC-612's Done-when: *"A Codex-only operator on Linux can run the full product/advisor/implementer/reviewer loop contained, with no Claude installed, and the website's integrations page says so"*):
+
+  1. `docs/agents/seat-parity.md`:
+     • Rows 12, 13, 16, 17, 20, 21, 22, 24, 27, 28, 29, 31 and Headline (`lines 39-57`): Claim `Works` for interactive/headless/scheduled-tick Codex launches and `Degraded (Codex native workspace-write)` for Containment (`rows 24, 31`), whereas under containment (`[contained]` / `[agents] contained` / `AIDA_CONTAINED=1`) all Codex launches currently hard-refuse (`refuse_uncontainable_agent_tool` / `require_vendor_containment`).
+     • Rows 13 & 15 (Product Headless / Scheduled tick): Claim `Works` via raw `AIDA_SESSION_ROLE=product codex exec PROMPT`, which bypasses AIDA containment/grants and is not how `aida schedule tick` runs seat jobs (`maintenance_schedule.rs:11-15`).
+     • Omits a `Detached launch (--bg)` row (`STORY-2254`).
+     • Lines 49-53 & 85-93: Claim `aida-burndown`, `aida-solo`, and `aida-fire` are Claude-only because they use `Agent(isolation: "worktree")`, which is stale since `STORY-1662`.
+     • Lines 95-115: Claim hooks behave identically, omitting that Codex mail wake was only armed via `aida agent new codex` (`STORY-2256`).
+  2. Website integrations page (`docs/product-integrations.md:9` and `docs/showcase/integrations.html:16`):
+     • Currently states only that *"Claude Code, Codex CLI and Antigravity have distinct launch, configuration and containment behavior; a working setup for one is not proof of parity for another"* and links to `aida-mcp-install-matrix.md`, without documenting the verified Codex-first Linux contained loop or linking to `docs/agents/seat-parity.md`.
+  3. Lifecycle & drain docs (`docs/autonomous-drain.md:325-331, 1613-1615`, `docs/agents/claude-surfaces-codex-parity.md:108-177`, `docs/agents/aida-repository-guide.md:315`, `docs/cli/03-work-autonomy.md:487-525`, `docs/cli/06-roles-sessions.md:144, 193, 204`):
+     • Contain stale claims (`"No codex exec drain path exists"`, `"Codex spend is not measured"`, `/aida-burndown` using `Agent(isolation: "worktree")`, and `--vendor claude` in `.codex/skills/aida-orchestrate/`).
+
+  Acceptance
+  ──────────
+  1. Update `docs/agents/seat-parity.md` so every cell matches verified behavior under containment (incorporating TASK-2631, STORY-2238, STORY-2254, STORY-2255, STORY-2256), including a `Detached launch (--bg)` row and accurate Product/Skills/Hooks sections.
+  2. Update `docs/product-integrations.md` and `docs/showcase/integrations.html` to state that a Codex-only operator on Linux can run the full product/advisor/implementer/reviewer loop contained without Claude installed, linking to `docs/agents/seat-parity.md`.
+  3. Reconcile stale claims in `docs/autonomous-drain.md`, `docs/agents/claude-surfaces-codex-parity.md`, `docs/agents/aida-repository-guide.md`, and `docs/cli/{03-work-autonomy,06-roles-sessions}.md`.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-01T06:49:40.328147102Z
+modified_at: 2026-11-01T06:49:40.328147102Z
+req_type: Task
+tags:
+- audit
+- docs:impacted
+- seat-parity
+- vendor:codex
+filed_at:
+  code_sha: 6dc7d4977ac5e47c42ddfb26597fe3ec5fb70b60
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 962ca07af25
+  vendor: antigravity
+  session: 01a194b1bcfb
