@@ -20,12 +20,12 @@ description: |
 
   ## Out of scope
   Rewriting the developer-facing CLI glossary entries; new explainer pages.
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T22:58:37.964636963Z
-modified_at: 2026-11-01T06:05:30.769122393Z
+modified_at: 2026-11-01T06:05:32.604618682Z
 req_type: Story
 tags:
 - docs
@@ -89,6 +89,12 @@ comments:
   created_at: 2026-11-01T06:05:30.647670192Z
   modified_at: 2026-11-01T06:05:30.647670192Z
   session_id: a31b25d9-60a5-4347-a85b-4c74ab06f274
+- id: 01a195b6-923c-7d60-93c4-da0b1f4420ad
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Website glossary, CLI flag, 23 terms and air-gapped links are correct and CI is green, but the regenerated book chapter docs/cli/12-glossary.md (the ''existing CLI glossary'' output AC2 requires) now has broken links and sends existing machinery links to the wrong entries.. Triage reason: PR-3193 review: CHANGES REQUESTED'
+  created_at: 2026-11-01T06:05:32.604617360Z
+  modified_at: 2026-11-01T06:05:32.604617360Z
+  session_id: a31b25d9-60a5-4347-a85b-4c74ab06f274
 history:
 - id: 01a19517-7d5f-7092-83c8-b303944f0e16
   author: joe
@@ -124,6 +130,14 @@ history:
   - field_name: status
     old_value: Done
     new_value: NeedsAttention
+- id: 01a195b6-923c-7d60-93c4-d9f692bb2372
+  author: joe
+  timestamp: 2026-11-01T06:05:32.604602098Z
+  session_id: a31b25d9-60a5-4347-a85b-4c74ab06f274
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: 44c7b6663259478cfd02fd2f5da843720f0ee6e0
   branch: main
@@ -135,11 +149,3 @@ implementation_info:
   implemented: true
   implemented_at: 2026-11-01T04:50:52.670929625Z
   implemented_by: joe
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: Website glossary, CLI flag, 23 terms and air-gapped links are correct and CI is green, but the regenerated book chapter docs/cli/12-glossary.md (the 'existing CLI glossary' output AC2 requires) now has broken links and sends existing machinery links to the wrong entries.
-  recovery_hint: address the review findings, move STORY-2219 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-01T05:57:30.193813065Z
