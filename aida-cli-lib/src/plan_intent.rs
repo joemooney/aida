@@ -238,15 +238,13 @@ pub(crate) fn run_dryrun_ai_pass(
     let log_path = dir.join(format!("{disp}-{date}.log"));
     let tee = crate::headless_tee::TeeOptions::from_env_and_flag(false)
         .with_label(format!("dryrun:{disp}"));
-    // trace:BUG-2389 | ai:codex
-    let status = crate::session::spawn_vendor_headless_with_seat(
-        crate::session::resolve_headless_vendor(project_root),
-        aida_core::agents_config::AgentSeat::Advisor,
+    // trace:BUG-2389 | ai:codex ai:claude
+    let status = crate::session::spawn_analysis_headless(
+        project_root,
         &prompt,
         &session_id,
         &log_path,
         &tee,
-        false,
     )
     .context("spawning headless /aida-dryrun agent")?;
     if !status.success() {
@@ -802,15 +800,13 @@ pub(crate) fn generate_intent(
     let log_path = dir.join(format!("{disp}-{date}.log"));
     let tee = crate::headless_tee::TeeOptions::from_env_and_flag(false)
         .with_label(format!("intent:{disp}"));
-    // trace:BUG-2389 | ai:codex
-    let status = crate::session::spawn_vendor_headless_with_seat(
-        crate::session::resolve_headless_vendor(project_root),
-        aida_core::agents_config::AgentSeat::Advisor,
+    // trace:BUG-2389 | ai:codex ai:claude
+    let status = crate::session::spawn_analysis_headless(
+        project_root,
         &prompt,
         &session_id,
         &log_path,
         &tee,
-        false,
     )
     .context("spawning headless /aida-intent agent")?;
     if !status.success() {
@@ -834,15 +830,11 @@ pub(crate) fn generate_intent(
 
     let model = if sidecar.model.trim().is_empty() {
         std::env::var("AIDA_INTENT_MODEL").unwrap_or_else(|_| {
-            // trace:BUG-2389 | ai:codex
-            let vendor = crate::session::resolve_headless_vendor(project_root);
-            crate::session::resolve_agent_tuning(
-                project_root,
-                vendor,
-                aida_core::agents_config::AgentSeat::Advisor,
-            )
-            .model
-            .unwrap_or_else(|| vendor.as_str().to_string())
+            // The model the spawn above launched with. trace:BUG-2389 | ai:codex ai:claude
+            let (vendor, seat) = crate::session::analysis_headless_launch(project_root);
+            crate::session::resolve_agent_tuning(project_root, vendor, seat)
+                .model
+                .unwrap_or_else(|| vendor.as_str().to_string())
         })
     } else {
         sidecar.model.clone()

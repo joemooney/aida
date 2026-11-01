@@ -921,32 +921,30 @@ pub(crate) fn handle_intake_command(
 
     // Seed the cold-boot prompt with the live advisor's context file when present,
     // so the headless advisor doesn't re-derive priorities from scratch. trace:STORY-626
+    // `intake_skill_prompt` already inlines the skill body for every vendor.
+    let prompt = intake::seeded_assess_prompt(&project_root, apply);
+    // Resolved once: the preview, the messages and the launch all use this
+    // vendor. trace:BUG-2389 | ai:codex ai:claude
     let vendor = session::resolve_headless_vendor(&project_root);
-    // Materialize before adding context, since slash expansion matches the prefix.
-    // trace:BUG-2389 | ai:codex
-    let prompt = intake::seed_skill_prompt(
-        &project_root,
-        &intake::materialize_skill_invocation(
-            &intake::intake_skill_prompt(apply),
-            vendor == session::HeadlessVendor::Claude,
-        ),
-    );
     let contained = session::aida_contained_env()?;
     session::require_vendor_containment(vendor, contained, "headless coordinator")?;
-    let mode_str = if vendor == session::HeadlessVendor::Claude {
-        session::resolve_headless_claude_posture(permission_mode, contained)?
-    } else {
-        if permission_mode.is_some() {
-            anyhow::bail!("--permission-mode is only supported by vendor claude");
-        }
-        String::new()
-    };
+    let mode_str = session::coordinator_permission_mode(vendor, permission_mode, contained)?;
     let mode = &mode_str;
 
     if dry_run {
         println!("\n{} dry run — not launching. Would run:", "·".dimmed());
-        println!("  vendor: {}\n  prompt: {:?}", vendor.as_str(), prompt);
-
+        let (program, args) = session::coordinator_headless_preview(
+            vendor,
+            &prompt,
+            mode,
+            aida_core::agents_config::AgentSeat::Advisor,
+            contained,
+            false,
+        )?;
+        println!("  {program} {args:?}");
+        if vendor == session::HeadlessVendor::Claude {
+            println!("  {} permission mode: {}", "→".dimmed(), mode.cyan());
+        }
         println!(
             "  {} AIDA_INTAKE_CANDIDATES={}",
             "env".dimmed(),
@@ -989,7 +987,11 @@ pub(crate) fn handle_intake_command(
     if session::containment_applied(vendor, contained) {
         crate::session::prepare_contained_mailbox_for_launch(&project_root)?;
     }
+    // The builder reserves the child's handle; it is released unless the
+    // child actually spawns. trace:BUG-2389 | ai:claude
+    let handle_guard = session::child_reservation_guard();
     let mut command = build_autopilot_intake_command(
+        vendor,
         &prompt,
         mode,
         "",
@@ -1007,12 +1009,13 @@ pub(crate) fn handle_intake_command(
         crate::gate::seat_authority::issue_child(&project_root, "advisor", &current_user_id(None))?;
     command.env(crate::gate::seat_authority::GRANT_ENV, &child_grant.id);
 
-    let status_code = command.status().map_err(|e| {
-        anyhow::anyhow!(
-            "failed to launch {} headless intake pass: {e}",
-            vendor.program()
-        )
-    });
+    let status_code = session::coordinator_status_with_handle_guard(&mut command, handle_guard)
+        .map_err(|e| {
+            anyhow::anyhow!(
+                "failed to launch {} headless intake pass: {e}",
+                vendor.program()
+            )
+        });
     // trace:BUG-2170 | ai:antigravity
     crate::session::revoke_headless_child_grant(&child_grant.id);
     let status_code = status_code?;
@@ -1028,6 +1031,7 @@ pub(crate) fn handle_intake_command(
 // trace:BUG-2124 trace:BUG-2171 trace:BUG-2170 | ai:antigravity
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn build_autopilot_intake_command(
+    vendor: session::HeadlessVendor,
     prompt: &str,
     mode: &str,
     child_grant_id: &str,
@@ -1042,6 +1046,7 @@ pub(crate) fn build_autopilot_intake_command(
 ) -> Result<std::process::Command> {
     // trace:BUG-2389 | ai:codex
     let mut command = session::build_coordinator_headless_command(
+        vendor,
         prompt,
         mode,
         aida_core::agents_config::AgentSeat::Advisor,

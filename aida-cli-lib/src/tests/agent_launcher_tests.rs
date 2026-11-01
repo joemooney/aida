@@ -4529,7 +4529,13 @@ fn uncontained_launchers_strip_inherited_aida_contained() {
 
     // 3. burndown quiet
     let burndown_quiet_cmd = crate::burndown_run::build_burndown_quiet_command(
-        "prompt", "mode", "", "CEILING", "10", false,
+        crate::session::HeadlessVendor::Claude,
+        "prompt",
+        "mode",
+        "",
+        "CEILING",
+        "10",
+        false,
     )
     .unwrap();
     assert!(
@@ -4547,6 +4553,7 @@ fn uncontained_launchers_strip_inherited_aida_contained() {
 
     // 4. burndown verbose
     let burndown_verbose_cmd = crate::burndown_run::build_burndown_verbose_command(
+        crate::session::HeadlessVendor::Claude,
         "prompt",
         "mode",
         "child-grant-id",
@@ -4571,6 +4578,7 @@ fn uncontained_launchers_strip_inherited_aida_contained() {
     // 5. autopilot intake
     let cfg = crate::intake::IntakeConfig::default();
     let intake_cmd = crate::autopilot_intake::build_autopilot_intake_command(
+        crate::session::HeadlessVendor::Claude,
         "prompt",
         "mode",
         "child-grant-id",
@@ -4598,9 +4606,13 @@ fn uncontained_launchers_strip_inherited_aida_contained() {
     );
 
     // 6. questions clarify
-    let clarify_cmd =
-        crate::questions::build_questions_clarify_command("prompt", "child-grant-id", false)
-            .unwrap();
+    let clarify_cmd = crate::questions::build_questions_clarify_command(
+        crate::session::HeadlessVendor::Claude,
+        "prompt",
+        "child-grant-id",
+        false,
+    )
+    .unwrap();
     assert!(
         clarify_cmd
             .get_envs()

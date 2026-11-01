@@ -1279,17 +1279,13 @@ pub(crate) fn handle_research_command(
     let log_path = project_root.join(format!(".aida/research/{display_id}-{date}.log"));
     let tee = crate::headless_tee::TeeOptions::from_env_and_flag(false)
         .with_label(format!("research:{display_id}"));
-    // trace:BUG-2389 | ai:codex
-    let status = crate::session::spawn_vendor_headless_with_seat(
-        crate::session::resolve_headless_vendor(
-            &find_project_root().unwrap_or_else(|_| project_root.to_path_buf()),
-        ),
-        aida_core::agents_config::AgentSeat::Advisor,
+    // trace:BUG-2389 | ai:codex ai:claude
+    let status = crate::session::spawn_analysis_headless(
+        &find_project_root().unwrap_or_else(|_| project_root.to_path_buf()),
         &prompt,
         &session_id,
         &log_path,
         &tee,
-        false,
     )
     .context("spawning headless research agent")?;
     if !status.success() {
@@ -1611,30 +1607,25 @@ pub(crate) fn questions_clarify(
     let contained = session::aida_contained_env()?;
     if dry_run {
         // A preview must not reserve a child identity or probe a harness version.
-        // trace:BUG-2389 | ai:codex
-        let prompt = crate::intake::materialize_skill_invocation(
-            &prompt,
-            vendor == session::HeadlessVendor::Claude,
-        );
-        let plan = session::interactive_reviewer_launch_plan(
-            vendor, None, None, &prompt, "preview", contained,
-        )?;
-        println!(
-            "\ndry run — not launching. Would run: {} {:?}",
-            plan.program, plan.args
-        );
+        // trace:BUG-2389 | ai:codex ai:claude
+        let plan = session::advisor_interactive_launch_plan(vendor, &prompt, contained)?;
+        println!("\n{} dry run — not launching. Would run:", "·".dimmed());
+        println!("  {} {:?}", plan.program, plan.args);
         return Ok(());
     }
-    let mut command = build_questions_clarify_command(&prompt, "", contained)?;
+    // The builder reserves the child's handle; it is released unless the
+    // child actually spawns. trace:BUG-2389 | ai:claude
+    let handle_guard = session::child_reservation_guard();
+    let mut command = build_questions_clarify_command(vendor, &prompt, "", contained)?;
     println!(
-        "launching interactive `{}` — answer its questions to author acceptance",
-        vendor.as_str()
+        "  {} launching interactive `{}` — answer its questions to author acceptance",
+        "→".green(),
+        vendor.program()
     );
     let child_grant =
         crate::gate::seat_authority::issue_child(&project_root, "advisor", &current_user_id(None))?;
     command.env(crate::gate::seat_authority::GRANT_ENV, &child_grant.id);
-    let status_code = command
-        .status()
+    let status_code = session::coordinator_status_with_handle_guard(&mut command, handle_guard)
         .with_context(|| format!("failed to launch {}", vendor.program()));
     // trace:BUG-2170 | ai:antigravity
     crate::session::revoke_headless_child_grant(&child_grant.id);
@@ -1650,12 +1641,13 @@ pub(crate) fn questions_clarify(
 
 // trace:BUG-2124 trace:BUG-2171 trace:BUG-2170 | ai:antigravity
 pub(crate) fn build_questions_clarify_command(
+    vendor: session::HeadlessVendor,
     prompt: &str,
     child_grant_id: &str,
     contained: bool,
 ) -> Result<std::process::Command> {
     // trace:BUG-2389 | ai:codex
-    session::build_advisor_interactive_command(prompt, child_grant_id, contained)
+    session::build_advisor_interactive_command(vendor, prompt, child_grant_id, contained)
 }
 
 /// `aida questions remedy <spec>` — the headless, bounded acceptance-authoring

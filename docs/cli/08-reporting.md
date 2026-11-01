@@ -533,14 +533,6 @@ persistence.
 
 ### `aida intent`
 
-AI analysis uses the configured `[agents] vendor`, as do `dryrun --ai`,
-`questions research`, `intake`/`assess`, and the `burndown run` coordinator.
-The headless vendor override takes precedence; `burndown run --vendor` also
-propagates to its children. `questions clarify` uses an interactive advisor
-with the same vendor selection. Claude and Codex launches retain their own
-permission and containment rules; `--permission-mode` is Claude-only.
-<!-- trace:BUG-2389 | ai:codex -->
-
 **One line** — show a plain-terms read of *why this spec exists* — its purpose, distilled from the spec and its graph neighborhood.
 
 **Mental model.** Where `aida why` is a deterministic state classifier (a heuristic over store signals: blocked? awaiting decision? un-queued?), `intent` is an AI synthesis of *meaning*: it reads the spec plus the specs around it and writes a short comprehension of what the work is really for. The result is cached and drift-stamped — generated on first call, printed from cache after, with a STALE marker when the neighborhood has moved since it was generated. So `why` answers "what's keeping this from being done?" and `intent` answers "what is this even for, in human terms?"
@@ -554,7 +546,7 @@ permission and containment rules; `--permission-mode` is Claude-only.
 - `--refresh` — force regeneration when the cached comprehension is stale or the spec changed in ways the drift stamp didn't catch.
 - `--json` — machine-readable envelope (`spec`, `audience`, `comprehension`, `generated_at`, `model`, `stale`) for downstream consumers.
 
-**Gotchas.** The output is an LLM synthesis, so it costs a generation on the first call (and on `--refresh`); thereafter it's a cache read. The STALE marker is your cue that the neighborhood drifted — re-run with `--refresh` if the cached read no longer fits.
+**Gotchas.** The output is an LLM synthesis, so it costs a generation on the first call (and on `--refresh`); thereafter it's a cache read. The STALE marker is your cue that the neighborhood drifted — re-run with `--refresh` if the cached read no longer fits. The synthesis runs headless on the configured `[agents] vendor` (Claude or Codex). <!-- trace:BUG-2389 | ai:claude -->
 
 **Chains with** — pairs with `aida show <ID>` (the literal contract) and `aida why <ID>` (the stuck-state classifier): `intent` for the *why it exists*, `why` for the *why it's still open*, `show` for the facts.
 

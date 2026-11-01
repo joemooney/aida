@@ -17,13 +17,14 @@
 // trace:BUG-2171 trace:BUG-2170 | ai:antigravity
 
 use crate::autopilot_intake::build_autopilot_intake_command;
-use crate::burndown_run::{
-    build_burndown_quiet_command, build_burndown_verbose_command,
-    burndown_verbose_claude_args_with_containment,
-};
+use crate::burndown_run::{build_burndown_quiet_command, build_burndown_verbose_command};
 use crate::questions::build_questions_clarify_command;
 use crate::session::resolve_headless_claude_posture;
 use crate::test_env::EnvVarsGuard;
+
+/// These builders take the caller's resolved vendor (BUG-2389); the
+/// containment contracts pinned here are Claude's.
+const CLAUDE: crate::session::HeadlessVendor = crate::session::HeadlessVendor::Claude;
 
 fn args_of(cmd: &std::process::Command) -> Vec<String> {
     cmd.get_args()
@@ -128,9 +129,16 @@ fn burndown_quiet_builder_argv_and_env_contained_vs_uncontained() {
         ],
     );
     // Contained
-    let cmd =
-        build_burndown_quiet_command("prompt-quiet", "dontAsk", "", "CEILING_KEY", "10", true)
-            .unwrap();
+    let cmd = build_burndown_quiet_command(
+        CLAUDE,
+        "prompt-quiet",
+        "dontAsk",
+        "",
+        "CEILING_KEY",
+        "10",
+        true,
+    )
+    .unwrap();
     assert_eq!(
         env_of(&cmd, "AIDA_CONTAINED"),
         Some(Some("1".to_string())),
@@ -154,6 +162,7 @@ fn burndown_quiet_builder_argv_and_env_contained_vs_uncontained() {
 
     // Uncontained
     let cmd_uncontained = build_burndown_quiet_command(
+        CLAUDE,
         "prompt-quiet",
         "bypassPermissions",
         "",
@@ -198,6 +207,7 @@ fn burndown_verbose_builder_argv_and_env_contained_vs_uncontained() {
     );
     // Contained
     let cmd = build_burndown_verbose_command(
+        CLAUDE,
         "prompt-verbose",
         "dontAsk",
         "child-grant-1",
@@ -236,6 +246,7 @@ fn burndown_verbose_builder_argv_and_env_contained_vs_uncontained() {
 
     // Uncontained
     let cmd_uncontained = build_burndown_verbose_command(
+        CLAUDE,
         "prompt-verbose",
         "bypassPermissions",
         "child-grant-1",
@@ -285,6 +296,7 @@ fn autopilot_intake_builder_argv_and_env_contained_vs_uncontained() {
 
     // Contained
     let cmd = build_autopilot_intake_command(
+        CLAUDE,
         "prompt-intake",
         "dontAsk",
         "child-intake-grant",
@@ -323,6 +335,7 @@ fn autopilot_intake_builder_argv_and_env_contained_vs_uncontained() {
 
     // Uncontained
     let cmd_uncontained = build_autopilot_intake_command(
+        CLAUDE,
         "prompt-intake",
         "bypassPermissions",
         "child-intake-grant",
@@ -374,7 +387,8 @@ fn questions_clarify_builder_argv_and_env_contained_vs_uncontained() {
     );
     // Contained
     let cmd =
-        build_questions_clarify_command("prompt-clarify", "child-clarify-grant", true).unwrap();
+        build_questions_clarify_command(CLAUDE, "prompt-clarify", "child-clarify-grant", true)
+            .unwrap();
     assert_eq!(
         env_of(&cmd, "AIDA_CONTAINED"),
         Some(Some("1".to_string())),
@@ -402,7 +416,8 @@ fn questions_clarify_builder_argv_and_env_contained_vs_uncontained() {
 
     // Uncontained
     let cmd_uncontained =
-        build_questions_clarify_command("prompt-clarify", "child-clarify-grant", false).unwrap();
+        build_questions_clarify_command(CLAUDE, "prompt-clarify", "child-clarify-grant", false)
+            .unwrap();
     assert_eq!(
         env_of(&cmd_uncontained, "AIDA_CONTAINED"),
         Some(None),
@@ -419,20 +434,6 @@ fn questions_clarify_builder_argv_and_env_contained_vs_uncontained() {
         "uncontained questions clarify must not include --settings: {args_uncontained:?}"
     );
     assert_eq!(args_uncontained.last().unwrap(), "prompt-clarify");
-}
-
-#[test]
-fn burndown_verbose_args_with_containment_helper() {
-    let uncontained_args =
-        burndown_verbose_claude_args_with_containment("/aida-burndown", "acceptEdits", false)
-            .unwrap();
-    crate::session::assert_headless_posture(&uncontained_args, false, "verbose args");
-    assert_eq!(uncontained_args.last().unwrap(), "/aida-burndown");
-
-    let contained_args =
-        burndown_verbose_claude_args_with_containment("/aida-burndown", "dontAsk", true).unwrap();
-    crate::session::assert_headless_posture(&contained_args, true, "contained verbose args");
-    assert_eq!(contained_args.last().unwrap(), "/aida-burndown");
 }
 
 #[test]

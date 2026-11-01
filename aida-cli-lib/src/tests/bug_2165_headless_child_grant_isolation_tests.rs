@@ -35,6 +35,7 @@ fn burndown_quiet_command_applies_implementer_grant_and_scrubs_purpose() {
         ],
     );
     let cmd = build_burndown_quiet_command(
+        HeadlessVendor::Claude,
         "test prompt",
         "bypassPermissions",
         "child-grant-quiet-123",
@@ -82,6 +83,7 @@ fn burndown_quiet_command_supports_baseline_child() {
         ],
     );
     let cmd = build_burndown_quiet_command(
+        HeadlessVendor::Claude,
         "test prompt",
         "bypassPermissions",
         "",
@@ -125,6 +127,7 @@ fn burndown_verbose_command_applies_implementer_grant_and_scrubs_purpose() {
         ],
     );
     let cmd = build_burndown_verbose_command(
+        HeadlessVendor::Claude,
         "test prompt",
         "bypassPermissions",
         "child-grant-verbose-456",
