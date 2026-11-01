@@ -1,4 +1,11 @@
 - user_id: role:implementer
+  requirement_id: 01a1942f-b90c-7ee1-a06c-d5856831d28e
+  position: 273000
+  added_by: role:implementer
+  note: PR-3193 round-2 generator fix omitted its generated output; see newest ADVISOR REWORK BRIEF and gate-ledger PR-3193.jsonl#7.
+  added_at: 2026-11-01T06:48:42.329009186Z
+  for_role: implementer
+- user_id: role:implementer
   requirement_id: 01a19434-2aa8-74d0-bccf-38faf512e4c7
   position: 274000
   added_by: role:implementer
@@ -18,13 +25,6 @@
   added_by: role:implementer
   note: 'PR-3192 delta review round 2: CHANGES REQUESTED'
   added_at: 2026-11-01T06:05:45.282931933Z
-  for_role: implementer
-- user_id: role:implementer
-  requirement_id: 01a1942f-b90c-7ee1-a06c-d5856831d28e
-  position: 277000
-  added_by: role:implementer
-  note: 'PR-3193 review: CHANGES REQUESTED'
-  added_at: 2026-11-01T06:05:34.142236770Z
   for_role: implementer
 - user_id: role:implementer
   requirement_id: 01a1936a-61a6-73a0-a35d-c22c1ce50b32
