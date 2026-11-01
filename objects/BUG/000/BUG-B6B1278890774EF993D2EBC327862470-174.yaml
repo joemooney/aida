@@ -19,7 +19,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T09:27:24.546816181Z
-modified_at: 2026-11-01T11:28:34.819921189Z
+modified_at: 2026-11-01T13:37:43.429360897Z
 req_type: Bug
 tags:
 - ci
@@ -51,6 +51,11 @@ comments:
   content: 'Final implementation handoff: the final source passes all 73 pr_train tests (0 failed; /tmp/bug-2401-tests-final.log), cargo fmt --all -- --check, git diff --check, and all 36 fast CI gates. Fast coverage was audited against the current tier plan: 36 expected, 36 passed, missing=[]. Logs: /tmp/bug-2401-fastgates-direct.log, /tmp/bug-2401-fastgates-resume.log, /tmp/bug-2401-fastgates-final.log. The executable-fixture ratchet identified a direct chmod in the new test; fixed by using test_exec::write_executable and reran the train filter. Fake-sccache fixtures were rerun with their default setting instead of inheriting the compile-only AIDA_SCCACHE_DISABLE=1 override. Static guard fetch attempts were refused by read-only .git; no fresh remote-ref or protected-head live recovery is claimed. Final patch /tmp/bug-2401.patch matches the working tree (git apply --reverse --check exits 0); draft PR body /tmp/bug-2401-pr-body.txt. Suggested commit/PR title: [AI:codex] fix(train): require protected CI before landing (BUG-2401). Staging remains refused with .git/index.lock: Read-only file system; no commit, push, PR, ship, review record or queue-done occurred. Leave In Progress for host-side commit/push/PR, independent review, and the sanctioned exact-head live recovery required by acceptance 4. Blocker finding SPEC-b6b1278890774ef993d2ebc327862470-002 records the native sandbox handoff failure.'
   created_at: 2026-11-01T10:45:55.393081818Z
   modified_at: 2026-11-01T10:45:55.393081818Z
+- id: 01a19754-8e05-7ac1-abe6-2bbedcaa94d4
+  author: mcp
+  content: 'Serialized BUG-2398 rework coordination: source baseline f05e1b9e6a22, local origin/main 471540a8c477. The shared story_1917_dispatch_flow_schedule_tests.rs change in this rework is only the matching CLI path for the genuinely authorized PR603 recorder invocation; no train-policy fixture/assertion edits and no BUG-2401 implementation were applied. Actual make test-touched on that baseline reports all 19 tests in this module passing. This result must not be transferred to the different BUG-2401 required-policy implementation baseline or treated as resolving its four reported overlapping fixture failures. BUG-2401 rework remains serialized after BUG-2398 per the advisor ruling.'
+  created_at: 2026-11-01T13:37:43.429348384Z
+  modified_at: 2026-11-01T13:37:43.429348384Z
 history:
 - id: 01a19681-5be8-7f43-92cc-a5b427eacd3f
   author: aida-session-start
