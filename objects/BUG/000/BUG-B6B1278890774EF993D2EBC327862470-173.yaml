@@ -24,6 +24,15 @@ tags:
 - forge
 - queue
 - vendor:codex
+relationships:
+- rel_type: Child
+  target_id: 01a19499-932e-79f0-a3e1-1299dfe355ad
+  created_at: 2026-11-01T08:29:05.908481525Z
+history:
+- id: 01a1963a-2b42-7cd2-a795-0772bcc408d1
+  author: joe
+  timestamp: 2026-11-01T08:29:16.994821992Z
+  changes: []
 filed_at:
   code_sha: ac1e318069f96c3f7e35be7ee0408f2ff4f5f284
   branch: main
