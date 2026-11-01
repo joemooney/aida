@@ -28,7 +28,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-01T06:49:40.328147102Z
-modified_at: 2026-11-01T06:49:40.328147102Z
+modified_at: 2026-11-01T08:12:44.145974130Z
 req_type: Task
 tags:
 - audit
@@ -39,6 +39,12 @@ relationships:
 - rel_type: Child
   target_id: 01a19499-932e-79f0-a3e1-1299dfe355ad
   created_at: 2026-11-01T06:49:46.991891549Z
+comments:
+- id: 01a1962b-04f1-7eb3-a68f-84ddee33f75b
+  author: joe
+  content: 'PROXY DECISION: approve final evidence-based parity/documentation/publication sweep. This is the closure audit for EPIC612, not permission to assert hoped-for parity. Every cell and public contained Codex loop claim requires the corresponding merged behavior and a real Codex-only Linux loop; record exact revisions/probes, preserve limitations until proven. Sequence after STORY2238/2254/2255/2256 and portable-skills fixes; publish only reviewed merged snapshots. Fixtures/build/link checks only for docs. Final acceptance cannot pass while any named runtime path is unsupported.'
+  created_at: 2026-11-01T08:12:44.145974130Z
+  modified_at: 2026-11-01T08:12:44.145974130Z
 history:
 - id: 01a195df-5d92-77b3-ab1d-b81203c3f5c3
   author: joe
