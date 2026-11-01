@@ -19,7 +19,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-01T07:26:20.914223641Z
-modified_at: 2026-11-01T07:47:36.135633026Z
+modified_at: 2026-11-01T08:04:16.550828967Z
 req_type: Bug
 tags:
 - architecture
@@ -174,6 +174,18 @@ comments:
   modified_at: 2026-11-01T07:47:36.135633026Z
   session_id: 01a1960d-cf2b-70b3-ad64-af3329442845
   harness_version: 2.1.316 (Claude Code)
+- id: 01a19623-4626-7b02-88cd-944f9f23cd89
+  author: joe
+  content: |
+    PROXY DECISION / independent sketch signoff: adopt the narrow Codex launch adapter from claude-advisor14's independent review (A1-A6), replacing advisor13's pointer/resolver/pre_exec proposal. No new ambient authority resolver, keyring layout, or Claude launch changes. One helper derives a fixed nonsecret whitelist ONLY from the child Command after its own grant, subject and identity have been applied; serialize TOML strings correctly, reject NUL/newline, preserve absent versus present-empty baseline and existing user set entries. Never carry arbitrary parent env, registry bearer tokens, key payloads, grant files, or AIDA_CONTAINED. Scope all managed Codex launch paths, not just one headless path. IDs are public selectors, not grant secrets; existing key/ancestry, subject, expiry and revocation validation remains mandatory.
+
+    New host evidence, model-free, installed Codex0.166.0: codex sandbox -P :workspace -C a temporary scratch HOME/CODEX_HOME with inherit=core dropped synthetic AIDA env, retained KEEP_ME; exact shell_environment_policy.set override restored only the synthetic value and retained KEEP_ME. keyctl GET_SESSION_KEYRING succeeded in both actual native workspace sandboxes. No model/auth use, no grant secrets or IDs printed. This resolves the nested-bwrap unknown; it does not by itself prove real delegated role or reviewer recording, which implementation tests must do.
+
+    AC3 clarification under accepted ADR66: assert adapter never forwards the parent grant, grants only its own delegated scope, refuses ordinary ungranted/wrong-seat operations, and can record a granted reviewer verdict under core policy. Deliberate same-uid replay of a separately discovered parent selector/key is ADR66's explicit residual boundary and is not a claim this adapter fixes. Record that residual truthfully; do not assert adversarial replay refusal without evidence. Existing validators must not weaken. Any regression or new exposure remains blocking. Required real Codex sandbox tests use temporary config, no global edits or credentials; prove explicit-empty baseline, own subject/role, own-scope permitted, advisor/wrong-seat denied, reviewer record with grant vs ungranted refusal. Model-free launch preflight must use the installed CLI's actual supported permission-profile syntax and report cause-specific inability; do not blindly pass model flags to sandbox or add fallback authority. Unsupported profiles/user filters that remove required metadata must fail requested-seat launch truthfully.
+
+    Implementation authorized on Codex only, STRICT independent authority review and operator merge floor. LIGHT one targeted launch/grant test plus make check-ci-fast; long cargo in tool background, no repeated capped compiles, CI full gate. Cache/write-root repair remains STORY2238; MCP permission policy remains BUG2394; never relax user config to work around either.
+  created_at: 2026-11-01T08:04:16.550828967Z
+  modified_at: 2026-11-01T08:04:16.550828967Z
 history:
 - id: 01a19600-c769-7cd0-ba08-8d93975e3e3b
   author: joe
