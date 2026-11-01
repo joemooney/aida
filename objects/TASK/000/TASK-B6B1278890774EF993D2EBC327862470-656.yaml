@@ -1,0 +1,27 @@
+id: 01a1965b-ab56-7033-9381-508eb11738ed
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-656
+agreed_id: TASK-2706
+title: 'Containment egress tracer: enforce netns proxy and local IPC policy with a synthetic lane'
+description: |-
+  Acceptance: (1) On sliceA contract, synthetic lane in unshared netns reaches only allowed fixture host via host-owned typed proxy channel; deny direct TCP/UDP/DNS, private-address/rebinding, host/port/protocol bypass per C12. (2) Enforce C5 pathname and abstract Unix IPC. HostABI8 needs approved seccomp-notify broker; no mutable-user-memory CONTINUE/FD/path/rename race. Host D-Bus/SSH/Codex daemon and inherited-FD escapes denied; only typed channels/private own endpoints allowed. (3) Proxy/broker death tears down lane; unsupported kernel refuses; live regression cannot skip. (4) Diagnostics and end-to-end fixture deliver observable actual coverage, no ordinary vendor enablement or real credentials/model calls. Layers: trusted host policy, network/IPC broker, runner lifetime, CLI diagnostics and negative tests. Signed sliceB.
+
+  All signed STORY2238 sketch C1-C12 and BUG2398 B1-B4 apply. Linux only, fakeHOME/synthetic tests, no global user settings or schedules. No partial backend may report AIDA containment applied or launch ordinary agents until all required protections are ready; named refusal, no fallback. STRICT independent review, operator merge floor. LIGHT one targeted test plus fast gates; shared infra or >10files adds touched-test/compile, fullsuiteCI only. Longcargo background, no slotbypass. Parent all7AC remain open until final installed-tool evidence; no slice alone completes parent.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-01T09:05:52.470755532Z
+modified_at: 2026-11-01T09:05:52.470755532Z
+req_type: Task
+tags:
+- architecture
+- containment
+- vendor:codex
+- vertical-slice
+filed_at:
+  code_sha: 4ce0af750fcb68d4adf57496e4e002aefd8ace77
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 4ce0af750fc
+  vendor: codex
