@@ -11,12 +11,12 @@ description: |
   2. If currentartifact stillbreaches, fix diagnosedpath preserving canonicalcorrectness, authoritychecks, useful truthfulbounded/incomplete linkage and BUG1801 zero-refresh-wait semantics. Budgets2000ms/10%/5000ms stayunchanged. For an architectural fork postsketch and seek independent signoff beforeimplementation; routineboundedfix mayproceed.
   3. Add decisive mechanism regression iffixneeded (fixtures/fakeHOME only); remeasure sameartifact/shapes/load and report before/after plus new-buildsamplecounts separately from old24hwindow. Never claimthreewarmcalls provefullSLO. Ifhistoricalonly, documentverifiedsupersedingmergedfix and representativefreshtelemetry instead ofcreatingunnecessarycode.
   4. Independentreview andnormalPRgates forcode. LIGHT one targetedregressionplusfast; >10files/sharedinfrastructure addsmandatorygates; no fullsuite/slotbypass/repeatedcappedcompiles. Longcargo background. Diagnosisfirst, nopollingloop, nouserconfigedits orbenchmarkbudgetrelaxation.
-status: Approved
+status: InProgress
 priority: Medium
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T10:04:17.050576260Z
-modified_at: 2026-11-01T16:47:51.047469366Z
+modified_at: 2026-11-01T16:55:47.604672850Z
 req_type: Bug
 tags:
 - guard-recurrence
@@ -33,6 +33,14 @@ comments:
   content: 'Current recurrence update: schedule trip performance-guard@2026-11-01T15:26:40.081371253Z reports123/494 show calls over2000ms (24.899%, allowed10%), worst40380ms (ceiling5000ms),24h,0excluded,lineage_scopedtrue. The later breach remains covered by this existing approved incident, not a new follow-up or budget change. Actual current liveartifact6a3f676, default/no-git/path-shape and controlled fakeHOME/load/phase evidence still needed; earlier three warm samples and old-artifact description do not close current acceptance. No doctor exit0 or missing new samples proves SLO recovery.'
   created_at: 2026-11-01T16:47:51.047469366Z
   modified_at: 2026-11-01T16:47:51.047469366Z
+history:
+- id: 01a19809-e494-74a2-9ac1-332231d47592
+  author: aida-session-start
+  timestamp: 2026-11-01T16:55:47.604671666Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 6fefb63280c352be0194c2cfadf54a085eb55471
   branch: main
