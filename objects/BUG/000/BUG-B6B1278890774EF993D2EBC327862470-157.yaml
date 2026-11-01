@@ -19,7 +19,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T02:25:46.947809262Z
-modified_at: 2026-11-01T09:32:44.817919630Z
+modified_at: 2026-11-01T10:14:10.085049462Z
 req_type: Bug
 tags:
 - area:agents
@@ -196,6 +196,16 @@ comments:
   content: 'Advisor ruling addendum to blocker5 actual native integration: restrictive Codex inherit=core drops ordinary AIDA_LANE_JOB_* and CARGO_TARGET_DIR env as well as role metadata. BUG2398 fixed whitelist is intentionally public seat context and forbids bearer tokens; do not assume runner path/token reaches tools merely because host Command env has it. The required real Codex launcher/drain fixture must prove job submission/result/tally across that boundary. Reuse approved explicit own-context/typed lease channel safely; no inherit-all or token-in-argv workaround. If this needs a new capability transport decision, punt that precise fork before claiming vendor-neutral runtime coverage. Direct native async Cargo and host-witnessed runner evidence must be reported distinctly and truthfully.'
   created_at: 2026-11-01T09:32:44.817919630Z
   modified_at: 2026-11-01T09:32:44.817919630Z
+- id: 01a1969a-31a5-7510-8992-985f9f5e9dc7
+  author: mcp
+  content: |-
+    Round 4 published: 07becb320ceaf7bc406cb72f1445797d598e7537 on existing PR https://github.com/joemooney/aida/pull/3192. All six 08:50 ruling blockers addressed in one new commit: full actual-command-tree golden regenerated (preserving rendered whitespace); fixture location uses CARGO_MANIFEST_DIR convention; all five executables use synced write_executable -> mark_executable without ratchet changes; bounded libtest result evidence distinguishes executed pass/fail from pre-test/offline/manifest/compile/argument/startup failures and zero/no-run/list/signal cases; vendor-neutral drain eligibility/offer/env/prompt/runner/result boundary is tested with real child submission and completion/refusal for Claude/Codex/AGY, separate from unchanged Claude resume policy; explicit false evidence is required to clear untested, and missing/unreadable evidence warns; the live source/cache/bin/config attack joins forced-live selection/count and refuses skips. Whole cargo home RO/offline, env clearing, no authority forwarding, reflink-only seeding and no production unconfined fallback remain intact.
+
+    Validation: focused lane_job 23 passed with AIDA_REQUIRE_BWRAP_LIVE=1 (live isolation executed); prescribed Cargo golden update and non-update verification passed; exact raw-current-executable resolver guard passed; make check-ci-fast 36 gates passed; make check-ci-compile passed all workspace test targets without full-suite execution (2551.5 seconds); manual drift guard against PR binary passed all 84 command/flag/subcommand/reflection checks; format check passed with RUSTC_WRAPPER cleared. Broader touched gate was attempted and FAILED: 799 passed / 13 failed (five PID namespace refusals, six contained-launch ENOENTs, one synthetic HOME read-only failure, one empty contained write-allowlist assertion). These remain explicit in the PR body; no namespace trust override or sandbox/test weakening was used. Full execution remains CI-only.
+
+    Native source .git is read-only, so publication used the authorized bounded /tmp checkout; all eight changed source files were verified byte-identical to the published commit. PR body now describes the actual reflink-only / offline / vendor-neutral / evidence-based design and ext4 cold-target limitation. Existing merge hold and fresh independent STRICT authority/confinement review remain required. Spec status was left unchanged after MCP refused Needs Attention -> In Progress without advisor authority. Standalone author turn ends after head/hold verification; no CI callback wait.
+  created_at: 2026-11-01T10:14:10.085040914Z
+  modified_at: 2026-11-01T10:14:10.085040914Z
 history:
 - id: 01a19525-88eb-79e3-aab8-8d511ad2f605
   author: aida-session-start
