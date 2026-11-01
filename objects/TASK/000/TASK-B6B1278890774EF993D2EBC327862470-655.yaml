@@ -11,7 +11,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T09:05:27.409838422Z
-modified_at: 2026-11-01T19:22:36.899634726Z
+modified_at: 2026-11-01T20:09:38.837177477Z
 req_type: Task
 tags:
 - architecture
@@ -153,6 +153,11 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-01T19:22:36.773662267Z
   modified_at: 2026-11-01T19:22:36.773662267Z
+- id: 01a198bb-5f15-7982-b5c5-6b5df3035680
+  author: joe
+  content: 'Advisor assessed completed inventory report /tmp/aida-TASK2705-profile-inventory-result.md against current task. PR3205 head8161d2706c7e17d428914e5b7f98c6061a0a5b1a CI41341849851 remains failure: original strict six cases four pass/two nested-unshare EPERM failures; no acceptance credit. Inventory yielded versions/labels but no profile source because exact basename filter only covered bwrap/unpriv_bwrap. New upstream primary lead MR1272.diff names bwrap-userns-restrict; this is a source-path lead, not proof of the installed runner policy or denying rule. Bounded public-source exact-path/package/include research requested from agy1; no workflow push/rerun or live policy/backend/test/authority change authorized by that request. AC3/C12 and parent acceptance remain open.'
+  created_at: 2026-11-01T20:09:38.837177477Z
+  modified_at: 2026-11-01T20:09:38.837177477Z
 history:
 - id: 01a1965b-7cae-7260-83dd-5767f6772d90
   author: joe
