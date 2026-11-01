@@ -107,6 +107,7 @@ fn run_standalone_reviewer_with_codex_only_project_launches_codex_after_worktree
         &["reviewer"],
     );
     env.set_key(crate::gate::seat_authority::GRANT_ENV, &grant_id);
+    std::env::set_current_dir(&project).unwrap();
     crate::session::set_headless_vendor_override(None);
 
     // Resolve the vendor from the REAL codex-only project config — the same
@@ -121,6 +122,8 @@ fn run_standalone_reviewer_with_codex_only_project_launches_codex_after_worktree
     let worktree = tmp.path().join("reviewer-worktree");
     std::fs::create_dir_all(&worktree).unwrap();
     assert!(worktree.is_dir(), "worktree must exist before launch");
+    crate::test_exec::link_fixture_store(&project, &worktree);
+    std::env::set_current_dir(&worktree).unwrap();
 
     let verdict_path = tmp.path().join("verdict.json");
     let prompt = "/aida-review --pr 59";
@@ -247,6 +250,7 @@ fn review_spec_resolve_and_launch_uses_codex_for_codex_only_project() {
         &["reviewer"],
     );
     env.set_key(crate::gate::seat_authority::GRANT_ENV, &grant_id);
+    std::env::set_current_dir(&project).unwrap();
     let outer = crate::test_ambient::replace(Some(crate::test_ambient::Ambient {
         project_root: project.clone(),
         stdin_is_terminal: false,

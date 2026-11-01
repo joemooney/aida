@@ -11053,6 +11053,9 @@ mod tests {
                 ("AIDA_HARNESS_VERSION", Some("launcher-version")),
             ],
         );
+        // The real child probe resolves the roster from cwd, as a real
+        // queue pickup does. This test runs in its exact isolated process.
+        std::env::set_current_dir(root.path()).unwrap();
         let tee = crate::headless_tee::TeeOptions {
             enabled: false,
             label: None,

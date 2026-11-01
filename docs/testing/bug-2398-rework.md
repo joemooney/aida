@@ -42,6 +42,13 @@ Run `41301174931`, retained in `/tmp/aida-review3207-ci-failures.log`, contains
 | 1 | `bug_2185_standalone_reviewer_commits_child_store_writes_on_its_error_exit` | Same protocol; retain missing-verdict error and child-store commit assertions. |
 | 12 | BUG-2149/2150 collection/lifecycle tests | Same protocol; retain own-child positives, sibling/foreign/launcher/stale/wrong-head/freshness/FIFO negatives and cleanup assertions. |
 
+The real probe reads its roster from cwd. These synthetic launch fixtures now
+enter their existing scratch project/worktree in an exact isolated test child;
+bare worktrees link to the project's existing store through fixture config.
+No roster seats or grants are changed to obtain a passing probe. The initial
+checkpoint exposed `RosterDenied` here; the fixture correction retains that
+production refusal and the complete original assertion set.
+
 The four broader STORY-1917 train-policy fixture failures overlapping BUG-2401
 are a separate retained evidence obligation. BUG-2401 implementation is
 serialized after this rework; no concurrent fixture edits or assertion waivers

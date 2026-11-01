@@ -356,10 +356,21 @@ fn preflight(child: &Command, overrides: &[String]) -> Result<()> {
 // particular a config parser may echo user -c values: never relay that output.
 // trace:BUG-2398 | ai:codex
 fn safe_probe_failure(message: &str) -> &'static str {
-    if message.lines().any(|line| {
-        line.trim().strip_prefix("Error: ").unwrap_or(line.trim())
-            == "seat_grant_valid=true expected_seat=false"
-    }) {
+    let lines: Vec<String> = message
+        .lines()
+        .map(|line| {
+            let line = line
+                .trim()
+                .strip_prefix("Error: ")
+                .or_else(|| line.trim().strip_prefix("error: "))
+                .unwrap_or(line.trim());
+            serde_json::from_str::<String>(line).unwrap_or_else(|_| line.into())
+        })
+        .collect();
+    if lines
+        .iter()
+        .any(|line| line == "seat_grant_valid=true expected_seat=false")
+    {
         return "ExpectedSeatMismatch";
     }
     for cause in [
@@ -381,10 +392,10 @@ fn safe_probe_failure(message: &str) -> &'static str {
         "ForeignNamespace",
         "KeyringUnavailable",
     ] {
-        if message.lines().any(|line| {
-            line.trim().strip_prefix("Error: ").unwrap_or(line.trim())
-                == format!("seat_grant_valid=false cause={cause}")
-        }) {
+        if lines
+            .iter()
+            .any(|line| line == &format!("seat_grant_valid=false cause={cause}"))
+        {
             return cause;
         }
     }

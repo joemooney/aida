@@ -99,6 +99,10 @@ fn run_mock_reviewer_in(
     make_tree: impl FnOnce(&std::path::Path, &std::path::Path),
     setup: impl Fn(&Launch<'_>, &mut crate::test_env::EnvVarsGuard) -> String,
 ) -> (Result<()>, std::path::PathBuf) {
+    assert!(
+        !crate::test_env::run_path_isolated_test(),
+        "fixture requires its exact isolated child"
+    );
     let (home, project) = codex_only_project(tmp);
     let worktree = tmp.join("reviewer-worktree");
     make_tree(&project, &worktree);
@@ -151,6 +155,12 @@ fn run_mock_reviewer_in(
         &["reviewer"],
     );
     env.set_key(crate::gate::seat_authority::GRANT_ENV, &launcher_grant);
+    crate::test_exec::link_fixture_store(&project, &worktree);
+    assert!(
+        !crate::test_env::run_path_isolated_test(),
+        "fixture requires its exact isolated child"
+    );
+    std::env::set_current_dir(&worktree).unwrap();
     let script = setup(
         &Launch {
             project: &project,

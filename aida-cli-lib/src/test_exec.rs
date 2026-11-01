@@ -124,3 +124,29 @@ fi
             .strip_prefix("#!/bin/sh\n")
             .unwrap_or(body.as_ref())
 }
+
+/// A synthetic reviewer worktree needs the same store link a real linked
+/// worktree has. Point at the fixture's existing roster; never mint new
+/// authority or change its seats to make the probe pass.
+// trace:BUG-2398 | ai:codex
+pub(crate) fn link_fixture_store(project: &std::path::Path, worktree: &std::path::Path) {
+    if crate::gate::seat_authority::roster_store(worktree).is_ok() {
+        return;
+    }
+    let store = crate::gate::seat_authority::roster_store(project).expect("fixture roster");
+    crate::gate::seat_authority::test_support::assert_scratch_store(&store);
+    std::fs::create_dir_all(worktree.join(".aida")).unwrap();
+    let config = worktree.join(".aida/config.toml");
+    assert!(
+        !config.exists(),
+        "do not overwrite an existing fixture configuration"
+    );
+    std::fs::write(
+        config,
+        format!(
+            "store_path = {}\n",
+            toml::Value::String(store.to_str().unwrap().into())
+        ),
+    )
+    .unwrap();
+}
