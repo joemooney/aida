@@ -16,12 +16,18 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-01T10:04:17.050576260Z
-modified_at: 2026-11-01T10:04:17.050576260Z
+modified_at: 2026-11-01T10:05:17.060333645Z
 req_type: Bug
 tags:
 - guard-recurrence
 - latency
 - performance
+comments:
+- id: 01a19692-0f84-7190-bb01-d45721d8f76e
+  author: joe
+  content: 'PROXY DECISION: matching performance-guard trip and configured 2000ms/10%/5000ms budgets verified. Treat as real recorded SLO incident requiring diagnosis, no budget change; three fresh under-budget calls do not establish recovery. Approved bounded diagnosis/fix scope, priority behind EPIC612 native parity. Historical-only closure requires representative fresh artifact evidence and an identified already-merged remedy.'
+  created_at: 2026-11-01T10:05:17.060333645Z
+  modified_at: 2026-11-01T10:05:17.060333645Z
 filed_at:
   code_sha: 6fefb63280c352be0194c2cfadf54a085eb55471
   branch: main
