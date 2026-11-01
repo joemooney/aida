@@ -10,16 +10,18 @@ description: |
   Acceptance:
   1. Managed native Codex tool calls present only their own delegated child grant/seat under restrictive shell environment policy, via the existing sanctioned grant/keyring contract. Never copy the parent advisor grant or broaden/mint authority in the tool shell.
   2. Preserve the user's restrictive global policy and credentials exclusions; do not change inherit to all globally or pass arbitrary parent environment/secrets. Scope any launch-time metadata transport to exact AIDA-owned child context, validated with existing authority boundaries. No grant secrets in argv/logs/config or project-writable context.
-  3. A real Codex fixture/probe under inherit=core verifies implementer role current and permitted own-scope operation, and refusal of reviewer/advisor operations and unrelated parent authority. Cover reviewer verdict recording separately with a granted reviewer and an ungranted refusal; do not weaken existing grant guards.
+  3. Under temporary inherit=core configuration, a real Codex fixture restores only its own delegated subject, seat and context; own-scope operation succeeds and wrong-seat/advisor operations refuse. A granted reviewer records a verdict that validates as authorized independent review. A named ungranted agent may retain a nonauthoritative record artifact under the existing recorder compatibility contract; that actual artifact must not satisfy standalone collection without the launched reviewer grant, authoritative reviewed/resolved classification, dispatch review-success/skip-review decisions (including --no-ship), ship, or automatic hold release. Presented invalid grants refuse recording. Assert the adapter never forwards a parent grant; do not claim deliberate same-uid parent-selector/key replay resistance beyond ADR-66. Correct the identified weak positive-approval consumers using existing durable authority validation, retaining refusal/protection artifact behavior and other compatibility rules.
   4. Add truthful diagnostic/refusal for an unusable requested seat before model work when possible. Document any native keyring limitation rather than silently granting a fallback.
 
   Sketch and independent advisor signoff before code; strict review for authority plumbing. This finding is separate from the native cache path writable-root refusal, which is recorded on STORY-2238. User's global Codex config must remain unchanged. Codex implementer lane after signoff; LIGHT targeted grant/launch test plus make check-ci-fast, CI is the full gate.
+
+  Scope amendment: the initial adapter-only sketch expands only to the weak positive-approval consumers identified in codex-advisor08 ruling: gate/dispatch_authority::verdict_at_head + dispatch_flow, human reviewed classification and gate/review_verdict::review_actionability consumers. Preserve named ungranted record artifacts as nonauthoritative; do not change roster, issuance, grants, direct-human receipts or protected merge policy. Independent design signoff on this amendment and strict implementation review are required before completion.
 status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T07:26:20.914223641Z
-modified_at: 2026-11-01T08:46:17.775253750Z
+modified_at: 2026-11-01T08:48:12.380023836Z
 req_type: Bug
 tags:
 - architecture
@@ -328,6 +330,10 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1964b-7eaf-7d40-b4e7-70be17c15ba2
+  author: joe
+  timestamp: 2026-11-01T08:48:12.463615630Z
+  changes: []
 filed_at:
   code_sha: 53c89700b4da50b5593a2079ed4cc3abaae5cdfe
   branch: main
