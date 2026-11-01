@@ -19,7 +19,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T02:25:46.947809262Z
-modified_at: 2026-11-01T04:27:50.056750773Z
+modified_at: 2026-11-01T04:45:44.668472369Z
 req_type: Bug
 tags:
 - area:agents
@@ -103,6 +103,13 @@ comments:
   created_at: 2026-11-01T04:27:50.056750773Z
   modified_at: 2026-11-01T04:27:50.056750773Z
   session_id: 77a7a933-9a3f-4243-9a44-892bcedf206c
+- id: 01a1956d-835c-71c3-bc0e-d9ccd1bd6fe1
+  author: joe
+  content: 'Round 2 implementer (finding 8 follow-up; could not file a draft TASK: ''aida add'' fails ID allocation with a read-only filesystem in the seat). FOLLOW-UP TO FILE: wire the lane job runner into the --auto-complete drain''s phase-1 implementer (auto_complete.rs). It needs the same Runner start and stop (gated on [contained] os_wrap), the AIDA_LANE_JOBS_* env, LANE_JOB_CONTRACT in the prompt, and untested=true in its phase result. Until then those lanes reach CI with no local test and no flag. Round 2 also could not run make check-ci-fast or any cargo here: Bash denied it in the sandbox. CI is the compile gate.'
+  created_at: 2026-11-01T04:45:44.668472369Z
+  modified_at: 2026-11-01T04:45:44.668472369Z
+  session_id: 01a195616a50
+  harness_version: 2.1.316 (Claude Code)
 history:
 - id: 01a19525-88eb-79e3-aab8-8d511ad2f605
   author: aida-session-start
