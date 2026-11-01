@@ -1,13 +1,7 @@
 job: hub-drift-guard-route
-last_run: 2026-11-01T08:23:05.576094556Z
+last_run: 2026-11-01T12:58:46.543177030Z
 last_by:
   seat: advisor
   vendor: codex
 result: done
-note: Live BUG2378 repair/reconcile completed; fresh remote status now confirms main ac1e318 and store703ead3a2344 agree across origin/gitlab, release v0.16.0 agrees. No force push; current comments continue normal store writes.
-due_since: 2026-11-01T11:26:37.148611861Z
-due_reason: on CronJobFailed:hub-drift-guard
-due_failure:
-  trip_id: hub-drift-guard@2026-11-01T11:18:59.996380484Z
-  job: hub-drift-guard
-  error: 'exit 1: '
+note: Normal supported aida remote reconcile --execute merged/pushed union ea273fc96563 to BOTH gitlab and origin, no force/reset. Code main and release already agree. Active private clones can publish origin-only, so future drift is not claimed prevented and no new unattended bridge/timer/config enabled; latest guarded source reconciliation preserved history.
