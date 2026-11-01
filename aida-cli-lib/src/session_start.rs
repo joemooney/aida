@@ -1861,6 +1861,14 @@ pub(crate) fn session_start_with_receipt(
     // (~/ai/aida-pr-9-epic-20 instead of ~/ai/aida-epic-20).
     // trace:BUG-75 | ai:claude
     let project_root = find_main_worktree_root()?;
+    // trace:BUG-b6b1278890774ef993d2ebc327862470-159 | ai:codex
+    let launch_vendor = if launch_claude {
+        let vendor = session::interactive_session_vendor()?;
+        session::preflight_interactive_session(&vendor, launch_permission_mode, launch_contained)?;
+        Some(vendor)
+    } else {
+        None
+    };
     // A dash-led branch or base would reach `git worktree add` / `git
     // rev-parse` as an option. trace:BUG-1622 | ai:claude
     for (flag, value) in [("--branch", branch), ("--base", base)] {
@@ -1876,7 +1884,9 @@ pub(crate) fn session_start_with_receipt(
             .as_deref()
             .is_some_and(queue_cmd::role_is_stakeholder_only)
     {
-        return session::new_session(
+        return session::new_session_for_vendor(
+            launch_vendor.as_deref().expect("launch vendor preflight"),
+            None,
             launch_title,
             launch_permission_mode,
             launch_role,
@@ -3414,8 +3424,9 @@ pub(crate) fn session_start_with_receipt(
                 "{} {}",
                 crate::glyph(crate::glyphs::Glyph::InfoAlt).cyan(),
                 format!(
-                    "sourced .aida/session-env.sh ({}) into launched claude's env",
-                    applied_vars.join(", ")
+                    "sourced .aida/session-env.sh ({}) into launched {}'s env",
+                    applied_vars.join(", "),
+                    launch_vendor.as_deref().unwrap_or("claude")
                 )
                 .dimmed()
             );
@@ -3427,9 +3438,12 @@ pub(crate) fn session_start_with_receipt(
                 .green()
                 .bold(),
             format!(
-                "launching claude in {} ({})",
+                "launching {} in {} ({})",
+                launch_vendor.as_deref().unwrap_or("claude"),
                 worktree_path.display(),
-                if launch_contained {
+                if launch_contained && launch_vendor.as_deref() == Some("codex") {
+                    "native sandbox, not AIDA-contained".to_string()
+                } else if launch_contained {
                     "contained sandbox".to_string()
                 } else {
                     launch_permission_mode
@@ -3456,7 +3470,9 @@ pub(crate) fn session_start_with_receipt(
         let derived_name = launch_name
             .filter(|s| !s.trim().is_empty())
             .or_else(|| session::derive_session_name(owns, &branch_name, &role_for_name));
-        return session::new_session(
+        return session::new_session_for_vendor(
+            launch_vendor.as_deref().expect("launch vendor preflight"),
+            Some(owns.to_string()),
             launch_title,
             launch_permission_mode,
             launch_role,

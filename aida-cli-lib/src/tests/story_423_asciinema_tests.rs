@@ -215,7 +215,7 @@ fn bare_agent_defaults_to_agent_new() {
             .command
             .registered::<crate::agent_launch::AgentArgs>(),
         crate::agent_launch::AgentArgs {
-            inner: AgentCommand::New { command: None }
+            inner: AgentCommand::New { command: None, .. }
         }
     ));
 

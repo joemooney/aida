@@ -849,6 +849,72 @@ fn exec_or_spawn_claude(cmd: &mut std::process::Command) -> Result<()> {
     }
 }
 
+// trace:BUG-b6b1278890774ef993d2ebc327862470-159 | ai:codex
+pub(crate) fn interactive_session_vendor() -> Result<String> {
+    let root = crate::find_main_worktree_root().unwrap_or(std::env::current_dir()?);
+    Ok(aida_core::agents_config::resolve_default_vendor(&root)
+        .unwrap_or_else(|| "claude".to_string()))
+}
+
+// Validate the actual vendor and trusted posture before prompts, launch logs,
+// worktrees or leases. The tracked launcher repeats its own ordinary guards.
+// trace:BUG-b6b1278890774ef993d2ebc327862470-159 | ai:codex
+pub(crate) fn preflight_interactive_session(
+    vendor: &str,
+    permission_mode: Option<&str>,
+    contained: bool,
+) -> Result<()> {
+    anyhow::ensure!(
+        matches!(vendor, "claude" | "codex"),
+        "unsupported interactive session vendor `{vendor}`"
+    );
+    anyhow::ensure!(
+        crate::find_executable_on_path(vendor).is_some(),
+        "`{vendor}` is not on PATH — install the configured vendor before launching"
+    );
+    let root = crate::find_main_worktree_root().unwrap_or(std::env::current_dir()?);
+    crate::enforce_agent_type_enabled(&root, vendor)?;
+    if contained {
+        containment_posture_in(&root, vendor, true)?;
+    }
+    if vendor == "claude" {
+        return refuse_uncontained_session_under_contained_parent(permission_mode, contained);
+    }
+    anyhow::ensure!(
+        permission_mode.is_none(),
+        "--permission-mode is only supported by claude"
+    );
+    let config = codex_interactive_session_config(contained)?;
+    crate::refuse_uncontained_child_of_contained_parent(&config)
+}
+
+// Use the existing sanctioned Codex flags and trusted native opt-in; never
+// interpret native as AIDA containment or widen the child's write boundary.
+// trace:BUG-b6b1278890774ef993d2ebc327862470-159 | ai:codex
+fn codex_interactive_session_config(contained: bool) -> Result<crate::AgentLaunchConfig> {
+    let root = crate::find_main_worktree_root().unwrap_or(std::env::current_dir()?);
+    let mut config = crate::AgentLaunchConfig {
+        agent_type: "codex",
+        binary: "codex",
+        default_args: vec![crate::CODEX_NO_DAEMON_FLAG.to_string()],
+        prompt_style: crate::AgentPromptStyle::Positional,
+        contained: false,
+    };
+    if contained {
+        containment_posture_in(&root, "codex", true)?;
+        config
+            .default_args
+            .extend(crate::tool_contained_flags("codex")?);
+    }
+    crate::apply_agent_default_flags(
+        &mut config,
+        &root,
+        crate::AgentDefaultFlagOptions::new(true, Vec::new(), None),
+        contained,
+    )?;
+    Ok(config)
+}
+
 /// `aida session new` — capture role + title up-front, append a record
 /// to `~/.aida/session-launches.log`, then exec `claude
 /// --permission-mode <mode>`. Subsequent `aida session list` calls read
@@ -868,6 +934,62 @@ pub fn new_session(
     contained: bool,
     set_terminal_title: bool,
 ) -> Result<()> {
+    let vendor = interactive_session_vendor()?;
+    new_session_for_vendor(
+        &vendor,
+        None,
+        title,
+        permission_mode,
+        role_override,
+        display_name,
+        contained,
+        set_terminal_title,
+    )
+}
+
+// A start --launch pins the vendor before allocating the seat, including when
+// project agents.toml is absent in the newly created child worktree.
+// trace:BUG-b6b1278890774ef993d2ebc327862470-159 | ai:codex
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn new_session_for_vendor(
+    vendor: &str,
+    spec: Option<String>,
+    title: Option<String>,
+    permission_mode: Option<&str>,
+    role_override: Option<String>,
+    display_name: Option<String>,
+    contained: bool,
+    set_terminal_title: bool,
+) -> Result<()> {
+    preflight_interactive_session(vendor, permission_mode, contained)?;
+    if vendor == "codex" {
+        // The tracked launcher owns child grant/subject/scope, registration,
+        // finalization and terminal restoration. BUG-2398's adapter belongs
+        // inside that launcher; this wrapper does not copy its pending policy.
+        let cwd = std::env::current_dir()?;
+        let root = crate::find_main_worktree_root().unwrap_or(cwd.clone());
+        let Some(role) = crate::resolve_child_role(&root, role_override, "codex")? else {
+            return Ok(());
+        };
+        return crate::agent_new_with_config(
+            codex_interactive_session_config(contained)?,
+            Some(role),
+            spec,
+            false,
+            Some(&cwd),
+            crate::AgentContextOptions::new(true, false),
+            set_terminal_title,
+            false,
+            false,
+            false,
+            crate::AgentPromptOptions::new(None, true),
+            crate::AgentResumeOptions::new(false, None, false, true),
+            crate::AgentDefaultFlagOptions::new(false, Vec::new(), None),
+            None,
+            title,
+            true,
+        );
+    }
     // BUG-2157: fail closed — a contained parent never launches an
     // uncontained or re-postured claude, whichever caller got here.
     // trace:BUG-2157 | ai:claude
