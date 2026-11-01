@@ -1,0 +1,27 @@
+id: 01a19949-d19c-74d0-9501-7b47f1b8ffd6
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-664
+title: '[cosmetic, non-blocking] Small offsets from the stated ''inclusive decile'' p90: …'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-2709, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  [cosmetic, non-blocking] Small offsets from the stated 'inclusive decile' p90: 175d p90 1,010 (page 1,008); 60d p90 1,483 and 40.0% >400 (page 1,485 / 40.1%); 30d p90 1,791 (page 1,782); June 24.2% >400 (page 24.1%); 175d <=100 bucket 25.1% (page 25.0%). None changes a conclusion.
+  Reviewed sha: 7fba6fb5ae38ad6e3bce3f11c5262cfbb6ec48ff
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-01T22:45:14.268661919Z
+modified_at: 2026-11-01T22:45:14.268661919Z
+req_type: Task
+tags:
+- carried-from:TASK-2709
+- finding-hash:83477a67
+- from-review:TASK-2709
+- kind:carried-forward
+filed_at:
+  code_sha: 4e8e63b03ff3c32f3799af8829e1ef9e2f28fc1f
+  branch: main
+  dirty: true
+  aida_version: 0.16.0
+  aida_build_sha: 6a3f67671a9
+  vendor: claude
