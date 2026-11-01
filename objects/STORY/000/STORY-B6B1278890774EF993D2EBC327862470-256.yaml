@@ -18,7 +18,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T22:17:06.607335957Z
-modified_at: 2026-11-01T01:44:01.438598943Z
+modified_at: 2026-11-01T02:25:24.093414381Z
 req_type: Story
 tags:
 - agent-new
@@ -121,6 +121,16 @@ comments:
   modified_at: 2026-11-01T01:44:01.438598943Z
   session_id: 01a1949eec59
   harness_version: 2.1.316 (Claude Code)
+- id: 01a194ed-067d-7841-a5c6-19f69ce93575
+  author: joe
+  content: |
+    ADVISOR REWORK BRIEF round 3 (19:35), PR-3184 at c580646, CI run for that head. One failure; main is green.
+    CI (lib): `context_prompt::story_809_coverage_tests::every_bare_confirm_is_exempted_or_adopted` (context_prompt.rs:299) flags aida-cli-lib/src/agent_launch.rs:3892, the new `inquire::Confirm::new(&question)` that offers the one-time grant.
+    Ruling: ADOPT a ContextCard (STORY-809). Do not add a ?-exempt annotation. This prompt mints authority, so the operator must see what they're granting before they answer: the seat being launched, the grant's scope and expiry (the 8h cap from the 16:27 signoff), and that it's one-time and child-only. Follow an existing ContextCard-adopted confirm in the codebase (grep `ContextCard` in context_prompt.rs and its callers). Keep the existing no-TTY / cancel → false behaviour.
+    Local gate (LIGHT): `AIDA_CARGO_TIMEOUT=900 cargo test --profile agent -p aida-cli-lib --lib -- story_809_coverage_tests story_256` in the background, then `make check-ci-fast`, then push. If cargo is denied in your sandbox, say so in the PR comment; CI is the gate. Read CI logs with `gh api repos/joemooney/aida/actions/jobs/<id>/logs` (BUG-2380).
+  created_at: 2026-11-01T02:25:24.093414381Z
+  modified_at: 2026-11-01T02:25:24.093414381Z
+  session_id: 77a7a933-9a3f-4243-9a44-892bcedf206c
 history:
 - id: 01a1940e-15d9-7e13-bbb4-79222982ffb5
   author: aida-session-start
