@@ -1,5 +1,6 @@
 id: 01a19690-424c-7c60-80ec-c9df2f904e31
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-660
+agreed_id: TASK-2716
 title: 'NON-BLOCKING: detect_main_conflict runs (bounded 20s fetch) for reviewer-role r…'
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on BUG-B6B1278890774EF993D2EBC327862470-057, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
@@ -20,6 +21,11 @@ tags:
 - finding-hash:729e7a2f
 - from-review:PR-3177
 - kind:carried-forward
+history:
+- id: 01a196b7-3289-7731-a37f-5195ed9cf692
+  author: joe
+  timestamp: 2026-11-01T10:45:50.857478900Z
+  changes: []
 filed_at:
   code_sha: 6fefb63280c352be0194c2cfadf54a085eb55471
   branch: main
