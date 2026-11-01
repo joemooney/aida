@@ -1,13 +1,7 @@
 job: hub-drift-guard-route
-last_run: 2026-11-01T12:58:46.543177030Z
+last_run: 2026-11-01T18:28:17.638639734Z
 last_by:
   seat: advisor
   vendor: codex
 result: done
-note: Normal supported aida remote reconcile --execute merged/pushed union ea273fc96563 to BOTH gitlab and origin, no force/reset. Code main and release already agree. Active private clones can publish origin-only, so future drift is not claimed prevented and no new unattended bridge/timer/config enabled; latest guarded source reconciliation preserved history.
-due_since: 2026-11-01T17:41:25.587075046Z
-due_reason: on CronJobFailed:hub-drift-guard
-due_failure:
-  trip_id: hub-drift-guard@2026-11-01T17:30:19.946199286Z
-  job: hub-drift-guard
-  error: 'exit 1: '
+note: Normal remote reconcile dry-run showed bothhubs behindlocal; --execute fast-forward pushed both, noforce/no structuralmerge. Fresh remote status confirms main/store/release in sync at store2b4cb5582d1c before this new duty receipt.
