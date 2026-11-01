@@ -27,7 +27,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T23:03:29.192827531Z
-modified_at: 2026-11-01T17:31:24.847009858Z
+modified_at: 2026-11-01T17:49:45.578624890Z
 req_type: Story
 tags:
 - docs
@@ -211,6 +211,11 @@ comments:
   content: 'Operational preparation policy refinement for the independently reviewed3194+3208 candidate batch: global authorship ledger may legitimately APPEND unrelated worker claims while mandatefixers run. Preserve the entire independently reviewed byte prefix exactly, refuse truncation/rewrite/malformed/unbounded/link/unreadable evidence, parse ALL current appended rows and revalidate current normal reviewer attestation/record-time grant/target-PR authorship independence and futureactualTTYactor independence against FULL current relevant authorship. Do not freeze unrelated append-only activity as a product gate and do not hide new relevant authors or allow in-loop manifest rewrites. Per-PR verdict/metadata/coveredcanon/policy/binary/sourcepins remain exact; all ordinary production admission/corpus/hold/CI/patch/merge gates remain mandatory. Scope build-writer exclusion to verified exact own managed private jobs35/36, kernelPID/start/UID/ancestry/resolvedprivatecwd+target/output/nooverride/no primaryoverlap; unknown or primary source/config/hook/index/ref writers refuse. Fixed4knowntrustedHOSTserviceidentity treatment retained, no name-basedauthority or rawservice/key access. A fresh independent integrator must prepare and document these operational-only corrections with new batch/hashes for fullrootreview and realHOSTproof. Both normal dry-run refusals remain:3194protectedconfig and3208unheldsupervised notcoveredbyship-heldmandate, so no execution underrootgrant or fakeTTY; existing authorized genuineuserTTYactor must satisfy actualnormalhuman-gate/grant checks itself or refuse.3207HUMANholdexcluded.'
   created_at: 2026-11-01T17:31:24.847009858Z
   modified_at: 2026-11-01T17:31:24.847009858Z
+- id: 01a1983b-4cea-7962-9557-7069a5f0ce64
+  author: joe
+  content: 'Prepared-body review correction: rootFULLread17report/helper/HOSTguard/decodedinner/manifest. Existing normal issue_direct/direct_issue_binding at seat_authority.rs1730/1935 binds roleenter immediate invoking shell plus POSIX terminal SID (and key). Captured roleenter runs in a command-substitution subshell; normal valid resulting presentation may use terminal SID rather than the later bodyBashPID. Current own-tty helper requiring only exact executingBashPID would falsely reject normal issuance. A fresh independent operational correction must validate actual normal rolecurrent/status + fresh non-child integrator grant + verified genuine loop ancestry/UID/FDs and matching kernel SID/start at the authorized loop (or actual executingBash proc/start if present), while retaining full author/reviewer independence. Do not add --bind-pid, fabricate PID/SID, alterissuer/keyring, exportparentcontext or weaken normalhumanpolicy. This corrects only private check to existingnormalissuer semantics; sourceauthority implementation unchanged. Freshuniqueartifacts/fullrootreview/actualHOSTchecks still required before authorizedplacement. No17batch/grant/slot/train consumed.'
+  created_at: 2026-11-01T17:49:45.578624890Z
+  modified_at: 2026-11-01T17:49:45.578624890Z
 history:
 - id: 01a19517-853a-7dc1-addd-62b1b73de3be
   author: joe
