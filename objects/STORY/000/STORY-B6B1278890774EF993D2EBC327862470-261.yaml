@@ -25,7 +25,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T22:58:37.964636963Z
-modified_at: 2026-11-01T06:05:32.604618682Z
+modified_at: 2026-11-01T06:05:33.655859030Z
 req_type: Story
 tags:
 - docs
@@ -94,6 +94,22 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Website glossary, CLI flag, 23 terms and air-gapped links are correct and CI is green, but the regenerated book chapter docs/cli/12-glossary.md (the ''existing CLI glossary'' output AC2 requires) now has broken links and sends existing machinery links to the wrong entries.. Triage reason: PR-3193 review: CHANGES REQUESTED'
   created_at: 2026-11-01T06:05:32.604617360Z
   modified_at: 2026-11-01T06:05:32.604617360Z
+  session_id: a31b25d9-60a5-4347-a85b-4c74ab06f274
+- id: 01a195b6-95dd-7b31-bb1c-dcfcd6153449
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (STORY-2219):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: e42b38641789
+    Recorded: 2026-11-01T05:57:29.126235889+00:00
+    Findings:
+    1. major-ish/minor: Broken links in the book chapter. The product glossary intro links [machinery glossary](machinery-glossary.md) and [lifecycle vocabulary](lifecycle-vocabulary.md), relative to the template master. docs/cli/generate-glossary.sh rewrites only ../../../../docs/ links, so docs/cli/12-glossary.md lines 24-27 point at docs/cli/machinery-glossary.md and docs/cli/lifecycle-vocabulary.md, which do not exist (404 in mdBook). Fix: in the generator, rewrite those two targets to the in-page anchors #machinery-glossary / #lifecycle-vocabulary, and add a grep to tests/test_generate_glossary_check.sh (its stub product-glossary.md should include such a link).
+    2. minor: Anchor collision regresses existing machinery links in the book chapter. Product '### Role' and '### Seat' (12-glossary.md:168,189) now come before machinery '### role' / '### seat' (387,399), so mdBook gives the product entries the bare #role / #seat ids. machinery-glossary.md:181 [role](#role) and :200 [seat](#seat) now land on the product entries instead of their machinery definitions. 'How to add a term' and 'Terms' are duplicated the same way. The implementer noted this as a design choice, but it changes where existing developer links go, which the spec's out-of-scope note ('rewriting the developer-facing CLI glossary') is meant to prevent. Fix options: emit the product section after machinery+lifecycle in the book (and in the default CLI order if you want them to match), or make the generator rewrite machinery-internal #role/#seat links to the machinery ids. Add a check that every in-page #anchor in the chapter resolves to the intended heading.
+    3. cosmetic: AC1 fold-in is incomplete as written. The 'How to add a term' section lists the folded TERM specs as local ID, role, seat and control plane. TERM-4 (stakeholder persona) is already in the machinery glossary, which is fine, but TERM-2 (cross-vendor fleet coordination, draft) is neither folded in nor mentioned. Either fold it in, or say that draft term specs were left out on purpose.
+    4. cosmetic: tests/test_generate_glossary_check.sh:8-10 puts the trace marker in the middle of the header comment sentence ('joined by a blank line. trace:STORY-2219 | ai:claude The real binary ...'). Move it to its own line.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-01T06:05:33.533436935Z
+  modified_at: 2026-11-01T06:05:33.533436935Z
   session_id: a31b25d9-60a5-4347-a85b-4c74ab06f274
 history:
 - id: 01a19517-7d5f-7092-83c8-b303944f0e16
