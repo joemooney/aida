@@ -13,7 +13,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T23:00:22.284758314Z
-modified_at: 2026-11-01T07:42:41.945489644Z
+modified_at: 2026-11-01T08:02:18.725628065Z
 req_type: Bug
 tags:
 - epic-home-003
@@ -111,6 +111,11 @@ comments:
   modified_at: 2026-11-01T05:09:20.387428942Z
   session_id: 01a195755789
   harness_version: 2.1.316 (Claude Code)
+- id: 01a19621-79e5-77d3-b062-8fbef76ab2af
+  author: joe
+  content: 'Post-merge verification on promoted live 9d26f95: agreed-id dry-run reported only local node1 binding repair and zero ID assignments/legacy renames/block claims; apply completed with the same zero-allocation result. remote reconcile --execute produced union b1c1e13cdc9a and pushed origin plus gitlab without force; db block verify reports consistent. node show identifies HOME b6b1278890774ef993d2ebc327862470 as active clone/root epoch1. Prior node backup and store backup branch retained. Inherited live maintenance is complete.'
+  created_at: 2026-11-01T08:02:18.725628065Z
+  modified_at: 2026-11-01T08:02:18.725628065Z
 history:
 - id: 01a1943a-492b-7f72-9377-cfc786176bec
   author: aida-session-start
