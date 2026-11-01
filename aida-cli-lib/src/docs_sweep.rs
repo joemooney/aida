@@ -124,9 +124,7 @@ pub(crate) fn parse_config(body: &str) -> Result<SweepConfig> {
         cfg.mode = match mode.trim() {
             "report" => SweepMode::Report,
             "pr" => SweepMode::Pr,
-            other => anyhow::bail!(
-                "[docs_sweep] mode = \"{other}\" is not a sweep mode (expected \"report\" or \"pr\")"
-            ),
+            other => anyhow::bail!("unknown [docs_sweep] mode '{other}' (expected report or pr)"),
         };
     }
     if let Some(n) = raw.max_files {
@@ -1660,9 +1658,10 @@ fn file_name_of(path: &str) -> &str {
     path.rsplit('/').next().unwrap_or(path)
 }
 
-/// What a sweep commit may contain: the files its edits changed, plus at most
-/// `max_files` documentation copies a `regenerate` step derived from them
-/// (same file name, still Markdown or HTML outside tests and the store).
+/// What a sweep commit may contain: the files its edits changed and any
+/// documentation copies a `regenerate` step derived from them (same file name,
+/// still Markdown or HTML outside tests and the store), together bounded by
+/// the single `max_files` cap.
 /// Anything else (code, a test, an unrelated file) means a regenerate step
 /// reached past the docs-only, capped edit set, so nothing is committed.
 pub(crate) fn check_staged(
@@ -1671,10 +1670,11 @@ pub(crate) fn check_staged(
     max_files: usize,
 ) -> Result<()> {
     let names: BTreeSet<&str> = changed.iter().map(|p| file_name_of(p)).collect();
-    let (derived, outside): (Vec<&String>, Vec<&String>) = staged
+    let outside: Vec<&String> = staged
         .iter()
         .filter(|p| !changed.contains(*p))
-        .partition(|p| is_doc_path(p) && names.contains(file_name_of(p)));
+        .filter(|p| !is_doc_path(p) || !names.contains(file_name_of(p)))
+        .collect();
     if !outside.is_empty() {
         anyhow::bail!(
             "a regenerate step changed files outside the documentation edits; nothing was committed: {}",
@@ -1685,10 +1685,14 @@ pub(crate) fn check_staged(
                 .join(", ")
         );
     }
-    if derived.len() > max_files {
+    // trace:STORY-2220 | ai:codex
+    // Refuse the entire batch before filing or committing when regeneration
+    // consumes more room than the source-edit plan left available.
+    if staged.len() > max_files {
         anyhow::bail!(
-            "a regenerate step changed {} derived files, over the per-run cap of {max_files}; nothing was committed",
-            derived.len()
+            "the staged documentation edits and derived copies total {} files, exceeding the per-run cap of {max_files} by {}; nothing was committed",
+            staged.len(),
+            staged.len() - max_files
         );
     }
     Ok(())

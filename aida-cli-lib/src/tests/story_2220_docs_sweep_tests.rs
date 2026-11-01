@@ -389,7 +389,11 @@ fn mode_defaults_to_report_and_parses_pr() {
     assert_eq!(SweepConfig::default().mode, SweepMode::Report);
     let cfg = parse_config("[docs_sweep]\nmode = \"pr\"\nmax_files = 5\n").unwrap();
     assert_eq!((cfg.mode, cfg.max_files), (SweepMode::Pr, 5));
-    assert!(parse_config("[docs_sweep]\nmode = \"auto\"\n").is_err());
+    let err = parse_config("[docs_sweep]\nmode = \"auto\"\n").unwrap_err();
+    assert_eq!(
+        err.to_string(),
+        "unknown [docs_sweep] mode 'auto' (expected report or pr)"
+    );
 }
 
 #[test]
@@ -871,7 +875,9 @@ fn a_run_whose_edits_all_skip_files_no_spec_and_opens_no_pr() {
 }
 
 /// AC acec3f70: a regenerate step that touches anything beyond the edited
-/// docs (and same-named doc copies) commits, pushes and files nothing.
+/// docs (and same-named doc copies), or exceeds their combined cap, commits,
+/// pushes and files nothing.
+// trace:STORY-2220 | ai:codex
 #[test]
 fn a_regenerate_step_that_reaches_past_the_docs_commits_nothing() {
     let changed: BTreeSet<String> =
@@ -889,6 +895,12 @@ fn a_regenerate_step_that_reaches_past_the_docs_commits_nothing() {
     );
     assert!(check_staged(&["src/lib.rs".into()], &changed, 20).is_err());
     assert!(check_staged(&["docs/other.md".into()], &changed, 20).is_err());
+
+    let staged = vec![changed.first().unwrap().clone(), mirror];
+    assert!(check_staged(&staged, &changed, 2).is_ok());
+    let err = check_staged(&staged, &changed, 1).unwrap_err();
+    assert!(err.to_string().contains("total 2 files"), "{err}");
+    assert!(err.to_string().contains("cap of 1 by 1"), "{err}");
 
     let tmp = tempfile::tempdir().unwrap();
     let root = project(tmp.path(), true);
@@ -913,6 +925,48 @@ fn a_regenerate_step_that_reaches_past_the_docs_commits_nothing() {
         .output()
         .unwrap();
     assert!(!branch.status.success(), "nothing was pushed");
+
+    // A legitimate regenerated mirror must share the source's cap. With
+    // room for only the source, refuse the whole run before a local commit,
+    // push, spec filing or PR creation. With room for both, commit both.
+    for max_files in [1, 2] {
+        let cfg = SweepConfig {
+            max_files,
+            regenerate: vec!["mkdir -p docs/mirror && cp docs/cli/a.md docs/mirror/a.md".into()],
+            ..SweepConfig::default()
+        };
+        let out = open_or_extend_pr(&root, &cfg, &host, &p);
+        if max_files == 1 {
+            let err = out.unwrap_err();
+            assert!(err.to_string().contains("cap of 1 by 1"), "{err}");
+            assert!(host.specs.borrow().is_empty());
+            assert!(host.created.borrow().is_empty());
+            assert_eq!(
+                git_out(&root, &["rev-parse", SWEEP_BRANCH]),
+                git_out(&root, &["rev-parse", "main"]),
+                "the refused run made no local commit"
+            );
+            let branch = crate::test_git::git_command()
+                .current_dir(&origin)
+                .args(["rev-parse", "--verify", "--quiet", SWEEP_BRANCH])
+                .output()
+                .unwrap();
+            assert!(!branch.status.success(), "the refused run pushed nothing");
+        } else {
+            let outcome = out.unwrap().unwrap();
+            assert_eq!(outcome.files, 2);
+            assert!(outcome.files <= max_files);
+            let committed = lines_of(git_out(
+                &origin,
+                &["diff", "--name-only", &format!("main..{SWEEP_BRANCH}")],
+            ));
+            assert_eq!(committed, s(&["docs/cli/a.md", "docs/mirror/a.md"]));
+            assert!(committed.len() <= max_files);
+            assert_eq!(commits_on_sweep_branch(&origin).len(), 1);
+            assert_eq!(host.specs.borrow().len(), 1);
+            assert_eq!(host.created.borrow().len(), 1);
+        }
+    }
 }
 
 #[test]
