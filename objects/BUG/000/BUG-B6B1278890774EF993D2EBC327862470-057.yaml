@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T21:37:29.201146410Z
-modified_at: 2026-11-01T06:06:24.512338673Z
+modified_at: 2026-11-01T06:08:25.172396782Z
 req_type: Bug
 tags:
 - epic-home-003
@@ -70,6 +70,12 @@ comments:
   created_at: 2026-11-01T04:08:36.801165196Z
   modified_at: 2026-11-01T04:08:36.801165196Z
   session_id: 77a7a933-9a3f-4243-9a44-892bcedf206c
+- id: 01a195b9-33f5-7432-8b84-378e25e3e430
+  author: joe
+  content: 'Advisor ruling: The brief matcher must recognise the header the advisor actually writes, ''ADVISOR REWORK BRIEF round N'' (an H2 or bold line, any case), and a test must cover that exact form. Fix every other finding in the PR-3177 verdict in the same push. LIGHT gate.'
+  created_at: 2026-11-01T06:08:25.077591652Z
+  modified_at: 2026-11-01T06:08:25.077591652Z
+  session_id: a31b25d9-60a5-4347-a85b-4c74ab06f274
 history:
 - id: 01a193e8-1070-7260-a5d0-2973465ae4a2
   author: aida-session-start
