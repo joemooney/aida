@@ -16721,6 +16721,17 @@ Options:
       --description <DESCRIPTION>
           Optional human-readable description of this agent session
 
+      --grant-inline <MODE>
+          At a human terminal with no seat grant, `auto` offers to launch the seat under a one-time
+          grant from you (your keystroke is the proof; nothing is exported to your shell). `no`
+          refuses instead, as scripts expect
+
+          Possible values:
+          - auto: Offer the one-time grant when a human is at the terminal
+          - no:   Never offer it; refuse with the recovery command
+          
+          [default: auto]
+
       --bg
           Dispatch to Claude Code's background supervisor via `claude --bg`. The session detaches
           from this terminal and shows up in `claude agents` (and `aida status`). When `--spec` is
@@ -16853,6 +16864,17 @@ Options:
       --description <DESCRIPTION>
           Optional human-readable description of this agent session
 
+      --grant-inline <MODE>
+          At a human terminal with no seat grant, `auto` offers to launch the seat under a one-time
+          grant from you (your keystroke is the proof; nothing is exported to your shell). `no`
+          refuses instead, as scripts expect
+
+          Possible values:
+          - auto: Offer the one-time grant when a human is at the terminal
+          - no:   Never offer it; refuse with the recovery command
+          
+          [default: auto]
+
       --no-mail-wake
           Do not wake this session's thread when its inbox has mail (default: `[agents.codex]
           mail_wake` in agents.toml, else on)
@@ -16973,6 +16995,17 @@ Options:
 
       --description <DESCRIPTION>
           Optional human-readable description of this agent session
+
+      --grant-inline <MODE>
+          At a human terminal with no seat grant, `auto` offers to launch the seat under a one-time
+          grant from you (your keystroke is the proof; nothing is exported to your shell). `no`
+          refuses instead, as scripts expect
+
+          Possible values:
+          - auto: Offer the one-time grant when a human is at the terminal
+          - no:   Never offer it; refuse with the recovery command
+          
+          [default: auto]
 
   -h, --help
           Print help (see a summary with '-h')
@@ -45749,6 +45782,11 @@ Working on aida itself
         "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
       },
       {
+        "name": "grant-inline",
+        "takes_value": true,
+        "help": "At a human terminal with no seat grant, `auto` offers to launch the seat under a one-time grant from you (your keystroke is the proof; nothing is exported to your shell). `no` refuses instead, as scripts expect"
+      },
+      {
         "name": "help",
         "takes_value": false,
         "help": "Print help (see more with '--help')"
@@ -45906,6 +45944,11 @@ Working on aida itself
         "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
       },
       {
+        "name": "grant-inline",
+        "takes_value": true,
+        "help": "At a human terminal with no seat grant, `auto` offers to launch the seat under a one-time grant from you (your keystroke is the proof; nothing is exported to your shell). `no` refuses instead, as scripts expect"
+      },
+      {
         "name": "help",
         "takes_value": false,
         "help": "Print help (see more with '--help')"
@@ -46056,6 +46099,11 @@ Working on aida itself
         "name": "format",
         "takes_value": true,
         "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "grant-inline",
+        "takes_value": true,
+        "help": "At a human terminal with no seat grant, `auto` offers to launch the seat under a one-time grant from you (your keystroke is the proof; nothing is exported to your shell). `no` refuses instead, as scripts expect"
       },
       {
         "name": "help",
