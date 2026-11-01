@@ -23,7 +23,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-01T06:43:22.094949183Z
-modified_at: 2026-11-01T06:54:08.750523139Z
+modified_at: 2026-11-01T06:54:11.192623093Z
 req_type: Bug
 tags:
 - audit
@@ -34,6 +34,12 @@ relationships:
 - rel_type: Child
   target_id: 01a19499-932e-79f0-a3e1-1299dfe355ad
   created_at: 2026-11-01T06:43:30.098943752Z
+comments:
+- id: 01a195e3-1af8-78b2-bcc7-fc3df7f3b2e8
+  author: joe
+  content: 'ADVISOR DISPOSITION: APPROVED. Grounded source confirms session::new_session remains Claude-specific and the wrappers choose Claude before resolving the configured vendor. Route all three entry points through existing vendor/posture resolution; do not introduce independent grant minting, broaden contained roots, or bypass trusted native opt-in. Mock both Codex and Claude argv/env and refuse unavailable/unsupported vendors before setup mutations. Sequence session.rs edits before BUG-2387/BUG-2386; work on a Codex lane after TASK-2631 is live.'
+  created_at: 2026-11-01T06:54:11.192623093Z
+  modified_at: 2026-11-01T06:54:11.192623093Z
 history:
 - id: 01a195d9-57f7-7021-8c44-245d62d9af7d
   author: joe
