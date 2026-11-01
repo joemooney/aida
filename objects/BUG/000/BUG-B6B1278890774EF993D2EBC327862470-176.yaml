@@ -15,7 +15,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-01T10:12:04.230556201Z
-modified_at: 2026-11-01T11:10:10.889761601Z
+modified_at: 2026-11-01T12:29:22.570980903Z
 req_type: Bug
 tags:
 - alias
@@ -159,6 +159,11 @@ comments:
     Recording authority: fresh own child context /tmp/aida-2403-signoff-own-context.sh became available after the read-only review; sourcing it and aida role current returned advisor. This judgment is submitted using only that context, with a fresh role check in the posting shell. No borrowed context or MCP mutation was used.
   created_at: 2026-11-01T11:10:10.889761601Z
   modified_at: 2026-11-01T11:10:10.889761601Z
+- id: 01a19715-fb0a-7b83-aab5-f9cbf77be864
+  author: joe
+  content: 'Additional observed alias case PR3194 at 2c786c12: normal canonical approval ledger#14 has release_grant; same-origin phase3#15 lacks it; subsequent friendly normal #16 has it. Root lawful auto-release still refuses the canonical refusal at6b1 because selected canonical#15 lacks record-time provenance. Contrasts PR3185 where final friendly normal#24 allowed supported release. No ledger edits/clearance bypass. Fresh independent supported canonical-without-pr last decision requested, permanent sketch must preserve both alias selection and same-origin receipt semantics.'
+  created_at: 2026-11-01T12:29:22.570980903Z
+  modified_at: 2026-11-01T12:29:22.570980903Z
 history:
 - id: 01a196a4-b6bb-7730-a79a-e4a546bf516d
   author: joe
