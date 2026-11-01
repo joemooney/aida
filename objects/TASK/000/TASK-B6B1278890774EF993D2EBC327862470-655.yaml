@@ -11,7 +11,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T09:05:27.409838422Z
-modified_at: 2026-11-01T13:19:29.836567749Z
+modified_at: 2026-11-01T14:20:58.684938974Z
 req_type: Task
 tags:
 - architecture
@@ -91,6 +91,12 @@ comments:
   content: 'Final local validation completed: serial actual make test-touched retry passed72 selected unit tests plus all9 BUG1502 real-binary JSON audit integration tests, with no failures/ignores. Initial slot-wrapper exit200-before-tests remains recorded; no bypass, outer timeout or repeated capped compile was used. Required-live task_2705_ with both flags passed6; make check-ci-fast passed36; actual make check-ci-compile passed. Public code remains acb177db657a03c5057ecfc9572f7a6b775ac768 on same open PR#3205, all17 author-diff file bytes verified. B2 help/JSON/grant-owner integration checks are green in actual CI. B1 FD checks now pass, but required CI still fails nested unshare with EPERM before mount_positive; Needs Attention remains for an advisor environment-policy ruling under no-new-permissions/no-skip constraints. No parent completion, ordinary launch enablement, permission change, own review or merge. Formal post_punt write remains approval-blocked (policy never), with evidence in PR/spec comments. Own MCP lease01a197079d92 released; old CLI sourcelease01a19701e905 cleanup attempted but retained because shared metadata is read-only; source and implementation are safely backed.'
   created_at: 2026-11-01T13:19:29.836558716Z
   modified_at: 2026-11-01T13:19:29.836558716Z
+- id: 01a1977c-27bc-78e1-a802-9e38010ebe16
+  author: joe
+  content: |
+    PROXY DIAGNOSIS / bounded HOST evidence: read FULL codex-implementer-25 diagnosis /tmp/aida-task2705-precondition-diagnosis-result.md (diagnosis only, no code mutation). Root reviewed the full fixed recipe, checked SHA256 e5df12564cdba76aee62019053740cefa2e7f92d2131add7bff37615f7b216e3, ordinary uid and regular singly-linked owned file, then executed once using cleared env and installed isolated Python on HOST. /tmp/aida-task2705-precondition-host-reviewed.json: exit0, all SIX outside/composed raw/mapped/split phases completed; protected controls unchanged, exact owned scratch removed. Kernel7.0.0-42-generic/bwrap0.9.0. acceptance_credit=false. This does NOT certify production FD/teardown/C10/model gates or identify failing CI Ubuntu26.04.1/bwrap0.11.1 cause. Independent reviewer16 REQUEST_CHANGES at acb177 remains. Next concrete same-PR experiment: disposable CI SAME-RUNNER baseline outside+composed diagnostic, then ONLY existing gates AppArmor userns prerequisite applied/readback there, same diagnostic and ORIGINAL strict task_2705_ fixture with both required-live flags; retain failure observations, no skip/assertion waiver or user-host policy change. If still fails, return actual measured fork. No production implementation approval is implied by synthetic success.
+  created_at: 2026-11-01T14:20:58.684938974Z
+  modified_at: 2026-11-01T14:20:58.684938974Z
 history:
 - id: 01a1965b-7cae-7260-83dd-5767f6772d90
   author: joe
