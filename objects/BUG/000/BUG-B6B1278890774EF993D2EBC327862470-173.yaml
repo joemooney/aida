@@ -18,7 +18,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T08:28:54.983776375Z
-modified_at: 2026-11-01T16:38:37.109090402Z
+modified_at: 2026-11-01T16:44:53.629979155Z
 req_type: Bug
 tags:
 - forge
@@ -180,6 +180,15 @@ comments:
   content: 'Advisor evidence update 2026-11-01 09:40MST: actor32 published same-PR head1677ad5dd74c5d1e3f0564777f630dcda489fe2c. Full receipt /tmp/aida-BUG2400-head-binding-result.md and identity manifest retained; source/public four-file bytes verified by author. One new targeted test PASS (actual debug profile, 44.78s), all36 fast gates PASS, format PASS. Exact-head CI41324585555 lib1 reports6812PASS/0FAIL/2ignored but fails separate default10s test timing gate at14.831s; aggregateBuildFAIL and holdFAIL remain. Fresh independent reviewer22 is assessing source and a bounded same-PR timing remedy; sourceapproval does not authorize shipping. No timing-budget change, test deletion, rerun, merge or completion claim.'
   created_at: 2026-11-01T16:38:37.109090402Z
   modified_at: 2026-11-01T16:38:37.109090402Z
+- id: 01a197ff-e9a4-7df1-a2bc-d315bd42ead4
+  author: joe
+  content: |-
+    Advisor ruling: PROXY CI REWORK RULING BUG2400, same PR3208 branchcodex/bug-2400-exact-pr base1677ad5dd74c5d1e3f0564777f630dcda489fe2c. Fresh independent reviewer22 FULL /tmp/aida-review3208-headbinding-result.md APPROVES source AC1-3 at1677; own canonicalnormalpair/PRrecord19 andfriendlyrecord1, GH6560823186, no sourcecorrectness blocker. Exact-head CI41324585555 functional6812PASS0FAIL2ignored but samefixture14.831s exceeds default10s; requiredBuildFAIL. This ruling addresses ONLY real CI timing within samePR, no newfollowup, policywaiver or productionbug2404change. Root personally read fullreport/actualfixtureprocesssetup; reviewer source-derived subprocess counts are hypotheses notmeasuredprofile.
+    Affected aida-cli-lib/src/tests/bug_2400_exact_pr_association_tests.rs existing monolith bug_2400_search_candidates_require_exact_store_association. Factor reusable isolated fixture setup and split into focused PATH-isolated tests (alias/token/ownership, commitpaging/headbinding/schema, saturation/duplicateenumeration, realresolver/deadline/error). Each PATH-mutating test must use existing test_env::run_path_isolated_test BEFORE tempfixtures/envguards; never weaken exactchildguard/EnvLock. Preserve EACH old assertion and distinct wrong-head/mixedduplicates/earlymatch+latefailure/headcountdrift/250positive251unknown/aliases/errors/caps/resolver-once/aggregateabsolute deadline; provide old-case-to-new-test coverage matrix. Saturation must distinguish intended cap from generictimeout/ghfailure and retain bothsingle/allopen semantics. Fake gh use shellbuiltin base=${0%/*}, terminal exec cat only where no latermutation is required; drift cases preserve cat+cp ordering. No production API behavior changes, arbitrary commandcount reduction, testdeletion/skip/budgetexception/thresholdchange/globalunknownpolicy change. If some case still over10s profilethatfixturephase and reduce avoidablefixtureoverhead; splitting alone not speedproof. CI exactnewHEAD stillgate.
+    ONE AIDA_CARGO_TIMEOUT=10m cargo test --profile agent -p aida-cli-lib pr_lookup::bug_2400_exact_pr_association_tests (filteredmodule includes allnewfocusedtests), background iflong, plus make check-ci-fast andformat/diffcheck. No broad/unfilteredlib/workspace/fullsuite/outertimeout/AIDA_CARGO_NO_SLOT. No sharedinfra editsplanned; ifgenuinetest_env/ratchetinfraor>10files stopforruling and requiredtouched+compile. Ordinary wrapper/timeouts/queue preserve; inspect cargo ps aftertimeout beforeanyretry. Record actualprofile/passcount/pertestduration; longcompiletime not runtimefailure. Normal samebranch nonforcedpush; freshdifferent noCargo delta reviewer then exactheadCI. Existing sourceapprovalnotnewheadapproval. No ownreview/ship/merge/holdclear/completed/queuedone.
+    Actor32 terminal, oldlease01a197d895f1 safelyretired ONLY after root verified four source/public/archive SHA256s and onlytwopublishedtrackedchanges dirty, cargo0/2slots0queued. Preserved /tmp/aida-BUG2400-head-binding-public-source.tar0600 +identitymanifest; no borroweddeadcontext. New strict pickup ownlease/grant required. SourcepublicationifnativeGitRO may use boundedtmpcheckoutofsameadvertisedbranch baseline+fullblobdiffidentityproof andnormalpush, no alternativepolicy/cache/rootauthority orfakesource. Owncontextmetadata only via HOSTexactPID/ancestry, same-shell rolecheckbeforemutations/no keyselectoroutput. Output /tmp/aida-BUG2400-timing-result.md with provenance/publichead/coverage map/local/CI/currentgates. Endafterreport, no poller.
+  created_at: 2026-11-01T16:44:53.540228721Z
+  modified_at: 2026-11-01T16:44:53.540228721Z
 history:
 - id: 01a1963a-2b42-7cd2-a795-0772bcc408d1
   author: joe
