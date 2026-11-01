@@ -370,9 +370,9 @@ Commands:
                 every spec of that kind. Read-only and deterministic (no LLM call). `aida lint
                 constants` instead lints source: numeric literals in traced Rust code that the
                 owning spec never mentions
-  lane          Run cargo builds and tests through the launcher of a headless lane
   verify        Explicit, report-only host verification using built-in probes. Never executes a
                 command from the requirements store
+  lane          Run cargo builds and tests through the launcher of a headless lane
   plan          Work with implementation plans archived under `docs/plans/`: `verify` lints a plan
                 against the structured template, `helpers` derives a reusable-helpers section from
                 the trace graph, `promote` moves Approved -> Planned when a plan file exists, and
@@ -26638,6 +26638,119 @@ Options:
 
   -h, --help
           Print help (see a summary with '-h')
+===== aida verify
+Explicit, report-only host verification using built-in probes. Never executes a command from the
+requirements store
+
+Usage: aida verify [OPTIONS] <COMMAND>
+
+Commands:
+  constraints  Compare constraint verify blocks with this Linux host. Read-only
+  help         Print this message or the help of the given subcommand(s)
+
+Options:
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida verify constraints
+Compare constraint verify blocks with this Linux host. Read-only
+
+Usage: aida verify constraints [OPTIONS]
+
+Options:
+      --json
+          Emit one match/drift/unknown/invalid result per configured row
+
+      --fail-on-drift
+          Return a nonzero exit only when a row reports drift
+
+  -v, --verbose
+          Also list rejected, superseded and archived constraints, which are never probed. JSON
+          output always includes them
+
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida lifecycle
+Spec-state lifecycle tooling. Today (generate-only): `aida lifecycle --diagram` prints a Mermaid
+state diagram generated from the single declared transition model in `aida-core`, so the picture
+can't drift from the code. `--check` pins the committed diagram in `docs/lifecycle.md` against the
+generated one and exits non-zero on drift (pre-commit-hook-able); with `--write` it
+inserts/refreshes the committed block instead. Phase 1 is purely additive — no guard enforcement, no
+empirical diffing
+
+Usage: aida lifecycle [OPTIONS]
+
+Options:
+      --diagram
+          Emit the Mermaid `stateDiagram-v2` generated from the declared transition model
+
+      --check
+          Compare the generated diagram against the committed mermaid block in `docs/lifecycle.md`
+          (or `--doc <FILE>`). Exits non-zero on drift. Pair with `--write` to fix drift in place
+
+      --write
+          Insert or refresh the committed mermaid block in the doc with the generated diagram. Use
+          with `--check` to auto-fix drift
+
+      --doc <FILE>
+          The doc whose first mermaid block is the pinned diagram. Defaults to `docs/lifecycle.md`
+          under the project root
+
+      --empirical
+          Reconstruct the OBSERVED state machine by walking the `history:` arrays in the spec store
+          — every recorded status flip becomes one observed transition, tallied with counts. On its
+          own, prints the observed transitions; pair with `--diff` to compare against the declared
+          model
+
+      --diff
+          Diff the declared model against the observed one: report observed transitions the declared
+          model never authorized (undocumented flips) and declared transitions never observed (dead
+          edges). Exits non-zero when any undocumented flip is found, so it is CI-gate-able. Implies
+          `--empirical`
+
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+  -h, --help
+          Print help (see a summary with '-h')
 ===== aida lane
 Run cargo builds and tests through the launcher of a headless lane
 
@@ -26746,119 +26859,6 @@ Options:
           Lines of output to print when the run ends
           
           [default: 120]
-
-      --format <FORMAT>
-          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
-          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
-          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
-
-          Possible values:
-          - human: Human-readable tables / emoji (the interactive default at a TTY)
-          - toon:  Token-efficient TOON — the compact agent default when piped/captured
-          - json:  Machine JSON, for commands that support a JSON projection
-
-      --canonical-ids
-          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
-          scripts). Also settable via AIDA_CANONICAL_IDS=1
-
-  -h, --help
-          Print help (see a summary with '-h')
-===== aida verify
-Explicit, report-only host verification using built-in probes. Never executes a command from the
-requirements store
-
-Usage: aida verify [OPTIONS] <COMMAND>
-
-Commands:
-  constraints  Compare constraint verify blocks with this Linux host. Read-only
-  help         Print this message or the help of the given subcommand(s)
-
-Options:
-      --format <FORMAT>
-          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
-          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
-          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
-
-          Possible values:
-          - human: Human-readable tables / emoji (the interactive default at a TTY)
-          - toon:  Token-efficient TOON — the compact agent default when piped/captured
-          - json:  Machine JSON, for commands that support a JSON projection
-
-      --canonical-ids
-          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
-          scripts). Also settable via AIDA_CANONICAL_IDS=1
-
-  -h, --help
-          Print help (see a summary with '-h')
-===== aida verify constraints
-Compare constraint verify blocks with this Linux host. Read-only
-
-Usage: aida verify constraints [OPTIONS]
-
-Options:
-      --json
-          Emit one match/drift/unknown/invalid result per configured row
-
-      --fail-on-drift
-          Return a nonzero exit only when a row reports drift
-
-  -v, --verbose
-          Also list rejected, superseded and archived constraints, which are never probed. JSON
-          output always includes them
-
-      --format <FORMAT>
-          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
-          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
-          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
-
-          Possible values:
-          - human: Human-readable tables / emoji (the interactive default at a TTY)
-          - toon:  Token-efficient TOON — the compact agent default when piped/captured
-          - json:  Machine JSON, for commands that support a JSON projection
-
-      --canonical-ids
-          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
-          scripts). Also settable via AIDA_CANONICAL_IDS=1
-
-  -h, --help
-          Print help (see a summary with '-h')
-===== aida lifecycle
-Spec-state lifecycle tooling. Today (generate-only): `aida lifecycle --diagram` prints a Mermaid
-state diagram generated from the single declared transition model in `aida-core`, so the picture
-can't drift from the code. `--check` pins the committed diagram in `docs/lifecycle.md` against the
-generated one and exits non-zero on drift (pre-commit-hook-able); with `--write` it
-inserts/refreshes the committed block instead. Phase 1 is purely additive — no guard enforcement, no
-empirical diffing
-
-Usage: aida lifecycle [OPTIONS]
-
-Options:
-      --diagram
-          Emit the Mermaid `stateDiagram-v2` generated from the declared transition model
-
-      --check
-          Compare the generated diagram against the committed mermaid block in `docs/lifecycle.md`
-          (or `--doc <FILE>`). Exits non-zero on drift. Pair with `--write` to fix drift in place
-
-      --write
-          Insert or refresh the committed mermaid block in the doc with the generated diagram. Use
-          with `--check` to auto-fix drift
-
-      --doc <FILE>
-          The doc whose first mermaid block is the pinned diagram. Defaults to `docs/lifecycle.md`
-          under the project root
-
-      --empirical
-          Reconstruct the OBSERVED state machine by walking the `history:` arrays in the spec store
-          — every recorded status flip becomes one observed transition, tallied with counts. On its
-          own, prints the observed transitions; pair with `--diff` to compare against the declared
-          model
-
-      --diff
-          Diff the declared model against the observed one: report observed transitions the declared
-          model never authorized (undocumented flips) and declared transitions never observed (dead
-          edges). Exits non-zero when any undocumented flip is found, so it is CI-gate-able. Implies
-          `--empirical`
 
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
@@ -56105,6 +56105,127 @@ Working on aida itself
   {
     "path": [
       "aida",
+      "verify"
+    ],
+    "about": "Explicit, report-only host verification using built-in probes. Never executes a command from the requirements store",
+    "flags": [
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "verify",
+      "constraints"
+    ],
+    "about": "Compare constraint verify blocks with this Linux host. Read-only",
+    "flags": [
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "fail-on-drift",
+        "takes_value": false,
+        "help": "Return a nonzero exit only when a row reports drift"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "json",
+        "takes_value": false,
+        "help": "Emit one match/drift/unknown/invalid result per configured row"
+      },
+      {
+        "name": "verbose",
+        "takes_value": false,
+        "help": "Also list rejected, superseded and archived constraints, which are never probed. JSON output always includes them"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "lifecycle"
+    ],
+    "about": "Spec-state lifecycle tooling. Today (generate-only): `aida lifecycle --diagram` prints a Mermaid state diagram generated from the single declared transition model in `aida-core`, so the picture can't drift from the code. `--check` pins the committed diagram in `docs/lifecycle.md` against the generated one and exits non-zero on drift (pre-commit-hook-able); with `--write` it inserts/refreshes the committed block instead. Phase 1 is purely additive — no guard enforcement, no empirical diffing",
+    "flags": [
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "check",
+        "takes_value": false,
+        "help": "Compare the generated diagram against the committed mermaid block in `docs/lifecycle.md` (or `--doc <FILE>`). Exits non-zero on drift. Pair with `--write` to fix drift in place"
+      },
+      {
+        "name": "diagram",
+        "takes_value": false,
+        "help": "Emit the Mermaid `stateDiagram-v2` generated from the declared transition model"
+      },
+      {
+        "name": "diff",
+        "takes_value": false,
+        "help": "Diff the declared model against the observed one: report observed transitions the declared model never authorized (undocumented flips) and declared transitions never observed (dead edges). Exits non-zero when any undocumented flip is found, so it is CI-gate-able. Implies `--empirical`"
+      },
+      {
+        "name": "doc",
+        "takes_value": true,
+        "help": "The doc whose first mermaid block is the pinned diagram. Defaults to `docs/lifecycle.md` under the project root"
+      },
+      {
+        "name": "empirical",
+        "takes_value": false,
+        "help": "Reconstruct the OBSERVED state machine by walking the `history:` arrays in the spec store — every recorded status flip becomes one observed transition, tallied with counts. On its own, prints the observed transitions; pair with `--diff` to compare against the declared model"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "write",
+        "takes_value": false,
+        "help": "Insert or refresh the committed mermaid block in the doc with the generated diagram. Use with `--check` to auto-fix drift"
+      }
+    ],
+    "hidden": true
+  },
+  {
+    "path": [
+      "aida",
       "lane"
     ],
     "about": "Run cargo builds and tests through the launcher of a headless lane",
@@ -56226,127 +56347,6 @@ Working on aida itself
       }
     ],
     "hidden": false
-  },
-  {
-    "path": [
-      "aida",
-      "verify"
-    ],
-    "about": "Explicit, report-only host verification using built-in probes. Never executes a command from the requirements store",
-    "flags": [
-      {
-        "name": "canonical-ids",
-        "takes_value": false,
-        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
-      },
-      {
-        "name": "format",
-        "takes_value": true,
-        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
-      },
-      {
-        "name": "help",
-        "takes_value": false,
-        "help": "Print help (see more with '--help')"
-      }
-    ],
-    "hidden": false
-  },
-  {
-    "path": [
-      "aida",
-      "verify",
-      "constraints"
-    ],
-    "about": "Compare constraint verify blocks with this Linux host. Read-only",
-    "flags": [
-      {
-        "name": "canonical-ids",
-        "takes_value": false,
-        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
-      },
-      {
-        "name": "fail-on-drift",
-        "takes_value": false,
-        "help": "Return a nonzero exit only when a row reports drift"
-      },
-      {
-        "name": "format",
-        "takes_value": true,
-        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
-      },
-      {
-        "name": "help",
-        "takes_value": false,
-        "help": "Print help (see more with '--help')"
-      },
-      {
-        "name": "json",
-        "takes_value": false,
-        "help": "Emit one match/drift/unknown/invalid result per configured row"
-      },
-      {
-        "name": "verbose",
-        "takes_value": false,
-        "help": "Also list rejected, superseded and archived constraints, which are never probed. JSON output always includes them"
-      }
-    ],
-    "hidden": false
-  },
-  {
-    "path": [
-      "aida",
-      "lifecycle"
-    ],
-    "about": "Spec-state lifecycle tooling. Today (generate-only): `aida lifecycle --diagram` prints a Mermaid state diagram generated from the single declared transition model in `aida-core`, so the picture can't drift from the code. `--check` pins the committed diagram in `docs/lifecycle.md` against the generated one and exits non-zero on drift (pre-commit-hook-able); with `--write` it inserts/refreshes the committed block instead. Phase 1 is purely additive — no guard enforcement, no empirical diffing",
-    "flags": [
-      {
-        "name": "canonical-ids",
-        "takes_value": false,
-        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
-      },
-      {
-        "name": "check",
-        "takes_value": false,
-        "help": "Compare the generated diagram against the committed mermaid block in `docs/lifecycle.md` (or `--doc <FILE>`). Exits non-zero on drift. Pair with `--write` to fix drift in place"
-      },
-      {
-        "name": "diagram",
-        "takes_value": false,
-        "help": "Emit the Mermaid `stateDiagram-v2` generated from the declared transition model"
-      },
-      {
-        "name": "diff",
-        "takes_value": false,
-        "help": "Diff the declared model against the observed one: report observed transitions the declared model never authorized (undocumented flips) and declared transitions never observed (dead edges). Exits non-zero when any undocumented flip is found, so it is CI-gate-able. Implies `--empirical`"
-      },
-      {
-        "name": "doc",
-        "takes_value": true,
-        "help": "The doc whose first mermaid block is the pinned diagram. Defaults to `docs/lifecycle.md` under the project root"
-      },
-      {
-        "name": "empirical",
-        "takes_value": false,
-        "help": "Reconstruct the OBSERVED state machine by walking the `history:` arrays in the spec store — every recorded status flip becomes one observed transition, tallied with counts. On its own, prints the observed transitions; pair with `--diff` to compare against the declared model"
-      },
-      {
-        "name": "format",
-        "takes_value": true,
-        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
-      },
-      {
-        "name": "help",
-        "takes_value": false,
-        "help": "Print help (see more with '--help')"
-      },
-      {
-        "name": "write",
-        "takes_value": false,
-        "help": "Insert or refresh the committed mermaid block in the doc with the generated diagram. Use with `--check` to auto-fix drift"
-      }
-    ],
-    "hidden": true
   },
   {
     "path": [

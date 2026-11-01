@@ -6,26 +6,21 @@
 //! linked worktree, and a seat clone has its own `.git`, so a lane's first
 //! targeted test was a cold full build (~27 min for aida-cli-lib).
 //!
-//! The seed runs on the host, where no tool-call cap applies. It does not copy
-//! the whole 45 GB profile directory. The wrapper copies with `cp -a` and
-//! never hardlinks, because rustc and cargo rewrite some files in place and a
-//! shared inode would corrupt the primary's cache. This seed hardlinks only the
-//! files that are replaced, never rewritten in place, and copies or skips the
-//! rest:
+//! The seed never shares an inode with the primary's target (advisor ruling,
+//! BUG-2383 round 2). A contained seat's sandbox binds its own target
+//! read-write, so a hardlinked file the seat opened for an in-place write
+//! would change the primary's artifact, and `aida dev build` links those into
+//! the live binary. The seed therefore copies only with reflinks
+//! (`cp -a --reflink=always`): copy-on-write clones, so a seat's write never
+//! reaches the primary's blocks, at near-zero disk cost. `cp -a` keeps
+//! mtimes, which cargo's fingerprints compare. When the filesystem has no
+//! reflinks (ext4, for one), nothing is seeded and the seat builds cold. That
+//! is acceptable because the lane job runner has no 60-second cap. A plain
+//! copy is never made: that would be the 45 GB copy this seed exists to avoid.
 //!
-//! - `deps/` artifacts (`.rlib`, `.rmeta`, `.so`, test and binary
-//!   executables): hardlinked. rustc writes them to a temporary file and
-//!   renames it into place, and the linker unlinks its output before it
-//!   writes, so a rebuild in the seat gets a new inode and never touches the
-//!   primary's file.
-//! - `deps/*.d` dep-info, `.fingerprint/` and `build/` (about 90 MB in all):
-//!   copied. cargo rewrites them in place, and a build script may rewrite its
-//!   `OUT_DIR` files in place.
-//! - `incremental/`: skipped. Incremental state is rewritten in place, and
-//!   only workspace crates use it. They recompile in a fresh checkout anyway,
-//!   because its mtimes are newer than the copied fingerprints.
-//! - Top-level files (the hardlinked binaries cargo puts beside `deps/`) and
-//!   `examples/`: skipped. cargo re-creates them.
+//! Seeded: `deps/`, `.fingerprint/` and `build/`. Skipped: `incremental/`
+//! (only workspace crates use it, and they recompile in a fresh checkout
+//! anyway) and the top-level binaries and `examples/`, which cargo re-creates.
 //!
 //! Like the wrapper, the seed holds the primary's build lock
 //! (`<main>/target/<profile>/.cargo-lock`) while it reads, so it never sees a
@@ -34,11 +29,14 @@
 //! next one.
 // trace:BUG-2383 | ai:claude
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::time::Duration;
 
 /// The cargo profiles a seat target is seeded for.
 pub(crate) const SEED_PROFILES: &[&str] = &["agent"];
+
+/// The profile subdirectories a seed clones. Everything else is skipped.
+pub(crate) const SEEDED_DIRS: &[&str] = &["deps", ".fingerprint", "build"];
 
 /// How long the lane job runner's seed waits for the primary's build lock
 /// before it gives up (the wrapper's `AIDA_CARGO_SEED_LOCK_WAIT` default).
@@ -51,12 +49,11 @@ pub(crate) const LAUNCH_LOCK_WAIT: Duration = Duration::from_secs(5);
 /// What one [`seed_profile`] call did.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum Seeded {
-    /// The profile directory was created. `linked` files share the primary's
-    /// inode; `copied` files are the seat's own.
-    Done { linked: u64, copied: u64 },
+    /// The profile directory was created from reflinked copies.
+    Reflinked,
     /// The seat already had the profile directory.
     AlreadyWarm,
-    /// Nothing to seed from, or the seed could not run, with the reason.
+    /// Nothing seeded, with the reason; the seat builds cold.
     Skipped(String),
 }
 
@@ -79,9 +76,8 @@ pub(crate) fn seed_seat_target(
         .collect()
 }
 
-/// Seed one profile. See the module docs for what is linked, copied and
-/// skipped. `seat_target` must be the seat's own directory, never
-/// `main_target` itself or inside it.
+/// Seed one profile. `seat_target` must be the seat's own directory, never
+/// `main_target` itself or inside the profile being seeded.
 pub(crate) fn seed_profile(
     main_target: &Path,
     seat_target: &Path,
@@ -132,22 +128,22 @@ pub(crate) fn seed_profile(
         return Seeded::Skipped("the primary's build is still running".into());
     }
     let tmp = seat_target.join(format!(".seed-{profile}.{}", std::process::id()));
-    let result = seed_into(&src, &tmp);
+    let result = reflink_into(&src, &tmp);
     drop(build_lock);
     match result {
-        Ok((linked, copied)) => match std::fs::rename(&tmp, &dst) {
+        Ok(()) => match std::fs::rename(&tmp, &dst) {
             Ok(()) => {
                 let _ = std::fs::write(dst.join(".cargo-lock"), b"");
-                Seeded::Done { linked, copied }
+                Seeded::Reflinked
             }
             Err(e) => {
                 let _ = std::fs::remove_dir_all(&tmp);
                 Seeded::Skipped(format!("move the seed into place: {e}"))
             }
         },
-        Err(e) => {
+        Err(why) => {
             let _ = std::fs::remove_dir_all(&tmp);
-            Seeded::Skipped(format!("seed failed: {e}"))
+            Seeded::Skipped(why)
         }
     }
 }
@@ -179,86 +175,43 @@ fn sweep_stale_seeds(seat_target: &Path, profile: &str) {
     }
 }
 
-/// How one entry of a profile directory is seeded.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum Plan {
-    Link,
-    Copy,
-    Skip,
-}
-
-/// The plan for `rel`, a path relative to the profile directory. Pure, so the
-/// rule is tested without a filesystem.
-pub(crate) fn plan_for(rel: &Path) -> Plan {
-    let mut parts = rel.components();
-    let Some(top) = parts.next() else {
-        return Plan::Skip;
-    };
-    let top = top.as_os_str().to_string_lossy();
-    let nested = parts.next().is_some();
-    match top.as_ref() {
-        ".fingerprint" | "build" => Plan::Copy,
-        "deps" if nested => {
-            if rel.extension().is_some_and(|e| e == "d") {
-                Plan::Copy
-            } else {
-                Plan::Link
-            }
+/// Clone each of [`SEEDED_DIRS`] from `src` into `dst` with
+/// `cp -a --reflink=always`, which fails rather than fall back to a copy. `Err`
+/// is the reason, worded for the job output.
+fn reflink_into(src: &Path, dst: &Path) -> std::result::Result<(), String> {
+    std::fs::create_dir_all(dst).map_err(|e| format!("create {}: {e}", dst.display()))?;
+    for dir in SEEDED_DIRS {
+        let from = src.join(dir);
+        if !from.is_dir() {
+            continue;
         }
-        "deps" => Plan::Copy,
-        _ => Plan::Skip,
-    }
-}
-
-/// Recreate `src` at `dst` by [`plan_for`]. Returns (linked, copied) counts.
-fn seed_into(src: &Path, dst: &Path) -> std::io::Result<(u64, u64)> {
-    std::fs::create_dir_all(dst)?;
-    let mut linked = 0;
-    let mut copied = 0;
-    let mut stack: Vec<PathBuf> = vec![PathBuf::new()];
-    while let Some(rel) = stack.pop() {
-        for entry in std::fs::read_dir(src.join(&rel))? {
-            let entry = entry?;
-            let rel_child = rel.join(entry.file_name());
-            let plan = plan_for(&rel_child);
-            if plan == Plan::Skip {
-                continue;
-            }
-            let file_type = entry.file_type()?;
-            let target = dst.join(&rel_child);
-            if file_type.is_dir() {
-                std::fs::create_dir_all(&target)?;
-                stack.push(rel_child);
-            } else if file_type.is_symlink() {
-                let link = std::fs::read_link(entry.path())?;
-                #[cfg(unix)]
-                std::os::unix::fs::symlink(link, &target)?;
-                #[cfg(not(unix))]
-                let _ = link;
-                copied += 1;
-            } else if plan == Plan::Link {
-                // Never fall back to a copy: that would be the 45 GB copy
-                // this seed exists to avoid (a hardlink fails across devices,
-                // as inside a sandbox's bind mounts). The seat builds cold.
-                std::fs::hard_link(entry.path(), &target)?;
-                linked += 1;
-            } else {
-                std::fs::copy(entry.path(), &target)?;
-                copied += 1;
-            }
+        let out = std::process::Command::new("cp")
+            .arg("-a")
+            .arg("--reflink=always")
+            .arg("--")
+            .arg(&from)
+            .arg(dst.join(dir))
+            .stdin(std::process::Stdio::null())
+            .output()
+            .map_err(|e| format!("run cp: {e}"))?;
+        if !out.status.success() {
+            let err = String::from_utf8_lossy(&out.stderr);
+            let first = err.lines().next().unwrap_or("").trim();
+            return Err(format!(
+                "this filesystem cannot reflink, so the seat builds cold (cp: {first})"
+            ));
         }
     }
-    Ok((linked, copied))
+    Ok(())
 }
 
-/// A one-line summary of [`seed_seat_target`]'s result, for a log.
+/// A one-line summary of [`seed_seat_target`]'s result, for a log and the
+/// job output.
 pub(crate) fn describe(results: &[(String, Seeded)]) -> String {
     results
         .iter()
         .map(|(profile, seeded)| match seeded {
-            Seeded::Done { linked, copied } => {
-                format!("{profile}: seeded ({linked} linked, {copied} copied)")
-            }
+            Seeded::Reflinked => format!("{profile}: seeded with reflinks (copy-on-write)"),
             Seeded::AlreadyWarm => format!("{profile}: already warm"),
             Seeded::Skipped(why) => format!("{profile}: not seeded ({why})"),
         })
@@ -269,26 +222,31 @@ pub(crate) fn describe(results: &[(String, Seeded)]) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::HashSet;
 
-    #[test]
-    fn plan_links_only_replaced_artifacts() {
-        assert_eq!(plan_for(Path::new("deps/libfoo-1.rlib")), Plan::Link);
-        assert_eq!(plan_for(Path::new("deps/libfoo-1.rmeta")), Plan::Link);
-        assert_eq!(plan_for(Path::new("deps/aida_cli_lib-1")), Plan::Link);
-        assert_eq!(plan_for(Path::new("deps/foo-1.d")), Plan::Copy);
-        assert_eq!(plan_for(Path::new("deps")), Plan::Copy);
-        assert_eq!(plan_for(Path::new(".fingerprint/foo-1/lib")), Plan::Copy);
-        assert_eq!(plan_for(Path::new("build/foo-1/out/x.rs")), Plan::Copy);
-        assert_eq!(plan_for(Path::new("incremental/foo-1/s-x")), Plan::Skip);
-        assert_eq!(plan_for(Path::new("incremental")), Plan::Skip);
-        assert_eq!(plan_for(Path::new("aida")), Plan::Skip);
-        assert_eq!(plan_for(Path::new("examples/x")), Plan::Skip);
+    /// Every regular file's (device, inode) under `root`.
+    #[cfg(unix)]
+    fn inodes(root: &Path) -> HashSet<(u64, u64)> {
+        use std::os::unix::fs::MetadataExt;
+        let mut out = HashSet::new();
+        let mut stack = vec![root.to_path_buf()];
+        while let Some(dir) = stack.pop() {
+            let Ok(entries) = std::fs::read_dir(&dir) else {
+                continue;
+            };
+            for entry in entries.flatten() {
+                let meta = std::fs::symlink_metadata(entry.path()).unwrap();
+                if meta.is_dir() {
+                    stack.push(entry.path());
+                } else if meta.is_file() {
+                    out.insert((meta.dev(), meta.ino()));
+                }
+            }
+        }
+        out
     }
 
-    #[test]
-    fn seed_links_deps_copies_metadata_and_never_shares_a_rewritten_file() {
-        let tmp = tempfile::tempdir().unwrap();
-        let main_target = tmp.path().join("target");
+    fn fixture_primary(main_target: &Path) {
         let src = main_target.join("agent");
         for dir in [
             "deps",
@@ -304,47 +262,68 @@ mod tests {
         std::fs::write(src.join("build/foo-1/out/gen.rs"), b"gen").unwrap();
         std::fs::write(src.join("incremental/foo-1/q"), b"inc").unwrap();
         std::fs::write(src.join("aida"), b"bin").unwrap();
+    }
+
+    // The ruling's test: whatever path the seed takes on this filesystem, no
+    // seeded file shares an inode with the primary's target.
+    #[cfg(unix)]
+    #[test]
+    fn seed_never_shares_an_inode_with_the_primary() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main_target = tmp.path().join("target");
+        fixture_primary(&main_target);
         let seat_target = main_target.join("worktrees").join("aida-seat-x");
 
         let got = seed_profile(&main_target, &seat_target, "agent", Duration::from_secs(5));
-        assert_eq!(
-            got,
-            Seeded::Done {
-                linked: 1,
-                copied: 3
-            }
-        );
         let dst = seat_target.join("agent");
-        assert_eq!(
-            std::fs::read(dst.join("deps/libfoo-1.rlib")).unwrap(),
-            b"rlib"
-        );
-        assert!(!dst.join("incremental").exists());
-        assert!(!dst.join("aida").exists());
-
-        // An in-place rewrite of a copied file in the seat leaves the
-        // primary's file untouched.
-        std::fs::write(dst.join(".fingerprint/foo-1/lib"), b"seat").unwrap();
-        std::fs::write(dst.join("deps/foo-1.d"), b"seat").unwrap();
-        assert_eq!(
-            std::fs::read(src.join(".fingerprint/foo-1/lib")).unwrap(),
-            b"fp"
-        );
-        assert_eq!(std::fs::read(src.join("deps/foo-1.d")).unwrap(), b"dep");
-
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::MetadataExt;
-            let a = std::fs::metadata(src.join("deps/libfoo-1.rlib")).unwrap();
-            let b = std::fs::metadata(dst.join("deps/libfoo-1.rlib")).unwrap();
-            assert_eq!(a.ino(), b.ino(), "deps artifacts are hardlinked");
+        match &got {
+            Seeded::Reflinked => {
+                let shared: Vec<_> = inodes(&main_target.join("agent"))
+                    .intersection(&inodes(&dst))
+                    .copied()
+                    .collect();
+                assert!(shared.is_empty(), "shared inodes: {shared:?}");
+                assert_eq!(
+                    std::fs::read(dst.join("deps/libfoo-1.rlib")).unwrap(),
+                    b"rlib"
+                );
+                assert!(dst.join(".fingerprint/foo-1/lib").is_file());
+                assert!(!dst.join("incremental").exists());
+                assert!(!dst.join("aida").exists());
+                // cp -a keeps the mtimes cargo's fingerprints compare.
+                let a = std::fs::metadata(main_target.join("agent/deps/libfoo-1.rlib"))
+                    .unwrap()
+                    .modified()
+                    .unwrap();
+                let b = std::fs::metadata(dst.join("deps/libfoo-1.rlib"))
+                    .unwrap()
+                    .modified()
+                    .unwrap();
+                assert_eq!(a, b);
+                // An in-place write in the seat leaves the primary untouched.
+                std::fs::write(dst.join("deps/libfoo-1.rlib"), b"seat").unwrap();
+                assert_eq!(
+                    std::fs::read(main_target.join("agent/deps/libfoo-1.rlib")).unwrap(),
+                    b"rlib"
+                );
+                assert_eq!(
+                    seed_profile(&main_target, &seat_target, "agent", Duration::from_secs(5)),
+                    Seeded::AlreadyWarm
+                );
+            }
+            Seeded::Skipped(why) => {
+                assert!(why.contains("reflink"), "{why}");
+                assert!(!dst.exists(), "a failed seed leaves no partial target");
+                let leftovers: Vec<_> = std::fs::read_dir(&seat_target)
+                    .unwrap()
+                    .flatten()
+                    .filter(|e| e.file_name().to_string_lossy().starts_with(".seed-"))
+                    .collect();
+                assert!(leftovers.is_empty(), "the temporary seed is removed");
+            }
+            Seeded::AlreadyWarm => panic!("a fresh seat target is not warm"),
         }
-
-        // A second seed is a no-op.
-        assert_eq!(
-            seed_profile(&main_target, &seat_target, "agent", Duration::from_secs(5)),
-            Seeded::AlreadyWarm
-        );
+        assert!(describe(&[("agent".into(), got)]).starts_with("agent: "));
     }
 
     #[test]
@@ -357,5 +336,17 @@ mod tests {
             Duration::from_secs(1),
         );
         assert!(matches!(got, Seeded::Skipped(_)), "{got:?}");
+    }
+
+    #[test]
+    fn describe_names_the_path_that_ran() {
+        assert_eq!(
+            describe(&[("agent".into(), Seeded::Reflinked)]),
+            "agent: seeded with reflinks (copy-on-write)"
+        );
+        assert_eq!(
+            describe(&[("agent".into(), Seeded::Skipped("no reflinks".into()))]),
+            "agent: not seeded (no reflinks)"
+        );
     }
 }

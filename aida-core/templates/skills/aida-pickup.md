@@ -490,8 +490,9 @@ Test locally by the spec's tier; the full workspace suite runs only in CI
 and a detached `setsid nohup` run dies with it, so run cargo through the
 launcher: `AIDA_CARGO_TIMEOUT=900 aida lane job run -- cargo test --profile
 agent -p <crate> --lib -- <filter>`, then `aida lane job wait <id>` while it
-exits 75 (still running). If it says the session has no lane job runner, ship
-and say `untested=true` in your result. trace:BUG-2383 | ai:claude
+exits 75 (still running). If it says the session has no lane job runner, or
+refuses the run (jobs run only inside bubblewrap), ship and say
+`untested=true` in your result. trace:BUG-2383 | ai:claude
 
 **Added or changed a CLI command or flag?** In every tier, regenerate the help
 golden with `AIDA_UPDATE_SNAPSHOTS=1 cargo test --profile agent -p aida-cli-lib help_surface_matches_golden_snapshot` and commit

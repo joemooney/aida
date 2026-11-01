@@ -218,15 +218,34 @@ The runner accepts only `cargo test`, `cargo check` and `cargo build` with the
 agent profile, and refuses options that point cargo at other config, another
 manifest or target directory, unstable flags or another toolchain. It runs
 the job in the seat with the seat's own cargo target, through the host's
-`cargo` (the slot-limiting wrapper), and under the seat's OS wrap when
-`[contained] os_wrap` is on. The command waits at most 50 seconds. It exits
-with cargo's exit code when the run finishes, and otherwise prints the job id
-and exits 75; `aida lane job wait <id>` keeps waiting. Output and exit codes
-are kept under the main checkout's `.aida/lane-jobs/<lease>/`, with one line
-per job in its `jobs.log`. A seat clone's cargo target is seeded from the
-primary's agent-profile target when the clone is created, and again before
-the first job: dependency artifacts are hardlinked, cargo's metadata and
-build-script output are copied, and incremental state is skipped.
+`cargo` (the slot-limiting wrapper), whose path each job's output names.
+
+A job runs code the seat wrote (build scripts, tests), so it always runs in its
+own bubblewrap sandbox. The filesystem is read-only except the seat, its cargo
+target, cargo home and the slot wrapper's lock and log directories. When
+`[contained] os_wrap` is off, or bubblewrap cannot run, the launcher does not
+offer the runner and the runner refuses every job. Nothing runs unsandboxed,
+and the result line says `untested=true`. A job starts from a cleared
+environment: only `PATH`, `HOME`, `USER`, `LANG`, `LC_*`, `TMPDIR`,
+`CARGO_HOME`, `RUSTUP_HOME`, `RUSTUP_TOOLCHAIN`, `CARGO_TERM_COLOR`,
+`XDG_RUNTIME_DIR` and `AIDA_CARGO_SLOTS` come from the launcher, plus the seat's
+cargo target and the lane marker. A seat may set `AIDA_CARGO_TIMEOUT`,
+`RUST_BACKTRACE`, `RUST_TEST_THREADS` and `AIDA_UPDATE_SNAPSHOTS` for a job.
+No grant, session variable or credential reaches it.
+
+The command waits at most 50 seconds. It exits with cargo's exit code when the
+run finishes, and otherwise prints the job id and exits 75; `aida lane job wait
+<id>` keeps waiting. Output and exit codes are kept under the main checkout's
+`.aida/lane-jobs/<lease>/`, with one line per job in its `jobs.log`. Only a
+`cargo test` that ran to its own exit code counts as tested: a lane that ran
+only `cargo check` or `cargo build` still says `untested=true`.
+
+A seat clone's cargo target is seeded from the primary's agent-profile target
+when the clone is created, and again before the first job. The seed uses only
+reflinks (`cp -a --reflink=always` of `deps/`, `.fingerprint/` and `build/`), so
+a seat never shares a file with the primary's target. On a filesystem without
+reflinks nothing is seeded and the seat builds cold. Each job's output says
+which happened.
 <!-- trace:BUG-2383 | ai:claude -->
 
 ### `aida backlog`

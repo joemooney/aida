@@ -101,11 +101,12 @@ pub(crate) const LANE_JOB_CONTRACT: &str = "\n\nLocal tests in this lane: a tool
 at 60 seconds and anything you detach (`setsid nohup ...`, `&`) dies with the call, so do not run \
 cargo yourself and do not background it. Hand the run to the launcher instead: \
 `AIDA_CARGO_TIMEOUT=900 aida lane job run -- cargo test --profile agent -p <crate> --lib -- \
-<filter>`. It accepts `cargo test|check|build --profile agent ...`, runs in this seat with its own \
-warm target under the cargo slot limiter, and returns within 50 seconds. When it finishes it \
-prints the output tail and exits with cargo's exit code; while it still runs it prints the job \
-id and exits 75, and you continue with `aida lane job wait <id>` until it finishes. If it \
-reports that this session has no lane job runner, say `untested=true` in your final result.";
+<filter>`. It accepts `cargo test|check|build --profile agent ...`, runs in this seat inside a \
+sandbox, with its own target, under the cargo slot limiter, and returns within 50 seconds. When \
+it finishes it prints the output tail and exits with cargo's exit code; while it still runs it \
+prints the job id and exits 75, and you continue with `aida lane job wait <id>` until it \
+finishes. Only a `cargo test` run counts as tested. If it reports that this session has no lane \
+job runner, or refuses the run, say `untested=true` in your final result.";
 
 /// Append `untested=true` to a result line when the lane ran no local test
 /// to completion (BUG-2383 AC3), so whoever launched it knows the push
@@ -600,7 +601,18 @@ pub(crate) fn run(launch: Launch<'_>) -> Result<()> {
     // outside its 60-second tool-call cap. trace:BUG-2383 | ai:claude
     let worktree = lease_worktree(launch.project_root, launch.lease_id);
     let lane_jobs = crate::lane_job::LaneJobs::for_lease(&main_root, &worktree, launch.lease_id);
+    // A job runs seat-written code, so it runs only inside bubblewrap: with
+    // os_wrap off the runner would refuse every job, so it is not offered and
+    // the lane reports untested=true.
     let lane_jobs = match lane_jobs.prepare() {
+        Ok(()) if !crate::session::os_wrap_enabled(&worktree) => {
+            eprintln!(
+                "{} the lane job runner needs `[contained] os_wrap` (jobs run only inside \
+                 bubblewrap), so the implementer cannot run tests and its result says untested=true",
+                "Warning:".yellow().bold()
+            );
+            None
+        }
         Ok(()) => Some(lane_jobs),
         Err(e) => {
             eprintln!(

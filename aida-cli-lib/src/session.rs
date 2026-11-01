@@ -4188,6 +4188,64 @@ pub(crate) fn os_wrapped_program_and_args(
     Ok(("bwrap".to_string(), full))
 }
 
+/// BUG-2383: wrap one lane job (a seat's `cargo test|check|build`) in its own
+/// minimal bubblewrap profile. A job runs code the seat wrote (build scripts,
+/// tests, a seat-written `.cargo/config.toml` runner), so it never runs
+/// unsandboxed and never gets the seat's wider launch profile (`~/.claude`,
+/// the store, the mailbox): the filesystem is read-only except `seat` and the
+/// `rw` paths the caller names (the seat's cargo target, cargo home, the slot
+/// limiter's state). Fails closed, with the remediation, when `[contained]
+/// os_wrap` is off for the seat or bubblewrap cannot run.
+// trace:BUG-2383 | ai:claude
+pub(crate) fn lane_job_wrapped_program_and_args(
+    seat: &Path,
+    rw: &[PathBuf],
+    program: &str,
+    args: Vec<String>,
+) -> Result<(String, Vec<String>)> {
+    if !os_wrap_enabled(seat) {
+        anyhow::bail!(
+            "a lane job runs only inside bubblewrap, and `[contained] os_wrap` is off for this \
+             seat. Turn it on (`[contained] os_wrap = true` in .aida/config.toml, or \
+             AIDA_OS_WRAP=1 for the launcher), with bubblewrap installed ({BWRAP_INSTALL_DEBIAN}). \
+             Nothing ran; report the work as untested (untested=true)."
+        );
+    }
+    let root = crate::find_project_root_from(seat).with_context(|| {
+        format!(
+            "{} is not inside a git repository; refusing to bind it read-write in bubblewrap",
+            seat.display()
+        )
+    })?;
+    if which_on_path("bwrap").is_none() {
+        anyhow::bail!(
+            "a lane job runs only inside bubblewrap, and `bwrap` is not on PATH \
+             ({BWRAP_INSTALL_DEBIAN}). Nothing ran; report the work as untested (untested=true)."
+        );
+    }
+    bwrap_preflight()?;
+    let read_allowlist = contained_read_allowlist(&root);
+    Ok((
+        "bwrap".to_string(),
+        lane_job_bwrap_argv(&root, rw, &read_allowlist, program, args),
+    ))
+}
+
+/// The pure argv of [`lane_job_wrapped_program_and_args`], after `bwrap`.
+// trace:BUG-2383 | ai:claude
+pub(crate) fn lane_job_bwrap_argv(
+    seat: &Path,
+    rw: &[PathBuf],
+    read_allowlist: &[String],
+    program: &str,
+    args: Vec<String>,
+) -> Vec<String> {
+    let mut full = bwrap_confinement_args_inner(seat, rw, read_allowlist);
+    full.push(program.to_string());
+    full.extend(args);
+    full
+}
+
 /// Run a trivial `bwrap … true` to confirm bubblewrap can actually create the
 /// user namespace + uid map on this host BEFORE wrapping the real drain. On
 /// failure (typically the AppArmor unprivileged-userns restriction) bail with

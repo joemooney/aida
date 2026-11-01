@@ -17,17 +17,33 @@
 //! --no-human`) runs [`Runner`] on a thread for as long as it waits for the
 //! lane. The runner takes one job at a time and runs it in the seat's
 //! directory, with the seat's build environment (its own cargo target, no
-//! compiler wrapper), under the seat's OS wrap when `[contained] os_wrap` is
-//! on, and through the host `cargo` on `PATH`, which is the cargo
-//! slot-limiting wrapper on a configured host. The run carries the lane
-//! marker, so a seat that ends its turn while a job runs is waited for and
-//! resumed by the existing background-work loop.
+//! compiler wrapper), and through the host `cargo` on `PATH`, which is the
+//! cargo slot-limiting wrapper on a configured host. Each job's output names
+//! the `cargo` it resolved to. The run carries the lane marker, so a seat that
+//! ends its turn while a job runs is waited for and resumed by the existing
+//! background-work loop.
 //!
-//! Containment (advisor ruling on BUG-2383): only an allow-listed cargo argv
-//! ever runs: `cargo test|check|build --profile agent ...`, with no option
-//! that points cargo at other code, config or output. The seat cannot make it
-//! run a shell string. Results are written only into the host's directory, so
-//! a seat that plants a symlink in its inbox cannot redirect a host write.
+//! Containment (advisor rulings on BUG-2383, rounds 1 and 2):
+//!
+//! - Only an allow-listed cargo argv runs: `cargo test|check|build --profile
+//!   agent ...`, with no option that points cargo at other code, config or
+//!   output.
+//! - A job still runs code the seat wrote (build scripts, tests, a
+//!   seat-written `.cargo/config.toml` runner), so it always runs inside its
+//!   own minimal bubblewrap profile
+//!   ([`crate::session::lane_job_wrapped_program_and_args`]): the filesystem
+//!   is read-only except the seat, its cargo target, cargo home and the slot
+//!   limiter's state. When `[contained] os_wrap` is off or bubblewrap cannot
+//!   run, the job is refused and nothing runs; the lane reports
+//!   `untested=true`.
+//! - A job starts from a cleared environment plus [`HOST_ENV_ALLOWED`], the
+//!   seat's build environment and the job's own [`ALLOWED_ENV`]. No grant,
+//!   session variable, credential or launcher-only signal file reaches it.
+//! - The inbox is opened without following symlinks, component by component,
+//!   and each job file is opened and removed through that directory handle,
+//!   so a seat that turns its inbox or a job file into a symlink cannot make
+//!   the host read or remove anything outside the inbox. Results are written
+//!   only into the host's directory.
 //!
 //! The seat side is `aida lane job run -- cargo test ...` and `aida lane job
 //! wait <id>`, both of which return within one tool call.
@@ -35,7 +51,6 @@
 
 use anyhow::{Context, Result};
 use std::collections::{BTreeMap, HashSet};
-use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::Arc;
@@ -73,6 +88,45 @@ pub(crate) const ALLOWED_ENV: &[&str] = &[
     "RUST_TEST_THREADS",
     "AIDA_UPDATE_SNAPSHOTS",
 ];
+
+/// The launcher's environment variables a job inherits; `LC_*` is also kept.
+/// Everything else (grants, `AIDA_SESSION_*`, `AIDA_HANDLE`, `SSH_AUTH_SOCK`,
+/// `GH_TOKEN`, the launcher-only signal files, `AIDA_CARGO_NO_SLOT`,
+/// `AIDA_CARGO_SLOT_HELD`) is dropped. `XDG_RUNTIME_DIR` and
+/// `AIDA_CARGO_SLOTS` carry no authority: the host cargo wrapper keeps its
+/// slot locks under `XDG_RUNTIME_DIR`, so without it a job would queue on a
+/// sandbox-private `/tmp` and skip the host's slot limit.
+pub(crate) const HOST_ENV_ALLOWED: &[&str] = &[
+    "PATH",
+    "HOME",
+    "USER",
+    "LANG",
+    "TMPDIR",
+    "CARGO_HOME",
+    "RUSTUP_HOME",
+    "RUSTUP_TOOLCHAIN",
+    "CARGO_TERM_COLOR",
+    "XDG_RUNTIME_DIR",
+    "AIDA_CARGO_SLOTS",
+];
+
+/// The seat build-environment variables a job gets (from
+/// [`crate::seat_clone::seat_build_env`]).
+pub(crate) const BUILD_ENV_ALLOWED: &[&str] = &["CARGO_TARGET_DIR", "RUSTC_WRAPPER"];
+
+/// Whether the launcher's `key` reaches a job.
+pub(crate) fn host_key_allowed(key: &str) -> bool {
+    HOST_ENV_ALLOWED.contains(&key) || key.starts_with("LC_")
+}
+
+/// The launcher environment `vars`, cut down to [`host_key_allowed`] keys.
+pub(crate) fn scrub_host_env(
+    vars: impl IntoIterator<Item = (String, String)>,
+) -> Vec<(String, String)> {
+    vars.into_iter()
+        .filter(|(k, _)| host_key_allowed(k))
+        .collect()
+}
 
 /// The cargo subcommands a job may run.
 pub(crate) const ALLOWED_SUBCOMMANDS: &[&str] = &["test", "check", "build"];
@@ -199,16 +253,36 @@ pub(crate) fn read_rc(results: &Path, id: &str) -> Option<i32> {
 pub(crate) struct Tally {
     /// Jobs that ran to an exit code of their own (pass or fail).
     pub(crate) completed: AtomicU32,
+    /// Of those, the `cargo test` jobs: a check or build tests nothing.
+    pub(crate) tested: AtomicU32,
     /// Jobs refused, timed out or stopped.
     pub(crate) incomplete: AtomicU32,
 }
 
 impl Tally {
-    /// Whether the lane ran no job to completion: its result line says
-    /// `untested=true`.
+    /// Whether the lane ran no `cargo test` to an exit code of its own: its
+    /// result line says `untested=true`.
     pub(crate) fn untested(&self) -> bool {
-        self.completed.load(Ordering::Relaxed) == 0
+        self.tested.load(Ordering::Relaxed) == 0
     }
+
+    /// Count a job that exited by itself.
+    pub(crate) fn record_exit(&self, job: &JobRequest) {
+        self.completed.fetch_add(1, Ordering::Relaxed);
+        if job.argv.get(1).map(String::as_str) == Some("test") {
+            self.tested.fetch_add(1, Ordering::Relaxed);
+        }
+    }
+}
+
+/// How a job is sandboxed.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Sandbox {
+    /// The job's own bubblewrap profile; refused when it cannot run.
+    Bwrap,
+    /// Tests only: run the fixture program directly.
+    #[cfg(test)]
+    TestUnwrapped,
 }
 
 /// Where one lane's jobs run.
@@ -222,12 +296,17 @@ pub(crate) struct LaneJobs {
     pub(crate) results: PathBuf,
     /// The lease id, carried as the lane marker on every job.
     pub(crate) lease_id: String,
-    /// The environment a job's cargo runs with (the seat's build env).
+    /// The seat's build environment (its cargo target, no compiler wrapper).
     pub(crate) build_env: Vec<(String, String)>,
-    /// The program a job's `cargo` resolves to: `cargo` on `PATH`, which is
-    /// the slot-limiting wrapper on a configured host. Tests point it at a
-    /// fixture.
+    /// The launcher environment a job inherits, already cut down by
+    /// [`scrub_host_env`].
+    pub(crate) host_env: Vec<(String, String)>,
+    /// The program a job's `cargo` resolves to, looked up on the job's
+    /// `PATH`: there, the slot-limiting wrapper on a configured host. Tests
+    /// point it at a fixture.
     pub(crate) program: String,
+    /// How each job is sandboxed.
+    pub(crate) sandbox: Sandbox,
 }
 
 impl LaneJobs {
@@ -255,8 +334,70 @@ impl LaneJobs {
             results: results_dir(main_root, lease_id),
             lease_id: lease_id.to_string(),
             build_env,
+            // vars_os: a non-UTF-8 variable is dropped, never a panic.
+            host_env: scrub_host_env(
+                std::env::vars_os()
+                    .filter_map(|(k, v)| Some((k.into_string().ok()?, v.into_string().ok()?))),
+            ),
             program: "cargo".to_string(),
+            sandbox: Sandbox::Bwrap,
         }
+    }
+
+    /// The whole environment of a job: the scrubbed launcher environment,
+    /// the seat's build environment, the job's own allow-listed variables and
+    /// the lane marker. Each source is filtered again here, so nothing outside
+    /// the allow-lists reaches a job whatever a caller put in `self`.
+    pub(crate) fn job_env(&self, job: &JobRequest) -> BTreeMap<String, String> {
+        let mut env: BTreeMap<String, String> = BTreeMap::new();
+        for (k, v) in &self.host_env {
+            if host_key_allowed(k) {
+                env.insert(k.clone(), v.clone());
+            }
+        }
+        for (k, v) in &self.build_env {
+            if BUILD_ENV_ALLOWED.contains(&k.as_str()) {
+                env.insert(k.clone(), v.clone());
+            }
+        }
+        for (k, v) in &job.env {
+            if ALLOWED_ENV.contains(&k.as_str()) {
+                env.insert(k.clone(), v.clone());
+            }
+        }
+        env.insert(
+            crate::headless_background::LANE_MARKER_ENV.to_string(),
+            self.lease_id.clone(),
+        );
+        env
+    }
+
+    /// The paths a job's sandbox may write besides the seat: its cargo
+    /// target, cargo home (registry downloads), and the host cargo wrapper's
+    /// slot locks and slot log, so the job queues for a slot with every other
+    /// cargo on the host and its run is recorded.
+    pub(crate) fn sandbox_rw_paths(&self, env: &BTreeMap<String, String>) -> Vec<PathBuf> {
+        let mut rw = Vec::new();
+        if let Some(target) = self.target_dir() {
+            rw.push(target);
+        }
+        let home = env.get("HOME").map(PathBuf::from);
+        if let Some(cargo_home) = env
+            .get("CARGO_HOME")
+            .map(PathBuf::from)
+            .or_else(|| home.as_ref().map(|h| h.join(".cargo")))
+        {
+            rw.push(cargo_home);
+        }
+        let runtime = env
+            .get("XDG_RUNTIME_DIR")
+            .map(PathBuf::from)
+            .unwrap_or_else(|| PathBuf::from("/tmp"));
+        rw.push(runtime.join(format!("cargo-slots-{}", current_uid())));
+        if let Some(home) = home {
+            rw.push(home.join(".local/state/cargo-slots"));
+        }
+        rw
     }
 
     /// The seat's cargo target directory, from its build environment.
@@ -267,8 +408,22 @@ impl LaneJobs {
             .map(|(_, v)| PathBuf::from(v))
     }
 
-    /// Create the inbox and the results directory.
+    /// Create the inbox and the results directory. Refuses an inbox path
+    /// the seat turned into a symlink, so the host never creates a directory
+    /// outside the seat.
     pub(crate) fn prepare(&self) -> Result<()> {
+        #[cfg(not(unix))]
+        anyhow::bail!("the lane job runner needs a unix host");
+        let mut path = self.seat.clone();
+        for part in Path::new(INBOX_RELATIVE).components() {
+            path.push(part);
+            if std::fs::symlink_metadata(&path).is_ok_and(|m| !m.file_type().is_dir()) {
+                anyhow::bail!(
+                    "{} is not a directory (a symlink?); the lane job runner will not use it",
+                    path.display()
+                );
+            }
+        }
         std::fs::create_dir_all(&self.inbox)
             .with_context(|| format!("create {}", self.inbox.display()))?;
         std::fs::create_dir_all(&self.results)
@@ -346,66 +501,83 @@ impl Drop for Runner {
 
 const POLL: Duration = Duration::from_millis(500);
 
+#[cfg(unix)]
 fn run_loop(lane: &LaneJobs, stop: &AtomicBool, tally: &Tally) {
     let mut seen: HashSet<String> = HashSet::new();
-    let mut seeded = false;
+    let mut seed_note: Option<String> = None;
+    let mut warned = false;
     while !stop.load(Ordering::Relaxed) {
-        match next_job(lane, &mut seen) {
-            Some((id, job)) => {
-                if !seeded {
-                    seeded = true;
-                    seed_lane_target(lane);
+        let inbox = match inbox::InboxDir::open(lane) {
+            Ok(inbox) => inbox,
+            Err(e) => {
+                if !warned {
+                    warned = true;
+                    lane.log(&format!(
+                        "cannot open the inbox {} without following a symlink: {e}",
+                        lane.inbox.display()
+                    ));
                 }
-                run_one(lane, &id, job, stop, tally);
+                std::thread::sleep(POLL);
+                continue;
+            }
+        };
+        match next_job(lane, &inbox, &mut seen) {
+            Some((id, job)) => {
+                let note = seed_note.get_or_insert_with(|| seed_lane_target(lane));
+                run_one(lane, &id, job, stop, tally, note);
             }
             None => std::thread::sleep(POLL),
         }
     }
 }
 
-/// Seed the seat's cargo target from the primary's before the first job.
-fn seed_lane_target(lane: &LaneJobs) {
+#[cfg(not(unix))]
+fn run_loop(_lane: &LaneJobs, _stop: &AtomicBool, _tally: &Tally) {}
+
+/// Seed the seat's cargo target from the primary's before the first job, and
+/// say which path ran, for the lane log and every job's output.
+fn seed_lane_target(lane: &LaneJobs) -> String {
     let Some(target) = lane.target_dir() else {
-        return;
+        return "the seat has no cargo target of its own; not seeded".into();
     };
-    let Some(main_target) = target.parent().and_then(Path::parent) else {
-        return;
+    let note = match target.parent().and_then(Path::parent) {
+        Some(main_target) if main_target.file_name() == Some(std::ffi::OsStr::new("target")) => {
+            let results = crate::seat_target_seed::seed_seat_target(
+                main_target,
+                &target,
+                crate::seat_target_seed::LOCK_WAIT,
+            );
+            crate::seat_target_seed::describe(&results)
+        }
+        _ => "not under the primary's target; not seeded".into(),
     };
-    if main_target.file_name() != Some(std::ffi::OsStr::new("target")) {
-        return;
-    }
-    let results = crate::seat_target_seed::seed_seat_target(
-        main_target,
-        &target,
-        crate::seat_target_seed::LOCK_WAIT,
-    );
-    lane.log(&format!(
-        "target {}: {}",
-        target.display(),
-        crate::seat_target_seed::describe(&results)
-    ));
+    let note = format!("seat target {}: {note}", target.display());
+    lane.log(&note);
+    note
 }
 
-/// The next job in the inbox, oldest name first, taken out of the inbox.
-/// A file that is not a regular file, is too large, or does not parse is
-/// answered with a refusal.
+/// The next job in the inbox, oldest name first, taken out of the inbox
+/// through the inbox's directory handle. A file that is not a regular file
+/// (a symlink included), is too large, or does not parse is answered with a
+/// refusal.
+#[cfg(unix)]
 fn next_job(
     lane: &LaneJobs,
+    inbox: &inbox::InboxDir,
     seen: &mut HashSet<String>,
 ) -> Option<(String, std::result::Result<JobRequest, String>)> {
-    let entries = std::fs::read_dir(&lane.inbox).ok()?;
-    let mut names: Vec<String> = entries
-        .flatten()
-        .filter_map(|e| e.file_name().to_str().map(String::from))
+    let mut names: Vec<String> = inbox
+        .names(&lane.inbox)
+        .into_iter()
         .filter_map(|n| n.strip_suffix(".job").map(String::from))
         .filter(|id| !seen.contains(id))
         .collect();
     names.sort();
     let id = names.into_iter().next()?;
     seen.insert(id.clone());
-    let path = lane.inbox.join(format!("{id}.job"));
-    let parsed = read_job(&path);
-    let _ = std::fs::remove_file(&path);
+    let name = format!("{id}.job");
+    let parsed = inbox.read_job(&name);
+    inbox.remove(&name);
     if !valid_id(&id) {
         lane.log(&format!("ignored a job file with an invalid id {id:?}"));
         return None;
@@ -413,19 +585,135 @@ fn next_job(
     Some((id, parsed))
 }
 
-fn read_job(path: &Path) -> std::result::Result<JobRequest, String> {
-    let meta = std::fs::symlink_metadata(path).map_err(|e| format!("read the job: {e}"))?;
-    if !meta.file_type().is_file() {
-        return Err("the job file is not a regular file".into());
+/// The inbox, held as a directory handle opened with `O_NOFOLLOW` at every
+/// component below the seat root (finding 9 of the BUG-2383 review).
+#[cfg(unix)]
+mod inbox {
+    use super::{JobRequest, LaneJobs, INBOX_RELATIVE, MAX_JOB_BYTES};
+    use std::ffi::{CString, OsStr};
+    use std::fs::File;
+    use std::io::Read;
+    use std::os::unix::ffi::OsStrExt;
+    use std::os::unix::fs::MetadataExt;
+    use std::os::unix::io::{AsRawFd, FromRawFd};
+    use std::path::Path;
+
+    pub(super) struct InboxDir {
+        dir: File,
     }
-    if meta.len() > MAX_JOB_BYTES {
-        return Err(format!("the job file is over {MAX_JOB_BYTES} bytes"));
+
+    /// `openat(dir, name, flags | O_NOFOLLOW | O_CLOEXEC)`.
+    fn openat_nofollow(dir: &File, name: &OsStr, flags: libc::c_int) -> std::io::Result<File> {
+        let c = CString::new(name.as_bytes())
+            .map_err(|_| std::io::Error::from(std::io::ErrorKind::InvalidInput))?;
+        // SAFETY: `c` is NUL-terminated and `dir` stays open for the call.
+        let fd = unsafe {
+            libc::openat(
+                dir.as_raw_fd(),
+                c.as_ptr(),
+                flags | libc::O_NOFOLLOW | libc::O_CLOEXEC,
+            )
+        };
+        if fd < 0 {
+            return Err(std::io::Error::last_os_error());
+        }
+        // SAFETY: `fd` was just returned by openat and nothing else owns it.
+        Ok(unsafe { File::from_raw_fd(fd) })
     }
-    let mut body = String::new();
-    std::fs::File::open(path)
-        .and_then(|f| f.take(MAX_JOB_BYTES).read_to_string(&mut body))
-        .map_err(|e| format!("read the job: {e}"))?;
-    serde_json::from_str(&body).map_err(|e| format!("the job file does not parse: {e}"))
+
+    impl InboxDir {
+        /// Open `<seat>/.aida/lane-jobs` without following a symlink at
+        /// `.aida` or `lane-jobs`.
+        pub(super) fn open(lane: &LaneJobs) -> std::io::Result<Self> {
+            let mut dir = File::open(&lane.seat)?;
+            for part in Path::new(INBOX_RELATIVE).components() {
+                dir = openat_nofollow(&dir, part.as_os_str(), libc::O_RDONLY | libc::O_DIRECTORY)?;
+            }
+            Ok(Self { dir })
+        }
+
+        /// The names in the inbox. They are listed by path, so the listing
+        /// is used only when that path is still the directory this handle
+        /// holds; every open and removal goes through the handle.
+        pub(super) fn names(&self, path: &Path) -> Vec<String> {
+            let (Ok(held), Ok(listed)) = (self.dir.metadata(), std::fs::symlink_metadata(path))
+            else {
+                return Vec::new();
+            };
+            if !listed.is_dir() || held.dev() != listed.dev() || held.ino() != listed.ino() {
+                return Vec::new();
+            }
+            let Ok(entries) = std::fs::read_dir(path) else {
+                return Vec::new();
+            };
+            entries
+                .flatten()
+                .filter_map(|e| e.file_name().to_str().map(String::from))
+                .collect()
+        }
+
+        /// Read job file `name`: a regular file of at most
+        /// [`MAX_JOB_BYTES`], never through a symlink, never blocking on a
+        /// FIFO.
+        pub(super) fn read_job(&self, name: &str) -> std::result::Result<JobRequest, String> {
+            let file = openat_nofollow(
+                &self.dir,
+                OsStr::new(name),
+                libc::O_RDONLY | libc::O_NONBLOCK,
+            )
+            .map_err(|e| {
+                if e.raw_os_error() == Some(libc::ELOOP) {
+                    "the job file is a symlink, not a regular file".to_string()
+                } else {
+                    format!("read the job: {e}")
+                }
+            })?;
+            let meta = file.metadata().map_err(|e| format!("read the job: {e}"))?;
+            if !meta.is_file() {
+                return Err("the job file is not a regular file".into());
+            }
+            if meta.len() > MAX_JOB_BYTES {
+                return Err(format!("the job file is over {MAX_JOB_BYTES} bytes"));
+            }
+            let mut body = String::new();
+            file.take(MAX_JOB_BYTES)
+                .read_to_string(&mut body)
+                .map_err(|e| format!("read the job: {e}"))?;
+            serde_json::from_str(&body).map_err(|e| format!("the job file does not parse: {e}"))
+        }
+
+        /// Remove `name` from the inbox (never a path outside it).
+        pub(super) fn remove(&self, name: &str) {
+            let Ok(c) = CString::new(name) else {
+                return;
+            };
+            // SAFETY: `c` is NUL-terminated and `self.dir` is open.
+            unsafe { libc::unlinkat(self.dir.as_raw_fd(), c.as_ptr(), 0) };
+        }
+    }
+}
+
+/// The real uid, for the cargo wrapper's slot directory name.
+fn current_uid() -> u32 {
+    // SAFETY: getuid has no preconditions and cannot fail.
+    #[cfg(unix)]
+    let uid = unsafe { libc::getuid() };
+    #[cfg(not(unix))]
+    let uid = 0;
+    uid
+}
+
+/// Where `program` resolves on `env`'s `PATH` (a path with a `/` is taken
+/// as given).
+pub(crate) fn resolve_program(program: &str, env: &BTreeMap<String, String>) -> Option<PathBuf> {
+    if program.contains('/') {
+        let p = PathBuf::from(program);
+        return p.is_file().then_some(p);
+    }
+    let path = env.get("PATH")?;
+    std::env::split_paths(path)
+        .map(|dir| dir.join(program))
+        .find(|candidate| candidate.is_file())
 }
 
 /// Write `rc` for job `id` atomically.
@@ -442,6 +730,7 @@ fn run_one(
     job: std::result::Result<JobRequest, String>,
     stop: &AtomicBool,
     tally: &Tally,
+    seed_note: &str,
 ) {
     let out_file = out_path(&lane.results, id);
     let refuse = |why: &str| {
@@ -454,7 +743,29 @@ fn run_one(
         Ok(job) => job,
         Err(why) => return refuse(&why),
     };
-    let out = match std::fs::OpenOptions::new()
+    let env = lane.job_env(&job);
+    let Some(cargo) = resolve_program(&lane.program, &env) else {
+        return refuse(&format!("`{}` is not on the job's PATH", lane.program));
+    };
+    let args = job.argv[1..].to_vec();
+    let (program, args, how_wrapped) = match lane.sandbox {
+        Sandbox::Bwrap => match crate::session::lane_job_wrapped_program_and_args(
+            &lane.seat,
+            &lane.sandbox_rw_paths(&env),
+            &cargo.to_string_lossy(),
+            args,
+        ) {
+            Ok((program, args)) => (program, args, "inside bubblewrap"),
+            Err(e) => return refuse(&format!("{e:#}")),
+        },
+        #[cfg(test)]
+        Sandbox::TestUnwrapped => (
+            cargo.to_string_lossy().into_owned(),
+            args,
+            "unwrapped (test fixture)",
+        ),
+    };
+    let mut out = match std::fs::OpenOptions::new()
         .write(true)
         .create_new(true)
         .open(&out_file)
@@ -462,17 +773,14 @@ fn run_one(
         Ok(f) => f,
         Err(e) => return refuse(&format!("create {}: {e}", out_file.display())),
     };
+    let ran_with = format!("cargo is {}, run {how_wrapped}", cargo.display());
+    {
+        use std::io::Write;
+        let _ = writeln!(out, "lane job: {seed_note}\nlane job: {ran_with}");
+    }
     let err = match out.try_clone() {
         Ok(f) => f,
         Err(e) => return refuse(&format!("open the output: {e}")),
-    };
-    let (program, args) = match crate::session::os_wrapped_program_and_args(
-        &lane.seat,
-        &lane.program,
-        job.argv[1..].to_vec(),
-    ) {
-        Ok(pair) => pair,
-        Err(e) => return refuse(&format!("{e:#}")),
     };
     let mut cmd = std::process::Command::new(&program);
     cmd.args(&args)
@@ -480,15 +788,10 @@ fn run_one(
         .stdin(std::process::Stdio::null())
         .stdout(out)
         .stderr(err)
-        .env(crate::headless_background::LANE_MARKER_ENV, &lane.lease_id)
-        .env_remove(INBOX_ENV)
-        .env_remove(RESULTS_ENV);
-    for (k, v) in &lane.build_env {
-        cmd.env(k, v);
-    }
-    for (k, v) in &job.env {
-        cmd.env(k, v);
-    }
+        // A job never inherits the launcher's environment: no grant, no
+        // session or launcher-only variable, no credential.
+        .env_clear()
+        .envs(&env);
     #[cfg(unix)]
     {
         use std::os::unix::process::CommandExt;
@@ -496,7 +799,7 @@ fn run_one(
     }
     let timeout = timeout_for(&job);
     lane.log(&format!(
-        "{id} started: {} (timeout {}s)",
+        "{id} started: {} (timeout {}s; {ran_with})",
         job.argv.join(" "),
         timeout.as_secs()
     ));
@@ -522,7 +825,7 @@ fn run_one(
         std::thread::sleep(POLL);
     };
     if how == "exited" {
-        tally.completed.fetch_add(1, Ordering::Relaxed);
+        tally.record_exit(&job);
     } else {
         tally.incomplete.fetch_add(1, Ordering::Relaxed);
         use std::io::Write;

@@ -169,10 +169,50 @@ fn fixture_lane(tmp: &Path) -> LaneJobs {
             "CARGO_TARGET_DIR".into(),
             tmp.join("seat-target").display().to_string(),
         )],
+        host_env: scrub_host_env(dirty_host_env(tmp)),
         program: fake.display().to_string(),
+        sandbox: Sandbox::TestUnwrapped,
     };
     lane.prepare().unwrap();
     lane
+}
+
+/// A launcher environment full of authority a job must never see, plus the
+/// keys it may.
+fn dirty_host_env(tmp: &Path) -> Vec<(String, String)> {
+    let mut env: Vec<(String, String)> = [
+        ("AIDA_SESSION_GRANT", "grant-secret"),
+        ("AIDA_SESSION_ROLE", "implementer"),
+        ("AIDA_SESSION_ID", "s-1"),
+        ("AIDA_HANDLE", "claude-implementer-1"),
+        ("AIDA_REVIEW_VERDICT_FILE", "/tmp/verdict"),
+        ("AIDA_ORCHESTRATOR_TOKEN", "tok"),
+        ("AIDA_LANE_JOBS_INBOX", "/x"),
+        ("AIDA_LANE_JOBS_RESULTS", "/y"),
+        ("AIDA_CARGO_NO_SLOT", "1"),
+        ("AIDA_CARGO_SLOT_HELD", "3"),
+        ("SSH_AUTH_SOCK", "/run/ssh.sock"),
+        ("GH_TOKEN", "ghp_secret"),
+        ("GITHUB_TOKEN", "ghs_secret"),
+        ("LD_PRELOAD", "/evil.so"),
+        ("LANG", "C.UTF-8"),
+        ("LC_ALL", "C"),
+        ("CARGO_TERM_COLOR", "never"),
+    ]
+    .iter()
+    .map(|(k, v)| ((*k).to_string(), (*v).to_string()))
+    .collect();
+    env.push(("PATH".into(), std::env::var("PATH").unwrap_or_default()));
+    env.push(("HOME".into(), tmp.join("home").display().to_string()));
+    env
+}
+
+/// Every key a job may see: the allow-lists plus the lane marker.
+fn allowed_job_key(key: &str) -> bool {
+    host_key_allowed(key)
+        || BUILD_ENV_ALLOWED.contains(&key)
+        || ALLOWED_ENV.contains(&key)
+        || key == crate::headless_background::LANE_MARKER_ENV
 }
 
 #[cfg(unix)]
@@ -229,6 +269,12 @@ fn fixture_lane_runs_a_filtered_test_through_the_runner_and_reports_pass_fail() 
     );
     assert!(out.contains("lane=lease-fixture"), "{out}");
     assert!(out.contains("timeout=900"), "{out}");
+    // The output names the seed path and the cargo it resolved to.
+    assert!(out.contains("lane job: seat target "), "{out}");
+    assert!(
+        out.contains(&format!("lane job: cargo is {}", lane.program)),
+        "{out}"
+    );
 
     let fail = job(&[
         "cargo",
@@ -332,6 +378,295 @@ fn a_job_still_running_at_lane_end_is_stopped() {
     let tally = runner.stop();
     assert_eq!(read_rc(&lane.results, &id), Some(STOPPED_RC));
     assert!(tally.untested());
+}
+
+// Round 2, ruling 2: a job starts from a cleared environment plus the
+// allow-lists. trace:BUG-2383 | ai:claude
+#[test]
+fn job_env_carries_only_allow_listed_keys() {
+    let tmp = tempfile::tempdir().unwrap();
+    let lane = LaneJobs {
+        seat: tmp.path().join("seat"),
+        inbox: tmp.path().join("seat").join(INBOX_RELATIVE),
+        results: tmp.path().join("results"),
+        lease_id: "lease-env".into(),
+        build_env: vec![
+            ("CARGO_TARGET_DIR".into(), "/t/seat".into()),
+            ("RUSTC_WRAPPER".into(), String::new()),
+            ("AIDA_SESSION_GRANT".into(), "smuggled".into()),
+        ],
+        // Unscrubbed on purpose: job_env filters again.
+        host_env: dirty_host_env(tmp.path()),
+        program: "cargo".into(),
+        sandbox: Sandbox::Bwrap,
+    };
+    let mut j = job(&["cargo", "test", "--profile", "agent"]);
+    j.env.insert("AIDA_CARGO_TIMEOUT".into(), "900".into());
+    j.env.insert("GH_TOKEN".into(), "from-the-seat".into());
+    let env = lane.job_env(&j);
+    for key in env.keys() {
+        assert!(allowed_job_key(key), "{key} reached a job");
+    }
+    for denied in [
+        "AIDA_SESSION_GRANT",
+        "AIDA_SESSION_ROLE",
+        "AIDA_SESSION_ID",
+        "AIDA_HANDLE",
+        "AIDA_REVIEW_VERDICT_FILE",
+        "AIDA_ORCHESTRATOR_TOKEN",
+        "AIDA_LANE_JOBS_INBOX",
+        "AIDA_CARGO_NO_SLOT",
+        "AIDA_CARGO_SLOT_HELD",
+        "SSH_AUTH_SOCK",
+        "GH_TOKEN",
+        "GITHUB_TOKEN",
+        "LD_PRELOAD",
+    ] {
+        assert!(!env.contains_key(denied), "{denied} reached a job");
+    }
+    assert_eq!(
+        env.get("CARGO_TARGET_DIR").map(String::as_str),
+        Some("/t/seat")
+    );
+    assert_eq!(
+        env.get("AIDA_CARGO_TIMEOUT").map(String::as_str),
+        Some("900")
+    );
+    assert_eq!(env.get("LC_ALL").map(String::as_str), Some("C"));
+    assert_eq!(
+        env.get(crate::headless_background::LANE_MARKER_ENV)
+            .map(String::as_str),
+        Some("lease-env")
+    );
+    // The scrub at construction drops the same keys.
+    let scrubbed = scrub_host_env(dirty_host_env(tmp.path()));
+    assert!(scrubbed.iter().all(|(k, _)| host_key_allowed(k)));
+    assert!(!scrubbed.iter().any(|(k, _)| k == "AIDA_SESSION_GRANT"));
+}
+
+#[cfg(unix)]
+#[test]
+fn a_job_that_prints_its_env_shows_only_allow_listed_keys() {
+    use std::os::unix::fs::PermissionsExt;
+    let tmp = tempfile::tempdir().unwrap();
+    let mut lane = fixture_lane(tmp.path());
+    // Unscrubbed, so the run itself (env_clear) is what keeps them out.
+    lane.host_env = dirty_host_env(tmp.path());
+    let printer = tmp.path().join("env-cargo");
+    std::fs::write(&printer, "#!/bin/sh\necho ENV-BEGIN\nenv\necho ENV-END\n").unwrap();
+    std::fs::set_permissions(&printer, std::fs::Permissions::from_mode(0o755)).unwrap();
+    lane.program = printer.display().to_string();
+    let runner = Runner::start(lane.clone());
+    let (rc, out) = run_through(&lane, &job(&["cargo", "test", "--profile", "agent"]));
+    runner.stop();
+    assert_eq!(rc, 0, "{out}");
+    let body = out
+        .split("ENV-BEGIN\n")
+        .nth(1)
+        .and_then(|rest| rest.split("ENV-END").next())
+        .expect("the env listing");
+    // The shell itself may export these.
+    let shell_noise = ["PWD", "OLDPWD", "SHLVL", "_"];
+    let keys: Vec<&str> = body
+        .lines()
+        .filter_map(|line| line.split_once('=').map(|(k, _)| k))
+        .filter(|k| !shell_noise.contains(k))
+        .collect();
+    assert!(!keys.is_empty(), "{out}");
+    for key in &keys {
+        assert!(allowed_job_key(key), "{key} reached a job: {out}");
+    }
+    assert!(
+        !out.contains("grant-secret") && !out.contains("ghp_secret"),
+        "{out}"
+    );
+}
+
+// Round 2, ruling 3: with os_wrap off (or bubblewrap unusable) a job is
+// refused and nothing runs. trace:BUG-2383 | ai:claude
+#[cfg(unix)]
+#[test]
+fn os_wrap_off_refuses_the_job_and_nothing_runs() {
+    let tmp = tempfile::tempdir().unwrap();
+    let mut lane = fixture_lane(tmp.path());
+    // The fixture seat is no git checkout and has no `[contained] os_wrap`.
+    lane.sandbox = Sandbox::Bwrap;
+    let runner = Runner::start(lane.clone());
+    let (rc, out) = run_through(
+        &lane,
+        &job(&["cargo", "test", "--profile", "agent", "--", "passing"]),
+    );
+    let tally = runner.stop();
+    assert_eq!(rc, REFUSED_RC, "{out}");
+    assert!(out.contains("lane job refused"), "{out}");
+    assert!(!out.contains("running 1 test"), "the fake cargo ran: {out}");
+    assert!(tally.untested());
+    assert_eq!(tally.completed.load(Ordering::Relaxed), 0);
+}
+
+// Round 2, ruling 5 (AC1): the job goes through the slot limiter, the `cargo`
+// on the job's PATH, and the output and lane log name it. trace:BUG-2383 | ai:claude
+#[cfg(unix)]
+#[test]
+fn a_job_takes_the_cargo_slot_through_the_limiter_on_path() {
+    use std::os::unix::fs::PermissionsExt;
+    let tmp = tempfile::tempdir().unwrap();
+    let mut lane = fixture_lane(tmp.path());
+    let bin = tmp.path().join("bin");
+    let run = tmp.path().join("run");
+    std::fs::create_dir_all(&bin).unwrap();
+    std::fs::create_dir_all(&run).unwrap();
+    let limiter = bin.join("cargo");
+    std::fs::write(
+        &limiter,
+        "#!/bin/sh\necho \"slot taken: $*\" >> \"$XDG_RUNTIME_DIR/slots.log\"\n\
+         echo \"running 1 test\"\nexit 0\n",
+    )
+    .unwrap();
+    std::fs::set_permissions(&limiter, std::fs::Permissions::from_mode(0o755)).unwrap();
+    lane.program = "cargo".into();
+    lane.host_env = scrub_host_env(vec![
+        (
+            "PATH".to_string(),
+            format!(
+                "{}:{}",
+                bin.display(),
+                std::env::var("PATH").unwrap_or_default()
+            ),
+        ),
+        ("XDG_RUNTIME_DIR".to_string(), run.display().to_string()),
+    ]);
+    let runner = Runner::start(lane.clone());
+    let (rc, out) = run_through(
+        &lane,
+        &job(&["cargo", "test", "--profile", "agent", "--", "x"]),
+    );
+    runner.stop();
+    assert_eq!(rc, 0, "{out}");
+    let slots = std::fs::read_to_string(run.join("slots.log")).unwrap();
+    assert!(
+        slots.contains("slot taken: test --profile agent -- x"),
+        "{slots}"
+    );
+    let named = format!("cargo is {}", limiter.display());
+    assert!(out.contains(&named), "{out}");
+    let log = std::fs::read_to_string(lane.results.join("jobs.log")).unwrap();
+    assert!(log.contains(&named), "{log}");
+}
+
+#[test]
+fn sandbox_writes_only_the_target_cargo_home_and_slot_state() {
+    let lane = LaneJobs {
+        seat: PathBuf::from("/w/aida-seat-x"),
+        inbox: PathBuf::from("/w/aida-seat-x").join(INBOX_RELATIVE),
+        results: PathBuf::from("/m/.aida/lane-jobs/l"),
+        lease_id: "l".into(),
+        build_env: vec![("CARGO_TARGET_DIR".into(), "/m/target/worktrees/x".into())],
+        host_env: Vec::new(),
+        program: "cargo".into(),
+        sandbox: Sandbox::Bwrap,
+    };
+    let env: BTreeMap<String, String> = [
+        ("HOME".to_string(), "/home/u".to_string()),
+        ("XDG_RUNTIME_DIR".to_string(), "/run/user/7".to_string()),
+    ]
+    .into_iter()
+    .collect();
+    let rw = lane.sandbox_rw_paths(&env);
+    let slot_dir = format!("/run/user/7/cargo-slots-{}", current_uid());
+    assert_eq!(
+        rw,
+        vec![
+            PathBuf::from("/m/target/worktrees/x"),
+            PathBuf::from("/home/u/.cargo"),
+            PathBuf::from(&slot_dir),
+            PathBuf::from("/home/u/.local/state/cargo-slots"),
+        ]
+    );
+    let argv = crate::session::lane_job_bwrap_argv(
+        &lane.seat,
+        &rw,
+        &[],
+        "/home/u/.local/bin/cargo",
+        vec!["test".into()],
+    );
+    // Read-only root; the seat and the named paths are the only rw binds.
+    assert_eq!(&argv[..3], &["--ro-bind", "/", "/"]);
+    let rw_binds: Vec<&str> = argv
+        .windows(2)
+        .filter(|w| w[0] == "--bind" || w[0] == "--bind-try")
+        .map(|w| w[1].as_str())
+        .collect();
+    assert_eq!(
+        rw_binds,
+        vec![
+            "/w/aida-seat-x",
+            "/m/target/worktrees/x",
+            "/home/u/.cargo",
+            slot_dir.as_str(),
+            "/home/u/.local/state/cargo-slots",
+        ]
+    );
+    assert!(!argv.iter().any(|a| a.contains(".claude")), "{argv:?}");
+    assert_eq!(
+        &argv[argv.len() - 2..],
+        &["/home/u/.local/bin/cargo", "test"]
+    );
+}
+
+// Finding 5: a check or build is not a test. trace:BUG-2383 | ai:claude
+#[test]
+fn only_a_test_job_counts_as_tested() {
+    let tally = Tally::default();
+    tally.record_exit(&job(&["cargo", "check", "--profile", "agent"]));
+    tally.record_exit(&job(&["cargo", "build", "--profile", "agent"]));
+    assert_eq!(tally.completed.load(Ordering::Relaxed), 2);
+    assert!(tally.untested(), "check and build alone are untested");
+    tally.record_exit(&job(&["cargo", "test", "--profile", "agent"]));
+    assert!(!tally.untested());
+}
+
+// Finding 9: an inbox the seat turned into a symlink is never read or
+// emptied. trace:BUG-2383 | ai:claude
+#[cfg(unix)]
+#[test]
+fn an_inbox_symlink_is_never_followed() {
+    let tmp = tempfile::tempdir().unwrap();
+    let lane = fixture_lane(tmp.path());
+    let elsewhere = tmp.path().join("host-dir");
+    std::fs::create_dir_all(&elsewhere).unwrap();
+    let planted = elsewhere.join("j1.job");
+    std::fs::write(
+        &planted,
+        serde_json::to_vec(&job(&[
+            "cargo",
+            "test",
+            "--profile",
+            "agent",
+            "--",
+            "passing",
+        ]))
+        .unwrap(),
+    )
+    .unwrap();
+    std::fs::remove_dir_all(&lane.inbox).unwrap();
+    std::os::unix::fs::symlink(&elsewhere, &lane.inbox).unwrap();
+    let runner = Runner::start(lane.clone());
+    std::thread::sleep(Duration::from_secs(2));
+    runner.stop();
+    assert!(
+        planted.exists(),
+        "the runner removed a file outside the inbox"
+    );
+    assert_eq!(
+        read_rc(&lane.results, "j1"),
+        None,
+        "it ran a job from outside"
+    );
+    let log = std::fs::read_to_string(lane.results.join("jobs.log")).unwrap_or_default();
+    assert!(log.contains("cannot open the inbox"), "{log}");
+    // And a fresh prepare refuses the symlinked inbox.
+    assert!(lane.prepare().is_err());
 }
 
 #[test]
