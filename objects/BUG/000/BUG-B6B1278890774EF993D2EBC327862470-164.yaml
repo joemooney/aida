@@ -21,7 +21,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-01T06:46:56.104025446Z
-modified_at: 2026-11-01T06:46:56.104025446Z
+modified_at: 2026-11-01T08:09:54.578122490Z
 req_type: Bug
 tags:
 - audit
@@ -31,6 +31,12 @@ relationships:
 - rel_type: Child
   target_id: 01a19499-932e-79f0-a3e1-1299dfe355ad
   created_at: 2026-11-01T06:47:02.411807206Z
+comments:
+- id: 01a19628-6e92-75f2-a350-2610ee0d8bfc
+  author: joe
+  content: 'PROXY DECISION: dispatch.rs199/219/2650/2733 still defaults to Claude and launch_implementer_lane2777 blocks on output(). Approve both configured-vendor routing and detached Codex completion under existing grants/leases, preserving dispatch token and permit checks. Background spawn must reuse the approved STORY2254 lifecycle, never bolt on an unscoped process. Sequence implementation after STORY2254 and BUG2385/2398 helpers; add fixture evidence for take/impl default and explicit override, prompt rendering, prompt source, spawn acceptance vs terminal result and no synchronous model wait.'
+  created_at: 2026-11-01T08:09:54.578122490Z
+  modified_at: 2026-11-01T08:09:54.578122490Z
 history:
 - id: 01a195dc-94a3-73e2-8979-5b3cd7a026e1
   author: joe
