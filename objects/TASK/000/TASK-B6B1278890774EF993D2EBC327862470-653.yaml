@@ -35,6 +35,16 @@ tags:
 - docs:impacted
 - seat-parity
 - vendor:codex
+relationships:
+- rel_type: Child
+  target_id: 01a19499-932e-79f0-a3e1-1299dfe355ad
+  created_at: 2026-11-01T06:49:46.991891549Z
+history:
+- id: 01a195df-5d92-77b3-ab1d-b81203c3f5c3
+  author: joe
+  timestamp: 2026-11-01T06:50:06.098222197Z
+  session_id: 01a194b1bcfb
+  changes: []
 filed_at:
   code_sha: 6dc7d4977ac5e47c42ddfb26597fe3ec5fb70b60
   branch: main
