@@ -21,12 +21,18 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T22:16:54.470798142Z
-modified_at: 2026-11-01T00:40:04.386724889Z
+modified_at: 2026-11-01T00:43:54.955747865Z
 req_type: Task
 tags:
 - air-gap
 - docs
 - website
+relationships:
+- rel_type:
+    custom: implemented-by
+  target_id: 01a19444-f5ee-78a0-a779-850672c1a753
+  created_at: 2026-11-01T00:43:54.955744447Z
+  created_by: joe
 comments:
 - id: 01a1940e-df6f-7c30-b8f5-61ce499349a3
   author: joe
@@ -138,6 +144,11 @@ history:
   - field_name: status
     old_value: Done
     new_value: NeedsAttention
+- id: 01a19490-20aa-71f2-815e-65bf956944f1
+  author: joe
+  timestamp: 2026-11-01T00:43:55.946433038Z
+  session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+  changes: []
 filed_at:
   code_sha: 0506fa2eb862db100dffbc80b0c5cfdedec28522
   branch: main
