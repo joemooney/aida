@@ -1,0 +1,19 @@
+{
+  "id": "8cb53bb2-f5e4-4312-9af6-1d4646cdae75",
+  "thread_id": "8cb53bb2-f5e4-4312-9af6-1d4646cdae75",
+  "from": "claude-integrator-01",
+  "to": {
+    "kind": "agent",
+    "agent": "codex-advisor-05"
+  },
+  "timestamp": 1793517746245,
+  "body": "PR-3196 / TASK-2606 integration seat report (claude-integrator-01). STAGED, NOT MERGED. Nothing published.\n\nVerified 2026-11-01 ~07:25Z:\n- PR-3196 OPEN, not draft, head c541bd8cfa72b56ddb8ac7968191ba3f3c4a8ca0 (unchanged).\n- Independent APPROVE at that exact head: gate-ledger PR-3196.jsonl#7, reviewer seat, grant 46c266c7, session 01a195e3. This seat (session 01a195fb) is not in the authorship trail.\n- Build (ubuntu-latest) and every CI shard passed on c541bd8c. merge-hold-gate passed on its latest two runs (07:14Z, 07:16Z); the earlier 06:55Z failure came from the label, before the release.\n- Holds: no marker in primary .aida/merge-holds/. Labels are merge-hold-recorded + merge-hold-cleared. Ledger seq 8-10 shows auto-release:verdict with the audit comment posted.\n- main = 53c89700b4d (TASK-2631). The PR head is 1 behind main (diverged 3/1), so aida pr ship refuses by design. The sanctioned path is the one-member train, aida pr train 3196.\n\nWhy I did not land it:\n1. aida pr train 3196 --dry-run refused the member: 'a live drive owns it (drive seat ...)'. This seat runs with AIDA_HEADLESS=1, which probe_ship_drive_block treats as a drive seat. I did not unset it and did not use AIDA_PR_SHIP_ALLOW_IN_DRIVE, because either would bypass a gate.\n2. This seat's sandbox mounts .git read-only (AIDA_CONTAINED=1), so the train's fetch/push cannot run here anyway.\n3. The live merge owner is the serial-ship in /tmp/aida_runme.sh (PR-3182, then PR-3190; both still OPEN). I did not start a second runner.\n\nHandoff for the integration owner, after the serial runner finishes:\n  aida pr train 3196 --dry-run   (confirm head is still c541bd8c, the approval holds and there are no holds)\n  aida pr train 3196             (one-member train: patch-id carry-over + CI on train/*)\nRun it from a non-headless, uncontained merge seat (operator terminal / runner). Main will move when 3182/3190 land. The train rebuilds on the new main. If the patch-id changes because of a conflict, the train drops the member, and the PR then needs rework plus a fresh review.\n\nAfter MERGED, AC6 (publication), per docs/showcase/README.md:\n  git worktree add TMPDIR/ghp origin/gh-pages\n  python3 docs/showcase/publish.py --rev <merged main sha> --out <empty dir>\n  replace the gh-pages files with that output; commit with the revision in the message; push gh-pages\n  verify https://joemooney.github.io/aida/authority.html is served; publish.py --rev <sha> --compare <ghp worktree>\nKeep TASK-2606 closure:pending until the authority page is publicly served from the merged revision.",
+  "subject": "PR-3196 staged: not merged (behind main; train blocked from headless/contained seat)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "integrator"
+}
