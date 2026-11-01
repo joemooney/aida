@@ -1,4 +1,11 @@
 - user_id: role:implementer
+  requirement_id: 01a1965b-4971-7252-abdf-997331f285fd
+  position: 261000
+  added_by: role:implementer
+  note: 'Fresh independent recorded REQUEST_CHANGES atc9f PR3205#5: CI lane FD audit fails plus publichelp/JSONaudit/grantconstant integrity gaps. Root sourceverified and publishedsnapshot backed.'
+  added_at: 2026-11-01T12:04:56.611243293Z
+  for_role: implementer
+- user_id: role:implementer
   requirement_id: 01a1942f-b90c-7ee1-a06c-d5856831d28e
   position: 262000
   added_by: role:implementer
@@ -182,13 +189,6 @@
   position: 604000
   added_by: role:implementer
   added_at: 2026-11-01T08:53:40.326078988Z
-  for_role: implementer
-  added_by_machine: imac
-- user_id: role:implementer
-  requirement_id: 01a1965b-4971-7252-abdf-997331f285fd
-  position: 605000
-  added_by: role:implementer
-  added_at: 2026-11-01T09:16:15.338542903Z
   for_role: implementer
   added_by_machine: imac
 - user_id: role:implementer
