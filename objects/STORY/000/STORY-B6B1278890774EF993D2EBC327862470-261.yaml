@@ -20,12 +20,12 @@ description: |
 
   ## Out of scope
   Rewriting the developer-facing CLI glossary entries; new explainer pages.
-status: Approved
+status: InProgress
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T22:58:37.964636963Z
-modified_at: 2026-11-01T09:46:01.935060293Z
+modified_at: 2026-11-01T12:22:35.261024350Z
 req_type: Story
 tags:
 - docs
@@ -291,6 +291,13 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Approved
+- id: 01a1970f-c3fd-74e0-acb8-b699376ad148
+  author: aida-session-start
+  timestamp: 2026-11-01T12:22:35.261016134Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 44c7b6663259478cfd02fd2f5da843720f0ee6e0
   branch: main
