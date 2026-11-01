@@ -148,13 +148,15 @@ if python3 "$ROOT/docs/cli/glossary-anchors.py" --verify "$TMP/wrong.md" 2>"$TMP
   exit 1
 fi
 grep -F "has its own #terms-1" "$TMP/out" >/dev/null
+# trace:STORY-2219 | ai:Codex
+cp "$TMP/tpl/product-glossary.md" "$TMP/product-glossary.saved.md"
 printf '\nSee [nothing](#no-such-term).\n' >>"$TMP/tpl/product-glossary.md"
 if gen; then
   echo "FAIL: an unresolved anchor did not fail generation" >&2
   exit 1
 fi
 grep -F "no heading for #no-such-term" "$TMP/out" >/dev/null
-sed -i '/no-such-term/d' "$TMP/tpl/product-glossary.md"
+cp "$TMP/product-glossary.saved.md" "$TMP/tpl/product-glossary.md"
 gen
 
 # (b) A hand edit of the page fails --check and leaves the page untouched.
