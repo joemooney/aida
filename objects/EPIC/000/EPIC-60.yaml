@@ -43,7 +43,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-08-29T19:06:45.483941259Z
-modified_at: 2026-10-04T04:50:26.312057700Z
+modified_at: 2026-11-01T06:32:03.977237401Z
 req_type: Epic
 tags:
 - codex
@@ -88,6 +88,13 @@ relationships:
 - rel_type: Parent
   target_id: 01a079b1-72cd-7240-a06a-a978137b59df
   created_at: 2026-09-07T02:27:50.240642666Z
+comments:
+- id: 01a195ce-da89-7351-b15f-f4e75c49ff85
+  author: joe
+  content: 'Advisor regroup 2026-10-31: superseded by EPIC-612 (Codex primary on Linux, in progress). Any open child still relevant moves under EPIC-612.'
+  created_at: 2026-11-01T06:32:03.977237401Z
+  modified_at: 2026-11-01T06:32:03.977237401Z
+  session_id: a31b25d9-60a5-4347-a85b-4c74ab06f274
 history:
 - id: 01a192ac-7e1d-73c3-9692-ab4bdbccc631
   author: joe
