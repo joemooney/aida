@@ -23,7 +23,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-01T06:43:22.094949183Z
-modified_at: 2026-11-01T06:54:11.192623093Z
+modified_at: 2026-11-01T16:58:56.708389373Z
 req_type: Bug
 tags:
 - audit
@@ -40,6 +40,11 @@ comments:
   content: 'ADVISOR DISPOSITION: APPROVED. Grounded source confirms session::new_session remains Claude-specific and the wrappers choose Claude before resolving the configured vendor. Route all three entry points through existing vendor/posture resolution; do not introduce independent grant minting, broaden contained roots, or bypass trusted native opt-in. Mock both Codex and Claude argv/env and refuse unavailable/unsupported vendors before setup mutations. Sequence session.rs edits before BUG-2387/BUG-2386; work on a Codex lane after TASK-2631 is live.'
   created_at: 2026-11-01T06:54:11.192623093Z
   modified_at: 2026-11-01T06:54:11.192623093Z
+- id: 01a1980c-c744-7d11-8dea-cd35e7a03b9b
+  author: joe
+  content: 'Dispatch decision 2026-11-01: TASK2631 is already merged/live, so this approved first interactive vendor-routing slice is eligible now. The existing disposition sequences BUG2387/BUG2386 AFTER this slice; it does not require BUG2398 completion before bounded BUG2385 implementation. Preserve every own-child/finalizer/native-posture/trusted-config/containment/Claude contract and coordinate the unmerged BUG2398 adapter without modifying its authority/key policy. Reuse sanctioned resolver/launchers; if new authority/containment design is needed stop for signed sketch rather than inventing it. Independent exact-head STRICT review and normal required CI/holds remain separate; root launch counts authorship and grants no root self-review or merge authority.'
+  created_at: 2026-11-01T16:58:56.708389373Z
+  modified_at: 2026-11-01T16:58:56.708389373Z
 history:
 - id: 01a195d9-57f7-7021-8c44-245d62d9af7d
   author: joe
