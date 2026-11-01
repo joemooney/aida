@@ -18,7 +18,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T08:28:54.983776375Z
-modified_at: 2026-11-01T12:55:51.983785921Z
+modified_at: 2026-11-01T12:58:47.469563607Z
 req_type: Bug
 tags:
 - forge
@@ -81,6 +81,11 @@ comments:
   content: 'Round-2 rework pushed to SAME PR #3208 / codex/bug-2400-exact-pr: 9d881dbcd16bda48e38ad729b2c7f88e6efa9d0c. GH head and origin advertised ref independently verified. Both B1 and B2 addressed with shared search/all-open exact association collection, typed commit unknowns (continue inspecting later candidates), checked all-open Result and explicit existing integrate primary-path fallback diagnostic. Finite candidate saturation returns unknown; maximum aggregate 10s network budget. Focused fake-store/forge regression PASSED 1/1 in 5.09s after actual CLI library test compilation; fmt and diff checks pass. make check-ci-fast is still queued at its no-default-features cargo check; no green claim yet. Advisor-approved /tmp publication baseline and all three source/committed file bytes plus full patch verified; /tmp/bug-2400-rework-identity.json. Original source remains preserved with same bytes. Fresh independent review required; no review record, ship, merge, hold release or Done claim.'
   created_at: 2026-11-01T12:55:51.983767517Z
   modified_at: 2026-11-01T12:55:51.983767517Z
+- id: 01a19730-e92d-7622-8ea0-5da7509dc7c4
+  author: mcp
+  content: 'Final round-2 validation/handoff: new public PR #3208 head 9d881dbcd16bda48e38ad729b2c7f88e6efa9d0c verified against GH and origin; focused regression PASSED 1/1 (5.09s), fmt/diff passed. make check-ci-fast INCOMPLETE: it remained queued for a normal cargo slot at the no-default-features check for approximately 12 minutes; stopped with exit 130, no slot bypass or green claim. Result /tmp/bug-2400-rework-result.md and byte/base/patch/public-head proof /tmp/bug-2400-rework-identity.json. B1/B2 changes are committed and pushed on the same branch/PR. No Done claim or merge/review/hold mutations. Fresh independent review and ordinary CI/integration are outstanding; turn ended.'
+  created_at: 2026-11-01T12:58:47.469553187Z
+  modified_at: 2026-11-01T12:58:47.469553187Z
 history:
 - id: 01a1963a-2b42-7cd2-a795-0772bcc408d1
   author: joe
