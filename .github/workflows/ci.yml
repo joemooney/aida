@@ -173,10 +173,83 @@ jobs:
         with:
           tool: cargo-nextest@0.9.146
 
+      # Same disposable lib-0 runner, unchanged reviewed synthetic recipe.
+      # A failed baseline is retained as a failed observation, never acceptance.
+      # No production assertion or namespace policy changes. trace:TASK-2705 | ai:codex
+      - name: Containment precondition baseline observation
+        id: containment_before
+        if: ${{ matrix.shard == 'lib-0' && steps.changes.outputs.full_ci == 'true' }}
+        continue-on-error: true
+        env:
+          PR_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          evidence="$RUNNER_TEMP/task-2705-precondition"
+          mkdir -p "$evidence"
+          jq -n --arg head "$PR_HEAD" --arg checkout "$(git rev-parse HEAD)" \
+            --arg run "$GITHUB_RUN_ID" --arg attempt "$GITHUB_RUN_ATTEMPT" \
+            --arg job "$GITHUB_JOB/lib-0" --arg runner "$RUNNER_NAME" \
+            --arg os "$RUNNER_OS" --arg arch "$RUNNER_ARCH" \
+            --arg image "$ImageOS/$ImageVersion" --arg kernel "$(uname -r)" \
+            '{head:$head,checkout:$checkout,run:$run,attempt:$attempt,job:$job,runner:$runner,os:$os,arch:$arch,image:$image,kernel:$kernel,acceptance_credit:false}' \
+            > "$evidence/identity.json"
+          echo 'e5df12564cdba76aee62019053740cefa2e7f92d2131add7bff37615f7b216e3  scripts/task-2705-precondition-probe.py' | sha256sum --check
+          rc=0
+          env -i PATH=/usr/bin:/bin LANG=C LC_ALL=C \
+            /usr/bin/python3 -I -S scripts/task-2705-precondition-probe.py --host \
+            > "$evidence/before.json" 2> "$evidence/before.stderr" || rc=$?
+          echo "$rc" > "$evidence/before.exit"
+          cat "$evidence/identity.json" "$evidence/before.json"
+          echo "Baseline observation exit=$rc (failure is not acceptance credit)"
+          exit "$rc"
+
+      - name: Prepare disposable lib-0 userns prerequisite
+        id: containment_prepare
+        if: ${{ !cancelled() && matrix.shard == 'lib-0' && steps.changes.outputs.full_ci == 'true' && (steps.containment_before.outcome == 'success' || steps.containment_before.outcome == 'failure') }}
+        run: |
+          # Existing gates prerequisite, scoped ONLY to this hosted CI VM.
+          # Verify write and readback; never swallow privilege/preparation errors.
+          evidence="$RUNNER_TEMP/task-2705-precondition"
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 2>&1 | tee "$evidence/preparation.log"
+          sysctl -n kernel.apparmor_restrict_unprivileged_userns | tee "$evidence/preparation.readback"
+          test "$(cat "$evidence/preparation.readback")" = 0
+
+      - name: Containment precondition after observation
+        if: ${{ !cancelled() && matrix.shard == 'lib-0' && steps.containment_prepare.outcome == 'success' }}
+        run: |
+          evidence="$RUNNER_TEMP/task-2705-precondition"
+          echo 'e5df12564cdba76aee62019053740cefa2e7f92d2131add7bff37615f7b216e3  scripts/task-2705-precondition-probe.py' | sha256sum --check
+          rc=0
+          env -i PATH=/usr/bin:/bin LANG=C LC_ALL=C \
+            /usr/bin/python3 -I -S scripts/task-2705-precondition-probe.py --host \
+            > "$evidence/after.json" 2> "$evidence/after.stderr" || rc=$?
+          echo "$rc" > "$evidence/after.exit"
+          cat "$evidence/after.json"
+          exit "$rc"
+
+      - name: Strict containment required-live fixture
+        if: ${{ !cancelled() && matrix.shard == 'lib-0' && steps.containment_prepare.outcome == 'success' }}
+        env:
+          AIDA_REQUIRE_BWRAP_LIVE: '1'
+          AIDA_REQUIRE_CODEX_CONTAINMENT_LIVE: '1'
+        run: |
+          evidence="$RUNNER_TEMP/task-2705-precondition"
+          rc=0
+          cargo test -p aida-cli-lib --lib task_2705_ -- --nocapture 2>&1 | tee "$evidence/strict-fixture.log" || rc=$?
+          echo "$rc" > "$evidence/strict-fixture.exit"
+          exit "$rc"
+
+      - name: Upload containment precondition evidence
+        if: ${{ !cancelled() && matrix.shard == 'lib-0' && steps.changes.outputs.full_ci == 'true' }}
+        uses: actions/upload-artifact@v5
+        with:
+          name: task-2705-precondition-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/task-2705-precondition/
+          if-no-files-found: error
+
       # Marker enumeration makes the external-prose inventory a generated,
       # reviewable contract rather than a best-effort audit. trace:TASK-1300
       - name: Run tests
-        if: ${{ matrix.shard != 'gates' && matrix.shard != 'contracts' && (steps.changes.outputs.full_ci == 'true') }}
+        if: ${{ !cancelled() && matrix.shard != 'gates' && matrix.shard != 'contracts' && steps.changes.outputs.full_ci == 'true' && ((matrix.shard == 'lib-0' && steps.containment_prepare.outcome == 'success') || (matrix.shard != 'lib-0' && success())) }}
         # cargo-nextest runs each lane's selection (.config/nextest.toml `ci`
         # profile: no fail-fast, no retries, the serial test-group, a per-test
         # hang guard); doctests stay on cargo test. The shadow period showed
@@ -188,6 +261,8 @@ jobs:
         # (pipefail keeps the runner's exit status). trace:STORY-1853 | ai:claude
         env:
           AIDA_REQUIRE_ZSH: ${{ runner.os == 'Linux' && '1' || '' }}
+          AIDA_REQUIRE_BWRAP_LIVE: ${{ matrix.shard == 'lib-0' && '1' || '' }}
+          AIDA_REQUIRE_CODEX_CONTAINMENT_LIVE: ${{ matrix.shard == 'lib-0' && '1' || '' }}
         run: python3 scripts/ci-test-shards.py --runner nextest --shard "${{ matrix.shard }}" < /dev/null 2>&1 | tee target/test-run.log
 
       # trace:TASK-1949 | ai:codex

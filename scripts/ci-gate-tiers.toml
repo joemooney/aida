@@ -142,3 +142,11 @@
 # trace:STORY-1853 | ai:claude
 "Test shard root hygiene" = "asserts an ephemeral CI checkout has no untracked root entries; local worktrees can contain operator scratch files"
 "Test time budget" = "its budgets are CI-runner seconds on the debug profile; a local run is a different profile on a shared host. `python3 scripts/test-timings.py <log> --junit <target dir>/nextest/ci/junit-*.xml` still prints local per-test timings"
+
+# Same-runner causal experiment only on disposable hosted CI; never run the
+# prerequisite or the HOST-labeled synthetic recipe on the developer machine.
+# Recipe is byte-identical to the reviewed fixed input. trace:TASK-2705 | ai:codex
+"Containment precondition baseline observation" = "same disposable CI runner baseline; failed observation retained without acceptance credit"
+"Prepare disposable lib-0 userns prerequisite" = "authorized sudo sysctl only on disposable hosted lib-0 CI runner, never the user host"
+"Containment precondition after observation" = "same disposable CI runner after verified prerequisite; paired with retained baseline"
+"Strict containment required-live fixture" = "CI dev-profile acceptance after verified prerequisite; local targeted agent-profile fixture is run separately"
