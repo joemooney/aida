@@ -1679,6 +1679,11 @@ pub(crate) fn split_posture_flags(
             ("--allow-dangerously-skip-permissions", false),
         ],
         "codex" => &[
+            // trace:TASK-2631 | ai:codex — native posture also governs CLI aliases.
+            ("-s", true),
+            ("-a", true),
+            ("--yolo", false),
+            ("--approve-for-me", false),
             ("--sandbox", true),
             ("--ask-for-approval", true),
             ("--dangerously-bypass-approvals-and-sandbox", false),
@@ -1694,6 +1699,8 @@ pub(crate) fn split_posture_flags(
         let arg = &flags[idx];
         let matched = posture.iter().find(|(name, takes_value)| {
             arg == name || (*takes_value && arg.starts_with(&format!("{name}=")))
+                // trace:TASK-2631 | ai:codex — clap accepts attached short-option values.
+                || (agent_type == "codex" && matches!(*name, "-s" | "-a") && arg.starts_with(*name))
         });
         match matched {
             Some((name, takes_value)) => {
@@ -2929,6 +2936,13 @@ pub(crate) fn agent_new_with_config_wake(
         plan.name.cyan(),
         plan.launch_cwd.display().to_string().cyan()
     );
+    // trace:TASK-2631 | ai:codex
+    if config.agent_type == "codex" {
+        eprintln!(
+            "  posture: {}",
+            resolved_agent_permission_summary(config.agent_type, &config.default_args)
+        );
+    }
     if let Some(spec) = &plan.current_spec {
         eprintln!("  {}: {}", "spec".bold(), spec.cyan());
     }
@@ -6034,6 +6048,11 @@ pub(crate) fn build_agent_new_bg_command(
         .current_dir(&plan.launch_cwd)
         .args(&config.default_args)
         .args(prompt_args)
+        // trace:TASK-2631 | ai:codex
+        .env(
+            "AIDA_CONTAINMENT_POSTURE",
+            agent_containment_posture(config),
+        )
         .env("AIDA_AGENT_TYPE", config.agent_type)
         .env("AIDA_AGENT_NAME", &plan.name)
         // BUG-558: the spawned agent's mailbox/queue identity (BUG-89 resolves
@@ -6137,6 +6156,11 @@ pub(crate) fn agent_launch_env_inputs(
 ) -> Vec<(&'static str, String)> {
     let mut out = vec![
         ("AIDA_AGENT_TYPE", config.agent_type.to_string()),
+        // trace:TASK-2631 | ai:codex
+        (
+            "AIDA_CONTAINMENT_POSTURE",
+            agent_containment_posture(config).to_string(),
+        ),
         ("AIDA_AGENT_NAME", plan.name.clone()),
         ("AIDA_USER", plan.name.clone()),
         ("AIDA_PROJECT_ROOT", plan.project_root.display().to_string()),
@@ -6310,7 +6334,15 @@ pub(crate) fn resolved_agent_permission_summary(agent_type: &str, args: &[String
                 let sandbox = resolved_flag_value(args, "--sandbox").unwrap_or("codex default");
                 let approval =
                     resolved_flag_value(args, "--ask-for-approval").unwrap_or("codex default");
-                format!("codex sandbox={sandbox}, ask-for-approval={approval}")
+                // trace:TASK-2631 | ai:codex
+                if sandbox == "workspace-write" && approval == "never" {
+                    format!(
+                        "codex sandbox={sandbox}, ask-for-approval={approval} ({})",
+                        session::ContainmentPosture::Native.label()
+                    )
+                } else {
+                    format!("codex sandbox={sandbox}, ask-for-approval={approval}")
+                }
             }
         }
         "antigravity" => {
@@ -6691,6 +6723,11 @@ fn run_agent_generation(
     command
         .current_dir(&plan.launch_cwd)
         .args(&exec_args)
+        // trace:TASK-2631 | ai:codex
+        .env(
+            "AIDA_CONTAINMENT_POSTURE",
+            agent_containment_posture(config),
+        )
         .env("AIDA_AGENT_TYPE", config.agent_type)
         .env("AIDA_AGENT_NAME", &plan.name)
         // BUG-558: export AIDA_USER = the stable name so the spawned agent's
@@ -7328,6 +7365,24 @@ mod task_1806_launch_mandate_tests {
 #[cfg(test)]
 #[path = "tests/story_1741_adoption_projection_tests.rs"]
 mod story_1741_adoption_projection_tests;
+
+// trace:TASK-2631 | ai:codex
+fn agent_containment_posture(config: &AgentLaunchConfig) -> &'static str {
+    if is_contained_launch(config) {
+        "aida"
+    } else if config.agent_type == "codex"
+        && resolved_flag_value(&config.default_args, "--sandbox") == Some("workspace-write")
+        && resolved_flag_value(&config.default_args, "--ask-for-approval") == Some("never")
+        && !config
+            .default_args
+            .iter()
+            .any(|a| a == "--dangerously-bypass-approvals-and-sandbox")
+    {
+        "native"
+    } else {
+        "none"
+    }
+}
 
 // trace:STORY-2215 | ai:claude
 #[cfg(test)]
