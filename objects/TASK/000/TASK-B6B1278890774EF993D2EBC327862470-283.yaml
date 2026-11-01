@@ -12,13 +12,29 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T22:45:38.838275166Z
-modified_at: 2026-11-01T03:34:33.288144890Z
+modified_at: 2026-11-01T03:35:11.804336028Z
 req_type: Task
 tags:
 - deputy
 - from-implementer:BUG-b6b1278890774ef993d2ebc327862470-150
 - kind:design-choice
 - severity:cosmetic
+comments:
+- id: 01a1952c-ecbc-72f3-825a-71ba43b048bc
+  author: joe
+  content: |-
+    ## Implementer approach
+
+    No parseable acceptance section; scope taken from the description: close the remaining gap — an orphaned job whose deputy died before opening its .out file must not leave its result naming a missing file.
+
+    - `recover_orphans` (aida-cli-lib/src/deputy/worker.rs) appends a one-line note via the existing `write_out_note` (creates 0600 if missing, appends otherwise so partial output is kept).
+    - Test: extend `orphans_are_failed_not_rerun` (unit, deputy/tests.rs) to assert the note exists for a never-opened .out, and add a case asserting partial output survives with the note appended.
+
+    Expected files: worker.rs, tests.rs. Ambiguities: None.
+  created_at: 2026-11-01T03:35:11.804336028Z
+  modified_at: 2026-11-01T03:35:11.804336028Z
+  session_id: 01a1952c51f9
+  harness_version: 2.1.316 (Claude Code)
 history:
 - id: 01a1942b-6c59-7f63-be23-f0c0a08754ad
   author: aida-backfill-agreed-ids
