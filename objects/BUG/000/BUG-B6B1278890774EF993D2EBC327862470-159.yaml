@@ -23,7 +23,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T06:43:22.094949183Z
-modified_at: 2026-11-01T18:24:29.927170099Z
+modified_at: 2026-11-01T18:24:30.628136530Z
 req_type: Bug
 tags:
 - audit
@@ -45,6 +45,11 @@ comments:
   content: 'Dispatch decision 2026-11-01: TASK2631 is already merged/live, so this approved first interactive vendor-routing slice is eligible now. The existing disposition sequences BUG2387/BUG2386 AFTER this slice; it does not require BUG2398 completion before bounded BUG2385 implementation. Preserve every own-child/finalizer/native-posture/trusted-config/containment/Claude contract and coordinate the unmerged BUG2398 adapter without modifying its authority/key policy. Reuse sanctioned resolver/launchers; if new authority/containment design is needed stop for signed sketch rather than inventing it. Independent exact-head STRICT review and normal required CI/holds remain separate; root launch counts authorship and grants no root self-review or merge authority.'
   created_at: 2026-11-01T16:58:56.708389373Z
   modified_at: 2026-11-01T16:58:56.708389373Z
+- id: 01a1985b-1d2d-7720-a6cd-7f9592618df9
+  author: joe
+  content: 'PR3210 exact head5a27494 CI41332027707 gates/Build fail: two hardcoded /tmp cleanup cwd paths in bug_2385_vendor_routing_tests.rs:217,274. Other lanes passed. Repair same bug/PR without ratchet waiver or lost16-case coverage. Complete concrete brief /tmp/aida-BUG2385-portability-rework-brief.txt and generated Codex pickup brief; preserved source/publication10-file byte identity freshly verified, no live source process. Normal own-session adoption only; no source cleanup or borrowed context.'
+  created_at: 2026-11-01T18:24:30.509256257Z
+  modified_at: 2026-11-01T18:24:30.509256257Z
 history:
 - id: 01a195d9-57f7-7021-8c44-245d62d9af7d
   author: joe
