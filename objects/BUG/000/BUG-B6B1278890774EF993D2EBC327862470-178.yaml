@@ -1,0 +1,26 @@
+id: 01a197fd-6169-7ed2-9110-3376ad2180a1
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-178
+agreed_id: BUG-2405
+title: Mail-backlog guard repeatedly routes historical role messages absent from the current logical advisor inbox
+description: |
+  Observed on live main6a3f67671a974703590efde5ae2a323f3f7471fa, Codex advisor05 PID2379176, 2026-11-01 09:44–09:47MST. Own role current --check=advisor with own grant, AIDA_SESSION_ROLE present. Supported mailbox inbox --peek --unread --recent-read-tail0 says no unread for codex-advisor-05+joe+advisor+codex; narrowed advisor inbox also empty; wake-snapshot --recipient advisor --json returns messages[], pending0, partialfalse. Same checkout/identity doctor check mail-backlog returns31 findings including28 old advisor request/handoff IDs (e.g.84b36522-9bc6-45ad-a672-e591f685dfac,128fbf1f-4816-4ffb-ab86-6058d28efcdf,e3020c7c-265f-4029-942f-39bf60ba5095), causing remindered48b294-e3bf-4d2c-bca1-524dbbb54918. Targeted mailbox read resolves those first3 bodies, but is non-marking; no raw ACK/watermark workaround was used. Root read the alert and verified its ACK, which does not ACK listed mail.
+  Evidence /tmp/aida-advisor-role-snapshot-0943.json, /tmp/aida-advisor-role-unread-0944.txt, /tmp/aida-full-own-inbox-0946.txt, /tmp/aida-mail-backlog-current-0944.txt. Source candidate seam mail_backlog::scan_and_route/evaluate/read_merged versus mailbox_cmd logical verified audience and mailbox_store::ReadEvidence; exact cause unproven. Could involve historical resolved recipients, read evidence, or audience semantics; do not assume lost ACKs or unread bodies from this discrepancy alone.
+  Required outcome: first reproduce with synthetic old/live advisor role audiences and real supported reader/guard paths, identify authoritative delivery/read rules, then independently sign any audience/ACK authority amendment before implementation. Guard must route only actionable unread work to a live reader who can actually read/ack it; logical inbox and guard should agree under the same complete audience/read evidence. Historical operator inspection remains available. Incomplete/unreadable evidence must stay explicitly unknown/partial and must not silently clear genuine unread requests; preserve thresholds/dedup/routing/retention. Regression tests must cover historical resolved role recipient versus new live holder, true unread current-role mail, cross-worktree receipts/anchor and unavailable evidence, plus exact notice-read-ACK separation. Do not mutate user receipts, broaden another session's ACK authority, migrate mail or suppress alerts as a workaround. This is fresh operational defect intake, not a non-blocking PR follow-up chain. No completion or code authorization yet.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-01T16:42:07.593722571Z
+modified_at: 2026-11-01T16:42:07.593722571Z
+req_type: Bug
+tags:
+- doctor
+- mailbox
+- triage-needed
+filed_at:
+  code_sha: 6a3f67671a974703590efde5ae2a323f3f7471fa
+  branch: main
+  dirty: true
+  aida_version: 0.16.0
+  aida_build_sha: 6a3f67671a9
+  vendor: codex
