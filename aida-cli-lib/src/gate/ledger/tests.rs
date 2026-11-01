@@ -1330,8 +1330,8 @@ fn a_refused_or_unparseable_file_keeps_the_ledger_out_of_every_reader() {
     };
     assert_eq!(
         approved_by_every_reader(),
-        (true, true, true, true),
-        "precondition: with no file the ledger approval answers"
+        (true, true, true, false),
+        "legacy readers still see the ledger artifact; dispatch needs durable authority"
     );
 
     let path = rv::verdict_path(&root, "PR-50");
