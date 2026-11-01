@@ -27,7 +27,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T23:03:29.192827531Z
-modified_at: 2026-11-01T03:37:37.427327527Z
+modified_at: 2026-11-01T03:41:58.187727122Z
 req_type: Story
 tags:
 - docs
@@ -40,6 +40,34 @@ comments:
   created_at: 2026-11-01T03:11:59.196421653Z
   modified_at: 2026-11-01T03:11:59.196421653Z
   session_id: 77a7a933-9a3f-4243-9a44-892bcedf206c
+- id: 01a19533-202b-7cf1-b724-9d58370c8333
+  author: joe
+  content: |
+    ## Implementer approach
+
+    ### Acceptance criteria as tests
+    - **AC1 command (unit, `docs_sweep` tests):** fixture repo with docs/cli/*.md, docs/showcase/*.html, README.md; a doc citing a nonexistent `aida` subcommand/flag yields a finding with file, line, evidence and proposed fix; `--since <ref>` limits scope to docs changed since ref (full sweep when CLI surface files changed or no prior sweep). Default since = recorded last swept revision.
+    - **AC2 scheduled idle-only (unit):** scaffold section contains a `docs-sweep` job, `command = "docs sweep"`, `every = "1d"`, `while = "queue.depth == 0 && drain.lock_free == true"`; `docs sweep` is in the allow-list (existing scaffold-parity test covers parse). Gate-closed skip is the existing `while` behaviour (no run, nothing queued). State file records the last swept revision.
+    - **AC3 report-only (unit):** `[docs_sweep] mode` parses `report|pr`, default report; report delivery builds ONE mail to `product` per run (none when zero findings).
+    - **AC4 PR mode (unit on planning; git/gh plumbing not covered by automation):** plan partitions findings into mechanical edits vs draft-spec findings; at most one PR on branch `docs-sweep/batch`, reused when an open PR exists. PR spec tagged `docs-only` (light review tier).
+    - **AC5 bounded (unit):** per-run file cap (default 20, `[docs_sweep] max_files`) — excess reported, never edited; edits restricted to doc paths; files carrying a GENERATED marker are never edited (finding points at the source).
+    - **AC6 glossary feed (unit):** inline-defined website terms (`<dfn>`, `<dt>`, `<strong>Term.</strong>`) absent from glossary headings become findings; in PR mode, a stub entry in the glossary source.
+    - **AC7 observable (unit):** `aida schedule status` carries last run / findings / mode for the docs-sweep job from the sweep state; a failed run exits non-zero, so the existing CronJobFailed path reports it.
+
+    ### Expected files
+    - new `aida-cli-lib/src/docs_sweep.rs` (+ tests)
+    - `aida-cli-lib/src/doc_cmd_args.rs`, `doc_cmd.rs` (Sweep subcommand)
+    - `aida-cli-lib/src/maintenance_schedule.rs` (allow-list entry, status detail)
+    - `aida-cli-lib/src/init_cmd.rs` (scaffold), `.aida/config.toml`
+    - help golden, CLI docs entry
+
+    ### Ambiguities / conflicts as questions
+    - `--report-only` is read as "print findings, deliver nothing, don't advance the cursor"; the configured mode governs a normal run.
+    - Only hidden-alias -> canonical-name command fixes and glossary stubs count as mechanical; other stale command text becomes a draft spec in PR mode.
+  created_at: 2026-11-01T03:41:58.187727122Z
+  modified_at: 2026-11-01T03:41:58.187727122Z
+  session_id: 01a1952f2068
+  harness_version: 2.1.316 (Claude Code)
 history:
 - id: 01a19517-853a-7dc1-addd-62b1b73de3be
   author: joe

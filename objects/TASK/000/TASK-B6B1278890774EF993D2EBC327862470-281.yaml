@@ -6,12 +6,12 @@ description: |
   docs/what-is-aida.md:169 and docs/what-is-aida.html:719 say "Starting and stopping a mandate are refused unless the process has an interactive terminal...". `aida mandate renew` has the same floor (STORY-166 AC1); add it to that sentence.
 
   Raised in review of PR-3175: https://github.com/joemooney/aida/pull/3175#issuecomment-6549936924
-status: InProgress
+status: Done
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T22:23:49.044464609Z
-modified_at: 2026-11-01T03:36:06.262303473Z
+modified_at: 2026-11-01T03:43:14.224235540Z
 req_type: Task
 tags:
 - docs
@@ -42,6 +42,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a19534-499b-7192-a8c7-1cf66672cb58
+  author: joe
+  timestamp: 2026-11-01T03:43:14.331629837Z
+  session_id: 01a1952dbc59
+  harness_version: 2.1.316 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 filed_at:
   code_sha: 9b13e9e400ff1a829ee90c0a3a45136a5bc48fda
   branch: pr-3175
@@ -51,3 +60,7 @@ filed_at:
   vendor: claude
   session: 01a1940b38a7
   harness_version: 2.1.316 (Claude Code)
+implementation_info:
+  implemented: true
+  implemented_at: 2026-11-01T03:43:14.224235540Z
+  implemented_by: joe
