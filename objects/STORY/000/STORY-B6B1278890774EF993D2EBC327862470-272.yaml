@@ -34,7 +34,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T03:24:07.798418309Z
-modified_at: 2026-11-01T06:48:08.700891587Z
+modified_at: 2026-11-01T06:53:03.741796053Z
 req_type: Story
 tags:
 - advisor
@@ -84,6 +84,11 @@ comments:
   modified_at: 2026-11-01T04:48:34.282795268Z
   session_id: 01a1956ccb82
   harness_version: 2.1.316 (Claude Code)
+- id: 01a195e2-1208-7c33-9380-f6ec7a8b76fd
+  author: joe
+  content: 'Advisor ruling: ADVISOR REWORK BRIEF: reviewer AC8/AC9 gaps are grounded in source. Test actual bare goal --invoke printer rather than formatting the expected string in the test; add traced Codex-seat goal context/whoami evidence independent of Claude env; remove or delegate the obsolete handoff composer; provide toon check fields; exercise command met/unmet/no-goal/free-text exit outcomes through a returnable status or equivalent real CLI test. Preserve operator-only goal setter. One push on same PR, no follow-up per finding. LIGHT: one targeted story_2243 test filter plus make check-ci-fast, with AIDA_CARGO_TIMEOUT and tool background mode for long cargo; no full cargo suite. Stop for independent review.'
+  created_at: 2026-11-01T06:53:03.368630220Z
+  modified_at: 2026-11-01T06:53:03.368630220Z
 history:
 - id: 01a1955e-d0d4-75f2-a078-b22ee5383ce4
   author: joe
