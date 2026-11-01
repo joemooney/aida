@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T21:37:29.201146410Z
-modified_at: 2026-11-01T06:08:27.021173534Z
+modified_at: 2026-11-01T06:08:28.346642828Z
 req_type: Bug
 tags:
 - epic-home-003
@@ -81,6 +81,22 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Ordering, conflict task and tests are sound, but the brief matcher misses the ''ADVISOR REWORK BRIEF'' header the advisor actually writes, so production briefs are still ignored (the BUG-057 failure recurs); CI red at head.. Triage reason: PR-3177 review round 7: CHANGES REQUESTED'
   created_at: 2026-11-01T06:08:27.021171054Z
   modified_at: 2026-11-01T06:08:27.021171054Z
+  session_id: a31b25d9-60a5-4347-a85b-4c74ab06f274
+- id: 01a195b9-4044-7cf2-aa91-3537a07a97c0
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-b6b1278890774ef993d2ebc327862470-057):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 7a4f77c55cb3
+    Recorded: 2026-11-01T06:06:24.120168048+00:00
+    Findings:
+    1. BLOCKING (acceptance 1, real-world): is_brief_comment (aida-cli-lib/src/rework_direction.rs:208-211) accepts only first lines starting 'advisor brief' or 'rework brief'. The advisor's actual header is 'ADVISOR REWORK BRIEF round N (...)' — all 5 briefs on this very spec use it — which lowercases to 'advisor rework brief…' and matches neither prefix (nor is_ruling_comment). Those briefs are invisible to resolve_direction, the stale verdict findings stay AUTHORITATIVE TASK, and the lane repeats BUG-057. Fix: also accept 'advisor rework brief' (or tolerate an optional 'rework' word between 'advisor' and 'brief'), and add a case to brief_comments_are_advisor_direction plus an end-to-end assemble_pickup_prompt test using the exact header 'ADVISOR REWORK BRIEF round 6 (21:10), PR-3177. FIRST TASK: ...' that fails without the fix.
+    2. CI RED at 7a4f77c: CI (rest) fails mailbox_logical::tests::story1843_receipt_lookups_are_exact_per_id_at_scale (aida-core/src/mailbox_logical_tests.rs:833), and the Build aggregate fails with it. The PR touches only aida-cli-lib; the same job passed at 4a38a4e and main's CI is green at a83e05d, so this looks like a flaky scale/timing test rather than this change. Re-run the failed job (or push the fix above) and confirm green; do not weaken the test. merge-hold-gate is the expected supervised hold, not a code defect.
+    3. MINOR: detect_main_conflict (rework_direction.rs:345-353) runs a synchronous network 'git fetch' on every rework pickup with no timeout. GIT_TERMINAL_PROMPT=0 stops prompts, but a stalled connection blocks the launch indefinitely. Consider a bounded timeout (e.g. GIT_HTTP_LOW_SPEED_LIMIT/TIME, or the repo's existing timed-command helper) since the forecast is best-effort.
+    4. COSMETIC: lead_line (rework_direction.rs:195-203) duplicates the first-line normalization inside queue_cmd::is_ruling_comment (queue_cmd.rs:10733-10741); have is_ruling_comment reuse it so the two matchers can't drift.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-01T06:08:28.228336992Z
+  modified_at: 2026-11-01T06:08:28.228336992Z
   session_id: a31b25d9-60a5-4347-a85b-4c74ab06f274
 history:
 - id: 01a193e8-1070-7260-a5d0-2973465ae4a2
