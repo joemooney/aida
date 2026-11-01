@@ -1,0 +1,41 @@
+id: 01a195de-11af-78e3-bde4-d62fbfb8aad9
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-652
+agreed_id: TASK-2689
+title: Portable .agents/skills/*/SKILL.md and AGENTS.md templates copy Claude-only AskUserQuestion, CLAUDE.md, .claude/, and /aida-* syntax
+description: |-
+  Why
+  ───
+  Discovered by SPIKE-710 audit:
+
+  1. `aida-core/src/scaffolding/inventory.rs:146-210` (`portable_skills`) copies `aida-core/templates/skills/*.md` verbatim into `.agents/skills/<name>/SKILL.md` without running prompt-language adaptation (unlike `codex_prompts.rs:102-140`):
+     • `aida-guided-implement.md:10, 145, 158, 163, 245`, `aida-clarify.md:8, 36, 108`, `aida-derisk.md:8, 73`, `aida-decide.md:8, 92`, and `aida-backlog-groom.md:190` instruct the agent to call Claude's `AskUserQuestion` tool.
+     • `aida-learn.md:17-160` routes project rules exclusively to `CLAUDE.md` (`git add CLAUDE.md`) and personal memory to `~/.claude/projects/<slug>/memory/`, never mentioning `AGENTS.md`.
+     • `aida-onboard.md:37, 99, 120` reads only `CLAUDE.md`; `aida-sync.md:19-149` and `aida-docs-review.md:158, 229, 314` audit only `.claude/skills/` and `CLAUDE.md`.
+  2. `aida-core/src/scaffolding/aida_md.rs:181-320, 386-396` (`generate_aida_md_for_agents`) and `aida-cli-lib/src/init_cmd.rs:1137-1138` inject `# AIDA Instructions (.claude/AIDA.md)`, `/aida-commit`, `/aida-capture`, `/aida-learn` slash syntax, and `.claude/settings.json` statusbar docs into `AGENTS.md`.
+  3. `aida-cli-lib/src/init_cmd.rs:899-911` (`looks_like_memory_lane`) checks only `.claude/AIDA.md` and `.claude/commands/aida-*` (ignoring `.codex/hooks.json`), `write_memory_lane_scaffolding` (`1226, 1251`) unconditionally writes `CLAUDE.md` and `.claude/skills`, and `init_cmd.rs:2453` omits `.codex .agents` from the seeded onboarding task's `git add` command.
+
+  Acceptance
+  ──────────
+  1. Adapt portable skills generated into `.agents/skills/*/SKILL.md` so `AskUserQuestion`, `CLAUDE.md`, `.claude/skills/`, and `/aida-*` references have vendor-neutral / Codex equivalents (`AGENTS.md`, `.agents/skills/`, `$aida-*`).
+  2. Parameterize `generate_aida_md_for_agents` (`aida_md.rs`) and `memory_lane_agents_md` (`init_cmd.rs:1137`) so `AGENTS.md` uses `$aida-*` skill syntax and references `.agents/skills/` rather than `.claude/AIDA.md` and `.claude/settings.json`.
+  3. Update `looks_like_memory_lane`, `write_memory_lane_scaffolding`, and the seeded onboarding task in `init_cmd.rs` to respect Codex-only agent selection.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-01T06:48:41.135327120Z
+modified_at: 2026-11-01T06:48:41.135327120Z
+req_type: Task
+tags:
+- audit
+- scaffolding
+- skills
+- vendor:codex
+filed_at:
+  code_sha: 6dc7d4977ac5e47c42ddfb26597fe3ec5fb70b60
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 962ca07af25
+  vendor: antigravity
+  session: 01a194b1bcfb
