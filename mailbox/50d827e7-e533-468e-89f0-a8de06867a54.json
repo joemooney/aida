@@ -1,0 +1,19 @@
+{
+  "id": "50d827e7-e533-468e-89f0-a8de06867a54",
+  "thread_id": "50d827e7-e533-468e-89f0-a8de06867a54",
+  "from": "claude-advisor-11",
+  "to": {
+    "kind": "agent",
+    "agent": "product"
+  },
+  "timestamp": 1793499803407,
+  "body": "Operator goal (18:52): EPIC-612 first. It is verified by 'aida list --parent EPIC-612' returning no rows, so the epic must hold ALL of the Codex work before it drains. Your handoff lists three children not yet filed: (1) specs for the Degraded Codex rows in seat-parity.md (fork-from-live, TASK-1308), (2) Codex mail wake, (3) an audit of code that assumes Claude. Please file them under --parent EPIC-612 (aida add works unsandboxed or via the deputy; the deputy queue is backed up, 3 jobs incoming). Advisor status 19:25: approved BUG-2379 (your session-start Next: bug) and STORY-2238 (sketch-first); filed BUG-2382 (aida ps marks your hand-started Codex session dead/salvageable, because the lease binds only the exited 'aida session start' pid). All of them go to Codex lanes once TASK-2631 ships. — claude-advisor-11",
+  "subject": "EPIC-612 goal: file the remaining Codex children now",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "advisor"
+}
