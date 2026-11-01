@@ -19,7 +19,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T02:25:46.947809262Z
-modified_at: 2026-11-01T04:26:33.753481811Z
+modified_at: 2026-11-01T04:27:50.056750773Z
 req_type: Bug
 tags:
 - area:agents
@@ -88,6 +88,21 @@ comments:
   modified_at: 2026-11-01T04:18:45.537638475Z
   session_id: 01a1953ec6c3
   harness_version: 2.1.316 (Claude Code)
+- id: 01a1955d-1da8-7fb0-b107-c723524bea89
+  author: joe
+  content: |
+    ADVISOR REWORK BRIEF round 2 (21:30), PR-3192. The reviewer's containment findings are correct. Finding 3 comes from the advisor's own 20:47 signoff, which allowed a `cp -al` seed; that part of the signoff is WITHDRAWN. Corrected rulings, binding:
+    1. Seed (AC2): NO hardlinks into the primary's target. Use `cp -a --reflink=always` when the filesystem supports reflinks (copy-on-write, so a seat's writes never touch the primary's inodes). If reflinks aren't supported, do NOT seed: the seat builds cold, which is acceptable because the runner has no 60s cap. Report which path ran in the job output. Test: the seed path never yields a file that shares an inode with target/agent (compare st_ino/st_dev).
+    2. Environment: jobs start from a CLEARED environment plus an explicit allow-list: PATH, HOME, USER, LANG/LC_*, TMPDIR, CARGO_HOME, RUSTUP_HOME, RUSTUP_TOOLCHAIN, CARGO_TARGET_DIR (the seat's own), AIDA_CARGO_TIMEOUT, CARGO_TERM_COLOR. Never pass AIDA_SESSION_GRANT, AIDA_SESSION_*, AIDA_HANDLE, SSH_AUTH_SOCK, GH_TOKEN/GITHUB_TOKEN, or any credential or launcher authority. Test: a job that prints its env shows only allow-listed keys.
+    3. Sandbox: when os_wrap is off or unavailable, the runner REFUSES the job (fail closed, with the bwrap remediation hint), and the seat records untested=true. Never run a job unsandboxed. Test: os_wrap off, then refused and nothing ran.
+    4. CI cli-0/lib, two regeneration failures from the new `aida lane job` command:
+       - aida-cli/tests/bug_1502_format_json_audit.rs:479 `checked_in_audit_is_exhaustive_and_every_honoured_probe_parses`: "regenerate the BUG-1502 audit". Add the new command to the checked-in audit, using the generator the test names.
+       - aida-cli-lib/src/tests/story_1728_command_registry_tests.rs:103 `help_surface_matches_golden_snapshot`: regenerate golden/cli_help_snapshot.txt (line 373 differs).
+    5. AC1 slot limiter: add a test that a job acquires the cargo slot. Use a stub limiter or assert the runner calls the limiter's entry point; no real build needed.
+    Local gate: the runner isn't live yet, so cargo can't run in the lane. Run `make check-ci-fast` and push; CI is the gate.
+  created_at: 2026-11-01T04:27:50.056750773Z
+  modified_at: 2026-11-01T04:27:50.056750773Z
+  session_id: 77a7a933-9a3f-4243-9a44-892bcedf206c
 history:
 - id: 01a19525-88eb-79e3-aab8-8d511ad2f605
   author: aida-session-start
