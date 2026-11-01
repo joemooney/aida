@@ -16,12 +16,12 @@ description: |
   2. Restore the EXISTING approved train carry-over contract through typed, provenance-preserving, bounded normal wiring. No raw ledger/projection edits, copied/restamped source signatures, arbitrary skip-review flag, weakened standalone current-head gate or trust in human-editable member-line alone. Preserve all member approval/authorship/hold/mandate/supervision/drive/CI/current-main and normal merge lease checks. Independent sketch/signoff before authority/gate code.
   3. Prove refusal for forged/manual manifests, changed patches or member heads, moved main, conflicting/non-authorized source reviews and holds; preserve current record-time authority semantics. Match positive evidence to actual normal final merge boundary.
   4. One focused approval/ledger/train regression plus fast gate; shared test infrastructure or >10 changedfiles adds touched/compile; fullsuiteCI, no slotbypass/outertimeout/blindrebuilds. Fresh independent strict review. Do not reopen/rewrite PR3212, change existing ledger events or manually approve its rewritten head. Validate a new ordinary train only after normal reviewed fix is live.
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T19:40:25.090169463Z
-modified_at: 2026-11-01T19:55:42.349020568Z
+modified_at: 2026-11-01T23:05:35.344763752Z
 req_type: Bug
 tags:
 - architecture
@@ -61,6 +61,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1995c-7370-7f70-b0ac-559b96118496
+  author: aida-orchestrator
+  timestamp: 2026-11-01T23:05:35.344802535Z
+  session_id: 01a1994eabb5
+  harness_version: 2.1.316 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 6a3f67671a974703590efde5ae2a323f3f7471fa
   branch: main
@@ -68,3 +77,11 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: 6a3f67671a9
   vendor: codex
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: Design/code meet the advisor-signed carry-over contract, but CI (lib-1) Run tests is red at the exact head and at the prior head while main is green; full-suite CI (AC4) unmet
+  recovery_hint: address the review findings, move BUG-2406 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-11-01T23:05:35.344763752Z
