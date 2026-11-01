@@ -8,6 +8,6 @@ result: done
 due_since: 2026-10-31T22:18:47.585314748Z
 due_reason: on CronJobFailed:dev-autopromote
 due_failure:
-  trip_id: dev-autopromote@2026-10-31T22:16:12.569027283Z
+  trip_id: dev-autopromote@2026-11-01T04:34:14.539862104Z
   job: dev-autopromote
-  error: 'exit 1: build of 584e95e4505310c1a681700bd42eda3ccb951b98 failed; log /home/joe/.aida/dev-autopromote/20261031T215353Z-584e95e45053.log; tail: cargo: queued for a build slot (2 in use; priority normal; set AIDA_CARGO_NO_SLOT=1 to bypass; run cargo ps to see who holds them) |     Blocking waiting for file lock on build directory |     Finished `agent` profile [optimized] target(s) in 6m 57s | error: "another `aida dev build` or `aida dev rollback` is updating /home/joe/.local/share/aida/live right now; retry when it finishes. Nothing was changed." | help: aida dev build'
+  error: 'exit 1: build of c7170b4366544d7fc412f8491acbbb407089d44a failed; log /home/joe/.aida/dev-autopromote/20261101T041158Z-c7170b436654.log; tail:    Compiling aida-cli-lib v0.16.0 (/home/joe/ai/aida/aida-cli-lib) |    Compiling aida-server v0.16.0 (/home/joe/ai/aida/aida-server) |    Compiling aida-cli v0.16.0 (/home/joe/ai/aida/aida-cli) |     Finished `agent` profile [optimized] target(s) in 6m 53s | Smoke test passed: /home/joe/.local/share/aida/live/.incoming/aida | error: "the staged build does not match HEAD, so it was not promoted: the staged `aida --version` reports sha c7170b43665, but HEAD is a83e05d785df667dfa986cf3eb310a3f0637b602." | help: aida --version'

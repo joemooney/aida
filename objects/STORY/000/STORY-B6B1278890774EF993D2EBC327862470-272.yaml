@@ -34,7 +34,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-01T03:24:07.798418309Z
-modified_at: 2026-11-01T04:29:54.836095597Z
+modified_at: 2026-11-01T04:43:37.611288937Z
 req_type: Story
 tags:
 - advisor
@@ -48,6 +48,12 @@ comments:
   modified_at: 2026-11-01T04:29:54.836095597Z
   session_id: 01a194b3-ee64-7742-8d58-7b1145539893
   harness_version: 2.1.316 (Claude Code)
+- id: 01a1956b-930b-7eb3-a0b3-83399a3005b2
+  author: joe
+  content: 'ADVISOR DISPOSITION (21:45, claude-advisor-11): APPROVED as written. One addition to AC6: `set` is refused from any session that carries AIDA_SESSION_GRANT or runs under an agent harness, not only from a non-TTY one. An agent with a PTY must not be able to set the advisor''s goal. This needs no architecture sketch: it adds a store record and surfaces, with no new authority beyond the operator-only set.'
+  created_at: 2026-11-01T04:43:37.611288937Z
+  modified_at: 2026-11-01T04:43:37.611288937Z
+  session_id: 77a7a933-9a3f-4243-9a44-892bcedf206c
 history:
 - id: 01a1955e-d0d4-75f2-a078-b22ee5383ce4
   author: joe
