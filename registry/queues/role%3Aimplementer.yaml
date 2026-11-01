@@ -1,4 +1,11 @@
 - user_id: role:implementer
+  requirement_id: 01a19639-d547-7300-9a70-befaedad7e96
+  position: 258000
+  added_by: role:implementer
+  note: 'Independent reviewer14 REQUESTCHANGES9255294 PR3208 ledger#5 GH6557971101. Two verified blockers: all-open enumeration omits native/commit fallback associations and hides duplicate ambiguity; failed/timed-out commit evidence becomes NoOpenPr. Bundle bounded exhaustion/unknown handling in same PR, no new follow-up chain. Exact source bytes backed before retiring dead source lease.'
+  added_at: 2026-11-01T12:40:55.081064904Z
+  for_role: implementer
+- user_id: role:implementer
   requirement_id: 01a19600-8cf2-74f3-a6ce-b7a32fa5affc
   position: 259000
   added_by: role:implementer
@@ -177,13 +184,6 @@
   position: 602000
   added_by: role:implementer
   added_at: 2026-11-01T08:20:30.015794210Z
-  for_role: implementer
-  added_by_machine: imac
-- user_id: role:implementer
-  requirement_id: 01a19639-d547-7300-9a70-befaedad7e96
-  position: 603000
-  added_by: role:implementer
-  added_at: 2026-11-01T08:30:01.689835867Z
   for_role: implementer
   added_by_machine: imac
 - user_id: role:implementer
