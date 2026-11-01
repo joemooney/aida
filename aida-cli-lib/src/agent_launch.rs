@@ -947,6 +947,7 @@ pub(crate) fn agent_new_command_for_type(token: &str) -> Option<AgentNewCommand>
             extra_flags: Vec::new(),
             name: None,
             description: None,
+            grant_inline: Default::default(),
             bg: false,
             rotate: false,
         }),
@@ -974,6 +975,7 @@ pub(crate) fn agent_new_command_for_type(token: &str) -> Option<AgentNewCommand>
             extra_flags: Vec::new(),
             name: None,
             description: None,
+            grant_inline: Default::default(),
             no_mail_wake: false,
             rotate: false,
         }),
@@ -1000,6 +1002,7 @@ pub(crate) fn agent_new_command_for_type(token: &str) -> Option<AgentNewCommand>
             extra_flags: Vec::new(),
             name: None,
             description: None,
+            grant_inline: Default::default(),
         }),
         _ => None,
     }
@@ -1063,6 +1066,15 @@ pub(crate) fn pick_agent_type_interactively() -> Result<Option<AgentNewCommand>>
 /// path and the interactive picker share one code path.
 // trace:TASK-837 | ai:claude
 pub(crate) fn dispatch_agent_new(cmd: &AgentNewCommand) -> Result<()> {
+    // trace:STORY-2215 | ai:claude
+    let (AgentNewCommand::Claude { grant_inline, .. }
+    | AgentNewCommand::Codex { grant_inline, .. }
+    | AgentNewCommand::Antigravity { grant_inline, .. }) = cmd;
+    let bg = matches!(cmd, AgentNewCommand::Claude { bg: true, .. });
+    GRANT_INLINE_OFFER.store(
+        inline_offer_enabled(*grant_inline, bg),
+        std::sync::atomic::Ordering::Relaxed,
+    );
     match cmd {
         AgentNewCommand::Claude {
             role,
@@ -1091,6 +1103,7 @@ pub(crate) fn dispatch_agent_new(cmd: &AgentNewCommand) -> Result<()> {
             bg,
             description,
             rotate,
+            grant_inline: _,
         } => agent_new_claude(
             role.clone(),
             spec.clone(),
@@ -1145,6 +1158,7 @@ pub(crate) fn dispatch_agent_new(cmd: &AgentNewCommand) -> Result<()> {
             description,
             no_mail_wake,
             rotate,
+            grant_inline: _,
         } => agent_new_codex_wake(
             role.clone(),
             spec.clone(),
@@ -1196,6 +1210,7 @@ pub(crate) fn dispatch_agent_new(cmd: &AgentNewCommand) -> Result<()> {
             extra_flags,
             name,
             description,
+            grant_inline: _,
         } => agent_new_antigravity(
             role.clone(),
             spec.clone(),
@@ -1664,6 +1679,11 @@ pub(crate) fn split_posture_flags(
             ("--allow-dangerously-skip-permissions", false),
         ],
         "codex" => &[
+            // trace:TASK-2631 | ai:codex — native posture also governs CLI aliases.
+            ("-s", true),
+            ("-a", true),
+            ("--yolo", false),
+            ("--approve-for-me", false),
             ("--sandbox", true),
             ("--ask-for-approval", true),
             ("--dangerously-bypass-approvals-and-sandbox", false),
@@ -1679,6 +1699,8 @@ pub(crate) fn split_posture_flags(
         let arg = &flags[idx];
         let matched = posture.iter().find(|(name, takes_value)| {
             arg == name || (*takes_value && arg.starts_with(&format!("{name}=")))
+                // trace:TASK-2631 | ai:codex — clap accepts attached short-option values.
+                || (agent_type == "codex" && matches!(*name, "-s" | "-a") && arg.starts_with(*name))
         });
         match matched {
             Some((name, takes_value)) => {
@@ -2914,6 +2936,13 @@ pub(crate) fn agent_new_with_config_wake(
         plan.name.cyan(),
         plan.launch_cwd.display().to_string().cyan()
     );
+    // trace:TASK-2631 | ai:codex
+    if config.agent_type == "codex" {
+        eprintln!(
+            "  posture: {}",
+            resolved_agent_permission_summary(config.agent_type, &config.default_args)
+        );
+    }
     if let Some(spec) = &plan.current_spec {
         eprintln!("  {}: {}", "spec".bold(), spec.cyan());
     }
@@ -3757,6 +3786,8 @@ fn preflight_agent_new_delegation(
 ) -> Result<()> {
     if let Some(role) = role {
         let seat = canonical_role_name(role);
+        // trace:STORY-2215 | ai:claude
+        offer_inline_parent_grant(project_root, &seat)?;
         let parent = crate::gate::seat_authority::current_grant(project_root);
         crate::gate::seat_authority::validate_child_delegation(project_root, &seat).map_err(
             |cause| {
@@ -3768,6 +3799,176 @@ fn preflight_agent_new_delegation(
         )?;
     }
     Ok(())
+}
+
+/// STORY-2215: this process's `aida agent new --grant-inline` mode. Only
+/// [`dispatch_agent_new`] (the `aida agent new` command itself) turns the
+/// offer on; every other launcher keeps the pure refusal. A process flag
+/// rather than a parameter: the preflight sits under three launchers' long
+/// signatures and is reached once per process.
+// trace:STORY-2215 | ai:claude
+static GRANT_INLINE_OFFER: std::sync::atomic::AtomicBool =
+    std::sync::atomic::AtomicBool::new(false);
+
+/// Whether `aida agent new` turns the offer on. Never for `--bg`: a
+/// background child of a seat that needs a grant is refused anyway (its grant
+/// could not be bound to it), and one of a baseline seat runs ungranted, so a
+/// grant minted for either would be asked for and never used.
+// trace:STORY-2215 | ai:claude
+pub(crate) fn inline_offer_enabled(mode: crate::agent_launch_args::GrantInline, bg: bool) -> bool {
+    mode == crate::agent_launch_args::GrantInline::Auto && !bg
+}
+
+/// Everything that decides whether `agent new` may offer the one-time grant.
+// trace:STORY-2215 | ai:claude
+#[derive(Debug, Clone, Default)]
+pub(crate) struct InlineGrantContext {
+    /// `--grant-inline auto` on `aida agent new`.
+    pub offer_enabled: bool,
+    /// No grant at all is exported (an invalid or expired one does not count).
+    pub grant_absent: bool,
+    pub stdin_tty: bool,
+    pub stdout_tty: bool,
+    pub stderr_tty: bool,
+    /// This shell is a contained seat (`AIDA_CONTAINED`, or unparseable).
+    pub contained: bool,
+    /// The roster lets this user hold the inline parent's seat and delegate
+    /// the requested one, so a yes could actually launch.
+    pub roster_allows: bool,
+    /// The process environment, `(name, value)`.
+    pub env: Vec<(String, String)>,
+}
+
+/// Whether `name` marks a headless run or an agent harness, which must never
+/// be offered a grant a human keystroke would otherwise prove.
+// trace:STORY-2215 | ai:claude
+fn inline_grant_blocking_env(name: &str) -> bool {
+    name == "AIDA_HEADLESS"
+        || name == "CLAUDECODE"
+        || name.starts_with("CODEX_")
+        || name.starts_with("AIDA_AGENT_")
+}
+
+/// The pure eligibility check for the inline grant offer. Every condition
+/// must hold; any miss keeps today's refusal.
+// trace:STORY-2215 | ai:claude
+pub(crate) fn inline_grant_eligible(ctx: &InlineGrantContext) -> bool {
+    ctx.offer_enabled
+        && ctx.grant_absent
+        && ctx.stdin_tty
+        && ctx.stdout_tty
+        && ctx.stderr_tty
+        && !ctx.contained
+        && ctx.roster_allows
+        && !ctx
+            .env
+            .iter()
+            .any(|(name, value)| !value.trim().is_empty() && inline_grant_blocking_env(name))
+}
+
+/// STORY-2215: at a human terminal with no seat grant, offer to launch `seat`
+/// under a one-time `advisor` grant from the human, minted in-process through
+/// `aida role enter`'s issuance body. On yes the grant is exported to THIS
+/// launcher process only (never the user's shell) so the child grant derives
+/// from it exactly as today. On no, or when ineligible, nothing changes and
+/// the caller refuses as before.
+// trace:STORY-2215 | ai:claude
+fn offer_inline_parent_grant(project_root: &std::path::Path, seat: &str) -> Result<()> {
+    use crate::gate::kernel_deps as k;
+    let offer_enabled = GRANT_INLINE_OFFER.load(std::sync::atomic::Ordering::Relaxed);
+    // Every launcher but an interactive `aida agent new` (and every `--bg` or
+    // `--grant-inline no` one) stops here, before any grant or roster read,
+    // so its preflight is exactly the pre-STORY-2215 refusal path.
+    if !offer_enabled {
+        return Ok(());
+    }
+    let grant_absent = matches!(
+        crate::gate::seat_authority::grant_check(project_root),
+        crate::gate::seat_authority::GrantCheck::Absent
+    );
+    let ctx = InlineGrantContext {
+        offer_enabled,
+        grant_absent,
+        // Read only when an offer is otherwise possible.
+        roster_allows: grant_absent
+            && crate::gate::seat_authority::inline_parent_roster_allows(
+                project_root,
+                "advisor",
+                seat,
+            ),
+        stdin_tty: k::authority_stdin_is_terminal(),
+        stdout_tty: k::authority_stdout_is_terminal(),
+        stderr_tty: k::authority_stderr_is_terminal(),
+        contained: session::aida_contained_env().unwrap_or(true),
+        env: std::env::vars().collect(),
+    };
+    if !inline_grant_eligible(&ctx) {
+        return Ok(());
+    }
+    let card = inline_grant_card(
+        seat,
+        inline_grant_lifetime_hours(project_root),
+        chrono::Local::now(),
+    );
+    let question = format!(
+        "No parent grant in this shell. Launch the {seat} under a one-time grant from you (operator)?"
+    );
+    // The grant facts print before the question, not only on `?`: the answer
+    // mints authority, so the operator sees what it mints. Default no: an
+    // empty line or end of input (Ctrl-D) mints nothing; a read error
+    // (no usable terminal) is a no too.
+    // trace:STORY-2215 | ai:claude
+    println!("{}", card.render());
+    let yes = crate::context_prompt::confirm_with_context(&question, false, &card).unwrap_or(false);
+    if !yes {
+        return Ok(());
+    }
+    match crate::gate::seat_authority::issue_inline_parent(project_root, "advisor", seat) {
+        // Edition 2021: set_var is safe; this process has not spawned the
+        // child yet, and the user's shell is a different process.
+        Ok(grant) => std::env::set_var(crate::gate::seat_authority::GRANT_ENV, &grant.id),
+        Err(cause) => eprintln!("Could not mint the one-time grant: {cause:#}"),
+    }
+    Ok(())
+}
+
+/// Hours the one-time grant lasts: min(8h, `[seat] max_grant_hours`), the
+/// same bound `issue_inline_parent` applies when it mints.
+// trace:STORY-2215 | ai:claude
+fn inline_grant_lifetime_hours(project_root: &std::path::Path) -> i64 {
+    std::cmp::min(
+        crate::gate::seat_authority::INLINE_PARENT_MAX.num_hours(),
+        crate::gate::seat_authority::resolve_max_grant_hours(project_root) as i64,
+    )
+}
+
+/// What a yes to the one-time grant offer mints: the launched seat, the
+/// parent seat and its delegation scope, the expiry, and the binding.
+// trace:STORY-2215 | ai:claude
+fn inline_grant_card(
+    seat: &str,
+    hours: i64,
+    now: chrono::DateTime<chrono::Local>,
+) -> crate::context_prompt::ContextCard {
+    let until = now + chrono::Duration::hours(hours);
+    crate::context_prompt::ContextCard {
+        decision: format!("whether to launch the {seat} under a one-time grant you issue now"),
+        provenance: vec![
+            format!("Launched seat: {seat} (it receives its own child grant)"),
+            format!("Parent seat: advisor, delegating only the {seat} seat"),
+            format!(
+                "Expires: {hours}h after you answer (about {})",
+                until.format("%Y-%m-%d %H:%M %Z")
+            ),
+            "One-time: bound to this launcher process only, never exported to your shell; the next launch asks again".to_string(),
+        ],
+        answers: vec![
+            format!("y: issue the grant and launch the {seat}"),
+            "n (or Enter): issue nothing and refuse with the recovery command".to_string(),
+            "?: show this context again".to_string(),
+        ],
+        recommended_default: "n: nothing is issued unless you type y".to_string(),
+    }
 }
 
 /// The `agent new` delegation refusal, with exactly one recovery command.
@@ -5837,6 +6038,11 @@ pub(crate) fn build_agent_new_bg_command(
         .current_dir(&plan.launch_cwd)
         .args(&config.default_args)
         .args(prompt_args)
+        // trace:TASK-2631 | ai:codex
+        .env(
+            "AIDA_CONTAINMENT_POSTURE",
+            agent_containment_posture(config),
+        )
         .env("AIDA_AGENT_TYPE", config.agent_type)
         .env("AIDA_AGENT_NAME", &plan.name)
         // BUG-558: the spawned agent's mailbox/queue identity (BUG-89 resolves
@@ -5940,6 +6146,11 @@ pub(crate) fn agent_launch_env_inputs(
 ) -> Vec<(&'static str, String)> {
     let mut out = vec![
         ("AIDA_AGENT_TYPE", config.agent_type.to_string()),
+        // trace:TASK-2631 | ai:codex
+        (
+            "AIDA_CONTAINMENT_POSTURE",
+            agent_containment_posture(config).to_string(),
+        ),
         ("AIDA_AGENT_NAME", plan.name.clone()),
         ("AIDA_USER", plan.name.clone()),
         ("AIDA_PROJECT_ROOT", plan.project_root.display().to_string()),
@@ -6113,7 +6324,15 @@ pub(crate) fn resolved_agent_permission_summary(agent_type: &str, args: &[String
                 let sandbox = resolved_flag_value(args, "--sandbox").unwrap_or("codex default");
                 let approval =
                     resolved_flag_value(args, "--ask-for-approval").unwrap_or("codex default");
-                format!("codex sandbox={sandbox}, ask-for-approval={approval}")
+                // trace:TASK-2631 | ai:codex
+                if sandbox == "workspace-write" && approval == "never" {
+                    format!(
+                        "codex sandbox={sandbox}, ask-for-approval={approval} ({})",
+                        session::ContainmentPosture::Native.label()
+                    )
+                } else {
+                    format!("codex sandbox={sandbox}, ask-for-approval={approval}")
+                }
             }
         }
         "antigravity" => {
@@ -6494,6 +6713,11 @@ fn run_agent_generation(
     command
         .current_dir(&plan.launch_cwd)
         .args(&exec_args)
+        // trace:TASK-2631 | ai:codex
+        .env(
+            "AIDA_CONTAINMENT_POSTURE",
+            agent_containment_posture(config),
+        )
         .env("AIDA_AGENT_TYPE", config.agent_type)
         .env("AIDA_AGENT_NAME", &plan.name)
         // BUG-558: export AIDA_USER = the stable name so the spawned agent's
@@ -7131,3 +7355,26 @@ mod task_1806_launch_mandate_tests {
 #[cfg(test)]
 #[path = "tests/story_1741_adoption_projection_tests.rs"]
 mod story_1741_adoption_projection_tests;
+
+// trace:TASK-2631 | ai:codex
+fn agent_containment_posture(config: &AgentLaunchConfig) -> &'static str {
+    if is_contained_launch(config) {
+        "aida"
+    } else if config.agent_type == "codex"
+        && resolved_flag_value(&config.default_args, "--sandbox") == Some("workspace-write")
+        && resolved_flag_value(&config.default_args, "--ask-for-approval") == Some("never")
+        && !config
+            .default_args
+            .iter()
+            .any(|a| a == "--dangerously-bypass-approvals-and-sandbox")
+    {
+        "native"
+    } else {
+        "none"
+    }
+}
+
+// trace:STORY-2215 | ai:claude
+#[cfg(test)]
+#[path = "tests/story_2215_inline_grant_env_tests.rs"]
+mod story_2215_inline_grant_env_tests;

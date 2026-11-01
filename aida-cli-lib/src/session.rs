@@ -695,6 +695,8 @@ pub(crate) fn build_contained_resume_command(
         &contained_session_write_roots_from(&worktree),
     )?);
     cmd.env("AIDA_CONTAINED", "1");
+    // trace:TASK-2631 | ai:codex — do not inherit a native parent's display marker.
+    cmd.env("AIDA_CONTAINMENT_POSTURE", "aida");
     cmd.current_dir(&worktree);
     Ok(cmd)
 }
@@ -1234,8 +1236,12 @@ pub(crate) fn build_claude_exec_command(
     }
     if contained {
         cmd.env("AIDA_CONTAINED", "1");
+        // trace:TASK-2631 | ai:codex — do not inherit a native parent's display marker.
+        cmd.env("AIDA_CONTAINMENT_POSTURE", "aida");
     } else {
         cmd.env_remove("AIDA_CONTAINED");
+        // trace:TASK-2631 | ai:codex
+        cmd.env("AIDA_CONTAINMENT_POSTURE", "none");
     }
     cmd.args(args);
     Ok(cmd)
@@ -1338,8 +1344,12 @@ pub(crate) fn build_run_claude_session_command(
     let mut cmd = std::process::Command::new(program);
     if contained {
         cmd.env("AIDA_CONTAINED", "1");
+        // trace:TASK-2631 | ai:codex — do not inherit a native parent's display marker.
+        cmd.env("AIDA_CONTAINMENT_POSTURE", "aida");
     } else {
         cmd.env_remove("AIDA_CONTAINED");
+        // trace:TASK-2631 | ai:codex
+        cmd.env("AIDA_CONTAINMENT_POSTURE", "none");
     }
     cmd.args(args);
     Ok(cmd)
@@ -1485,6 +1495,17 @@ pub(crate) fn compose_headless_command(
     // is refused at the one choke point instead of silently running uncontained.
     // trace:BUG-2144 | ai:claude
     require_vendor_containment(vendor, contained, "headless session")?;
+    // trace:TASK-2631 | ai:codex
+    if matches!(
+        containment_posture(vendor, contained),
+        Ok(ContainmentPosture::Native)
+    ) {
+        eprintln!(
+            "  {}: {}",
+            vendor.as_str(),
+            ContainmentPosture::Native.label()
+        );
+    }
     let worktree = headless_worktree_root();
     // BUG-049: a fresh seat worktree is untrusted, so Claude Code would drop
     // the project allow-list and deny the lane's Bash calls. Pre-trust it
@@ -1625,7 +1646,8 @@ pub(crate) fn spawn_vendor_headless_with_seat_granted(
     }
     let tuning = resolve_agent_tuning(&headless_worktree_root(), vendor, seat);
     // trace:BUG-2218 TASK-2328 | ai:codex
-    if contained {
+    // trace:TASK-2631 | ai:codex
+    if containment_applied(vendor, contained) {
         prepare_contained_mailbox_for_launch(&headless_worktree_root())?;
     }
     // TASK-1169 / ADR-22: bound the child's turn-end background-wait ceiling
@@ -1646,7 +1668,7 @@ pub(crate) fn spawn_vendor_headless_with_seat_granted(
         &headless_worktree_root(),
         seat.as_str(),
         &crate::current_user_id(None),
-        contained,
+        containment_applied(vendor, contained),
     )?;
     let mut cmd = Command::new(program);
     cmd.args(args)
@@ -1671,11 +1693,18 @@ pub(crate) fn spawn_vendor_headless_with_seat_granted(
     // behind. trace:BUG-2139 | ai:claude
     scrub_launcher_session_env(&mut cmd);
     // trace:BUG-2006 | ai:antigravity
+    // trace:TASK-2631 | ai:codex
+    let posture = containment_posture(vendor, contained)?;
     if containment_applied(vendor, contained) {
         cmd.env("AIDA_CONTAINED", "1");
+        // trace:TASK-2631 | ai:codex — do not inherit a native parent's display marker.
+        cmd.env("AIDA_CONTAINMENT_POSTURE", "aida");
     } else {
         cmd.env_remove("AIDA_CONTAINED");
+        // trace:TASK-2631 | ai:codex
+        cmd.env("AIDA_CONTAINMENT_POSTURE", "none");
     }
+    stamp_containment_posture(&mut cmd, posture);
     // A watch-launched reviewer is recorded before the wait. trace:TASK-1993 | ai:claude
     let status = reviewer_status_with_handle_guard(cmd.stdout(Stdio::from(log)), &mut handle_guard)
         .with_context(|| format!("failed to spawn {}", vendor.program()))?;
@@ -1974,8 +2003,12 @@ pub(crate) fn spawn_claude_resume_with_grant(
     // trace:BUG-2006 | ai:antigravity
     if contained {
         cmd.env("AIDA_CONTAINED", "1");
+        // trace:TASK-2631 | ai:codex — do not inherit a native parent's display marker.
+        cmd.env("AIDA_CONTAINMENT_POSTURE", "aida");
     } else {
         cmd.env_remove("AIDA_CONTAINED");
+        // trace:TASK-2631 | ai:codex
+        cmd.env("AIDA_CONTAINMENT_POSTURE", "none");
     }
     if contained {
         prepare_contained_mailbox_for_launch(&std::env::current_dir()?)?;
@@ -2024,6 +2057,8 @@ pub(crate) fn build_codex_session_command(
         cmd.env(crate::gate::seat_authority::GRANT_ENV, id);
     }
     cmd.env_remove("AIDA_CONTAINED");
+    // trace:TASK-2631 | ai:codex
+    cmd.env("AIDA_CONTAINMENT_POSTURE", "none");
     cmd.args(codex_session_args(initial_prompt, bypass, model));
     cmd
 }
@@ -2036,7 +2071,23 @@ pub fn exec_codex_session(
     model: Option<&str>,
     grant_id: Option<&str>,
 ) -> Result<()> {
-    let mut cmd = build_codex_session_command(initial_prompt, bypass, model, grant_id);
+    // trace:TASK-2631 | ai:codex
+    let requested = drain_contained(&headless_worktree_root())?;
+    let posture = containment_posture(HeadlessVendor::Codex, requested)?;
+    let mut cmd = if posture == ContainmentPosture::Native {
+        let mut cmd = std::process::Command::new("codex");
+        cmd.args(crate::tool_contained_flags("codex")?)
+            .args(codex_session_args(initial_prompt, false, model))
+            .env_remove("AIDA_CONTAINED");
+        if let Some(id) = grant_id {
+            cmd.env(crate::gate::seat_authority::GRANT_ENV, id);
+        }
+        eprintln!("  codex: {}", posture.label());
+        cmd
+    } else {
+        build_codex_session_command(initial_prompt, bypass, model, grant_id)
+    };
+    stamp_containment_posture(&mut cmd, posture);
     #[cfg(unix)]
     {
         use std::os::unix::process::CommandExt;
@@ -2112,7 +2163,14 @@ pub(crate) fn interactive_reviewer_launch_plan(
             Ok(ReviewerLaunchPlan {
                 vendor,
                 program: resolve_agent_program(vendor.program()),
-                args: codex_session_args(prompt, bypass, None),
+                // trace:TASK-2631 | ai:codex
+                args: if contained {
+                    let mut args = crate::tool_contained_flags("codex")?;
+                    args.extend(codex_session_args(prompt, false, None));
+                    args
+                } else {
+                    codex_session_args(prompt, bypass, None)
+                },
                 contained: containment_applied(vendor, contained),
             })
         }
@@ -2180,8 +2238,29 @@ pub(crate) fn spawn_reviewer_launch_plan_granted(
     // trace:BUG-2006 | ai:antigravity
     if plan.contained {
         cmd.env("AIDA_CONTAINED", "1");
+        // trace:TASK-2631 | ai:codex — do not inherit a native parent's display marker.
+        cmd.env("AIDA_CONTAINMENT_POSTURE", "aida");
     } else {
         cmd.env_remove("AIDA_CONTAINED");
+        // trace:TASK-2631 | ai:codex
+        cmd.env("AIDA_CONTAINMENT_POSTURE", "none");
+    }
+    // trace:TASK-2631 | ai:codex
+    let posture = if plan.contained {
+        ContainmentPosture::Aida
+    } else if plan.vendor == HeadlessVendor::Codex
+        && plan
+            .args
+            .windows(2)
+            .any(|w| w == ["--sandbox", "workspace-write"])
+    {
+        ContainmentPosture::Native
+    } else {
+        ContainmentPosture::None
+    };
+    stamp_containment_posture(&mut cmd, posture);
+    if posture == ContainmentPosture::Native {
+        eprintln!("  codex: {}", posture.label());
     }
     // A watch-launched reviewer is recorded before the wait. trace:TASK-1993 | ai:claude
     let status = reviewer_status_with_handle_guard(&mut cmd, &mut handle_guard)
@@ -2250,11 +2329,81 @@ impl HeadlessVendor {
 }
 
 /// Returns whether containment is actually supported and applied for `vendor`.
-/// Currently, only Claude sessions support containment; Codex and Antigravity
-/// run with their respective approval bypasses and do not apply containment.
+/// Only Claude applies AIDA containment. Use [`containment_posture`] to distinguish
+/// an explicitly opted-in Codex native sandbox from no containment.
+// trace:TASK-2631 | ai:codex
 // trace:BUG-2006 | ai:antigravity
 pub fn containment_applied(vendor: HeadlessVendor, contained: bool) -> bool {
     vendor == HeadlessVendor::Claude && contained
+}
+
+/// Effective launch boundary. Native never grants AIDA containment authority.
+// trace:TASK-2631 | ai:codex
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ContainmentPosture {
+    Aida,
+    Native,
+    None,
+}
+
+// trace:TASK-2631 | ai:codex
+impl ContainmentPosture {
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Aida => "AIDA-contained",
+            Self::Native => "native sandbox, not AIDA-contained",
+            Self::None => "not contained",
+        }
+    }
+}
+
+/// Resolve the project opt-in, failing closed on malformed or unsupported policy.
+// trace:TASK-2631 | ai:codex
+pub(crate) fn containment_posture_in(
+    root: &Path,
+    vendor: &str,
+    requested: bool,
+) -> Result<ContainmentPosture> {
+    if !requested {
+        return Ok(ContainmentPosture::None);
+    }
+    let setting = crate::agent_config::load_contained_vendor(root, vendor)?;
+    vendor_containment_posture(vendor, setting.as_deref())
+}
+
+// trace:TASK-2631 | ai:codex
+fn vendor_containment_posture(vendor: &str, setting: Option<&str>) -> Result<ContainmentPosture> {
+    match (HeadlessVendor::parse(vendor), setting) {
+        (Some(HeadlessVendor::Claude), None | Some("aida")) => Ok(ContainmentPosture::Aida),
+        (Some(HeadlessVendor::Codex), Some("native")) => Ok(ContainmentPosture::Native),
+        (_, Some("native")) => anyhow::bail!(
+            "[contained.vendors] {vendor} = \"native\" is unsupported: `{vendor}` has no supported native sandbox; refusing to launch it"
+        ),
+        (_, None | Some("aida")) => anyhow::bail!(
+            "`{vendor}` cannot run an AIDA-contained session; refusing to launch it. Use --vendor claude, or explicitly set [contained.vendors] codex = \"native\" in the trusted default-branch config for Codex (native sandbox, not AIDA-contained)"
+        ),
+        (_, Some(value)) => anyhow::bail!(
+            "[contained.vendors] {vendor} = {} must be \"aida\" or \"native\"; refusing to launch it", aida_core::toml_quote::toml_string(value)
+        ),
+    }
+}
+
+/// Runtime resolver shared by preflight and argv builders.
+// trace:TASK-2631 | ai:codex
+pub fn containment_posture(vendor: HeadlessVendor, requested: bool) -> Result<ContainmentPosture> {
+    // Ambient launch-policy tests must not inherit this repository's opt-in.
+    // Tests with policy fixtures pin the existing per-thread cwd/root seam.
+    #[cfg(test)]
+    if contained_cwd_seam::cwd().is_none() && crate::kernel::test_ambient::project_root().is_none()
+    {
+        return if requested {
+            vendor_containment_posture(vendor.as_str(), None)
+        } else {
+            Ok(ContainmentPosture::None)
+        };
+    }
+    containment_posture_in(&headless_worktree_root(), vendor.as_str(), requested)
 }
 
 /// TASK-1116: per-invocation top-precedence override for the headless
@@ -2624,9 +2773,9 @@ pub(crate) fn guided_session_launch(
 /// ([`claude_headless_args_with_posture`]); `Codex` builds the `codex exec`
 /// argv (prior art: `compete.rs::vendor_adapter`), with the prompt as the final
 /// positional. Pure — the arms are unit-tested without spawning. The `contained`
-/// posture only affects the Claude arm today (Codex carries its own sandbox via
-/// `--dangerously-bypass-approvals-and-sandbox`; Agy via
-/// `--dangerously-skip-permissions`).
+/// posture selects Claude containment or an explicitly opted-in Codex native sandbox.
+/// Uncontained Codex and Agy retain their historical bypass arguments.
+// trace:TASK-2631 | ai:codex
 // trace:STORY-683 TASK-1048 | ai:claude
 // trace:BUG-2006 | ai:antigravity
 pub fn headless_vendor_args(
@@ -2646,7 +2795,17 @@ pub fn headless_vendor_args(
             model,
             effort,
         )?,
-        HeadlessVendor::Codex => codex_headless_args_with_model_and_effort(prompt, model, effort),
+        // trace:TASK-2631 | ai:codex
+        HeadlessVendor::Codex => {
+            let mut args = codex_headless_args_with_model_and_effort(prompt, model, effort);
+            if contained {
+                containment_posture(vendor, true)?;
+                args.retain(|arg| arg != "--dangerously-bypass-approvals-and-sandbox");
+                let flags = crate::tool_contained_flags("codex")?;
+                args.splice(0..0, flags);
+            }
+            args
+        }
         HeadlessVendor::Agy => agy_headless_args_with_effort(prompt, effort),
     })
 }
@@ -2674,6 +2833,14 @@ pub(crate) fn headless_vendor_args_contained_in(
             model,
             effort,
         ),
+        // trace:TASK-2631 | ai:codex
+        (HeadlessVendor::Codex, Some(dir)) => {
+            containment_posture_in(dir, vendor.as_str(), true)?;
+            let mut args = codex_headless_args_with_model_and_effort(prompt, model, effort);
+            args.retain(|arg| arg != "--dangerously-bypass-approvals-and-sandbox");
+            args.splice(0..0, crate::tool_contained_flags("codex")?);
+            Ok(args)
+        }
         _ => headless_vendor_args(vendor, prompt, session_id, false, model, effort),
     }
 }
@@ -2802,17 +2969,11 @@ pub(crate) fn require_vendor_containment(
     contained: bool,
     what: &str,
 ) -> Result<()> {
-    // BUG-2223: the fix leads, on the first line; a seat left at a codex
-    // default hit this on every headless launch and the remedy sat at the end.
-    // trace:BUG-2223 | ai:claude
-    if contained && !containment_applied(vendor, true) {
-        anyhow::bail!(
-            "the `{}` vendor cannot run a contained session: re-run with --vendor claude or \
-             AIDA_HEADLESS_VENDOR=claude, or turn containment off for this run\n  \
-             [contained] containment was requested (--sandbox, AIDA_CONTAINED, or [agents] \
-             contained), so aida is refusing to launch the {what} uncontained.",
-            vendor.as_str()
-        );
+    // trace:TASK-2631 | ai:codex
+    if contained {
+        crate::refuse_uncontainable_agent_tool(vendor.as_str()).with_context(|| format!(
+            "the `{}` vendor cannot run a contained session: re-run with --vendor claude or AIDA_HEADLESS_VENDOR=claude, or fix [contained.vendors]\n  [contained] refusing to launch the {what} uncontained", vendor.as_str()
+        ))?;
     }
     Ok(())
 }
@@ -2849,14 +3010,12 @@ pub(crate) fn child_containment_preflight(
         return Ok(());
     }
     // trace:BUG-2223 | ai:claude
-    if !containment_applied(vendor, true) {
-        anyhow::bail!(
-            "the `{}` vendor cannot run a contained session: run the drain on claude \
-             (AIDA_HEADLESS_VENDOR=claude or --vendor claude), or turn containment off for \
-             this drain\n  [contained] this drain is contained, so aida is refusing to launch \
-             the {child} uncontained.",
-            vendor.as_str()
-        );
+    // trace:TASK-2631 | ai:codex
+    let posture = containment_posture(vendor, true).with_context(|| format!(
+        "the `{}` vendor cannot run a contained session: use --vendor claude or AIDA_HEADLESS_VENDOR=claude, or fix [contained.vendors]\n  [contained] refusing to launch the {child} uncontained", vendor.as_str()
+    ))?;
+    if posture == ContainmentPosture::Native {
+        return Ok(());
     }
     if !sandbox_available {
         anyhow::bail!(
@@ -4471,7 +4630,8 @@ fn build_exec_vendor_headless_command_for(
     // trace:TASK-1169 | ai:claude
     let (ceiling_key, ceiling_value) = crate::bg_wait_ceiling_env(Some(&headless_worktree_root()));
     // trace:BUG-2218 TASK-2328 | ai:codex
-    if contained {
+    // trace:TASK-2631 | ai:codex
+    if containment_applied(vendor, contained) {
         prepare_contained_mailbox_for_launch(&headless_worktree_root())?;
     }
     let mut child_cmd = Command::new(program);
@@ -4492,11 +4652,14 @@ fn build_exec_vendor_headless_command_for(
     apply_child_agent_identity(&mut child_cmd, vendor, seat);
     // trace:TASK-1955 | ai:claude (TASK-1804)
     apply_headless_harness_version(&mut child_cmd, vendor, &headless_worktree_root());
+    // trace:TASK-2631 | ai:codex
+    let posture = containment_posture(vendor, contained)?;
     if containment_applied(vendor, contained) {
         child_cmd.env("AIDA_CONTAINED", "1");
     } else {
         child_cmd.env_remove("AIDA_CONTAINED");
     }
+    stamp_containment_posture(&mut child_cmd, posture);
     Ok(child_cmd)
 }
 
@@ -5373,7 +5536,14 @@ pub(crate) fn advisor_tier_program_and_args_with_posture(
             // TASK-1081: same mock resolver as the Claude arm. trace:TASK-1081
             (
                 resolve_agent_program(HeadlessVendor::Codex.program()),
-                codex_headless_args_with_model_and_effort(seeded_prompt, model, effort),
+                headless_vendor_args_contained_in(
+                    vendor,
+                    seeded_prompt,
+                    advisor_uuid,
+                    contained_in,
+                    model,
+                    effort,
+                )?,
             )
         }
         HeadlessVendor::Agy => {
@@ -5487,8 +5657,12 @@ pub(crate) fn spawn_claude_headless_resume_granted(
     // trace:BUG-2006 | ai:antigravity
     if contained {
         cmd.env("AIDA_CONTAINED", "1");
+        // trace:TASK-2631 | ai:codex — do not inherit a native parent's display marker.
+        cmd.env("AIDA_CONTAINMENT_POSTURE", "aida");
     } else {
         cmd.env_remove("AIDA_CONTAINED");
+        // trace:TASK-2631 | ai:codex
+        cmd.env("AIDA_CONTAINMENT_POSTURE", "none");
     }
     // A watch-launched reviewer is recorded before the wait. trace:TASK-1993 | ai:claude
     let status = reviewer_status_with_handle_guard(cmd.stdout(Stdio::from(log)), &mut handle_guard)
@@ -6863,8 +7037,12 @@ pub(crate) fn build_claude_resume_exec_command(
     }
     if contained {
         cmd.env("AIDA_CONTAINED", "1");
+        // trace:TASK-2631 | ai:codex — do not inherit a native parent's display marker.
+        cmd.env("AIDA_CONTAINMENT_POSTURE", "aida");
     } else {
         cmd.env_remove("AIDA_CONTAINED");
+        // trace:TASK-2631 | ai:codex
+        cmd.env("AIDA_CONTAINMENT_POSTURE", "none");
     }
     Ok(cmd)
 }
@@ -11204,4 +11382,19 @@ mod tests {
             }
         }
     }
+}
+
+// trace:TASK-2631 | ai:codex
+pub(crate) fn stamp_containment_posture(
+    cmd: &mut std::process::Command,
+    posture: ContainmentPosture,
+) {
+    cmd.env(
+        "AIDA_CONTAINMENT_POSTURE",
+        match posture {
+            ContainmentPosture::Aida => "aida",
+            ContainmentPosture::Native => "native",
+            ContainmentPosture::None => "none",
+        },
+    );
 }
