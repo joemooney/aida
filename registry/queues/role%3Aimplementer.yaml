@@ -1,4 +1,11 @@
 - user_id: role:implementer
+  requirement_id: 01a1942f-b90c-7ee1-a06c-d5856831d28e
+  position: 268000
+  added_by: role:implementer
+  note: PR-3193 round-3 acceptance content passes, but portability ratchet blocks at tests/test_generate_glossary_check.sh:157 (GNU sed -i). Verdict ledger PR-3193.jsonl#11 at e8f39409662d.
+  added_at: 2026-11-01T07:31:39.059728659Z
+  for_role: implementer
+- user_id: role:implementer
   requirement_id: 01a193e5-6e71-77a2-8c2c-bd433eb2f055
   position: 269000
   added_by: role:implementer
@@ -25,13 +32,6 @@
   added_by: role:implementer
   note: PR-3196 round-1 AC3/AC5 prose corrections; latest complete advisor brief names every correction and the post-merge publication gate.
   added_at: 2026-11-01T06:48:51.001830333Z
-  for_role: implementer
-- user_id: role:implementer
-  requirement_id: 01a1942f-b90c-7ee1-a06c-d5856831d28e
-  position: 273000
-  added_by: role:implementer
-  note: PR-3193 round-2 generator fix omitted its generated output; see newest ADVISOR REWORK BRIEF and gate-ledger PR-3193.jsonl#7.
-  added_at: 2026-11-01T06:48:42.329009186Z
   for_role: implementer
 - user_id: role:implementer
   requirement_id: 01a19434-2aa8-74d0-bccf-38faf512e4c7
