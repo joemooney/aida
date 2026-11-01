@@ -1,0 +1,34 @@
+id: 01a19974-7b25-77e2-a55e-311b69e1eb70
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-297
+agreed_id: STORY-2282
+title: 'Review PR-3220: [AI:claude] fix(watchdog): runaway-seats reads this project''s Codex sessions; shift tick treats codex as covered (BUG-2391)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `bug-b6b1278890774ef993d2ebc327862470-165`.
+
+  - PR: <https://github.com/joemooney/aida/pull/3220>
+  - Branch: `bug-b6b1278890774ef993d2ebc327862470-165` → `main`
+
+  ## Covers
+
+  - BUG-2391
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 3220` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-01T23:31:50.181037347Z
+modified_at: 2026-11-01T23:31:50.181037347Z
+req_type: Story
+filed_at:
+  code_sha: c0110e5db66c985b4c16fff2db8591fb512136ab
+  branch: main
+  dirty: true
+  aida_version: 0.16.0
+  aida_build_sha: 6a3f67671a9
+  vendor: claude
+  session: 126bbd5a-a92f-452b-ab0b-2637a1db42c2
