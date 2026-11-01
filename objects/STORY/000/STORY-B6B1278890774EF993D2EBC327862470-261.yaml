@@ -20,12 +20,12 @@ description: |
 
   ## Out of scope
   Rewriting the developer-facing CLI glossary entries; new explainer pages.
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T22:58:37.964636963Z
-modified_at: 2026-11-01T07:31:31.705598720Z
+modified_at: 2026-11-01T07:31:36.061558508Z
 req_type: Story
 tags:
 - docs
@@ -143,6 +143,11 @@ comments:
   content: 'Advisor ruling: ADVISOR REWORK BRIEF: fix the single GNU-only sed -i site in tests/test_generate_glossary_check.sh:157 using a portable fixture restore/rewrite (no allowlist addition). Verify bash tests/test_generate_glossary_check.sh and scripts/check-portability.sh, plus showcase build check and make check-ci-fast if available. This is FASTTRACK; no direct cargo. If the fast gate compiles beyond sandbox support, report unavailable once rather than repeated short builds. Push one small commit on the existing PR then stop for independent review. Optional contributor-section finding ACCEPTED as-is: accurate and clearly labeled contributor instructions are useful to readers who want glossary corrections; no follow-up task or PR.'
   created_at: 2026-11-01T07:31:31.481455453Z
   modified_at: 2026-11-01T07:31:31.481455453Z
+- id: 01a19605-5bfd-7462-b6bd-fe8c5209763e
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Round-3 regeneration fixes the book chapter (drift test, anchor verify, showcase build and tests all pass; every AC1-AC4 item verified), but CI (gates) fails at ''Check Rust test portability ratchet'' on the GNU-only sed -i that round 2 added to tests/test_generate_glossary_check.sh. Triage reason: PR-3193 round-3 acceptance content passes, but portability ratchet blocks at tests/test_generate_glossary_check.sh:157 (GNU sed -i). Verdict ledger PR-3193.jsonl#11 at e8f39409662d.'
+  created_at: 2026-11-01T07:31:36.061555664Z
+  modified_at: 2026-11-01T07:31:36.061555664Z
 history:
 - id: 01a19517-7d5f-7092-83c8-b303944f0e16
   author: joe
@@ -232,6 +237,13 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a19605-5bfd-7462-b6bd-fe7ed18089ea
+  author: joe
+  timestamp: 2026-11-01T07:31:36.061536615Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: 44c7b6663259478cfd02fd2f5da843720f0ee6e0
   branch: main
@@ -243,11 +255,3 @@ implementation_info:
   implemented: true
   implemented_at: 2026-11-01T04:50:52.670929625Z
   implemented_by: joe
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: Round-3 regeneration fixes the book chapter (drift test, anchor verify, showcase build and tests all pass; every AC1-AC4 item verified), but CI (gates) fails at 'Check Rust test portability ratchet' on the GNU-only sed -i that round 2 added to tests/test_generate_glossary_check.sh
-  recovery_hint: address the review findings, move STORY-2219 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-01T07:24:40.076171752Z
