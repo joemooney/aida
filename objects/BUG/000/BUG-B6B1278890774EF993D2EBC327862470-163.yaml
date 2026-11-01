@@ -1,0 +1,38 @@
+id: 01a195dc-2988-7ac2-a04f-f649511fc081
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-163
+agreed_id: BUG-2389
+title: Headless CLI commands (burndown run, intake/assess, dryrun --ai, intent, questions research/clarify) hardcode claude instead of [agents] vendor
+description: |-
+  Why
+  ───
+  Discovered by SPIKE-710 audit. Six headless/AI CLI commands hardcode `claude` / `spawn_claude_headless` instead of resolving `[agents] vendor` (`session::resolve_headless_vendor`):
+
+  • `aida-cli-lib/src/burndown_run.rs:347-368, 430-460, 551-653, 2226, 2256` (`aida burndown run`): `build_burndown_quiet_command` and `build_burndown_verbose_command` hardcode `Command::new("claude")` (`claude -p`). Even when `--vendor codex` is passed (`352-367`), the top-level coordinator still spawns `claude -p` and fails if `claude` is not on PATH (`643`).
+  • `aida-cli-lib/src/autopilot_intake.rs:924-1035` (`aida intake` / `aida assess`): `build_autopilot_intake_command` hardcodes `Command::new("claude")` (`1023`), `resolve_headless_claude_posture` (`926`), and `/aida-assess` (`924`).
+  • `aida-cli-lib/src/plan_intent.rs:242, 781, 798, 820` (`aida dryrun --ai` & `aida intent`): calls `session::spawn_claude_headless` (`242`, `798`) and defaults model fallback to `"claude"` (`820`).
+  • `aida-cli-lib/src/questions.rs:1283, 1603-1699` (`aida questions research` & `aida questions clarify`): `questions_research` (`1283`) calls `session::spawn_claude_headless`, and `questions_clarify` (`1685`) spawns `Command::new("claude")` with `/aida-clarify`.
+
+  Acceptance
+  ──────────
+  1. `aida burndown run`, `aida intake`/`assess`, `aida dryrun --ai`, `aida intent`, `aida questions research`, and `aida questions clarify` resolve the configured vendor via `resolve_headless_vendor` / `resolve_default_vendor` and route through `spawn_vendor_headless_with_seat` (or vendor-aware interactive launch for `questions clarify`).
+  2. All six commands work on a Codex-only host with `[agents] vendor = "codex"` and no `claude` binary installed.
+  3. Tests verify argv/vendor selection for both `claude` and `codex`.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-01T06:46:36.168832796Z
+modified_at: 2026-11-01T06:46:36.168832796Z
+req_type: Bug
+tags:
+- audit
+- headless
+- vendor:codex
+filed_at:
+  code_sha: 6dc7d4977ac5e47c42ddfb26597fe3ec5fb70b60
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 962ca07af25
+  vendor: antigravity
+  session: 01a194b1bcfb
