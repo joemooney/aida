@@ -34,47 +34,6 @@
   added_at: 2026-11-01T14:55:35.450273907Z
   for_role: implementer
 - user_id: role:implementer
-  requirement_id: 01a1942f-b90c-7ee1-a06c-d5856831d28e
-  position: 260000
-  added_by: role:implementer
-  added_at: 2026-11-01T12:21:40.598767707Z
-  for_role: implementer
-  added_by_machine: imac
-- user_id: role:implementer
-  requirement_id: 01a195dc-eca2-7570-afea-e3ba747f78c3
-  position: 265000
-  added_by: role:implementer
-  added_at: 2026-11-01T08:40:37.081375325Z
-  for_role: implementer
-- user_id: role:implementer
-  requirement_id: 01a1936a-61a6-73a0-a35d-c22c1ce50b32
-  position: 266000
-  added_by: role:implementer
-  note: PR3185 conflicts with merged BUG2378; preserve both reviewed behaviors, fresh independent review at resolution head
-  added_at: 2026-11-01T08:19:14.517033441Z
-  for_role: implementer
-- user_id: role:implementer
-  requirement_id: 01a193e5-6e71-77a2-8c2c-bd433eb2f055
-  position: 269000
-  added_by: role:implementer
-  note: 'PR-3177 fresh independent review found the remaining real T0/T1/T2 ordering bug: gate-ledger PR-3177.jsonl#19 at 9383d0215ddaade7388bce69f530efbfc7728353. New brief below is binding.'
-  added_at: 2026-11-01T07:04:55.374499750Z
-  for_role: implementer
-- user_id: role:implementer
-  requirement_id: 01a19522-caf6-7ed2-b79e-13167544f557
-  position: 270000
-  added_by: role:implementer
-  note: 'PR-3195 verdict at e796e01e61f106956eeef59a2d2dd4d89856bb80: gate-ledger PR-3195.jsonl#2. Bundle meaningful regression/Codex-seat evidence, dead-code cleanup, toon check rendering, and check exit-status coverage.'
-  added_at: 2026-11-01T06:53:10.127320808Z
-  for_role: implementer
-- user_id: role:implementer
-  requirement_id: 01a1940c-ad69-7bf3-a8da-4726cbde065b
-  position: 272000
-  added_by: role:implementer
-  note: PR-3196 round-1 AC3/AC5 prose corrections; latest complete advisor brief names every correction and the post-merge publication gate.
-  added_at: 2026-11-01T06:48:51.001830333Z
-  for_role: implementer
-- user_id: role:implementer
   requirement_id: 01a11874-024a-71b2-935d-56a2a7e89778
   position: 296000
   added_by: role:implementer
@@ -111,18 +70,6 @@
   position: 491000
   added_by: role:implementer
   added_at: 2026-10-30T00:23:29.965998987Z
-  for_role: advisor
-- user_id: role:implementer
-  requirement_id: 01a19431-508c-75d0-9f06-4bc7ed05f3d6
-  position: 585000
-  added_by: role:implementer
-  added_at: 2026-10-31T23:09:25.282849694Z
-  for_role: advisor
-- user_id: role:implementer
-  requirement_id: 01a1949a-618d-75f2-ab02-3cb8f905080b
-  position: 588000
-  added_by: role:implementer
-  added_at: 2026-11-01T01:13:19.302937810Z
   for_role: advisor
 - user_id: role:implementer
   requirement_id: 01a194c2-a618-7a43-936b-fc06bceb3bce
