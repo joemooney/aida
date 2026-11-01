@@ -11,7 +11,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T09:05:27.409838422Z
-modified_at: 2026-11-01T11:29:17.577284445Z
+modified_at: 2026-11-01T12:04:53.460494879Z
 req_type: Task
 tags:
 - architecture
@@ -33,6 +33,16 @@ comments:
   content: 'Recovery checkpoint: implementation commit c9f713903db is pushed to origin/task-b6b1278890774ef993d2ebc327862470-655. Source/native Git metadata is read-only; commit/push used /tmp/aida-task2705-publication, whose 12-file snapshot matches the assigned worktree. No PR is open yet and TASK remains In Progress. `make check-ci-fast` passed all 36 gates, including no-default-features CLI compile and TUI seam checks. The initial targeted task_2705_closed_containment_tracer passed (and compiled library/integration targets). Final exact-source validation is still running: AIDA_REQUIRE_BWRAP_LIVE=1 AIDA_REQUIRE_CODEX_CONTAINMENT_LIVE=1 cargo test -p aida-cli-lib --profile agent --lib task_2705_ -- --nocapture; log /tmp/task2705-required-live.log. It has reached code generation, not an acceptance result yet. Final source uses crate-local immutable vendors.toml (packaging-safe), local-only pinned trusted refs, redacted policy parse errors, strict namespaces, protected mounts, FD/reaper hygiene, normal and timeout teardown checks. Do not credit final six-case/live acceptance or mark Done until that gate passes. All parent ACs and independent strict/operator merge gates remain open; no ship or review record run.'
   created_at: 2026-11-01T10:20:25.683846182Z
   modified_at: 2026-11-01T10:20:25.683846182Z
+- id: 01a196ff-8fff-7461-9bc1-445b15d7be62
+  author: joe
+  content: |-
+    Advisor ruling: ADVISOR binding rework at c9f713903db99bd30d448497f7e91d3b97d8d6e8, independentreviewer12 attestedPR3205ledger#5 /GH6557343447, predecessor /tmp/aida-review3205-result.md. Rootverifiedsource+actualfailedCI41297289880 andall12sourcebytesbackedmatchingpublicc9. TwoBLOCKERSinSAMEPR3205/branchtask-b6b1278890774ef993d2ebc327862470-655:
+    B1 requiredCIlib0Python only_standard_fds_present fails whereaslocal6pass. IdentifyexactextraFD type/origin/flags usingboundedredacteddiagnostics (neverreadFDpayload/usercredentials), rootcausebwrap/platformdifference. FixatACTUALexecutionboundary soUNTYPEDhostfile/dir/socketFDsneverreachlaneorreaper; preserveFD/proc/namespace/hostsocketnegativecontrols andgenuinesyntheticpositive. DoNOTremoveassert/skipCI/relaxallfdsbytype orsanitizeonlyinsidetestbodytomaskleak. IfnecessarytypedpostexecchannelnotalreadyC3approved, preciseadvisorforkbeforechangingcontract; no inventedhostsocketexploitfromunknownFDlog. Keepdiagnostic-onlybackendunselectableordinarylaunch,parent7ACremain.
+    B2 finishpubliccommandintegrity: regeneraterealFULLCLIhelp golden for configpermissionsprobe, updateBUG1502 formatJSONaudit throughactualsupportedprobeoutputpath, useowner seat_authority::GRANT_ENV constant in syntheticsetterinsteadrawliteral; preserveallratchets/noallowlistexemption. CheckactualCIhelp/format/grant-guard failures nowfixed, notjustmanualsnapshottext.
+    Local: ONEtargeted task_2705_ required-live(filter withAIDA_REQUIRE_BWRAP_LIVE=1 andAIDA_REQUIRE_CODEX_CONTAINMENT_LIVE=1)+makecheck-ci-fast, longcargo backgroundnormal slots/nooutertimeouts/repeatedcappedcompiles. ThisPR>10files/sharedratchetbaselines: actualmake test-touchedandmakecheck-ci-compile ONCE required; adryrunplan isNOTexecutionproof. Recordanyfailed/skipped/unavailablehonestly. FullsuiteCIonly, noslotbypass. SignedC1-C12remain, no newhost/userpermissionsorcredentials/timers. Currentmain471540a, preserveBUG2398 concurrentauthoritychanges; regenerateanysharedgoldenafterrealmainupdate, conflictneedsfreshreview.
+    Nativeprivateclone.gitRO known: explicitlyAUTHORIZEDwritablebounded/tmp publicationcheckout fromnormalorigin, applyexactauthorchanges, verifybyte/stablepatchidentity, normalcommit/pushexistingbranch(noff), updateSAMEPR. DoNOTendwithonly.gitROblockerwithouttryingthatapprovedpath. No sandbox/globalconfigrelaxation. Beforeclaimingdoneactualpublichead/PRverified. DoNOTreview/mergeowncode. IfmetadataMCPneverapprovalrejects, preservePR/evidenceandreport, noborrowedparentgrant. LatestRULINGgoverns; readfullspecandthisbeforecode. Sourceoldleaseendsafelyafterallpublishedfilesbacked, no lostunpublishedimplementation.
+  created_at: 2026-11-01T12:04:53.375521471Z
+  modified_at: 2026-11-01T12:04:53.375521471Z
 history:
 - id: 01a1965b-7cae-7260-83dd-5767f6772d90
   author: joe
