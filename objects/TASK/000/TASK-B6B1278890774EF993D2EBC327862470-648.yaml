@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T00:55:07.917269049Z
-modified_at: 2026-11-01T03:24:07.871394948Z
+modified_at: 2026-11-01T03:31:12.480736296Z
 req_type: Task
 tags:
 - config
@@ -120,6 +120,16 @@ comments:
     The native display stamp is informational only; AIDA_CONTAINED takes display precedence, native children do not receive that authority marker, and native selection on generated explicit Claude launches refuses. Existing Claude parent protections remain intact. No template masters or generated mirrors changed. `make check-ci-fast` is running; no full workspace suite was run.
   created_at: 2026-11-01T03:24:07.871394948Z
   modified_at: 2026-11-01T03:24:07.871394948Z
+- id: 01a19529-45e0-7bb2-a7f7-ce69851bee20
+  author: codex
+  content: |
+    Codex implementer completion evidence for commit 2bb95a799d0: added actual `aida agent new codex --bg` support at the operator's explicit follow-up request. Native background exec shares foreground preflight/setup/grants, detaches into its own session, records actual PID plus lease liveness and grant binding, logs privately (0600), and stops/reaps a child whose acceptance fails. No Claude supervisor behavior or containment flags were relaxed. BG requires a fresh prompted session; resume/rotation/unprompted combinations refuse.
+
+    Final focused Rust run: 36/36 passed, including new background CLI parsing/conflicts, absent-key refusal, native mock background process session/PID/lease/environment/log tests, failed-acceptance cleanup, prior TASK-2631 tests and unchanged BUG-2144 refusals, permission/doctor fixtures, existing diagnostics, and regenerated CLI help snapshot. The same compiled binary passes 55/55 unchanged Claude/foreground/registry-lock regressions from an isolated scratch cwd. `make check-ci-fast`: all 36 gates passed. No full workspace suite was run. Initial broader fixture-discovery failures remain filed as BUG-2381; the scratch-cwd rerun demonstrates the ambient issue for the Claude regressions.
+
+    OpenAI host verification is recorded in the earlier AC1 comment and PR body: installed codex-cli 0.166.0 static binary/parser evidence, not live authenticated traffic capture. Native is never credited as AIDA containment. Codex remains this repository's default vendor with explicit native opt-in.
+  created_at: 2026-11-01T03:31:12.480736296Z
+  modified_at: 2026-11-01T03:31:12.480736296Z
 history:
 - id: 01a1949a-7ffe-78a3-8011-c5c0c44dc2d3
   author: joe
