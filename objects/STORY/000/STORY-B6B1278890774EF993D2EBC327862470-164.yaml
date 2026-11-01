@@ -29,12 +29,12 @@ description: |
 
   ## Related
   STORY-HOME-095 (block delegation, done), STORY-HOME-105 (agreed IDs + backfill, PR-3170 in review), BUG-2017 (allocation authority).
-status: InProgress
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T19:23:04.998731220Z
-modified_at: 2026-11-01T08:25:56.886407496Z
+modified_at: 2026-11-01T13:14:52.653843620Z
 req_type: Story
 tags:
 - architecture
@@ -423,6 +423,20 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1973f-a2d1-7131-ae15-838cc524eb21
+  author: aida-auto-bump
+  timestamp: 2026-11-01T13:14:52.497232495Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1973f-a36d-7ed1-9215-5c45a0560082
+  timestamp: 2026-11-01T13:14:52.653838922Z
+  agent: implementer
+  commit_sha: c83511bef95a4653430549650382dcd4a28f8702
+  summary: 'Independent reviewer-10: all seven STORY-2204 criteria pass within signed scope at exact e0b7d028; source review confirms per-hub authority, CAS and promoted spendability, docs, and byte-identical BUG-2378 preservation. Own fresh friendly-key approval only; no phase3 overwrite or hold clearance.'
+  review_verdict: approved
 filed_at:
   code_sha: 53817a25ee83981f919be3dbcee742234338ab9a
   branch: main
@@ -434,3 +448,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-11-01T00:36:23.073217643Z
   implemented_by: joe
+  completed_at: 2026-11-01T13:14:52.497224788Z
+  completion_sha: c83511bef95a4653430549650382dcd4a28f8702
