@@ -22,7 +22,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T06:30:56.167167026Z
-modified_at: 2026-11-01T21:33:51.215089470Z
+modified_at: 2026-11-01T21:55:42.652897011Z
 req_type: Bug
 tags:
 - area:ship
@@ -45,6 +45,11 @@ comments:
   content: 'Implementation underway: releasing the main merge lease after pull and before cleanup; replacing per-SHA git cat-file probes with one batch and stdin rev-list exclusions; bounding each clone scan to 10s. Post-merge end/reap/prune stays sequential in a detached worker, with a 20s foreground wait and a durable progress log. Existing salvage/mail-retention/protected-lease gates are retained. Regression tests cover 25 clones with 6,400 shipped IDs, lock release, and background completion. Native sandbox makes the linked cache read-only for CLI mutations; MCP update succeeds.'
   created_at: 2026-11-01T21:33:51.215070230Z
   modified_at: 2026-11-01T21:33:51.215070230Z
+- id: 01a1991c-79bc-7321-a669-d7c2ab8fa28a
+  author: mcp
+  content: 'Implemented and pushed commit 5ea7431157d on branch bug-b6b1278890774ef993d2ebc327862470-158. Merge lease now drops after pull and before cleanup. An internal detached worker serializes session end/reap/prune under a separate cleanup flock; ship waits at most 20s then reports its PID/private log. Clone probes share a 10s deadline and retain unknown evidence; Git object checks use one batch and stdin exclusions. Existing retention/salvage/protected-lease gates remain, including doctor TTY restrictions. Validation: 101 targeted Rust tests passed (4 BUG-2384, 88 ship helpers, 6 GC regressions, 2 live bwrap lifecycle, 1 real CLI fixture); formatting and diff checks passed. The 25-clone regression covers 6,400 IDs and preservation of unshipped work. Committed/pushed from /tmp/bug2384-publish because native seat Git metadata is read-only; source edits remain in the seat. Opening the standalone implementation PR next, without shipping or recording a review.'
+  created_at: 2026-11-01T21:55:42.652889405Z
+  modified_at: 2026-11-01T21:55:42.652889405Z
 history:
 - id: 01a19903-07e8-75a2-b046-5be385601f6c
   author: aida-session-start
