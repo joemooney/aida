@@ -1,0 +1,38 @@
+id: 01a195dd-59da-7910-9ac5-c5061f2071fb
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-167
+agreed_id: BUG-2393
+title: Headless callers (advisor watch, questions, dryrun, intent, reconstitute, burndown, intake, compete) ignore [agents] contained in agents.toml
+description: |-
+  Why
+  ───
+  Discovered by SPIKE-710 audit. When `AIDA_CONTAINED=1` is not set in the ambient shell environment (for example, cron/systemd scheduled ticks or a fresh operator shell) and containment is configured in `~/.aida/agents.toml` (`[agents] contained = true`) or `.aida/config.toml` (`[contained] enable = true`), several headless launch paths pass `contained = false` or check only `session::aida_contained_env()?` instead of `session::drain_contained(project_root)?`:
+
+  • `aida-cli-lib/src/advisor_watch.rs:241` (`fork_and_run`) & `276` (`cold_boot_and_run`): pass literal `false` for `contained`.
+  • `aida-cli-lib/src/questions.rs:1283` (`questions_research`) & `1747` (`handle_questions_remedy`): pass literal `false` for `contained`.
+  • `aida-cli-lib/src/plan_intent.rs:242` (`run_dryrun_ai_pass`) & `798` (`generate_intent`): pass literal `false` for `contained`.
+  • `aida-cli-lib/src/reconstitute.rs:935` (`run_headless`): passes literal `false` for `contained`.
+  • `aida-cli-lib/src/burndown_run.rs:431`, `aida-cli-lib/src/autopilot_intake.rs:925`, `aida-cli-lib/src/compete_cmd.rs:1054, 1081`, and `aida-cli-lib/src/session.rs:637` (`session::resume`): check only `session::aida_contained_env()?` (`AIDA_CONTAINED`) and ignore `[agents] contained` / `[contained] enable`.
+
+  Acceptance
+  ──────────
+  1. All headless spawn and resume call sites resolve project/user containment via `session::drain_contained(project_root)?` (which combines `AIDA_CONTAINED`, `[agents] contained`, and `[contained] enable`) rather than passing `false` or checking only `aida_contained_env()?`.
+  2. Unit tests verify that setting `contained = true` in `agents.toml` without `AIDA_CONTAINED` in the environment enforces containment on `advisor watch`, `questions`, `dryrun`, `intent`, `burndown`, `intake`, `compete`, and `session resume`.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-01T06:47:54.074794793Z
+modified_at: 2026-11-01T06:47:54.074794793Z
+req_type: Bug
+tags:
+- audit
+- containment
+- vendor:codex
+filed_at:
+  code_sha: 6dc7d4977ac5e47c42ddfb26597fe3ec5fb70b60
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 962ca07af25
+  vendor: antigravity
+  session: 01a194b1bcfb
