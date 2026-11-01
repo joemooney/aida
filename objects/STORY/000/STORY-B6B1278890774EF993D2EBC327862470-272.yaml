@@ -34,7 +34,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T03:24:07.798418309Z
-modified_at: 2026-11-01T07:01:48.250691228Z
+modified_at: 2026-11-01T08:02:22.866723346Z
 req_type: Story
 tags:
 - advisor
@@ -111,6 +111,11 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-01T06:53:08.443941626Z
   modified_at: 2026-11-01T06:53:08.443941626Z
+- id: 01a19621-8a12-7322-b144-442aec2c0828
+  author: joe
+  content: 'PROXY DECISION: accept both nonblocking round2 findings without follow-up. The hyphenated criterion label is an existing trace-parser limitation; reviewer directly inspected and verified the real vendor-neutral test. Unescaped multiline/pipe free text can impair toon presentation, while canonical storage, JSON output and clause evaluation retain the original goal; this presentation edge is accepted for this reviewed implementation. All nine ACs have independent evidence at84546ca; no authority gate is waived.'
+  created_at: 2026-11-01T08:02:22.866723346Z
+  modified_at: 2026-11-01T08:02:22.866723346Z
 history:
 - id: 01a1955e-d0d4-75f2-a078-b22ee5383ce4
   author: joe
