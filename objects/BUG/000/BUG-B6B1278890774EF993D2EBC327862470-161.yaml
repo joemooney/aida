@@ -21,7 +21,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T06:45:59.471168135Z
-modified_at: 2026-11-01T21:47:56.147334722Z
+modified_at: 2026-11-01T22:01:29.051081781Z
 req_type: Bug
 tags:
 - audit
@@ -38,6 +38,11 @@ comments:
   content: 'ADVISOR DISPOSITION: APPROVED. Verified codex_session_args currently pushes initial_prompt unchanged and the existing codex_inline_prompt helper expands known AIDA commands for headless use. Reuse that common renderer for the interactive entry points and preview hints; preserve native/contained posture, child grants, explicit vendor selection and Claude behavior. Unknown or unrenderable AIDA prompts must fail or retain a clearly documented safe fallback rather than silently claim skill execution. Sequence after BUG-2385 to avoid launch/session.rs edit overlap. Run Codex lane after TASK-2631 live activation.'
   created_at: 2026-11-01T06:53:06.950214285Z
   modified_at: 2026-11-01T06:53:06.950214285Z
+- id: 01a19921-c2db-7bb0-9f65-5876d1cc62d2
+  author: mcp
+  content: 'Implementation prepared in /home/joe/ai/aida-worktrees/aida-seat-aida-bug-b6b1278890774ef993d2ebc327862470-161 on branch bug-b6b1278890774ef993d2ebc327862470-161. Shared codex_interactive_prompt reuses codex_inline_prompt for standalone invocation lines (including after agent-launch preambles); codex_session_args and agent_initial_prompt_args use it, covering queue/reviewer/derisk and preview paths while retaining launch flags, grants and Claude behavior. Guided human review already uses CLI prose and is verified unchanged. Unrenderable commands use $aida-* installed-skill syntax plus an explicit stop-if-unavailable instruction; documented in docs/cli/06-roles-sessions.md. Reviewer integration mock now records NUL-delimited argv so multiline bodies remain one argument. Validation: 15 focused tests passed: interactive_codex (2), codex_session_args_ (2), interactive_session_args_pass_model_before_prompt (1), interactive_reviewer_launch_plan_ (4), codex_derisk_agent_argv (1), deferred_codex_interactive (1), bug_1607_reviewer_vendor_tests (4). cargo fmt --all -- --check and git diff --check pass. DELIVERY BLOCKER: sandbox marks this seat''s .git read-only; git add fails creating .git/index.lock with Read-only file system. No commit, push, or PR created; spec remains In Progress rather than queue-done. Filed implementer finding SPEC-b6b1278890774ef993d2ebc327862470-005. Complete diff saved at /tmp/BUG-2387.patch. Resume in a session with writable Git metadata, commit as [AI:codex] fix(launch): expand interactive Codex AIDA prompts (BUG-2387), push, queue done, and open PR for the separate reviewer; do not ship or review-record from this standalone implementer.'
+  created_at: 2026-11-01T22:01:29.051073924Z
+  modified_at: 2026-11-01T22:01:29.051073924Z
 history:
 - id: 01a195db-bc66-7823-a291-6c9fe37c36f5
   author: joe
