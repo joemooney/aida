@@ -18,7 +18,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T08:28:54.983776375Z
-modified_at: 2026-11-01T16:17:22.194506681Z
+modified_at: 2026-11-01T16:38:37.109090402Z
 req_type: Bug
 tags:
 - forge
@@ -175,6 +175,11 @@ comments:
     PROXY IMPLEMENTATION RECEIPT: actor32 published1677ad5dd74c5d1e3f0564777f630dcda489fe2c SAMEPR3208/branch afterab, with two-file stable collection/recheck change. RootreadFULL /tmp/aida-BUG2400-head-binding-result.md6800bytes and actualpublichead. Positive commit trailers no longer return before full validated count/terminalHEAD and second detail identicalHEAD/count; typedunknown on drift/incomplete/errors retained. No approval yet; fresh different strict review needed. Actualfocused exactregression1PASS0FAIL44.78s after5m08debug-profilecompile (notagentprofile; reporttruthful), fastpendingatthen-readback. Old26EnvLockfailure/correctedqueuedrunsnotnewproof. Source/public4filebytes andnormalpushidentitymanifestretained, owncommentfailednothingwrittenreadonlylinkedcache. RootnormalNONFORCEDLOCALbranchFFtoactual1677 beforefreshreview so unscopedrecordchecksseeREALcurrenthead; no force/fakeobjects/ledgermodifications/signaturereuse. Existingallauthority/queueunknown/alias/GitLabfloors unchanged.
   created_at: 2026-11-01T16:17:22.194506681Z
   modified_at: 2026-11-01T16:17:22.194506681Z
+- id: 01a197fa-2b35-74c3-8d55-c1ecd4171f5f
+  author: joe
+  content: 'Advisor evidence update 2026-11-01 09:40MST: actor32 published same-PR head1677ad5dd74c5d1e3f0564777f630dcda489fe2c. Full receipt /tmp/aida-BUG2400-head-binding-result.md and identity manifest retained; source/public four-file bytes verified by author. One new targeted test PASS (actual debug profile, 44.78s), all36 fast gates PASS, format PASS. Exact-head CI41324585555 lib1 reports6812PASS/0FAIL/2ignored but fails separate default10s test timing gate at14.831s; aggregateBuildFAIL and holdFAIL remain. Fresh independent reviewer22 is assessing source and a bounded same-PR timing remedy; sourceapproval does not authorize shipping. No timing-budget change, test deletion, rerun, merge or completion claim.'
+  created_at: 2026-11-01T16:38:37.109090402Z
+  modified_at: 2026-11-01T16:38:37.109090402Z
 history:
 - id: 01a1963a-2b42-7cd2-a795-0772bcc408d1
   author: joe
