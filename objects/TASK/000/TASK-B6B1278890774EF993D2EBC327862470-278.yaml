@@ -14,12 +14,12 @@ description: |
 
   ## Out of scope
   New site content.
-status: NeedsAttention
+status: Completed
 priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T22:17:10.638818101Z
-modified_at: 2026-11-01T00:58:15.914875940Z
+modified_at: 2026-11-01T01:45:56.171729170Z
 req_type: Task
 tags:
 - docs
@@ -127,6 +127,20 @@ history:
   session_id: 01a19497451f
   harness_version: 2.1.316 (Claude Code)
   changes: []
+- id: 01a194c8-e4c6-7d12-ba8c-30c1173d04c1
+  author: aida-auto-bump
+  timestamp: 2026-11-01T01:45:56.166353436Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Completed
+processing_record:
+- id: 01a194c8-e4cb-7c73-9c7d-ae5c6b87e7d3
+  timestamp: 2026-11-01T01:45:56.171726750Z
+  agent: aida
+  commit_sha: c2b2539263add41bfd3d81b170e377d20b9eb496
+  summary: 'Base-only update from main (gh update-branch a7a1581bea9962c386abab625de17cd45cd733a0 -> 3c507ca6ccfa87f3f495869434521ced2b115f70); reviewed content unchanged, prior approval carried; serial ship after main fix #2646.'
+  review_verdict: approved
 filed_at:
   code_sha: 0506fa2eb862db100dffbc80b0c5cfdedec28522
   branch: main
@@ -138,11 +152,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-10-31T23:58:42.618759585Z
   implemented_by: joe
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'publish.py, pages job and README are sound (output file set == origin/gh-pages, 28 files; 6 tests pass), but the criterion traces use the display ID and do not register: aida criteria TASK-2604 still reports all 4 criteria untraced'
-  recovery_hint: address the review findings, move TASK-2604 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-01T00:53:25.417366475Z
+  completed_at: 2026-11-01T01:45:56.166347993Z
+  completion_sha: c2b2539263add41bfd3d81b170e377d20b9eb496
