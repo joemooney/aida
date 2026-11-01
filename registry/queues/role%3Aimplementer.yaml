@@ -1,4 +1,11 @@
 - user_id: role:implementer
+  requirement_id: 01a19434-2aa8-74d0-bccf-38faf512e4c7
+  position: 254000
+  added_by: role:implementer
+  note: Train3209 dropped3194 for actual main conflict; merge currentmain6a into samePR while preserving all7AC and newlymerged glossary/authority sources. Freshdelta review required.
+  added_at: 2026-11-01T14:59:31.650260715Z
+  for_role: implementer
+- user_id: role:implementer
   requirement_id: 01a1965b-4971-7252-abdf-997331f285fd
   position: 255000
   added_by: role:implementer
@@ -198,13 +205,6 @@
   position: 607000
   added_by: role:implementer
   added_at: 2026-11-01T10:05:19.370127936Z
-  for_role: implementer
-  added_by_machine: imac
-- user_id: role:implementer
-  requirement_id: 01a19434-2aa8-74d0-bccf-38faf512e4c7
-  position: 608000
-  added_by: role:implementer
-  added_at: 2026-11-01T10:11:43.193219713Z
   for_role: implementer
   added_by_machine: imac
 - user_id: role:implementer
