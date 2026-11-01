@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-154
 agreed_id: BUG-2380
 title: Contained lanes and reviewers cannot read CI failure logs, so red-CI rework rounds run blind
 description: 'Observed 2026-10-31 on PR-3176, PR-3182 and PR-3185: reviewers report ''CI lib-0/cli-1 Run tests failed'' without the test names, and implementer lanes say ''someone with log access needs to run gh run view --log-failed'' (the contained sandbox blocks the log download). Rework rounds then guess, or the advisor fetches logs by hand. Expected: the rework pickup and the reviewer prompt include the failing test names and panic lines for the PR head''s failed CI jobs, fetched host-side by the launcher (gh run view --job <id> --log, filtered to FAILED/panicked lines, capped) and written into the lane''s brief file. Acceptance: (1) a lane picking up a PR with red CI gets a ''CI failures at <sha>'' section listing each failing test and its panic line; (2) a reviewer''s prompt gets the same; (3) test with a stubbed gh producing a failed job log; (4) when logs are unavailable (run in progress, expired), the section says so explicitly.'
-status: Done
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T01:26:21.540218031Z
-modified_at: 2026-11-01T03:15:44.213495487Z
+modified_at: 2026-11-01T03:30:06.896318907Z
 req_type: Bug
 tags:
 - ci
@@ -49,6 +49,20 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a19528-45aa-72d0-b4ab-cda2fde71734
+  author: aida-auto-bump
+  timestamp: 2026-11-01T03:30:06.890684004Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a19528-45b0-7a50-a3f6-2bae93b8dea2
+  timestamp: 2026-11-01T03:30:06.896314654Z
+  agent: aida
+  commit_sha: 841206e2bdf306bd82e61ebeee931e693934744a
+  summary: 'All 4 BUG-2380 criteria met: ci_failures.rs fetches the PR head''s failed jobs via gh api only (no gh run view / no cache write), extracts FAILED/FAIL/panic+message/first ##[error] lines and skips gate self-test noise; rework pickup (when review findings exist) gets the section prepended, the GitHub reviewer prompt gets it appended; stubbed-gh test covers the failed-job path; in-progress, unreadable and expired-log cases say so explicitly. CI green at head. Non-blocking: rework section only fires when a review-findings block exists; prompt wiring has no direct test; gh calls have no timeout.'
+  review_verdict: approved
 filed_at:
   code_sha: 43d9f95803036ec22350e5a210d8c1cae20b9fe5
   branch: main
@@ -61,3 +75,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-11-01T02:16:36.583407141Z
   implemented_by: joe
+  completed_at: 2026-11-01T03:30:06.890676753Z
+  completion_sha: 841206e2bdf306bd82e61ebeee931e693934744a
