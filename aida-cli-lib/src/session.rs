@@ -1833,27 +1833,62 @@ pub(crate) mod contained_cwd_seam {
         }
     }
 
-    /// A plain `git init` checkout under the system temp dir, created once per
-    /// test process and kept for its lifetime: a main checkout of its own,
-    /// the shape a CI clone has, with no store, leases or seat marker.
+    /// The process-wide hermetic checkout, once created.
+    static HERMETIC_ROOT: std::sync::OnceLock<PathBuf> = std::sync::OnceLock::new();
+
+    /// A plain `git init -b main` checkout under the system temp dir, created
+    /// once per test process: a main checkout of its own, the shape a CI clone
+    /// has, with no store, leases or seat marker. A test binary shares it
+    /// across threads, so no test's `TempDir` can own it; it is removed when
+    /// the process exits (an `atexit` hook, the way `drain_lock` cleans up),
+    /// so test runs leave no `aida-bug-2381-checkout-*` directory behind.
     // trace:BUG-2381 | ai:claude
     pub(crate) fn hermetic_checkout() -> &'static PathBuf {
-        static ROOT: std::sync::OnceLock<PathBuf> = std::sync::OnceLock::new();
-        ROOT.get_or_init(|| {
+        HERMETIC_ROOT.get_or_init(|| {
             let dir = tempfile::Builder::new()
                 .prefix("aida-bug-2381-checkout-")
                 .tempdir()
                 .expect("BUG-2381: create the hermetic checkout")
                 .keep();
-            let status = std::process::Command::new("git")
-                .args(["init", "-q"])
-                .arg(&dir)
-                .env("GIT_CONFIG_NOSYSTEM", "1")
+            let dir = std::fs::canonicalize(&dir).unwrap_or(dir);
+            register_hermetic_cleanup();
+            let status = hermetic_git_init(&dir)
                 .status()
                 .expect("BUG-2381: run git init for the hermetic checkout");
             assert!(status.success(), "BUG-2381: git init {}", dir.display());
-            std::fs::canonicalize(&dir).unwrap_or(dir)
+            dir
         })
+    }
+
+    /// The `git init` for the hermetic checkout, with no system or global
+    /// git config (an operator's `init.templateDir` hooks or
+    /// `init.defaultBranch` never reach it) and an explicit `main` branch.
+    // trace:BUG-2381 | ai:claude
+    pub(crate) fn hermetic_git_init(dir: &Path) -> std::process::Command {
+        let mut command = crate::test_git::git_command();
+        command
+            .env("GIT_CONFIG_NOSYSTEM", "1")
+            .env("GIT_CONFIG_GLOBAL", "/dev/null")
+            .args(["init", "-q", "-b", "main"])
+            .arg(dir);
+        command
+    }
+
+    /// Remove the hermetic checkout at process exit. Unix only (`libc` is a
+    /// unix-only dependency); elsewhere it stays in the temp dir.
+    // trace:BUG-2381 | ai:claude
+    fn register_hermetic_cleanup() {
+        #[cfg(unix)]
+        // SAFETY: `remove_hermetic_checkout` is a no-arg extern "C" fn that
+        // only reads a OnceLock and does best-effort fs; safe to run at exit.
+        let _registered = unsafe { libc::atexit(remove_hermetic_checkout) };
+    }
+
+    #[cfg(unix)]
+    extern "C" fn remove_hermetic_checkout() {
+        if let Some(dir) = HERMETIC_ROOT.get() {
+            let _ = std::fs::remove_dir_all(dir);
+        }
     }
 }
 
