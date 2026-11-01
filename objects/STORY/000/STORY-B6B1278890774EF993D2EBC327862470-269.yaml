@@ -32,7 +32,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T00:54:49.371776631Z
-modified_at: 2026-11-01T08:23:45.658122738Z
+modified_at: 2026-11-01T08:28:10.497387491Z
 req_type: Story
 tags:
 - architecture
@@ -199,6 +199,11 @@ comments:
   modified_at: 2026-11-01T08:23:45.658122738Z
   session_id: 01a19630-eb78-7351-aec2-ab1789f9781a
   harness_version: 2.1.316 (Claude Code)
+- id: 01a19639-2781-77b1-9315-c7c3ffc38e5c
+  author: joe
+  content: 'HOST COUNTER-EVIDENCE for C2 claimed existing proc parent-root escape: reproduced exact current bwrap_confinement_args_inner FS vector on host with ONLY new synthetic temp worktree and outside marker. Ordinary marker path absent under private tmp. Writing synthetic host marker via proc host-parent root failed EACCES13; unchanged. Adding unshare-pid control gave childPID2 and ENOENT2; unchanged. Both exited0, reported booleans/errno only. Scratch /tmp/aida-proc-boundary-probe-zewgw0rd. Source lacks explicit PID isolation, but actual existing host-write escape is NOT established; do not file or describe proven escape without working current-path fixture. New backend C2 stronger isolation remains binding defense-in-depth, preserving keyring and Claude parity. Independent reconciliation needed before separate legacy fix. No user files/secrets accessed or policy relaxed.'
+  created_at: 2026-11-01T08:28:10.497387491Z
+  modified_at: 2026-11-01T08:28:10.497387491Z
 history:
 - id: 01a1949a-3f43-7b12-bc6b-0d5bf40ee2f2
   author: joe
