@@ -10,6 +10,15 @@ use std::path::PathBuf;
 // trace:STORY-90 trace:TASK-2251 | ai:claude
 #[derive(Subcommand, Debug)]
 pub enum PrCommand {
+    // Sequential post-merge worker, launched only after releasing the merge lease.
+    // trace:BUG-2384 | ai:codex
+    #[clap(hide = true)]
+    PostShipCleanup {
+        #[clap(long)]
+        lease: Option<String>,
+        #[clap(long)]
+        sweep: bool,
+    },
     /// File the reviewer story for the change (PR/MR) open on the current
     /// branch and queue it to the `reviewer` role. Idempotent: when a
     /// `Review PR-<n>:` / `Review MR-<n>:` story already exists for it, reuses
