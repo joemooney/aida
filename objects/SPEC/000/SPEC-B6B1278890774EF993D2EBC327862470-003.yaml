@@ -7,12 +7,18 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-01T11:19:33.083507514Z
-modified_at: 2026-11-01T11:19:33.083507514Z
+modified_at: 2026-11-01T12:21:15.966362350Z
 req_type: Task
 tags:
 - from-implementer:BUG-2400
 - kind:bug-spotted
 - severity:major
+comments:
+- id: 01a1970e-8e3e-7c40-bc3d-26aecfdb4e1f
+  author: joe
+  content: 'PROXY DISPOSITION: exact duplicate of the reopened native publication/own-coordination workflow owner TASK2712 (canonical SPEC-b6b1278890774ef993d2ebc327862470-001), including native .git/index.lock and shared cache boundaries. BUG2400 temporary /tmp publication is a recovery workaround, not product completion. Supersede this repeated observation under the same architecture-first owner; no separate code or follow-up PR.'
+  created_at: 2026-11-01T12:21:15.966362350Z
+  modified_at: 2026-11-01T12:21:15.966362350Z
 filed_at:
   aida_version: 0.16.0
   aida_build_sha: 471540a8c47
