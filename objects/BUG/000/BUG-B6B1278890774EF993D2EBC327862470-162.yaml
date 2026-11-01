@@ -19,12 +19,12 @@ description: |-
   1. `aida skill render` and `aida mcp skill render` resolve skills from `.agents/skills/<name>/SKILL.md` and `.claude/skills/<name>/SKILL.md` (plus legacy flat `.claude/skills/<name>.md` and local overlays), working on Codex-only repos without `.claude/`.
   2. `aida skill lint` scans `.agents/skills/*/SKILL.md` and `.claude/skills/*/SKILL.md` (not just flat `.claude/skills/*.md`) so skills are actually linted.
   3. Regression tests cover a Codex-only repo layout (`.agents/skills/<name>/SKILL.md`, no `.claude/`).
-status: InProgress
+status: Done
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T06:46:15.376021939Z
-modified_at: 2026-11-01T07:50:57.652207880Z
+modified_at: 2026-11-01T07:54:16.601776433Z
 req_type: Bug
 tags:
 - audit
@@ -69,6 +69,13 @@ history:
   author: joe
   timestamp: 2026-11-01T07:29:49.568758987Z
   changes: []
+- id: 01a1961a-1f03-7f41-bddc-8beac5541201
+  author: joe
+  timestamp: 2026-11-01T07:54:16.708000210Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 filed_at:
   code_sha: 6dc7d4977ac5e47c42ddfb26597fe3ec5fb70b60
   branch: main
@@ -77,3 +84,7 @@ filed_at:
   aida_build_sha: 962ca07af25
   vendor: antigravity
   session: 01a194b1bcfb
+implementation_info:
+  implemented: true
+  implemented_at: 2026-11-01T07:54:16.601776433Z
+  implemented_by: joe
