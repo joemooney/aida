@@ -16,12 +16,12 @@ description: |
   2. Restore the EXISTING approved train carry-over contract through typed, provenance-preserving, bounded normal wiring. No raw ledger/projection edits, copied/restamped source signatures, arbitrary skip-review flag, weakened standalone current-head gate or trust in human-editable member-line alone. Preserve all member approval/authorship/hold/mandate/supervision/drive/CI/current-main and normal merge lease checks. Independent sketch/signoff before authority/gate code.
   3. Prove refusal for forged/manual manifests, changed patches or member heads, moved main, conflicting/non-authorized source reviews and holds; preserve current record-time authority semantics. Match positive evidence to actual normal final merge boundary.
   4. One focused approval/ledger/train regression plus fast gate; shared test infrastructure or >10 changedfiles adds touched/compile; fullsuiteCI, no slotbypass/outertimeout/blindrebuilds. Fresh independent strict review. Do not reopen/rewrite PR3212, change existing ledger events or manually approve its rewritten head. Validate a new ordinary train only after normal reviewed fix is live.
-status: Draft
+status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-01T19:40:25.090169463Z
-modified_at: 2026-11-01T19:53:28.078840811Z
+modified_at: 2026-11-01T19:53:29.308859823Z
 req_type: Bug
 tags:
 - architecture
@@ -46,6 +46,14 @@ comments:
     Local gate ONE AIDA_CARGO_TIMEOUT=10m cargo test --profile agent -p aida-cli-lib <focused bug2406 module/filter> plus make check-ci-fast and format/diff checks. Actual shared test infrastructure or >10 changed files adds required touched/compile checks, fullsuiteCI only. LongCargo background, no outertimeout/slotbypass/blindretry. Test current failure before repair within same targeted invocation/fixture where practical; report actual evidence, not a claimed pre-fix run.
   created_at: 2026-11-01T19:53:28.078840811Z
   modified_at: 2026-11-01T19:53:28.078840811Z
+history:
+- id: 01a198ac-93dc-74a1-8acc-57897597eef0
+  author: joe
+  timestamp: 2026-11-01T19:53:29.308856744Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: 6a3f67671a974703590efde5ae2a323f3f7471fa
   branch: main
