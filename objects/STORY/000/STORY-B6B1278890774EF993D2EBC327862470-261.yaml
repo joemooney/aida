@@ -25,7 +25,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T22:58:37.964636963Z
-modified_at: 2026-11-01T06:45:35.732865103Z
+modified_at: 2026-11-01T06:48:37.431145312Z
 req_type: Story
 tags:
 - docs
@@ -116,6 +116,11 @@ comments:
   content: 'ADVISOR REWORK BRIEF round 3 (codex-advisor-05): PR-3193 at 3d45dd02d1af30ac0dc220328f42cd60539229cb still fails AC2 solely because docs/cli/12-glossary.md was not regenerated. Evidence: latest reviewer verdict gate-ledger PR-3193.jsonl#7, accessible with aida review verdict PR-3193 --json. I verified the committed chapter retains machinery-glossary.md and lifecycle-vocabulary.md relative links while the generator is corrected. Regenerate through make book-glossary with the current binary; the reviewer permits the equivalent render_discipline_glossary fixture stub if compiling is unavailable. Commit generated output, never hand edit it. Verify bash tests/test_generate_glossary_check.sh, python3 docs/cli/glossary-anchors.py --verify docs/cli/12-glossary.md, showcase build check and make check-ci-fast. FASTTRACK generated-doc-only change: no cargo. Push one commit on the same PR branch, then independent delta review. Detailed pickup brief: .aida/agent-briefs/claude/STORY-b6b1278890774ef993d2ebc327862470-261-2026-11-01T064451Z.md. Metadata requeue is pending host grant setup; no replacement lane has started.'
   created_at: 2026-11-01T06:45:35.732865103Z
   modified_at: 2026-11-01T06:45:35.732865103Z
+- id: 01a195dd-ff7b-7c11-8e88-745763397be4
+  author: joe
+  content: 'Advisor ruling: Regenerate and commit docs/cli/12-glossary.md on the existing PR branch. FASTTRACK generated-doc-only round: glossary fixture, anchor verification, showcase build check and make check-ci-fast; no cargo. Full newest advisor brief is authoritative.'
+  created_at: 2026-11-01T06:48:36.475394320Z
+  modified_at: 2026-11-01T06:48:36.475394320Z
 history:
 - id: 01a19517-7d5f-7092-83c8-b303944f0e16
   author: joe
