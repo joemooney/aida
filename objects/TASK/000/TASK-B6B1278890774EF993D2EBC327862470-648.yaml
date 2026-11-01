@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T00:55:07.917269049Z
-modified_at: 2026-11-01T03:19:48.073936265Z
+modified_at: 2026-11-01T03:24:07.871394948Z
 req_type: Task
 tags:
 - config
@@ -110,6 +110,16 @@ comments:
     Implementation sketch: reuse foreground agent-new preflight, worktree/setup receipts, native flags, child grants, identity/env, and actual-PID registry tracking. Codex --bg converts the final argv to detached codex exec --json with null stdin and private 0600 output log. Before acceptance the launcher binds the child grant and lease liveness to the actual PID and registers it; an acceptance failure stops and reaps that child and revokes its newly issued grant. Native remains explicitly not AIDA-contained. Claude --bg keeps its existing supervisor path. Background Codex requires a fresh prompted run; resume/rotation/unprompted combinations refuse. Logs/context remain inspection artifacts, and ordinary registry liveness observes completion. No new daemon or model polling.
   created_at: 2026-11-01T03:19:48.073936265Z
   modified_at: 2026-11-01T03:19:48.073936265Z
+- id: 01a19522-cb3f-7260-aeae-a19e910086b5
+  author: joe
+  content: |
+    TASK-2631 validation (Codex implementer): final focused `cargo test -p aida-cli-lib --lib -- task_2631_containment_tests bug_2144_2146_containment_refusal_tests permission_posture_ the_containment_refusal_names_the_vendor_fix_in_its_first_line cold_boot_inherits_containment_even_with_literal_false_call_site noexec_preview_renders_command_and_codex_permission_posture` passed 31/31. Includes AC2' tri-state, explicit opt-in, no-key refusals unchanged, agy/unknown/Claude native refusal, native mock implementer/reviewer process argv and env, byte-identical Claude flags, reporting/statusline and AC3 contradiction fixture.
+
+    Initial broader `contain` filter passed 220 and failed 27. Two introduced diagnostic expectations were restored and their existing tests now pass. Filed BUG-2381 for ambient cwd/live-main fixture discovery and sandbox /var/tmp limits. Re-ran 49 unchanged Claude launcher/session and BUG-2151/BUG-2157/BUG-2158 parent protections with the SAME compiled test binary from a fresh /tmp scratch cwd: 49/49 passed (no assertion or production-boundary relaxation). This demonstrates the sibling-worktree ambient-cwd issue for those initial failures.
+
+    The native display stamp is informational only; AIDA_CONTAINED takes display precedence, native children do not receive that authority marker, and native selection on generated explicit Claude launches refuses. Existing Claude parent protections remain intact. No template masters or generated mirrors changed. `make check-ci-fast` is running; no full workspace suite was run.
+  created_at: 2026-11-01T03:24:07.871394948Z
+  modified_at: 2026-11-01T03:24:07.871394948Z
 history:
 - id: 01a1949a-7ffe-78a3-8011-c5c0c44dc2d3
   author: joe
