@@ -19,7 +19,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-01T07:26:20.914223641Z
-modified_at: 2026-11-01T07:34:39.617631574Z
+modified_at: 2026-11-01T07:47:36.135633026Z
 req_type: Bug
 tags:
 - architecture
@@ -102,6 +102,77 @@ comments:
   created_at: 2026-11-01T07:34:39.617631574Z
   modified_at: 2026-11-01T07:34:39.617631574Z
   session_id: 01a19602-239f-70a0-950a-ec6d76a57cb6
+  harness_version: 2.1.316 (Claude Code)
+- id: 01a19614-0247-7911-9990-4eb4c3146ac7
+  author: joe
+  content: |
+    INDEPENDENT ADVISOR REVIEW of the BUG-2398 sketch (comments 0-1). Verdict: CHANGES REQUESTED. Replace S1-S3 with the scoped native-Codex adapter below. Reviewer: independent claude advisor (subject claude-advisor-14). I did not write the sketch, implement anything, change any status, or launch anything.
+
+    ## Facts proven
+    These were run with no model call, in a temporary CODEX_HOME whose config is inherit=core with set.KEEP_ME. codex-cli 0.166.0 ran inside this seat's bwrap.
+    P1. codex sandbox APPLIES shell_environment_policy. Under -c sandbox_mode="danger-full-access" the tool env was only HOME/LANG/LC_*/LOGNAME/PATH/SHELL/TMPDIR/USER/KEEP_ME. The parent's AIDA_SESSION_GRANT_PROBE and FOO_PARENT were dropped. So the policy applies at the full-access posture too: the loss is NOT specific to the native posture, and it hits every managed Codex launch.
+    P2. A per-launch -c shell_environment_policy.set.AIDA_PROBE_X="probe" MERGES with the user's [shell_environment_policy.set]. KEEP_ME survived, inherit stayed core, and nothing else leaked. The sketch's reason for rejecting this (alternative 1: it "effectively edits the user policy") is false for set.<exact key>. It is true only for inherit=all, which stays banned.
+    P3. The session keyring survives codex sandbox (full-access wrapper). The tool shell possesses aida-grant keys (2 seen).
+    P4. Live BUG-2397 log: "No active role was reported". The status edit was refused because the cache is outside the writable roots. MCP queue_done was refused because "the tool requires approval and policy is never". The .git of the worktree is read-only, so the lane published from /tmp.
+
+    ## Unknowns (do not assume)
+    U1. keyctl/add_key under Codex's own bwrap+seccomp (workspace-write) path. This could not be run here: from inside a Claude bwrap, codex sandbox fails with "bwrap: No permissions to create new namespace". The operator or implementer must run it from a host terminal. The same nesting means a native Codex lane cannot be launched from inside a Claude-contained seat at all.
+    U2. Whether exec tool calls (with a model) apply the policy exactly like codex sandbox does. P1, P2 and P4 agree with each other. A real exec fixture stays operator-run.
+    U3. Whether reviewer attribution or independence needs ancestry that a PID namespace hides. The PR-3177 "missing agent session ID/ancestry" refusal is as relayed by root, not reproduced here. The reviewer test must show this.
+
+    ## Defects in the sketch
+    D1. Rejection 1 treats the grant ID as a secret, and that constraint is invented. An ID confers nothing without the key:<sha256> possession or a proc/sid ancestry match. The record is 0600 for the same uid, and the same uid can already read the ID from /proc/<pid>/environ. Acceptance 2 bans grant SECRETS (the key payload), not IDs.
+    D2. The subject check is circular. For agent_launch the child subject = plan.name (agent_launch.rs:6799-6806) and AIDA_USER=plan.name. Under inherit=core, current_user_id falls back to USER=joe, so grant_check_for_at returns SubjectMismatch before the pointer could "resolve a valid grant". The rule in S2, "identity falls back only after the same pointer resolved a valid grant", cannot work.
+    D3. S1's per-child keyring LINKS the old keyring, which re-creates in new code the parent/sibling key possession that the sketch itself calls a pre-existing exposure. That exposure is proven in the next section.
+    D4. S2 and S3 are larger than this bug needs. They add ambient keyring discovery to the authority resolver for every vendor, an unsafe pre_exec at about 15 spawn sites including every Claude path, and a GRANT_ENV ratchet. Claude behavior must stay unchanged. None of this is needed to restore the handle for Codex.
+    D5. S4's preflight run from a Claude-contained seat would always fail on the bwrap userns error. Its refusal must name that cause verbatim. An inconclusive probe is still a refusal for a non-baseline seat, never an argv-free silent downgrade.
+
+    ## Pre-existing exposure (proven; to be filed separately)
+    /proc/keys in this live advisor child seat lists TWO possessor-only aida-grant keys: its own grant 1df410e6 and a different root grant 05109bf2 (advisor, subject joe, delegable advisor/implementer/integrator/reviewer, bound proc+sid+key). 05109bf2 is not this seat's parent: the parent is 4341ca93, which is bound to a process only. The mechanism:
+    - sys::install KEYCTL_LINKs the previous keyring.
+    - binding_overlaps matches ANY single token, so the key alone satisfies the binding.
+    - The subject comes from the AIDA_USER env var, which the caller controls.
+    - Grant IDs can be listed in ~/.aida/session-grants.
+    So any descendant could present an ancestor's root advisor grant. I did not exercise it. I could not file it: aida add fails because the store is read-only from this sandbox. The full draft is in the mail to codex-advisor-05; root should file it. BUG-2398 must not widen this exposure, and it does not need to fix it.
+
+    ## Required contract (smallest complete one)
+    A1. Owner: the Codex argv builder in session.rs (headless_vendor_args / codex_headless_args_with_model_and_effort, build_codex_session_command, exec_codex_session, run_vendor_headless_child) plus the Codex arm of agent_launch. Trigger: every AIDA-managed Codex launch, in every posture (P1). Claude, Gemini and Agy argv stay unchanged, and a test asserts it.
+    A2. One function, codex_tool_env_overrides(child_env), emits -c shell_environment_policy.set.<K>=<toml-string> for an EXACT const whitelist. The values are read from the env already set on the child Command, so they are a single source and cannot drift:
+    - AIDA_SESSION_GRANT (a validated UUID, or "" for an explicit baseline, which must reach the shell as present-empty)
+    - AIDA_SESSION_ROLE
+    - AIDA_USER
+    - AIDA_AGENT_NAME
+    - AIDA_AGENT_TYPE
+    - AIDA_SESSION_ID (the lease)
+    - AIDA_SESSION_SCOPE
+    - AIDA_PROJECT_ROOT
+    - AIDA_AGENT_CONTEXT_FILE
+    - AIDA_CONTAINMENT_POSTURE
+    - AIDA_HEADLESS
+    An absent var stays absent. Never emit:
+    - AIDA_AGENT_REGISTRY_TOKEN or any *TOKEN*/*SECRET*/*KEY*/*PASSWORD* name (a ratchet test checks the const)
+    - AIDA_SESSION_GRANT_FILE
+    - AIDA_CONTAINED
+    - any non-AIDA parent variable
+    Values are encoded with the toml serializer, and a value containing NUL or a newline is refused.
+    A3. No resolver change, no keyring pointer, no pre_exec, and no change to any spawn site outside the Codex builders. Authority is unchanged: the shell still has to present key possession (P3) or ancestry. With an unusable keyring that gives the existing named KeyringUnavailable/ForeignNamespace refusal, never a fallback. Revocation and expiry are unchanged. There is no race, because argv is fixed at exec. IDs in argv are visible to other uids through cmdline. That is acceptable (D1) and should be noted in the docs.
+    A4. Model-free preflight for a non-baseline Codex seat. Run codex sandbox with the lane's own flags plus the A2 overrides, followed by -- aida role current --probe-seat --expect <seat>. It prints booleans only and never the ID. On failure the launch is refused with the cause (userns/bwrap, keyring errno, PresenterNotBound, SubjectMismatch). Baseline seats keep today's path.
+    A5. Tests (LIGHT gate):
+    - unit tests for the whitelist, encoding, deny ratchet, absent vs. empty, and an unchanged Claude argv
+    - actual-tool tests, gated on codex in PATH with no model call, in a temporary CODEX_HOME at inherit=core: role current shows implementer; own-scope operation allowed (lease/mailbox); advisor op denied; an ungranted child denied; a granted reviewer records a verdict; an ungranted reviewer is refused
+    - the parent test asserts only that the adapter never emits a parent ID. It must NOT claim that a deliberately presented parent ID is refused, because the pre-existing finding means it currently is not
+    - the real codex exec fixture stays operator-run
+    - keep bug_1934, bug_1983, story_1662, story_1917, the BUG-2139 tests and the TASK-2631 tests
+    A6. Docs: AIDA needs no relaxation of shell_environment_policy. Record the U1 result. If keyctl is blocked under Codex bwrap, granted Codex seats need posture=aida (STORY-2238), and the docs must say so rather than pretend.
+
+    ## Still needs operator or upstream action (out of scope here)
+    - The U1 host-terminal probe.
+    - MCP tools hit approval_policy=never. That is the user's ~/.codex config, which stays unchanged, so it needs an operator decision; AIDA must not auto-approve.
+    - Native writable roots for .git, the cache and ~/.aida grant stamps belong to STORY-2238.
+    - An AIDA bwrap backend for Codex does not exist yet (STORY-2238). Do not invent one here.
+  created_at: 2026-11-01T07:47:36.135633026Z
+  modified_at: 2026-11-01T07:47:36.135633026Z
+  session_id: 01a1960d-cf2b-70b3-ad64-af3329442845
   harness_version: 2.1.316 (Claude Code)
 history:
 - id: 01a19600-c769-7cd0-ba08-8d93975e3e3b

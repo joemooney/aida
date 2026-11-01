@@ -24,7 +24,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T06:46:15.376021939Z
-modified_at: 2026-11-01T07:29:49.448280702Z
+modified_at: 2026-11-01T07:50:57.652207880Z
 req_type: Bug
 tags:
 - audit
@@ -40,6 +40,11 @@ comments:
   content: 'ADVISOR DISPOSITION: APPROVED. Verified stock_path in skill_cmd.rs and collect_skill_files in plan_report.rs hardcode .claude/skills and flat Markdown. Implement common layout discovery used by CLI render, MCP render and lint; preserve deterministic precedence and local overlays and add Codex-only fixture coverage. No changes to grants, containment or trust sources. Run on a Codex lane once TASK-2631 reaches the live trusted build.'
   created_at: 2026-11-01T06:51:06.221198949Z
   modified_at: 2026-11-01T06:51:06.221198949Z
+- id: 01a19617-1574-7a13-a281-1bb526e67af0
+  author: mcp
+  content: 'Implementation in codex/bug-2388-skill-discovery: shared discovery now serves CLI render, MCP render and lint. Render precedence is portable .agents folder, Claude folder, then legacy Claude flat; overlays stay in the selected pack, with SKILL.local.md taking precedence over pack-level <name>.local.md for folder prompts. Lint scans both packs and excludes overlays/helpers. Four new discovery tests, four existing lint tests and the help golden comparison pass; formatting and diff checks pass. Isolated fixture reproduces the installed binary''s original failure. Fresh CLI binary build is still running before patched CLI/MCP fixture validation and PR publication.'
+  created_at: 2026-11-01T07:50:57.652196145Z
+  modified_at: 2026-11-01T07:50:57.652196145Z
 history:
 - id: 01a195dc-0e68-73b0-b950-a0f3ab5b3b3f
   author: joe
