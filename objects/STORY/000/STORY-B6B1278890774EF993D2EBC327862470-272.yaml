@@ -1,0 +1,46 @@
+id: 01a19522-caf6-7ed2-b79e-13167544f557
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-272
+agreed_id: STORY-2243
+title: 'aida goal set / show / clear / check: a durable per-seat standing goal that survives cold sessions and is shown at launch'
+description: |-
+  ## Why
+  The operator gives the advisor a standing goal (e.g. "get the open list to zero, then improve AIDA from the regroup list") by pasting `/goal …` into one Claude session. It lives only in that session: a cold or rotated advisor loses it, the operator has to keep the wording elsewhere, and other vendors (Codex) have no `/goal`. Today `aida goal` only *derives* a condition line to paste. `aida whoami` prints `goal:`, but that is the role purpose, not a goal anyone set.
+
+  ## Scope
+  - `aida goal set --seat <role> "<text>" [--epic ID] [--spec ID] [--batch N] [--queue-empty ROLE] [--pr N]`: stores the goal in the substrate as free text plus ordered clauses, each built from the existing derive flags and carrying its verify command. Setting a new goal replaces the old one, and the old one stays in history.
+  - `aida goal show [--seat <role>]` (alias `get`): prints the text, the clauses, who set it and when. With no `--seat`, it shows the caller seat's goal. Supports `--format json`.
+  - `aida goal clear --seat <role>`, and `aida goal history --seat <role>`.
+  - `aida goal check [--seat <role>]`: runs each clause's verify and reports met/unmet per clause plus overall. Exit 0 only when all clauses are met.
+  - The existing flag-only derive form moves to `aida goal derive` (single user, no compat shim).
+  - Surfaces: the launch context (`AIDA_AGENT_CONTEXT_FILE`) gets a "Goal" section; `aida whoami` `goal:` shows the set goal (role purpose moves to `purpose:`); the seat handoff (`aida session handoff --show`) includes it.
+
+  ## Acceptance
+  1. `aida goal set --seat advisor "X" --epic EPIC-612 --queue-empty implementer`, then `aida goal show --seat advisor`, prints X and both clauses with their verify commands, setter and timestamp, in human, toon and json.
+  2. The goal is canonical in the store (not the local cache): a fresh session on the same repo, and a second clone after sync, shows the same goal.
+  3. A newly launched advisor seat's context file contains the goal, and `aida whoami` in that seat prints it on `goal:`. Role purpose prints on `purpose:`.
+  4. `aida goal check` exits 0 when all clauses are met and non-zero naming each unmet clause (fixture with one met, one unmet). A free-text-only goal reports "no checkable clauses" and does not claim to be met.
+  5. Setting a second goal replaces the first; `aida goal history` lists both, newest first. `clear` removes the active goal, and history records the clear.
+  6. `aida goal derive --epic EPIC-612 --invoke` prints the same line the current `aida goal --epic EPIC-612 --invoke` prints (regression).
+  7. Vendor-neutral: works from a Codex seat (nothing depends on Claude `/goal`).
+
+  ## Open questions (for the advisor)
+  - Who may set a goal: operator only (human TTY), or also product for the advisor? Proposed: operator plus product; the advisor may read and check but not set its own.
+  - Per-seat only, or also a project-wide goal (`--seat all`)?
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-01T03:24:07.798418309Z
+modified_at: 2026-11-01T03:24:07.798418309Z
+req_type: Story
+tags:
+- advisor
+- goal
+- seats
+filed_at:
+  code_sha: 7518617e469376bbe5debebd7cadd980e08656e5
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 7518617e469
+  vendor: claude
