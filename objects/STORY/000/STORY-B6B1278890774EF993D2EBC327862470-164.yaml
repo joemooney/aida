@@ -34,7 +34,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T19:23:04.998731220Z
-modified_at: 2026-11-01T01:41:08.392842178Z
+modified_at: 2026-11-01T02:14:57.249954492Z
 req_type: Story
 tags:
 - architecture
@@ -242,6 +242,13 @@ comments:
   created_at: 2026-11-01T01:41:08.392842178Z
   modified_at: 2026-11-01T01:41:08.392842178Z
   session_id: 77a7a933-9a3f-4243-9a44-892bcedf206c
+- id: 01a194e3-75e1-74a1-a258-46ba288b42af
+  author: joe
+  content: 'Round 3 (c01183a). F1 CI: this seat cannot reach the Actions log/artifact blob hosts, and no test binary builds inside its 60s per-call limit, so failures were found statically. Gates: cargo fmt diff in story_164_single_hub.rs and three unguarded test git commits (git-maintenance ratchet), both fixed and rechecked locally. lib/cli: save_claimed did not create registry/ before a clone''s first claim (fixed). Any other lib-0/lib-1/cli-1 failure is still unknown until this head''s CI run reports. F2: the promoted-pool branch of block_lineage now requires same_claim on the reached hub''s store ref (HubReach carries those claims); unit test a_promoted_hub_pool_block_not_on_the_hub_ref_is_not_spendable. F3: the rejected-claim CLI test asserts a definite hook refusal, then keeps a real unpushed claim (push URL unreachable after the claim commit) and asserts NotOnHub and a node-local ID. F4: new CLI case aida_init_then_a_pushed_hub_declaration_reaches_the_first_agreed_id runs aida init, then commits and pushes [store.hubs], claims, and mints. It pins counter_scope to per-type because init defaults to global.'
+  created_at: 2026-11-01T02:14:57.249954492Z
+  modified_at: 2026-11-01T02:14:57.249954492Z
+  session_id: 01a194cd4400
+  harness_version: 2.1.316 (Claude Code)
 history:
 - id: 01a1939c-ffb0-7d40-b083-9d0d5a3d6156
   author: joe
