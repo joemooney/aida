@@ -2,7 +2,7 @@ id: 01a12b25-1dee-7eb1-8fa2-15c9983b4dcd
 spec_id: FAQ-42
 agreed_id: FAQ-42
 title: Why can't an agent start a relay or enter a role for me?
-description: |
+description: |+
   **Seat grants are issued only to a human at an interactive terminal. An agent's `aida role enter` fails with "role grants require a human at an interactive TTY", so you have to start relays and orchestrators yourself.**
 
   ## Why
@@ -18,19 +18,30 @@ description: |
   ```
   An agent can prepare the command, stop a stalled relay, and verify the new one (`pgrep -af relay.sh`, then read `/proc/<pid>/environ` for ANTHROPIC_MODEL and AIDA_SESSION_ROLE). It cannot launch the relay.
 
+  ### Launching one agent from a fresh terminal
+  You do not need the `eval` step to launch a single seat yourself. At an interactive terminal with no seat grant, `aida agent new --role <seat>` asks whether to launch that seat under a one-time grant from you. Answer `y` and it launches the agent with its own child grant. The one-time grant is never exported to your shell, lasts at most 8 hours, and is not reused: the next launch asks again. The question is never offered to an agent, a headless run, or a contained seat; they are refused as before. Pass `--grant-inline no` to refuse without asking. A relay or orchestrator that launches several seats still needs `aida role enter` as shown above.
+
   ## See also
   FAQ-18 (which seats to delegate), STORY-1654
+
 status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T13:26:55.214170874Z
-modified_at: 2026-10-11T13:26:55.214170874Z
+modified_at: 2026-11-01T00:02:27.817415945Z
 req_type: Faq
 tags:
 - audience:user
 - topic:relay
 - topic:roles
+history:
+- id: 01a1946a-300e-77a1-9896-5949a9f60b78
+  author: joe
+  timestamp: 2026-11-01T00:02:29.518865913Z
+  session_id: 01a1945097d4
+  harness_version: 2.1.316 (Claude Code)
+  changes: []
 filed_at:
   code_sha: fba16d9c884b16090b3c2d079a53a1def8aa9a36
   branch: main
