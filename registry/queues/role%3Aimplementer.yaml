@@ -1,4 +1,11 @@
 - user_id: role:implementer
+  requirement_id: 01a19600-8cf2-74f3-a6ce-b7a32fa5affc
+  position: 259000
+  added_by: role:implementer
+  note: 'Independent final reviewer13 attested REQUESTCHANGES at f05e1b9 PR3207 ledger#9 GH6557881420. Three blocking groups: effective own child metadata integrity vs later Codex overrides; four existing ratchets; actual fresh-authorized dispatch and lifecycle fixtures. Preliminary companion-constructor finding explicitly withdrawn after caller refusal verified. Full binding rework preserves all signed authority floors and same PR, /tmp/aida-BUG2398-rework-ruling.txt.'
+  added_at: 2026-11-01T12:26:40.253012116Z
+  for_role: implementer
+- user_id: role:implementer
   requirement_id: 01a1942f-b90c-7ee1-a06c-d5856831d28e
   position: 260000
   added_by: role:implementer
@@ -11,12 +18,6 @@
   added_by: role:implementer
   note: 'Fresh independent recorded REQUEST_CHANGES atc9f PR3205#5: CI lane FD audit fails plus publichelp/JSONaudit/grantconstant integrity gaps. Root sourceverified and publishedsnapshot backed.'
   added_at: 2026-11-01T12:04:56.611243293Z
-  for_role: implementer
-- user_id: role:implementer
-  requirement_id: 01a19600-8cf2-74f3-a6ce-b7a32fa5affc
-  position: 263000
-  added_by: role:implementer
-  added_at: 2026-11-01T09:22:14.123115516Z
   for_role: implementer
 - user_id: role:implementer
   requirement_id: 01a195dc-eca2-7570-afea-e3ba747f78c3
