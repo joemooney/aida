@@ -34,12 +34,20 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-01T03:24:07.798418309Z
-modified_at: 2026-11-01T04:29:41.382311729Z
+modified_at: 2026-11-01T04:29:54.836095597Z
 req_type: Story
 tags:
 - advisor
 - goal
 - vendor:codex
+comments:
+- id: 01a1955f-0514-7d51-aaec-da2596acc29d
+  author: joe
+  content: 'PRODUCT 21:30: rewritten to the operator''s shape (21:29): advisor-only, under the existing `aida goal` (no new top-level command), only the operator sets it, scope key ready for EPIC-74 target branches. Awaiting advisor disposition. The advisor was not live when filed (claude-advisor-10 has no live agent).'
+  created_at: 2026-11-01T04:29:54.836095597Z
+  modified_at: 2026-11-01T04:29:54.836095597Z
+  session_id: 01a194b3-ee64-7742-8d58-7b1145539893
+  harness_version: 2.1.316 (Claude Code)
 history:
 - id: 01a1955e-d0d4-75f2-a078-b22ee5383ce4
   author: joe
