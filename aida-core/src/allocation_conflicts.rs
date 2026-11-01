@@ -839,8 +839,12 @@ fn collect_with(
         })
         .collect();
     // A pruned tip is still a merge base of the tip that descends from it
-    // (a fast-forward joins exactly that pair), so it stays as baseline:
-    // a display ID two UUIDs first claim after it is still introduced.
+    // (a fast-forward joins exactly that pair), so it stays as baseline
+    // when one tip remains: a display ID two UUIDs first claim after it is
+    // still introduced. With two or more kept tips their own merge bases are
+    // the baseline and a pruned tip is dropped: a stale hub older than those
+    // merge bases would otherwise add an older baseline, and a claim one side
+    // reverted to the stale value would no longer count as introduced.
     // trace:BUG-2378 | ai:claude
     let (pruned, kept): (Vec<(String, bool)>, Vec<(String, bool)>) = tips
         .into_iter()
@@ -854,7 +858,8 @@ fn collect_with(
     // case: the pruned tips are its baseline.
     let mut bases: Vec<String> = match tips.as_slice() {
         [only] if lone_tip_is_baseline && pruned.is_empty() => vec![only.clone()],
-        _ => pruned,
+        [_] => pruned,
+        _ => Vec::new(),
     };
     let mut unrelated = false;
     for (i, a) in tips.iter().enumerate() {
