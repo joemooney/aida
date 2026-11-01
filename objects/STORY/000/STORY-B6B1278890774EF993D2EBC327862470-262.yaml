@@ -27,7 +27,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T23:03:29.192827531Z
-modified_at: 2026-11-01T11:17:03.859103582Z
+modified_at: 2026-11-01T14:59:27.284770139Z
 req_type: Story
 tags:
 - docs
@@ -177,6 +177,15 @@ comments:
     Validation: cargo test -p aida-cli-lib --no-default-features --lib docs_schedule_boundary_regression passed (1 test); make check-ci-fast passed all 36 gates, including Rust portability and formatting; git diff --check passed. Long Cargo ran in the background without an outer timeout or slot bypass. The bounded /tmp publication checkout preserves parent 6b1fd1a1ce2 and author identity; its committed two-file patch exactly matches the source checkout patch. Push to the same PR follows; existing hold retained, with no ship, verdict recording or hold clearance. Stop for fresh independent review.
   created_at: 2026-11-01T11:17:03.859103582Z
   modified_at: 2026-11-01T11:17:03.859103582Z
+- id: 01a1979f-6137-7493-99b6-9a70fc5e25c3
+  author: joe
+  content: |-
+    Advisor ruling: ADVISOR REWORK sameSTORY2220 canonicalSTORY-b6b1278890774ef993d2ebc327862470-262 SAMEPR3194/branchstory-b6b1278890774ef993d2ebc327862470-262 at2c786c12e3b6dfb113ce5ea6e2cfa8d14bf5442a. FullindependentpriorAPPROVE /tmp/aida-review3194-canonical-receipt-result.md reviewer15 GH6558166579 all7AC, actualnormalcanonical23/friendly22owngrant autorelease20. This is BASEINTEGRATION rework, NOToldfindingreplay/unresolvedsemanticwaiver. Train3209MERGEDonly3185/3193; actualGH3194comment6558443102 saysconflictwithmain/earliermember andmergecurrentmainbeforeretrain. Rootverifiedmain6a3f67671a974703590efde5ae2a323f3f7471fa landsproductglossaryanddelegation. Merge currentmain6a (ornewerverifiedmain) INTO SAMEPRbranch bynormalmerge, noforcepush/reset/rebasebranchdeletion; resolveactualdocs/sourceconflictsdeliberately. Preserveall7ACandpriorfixes plusNEWmainfeatures. Ifnonmechanicaldesignfork genuinelyexists reportprecisechoices beforeguessing; otherwiseimplementintegrationnow.
+    ReadFULLownspec/proxycomments/7AC/FULLpriorverdict/relevantdocsgeneration. Preserve strictzero/comment/---queueYAML→unknown/zeroactualtickcallbacks and[]valid; alluser/local+globalprojectqueues/linkedstore/evidencereaderrors refuseidle. Keepdailyidle+drain.lockfree, no newenabledtimer/livejobchanges. B2strictcanonicalexistingfindingdedup beforefiling includesarchived/deferred withfalliblereads; no cacheauthority/doublefiling. Report-onlydefault/batchedbranchreuse/cursorfreshmailbehavior. Combinedsource+derivededitcap beforeeffects. Trusteddefaultbranchregenandcredentialroutingunchanged. Existingportabilitywordingretained. Newproductglossarysingle-source/library/search/authoritydocsfrommainMUSTsurvive; generatedfilesregeneratedfromsources, no hand-editderivedmismatch. Existingall7ACtestproofretained, no broadrefactor.
+    RootverifiedoldsourcefulltrackedtreeEXACTpublic2c;two dirtyfilesmaintenance_schedule/testsbyteequalpublic archived0600 /tmp/aida-STORY2220-2c-reviewed-source.tar before normaldeadlease01a196bf87d3ended. StartCURRENTpublic2c onSAMEbranch; sourceoldHEAD6b1notstartingpoint. WorkONLYnewownscopedclone, notmain. Native.gitRO approvedbounded/tmp publicationcheckout exactsource/base/stablepatchidentity+normalpushonlyifneeded, notproductfix. No realuserconfig/storefixtures/auth/keys/cron/timer.
+    LocalLIGHT ONEtargeted AIDA_CARGO_TIMEOUT=10m cargo test --profile agent -p aida-cli-lib docs_sweep +make check-ci-fast; sharedinfra or>10CHANGEDintegrationfiles requiresactualtouched/compile. Original18filePRalreadyhasactualCI, don'trepeatbroadlocalsolelyforinheritedfiles. NormalCargoslots/backgroundlongjobs, nofullsuite/unfilteredlib/slotbypass/outertimeout/repeatedshortcompile. PUSHSAMEPRnormal, reportexactnewhead/mergemain/diffandactualtargetedfast+CI /tmp/aida-STORY2220-main-integration-result.md. Freshindependentaffected-deltaSTRICTreview+exactheadCI beforetrain, notownapproval/ship/merge/manualhold. Do notstampolderapprovalorrawledgers; sourceapprovalonoldheaddoesn'tapprovechangedintegration.
+  created_at: 2026-11-01T14:59:27.159983816Z
+  modified_at: 2026-11-01T14:59:27.159983816Z
 history:
 - id: 01a19517-853a-7dc1-addd-62b1b73de3be
   author: joe
