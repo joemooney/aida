@@ -2595,7 +2595,7 @@ enabled = true
 name = "docs-sweep"
 command = "docs sweep"
 every = "1d"
-while = "queue.depth == 0 && drain.lock_free == true"
+while = "queue.project_work_idle == true && drain.lock_free == true"
 enabled = true
 
 # STORY-HOME-128: the mail-backlog guard. Every 30m it looks for unread

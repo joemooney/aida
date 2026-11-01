@@ -1631,14 +1631,20 @@ impl SweepHost for LiveHost {
     }
 
     fn filed_keys(&self, project_root: &Path) -> Result<BTreeSet<String>> {
-        use aida_core::DatabaseBackend;
-        Ok(open_backend(project_root)?
-            .list_summaries(&aida_core::ListFilter::default())
-            .unwrap_or_default()
-            .into_iter()
-            .flat_map(|s| s.tags.into_iter())
-            .filter(|t| t.starts_with(KEY_TAG_PREFIX))
-            .collect())
+        // trace:STORY-2220 | ai:codex — filing must see current canonical
+        // objects, including writes newer than an advisory cache snapshot.
+        let store = crate::store_sync::detect_distributed_store_from(project_root)
+            .context("cannot resolve docs sweep dedup store")?;
+        let mut keys = BTreeSet::new();
+        for (_, path) in aida_core::object_store::list_objects_strict(&store.join("objects"))? {
+            let req = aida_core::object_store::read_object_from_path(&path)?;
+            keys.extend(
+                req.tags
+                    .into_iter()
+                    .filter(|t| t.starts_with(KEY_TAG_PREFIX)),
+            );
+        }
+        Ok(keys)
     }
 
     fn file_spec(&self, project_root: &Path, spec: NewSpec) -> Result<String> {

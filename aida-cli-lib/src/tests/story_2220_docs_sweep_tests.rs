@@ -426,7 +426,7 @@ fn the_scaffold_registers_a_daily_idle_only_docs_sweep_job() {
     assert_eq!(job["command"].as_str(), Some("docs sweep"));
     assert_eq!(job["every"].as_str(), Some("1d"));
     let gate = job["while"].as_str().unwrap();
-    assert!(gate.contains("queue.depth == 0"), "{gate}");
+    assert!(gate.contains("queue.project_work_idle == true"), "{gate}");
     assert!(gate.contains("drain.lock_free == true"), "{gate}");
     assert_eq!(job["enabled"].as_bool(), Some(true));
 }
@@ -1024,4 +1024,191 @@ fn the_sweep_config_is_read_from_the_default_branch_not_the_worktree() {
     let cfg = load_config(&root).unwrap();
     assert_eq!(cfg.mode, SweepMode::Pr);
     assert!(cfg.regenerate.is_empty());
+}
+
+/// Advisor B1/B2: exercise the real snapshot/tick and canonical filing adapter,
+/// including evidence a caller-local meter or advisory cache cannot see.
+// trace:STORY-2220 | ai:codex
+#[test]
+fn docs_schedule_boundary_regression() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    use crate::schedule_predicate::{self, Field};
+    use aida_core::DatabaseBackend;
+    let tmp = tempfile::tempdir().unwrap();
+    let root = project(tmp.path(), false);
+    let store = root.join(".aida-store");
+    std::fs::create_dir_all(root.join(".aida")).unwrap();
+    std::fs::create_dir_all(&store).unwrap();
+    git_ok(&store, &["init", "-q", "-b", "aida-store"]);
+    git_ok(&store, &["config", "user.name", "Test"]);
+    git_ok(&store, &["config", "user.email", "t@example.com"]);
+    let config = "[deployment]\nstore_path = \".aida-store\"\n[docs_sweep]\nmode = \"pr\"\n\n[[schedule.jobs]]\nname = \"docs-sweep\"\ncommand = \"docs sweep\"\nevery = \"1d\"\nwhile = \"queue.project_work_idle == true && drain.lock_free == true\"\nenabled = true\n";
+    commit_files(
+        &root,
+        &[
+            (".aida/config.toml", config),
+            ("docs/cli/a.md", "Run `aida schedule statsu`.\n"),
+        ],
+        "fixture",
+    );
+    let queues = store.join("registry/queues");
+    std::fs::create_dir_all(&queues).unwrap();
+    let fields = BTreeSet::from([Field::ProjectWorkIdle, Field::DrainLockFree]);
+    let gate =
+        schedule_predicate::parse("queue.project_work_idle == true && drain.lock_free == true")
+            .unwrap();
+    let runs = std::cell::Cell::new(0);
+    let tick = |day| {
+        crate::maintenance_schedule::tick_project_registry_for_test(
+            &root,
+            Utc::now() + chrono::Duration::days(day),
+            &|command| {
+                assert_eq!(command, "docs sweep");
+                runs.set(runs.get() + 1);
+                Ok(0)
+            },
+        )
+        .unwrap()
+    };
+    let check = |want| {
+        let snap = crate::maintenance_schedule::collect_snapshot(&root, &fields, None);
+        assert_eq!(snap.project_work_idle, want);
+        assert_eq!(schedule_predicate::eval(&gate, &snap).ok(), want);
+    };
+    check(Some(true));
+    let local = queues.join("other-user.yaml");
+    let row = aida_core::QueueEntry {
+        user_id: "other-user".into(),
+        requirement_id: uuid::Uuid::new_v4(),
+        position: 0,
+        added_by: "peer".into(),
+        note: None,
+        added_at: Utc::now(),
+        for_role: Some("implementer".into()),
+        for_scope: None,
+        for_session: None,
+        added_by_machine: None,
+    };
+    std::fs::write(&local, serde_yaml::to_string(&vec![row]).unwrap()).unwrap();
+    check(Some(false));
+    tick(0);
+    assert_eq!(runs.get(), 0);
+    std::fs::write(&local, "[]\n").unwrap();
+    let global = crate::home_dir().unwrap().join(".aida/queue");
+    std::fs::create_dir_all(&global).unwrap();
+    for (day, role) in ["implementer", "reviewer"].iter().enumerate() {
+        let path = global.join(format!("{role}.yaml"));
+        let row = crate::global_queue::GlobalQueueEntry {
+            requirement_id: uuid::Uuid::new_v4(),
+            project_root: root.clone(),
+            project_name: "fixture".into(),
+            spec_id: None,
+            agreed_id: None,
+            title: None,
+            position: 0,
+            added_by: "peer".into(),
+            added_at: Utc::now(),
+            note: None,
+            for_role: role.to_string(),
+        };
+        std::fs::write(&path, serde_yaml::to_string(&vec![row]).unwrap()).unwrap();
+        check(Some(false));
+        tick(day as i64 + 1);
+        assert_eq!(runs.get(), 0);
+        std::fs::write(&path, "[]\n").unwrap();
+    }
+    // Parse failure and a read failure both refuse, even when own queue is empty.
+    std::fs::write(&local, "not a queue").unwrap();
+    check(None);
+    assert!(tick(3).iter().any(|s| s.contains("evidence is unknown")));
+    std::fs::remove_file(&local).unwrap();
+    std::fs::create_dir(&local).unwrap();
+    check(None);
+    tick(4);
+    assert_eq!(runs.get(), 0);
+    std::fs::remove_dir(&local).unwrap();
+    let global_path = global.join("reviewer.yaml");
+    std::fs::write(&global_path, "null").unwrap();
+    check(None);
+    tick(5);
+    assert_eq!(runs.get(), 0);
+    std::fs::remove_file(&global_path).unwrap();
+    std::fs::create_dir(&global_path).unwrap();
+    check(None);
+    tick(6);
+    assert_eq!(runs.get(), 0);
+    std::fs::remove_dir(&global_path).unwrap();
+    check(Some(true));
+    tick(7);
+    assert_eq!(runs.get(), 1);
+
+    // Build a cache before the key is filed, then hold it stale while an
+    // independent writer adds the key to the canonical object.
+    let cache_path = aida_core::CachedGitBackend::default_cache_path(&store);
+    let backend = crate::test_env::home_fixture_cached_backend(&store, &cache_path).unwrap();
+    let mut req = aida_core::Requirement::new("existing docs finding".into(), "body".into());
+    req.spec_id = Some("TASK-1".into());
+    let mut req = backend.add_requirement(req).unwrap();
+    backend
+        .list_summaries(&aida_core::ListFilter::default())
+        .unwrap();
+    let (findings, _, _, _) = sweep(&root, &load_config(&root).unwrap(), None).unwrap();
+    assert_eq!(findings.len(), 1);
+    let tag = format!("{KEY_TAG_PREFIX}{}", findings[0].key());
+    req.tags.insert(tag.clone());
+    crate::test_env::home_fixture_backend(&store)
+        .unwrap()
+        .update_requirement(&req)
+        .unwrap();
+    let _foreign = crate::stale_cache_fixture::hold_foreign_refresh(&cache_path);
+    assert!(backend
+        .list_summaries(&aida_core::ListFilter::default())
+        .unwrap()
+        .iter()
+        .all(|r| !r.tags.contains(&tag)));
+    assert!(LiveHost.filed_keys(&root).unwrap().contains(&tag));
+    run_with(&root, normal_run(), &LiveHost).unwrap();
+    assert_eq!(
+        aida_core::object_store::list_objects_strict(&store.join("objects"))
+            .unwrap()
+            .len(),
+        1
+    );
+    let mut state = load_state(&root);
+    state.last_swept_rev = None;
+    save_state(&root, &state).unwrap();
+    let before_state = std::fs::read(root.join(STATE_FILE)).unwrap();
+    let before_mail = mails(&root).len();
+    let path = aida_core::object_store::object_path(
+        &store.join("objects"),
+        req.spec_id.as_deref().unwrap(),
+    )
+    .unwrap();
+    let original = std::fs::read(&path).unwrap();
+    for unreadable in [false, true] {
+        std::fs::remove_file(&path).unwrap();
+        if unreadable {
+            std::fs::create_dir(&path).unwrap();
+        } else {
+            std::fs::write(&path, "broken: [").unwrap();
+        }
+        assert!(LiveHost.filed_keys(&root).is_err());
+        assert!(run_with(&root, normal_run(), &LiveHost).is_err());
+        assert_eq!(std::fs::read(root.join(STATE_FILE)).unwrap(), before_state);
+        assert_eq!(mails(&root).len(), before_mail);
+        assert_eq!(
+            aida_core::object_store::list_objects_strict(&store.join("objects"))
+                .unwrap()
+                .len(),
+            1
+        );
+        if unreadable {
+            std::fs::remove_dir(&path).unwrap();
+        } else {
+            std::fs::remove_file(&path).unwrap();
+        }
+        std::fs::write(&path, &original).unwrap();
+    }
 }

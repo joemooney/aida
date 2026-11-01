@@ -3184,6 +3184,54 @@ pub(crate) fn maybe_offer_tick_install(project_root: &Path) {
 // Snapshot for `when` predicates
 // ---------------------------------------------------------------------------
 
+/// Strict project-wide idle evidence for opportunistic docs work. Existing
+/// seat-local queue meters retain their display semantics.
+// trace:STORY-2220 | ai:codex
+fn project_work_idle(project_root: &Path) -> Result<bool> {
+    let store = crate::store_sync::detect_distributed_store_from(project_root)
+        .context("cannot resolve project queues")?;
+    let queues = store.join("registry/queues");
+    let entries = match std::fs::read_dir(&queues) {
+        Ok(entries) => Some(entries),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
+        Err(e) => return Err(e).context("cannot enumerate project queues"),
+    };
+    let mut busy = false;
+    if let Some(entries) = entries {
+        for entry in entries {
+            let path = entry?.path();
+            if path.extension().and_then(|e| e.to_str()) != Some("yaml") {
+                continue;
+            }
+            let content = std::fs::read_to_string(&path)
+                .with_context(|| format!("cannot read queue {}", path.display()))?;
+            let rows: Vec<aida_core::QueueEntry> = serde_yaml::from_str(&content)
+                .with_context(|| format!("cannot parse queue {}", path.display()))?;
+            busy |= rows.iter().any(|row| {
+                matches!(
+                    row.for_role.as_deref(),
+                    None | Some("implementer" | "reviewer")
+                )
+            });
+        }
+    }
+    let project = project_root.canonicalize()?;
+    let home = crate::home_dir().context("cannot resolve global queue home")?;
+    for role in ["implementer", "reviewer"] {
+        let path = home.join(".aida/queue").join(format!("{role}.yaml"));
+        for row in crate::global_queue::read_queue(&path, role)? {
+            // Compare canonical store identity too, so linked worktrees count.
+            let same = row.project_root == project || row.project_root.canonicalize()? == project;
+            let same_store = crate::store_sync::detect_distributed_store_from(&row.project_root)
+                .map(|other| other.canonicalize())
+                .transpose()?
+                .is_some_and(|other| Some(other) == store.canonicalize().ok());
+            busy |= same || same_store;
+        }
+    }
+    Ok(!busy)
+}
+
 /// Build the predicate snapshot, computing only the `fields` some job
 /// references. Every column is a local-file / cache read — never git, never
 /// the network (`ci.red_prs` is therefore 0 here; the tick has no gh call).
@@ -3226,6 +3274,9 @@ pub(crate) fn collect_snapshot(
     }
     if fields.contains(&Field::DispatchPending) {
         snap.dispatch_pending = crate::dispatch::pending_request_count(project_root);
+    }
+    if fields.contains(&Field::ProjectWorkIdle) {
+        snap.project_work_idle = project_work_idle(project_root).ok();
     }
     if fields.contains(&Field::QueueDepth) {
         snap.queue_depth = crate::read_queue_depth(project_root, None).unwrap_or(0) as i64;

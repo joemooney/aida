@@ -520,7 +520,7 @@ enabled = true
 name = "docs-sweep"
 command = "docs sweep"
 every = "1d"
-while = "queue.depth == 0 && drain.lock_free == true"
+while = "queue.project_work_idle == true && drain.lock_free == true"
 enabled = true
 
 # STORY-2220: what a docs-sweep run does. `report` (the default) sends the
