@@ -1,8 +1,6 @@
 job: fleet-heartbeat
-last_run: 2026-11-01T14:55:42.295104348Z
+last_run: 2026-11-01T17:00:48.962587640Z
 last_by:
   seat: advisor
   vendor: codex
 result: done
-due_since: 2026-11-01T16:01:16.129513866Z
-due_reason: every 1h
