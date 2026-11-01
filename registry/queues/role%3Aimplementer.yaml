@@ -1,4 +1,11 @@
 - user_id: role:implementer
+  requirement_id: 01a1965b-4971-7252-abdf-997331f285fd
+  position: 249000
+  added_by: role:implementer
+  note: Actual unchanged composednamespace rawunshareEPERM survives both same-runner A/B controls. Need exact running profile/rules/package/attachment facts to identify denying rule; old runner gone, add bounded readonly same-next-failing-run inventory without backend or test-policy change.
+  added_at: 2026-11-01T19:22:37.383388658Z
+  for_role: implementer
+- user_id: role:implementer
   requirement_id: 01a195d9-336e-7223-b445-3e72671493bc
   position: 250000
   added_by: role:implementer
@@ -18,13 +25,6 @@
   added_by: role:implementer
   note: Train3209 dropped3194 for actual main conflict; merge currentmain6a into samePR while preserving all7AC and newlymerged glossary/authority sources. Freshdelta review required.
   added_at: 2026-11-01T14:59:31.650260715Z
-  for_role: implementer
-- user_id: role:implementer
-  requirement_id: 01a1965b-4971-7252-abdf-997331f285fd
-  position: 255000
-  added_by: role:implementer
-  note: Independent review16 retains required nested-positive gate; reviewed HOST diagnostic passes. Obtain finite same-CI-runner A/B and original strict fixture without waiver, same PR3205.
-  added_at: 2026-11-01T14:57:14.696422352Z
   for_role: implementer
 - user_id: role:implementer
   requirement_id: 01a19600-8cf2-74f3-a6ce-b7a32fa5affc
