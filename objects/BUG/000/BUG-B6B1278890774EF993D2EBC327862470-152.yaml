@@ -13,7 +13,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T23:00:22.284758314Z
-modified_at: 2026-11-01T00:03:49.177279392Z
+modified_at: 2026-11-01T01:12:40.908233909Z
 req_type: Bug
 tags:
 - epic-home-003
@@ -31,6 +31,13 @@ comments:
   created_at: 2026-11-01T00:03:49.177279392Z
   modified_at: 2026-11-01T00:03:49.177279392Z
   session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+- id: 01a194aa-72cc-7952-a670-62a68cbf7c7c
+  author: joe
+  content: 'Round 2 (74df75a): findings 2-6 addressed (pruned ancestor tips kept as merge bases + skip lone-tip shortcut, new all-wrapper fast-forward refusal test; build_claim lease-stamp unit test; CLI fixture covers the one-time repair on an already-backfilled store; node show degrades on malformed node_aliases.toml; clone_node_id/registered_node_ids docs corrected). CI at 74df75a: rest, cli-1, lib-1, contracts now PASS (rest and cli-1 were red at 33b3f5c). Still RED: cli-0 (contains the new bug_2378_root_after_backfill target, never run locally) and lib-0 (aida-cli-lib unit half; also red last round, cause unidentified). This implementer sandbox cannot read CI job logs (results-receiver blob host denied, gh api denied) and cannot run a CLI/cli-lib build (60s per-call limit, background jobs killed), so the failing test names are unknown. Next seat needs log access: gh run view --log-failed --job=124706165335 (cli-0) and the lib-0 job of run 41258332857.'
+  created_at: 2026-11-01T01:12:40.908233909Z
+  modified_at: 2026-11-01T01:12:40.908233909Z
+  session_id: 01a194854611
+  harness_version: 2.1.316 (Claude Code)
 history:
 - id: 01a1943a-492b-7f72-9377-cfc786176bec
   author: aida-session-start
