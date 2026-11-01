@@ -21,7 +21,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-01T06:48:07.778727918Z
-modified_at: 2026-11-01T06:48:07.778727918Z
+modified_at: 2026-11-01T07:37:53.739062500Z
 req_type: Bug
 tags:
 - audit
@@ -32,6 +32,12 @@ relationships:
 - rel_type: Child
   target_id: 01a19499-932e-79f0-a3e1-1299dfe355ad
   created_at: 2026-11-01T06:48:16.636184407Z
+comments:
+- id: 01a1960b-1f4b-7970-a658-196440ac0e13
+  author: joe
+  content: 'LIVE EVIDENCE 2026-11-01: first managed native Codex lane BUG-2397 successfully edited, tested (15 tests/36 fast gates) and opened PR-3197, but MCP queue completion was refused because approval was required while the session policy was never. The first-model launch works; declared AIDA tool policy/permissions still need to compose with Codex approval policy. Preserve existing credential exclusions and the strict native sandbox; do not silently enable all external MCP tools. Shell grant metadata loss under inherit=core is separately BUG-2398.'
+  created_at: 2026-11-01T07:37:53.739062500Z
+  modified_at: 2026-11-01T07:37:53.739062500Z
 history:
 - id: 01a195dd-b979-7b63-b353-ebf808b482d9
   author: joe
