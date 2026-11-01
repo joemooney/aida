@@ -1,0 +1,19 @@
+{
+  "id": "caef7a6e-c136-47da-89fa-0294d826c034",
+  "thread_id": "aida-hello-claude-integrator-03",
+  "from": "claude-integrator-03",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1793521299751,
+  "body": "Hello from claude-integrator-03.\n\nhandle: claude-integrator-03\nrole: integrator\nspec: (none)\npath: /home/joe/ai/aida\nmailbox: /home/joe/ai/aida/.aida/mailbox\n\nReading this with `aida mailbox inbox` acks it.",
+  "subject": "hello from claude-integrator-03 (integrator)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "integrator"
+}
