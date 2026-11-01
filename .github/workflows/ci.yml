@@ -165,14 +165,6 @@ jobs:
         if: ${{ startsWith(matrix.shard, 'lib-') && (steps.changes.outputs.full_ci == 'true') }}
         run: cargo build -p aida-cli --bin aida
 
-      # Pinned action commit (v2.87.22) and nextest version: a prebuilt
-      # binary, no `cargo install`. trace:TASK-1957 | ai:claude
-      - name: Install cargo-nextest
-        if: ${{ matrix.shard != 'gates' && matrix.shard != 'contracts' && (steps.changes.outputs.full_ci == 'true') }}
-        uses: taiki-e/install-action@83ac0ad63c0167e6f06796fab0fce28db1bf3db0 # v2.87.22
-        with:
-          tool: cargo-nextest@0.9.146
-
       # Same disposable lib-0 runner, unchanged reviewed synthetic recipe.
       # A failed baseline is retained as a failed observation, never acceptance.
       # No production assertion or namespace policy changes. trace:TASK-2705 | ai:codex
@@ -245,6 +237,14 @@ jobs:
           name: task-2705-precondition-${{ github.run_attempt }}
           path: ${{ runner.temp }}/task-2705-precondition/
           if-no-files-found: error
+
+      # Pinned action commit (v2.87.22) and nextest version: a prebuilt
+      # binary, no `cargo install`. trace:TASK-1957 | ai:claude
+      - name: Install cargo-nextest
+        if: ${{ !cancelled() && matrix.shard != 'gates' && matrix.shard != 'contracts' && steps.changes.outputs.full_ci == 'true' && ((matrix.shard == 'lib-0' && steps.containment_prepare.outcome == 'success') || (matrix.shard != 'lib-0' && success())) }}
+        uses: taiki-e/install-action@83ac0ad63c0167e6f06796fab0fce28db1bf3db0 # v2.87.22
+        with:
+          tool: cargo-nextest@0.9.146
 
       # Marker enumeration makes the external-prose inventory a generated,
       # reviewable contract rather than a best-effort audit. trace:TASK-1300
