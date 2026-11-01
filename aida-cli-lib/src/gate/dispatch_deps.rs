@@ -319,6 +319,10 @@ pub(crate) const FACADE_EXTERNAL_LEAVES: &[(&str, &str)] = &[
         "review marker holder liveness; feeds authority",
     ),
     (
+        "aida_core::liveness::process_identity_matches_strict",
+        "grant holder liveness; feeds authority",
+    ),
+    (
         "aida_core::liveness::process_start_time",
         "process start time for fleet lanes; feeds authority",
     ),

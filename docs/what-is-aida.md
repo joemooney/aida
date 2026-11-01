@@ -216,7 +216,7 @@ AIDA refuses an approval from the session that authored the work (`gate/approval
 
 **What standard tooling already does.** Tokens can expire. Deployment environments can require a named human reviewer or a wait timer. Admins can bypass protection. None of these is a time-boxed grant that lets an agent ship reviewed-but-held work while the human is away.
 
-**What AIDA adds because the developers are agents.** A mandate is a time-boxed, scoped grant (8 hours by default, at most 24). It can be started or stopped only from an interactive terminal outside an AIDA-launched agent session (`gate/mandate.rs`, `gate/seat_authority.rs`), it is checked on every action, and every action it drives is ledgered. On 28 October an attempt to stop the mandate from the operator's agent loop was refused ("a mandate can only be stopped by a human at an interactive terminal"). After the mandate expired at 21:17:04Z, the advisor's next request (`aida dispatch request review 3065`) was refused at submit, and the refusal named the command to start a new mandate. AIDA states its own limit: a same-user process that forges files in the AIDA home directory is outside its threat model.
+**What AIDA adds because the developers are agents.** A mandate is a time-boxed, scoped grant (8 hours by default, at most 24). It can be started, renewed or stopped only from an interactive terminal outside an AIDA-launched agent session (`gate/mandate.rs`, `gate/seat_authority.rs`), it is checked on every action, and every action it drives is ledgered. On 28 October an attempt to stop the mandate from the operator's agent loop was refused ("a mandate can only be stopped by a human at an interactive terminal"). After the mandate expired at 21:17:04Z, the advisor's next request (`aida dispatch request review 3065`) was refused at submit, and the refusal named the command to start a new mandate. AIDA states its own limit: a same-user process that forges files in the AIDA home directory is outside its threat model.
 
 ### 4. Sandboxed agents that can still get work done
 
@@ -261,7 +261,7 @@ A fair question: why not write a few skills (instructions the agent loads) and a
 - `aida pr ship` refuses a PR whose head is behind its base, and the review watcher holds back an automatic review of a behind head with overlapping paths, whatever the agent thinks.
 - Verdicts are bound to an exact commit, and the merge is pinned to the approved head.
 - Merge holds fail a required check until cleared. Clearing one by hand needs a human at a terminal, and a sensitive spec needs either that or a mandate the human started with `--include-supervised`.
-- Mandates can only be started or stopped from an interactive terminal, outside an AIDA-launched agent session.
+- Mandates can only be started, renewed or stopped from an interactive terminal, outside an AIDA-launched agent session.
 - Dispatch requests are validated when queued, and authority is re-checked at every checkpoint before a side effect. A replacement mandate does not revive requests that lapsed under an earlier one.
 - Claims and leases are tied to live processes (PID plus start time). In the paths checked here, unreadable ownership or evidence makes the operation refuse.
 
