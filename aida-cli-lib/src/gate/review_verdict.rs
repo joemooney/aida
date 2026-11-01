@@ -2799,7 +2799,7 @@ pub fn review_actionability(
         let mut approval = v.clone();
         approval.closed_by_merge = None;
         approval.closed_at = None;
-        if !crate::gate::review_authority::independent_approval_authorized(
+        if !crate::gate::review_approval::independent_approval_authorized(
             project_root,
             &[key.to_string()],
             v.reviewed_branch.as_deref(),

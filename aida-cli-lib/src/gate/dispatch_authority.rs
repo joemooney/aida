@@ -1595,7 +1595,7 @@ pub(crate) fn verdict_at_head(
     if v.kind.approves()
         && (review_verdict::reconcile_artifacts_for_sha([current.body.as_str()], head_oid).ok()
             != Some(Some(VerdictKind::Approved))
-            || !crate::gate::review_authority::independent_approval_authorized(
+            || !crate::gate::review_approval::independent_approval_authorized(
                 main_worktree,
                 &[],
                 v.reviewed_branch.as_deref(),

@@ -38,7 +38,7 @@ pub(crate) fn pr_has_approved_verdict(project_root: &std::path::Path, pr_number:
         Ok(auto_complete::ReviewerOutcome::Verdict(
             auto_complete::Verdict::Approved
         ))
-    ) && crate::gate::review_authority::independent_approval_authorized(
+    ) && crate::gate::review_approval::independent_approval_authorized(
         project_root,
         &[],
         v.reviewed_branch.as_deref(),
@@ -209,7 +209,7 @@ pub(crate) fn spec_review_approved_at_head(
             crate::gate::review_verdict::parse_recorded_verdict(&current.body)
                 .as_ref()
                 .is_some_and(|v| {
-                    crate::gate::review_authority::human_approval_authorized(
+                    crate::gate::review_approval::human_approval_authorized(
                         project_root,
                         req,
                         spec_id,
@@ -250,7 +250,7 @@ pub(crate) fn spec_review_approved_at_head(
         }
         candidates.push((
             record.as_ref().is_some_and(|v| {
-                crate::gate::review_authority::human_approval_authorized(
+                crate::gate::review_approval::human_approval_authorized(
                     project_root,
                     req,
                     spec_id,
