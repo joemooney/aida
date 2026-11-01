@@ -21,7 +21,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-01T06:45:59.471168135Z
-modified_at: 2026-11-01T06:53:04.434224524Z
+modified_at: 2026-11-01T06:53:06.950214285Z
 req_type: Bug
 tags:
 - audit
@@ -32,6 +32,12 @@ relationships:
 - rel_type: Child
   target_id: 01a19499-932e-79f0-a3e1-1299dfe355ad
   created_at: 2026-11-01T06:46:06.928852898Z
+comments:
+- id: 01a195e2-2006-7452-b232-8b8bebcd2647
+  author: joe
+  content: 'ADVISOR DISPOSITION: APPROVED. Verified codex_session_args currently pushes initial_prompt unchanged and the existing codex_inline_prompt helper expands known AIDA commands for headless use. Reuse that common renderer for the interactive entry points and preview hints; preserve native/contained posture, child grants, explicit vendor selection and Claude behavior. Unknown or unrenderable AIDA prompts must fail or retain a clearly documented safe fallback rather than silently claim skill execution. Sequence after BUG-2385 to avoid launch/session.rs edit overlap. Run Codex lane after TASK-2631 live activation.'
+  created_at: 2026-11-01T06:53:06.950214285Z
+  modified_at: 2026-11-01T06:53:06.950214285Z
 history:
 - id: 01a195db-bc66-7823-a291-6c9fe37c36f5
   author: joe
