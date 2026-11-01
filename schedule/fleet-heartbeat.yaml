@@ -1,8 +1,7 @@
 job: fleet-heartbeat
-last_run: 2026-11-01T17:00:48.962587640Z
+last_run: 2026-11-01T18:28:13.455424103Z
 last_by:
   seat: advisor
   vendor: codex
 result: done
-due_since: 2026-11-01T18:06:59.920960581Z
-due_reason: every 1h
+note: 8PR exact heads/CI, all8relay.status, current actor PIDs and approved ready view inspected; sameBUG2385 concrete rework delegated37; reviewer25 actual identity refusal and human floors retained.
