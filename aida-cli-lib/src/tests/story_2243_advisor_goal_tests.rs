@@ -43,6 +43,7 @@ fn store_with(goals: Vec<AdvisorGoal>) -> tempfile::TempDir {
 
 // AC1: show prints the text, both clauses with their verify commands, the
 // setter and the timestamp, in human, toon and json.
+// trace:STORY-b6b1278890774ef993d2ebc327862470-272.ac4bdd03 | ai:claude
 #[test]
 fn show_prints_text_clauses_setter_and_time_in_every_format() {
     let g = goal("X", clauses());
@@ -91,6 +92,7 @@ fn show_without_a_goal_says_how_to_set_one() {
 
 // AC4: one met and one unmet clause → not met, the unmet one named; every
 // clause met → met.
+// trace:STORY-b6b1278890774ef993d2ebc327862470-272.ac73038d | ai:claude
 #[test]
 fn check_names_each_unmet_clause_and_is_met_only_when_all_are() {
     let g = goal("X", clauses());
@@ -125,6 +127,7 @@ fn check_names_each_unmet_clause_and_is_met_only_when_all_are() {
 }
 
 // AC4: a free-text-only goal has no checkable clauses and is never met.
+// trace:STORY-b6b1278890774ef993d2ebc327862470-272.ac73038d | ai:claude
 #[test]
 fn free_text_goal_reports_no_checkable_clauses_and_is_never_met() {
     let g = goal("get the open list to zero", Vec::new());
@@ -138,6 +141,7 @@ fn free_text_goal_reports_no_checkable_clauses_and_is_never_met() {
 }
 
 // AC5: history lists every goal, newest first, the newest marked active.
+// trace:STORY-b6b1278890774ef993d2ebc327862470-272.ac1f6c1e | ai:claude
 #[test]
 fn history_lists_goals_newest_first() {
     let mut first = goal("first", Vec::new());
@@ -174,6 +178,7 @@ fn tty() -> SetterFacts {
 // AC6 (+ advisor disposition): `set` is refused from a non-TTY session, from
 // any session carrying an agent marker or a seat grant, and from under an
 // agent harness even with a PTY. The message says the operator sets it.
+// trace:STORY-b6b1278890774ef993d2ebc327862470-272.acb9b660 | ai:claude
 #[test]
 fn set_is_operator_only() {
     assert_eq!(set_refusal(&tty()), None, "a direct operator may set");
@@ -206,6 +211,7 @@ fn set_is_operator_only() {
 }
 
 // AC6: from an agent environment the observed facts refuse `set`.
+// trace:STORY-b6b1278890774ef993d2ebc327862470-272.acb9b660 | ai:claude
 #[test]
 fn observed_agent_session_is_refused() {
     let _env = crate::test_env::EnvVarsGuard::set(&[("AIDA_AGENT_NAME", "claude-advisor-11")]);
@@ -216,6 +222,7 @@ fn observed_agent_session_is_refused() {
 
 // AC3 + AC9: the launch context carries a `## Goal` section in the advisor
 // seat only, and only when a goal is set. Nothing depends on a vendor.
+// trace:STORY-b6b1278890774ef993d2ebc327862470-272.acd25002 | ai:claude
 #[test]
 fn launch_context_goal_section_is_advisor_only() {
     let dir = store_with(vec![goal("X", clauses())]);
@@ -280,6 +287,7 @@ fn view(role: &str, goal: Option<crate::whoami_view::GoalLine>) -> crate::whoami
 
 // AC3: in the advisor seat whoami prints the goal on `goal:` and the seat
 // purpose on `purpose:`; other seats keep their line and never see the goal.
+// trace:STORY-b6b1278890774ef993d2ebc327862470-272.acd25002 | ai:claude
 #[test]
 fn whoami_prints_the_goal_in_the_advisor_seat_only() {
     use crate::whoami_view::{goal_line, with_advisor_goal};

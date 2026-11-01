@@ -197,6 +197,7 @@ mod tests {
 
     // AC7: the record carries `scope` (the default branch) under that name,
     // so per-branch goals can key on it.
+    // trace:STORY-b6b1278890774ef993d2ebc327862470-272.accb6f41 | ai:claude
     #[test]
     fn record_pins_the_scope_field() {
         let yaml = serde_yaml::to_string(&goal("X", "2026-11-01T00:00:00Z")).unwrap();
@@ -220,6 +221,7 @@ mod tests {
 
     // AC5: a second set replaces the active goal; history lists both, newest
     // first. The write is committed to the store.
+    // trace:STORY-b6b1278890774ef993d2ebc327862470-272.ac1f6c1e | ai:claude
     #[test]
     fn second_set_replaces_and_history_is_newest_first() {
         let dir = tempfile::tempdir().unwrap();
@@ -243,6 +245,7 @@ mod tests {
 
     // AC2: the goal is canonical in the store: set in one clone, it reaches a
     // second clone after a pull.
+    // trace:STORY-b6b1278890774ef993d2ebc327862470-272.ac0a7bc4 | ai:claude
     #[test]
     fn goal_set_in_one_clone_reaches_another_after_sync() {
         let root = tempfile::tempdir().unwrap();
