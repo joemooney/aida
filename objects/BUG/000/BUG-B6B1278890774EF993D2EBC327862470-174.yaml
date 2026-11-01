@@ -14,12 +14,12 @@ description: |
   4. Validate live recovery with a sanctioned train and exact protected-head checks before landing. Do not simply retry blind or substitute raw gh merge. Record prior3202 failure and full recovery evidence.
 
   LIGHT one targeted train/CI filter plus fastgates; fixtures/fakeHOME only, no actual admin/protection changes. Independent review, ordinary guarded integration. Claude quota exhausted; implement on Codex.
-status: Approved
+status: InProgress
 priority: High
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T09:27:24.546816181Z
-modified_at: 2026-11-01T09:44:16.337575123Z
+modified_at: 2026-11-01T09:47:02.504305652Z
 req_type: Bug
 tags:
 - ci
@@ -36,6 +36,14 @@ comments:
   content: Independent Codex integrator confirmed exact failed3202 head now exposes protected Build success, all original member heads unchanged/approved/held-clear, and no live shipper. Authorized one bounded sanctioned re-train with explicit member-head assertions via existing operator terminal; new stack still needs its own exact-head required checks and forge protection. If missing-required/policy refusal repeats, stop retries until this defect fixed. No old-stack green is treated as new-stack authority.
   created_at: 2026-11-01T09:44:16.337575123Z
   modified_at: 2026-11-01T09:44:16.337575123Z
+history:
+- id: 01a19681-5be8-7f43-92cc-a5b427eacd3f
+  author: aida-session-start
+  timestamp: 2026-11-01T09:47:02.504303381Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 4ce0af750fcb68d4adf57496e4e002aefd8ace77
   branch: main
