@@ -15,7 +15,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-01T00:55:07.917269049Z
-modified_at: 2026-11-01T00:55:07.917269049Z
+modified_at: 2026-11-01T01:00:01.006565307Z
 req_type: Task
 tags:
 - config
@@ -25,6 +25,23 @@ relationships:
 - rel_type: Child
   target_id: 01a19499-932e-79f0-a3e1-1299dfe355ad
   created_at: 2026-11-01T00:55:14.620905699Z
+comments:
+- id: 01a1949e-da6e-7650-be75-1cf6c87c108c
+  author: joe
+  content: |-
+    OPERATOR DECISION 2026-10-31 (recorded by product): per-vendor explicit posture. Claude stays fully AIDA-contained; Codex runs its native sandbox by explicit opt-in until STORY-2238 lands. AC2 is REPLACED by:
+
+    AC2'. New config `[contained.vendors]`, one key per vendor, value "aida" | "native"; a vendor with no key keeps today's behaviour: refuse, BUG-2144 fail-closed. This repo sets `codex = "native"`.
+     - "native" for codex = the existing tool_contained_flags("codex") posture (`--sandbox workspace-write --ask-for-approval never`, STORY-1124 / ADR-31).
+     - Applies on every launch path BUG-2144 guards: `aida agent new codex` (interactive and --bg; refuse_uncontainable_agent_tool, lib_part2.rs) and headless queue-work implementer/reviewer children (session::require_vendor_containment / require_child_containment).
+     - Never silent: the posture is reported as "native sandbox, not AIDA-contained" by `aida config permissions show`, `aida doctor --category permission-posture`, the launch banner and the statusline. containment_applied() must NOT report a native posture as AIDA containment; model it as a tri-state (aida / native / none) so later checks can tell them apart.
+     - "native" is refused for a vendor with no native sandbox (agy, unknown tools) with a message naming the vendor.
+     - Claude regression guard: existing Claude containment tests unchanged and green; add a test that `codex = "native"` leaves Claude's flags byte-identical.
+    Strict review requested (launch posture).
+  created_at: 2026-11-01T01:00:01.006565307Z
+  modified_at: 2026-11-01T01:00:01.006565307Z
+  session_id: 01a19317-50be-7103-a820-408213c53b0b
+  harness_version: 2.1.316 (Claude Code)
 history:
 - id: 01a1949a-7ffe-78a3-8011-c5c0c44dc2d3
   author: joe
