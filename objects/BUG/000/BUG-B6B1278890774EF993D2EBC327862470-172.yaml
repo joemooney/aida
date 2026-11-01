@@ -19,7 +19,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T07:26:20.914223641Z
-modified_at: 2026-11-01T08:13:05.467239587Z
+modified_at: 2026-11-01T08:14:53.124156628Z
 req_type: Bug
 tags:
 - architecture
@@ -254,6 +254,11 @@ comments:
     The independent peer accepts the narrow adapter, own-subject transport and ADR66 residual scope under these conditions. No keyring/resolver/pre_exec redesign, no Claude changes. Strict independent implementation review remains mandatory.
   created_at: 2026-11-01T08:13:05.467239587Z
   modified_at: 2026-11-01T08:13:05.467239587Z
+- id: 01a1962c-fcc4-7093-b1ec-023c3e9572c0
+  author: joe
+  content: 'Additional HOST model-free evidence with real /home/joe Codex config, minimal PATH/HOME env and actual installed0.166 CLI: codex sandbox -P :workspace -C scratch with exact empty AIDA_SESSION_GRANT set override exited0 and reported grant_present=true, grant_empty=true. Separate synthetic empty-value probe also exited0 with keyctl available. The reported app-server socket ownership/mode failure in a nested lane is therefore not a reproduced host failure; preserve its precise cause and do not broaden global permissions to suppress it. Implementation must reproduce and distinguish environment/nesting from unsupported metadata transport.'
+  created_at: 2026-11-01T08:14:53.124156628Z
+  modified_at: 2026-11-01T08:14:53.124156628Z
 history:
 - id: 01a19600-c769-7cd0-ba08-8d93975e3e3b
   author: joe
