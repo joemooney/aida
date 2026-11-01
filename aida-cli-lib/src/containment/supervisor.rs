@@ -54,7 +54,7 @@ impl Drop for OwnedRun {
 // Each denial has a writable synthetic host-side positive control prepared
 // before confinement. No credentials, model executable or grant selector.
 const LANE: &str = r#"
-import os, json, errno, ctypes, time, fcntl, stat, sys
+import os, json, errno, time, fcntl, stat, sys
 # Metadata only: bounded counts, no payloads, paths, socket endpoints or credentials.
 def fd_metadata():
     result=[]
@@ -97,6 +97,9 @@ def denied(name, action):
     else: raise RuntimeError(name + ': unexpectedly allowed')
 def write(p):
     with open(p, 'w') as f: f.write('synthetic-write')
+if startup_fds:
+    print(json.dumps(dict(fd_diagnostic_version=1, boundary=startup_fds)), file=sys.stderr, flush=True)
+ok('exec_boundary_only_standard_fds_present', not startup_fds)
 for root in ['workspace', 'store', 'cache', 'state']:
     p='/lane/'+root+'/allowed'
     write(p)
@@ -154,10 +157,17 @@ for p in os.listdir('/proc'):
 ok('reaper_has_no_host_handles', True)
 ok('only_typed_fds_present', not fds)
 denied('inherited_fd_write', lambda: os.write(int(os.sys.argv[4]), b'escape'))
+denied('inherited_file_fd_write', lambda: os.write(int(os.sys.argv[7]), b'escape'))
+denied('inherited_directory_fd_create', lambda: os.open('fd-escape', os.O_WRONLY|os.O_CREAT, 0o600, dir_fd=int(os.sys.argv[8])))
 # Nested user namespaces are retained for native layers. They must not peel
 # off inherited protected mounts (MNT_LOCKED), even with new CAP_SYS_ADMIN.
 nested=os.fork()
 if nested==0:
+    # This worker alone needs FFI. Python 3.14/libffi static trampolines open
+    # an O_RDONLY|O_CLOEXEC library descriptor on import. Create it AFTER fork,
+    # so it never enters the admitted lane or the bwrap namespace reaper.
+    # Nothing closes or waives an inherited FD: both parent assertions stay.
+    import ctypes
     libc=ctypes.CDLL(None, use_errno=True)
     if libc.unshare(0x10000000 | 0x00020000) != 0: os._exit(10)
     os.mkdir('/tmp/nested-control')
@@ -256,6 +266,35 @@ fn run_probe_inner(timeout_fixture: bool) -> Result<Vec<String>> {
             "FD positive control"
         );
     }
+    // Seed every untyped host-handle class at the actual bwrap exec boundary,
+    // not just a socket. All payloads and paths are owned synthetic controls.
+    // trace:TASK-2705 | ai:codex
+    let host_file = std::fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .create_new(true)
+        .open(root.path().join("fd-host-file"))?;
+    let host_directory = std::fs::File::open(root.path())?;
+    unsafe {
+        anyhow::ensure!(
+            libc::write(host_file.as_raw_fd(), b"F".as_ptr().cast(), 1) == 1,
+            "host file FD positive control"
+        );
+        let control_fd = libc::openat(
+            host_directory.as_raw_fd(),
+            c"fd-directory-control".as_ptr(),
+            libc::O_WRONLY | libc::O_CREAT | libc::O_EXCL | libc::O_CLOEXEC,
+            0o600,
+        );
+        anyhow::ensure!(control_fd >= 0, "host directory FD positive control");
+        libc::close(control_fd);
+        for fd in [host_file.as_raw_fd(), host_directory.as_raw_fd()] {
+            anyhow::ensure!(
+                libc::fcntl(fd, libc::F_SETFD, 0) == 0,
+                "host handle non-CLOEXEC positive control"
+            );
+        }
+    }
     let boundary = super::filesystem::Boundary::synthetic(root.path())?;
     let mut cmd = Command::new("/usr/bin/bwrap");
     boundary.append_to(&mut cmd);
@@ -271,6 +310,8 @@ fn run_probe_inner(timeout_fixture: bool) -> Result<Vec<String>> {
                 .map(|name| Ok((name, std::fs::read_link(format!("/proc/self/ns/{name}"))?)))
                 .collect::<std::io::Result<std::collections::BTreeMap<_, _>>>()?,
         )?)
+        .arg(host_file.as_raw_fd().to_string())
+        .arg(host_directory.as_raw_fd().to_string())
         .env_clear()
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
@@ -408,12 +449,18 @@ fn run_probe_inner(timeout_fixture: bool) -> Result<Vec<String>> {
         std::fs::read_to_string(root.path().join("outside"))? == "outside-control",
         "outside control changed"
     );
+    anyhow::ensure!(
+        std::fs::read(root.path().join("fd-host-file"))? == b"F"
+            && root.path().join("fd-directory-control").is_file()
+            && !root.path().join("fd-escape").exists(),
+        "host FD controls changed"
+    );
     checks.push("host_controls_unchanged".into());
     checks.push("wrapper_reaped".into());
     let (path, identity) = namespace.context("namespace identity readiness unavailable")?;
     require_namespace_gone(&path, &identity)?;
     checks.push("namespace_init_reaped".into());
-    drop((leaked, peer));
+    drop((leaked, peer, host_file, host_directory));
     Ok(checks)
 }
 
