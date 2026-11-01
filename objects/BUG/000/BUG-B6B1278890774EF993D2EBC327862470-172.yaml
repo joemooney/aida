@@ -21,7 +21,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T07:26:20.914223641Z
-modified_at: 2026-11-01T14:55:32.414192985Z
+modified_at: 2026-11-01T14:55:34.820714016Z
 req_type: Bug
 tags:
 - architecture
@@ -439,6 +439,19 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: STRICT: effective-context and authority rework conforms; new hidden-option golden snapshot breaks required CI, and exact-newhead native host completion proof remains absent.. Triage reason: Fresh reviewer17 finds only hidden-option help snapshot regression; current-head native HOST and cleanup tests now genuinely pass. Same-PR focused fix, all floors retained.'
   created_at: 2026-11-01T14:55:32.414191261Z
   modified_at: 2026-11-01T14:55:32.414191261Z
+- id: 01a1979b-d51e-78a3-a1ea-85a8e2f86155
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-b6b1278890774ef993d2ebc327862470-172):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 2f9c56bb56bb
+    Recorded: 2026-11-01T14:29:22.103484465+00:00
+    Findings:
+    1. P2 source regression: role_cmd_args.rs adds expect-context-sha256 but cli_help_snapshot.txt omits it from the hidden-included catalog; exact-head CI41312920588 help_surface_matches_golden_snapshot FAIL at snapshot42407, required Build FAILURE. Regenerate/review intended snapshot without weakening checks.
+    2. AC3 mandatory evidence gap, not demonstrated source defect: newhead actual native fixture fails under outer mode000 app-server mask; no newhead HOST native execution proof. Old f05 HOST pass and CI nominal success with codex-unavailable early return do not satisfy independent signoff condition6. Obtain isolated exact-artifact native proof or grounded ruling; no live keys/grants or policy waiver.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-01T14:55:34.686007597Z
+  modified_at: 2026-11-01T14:55:34.686007597Z
 history:
 - id: 01a19600-c769-7cd0-ba08-8d93975e3e3b
   author: joe
