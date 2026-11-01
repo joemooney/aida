@@ -47,7 +47,7 @@ fn a_session_start_write_that_loses_the_lock_is_restored_by_the_next_prompt() {
         assert!(own_row(root).is_none(), "the session is unregistered");
     }
     let beat = heartbeat_session_agent_for(root, root, Some("sid-a"), &binary(), pid).unwrap();
-    assert_eq!(beat, Heartbeat::Reregistered);
+    assert!(matches!(beat, Heartbeat::Reregistered(_)), "{beat:?}");
     let row = own_row(root).expect("the prompt heartbeat registered the session");
     assert_eq!(row.claude_session_id.as_deref(), Some("sid-a"));
     assert!(row.ended_at.is_none());
@@ -67,7 +67,7 @@ fn a_deleted_live_row_is_back_after_the_prompt_heartbeat_with_a_newer_heartbeat(
     std::fs::remove_file(&path).unwrap();
 
     let beat = heartbeat_session_agent_for(root, root, Some("sid-b"), &binary(), pid).unwrap();
-    assert_eq!(beat, Heartbeat::Reregistered);
+    assert!(matches!(beat, Heartbeat::Reregistered(_)), "{beat:?}");
     let back = own_row(root).expect("row restored");
     assert!(back.last_active_at > first.last_active_at, "{back:?}");
     assert_eq!(back.claude_session_id.as_deref(), Some("sid-b"));
@@ -226,6 +226,91 @@ fn gc_ends_a_dead_row_at_its_last_heartbeat_not_its_start() {
     let ended = load_entries(root).remove(0).1;
     assert_eq!(ended.ended_at, Some(row.last_active_at));
     assert_ne!(ended.ended_at, Some(row.started_at));
+}
+
+// AC5, end to end: a one-prompt `claude -p` lane registers at its start and
+// never heartbeats again, then runs for hours. Its launcher ends the row at
+// the child's exit, so the recorded end is the real end, and a later gc keeps
+// it rather than rewinding it to the start.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-151.ac551a24 | ai:claude
+#[test]
+fn a_headless_lane_that_ends_hours_after_its_one_prompt_is_ended_at_its_exit() {
+    let tmp = TempDir::new().unwrap();
+    let root = tmp.path();
+    let sid = "6f1c2a43-1d2e-4b7a-9c3f-2a1b0c9d8e7f";
+    let started = Utc::now() - Duration::hours(3);
+    let mut row = recycled_row(u32::MAX - 1);
+    row.pid_start = None;
+    row.started_at = started;
+    row.last_active_at = started;
+    row.claude_session_id = Some(sid.into());
+    rewrite(root, &row);
+
+    let before_exit = Utc::now();
+    crate::session::record_headless_session_end(root, sid);
+    let ended = load_entries(root).remove(0).1;
+    let end = ended.ended_at.expect("the lane's exit ended its row");
+    assert!(
+        end >= before_exit,
+        "ended at its exit, not its start: {end}"
+    );
+    assert!(end - started >= Duration::hours(3), "{end} vs {started}");
+
+    gc_dead_agents(root, false, None).unwrap();
+    let after_gc = load_entries(root).remove(0).1;
+    assert_eq!(after_gc.ended_at, Some(end), "gc keeps the recorded end");
+}
+
+// Only the exiting lane's own live row is ended; another session's row and an
+// already-ended row are left alone.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-151.ac551a24 | ai:claude
+#[test]
+fn mark_session_ended_touches_only_the_live_row_of_that_session() {
+    let tmp = TempDir::new().unwrap();
+    let root = tmp.path();
+    let mut other = recycled_row(u32::MAX - 2);
+    other.claude_session_id = Some("other-session".into());
+    rewrite(root, &other);
+    assert_eq!(mark_session_ended(root, "lane-session").unwrap(), None);
+    assert_eq!(mark_session_ended(root, "  ").unwrap(), None);
+    let mut done = recycled_row(u32::MAX - 3);
+    done.claude_session_id = Some("lane-session".into());
+    done.ended_at = Some(done.last_active_at);
+    rewrite(root, &done);
+    assert_eq!(mark_session_ended(root, "lane-session").unwrap(), None);
+    for (_, row) in load_entries(root) {
+        let expected = (row.pid == u32::MAX - 3).then_some(done.last_active_at);
+        assert_eq!(row.ended_at, expected, "{row:?}");
+    }
+}
+
+// A row the prompt heartbeat registers stands in for the lost SessionStart
+// write: it keeps the launcher's pending mail wake and now records the
+// session's thread, which is what arming the wake needs.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-151 | ai:claude
+#[test]
+fn a_reregistered_row_keeps_the_launch_mail_wake_and_records_the_thread() {
+    let tmp = TempDir::new().unwrap();
+    let root = tmp.path();
+    let pid = std::process::id();
+    let sid = "0b6c3d1e-8f7a-4e2d-9a1b-3c4d5e6f7a8b";
+    let mut launched = touch_session_start_agent_for(root, root, None, &binary(), pid).unwrap();
+    launched.mail_wake = Some(MailWake::Pending);
+    launched.claude_session_id = None;
+    rewrite(root, &launched);
+
+    let beat = heartbeat_session_agent_for(root, root, Some(sid), &binary(), pid).unwrap();
+    let Heartbeat::Reregistered(entry) = beat else {
+        panic!("expected a re-registration, got {beat:?}");
+    };
+    assert_eq!(entry.mail_wake, Some(MailWake::Pending));
+    assert_eq!(
+        crate::mailbox_wake_run::row_thread(&entry).as_deref(),
+        Some(sid)
+    );
+    let stored = own_row(root).unwrap();
+    assert_eq!(stored.mail_wake, Some(MailWake::Pending));
+    assert_eq!(stored.claude_session_id.as_deref(), Some(sid));
 }
 
 fn grant(id: &str, holders: Vec<(u32, bool)>) -> HeldGrant {

@@ -1261,14 +1261,7 @@ pub(crate) fn notice_hook_session(
             // launch asked for. Never blocks or fails the session.
             // trace:STORY-HOME-096 | ai:claude
             if let Ok(entry) = entry {
-                let armed = crate::mail_wake::arm_pending(
-                    &project_root,
-                    &entry,
-                    crate::mailbox_wake_run::ensure_service,
-                );
-                if let Some(warning) = armed.and_then(|a| a.warning) {
-                    eprintln!("warning: {warning}");
-                }
+                arm_launch_mail_wake(&project_root, &entry);
             }
             // Hooks run outside the command sandbox, so this is where dead
             // rows get ended before a sandboxed sender counts them as
@@ -1285,15 +1278,34 @@ pub(crate) fn notice_hook_session(
                 env!("CARGO_PKG_VERSION").to_string(),
                 env!("AIDA_BUILD_GIT_SHA").to_string(),
             );
-            let _ = agent_registry::heartbeat_session_agent(
+            let beat = agent_registry::heartbeat_session_agent(
                 &project_root,
                 &worktree_root,
                 session_id.as_deref(),
                 &binary,
             );
+            // A row registered here stands in for the SessionStart write that
+            // was lost, so it gets that write's mail wake too.
+            if let Ok(agent_registry::Heartbeat::Reregistered(entry)) = beat {
+                arm_launch_mail_wake(&project_root, &entry);
+            }
         }
     }
     (session_id, is_session_start)
+}
+
+/// Arm the mail wake a session's launch asked for, now that the session's
+/// thread is on its registry row. Warns, never blocks or fails the session.
+// trace:STORY-HOME-096 BUG-B6B1278890774EF993D2EBC327862470-151 | ai:claude
+fn arm_launch_mail_wake(
+    project_root: &std::path::Path,
+    entry: &agent_registry::AgentRegistryEntry,
+) {
+    let armed =
+        crate::mail_wake::arm_pending(project_root, entry, crate::mailbox_wake_run::ensure_service);
+    if let Some(warning) = armed.and_then(|a| a.warning) {
+        eprintln!("warning: {warning}");
+    }
 }
 
 /// STORY-741: render the unified "Awaiting you" report as a first-class

@@ -975,13 +975,13 @@ fn touch_session_start_agent_for(
 
 /// What [`heartbeat_session_agent`] did.
 // trace:BUG-B6B1278890774EF993D2EBC327862470-151 | ai:claude
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum Heartbeat {
     /// The session's own row was there; its `last_active_at` is now.
     Refreshed,
     /// The session had no row of its own (a missed SessionStart write, a
-    /// row removed or replaced since): it is registered again.
-    Reregistered,
+    /// row removed or replaced since): it is registered again, as this row.
+    Reregistered(Box<AgentRegistryEntry>),
     /// No agent client is an ancestor of this hook, so there is no seat
     /// process to record.
     NoAgentProcess,
@@ -1045,8 +1045,9 @@ pub(crate) fn heartbeat_session_agent_for(
         }
         drop(lock);
     }
-    touch_session_start_agent_for(project_root, worktree_root, session_id, binary, pid)?;
-    Ok(Heartbeat::Reregistered)
+    let entry =
+        touch_session_start_agent_for(project_root, worktree_root, session_id, binary, pid)?;
+    Ok(Heartbeat::Reregistered(Box::new(entry)))
 }
 
 /// Keep the row an earlier, now-dead process left at a recycled pid's path
@@ -1659,8 +1660,39 @@ pub(crate) fn mark_agent_ended(
         Err(err) if err.kind() == std::io::ErrorKind::NotFound => return Ok(None),
         Err(err) => return Err(err).with_context(|| format!("reading {}", path.display())),
     };
-    let mut entry: AgentRegistryEntry =
+    let entry: AgentRegistryEntry =
         toml::from_str(&body).with_context(|| format!("parsing {}", path.display()))?;
+    end_entry(project_root, entry).map(Some)
+}
+
+/// End the live row of the native session `session_id` at now, if one is
+/// registered. A headless phase's launcher calls this when the child exits:
+/// the child's only heartbeats are its prompts, and a one-prompt `-p` lane
+/// would otherwise be ended by gc at its start. Matched by session id, not
+/// pid, because a wrapped child's pid is the wrapper's.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-151 | ai:claude
+pub(crate) fn mark_session_ended(
+    project_root: &Path,
+    session_id: &str,
+) -> Result<Option<AgentRegistryEntry>> {
+    let session_id = session_id.trim();
+    if session_id.is_empty() {
+        return Ok(None);
+    }
+    let Some((_, entry)) = load_active_entries(project_root)
+        .into_iter()
+        .filter(|(_, row)| row.ended_at.is_none())
+        .find(|(_, row)| {
+            row.native_session_id.as_deref() == Some(session_id)
+                || row.claude_session_id.as_deref() == Some(session_id)
+        })
+    else {
+        return Ok(None);
+    };
+    end_entry(project_root, entry).map(Some)
+}
+
+fn end_entry(project_root: &Path, mut entry: AgentRegistryEntry) -> Result<AgentRegistryEntry> {
     entry.ended_at = Some(Utc::now());
     entry.last_active_at = entry.ended_at.unwrap();
     // trace:STORY-790 | ai:claude — freeze the spec's status for the resume
@@ -1685,7 +1717,7 @@ pub(crate) fn mark_agent_ended(
         &entry,
         crate::agent_handle::LAUNCHER_LOCK_BUDGET,
     )?;
-    Ok(Some(entry))
+    Ok(entry)
 }
 
 /// Load every registry entry (alive or stale) as `(path, entry)` pairs.
