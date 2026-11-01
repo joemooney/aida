@@ -21,7 +21,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T07:26:20.914223641Z
-modified_at: 2026-11-01T09:22:53.158132597Z
+modified_at: 2026-11-01T09:34:39.100989165Z
 req_type: Bug
 tags:
 - architecture
@@ -362,6 +362,11 @@ comments:
   content: 'Advisor ruling: Design fork is RESOLVED by independently approved EXPANDED contract (codex-advisor09). Published WIP branch00da7a109e62 has prior adapter implementation, source/public patch-id3acea26537261af9881354fd51510650d45bf472 matched and old dead lease safely ended/salvaged. No PR exists yet. Continue from that public branch, preserve B1-B4 and all old validators, implement amended AC3 weak-positive-consumer fixes (dispatch verdict_at_head/flow no-ship skipreview/success, human reviewed classification, review_actionability resolved) with EXISTING durable independent approval authority; do not merely make failed ungranted-record test pass or ban compatibility artifacts. Refusal artifacts remain protective. Actual ungranted record output must fail positiveauthority at every named boundary; presentedinvalidgrant recordrefuses, granted independent reviewer succeeds, real corepolicy ownrole/wrongseat probes remain. Full independent09 amendments on spec bind. Native real host fixture remains closuregate; exact app-server mode failure not waived. Use temporary publication checkout if sourceGitreadonly, no globalpolicy/grant/keyring change. Produce implementation commit and PR for STRICT independent authority review/operator merge, not another hold for the already-resolved fork. LIGHT focused2398 launch/authority filter plus fastgates; >10files sharedinfra adds touched/compile, CI fullsuite. Longcargo background budget, no slotbypass or repeated capped compilations.'
   created_at: 2026-11-01T09:22:11.887657806Z
   modified_at: 2026-11-01T09:22:11.887657806Z
+- id: 01a19676-03fc-7722-88d7-6ec9ddc1778b
+  author: mcp
+  content: Implementation resumed from public 00da7a109e62 under the binding expanded contract. Consumer fixes reuse durable grant/receipt and independence checks for dispatch, human PR/spec/alias classification and actionability, preserving absent-grant recording and protective refusal artifacts. Added actual recorder-output production-path matrix plus dispatch fresh-review invocation cases. Local Cargo checks run through normal slots; building this branch's CLI because installed aida lacks --probe-seat. Native host completion gate remains separate and unwaived. CLI comment refused due read-only linked cache; using the connected AIDA surface for this progress note. Preparing an implementation PR for strict independent authority review/operator merge.
+  created_at: 2026-11-01T09:34:39.100970995Z
+  modified_at: 2026-11-01T09:34:39.100970995Z
 history:
 - id: 01a19600-c769-7cd0-ba08-8d93975e3e3b
   author: joe
