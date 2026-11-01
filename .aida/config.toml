@@ -85,9 +85,16 @@ allowed_hosts = [
   "github.com", "api.github.com", "objects.githubusercontent.com", "codeload.github.com",
   "gitlab.joemooney.com",
   "api.anthropic.com", "statsig.anthropic.com",
+  # trace:TASK-2631 | ai:codex — API-key and ChatGPT auth (codex-cli 0.166.0).
+  "api.openai.com", "chatgpt.com", "auth.openai.com",
   "static.crates.io", "index.crates.io", "crates.io",
   "registry.npmjs.org",
 ]
+
+# TASK-2631 / STORY-2238: explicit interim opt-in. Claude remains AIDA-contained;
+# Codex uses its native sandbox, not AIDA containment, until vendor-neutral support.
+[contained.vendors]
+codex = "native"
 
 # BUG-1180/ADR-39 informational CI allow-list. Under ADR-72 the
 # cross-platform workflow is manual-only and never runs on PRs; the glob stays

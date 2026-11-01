@@ -1440,7 +1440,7 @@ pub(crate) fn scan_permission_posture_findings(
                 summary: format!("{}: {} ({})", f.agent, f.summary, f.severity),
                 action: if vendor_refused {
                     format!(
-                        "set the default headless vendor to claude, or turn containment off; current source: {}",
+                        "set [contained.vendors] codex = \"native\" for Codex (native sandbox, not AIDA-contained), set [agents] vendor = \"claude\", or turn containment off; current source: {}",
                         f.source
                     )
                 } else {
@@ -1524,8 +1524,9 @@ pub(crate) fn permission_posture_report(project_root: &std::path::Path) -> Permi
                 id: "default-headless-vendor-refused-under-containment".to_string(),
                 agent: row_agent.to_string(),
                 summary: format!(
-                    "the default headless vendor is {}, which cannot run contained; drains are refused while containment is on",
-                    vendor.as_str()
+                    "[agents] vendor = {} cannot launch with [agents] contained / [contained] enable = true; {}",
+                    aida_core::toml_quote::toml_string(vendor.as_str()),
+                    row.net_effect
                 ),
                 source,
             });
@@ -1650,7 +1651,17 @@ fn permission_posture_for_agent(
         source: PolicySource::Default,
     });
 
-    let (tier, tier_source, flags, flags_source) = if let Some(flags) = per_tool {
+    // trace:TASK-2631 | ai:codex
+    let boundary = crate::session::containment_posture_in(project_root, agent, contained.value);
+    let native = matches!(boundary, Ok(crate::session::ContainmentPosture::Native));
+    let (tier, tier_source, flags, flags_source) = if native {
+        (
+            "native".to_string(),
+            "[contained.vendors] codex = \"native\"".to_string(),
+            display_tool_contained_flags(agent),
+            "[contained.vendors]".to_string(),
+        )
+    } else if let Some(flags) = per_tool {
         // trace:BUG-b6b1278890774ef993d2ebc327862470-028 | ai:claude
         let codex_flags = codex_flag_posture(if agent == "codex" { &flags.value } else { &[] });
         let codex_flag_sandbox = codex_flags.effective_sandbox();
@@ -1781,9 +1792,8 @@ fn permission_posture_for_agent(
     };
     // BUG-2144: only claude runs an AIDA-contained session; every other
     // vendor's launch is refused while containment is on, whatever its flags.
-    let refused_under_containment = contained.value
-        && !crate::session::HeadlessVendor::parse(agent)
-            .is_some_and(|v| crate::session::containment_applied(v, true));
+    // trace:TASK-2631 | ai:codex
+    let refused_under_containment = contained.value && boundary.is_err();
 
     if tier == "bypass" && !codex_has_workspace_table {
         findings.push(PermissionPostureFinding {
@@ -1848,7 +1858,17 @@ fn permission_posture_for_agent(
         sandboxed
     };
     let net_effect = if refused_under_containment {
-        "refused under containment (only claude runs contained); flags apply only when containment is off"
+        format!(
+            "refused under containment: {}; flags apply only when containment is off",
+            boundary
+                .as_ref()
+                .err()
+                .map(ToString::to_string)
+                .unwrap_or_default()
+        )
+    } else if native {
+        crate::session::ContainmentPosture::Native
+            .label()
             .to_string()
     } else if tier == "bypass" && agent == "codex" && !nuclear {
         format!("unsandboxed (--sandbox danger-full-access); prompts {prompts}")

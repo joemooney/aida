@@ -1,6 +1,10 @@
 //! Session/terminal/agent dispatchers, dispatch health, agent new/resume and tracked agent launch (STORY-1488 slice 1)
 // trace:STORY-1488 | ai:claude
 
+// trace:TASK-2631 | ai:codex
+#[path = "agent_codex_background.rs"]
+mod codex_background;
+
 use crate::*;
 
 // trace:STORY-1728 | ai:claude
@@ -956,6 +960,7 @@ pub(crate) fn agent_new_command_for_type(token: &str) -> Option<AgentNewCommand>
             force: false,
             cwd: None,
             bypass_sandbox: false,
+            bg: false,
             model: None,
             no_context: false,
             no_title: false,
@@ -1125,6 +1130,7 @@ pub(crate) fn dispatch_agent_new(cmd: &AgentNewCommand) -> Result<()> {
             force,
             cwd,
             bypass_sandbox,
+            bg,
             model,
             no_context,
             no_title,
@@ -1168,7 +1174,8 @@ pub(crate) fn dispatch_agent_new(cmd: &AgentNewCommand) -> Result<()> {
             ),
             // trace:STORY-B6B1278890774EF993D2EBC327862470-150 | ai:claude
             AgentDefaultFlagOptions::new(!*no_default_flags, extra_flags.clone(), model.clone())
-                .rotating(*rotate),
+                .rotating(*rotate)
+                .background(*bg),
             name.clone(),
             description.clone(),
             *no_mail_wake,
@@ -1603,6 +1610,8 @@ pub(crate) struct AgentDefaultFlagOptions {
     /// `--rotate`: supervise the child across context rotations.
     // trace:STORY-B6B1278890774EF993D2EBC327862470-101 | ai:claude
     pub(crate) rotate: bool,
+    // trace:TASK-2631 | ai:codex
+    pub(crate) background: bool,
 }
 
 impl AgentDefaultFlagOptions {
@@ -1616,7 +1625,14 @@ impl AgentDefaultFlagOptions {
             extra_flags,
             model_override,
             rotate: false,
+            background: false,
         }
+    }
+
+    // trace:TASK-2631 | ai:codex
+    pub(crate) fn background(mut self, enabled: bool) -> Self {
+        self.background = enabled;
+        self
     }
 
     /// Set `--rotate`.
@@ -1664,6 +1680,11 @@ pub(crate) fn split_posture_flags(
             ("--allow-dangerously-skip-permissions", false),
         ],
         "codex" => &[
+            // trace:TASK-2631 | ai:codex — native posture also governs CLI aliases.
+            ("-s", true),
+            ("-a", true),
+            ("--yolo", false),
+            ("--approve-for-me", false),
             ("--sandbox", true),
             ("--ask-for-approval", true),
             ("--dangerously-bypass-approvals-and-sandbox", false),
@@ -1679,6 +1700,8 @@ pub(crate) fn split_posture_flags(
         let arg = &flags[idx];
         let matched = posture.iter().find(|(name, takes_value)| {
             arg == name || (*takes_value && arg.starts_with(&format!("{name}=")))
+                // trace:TASK-2631 | ai:codex — clap accepts attached short-option values.
+                || (agent_type == "codex" && matches!(*name, "-s" | "-a") && arg.starts_with(*name))
         });
         match matched {
             Some((name, takes_value)) => {
@@ -2722,8 +2745,15 @@ pub(crate) fn agent_new_with_config_wake(
     // piped launch never rotates unless it passed `--rotate`).
     // trace:STORY-B6B1278890774EF993D2EBC327862470-101 | ai:claude
     // trace:STORY-B6B1278890774EF993D2EBC327862470-150 | ai:claude
+    // trace:TASK-2631 | ai:codex
+    let background = flag_options.background;
+    if background {
+        codex_background::validate(&config, &prompt, &resume, flag_options.rotate)?;
+        resume.prompt_enabled = false;
+    }
     let explicit_rotate = flag_options.rotate;
-    let config_rotate = flag_options.use_config_defaults
+    let config_rotate = !background
+        && flag_options.use_config_defaults
         && crate::agent_rotation::rotation_supported(config.agent_type)
         && load_agents_tool_bool(&project_root, config.agent_type, "rotate")?.unwrap_or(false);
     let mut rotate = crate::agent_rotation::rotation_enabled(
@@ -2751,6 +2781,10 @@ pub(crate) fn agent_new_with_config_wake(
         flag_options,
         explicit_permission,
     )?;
+    // trace:TASK-2631 | ai:codex
+    if background {
+        codex_background::configure_args(&mut config)?;
+    }
     // BUG-2151: a contained parent contains every child, whatever the flags.
     // Checked before any preview or side effect. trace:BUG-2151 | ai:claude
     refuse_uncontained_child_of_contained_parent(&config)?;
@@ -2865,7 +2899,7 @@ pub(crate) fn agent_new_with_config_wake(
         epic_agent_new_guard(&project_root, spec_id)?;
         // BUG-1701: a drain-groomed spec belongs in the one-shot lane, not here.
         // trace:BUG-1701 | ai:claude
-        drain_mode_agent_new_guard(&project_root, spec_id, force, true)?;
+        drain_mode_agent_new_guard(&project_root, spec_id, force, !background)?;
         focus_scope_guard_for_spec(&project_root, spec_id, force)?;
     }
 
@@ -2914,6 +2948,13 @@ pub(crate) fn agent_new_with_config_wake(
         plan.name.cyan(),
         plan.launch_cwd.display().to_string().cyan()
     );
+    // trace:TASK-2631 | ai:codex
+    if config.agent_type == "codex" {
+        eprintln!(
+            "  posture: {}",
+            resolved_agent_permission_summary(config.agent_type, &config.default_args)
+        );
+    }
     if let Some(spec) = &plan.current_spec {
         eprintln!("  {}: {}", "spec".bold(), spec.cyan());
     }
@@ -2995,17 +3036,18 @@ pub(crate) fn agent_new_with_config_wake(
     if let Some(warning) = &launch_wake.warning {
         eprintln!("  {} {warning}", "warning:".yellow().bold());
     }
-    run_tracked_agent_after_spawn(
+    run_tracked_agent_after_spawn_mode(
         &binary,
         &config,
         &plan,
         launch_context.as_ref(),
         &prompt_args,
         description,
-        title,
+        title && !background,
         verbose,
         launch_wake.state,
         rotate,
+        background,
         || {
             handle_guard.disarm();
             if let Some(receipt) = setup_receipt.as_mut() {
@@ -3218,6 +3260,13 @@ pub(crate) fn agent_new_bg_dispatch(
         plan.name.cyan(),
         plan.launch_cwd.display().to_string().cyan()
     );
+    // trace:TASK-2631 | ai:codex
+    if config.agent_type == "codex" {
+        eprintln!(
+            "  posture: {}",
+            resolved_agent_permission_summary(config.agent_type, &config.default_args)
+        );
+    }
     if let Some(spec) = &plan.current_spec {
         eprintln!("  {}: {}", "spec".bold(), spec.cyan());
     }
@@ -5837,6 +5886,11 @@ pub(crate) fn build_agent_new_bg_command(
         .current_dir(&plan.launch_cwd)
         .args(&config.default_args)
         .args(prompt_args)
+        // trace:TASK-2631 | ai:codex
+        .env(
+            "AIDA_CONTAINMENT_POSTURE",
+            agent_containment_posture(config),
+        )
         .env("AIDA_AGENT_TYPE", config.agent_type)
         .env("AIDA_AGENT_NAME", &plan.name)
         // BUG-558: the spawned agent's mailbox/queue identity (BUG-89 resolves
@@ -5939,6 +5993,11 @@ pub(crate) fn agent_launch_env_inputs(
     context_path: Option<&std::path::Path>,
 ) -> Vec<(&'static str, String)> {
     let mut out = vec![
+        // trace:TASK-2631 | ai:codex
+        (
+            "AIDA_CONTAINMENT_POSTURE",
+            agent_containment_posture(config).to_string(),
+        ),
         ("AIDA_AGENT_TYPE", config.agent_type.to_string()),
         ("AIDA_AGENT_NAME", plan.name.clone()),
         ("AIDA_USER", plan.name.clone()),
@@ -5948,6 +6007,10 @@ pub(crate) fn agent_launch_env_inputs(
             plan.role_instance.as_str().to_string(),
         ),
     ];
+    // trace:TASK-2631 | ai:codex
+    if codex_background::is_headless(config) {
+        out.push(("AIDA_HEADLESS", "1".into()));
+    }
     // trace:BUG-2006 | ai:antigravity
     if is_contained_launch(config) {
         out.push(("AIDA_CONTAINED", "1".to_string()));
@@ -6113,7 +6176,15 @@ pub(crate) fn resolved_agent_permission_summary(agent_type: &str, args: &[String
                 let sandbox = resolved_flag_value(args, "--sandbox").unwrap_or("codex default");
                 let approval =
                     resolved_flag_value(args, "--ask-for-approval").unwrap_or("codex default");
-                format!("codex sandbox={sandbox}, ask-for-approval={approval}")
+                // trace:TASK-2631 | ai:codex
+                if sandbox == "workspace-write" && approval == "never" {
+                    format!(
+                        "codex sandbox={sandbox}, ask-for-approval={approval} ({})",
+                        session::ContainmentPosture::Native.label()
+                    )
+                } else {
+                    format!("codex sandbox={sandbox}, ask-for-approval={approval}")
+                }
             }
         }
         "antigravity" => {
@@ -6183,8 +6254,7 @@ pub(crate) fn run_tracked_agent(
     )
 }
 
-// trace:BUG-2188 | ai:codex
-// why: preserves the existing launch flags while handing ownership over at spawn.
+// trace:TASK-2631 | ai:codex — preserve the foreground helper and its existing callers.
 #[allow(clippy::too_many_arguments)]
 fn run_tracked_agent_after_spawn(
     binary: &std::path::Path,
@@ -6197,6 +6267,39 @@ fn run_tracked_agent_after_spawn(
     verbose: bool,
     mail_wake: Option<agent_registry::MailWake>,
     rotate: bool,
+    on_spawn: impl FnOnce(),
+) -> Result<()> {
+    run_tracked_agent_after_spawn_mode(
+        binary,
+        config,
+        plan,
+        launch_context,
+        prompt_args,
+        description,
+        title,
+        verbose,
+        mail_wake,
+        rotate,
+        false,
+        on_spawn,
+    )
+}
+
+// trace:BUG-2188 | ai:codex
+// why: preserves the existing launch flags while handing ownership over at spawn.
+#[allow(clippy::too_many_arguments)]
+fn run_tracked_agent_after_spawn_mode(
+    binary: &std::path::Path,
+    config: &AgentLaunchConfig,
+    plan: &AgentLaunchPlan,
+    launch_context: Option<&AgentLaunchContext>,
+    prompt_args: &[String],
+    description: Option<String>,
+    title: bool,
+    verbose: bool,
+    mail_wake: Option<agent_registry::MailWake>,
+    rotate: bool,
+    background: bool,
     on_spawn: impl FnOnce(),
 ) -> Result<()> {
     // trace:STORY-B6B1278890774EF993D2EBC327862470-101 | ai:claude
@@ -6234,6 +6337,7 @@ fn run_tracked_agent_after_spawn(
             verbose,
             mail_wake,
             None,
+            background,
             on_spawn,
         )?
         .status
@@ -6371,6 +6475,7 @@ fn run_rotating_agent(
                     .map(|(path, stamp)| (path.as_path(), stamp.as_str())),
                 previous_session: previous_session.as_deref(),
             }),
+            false,
             move || {
                 if let Some(f) = first_spawn {
                     f();
@@ -6473,6 +6578,7 @@ fn run_agent_generation(
     verbose: bool,
     mail_wake: Option<agent_registry::MailWake>,
     rotation: Option<RotationEnv<'_>>,
+    background: bool,
     on_spawn: impl FnOnce(),
 ) -> Result<GenerationExit> {
     // TASK-864: route the INTERACTIVE foreground launch through the same os_wrap
@@ -6494,6 +6600,11 @@ fn run_agent_generation(
     command
         .current_dir(&plan.launch_cwd)
         .args(&exec_args)
+        // trace:TASK-2631 | ai:codex
+        .env(
+            "AIDA_CONTAINMENT_POSTURE",
+            agent_containment_posture(config),
+        )
         .env("AIDA_AGENT_TYPE", config.agent_type)
         .env("AIDA_AGENT_NAME", &plan.name)
         // BUG-558: export AIDA_USER = the stable name so the spawned agent's
@@ -6505,6 +6616,10 @@ fn run_agent_generation(
         .stdin(std::process::Stdio::inherit())
         .stdout(std::process::Stdio::inherit())
         .stderr(std::process::Stdio::inherit());
+    // trace:TASK-2631 | ai:codex
+    if codex_background::is_headless(config) {
+        command.env("AIDA_HEADLESS", "1");
+    }
     // trace:STORY-1843 | ai:claude
     crate::agent_handle::apply_launch_env(&mut command, &plan.project_root, &plan.name);
     apply_harness_version(
@@ -6584,13 +6699,24 @@ fn run_agent_generation(
     } else {
         command.env_remove("AIDA_SESSION_ROLE");
     }
+    // trace:TASK-2631 | ai:codex
+    let background_log = if background {
+        Some(codex_background::configure_command(
+            &mut command,
+            &plan.project_root,
+        )?)
+    } else {
+        None
+    };
     let mut grant_rollback = IssuedLaunchGrant::from_command(&command);
     let mut child = command
         .spawn_retrying_etxtbsy()
         .with_context(|| format!("failed to spawn {}", binary.display()))?;
     // Once spawned, the child owns its work even if registry/wait fails.
     // trace:BUG-2188 | ai:codex
-    grant_rollback.disarm();
+    if !background {
+        grant_rollback.disarm();
+    }
     on_spawn();
     let child_pid = child.id();
     // BUG-1918: this launcher made the claim; record the worker it spawned.
@@ -6638,6 +6764,60 @@ fn run_agent_generation(
     // painted over by its UI. Collect warnings and print them after the
     // child exits, where they stay on screen.
     // trace:BUG-b6b1278890774ef993d2ebc327862470-030 | ai:claude
+    // trace:TASK-2631 | ai:codex
+    if let Some(log) = background_log {
+        let accepted = codex_background::accept_child(&mut child, |pid| {
+            if let Some(grant) = grant_rollback.0.as_deref() {
+                crate::gate::seat_authority::bind_grant_to_pid(grant, pid)?;
+                if let Some(lease) = plan.lease_id.as_deref() {
+                    session::stamp_lease_child_grant_at(&plan.project_root, lease, grant)?;
+                }
+            }
+            if let Some(lease) = plan.lease_id.as_deref() {
+                session::stamp_lease_active_pid_at(&plan.project_root, lease, pid)?;
+            }
+            let entry = agent_registry::register_spawned_agent(
+                &plan.project_root,
+                config.agent_type,
+                pid,
+                plan.role.clone(),
+                plan.current_spec.clone(),
+                plan.launch_cwd.clone(),
+                Some(&binary),
+                Some(plan.name.clone()),
+                plan.native_session_id.clone(),
+                plan.resumed_from.clone(),
+                Some(format!(
+                    "{}background log: {}",
+                    description
+                        .as_deref()
+                        .map(|s| format!("{s}; "))
+                        .unwrap_or_default(),
+                    log.display()
+                )),
+            )?;
+            if let Some(state) = mail_wake {
+                stamp_launch_mail_wake(&plan.project_root, &entry, state);
+            }
+            Ok(())
+        });
+        if let Err(error) = accepted {
+            let _ =
+                agent_registry::mark_agent_ended(&plan.project_root, config.agent_type, child_pid);
+            return Err(error.context(format!("background Codex log: {}", log.display())));
+        }
+        grant_rollback.disarm();
+        eprintln!(
+            "background codex: {} (pid {child_pid}); {}",
+            plan.name,
+            resolved_agent_permission_summary("codex", &config.default_args)
+        );
+        eprintln!("  log: {}", log.display());
+        return Ok(GenerationExit {
+            status: std::process::ExitStatus::default(),
+            native_session_id: None,
+        });
+    }
     let mut deferred_warnings = Vec::new();
     let signal_forwarder = post_spawn_step(
         install_child_signal_forwarder(child_pid),
@@ -7131,3 +7311,21 @@ mod task_1806_launch_mandate_tests {
 #[cfg(test)]
 #[path = "tests/story_1741_adoption_projection_tests.rs"]
 mod story_1741_adoption_projection_tests;
+
+// trace:TASK-2631 | ai:codex
+fn agent_containment_posture(config: &AgentLaunchConfig) -> &'static str {
+    if is_contained_launch(config) {
+        "aida"
+    } else if config.agent_type == "codex"
+        && resolved_flag_value(&config.default_args, "--sandbox") == Some("workspace-write")
+        && resolved_flag_value(&config.default_args, "--ask-for-approval") == Some("never")
+        && !config
+            .default_args
+            .iter()
+            .any(|a| a == "--dangerously-bypass-approvals-and-sandbox")
+    {
+        "native"
+    } else {
+        "none"
+    }
+}

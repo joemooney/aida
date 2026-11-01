@@ -1,3 +1,10 @@
+Explicit `[contained.vendors] codex = "native"` opts Codex into its workspace-write
+sandbox with approvals disabled, reported as “native sandbox, not AIDA-contained”.
+Claude retains AIDA containment. Missing non-Claude vendor keys still refuse;
+unsupported native vendors refuse. Codex `agent new --bg` runs a detached
+`codex exec` with private logs and PID/lease/grant tracking. See OVERVIEW.md.
+<!-- trace:TASK-2631 | ai:codex -->
+
 A host-side Codex mail adapter can queue notifications to one existing thread
 without model polling. Read [setup and recovery](docs/agents/codex-mail-wake.md);
 queue acceptance and inbox acknowledgement remain distinct.

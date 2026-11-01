@@ -653,6 +653,9 @@ pub(crate) struct DoctorReport {
     // trace:STORY-1916 | ai:claude
     #[serde(skip_serializing_if = "Option::is_none")]
     disk_status: Option<crate::disk_emergency::DiskStatus>,
+    // trace:TASK-2631 | ai:codex
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    permission_postures: Vec<String>,
 }
 
 impl DoctorReport {
@@ -667,6 +670,7 @@ impl DoctorReport {
             error: None,
             runaway_seats: None,
             disk_status: None,
+            permission_postures: Vec::new(),
         }
     }
 }
@@ -1159,6 +1163,14 @@ fn doctor_multi_agent(opts: DoctorRunOptions) -> Result<()> {
     }
 
     let mut report = DoctorReport::from_findings(findings);
+    // trace:TASK-2631 | ai:codex
+    if doctor_category_selected(opts.category.as_deref(), "permission-posture")? {
+        report.permission_postures = crate::config_cmd::permission_posture_report(&project_root)
+            .agents
+            .into_iter()
+            .map(|row| format!("{}: {}", row.agent, row.net_effect))
+            .collect();
+    }
     report.performance_audits = performance_audits;
     report.runaway_seats = runaway_seats;
     report.hidden_completed_without_commit = hidden_completed_without_commit;
@@ -7565,6 +7577,15 @@ fn doctor_render_mode(json_flag: bool) -> DoctorRenderMode {
 pub(crate) fn render_doctor_report_toon(report: &DoctorReport) -> String {
     use crate::toon::{error_block, scalar, table_raw};
     let mut blocks = vec![scalar("total", &report.total.to_string())];
+    // trace:TASK-2631 | ai:codex
+    if !report.permission_postures.is_empty() {
+        let rows = report
+            .permission_postures
+            .iter()
+            .map(|p| vec![p.clone()])
+            .collect::<Vec<_>>();
+        blocks.push(table_raw("permission_postures", &["posture"], &rows));
+    }
     if report.hidden_completed_without_commit != 0 {
         blocks.push(scalar(
             "hidden_completed_without_commit",
@@ -7796,6 +7817,10 @@ fn emit_doctor_report(
 
 fn render_doctor_report(report: &DoctorReport, healed: bool) -> Result<()> {
     println!("{}", "─── AIDA doctor ───".bold());
+    // trace:TASK-2631 | ai:codex
+    for posture in &report.permission_postures {
+        println!("  {posture}");
+    }
     if report.findings.is_empty() && report.hidden_completed_without_commit == 0 {
         println!(
             "  {} no multi-agent state drift detected",

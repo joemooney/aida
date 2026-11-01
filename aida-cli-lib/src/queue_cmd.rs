@@ -13418,7 +13418,8 @@ pub(crate) fn handle_queue_work(
                 &project_root,
                 &crate::canonical_role_name(&role),
                 &crate::current_user_id(None),
-                contained,
+                // trace:TASK-2631 | ai:codex
+                session::containment_applied(launch_vendor, contained),
             )?;
             child_grant_id = Some(child_grant.id);
         } else if matches!(launch, QueueWorkLaunch::Fresh(_)) {
@@ -13431,7 +13432,8 @@ pub(crate) fn handle_queue_work(
                 &project_root,
                 &seat,
                 &crate::current_user_id(None),
-                contained,
+                // trace:TASK-2631 | ai:codex
+                session::containment_applied(launch_vendor, contained),
             )?;
             match &grant {
                 crate::gate::seat_authority::HeadlessChildGrant::Issued(issued) => {

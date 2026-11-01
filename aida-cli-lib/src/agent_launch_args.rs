@@ -1259,6 +1259,12 @@ pub enum AgentNewCommand {
         #[clap(long)]
         bypass_sandbox: bool,
 
+        /// Run a detached, tracked `codex exec` process. Output is saved to a private
+        /// log under .aida/headless-logs. Uses native sandboxing, not AIDA containment.
+        // trace:TASK-2631 | ai:codex
+        #[clap(long, conflicts_with_all = ["rotate", "resume", "no_prompt"])]
+        bg: bool,
+
         /// Opaque Codex model name passed through as `codex --model`.
         /// Overrides `[agents.codex] model`; AIDA does not validate it.
         // trace:STORY-1003 | ai:codex

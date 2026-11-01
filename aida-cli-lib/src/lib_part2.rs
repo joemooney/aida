@@ -677,23 +677,23 @@ mod story_49_store_drift_tests;
 // trace:STORY-432 | ai:codex
 // ----------------------------------------------------------------------------
 
-/// BUG-2144: refuse an `aida agent new <tool>` launch under `[agents]
-/// contained` when `<tool>` cannot run an AIDA-contained session (only Claude
-/// can) — the same rule the drain applies via
-/// [`session::require_vendor_containment`].
-// trace:BUG-2144 | ai:claude
+/// Runtime vendor refusal shared by headless preflight and the agent-tool guard.
+/// Native is accepted only by explicit project policy; it grants no AIDA containment.
+// trace:TASK-2631 | ai:codex
 pub(crate) fn refuse_uncontainable_agent_tool(agent_type: &str) -> Result<()> {
-    let containable = session::HeadlessVendor::parse(agent_type)
-        .is_some_and(|v| session::containment_applied(v, true));
-    if !containable {
-        anyhow::bail!(
-            "[contained] containment is on ([agents] contained / [contained] enable), but \
-             `{agent_type}` cannot run an AIDA-contained session — refusing to launch it \
-             uncontained. Launch `aida agent new claude`, or turn containment off for this \
-             project."
-        );
+    if let Some(vendor) = session::HeadlessVendor::parse(agent_type) {
+        session::containment_posture(vendor, true)?;
+        return Ok(());
     }
-    Ok(())
+    anyhow::bail!("`{agent_type}` cannot run an AIDA-contained session — refusing to launch it uncontained; use --vendor claude")
+}
+
+// trace:TASK-2631 | ai:codex
+fn refuse_uncontainable_agent_tool_at(
+    agent_type: &str,
+    root: &std::path::Path,
+) -> Result<session::ContainmentPosture> {
+    session::containment_posture_in(root, agent_type, true)
 }
 
 pub(crate) fn apply_agent_default_flags(
@@ -707,11 +707,39 @@ pub(crate) fn apply_agent_default_flags(
     // BUG-1699 posture split, so a widening default is refused, not dropped.
     // trace:BUG-2158 | ai:claude
     let contained_claude_parent = config.agent_type == "claude" && session::aida_contained_env()?;
+    // trace:TASK-2631 | ai:codex — generated explicit Claude containment stays AIDA-only.
+    if config.contained {
+        refuse_uncontainable_agent_tool_at(config.agent_type, project_root)?;
+    }
     if contained_claude_parent {
         refuse_unallowlisted_contained_passthrough(&flag_options.extra_flags, "--extra-flag")?;
     }
     if flag_options.use_config_defaults {
-        let per_tool = load_agent_default_flags(project_root, config.agent_type)?;
+        let mut per_tool = load_agent_default_flags(project_root, config.agent_type)?;
+        // trace:TASK-2631 | ai:codex
+        let native = !explicit_permission
+            && load_agents_contained(project_root)?
+            && refuse_uncontainable_agent_tool_at(config.agent_type, project_root)?
+                == session::ContainmentPosture::Native;
+        if native {
+            let (_, posture) =
+                split_posture_flags(config.agent_type, flag_options.extra_flags.clone());
+            if !posture.is_empty() {
+                anyhow::bail!("native sandbox, not AIDA-contained: drop conflicting --extra-flag posture options: {}", posture.join(" "));
+            }
+            if load_agents_bypass(project_root)? {
+                anyhow::bail!(
+                    "[agents] bypass and [agents] contained are mutually exclusive launch postures"
+                );
+            }
+            per_tool = split_posture_flags(config.agent_type, per_tool).0;
+            config.default_args =
+                split_posture_flags(config.agent_type, std::mem::take(&mut config.default_args)).0;
+            config
+                .default_args
+                .extend(tool_contained_flags(config.agent_type)?);
+            config.contained = false;
+        }
         if contained_claude_parent {
             refuse_unallowlisted_contained_passthrough(
                 &per_tool,
@@ -725,19 +753,10 @@ pub(crate) fn apply_agent_default_flags(
         // precedence over the uniform knob (TASK-557 raw passthrough). A
         // `--no-default-flags` launch skips this block entirely (agents.toml
         // is never read), so it lands on the faithful native default.
-        // BUG-2144 (advisor ruling, #2665 review): containment is monotonic on
-        // the interactive `agent new` path too. `[agents] contained` on a
-        // vendor that cannot run an AIDA-contained session (codex: its own
-        // `--sandbox workspace-write` is not AIDA containment; agy; any other
-        // tool) is REFUSED here — before any side effect, and before the
-        // `--no-exec` preview renders — never downgraded to a native launch.
-        // Per-tool `default_flags` do not bypass this; only an explicit
-        // launch-posture flag on the command line does (operator override).
-        // trace:BUG-2144 | ai:claude
-        if !explicit_permission && load_agents_contained(project_root)? {
-            refuse_uncontainable_agent_tool(config.agent_type)?;
-        }
-        if !explicit_permission && per_tool.is_empty() {
+        // trace:TASK-2631 | ai:codex
+        // The root-aware refusal above preserves BUG-2144 for absent keys.
+        // Native Codex has already received its explicit sandbox posture.
+        if !explicit_permission && per_tool.is_empty() && !native {
             let bypass = load_agents_bypass(project_root)?;
             let contained = load_agents_contained(project_root)?;
             if bypass && contained {

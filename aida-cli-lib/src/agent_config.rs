@@ -594,3 +594,40 @@ pub(crate) fn read_agents_bool_from_file(
         ),
     }
 }
+
+/// Explicit per-vendor boundary in project config; absence preserves legacy refusal.
+// trace:TASK-2631 | ai:codex
+pub(crate) fn load_contained_vendor(
+    root: &std::path::Path,
+    vendor: &str,
+) -> Result<Option<String>> {
+    let path = config_path_for_project(root);
+    let body = match std::fs::read_to_string(&path) {
+        Ok(body) => body,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(e) => return Err(e).with_context(|| format!("reading {}", path.display())),
+    };
+    let cfg: toml::Value =
+        toml::from_str(&body).with_context(|| format!("parsing {}", path.display()))?;
+    let Some(vendors) = cfg.get("contained").and_then(|v| v.get("vendors")) else {
+        return Ok(None);
+    };
+    let table = vendors.as_table().ok_or_else(|| {
+        anyhow::anyhow!("[contained.vendors] in {} must be a table", path.display())
+    })?;
+    let key = if vendor == "antigravity" {
+        "agy"
+    } else {
+        vendor
+    };
+    table
+        .get(key)
+        .map(|value| match value.as_str() {
+            Some(value @ ("aida" | "native")) => Ok(value.to_string()),
+            _ => anyhow::bail!(
+                "[contained.vendors] {key} in {} must be \"aida\" or \"native\"",
+                path.display()
+            ),
+        })
+        .transpose()
+}
