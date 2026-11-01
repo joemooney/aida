@@ -1,0 +1,18 @@
+{
+  "id": "deputy-default-01a1948e-101a-7ac3-b020-97405032caa3",
+  "thread_id": "deputy-01a1948e-101a-7ac3-b020-97405032caa3",
+  "from": "deputy:default",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-implementer-537"
+  },
+  "timestamp": 1793493700936,
+  "body": "Deputy \"default\" finished job 01a1948e-101a-7ac3-b020-97405032caa3: rc 0 (ok).\nCommand: aida --version\nOutput: /home/joe/ai/aida/.aida/deputy/default/out/01a1948e-101a-7ac3-b020-97405032caa3.out\nRead it with `aida deputy log 01a1948e-101a-7ac3-b020-97405032caa3`.\n",
+  "subject": "deputy job 01a1948e done: rc 0",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}
