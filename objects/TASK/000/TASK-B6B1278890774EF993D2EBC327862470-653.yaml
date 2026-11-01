@@ -28,7 +28,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-01T06:49:40.328147102Z
-modified_at: 2026-11-01T08:13:10.830731181Z
+modified_at: 2026-11-01T15:25:59.862184354Z
 req_type: Task
 tags:
 - audit
@@ -65,6 +65,12 @@ comments:
   content: 'PROXY DECISION: approve final evidence-based parity/documentation/publication sweep. This is the closure audit for EPIC612, not permission to assert hoped-for parity. Every cell and public contained Codex loop claim requires the corresponding merged behavior and a real Codex-only Linux loop; record exact revisions/probes, preserve limitations until proven. Sequence after STORY2238/2254/2255/2256 and portable-skills fixes; publish only reviewed merged snapshots. Fixtures/build/link checks only for docs. Final acceptance cannot pass while any named runtime path is unsupported.'
   created_at: 2026-11-01T08:12:44.145974130Z
   modified_at: 2026-11-01T08:12:44.145974130Z
+- id: 01a197b7-aeb6-7083-92f0-2b8ce5f89807
+  author: joe
+  content: |
+    PROXY COORDINATION: assigned live agy1 a bounded read-only documentation evidence/edit-checklist preparation, following Joe's explicit request for agy1 work. Pin actual current merged main (6a3f6767 at assignment), refresh only this task's named parity/integrations/drain claims against source and receipts, distinguish alreadymerged TASK2631/BUG2388/BUG2392 from remaining runtime gates, and map final AC2 smoke receipts. Full task stays BLOCKED; no production docs/code edit, queue/status change, PR/push, unsupported parity claim, Cargo, live auth/model/user-state probes or new timer authorized. Deliver /tmp/aida-agy1-task2690-evidence.md and optional own-authority PREPARATION comment, 4–8KB concrete matrix/checklist. This is not another broad SPIKE710 audit or a claim the task is implemented. Root waits for actual agy reply before claiming the work started.
+  created_at: 2026-11-01T15:25:59.862184354Z
+  modified_at: 2026-11-01T15:25:59.862184354Z
 history:
 - id: 01a195df-5d92-77b3-ab1d-b81203c3f5c3
   author: joe
