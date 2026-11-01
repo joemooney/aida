@@ -40,6 +40,28 @@ def inline(text):
     return text
 
 
+def graphic_description(graphic_path, fallback):
+    """Alt text for an SVG asset: its <title> and <desc>, else the fallback."""
+    svg = ET.fromstring(graphic_path.read_text())
+    # trace:TASK-HOME-128 | ai:codex
+    description = '. '.join(' '.join(node.itertext()).strip().rstrip('.')
+                           for tag in ('title', 'desc')
+                           for node in svg.findall('{http://www.w3.org/2000/svg}' + tag))
+    return description + '.' if description else fallback
+
+
+def figure(graphic_path, fallback):
+    description = graphic_description(graphic_path, fallback)
+    return f'<figure><img class="guide-graphic" src="assets/{graphic_path.name}" alt="{html.escape(description, quote=True)}"></figure>'
+
+
+# trace:TASK-B6B1278890774EF993D2EBC327862470-277 | ai:claude
+# A line holding only `![label](showcase/assets/<name>.svg)` places that
+# diagram in the page body. The path is relative to docs/, so the Markdown
+# source also renders the image when read on the forge.
+FIGURE = re.compile(r'^!\[([^\]]+)\]\(showcase/assets/([a-z0-9-]+\.svg)\)$')
+
+
 def render(source):
     output, paragraph, listing, code, slugs = [], [], None, None, set()
     def flush():
@@ -64,6 +86,16 @@ def render(source):
             code.append(line); continue
         if line.startswith('<!--'):
             continue
+        image = FIGURE.match(line)
+        if image:
+            flush(); close_list()
+            graphic_path = SITE / 'assets' / image[2]
+            if not graphic_path.is_file():
+                raise ValueError('Missing figure asset: ' + image[2])
+            output.append(figure(graphic_path, image[1]))
+            continue
+        if line.startswith('!['):
+            raise ValueError('Figures must be a whole line naming showcase/assets/<name>.svg: ' + line)
         heading = re.match(r'^(#{1,6}) (.+)$', line)
         item = re.match(r'^[-*] (.+)$', line)
         if not line.strip() or heading or item or line.startswith('> '):
@@ -111,6 +143,7 @@ def render_outputs():
         subprocess.run(['git', 'ls-files', '--error-unmatch', '--', str(source_path.relative_to(ROOT))], cwd=ROOT, check=True, stdout=subprocess.DEVNULL)
         content = source_path.read_text()
         text = re.sub(r'<!--.*?-->', '', content, flags=re.S)
+        text = re.sub(r'^!\[([^\]]+)\]\([^\s)]+\)$', r'\1', text, flags=re.M)
         text = re.sub(r'\[([^\]]+)\]\([^\s)]+\)', r'\1', text)
         text = re.sub(r'^#{1,6} ', '', text, flags=re.M)
         text = re.sub(r'^> ?', '', text, flags=re.M)
@@ -121,13 +154,7 @@ def render_outputs():
         graphic_path = SITE / 'assets' / (Path(output).stem + '.svg')
         graphic = ''
         if graphic_path.exists():
-            svg = ET.fromstring(graphic_path.read_text())
-            # trace:TASK-HOME-128 | ai:codex
-            description = '. '.join(' '.join(node.itertext()).strip().rstrip('.')
-                                   for tag in ('title', 'desc')
-                                   for node in svg.findall('{http://www.w3.org/2000/svg}' + tag))
-            description = description + '.' if description else title
-            graphic = f'<figure><img class="guide-graphic" src="assets/{graphic_path.name}" alt="{html.escape(description, quote=True)}"></figure>'
+            graphic = figure(graphic_path, title)
         interactive = ''
         scripts = ''
         # trace:TASK-B6B1278890774EF993D2EBC327862470-109 | ai:codex

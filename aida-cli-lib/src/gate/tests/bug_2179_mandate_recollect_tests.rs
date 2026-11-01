@@ -23,7 +23,7 @@ fn snapshots(versions: Vec<Option<u32>>) -> impl FnMut() -> Result<Option<u32>, 
     }
 }
 
-fn equal(a: &u32, b: &u32) -> bool {
+fn equal<T>(a: &u32, b: &u32, _: &T) -> bool {
     a == b
 }
 
@@ -96,7 +96,7 @@ fn snapshots_the_rule_calls_stable_keep_the_first_collection() {
     let collections = Cell::new(0u32);
     let out = collect_on_stable_store(
         snapshots(vec![Some(1), Some(2)]),
-        |_, _| true,
+        |_, _, _| true,
         || {
             collections.set(collections.get() + 1);
             collections.get()
@@ -173,4 +173,26 @@ fn a_store_dirty_on_every_attempt_refuses_after_the_bound() {
         }
         other => panic!("expected a TraceEvidenceUnreadable refusal, got {other:?}"),
     }
+}
+
+/// BUG-056: `stable` judges the snapshots against what was collected, so a
+/// collection whose evidence the change did not touch is kept even though the
+/// snapshots differ, and one whose evidence it touched is re-collected.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-056 | ai:claude
+#[test]
+fn bug_056_stability_is_judged_against_the_collected_evidence() {
+    let collections = Cell::new(0u32);
+    // The first collection read evidence 1, which the 1 -> 2 change touched
+    // (odd collections are "touched"); the second is untouched by 2 -> 3.
+    let out = collect_on_stable_store(
+        snapshots(vec![Some(1), Some(2), Some(2), Some(3)]),
+        |_, _, collected: &u32| collected % 2 == 0,
+        || {
+            collections.set(collections.get() + 1);
+            collections.get()
+        },
+        Duration::ZERO,
+    );
+    assert_eq!(out.ok(), Some(2));
+    assert_eq!(collections.get(), 2);
 }
