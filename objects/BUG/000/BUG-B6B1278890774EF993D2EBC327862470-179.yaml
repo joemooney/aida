@@ -16,12 +16,12 @@ description: |
   2. Restore the EXISTING approved train carry-over contract through typed, provenance-preserving, bounded normal wiring. No raw ledger/projection edits, copied/restamped source signatures, arbitrary skip-review flag, weakened standalone current-head gate or trust in human-editable member-line alone. Preserve all member approval/authorship/hold/mandate/supervision/drive/CI/current-main and normal merge lease checks. Independent sketch/signoff before authority/gate code.
   3. Prove refusal for forged/manual manifests, changed patches or member heads, moved main, conflicting/non-authorized source reviews and holds; preserve current record-time authority semantics. Match positive evidence to actual normal final merge boundary.
   4. One focused approval/ledger/train regression plus fast gate; shared test infrastructure or >10 changedfiles adds touched/compile; fullsuiteCI, no slotbypass/outertimeout/blindrebuilds. Fresh independent strict review. Do not reopen/rewrite PR3212, change existing ledger events or manually approve its rewritten head. Validate a new ordinary train only after normal reviewed fix is live.
-status: Approved
+status: InProgress
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T19:40:25.090169463Z
-modified_at: 2026-11-01T23:31:13.288140423Z
+modified_at: 2026-11-01T23:33:22.826354809Z
 req_type: Bug
 tags:
 - architecture
@@ -84,6 +84,13 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
+- id: 01a19975-e50a-7541-be36-4ae6c3ff249c
+  author: aida-session-start
+  timestamp: 2026-11-01T23:33:22.826352033Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 6a3f67671a974703590efde5ae2a323f3f7471fa
   branch: main
