@@ -22,7 +22,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T06:30:56.167167026Z
-modified_at: 2026-11-01T23:05:37.973807734Z
+modified_at: 2026-11-01T23:42:28.450486154Z
 req_type: Bug
 tags:
 - area:ship
@@ -86,6 +86,12 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
+- id: 01a1997e-3992-7a21-a093-bc141cbe5608
+  author: joe
+  timestamp: 2026-11-01T23:42:28.754768146Z
+  session_id: 126bbd5a-a92f-452b-ab0b-2637a1db42c2
+  changes: []
+execution_mode: drain
 filed_at:
   code_sha: 962ca07af25ca4de3426bdd951fb2d6782568184
   branch: main
