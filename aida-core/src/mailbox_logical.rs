@@ -380,6 +380,140 @@ impl ResolvedAudience {
     }
 }
 
+// trace:BUG-b6b1278890774ef993d2ebc327862470-178 | ai:codex
+// Private policy input shared by own-reader and diagnostic paths. This type
+// cannot be passed to ACK, binding, or any identity constructor.
+struct PolicySubject<'a> {
+    private: &'a [String],
+    human: &'a [String],
+    shared: &'a [String],
+    roles: &'a [String],
+    recipient: Option<&'a RecipientUuid>,
+}
+impl<'a> PolicySubject<'a> {
+    fn own(a: &'a ResolvedAudience) -> Self {
+        Self {
+            private: &a.private,
+            human: &a.human,
+            shared: &a.shared,
+            roles: &a.roles,
+            recipient: a.recipient(),
+        }
+    }
+    fn keys(&self) -> impl Iterator<Item = &str> {
+        self.private
+            .iter()
+            .chain(self.human)
+            .chain(self.shared)
+            .map(String::as_str)
+    }
+    fn matching_keys(&self, m: &Message) -> Vec<&str> {
+        self.keys().filter(|k| m.addressed_to(k)).collect()
+    }
+    fn sent_by_own(&self, m: &Message) -> bool {
+        self.private.contains(&m.from)
+    }
+    fn role_keys(&self) -> &[String] {
+        self.roles
+    }
+    fn recipient(&self) -> Option<&RecipientUuid> {
+        self.recipient
+    }
+}
+
+/// Read-only diagnostic state, deliberately separate from ACK evidence.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum InspectionState {
+    Unread,
+    Acknowledged,
+    ReadLegacy,
+    Pending,
+}
+
+/// Minimal routing metadata; contains no payload, delivery record, or ACK basis.
+#[derive(Debug)]
+pub struct InspectionRecord {
+    pub id: String,
+    pub to: Recipient,
+    pub from: String,
+    pub timestamp: i64,
+    pub intent: crate::mailbox::Intent,
+    pub subject: String,
+    pub state: InspectionState,
+}
+
+/// Absence is conclusive only when complete and no local unknown IDs remain.
+#[derive(Debug)]
+pub struct MailInspection {
+    pub records: Vec<InspectionRecord>,
+    pub unknown_ids: Vec<String>,
+    pub complete: bool,
+}
+
+/// Source coverage when there are no verified live inspection subjects.
+/// Even an empty recipient directory cannot turn an unreadable source clear.
+pub fn inspection_sources_complete(ctx: &MailboxContext, limits: &ReadLimits) -> bool {
+    let policy = PolicySubject {
+        private: &[],
+        human: &[],
+        shared: &[],
+        roles: &[],
+        recipient: None,
+    };
+    snapshot_for_policy(ctx, &policy, &Query::Inbox, limits)
+        .0
+        .complete()
+}
+
+/// Observe delivery eligibility using exactly the own-inbox policy, without
+/// constructing the subject's audience or exposing its bodies or ACK plan.
+pub fn inspect_mail(
+    ctx: &MailboxContext,
+    subject: &crate::mailbox_identity::InspectionSubject,
+    limits: &ReadLimits,
+) -> MailInspection {
+    let private = vec![subject.handle.clone()];
+    let policy = PolicySubject {
+        private: &private,
+        human: &[],
+        shared: &subject.role,
+        roles: &subject.role,
+        recipient: Some(&subject.recipient),
+    };
+    let (snapshot, unknown_ids, pending) = snapshot_for_policy(ctx, &policy, &Query::Inbox, limits);
+    let complete = snapshot.complete();
+    let project = |m: &Message, state| InspectionRecord {
+        id: m.id.clone(),
+        to: m.to.clone(),
+        from: m.from.clone(),
+        timestamp: m.timestamp,
+        intent: m.intent,
+        subject: crate::mailbox::subject_line(m, 80),
+        state,
+    };
+    let mut records = snapshot
+        .records
+        .iter()
+        .filter(|r| !r.message.archived && !unknown_ids.contains(&r.message.id))
+        .map(|r| {
+            project(
+                &r.message,
+                match r.read {
+                    ReadEvidence::Unread => InspectionState::Unread,
+                    ReadEvidence::Acknowledged { .. } => InspectionState::Acknowledged,
+                    ReadEvidence::LegacyWatermark { .. } => InspectionState::ReadLegacy,
+                },
+            )
+        })
+        .collect::<Vec<_>>();
+    records.extend(pending.iter().map(|m| project(m, InspectionState::Pending)));
+    MailInspection {
+        records,
+        unknown_ids,
+        complete,
+    }
+}
+
 /// What the snapshot is asked for.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Query {
@@ -702,6 +836,10 @@ pub struct LogicalSnapshot {
     pub anchor_error: Option<SourceErrorCode>,
     /// Queued role deliveries this reader may bind (slice D1).
     pub pending_deliveries: Vec<PendingDelivery>,
+    /// Diagnostic-only local unknowns. These preserve the established own-reader
+    /// complete/ACK contract; inspection must not treat them as cleared mail.
+    // trace:BUG-b6b1278890774ef993d2ebc327862470-178 | ai:codex
+    pub inspection_unknown_ids: Vec<String>,
 }
 
 impl LogicalSnapshot {
@@ -806,6 +944,16 @@ pub fn logical_snapshot(
     query: &Query,
     limits: &ReadLimits,
 ) -> LogicalSnapshot {
+    snapshot_for_policy(ctx, &PolicySubject::own(audience), query, limits).0
+}
+
+// trace:BUG-b6b1278890774ef993d2ebc327862470-178 | ai:codex
+fn snapshot_for_policy(
+    ctx: &MailboxContext,
+    audience: &PolicySubject<'_>,
+    query: &Query,
+    limits: &ReadLimits,
+) -> (LogicalSnapshot, Vec<String>, Vec<Message>) {
     let observed_at_ms = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map_or(0, |d| d.as_millis() as i64);
@@ -876,7 +1024,7 @@ pub fn logical_snapshot(
         Query::Thread(want) => thread == want,
     };
     let mut anchor = AnchorEvidence::new(ctx.repository.as_ref().map(|r| r.path()));
-    let (delivered, pending_deliveries, delivery_conflicts) = delivery_gates(
+    let (delivered, pending_deliveries, delivery_conflicts, mut unknown_ids) = delivery_gates(
         ctx,
         &observed,
         salvaged,
@@ -900,6 +1048,25 @@ pub fn logical_snapshot(
         .map(|(id, _)| id)
         .collect();
 
+    let pending_ids: HashSet<&str> = pending_deliveries
+        .iter()
+        .map(|p| p.message_id.as_str())
+        .collect();
+    let pending_gates = delivered
+        .iter()
+        .filter(|(id, _)| !pending_ids.contains(id.as_str()))
+        .map(|(id, gate)| (id.clone(), gate.clone()))
+        .collect();
+    let (pending_records, _) = if pending_ids.is_empty() {
+        (Vec::new(), Vec::new())
+    } else {
+        reconcile(&observed, local_count, audience, false, &pending_gates)
+    };
+    let pending_messages = pending_records
+        .into_iter()
+        .filter(|(m, _)| pending_ids.contains(m.id.as_str()) && !m.archived)
+        .map(|(m, _)| m)
+        .collect();
     let mut receipts = ReceiptCache::default();
     let mut out_records = Vec::with_capacity(records.len());
     for (mut message, provenance) in records {
@@ -921,6 +1088,7 @@ pub fn logical_snapshot(
                 .map(str::to_string)
                 .collect(),
         };
+        let mut receipt_unknown = false;
         let read = read_evidence(
             &message,
             &keys,
@@ -931,7 +1099,11 @@ pub fn logical_snapshot(
             &mut receipts,
             &mut anchor,
             &mut budget,
+            &mut receipt_unknown,
         );
+        if receipt_unknown && !matches!(read, ReadEvidence::Acknowledged { .. }) {
+            unknown_ids.push(message.id.clone());
+        }
         if message.retracted {
             message.body.clear();
             message.subject = None;
@@ -955,6 +1127,7 @@ pub fn logical_snapshot(
         retention: RetentionCoverage::Unestablished,
         exact_found: None,
         anchor_error: anchor.error,
+        inspection_unknown_ids: unknown_ids.clone(),
         pending_deliveries: pending_deliveries
             .into_iter()
             .filter(|_| matches!(query, Query::Inbox | Query::Addressable))
@@ -965,7 +1138,7 @@ pub fn logical_snapshot(
             || snapshot.conflicts.iter().any(|c| c == id);
         snapshot.exact_found = (found || snapshot.complete()).then_some(found);
     }
-    snapshot
+    (snapshot, unknown_ids, pending_messages)
 }
 
 /// The outcome of one exact per-ID receipt lookup across every inventoried
@@ -1858,18 +2031,20 @@ enum DeliveryGate {
 /// hidden from every reader of this snapshot, never served as legacy role
 /// mail. Vendor-group mail never carries a sidecar and is never gated.
 // trace:STORY-1843 | ai:claude
+// trace:BUG-b6b1278890774ef993d2ebc327862470-178 | ai:codex
 fn delivery_gates(
     ctx: &MailboxContext,
     observed: &[Option<ObservedSource>],
     salvaged: Vec<DeliverySidecar>,
     unsighted: bool,
-    audience: &ResolvedAudience,
+    audience: &PolicySubject<'_>,
     anchor: &mut AnchorEvidence,
     budget: &mut Budget,
 ) -> (
     HashMap<String, DeliveryGate>,
     Vec<PendingDelivery>,
     Conflicts,
+    Vec<String>,
 ) {
     let mut sidecars: BTreeMap<String, Vec<DeliverySidecar>> = BTreeMap::new();
     let mut handovers: HashMap<&str, Vec<&DeliveryRecord>> = HashMap::new();
@@ -1916,6 +2091,7 @@ fn delivery_gates(
             }
         }
     }
+    let mut unknown_ids = BTreeSet::new();
     let mut gates = HashMap::new();
     let wanted: Vec<&str> = role_addressed
         .into_iter()
@@ -1931,6 +2107,7 @@ fn delivery_gates(
                         }
                         Ok(_) => {}
                         Err(()) => {
+                            unknown_ids.insert(id.to_string());
                             gates.insert(id.to_string(), DeliveryGate::NotOwned);
                         }
                     }
@@ -1939,6 +2116,7 @@ fn delivery_gates(
             Err(code) => {
                 anchor.error.get_or_insert(code);
                 for &id in &wanted {
+                    unknown_ids.insert(id.to_string());
                     gates.insert(id.to_string(), DeliveryGate::NotOwned);
                 }
             }
@@ -1946,6 +2124,7 @@ fn delivery_gates(
     }
     if unsighted {
         for id in wanted.into_iter().filter(|id| !sidecars.contains_key(*id)) {
+            unknown_ids.insert(id.to_string());
             gates.insert(id.to_string(), DeliveryGate::NotOwned);
         }
     }
@@ -1975,6 +2154,9 @@ fn delivery_gates(
                 Err(_) => unknown = true,
             }
         }
+        if unknown {
+            unknown_ids.insert(id.to_string());
+        }
         let handed = valid_handovers(sidecar, handovers.get(id).map(Vec::as_slice));
         let owned = audience
             .recipient()
@@ -1999,7 +2181,7 @@ fn delivery_gates(
         };
         gates.insert(id.to_string(), gate);
     }
-    (gates, pending, conflicts)
+    (gates, pending, conflicts, unknown_ids.into_iter().collect())
 }
 
 /// Where retired sources' mailboxes are kept, below the common Git dir:
@@ -2342,7 +2524,7 @@ type Conflicts = Vec<(String, BTreeSet<String>)>;
 fn reconcile(
     observed: &[Option<ObservedSource>],
     local_count: usize,
-    audience: &ResolvedAudience,
+    audience: &PolicySubject<'_>,
     include_own_sent: bool,
     delivered: &HashMap<String, DeliveryGate>,
 ) -> (Vec<(Message, Vec<Provenance>)>, Conflicts) {
@@ -2479,6 +2661,7 @@ fn key_evidence(
 /// Unreadable receipt evidence, or a deadline reached mid-lookup, marks that
 /// source as errored.
 #[allow(clippy::too_many_arguments)]
+// trace:BUG-b6b1278890774ef993d2ebc327862470-178 | ai:codex
 fn read_evidence(
     message: &Message,
     keys: &[String],
@@ -2489,6 +2672,7 @@ fn read_evidence(
     cache: &mut ReceiptCache,
     anchor: &mut AnchorEvidence,
     budget: &mut Budget,
+    unknown: &mut bool,
 ) -> ReadEvidence {
     let keys: Vec<&str> = keys.iter().map(String::as_str).collect();
     let mut anchored = None;
@@ -2501,6 +2685,7 @@ fn read_evidence(
             None => every_key = false,
         }
     }
+    *unknown |= keys.iter().any(|key| anchor.failed_keys.contains(*key));
     if let (true, Some((key, (at, legacy)))) = (every_key, anchored) {
         return ReadEvidence::Acknowledged {
             origin: AckOrigin::Anchor { legacy },
@@ -2514,6 +2699,7 @@ fn read_evidence(
         let Some(source) = source else { continue };
         for key in &keys {
             if budget.expired() {
+                *unknown = true;
                 sources[index].status = SourceStatus::Error(SourceErrorCode::OverBudget);
                 return legacy.unwrap_or(ReadEvidence::Unread);
             }
@@ -2524,6 +2710,7 @@ fn read_evidence(
             let evidence = match evidence {
                 Ok(evidence) => evidence,
                 Err(code) => {
+                    *unknown = true;
                     sources[index].status = SourceStatus::Error(*code);
                     continue;
                 }
@@ -2538,7 +2725,10 @@ fn read_evidence(
                         }
                     }
                     Ok(None) => {}
-                    Err(code) => sources[index].status = SourceStatus::Error(code),
+                    Err(code) => {
+                        *unknown = true;
+                        sources[index].status = SourceStatus::Error(code);
+                    }
                 }
             }
             if legacy.is_none()
@@ -2686,6 +2876,7 @@ fn read_ledger_sized(
 struct AnchorEvidence {
     common: Option<PathBuf>,
     ledgers: HashMap<String, Option<ReceiptLedger>>,
+    failed_keys: HashSet<String>,
     error: Option<SourceErrorCode>,
 }
 
@@ -2694,6 +2885,7 @@ impl AnchorEvidence {
         Self {
             common: common.map(Path::to_path_buf),
             ledgers: HashMap::new(),
+            failed_keys: HashSet::new(),
             error: None,
         }
     }
@@ -2713,6 +2905,7 @@ impl AnchorEvidence {
                 })
             };
             let ledger = read.unwrap_or_else(|code| {
+                self.failed_keys.insert(key.to_string());
                 self.error.get_or_insert(code);
                 None
             });

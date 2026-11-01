@@ -370,7 +370,16 @@ pub fn reservation_recipient(
     }
     let path = agents_dir.join("handles").join(format!("{handle}.toml"));
     let body = read_bounded_regular(&path)?;
-    let r: ReservationRow = toml::from_str(&body).ok()?;
+    reservation_from_body(&body, handle, row_id, sessions)
+}
+
+fn reservation_from_body(
+    body: &str,
+    handle: &str,
+    row_id: &str,
+    sessions: &[&str],
+) -> Option<RecipientUuid> {
+    let r: ReservationRow = toml::from_str(body).ok()?;
     if r.handle != handle {
         return None;
     }
@@ -413,6 +422,11 @@ fn valid_handle(name: &str) -> bool {
 }
 
 fn read_bounded_regular(path: &Path) -> Option<String> {
+    read_regular(path, false)
+}
+
+fn read_regular(path: &Path, inspection: bool) -> Option<String> {
+    use std::os::unix::fs::MetadataExt;
     use std::os::unix::fs::OpenOptionsExt;
     let file = std::fs::OpenOptions::new()
         .read(true)
@@ -420,7 +434,13 @@ fn read_bounded_regular(path: &Path) -> Option<String> {
         .open(path)
         .ok()?;
     let meta = file.metadata().ok()?;
-    if !meta.is_file() || meta.len() > REGISTRY_ROW_BYTES {
+    if !meta.is_file()
+        || meta.len() > REGISTRY_ROW_BYTES
+        || (inspection
+            && (meta.nlink() != 1
+                || meta.uid() != unsafe { libc::geteuid() }
+                || meta.mode() & 0o022 != 0))
+    {
         return None;
     }
     let mut body = String::new();
@@ -794,3 +814,94 @@ pub fn inbox_identities(facts: &MailIdentityFacts) -> Vec<String> {
 #[cfg(test)]
 #[path = "mailbox_identity_tests.rs"]
 mod tests;
+
+// trace:BUG-b6b1278890774ef993d2ebc327862470-178 | ai:codex
+/// Verified third-party inspection facts. Not an identity, audience, or ACK
+/// capability; only the read-only mailbox projection accepts this type.
+#[derive(Debug)]
+pub struct InspectionSubject {
+    pub(crate) handle: String,
+    pub(crate) role: Vec<String>,
+    pub(crate) recipient: RecipientUuid,
+}
+
+impl InspectionSubject {
+    /// Observe an existing registry row and its reservation, without arming,
+    /// binding, granting, or assuming the process identity of its reader.
+    pub fn observe(row: &Path) -> Result<Self, BindingRefusal> {
+        use std::os::fd::AsRawFd;
+        use std::os::unix::fs::{MetadataExt, OpenOptionsExt};
+        // Pin the registry and reservation directories, refuse links and unsafe
+        // ownership/modes, then read bounded no-follow children through handles.
+        let pin = |path: &Path| -> Result<std::fs::File, BindingRefusal> {
+            let file = std::fs::OpenOptions::new()
+                .read(true)
+                .custom_flags(libc::O_DIRECTORY | libc::O_NOFOLLOW | libc::O_NONBLOCK)
+                .open(path)
+                .map_err(|_| BindingRefusal::Unreadable)?;
+            let meta = file.metadata().map_err(|_| BindingRefusal::Unreadable)?;
+            if meta.uid() != unsafe { libc::geteuid() } || meta.mode() & 0o022 != 0 {
+                return Err(BindingRefusal::Unreadable);
+            }
+            Ok(file)
+        };
+        let parent = row.parent().ok_or(BindingRefusal::Unreadable)?;
+        let registry = pin(parent)?;
+        let registry_path =
+            std::path::PathBuf::from(format!("/proc/self/fd/{}", registry.as_raw_fd()));
+        let pinned_row = registry_path.join(row.file_name().ok_or(BindingRefusal::Unreadable)?);
+        let body = read_regular(&pinned_row, true).ok_or(BindingRefusal::Unreadable)?;
+        let parsed: RegistryRow = toml::from_str(&body).map_err(|_| BindingRefusal::Corrupt)?;
+        if row.file_stem().and_then(|s| s.to_str()) != Some(parsed.id.as_str()) {
+            return Err(BindingRefusal::Corrupt);
+        }
+        if parsed.ended_at.is_some() {
+            return Err(BindingRefusal::Ended);
+        }
+        let handle = parsed
+            .name
+            .filter(|n| valid_handle(n))
+            .ok_or(BindingRefusal::NoHandle)?;
+        if !parsed.pid_start.as_deref().is_some_and(|start| {
+            crate::liveness::process_identity_matches_strict(parsed.pid, start)
+        }) {
+            return Err(BindingRefusal::NotLive);
+        }
+        let sessions: Vec<&str> = [&parsed.claude_session_id, &parsed.native_session_id]
+            .into_iter()
+            .flatten()
+            .map(String::as_str)
+            .collect();
+        let handles = pin(&registry_path.join("handles"))?;
+        let reservation_path =
+            std::path::PathBuf::from(format!("/proc/self/fd/{}", handles.as_raw_fd()))
+                .join(format!("{handle}.toml"));
+        let reservation =
+            read_regular(&reservation_path, true).ok_or(BindingRefusal::Unreadable)?;
+        let recipient = reservation_from_body(&reservation, &handle, &parsed.id, &sessions)
+            .ok_or(BindingRefusal::Unreadable)?;
+        // A replaced directory is an unknown observation, not fresh evidence.
+        for (path, pinned) in [
+            (parent.to_path_buf(), &registry),
+            (registry_path.join("handles"), &handles),
+        ] {
+            let again = pin(&path)?;
+            let a = again.metadata().map_err(|_| BindingRefusal::Unreadable)?;
+            let b = pinned.metadata().map_err(|_| BindingRefusal::Unreadable)?;
+            if (a.dev(), a.ino()) != (b.dev(), b.ino()) {
+                return Err(BindingRefusal::Unreadable);
+            }
+        }
+        let role = parsed
+            .role
+            .filter(|r| !r.trim().is_empty())
+            .map(|r| effective_role(Some(&r)).0)
+            .into_iter()
+            .collect();
+        Ok(Self {
+            handle,
+            role,
+            recipient,
+        })
+    }
+}

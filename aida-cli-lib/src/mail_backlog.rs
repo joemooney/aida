@@ -104,9 +104,14 @@ pub(crate) struct Backlog {
 impl Backlog {
     fn summary(&self) -> String {
         format!(
-            "{}: unread [{}] from {}, {} old: {}",
+            "{}: {} [{}] from {}, {} old: {}",
             self.recipient,
-            self.kind,
+            if self.kind.starts_with("pending ") {
+                "pending binding"
+            } else {
+                "unread"
+            },
+            self.kind.strip_prefix("pending ").unwrap_or(self.kind),
             self.from,
             format_age(self.age),
             self.subject
@@ -192,6 +197,7 @@ fn role_wake(role: &str, holders: &[&AgentRegistryEntry]) -> Wake {
 /// PURE: the overdue unread requests/handoffs addressed to a live agent's
 /// handle or a role a live agent holds. `is_read(recipient, msg)` is the
 /// read evidence; mail with no recoverable time is never aged.
+#[cfg(test)]
 pub(crate) fn evaluate(
     messages: &[Message],
     is_read: &dyn Fn(&str, &Message) -> bool,
@@ -284,36 +290,131 @@ pub(crate) fn scan_and_route(project_root: &Path, route: bool) -> Vec<DoctorFind
     let policy = Policy::from_config(cfg.as_ref());
     let store_root = crate::detect_distributed_store_from(project_root)
         .unwrap_or_else(|| project_root.join(".aida-store"));
-    let messages = match read_merged(project_root, &store_root) {
-        Ok(m) => m,
-        Err(err) => {
-            eprintln!("warning: mail-backlog could not read the mailbox: {err:#}");
-            return Vec::new();
-        }
-    };
-    let evidence = crate::mailbox_store::ReadEvidence::load_fail_closed(project_root);
-    let live = crate::agent_registry::load_live_entries(project_root);
     let now = Utc::now();
-    let backlog = evaluate(
-        &messages,
-        &|to, m| evidence.read_by(to, m),
-        &live,
+    let (backlog, unknown) = inspect_backlog(
+        project_root,
+        &store_root,
         &policy,
         now,
+        &aida_core::mailbox_logical::ReadLimits::explicit_read(),
     );
     if route {
-        route_backlog(project_root, &store_root, &backlog, &policy, now);
+        route_backlog_observed(project_root, &store_root, &backlog, &policy, now, !unknown);
     }
-    backlog
+    let mut findings: Vec<_> = backlog
         .into_iter()
         .map(Backlog::into_doctor_finding)
-        .collect()
+        .collect();
+    if unknown {
+        findings.push(unknown_finding());
+    }
+    findings
 }
 
-fn read_merged(project_root: &Path, store_root: &Path) -> anyhow::Result<Vec<Message>> {
-    let local = crate::mailbox_store::read_local_messages(project_root)?;
-    let canonical = crate::mailbox_store::read_canonical_messages(store_root)?;
-    Ok(aida_core::mailbox::merge_dedup(&local, &canonical))
+// trace:BUG-b6b1278890774ef993d2ebc327862470-178 | ai:codex
+fn unknown_finding() -> DoctorFinding {
+    DoctorFinding {
+        category: CATEGORY.into(), id: format!("{CATEGORY}:unknown"),
+        summary: "Mail backlog inspection is incomplete; some delivery or read state is unknown.".into(),
+        action: "Restore mailbox source, receipt and live-reader evidence, then rerun the check. Prior reminders remain retained.".into(),
+        safe_heal: false,
+    }
+}
+
+// trace:BUG-b6b1278890774ef993d2ebc327862470-178 | ai:codex
+fn inspect_backlog(
+    project_root: &Path,
+    store_root: &Path,
+    policy: &Policy,
+    now: DateTime<Utc>,
+    limits: &aida_core::mailbox_logical::ReadLimits,
+) -> (Vec<Backlog>, bool) {
+    use aida_core::mailbox_logical::{inspect_mail, InspectionState, MailboxContext};
+    let home = crate::mailbox_store::mailbox_home(project_root);
+    let root = home.root();
+    let directory = match crate::mailbox_resolver::RecipientDirectory::load(root, store_root) {
+        Ok(directory) => directory,
+        Err(_) => return (Vec::new(), true),
+    };
+    let store = std::fs::symlink_metadata(store_root)
+        .is_ok()
+        .then_some(store_root);
+    let ctx = match MailboxContext::resolve_or_local(root, store) {
+        Ok(ctx) => ctx,
+        Err(_) => return (Vec::new(), true),
+    };
+    let mut unknown = !directory.warnings().is_empty();
+    let mut grouped: BTreeMap<String, (Backlog, Vec<&AgentRegistryEntry>)> = BTreeMap::new();
+    let readers = directory.inspection_readers();
+    if readers.is_empty() {
+        unknown |= !aida_core::mailbox_logical::inspection_sources_complete(&ctx, limits);
+    }
+    for (entry, subject) in readers {
+        let subject = match subject {
+            Ok(s) => s,
+            Err(_) => {
+                unknown = true;
+                continue;
+            }
+        };
+        let inspection = inspect_mail(&ctx, &subject, limits);
+        unknown |= !inspection.complete || !inspection.unknown_ids.is_empty();
+        for record in inspection.records {
+            if !matches!(
+                record.state,
+                InspectionState::Unread | InspectionState::Pending
+            ) || record.timestamp <= 0
+            {
+                continue;
+            }
+            let kind = match record.intent {
+                Intent::Request if record.state == InspectionState::Pending => "pending request",
+                Intent::Handoff if record.state == InspectionState::Pending => "pending handoff",
+                Intent::Request => "request",
+                Intent::Handoff => "handoff",
+                Intent::Fyi => continue,
+            };
+            let Recipient::Agent(to) = record.to else {
+                continue;
+            };
+            let age = Duration::milliseconds(now.timestamp_millis() - record.timestamp);
+            if age < policy.max_age {
+                continue;
+            }
+            let id = format!("{}:{}", key(&to), record.id);
+            let (_, owners) = grouped.entry(id.clone()).or_insert_with(|| {
+                (
+                    Backlog {
+                        id,
+                        recipient: to,
+                        from: record.from,
+                        kind,
+                        age,
+                        subject: record.subject,
+                        wake: Wake::Operator,
+                    },
+                    Vec::new(),
+                )
+            });
+            owners.push(entry);
+        }
+    }
+    let mut backlog = grouped
+        .into_values()
+        .map(|(mut b, owners)| {
+            b.wake = if owners
+                .iter()
+                .any(|e| key(&handle(e)) == key(&b.recipient) || key(&e.id) == key(&b.recipient))
+            {
+                agent_wake(owners[0])
+            } else {
+                role_wake(&crate::canonical_role_name(&b.recipient), &owners)
+            };
+            b
+        })
+        .collect::<Vec<_>>();
+    backlog.sort_by(|a, b| b.age.cmp(&a.age).then(a.id.cmp(&b.id)));
+    (backlog, unknown)
 }
 
 fn nudged_path(project_root: &Path) -> PathBuf {
@@ -333,6 +434,7 @@ fn load_nudged(project_root: &Path) -> BTreeMap<String, DateTime<Utc>> {
 /// Nudge every due finding. Only a nudge that landed is recorded, so a
 /// failed one retries next tick; records for mail no longer in the backlog
 /// (read, deleted, or its agent gone) are dropped.
+#[cfg(test)]
 fn route_backlog(
     project_root: &Path,
     store_root: &Path,
@@ -340,11 +442,23 @@ fn route_backlog(
     policy: &Policy,
     now: DateTime<Utc>,
 ) {
+    route_backlog_observed(project_root, store_root, backlog, policy, now, true);
+}
+
+// trace:BUG-b6b1278890774ef993d2ebc327862470-178 | ai:codex
+fn route_backlog_observed(
+    project_root: &Path,
+    store_root: &Path,
+    backlog: &[Backlog],
+    policy: &Policy,
+    now: DateTime<Utc>,
+    complete: bool,
+) {
     let previous = load_nudged(project_root);
     let current: BTreeSet<&str> = backlog.iter().map(|b| b.id.as_str()).collect();
     let mut nudged: BTreeMap<String, DateTime<Utc>> = previous
         .iter()
-        .filter(|(id, _)| current.contains(id.as_str()))
+        .filter(|(id, _)| !complete || current.contains(id.as_str()))
         .map(|(id, at)| (id.clone(), *at))
         .collect();
 
@@ -793,3 +907,7 @@ mod tests {
         );
     }
 }
+
+#[cfg(test)]
+#[path = "mail_backlog_bug2405_tests.rs"]
+mod focused_bug2405;
