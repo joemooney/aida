@@ -232,6 +232,7 @@ fn the_admitted_record_takes_its_authority_from_the_checks() {
         revoked_by: None,
         scopes: Default::default(),
         kind: None,
+        renewals: Vec::new(),
     };
     let caller = AuthorizedDispatchCaller {
         mandate,

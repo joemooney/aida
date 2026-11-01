@@ -306,25 +306,43 @@ pub(crate) fn mandate_probe_with(
         return deputy::worker::no_mandate_stop();
     }
     eprintln!("  mandate: {left} left; the deputy stops claiming then (--keep-after-mandate keeps it running)");
-    let expires_at = m.expires_at;
-    let cache: Arc<Mutex<Option<(std::time::Instant, bool)>>> = Arc::new(Mutex::new(None));
+    // Follow the mandate by id, not by the expiry seen at start: `aida
+    // mandate renew` extends the same mandate in place, so a renewal moves
+    // the stop point instead of ending the run at the old expiry.
+    // trace:STORY-B6B1278890774EF993D2EBC327862470-166.ac446b4b | ai:claude
+    let id = m.id.clone();
+    // (latest known expiry, last re-read: when and whether it still held)
+    type Seen = (chrono::DateTime<Utc>, Option<(std::time::Instant, bool)>);
+    let seen: Arc<Mutex<Seen>> = Arc::new(Mutex::new((m.expires_at, None)));
     Arc::new(move || {
-        if Utc::now() >= expires_at {
-            return Some(format!(
-                "the mandate expired at {}",
-                expires_at.to_rfc3339()
-            ));
-        }
-        let mut c = cache.lock().unwrap_or_else(|p| p.into_inner());
-        let active = match c.as_ref() {
-            Some((at, active)) if at.elapsed() < Duration::from_secs(10) => *active,
-            _ => {
-                let active = matches!(current_state(), MandateState::Active(_));
-                *c = Some((std::time::Instant::now(), active));
-                active
-            }
+        let now = Utc::now();
+        let mut s = seen.lock().unwrap_or_else(|p| p.into_inner());
+        let past_expiry = now >= s.0;
+        let fresh = matches!(s.1, Some((at, _)) if at.elapsed() < Duration::from_secs(10));
+        let last_held = s.1.map_or(true, |(_, h)| h);
+        // Crossing the known expiry forces a re-read (a renewal may have
+        // moved it); a fresh "no longer holds" is not re-read every call.
+        let holds = if !fresh || (past_expiry && last_held) {
+            let holds = match current_state() {
+                MandateState::Active(cur) if cur.id == id && cur.expires_at > now => {
+                    s.0 = cur.expires_at;
+                    true
+                }
+                _ => false,
+            };
+            s.1 = Some((std::time::Instant::now(), holds));
+            holds
+        } else {
+            last_held
         };
-        (!active).then(|| "the mandate it started under was stopped".to_string())
+        if holds {
+            return None;
+        }
+        Some(if now >= s.0 {
+            format!("the mandate expired at {}", s.0.to_rfc3339())
+        } else {
+            "the mandate it started under was stopped".to_string()
+        })
     })
 }
 

@@ -262,6 +262,12 @@ pub(crate) fn handle_block_command(cmd: &BlockCommand, store_path: &std::path::P
                         if attempt > 0 {
                             pull_unless_refused(store_path, &branch)?;
                         }
+                        // A retired node claims nothing; a bound root claims
+                        // only after the agreed-ID backfill, which claims its
+                        // blocks above every backfilled number.
+                        // trace:STORY-B6B1278890774EF993D2EBC327862470-105 | ai:claude
+                        aida_core::allocation_authority::refuse_retired_node(store_path, &node_id)?;
+                        crate::doctor_backfill_agreed::refuse_claim_before_backfill(store_path)?;
 
                         BlockRegistry::with_dispense_lock(&blocks_path, || {
                             let mut registry = BlockRegistry::load(&blocks_path)?;
@@ -914,6 +920,9 @@ pub(crate) fn auto_allocate_block_inner(
                 if attempt > 0 && !local_only {
                     pull_unless_refused(store_path, &branch)?;
                 }
+                // trace:STORY-B6B1278890774EF993D2EBC327862470-105 | ai:claude
+                aida_core::allocation_authority::refuse_retired_node(store_path, node_id)?;
+                crate::doctor_backfill_agreed::refuse_claim_before_backfill(store_path)?;
 
                 BlockRegistry::with_dispense_lock(&blocks_path, || {
                     let mut registry = BlockRegistry::load(&blocks_path)?;
@@ -1490,6 +1499,7 @@ mod task_1930_tests {
             name: Some("node-1".into()),
             user: Some("tester".into()),
             registered: chrono::Utc::now(),
+            retired_at: None,
         });
         nodes.save(&nodes_path).unwrap();
         let node_cfg = aida_core::NodeConfig {

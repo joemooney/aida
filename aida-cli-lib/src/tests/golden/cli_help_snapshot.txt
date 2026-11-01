@@ -1006,12 +1006,12 @@ Options:
           Select AND order the displayed columns, e.g. `--fields id,title,status,priority,tags` or
           `--fields 'id title opened'`; entries are separated by commas and/or whitespace. Renders
           exactly those columns in that order — on the human table AND the token-efficient agent
-          output (a real token win for agents). Valid fields: id, title, status, type, priority,
-          feature, owner, assignee, tags, heft, modified_at, opened, weight, queued, in_flight,
-          blocked, mode, origin, deferred_reason, driver, driver_kind, review_lens. `opened` is the
-          creation time. Aliases: req_type = type, created_at = opened, created = opened. Default
-          (no `--fields`) keeps the standard columns; agent mode defaults to the minimal
-          id,title,status,type,modified_at set
+          output (a real token win for agents). Valid fields: id, local_id, title, status, type,
+          priority, feature, owner, assignee, tags, heft, modified_at, opened, weight, queued,
+          in_flight, blocked, mode, origin, deferred_reason, driver, driver_kind, review_lens.
+          `opened` is the creation time. Aliases: req_type = type, created_at = opened, created =
+          opened. Default (no `--fields`) keeps the standard columns; agent mode defaults to the
+          minimal id,title,status,type,modified_at set
 
       --topics
           List the topics (tags) in use on live FAQs, with how many FAQs carry each, most-used
@@ -6895,7 +6895,7 @@ Options:
 Fire-fighting mandate: a human-minted, time-boxed grant that lets the advisor seat ship held PRs
 with an attested, independent approval.
 
-`start` and `stop` need a human at an interactive terminal; `status` is open to anyone.
+`start`, `renew` and `stop` need a human at an interactive terminal; `status` is open to anyone.
 Operator-only specs always stay human-only.
 
 Usage: aida mandate [OPTIONS] <COMMAND>
@@ -6905,6 +6905,8 @@ Commands:
           independent approval and green CI. Start and stop require a human at an interactive
           terminal; a same-uid process that forges files in the AIDA home is outside the threat
           model (the same as session grants)
+  renew   Extend the active mandate in place, keeping its scope, flags and reason, so nothing has to
+          be retyped. Grants that name the mandate stay valid. Human at an interactive terminal only
   stop    End the active mandate now. Human at an interactive terminal only
   status  Show the current mandate, if any
   help    Print this message or the help of the given subcommand(s)
@@ -6951,8 +6953,8 @@ Options:
           With --drive: keep sensitive specs human-only
 
       --ttl <TTL>
-          How long it lasts, e.g. `8h` or `90m` (default 8h, at most 24h). A mandate cannot be
-          extended; stop it and start another
+          How long it lasts, e.g. `8h` or `90m` (default 8h, at most 24h). Extend an active one with
+          `aida mandate renew`
 
       --reason <REASON>
           Why the mandate exists, recorded with it
@@ -6960,6 +6962,33 @@ Options:
       --include-supervised
           Also cover sensitive specs (security, containment, authority, guided, keystone).
           Operator-only specs are never covered
+
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida mandate renew
+Extend the active mandate in place, keeping its scope, flags and reason, so nothing has to be
+retyped. Grants that name the mandate stay valid. Human at an interactive terminal only
+
+Usage: aida mandate renew [OPTIONS]
+
+Options:
+      --for <DURATION>
+          How long from now it lasts, e.g. `8h` or `90m` (default: the duration it was started with,
+          at most 24h)
 
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
@@ -11824,9 +11853,11 @@ Options:
           Repair one category of store damage that needs a data migration. `id-collisions`: spec IDs
           that differ only by leading zeros are the same ID, so each collision keeps one spec on the
           number and gives the others a fresh ID, rewriting their mentions in the store, docs and
-          code comments. Needs --dry-run (preview) or --yes (apply)
+          code comments. `agreed-ids`: give every node-local spec that has no agreed ID the next
+          agreed number of its type; local IDs keep resolving. Needs --dry-run (preview) or --yes
+          (apply)
           
-          [possible values: id-collisions]
+          [possible values: id-collisions, agreed-ids]
 
       --dry-run
           With --fix: show the plan and write nothing to the store
@@ -24921,12 +24952,12 @@ Options:
       --fields <FIELDS>
           Select AND order the displayed columns, e.g. `--fields id,title,status,priority,tags` or
           `--fields 'id title opened'`; entries are separated by commas and/or whitespace. Renders
-          exactly those columns in that order. Valid fields: id, title, status, type, priority,
-          feature, owner, assignee, tags, heft, modified_at, opened, weight, queued, in_flight,
-          blocked, mode, origin, deferred_reason, driver, driver_kind, review_lens. `opened` is the
-          creation time. Aliases: req_type = type, created_at = opened, created = opened. Search
-          rows carry no work-routing state, so queued, in_flight and blocked render false. Default
-          keeps the standard layout. Mirrors `aida list --fields`
+          exactly those columns in that order. Valid fields: id, local_id, title, status, type,
+          priority, feature, owner, assignee, tags, heft, modified_at, opened, weight, queued,
+          in_flight, blocked, mode, origin, deferred_reason, driver, driver_kind, review_lens.
+          `opened` is the creation time. Aliases: req_type = type, created_at = opened, created =
+          opened. Search rows carry no work-routing state, so queued, in_flight and blocked render
+          false. Default keeps the standard layout. Mirrors `aida list --fields`
 
   -h, --help
           Print help (see a summary with '-h')
@@ -29887,7 +29918,7 @@ Working on aida itself
       {
         "name": "fields",
         "takes_value": true,
-        "help": "Select AND order the displayed columns, e.g. `--fields id,title,status,priority,tags` or `--fields 'id title opened'`; entries are separated by commas and/or whitespace. Renders exactly those columns in that order — on the human table AND the token-efficient agent output (a real token win for agents). Valid fields: id, title, status, type, priority, feature, owner, assignee, tags, heft, modified_at, opened, weight, queued, in_flight, blocked, mode, origin, deferred_reason, driver, driver_kind, review_lens. `opened` is the creation time. Aliases: req_type = type, created_at = opened, created = opened. Default (no `--fields`) keeps the standard columns; agent mode defaults to the minimal id,title,status,type,modified_at set"
+        "help": "Select AND order the displayed columns, e.g. `--fields id,title,status,priority,tags` or `--fields 'id title opened'`; entries are separated by commas and/or whitespace. Renders exactly those columns in that order — on the human table AND the token-efficient agent output (a real token win for agents). Valid fields: id, local_id, title, status, type, priority, feature, owner, assignee, tags, heft, modified_at, opened, weight, queued, in_flight, blocked, mode, origin, deferred_reason, driver, driver_kind, review_lens. `opened` is the creation time. Aliases: req_type = type, created_at = opened, created = opened. Default (no `--fields`) keeps the standard columns; agent mode defaults to the minimal id,title,status,type,modified_at set"
       },
       {
         "name": "format",
@@ -36089,7 +36120,38 @@ Working on aida itself
       {
         "name": "ttl",
         "takes_value": true,
-        "help": "How long it lasts, e.g. `8h` or `90m` (default 8h, at most 24h). A mandate cannot be extended; stop it and start another"
+        "help": "How long it lasts, e.g. `8h` or `90m` (default 8h, at most 24h). Extend an active one with `aida mandate renew`"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "mandate",
+      "renew"
+    ],
+    "about": "Extend the active mandate in place, keeping its scope, flags and reason, so nothing has to be retyped. Grants that name the mandate stay valid. Human at an interactive terminal only",
+    "flags": [
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "for",
+        "takes_value": true,
+        "help": "How long from now it lasts, e.g. `8h` or `90m` (default: the duration it was started with, at most 24h)"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
       }
     ],
     "hidden": false
@@ -40912,7 +40974,7 @@ Working on aida itself
       {
         "name": "fix",
         "takes_value": true,
-        "help": "Repair one category of store damage that needs a data migration. `id-collisions`: spec IDs that differ only by leading zeros are the same ID, so each collision keeps one spec on the number and gives the others a fresh ID, rewriting their mentions in the store, docs and code comments. Needs --dry-run (preview) or --yes (apply)"
+        "help": "Repair one category of store damage that needs a data migration. `id-collisions`: spec IDs that differ only by leading zeros are the same ID, so each collision keeps one spec on the number and gives the others a fresh ID, rewriting their mentions in the store, docs and code comments. `agreed-ids`: give every node-local spec that has no agreed ID the next agreed number of its type; local IDs keep resolving. Needs --dry-run (preview) or --yes (apply)"
       },
       {
         "name": "fix-sandbox",
@@ -54264,7 +54326,7 @@ Working on aida itself
       {
         "name": "fields",
         "takes_value": true,
-        "help": "Select AND order the displayed columns, e.g. `--fields id,title,status,priority,tags` or `--fields 'id title opened'`; entries are separated by commas and/or whitespace. Renders exactly those columns in that order. Valid fields: id, title, status, type, priority, feature, owner, assignee, tags, heft, modified_at, opened, weight, queued, in_flight, blocked, mode, origin, deferred_reason, driver, driver_kind, review_lens. `opened` is the creation time. Aliases: req_type = type, created_at = opened, created = opened. Search rows carry no work-routing state, so queued, in_flight and blocked render false. Default keeps the standard layout. Mirrors `aida list --fields`"
+        "help": "Select AND order the displayed columns, e.g. `--fields id,title,status,priority,tags` or `--fields 'id title opened'`; entries are separated by commas and/or whitespace. Renders exactly those columns in that order. Valid fields: id, local_id, title, status, type, priority, feature, owner, assignee, tags, heft, modified_at, opened, weight, queued, in_flight, blocked, mode, origin, deferred_reason, driver, driver_kind, review_lens. `opened` is the creation time. Aliases: req_type = type, created_at = opened, created = opened. Search rows carry no work-routing state, so queued, in_flight and blocked render false. Default keeps the standard layout. Mirrors `aida list --fields`"
       },
       {
         "name": "format",

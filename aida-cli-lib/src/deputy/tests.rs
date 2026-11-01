@@ -942,7 +942,16 @@ mod worker_fixtures {
             assert_eq!(r.rc, RC_REFUSED);
             assert!(r.reason.starts_with(want), "{}", r.reason);
             assert!(spool.job_path("failed", &j.id).exists());
+            // The result names an output file; a refusal writes it.
+            // trace:BUG-B6B1278890774EF993D2EBC327862470-150 | ai:claude
+            let out = std::fs::read_to_string(&r.output)
+                .unwrap_or_else(|e| panic!("{} missing: {e}", r.output.display()));
+            assert!(out.contains(want), "{out}");
+            assert!(out.contains("did not run"), "{out}");
         }
+        let exec_out = std::fs::read_to_string(spool.out_path(&exec.id)).unwrap();
+        assert!(exec_out.contains("/bin/echo"), "{exec_out}");
+        assert!(exec_out.contains("--allow-exec"), "{exec_out}");
         let ledger = std::fs::read_to_string(spool.ledger_path()).unwrap();
         assert_eq!(ledger.matches("\"refused\"").count(), 3);
     }
@@ -1313,6 +1322,10 @@ mod worker_fixtures {
             let r = spool.read_result(&id).unwrap();
             assert_eq!(r.rc, RC_CANCELLED);
             assert_eq!(r.reason, "cancelled before it ran");
+            // trace:BUG-B6B1278890774EF993D2EBC327862470-150 | ai:claude
+            assert!(std::fs::read_to_string(&r.output)
+                .unwrap()
+                .contains("before it ran"));
             assert!(spool.job_path("failed", &id).exists());
             assert!(!spool.root.join("never-ran").exists());
 
@@ -1729,8 +1742,8 @@ mod worker_fixtures {
             std::thread::sleep(Duration::from_millis(150));
             assert_eq!(p(), None);
 
-            // Active at start, expiring: stops once the clock passes it,
-            // without re-reading the records.
+            // Active at start, expiring: stops once the clock passes it
+            // and a re-read shows it was not renewed.
             let p = mandate_probe_with(
                 false,
                 Utc::now(),
@@ -1764,6 +1777,50 @@ mod worker_fixtures {
             // Cached: the next call within 10s does not re-read.
             assert!(p().is_some());
             assert_eq!(reads.load(Ordering::SeqCst), 2);
+        }
+
+        // STORY-166 AC5: a renewal (same id, later expiry) keeps a running
+        // deputy claiming past the expiry it started under.
+        // trace:STORY-B6B1278890774EF993D2EBC327862470-166.ac446b4b | ai:claude
+        #[test]
+        fn mandate_probe_follows_a_renewal_past_the_old_expiry() {
+            use crate::deputy_cmd::mandate_probe_with;
+            use crate::gate::mandate::MandateState;
+            use std::sync::Mutex;
+
+            let current = Arc::new(Mutex::new(mandate(300)));
+            let reader = Arc::clone(&current);
+            let p = mandate_probe_with(
+                false,
+                Utc::now(),
+                Arc::new(move || MandateState::Active(reader.lock().unwrap().clone())),
+            );
+            assert_eq!(p(), None);
+            // Renewed in place: same id, expiry an hour out.
+            current.lock().unwrap().expires_at = Utc::now() + CDuration::hours(1);
+            std::thread::sleep(Duration::from_millis(400));
+            assert_eq!(
+                p(),
+                None,
+                "a renewed mandate still holds past the old expiry"
+            );
+
+            // A different mandate replacing it does not count as a renewal.
+            let other = Arc::new(Mutex::new(mandate(300)));
+            let reader = Arc::clone(&other);
+            let p = mandate_probe_with(
+                false,
+                Utc::now(),
+                Arc::new(move || MandateState::Active(reader.lock().unwrap().clone())),
+            );
+            {
+                let mut m = other.lock().unwrap();
+                m.id = "m-other".into();
+                m.expires_at = Utc::now() + CDuration::hours(1);
+            }
+            std::thread::sleep(Duration::from_millis(400));
+            let why = p().expect("a different mandate does not extend this run");
+            assert!(why.contains("mandate expired"), "{why}");
         }
 
         // AC4: a short-TTL grant: the running job finishes, nothing more is
