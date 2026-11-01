@@ -54,7 +54,30 @@ impl Drop for OwnedRun {
 // Each denial has a writable synthetic host-side positive control prepared
 // before confinement. No credentials, model executable or grant selector.
 const LANE: &str = r#"
-import os, json, errno, ctypes, time
+import os, json, errno, ctypes, time, fcntl, stat, sys
+# Metadata only: bounded counts, no payloads, paths, socket endpoints or credentials.
+def fd_metadata():
+    result=[]
+    for s in sorted(os.listdir('/proc/self/fd'), key=int):
+        n=int(s)
+        if n<=2: continue
+        try:
+            mode=os.fstat(n).st_mode
+            target=os.readlink('/proc/self/fd/'+s)
+            kind=('directory' if stat.S_ISDIR(mode) else 'file' if stat.S_ISREG(mode)
+                  else 'socket' if stat.S_ISSOCK(mode) else 'pipe' if stat.S_ISFIFO(mode) else 'other')
+            # Only fixed kernel-generated labels are safe to publish verbatim.
+            label=target if target in ('anon_inode:[eventfd]', 'anon_inode:[signalfd]', 'anon_inode:[eventpoll]') else '<redacted>'
+            result.append(dict(fd=n, kind=kind, target=label,
+                               fd_flags=fcntl.fcntl(n,fcntl.F_GETFD),
+                               status_flags=fcntl.fcntl(n,fcntl.F_GETFL)))
+        except FileNotFoundError: continue
+        except OSError as e:
+            if e.errno==errno.EBADF: continue
+            raise
+        if len(result)==32: break
+    return result
+startup_fds=fd_metadata()
 time.sleep(0.1)
 checks=[]
 def ok(name, condition):
@@ -106,6 +129,9 @@ for s in os.listdir('/proc/self/fd'):
     if n>2:
         try: os.fstat(n); fds.append(n)
         except OSError: pass
+if fds:
+    print(json.dumps(dict(fd_diagnostic_version=1, python=sys.version_info[:3],
+                          startup=startup_fds, lane=fd_metadata())), file=sys.stderr, flush=True)
 ok('only_standard_fds_present', not fds)
 # The namespace reaper must not retain mount/proc/socket handles either: a
 # source directory FD there could bypass protected overmounts via /proc/1/fd.
@@ -265,7 +291,10 @@ fn run_probe_inner(timeout_fixture: bool) -> Result<Vec<String>> {
             .stderr(Stdio::piped());
         #[cfg(test)]
         result
-            .env("AIDA_SESSION_GRANT", "synthetic-parent-selector")
+            .env(
+                crate::gate::seat_authority::GRANT_ENV,
+                "synthetic-parent-selector",
+            )
             .env("AIDA_HANDLE_LAUNCH_TOKEN", "synthetic-handle-token")
             .env("AIDA_AGENT_REGISTRY_TOKEN", "synthetic-registry-token");
         result
