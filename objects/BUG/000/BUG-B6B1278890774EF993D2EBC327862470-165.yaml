@@ -1,0 +1,39 @@
+id: 01a195dc-b125-76c0-87f2-703f451cd105
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-165
+agreed_id: BUG-2391
+title: aida doctor check runaway-seats and aida shift tick (COVERED_VENDORS) ignore ~/.codex/sessions, blocking Codex night-shift waves
+description: |-
+  Why
+  ───
+  Discovered by SPIKE-710 audit:
+
+  • `aida-cli-lib/src/runaway_seats.rs:9-23` (`aida doctor check runaway-seats`): scans only `~/.claude/projects/<slug>/**/*.jsonl` and explicitly skips `~/.codex/sessions` (`not-read codex-sessions ~/.codex/sessions — not project-scoped; Codex seats are not covered by this check`), even though `usage.rs` (STORY-1479) and `vendor_activity.rs` already attribute `~/.codex/sessions` JSONL files to a project by reading `cwd` from `session_meta`.
+  • `aida-cli-lib/src/shift.rs:100, 1272-1287` (`aida shift tick` / `aida shift status`): sets `const COVERED_VENDORS: &[&str] = &["claude"];` and refuses to launch night-shift waves when the resolved drain vendor is `"codex"` (`"the watchdog cannot see codex spend"`) unless `allow_uncovered_vendors = ["codex"]` is manually set in `.aida/shift-local.toml`.
+
+  As a result, runaway Codex seats (such as mail-wake or tool-call loops) are invisible to the 15-minute `watchdog` schedule job, and `aida shift tick` refuses to run on a Codex-first repository by default.
+
+  Acceptance
+  ──────────
+  1. `runaway_seats.rs` scans `~/.codex/sessions` filtered by project/worktree `cwd` (matching `usage.rs` / `vendor_activity.rs`) and evaluates the same window token/byte/line thresholds for Codex sessions.
+  2. `shift.rs:100` includes `"codex"` in `COVERED_VENDORS` once `runaway-seats` covers Codex, so `aida shift tick` runs on `[agents] vendor = "codex"` without requiring `allow_uncovered_vendors`.
+  3. Update `docs/autonomous-drain.md:1613-1615` to reflect Codex watchdog coverage, and add unit tests with synthetic `~/.codex/sessions` JSONL fixtures.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-01T06:47:10.885136620Z
+modified_at: 2026-11-01T06:47:10.885136620Z
+req_type: Bug
+tags:
+- audit
+- doctor
+- shift
+- vendor:codex
+filed_at:
+  code_sha: 6dc7d4977ac5e47c42ddfb26597fe3ec5fb70b60
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 962ca07af25
+  vendor: antigravity
+  session: 01a194b1bcfb
