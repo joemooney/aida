@@ -20,7 +20,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-01T07:26:01.071265913Z
-modified_at: 2026-11-01T13:54:33.737142216Z
+modified_at: 2026-11-01T16:47:47.913838524Z
 req_type: Task
 tags:
 - architecture
@@ -643,6 +643,11 @@ comments:
     Own-context posting: only /tmp/aida-native-design-final-signoff-own-context.sh is sourced; exact codex-advisor-19/context/companion and same-shell role current --check are checked before posting. Posting success, exact-body readback and queued host commit state are separate observations, not assumptions in this body.
   created_at: 2026-11-01T13:54:33.737142216Z
   modified_at: 2026-11-01T13:54:33.737142216Z
+- id: 01a19802-92c9-7173-9aa6-2b1970ac0846
+  author: joe
+  content: 'Advisor preparation disposition 2026-11-01: FULL independent reviewer21 audit /tmp/aida-TASK2712-fixture-audit-result.md read. CHANGESREQUESTED accepted for test-only preparation: R21-1 actual OwnedChild group/Drop plus separate real preflight do not establish bounded all-descendant exit/reap barrier; R21-2 actual launch binding and unsigned client facts do not establish exact native client identity; R21-3 recipe stat then pathname rmtree is not identity-bound cleanup; R21-4 result/schema omit pinned test-source/manifest/version, complete required client facts and cleanup eligibility. Root inspected these actual code/schema/recipe seams; no HOST diagnostic run authorized. Preserve real finalizer and production grant/keyring byte identity, synthetic fresh-key controls, no real auth/parent keys/public-digest substitute, all signed T1/T2/T3/T2712-1/-2 and full production gates. Required rework remains preparation-only with independent re-audit and root FULL revised-source review before separate HOST execution; no source correctness verdict, AC1/4 completion, queue pickup of blocked production work or reduced evidence waiver follows.'
+  created_at: 2026-11-01T16:47:47.913838524Z
+  modified_at: 2026-11-01T16:47:47.913838524Z
 history:
 - id: 01a1960f-6ca8-7313-8a94-63b0b98a4e44
   author: joe
