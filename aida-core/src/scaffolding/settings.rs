@@ -16,6 +16,7 @@ const STATUSLINE_COMMAND: &str =
 
 /// The `[contained]` config section `aida init` scaffolds, from its template
 /// master. trace:BUG-b6b1278890774ef993d2ebc327862470-014 | ai:claude
+/// trace:BUG-2392 | ai:codex
 pub const CONTAINED_CONFIG_TEMPLATE: &str = include_str!("../../templates/contained.toml");
 
 /// The allow entries a contained reviewer needs to run `aida` at all. Every
@@ -26,6 +27,7 @@ pub const REVIEWER_ALLOW_ENTRIES: &[&str] = &["Bash(aida)", "Bash(aida *)"];
 
 /// `[contained] allowed_hosts` from the template master.
 /// trace:BUG-b6b1278890774ef993d2ebc327862470-014 | ai:claude
+/// trace:BUG-2392 | ai:codex
 pub fn template_contained_allowed_hosts() -> Vec<String> {
     toml::from_str::<toml::Value>(CONTAINED_CONFIG_TEMPLATE)
         .ok()
@@ -363,6 +365,30 @@ mod tests {
     fn parse_json(s: &str) -> serde_json::Value {
         serde_json::from_str(s)
             .unwrap_or_else(|e| panic!("settings.json output is not valid JSON: {}\n\n{}", e, s))
+    }
+
+    // trace:BUG-2392 | ai:codex
+    #[test]
+    fn contained_template_includes_both_vendors_and_development_hosts() {
+        let template: toml::Value = toml::from_str(CONTAINED_CONFIG_TEMPLATE).unwrap();
+        let hosts = template["contained"]["allowed_hosts"].as_array().unwrap();
+        let expected = [
+            "github.com",
+            "api.github.com",
+            "objects.githubusercontent.com",
+            "codeload.github.com",
+            "api.anthropic.com",
+            "statsig.anthropic.com",
+            "api.openai.com",
+            "chatgpt.com",
+            "auth.openai.com",
+            "static.crates.io",
+            "index.crates.io",
+            "crates.io",
+            "registry.npmjs.org",
+        ];
+        assert_eq!(hosts.len(), expected.len());
+        assert_eq!(template_contained_allowed_hosts(), expected);
     }
 
     /// BUG-014: an adopted repo gets only the reviewer entries; the AIDA
