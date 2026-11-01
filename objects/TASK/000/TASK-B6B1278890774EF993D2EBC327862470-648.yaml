@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T00:55:07.917269049Z
-modified_at: 2026-11-01T05:45:41.279558677Z
+modified_at: 2026-11-01T06:44:02.414685573Z
 req_type: Task
 tags:
 - config
@@ -164,6 +164,11 @@ comments:
   content: 'Round 2 advisor rework pushed as 337f319e006 on task-2631 to PR-3188. Removed the Codex --bg launcher, CLI option, grant-binding and headless-only call sites, tests and docs; STORY-2254 retains 2bb95a799d0 as its starting point. Native vendor opt-in now reads exclusively through trusted_config from the committed trusted default-branch config, never the branch-local copy. This PR''s repository opt-in becomes trusted after merge into origin/main; config/setup/reporting text names that source. Real Git regression fixtures prove a committed branch opt-in cannot enable native posture, missing trusted config refuses, and trusted native survives branch edits. Restored the original preview env first entry and updated the config-trust inventory. Merged origin/main and refreshed it before push (0 commits behind); no force-push. Validation: requested LIGHT filters 97/97; help golden + unchanged containment refusals + trusted-config tests 16/16; TASK-1169 headless-spawn guard integration tests 3/3; make check-ci-fast all 36 gates; make check-ci-compile all test targets; formatting and diff-whitespace clean. No full workspace suite run. Live API-key/ChatGPT authentication verification remains the advisor-accepted post-merge check: record the first contained Codex lane result here after merge. PR body updated with the trusted source and validation.'
   created_at: 2026-11-01T05:45:41.279519336Z
   modified_at: 2026-11-01T05:45:41.279519336Z
+- id: 01a195d9-d0ee-7383-b0d2-305b2ef29c16
+  author: joe
+  content: 'ADVISOR HANDOFF AUDIT (codex-advisor-05): verified PR-3188 head a2666119e8bbe2ebb8738e3732552ba5ea7d3fca has an independently attested approved verdict at that exact SHA (2026-11-01T06:38:25Z), and Build passed at that head. Serial shipping is already queued behind PR-3182/3190; no duplicate ship started. Round-2 non-blocking findings accepted for this bounded fix: native child remains inside parent sandbox (no escape); statusline trusted-read overhead and redundant stamps do not change authority. STORY-2238 owns the unified containment contract. Preserve the required post-merge live-auth check before considering that handoff action done.'
+  created_at: 2026-11-01T06:44:02.414685573Z
+  modified_at: 2026-11-01T06:44:02.414685573Z
 history:
 - id: 01a1949a-7ffe-78a3-8011-c5c0c44dc2d3
   author: joe
