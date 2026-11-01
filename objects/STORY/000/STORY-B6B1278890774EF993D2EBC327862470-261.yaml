@@ -25,7 +25,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T22:58:37.964636963Z
-modified_at: 2026-11-01T13:35:22.364730236Z
+modified_at: 2026-11-01T13:55:43.106164556Z
 req_type: Story
 tags:
 - docs
@@ -187,6 +187,11 @@ comments:
   content: 'Integration audit: fresh independent reviewer15 approved exact cda8b50138481b9795fd8a9995d472c9711270b3 (canonical22/friendly21); independent integrator12 batch and genuine TTY own grant used normal train3209, all7CI/Build/hold green at e7eab6cac1b788a7892ad516f43a941d31e8073e. Landed6a3f67671a974703590efde5ae2a323f3f7471fa afterc83511b, main trailer/parent verified, sourcePR3193 CLOSED/nullmergeCommit expected train. SourceCompleted verified by aida pull; ACTUALpublicPages refresh from this exactapprovedmergedrevision delegated separately, /tmp/aida-glossary-live-publication-result.md pending; no livepublication claimed yet. Overall trainrc1 means fullrequestedbatchnotlanded(3194excluded), not thismemberunmerged.'
   created_at: 2026-11-01T13:35:22.364730236Z
   modified_at: 2026-11-01T13:35:22.364730236Z
+- id: 01a19765-0782-7812-a614-6e1d9cc8b1dc
+  author: joe
+  content: 'Live publication closure verified: independent publisher24 assembled approved merged6a3f67671a974703590efde5ae2a323f3f7471fa exactly40staticfiles, normal fast-forward gh-pages58096645ab6e2c77416d7928174fd42742cc3f2a (parent3c1e646834ece8ed303678b142720a7645c9ef68), Pages41311706445SUCCESS for exactcommit. ActualHTTPall40files byte-match; canonicalglossary/library/search/authority200 and exactbytes, all24termrecords coverrequired23anchors/searchURLs/librarylinks. Root separately fetched canonicalpublicglossary12920bytes SHA2564de11893d3b02b61c9f220d2083e9dc21ccd309d24b3e04b0ce34697fa50a3aa matchingapprovedassembly. Fullreceipt /tmp/aida-glossary-live-publication-result.md andartifacts /tmp/aida-glossary-live-6a-xgb01oyg. No new hosting/timer/policy/Sites/GitLabchange or sourcefeatureedits. LiveCLIalso6a3f67671a9actualversion after normalbuild9m09smokePASSatomicpromotion.'
+  created_at: 2026-11-01T13:55:43.106164556Z
+  modified_at: 2026-11-01T13:55:43.106164556Z
 history:
 - id: 01a19517-7d5f-7092-83c8-b303944f0e16
   author: joe
