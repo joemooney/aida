@@ -18,7 +18,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T08:28:54.983776375Z
-modified_at: 2026-11-01T16:45:50.212653857Z
+modified_at: 2026-11-01T17:27:07.913984381Z
 req_type: Bug
 tags:
 - forge
@@ -194,6 +194,11 @@ comments:
   content: Exact-head CI timing failure after independent source approval; preserve all regressions and default10s budget in same PR.
   created_at: 2026-11-01T16:44:55.626695685Z
   modified_at: 2026-11-01T16:44:55.626695685Z
+- id: 01a19826-9589-78d3-a6f9-7065a84b2d0d
+  author: joe
+  content: 'Host evidence receipt: author33 full /tmp/aida-BUG2400-timing-result.md/publicationidentity/62assertion coverage map read. SamePR headabe0d027a6049e5a4a3c3786fee49d0dee804d18, production3blobs unchanged, one fixture split withall62sitespreserved/two saturationassertionsstrengthened. ActualoptimizedAGENT4PASS0FAIL3.06s after12m14compile; all36fast/format/diffPASS. Freshdifferent independent23 FULL /tmp/aida-review3208-timing-delta-result.md read; sourceAPPROVE currentnormalcanonical+PR22 andfriendly2 ownattestation/releasegrant/readbackverified, GH6561187906. ExactCI41329385904 all7lanes+requiredBuildSUCCESS andhold41329385710SUCCESS nowverified. AuthorcanonicalcommentrefusedcacheRO/nothingwritten; this supportedHOSTcomment preservesreceipt withoutborrowingidentity. UIactionabilityneeds-review remainsvisible andnormalcorpus/ship/stalebase/patch/authoritygatesstilldecide; norootselfmerge, manualholdclear, Completed orold1677timingfailureerasure. Readyfornormalindependentintegrationassessment, notcompletionclaim.'
+  created_at: 2026-11-01T17:27:07.913984381Z
+  modified_at: 2026-11-01T17:27:07.913984381Z
 history:
 - id: 01a1963a-2b42-7cd2-a795-0772bcc408d1
   author: joe
