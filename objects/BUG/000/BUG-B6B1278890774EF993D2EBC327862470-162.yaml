@@ -24,7 +24,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T06:46:15.376021939Z
-modified_at: 2026-11-01T07:54:21.868133504Z
+modified_at: 2026-11-01T07:54:43.834574059Z
 req_type: Bug
 tags:
 - audit
@@ -50,6 +50,11 @@ comments:
   content: Implementation commit fa636d0aa1a pushed; PR https://github.com/joemooney/aida/pull/3198 is open. All four new discovery tests, four existing lint tests, help snapshot comparison, CLI build, isolated CLI/MCP fixtures, formatting and diff checks passed. MCP render fixture uses human output to suppress its existing TOON cache footer. Stopping at the standalone implementer PR handoff; no ship or review verdict attempted.
   created_at: 2026-11-01T07:54:21.868133504Z
   modified_at: 2026-11-01T07:54:21.868133504Z
+- id: 01a1961a-88fa-7611-9860-db88341ec9bb
+  author: joe
+  content: 'Handoff bookkeeping: PR #3198 is open and queue done succeeded. MCP advisory lease 01a19603ffb1 could not be released: the connected transport closed; a fresh stdio release_task then returned Read-only file system (os error 30). No session teardown or permissions bypass attempted. The launcher-owned session is retained for its normal handoff cleanup.'
+  created_at: 2026-11-01T07:54:43.834574059Z
+  modified_at: 2026-11-01T07:54:43.834574059Z
 history:
 - id: 01a195dc-0e68-73b0-b950-a0f3ab5b3b3f
   author: joe
