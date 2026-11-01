@@ -20,7 +20,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-01T07:26:01.071265913Z
-modified_at: 2026-11-01T12:42:27.436812667Z
+modified_at: 2026-11-01T12:48:32.517230292Z
 req_type: Task
 tags:
 - architecture
@@ -326,6 +326,11 @@ comments:
     The HOST-prepared own-context script was read and sourced in the same shell as this artifact write. Exact own child name/context and companion instance were checked; `aida role current --check` returned advisor. Repeat those checks before posting. No parent/root/dead context was borrowed. Canonical exact-body readback and any queued-host-commit limitation are reported separately, without changing this judgment body.
   created_at: 2026-11-01T12:42:27.436812667Z
   modified_at: 2026-11-01T12:42:27.436812667Z
+- id: 01a19727-8705-7412-9926-d6f6485124f6
+  author: joe
+  content: 'PROXY DESIGN DIRECTION: retain selected typed host private index/ref with source HEAD protected and journal-backed completion receipts. Amend all advisor17 T1-T3 before code. Authorize preparation of one bounded HOST synthetic exact-own-key READ/HMAC diagnostic with fake HOME/roster/store and fixture-issued own child, parent/sibling negatives, no real grants/credentials/model/auth/fake user TTY/global or socket changes. Preparation is not production implementation; root reviews recipe before execution. Pin existing host-only HTTPS credential/executable closure, no new credential authority/parent fallback. Existing ungranted nonauthoritative recording compatibility stays. Overlapping implementation remains blocked after BUG2398.'
+  created_at: 2026-11-01T12:48:32.517230292Z
+  modified_at: 2026-11-01T12:48:32.517230292Z
 history:
 - id: 01a1960f-6ca8-7313-8a94-63b0b98a4e44
   author: joe
