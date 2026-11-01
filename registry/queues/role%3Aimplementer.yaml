@@ -1,9 +1,9 @@
 - user_id: role:implementer
   requirement_id: 01a19639-d547-7300-9a70-befaedad7e96
-  position: 252000
+  position: 251000
   added_by: role:implementer
-  note: 'Context correction only: actor26 terminal, old lease normally ended after exact public-ab source preservation. New strict pickup required; sole head-binding finding and all protections unchanged.'
-  added_at: 2026-11-01T15:58:17.152033292Z
+  note: Exact-head CI timing failure after independent source approval; preserve all regressions and default10s budget in same PR.
+  added_at: 2026-11-01T16:44:56.238101290Z
   for_role: implementer
 - user_id: role:implementer
   requirement_id: 01a19434-2aa8-74d0-bccf-38faf512e4c7
