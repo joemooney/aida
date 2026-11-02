@@ -16,12 +16,12 @@ description: |-
 
   ## Notes
   TASK-1308 (deferred) stays the dogfood-wave proof; this story removes the technical gap it cites.
-status: InProgress
+status: Done
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T04:45:50.173634412Z
-modified_at: 2026-11-02T00:51:17.764724848Z
+modified_at: 2026-11-02T02:12:19.628129981Z
 req_type: Story
 tags:
 - fork
@@ -58,6 +58,24 @@ comments:
   modified_at: 2026-11-02T00:51:17.764724848Z
   session_id: 01a199ba5b90
   harness_version: 2.1.316 (Claude Code)
+- id: 01a19a06-d369-7622-98f5-e289cd3b4933
+  author: joe
+  content: |-
+    ## Implementer finding (kind:deviation, severity:minor)
+
+    I could not file this as a draft TASK from the sandbox (ID allocation hit a read-only FS), so it is recorded here for triage.
+
+    Acceptance 1 asks for advisor watch **and the product fork path**. Only `aida advisor watch` is wired. Still open:
+    - `phase_driver.rs::spawn_advisor_session` still forces a cold boot for non-Claude vendors, and the Codex arm of `advisor_tier_program_and_args_with_posture` ignores `is_fork`. It could reuse `advisor::plan_codex_fork` and `session::compose_headless_command_forking`.
+    - No product-seat fork launcher exists for any vendor, so seat-parity row 14 stays Degraded and now names that gap.
+
+    I deferred it because the punt tier's `AdvisorPass::Fork` carries a Claude JSONL plan, and a Codex variant reshapes the calibration shadow-fork logic.
+
+    Branch: story-b6b1278890774ef993d2ebc327862470-278 · Commit: f6cebea6864
+  created_at: 2026-11-02T02:11:41.033665694Z
+  modified_at: 2026-11-02T02:11:41.033665694Z
+  session_id: 01a199ba5b90
+  harness_version: 2.1.316 (Claude Code)
 history:
 - id: 01a1956d-d26a-7a83-9ddc-67ed991509ed
   author: joe
@@ -84,6 +102,15 @@ history:
   session_id: 01a199ba5b90
   harness_version: 2.1.316 (Claude Code)
   changes: []
+- id: 01a19a07-6a8d-78b3-aa15-cd62ee288773
+  author: joe
+  timestamp: 2026-11-02T02:12:19.725947415Z
+  session_id: 01a199ba5b90
+  harness_version: 2.1.316 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 filed_at:
   code_sha: a83e05d785df667dfa986cf3eb310a3f0637b602
   branch: main
@@ -91,3 +118,7 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: a83e05d785d
   vendor: claude
+implementation_info:
+  implemented: true
+  implemented_at: 2026-11-02T02:12:19.628129981Z
+  implemented_by: joe
