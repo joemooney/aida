@@ -766,8 +766,9 @@ fn decide_managed_merge(
         Ok(v) => v,
         Err(_) => return UpgradeAction::LeaveAlone,
     };
-    let slots = aida_core::scaffolding::slots_for_file(relative_path);
-    let (merged, changes) = aida_core::scaffolding::slot_merge(&actual_json, &expected_json, slots);
+    // trace:BUG-2395 | ai:claude
+    let (merged, changes) =
+        aida_core::scaffolding::managed_slot_merge(relative_path, &actual_json, &expected_json);
     if changes.is_empty() {
         UpgradeAction::None
     } else {
@@ -846,7 +847,13 @@ fn file_matches_artifact(path: &std::path::Path, actual: &str, expected: &str) -
                 aida_core::scaffolding::generated_text_matches(actual, expected)
             } else {
                 slots.iter().all(|s| {
-                    aida_core::scaffolding::slot_value_matches(s, av.pointer(s), ev.pointer(s))
+                    // trace:BUG-2395 | ai:claude
+                    aida_core::scaffolding::managed_slot_matches(
+                        path,
+                        s,
+                        av.pointer(s),
+                        ev.pointer(s),
+                    )
                 })
             }
         }

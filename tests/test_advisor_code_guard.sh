@@ -18,6 +18,9 @@ TARGET_DIR=$(cargo metadata --no-deps --format-version 1 \
 export PATH="$TARGET_DIR/debug:$PATH"
 
 HOOK="$(cd "$(dirname "$0")/.." && pwd)/aida-core/templates/hooks/aida-advisor-code-guard.sh"
+# The guard reads these project anchors too; an ambient AIDA or Codex session
+# must not leak its own repository into the fixtures. trace:BUG-2395 | ai:claude
+unset AIDA_SESSION_PROJECT CODEX_PROJECT_DIR
 TMP=$(mktemp -d)
 FAKEHOME=$(mktemp -d)
 mkdir -p "$FAKEHOME/.aida"
@@ -236,6 +239,23 @@ unlisted_actual=$(cd "$OTHER" && printf '{"session_id":"unlisted","tool_input":{
     env -u AIDA_AUTO_COMPLETE CLAUDE_PROJECT_DIR="$OUTSIDE" AIDA_SESSION_ROLE=advisor \
     TMPDIR="$TMP" HOME="$FAKEHOME" "$HOOK" >/dev/null 2>&1; echo $?)
 assert_exit "project dir git cannot list → still guarded" 2 "$unlisted_actual"
+# BUG-2395: AIDA_SESSION_PROJECT and CODEX_PROJECT_DIR anchor the repository
+# the same way, and an anchor git cannot list keeps the guard in force.
+# trace:BUG-2395 | ai:claude
+run_anchor() {
+    (cd "$2" && printf '{"session_id":"%s","tool_input":{"file_path":"%s"}}' "$3" "$4" | \
+        env -u AIDA_AUTO_COMPLETE -u CLAUDE_PROJECT_DIR "$1" AIDA_SESSION_ROLE=advisor \
+        TMPDIR="$TMP" HOME="$FAKEHOME" "$HOOK" >/dev/null 2>&1; echo $?)
+}
+for var in AIDA_SESSION_PROJECT CODEX_PROJECT_DIR; do
+    assert_exit "$var repo from a cwd in another repo → soft-block" 2 \
+        "$(run_anchor "$var=$FIX" "$OTHER" "anchor-$var" "$FIX/src/x.rs")"
+    assert_exit "outside path with $var set → allowed" 0 \
+        "$(run_anchor "$var=$FIX" "$OUTSIDE" "anchor-out-$var" "$OUTSIDE/y.rs")"
+    assert_no_marker "outside path with $var set" "anchor-out-$var"
+    assert_exit "$var git cannot list → still guarded" 2 \
+        "$(run_anchor "$var=$OUTSIDE" "$OTHER" "anchor-unlisted-$var" "$OUTSIDE/u.rs")"
+done
 assert_exit "inherited GIT_DIR does not redirect the repository" 2 \
     "$(cd "$FIX" && printf '{"session_id":"gitdir","tool_input":{"file_path":"%s"}}' "$FIX/src/g.rs" | \
         env -u AIDA_AUTO_COMPLETE -u CLAUDE_PROJECT_DIR GIT_DIR="$OTHER/.git" AIDA_SESSION_ROLE=advisor \
