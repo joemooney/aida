@@ -1500,6 +1500,7 @@ fn product_grant(delegable: &[&str]) -> crate::gate::seat_authority::SeatGrant {
         revoked_at: None,
         binding: Vec::new(),
         origin: None,
+        launch_capability: None,
     }
 }
 

@@ -63,4 +63,16 @@ pub enum InternalCommand {
         #[clap(long, value_name = "PATH")]
         cwd: Option<PathBuf>,
     },
+
+    /// The detached Codex launch supervisor. Started only by
+    /// `aida agent new codex --bg` with its private control channel.
+    // trace:STORY-2254 | ai:claude
+    CodexBgSupervise {
+        #[clap(long)]
+        attempt: String,
+    },
+
+    /// The detached Codex exec barrier (becomes the worker).
+    // trace:STORY-2254 | ai:claude
+    CodexBgBarrier,
 }

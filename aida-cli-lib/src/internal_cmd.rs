@@ -21,6 +21,11 @@ pub(crate) use internal_cmd_args::*;
 /// vendor-agnostic advisor-code-write gate (STORY-684).
 pub(crate) fn handle_internal_command(command: &cli::InternalCommand) -> Result<()> {
     match command {
+        // trace:STORY-2254 | ai:claude
+        cli::InternalCommand::CodexBgSupervise { attempt } => {
+            crate::agent_launch::codex_bg_supervise_main(attempt)
+        }
+        cli::InternalCommand::CodexBgBarrier => crate::agent_launch::codex_bg_barrier_main(),
         // Called by the git pre-commit hook: enforce the advisor-no-code-write
         // invariant at the commit boundary for ANY vendor. Exits non-zero (the
         // bail) when an advisor session stages code with no sanctioned context,

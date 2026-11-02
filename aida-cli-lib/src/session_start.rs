@@ -1342,6 +1342,18 @@ impl SessionStartReceipt {
         }
         self.cleanup = None;
     }
+    /// STORY-2254: make this receipt's rollback conditional on a durable
+    /// ownership record. Its destructive Drop runs only while `still_owner`
+    /// confirms this invocation still owns the setup, so a crash or early
+    /// return after ownership moved to a detached supervisor (but before
+    /// [`Self::disarm`]) never deletes the supervisor's worktree, lease or
+    /// claim.
+    // trace:STORY-2254 | ai:claude
+    pub(crate) fn require_owner(&mut self, still_owner: impl Fn() -> bool + 'static) {
+        if let Some(cleanup) = self.cleanup.as_mut() {
+            cleanup.owner_check = Some(Box::new(still_owner));
+        }
+    }
 }
 // trace:BUG-2188 | ai:codex
 pub(crate) struct SessionStartCleanup {
@@ -1359,6 +1371,9 @@ pub(crate) struct SessionStartCleanup {
     // trace:BUG-2188 TASK-2326 | ai:codex
     claim_write: Option<crate::claim::ClaimStatusChange>,
     armed: bool,
+    /// STORY-2254: the ownership boundary checked before destructive action.
+    // trace:STORY-2254 | ai:claude
+    owner_check: Option<Box<dyn Fn() -> bool>>,
 }
 impl SessionStartCleanup {
     fn new(root: &std::path::Path, scope: &str) -> Self {
@@ -1375,6 +1390,7 @@ impl SessionStartCleanup {
             lease_id: None,
             claim_write: None,
             armed: true,
+            owner_check: None,
         }
     }
     fn own_tree(&mut self, path: &std::path::Path, branch: Option<String>) {
@@ -1523,7 +1539,11 @@ impl SessionStartCleanup {
 }
 impl Drop for SessionStartCleanup {
     fn drop(&mut self) {
-        if !self.armed || !self.release_tree() {
+        // trace:STORY-2254 | ai:claude
+        if !self.armed || self.owner_check.as_ref().is_some_and(|still| !still()) {
+            return;
+        }
+        if !self.release_tree() {
             return;
         }
         if let Some(id) = &self.lease_id {

@@ -94,6 +94,7 @@ impl Case {
             revoked_at: None,
             binding: Vec::new(),
             origin: None,
+            launch_capability: None,
         };
         let mut hold = mh::typed_hold(PR, HoldReasonKind::Rework, "rework", Some(OLD.into()));
         hold.verdict_ref = Some(mh::VerdictRef::new(
