@@ -14,13 +14,20 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-02T04:15:22.397259731Z
-modified_at: 2026-11-02T04:15:22.397259731Z
+modified_at: 2026-11-02T06:25:47.449521966Z
 req_type: Task
 tags:
 - carried-from:STORY-2256
 - finding-hash:908292cb
 - from-review:PR-3225
 - kind:carried-forward
+comments:
+- id: 01a19aef-77b9-7b03-bb52-b9b865956913
+  author: joe
+  content: 'ADVISOR RULING (2026-11-01 23:30 MST, ruled once per the 2026-10-28 operator order): accepted as-is, no change. Reason: the helpers that compute both outputs are unit-tested, and the call sites are one-line passthroughs.'
+  created_at: 2026-11-02T06:25:47.449521966Z
+  modified_at: 2026-11-02T06:25:47.449521966Z
+  session_id: 1f56bd1e-c059-4f73-b8df-e18b2170fdfc
 history:
 - id: 01a19aa1-ae10-7291-a905-4a596b12e27b
   author: joe
