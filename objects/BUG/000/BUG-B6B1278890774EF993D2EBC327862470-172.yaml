@@ -21,7 +21,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T07:26:20.914223641Z
-modified_at: 2026-11-02T09:29:05.548031883Z
+modified_at: 2026-11-02T09:45:30.618648825Z
 req_type: Bug
 tags:
 - architecture
@@ -551,6 +551,12 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-02T09:27:54.786227667Z
   modified_at: 2026-11-02T09:27:54.786227667Z
+  session_id: 1f56bd1e-c059-4f73-b8df-e18b2170fdfc
+- id: 01a19ba6-50fa-7d63-8cf6-25bfc455700f
+  author: joe
+  content: 'ADVISOR HOST CHECK (2026-11-02 02:46 MST) at 94de292, after building the matching CLI: cargo test -p aida-cli-lib --lib bug_2385_vendor_routing codex_tool_env gave 34 passed, 0 failed.'
+  created_at: 2026-11-02T09:45:30.618648825Z
+  modified_at: 2026-11-02T09:45:30.618648825Z
   session_id: 1f56bd1e-c059-4f73-b8df-e18b2170fdfc
 history:
 - id: 01a19600-c769-7cd0-ba08-8d93975e3e3b
