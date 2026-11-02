@@ -11,7 +11,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T16:42:07.593722571Z
-modified_at: 2026-11-02T03:26:33.603749690Z
+modified_at: 2026-11-02T03:35:27.857008155Z
 req_type: Bug
 tags:
 - doctor
@@ -53,6 +53,13 @@ comments:
   created_at: 2026-11-02T03:22:18.439493402Z
   modified_at: 2026-11-02T03:22:18.439493402Z
   session_id: 126bbd5a-a92f-452b-ab0b-2637a1db42c2
+- id: 01a19a53-8771-7920-a810-c5127df4362e
+  author: joe
+  content: 'Round 2 rework pushed as 11a94b8b33e on PR #3214: (1) dropped mode/owner/nlink refusal in InspectionSubject::observe so a 0775 registry is inspected, as the own reader does; (2) unknown is now limited to the affected reader''s handle/id/role keys, liveness uses reader_liveness with its TTL, invalid rows and live rows with no handle are skipped, and pruning keeps records only for unknown recipients; (3) direct mail is matched on the handle only, the same as the own inbox; documented and tested. (4) Not verified locally: cargo was denied in this headless session, so the focused tests have not run. CI is the gate. The cli-0 failure at fd8ae4d (bug_2378 node show) is in node identity code this PR doesn''t touch, and main 1451c90 passed with that test, so it looks flaky or unrelated. Not investigated further because the log host was blocked.'
+  created_at: 2026-11-02T03:35:27.857008155Z
+  modified_at: 2026-11-02T03:35:27.857008155Z
+  session_id: 01a19a4b58a9
+  harness_version: 2.1.316 (Claude Code)
 history:
 - id: 01a198c4-4a0e-78f2-a498-045eec94c002
   author: joe
