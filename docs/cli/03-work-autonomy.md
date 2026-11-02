@@ -101,6 +101,11 @@ branches on the exit code:
 | 33 | `implementer: held branch=<branch>` | The branch is pushed and the PR is held (`aida pr hold`). |
 | 34 | (none) | Refused before any setup: the concurrency cap is reached. |
 
+Every line except `punted` ends with ` untested=true` when the implementer ran
+no local test to completion, so its push reached CI untested.
+
+Its local tests run through `aida lane job` (below).
+
 The child runs in its own lease and worktree as `implementer`. If the
 launcher's grant delegates `implementer`, it gets a child grant. Otherwise
 (no grant, or a grant that does not delegate it) it runs at baseline
@@ -199,6 +204,70 @@ The same recipe is embedded in every phase-failure comment, so the reader who de
 **Chains with** — `backlog groom` fills it; `queue work` empties it into sessions; `drain status` watches an `--auto-complete` run draining it.
 
 ---
+
+### `aida lane`
+
+**A headless implementer runs its local tests through its launcher.** A
+headless tool call is capped at 60 seconds, and a process it detaches dies
+with the call, so the launcher runs a lane job runner for as long as it waits.
+In the seat, `aida lane job run --` followed by a cargo command hands the run
+to it, for example
+`aida lane job run -- <cargo command>` with
+`cargo test --profile agent -p <crate> --lib -- <filter>` as the cargo command.
+The runner accepts only `cargo test`, `cargo check` and `cargo build` with the
+agent profile, and refuses options that point cargo at other config, another
+manifest or target directory, unstable flags or another toolchain. It runs
+the job in the seat with the seat's own cargo target, through the host's
+`cargo` (the slot-limiting wrapper), whose path each job's output names.
+
+A job runs code the seat wrote (build scripts, tests), so it always runs in its
+own bubblewrap sandbox. The filesystem is read-only except the seat, its cargo
+target, and the slot wrapper's lock and log directories. All of cargo home is
+read-only: `bin/` (the `cargo` and `rustc` proxies), `config.toml`, the download
+caches, and the extracted dependency sources in `registry/src/` and
+`git/checkouts/`, whose build scripts the host's next cargo runs. So a job
+cannot change what the host's next cargo runs. A job runs offline
+(`CARGO_NET_OFFLINE=true`) against the dependencies the host already fetched;
+a dependency the host has not fetched fails with cargo's offline error, and the
+seat reports that work as untested. When
+`[contained] os_wrap` is off, or bubblewrap cannot run, the launcher does not
+offer the runner and the runner refuses every job. Nothing runs unsandboxed,
+and the result line says `untested=true`. A job starts from a cleared
+environment: only `PATH`, `HOME`, `USER`, `LANG`, `LC_*`, `TMPDIR`,
+`CARGO_HOME`, `RUSTUP_HOME`, `RUSTUP_TOOLCHAIN`, `CARGO_TERM_COLOR`,
+`XDG_RUNTIME_DIR` and `AIDA_CARGO_SLOTS` come from the launcher, plus the seat's
+cargo target, the lane marker and `CARGO_NET_OFFLINE=true`. A seat may set `AIDA_CARGO_TIMEOUT`,
+`RUST_BACKTRACE`, `RUST_TEST_THREADS` and `AIDA_UPDATE_SNAPSHOTS` for a job.
+No grant, session variable or credential reaches it.
+
+The command waits at most 50 seconds. It exits with cargo's exit code when the
+run finishes, and otherwise prints the job id and exits 75; `aida lane job wait
+<id>` keeps waiting. Output and exit codes are kept under the main checkout's
+`.aida/lane-jobs/<lease>/`, with one line per job in its `jobs.log`. Only a
+`cargo test` with a libtest result reporting at least one passed or failed test
+counts as tested. Genuine test failures count; manifest, offline dependency,
+compile, argument and test-process startup errors do not. Zero-match filters,
+ignored-only runs, `cargo test --no-run`, `cargo test -- --list`, and signal
+exits remain `untested=true`,
+as do `cargo check` and `cargo build`. Missing or unreadable result evidence
+also reports `untested=true`.
+
+Both headless implementer launches get the runner: a standalone implementer
+(`aida queue work <SPEC> --no-human`) and the `--auto-complete --no-human`
+drain's implementer phase, for Claude, Codex and Antigravity alike. Claude's
+resume policy remains separate. A drain whose implementer ran no test to completion
+says `untested=true` in that phase's output.
+
+A seat clone's cargo target is seeded from the primary's agent-profile target
+when the clone is created, and again before the first job. The seed copies
+`deps/`, `.fingerprint/` and `build/` with copy-on-write reflinks only, so a
+seat never shares a file with the primary's target. On a filesystem without
+reflinks (ext4, for one) nothing is seeded and the seat builds cold, and the
+job output says `not seeded`. A cold build of a large crate can take longer
+than the default 900-second timeout, so the runner gives a job on an unseeded
+target the largest timeout (3600 seconds) unless the job sets its own
+`AIDA_CARGO_TIMEOUT`.
+<!-- trace:BUG-2383 | ai:claude -->
 
 ### `aida backlog`
 

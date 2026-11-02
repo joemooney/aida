@@ -486,6 +486,15 @@ Test locally by the spec's tier; the full workspace suite runs only in CI
 - **STRICT or heft >= 7**: LIGHT plus the area's integration test binaries
   (`cargo test --profile agent -p <crate> --test <name>`).
 
+**Headless lane (`AIDA_HEADLESS=1`)?** A tool call is capped at 60 seconds
+and a detached `setsid nohup` run dies with it, so run cargo through the
+launcher: `aida lane job run -- cargo test --profile agent -p <crate> --lib --
+<filter>`, then `aida lane job wait <id>` while it exits 75 (still running).
+The runner allows a cold (`not seeded`) target 3600 seconds and a seeded one
+900; `AIDA_CARGO_TIMEOUT=<secs>` overrides. If it says the session has no lane job runner, or
+refuses the run (jobs run only inside bubblewrap), ship and say
+`untested=true` in your result. trace:BUG-2383 | ai:claude
+
 **Added or changed a CLI command or flag?** In every tier, regenerate the help
 golden with `AIDA_UPDATE_SNAPSHOTS=1 cargo test --profile agent -p aida-cli-lib help_surface_matches_golden_snapshot` and commit
 `aida-cli-lib/src/tests/golden/cli_help_snapshot.txt` with the change. `make check-ci-fast`

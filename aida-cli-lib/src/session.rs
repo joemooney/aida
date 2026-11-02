@@ -4442,6 +4442,64 @@ pub(crate) fn os_wrapped_program_and_args(
     Ok(("bwrap".to_string(), full))
 }
 
+/// BUG-2383: wrap one lane job (a seat's `cargo test|check|build`) in its own
+/// minimal bubblewrap profile. A job runs code the seat wrote (build scripts,
+/// tests, a seat-written `.cargo/config.toml` runner), so it never runs
+/// unsandboxed and never gets the seat's wider launch profile (`~/.claude`,
+/// the store, the mailbox): the filesystem is read-only except `seat` and the
+/// `rw` paths the caller names (the seat's cargo target and the slot
+/// limiter's state; never cargo home). Fails closed, with the remediation, when `[contained]
+/// os_wrap` is off for the seat or bubblewrap cannot run.
+// trace:BUG-2383 | ai:claude
+pub(crate) fn lane_job_wrapped_program_and_args(
+    seat: &Path,
+    rw: &[PathBuf],
+    program: &str,
+    args: Vec<String>,
+) -> Result<(String, Vec<String>)> {
+    if !os_wrap_enabled(seat) {
+        anyhow::bail!(
+            "a lane job runs only inside bubblewrap, and `[contained] os_wrap` is off for this \
+             seat. Turn it on (`[contained] os_wrap = true` in .aida/config.toml, or \
+             AIDA_OS_WRAP=1 for the launcher), with bubblewrap installed ({BWRAP_INSTALL_DEBIAN}). \
+             Nothing ran; report the work as untested (untested=true)."
+        );
+    }
+    let root = crate::find_project_root_from(seat).with_context(|| {
+        format!(
+            "{} is not inside a git repository; refusing to bind it read-write in bubblewrap",
+            seat.display()
+        )
+    })?;
+    if which_on_path("bwrap").is_none() {
+        anyhow::bail!(
+            "a lane job runs only inside bubblewrap, and `bwrap` is not on PATH \
+             ({BWRAP_INSTALL_DEBIAN}). Nothing ran; report the work as untested (untested=true)."
+        );
+    }
+    bwrap_preflight()?;
+    let read_allowlist = contained_read_allowlist(&root);
+    Ok((
+        "bwrap".to_string(),
+        lane_job_bwrap_argv(&root, rw, &read_allowlist, program, args),
+    ))
+}
+
+/// The pure argv of [`lane_job_wrapped_program_and_args`], after `bwrap`.
+// trace:BUG-2383 | ai:claude
+pub(crate) fn lane_job_bwrap_argv(
+    seat: &Path,
+    rw: &[PathBuf],
+    read_allowlist: &[String],
+    program: &str,
+    args: Vec<String>,
+) -> Vec<String> {
+    let mut full = bwrap_confinement_args_inner(seat, rw, read_allowlist);
+    full.push(program.to_string());
+    full.extend(args);
+    full
+}
+
 /// Run a trivial `bwrap … true` to confirm bubblewrap can actually create the
 /// user namespace + uid map on this host BEFORE wrapping the real drain. On
 /// failure (typically the AppArmor unprivileged-userns restriction) bail with
@@ -4677,36 +4735,59 @@ pub(crate) fn exec_vendor_headless(
     child_grant: &crate::gate::seat_authority::HeadlessChildGrant,
     lane_tree: Option<(&Path, &str)>,
 ) -> Result<()> {
-    let run_once = |prompt: &str, log: &Path, resume: bool, hold: Option<&dyn Fn() -> bool>| {
-        run_vendor_headless_child(
-            vendor,
-            prompt,
-            session_id,
-            log,
-            tee_opts,
-            contained,
-            lease_id,
-            seat,
-            child_grant.env_value(),
-            &HeadlessChildHooks {
-                resume,
-                hold_reap: hold,
-                ..HeadlessChildHooks::default()
-            },
-        )
-    };
-    // BUG-050: the `--auto-complete` drain's phase-1 implementer gets the
-    // standalone launch's resume safety net, through the same loop: a lane
-    // that parks on its own build is waited for and resumed, bounded.
-    // trace:BUG-B6B1278890774EF993D2EBC327862470-050 | ai:claude
-    let result = match drain_resume_lane(vendor, seat, lease_id, lane_tree) {
-        None => run_once(prompt, log_path, false, None),
-        Some((lease, (worktree, branch))) => {
-            drain_lane_with_resume(lease, worktree, branch, prompt, log_path, |p, l, r, h| {
-                run_once(p, l, r, Some(h))
-            })
-        }
-    };
+    let drain_lane = drain_resume_lane(vendor, seat, lease_id, lane_tree);
+    // BUG-2383: the drain's phase-1 implementer gets the standalone launch's
+    // lane job runner too, so it can run its targeted tests outside its
+    // 60-second tool-call cap, and a lane that ran none is reported untested.
+    // This process is the seat's host side (it launches the sandboxed
+    // vendor), so the runner runs here. trace:BUG-2383 | ai:claude
+    let main_root = crate::main_worktree_root_from(&headless_worktree_root());
+    let result = with_implementer_jobs(
+        &main_root,
+        seat,
+        lease_id,
+        lane_tree,
+        prompt,
+        crate::lane_job::offer,
+        |prompt, apply_lane_env| {
+            let run_once =
+                |prompt: &str, log: &Path, resume: bool, hold: Option<&dyn Fn() -> bool>| {
+                    run_vendor_headless_child(
+                        vendor,
+                        prompt,
+                        session_id,
+                        log,
+                        tee_opts,
+                        contained,
+                        lease_id,
+                        seat,
+                        child_grant.env_value(),
+                        &HeadlessChildHooks {
+                            customize: Some(apply_lane_env),
+                            resume,
+                            hold_reap: hold,
+                            ..HeadlessChildHooks::default()
+                        },
+                    )
+                };
+            // BUG-050: the `--auto-complete` drain's phase-1 implementer gets the
+            // standalone launch's resume safety net, through the same loop: a lane
+            // that parks on its own build is waited for and resumed, bounded.
+            // trace:BUG-B6B1278890774EF993D2EBC327862470-050 | ai:claude
+            let result = match drain_lane {
+                None => run_once(prompt, log_path, false, None),
+                Some((lease, (worktree, branch))) => drain_lane_with_resume(
+                    lease,
+                    worktree,
+                    branch,
+                    prompt,
+                    log_path,
+                    |p, l, r, h| run_once(p, l, r, Some(h)),
+                ),
+            };
+            result
+        },
+    );
     // BUG-2139: the child's grant dies with the child — on a normal or
     // nonzero exit and on a spawn failure alike. A failed revoke only warns:
     // the grant still expires with its parent, and the lease end/reap revokes
@@ -4716,6 +4797,66 @@ pub(crate) fn exec_vendor_headless(
     }
     let status = result?;
     std::process::exit(status.code().unwrap_or(1));
+}
+
+/// Job eligibility is vendor-neutral; resume eligibility below remains Claude-only.
+// trace:BUG-2383 | ai:codex
+pub(crate) fn implementer_job_lane<'a>(
+    seat: &str,
+    lease_id: Option<&'a str>,
+    lane_tree: Option<(&'a Path, &'a str)>,
+) -> Option<(&'a str, (&'a Path, &'a str))> {
+    lease_id
+        .zip(lane_tree)
+        .filter(|_| crate::canonical_role_name(seat) == "implementer")
+}
+
+/// The actual drain launch boundary: prompt/env, runner lifetime and result
+/// evidence are shared by every implementer vendor, independently of resume.
+// trace:BUG-2383 | ai:codex
+pub(crate) fn with_implementer_jobs<T>(
+    main_root: &Path,
+    seat: &str,
+    lease_id: Option<&str>,
+    lane_tree: Option<(&Path, &str)>,
+    prompt: &str,
+    offer: impl FnOnce(&Path, &Path, &str) -> Option<crate::lane_job::LaneJobs>,
+    run: impl FnOnce(&str, &dyn Fn(&mut std::process::Command)) -> T,
+) -> T {
+    let lane = implementer_job_lane(seat, lease_id, lane_tree);
+    let jobs = lane.and_then(|(lease, (tree, _))| offer(main_root, tree, lease));
+    let lease = lane.map(|(lease, _)| lease);
+    let prompt = if jobs.is_some() {
+        format!(
+            "{prompt}{}",
+            crate::standalone_implementer::LANE_JOB_CONTRACT
+        )
+    } else if lease.is_some() {
+        format!(
+            "{prompt}\n\nLocal test runner unavailable. Report untested=true in your final result."
+        )
+    } else {
+        prompt.to_string()
+    };
+    let apply = |cmd: &mut std::process::Command| {
+        if let Some(jobs) = &jobs {
+            jobs.apply_env(cmd);
+        }
+    };
+    // Invalidate previous evidence before launching, including a failed spawn.
+    if let Some(lease) = lease {
+        crate::lane_job::record_untested(main_root, lease, true);
+    }
+    let runner = jobs.clone().map(crate::lane_job::Runner::start);
+    let result = run(&prompt, &apply);
+    let untested = runner.map(|r| r.stop().untested()).unwrap_or(true);
+    if let Some(lease) = lease {
+        crate::lane_job::record_untested(main_root, lease, untested);
+        if let Some(line) = crate::lane_job::phase_test_warning(main_root, Some(lease)) {
+            eprintln!("{line}");
+        }
+    }
+    result
 }
 
 /// BUG-050: which [`exec_vendor_headless`] launches get the drain resume

@@ -3001,6 +3001,19 @@ pub(crate) fn session_start_with_receipt(
                     isolated_target.display()
                 )
             })?;
+            // BUG-2383: a clone is not a linked worktree, so the host cargo
+            // wrapper never seeds its target; warm it here from the primary's
+            // with reflinks only (never a shared inode).
+            // trace:BUG-2383 | ai:claude
+            let seeded = crate::seat_target_seed::seed_seat_target(
+                target,
+                &isolated_target,
+                crate::seat_target_seed::LAUNCH_LOCK_WAIT,
+            );
+            eprintln!(
+                "  seat cargo target: {}",
+                crate::seat_target_seed::describe(&seeded)
+            );
         }
         write_session_env_file(&worktree_path, &isolated_target).with_context(|| {
             format!("writing session env shim under {}", worktree_path.display())
