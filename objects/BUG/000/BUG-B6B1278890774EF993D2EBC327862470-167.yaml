@@ -22,7 +22,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T06:47:54.074794793Z
-modified_at: 2026-11-02T04:35:08.638345082Z
+modified_at: 2026-11-02T06:05:57.328303854Z
 req_type: Bug
 tags:
 - audit
@@ -79,6 +79,13 @@ comments:
   modified_at: 2026-11-02T04:35:08.638345082Z
   session_id: 01a19a61042e
   harness_version: 2.1.316 (Claude Code)
+- id: 01a19add-4ed0-7050-9e8c-643b495f2c6a
+  author: joe
+  content: |
+    REWORK BRIEF (advisor, 2026-11-01 22:58 MST): PR #3229, CI red at ca80cd16. The only failure is the ratchet aida-cli-lib/src/tests/node_alias_display_ratchet_tests.rs:99: 169 unmarked `.display_id()` calls remain, so lower BASELINE from 172 to 169. Merge main first if behind. Gate: FASTTRACK plus `cargo test -p aida-cli-lib node_alias_display_ratchet`, then push.
+  created_at: 2026-11-02T06:05:57.328303854Z
+  modified_at: 2026-11-02T06:05:57.328303854Z
+  session_id: 1f56bd1e-c059-4f73-b8df-e18b2170fdfc
 history:
 - id: 01a195dd-7495-70a1-9fe4-3bf923e003f5
   author: joe
