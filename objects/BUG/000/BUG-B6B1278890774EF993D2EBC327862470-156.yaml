@@ -18,7 +18,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T02:22:11.107502056Z
-modified_at: 2026-11-02T02:56:07.834770955Z
+modified_at: 2026-11-02T03:39:51.160599458Z
 req_type: Bug
 tags:
 - area:agents
@@ -74,6 +74,13 @@ comments:
   created_at: 2026-11-02T02:52:07.305045927Z
   modified_at: 2026-11-02T02:52:07.305045927Z
   session_id: 126bbd5a-a92f-452b-ab0b-2637a1db42c2
+- id: 01a19a57-8bf8-7ca1-b69e-abb7cc505a07
+  author: joe
+  content: 'Review round 2 finding 4 (follow-up, outside AC scope, not filed: spec ID allocation is read-only in this sandbox). worktree_gc.rs active_worktree_paths, leases.rs stale classification (~2257/~2719) and session_start.rs still use claude-only probe_live_claude_sessions. A hand-started codex clone whose creator pid has exited reads live in aida ps but inactive to GC and stale classification. Needs a follow-up bug so worktree GC never reaps a codex-occupied clone.'
+  created_at: 2026-11-02T03:39:51.160599458Z
+  modified_at: 2026-11-02T03:39:51.160599458Z
+  session_id: 01a19a2f7ed4
+  harness_version: 2.1.316 (Claude Code)
 history:
 - id: 01a194ea-5f72-7e03-8745-ebc42cce4fcf
   author: joe
