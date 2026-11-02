@@ -18,7 +18,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T08:28:54.983776375Z
-modified_at: 2026-11-01T23:42:35.294968347Z
+modified_at: 2026-11-02T00:00:00.985351739Z
 req_type: Bug
 tags:
 - forge
@@ -211,6 +211,13 @@ comments:
   created_at: 2026-11-01T23:42:35.294968347Z
   modified_at: 2026-11-01T23:42:35.294968347Z
   session_id: 126bbd5a-a92f-452b-ab0b-2637a1db42c2
+- id: 01a1998e-47d9-7301-92c1-72dbab200cad
+  author: joe
+  content: 'Round 4 fix pushed as d27abc68113 on PR #3208 (base 3d06aedb2d4e). F1/F2: one batched GraphQL read (headRefOid + commits(last:100){totalCount oid message}) decides unmatched candidates. A PR is decided only when its total fits the page, SHAs are valid/distinct and the last oid is the head from the same response; anything else falls back to the exact REST probe for that PR alone, so the typed-unknown policy is unchanged. Deadline went from 10s to 20s. F3: a continuation extends the ID only with >=3 digits that are not a YYYY-MM-DD date, so -N and dated session branches match again. F4: the single lookup short-circuits on the first exact match. F5: new tests for the latency fixture with 14 unrelated PRs, batch-evidence shapes and session-branch positives. Local: cargo check --tests PASS, make check-ci-fast PASS (36 gates), diff --check clean. Filtered cargo test NOT completed: 3 attempts killed at the 10-minute tool ceiling compiling the aida-cli-lib test binary (cold target, load ~7 on 6 cores). That is a compile limit, not a test failure. The GraphQL shape is not measured live (network denied in the sandbox). Exact-head CI is the test gate. The /tmp result file could not be written (outside the sandbox).'
+  created_at: 2026-11-02T00:00:00.985351739Z
+  modified_at: 2026-11-02T00:00:00.985351739Z
+  session_id: 01a1995fa6d6
+  harness_version: 2.1.316 (Claude Code)
 history:
 - id: 01a1963a-2b42-7cd2-a795-0772bcc408d1
   author: joe
