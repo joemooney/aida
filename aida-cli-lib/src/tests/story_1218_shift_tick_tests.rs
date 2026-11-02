@@ -54,6 +54,7 @@ fn probes(candidates: Vec<Candidate>) -> Probes {
             spent_24h: 1_000_000_000,
             last_run_at: Some(now() - Duration::minutes(5)),
             last_verdict: Some("ok".to_string()),
+            codex_available: true,
         }),
         vendor: "claude".to_string(),
         vendor_error: None,
@@ -742,6 +743,32 @@ fn shift_refuses_when_budget_evidence_missing_or_stale() {
     let g = guard(&r, "budget-evidence");
     assert!(g.pass && g.detail.contains("measured"), "{}", g.detail);
     assert!(!g.detail.contains("NOT"), "{}", g.detail);
+    // TASK-2731: a run that found no Codex sessions tree did not measure
+    // Codex spend, so a Codex wave is refused — and the local override still
+    // admits it, saying so. Claude coverage is unaffected.
+    // trace:TASK-2731 | ai:claude
+    let mut p = probes(vec![drain("TASK-1")]);
+    p.vendor = "codex".into();
+    p.budget.as_mut().unwrap().codex_available = false;
+    let (r, _) = run(&cfg_on(), &p, &mut ShiftState::default(), &ctx());
+    let g = guard(&r, "budget-evidence");
+    assert!(
+        !g.pass && g.detail.contains("cannot see codex"),
+        "{}",
+        g.detail
+    );
+    let allow = cfg_with(
+        None,
+        Some(&format!(
+            "[repo.\"{REPO}\"]\nenabled = true\nallow_uncovered_vendors = [\"codex\"]\n"
+        )),
+    );
+    let (r, _) = run(&allow, &p, &mut ShiftState::default(), &ctx());
+    let g = guard(&r, "budget-evidence");
+    assert!(g.pass && g.detail.contains("NOT measured"), "{}", g.detail);
+    p.vendor = "claude".into();
+    let (r, _) = run(&cfg_on(), &p, &mut ShiftState::default(), &ctx());
+    assert!(guard(&r, "budget-evidence").pass);
     // The override is local-only: the committed config cannot grant it.
     let committed = cfg_with(
         Some("[shift]\nallow_uncovered_vendors = [\"codex\"]\n"),
