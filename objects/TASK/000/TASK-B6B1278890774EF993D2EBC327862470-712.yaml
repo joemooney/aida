@@ -1,0 +1,30 @@
+id: 01a19cef-8b75-7102-9346-c53bc4fc4ba6
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-712
+title: 'Non-blocking (minor): innermost_agent_vendor''s depth comparison (advisor_cmd_ro…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-2755, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  Non-blocking (minor): innermost_agent_vendor's depth comparison (advisor_cmd_root.rs:297-309) has no unit test; only resolve_register_identity's pure matrix is covered. Split the (claude_depth, codex_depth) -> vendor choice into a pure fn to test it.
+
+  PR: #3262
+  Reviewed sha: 281cd993fe0dfa52bce287fde8116be9f4741857
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-02T15:45:06.933394368Z
+modified_at: 2026-11-02T15:45:06.933394368Z
+req_type: Task
+tags:
+- carried-from:TASK-2755
+- finding-hash:a47644e6
+- from-review:PR-3262
+- kind:carried-forward
+filed_at:
+  code_sha: 6fafff141a37de5cd8d6dc06261deb83590f55b1
+  branch: main
+  dirty: true
+  aida_version: 0.16.0
+  aida_build_sha: 6a3f67671a9
+  vendor: claude
+  session: ee0bf351-6b17-486f-a38e-cfbb1343c426
