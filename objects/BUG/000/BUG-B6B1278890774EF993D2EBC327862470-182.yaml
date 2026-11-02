@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-182
 agreed_id: BUG-2413
 title: Train refuses a drain PR when its trailer names superseded bundled specs whose execution mode is unset (treated as supervised)
 description: 'Observed on #3239 (TASK-2733), #3240 (TASK-2731/2737) and #3250 (TASK-HOME-692/693): each carrier was drain, but bundled specs superseded into it kept mode unset and the train refused ''X is marked unset (supervised): its merge needs a human''. Workaround: aida edit <each> --mode drain. Expected: a spec superseded-by the carrier inherits the carrier''s mode for gating (or is ignored by the gate), and an unset mode on a superseded spec never forces supervision.'
-status: InProgress
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-02T12:46:25.266631877Z
-modified_at: 2026-11-02T20:24:45.350860928Z
+modified_at: 2026-11-02T20:49:05.336788857Z
 req_type: Bug
 tags:
 - area:autonomy
@@ -54,6 +54,20 @@ history:
   timestamp: 2026-11-02T20:24:45.469713609Z
   session_id: ee0bf351-6b17-486f-a38e-cfbb1343c426
   changes: []
+- id: 01a19e05-d734-7e60-8837-d3b175c7a83c
+  author: aida-auto-bump
+  timestamp: 2026-11-02T20:49:05.332830338Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a19e05-d738-7a20-b002-bae3db16d167
+  timestamp: 2026-11-02T20:49:05.336784632Z
+  agent: implementer
+  commit_sha: 90e94b5e7e8debe9e52287763030e4eec48d1972
+  summary: 'BUG-2412 PASS: train PRs record their owner (host/pid/start/pidns/boot) and a later train closes one only when the owner shares its host, boot and pidns and is dead, with no live train lease; foreign or unreadable owners keep blocking. BUG-2413 PASS: a superseded spec with no mode gates on its carrier''s mode (bounded chain, own mode wins). Rework items 1-2 met; CI green at 828c570 (run 41515082931).'
+  review_verdict: approved
 execution_mode: drain
 filed_at:
   code_sha: 5b21d041d218b3030c4878b5cabb862da086026e
@@ -63,3 +77,7 @@ filed_at:
   aida_build_sha: 6a3f67671a9
   vendor: claude
   session: 1f56bd1e-c059-4f73-b8df-e18b2170fdfc
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-02T20:49:05.332825123Z
+  completion_sha: 90e94b5e7e8debe9e52287763030e4eec48d1972
