@@ -22,7 +22,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T06:47:39.554427385Z
-modified_at: 2026-11-02T13:34:58.506364476Z
+modified_at: 2026-11-02T13:35:03.275860832Z
 req_type: Task
 tags:
 - audit
@@ -53,6 +53,12 @@ comments:
   created_at: 2026-11-02T12:57:45.599997196Z
   modified_at: 2026-11-02T12:57:45.599997196Z
   session_id: a6bd9934-24a9-45f4-a5c0-d8e217b12479
+- id: 01a19c78-786b-7601-a0c0-141015b2b49f
+  author: joe
+  content: 'ADVISOR (06:38): blocked on STORY-2238 and STORY-2254 per the proxy decision. Re-dispatch once both complete.'
+  created_at: 2026-11-02T13:35:03.275860832Z
+  modified_at: 2026-11-02T13:35:03.275860832Z
+  session_id: ee0bf351-6b17-486f-a38e-cfbb1343c426
 history:
 - id: 01a195dd-3c94-7111-aa51-6281592ed6cb
   author: joe
