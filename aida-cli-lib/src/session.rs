@@ -5043,20 +5043,48 @@ fn adapt_coordinator_args(
     }
 }
 
-/// Wait on a coordinator `cmd`, releasing the child handle `guard` protects
-/// only if the spawn itself fails. Disarm at spawn: a running child owns the
-/// handle it was given.
-// trace:BUG-2389 | ai:claude
-pub(crate) fn coordinator_status_with_handle_guard(
+/// Codex finalization for a coordinator child (burndown, autopilot intake,
+/// questions clarify): stamp the child's own user and project root, then
+/// carry its delegated seat into Codex tool shells. A refusal is returned
+/// before anything spawns; the caller revokes the child grant it issued.
+/// Other vendors pass through untouched.
+// trace:BUG-2398 | ai:claude
+pub(crate) fn finalize_coordinator_launch(
+    vendor: HeadlessVendor,
     cmd: &mut std::process::Command,
+    project_root: &Path,
+) -> Result<()> {
+    if vendor != HeadlessVendor::Codex {
+        return Ok(());
+    }
+    cmd.env("AIDA_USER", crate::current_user_id(None))
+        .env("AIDA_PROJECT_ROOT", project_root);
+    crate::codex_tool_env::prepare_launch(cmd)
+}
+
+/// Finalize, then wait on a coordinator `cmd`, releasing the child handle
+/// `guard` protects unless the child actually spawns. Disarm at spawn: a
+/// running child owns the handle it was given. `stdout` is applied only after
+/// finalization, which rebuilds the Command and would drop earlier stdio.
+// trace:BUG-2389 | ai:claude
+// trace:BUG-2398 | ai:claude
+pub(crate) fn coordinator_status_with_handle_guard(
+    vendor: HeadlessVendor,
+    cmd: &mut std::process::Command,
+    project_root: &Path,
+    stdout: Option<std::process::Stdio>,
     mut guard: Option<crate::agent_handle::LaunchReservationGuard>,
-) -> std::io::Result<std::process::ExitStatus> {
+) -> Result<std::process::ExitStatus> {
     use crate::process_retry::RetryEtxtbsy;
+    finalize_coordinator_launch(vendor, cmd, project_root)?;
+    if let Some(stdout) = stdout {
+        cmd.stdout(stdout);
+    }
     let mut child = cmd.spawn_retrying_etxtbsy()?;
     if let Some(guard) = guard.as_mut() {
         guard.disarm();
     }
-    child.wait()
+    Ok(child.wait()?)
 }
 
 // trace:BUG-2389 | ai:codex

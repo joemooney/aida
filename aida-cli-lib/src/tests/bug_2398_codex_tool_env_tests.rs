@@ -472,24 +472,167 @@ fn bug_2398_prefix_and_wrapped_prefix_preserve_companion_without_tokens() {
     }
 }
 
+/// How a launch-inventory file finalizes the Codex children it launches.
+#[derive(Debug)]
+enum Finalization {
+    /// Calls `codex_tool_env::prepare_launch` at least this many times.
+    PrepareLaunch(usize),
+    /// Spawns only through `session::coordinator_status_with_handle_guard`,
+    /// which finalizes Codex children itself.
+    CoordinatorSpawn,
+    /// Assigns a selector but launches no Codex child (reason recorded).
+    NotACodexLaunch(&'static str),
+}
+
+/// ONE inventory of every production source file that hands a child Command
+/// its seat grant selector or spawns a coordinator child, pinned by exact
+/// marker count. A file not listed, or a listed file whose count moved, fails:
+/// a new launch site must be audited (Codex: finalize through
+/// `prepare_launch`) and recorded here. This is how the #3217 coordinator
+/// launches would have been caught.
+// trace:BUG-b6b1278890774ef993d2ebc327862470-172.ac022c22 | ai:claude
+const LAUNCH_INVENTORY: &[(&str, usize, Finalization)] = &[
+    ("agent_launch.rs", 3, Finalization::PrepareLaunch(2)),
+    ("autopilot_intake.rs", 3, Finalization::CoordinatorSpawn),
+    ("burndown_run.rs", 4, Finalization::CoordinatorSpawn),
+    ("compete_cmd.rs", 1, Finalization::PrepareLaunch(1)),
+    (
+        "containment/supervisor.rs",
+        1,
+        Finalization::NotACodexLaunch(
+            "cfg(test) synthetic selector proving the probe's env_clear forwards none",
+        ),
+    ),
+    ("dispatch.rs", 1, Finalization::PrepareLaunch(1)),
+    ("phase_driver.rs", 1, Finalization::PrepareLaunch(1)),
+    ("phase_driver_trait.rs", 1, Finalization::PrepareLaunch(1)),
+    ("questions.rs", 2, Finalization::CoordinatorSpawn),
+    // Claude-only builders/resumes plus the shared seat-env helper; every
+    // Codex spawn in this file (incl. the coordinator spawn) finalizes.
+    ("session.rs", 12, Finalization::PrepareLaunch(5)),
+];
+
+/// Child-launch markers in whitespace-normalized source: a grant selector
+/// assigned to a Command, the shared seat-env helper, or a coordinator spawn.
+fn launch_markers(normalized: &str) -> usize {
+    normalized
+        .matches(".env(crate::gate::seat_authority::GRANT_ENV")
+        .count()
+        + normalized
+            .matches("apply_headless_child_seat_env(&mut")
+            .count()
+        + normalized
+            .matches("coordinator_status_with_handle_guard(")
+            .count()
+        - normalized
+            .matches("fncoordinator_status_with_handle_guard(")
+            .count()
+}
+
+fn production_sources(dir: &Path, out: &mut Vec<std::path::PathBuf>) {
+    for entry in std::fs::read_dir(dir).unwrap() {
+        let path = entry.unwrap().path();
+        let name = path.file_name().unwrap().to_string_lossy().into_owned();
+        if path.is_dir() {
+            if name != "tests" {
+                production_sources(&path, out);
+            }
+        } else if name.ends_with(".rs")
+            && !name.ends_with("_tests.rs")
+            && !name.starts_with("test_")
+        {
+            out.push(path);
+        }
+    }
+}
+
+// trace:BUG-b6b1278890774ef993d2ebc327862470-172.ac022c22 | ai:claude
 #[test]
 fn bug_2398_final_spawn_boundary_ratchet() {
-    for (source, expected) in [
-        (include_str!("../agent_launch.rs"), 2),
-        (include_str!("../session.rs"), 4),
-        (include_str!("../phase_driver_trait.rs"), 1),
-        (include_str!("../phase_driver.rs"), 1),
-        (include_str!("../dispatch.rs"), 1),
-        (include_str!("../compete_cmd.rs"), 1),
-    ] {
-        assert!(
-            source
-                .matches("crate::codex_tool_env::prepare_launch")
-                .count()
-                >= expected,
-            "a managed Codex spawn path lost finalization"
+    let src = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+    let mut files = Vec::new();
+    production_sources(&src, &mut files);
+    let normalize = |text: &str| text.split_whitespace().collect::<String>();
+    let mut found = std::collections::BTreeMap::new();
+    for path in files {
+        let text = std::fs::read_to_string(&path).unwrap();
+        let markers = launch_markers(&normalize(&text));
+        if markers > 0 {
+            let rel = path
+                .strip_prefix(&src)
+                .unwrap()
+                .to_string_lossy()
+                .into_owned();
+            found.insert(rel, (markers, text));
+        }
+    }
+    for (rel, (markers, _)) in &found {
+        let Some((_, expected, _)) = LAUNCH_INVENTORY.iter().find(|(f, ..)| f == rel) else {
+            panic!(
+                "{rel} launches a seat-granted child but is not in LAUNCH_INVENTORY: a Codex \
+                 child must finalize through codex_tool_env::prepare_launch; audit it and record it"
+            );
+        };
+        assert_eq!(
+            markers, expected,
+            "{rel}: child-launch site count changed; audit the new site for Codex \
+             finalization (prepare_launch) and update LAUNCH_INVENTORY"
         );
     }
+    for (rel, _, how) in LAUNCH_INVENTORY {
+        let (_, text) = found
+            .get(*rel)
+            .unwrap_or_else(|| panic!("stale LAUNCH_INVENTORY entry {rel}"));
+        match how {
+            Finalization::PrepareLaunch(n) => assert!(
+                text.matches("crate::codex_tool_env::prepare_launch(")
+                    .count()
+                    >= *n,
+                "{rel}: a managed Codex spawn path lost finalization"
+            ),
+            Finalization::CoordinatorSpawn => {
+                // Every coordinator call site revokes the child grant it
+                // issued after the call returns, so a finalization refusal
+                // leaves no live grant.
+                for call in text
+                    .split("session::coordinator_status_with_handle_guard(")
+                    .skip(1)
+                {
+                    let rest_of_fn = call.split("\n}\n").next().unwrap();
+                    assert!(
+                        rest_of_fn.contains("revoke_headless_child_grant("),
+                        "{rel}: a coordinator launch does not revoke its child grant"
+                    );
+                }
+                assert!(!text.contains("crate::codex_tool_env::prepare_launch("));
+            }
+            Finalization::NotACodexLaunch(reason) => assert!(!reason.is_empty()),
+        }
+    }
+    // The coordinator spawn finalizes BEFORE stdio and spawn: finalization
+    // rebuilds the Command and would drop stdio configured earlier.
+    let session = include_str!("../session.rs");
+    let finalize = session
+        .split("fn finalize_coordinator_launch(")
+        .nth(1)
+        .unwrap();
+    assert!(finalize
+        .split("\n}\n")
+        .next()
+        .unwrap()
+        .contains("crate::codex_tool_env::prepare_launch(cmd)"));
+    let spawn = session
+        .split("fn coordinator_status_with_handle_guard(")
+        .nth(1)
+        .unwrap()
+        .split("\n}\n")
+        .next()
+        .unwrap();
+    let at = |needle: &str| spawn.find(needle).unwrap_or_else(|| panic!("{needle}"));
+    assert!(
+        at("finalize_coordinator_launch(vendor, cmd, project_root)?") < at("cmd.stdout(stdout)")
+    );
+    assert!(at("cmd.stdout(stdout)") < at("spawn_retrying_etxtbsy()"));
     let queue = include_str!("../queue_cmd.rs");
     assert!(queue.contains("session::exec_codex_session("));
     // Pure composers stay pure; caller-side customization precedes finalization.
@@ -502,6 +645,99 @@ fn bug_2398_final_spawn_boundary_ratchet() {
         run.find("customize(&mut child_cmd)").unwrap()
             < run.find("crate::codex_tool_env::prepare_launch").unwrap()
     );
+}
+
+/// A coordinator-launched Codex child (the #3217 burndown path) carries its
+/// delegated seat into tool shells through `-c shell_environment_policy.set`
+/// overrides, keeps the stdout configured by its caller, and a preflight
+/// refusal stops the launch before the model ever runs. A fake `codex`
+/// records argv; no model call, CI-runnable.
+// trace:BUG-b6b1278890774ef993d2ebc327862470-172.ac022c22 | ai:claude
+#[test]
+fn bug_2398_coordinator_codex_launch_keeps_delegated_seat() {
+    let root = tempfile::tempdir().unwrap();
+    std::fs::create_dir(root.path().join(".git")).unwrap();
+    let fake = root.path().join("codex");
+    let log = root.path().join("argv.log");
+    let refuse = root.path().join("refuse");
+    let calls = root.path().join("calls.log");
+    crate::test_exec::write_executable(
+        &fake,
+        &format!(
+            "#!/bin/sh\necho \"CALL $*\" >> '{calls}'\ncase \"$*\" in\n*--probe-seat*) [ -e '{refuse}' ] && {{ echo 'seat_grant_valid=false cause=Revoked'; exit 1; }}; echo 'seat_grant_valid=true expected_seat=true'; exit 0;;\n--version) echo 'codex-cli 0.0.0'; exit 0;;\nesac\necho EXEC >> '{log}'\nfor a in \"$@\"; do echo \"$a\" >> '{log}'; done\necho coordinator-stdout\n",
+            refuse = refuse.display(),
+            log = log.display(),
+            calls = calls.display(),
+        ),
+    );
+    let _ambient = crate::test_env::AmbientGuard::hermetic_and(
+        root.path(),
+        None,
+        &[
+            ("AIDA_HEADLESS_VENDOR", Some("codex")),
+            ("AIDA_AGENT_CMD", Some(fake.to_str().unwrap())),
+            ("AIDA_OS_WRAP", Some("0")),
+            ("AIDA_CONTAINED", None),
+            // Ambient launcher context the child never assigned.
+            ("AIDA_SESSION_SCOPE", Some("LAUNCHER-SCOPE")),
+        ],
+    );
+    let grant = uuid::Uuid::new_v4().to_string();
+    let build = || {
+        crate::burndown_run::build_burndown_quiet_command(
+            crate::session::HeadlessVendor::Codex,
+            "test prompt",
+            "bypassPermissions",
+            &grant,
+            "CEILING_KEY",
+            "100",
+            false,
+        )
+        .unwrap()
+    };
+    let out = root.path().join("stdout.log");
+    let status = crate::session::coordinator_status_with_handle_guard(
+        crate::session::HeadlessVendor::Codex,
+        &mut build(),
+        root.path(),
+        Some(std::fs::File::create(&out).unwrap().into()),
+        None,
+    )
+    .unwrap_or_else(|e| {
+        let calls = std::fs::read_to_string(&calls).unwrap_or_default();
+        panic!("{e:#}\n{calls}")
+    });
+    assert!(status.success());
+    let argv = std::fs::read_to_string(&log).unwrap();
+    for expected in [
+        format!("shell_environment_policy.set.{GRANT_ENV}=\"{grant}\""),
+        "shell_environment_policy.set.AIDA_SESSION_ROLE=\"implementer\"".to_string(),
+        format!(
+            "shell_environment_policy.set.AIDA_PROJECT_ROOT={}",
+            toml::Value::String(root.path().display().to_string())
+        ),
+    ] {
+        assert!(argv.lines().any(|l| l == expected), "{expected}\n{argv}");
+    }
+    assert!(!argv.contains("LAUNCHER-SCOPE"), "{argv}");
+    assert_eq!(
+        std::fs::read_to_string(&out).unwrap(),
+        "coordinator-stdout\n",
+        "caller stdout must survive finalization"
+    );
+    // Refusal: the probe fails, nothing execs, the caller gets the cause.
+    std::fs::remove_file(&log).unwrap();
+    std::fs::write(&refuse, "").unwrap();
+    let error = crate::session::coordinator_status_with_handle_guard(
+        crate::session::HeadlessVendor::Codex,
+        &mut build(),
+        root.path(),
+        None,
+        None,
+    )
+    .unwrap_err();
+    assert!(format!("{error:#}").contains("Revoked"), "{error:#}");
+    assert!(!log.exists(), "a refused coordinator child must never exec");
 }
 
 // Actual supported recorder output, copied byte-for-byte to the PR key.

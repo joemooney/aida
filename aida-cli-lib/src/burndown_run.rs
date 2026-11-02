@@ -638,10 +638,17 @@ pub(crate) fn handle_burndown_run(
                 contained,
             )
             .and_then(|mut command| {
-                session::coordinator_status_with_handle_guard(&mut command, handle_guard)
-                    .with_context(|| {
-                        format!("failed to launch {} headless coordinator", vendor.program())
-                    })
+                // trace:BUG-2398 | ai:claude
+                session::coordinator_status_with_handle_guard(
+                    vendor,
+                    &mut command,
+                    &project_root,
+                    None,
+                    handle_guard,
+                )
+                .with_context(|| {
+                    format!("failed to launch {} headless coordinator", vendor.program())
+                })
             });
             if let Some(id) = child_grant.id() {
                 session::revoke_headless_child_grant(id);
@@ -2132,9 +2139,15 @@ pub(crate) fn run_burndown_verbose(
         contained,
     )
     .and_then(|mut command| {
-        command.stdout(std::process::Stdio::from(log));
-        session::coordinator_status_with_handle_guard(&mut command, handle_guard)
-            .with_context(|| format!("failed to launch {} headless coordinator", vendor.program()))
+        // stdout is applied after Codex finalization. trace:BUG-2398 | ai:claude
+        session::coordinator_status_with_handle_guard(
+            vendor,
+            &mut command,
+            &project_root,
+            Some(std::process::Stdio::from(log)),
+            handle_guard,
+        )
+        .with_context(|| format!("failed to launch {} headless coordinator", vendor.program()))
     });
     // Always stop the tee, even on spawn failure, so the background thread exits.
     tee_handle.stop();
