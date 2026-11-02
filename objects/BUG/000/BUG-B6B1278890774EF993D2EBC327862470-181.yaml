@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-181
 agreed_id: BUG-2412
 title: A killed aida pr train leaves its train PR open, and the next train refuses the member as 'already riding live train PR' with no liveness check
 description: 'Observed 2026-11-02 02:05: an advisor-side timeout killed ''aida pr train 3214 3240'' mid-bisect. Train PR #3248 (land #3240) stayed open with no owning process. The next train refused #3240: ''it is already riding live train PR #3248; a PR rides one train at a time''. Manual fix: gh pr close 3248. Expected: a train records its owner pid or lease; a later train treats a train PR whose owner is dead as abandoned (close or adopt it) instead of blocking. Related: BUG-2220.'
-status: InProgress
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-02T12:46:17.872589821Z
-modified_at: 2026-11-02T20:24:43.794989219Z
+modified_at: 2026-11-02T20:49:03.200799417Z
 req_type: Bug
 tags:
 - area:merge-train
@@ -94,6 +94,20 @@ history:
   timestamp: 2026-11-02T20:24:43.878075673Z
   session_id: ee0bf351-6b17-486f-a38e-cfbb1343c426
   changes: []
+- id: 01a19e05-cedb-7360-9767-7b4c929ed4f6
+  author: aida-auto-bump
+  timestamp: 2026-11-02T20:49:03.195051374Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a19e05-cee0-7da0-8116-7bcde4057136
+  timestamp: 2026-11-02T20:49:03.200795903Z
+  agent: aida
+  commit_sha: 90e94b5e7e8debe9e52287763030e4eec48d1972
+  summary: 'BUG-2412 PASS: train PRs record their owner (host/pid/start/pidns/boot) and a later train closes one only when the owner shares its host, boot and pidns and is dead, with no live train lease; foreign or unreadable owners keep blocking. BUG-2413 PASS: a superseded spec with no mode gates on its carrier''s mode (bounded chain, own mode wins). Rework items 1-2 met; CI green at 828c570 (run 41515082931).'
+  review_verdict: approved
 execution_mode: drain
 filed_at:
   code_sha: 5b21d041d218b3030c4878b5cabb862da086026e
@@ -103,3 +117,7 @@ filed_at:
   aida_build_sha: 6a3f67671a9
   vendor: claude
   session: 1f56bd1e-c059-4f73-b8df-e18b2170fdfc
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-02T20:49:03.195045193Z
+  completion_sha: 90e94b5e7e8debe9e52287763030e4eec48d1972
