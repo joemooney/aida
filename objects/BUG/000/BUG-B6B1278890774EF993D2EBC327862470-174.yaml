@@ -14,12 +14,12 @@ description: |
   4. Validate live recovery with a sanctioned train and exact protected-head checks before landing. Do not simply retry blind or substitute raw gh merge. Record prior3202 failure and full recovery evidence.
 
   LIGHT one targeted train/CI filter plus fastgates; fixtures/fakeHOME only, no actual admin/protection changes. Independent review, ordinary guarded integration. Claude quota exhausted; implement on Codex.
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T09:27:24.546816181Z
-modified_at: 2026-11-02T02:24:58.725173232Z
+modified_at: 2026-11-02T02:58:05.045252028Z
 req_type: Bug
 tags:
 - ci
@@ -103,6 +103,15 @@ history:
   timestamp: 2026-11-02T02:24:59.746767712Z
   session_id: 126bbd5a-a92f-452b-ab0b-2637a1db42c2
   changes: []
+- id: 01a19a31-4e75-78c0-a590-624bbc70ee3d
+  author: aida-orchestrator
+  timestamp: 2026-11-02T02:58:05.045276243Z
+  session_id: 01a19a2ee5dd
+  harness_version: 2.1.316 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 4ce0af750fcb68d4adf57496e4e002aefd8ace77
   branch: main
@@ -110,3 +119,11 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: 4ce0af750fc
   vendor: codex
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'Snapshot readiness misclassifies the real in-flight CI shape: needs-gated aggregate trips the 600s Missing bound while lanes run, and held-member trains go Red before lanes settle (BUG-2214 regression); live recovery (AC4) unverified; PR CI still running.'
+  recovery_hint: address the review findings, move BUG-2401 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-11-02T02:58:05.045252028Z
