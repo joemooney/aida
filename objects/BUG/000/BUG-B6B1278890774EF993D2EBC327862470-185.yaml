@@ -1,0 +1,24 @@
+id: 01a19c63-d0b7-7c33-a3fa-deb3b52d1db5
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-185
+agreed_id: BUG-2416
+title: Guided Codex launch in zen_drive_root sets AIDA_SESSION_ROLE without codex_tool_env::prepare_launch or a grant decision
+description: 'Found in the PR #3256 review (BUG-2395). zen_drive_root.rs launches a guided Codex session that sets AIDA_SESSION_ROLE but bypasses codex_tool_env::prepare_launch and makes no grant decision, so it is listed as a KnownGap in ROLE_LAUNCH_SITES. Expected: the launch goes through prepare_launch with an explicit grant decision (delegate or refuse), like every other Codex launch site, and the KnownGap entry is removed so the ratchet enforces it. Acceptance: ROLE_LAUNCH_SITES has no zen_drive_root KnownGap, and a test asserts that the guided Codex argv and env come from prepare_launch.'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-02T13:12:29.623628105Z
+modified_at: 2026-11-02T13:12:29.623628105Z
+req_type: Bug
+tags:
+- area:codex
+- authority
+- vendor:codex
+filed_at:
+  code_sha: 0ce3c0ba6e620e3a6cf48cc50ce5dbc5235cc4b3
+  branch: main
+  dirty: true
+  aida_version: 0.16.0
+  aida_build_sha: 6a3f67671a9
+  vendor: claude
+  session: ee0bf351-6b17-486f-a38e-cfbb1343c426
