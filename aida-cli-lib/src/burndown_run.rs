@@ -413,10 +413,11 @@ pub(crate) fn handle_burndown_run(
     // The skill re-resolves the ready set authoritatively (same gate), so the
     // preflight list is what WILL drain. Build the headless invocation.
     let prompt = burndown_skill_prompt(status, tag, batch, max, concurrency);
-    let contained = session::aida_contained_env()?;
     // Resolved once: the preview, the messages and the launch all use this
-    // vendor. trace:BUG-2389 | ai:claude
-    let vendor = session::resolve_headless_vendor(&find_project_root()?);
+    // vendor and containment. trace:BUG-2389 BUG-2393 | ai:claude
+    let launch_root = find_project_root()?;
+    let contained = session::drain_contained(&launch_root)?;
+    let vendor = session::resolve_headless_vendor(&launch_root);
     session::require_vendor_containment(vendor, contained, "headless coordinator")?;
     let mode_str = session::coordinator_permission_mode(vendor, permission_mode, contained)?;
     let mode = &mode_str;

@@ -1604,7 +1604,8 @@ pub(crate) fn questions_clarify(
     let prompt = format!("/aida-clarify {}", targets.join(" "));
     let project_root = find_project_root()?;
     let vendor = session::resolve_headless_vendor(&project_root);
-    let contained = session::aida_contained_env()?;
+    // trace:BUG-2393 | ai:claude
+    let contained = session::drain_contained(&project_root)?;
     if dry_run {
         // A preview must not reserve a child identity or probe a harness version.
         // trace:BUG-2389 | ai:codex ai:claude
@@ -1689,6 +1690,8 @@ pub(crate) fn questions_remedy(
     let tee = crate::headless_tee::TeeOptions::from_env_and_flag(false)
         .with_label(format!("remedy-{}", req.display_id().to_ascii_lowercase()));
     let session_id = uuid::Uuid::now_v7().to_string();
+    // trace:BUG-2393 | ai:claude
+    let contained = session::drain_contained(&project_root)?;
     let status = session::spawn_vendor_headless_with_seat(
         vendor,
         aida_core::agents_config::AgentSeat::Advisor,
@@ -1696,7 +1699,7 @@ pub(crate) fn questions_remedy(
         &session_id,
         &log_path,
         &tee,
-        false,
+        contained,
     );
     let status = status?;
     if status.success() {

@@ -633,8 +633,9 @@ fn resolve_branch(cwd: &str) -> Option<String> {
 pub fn resume(id: Option<String>, limit: usize) -> Result<()> {
     // BUG-2157: a contained parent (strict parse, so a typo refuses) resumes
     // contained. Read before the picker so a refusal precedes any interaction.
-    // trace:BUG-2157 | ai:claude
-    let parent_contained = aida_contained_env()?;
+    // BUG-2393: configured containment counts too, not only the env.
+    // trace:BUG-2157 BUG-2393 | ai:claude
+    let parent_contained = drain_contained(&headless_worktree_root())?;
     let target = match id {
         Some(prefix) => resolve_resume_target(&prefix)?,
         None => pick_interactive(limit)?,
@@ -1437,8 +1438,9 @@ pub(crate) fn analysis_headless_launch(
 }
 
 /// Spawn a headless analysis pass on [`analysis_headless_launch`]'s vendor
-/// and seat, uncontained unless the parent is.
-// trace:BUG-2389 | ai:claude
+/// and seat, contained when the parent is or the project/user configuration
+/// asks for it ([`drain_contained`]).
+// trace:BUG-2389 BUG-2393 | ai:claude
 pub(crate) fn spawn_analysis_headless(
     project_root: &Path,
     prompt: &str,
@@ -1447,7 +1449,13 @@ pub(crate) fn spawn_analysis_headless(
     tee_opts: &crate::headless_tee::TeeOptions,
 ) -> Result<std::process::ExitStatus> {
     let (vendor, seat) = analysis_headless_launch(project_root);
-    spawn_vendor_headless_with_seat(vendor, seat, prompt, session_id, log_path, tee_opts, false)
+    // BUG-2393: configured containment (`[agents] contained`, `[contained]
+    // enable`) applies even when `AIDA_CONTAINED` is not in the environment.
+    // trace:BUG-2393 | ai:claude
+    let contained = drain_contained(project_root)?;
+    spawn_vendor_headless_with_seat(
+        vendor, seat, prompt, session_id, log_path, tee_opts, contained,
+    )
 }
 
 /// Compose the (program, argv) for a headless run of `vendor`'s CLI — the ONE
