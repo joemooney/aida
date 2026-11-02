@@ -1,0 +1,27 @@
+id: 01a19a5a-ff3d-7de0-8ef7-277bf69eed96
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-673
+title: 'NON-BLOCKING cosmetic docs/testing/task-2705-rework.md:50-52: stale sentence sa…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-2705, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  NON-BLOCKING cosmetic docs/testing/task-2705-rework.md:50-52: stale sentence says preflight returns a typed refusal if unshare, mount or unmount is denied with EPERM/EACCES/ENOSPC; code (supervisor.rs:287-293) and the following paragraph classify only nested unshare. Delete the stale sentence.
+  Reviewed sha: 94367e74ed9e9af0c2242dfc9799de38e2b4e1b1
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-02T03:43:37.277162943Z
+modified_at: 2026-11-02T03:43:37.277162943Z
+req_type: Task
+tags:
+- carried-from:TASK-2705
+- finding-hash:22c4ad72
+- from-review:TASK-2705
+- kind:carried-forward
+filed_at:
+  code_sha: 9a2168d8563579456bf669bb816ebdf5ff3aa355
+  branch: main
+  dirty: true
+  aida_version: 0.16.0
+  aida_build_sha: 6a3f67671a9
+  vendor: claude
