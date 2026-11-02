@@ -23,7 +23,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T06:45:38.111981577Z
-modified_at: 2026-11-02T08:46:08.303326049Z
+modified_at: 2026-11-02T08:48:04.278662647Z
 req_type: Bug
 tags:
 - architecture
@@ -228,6 +228,12 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-02T08:21:25.621943111Z
   modified_at: 2026-11-02T08:21:25.621943111Z
+  session_id: 1f56bd1e-c059-4f73-b8df-e18b2170fdfc
+- id: 01a19b71-bab6-7c93-963e-ea1c4e1328e6
+  author: joe
+  content: 'REWORK BRIEF (advisor, 2026-11-02 01:50 MST), round 6. Exact failures at 89be86e: (1) gates, portability ratchet: aida-cli-lib/src/tests/bug_2386_resume_routing_tests.rs:88 interpolates a filesystem path into a TOML basic string (worktree_path = "{}"). Build that lease TOML with the toml crate (or toml::Value for the path) instead of format!, or put the test behind #[cfg(unix)]. Serializing is preferred. (2) lib-1: headless_hint_tests::headless_env_launches_route_through_shared_argv_builders fails at session.rs ~line 6425, where the AIDA_HEADLESS launch builds its own argv with codex_resume_exec_args. Route that resume launch through the shared headless argv builder the test names (see how the other AIDA_HEADLESS launch sites in session.rs do it), not around the test. No other changes. Gate: cargo test -p aida-cli-lib headless_hint_tests bug_2386, then make check-ci-fast. If cargo is denied, push and say so.'
+  created_at: 2026-11-02T08:48:04.278662647Z
+  modified_at: 2026-11-02T08:48:04.278662647Z
   session_id: 1f56bd1e-c059-4f73-b8df-e18b2170fdfc
 history:
 - id: 01a195db-6c30-7600-a068-211ab6c2eed8
