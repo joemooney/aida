@@ -1,0 +1,28 @@
+id: 01a19bf7-c964-7b43-b4cc-64955fe31571
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-700
+title: 'Non-blocking (cosmetic): STORY-2255 codex_tick tests now call std::env::set_cur…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on BUG-2398, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  Non-blocking (cosmetic): STORY-2255 codex_tick tests now call std::env::set_current_dir inside the path-isolated child. This is safe because the child is a separate process, but these fixtures depend on the cwd roster. A cwd-independent preflight fixture (explicit --project-root) would be less fragile.
+  Reviewed sha: 5e7e44e9eb959e0f527383c4a0a9c5dd223557ea
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-02T11:14:29.860484316Z
+modified_at: 2026-11-02T11:14:29.860484316Z
+req_type: Task
+tags:
+- carried-from:BUG-2398
+- finding-hash:b2f46db1
+- from-review:BUG-2398
+- kind:carried-forward
+filed_at:
+  code_sha: 2b9eaa5c3210f8343c475e9993c55cbadb9083d5
+  branch: main
+  dirty: true
+  aida_version: 0.16.0
+  aida_build_sha: 6a3f67671a9
+  vendor: claude
+  session: 1f56bd1e-c059-4f73-b8df-e18b2170fdfc
