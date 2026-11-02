@@ -186,7 +186,7 @@ impl VendorActivity for AgyActivity {
     }
 }
 
-fn codex_sessions_root() -> Option<PathBuf> {
+pub(crate) fn codex_sessions_root() -> Option<PathBuf> {
     if let Ok(root) = std::env::var("AIDA_CODEX_SESSIONS_DIR") {
         let trimmed = root.trim();
         if !trimmed.is_empty() {

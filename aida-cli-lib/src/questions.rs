@@ -1279,9 +1279,15 @@ pub(crate) fn handle_research_command(
     let log_path = project_root.join(format!(".aida/research/{display_id}-{date}.log"));
     let tee = crate::headless_tee::TeeOptions::from_env_and_flag(false)
         .with_label(format!("research:{display_id}"));
-    let status =
-        crate::session::spawn_claude_headless(&prompt, &session_id, &log_path, &tee, false)
-            .context("spawning headless research agent")?;
+    // trace:BUG-2389 | ai:codex ai:claude
+    let status = crate::session::spawn_analysis_headless(
+        &find_project_root().unwrap_or_else(|_| project_root.to_path_buf()),
+        &prompt,
+        &session_id,
+        &log_path,
+        &tee,
+    )
+    .context("spawning headless research agent")?;
     if !status.success() {
         anyhow::bail!(
             "research agent exited with {} — see log {}",
@@ -1595,75 +1601,32 @@ pub(crate) fn questions_clarify(
         targets.join(", ").cyan()
     );
 
-    let contained = session::aida_contained_env()?;
-
-    // Build the interactive invocation. Unlike the headless drain, clarify
-    // needs a human at the keyboard, so it launches plain interactive
-    // `claude "<prompt>"` — NOT `claude -p`.
     let prompt = format!("/aida-clarify {}", targets.join(" "));
-
+    let project_root = find_project_root()?;
+    let vendor = session::resolve_headless_vendor(&project_root);
+    let contained = session::aida_contained_env()?;
     if dry_run {
+        // A preview must not reserve a child identity or probe a harness version.
+        // trace:BUG-2389 | ai:codex ai:claude
+        let plan = session::advisor_interactive_launch_plan(vendor, &prompt, contained)?;
         println!("\n{} dry run — not launching. Would run:", "·".dimmed());
-        if contained {
-            println!(
-                "  claude {} {prompt:?}",
-                crate::session::claude_contained_flags()?.join(" ")
-            );
-        } else {
-            println!("  claude {prompt:?}");
-        }
+        println!("  {} {:?}", plan.program, plan.args);
         return Ok(());
     }
-
+    // The builder reserves the child's handle; it is released unless the
+    // child actually spawns. trace:BUG-2389 | ai:claude
+    let handle_guard = session::child_reservation_guard();
+    let mut command = build_questions_clarify_command(vendor, &prompt, "", contained)?;
     println!(
-        "  {} launching interactive `claude` — answer its questions to author acceptance",
-        "→".green()
+        "  {} launching interactive `{}` — answer its questions to author acceptance",
+        "→".green(),
+        vendor.program()
     );
-    if contained {
-        println!(
-            "  {} {}",
-            "→".green(),
-            format!(
-                "claude {} {prompt:?}",
-                crate::session::claude_contained_flags()?.join(" ")
-            )
-            .dimmed()
-        );
-    } else {
-        println!(
-            "  {} {}",
-            "→".green(),
-            format!("claude {prompt:?}").dimmed()
-        );
-    }
-    println!();
-
-    // Interactive: inherit the terminal so the human can converse. `claude` is
-    // resolved off PATH (matching every other launch site); a missing binary
-    // surfaces as a guided error, not a raw ENOENT. STORY-762: on a
-    // codex-only machine the guidance names the alternatives instead of just
-    // demanding an install the machine may not permit — the clarify loop
-    // drives a Claude Code skill, so Codex parity arrives with the
-    // skills-parity work, not by swapping the binary here.
-    let project_root = find_project_root()?;
-    // Prepare before issuing authority: a filesystem refusal leaves no grant.
-    // trace:BUG-2218 TASK-2328 | ai:codex
-    if contained {
-        crate::session::prepare_contained_mailbox_for_launch(&project_root)?;
-    }
     let child_grant =
         crate::gate::seat_authority::issue_child(&project_root, "advisor", &current_user_id(None))?;
-    let status_code = build_questions_clarify_command(&prompt, &child_grant.id, contained)?
-        .status()
-        .map_err(|e| {
-            anyhow::anyhow!(
-                "failed to launch `claude` ({e}) — the acceptance-authoring loop drives a \
-                 Claude Code skill and needs the Claude Code CLI on PATH.\n\
-                 On a Codex-only machine, instead:\n\
-                 - answer questions directly: aida questions list / aida questions answer\n\
-                 - or edit acceptance by hand: aida edit <spec-id> --description ..."
-            )
-        });
+    command.env(crate::gate::seat_authority::GRANT_ENV, &child_grant.id);
+    let status_code = session::coordinator_status_with_handle_guard(&mut command, handle_guard)
+        .with_context(|| format!("failed to launch {}", vendor.program()));
     // trace:BUG-2170 | ai:antigravity
     crate::session::revoke_headless_child_grant(&child_grant.id);
     let status_code = status_code?;
@@ -1678,24 +1641,13 @@ pub(crate) fn questions_clarify(
 
 // trace:BUG-2124 trace:BUG-2171 trace:BUG-2170 | ai:antigravity
 pub(crate) fn build_questions_clarify_command(
+    vendor: session::HeadlessVendor,
     prompt: &str,
     child_grant_id: &str,
     contained: bool,
 ) -> Result<std::process::Command> {
-    let mut cmd = std::process::Command::new("claude");
-    if contained {
-        cmd.args(crate::session::claude_contained_flags()?);
-    }
-    cmd.arg(prompt)
-        .env("AIDA_SESSION_ROLE", "advisor")
-        .env(crate::gate::seat_authority::GRANT_ENV, child_grant_id);
-    crate::session::scrub_launcher_session_env(&mut cmd);
-    if contained {
-        cmd.env("AIDA_CONTAINED", "1");
-    } else {
-        cmd.env_remove("AIDA_CONTAINED");
-    }
-    Ok(cmd)
+    // trace:BUG-2389 | ai:codex
+    session::build_advisor_interactive_command(vendor, prompt, child_grant_id, contained)
 }
 
 /// `aida questions remedy <spec>` — the headless, bounded acceptance-authoring

@@ -21,8 +21,8 @@ answers "why is this spec still *open*?" (status / blockers / leases). This
 skill is the complementary **synthesis**: it reads the surrounding graph and
 explains the spec's *reason-for-being* in prose. Two verbs, two kinds of work.
 
-You are launched by `aida intent <spec>` as a headless `claude -p`. The launcher
-has already resolved the spec id and the output path; your job is the
+You are launched by `aida intent <spec>` as a headless advisor using the configured
+vendor. The launcher has already resolved the spec id and the output path; your job is the
 comprehension a CLI cannot produce.
 
 ## Inputs

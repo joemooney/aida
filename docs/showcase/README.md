@@ -4,6 +4,7 @@ A presentation for newcomers and engineering management, centered on **a governe
 
 - Open [index.html](index.html) for the interactive showcase.
 - Open [executive-brief.html](executive-brief.html) for a concise meeting handout. Its Print / Save as PDF button uses the browser's print dialog.
+- Open [engineering-audit.html](engineering-audit.html) for the interactive DORA, GitClear, and LinearB engineering architecture & delivery benchmark report.
 - Read [the detailed overview](../what-is-aida.md) for supporting technical context and limitations.
 
 The site is buildless and self-contained: HTML, CSS, JavaScript and an inline SVG diagram. It has no external font, package, analytics or image dependency. The landing page and brief work when opened directly from disk. To preserve the guide’s source and reference links, serve the repository layout with `docs/showcase/index.html` as the entry, or provide those linked docs alongside it; copying only this directory does not include the references. Publishing to a Git repository alone does not make the HTML a website.

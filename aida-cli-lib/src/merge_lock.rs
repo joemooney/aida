@@ -262,6 +262,25 @@ pub(crate) struct MergeLease {
 }
 
 impl MergeLease {
+    // trace:BUG-b6b1278890774ef993d2ebc327862470-179 | ai:codex
+    /// Validate the live guard as well as the on-disk holder before a train attempt.
+    pub(crate) fn covers(&self, root: &Path, base: &str, pr: u64) -> bool {
+        if !self.held || self.path != lock_path(root, base) {
+            return false;
+        }
+        std::fs::read_to_string(&self.path)
+            .ok()
+            .is_some_and(|body| {
+                let h = parse(&body);
+                is_complete_record(&body)
+                    && h.pr == Some(pr)
+                    && h.note == crate::pr_train::TRAIN_LEASE_NOTE
+                    && h.pid == std::process::id()
+                    && h.pid_start == aida_core::liveness::process_start_identity(h.pid)
+                    && stale_reason(&h, &crate::coordination::hostname()).is_none()
+            })
+    }
+
     // trace:TASK-1581 | ai:antigravity — the explicit `release(self)` had no
     // caller; `drop(lease)` is the same operation.
     fn do_release(&mut self) {
