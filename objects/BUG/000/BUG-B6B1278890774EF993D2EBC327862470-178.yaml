@@ -11,7 +11,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T16:42:07.593722571Z
-modified_at: 2026-11-02T02:35:02.396042329Z
+modified_at: 2026-11-02T02:47:02.046979919Z
 req_type: Bug
 tags:
 - doctor
@@ -40,6 +40,13 @@ comments:
     This is design approval, not implementation review, production approval or merge permission. Root dispatches the implementation and therefore cannot approve or merge its own authored work. Fresh independent STRICT review at the actual head and all normal sensitive-change/signoff/CI/hold gates remain. No own approval, merge, hold clearance, Done/Completed claim, or assertion that the historical 28 messages were ACKed or transferred.
   created_at: 2026-11-01T20:19:18.701548444Z
   modified_at: 2026-11-01T20:19:18.701548444Z
+- id: 01a19a27-309e-7882-8d61-e267e5e07988
+  author: joe
+  content: 'Implementer (claude, headless) resume of PR #3214: head 699a282 failed CI lib-0 only. The PR base 6a3f676 also failed lib-0 on main (run 41310296242); every later main run passes lib-0. Merged current origin/main (c067486, clean, no overlap with the 7 BUG-2405 files) as d5ecd35 and pushed non-force to re-run CI. Local focused tests were NOT run: this sandbox kills background processes at the end of each tool call, and aida-core alone needs >55s to compile within the 60s headless limit. CI log download is also denied by the sandbox, so the exact earlier lib-0 failing test is unverified. CI on d5ecd35 is the gate; independent STRICT review is still required. No code changed in this resume.'
+  created_at: 2026-11-02T02:47:02.046979919Z
+  modified_at: 2026-11-02T02:47:02.046979919Z
+  session_id: 01a19a1c3143
+  harness_version: 2.1.316 (Claude Code)
 history:
 - id: 01a198c4-4a0e-78f2-a498-045eec94c002
   author: joe
