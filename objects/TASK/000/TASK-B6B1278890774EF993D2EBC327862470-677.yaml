@@ -1,0 +1,27 @@
+id: 01a19a5b-339a-7e22-b580-3f3157e76ca3
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-677
+title: 'NON-BLOCKING minor tests.rs:225-229: assert_ready_or_isolation_unavailable pass…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-2705, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  NON-BLOCKING minor tests.rs:225-229: assert_ready_or_isolation_unavailable passes silently on IsolationState::Unknown when not required (any pre-isolation refusal); strictness relies on task_2705_closed_containment_tracer's Err arm. Also CI never runs task_2705_ under required-live flags on the AppArmor-restricted runner, so a full-lane regression is invisible to CI; live proof is advisor-attested (log does not echo flags/SHA).
+  Reviewed sha: 94367e74ed9e9af0c2242dfc9799de38e2b4e1b1
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-02T03:43:50.682530060Z
+modified_at: 2026-11-02T03:43:50.682530060Z
+req_type: Task
+tags:
+- carried-from:TASK-2705
+- finding-hash:8f844ee4
+- from-review:TASK-2705
+- kind:carried-forward
+filed_at:
+  code_sha: 9a2168d8563579456bf669bb816ebdf5ff3aa355
+  branch: main
+  dirty: true
+  aida_version: 0.16.0
+  aida_build_sha: 6a3f67671a9
+  vendor: claude
