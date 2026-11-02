@@ -7,12 +7,12 @@ description: |-
 
   NON-BLOCKING cosmetic docs/testing/task-2705-rework.md:50-52: stale sentence says preflight returns a typed refusal if unshare, mount or unmount is denied with EPERM/EACCES/ENOSPC; code (supervisor.rs:287-293) and the following paragraph classify only nested unshare. Delete the stale sentence.
   Reviewed sha: 94367e74ed9e9af0c2242dfc9799de38e2b4e1b1
-status: Draft
+status: Superseded
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-02T03:43:37.277162943Z
-modified_at: 2026-11-02T06:26:00.765987937Z
+modified_at: 2026-11-02T06:26:02.033295876Z
 req_type: Task
 tags:
 - carried-from:TASK-2705
@@ -32,6 +32,14 @@ history:
   timestamp: 2026-11-02T04:14:43.881429261Z
   session_id: 126bbd5a-a92f-452b-ab0b-2637a1db42c2
   changes: []
+- id: 01a19aef-b0b1-76c1-b6ac-bf610df7f575
+  author: joe
+  timestamp: 2026-11-02T06:26:02.033294035Z
+  session_id: 1f56bd1e-c059-4f73-b8df-e18b2170fdfc
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: 9a2168d8563579456bf669bb816ebdf5ff3aa355
   branch: main
