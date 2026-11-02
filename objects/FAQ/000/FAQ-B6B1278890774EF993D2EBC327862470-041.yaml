@@ -1,0 +1,45 @@
+id: 01a19c4c-86e5-71b1-b187-545032ab82fd
+spec_id: FAQ-b6b1278890774ef993d2ebc327862470-041
+agreed_id: FAQ-148
+title: Why does a review or rework lane fail with 'could not end dead lease', and how do I clear it safely?
+description: |
+  **A finished lane's lease still holds the branch. If its seat is clean and its HEAD is already in the PR, end it with `aida session end <id> --force --yes`, then requeue.**
+
+  ## Why
+  Headless implementer and reviewer lanes exit without ending their session lease. The next `aida queue work` on the same branch (a rework or a review of `PR-N`) tries to take the scope over. It refuses to discard a lease whose seat might hold unpushed work, so it stops with `could not end dead lease <id> ... add --force`.
+
+  ## How
+  1. Find the lease: `grep -l '"<branch>"' .aida/sessions/*.toml` (for a reviewer, the branch is `pr-N`).
+  2. Check that no process is live: the lease's `pid` is empty or dead.
+  3. Check that the seat is safe: `git -C <worktree> status --porcelain` prints nothing, and `git merge-base --is-ancestor $(git -C <worktree> rev-parse HEAD) <PR head sha>` succeeds.
+  4. Run `aida session end <id> --force --yes`. It still salvages a patch to `.aida/salvage/`.
+  5. Requeue the lane.
+
+  ## Caveat
+  - If ending is refused for mail retention ("recorded by a different build"), see BUG-2411.
+  - A false "holds work origin does not have" after an explicit-refspec push is BUG-2415.
+  - STORY-2315 proposes that relaunches do this check automatically.
+
+  ## See also
+  STORY-2315, BUG-2411, BUG-2415, BUG-2383
+status: Completed
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-02T12:47:03.397774580Z
+modified_at: 2026-11-02T12:47:03.397774580Z
+req_type: Faq
+tags:
+- audience:dev
+- topic:sessions
+filed_at:
+  code_sha: 5b21d041d218b3030c4878b5cabb862da086026e
+  branch: main
+  dirty: true
+  aida_version: 0.16.0
+  aida_build_sha: 6a3f67671a9
+  vendor: claude
+  session: 1f56bd1e-c059-4f73-b8df-e18b2170fdfc
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-02T12:47:03.397799840Z
