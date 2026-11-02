@@ -11,7 +11,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T09:05:52.470755532Z
-modified_at: 2026-11-02T06:45:51.243284977Z
+modified_at: 2026-11-02T07:21:24.714204467Z
 req_type: Task
 tags:
 - architecture
@@ -76,6 +76,20 @@ comments:
   created_at: 2026-11-02T06:44:43.907086317Z
   modified_at: 2026-11-02T06:44:43.907086317Z
   session_id: 1f56bd1e-c059-4f73-b8df-e18b2170fdfc
+- id: 01a19b22-63ea-7c62-8887-86b4d57ae574
+  author: mcp
+  content: |-
+    Implementer handoff: code and verification finished in /home/joe/ai/aida-worktrees/aida-seat-aida-task-b6b1278890774ef993d2ebc327862470-656 on branch task-b6b1278890774ef993d2ebc327862470-656 (base HEAD cea120d2432). Publication must use the advisor's host-side step already specified in comment 4: git add here was refused with `.git/index.lock: Read-only file system`. No commit, push, PR, queue-done, ship or review verdict was produced; TASK-2706 remains In Progress until the host publishes and completes the queue handoff.
+
+    Seven changed files, including NEW UNTRACKED aida-cli-lib/src/containment/egress_probe.py (include this when committing). The existing closed permissions probe now requires both filesystem/supervisor and synthetic egress/IPC coverage before Ready. Fixed embedded Python host/lane code implements exact typed CONNECT host/port/protocol policy, pinned checked numeric destinations with a host-only loopback fixture exception, an ABI8 seccomp notification connect broker that copies sockaddr once and injects only a pinned private endpoint (never CONTINUE), separate RO host-service controls, socket/io_uring/FD bypass denials and real pointer/path/FD race cases. Ordinary vendor launches and applied-containment credit remain false. ABI>=9 names the missing Landlock Unix-connect backend rather than shipping the broker there. This is still a closed synthetic tracer, not a general vendor IPC/proxy adapter or parent completion.
+
+    Supervisor changes capture namespace identity behind a startup barrier, bind helper death to Rust with PDEATHSIG, and verify teardown on proxy/broker failure before/after readiness, cooperative deadline and forced helper death. TASK-2735 is bundled: nested-userns preflight now gets info-fd identity plus a timeout teardown regression. CLI manual updated. CI prepares userns before lib-shard tests and includes the containment module in the existing required-live bwrap gate with both required-live flags and a non-vacuous TASK-2706 success assertion.
+
+    Validation on final code: `AIDA_REQUIRE_BWRAP_LIVE=1 AIDA_REQUIRE_CODEX_CONTAINMENT_LIVE=1 cargo test -p aida-cli-lib --lib --profile agent containment::tests -- --nocapture`: 7 passed, 0 failed, 0 ignored (4.00s); `make check-ci-fast`: all 36 gates passed; cargo fmt --all -- --check and git diff --check passed; changed workflow YAML and shell bodies parsed successfully. Logs: /tmp/task2706-required-live.log, /tmp/task2706-final-fast.log, /tmp/task2706-final-fmt.log. All model-free fixtures; no real credentials, model traffic, global user settings or schedules changed.
+
+    Suggested host commit/PR title: `[AI:codex] feat(containment): enforce synthetic egress and IPC tracer (TASK-2706)`. Strict independent review and operator merge floor remain required.
+  created_at: 2026-11-02T07:21:24.714187134Z
+  modified_at: 2026-11-02T07:21:24.714187134Z
 history:
 - id: 01a1965b-c73c-7f92-bea8-1e28e5f1ff36
   author: joe
