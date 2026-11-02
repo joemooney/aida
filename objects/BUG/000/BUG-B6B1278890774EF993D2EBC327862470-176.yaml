@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T10:12:04.230556201Z
-modified_at: 2026-11-02T11:46:25.737832879Z
+modified_at: 2026-11-02T11:58:03.920110916Z
 req_type: Bug
 tags:
 - alias
@@ -192,6 +192,13 @@ comments:
   created_at: 2026-11-02T11:45:33.445419849Z
   modified_at: 2026-11-02T11:45:33.445419849Z
   session_id: 1f56bd1e-c059-4f73-b8df-e18b2170fdfc
+- id: 01a19c1f-ac90-7360-bf96-b9e40292c95f
+  author: joe
+  content: 'ROUND 2 pushed at 02a4d48ebe8 (PR #3253). Cargo was DENIED in this seat (no local compile, no bug_2403 filter, no make check-ci-fast); advisor host-run of the filter is needed per the ruling. Addressed: amendments 1-3 (review_alias.rs selection across caller-proved spec_id/agreed_id labels; Absent/Selected/Ambiguous/Unsafe; read_recorded_verdict_any, queue-done gate, review verdict <spec>, rework findings all use it; prose-substring fallback replaced by ledger spec->change binding), 6-7 (ledger/checked.rs strict bounded no-follow reader + aggregate budget on the cross-label path), finding 4 (drain stamp drops the just-archived duplicate origin round). NOT done, stated plainly: finding 3(a) end-to-end Rework auto-release through rework_hold_release, 3(b) GitLab MR record --pr repeat, 3(c) concurrent-origin-replacement injection test; amendment 6 completeness discovery beyond the by-spec index (index lag still treated as a hint, no full ledger scan); amendment 1 identity proof uses the requirement object''s own spec_id/agreed_id rather than registry/node_aliases.toml snapshot mappings; hold release (PR-keyed) not rerouted. Existing BUG-814 tests updated: prose mention no longer binds a PR review to a spec.'
+  created_at: 2026-11-02T11:58:03.920110916Z
+  modified_at: 2026-11-02T11:58:03.920110916Z
+  session_id: 01a19c1500dd
+  harness_version: 2.1.316 (Claude Code)
 history:
 - id: 01a196a4-b6bb-7730-a79a-e4a546bf516d
   author: joe
