@@ -965,5 +965,5 @@ mod tests {
 }
 
 #[cfg(test)]
-#[path = "mail_backlog_bug2405_tests.rs"]
+#[path = "tests/mail_backlog_bug2405_tests.rs"]
 mod focused_bug2405;
