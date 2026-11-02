@@ -7,12 +7,12 @@ description: |-
 
   Non-blocking (minor, carried): launch_markers in bug_2398_final_spawn_boundary_ratchet counts only the fully-qualified '.env(crate::gate::seat_authority::GRANT_ENV' form, so an imported GRANT_ENV, a literal 'AIDA_SESSION_GRANT' or .envs([...]) would evade the spawn inventory.
   Reviewed sha: 5e7e44e9eb959e0f527383c4a0a9c5dd223557ea
-status: Draft
+status: Approved
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-02T11:14:25.148757386Z
-modified_at: 2026-11-02T12:59:19.768573679Z
+modified_at: 2026-11-02T12:59:21.453571503Z
 req_type: Task
 tags:
 - carried-from:BUG-2398
@@ -32,6 +32,14 @@ history:
   timestamp: 2026-11-02T12:09:08.377990086Z
   session_id: 1f56bd1e-c059-4f73-b8df-e18b2170fdfc
   changes: []
+- id: 01a19c57-c9ed-7102-933f-57f6ef7d30f9
+  author: joe
+  timestamp: 2026-11-02T12:59:21.453568748Z
+  session_id: ee0bf351-6b17-486f-a38e-cfbb1343c426
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: 2b9eaa5c3210f8343c475e9993c55cbadb9083d5
   branch: main
