@@ -648,7 +648,7 @@ pub(crate) fn run(launch: Launch<'_>) -> Result<()> {
     let customize = |cmd: &mut std::process::Command| {
         apply_standalone_child_env(cmd, launch.lease_id, &punt_signal, &hold_signal);
         if let Some(lane_jobs) = &lane_jobs {
-            lane_jobs.apply_env(cmd);
+            lane_jobs.apply_selector(cmd);
         }
     };
     // The child is spawned, not exec'd: stamp it on the lease for every
@@ -697,7 +697,11 @@ pub(crate) fn run(launch: Launch<'_>) -> Result<()> {
         on_waiting: &|| mark_slot_waiting(launch.project_root),
         on_log: &|log| record_slot_log(launch.project_root, log),
     };
-    let runner = lane_jobs.clone().map(crate::lane_job::Runner::start);
+    // Published on the lease, so every vendor's tool shell finds it through
+    // its public selector. trace:BUG-2383 | ai:claude
+    let runner = lane_jobs
+        .clone()
+        .map(|lane| crate::lane_job::Runner::start_published(lane, &main_root));
     let finished = lane.run(
         prompt,
         |prompt, log, resume, hold| {

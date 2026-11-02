@@ -5507,14 +5507,18 @@ pub(crate) fn with_implementer_jobs<T>(
     };
     let apply = |cmd: &mut std::process::Command| {
         if let Some(jobs) = &jobs {
-            jobs.apply_env(cmd);
+            jobs.apply_selector(cmd);
         }
     };
     // Invalidate previous evidence before launching, including a failed spawn.
     if let Some(lease) = lease {
         crate::lane_job::record_untested(main_root, lease, true);
     }
-    let runner = jobs.clone().map(crate::lane_job::Runner::start);
+    // Published on the lease, so every vendor's tool shell finds it through
+    // its public selector. trace:BUG-2383 | ai:claude
+    let runner = jobs
+        .clone()
+        .map(|lane| crate::lane_job::Runner::start_published(lane, main_root));
     let result = run(&prompt, &apply);
     let untested = runner.map(|r| r.stop().untested()).unwrap_or(true);
     if let Some(lease) = lease {

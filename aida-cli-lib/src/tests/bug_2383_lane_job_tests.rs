@@ -1049,6 +1049,7 @@ fn drain_launcher_supplies_jobs_for_all_implementer_vendors_and_reports_evidence
             };
             let request_file = tmp.path().join("request");
             std::fs::write(&request_file, serde_json::to_vec(&request).unwrap()).unwrap();
+            write_fixture_lease(&main, lease, &lane.seat);
             with_implementer_jobs(
                 &main,
                 "implementer",
@@ -1063,9 +1064,32 @@ fn drain_launcher_supplies_jobs_for_all_implementer_vendors_and_reports_evidence
                 },
                 |prompt, apply| {
                     assert!(prompt.contains("aida lane job run -- cargo test --profile agent"));
+                    // The runner is published on the lease: the seat side
+                    // resolves both directories from the selector alone.
+                    let (inbox, results) = resolve_seat_dirs(
+                        Some(main.as_path()),
+                        Some(lease),
+                        &lane.seat,
+                        runner_alive,
+                    )
+                    .expect("the published runner resolves");
+                    assert_eq!(
+                        inbox,
+                        std::fs::canonicalize(&lane.seat)
+                            .unwrap()
+                            .join(INBOX_RELATIVE)
+                    );
+                    assert_eq!(results, lane.results);
+                    // Launcher wiring only: the child carries the lease id
+                    // selector and no lane path.
                     let mut cmd = std::process::Command::new("/bin/sh");
-                    cmd.arg("-c").arg("test -d \"$AIDA_LANE_JOBS_RESULTS\" && cp \"$1\" \"$AIDA_LANE_JOBS_INBOX/drain.tmp\" && mv \"$AIDA_LANE_JOBS_INBOX/drain.tmp\" \"$AIDA_LANE_JOBS_INBOX/drain.job\"")
-                    .arg("fixture").arg(&request_file);
+                    cmd.env_clear()
+                        .current_dir(&lane.seat)
+                        .arg("-c")
+                        .arg("[ \"$AIDA_SESSION_ID\" = \"$2\" ] && [ -z \"$AIDA_LANE_JOBS_INBOX$AIDA_LANE_JOBS_RESULTS\" ] && cp \"$1\" .aida/lane-jobs/drain.tmp && mv .aida/lane-jobs/drain.tmp .aida/lane-jobs/drain.job")
+                        .arg("fixture")
+                        .arg(&request_file)
+                        .arg(lease);
                     apply(&mut cmd);
                     assert!(cmd.status().unwrap().success());
                     let deadline = Instant::now() + Duration::from_secs(10);
@@ -1078,6 +1102,11 @@ fn drain_launcher_supplies_jobs_for_all_implementer_vendors_and_reports_evidence
                         Some(if refused { REFUSED_RC } else { 0 })
                     );
                 },
+            );
+            assert!(
+                resolve_seat_dirs(Some(main.as_path()), Some(lease), &lane.seat, runner_alive)
+                    .is_err(),
+                "a stopped runner is unpublished"
             );
             let warning = phase_test_warning(&main, Some(lease));
             assert_eq!(warning.is_some(), refused);
@@ -1106,4 +1135,257 @@ fn drain_launcher_supplies_jobs_for_all_implementer_vendors_and_reports_evidence
     assert!(phase_test_warning(tmp.path(), Some("unreadable")).is_some());
     assert!(implementer_job_lane("reviewer", Some("x"), Some((tmp.path(), "b"))).is_none());
     assert!(implementer_job_lane("implementer", None, Some((tmp.path(), "b"))).is_none());
+}
+
+// ---- lease channel (transport sketch part 1, advisor signoff 2026-11-02) ----
+
+/// A minimal lease for `lease` under `main` whose worktree is `seat`.
+#[cfg(unix)]
+fn write_fixture_lease(main: &Path, lease: &str, seat: &Path) {
+    let dir = main.join(".aida").join("sessions");
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(
+        dir.join(format!("{lease}.toml")),
+        format!(
+            "id = \"{lease}\"\nscope = \"BUG-1\"\nworktree_path = \"{}\"\nchild_grant = \"g-selector\"\n",
+            seat.display()
+        ),
+    )
+    .unwrap();
+}
+
+#[cfg(unix)]
+fn lease_body(main: &Path, lease: &str) -> String {
+    std::fs::read_to_string(main.join(".aida/sessions").join(format!("{lease}.toml"))).unwrap()
+}
+
+// The host publishes a typed record and clears it; other lease fields are kept.
+// trace:BUG-2383 | ai:claude
+#[cfg(unix)]
+#[test]
+fn a_runner_is_published_on_its_lease_and_cleared_when_it_stops() {
+    let tmp = tempfile::tempdir().unwrap();
+    let lane = fixture_lane(tmp.path());
+    let main = tmp.path().join("main");
+    write_fixture_lease(&main, &lane.lease_id, &lane.seat);
+    assert!(
+        resolve_seat_dirs(
+            Some(main.as_path()),
+            Some(lane.lease_id.as_str()),
+            &lane.seat,
+            runner_alive
+        )
+        .is_err(),
+        "no record, no runner"
+    );
+    let runner = Runner::start_published(lane.clone(), &main);
+    let body = lease_body(&main, &lane.lease_id);
+    let doc: toml::Value = toml::from_str(&body).unwrap();
+    let record: RunnerRecord = doc[LEASE_FIELD].clone().try_into().unwrap();
+    assert_eq!(record.protocol, PROTOCOL);
+    assert_eq!(record.runner_pid, std::process::id());
+    assert!(runner_alive(&record));
+    assert_eq!(doc["child_grant"].as_str(), Some("g-selector"));
+    let keys: Vec<&String> = doc[LEASE_FIELD].as_table().unwrap().keys().collect();
+    assert_eq!(keys, ["protocol", "runner_pid", "runner_started_at"]);
+    let (inbox, results) = resolve_seat_dirs(
+        Some(main.as_path()),
+        Some(lane.lease_id.as_str()),
+        &lane.seat,
+        runner_alive,
+    )
+    .unwrap();
+    assert_eq!(
+        inbox,
+        std::fs::canonicalize(&lane.seat)
+            .unwrap()
+            .join(INBOX_RELATIVE)
+    );
+    assert_eq!(results, lane.results);
+    // A subdirectory of the seat is inside its own context too.
+    let sub = lane.seat.join("src");
+    std::fs::create_dir_all(&sub).unwrap();
+    assert!(resolve_seat_dirs(
+        Some(main.as_path()),
+        Some(lane.lease_id.as_str()),
+        &sub,
+        runner_alive
+    )
+    .is_ok());
+    drop(runner);
+    assert!(!lease_body(&main, &lane.lease_id).contains(LEASE_FIELD));
+    assert!(lease_body(&main, &lane.lease_id).contains("g-selector"));
+    assert!(resolve_seat_dirs(
+        Some(main.as_path()),
+        Some(lane.lease_id.as_str()),
+        &lane.seat,
+        runner_alive
+    )
+    .is_err());
+}
+
+// Every way a selector can fail resolves to no runner (untested=true), never
+// to a path outside the lease's own seat. trace:BUG-2383 | ai:claude
+#[cfg(unix)]
+#[test]
+fn seat_resolution_refuses_forged_foreign_stale_and_symlinked_selectors() {
+    let tmp = tempfile::tempdir().unwrap();
+    let lane = fixture_lane(tmp.path());
+    let main = tmp.path().join("main");
+    write_fixture_lease(&main, &lane.lease_id, &lane.seat);
+    publish(&main, &lane.lease_id).unwrap();
+    let ok = |_: &RunnerRecord| true;
+    let resolve =
+        |root: Option<&Path>, id: Option<&str>, cwd: &Path| resolve_seat_dirs(root, id, cwd, ok);
+    assert!(resolve(
+        Some(main.as_path()),
+        Some(lane.lease_id.as_str()),
+        &lane.seat
+    )
+    .is_ok());
+    // No selector, a malformed one, a relative root.
+    assert!(resolve(Some(main.as_path()), None, &lane.seat).is_err());
+    for bad in ["", "../lease-fixture", "a/b", "x.toml"] {
+        assert!(
+            resolve(Some(main.as_path()), Some(bad), &lane.seat).is_err(),
+            "{bad:?}"
+        );
+    }
+    assert!(resolve(
+        Some(Path::new("main")),
+        Some(lane.lease_id.as_str()),
+        &lane.seat
+    )
+    .is_err());
+    // A forged id: no such lease.
+    assert!(resolve(Some(main.as_path()), Some("lease-forged"), &lane.seat).is_err());
+    // A cwd outside the lease's worktree, including a sibling sharing its prefix.
+    let other = tmp.path().join("aida-seat-fixture-other");
+    std::fs::create_dir_all(&other).unwrap();
+    assert!(resolve(Some(main.as_path()), Some(lane.lease_id.as_str()), &other).is_err());
+    assert!(resolve(
+        Some(main.as_path()),
+        Some(lane.lease_id.as_str()),
+        tmp.path()
+    )
+    .is_err());
+    // A dead or recycled runner.
+    assert!(resolve_seat_dirs(
+        Some(main.as_path()),
+        Some(lane.lease_id.as_str()),
+        &lane.seat,
+        |_| false
+    )
+    .is_err());
+    let recycled = RunnerRecord {
+        protocol: PROTOCOL,
+        runner_pid: std::process::id(),
+        runner_started_at: "not-this-process".into(),
+    };
+    assert!(!runner_alive(&recycled));
+    // Another protocol.
+    let body = lease_body(&main, &lane.lease_id).replace("protocol = 1", "protocol = 2");
+    std::fs::write(main.join(".aida/sessions/lease-fixture.toml"), body).unwrap();
+    assert!(resolve(
+        Some(main.as_path()),
+        Some(lane.lease_id.as_str()),
+        &lane.seat
+    )
+    .is_err());
+    // A symlinked lease file, or sessions directory.
+    let real = tmp.path().join("elsewhere.toml");
+    std::fs::rename(main.join(".aida/sessions/lease-fixture.toml"), &real).unwrap();
+    std::os::unix::fs::symlink(&real, main.join(".aida/sessions/lease-fixture.toml")).unwrap();
+    assert!(resolve(
+        Some(main.as_path()),
+        Some(lane.lease_id.as_str()),
+        &lane.seat
+    )
+    .is_err());
+    let main2 = tmp.path().join("main2");
+    std::fs::create_dir_all(main2.join(".aida")).unwrap();
+    std::os::unix::fs::symlink(main.join(".aida/sessions"), main2.join(".aida/sessions")).unwrap();
+    assert!(resolve(
+        Some(main2.as_path()),
+        Some(lane.lease_id.as_str()),
+        &lane.seat
+    )
+    .is_err());
+}
+
+// The seat side reads no lane path from its environment: the retired
+// variables are inert. trace:BUG-2383 | ai:claude
+#[cfg(unix)]
+#[test]
+fn seat_side_ignores_lane_path_variables() {
+    let src = include_str!("../lane_job.rs");
+    for retired in ["AIDA_LANE_JOBS_INBOX", "AIDA_LANE_JOBS_RESULTS"] {
+        assert!(!src.contains(retired), "{retired} is read again");
+    }
+}
+
+// Signoff test (b): no lease field holds a credential. The lease is readable
+// by every seat, and the record added here names only a pid and its start.
+// trace:BUG-2383 | ai:claude
+#[test]
+fn no_lease_field_holds_a_credential() {
+    let src = include_str!("../leases.rs");
+    let start = src.find("pub(crate) struct SessionLease {").unwrap();
+    let end = start + src[start..].find("\n}\n").unwrap();
+    let fields: Vec<&str> = src[start..end]
+        .lines()
+        .filter_map(|l| l.trim().strip_prefix("pub(crate) "))
+        .filter_map(|l| l.split(':').next())
+        .collect();
+    assert!(fields.contains(&"worktree_path"), "{fields:?}");
+    // BUG-237's zen intent nonce only corroborates an inherited AIDA_ZEN=1;
+    // it grants nothing over the lane, its runner or its results.
+    const REVIEWED: &[&str] = &["zen_intent_token"];
+    for field in fields
+        .iter()
+        .copied()
+        .filter(|f| !REVIEWED.contains(f))
+        .chain([LEASE_FIELD, "protocol", "runner_pid", "runner_started_at"])
+    {
+        for word in [
+            "token",
+            "secret",
+            "password",
+            "bearer",
+            "credential",
+            "cookie",
+        ] {
+            assert!(
+                !field.to_ascii_lowercase().contains(word),
+                "lease field {field} looks like a credential"
+            );
+        }
+    }
+}
+
+// Signoff test (a): neither the lease directory nor the results directory is
+// inside a seat-writable root, so a seat cannot forge a runner record or a
+// result. trace:BUG-2383 | ai:claude
+#[cfg(unix)]
+#[test]
+fn leases_and_results_are_outside_every_seat_writable_root() {
+    let tmp = tempfile::tempdir().unwrap();
+    let main = tmp.path().join("aida");
+    let seat = tmp.path().join("aida-worktrees").join("aida-seat-x");
+    std::fs::create_dir_all(&main).unwrap();
+    std::fs::create_dir_all(&seat).unwrap();
+    // The Claude contained boundary and Codex workspace-write share the seat
+    // root; the temp dirs both also grant hold no checkout.
+    let roots = crate::contained_boundary::contained_write_roots(&seat);
+    assert!(!roots.is_empty());
+    for host_only in [main.join(".aida/sessions"), results_dir(&main, "lease-x")] {
+        for root in &roots {
+            assert!(
+                !host_only.starts_with(root),
+                "{} is inside seat-writable {}",
+                host_only.display(),
+                root.display()
+            );
+        }
+    }
 }

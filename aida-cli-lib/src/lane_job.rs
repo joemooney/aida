@@ -52,6 +52,21 @@
 //!
 //! The seat side is `aida lane job run -- cargo test ...` and `aida lane job
 //! wait <id>`, both of which return within one tool call.
+//!
+//! Discovery (advisor signoff 2026-11-02, transport sketch part 1): no
+//! lane-job variable reaches the seat. A Codex tool shell under
+//! `shell_environment_policy.inherit = "core"` keeps only the public seat
+//! context of [`crate::codex_tool_env`] (BUG-2398), so every vendor finds
+//! its runner the same way, through one selector that whitelist already
+//! carries: the lease id in `AIDA_SESSION_ID`, scoped by
+//! `AIDA_PROJECT_ROOT`. While a [`Runner`] serves the lane, the host stamps a
+//! typed [`RunnerRecord`] on that lease ([`LEASE_FIELD`]); the seat side
+//! ([`resolve_seat_dirs`]) reads the lease without following a symlink,
+//! requires its cwd to be inside the lease's own worktree and the recorded
+//! runner to be alive with the recorded start identity, and derives both
+//! directories from the lease. The lease id is a name, not a capability: no
+//! token, path or grant travels in env or argv, and any failure means
+//! `untested=true`, never a direct cargo run.
 // trace:BUG-2383 | ai:claude
 
 use anyhow::{Context, Result};
@@ -61,10 +76,23 @@ use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-/// The seat's inbox directory, set on the implementer child.
-pub(crate) const INBOX_ENV: &str = "AIDA_LANE_JOBS_INBOX";
-/// The host's results directory, set on the implementer child.
-pub(crate) const RESULTS_ENV: &str = "AIDA_LANE_JOBS_RESULTS";
+/// The lease field the host stamps while a runner serves the lane.
+// trace:BUG-2383 | ai:claude
+pub(crate) const LEASE_FIELD: &str = "lane_jobs";
+/// The lane-job protocol version a [`RunnerRecord`] names.
+pub(crate) const PROTOCOL: u32 = 1;
+
+/// The typed record on a lease saying a lane job runner serves it. It names
+/// the host process the runner thread lives in and that process's kernel
+/// start identity (so a recycled pid is not a live runner); it carries no
+/// path, token or grant.
+// trace:BUG-2383 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub(crate) struct RunnerRecord {
+    pub(crate) protocol: u32,
+    pub(crate) runner_pid: u32,
+    pub(crate) runner_started_at: String,
+}
 
 /// The inbox, relative to the seat root.
 pub(crate) const INBOX_RELATIVE: &str = ".aida/lane-jobs";
@@ -575,10 +603,13 @@ impl LaneJobs {
         Ok(())
     }
 
-    /// Set the child's environment so `aida lane job` finds the lane.
-    pub(crate) fn apply_env(&self, cmd: &mut std::process::Command) {
-        cmd.env(INBOX_ENV, &self.inbox)
-            .env(RESULTS_ENV, &self.results);
+    /// Give the child its lane's one public selector, the lease id in
+    /// `AIDA_SESSION_ID` (on the BUG-2398 Codex tool-shell whitelist), so
+    /// `aida lane job` resolves the runner through the lease. No path or
+    /// token is set.
+    // trace:BUG-2383 | ai:claude
+    pub(crate) fn apply_selector(&self, cmd: &mut std::process::Command) {
+        cmd.env("AIDA_SESSION_ID", &self.lease_id);
     }
 
     /// Append one line to the lane's `jobs.log` and the launcher's stderr.
@@ -601,10 +632,32 @@ pub(crate) struct Runner {
     stop: Arc<AtomicBool>,
     handle: Option<std::thread::JoinHandle<()>>,
     pub(crate) tally: Arc<Tally>,
+    /// The main root and lease id whose [`RunnerRecord`] this runner
+    /// stamped, cleared again when it stops.
+    published: Option<(PathBuf, String)>,
 }
 
 impl Runner {
-    /// Start the runner for `lane` on its own thread.
+    /// Start the runner for `lane` and publish it on the lane's lease under
+    /// `main_root`, so the seat finds it through [`resolve_seat_dirs`]
+    /// whatever its vendor strips from a tool shell's environment. When the
+    /// record cannot be written the runner still starts, but the seat cannot
+    /// find it and the lane reports `untested=true`.
+    // trace:BUG-2383 | ai:claude
+    pub(crate) fn start_published(lane: LaneJobs, main_root: &Path) -> Self {
+        let lease_id = lane.lease_id.clone();
+        let mut runner = Self::start(lane);
+        match publish(main_root, &lease_id) {
+            Ok(()) => runner.published = Some((main_root.to_path_buf(), lease_id)),
+            Err(e) => eprintln!(
+                "  lane job: could not publish the runner on lease {lease_id}, so the \
+                 implementer cannot find it and its result says untested=true: {e:#}"
+            ),
+        }
+        runner
+    }
+
+    /// Start the runner for `lane` on its own thread, unpublished.
     pub(crate) fn start(lane: LaneJobs) -> Self {
         let stop = Arc::new(AtomicBool::new(false));
         let tally = Arc::new(Tally::default());
@@ -620,6 +673,7 @@ impl Runner {
             stop,
             handle,
             tally,
+            published: None,
         }
     }
 
@@ -634,7 +688,72 @@ impl Runner {
         if let Some(handle) = self.handle.take() {
             let _ = handle.join();
         }
+        if let Some((main_root, lease_id)) = self.published.take() {
+            let _ = unpublish(main_root.as_path(), &lease_id);
+        }
     }
+}
+
+/// The lease file of `lease_id` under `main_root`.
+fn lease_path(main_root: &Path, lease_id: &str) -> PathBuf {
+    main_root
+        .join(".aida")
+        .join("sessions")
+        .join(format!("{lease_id}.toml"))
+}
+
+/// Rewrite `lease_id`'s [`LEASE_FIELD`] under the lease write lock: set it to
+/// `record`, or remove it.
+// trace:BUG-2383 | ai:claude
+fn rewrite_record(main_root: &Path, lease_id: &str, record: Option<&RunnerRecord>) -> Result<()> {
+    use toml_edit::{value, DocumentMut, Item, Table};
+    if !valid_lease_id(lease_id) {
+        anyhow::bail!("`{lease_id}` is not a lease id");
+    }
+    let path = lease_path(main_root, lease_id);
+    crate::session::with_lease_write_lock(main_root, || {
+        let body = std::fs::read_to_string(&path)
+            .with_context(|| format!("reading lease {}", path.display()))?;
+        let mut doc = body
+            .parse::<DocumentMut>()
+            .with_context(|| format!("parsing lease {}", path.display()))?;
+        match record {
+            Some(record) => {
+                let mut table = Table::new();
+                table["protocol"] = value(i64::from(record.protocol));
+                table["runner_pid"] = value(i64::from(record.runner_pid));
+                table["runner_started_at"] = value(record.runner_started_at.clone());
+                doc[LEASE_FIELD] = Item::Table(table);
+            }
+            None => {
+                doc.remove(LEASE_FIELD);
+            }
+        }
+        aida_core::write_atomic(&path, doc.to_string())
+            .with_context(|| format!("writing lease {}", path.display()))
+    })
+}
+
+/// Stamp this process as `lease_id`'s lane job runner.
+// trace:BUG-2383 | ai:claude
+pub(crate) fn publish(main_root: &Path, lease_id: &str) -> Result<()> {
+    let pid = std::process::id();
+    let started = crate::process_probe::process_start_identity(pid)
+        .context("this process has no readable start identity")?;
+    rewrite_record(
+        main_root,
+        lease_id,
+        Some(&RunnerRecord {
+            protocol: PROTOCOL,
+            runner_pid: pid,
+            runner_started_at: started,
+        }),
+    )
+}
+
+/// Clear `lease_id`'s runner record.
+pub(crate) fn unpublish(main_root: &Path, lease_id: &str) -> Result<()> {
+    rewrite_record(main_root, lease_id, None)
 }
 
 impl Drop for Runner {
@@ -1032,22 +1151,122 @@ fn kill_group(child: &mut std::process::Child) {
 
 // ---- seat side ------------------------------------------------------------
 
-/// The inbox and results directories this process was given, or an error
-/// that says the lane has no runner.
-pub(crate) fn seat_dirs() -> Result<(PathBuf, PathBuf)> {
-    let get = |name: &str| {
-        std::env::var_os(name)
-            .filter(|v| !v.is_empty())
-            .map(PathBuf::from)
-    };
-    match (get(INBOX_ENV), get(RESULTS_ENV)) {
-        (Some(inbox), Some(results)) => Ok((inbox, results)),
-        _ => anyhow::bail!(
-            "this session has no lane job runner ({INBOX_ENV} is not set). Only a \
-             standalone implementer launched by `aida queue work <SPEC> --no-human` \
-             has one. Report the work as untested (untested=true)."
-        ),
+/// A lease id: the same shape as a job id, so it is one path component.
+fn valid_lease_id(id: &str) -> bool {
+    valid_id(id)
+}
+
+/// The fields of a lease the seat side reads; everything else is ignored.
+#[derive(Debug, serde::Deserialize)]
+struct LeaseView {
+    worktree_path: PathBuf,
+    #[serde(default)]
+    lane_jobs: Option<RunnerRecord>,
+}
+
+/// Whether `record` names a live runner: its pid is running and has the
+/// recorded start identity.
+pub(crate) fn runner_alive(record: &RunnerRecord) -> bool {
+    crate::process_probe::process_start_identity(record.runner_pid).as_deref()
+        == Some(record.runner_started_at.as_str())
+}
+
+/// Read `<main>/.aida/sessions/<id>.toml` refusing a symlink at any
+/// component below `main`.
+fn read_lease_nofollow(main: &Path, lease_id: &str) -> Result<String> {
+    let mut path = main.to_path_buf();
+    let file = format!("{lease_id}.toml");
+    for part in [".aida", "sessions", file.as_str()] {
+        path.push(part);
+        let meta = std::fs::symlink_metadata(&path)
+            .with_context(|| format!("{} is missing", path.display()))?;
+        if meta.file_type().is_symlink() {
+            anyhow::bail!("{} is a symlink", path.display());
+        }
     }
+    #[cfg(unix)]
+    let body = {
+        use std::io::Read;
+        use std::os::unix::fs::OpenOptionsExt;
+        let mut body = String::new();
+        let mut file = std::fs::OpenOptions::new()
+            .read(true)
+            .custom_flags(libc::O_NOFOLLOW)
+            .open(&path)
+            .with_context(|| format!("open {}", path.display()))?;
+        file.read_to_string(&mut body)
+            .with_context(|| format!("read {}", path.display()))?;
+        body
+    };
+    #[cfg(not(unix))]
+    let body =
+        std::fs::read_to_string(&path).with_context(|| format!("read {}", path.display()))?;
+    Ok(body)
+}
+
+/// Resolve this seat's inbox and results directories from its lease:
+/// `lease_id` is the one selector (`AIDA_SESSION_ID`), scoped by
+/// `project_root` (`AIDA_PROJECT_ROOT`, else the git root of `cwd`); `cwd` is
+/// the caller's directory. The project root may be the seat itself (a Codex
+/// child's) or the main checkout; the lease is read from the main checkout
+/// either way.
+// trace:BUG-2383 | ai:claude
+pub(crate) fn resolve_seat_dirs(
+    project_root: Option<&Path>,
+    lease_id: Option<&str>,
+    cwd: &Path,
+    alive: impl Fn(&RunnerRecord) -> bool,
+) -> Result<(PathBuf, PathBuf)> {
+    let lease_id = lease_id
+        .filter(|id| valid_lease_id(id))
+        .context("AIDA_SESSION_ID is not a lease id")?;
+    let root = match project_root {
+        Some(root) if root.is_absolute() => root.to_path_buf(),
+        Some(_) => anyhow::bail!("AIDA_PROJECT_ROOT is not an absolute path"),
+        None => crate::find_project_root_from(cwd)?,
+    };
+    let main = crate::main_worktree_root_from(&root);
+    let lease: LeaseView = toml::from_str(&read_lease_nofollow(&main, lease_id)?)
+        .with_context(|| format!("lease {lease_id} does not parse"))?;
+    let worktree = std::fs::canonicalize(&lease.worktree_path)
+        .with_context(|| format!("lease {lease_id}'s worktree does not resolve"))?;
+    let here = std::fs::canonicalize(cwd).context("the current directory does not resolve")?;
+    if !here.starts_with(&worktree) {
+        anyhow::bail!(
+            "the current directory {} is not inside lease {lease_id}'s worktree",
+            here.display()
+        );
+    }
+    let record = lease
+        .lane_jobs
+        .with_context(|| format!("lease {lease_id} names no lane job runner"))?;
+    if record.protocol != PROTOCOL {
+        anyhow::bail!(
+            "lease {lease_id}'s runner speaks protocol {}, this aida speaks {PROTOCOL}",
+            record.protocol
+        );
+    }
+    if !alive(&record) {
+        anyhow::bail!("lease {lease_id}'s lane job runner is not running");
+    }
+    Ok((worktree.join(INBOX_RELATIVE), results_dir(&main, lease_id)))
+}
+
+/// This seat's inbox and results directories, resolved through its lease
+/// ([`resolve_seat_dirs`]), or an error that says the lane has no runner.
+pub(crate) fn seat_dirs() -> Result<(PathBuf, PathBuf)> {
+    let root = std::env::var_os("AIDA_PROJECT_ROOT")
+        .filter(|v| !v.is_empty())
+        .map(PathBuf::from);
+    let lease = std::env::var("AIDA_SESSION_ID").ok();
+    let cwd = std::env::current_dir().context("no current directory")?;
+    resolve_seat_dirs(root.as_deref(), lease.as_deref(), &cwd, runner_alive).map_err(|why| {
+        anyhow::anyhow!(
+            "this session has no lane job runner ({why:#}). Only a headless implementer \
+             launched by `aida queue work <SPEC> --no-human` has one. Report the work as \
+             untested (untested=true)."
+        )
+    })
 }
 
 /// A new job id: time-ordered, unique per process.
