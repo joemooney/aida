@@ -1,0 +1,99 @@
+{
+  "schema_version": 1,
+  "spec": "TASK-2705",
+  "publishes": [
+    {
+      "at": "2026-11-02T03:43:35.004000211Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-01T11:29:18.004648176Z",
+      "spec": "TASK-2705",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "Independent STRICT codex-reviewer-12: required CI FD-hygiene assertion fails; public help/JSON audit and grant-owner integrity guards fail. Closed synthetic slice only; no parent completion.",
+        "recovery_hint": "address the review findings, move TASK-B6B1278890774EF993D2EBC327862470-655 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-11-01T12:04:55.899347200Z",
+      "spec": "TASK-2705",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-01T13:03:56.148458492Z",
+      "spec": "TASK-2705",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "Typed stdout B2 fixed; required nested-userns positive control fails EPERM on exact-head CI, so slice AC3 remains unaccepted.",
+        "recovery_hint": "address the review findings, move TASK-B6B1278890774EF993D2EBC327862470-655 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-11-01T14:57:13.835880975Z",
+      "spec": "TASK-2705",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-01T15:30:37.811190786Z",
+      "spec": "TASK-2705",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "Authorized CI experiment conforms, but repeated same-runner evidence and original required-live strict/generic tests leave AC3/C12 unmet.",
+        "recovery_hint": "address the review findings, move TASK-B6B1278890774EF993D2EBC327862470-655 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-11-01T19:22:36.714178177Z",
+      "spec": "TASK-2705",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-02T03:43:12.624464602Z",
+      "spec": "TASK-2705",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 3205
+      }
+    },
+    {
+      "ts": "2026-11-02T03:43:34.838933487Z",
+      "spec": "TASK-2705",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "9a2168d8563579456bf669bb816ebdf5ff3aa355",
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
