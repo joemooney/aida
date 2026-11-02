@@ -1,0 +1,30 @@
+id: 01a19b82-af28-74c3-a32a-83275e59aaf7
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-693
+title: 'COSMETIC non-blocking (carried): docs/cli/03-work-autonomy.md:415-438 new unind…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on BUG-B6B1278890774EF993D2EBC327862470-178, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  COSMETIC non-blocking (carried): docs/cli/03-work-autonomy.md:415-438 new unindented block plus double blank line sits between the '- **substrate**' bullet and its indented '  **Runaway-seat watchdog**' continuation, orphaning that paragraph.
+
+  PR: #3214
+  Reviewed sha: de14432815609f5237675390d376556ef7927b4d
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-02T09:06:35.432011773Z
+modified_at: 2026-11-02T09:06:35.432011773Z
+req_type: Task
+tags:
+- carried-from:BUG-B6B1278890774EF993D2EBC327862470-178
+- finding-hash:86f19384
+- from-review:PR-3214
+- kind:carried-forward
+filed_at:
+  code_sha: f7892bcf9b28cd9659cd5461cbb35a64c744ecd0
+  branch: main
+  dirty: true
+  aida_version: 0.16.0
+  aida_build_sha: 6a3f67671a9
+  vendor: claude
+  session: 1f56bd1e-c059-4f73-b8df-e18b2170fdfc
