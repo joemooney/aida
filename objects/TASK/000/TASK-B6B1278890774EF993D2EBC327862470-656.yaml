@@ -6,12 +6,12 @@ description: |-
   Acceptance: (1) On sliceA contract, synthetic lane in unshared netns reaches only allowed fixture host via host-owned typed proxy channel; deny direct TCP/UDP/DNS, private-address/rebinding, host/port/protocol bypass per C12. (2) Enforce C5 pathname and abstract Unix IPC. HostABI8 needs approved seccomp-notify broker; no mutable-user-memory CONTINUE/FD/path/rename race. Host D-Bus/SSH/Codex daemon and inherited-FD escapes denied; only typed channels/private own endpoints allowed. (3) Proxy/broker death tears down lane; unsupported kernel refuses; live regression cannot skip. (4) Diagnostics and end-to-end fixture deliver observable actual coverage, no ordinary vendor enablement or real credentials/model calls. Layers: trusted host policy, network/IPC broker, runner lifetime, CLI diagnostics and negative tests. Signed sliceB.
 
   All signed STORY2238 sketch C1-C12 and BUG2398 B1-B4 apply. Linux only, fakeHOME/synthetic tests, no global user settings or schedules. No partial backend may report AIDA containment applied or launch ordinary agents until all required protections are ready; named refusal, no fallback. STRICT independent review, operator merge floor. LIGHT one targeted test plus fast gates; shared infra or >10files adds touched-test/compile, fullsuiteCI only. Longcargo background, no slotbypass. Parent all7AC remain open until final installed-tool evidence; no slice alone completes parent.
-status: NeedsAttention
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T09:05:52.470755532Z
-modified_at: 2026-11-02T07:50:15.751127467Z
+modified_at: 2026-11-02T07:50:20.014047781Z
 req_type: Task
 tags:
 - architecture
@@ -101,6 +101,12 @@ comments:
   content: 'REWORK BRIEF (advisor, 2026-11-02 00:55 MST), PR #3242 round 2. (1) CI gates is red because the PR runs all of containment::tests as required-live, and the GitHub runner denies NESTED user namespaces (HostPolicyDenied, phase unshare, errno 1) even after the apparmor sysctl. That fails task_2705_closed_containment_tracer and task_2705_trusted_snapshot_cannot_execute_stored_shell. Per the TASK-2705 ruling, those nested tests are attested live on the advisor host and are not required-live in CI. Scope the CI required-live step to the tests the runner can run: task_2706_egress_ipc_live passed on CI, so keep it required there. Leave the 2705 tests in their existing CI mode. (2) Add the two missing tests the review named: an unsupported kernel refuses by name, with no fallback (AC3), and the B-refusal credit path. No other changes. Gate: STRICT. Run the targeted containment tests, then make check-ci-fast; the advisor re-runs the host live proof and host-commits.'
   created_at: 2026-11-02T07:50:15.751127467Z
   modified_at: 2026-11-02T07:50:15.751127467Z
+  session_id: 1f56bd1e-c059-4f73-b8df-e18b2170fdfc
+- id: 01a19b3c-de6e-7e81-aa6c-cf1d47dd83eb
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Design and code meet TASK-2706/TASK-2735 acceptance on read, but CI gates is red: the PR''s own required-live bwrap gate (now running containment::tests) exits 101 at cf5264e; ''unsupported kernel refuses'' and the B-refusal credit path are untested.. No triage reason was given.'
+  created_at: 2026-11-02T07:50:20.014045337Z
+  modified_at: 2026-11-02T07:50:20.014045337Z
   session_id: 1f56bd1e-c059-4f73-b8df-e18b2170fdfc
 history:
 - id: 01a1965b-c73c-7f92-bea8-1e28e5f1ff36
@@ -196,6 +202,14 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a19b3c-de6e-7e81-aa6c-cf030d7fe8c8
+  author: joe
+  timestamp: 2026-11-02T07:50:20.014030264Z
+  session_id: 1f56bd1e-c059-4f73-b8df-e18b2170fdfc
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: 4ce0af750fcb68d4adf57496e4e002aefd8ace77
   branch: main
@@ -203,11 +217,3 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: 4ce0af750fc
   vendor: codex
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'Design and code meet TASK-2706/TASK-2735 acceptance on read, but CI gates is red: the PR''s own required-live bwrap gate (now running containment::tests) exits 101 at cf5264e; ''unsupported kernel refuses'' and the B-refusal credit path are untested.'
-  recovery_hint: address the review findings, move TASK-2706 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-02T07:43:08.535897435Z
