@@ -2302,7 +2302,10 @@ fn ungated(store_readable: bool) -> PreviewGates<'static> {
 // trace:TASK-1955 | ai:claude (TASK-1933)
 #[test]
 fn the_preview_shows_human_gates_and_the_operator_only_floor_as_the_tick_does() {
-    let decisions = vec![plan_unowned_spec(&unowned("STORY-9"))];
+    let decisions = vec![plan_unowned_spec(
+        &unowned("STORY-9"),
+        "aida agent new claude --spec STORY-9 --bg",
+    )];
     assert_eq!(
         preview_json(&decisions, &ungated(true))["lanes"][0]["held"],
         serde_json::Value::Null
@@ -2518,7 +2521,10 @@ fn every_reap_outcome_is_ledgered() {
 fn a_mail_failure_retry_does_not_duplicate_the_due_event() {
     let root = tempfile::tempdir().unwrap();
     std::fs::create_dir_all(root.path().join(".aida")).unwrap();
-    let LaneDecision::Act(item) = plan_unowned_spec(&unowned("TASK-1")) else {
+    let LaneDecision::Act(item) = plan_unowned_spec(
+        &unowned("TASK-1"),
+        "aida agent new claude --spec TASK-1 --bg",
+    ) else {
         panic!("an unowned spec is a dispatch");
     };
     let fail = |_: &Path, _: &aida_core::mailbox::Message| -> Result<()> {
@@ -3102,4 +3108,21 @@ fn an_unwritable_refusal_sidecar_is_reported_not_repeated() {
     assert!(fake.rows.is_empty(), "{:?}", fake.rows);
     assert!(fake.notices.is_empty());
     assert!(fake.due.is_empty());
+}
+
+// trace:BUG-2396 | ai:claude
+#[test]
+fn bug2396_unowned_spec_redispatch_names_the_codex_lane_without_bg() {
+    let LaneDecision::Act(item) = plan_unowned_spec(
+        &unowned("TASK-1"),
+        &crate::mandate_drive::unowned_spec_launch(crate::session::HeadlessVendor::Codex, "TASK-1"),
+    ) else {
+        panic!("an unowned spec is a redispatch");
+    };
+    assert!(
+        item.command
+            .starts_with("aida agent new codex --spec TASK-1 (a separate session"),
+        "{}",
+        item.command
+    );
 }

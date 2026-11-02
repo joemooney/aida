@@ -222,9 +222,11 @@ pub(crate) struct Sources {
     pub(crate) state_path: Option<PathBuf>,
 }
 
-/// The real sources for `project_root`.
+/// The project root, its worktrees, and its contained clone seats: every
+/// directory a seat of this project runs in. Shared with `aida status`'s
+/// Codex section (BUG-2396).
 // trace:STORY-1462 | ai:claude
-pub(crate) fn default_sources(project_root: &Path) -> Sources {
+pub(crate) fn project_seat_roots(project_root: &Path) -> Vec<PathBuf> {
     let mut roots = vec![project_root.to_path_buf()];
     // TASK-2053: contained seats' private clones are seats too.
     // trace:TASK-2053 | ai:claude
@@ -239,6 +241,13 @@ pub(crate) fn default_sources(project_root: &Path) -> Sources {
             roots.push(wt);
         }
     }
+    roots
+}
+
+/// The real sources for `project_root`.
+// trace:STORY-1462 | ai:claude
+pub(crate) fn default_sources(project_root: &Path) -> Sources {
+    let roots = project_seat_roots(project_root);
     let transcript_dirs = match crate::home_dir() {
         Some(home) => roots
             .iter()
@@ -462,6 +471,12 @@ struct State {
     last_run_at: Option<DateTime<Utc>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     last_verdict: Option<String>,
+    /// Whether the last run read a Codex sessions tree (`codex-sessions`
+    /// source `available`). The budget-evidence guard claims Codex spend is
+    /// measured only when this is true.
+    // trace:TASK-2731 | ai:claude
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    last_codex_available: Option<bool>,
     /// Codex session file -> its session id when it is this project's,
     /// `None` when its `session_meta` cwd is another project's. Holds only
     /// files seen in the last run, so it never grows with `~/.codex`.
@@ -622,6 +637,16 @@ struct CodexMetaPayload {
 /// when its first line is still being written (decide on a later run).
 // trace:BUG-2391 | ai:claude
 fn codex_session_scope(path: &Path, roots: &[PathBuf]) -> Option<Option<String>> {
+    let meta = codex_rollout_meta(path)?;
+    Some(meta.and_then(|(id, cwd)| roots.iter().any(|r| cwd.starts_with(r)).then_some(id)))
+}
+
+/// `Some(Some((session id, cwd)))` from a Codex rollout's first-line
+/// `session_meta`; `Some(None)` when that line names no cwd or is not a
+/// `session_meta`; `None` while the first line is still being written.
+// trace:BUG-2391 | ai:claude
+// trace:BUG-2396 | ai:claude — shared with `aida status`'s Codex section.
+pub(crate) fn codex_rollout_meta(path: &Path) -> Option<Option<(String, PathBuf)>> {
     use std::io::Read;
     let file = fs::File::open(path).ok()?;
     let mut reader = BufReader::new(file).take(MAX_LINE_BYTES as u64 + 1);
@@ -640,19 +665,16 @@ fn codex_session_scope(path: &Path, roots: &[PathBuf]) -> Option<Option<String>>
     else {
         return Some(None);
     };
-    let Some(cwd) = payload.cwd.as_deref().map(Path::new) else {
+    let Some(cwd) = payload.cwd.map(PathBuf::from) else {
         return Some(None);
     };
-    if !roots.iter().any(|r| cwd.starts_with(r)) {
-        return Some(None);
-    }
     let id = payload.session_id.or(payload.id).unwrap_or_else(|| {
         path.file_stem()
             .unwrap_or_default()
             .to_string_lossy()
             .to_string()
     });
-    Some(Some(id))
+    Some(Some((id, cwd)))
 }
 
 /// Byte gate for Codex lines: only the event kinds the rules read, plus
@@ -931,7 +953,7 @@ fn file_mtime(path: &Path) -> Option<DateTime<Utc>> {
         .map(DateTime::<Utc>::from)
 }
 
-fn walk_jsonl(dir: &Path, out: &mut Vec<PathBuf>) {
+pub(crate) fn walk_jsonl(dir: &Path, out: &mut Vec<PathBuf>) {
     let Ok(entries) = fs::read_dir(dir) else {
         return;
     };
@@ -1657,6 +1679,13 @@ pub(crate) fn scan(
     // trace:STORY-1218 | ai:claude
     state.last_run_at = Some(now);
     state.last_verdict = Some(verdict.to_string());
+    // trace:TASK-2731 | ai:claude
+    state.last_codex_available = Some(
+        coverage
+            .sources
+            .iter()
+            .any(|s| s.source == "codex-sessions" && s.state == "available"),
+    );
     save_state(sources.state_path.as_deref(), &state);
 
     coverage.verdict = verdict.into();
@@ -1676,6 +1705,10 @@ pub(crate) struct BudgetEvidence {
     pub(crate) last_run_at: Option<DateTime<Utc>>,
     /// That run's verdict (`ok`, `tripped`, `degraded`, `unknown`).
     pub(crate) last_verdict: Option<String>,
+    /// Whether that run could read Codex sessions; `false` for a state file
+    /// written before this was recorded (unproven is not measured).
+    // trace:TASK-2731 | ai:claude
+    pub(crate) codex_available: bool,
 }
 
 /// `None` when the state file is missing, unreadable or of another version.
@@ -1696,6 +1729,7 @@ pub(crate) fn budget_evidence(state_path: &Path, now: DateTime<Utc>) -> Option<B
         spent_24h,
         last_run_at: state.last_run_at,
         last_verdict: state.last_verdict,
+        codex_available: state.last_codex_available.unwrap_or(false),
     })
 }
 
@@ -3011,7 +3045,12 @@ mod tests {
             "s.jsonl",
             &ordinary_transcript("s", 2),
         );
-        let src = sources(tmp.path());
+        // A Codex tree that does not exist yet: the source reads unavailable.
+        // trace:TASK-2731 | ai:claude
+        let src = Sources {
+            codex_dirs: vec![tmp.path().join("codex").join("sessions")],
+            ..sources(tmp.path())
+        };
         let state_path = src.state_path.clone().unwrap();
         assert_eq!(budget_evidence(&state_path, t0()), None, "no state yet");
         let now = t0() + Duration::minutes(150);
@@ -3026,9 +3065,23 @@ mod tests {
         assert!(ev.spent_24h > 0, "{ev:?}");
         assert_eq!(ev.last_run_at, Some(now));
         assert_eq!(ev.last_verdict.as_deref(), Some(cov.verdict.as_str()));
+        // TASK-2731: no Codex sessions tree, so Codex spend was not measured.
+        // trace:TASK-2731 | ai:claude
+        assert!(!ev.codex_available, "{ev:?}");
         // Two days later the same aggregates fall out of the trailing day.
         let later = budget_evidence(&state_path, now + Duration::days(2)).unwrap();
         assert_eq!(later.spent_24h, 0);
+        // Once the tree exists, the next run records Codex as measured.
+        std::fs::create_dir_all(&src.codex_dirs[0]).unwrap();
+        scan(
+            "aida",
+            &src,
+            &WatchdogPolicy::default(),
+            now + Duration::minutes(1),
+            &HashMap::new(),
+        );
+        let ev = budget_evidence(&state_path, now + Duration::minutes(1)).unwrap();
+        assert!(ev.codex_available, "{ev:?}");
     }
 
     /// BUG-1962: an ended or idle session with trailing compactions reports

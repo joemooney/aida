@@ -494,7 +494,7 @@ pub fn inspect_mail(
         from: m.from.clone(),
         timestamp: m.timestamp,
         intent: m.intent,
-        subject: crate::mailbox::subject_line(m, 80),
+        subject: crate::mailbox::subject_line(m, crate::mailbox::SUBJECT_MAX),
         state,
     };
     let mut records = snapshot

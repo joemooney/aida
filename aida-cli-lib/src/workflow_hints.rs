@@ -185,7 +185,9 @@ pub enum PrState {
 /// message selection is unit-testable without touching config or env.
 /// `branch` + `pr` drive the BUG-232 PR-aware sharpening. trace:BUG-232
 /// | ai:claude
+// trace:BUG-2396 | ai:claude — `vendor` picks `/aida-pr` vs `$aida-pr`.
 fn queue_drained_hint_lines(
+    vendor: crate::session::HeadlessVendor,
     kind: crate::forge::ForgeKind,
     role: Option<&str>,
     scope: Option<&str>,
@@ -223,12 +225,13 @@ fn queue_drained_hint_lines(
     let noun = kind.change_noun();
     // trace:TASK-840 | ai:claude — route the warning marker through the registry.
     let warn = crate::glyphs::Glyph::Warning.render(crate::glyphs::active_profile(None));
+    let ship = crate::vendor_hints::skill_ref(vendor, "aida-pr", "");
     let body = match pr {
         // BUG-232: the branch has unshipped commits and the forge confirmed no
         // change exists — the spec is Done-but-unmergeable. Say so pointedly.
         PrState::Absent if commits > 0 => format!(
             "{warn} No {} is open for {} — the work is committed but unshipped. \
-             Run `/aida-pr` to ship it, or it sits Done and unmergeable.",
+             Run `{ship}` to ship it, or it sits Done and unmergeable.",
             noun, branch_phrase
         ),
         // A change already exists — the next move is merge, not open.
@@ -251,7 +254,7 @@ fn queue_drained_hint_lines(
                 .map(|c| format!(" (or `{}`)", c))
                 .unwrap_or_default();
             format!(
-                "Open a {} with `/aida-pr`{}, or pick a new cluster \
+                "Open a {} with `{ship}`{}, or pick a new cluster \
                  with `aida queue work <scope>`.",
                 noun, create_hint
             )
@@ -554,7 +557,9 @@ fn requirement_id_parts(spec: &str) -> Option<(String, String)> {
 /// suggested follow-up commands; that's what the user typed and what they
 /// want to re-type.
 /// trace:BUG-269 BUG-285 | ai:claude
+// trace:BUG-2396 | ai:claude — `vendor` picks `/aida-pr` vs `$aida-pr`.
 pub fn queue_done_precheck_error(
+    vendor: crate::session::HeadlessVendor,
     display_id: &str,
     branch_commits_ahead: Option<u32>,
     pr: PrState,
@@ -573,8 +578,9 @@ pub fn queue_done_precheck_error(
         if commits == 1 { "" } else { "s" }
     );
     let action = format!(
-        "Open the PR first: run `/aida-pr`, then re-run `aida queue done {}`. \
+        "Open the PR first: run `{}`, then re-run `aida queue done {}`. \
          DO NOT exit this session without opening the PR — the orchestrator will fail phase 1 otherwise.",
+        crate::vendor_hints::skill_ref(vendor, "aida-pr", ""),
         display_id
     );
     let bypass = format!(
@@ -765,7 +771,8 @@ pub fn queue_done_precheck_diagnose(
         };
     }
 
-    match queue_done_precheck_error(display_id, Some(commits_ahead), pr_state) {
+    let vendor = crate::vendor_hints::hint_vendor(&project_root);
+    match queue_done_precheck_error(vendor, display_id, Some(commits_ahead), pr_state) {
         Some(lines) => QueueDoneGateDiagnose::Refuse(lines),
         None => QueueDoneGateDiagnose::Proceed,
     }
@@ -794,7 +801,11 @@ pub fn after_queue_drained(
     let kind = project_root
         .map(crate::forge::resolve_forge_kind)
         .unwrap_or(crate::forge::ForgeKind::None);
-    let lines = queue_drained_hint_lines(kind, role, scope, branch_commits_ahead, branch, pr);
+    let vendor = project_root
+        .map(crate::vendor_hints::hint_vendor)
+        .unwrap_or(crate::session::HeadlessVendor::Claude);
+    let lines =
+        queue_drained_hint_lines(vendor, kind, role, scope, branch_commits_ahead, branch, pr);
     emit(project_root, &lines);
 }
 
@@ -1073,6 +1084,7 @@ mod tests {
     #[test]
     fn queue_drained_warns_when_commits_ahead_and_no_pr() {
         let lines = queue_drained_hint_lines(
+            crate::session::HeadlessVendor::Claude,
             crate::forge::ForgeKind::GitHub,
             Some("implementer"),
             None,
@@ -1088,10 +1100,33 @@ mod tests {
         assert!(lines[1].contains("/aida-pr"));
     }
 
+    // trace:BUG-2396 | ai:claude
+    #[test]
+    fn codex_project_hints_name_the_codex_pr_skill() {
+        let codex = crate::session::HeadlessVendor::Codex;
+        for pr in [PrState::Absent, PrState::Unknown] {
+            let lines = queue_drained_hint_lines(
+                codex,
+                crate::forge::ForgeKind::GitHub,
+                Some("implementer"),
+                None,
+                Some(1),
+                Some("task-264"),
+                pr,
+            );
+            assert!(lines[1].contains("`$aida-pr`"), "{lines:?}");
+            assert!(!lines[1].contains("/aida-pr"), "{lines:?}");
+        }
+        let gate = queue_done_precheck_error(codex, "BUG-1", Some(1), PrState::Absent).unwrap();
+        assert!(gate[1].contains("run `$aida-pr`"), "{gate:?}");
+        assert!(!gate.iter().any(|l| l.contains("/aida-pr")), "{gate:?}");
+    }
+
     // An already-open PR redirects the hint to "merge it", not "open one".
     #[test]
     fn queue_drained_points_at_merge_when_pr_open() {
         let lines = queue_drained_hint_lines(
+            crate::session::HeadlessVendor::Claude,
             crate::forge::ForgeKind::GitHub,
             Some("implementer"),
             None,
@@ -1110,6 +1145,7 @@ mod tests {
     #[test]
     fn queue_drained_hint_is_forge_aware() {
         let gitlab = queue_drained_hint_lines(
+            crate::session::HeadlessVendor::Claude,
             crate::forge::ForgeKind::GitLab,
             Some("implementer"),
             None,
@@ -1122,6 +1158,7 @@ mod tests {
         assert!(!gitlab[1].contains("gh pr"));
 
         let pure_git = queue_drained_hint_lines(
+            crate::session::HeadlessVendor::Claude,
             crate::forge::ForgeKind::None,
             Some("implementer"),
             None,
@@ -1135,6 +1172,7 @@ mod tests {
         assert!(!pure_git[1].contains("glab "));
         // create-path likewise names no forge CLI for pure-git.
         let pg_create = queue_drained_hint_lines(
+            crate::session::HeadlessVendor::Claude,
             crate::forge::ForgeKind::None,
             Some("implementer"),
             None,
@@ -1152,6 +1190,7 @@ mod tests {
     #[test]
     fn queue_drained_generic_when_pr_state_unknown() {
         let lines = queue_drained_hint_lines(
+            crate::session::HeadlessVendor::Claude,
             crate::forge::ForgeKind::GitHub,
             Some("implementer"),
             None,
@@ -1169,6 +1208,7 @@ mod tests {
     #[test]
     fn queue_drained_no_warning_when_nothing_to_ship() {
         let lines = queue_drained_hint_lines(
+            crate::session::HeadlessVendor::Claude,
             crate::forge::ForgeKind::GitHub,
             Some("implementer"),
             None,
@@ -1187,7 +1227,12 @@ mod tests {
     // actionable error naming the spec, the next command, and the bypass.
     #[test]
     fn precheck_refuses_when_commits_ahead_and_no_pr() {
-        let result = queue_done_precheck_error("BUG-249", Some(1), PrState::Absent);
+        let result = queue_done_precheck_error(
+            crate::session::HeadlessVendor::Claude,
+            "BUG-249",
+            Some(1),
+            PrState::Absent,
+        );
         let lines = result.expect("expected refusal");
         assert!(lines[0].contains("BUG-249 has 1 local commit but no open PR"));
         assert!(lines[1].contains("/aida-pr"));
@@ -1202,7 +1247,13 @@ mod tests {
     // can't silently regress the substrate guardrail.
     #[test]
     fn precheck_message_is_loud_for_llm_consumers() {
-        let lines = queue_done_precheck_error("BUG-249", Some(1), PrState::Absent).unwrap();
+        let lines = queue_done_precheck_error(
+            crate::session::HeadlessVendor::Claude,
+            "BUG-249",
+            Some(1),
+            PrState::Absent,
+        )
+        .unwrap();
         assert!(
             lines[0].starts_with("error:"),
             "first line must start with `error:` so the tool result parses as a failure even when the exit code is masked by a pipe: {:?}",
@@ -1228,14 +1279,25 @@ mod tests {
     // Plural "commits" when more than one is ahead.
     #[test]
     fn precheck_pluralizes_commits() {
-        let lines = queue_done_precheck_error("STORY-42", Some(3), PrState::Absent).unwrap();
+        let lines = queue_done_precheck_error(
+            crate::session::HeadlessVendor::Claude,
+            "STORY-42",
+            Some(3),
+            PrState::Absent,
+        )
+        .unwrap();
         assert!(lines[0].contains("3 local commits but no open PR"));
     }
 
     // BUG-269 happy path: an open PR already references the spec.
     #[test]
     fn precheck_proceeds_when_pr_open() {
-        let result = queue_done_precheck_error("BUG-249", Some(1), PrState::Open(42));
+        let result = queue_done_precheck_error(
+            crate::session::HeadlessVendor::Claude,
+            "BUG-249",
+            Some(1),
+            PrState::Open(42),
+        );
         assert!(result.is_none());
     }
 
@@ -1243,7 +1305,12 @@ mod tests {
     // branch — proceed silently (existing behavior).
     #[test]
     fn precheck_proceeds_when_no_commits_ahead() {
-        let result = queue_done_precheck_error("BUG-249", Some(0), PrState::Absent);
+        let result = queue_done_precheck_error(
+            crate::session::HeadlessVendor::Claude,
+            "BUG-249",
+            Some(0),
+            PrState::Absent,
+        );
         assert!(result.is_none());
     }
 
@@ -1251,14 +1318,24 @@ mod tests {
     // on guesswork. Proceed rather than risk blocking a legitimate done.
     #[test]
     fn precheck_proceeds_when_pr_state_unknown() {
-        let result = queue_done_precheck_error("BUG-249", Some(2), PrState::Unknown);
+        let result = queue_done_precheck_error(
+            crate::session::HeadlessVendor::Claude,
+            "BUG-249",
+            Some(2),
+            PrState::Unknown,
+        );
         assert!(result.is_none());
     }
 
     // Commits-ahead unknown (helper returned None) → proceed silently.
     #[test]
     fn precheck_proceeds_when_commits_unknown() {
-        let result = queue_done_precheck_error("BUG-249", None, PrState::Absent);
+        let result = queue_done_precheck_error(
+            crate::session::HeadlessVendor::Claude,
+            "BUG-249",
+            None,
+            PrState::Absent,
+        );
         assert!(result.is_none());
     }
 
@@ -1435,7 +1512,13 @@ mod tests {
             QueueDoneGateDiagnose::Refuse(lines) => {
                 assert_eq!(
                     lines,
-                    queue_done_precheck_error("BUG-249", Some(1), PrState::Absent).unwrap(),
+                    queue_done_precheck_error(
+                        crate::session::HeadlessVendor::Claude,
+                        "BUG-249",
+                        Some(1),
+                        PrState::Absent
+                    )
+                    .unwrap(),
                     "Refuse lines must match queue_done_precheck_error verbatim"
                 );
                 assert!(lines[0].contains("BUG-249 has 1 local commit but no open PR"));
