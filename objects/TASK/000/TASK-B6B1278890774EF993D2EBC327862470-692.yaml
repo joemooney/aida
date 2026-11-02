@@ -1,5 +1,6 @@
 id: 01a19b82-9e24-74e0-8800-c43461dc36c6
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-692
+agreed_id: TASK-2749
 title: 'COSMETIC non-blocking (carried): aida-core/src/mailbox_logical.rs:497 hard-code…'
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on BUG-B6B1278890774EF993D2EBC327862470-178, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
@@ -44,6 +45,11 @@ history:
 - id: 01a19b8f-6526-7f73-b2ff-5b85f20d77f7
   author: joe
   timestamp: 2026-11-02T09:20:28.454262560Z
+  session_id: 1f56bd1e-c059-4f73-b8df-e18b2170fdfc
+  changes: []
+- id: 01a19ba5-acb8-7261-a05a-fa718af7f650
+  author: joe
+  timestamp: 2026-11-02T09:44:48.568713809Z
   session_id: 1f56bd1e-c059-4f73-b8df-e18b2170fdfc
   changes: []
 filed_at:
