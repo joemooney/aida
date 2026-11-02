@@ -4657,7 +4657,8 @@ fn uncontained_launchers_strip_inherited_aida_contained() {
 
     // 8. compete arm
     let arm_cmd =
-        crate::compete_cmd::build_compete_arm_command(&project, "claude", &[], "claude").unwrap();
+        crate::compete_cmd::build_compete_arm_command(&project, &project, "claude", &[], "claude")
+            .unwrap();
     assert!(
         arm_cmd
             .get_envs()

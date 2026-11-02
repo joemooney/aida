@@ -1603,8 +1603,9 @@ pub(crate) fn questions_clarify(
 
     let prompt = format!("/aida-clarify {}", targets.join(" "));
     let project_root = find_project_root()?;
-    let vendor = session::resolve_headless_vendor(&project_root);
-    let contained = session::aida_contained_env()?;
+    // trace:BUG-2393 | ai:claude
+    let (vendor, contained) =
+        session::resolve_headless_launch_posture(&project_root, "interactive advisor session")?;
     if dry_run {
         // A preview must not reserve a child identity or probe a harness version.
         // trace:BUG-2389 | ai:codex ai:claude
@@ -1680,38 +1681,55 @@ pub(crate) fn questions_remedy(
 
     let project_root =
         find_project_root().unwrap_or_else(|_| std::env::current_dir().unwrap_or_default());
-    let vendor = session::resolve_headless_vendor(&project_root);
-    let prompt = questions_remedy_prompt(&req.display_id());
-    let log_path = questions_remedy_log_path(&project_root, &req.display_id());
-
-    println!("remedying {} with headless advisor", req.display_id());
-    println!("  vendor: {}", vendor.as_str());
-    println!("  log: {}", log_path.display());
-
-    if dry_run {
-        println!("\ndry run — not launching. Prompt:\n\n{prompt}");
+    let Some(status) = launch_questions_remedy(&project_root, &req.display_id(), dry_run)? else {
         return Ok(());
-    }
-
-    let tee = crate::headless_tee::TeeOptions::from_env_and_flag(false)
-        .with_label(format!("remedy-{}", req.display_id().to_ascii_lowercase()));
-    let session_id = uuid::Uuid::now_v7().to_string();
-    let status = session::spawn_vendor_headless_with_seat(
-        vendor,
-        aida_core::agents_config::AgentSeat::Advisor,
-        &prompt,
-        &session_id,
-        &log_path,
-        &tee,
-        false,
-    );
-    let status = status?;
+    };
     if status.success() {
         Ok(())
     } else {
         let code = status.code().unwrap_or(1);
         std::process::exit(code);
     }
+}
+
+/// The launch half of [`questions_remedy`], after the spec is resolved:
+/// resolve vendor and containment (env OR configuration; a vendor that cannot
+/// run contained is refused before anything spawns), then run the headless
+/// advisor. `None` for a dry run.
+// trace:TASK-1075 | ai:codex
+// trace:BUG-2393 | ai:claude
+pub(crate) fn launch_questions_remedy(
+    project_root: &std::path::Path,
+    spec: &str,
+    dry_run: bool,
+) -> Result<Option<std::process::ExitStatus>> {
+    let (vendor, contained) =
+        session::resolve_headless_launch_posture(project_root, "headless advisor")?;
+    let prompt = questions_remedy_prompt(spec);
+    let log_path = questions_remedy_log_path(project_root, spec);
+
+    println!("remedying {spec} with headless advisor");
+    println!("  vendor: {}", vendor.as_str());
+    println!("  log: {}", log_path.display());
+
+    if dry_run {
+        println!("\ndry run — not launching. Prompt:\n\n{prompt}");
+        return Ok(None);
+    }
+
+    let tee = crate::headless_tee::TeeOptions::from_env_and_flag(false)
+        .with_label(format!("remedy-{}", spec.to_ascii_lowercase()));
+    let session_id = uuid::Uuid::now_v7().to_string();
+    session::spawn_vendor_headless_with_seat(
+        vendor,
+        aida_core::agents_config::AgentSeat::Advisor,
+        &prompt,
+        &session_id,
+        &log_path,
+        &tee,
+        contained,
+    )
+    .map(Some)
 }
 
 // trace:TASK-1075 | ai:codex

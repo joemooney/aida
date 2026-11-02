@@ -9,7 +9,7 @@ use std::path::Path;
 
 /// Unmarked `.display_id()` occurrences in non-test `aida-cli-lib/src` code
 /// after the STORY-078 output migration. Lower it when you migrate more.
-const BASELINE: usize = 172;
+const BASELINE: usize = 169;
 
 const MARKER: &str = "canonical-id";
 
