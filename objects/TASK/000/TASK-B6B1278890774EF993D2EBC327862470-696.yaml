@@ -1,0 +1,30 @@
+id: 01a19ba5-f557-71e2-83db-f46290790bbb
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-696
+title: 'Non-blocking (minor, carried): codex_rollout_path walks all of $CODEX_HOME/sess…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on STORY-2255, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  Non-blocking (minor, carried): codex_rollout_path walks all of $CODEX_HOME/sessions on each tick whose codex PID is gone; search newest-first or cache at register.
+
+  PR: #3227
+  Reviewed sha: 4738c574ba3eccdd96fc329aafca8f5a98c75e6c
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-02T09:45:07.159842184Z
+modified_at: 2026-11-02T09:45:07.159842184Z
+req_type: Task
+tags:
+- carried-from:STORY-2255
+- finding-hash:13ae1380
+- from-review:PR-3227
+- kind:carried-forward
+filed_at:
+  code_sha: 8ab45ba1c8731a979e678fdf3c041459e7434c46
+  branch: main
+  dirty: true
+  aida_version: 0.16.0
+  aida_build_sha: 6a3f67671a9
+  vendor: claude
+  session: 1f56bd1e-c059-4f73-b8df-e18b2170fdfc
