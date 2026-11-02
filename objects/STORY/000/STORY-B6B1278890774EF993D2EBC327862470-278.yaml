@@ -21,7 +21,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T04:45:50.173634412Z
-modified_at: 2026-11-02T07:30:07.433975539Z
+modified_at: 2026-11-02T07:31:17.699598108Z
 req_type: Story
 tags:
 - fork
@@ -99,6 +99,12 @@ comments:
   content: 'REWORK BRIEF (advisor, 2026-11-02 00:10 MST): PR #3227 passed review at 4f87569b but conflicts with main (#3224 BUG-2382 and #3229 BUG-2393 merged). Merge origin/main and resolve, keeping both sides'' behaviour. No other changes. Gate: LIGHT, using the targeted cargo test for the resolved files, then make check-ci-fast. A delta review follows.'
   created_at: 2026-11-02T07:09:17.102318891Z
   modified_at: 2026-11-02T07:09:17.102318891Z
+  session_id: 1f56bd1e-c059-4f73-b8df-e18b2170fdfc
+- id: 01a19b2b-7043-72f2-8ffa-0e91bca62dfd
+  author: joe
+  content: 'REWORK BRIEF (advisor, 2026-11-02 00:32 MST): the review at 8218de6 is valid. The merge is faithful, but codex_fork_and_run passes a literal false for contained, so the Codex advisor watch fork ignores the configured containment that BUG-2393 (#3229) now resolves for every headless caller, and it trips BUG-2393''s source ratchet. Resolve containment the way the other BUG-2393 callers do (the same resolver as cold_boot_and_run) and pass it through. Add a test: with configured containment (agents.toml, env unset), the watch fork launches contained. No other changes. Gate: LIGHT. If cargo is denied in your seat, push and say so in the commit body.'
+  created_at: 2026-11-02T07:31:17.699598108Z
+  modified_at: 2026-11-02T07:31:17.699598108Z
   session_id: 1f56bd1e-c059-4f73-b8df-e18b2170fdfc
 history:
 - id: 01a1956d-d26a-7a83-9ddc-67ed991509ed
