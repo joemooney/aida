@@ -14,7 +14,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-02T05:01:03.079385668Z
-modified_at: 2026-11-02T07:18:36.826459291Z
+modified_at: 2026-11-02T07:18:39.890371747Z
 req_type: Task
 tags:
 - carried-from:BUG-B6B1278890774EF993D2EBC327862470-159
@@ -54,6 +54,21 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: CI lib-0 ''Run tests'' failed at 9b692dc45331 (green on main at base cea120d24); and the TASK-2742 env-role default lets an undelegated inherited role fail after lease/worktree setup. TASK-2737 and TASK-2731 diffs are correct pending a green CI.. No triage reason was given.'
   created_at: 2026-11-02T07:18:36.826456546Z
   modified_at: 2026-11-02T07:18:36.826456546Z
+  session_id: 1f56bd1e-c059-4f73-b8df-e18b2170fdfc
+- id: 01a19b1f-df67-7cc0-93f4-e70b87e7b1c8
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (TASK-2742):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 9b692dc45331
+    Recorded: 2026-11-02T07:17:12.939837831+00:00
+    Findings:
+    1. CI RED: job 'CI (lib-0)' step 'Run tests' failed at head 9b692dc45331 (run 41403040857). lib-0 passed on main at the merge base cea120d24, so the failure is very likely from this PR. The reviewer could not read the failing test name because the sandbox blocks the log host. The change was never compiled or tested locally. Pull the lib-0 log (gh run view 41403040857 --log-failed), fix the failing test(s), and confirm all 7 shards are green. Candidate new lib tests: session::tests::headless_codex_child_never_inherits_the_parent_mail_wake, vendor_activity::tests::codex_sessions_root_honours_codex_home, runaway_seats budget_evidence_reads_trailing_day_and_last_verdict, tests::story_1218_shift_tick_tests shift_refuses_when_budget_evidence_missing_or_stale, tests::bug_2385_vendor_routing_tests (codex_session_start_env_role, codex_start_launch_role_never_reaches_the_picker).
+    2. TASK-2742 (major): the codex child role now inherits AIDA_SESSION_ROLE (session.rs start_launch_default_role, session_start.rs:1887), but session start --launch never checks delegation in preflight. agent_new_with_config -> preflight_agent_new_delegation (agent_launch.rs:3861, validate_child_delegation) refuses an undelegated seat only AFTER the claim/lease and worktree exist (the return at session_start.rs:3500). Repro: an advisor seat shell (AIDA_SESSION_ROLE=advisor, grant delegating implementer) on a codex vendor runs 'aida session start --owns X --launch'. The child role becomes 'advisor', the delegation refusal fires after setup, and the lease and worktree are orphaned. That is the defect class this spec exists to close. Before this PR the non-TTY path defaulted to implementer and succeeded, so this is a regression. It also contradicts resolve_child_role's documented TASK-1462 invariant (role.rs:927-932: the launcher's AIDA_SESSION_ROLE is deliberately NOT cloned into the child). Fix: in preflight, run crate::gate::seat_authority::validate_child_delegation(project_root, &codex_child_role) when a parent grant is active, and refuse with nothing to undo. Add a dispatch test where AIDA_SESSION_ROLE names a seat the grant does not delegate: assert the refusal and that no .aida/sessions lease or worktree exists.
+    3. TASK-2742 (minor): the codex child role diverges from the session's recorded role. session_start.rs:3087 records launch_role, else the scope default (reviewer for a review target, otherwise implementer); AIDA_SESSION_ROLE only triggers a mismatch warning. The codex child gets launch_role, else AIDA_SESSION_ROLE, else implementer. In the new codex_session_start_env_role fixture the lease records 'implementer' while the codex child runs 'integrator'. A review-scoped 'session start --review PR-N --launch' gets a non-reviewer codex child. Derive the child default from the same resolution as the session role (or agent_new_scope_role), or document and test the intended divergence.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-02T07:18:39.719620152Z
+  modified_at: 2026-11-02T07:18:39.719620152Z
   session_id: 1f56bd1e-c059-4f73-b8df-e18b2170fdfc
 history:
 - id: 01a19abc-8d4f-7c32-824b-5498d0b2cb3d
