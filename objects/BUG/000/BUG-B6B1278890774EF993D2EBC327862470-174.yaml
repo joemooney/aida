@@ -14,12 +14,12 @@ description: |
   4. Validate live recovery with a sanctioned train and exact protected-head checks before landing. Do not simply retry blind or substitute raw gh merge. Record prior3202 failure and full recovery evidence.
 
   LIGHT one targeted train/CI filter plus fastgates; fixtures/fakeHOME only, no actual admin/protection changes. Independent review, ordinary guarded integration. Claude quota exhausted; implement on Codex.
-status: Approved
+status: InProgress
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T09:27:24.546816181Z
-modified_at: 2026-11-02T00:03:09.772316279Z
+modified_at: 2026-11-02T01:26:05.439825406Z
 req_type: Bug
 tags:
 - ci
@@ -85,6 +85,13 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
+- id: 01a199dd-157f-7441-b4b6-3bce0a745821
+  author: aida-session-start
+  timestamp: 2026-11-02T01:26:05.439822338Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 4ce0af750fcb68d4adf57496e4e002aefd8ace77
   branch: main
