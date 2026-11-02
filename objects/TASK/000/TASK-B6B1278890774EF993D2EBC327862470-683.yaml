@@ -14,7 +14,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-02T05:01:03.079385668Z
-modified_at: 2026-11-02T07:20:20.661861165Z
+modified_at: 2026-11-02T07:32:33.738111484Z
 req_type: Task
 tags:
 - carried-from:BUG-B6B1278890774EF993D2EBC327862470-159
@@ -70,6 +70,13 @@ comments:
   created_at: 2026-11-02T07:18:39.719620152Z
   modified_at: 2026-11-02T07:18:39.719620152Z
   session_id: 1f56bd1e-c059-4f73-b8df-e18b2170fdfc
+- id: 01a19b2c-994a-70b0-9099-07c2335c100f
+  author: joe
+  content: 'Round 2 (297aa480f9d): codex start --launch child role = --role else scope default (matches lease; AIDA_SESSION_ROLE ignored per TASK-1462); delegation validated in preflight before claim/worktree; new undelegated-refusal dispatch test; runaway_seats fixture fixed (empty codex_dirs index). Not compiled locally: aida-cli-lib check exceeds the 60s per-call limit and background jobs are killed; CI is the compile/test gate.'
+  created_at: 2026-11-02T07:32:33.738111484Z
+  modified_at: 2026-11-02T07:32:33.738111484Z
+  session_id: 01a19b21654c
+  harness_version: 2.1.316 (Claude Code)
 history:
 - id: 01a19abc-8d4f-7c32-824b-5498d0b2cb3d
   author: joe
