@@ -21,7 +21,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T04:45:50.173634412Z
-modified_at: 2026-11-02T07:31:22.317485820Z
+modified_at: 2026-11-02T07:31:23.629166344Z
 req_type: Story
 tags:
 - fork
@@ -111,6 +111,22 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Merge resolution is textually faithful (session.rs/liveness.rs deltas identical on both sides; process_probe import union; main''s BUG-2393 cold-boot test adapted to the new cold_boot_and_run signature), but it misses a semantic conflict with #3229 (BUG-2393): the PR''s new codex_fork_and_run passes a literal false for contained, so the Codex advisor fork ignores configured containment and trips BUG-2393''s source ratchet. AC1 verified (codex_tick_forks_the_registered_thread_without_touching_it, punt_tier_forks_the_registered_codex_thread); AC2 verified (codex_tick_cold_boots_without_a_thread_or_exec_fork, codex_tick_cold_boots_for_another_project_or_a_stale_thread, plan_codex_fork_names_every_fallback_reason, exec_fork_probe_is_bounded); AC3 verified (fixture rollout byte-identity in codex_tick_forks_...); AC4 PARTIAL: env containment verified by contained_fork_uses_the_native_posture_without_bypass, configured containment (agents.toml/config.toml, env unset) not honoured on the watch fork path; AC5 verified (seat-parity rows 14/18, stale wording count 0); AC6 verified (legacy_registration_stays_a_claude_fork, Claude branch unchanged). CI at head still pending at review time.. No triage reason was given.'
   created_at: 2026-11-02T07:31:22.317484506Z
   modified_at: 2026-11-02T07:31:22.317484506Z
+  session_id: 1f56bd1e-c059-4f73-b8df-e18b2170fdfc
+- id: 01a19b2b-86c9-7780-96df-387ec843fa0d
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (STORY-2255):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 8218de603112
+    Recorded: 2026-11-02T07:30:06.714033050+00:00
+    Findings:
+    1. BLOCKING: aida-cli-lib/src/advisor_watch.rs codex_fork_and_run (~line 314) calls session::spawn_codex_headless_fork(..., &tee, false). After the merge of #3229 (BUG-2393), every advisor-watch spawn must resolve containment with session::drain_contained(project_root)?. As written, with [agents] contained = true (or [contained] enable = true) and AIDA_CONTAINED unset (a cron/systemd tick), the Codex fork runs uncontained instead of being refused, while the cold-boot path beside it refuses. That is the BUG-2393 regression on a new call site, and AC4 is only met for env containment. It also fails the BUG-2393 ratchet test listed_headless_callers_resolve_configured_containment (bug_2393_configured_containment_tests.rs): the flattened source contains '&tee, false, )'. I reproduced the string check locally. Fix: let contained = session::drain_contained(project_root)?; and pass it. Add a test mirroring cold_boot_honours_configured_containment_without_the_env: Codex registration, agents.toml contained=true, AIDA_CONTAINED unset, fork_and_run_to refuses with 'cannot run a contained session' and the fake codex is never spawned.
+    2. Non-blocking (minor, carried from round 2): resolve_register_identity always prefers CODEX_THREAD_ID, so a Claude session started from a Codex shell registers the parent Codex thread. Consider picking the nearest ancestor's vendor.
+    3. Non-blocking (minor, carried): codex_rollout_path walks the whole $CODEX_HOME/sessions tree on every tick whose codex PID is gone. Search newest-first or cache the path at register time.
+    4. Non-blocking (known deferral, carried): the calibration-ON shadow fork in phase_driver_trait still plans only a Claude JSONL fork, so a Codex-hosted calibration shadow cold-boots.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-02T07:31:23.465766208Z
+  modified_at: 2026-11-02T07:31:23.465766208Z
   session_id: 1f56bd1e-c059-4f73-b8df-e18b2170fdfc
 history:
 - id: 01a1956d-d26a-7a83-9ddc-67ed991509ed
