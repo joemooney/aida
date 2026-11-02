@@ -11,7 +11,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T09:06:06.223993645Z
-modified_at: 2026-11-02T14:38:12.691493737Z
+modified_at: 2026-11-02T18:36:44.329444540Z
 req_type: Task
 tags:
 - architecture
@@ -82,6 +82,12 @@ comments:
   created_at: 2026-11-02T14:38:12.691493737Z
   modified_at: 2026-11-02T14:38:12.691493737Z
   session_id: 2a0361be-44f4-4500-9f69-b6435c29346c
+- id: 01a19d8c-aba9-78f3-9829-ea37b70e850c
+  author: joe
+  content: 'ADVISOR RULING (11:38 MST) on the PR0 fork: F1 APPROVED. The SQLite cache gets its own .aida/cache-db/ (only cache.db and its sidecars), named once in aida_core::db::CACHE_DIR_NAME. .aida/cache/ keeps the JSON caches. This amends STORY-2238 signoff amendment 3''s path; the directory-leaf invariant is unchanged.'
+  created_at: 2026-11-02T18:36:44.329444540Z
+  modified_at: 2026-11-02T18:36:44.329444540Z
+  session_id: ee0bf351-6b17-486f-a38e-cfbb1343c426
 history:
 - id: 01a1965c-1e90-7483-8313-1b32a588eaef
   author: joe
