@@ -1445,6 +1445,11 @@ pub(crate) fn rewrite_agent_default_new(args: &[String]) -> Vec<String> {
             "pause",
             "resume",
             "stop",
+            // The hidden `wake` (and `describe`) were rewritten to
+            // `agent new wake …`, so the documented manual-arm command
+            // failed. trace:STORY-2256 | ai:claude
+            "describe",
+            "wake",
             "list-roles",
             "help",
         ];

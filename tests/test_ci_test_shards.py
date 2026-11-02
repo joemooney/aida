@@ -343,12 +343,19 @@ class ShardsTest(unittest.TestCase):
             (root / 'file').write_text('tracked')
             subprocess.run(['git', '-C', tmp, 'add', 'file'], check=True)
             self.assertEqual(shards.check_root(root), 0)
+            # trace:BUG-2384 | ai:claude — capture the guard's `::error::`
+            # line: printed raw, GitHub turns it into a run annotation
+            # ("left untracked root entries: stray/") even on a green run.
             (root / 'leak').write_text('oops')
-            self.assertEqual(shards.check_root(root), 1)
+            with patch('sys.stderr', new_callable=io.StringIO) as err:
+                self.assertEqual(shards.check_root(root), 1)
+            self.assertIn('leak', err.getvalue())
             (root / 'leak').unlink()
             (root / 'stray').mkdir()
             (root / 'stray' / 'file').write_text('oops')
-            self.assertEqual(shards.check_root(root), 1)
+            with patch('sys.stderr', new_callable=io.StringIO) as err:
+                self.assertEqual(shards.check_root(root), 1)
+            self.assertIn('stray/', err.getvalue())
 
     def test_store_guard_accepts_an_actual_attached_store(self):
         workflow = yaml.safe_load((ROOT / '.github/workflows/ci.yml').read_text())

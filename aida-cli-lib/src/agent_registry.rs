@@ -211,8 +211,25 @@ pub(crate) fn set_mail_wake_on_row(
         project_root,
         entry,
         crate::agent_handle::LAUNCHER_LOCK_BUDGET,
-        |_| Some(state),
+        // The child's own hook may already have armed this launch from the
+        // launcher's decision; `pending` would only re-arm it.
+        // trace:STORY-2256 | ai:claude
+        |now| (!(state == MailWake::Pending && now == Some(MailWake::Armed))).then_some(state),
     )
+}
+
+/// Record `state` on `entry`'s row only when nothing has decided its mail
+/// wake yet; the SessionStart hook's default for a hand-started session
+/// never replaces a launcher's stamp. Returns the row as it is now.
+// trace:STORY-2256 | ai:claude
+pub(crate) fn adopt_mail_wake_on_row(
+    project_root: &Path,
+    entry: &AgentRegistryEntry,
+    state: MailWake,
+) -> Result<AgentRegistryEntry> {
+    update_mail_wake_on_row(project_root, entry, ARM_LOCK_BUDGET, |now| {
+        now.is_none().then_some(state)
+    })
 }
 
 /// How long arming waits for the namespace lock: it runs in the launcher

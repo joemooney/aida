@@ -26,6 +26,18 @@ reads `armed` even if the other attempt failed first. Ending
 the agent, or `aida agent gc` finding its process gone, retires the row; the
 ledger is kept.
 
+Hand-launched Codex seats are covered too. A seat started any other way, for
+example `aida session start --owns <ID>` and then `codex`, gets the same wake:
+its SessionStart hook writes the agent's registry row, arms it on the exact
+thread the hook reports, and installs the service if it is missing. If the
+install is refused (for example inside containment), the session still starts,
+the hook prints the one command to run, and the row reads `failed`. On a Codex
+project, `aida session start` prints a `Mail wake:` line saying whether the
+wake will arm and, when the service is missing, the install command. A Codex
+session that was already running before its project had this behaviour arms on
+its next start.
+<!-- trace:STORY-2256 | ai:claude -->
+
 - `--no-mail-wake` opts one launch out. `[agents.codex] mail_wake = false` in
   `~/.aida/agents.toml` or `.aida/agents.toml` makes off the default. A value
   that is not `true` or `false` gets a warning, and the launch uses the default.
@@ -38,7 +50,9 @@ ledger is kept.
   (stale snapshots, unread accepted mail, uncertain submissions) as well as the
   advisor registration below. It also lists every live agent whose wake
   `failed`, or is still `pending` ten minutes after it started, with the exact
-  commands that arm it by hand. `wake-service install` prints the
+  commands that arm it by hand. Plain `aida doctor` also reports a finding,
+  with the install command, when any live Codex agent should be woken and the
+  service is not installed. `wake-service install` prints the
   `[[schedule.jobs]]` block that runs it every 15 minutes; add it to
   `.aida/config.toml` yourself.
 
