@@ -163,6 +163,16 @@ impl Drop for FlowHookGuard {
 }
 
 fn write_approved_verdict(root: &Path, pr: u64, head_sha: &str, verdict_word: &str) {
+    if verdict_word == "APPROVED" {
+        // Synthetic heads in this runner fixture resolve to a real commit
+        // date; durable independent authority is no longer optional.
+        git(
+            root,
+            &["update-ref", &format!("refs/heads/{head_sha}"), "HEAD"],
+        );
+        write_attested_approval(root, pr, head_sha);
+        return;
+    }
     let verdicts_dir = root.join(".aida").join("review-verdicts");
     std::fs::create_dir_all(&verdicts_dir).unwrap();
     let rec = serde_json::json!({
@@ -540,18 +550,16 @@ fn story_1917_flow_runner_fast_path_re_review_loop_changes_requested_and_no_ship
     .unwrap();
     let verdicts_dir = f.root.join(".aida").join("review-verdicts");
     let grant_id = std::env::var(crate::gate::seat_authority::GRANT_ENV).unwrap();
+    write_approved_verdict(&f.root, 402, "bbbb2222", "APPROVED");
+    let prepared = state_dir.join("authorized-402.json");
+    std::fs::rename(verdicts_dir.join("PR-402.json"), &prepared).unwrap();
     let fake_aida_402 = f.write_executable_script(
         "fake-aida-flow-402.sh",
         &format!(
-            "#!/bin/sh\nset -eu\n\
-             echo \"$*\" >> '{}'\n\
-             cat > '{}/PR-402.json' <<'EOF'\n\
-             {{\"schema_version\":1,\"pr\":402,\"verdict\":\"APPROVED\",\"head_sha\":\"bbbb2222\",\"timestamp\":\"2026-10-25T00:00:00Z\",\"reviewer_session\":\"s1\",\"reviewer_vendor\":\"claude\",\"reviewer_model\":\"claude-opus-4-7\",\"author_vendor\":\"claude\",\"author_model\":\"claude-opus-4-7\",\"findings_count\":0,\"summary\":\"ok\",\"spec_ids\":[\"TASK-100\"],\"grant_id\":\"{}\"}}\n\
-             EOF\n\
-             exit 0\n",
+            "#!/bin/sh\necho review >> '{}'\ncp '{}' '{}/PR-402.json'\n",
             review_calls_log.display(),
-            verdicts_dir.display(),
-            grant_id
+            prepared.display(),
+            verdicts_dir.display()
         ),
     );
     TEST_AIDA_BIN.with(|c| *c.borrow_mut() = Some(fake_aida_402));
@@ -2820,4 +2828,116 @@ fn story_1917_native_pr_ship_held_refuses_at_each_checkpoint_and_rearms_only_its
         reset_home_mandates();
         native_ship(9712, true).assert_refused_at(*at);
     }
+}
+
+/// Real compatibility recorder output must neither skip a fresh review nor
+/// report approval success through either flow mode. A fresh authorized
+/// recording invocation, rather than a fabricated attestation, restores success.
+// trace:BUG-2398 | ai:codex
+#[test]
+fn bug_2398_dispatch_flow_ungranted_artifact_requires_fresh_authorized_review() {
+    use crate::gate::{review_authority as ra, review_verdict as rv, seat_authority as sa};
+    let mut f = FlowFixture::new(&["reviewer", "implementer"]);
+    f.start_mandate(&[Scope::ShipHeld, Scope::Dispatch], false);
+    let _hooks = FlowHookGuard;
+    let head = crate::resolve_commit_sha(&f.root, "HEAD").unwrap();
+    let parent = std::env::var(sa::GRANT_ENV).unwrap();
+    f.ambient.set_key(sa::GRANT_ENV, "");
+    f.ambient
+        .set_key("AIDA_AGENT_NAME", "codex-reviewer-fixture");
+    f.ambient.set_key("AIDA_AGENT_TYPE", "codex");
+    f.ambient
+        .set_key("AIDA_SESSION_ID", "independent-2398-reviewer");
+    let identity = ra::IdentitySource {
+        session_ids: vec!["independent-2398-reviewer".into()],
+        ..Default::default()
+    };
+    ra::with_identity_source(identity, || {
+        crate::handle_review_record_at(
+            f.root.clone(),
+            "TASK-100",
+            "approved",
+            Some(&head),
+            Some("main"),
+            Some("actual named non-TTY ungranted recorder"),
+            &[],
+            &[],
+            None,
+        )
+    })
+    .unwrap();
+    let ungranted = rv::current_verdict(&f.root, "TASK-100").unwrap().body;
+    std::fs::create_dir_all(rv::verdict_path(&f.root, "PR-601").parent().unwrap()).unwrap();
+    let reviewer = sa::test_support::mint_grant_for(&f.root, &f.principal, "reviewer", &[]);
+    f.ambient.set_key(sa::GRANT_ENV, &parent);
+    f.ambient.unset_key("AIDA_SESSION_ID");
+    let gh_body = serde_json::json!({"headRefOid":head, "headRefName":"feature-2398", "baseRefName":"main", "state":"OPEN", "mergeStateStatus":"CLEAN", "title":"fixture (TASK-100)"});
+    let view_file = f._tmp.path().join("pr-view.json");
+    std::fs::write(&view_file, gh_body.to_string()).unwrap();
+    let gh = f.write_executable_script(
+        "gh-2398",
+        &format!("#!/bin/sh\ncat '{}'\n", view_file.display()),
+    );
+    f.ambient.set_key("AIDA_TEST_GH_BINARY", gh);
+    TEST_FLOW_WAIT_CI_HOOK.with(|c| {
+        *c.borrow_mut() = Some(Box::new(|_, _, ctx, ship| {
+            ctx.reverify_now(ship)?;
+            Ok(crate::gate::dispatch_types::CiState::Success)
+        }))
+    });
+    TEST_FLOW_SHIP_HOOK.with(|c| {
+        *c.borrow_mut() = Some(Box::new(|_, _| panic!("ungranted artifact reached ship")))
+    });
+    let calls = f._tmp.path().join("review-calls");
+    let no_review = f.write_executable_script(
+        "review-no-authority",
+        &format!("#!/bin/sh\necho review >> '{}'\n", calls.display()),
+    );
+    TEST_AIDA_BIN.with(|c| *c.borrow_mut() = Some(no_review));
+    for (pr, no_ship) in [(601, false), (602, true), (603, true)] {
+        std::fs::write(rv::verdict_path(&f.root, &format!("PR-{pr}")), &ungranted).unwrap();
+        if pr == 603 {
+            let aida = crate::test_exec::matching_aida_cli().display().to_string();
+            let fresh = f.write_executable_script("review-fresh-authority", &format!(
+                "#!/bin/sh\nset -eu\necho authorized >> '{}'\nAIDA_SESSION_GRANT='{}' AIDA_USER='{}' AIDA_SESSION_ID=independent-2398-reviewer AIDA_ROLE_INSTANCE=driver AIDA_PROJECT_ROOT='{}' '{}' review record TASK-100 --verdict approved --sha '{}'\nAIDA_PROJECT_ROOT='{}' '{}' review verdict TASK-100 --json > '{}/PR-603.json'\n",
+                calls.display(), reviewer, f.principal, f.root.display(), aida, head,
+                f.root.display(), aida, f.root.join(".aida/review-verdicts").display()
+            ));
+            TEST_AIDA_BIN.with(|c| *c.borrow_mut() = Some(fresh));
+        }
+        let now = Utc::now();
+        let sub = submit_request(
+            &f.root,
+            &f.mandate_dir,
+            &f.principal,
+            &DispatchRequestVerb::Flow {
+                pr,
+                no_ship,
+                vendor: Some(DispatchVendor::Claude),
+            },
+            now,
+        )
+        .unwrap();
+        let result =
+            execute_one_request(&f.root, &f.mandate_dir, &sub.request.id, true, now).unwrap();
+        assert_eq!(
+            result.status,
+            if pr == 603 {
+                DispatchStatus::Done
+            } else {
+                DispatchStatus::Failed
+            },
+            "{result:?}"
+        );
+        if pr != 603 {
+            assert!(!result.summary.contains("with green CI"), "{result:?}");
+        }
+    }
+    let calls = std::fs::read_to_string(calls).unwrap();
+    assert_eq!(
+        calls.lines().filter(|line| *line == "review").count(),
+        2,
+        "both modes must invoke fresh review"
+    );
+    assert!(calls.contains("authorized"));
 }

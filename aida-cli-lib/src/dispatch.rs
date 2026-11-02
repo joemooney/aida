@@ -2774,6 +2774,15 @@ fn launch_implementer_lane(
         vendor,
     );
 
+    if vendor == DispatchVendor::Codex {
+        // trace:BUG-2398 | ai:codex — explicit baseline reaches core-policy tools.
+        if let Err(error) = crate::codex_tool_env::prepare_launch(&mut cmd) {
+            return RunnerOutcome::Refused {
+                reason: format!("Codex seat transport: {error:#}"),
+            };
+        }
+    }
+
     match cmd.output() {
         Ok(out) => {
             let stdout = String::from_utf8_lossy(&out.stdout);

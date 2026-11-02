@@ -1,3 +1,5 @@
+// Managed Codex fixture programs also model the requested-seat probe.
+// trace:BUG-2398 | ai:codex
 // trace:BUG-2017 | ai:codex — explicit positive global-ID fixture.
 use super::*;
 use clap::Parser;
@@ -2727,7 +2729,7 @@ fn tracked_fake_agent_receives_env_and_registry_is_removed() {
     crate::test_exec::write_executable(
         &fake_agent,
         format!(
-            "#!/bin/sh\nenv | sort > '{}'\nprintf '%s\\n' \"$@\" > '{}'\n",
+            "#!/bin/sh\ncase \" $* \" in *\" --probe-seat \"*) echo \"seat_grant_valid=true expected_seat=true\"; exit 0;; esac\nenv | sort > '{}'\nprintf '%s\\n' \"$@\" > '{}'\n",
             env_out.display(),
             argv_out.display()
         ),
@@ -2841,7 +2843,7 @@ fn tracked_fake_antigravity_receives_env_args_and_registry_is_removed() {
     crate::test_exec::write_executable(
         &fake_agent,
         format!(
-            "#!/bin/sh\nenv | sort > '{}'\nprintf '%s\\n' \"$@\" > '{}'\n",
+            "#!/bin/sh\ncase \" $* \" in *\" --probe-seat \"*) echo \"seat_grant_valid=true expected_seat=true\"; exit 0;; esac\nenv | sort > '{}'\nprintf '%s\\n' \"$@\" > '{}'\n",
             env_out.display(),
             argv_out.display()
         ),
@@ -3276,7 +3278,7 @@ fn tracked_fake_agent_receives_context_file_env_and_cleans_file() {
     crate::test_exec::write_executable(
         &fake_agent,
         format!(
-            "#!/bin/sh\nenv | sort > '{}'\ncp \"$AIDA_AGENT_CONTEXT_FILE\" '{}'\n",
+            "#!/bin/sh\ncase \" $* \" in *\" --probe-seat \"*) echo \"seat_grant_valid=true expected_seat=true\"; exit 0;; esac\nenv | sort > '{}'\ncp \"$AIDA_AGENT_CONTEXT_FILE\" '{}'\n",
             env_out.display(),
             context_out.display()
         ),

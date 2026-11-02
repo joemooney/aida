@@ -1104,6 +1104,14 @@ pub(crate) fn build_compete_arm_command(
     } else {
         cmd.env_remove("AIDA_CONTAINED");
     }
+    if vendor == "codex" {
+        // Compete arms and judges do not receive a delegated seat.
+        // trace:BUG-2398 | ai:codex
+        cmd.env(crate::gate::seat_authority::GRANT_ENV, "")
+            .env("AIDA_PROJECT_ROOT", worktree_dir)
+            .env("AIDA_AGENT_TYPE", "codex");
+        crate::codex_tool_env::prepare_launch(&mut cmd)?;
+    }
     Ok(cmd)
 }
 

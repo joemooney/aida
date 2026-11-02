@@ -1734,6 +1734,14 @@ pub(crate) fn spawn_vendor_headless_with_seat_granted(
         cmd.env("AIDA_CONTAINMENT_POSTURE", "none");
     }
     stamp_containment_posture(&mut cmd, posture);
+    if vendor == HeadlessVendor::Codex {
+        cmd.env("AIDA_USER", crate::current_user_id(None))
+            .env("AIDA_PROJECT_ROOT", headless_worktree_root());
+        if let Err(error) = crate::codex_tool_env::prepare_launch(&mut cmd) {
+            revoke_headless_child_grant(&child_grant.id);
+            return Err(error);
+        }
+    }
     // A watch-launched reviewer is recorded before the wait. trace:TASK-1993 | ai:claude
     let status = reviewer_status_with_handle_guard(cmd.stdout(Stdio::from(log)), &mut handle_guard)
         .with_context(|| format!("failed to spawn {}", vendor.program()))?;
@@ -2117,6 +2125,36 @@ pub fn exec_codex_session(
         build_codex_session_command(initial_prompt, bypass, model, grant_id)
     };
     stamp_containment_posture(&mut cmd, posture);
+    // trace:BUG-2398 | ai:codex — this is the already-delegated tab's seat.
+    cmd.env(
+        crate::gate::seat_authority::GRANT_ENV,
+        grant_id.unwrap_or(""),
+    )
+    .env("AIDA_USER", crate::current_user_id(None))
+    .env("AIDA_PROJECT_ROOT", headless_worktree_root())
+    .env("AIDA_AGENT_TYPE", "codex");
+    if let Some(id) = grant_id.filter(|id| !id.is_empty()) {
+        if let crate::gate::seat_authority::GrantCheck::Valid(grant) =
+            crate::gate::seat_authority::grant_check_for(
+                &headless_worktree_root(),
+                id,
+                &crate::current_user_id(None),
+            )
+        {
+            cmd.env("AIDA_SESSION_ROLE", grant.seat);
+        }
+    }
+    for key in [
+        "AIDA_SESSION_ID",
+        "AIDA_SESSION_SCOPE",
+        "AIDA_AGENT_NAME",
+        "AIDA_AGENT_CONTEXT_FILE",
+    ] {
+        if let Some(value) = std::env::var_os(key) {
+            cmd.env(key, value);
+        }
+    }
+    crate::codex_tool_env::prepare_launch(&mut cmd)?;
     #[cfg(unix)]
     {
         use std::os::unix::process::CommandExt;
@@ -2342,6 +2380,14 @@ pub(crate) fn spawn_reviewer_launch_plan_granted(
     stamp_containment_posture(&mut cmd, posture);
     if posture == ContainmentPosture::Native {
         eprintln!("  codex: {}", posture.label());
+    }
+    if plan.vendor == HeadlessVendor::Codex {
+        cmd.env("AIDA_USER", crate::current_user_id(None))
+            .env("AIDA_PROJECT_ROOT", project_root);
+        if let Err(error) = crate::codex_tool_env::prepare_launch(&mut cmd) {
+            revoke_headless_child_grant(&grant.id);
+            return Err(error);
+        }
     }
     // A watch-launched reviewer is recorded before the wait. trace:TASK-1993 | ai:claude
     let status = reviewer_status_with_handle_guard(&mut cmd, &mut handle_guard)
@@ -5362,6 +5408,15 @@ fn run_vendor_headless_child(
     // trace:BUG-B6B1278890774EF993D2EBC327862470-050 | ai:claude
     if let Some(id) = lease_id {
         child_cmd.env(crate::headless_background::LANE_MARKER_ENV, id);
+    }
+    if vendor == HeadlessVendor::Codex {
+        child_cmd
+            .env("AIDA_USER", crate::current_user_id(None))
+            .env("AIDA_PROJECT_ROOT", headless_worktree_root());
+        if let Some(id) = lease_id {
+            child_cmd.env(crate::gate::review_authority::WORKER_SESSION_ENV, id);
+        }
+        crate::codex_tool_env::prepare_launch(&mut child_cmd)?;
     }
     let mut child = child_cmd
         .stdout(Stdio::from(log))
@@ -11152,7 +11207,7 @@ mod tests {
         let env_out = tmp.path().join("env.txt");
         crate::test_exec::write_executable(
             &fake,
-            format!("#!/bin/sh\nenv | sort > '{}'\nexit 0\n", env_out.display()),
+            format!("#!/bin/sh\ncase \" $* \" in *\" --probe-seat \"*) echo \"seat_grant_valid=true expected_seat=true\"; exit 0;; esac\nenv | sort > '{}'\nexit 0\n", env_out.display()),
         );
         let log_path = tmp.path().join("headless.log");
         let tee_opts = crate::headless_tee::TeeOptions {
@@ -11631,9 +11686,9 @@ mod tests {
         for vendor in ["claude", "codex"] {
             crate::test_exec::write_executable(
                 &bin.path().join(vendor),
-                format!(
+                crate::test_exec::codex_probe_script(format!(
                     "#!/bin/sh\n[ \"$1\" = --version ] && {{ echo '{vendor} 9.9.9'; exit 0; }}\nprintf 'HV=%s\\n' \"${{AIDA_HARNESS_VERSION-unset}}\"\n"
-                ),
+                )),
             );
         }
         let path = format!(
@@ -11653,6 +11708,9 @@ mod tests {
                 ("AIDA_HARNESS_VERSION", Some("launcher-version")),
             ],
         );
+        // The real child probe resolves the roster from cwd, as a real
+        // queue pickup does. This test runs in its exact isolated process.
+        std::env::set_current_dir(root.path()).unwrap();
         let tee = crate::headless_tee::TeeOptions {
             enabled: false,
             label: None,

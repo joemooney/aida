@@ -593,6 +593,7 @@ mod schedule_ledger;
 mod schedule_predicate;
 mod schema;
 // trace:BUG-1934 | ai:claude
+mod codex_tool_env;
 mod grant_keyring;
 // trace:BUG-2169 | ai:claude — a contained seat's private clone (the only host accessor).
 mod seat_clone;

@@ -3301,6 +3301,14 @@ pub(crate) fn agent_new_bg_dispatch(
     )?;
 
     let mut grant_rollback = IssuedLaunchGrant::from_command(&command);
+    if config.agent_type == "codex" {
+        command.env(crate::gate::seat_authority::GRANT_ENV, "");
+        crate::codex_tool_env::prepare_launch(&mut command)?;
+    }
+    command
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped());
     let output = command
         .output_retrying_etxtbsy()
         .with_context(|| format!("failed to spawn {}", binary.display()))?;
@@ -6063,10 +6071,13 @@ pub(crate) fn build_agent_new_bg_command(
         // registry/brief identity. trace:BUG-558 | ai:claude
         .env("AIDA_USER", &plan.name)
         .env("AIDA_PROJECT_ROOT", &plan.project_root)
-        .env_remove(crate::gate::seat_authority::GRANT_ENV) // trace:TASK-1752 | ai:claude
-        .stdin(std::process::Stdio::null())
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::piped());
+        .env_remove(crate::gate::seat_authority::GRANT_ENV); // trace:TASK-1752 | ai:claude
+    if config.agent_type != "codex" {
+        command
+            .stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped());
+    }
     // The child is its own session: never the launcher's session identity,
     // and only this launch's handle token. trace:STORY-1843 | ai:claude
     crate::agent_handle::apply_launch_env(&mut command, &plan.project_root, &plan.name);
@@ -6735,11 +6746,8 @@ fn run_agent_generation(
         // USER (see the bg-dispatch block above). trace:BUG-558 | ai:claude
         .env("AIDA_USER", &plan.name)
         .env("AIDA_PROJECT_ROOT", &plan.project_root)
-        .env_remove(crate::gate::seat_authority::GRANT_ENV) // trace:TASK-1752 | ai:claude
-        .stdin(std::process::Stdio::inherit())
-        .stdout(std::process::Stdio::inherit())
-        .stderr(std::process::Stdio::inherit());
-    // trace:STORY-1843 | ai:claude
+        .env_remove(crate::gate::seat_authority::GRANT_ENV); // trace:TASK-1752 | ai:claude
+                                                             // trace:STORY-1843 | ai:claude
     crate::agent_handle::apply_launch_env(&mut command, &plan.project_root, &plan.name);
     apply_harness_version(
         &mut command,
@@ -6819,6 +6827,17 @@ fn run_agent_generation(
         command.env_remove("AIDA_SESSION_ROLE");
     }
     let mut grant_rollback = IssuedLaunchGrant::from_command(&command);
+    if config.agent_type == "codex" {
+        // trace:BUG-2398 | ai:codex — only the final child's seat metadata.
+        if plan.role.is_none() {
+            command.env(crate::gate::seat_authority::GRANT_ENV, "");
+        }
+        crate::codex_tool_env::prepare_launch(&mut command)?;
+    }
+    command
+        .stdin(std::process::Stdio::inherit())
+        .stdout(std::process::Stdio::inherit())
+        .stderr(std::process::Stdio::inherit());
     let mut child = command
         .spawn_retrying_etxtbsy()
         .with_context(|| format!("failed to spawn {}", binary.display()))?;

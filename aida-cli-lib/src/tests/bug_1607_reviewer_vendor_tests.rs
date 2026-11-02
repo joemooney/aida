@@ -28,10 +28,10 @@ fn write_argv_capture_mock(dir: &std::path::Path, capture: &std::path::Path) -> 
     let script = dir.join("mock-agent.sh");
     crate::test_exec::write_executable(
         &script,
-        format!(
+        crate::test_exec::codex_probe_script(format!(
             "#!/bin/sh\nfor a in \"$@\"; do printf '%s\\n' \"$a\" >> \"{}\"; done\nexit 0\n",
             capture.display()
-        ),
+        )),
     );
     script
 }
@@ -107,6 +107,7 @@ fn run_standalone_reviewer_with_codex_only_project_launches_codex_after_worktree
         &["reviewer"],
     );
     env.set_key(crate::gate::seat_authority::GRANT_ENV, &grant_id);
+    std::env::set_current_dir(&project).unwrap();
     crate::session::set_headless_vendor_override(None);
 
     // Resolve the vendor from the REAL codex-only project config — the same
@@ -151,6 +152,18 @@ fn run_standalone_reviewer_with_codex_only_project_launches_codex_after_worktree
     );
 
     let argv = read_captured_argv(&capture);
+    let mut prefix = 0;
+    while prefix + 1 < argv.len()
+        && argv[prefix] == "-c"
+        && argv[prefix + 1].starts_with("shell_environment_policy.set.")
+    {
+        prefix += 2;
+    }
+    assert!(
+        prefix > 0,
+        "child metadata overrides must precede vendor args"
+    );
+    let argv = argv[prefix..].to_vec();
     assert_eq!(
         argv,
         crate::session::codex_session_args(prompt, false, None),
@@ -235,6 +248,7 @@ fn review_spec_resolve_and_launch_uses_codex_for_codex_only_project() {
         &["reviewer"],
     );
     env.set_key(crate::gate::seat_authority::GRANT_ENV, &grant_id);
+    std::env::set_current_dir(&project).unwrap();
     let outer = crate::test_ambient::replace(Some(crate::test_ambient::Ambient {
         project_root: project.clone(),
         stdin_is_terminal: false,
@@ -257,6 +271,18 @@ fn review_spec_resolve_and_launch_uses_codex_for_codex_only_project() {
     assert!(status.success());
 
     let argv = read_captured_argv(&capture);
+    let mut prefix = 0;
+    while prefix + 1 < argv.len()
+        && argv[prefix] == "-c"
+        && argv[prefix + 1].starts_with("shell_environment_policy.set.")
+    {
+        prefix += 2;
+    }
+    assert!(
+        prefix > 0,
+        "child metadata overrides must precede vendor args"
+    );
+    let argv = argv[prefix..].to_vec();
     assert_eq!(
         argv,
         crate::session::codex_session_args(prompt, false, None),

@@ -56,7 +56,23 @@ pub(crate) fn handle_role_command(cmd: &RoleCommand) -> Result<()> {
         RoleCommand::Show { name } => handle_role_show(&project_root, name.as_deref()),
         RoleCommand::Repair { name } => handle_role_repair(&project_root, name.as_deref()),
         RoleCommand::Active => handle_role_active(),
-        RoleCommand::Current { check } => handle_role_current(*check),
+        RoleCommand::Current {
+            check,
+            probe_seat,
+            expect,
+            expect_role_instance,
+            expect_context_sha256,
+        } => {
+            if *probe_seat {
+                handle_role_seat_probe(
+                    expect.as_deref().unwrap_or_default(),
+                    expect_role_instance.as_deref(),
+                    expect_context_sha256.as_deref(),
+                )
+            } else {
+                handle_role_current(*check)
+            }
+        }
         RoleCommand::Expiry {
             warn_within,
             refuse_within,
@@ -983,6 +999,53 @@ fn handle_role_active() -> Result<()> {
 // trailing newline — `current` always prints a line so a scripting caller
 // can capture the value and branch on exit code separately.
 // trace:STORY-64 | ai:claude
+// trace:BUG-2398 | ai:codex
+fn handle_role_seat_probe(
+    expected: &str,
+    expected_instance: Option<&str>,
+    expected_context: Option<&str>,
+) -> Result<()> {
+    if let Some(expected_context) = expected_context {
+        anyhow::ensure!(
+            expected_context
+                == crate::codex_tool_env::context_digest(|key| {
+                    if key == crate::gate::seat_authority::GRANT_ENV {
+                        crate::gate::seat_authority::current_grant_id().map(Into::into)
+                    } else {
+                        std::env::var_os(key)
+                    }
+                }),
+            "seat_grant_valid=false cause=ChildContextMismatch"
+        );
+    }
+    if let Some(instance) = expected_instance {
+        anyhow::ensure!(
+            matches!(instance, "driver" | "companion")
+                && std::env::var("AIDA_ROLE_INSTANCE").as_deref() == Ok(instance),
+            "seat_grant_valid=false cause=RoleInstanceMismatch"
+        );
+    }
+    use crate::gate::seat_authority::{grant_check, GrantCheck};
+    match grant_check(&statusline_project_root()) {
+        GrantCheck::Valid(grant)
+            if grant.seat == expected
+                && std::env::var("AIDA_SESSION_ROLE").as_deref() == Ok(expected) =>
+        {
+            println!("seat_grant_valid=true expected_seat=true");
+            Ok(())
+        }
+        GrantCheck::Valid(_) => anyhow::bail!("seat_grant_valid=true expected_seat=false"),
+        GrantCheck::Absent => anyhow::bail!("seat_grant_valid=false cause=Absent"),
+        GrantCheck::Rejected { reason, .. } => {
+            // Debug's discriminant name gives a cause without the record's
+            // subject, binding, timestamps or selector values.
+            let detail = format!("{reason:?}");
+            let cause = detail.split([' ', '{', '(']).next().unwrap_or("Rejected");
+            anyhow::bail!("seat_grant_valid=false cause={cause}")
+        }
+    }
+}
+
 fn handle_role_current(check: bool) -> Result<()> {
     let role =
         crate::gate::seat_authority::current_seat(&statusline_project_root()).unwrap_or_default();
