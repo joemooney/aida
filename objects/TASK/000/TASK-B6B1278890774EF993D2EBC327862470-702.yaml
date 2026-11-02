@@ -9,12 +9,12 @@ description: |-
 
   PR: #3235
   Reviewed sha: c38c342473c493a737b85b7946ed6327a3c70b30
-status: InProgress
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-02T14:09:39.912820778Z
-modified_at: 2026-11-02T17:59:01.482062066Z
+modified_at: 2026-11-02T18:38:39.599742663Z
 req_type: Task
 tags:
 - carried-from:TASK-2835
@@ -61,6 +61,21 @@ history:
   timestamp: 2026-11-02T17:59:02.996892499Z
   session_id: ee0bf351-6b17-486f-a38e-cfbb1343c426
   changes: []
+- id: 01a19d8e-6da4-7773-b5c0-09407fd6b3bf
+  author: aida-auto-bump
+  timestamp: 2026-11-02T18:38:39.524412968Z
+  session_id: ee0bf351-6b17-486f-a38e-cfbb1343c426
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a19d8e-6def-7391-8b11-b5e0f74b79f4
+  timestamp: 2026-11-02T18:38:39.599737800Z
+  agent: aida
+  commit_sha: 1b678fd5059046ff02bfb3b87c1f10d3162efda6
+  summary: 'All AC met: script prints bucket shares (606/2418=25.1%), Small corrected to 25.1 in both audit copies; overview favicons resolve after publish.py rewrite (assets/*) with CSP img-src ''self''; logos downscaled to 2x display (152x150, 296x338). CI green, CLEAN at 0e08475.'
+  review_verdict: approved
 execution_mode: drain
 filed_at:
   code_sha: 20d11bb5b2b5314b9886bd640d3473dae049be7d
@@ -70,3 +85,7 @@ filed_at:
   aida_build_sha: 6a3f67671a9
   vendor: claude
   session: ee0bf351-6b17-486f-a38e-cfbb1343c426
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-02T18:38:39.524405596Z
+  completion_sha: 1b678fd5059046ff02bfb3b87c1f10d3162efda6
