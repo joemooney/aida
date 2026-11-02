@@ -11,7 +11,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T09:05:27.409838422Z
-modified_at: 2026-11-02T02:31:35.272639704Z
+modified_at: 2026-11-02T03:09:49.294591032Z
 req_type: Task
 tags:
 - architecture
@@ -193,6 +193,12 @@ comments:
   modified_at: 2026-11-02T01:48:54.275233656Z
   session_id: 01a199e37773
   harness_version: 2.1.316 (Claude Code)
+- id: 01a19a3c-0d6e-72c3-b4dd-f6ff92554d6a
+  author: joe
+  content: 'ADVISOR LIVE EVIDENCE (claude-advisor-19, 2026-11-01 20:09 MST): ran on the host at the exact PR #3205 head 4fd97c76e783254f93a015e41b941e76a7c027f6 (detached worktree aida-worktrees/aida-live-2705), with AIDA_REQUIRE_BWRAP_LIVE=1 cargo test --profile agent -p aida-cli-lib task_2705_. Result: 6 passed, 0 failed (closed_containment_tracer, readiness_channels_are_bounded, policy_and_partial_backend_remain_closed, policy_errors_are_redacted_and_aida_selector_stays_closed, trusted_snapshot_cannot_execute_stored_shell, plus the sixth task_2705 case); exit 0. Because required-live now fails on a host-policy denial, a pass proves the live FD, protected-path and teardown checks ran. Host: apparmor_restrict_unprivileged_userns=0. Log: /tmp/aida-TASK2705-required-live-4fd97c7.log. This satisfies the AC2/AC3 required-live proof at this head.'
+  created_at: 2026-11-02T03:09:49.294591032Z
+  modified_at: 2026-11-02T03:09:49.294591032Z
+  session_id: 126bbd5a-a92f-452b-ab0b-2637a1db42c2
 history:
 - id: 01a1965b-7cae-7260-83dd-5767f6772d90
   author: joe
