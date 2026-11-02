@@ -631,14 +631,25 @@ fn resolve_branch(cwd: &str) -> Option<String> {
 }
 
 pub fn resume(id: Option<String>, limit: usize) -> Result<()> {
+    resume_with(&headless_worktree_root(), || match id {
+        Some(prefix) => resolve_resume_target(&prefix),
+        None => pick_interactive(limit),
+    })
+}
+
+/// [`resume`] with the project root and the target lookup supplied, so a test
+/// can drive the containment decision without a real session store.
+// trace:BUG-2393 | ai:claude
+pub(crate) fn resume_with(
+    project_root: &Path,
+    resolve_target: impl FnOnce() -> Result<ResumeTarget>,
+) -> Result<()> {
     // BUG-2157: a contained parent (strict parse, so a typo refuses) resumes
     // contained. Read before the picker so a refusal precedes any interaction.
-    // trace:BUG-2157 | ai:claude
-    let parent_contained = aida_contained_env()?;
-    let target = match id {
-        Some(prefix) => resolve_resume_target(&prefix)?,
-        None => pick_interactive(limit)?,
-    };
+    // BUG-2393: configured containment counts too, not only the env.
+    // trace:BUG-2157 BUG-2393 | ai:claude
+    let parent_contained = drain_contained(project_root)?;
+    let target = resolve_target()?;
     if parent_contained {
         let cwd = std::env::current_dir().context("failed to read the current directory")?;
         let mut cmd = build_contained_resume_command(&target, &cwd)?;
@@ -1570,8 +1581,9 @@ pub(crate) fn analysis_headless_launch(
 }
 
 /// Spawn a headless analysis pass on [`analysis_headless_launch`]'s vendor
-/// and seat, uncontained unless the parent is.
-// trace:BUG-2389 | ai:claude
+/// and seat, contained when the parent is or the project/user configuration
+/// asks for it ([`drain_contained`]).
+// trace:BUG-2389 BUG-2393 | ai:claude
 pub(crate) fn spawn_analysis_headless(
     project_root: &Path,
     prompt: &str,
@@ -1580,7 +1592,13 @@ pub(crate) fn spawn_analysis_headless(
     tee_opts: &crate::headless_tee::TeeOptions,
 ) -> Result<std::process::ExitStatus> {
     let (vendor, seat) = analysis_headless_launch(project_root);
-    spawn_vendor_headless_with_seat(vendor, seat, prompt, session_id, log_path, tee_opts, false)
+    // BUG-2393: configured containment (`[agents] contained`, `[contained]
+    // enable`) applies even when `AIDA_CONTAINED` is not in the environment.
+    // trace:BUG-2393 | ai:claude
+    let contained = drain_contained(project_root)?;
+    spawn_vendor_headless_with_seat(
+        vendor, seat, prompt, session_id, log_path, tee_opts, contained,
+    )
 }
 
 /// Compose the (program, argv) for a headless run of `vendor`'s CLI — the ONE
@@ -3121,6 +3139,47 @@ pub(crate) fn drain_contained(project_root: &Path) -> Result<bool> {
         "[contained] could not read the contained posture — refusing to launch rather than \
          run uncontained. Fix the file named below and retry",
     )
+}
+
+/// The vendor and containment of a headless launch rooted at `project_root`:
+/// the configured vendor, containment from the env OR the project/user
+/// configuration ([`drain_contained`]), and a refusal when that vendor cannot
+/// run contained. `what` names the launch in the refusal. Shared by the
+/// burndown and intake coordinators and `questions remedy`/`clarify`, so none
+/// of them can drift back to an env-only read.
+// trace:BUG-2393 | ai:claude
+pub(crate) fn resolve_headless_launch_posture(
+    project_root: &Path,
+    what: &str,
+) -> Result<(HeadlessVendor, bool)> {
+    let contained = drain_contained(project_root)?;
+    let vendor = resolve_headless_vendor(project_root);
+    require_vendor_containment(vendor, contained, what)?;
+    Ok((vendor, contained))
+}
+
+/// A headless coordinator's launch (`burndown run`, `autopilot intake`):
+/// [`resolve_headless_launch_posture`] plus its permission mode.
+// trace:BUG-2393 | ai:claude
+pub(crate) struct CoordinatorLaunch {
+    pub vendor: HeadlessVendor,
+    pub contained: bool,
+    pub mode: String,
+}
+
+// trace:BUG-2393 | ai:claude
+pub(crate) fn resolve_coordinator_launch(
+    project_root: &Path,
+    permission_mode: Option<&str>,
+) -> Result<CoordinatorLaunch> {
+    let (vendor, contained) =
+        resolve_headless_launch_posture(project_root, "headless coordinator")?;
+    let mode = coordinator_permission_mode(vendor, permission_mode, contained)?;
+    Ok(CoordinatorLaunch {
+        vendor,
+        contained,
+        mode,
+    })
 }
 
 /// BUG-2146 (#2665 review): parse `AIDA_CONTAINED`. Case-insensitive
