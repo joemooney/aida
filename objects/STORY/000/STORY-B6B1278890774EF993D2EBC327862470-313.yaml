@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-02T12:46:46.980613333Z
-modified_at: 2026-11-02T16:02:23.012122886Z
+modified_at: 2026-11-02T16:04:46.614256245Z
 req_type: Story
 tags:
 - area:lanes
@@ -21,6 +21,18 @@ comments:
   content: 'ADVISOR TRIAGE (2026-11-02 06:08 MST): APPROVED. The ''Expected'' clause is the acceptance criterion; add a regression test that reproduces the observed failure.'
   created_at: 2026-11-02T13:00:24.289106867Z
   modified_at: 2026-11-02T13:00:24.289106867Z
+  session_id: ee0bf351-6b17-486f-a38e-cfbb1343c426
+- id: 01a19d01-8b96-77a0-acb6-480a0ff50b73
+  author: joe
+  content: |-
+    ADVISOR REWORK BRIEF (09:06 MST), PR #3265 round 1 at ce92abf. Final round; fix all four items in this PR.
+    1. BLOCKING (CI lib-0): task_2143_no_new_raw_git_where_a_lease_tree_is_read. In pr_lease_takeover.rs, build the seat-tree git calls (:260/:266) with aida_core::git_ops::host_git_command. For the main-checkout calls (is_ancestor :293, pr_head_on_origin) use host_git_command, or add the '// raw-git-ok(TASK-2053): runs in the main checkout, never a seat clone' marker. Do NOT add an allowlist entry.
+    2. BLOCKING: extract the PrLeaseCheck -> force/bail/plain-end mapping into ONE pure helper used by both queue_cmd --steal (~12823) and session_start AutoEnd (~2568), and test it, including every conflict being handled (not just [0]) and the previous reviewer's pr-N lease being collected. Add one regression test reproducing 'could not end dead lease ... add --force' for a dead, clean, in-PR lease.
+    3. Unreadable maps to NotProvable (a plain end whose own guards apply), not Refuse; the spec allows refusal only for dirty seats, commits the PR lacks, or a live process.
+    4. Cosmetic: AutoEnd/Live/Refuse messages print the lease's own branch (l.branch), not the source branch.
+    Gate: LIGHT, ONE targeted cargo test -p aida-cli-lib with the pr_lease_takeover and task_2143 filters, plus make check-ci-fast. Push to the PR branch.
+  created_at: 2026-11-02T16:04:46.614256245Z
+  modified_at: 2026-11-02T16:04:46.614256245Z
   session_id: ee0bf351-6b17-486f-a38e-cfbb1343c426
 history:
 - id: 01a19c58-c9f1-74d0-8b73-1833729f203a
