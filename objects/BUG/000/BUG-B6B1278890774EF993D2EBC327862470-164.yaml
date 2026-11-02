@@ -21,7 +21,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T06:46:56.104025446Z
-modified_at: 2026-11-02T12:56:17.938259396Z
+modified_at: 2026-11-02T12:57:53.173593785Z
 req_type: Bug
 tags:
 - audit
@@ -41,6 +41,21 @@ comments:
   content: 'PROXY DECISION: dispatch.rs199/219/2650/2733 still defaults to Claude and launch_implementer_lane2777 blocks on output(). Approve both configured-vendor routing and detached Codex completion under existing grants/leases, preserving dispatch token and permit checks. Background spawn must reuse the approved STORY2254 lifecycle, never bolt on an unscoped process. Sequence implementation after STORY2254 and BUG2385/2398 helpers; add fixture evidence for take/impl default and explicit override, prompt rendering, prompt source, spawn acceptance vs terminal result and no synchronous model wait.'
   created_at: 2026-11-01T08:09:54.578122490Z
   modified_at: 2026-11-01T08:09:54.578122490Z
+- id: 01a19c56-7115-7d52-a9e0-d221fe079e53
+  author: joe
+  content: |
+    IMPLEMENTER STOP — sequencing fork (BUG-2390), 2026-11-02.
+
+    I claimed BUG-2390 (session 01a19c55). I have not changed any code. Blocker STORY-2254 is still In Progress and has not shipped. `git grep` on origin/main finds no detached Codex lifecycle. AC2 (detached Codex launch from dispatch) must reuse that lifecycle. The 2026-11-01 proxy decision says "never bolt on an unscoped process" and "sequence implementation after STORY2254". `aida show` also refuses pickup until the blocker is Completed. So I cannot ship the full acceptance now.
+
+    Fork for the advisor:
+    (A) Wait. Re-dispatch BUG-2390 after STORY-2254 merges. (Recommended: one PR covering all acceptance, with no interim Codex path.)
+    (B) Split. Ship AC1 now: when --vendor is omitted, take/impl use the configured [agents] vendor, plus the AC3 tests for it. A child spec carries AC2 behind STORY-2254. Risk: until then, a Codex-configured project would route take/impl to the still-blocking synchronous `codex exec` path, which makes the blocking problem more visible.
+
+    I'm releasing my claim so whoever is dispatched next is not blocked.
+  created_at: 2026-11-02T12:57:53.173593785Z
+  modified_at: 2026-11-02T12:57:53.173593785Z
+  session_id: 19f25128-6d53-4dd1-b586-f05c79e5e78f
 history:
 - id: 01a195dc-94a3-73e2-8979-5b3cd7a026e1
   author: joe
