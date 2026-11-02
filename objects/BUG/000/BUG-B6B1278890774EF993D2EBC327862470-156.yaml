@@ -13,12 +13,12 @@ description: |
   1. A session started with `aida session start --owns <ID>` and then joined by an interactive codex (or claude) process in that clone/worktree reads `live` in `aida ps` while the agent runs. Re-bind it on the agent's first AIDA call or hook, or use the vendor activity adapter (STORY-1054), for example the Codex session's rollout file mtime or a process whose cwd is the clone.
   2. A process-dead verdict that rests only on the creator pid never emits a salvage recipe while a vendor process has the clone as its cwd. In that case it says "unbound agent in clone" and names the pid.
   3. Tests: a creator pid that exited plus a live vendor process in the clone gives live; no vendor process gives the current salvageable output (regression).
-status: Approved
+status: InProgress
 priority: High
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T02:22:11.107502056Z
-modified_at: 2026-11-02T00:01:47.901980767Z
+modified_at: 2026-11-02T00:30:54.082686181Z
 req_type: Bug
 tags:
 - area:agents
@@ -46,6 +46,13 @@ history:
   timestamp: 2026-11-02T00:01:51.477601172Z
   session_id: 126bbd5a-a92f-452b-ab0b-2637a1db42c2
   changes: []
+- id: 01a199aa-8e82-7e62-818e-041f4558a526
+  author: aida-session-start
+  timestamp: 2026-11-02T00:30:54.082682898Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 execution_mode: drain
 filed_at:
   code_sha: 7518617e469376bbe5debebd7cadd980e08656e5
