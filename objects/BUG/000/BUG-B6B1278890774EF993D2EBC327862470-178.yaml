@@ -11,7 +11,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T16:42:07.593722571Z
-modified_at: 2026-11-02T06:13:50.651553763Z
+modified_at: 2026-11-02T06:49:01.096584627Z
 req_type: Bug
 tags:
 - doctor
@@ -146,6 +146,12 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a19b04-bc0c-7232-b3de-c39f05087e06
+  author: joe
+  timestamp: 2026-11-02T06:49:01.196956533Z
+  session_id: 01a19af93a71
+  harness_version: 2.1.316 (Claude Code)
+  changes: []
 execution_mode: drain
 filed_at:
   code_sha: 6a3f67671a974703590efde5ae2a323f3f7471fa
@@ -158,7 +164,7 @@ failure_reason:
   phase: reviewer
   phase_index: 3
   kind: verdict:request-changes
-  detail: 'Round-2 rework fixes all prior findings (0775 registry accepted + tested; unknown scoped per reader; direct-mail narrowing documented + tested) and the design matches the advisor ruling, but CI is red from this PR: lib-1 ''Run tests'' fails at 5c7796d while main 8a4a56e (same base) passes both lib shards; lib-0 failed at the three prior heads. The new tests'' pass status is unproven.'
+  detail: 'Round-3 fix worked: lib-1 is now green and the design and test coverage match the advisor ruling. But CI (lib-0) ''Run tests'' fails at head 5adc7cd (run 41400843860, job 125132115493) and at 81382bb (run 41398598718). Main is green at 952552f, the main commit this head merges, so a red required lane blocks approval.'
   recovery_hint: address the review findings, move BUG-2405 back to In Progress, and clear the PR hold only after approval
   shelved_by: reviewer
-  shelved_at: 2026-11-02T05:22:27.834485759Z
+  shelved_at: 2026-11-02T06:49:01.096584627Z
