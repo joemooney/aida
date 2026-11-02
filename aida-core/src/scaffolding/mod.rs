@@ -33,7 +33,8 @@ pub use aida_md::{
 pub use claude_md::{claude_md_has_import, insert_claude_md_import, CLAUDE_AIDA_IMPORT};
 // trace:BUG-b6b1278890774ef993d2ebc327862470-014 | ai:claude
 pub use managed_merge::{
-    slot_merge, slot_value_matches, slots_for_file, SlotChange, SlotChangeKind,
+    managed_slot_matches, managed_slot_merge, slot_merge, slot_value_matches, slots_for_file,
+    SlotChange, SlotChangeKind,
 };
 pub use settings::{
     is_aida_repository, scaffold_permissions_allow, template_contained_allowed_hosts,
@@ -48,7 +49,12 @@ pub use settings::{
 /// path treats `{"a":1,"b":2}` and `{"b":2,"a":1}` as identical regardless
 /// of how they look in serialized form.
 /// trace:BUG-1-066 | ai:claude
-fn diff_slice_managed_merge(expected: &str, actual: &str, slots: &[&str]) -> DiffSlice {
+fn diff_slice_managed_merge(
+    path: &Path,
+    expected: &str,
+    actual: &str,
+    slots: &[&str],
+) -> DiffSlice {
     let expected_v: serde_json::Value = match serde_json::from_str(expected) {
         Ok(v) => v,
         Err(_) => {
@@ -71,7 +77,9 @@ fn diff_slice_managed_merge(expected: &str, actual: &str, slots: &[&str]) -> Dif
     // Find which slots actually differ (by parsed value, not text).
     let mut differing: Vec<&str> = Vec::new();
     for slot in slots {
-        if !managed_merge::slot_value_matches(
+        // trace:BUG-2395 | ai:claude
+        if !managed_merge::managed_slot_matches(
+            path,
             slot,
             actual_v.pointer(slot),
             expected_v.pointer(slot),
@@ -159,7 +167,7 @@ pub fn aida_managed_diff_slice(path: &Path, expected: &str, actual: &str) -> Dif
     // trace:BUG-1-066 | ai:claude
     let slots = managed_merge::slots_for_file(path);
     if !slots.is_empty() {
-        return diff_slice_managed_merge(expected, actual, slots);
+        return diff_slice_managed_merge(path, expected, actual, slots);
     }
 
     let name = path.file_name().and_then(|s| s.to_str()).unwrap_or("");
@@ -607,6 +615,8 @@ pub fn wrap_with_aida_header(path: &std::path::Path, raw_content: &str) -> Strin
     let is_shell = path.extension().and_then(|e| e.to_str()) == Some("sh")
         || path_str.starts_with(".git/hooks/")
         || path_str.starts_with(".claude/hooks/")
+        // trace:BUG-2395 | ai:claude
+        || path_str.starts_with(".codex/hooks/")
         || raw_content.starts_with("#!");
     let is_json = path.extension().and_then(|e| e.to_str()) == Some("json");
     let is_toml = path.extension().and_then(|e| e.to_str()) == Some("toml");
@@ -1081,7 +1091,13 @@ impl FileCategory {
         // ManagedMerge: JSON config files where AIDA + user share keys.
         // settings.local.json is the per-user, gitignored MCP-trust override
         // (AIDA owns /enabledMcpjsonServers). trace:BUG-484
-        if s == ".claude/settings.json" || s == ".mcp.json" || s == ".claude/settings.local.json" {
+        // `.codex/hooks.json` is entry-owned: AIDA owns its own hook entries
+        // inside each event, the user owns the rest. trace:BUG-2395 | ai:claude
+        if s == ".claude/settings.json"
+            || s == ".mcp.json"
+            || s == ".claude/settings.local.json"
+            || s == codex_hooks::HOOKS_JSON_REL
+        {
             return FileCategory::ManagedMerge;
         }
         // Seed: top-level project docs the user is expected to tailor.
@@ -2705,6 +2721,48 @@ aida show <SPEC-ID>
             }
         }
 
+        // Codex hooks (in .codex/hooks/ + .codex/hooks.json). `aida init`
+        // does the first wiring; once a project carries it, status / diff /
+        // apply / upgrade keep it current like the Claude hooks above. A
+        // project without Codex wiring never grows a `.codex/` tree.
+        // trace:BUG-2395 | ai:claude
+        if codex_hooks::codex_hooks_wired(&self.project_root) {
+            new_dirs.insert(PathBuf::from(codex_hooks::HOOKS_DIR_REL));
+            let embedded = &crate::templates::EMBEDDED_TEMPLATES;
+            let mut codex_files: Vec<(PathBuf, String, String)> = codex_hooks::handler_names()
+                .into_iter()
+                .filter_map(|name| {
+                    let body = embedded.get(format!("hooks/{name}").as_str())?;
+                    Some((
+                        PathBuf::from(codex_hooks::HOOKS_DIR_REL).join(&name),
+                        body.trim_end().to_string(),
+                        format!("Codex hook handler {name}"),
+                    ))
+                })
+                .collect();
+            if let Some(wiring) = embedded.get("codex-hooks.json") {
+                codex_files.push((
+                    PathBuf::from(codex_hooks::HOOKS_JSON_REL),
+                    format!("{}\n", wiring.trim_end()),
+                    "Codex hook wiring for the AIDA handlers".to_string(),
+                ));
+            }
+            for (path, body, description) in codex_files {
+                let artifact = self.create_artifact(path.clone(), body, description, true);
+                match &artifact.file_status {
+                    FileStatus::New => new_files.push(path),
+                    FileStatus::Modified { .. } | FileStatus::NoHeader => {
+                        modified_files.push(artifact.path.clone())
+                    }
+                    FileStatus::OlderVersion { .. } => {
+                        upgradeable_files.push(artifact.path.clone())
+                    }
+                    FileStatus::Unmodified => overwrites.push(artifact.path.clone()),
+                }
+                artifacts.push(artifact);
+            }
+        }
+
         // Filter new_dirs to only include those that don't exist
         let new_dirs: Vec<PathBuf> = new_dirs
             .into_iter()
@@ -2883,10 +2941,12 @@ aida show <SPEC-ID>
                 message: e.to_string(),
             })?;
 
-            // Make git hooks and Claude Code hooks executable on Unix
+            // Make git hooks and Claude Code / Codex hooks executable on Unix
+            // trace:BUG-2395 | ai:claude
             #[cfg(unix)]
             if artifact.path.starts_with(".git/hooks/")
                 || artifact.path.starts_with(".claude/hooks/")
+                || artifact.path.starts_with(codex_hooks::HOOKS_DIR_REL)
             {
                 use std::os::unix::fs::PermissionsExt;
                 let mut perms = fs::metadata(&full_path)
@@ -3759,6 +3819,91 @@ mod tests {
             title: "Test Project".to_string(),
             description: "A test project for scaffolding".to_string(),
             ..Default::default()
+        }
+    }
+
+    /// BUG-2395: once a project carries Codex hook wiring, the scaffold
+    /// pipeline owns `.codex/hooks/*` and `.codex/hooks.json` like the Claude
+    /// hooks: a stale handler is drift, apply rewrites it executable with the
+    /// header after the shebang, and the wiring is managed-merge. A project
+    /// without the wiring never grows a `.codex/` tree.
+    // trace:BUG-2395 | ai:claude
+    #[test]
+    fn bug_2395_scaffold_covers_codex_hooks_only_when_wired() {
+        let store = create_test_store();
+        let claude_only = TempDir::new().unwrap();
+        let preview = Scaffolder::new(claude_only.path().to_path_buf(), ScaffoldConfig::default())
+            .preview(&store);
+        assert!(
+            !preview
+                .artifacts
+                .iter()
+                .any(|a| a.path.starts_with(".codex")),
+            "a Claude-only repo must not sprout .codex/"
+        );
+
+        let temp_dir = TempDir::new().unwrap();
+        let root = temp_dir.path();
+        codex_hooks::scaffold_codex_hooks(root, false).unwrap();
+        let stale = root.join(".codex/hooks/aida-session-context.sh");
+        fs::write(&stale, "#!/usr/bin/env bash\necho stale\n").unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            fs::set_permissions(&stale, fs::Permissions::from_mode(0o644)).unwrap();
+        }
+
+        let mut scaffolder = Scaffolder::new(root.to_path_buf(), ScaffoldConfig::default());
+        let preview = scaffolder.preview(&store);
+        let handler = preview
+            .artifacts
+            .iter()
+            .find(|a| a.path == Path::new(".codex/hooks/aida-session-context.sh"))
+            .expect("wired Codex handler is a scaffold artifact");
+        assert_eq!(handler.category(), FileCategory::Template);
+        assert!(handler.content.starts_with("#!"), "shebang stays on line 1");
+        assert!(
+            handler
+                .content
+                .lines()
+                .nth(1)
+                .unwrap_or("")
+                .starts_with("# AIDA Generated:"),
+            "AIDA header goes right after the shebang"
+        );
+        assert!(
+            preview
+                .modified_files
+                .contains(&PathBuf::from(".codex/hooks/aida-session-context.sh")),
+            "a stale Codex handler is reported as drift"
+        );
+        let wiring = preview
+            .artifacts
+            .iter()
+            .find(|a| a.path == Path::new(codex_hooks::HOOKS_JSON_REL))
+            .expect("Codex wiring is a scaffold artifact");
+        assert_eq!(wiring.category(), FileCategory::ManagedMerge);
+        for name in codex_hooks::handler_names() {
+            assert!(
+                preview
+                    .artifacts
+                    .iter()
+                    .any(|a| a.path == Path::new(codex_hooks::HOOKS_DIR_REL).join(&name)),
+                "handler {name} missing from preview"
+            );
+        }
+
+        scaffolder.apply(&preview).expect("scaffold apply");
+        let body = fs::read_to_string(&stale).unwrap();
+        assert!(
+            !body.contains("echo stale"),
+            "apply rewrites the stale handler"
+        );
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mode = fs::metadata(&stale).unwrap().permissions().mode();
+            assert_eq!(mode & 0o777, 0o755);
         }
     }
 
