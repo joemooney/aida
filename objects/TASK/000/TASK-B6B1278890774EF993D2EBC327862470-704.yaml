@@ -1,0 +1,30 @@
+id: 01a19c98-4364-7432-9ce6-713fa0bc2868
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-704
+title: 'Cosmetic (carried): the published overview.html (docs/what-is-aida.html) has no…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-2835, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  Cosmetic (carried): the published overview.html (docs/what-is-aida.html) has no favicon links. aida-logo-arch.png (111 KB) and aida-logo-geometric.png (65 KB) are displayed at <=148 px and could be downscaled.
+
+  PR: #3235
+  Reviewed sha: c38c342473c493a737b85b7946ed6327a3c70b30
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-02T14:09:46.852984287Z
+modified_at: 2026-11-02T14:09:46.852984287Z
+req_type: Task
+tags:
+- carried-from:TASK-2835
+- finding-hash:8af6c917
+- from-review:PR-3235
+- kind:carried-forward
+filed_at:
+  code_sha: 20d11bb5b2b5314b9886bd640d3473dae049be7d
+  branch: main
+  dirty: true
+  aida_version: 0.16.0
+  aida_build_sha: 6a3f67671a9
+  vendor: claude
+  session: ee0bf351-6b17-486f-a38e-cfbb1343c426
