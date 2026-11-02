@@ -4,6 +4,9 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>AIDA Engineering Architecture & Delivery Audit — DORA, GitClear & LinearB Benchmark Report</title>
+  <link rel="icon" type="image/png" href="../showcase/assets/aida-icon.png" />
+  <link rel="icon" href="../showcase/assets/favicon.ico" sizes="any" />
+  <link rel="apple-touch-icon" href="../showcase/assets/aida-icon.png" />
   <style>
     :root, [data-theme="paper"] {
       --bg: #f4f1e9;
@@ -56,15 +59,8 @@
       --shadow: 0 10px 32px rgba(0, 0, 0, 0.4);
     }
 
-    * {
-      box-sizing: border-box;
-    }
-
-    html {
-      scroll-behavior: smooth;
-      scroll-padding-top: 88px;
-    }
-
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; scroll-padding-top: 88px; }
     body {
       margin: 0;
       background: var(--bg);
@@ -75,1111 +71,237 @@
       -webkit-font-smoothing: antialiased;
       transition: background 0.25s ease, color 0.25s ease;
     }
-
-    a {
-      color: inherit;
-      text-decoration: none;
-    }
-
-    .shell {
-      max-width: 1400px;
-      width: calc(100% - 64px);
-      margin: 0 auto;
-    }
-
-    /* Sticky Top Header */
+    a { color: inherit; text-decoration: none; }
+    .shell { max-width: 1400px; width: calc(100% - 64px); margin: 0 auto; }
     .topbar {
-      position: sticky;
-      top: 0;
-      z-index: 100;
-      background: var(--bg);
-      border-bottom: 1px solid var(--line);
+      position: sticky; top: 0; z-index: 100;
+      background: var(--bg); border-bottom: 1px solid var(--line);
       backdrop-filter: blur(10px);
     }
-
     .topbar-inner {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      height: 74px;
-      gap: 20px;
+      display: flex; align-items: center; justify-content: space-between;
+      height: 74px; gap: 20px;
     }
-
     .brand {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      font-weight: 750;
-      font-size: 22px;
-      letter-spacing: -0.8px;
+      display: flex; align-items: center; gap: 12px;
+      font-weight: 750; font-size: 22px; letter-spacing: -0.8px;
     }
-
     .brand-mark {
-      display: grid;
-      place-items: center;
-      width: 32px;
-      height: 32px;
-      background: var(--accent);
-      color: #fff;
-      font-size: 22px;
-      line-height: 1;
+      display: grid; place-items: center; width: 34px; height: 34px;
+      background: #232a26; border: 1px solid #3c443e; border-radius: 4px;
+      padding: 3px; overflow: hidden;
     }
-
+    .brand-mark img {
+      width: 100%; height: 100%; object-fit: contain; display: block;
+    }
+    .hero-brand-bar {
+      display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+      margin-bottom: 18px;
+    }
+    .brand-badge-light {
+      display: inline-flex; align-items: center; gap: 12px;
+      padding: 8px 14px; background: #f6f4ef; border: 1px solid var(--line);
+      border-radius: 3px; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+    }
+    .brand-badge-light img { height: 42px; width: auto; display: block; }
+    .brand-badge-dark {
+      display: inline-flex; align-items: center; gap: 10px;
+      padding: 6px 12px; background: #07090e; border: 1px solid #39413c;
+      border-radius: 3px;
+    }
+    .brand-badge-dark img { height: 44px; width: auto; display: block; }
+    .verdict-head-row {
+      display: flex; align-items: flex-start; justify-content: space-between;
+      gap: 16px; margin-bottom: 10px;
+    }
+    .verdict-orbital-logo {
+      width: 78px; height: auto; border: 1px solid #39413c;
+      border-radius: 3px; background: #07090e; flex-shrink: 0; display: block;
+    }
+    .footer-brand-strip {
+      display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+    }
+    .footer-logo-chip {
+      display: inline-flex; align-items: center; padding: 5px 10px;
+      background: #f6f4ef; border: 1px solid var(--line); border-radius: 3px;
+    }
+    .footer-logo-chip.dark {
+      background: #07090e; border-color: #39413c;
+    }
+    .footer-logo-chip img { height: 34px; width: auto; display: block; }
     .brand-sub {
-      font-family: var(--mono);
-      font-size: 10px;
-      letter-spacing: 1px;
-      color: var(--ink-secondary);
-      border-left: 1px solid var(--line);
-      padding-left: 12px;
-      font-weight: 500;
+      font-family: var(--mono); font-size: 10px; letter-spacing: 1px;
+      color: var(--ink-secondary); border-left: 1px solid var(--line);
+      padding-left: 12px; font-weight: 500;
     }
-
-    .nav-links {
-      display: flex;
-      align-items: center;
-      gap: 22px;
-      flex-wrap: wrap;
-    }
-
+    .nav-links { display: flex; align-items: center; gap: 20px; flex-wrap: wrap; }
     .nav-links a {
-      font-family: var(--mono);
-      font-size: 11px;
-      letter-spacing: 0.6px;
-      color: var(--ink-secondary);
-      text-transform: uppercase;
-      padding: 4px 0;
-      border-bottom: 2px solid transparent;
+      font-family: var(--mono); font-size: 11px; letter-spacing: 0.6px;
+      color: var(--ink-secondary); text-transform: uppercase;
+      padding: 4px 0; border-bottom: 2px solid transparent;
       transition: color 0.15s, border-color 0.15s;
     }
-
-    .nav-links a:hover {
-      color: var(--accent);
-      border-bottom-color: var(--accent);
-    }
-
-    .top-actions {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-    }
-
+    .nav-links a:hover { color: var(--accent); border-bottom-color: var(--accent); }
+    .top-actions { display: flex; align-items: center; gap: 10px; }
     .btn-ghost {
-      background: var(--bg-elevated);
-      color: var(--ink);
-      border: 1px solid var(--line);
-      padding: 7px 12px;
-      font-family: var(--mono);
-      font-size: 11px;
-      cursor: pointer;
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
+      background: var(--bg-elevated); color: var(--ink);
+      border: 1px solid var(--line); padding: 7px 12px;
+      font-family: var(--mono); font-size: 11px; cursor: pointer;
+      display: inline-flex; align-items: center; gap: 6px;
       transition: all 0.15s ease;
     }
-
-    .btn-ghost:hover {
-      border-color: var(--accent);
-      color: var(--accent);
-    }
-
-    /* Hero Section */
-    .hero {
-      padding: 52px 0 40px;
-      border-bottom: 1px solid var(--line);
-    }
-
+    .btn-ghost:hover { border-color: var(--accent); color: var(--accent); }
+    .hero { padding: 52px 0 40px; border-bottom: 1px solid var(--line); }
     .eyebrow {
-      font-family: var(--mono);
-      font-size: 11px;
-      letter-spacing: 1.2px;
-      text-transform: uppercase;
-      color: var(--accent);
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      margin-bottom: 16px;
-      font-weight: 600;
+      font-family: var(--mono); font-size: 11px; letter-spacing: 1.2px;
+      text-transform: uppercase; color: var(--accent);
+      display: flex; align-items: center; gap: 8px;
+      margin-bottom: 16px; font-weight: 600;
     }
-
-    .pulse-dot {
-      width: 7px;
-      height: 7px;
-      border-radius: 50%;
-      background: var(--accent);
-      display: inline-block;
-    }
-
-    .hero-grid {
-      display: grid;
-      grid-template-columns: 1.35fr 1fr;
-      gap: 44px;
-      align-items: start;
-    }
-
+    .pulse-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); display: inline-block; }
+    .hero-grid { display: grid; grid-template-columns: 1.35fr 1fr; gap: 44px; align-items: start; }
     h1 {
-      font-family: var(--serif);
-      font-weight: 400;
-      font-size: clamp(38px, 4.4vw, 64px);
-      line-height: 1.05;
-      letter-spacing: -1.8px;
-      margin: 0 0 20px;
+      font-family: var(--serif); font-weight: 400;
+      font-size: clamp(38px, 4.4vw, 64px); line-height: 1.05;
+      letter-spacing: -1.8px; margin: 0 0 20px;
     }
-
-    h1 span {
-      color: var(--accent);
-    }
-
-    .hero-lead {
-      font-size: 17px;
-      color: var(--ink-secondary);
-      line-height: 1.65;
-      margin: 0 0 24px;
-      max-width: 740px;
-    }
-
+    h1 span { color: var(--accent); }
+    .hero-lead { font-size: 17px; color: var(--ink-secondary); line-height: 1.65; margin: 0 0 24px; max-width: 740px; }
     .meta-strip {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 12px 24px;
-      padding: 14px 18px;
-      background: var(--bg-panel);
-      border-left: 3px solid var(--accent);
-      font-family: var(--mono);
-      font-size: 11px;
-      color: var(--ink-secondary);
+      display: flex; flex-wrap: wrap; gap: 12px 24px;
+      padding: 14px 18px; background: var(--bg-panel);
+      border-left: 3px solid var(--accent); font-family: var(--mono);
+      font-size: 11px; color: var(--ink-secondary);
     }
-
-    .meta-strip strong {
-      color: var(--ink);
-    }
-
-    /* Executive Verdict Box */
+    .meta-strip strong { color: var(--ink); }
     .verdict-card {
-      background: var(--bg-dark-card);
-      color: #f4f1e9;
-      padding: 28px;
-      border: 1px solid var(--line);
-      box-shadow: var(--shadow);
+      background: var(--bg-dark-card); color: #f4f1e9;
+      padding: 28px; border: 1px solid var(--line); box-shadow: var(--shadow);
     }
-
     .verdict-card .card-kicker {
-      font-family: var(--mono);
-      font-size: 10px;
-      letter-spacing: 1.2px;
-      color: #ff8658;
-      text-transform: uppercase;
-      margin-bottom: 10px;
+      font-family: var(--mono); font-size: 10px; letter-spacing: 1.2px;
+      color: #ff8658; text-transform: uppercase; margin-bottom: 10px;
     }
-
-    .verdict-card h3 {
-      font-family: var(--serif);
-      font-size: 24px;
-      font-weight: 400;
-      margin: 0 0 14px;
-      line-height: 1.2;
-      color: #fff;
-    }
-
-    .verdict-card p {
-      font-size: 13.5px;
-      color: #c8ccc4;
-      line-height: 1.65;
-      margin: 0 0 16px;
-    }
-
-    .verdict-pills {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 10px;
-      border-top: 1px solid #39413c;
-      padding-top: 16px;
-    }
-
-    .v-pill {
-      background: rgba(255, 255, 255, 0.04);
-      padding: 10px 12px;
-      border-left: 2px solid #ff8658;
-    }
-
-    .v-pill.good {
-      border-left-color: #3dd68c;
-    }
-
-    .v-pill small {
-      display: block;
-      font-family: var(--mono);
-      font-size: 9px;
-      color: #9aa197;
-      text-transform: uppercase;
-      letter-spacing: 0.7px;
-    }
-
-    .v-pill strong {
-      font-family: var(--mono);
-      font-size: 14px;
-      color: #fff;
-    }
-
-    /* KPI Strip */
+    .verdict-card h3 { font-family: var(--serif); font-size: 24px; font-weight: 400; margin: 0 0 14px; line-height: 1.2; color: #fff; }
+    .verdict-card p { font-size: 13.5px; color: #c8ccc4; line-height: 1.65; margin: 0 0 16px; }
+    .verdict-pills { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; border-top: 1px solid #39413c; padding-top: 16px; }
+    .v-pill { background: rgba(255, 255, 255, 0.04); padding: 10px 12px; border-left: 2px solid #ff8658; }
+    .v-pill.good { border-left-color: #3dd68c; }
+    .v-pill small { display: block; font-family: var(--mono); font-size: 9px; color: #9aa197; text-transform: uppercase; letter-spacing: 0.7px; }
+    .v-pill strong { font-family: var(--mono); font-size: 14px; color: #fff; }
     .kpi-grid {
-      display: grid;
-      grid-template-columns: repeat(6, 1fr);
-      border: 1px solid var(--line);
-      border-top: 0;
-      background: var(--bg-elevated);
-      margin-bottom: 48px;
+      display: grid; grid-template-columns: repeat(6, 1fr);
+      border: 1px solid var(--line); border-top: 0;
+      background: var(--bg-elevated); margin-bottom: 48px;
     }
-
-    .kpi-cell {
-      padding: 22px 20px;
-      border-right: 1px solid var(--line);
-      display: flex;
-      flex-direction: column;
-      justify-content: space-between;
-    }
-
-    .kpi-cell:last-child {
-      border-right: 0;
-    }
-
-    .kpi-label {
-      font-family: var(--mono);
-      font-size: 10px;
-      text-transform: uppercase;
-      letter-spacing: 0.8px;
-      color: var(--ink-secondary);
-      margin-bottom: 8px;
-    }
-
-    .kpi-value {
-      font-family: var(--serif);
-      font-size: 34px;
-      line-height: 1.05;
-      letter-spacing: -1px;
-      margin-bottom: 8px;
-      color: var(--ink);
-    }
-
-    .kpi-foot {
-      font-family: var(--mono);
-      font-size: 10px;
-      display: flex;
-      align-items: center;
-      gap: 6px;
-    }
-
-    .badge {
-      display: inline-block;
-      padding: 2px 7px;
-      font-family: var(--mono);
-      font-size: 10px;
-      font-weight: 600;
-      letter-spacing: 0.4px;
-      text-transform: uppercase;
-      border-radius: 2px;
-    }
-
-    .badge-elite {
-      background: var(--emerald-soft);
-      color: var(--emerald);
-      border: 1px solid rgba(27, 107, 76, 0.3);
-    }
-
-    .badge-warn {
-      background: var(--amber-soft);
-      color: var(--amber);
-      border: 1px solid rgba(180, 101, 12, 0.3);
-    }
-
-    .badge-crit {
-      background: var(--crimson-soft);
-      color: var(--crimson);
-      border: 1px solid rgba(168, 32, 32, 0.3);
-    }
-
-    .badge-info {
-      background: var(--blue-soft);
-      color: var(--blue);
-      border: 1px solid rgba(35, 87, 137, 0.3);
-    }
-
-    /* Section Headers */
-    .report-section {
-      padding: 54px 0;
-      border-bottom: 1px solid var(--line);
-    }
-
-    .section-head {
-      display: flex;
-      justify-content: space-between;
-      align-items: flex-end;
-      gap: 24px;
-      margin-bottom: 32px;
-      flex-wrap: wrap;
-    }
-
-    .section-num {
-      font-family: var(--mono);
-      font-size: 11px;
-      color: var(--accent);
-      letter-spacing: 1.2px;
-      text-transform: uppercase;
-      margin-bottom: 8px;
-      font-weight: 600;
-    }
-
-    h2 {
-      font-family: var(--serif);
-      font-weight: 400;
-      font-size: clamp(28px, 3.1vw, 44px);
-      letter-spacing: -1.2px;
-      line-height: 1.1;
-      margin: 0;
-    }
-
-    .section-desc {
-      max-width: 540px;
-      color: var(--ink-secondary);
-      font-size: 14px;
-      margin: 0;
-    }
-
-    /* Two-column and Three-column layouts */
-    .grid-2 {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 28px;
-      margin-bottom: 28px;
-    }
-
-    .grid-12-8 {
-      display: grid;
-      grid-template-columns: 1.35fr 1fr;
-      gap: 28px;
-      margin-bottom: 28px;
-    }
-
-    .card {
-      background: var(--bg-elevated);
-      border: 1px solid var(--line);
-      padding: 26px;
-      box-shadow: var(--shadow);
-      position: relative;
-    }
-
-    .card-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: flex-start;
-      gap: 16px;
-      margin-bottom: 18px;
-      padding-bottom: 14px;
-      border-bottom: 1px solid var(--line);
-      flex-wrap: wrap;
-    }
-
-    .card-title {
-      font-family: var(--serif);
-      font-size: 21px;
-      font-weight: 400;
-      margin: 0 0 4px;
-      letter-spacing: -0.4px;
-    }
-
-    .card-subtitle {
-      font-family: var(--mono);
-      font-size: 10.5px;
-      color: var(--ink-secondary);
-      margin: 0;
-    }
-
-    /* Interactive Tab Controls */
-    .tab-group {
-      display: inline-flex;
-      border: 1px solid var(--line);
-      background: var(--bg);
-    }
-
-    .tab-btn {
-      border: 0;
-      background: transparent;
-      color: var(--ink-secondary);
-      font-family: var(--mono);
-      font-size: 10.5px;
-      padding: 6px 12px;
-      cursor: pointer;
-      border-right: 1px solid var(--line);
-      transition: all 0.15s;
-    }
-
-    .tab-btn:last-child {
-      border-right: 0;
-    }
-
-    .tab-btn.active {
-      background: var(--accent);
-      color: #fff;
-      font-weight: 600;
-    }
-
-    /* Interactive Horizontal Bars & Charts */
-    .bar-list {
-      display: flex;
-      flex-direction: column;
-      gap: 11px;
-    }
-
-    .bar-row {
-      display: grid;
-      grid-template-columns: 230px 1fr 115px;
-      align-items: center;
-      gap: 12px;
-      font-size: 12.5px;
-      padding: 4px 6px;
-      border-radius: 3px;
-      transition: background 0.15s;
-    }
-
-    .bar-row:hover {
-      background: var(--bg-panel);
-    }
-
-    .bar-label {
-      font-family: var(--mono);
-      font-size: 11.5px;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      color: var(--ink);
-    }
-
-    .bar-track {
-      height: 18px;
-      background: var(--bg-panel);
-      position: relative;
-      overflow: hidden;
-      border: 1px solid var(--line);
-    }
-
-    .bar-fill {
-      height: 100%;
-      background: var(--accent);
-      transition: width 0.5s cubic-bezier(0.16, 1, 0.3, 1);
-    }
-
+    .kpi-cell { padding: 22px 20px; border-right: 1px solid var(--line); display: flex; flex-direction: column; justify-content: space-between; }
+    .kpi-cell:last-child { border-right: 0; }
+    .kpi-label { font-family: var(--mono); font-size: 10px; text-transform: uppercase; letter-spacing: 0.8px; color: var(--ink-secondary); margin-bottom: 8px; }
+    .kpi-value { font-family: var(--serif); font-size: 34px; line-height: 1.05; letter-spacing: -1px; margin-bottom: 8px; color: var(--ink); }
+    .kpi-foot { font-family: var(--mono); font-size: 10px; display: flex; align-items: center; gap: 6px; }
+    .badge { display: inline-block; padding: 2px 7px; font-family: var(--mono); font-size: 10px; font-weight: 600; letter-spacing: 0.4px; text-transform: uppercase; border-radius: 2px; }
+    .badge-elite { background: var(--emerald-soft); color: var(--emerald); border: 1px solid rgba(27, 107, 76, 0.3); }
+    .badge-warn { background: var(--amber-soft); color: var(--amber); border: 1px solid rgba(180, 101, 12, 0.3); }
+    .badge-crit { background: var(--crimson-soft); color: var(--crimson); border: 1px solid rgba(168, 32, 32, 0.3); }
+    .badge-info { background: var(--blue-soft); color: var(--blue); border: 1px solid rgba(35, 87, 137, 0.3); }
+    .report-section { padding: 54px 0; border-bottom: 1px solid var(--line); }
+    .section-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 24px; margin-bottom: 32px; flex-wrap: wrap; }
+    .section-num { font-family: var(--mono); font-size: 11px; color: var(--accent); letter-spacing: 1.2px; text-transform: uppercase; margin-bottom: 8px; font-weight: 600; }
+    h2 { font-family: var(--serif); font-weight: 400; font-size: clamp(28px, 3.1vw, 44px); letter-spacing: -1.2px; line-height: 1.1; margin: 0; }
+    .section-desc { max-width: 540px; color: var(--ink-secondary); font-size: 14px; margin: 0; }
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; margin-bottom: 28px; }
+    .grid-12-8 { display: grid; grid-template-columns: 1.35fr 1fr; gap: 28px; margin-bottom: 28px; }
+    .card { background: var(--bg-elevated); border: 1px solid var(--line); padding: 26px; box-shadow: var(--shadow); position: relative; }
+    .card-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; margin-bottom: 18px; padding-bottom: 14px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+    .card-title { font-family: var(--serif); font-size: 21px; font-weight: 400; margin: 0 0 4px; letter-spacing: -0.4px; }
+    .card-subtitle { font-family: var(--mono); font-size: 10.5px; color: var(--ink-secondary); margin: 0; }
+    .tab-group { display: inline-flex; border: 1px solid var(--line); background: var(--bg); }
+    .tab-btn { border: 0; background: transparent; color: var(--ink-secondary); font-family: var(--mono); font-size: 10.5px; padding: 6px 12px; cursor: pointer; border-right: 1px solid var(--line); transition: all 0.15s; }
+    .tab-btn:last-child { border-right: 0; }
+    .tab-btn.active { background: var(--accent); color: #fff; font-weight: 600; }
+    .bar-list { display: flex; flex-direction: column; gap: 11px; }
+    .bar-row { display: grid; grid-template-columns: 230px 1fr 115px; align-items: center; gap: 12px; font-size: 12.5px; padding: 4px 6px; border-radius: 3px; transition: background 0.15s; }
+    .bar-row:hover { background: var(--bg-panel); }
+    .bar-label { font-family: var(--mono); font-size: 11.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--ink); }
+    .bar-track { height: 18px; background: var(--bg-panel); position: relative; overflow: hidden; border: 1px solid var(--line); }
+    .bar-fill { height: 100%; background: var(--accent); transition: width 0.5s cubic-bezier(0.16, 1, 0.3, 1); }
     .bar-fill.emerald { background: var(--emerald); }
     .bar-fill.amber { background: var(--amber); }
     .bar-fill.crimson { background: var(--crimson); }
     .bar-fill.blue { background: var(--blue); }
-
-    .bar-val {
-      font-family: var(--mono);
-      font-size: 11px;
-      text-align: right;
-      color: var(--ink-secondary);
-      white-space: nowrap;
-    }
-
-    /* Data Tables */
-    .table-wrap {
-      overflow-x: auto;
-    }
-
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      font-size: 13px;
-    }
-
-    th, td {
-      padding: 11px 13px;
-      text-align: left;
-      border-bottom: 1px solid var(--line);
-    }
-
-    th {
-      font-family: var(--mono);
-      font-size: 10.5px;
-      text-transform: uppercase;
-      letter-spacing: 0.7px;
-      color: var(--ink-secondary);
-      background: var(--bg-panel);
-      cursor: pointer;
-      user-select: none;
-      white-space: nowrap;
-    }
-
-    th:hover {
-      color: var(--accent);
-    }
-
-    tr:hover td {
-      background: rgba(186, 57, 22, 0.04);
-    }
-
-    td.num, th.num {
-      text-align: right;
-      font-family: var(--mono);
-      font-size: 12px;
-    }
-
-    td.code-cell {
-      font-family: var(--mono);
-      font-size: 11.5px;
-    }
-
-    /* Callouts */
-    .callout {
-      padding: 18px 22px;
-      border-left: 4px solid var(--accent);
-      background: var(--bg-panel);
-      margin-top: 20px;
-      font-size: 13.5px;
-    }
-
-    .callout.strength {
-      border-left-color: var(--emerald);
-      background: var(--emerald-soft);
-    }
-
-    .callout.weakness {
-      border-left-color: var(--crimson);
-      background: var(--crimson-soft);
-    }
-
-    .callout-title {
-      font-family: var(--mono);
-      font-size: 11px;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.8px;
-      margin-bottom: 6px;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-
-    /* SVG Chart Containers */
-    .svg-chart-wrap {
-      width: 100%;
-      overflow-x: auto;
-      position: relative;
-    }
-
-    svg.chart-svg {
-      width: 100%;
-      height: auto;
-      display: block;
-      font-family: var(--mono);
-    }
-
-    /* Interactive Tooltip */
-    #chart-tooltip {
-      position: fixed;
-      pointer-events: none;
-      z-index: 999;
-      background: #191e1b;
-      color: #f4f1e9;
-      border: 1px solid #ff7849;
-      padding: 10px 14px;
-      font-family: var(--mono);
-      font-size: 11px;
-      line-height: 1.5;
-      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
-      opacity: 0;
-      transition: opacity 0.12s ease;
-      max-width: 320px;
-    }
-
-    /* Scale Spectrum Indicator */
-    .spectrum-bar {
-      display: grid;
-      grid-template-columns: 1fr 1.2fr 1.6fr 1fr;
-      border: 1px solid var(--line);
-      margin: 22px 0 12px;
-      background: var(--bg);
-    }
-
-    .spec-tier {
-      padding: 14px 16px;
-      border-right: 1px solid var(--line);
-      position: relative;
-    }
-
-    .spec-tier:last-child {
-      border-right: 0;
-    }
-
-    .spec-tier.active {
-      background: var(--accent-soft);
-      outline: 2px solid var(--accent);
-      z-index: 1;
-    }
-
-    .spec-tier small {
-      display: block;
-      font-family: var(--mono);
-      font-size: 10px;
-      color: var(--ink-secondary);
-      text-transform: uppercase;
-    }
-
-    .spec-tier strong {
-      font-family: var(--serif);
-      font-size: 18px;
-    }
-
-    /* Simulator Panel */
-    .sim-grid {
-      display: grid;
-      grid-template-columns: 1fr 1.15fr;
-      gap: 28px;
-      align-items: center;
-    }
-
-    .slider-group {
-      margin-bottom: 20px;
-    }
-
-    .slider-head {
-      display: flex;
-      justify-content: space-between;
-      font-family: var(--mono);
-      font-size: 12px;
-      margin-bottom: 6px;
-    }
-
-    input[type="range"] {
-      width: 100%;
-      accent-color: var(--accent);
-      cursor: pointer;
-    }
-
-    .sim-outputs {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 14px;
-    }
-
-    .sim-box {
-      padding: 18px;
-      background: var(--bg);
-      border: 1px solid var(--line);
-    }
-
-    .sim-box small {
-      display: block;
-      font-family: var(--mono);
-      font-size: 10px;
-      color: var(--ink-secondary);
-      text-transform: uppercase;
-      margin-bottom: 6px;
-    }
-
-    .sim-box strong {
-      font-family: var(--serif);
-      font-size: 30px;
-      color: var(--emerald);
-    }
-
-    /* Action Plan Cards */
-    .action-grid {
-      display: grid;
-      grid-template-columns: repeat(2, 1fr);
-      gap: 24px;
-    }
-
-    .action-card {
-      background: var(--bg-elevated);
-      border: 1px solid var(--line);
-      border-top: 3px solid var(--accent);
-      padding: 26px;
-      display: flex;
-      flex-direction: column;
-      justify-content: space-between;
-    }
-
-    .action-num {
-      font-family: var(--mono);
-      font-size: 11px;
-      color: var(--accent);
-      font-weight: 700;
-      letter-spacing: 1px;
-      margin-bottom: 8px;
-    }
-
-    .action-card h3 {
-      font-family: var(--serif);
-      font-size: 23px;
-      font-weight: 400;
-      margin: 0 0 12px;
-      letter-spacing: -0.4px;
-    }
-
-    .action-card p {
-      font-size: 13.5px;
-      color: var(--ink-secondary);
-      margin: 0 0 14px;
-    }
-
-    .action-card ul {
-      margin: 0 0 18px;
-      padding-left: 18px;
-      font-size: 13px;
-      color: var(--ink);
-    }
-
-    .action-card li {
-      margin-bottom: 6px;
-    }
-
-    .kpi-target {
-      padding-top: 14px;
-      border-top: 1px solid var(--line);
-      font-family: var(--mono);
-      font-size: 11px;
-      color: var(--emerald);
-      font-weight: 600;
-    }
-
-    footer {
-      padding: 40px 0 90px;
-      font-family: var(--mono);
-      font-size: 11px;
-      color: var(--ink-secondary);
-      display: flex;
-      justify-content: space-between;
-      flex-wrap: wrap;
-      gap: 16px;
-    }
-
-    /* Glossary Term Tooltips */
-    .term-tip {
-      border-bottom: 1.5px dashed var(--accent);
-      cursor: help;
-      position: relative;
-      display: inline-flex;
-      align-items: center;
-      gap: 4px;
-      transition: color 0.15s, background 0.15s;
-      padding: 0 2px;
-      border-radius: 2px;
-    }
-
-    .term-tip:hover, .term-tip:focus {
-      color: var(--accent);
-      background: var(--accent-soft);
-      outline: none;
-    }
-
-    .term-tip::after {
-      content: "?";
-      display: inline-grid;
-      place-items: center;
-      width: 13px;
-      height: 13px;
-      border-radius: 50%;
-      background: var(--accent-soft);
-      color: var(--accent);
-      border: 1px solid var(--accent);
-      font-family: var(--mono);
-      font-size: 8.5px;
-      font-weight: 700;
-      line-height: 1;
-      flex-shrink: 0;
-    }
-
-    .tip-kicker {
-      font-family: var(--mono);
-      font-size: 9px;
-      letter-spacing: 1px;
-      text-transform: uppercase;
-      color: #ff8658;
-      margin-bottom: 4px;
-      display: block;
-    }
-
-    .tip-title {
-      font-family: var(--serif);
-      font-size: 15px;
-      color: #fff;
-      margin-bottom: 6px;
-      display: block;
-      border-bottom: 1px solid #353d38;
-      padding-bottom: 5px;
-    }
-
-    .tip-body {
-      font-family: var(--sans);
-      font-size: 12px;
-      color: #d5d9d2;
-      line-height: 1.5;
-      display: block;
-      margin-bottom: 8px;
-    }
-
-    .tip-meta {
-      font-family: var(--mono);
-      font-size: 10px;
-      color: #8ce6b8;
-      background: rgba(61, 214, 140, 0.1);
-      padding: 5px 8px;
-      border-left: 2px solid #3dd68c;
-      display: block;
-    }
-
-    /* Card Zoom & Prev/Next Header Controls */
-    .card-tools {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      flex-wrap: wrap;
-    }
-
-    .card-tool-btn {
-      border: 1px solid var(--line);
-      background: var(--bg);
-      color: var(--ink-secondary);
-      font-family: var(--mono);
-      font-size: 10px;
-      padding: 4px 8px;
-      cursor: pointer;
-      transition: all 0.15s;
-    }
-
-    .card-tool-btn:hover {
-      border-color: var(--accent);
-      color: var(--accent);
-    }
-
-    /* Zoomed Single Card / Graph Modal Mode */
-    .card.card-zoomed {
-      position: fixed !important;
-      inset: 28px !important;
-      z-index: 350 !important;
-      overflow-y: auto !important;
-      max-width: none !important;
-      margin: 0 !important;
-      padding: 36px 44px !important;
-      box-shadow: 0 24px 80px rgba(0, 0, 0, 0.65) !important;
-      border: 2px solid var(--accent) !important;
-    }
-
-    .card.card-zoomed svg.chart-svg {
-      max-height: 58vh;
-      width: auto;
-      margin: 0 auto;
-    }
-
-    #zoom-backdrop {
-      display: none;
-      position: fixed;
-      inset: 0;
-      background: rgba(12, 15, 13, 0.76);
-      backdrop-filter: blur(4px);
-      z-index: 340;
-    }
-
-    #zoom-backdrop.active {
-      display: block;
-    }
-
-    /* Presentation Deck Mode (Single Slide Step-Through) */
-    body.deck-mode .slide-section {
-      display: none;
-      animation: slideFade 0.25s ease;
-    }
-
-    body.deck-mode .slide-section.active-slide {
-      display: block;
-      min-height: calc(100vh - 170px);
-      padding-top: 32px;
-      padding-bottom: 100px;
-    }
-
-    @keyframes slideFade {
-      from { opacity: 0; transform: translateY(8px); }
-      to { opacity: 1; transform: translateY(0); }
-    }
-
-    /* Bird's-Eye Zoom-Out Overview Grid Mode */
-    body.overview-mode main.shell {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(410px, 1fr));
-      gap: 24px;
-      padding-top: 28px;
-      padding-bottom: 110px;
-      align-items: start;
-    }
-
-    body.overview-mode .slide-section {
-      display: block !important;
-      border: 2px solid var(--line);
-      background: var(--bg-elevated);
-      padding: 20px !important;
-      margin: 0 !important;
-      max-height: 430px;
-      overflow: hidden;
-      position: relative;
-      cursor: pointer;
-      transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
-      box-shadow: var(--shadow);
-    }
-
-    body.overview-mode .slide-section > *:not(.slide-overview-badge) {
-      transform: scale(0.76);
-      transform-origin: top left;
-      width: 131.5%;
-      pointer-events: none;
-    }
-
-    body.overview-mode .slide-section::after {
-      content: "Click to Zoom In ⤢";
-      position: absolute;
-      right: 12px;
-      bottom: 12px;
-      background: var(--accent);
-      color: #fff;
-      font-family: var(--mono);
-      font-size: 10px;
-      padding: 4px 10px;
-      letter-spacing: 0.5px;
-      z-index: 5;
-    }
-
-    body.overview-mode .slide-section:hover {
-      transform: translateY(-4px);
-      border-color: var(--accent);
-    }
-
-    body.overview-mode .slide-section.active-slide {
-      border-color: var(--accent);
-      outline: 2px solid var(--accent);
-    }
-
-    body.overview-mode footer {
-      grid-column: 1 / -1;
-    }
-
-    /* Floating Presentation Controller Dock */
-    .pres-dock {
-      position: fixed;
-      bottom: 18px;
-      left: 50%;
-      transform: translateX(-50%);
-      z-index: 400;
-      background: var(--bg-dark-card);
-      color: #f4f1e9;
-      border: 1px solid #454d47;
-      box-shadow: 0 12px 36px rgba(0, 0, 0, 0.45);
-      padding: 8px 14px;
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      border-radius: 4px;
-      font-family: var(--mono);
-      font-size: 11px;
-    }
-
-    .pres-btn {
-      background: rgba(255, 255, 255, 0.08);
-      color: #f4f1e9;
-      border: 1px solid #4a524c;
-      padding: 6px 11px;
-      font-family: var(--mono);
-      font-size: 10.5px;
-      cursor: pointer;
-      display: inline-flex;
-      align-items: center;
-      gap: 5px;
-      transition: all 0.15s;
-      white-space: nowrap;
-    }
-
-    .pres-btn:hover {
-      background: var(--accent);
-      border-color: var(--accent);
-      color: #fff;
-    }
-
-    .pres-btn.active {
-      background: var(--accent);
-      border-color: var(--accent);
-      color: #fff;
-      font-weight: 600;
-    }
-
-    .pres-dots {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-    }
-
-    .pres-dot {
-      width: 9px;
-      height: 9px;
-      border-radius: 50%;
-      background: #555e57;
-      border: 0;
-      padding: 0;
-      cursor: pointer;
-      transition: all 0.15s;
-    }
-
-    .pres-dot.active {
-      background: #ff7849;
-      transform: scale(1.3);
-    }
-
-    .pres-status {
-      min-width: 195px;
-      text-align: center;
-      color: #d5d9d2;
-      font-size: 10.5px;
-      white-space: nowrap;
-    }
-
-    @media (max-width: 1080px) {
-      .hero-grid, .grid-2, .grid-12-8, .sim-grid, .action-grid {
-        grid-template-columns: 1fr;
-      }
-      .kpi-grid {
-        grid-template-columns: repeat(3, 1fr);
-      }
-      .kpi-cell {
-        border-bottom: 1px solid var(--line);
-      }
-    }
-
-    @media (max-width: 680px) {
-      .shell {
-        width: calc(100% - 32px);
-      }
-      .kpi-grid {
-        grid-template-columns: repeat(2, 1fr);
-      }
-      .bar-row {
-        grid-template-columns: 140px 1fr 90px;
-      }
-      .spectrum-bar {
-        grid-template-columns: 1fr;
-      }
-    }
-
-    @media print {
-      .topbar, .tab-group, .sim-grid input {
-        display: none !important;
-      }
-      body {
-        background: #fff;
-        color: #000;
-      }
-      .card, .action-card {
-        box-shadow: none;
-        break-inside: avoid;
-      }
-    }
+    .bar-val { font-family: var(--mono); font-size: 11px; text-align: right; color: var(--ink-secondary); white-space: nowrap; }
+    .table-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th, td { padding: 11px 13px; text-align: left; border-bottom: 1px solid var(--line); }
+    th { font-family: var(--mono); font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.7px; color: var(--ink-secondary); background: var(--bg-panel); cursor: pointer; user-select: none; white-space: nowrap; }
+    th:hover { color: var(--accent); }
+    tr:hover td { background: rgba(186, 57, 22, 0.04); }
+    td.num, th.num { text-align: right; font-family: var(--mono); font-size: 12px; }
+    td.code-cell { font-family: var(--mono); font-size: 11.5px; }
+    .callout { padding: 18px 22px; border-left: 4px solid var(--accent); background: var(--bg-panel); margin-top: 20px; font-size: 13.5px; }
+    .callout.strength { border-left-color: var(--emerald); background: var(--emerald-soft); }
+    .callout.weakness { border-left-color: var(--crimson); background: var(--crimson-soft); }
+    .callout-title { font-family: var(--mono); font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 6px; display: flex; align-items: center; gap: 8px; }
+    .svg-chart-wrap { width: 100%; overflow-x: auto; position: relative; }
+    svg.chart-svg { width: 100%; height: auto; display: block; font-family: var(--mono); }
+    #chart-tooltip { position: fixed; pointer-events: none; z-index: 999; background: #191e1b; color: #f4f1e9; border: 1px solid #ff7849; padding: 10px 14px; font-family: var(--mono); font-size: 11px; line-height: 1.5; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35); opacity: 0; transition: opacity 0.12s ease; max-width: 320px; }
+    .spectrum-bar { display: grid; grid-template-columns: 1fr 1.2fr 1.6fr 1fr; border: 1px solid var(--line); margin: 22px 0 12px; background: var(--bg); }
+    .spec-tier { padding: 14px 16px; border-right: 1px solid var(--line); position: relative; }
+    .spec-tier:last-child { border-right: 0; }
+    .spec-tier.active { background: var(--accent-soft); outline: 2px solid var(--accent); z-index: 1; }
+    .spec-tier small { display: block; font-family: var(--mono); font-size: 10px; color: var(--ink-secondary); text-transform: uppercase; }
+    .spec-tier strong { font-family: var(--serif); font-size: 18px; }
+    .sim-grid { display: grid; grid-template-columns: 1fr 1.15fr; gap: 28px; align-items: center; }
+    .slider-group { margin-bottom: 20px; }
+    .slider-head { display: flex; justify-content: space-between; font-family: var(--mono); font-size: 12px; margin-bottom: 6px; }
+    input[type="range"] { width: 100%; accent-color: var(--accent); cursor: pointer; }
+    .sim-outputs { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    .sim-box { padding: 18px; background: var(--bg); border: 1px solid var(--line); }
+    .sim-box small { display: block; font-family: var(--mono); font-size: 10px; color: var(--ink-secondary); text-transform: uppercase; margin-bottom: 6px; }
+    .sim-box strong { font-family: var(--serif); font-size: 30px; color: var(--emerald); }
+    .action-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 24px; }
+    .action-card { background: var(--bg-elevated); border: 1px solid var(--line); border-top: 3px solid var(--accent); padding: 26px; display: flex; flex-direction: column; justify-content: space-between; }
+    .action-num { font-family: var(--mono); font-size: 11px; color: var(--accent); font-weight: 700; letter-spacing: 1px; margin-bottom: 8px; }
+    .action-card h3 { font-family: var(--serif); font-size: 23px; font-weight: 400; margin: 0 0 12px; letter-spacing: -0.4px; }
+    .action-card p { font-size: 13.5px; color: var(--ink-secondary); margin: 0 0 14px; }
+    .action-card ul { margin: 0 0 18px; padding-left: 18px; font-size: 13px; color: var(--ink); }
+    .action-card li { margin-bottom: 6px; }
+    .kpi-target { padding-top: 14px; border-top: 1px solid var(--line); font-family: var(--mono); font-size: 11px; color: var(--emerald); font-weight: 600; }
+    footer { padding: 40px 0 90px; font-family: var(--mono); font-size: 11px; color: var(--ink-secondary); display: flex; justify-content: space-between; flex-wrap: wrap; gap: 16px; }
+    .term-tip { border-bottom: 1.5px dashed var(--accent); cursor: help; position: relative; display: inline-flex; align-items: center; gap: 4px; transition: color 0.15s, background 0.15s; padding: 0 2px; border-radius: 2px; }
+    .term-tip:hover, .term-tip:focus { color: var(--accent); background: var(--accent-soft); outline: none; }
+    .term-tip::after { content: "?"; display: inline-grid; place-items: center; width: 13px; height: 13px; border-radius: 50%; background: var(--accent-soft); color: var(--accent); border: 1px solid var(--accent); font-family: var(--mono); font-size: 8.5px; font-weight: 700; line-height: 1; flex-shrink: 0; }
+    .tip-kicker { font-family: var(--mono); font-size: 9px; letter-spacing: 1px; text-transform: uppercase; color: #ff8658; margin-bottom: 4px; display: block; }
+    .tip-title { font-family: var(--serif); font-size: 15px; color: #fff; margin-bottom: 6px; display: block; border-bottom: 1px solid #353d38; padding-bottom: 5px; }
+    .tip-body { font-family: var(--sans); font-size: 12px; color: #d5d9d2; line-height: 1.5; display: block; margin-bottom: 8px; }
+    .tip-meta { font-family: var(--mono); font-size: 10px; color: #8ce6b8; background: rgba(61, 214, 140, 0.1); padding: 5px 8px; border-left: 2px solid #3dd68c; display: block; }
+    .card-tools { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+    .card-tool-btn { border: 1px solid var(--line); background: var(--bg); color: var(--ink-secondary); font-family: var(--mono); font-size: 10px; padding: 4px 8px; cursor: pointer; transition: all 0.15s; }
+    .card-tool-btn:hover { border-color: var(--accent); color: var(--accent); }
+    .card.card-zoomed { position: fixed !important; inset: 28px !important; z-index: 350 !important; overflow-y: auto !important; max-width: none !important; margin: 0 !important; padding: 36px 44px !important; box-shadow: 0 24px 80px rgba(0, 0, 0, 0.65) !important; border: 2px solid var(--accent) !important; }
+    .card.card-zoomed svg.chart-svg { max-height: 58vh; width: auto; margin: 0 auto; }
+    #zoom-backdrop { display: none; position: fixed; inset: 0; background: rgba(12, 15, 13, 0.76); backdrop-filter: blur(4px); z-index: 340; }
+    #zoom-backdrop.active { display: block; }
+    body.deck-mode .slide-section { display: none; animation: slideFade 0.25s ease; }
+    body.deck-mode .slide-section.active-slide { display: block; min-height: calc(100vh - 170px); padding-top: 32px; padding-bottom: 100px; }
+    @keyframes slideFade { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+    body.overview-mode main.shell { display: grid; grid-template-columns: repeat(auto-fit, minmax(410px, 1fr)); gap: 24px; padding-top: 28px; padding-bottom: 110px; align-items: start; }
+    body.overview-mode .slide-section { display: block !important; border: 2px solid var(--line); background: var(--bg-elevated); padding: 20px !important; margin: 0 !important; max-height: 430px; overflow: hidden; position: relative; cursor: pointer; transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease; box-shadow: var(--shadow); }
+    body.overview-mode .slide-section > *:not(.slide-overview-badge) { transform: scale(0.76); transform-origin: top left; width: 131.5%; pointer-events: none; }
+    body.overview-mode .slide-section::after { content: "Click to Zoom In ⤢"; position: absolute; right: 12px; bottom: 12px; background: var(--accent); color: #fff; font-family: var(--mono); font-size: 10px; padding: 4px 10px; letter-spacing: 0.5px; z-index: 5; }
+    body.overview-mode .slide-section:hover { transform: translateY(-4px); border-color: var(--accent); }
+    body.overview-mode .slide-section.active-slide { border-color: var(--accent); outline: 2px solid var(--accent); }
+    body.overview-mode footer { grid-column: 1 / -1; }
+    .pres-dock { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); z-index: 400; background: var(--bg-dark-card); color: #f4f1e9; border: 1px solid #454d47; box-shadow: 0 12px 36px rgba(0, 0, 0, 0.45); padding: 8px 14px; display: flex; align-items: center; gap: 12px; border-radius: 4px; font-family: var(--mono); font-size: 11px; }
+    .pres-btn { background: rgba(255, 255, 255, 0.08); color: #f4f1e9; border: 1px solid #4a524c; padding: 6px 11px; font-family: var(--mono); font-size: 10.5px; cursor: pointer; display: inline-flex; align-items: center; gap: 5px; transition: all 0.15s; white-space: nowrap; }
+    .pres-btn:hover, .pres-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+    .pres-dots { display: flex; align-items: center; gap: 6px; }
+    .pres-dot { width: 9px; height: 9px; border-radius: 50%; background: #555e57; border: 0; padding: 0; cursor: pointer; transition: all 0.15s; }
+    .pres-dot.active { background: #ff7849; transform: scale(1.3); }
+    .pres-status { min-width: 195px; text-align: center; color: #d5d9d2; font-size: 10.5px; white-space: nowrap; }
+    @media (max-width: 1080px) { .hero-grid, .grid-2, .grid-12-8, .sim-grid, .action-grid { grid-template-columns: 1fr; } .kpi-grid { grid-template-columns: repeat(3, 1fr); } .kpi-cell { border-bottom: 1px solid var(--line); } }
+    @media (max-width: 680px) { .shell { width: calc(100% - 32px); } .kpi-grid { grid-template-columns: repeat(2, 1fr); } .bar-row { grid-template-columns: 140px 1fr 90px; } .spectrum-bar { grid-template-columns: 1fr; } }
+    @media print { .topbar, .tab-group, .sim-grid input, .pres-dock { display: none !important; } body { background: #fff; color: #000; } .card, .action-card { box-shadow: none; break-inside: avoid; } }
   </style>
 </head>
 <body>
@@ -1200,12 +322,13 @@
 
 <header class="topbar">
   <div class="shell topbar-inner">
-    <a href="#top" class="brand">
-      <span class="brand-mark">✳</span>
+    <a href="../showcase/index.html" class="brand" title="Back to AIDA Showcase">
+      <span class="brand-mark"><img src="../showcase/assets/aida-icon-64.png" width="26" height="26" alt="AIDA Arch Icon" /></span>
       <span>AIDA</span>
       <span class="brand-sub">ENGINEERING AUDIT · NOV 2026</span>
     </a>
     <nav class="nav-links" aria-label="Report Sections">
+      <a href="../showcase/index.html">← Showcase</a>
       <a href="#exec-summary" onclick="goToSlide(0)">01. Summary</a>
       <a href="#scale-structure" onclick="goToSlide(1)">02. Scale &amp; CodeGraph</a>
       <a href="#pr-velocity" onclick="goToSlide(2)">03. MR Velocity &amp; GitClear</a>
@@ -1254,13 +377,18 @@
       </div>
 
       <aside class="verdict-card" aria-label="Executive Audit Diagnosis">
-        <div class="card-kicker">EXECUTIVE DIAGNOSIS</div>
-        <h3>High Trunk Integration Velocity Paired with Batch-Size &amp; Hub Coupling Friction</h3>
+        <div class="verdict-head-row">
+          <div>
+            <div class="card-kicker">EXECUTIVE DIAGNOSIS</div>
+            <h3 style="margin-bottom:0;">High Trunk Integration Velocity Paired with Batch-Size &amp; Hub Coupling Friction</h3>
+          </div>
+          <img class="verdict-orbital-logo" src="../showcase/assets/aida-logo-orbital.jpg" width="78" height="61" alt="AIDA orbital emblem" />
+        </div>
         <p>
           AIDA merges <strong>12.9–14.35 PRs/day</strong> onto <code>main</code> (peaking at <strong>833 PRs</strong> in June 2026), and
           <code>aida review watch</code> is designed to dispatch a reviewer as soon as a branch is pushed (pickup latency is a design
           claim; this audit did not measure it). However, <strong>78.3% of all Rust code</strong> resides in a single crate
-          (<code>aida-cli-lib</code>), and <strong>31.6% of PRs exceed 400 LoC</strong> (40.1% in the trailing 60 days), co-occurring with a
+          (<code>aida-cli-lib</code>), and <strong>31.6% of PRs exceed 400 LoC</strong> (40.0% in the trailing 60 days), co-occurring with a
           <strong>27.7% &lt;21-day file-touch churn proxy</strong> and a <strong>31.6% <code>BUG-</code>/<code>fix:</code> commit share</strong>.
         </p>
         <div class="verdict-pills">
@@ -1409,7 +537,7 @@
               <td class="num"><strong>31.6% of PRs</strong> (median 225 LoC)</td>
               <td class="num">~26% of PRs*</td>
               <td class="num">&lt; 15% of PRs*</td>
-              <td><span class="badge badge-warn">Batch-Size Weakness</span> 10.1% of PRs exceed 1,000 LoC; trailing 60 days 40.1% exceed 400 (SmartBear/Cisco 200–400 LoC guidance)</td>
+              <td><span class="badge badge-warn">Batch-Size Weakness</span> 10.1% of PRs exceed 1,000 LoC; trailing 60 days 40.0% exceed 400 (SmartBear/Cisco 200–400 LoC guidance)</td>
             </tr>
             <tr data-kind="weakness">
               <td><strong>LinearB &lt;21-Day Rework Churn (30d)</strong></td>
@@ -1445,9 +573,10 @@
             <strong>PR merges</strong> are first-parent commits whose subject ends in <code>(#N)</code>, read from
             <code>git log --first-parent 6a3f67671a9 --format='@%cs %s' --shortstat</code>; PR size = insertions + deletions from that shortstat, with no files excluded.
             Windows filter on committer date (<code>%cs</code> &ge; start date); median is the midpoint average and p90 the inclusive decile.
-            All history: 2,421 PRs. Since 2026-05-10 (175 d): 2,418 PRs, median 225, p90 1,008, mean 664.8, 31.6% &gt;400, 10.1% &gt;1,000.
-            Since 2026-09-02 (60 d): 861 PRs, median 290, p90 1,485, 40.1% &gt;400. Since 2026-10-02 (30 d): 387 PRs, median 325, p90 1,782, 44.7% &gt;400.
-            June 2026: 833 PRs, median 188, p90 625, 24.1% &gt;400.
+            All history: 2,421 PRs. Since 2026-05-10 (175 d): 2,418 PRs, median 225, p90 1,010, mean 589.9, 31.6% &gt;400, 10.1% &gt;1,000.
+            Since 2026-09-02 (60 d): 861 PRs, median 290, p90 1,483, 40.0% &gt;400. Since 2026-10-02 (30 d): 387 PRs, median 325, p90 1,791, 44.7% &gt;400.
+            June 2026: 833 PRs, median 188, p90 625, 24.2% &gt;400.
+            <strong>PR-size density chart</strong>: Gaussian kernel density estimate of log<sub>10</sub>(max(size, 1)) over the 2,418 PRs since 2026-05-10 (the 6 zero-line PRs map to 0), bandwidth h = 0.0990 log<sub>10</sub> units from Silverman’s rule of thumb (0.9 · min(sd, IQR/1.34) · n<sup>−1/5</sup>), evaluated at 46 even points from 10 to 5,012 LoC with no boundary correction (mass outside that range is not drawn), and scaled so the peak density sits at the top of the plot. Every figure in this note and every curve point and marker on the chart is printed by <code>python3 scripts/showcase-pr-size.py --svg</code>, run from the repository root.
             Commit counts per window use the same committer-date filter on <code>git log 6a3f67671a9 --format=%cs</code>.
             <strong>Reverts</strong> = subjects matching <code>^revert</code> (case-insensitive): 4 (7 subjects mention “revert” anywhere).
             <strong>Fix share</strong> = subjects containing <code>BUG-</code> (1,163) plus subjects starting with <code>fix</code> and not containing <code>BUG-</code> (163); subjects such as <code>[AI:x] fix(...)</code> are not matched, so this undercounts fixes.
@@ -1642,19 +771,19 @@
         <div class="card-header">
           <div>
             <h3 class="card-title">PR Diff Size vs. GitClear Review Ceiling</h3>
-            <p class="card-subtitle">31.6% of PRs since 2026-05-10 exceed 400 LoC (40.1% in the trailing 60 days)</p>
+            <p class="card-subtitle">31.6% of PRs since 2026-05-10 exceed 400 LoC (40.0% in the trailing 60 days)</p>
           </div>
           <div class="tab-group">
             <button class="tab-btn active" onclick="renderSizingChart('bars', this)">Bucket Histogram</button>
-            <button class="tab-btn" onclick="renderSizingChart('bell', this)">Schematic Shift</button>
+            <button class="tab-btn" onclick="renderSizingChart('bell', this)">Log-Scale Density</button>
           </div>
         </div>
         <div class="svg-chart-wrap" id="sizing-svg-container"></div>
         <div class="callout weakness">
           <div class="callout-title">⚠ SmartBear/Cisco Review-Size Guidance (&gt;400 LoC)</div>
           The SmartBear/Cisco Systems case study (Cohen, 2006; 2,500 reviews) recommends reviewing no more than <strong>200–400 LoC</strong> at a time. Since 2026-05-10, AIDA's
-          median PR is <strong>225 LoC</strong> (mean <strong>664.8 LoC</strong>, p90 <strong>1,008 LoC</strong>), with <strong>10.1% of PRs exceeding 1,000 LoC</strong>.
-          PRs have grown recently: over the trailing 60 days the median is 290 LoC and p90 1,485 LoC.
+          median PR is <strong>225 LoC</strong> (mean <strong>589.9 LoC</strong>, p90 <strong>1,010 LoC</strong>), with <strong>10.1% of PRs exceeding 1,000 LoC</strong>.
+          PRs have grown recently: over the trailing 60 days the median is 290 LoC and p90 1,483 LoC.
         </div>
       </div>
     </div>
@@ -1709,7 +838,7 @@
               <td class="num"><strong>414.5 / mo</strong></td>
               <td class="num">18.6 / d</td>
               <td class="num">225 LoC</td>
-              <td class="num">1,008 LoC</td>
+              <td class="num">1,010 LoC</td>
               <td class="num"><span class="badge badge-warn">31.6%</span></td>
             </tr>
             <tr>
@@ -1719,8 +848,8 @@
               <td class="num"><strong>430.5 / mo</strong></td>
               <td class="num">24.5 / d</td>
               <td class="num">290 LoC</td>
-              <td class="num">1,485 LoC</td>
-              <td class="num"><span class="badge badge-warn">40.1%</span></td>
+              <td class="num">1,483 LoC</td>
+              <td class="num"><span class="badge badge-warn">40.0%</span></td>
             </tr>
             <tr>
               <td><strong>AIDA Trailing 30-Day Window</strong></td>
@@ -1729,7 +858,7 @@
               <td class="num"><strong>387.0 / mo</strong></td>
               <td class="num">26.8 / d</td>
               <td class="num">325 LoC</td>
-              <td class="num">1,782 LoC</td>
+              <td class="num">1,791 LoC</td>
               <td class="num"><span class="badge badge-warn">44.7%</span></td>
             </tr>
             <tr>
@@ -1740,7 +869,7 @@
               <td class="num">30.6 / d</td>
               <td class="num">188 LoC</td>
               <td class="num">625 LoC</td>
-              <td class="num">24.1%</td>
+              <td class="num">24.2%</td>
             </tr>
           </tbody>
         </table>
@@ -2023,7 +1152,7 @@
           <div class="action-num">ACTION 03 · SMALL-BATCH PR RATCHET</div>
           <h3>Enforce a &lt;400 Production-LoC Budget at Decomposition &amp; Ship</h3>
           <p>
-            <strong>31.6% of merged PRs</strong> since 2026-05-10 exceed the 400-LoC review threshold (40.1% in the trailing 60 days; 10.1% exceed 1,000 LoC),
+            <strong>31.6% of merged PRs</strong> since 2026-05-10 exceed the 400-LoC review threshold (40.0% in the trailing 60 days; 10.1% exceed 1,000 LoC),
             increasing reviewer context load and co-occurring with multi-round review cycles.
           </p>
           <ul>
@@ -2052,8 +1181,13 @@
   </section>
 
   <footer>
-    <div>AIDA ENGINEERING ARCHITECTURE &amp; DELIVERY AUDIT · PINNED COMMIT <code>6a3f67671a974703590efde5ae2a323f3f7471fa</code></div>
-    <div>GENERATED 2026-11-01 · SOURCES: GIT LOG · TOKEI · CODEGRAPH SQLITE · DORA · GITCLEAR · LINEARB</div>
+    <div class="footer-brand-strip">
+      <span class="footer-logo-chip"><img src="../showcase/assets/aida-logo-arch.png" width="54" height="53" alt="AIDA arch logo" loading="lazy" /></span>
+      <span class="footer-logo-chip"><img src="../showcase/assets/aida-logo-geometric.png" width="48" height="55" alt="AIDA geometric logo" loading="lazy" /></span>
+      <span class="footer-logo-chip dark"><img src="../showcase/assets/aida-logo-orbital.jpg" width="68" height="53" alt="AIDA orbital logo" loading="lazy" /></span>
+      <span>AIDA ENGINEERING ARCHITECTURE &amp; DELIVERY AUDIT · PINNED COMMIT <code>6a3f67671a974703590efde5ae2a323f3f7471fa</code></span>
+    </div>
+    <div><a href="../showcase/index.html" style="color:var(--accent);text-decoration:none;">← Back to AIDA Showcase</a> · <a href="../showcase/metrics.html" style="color:var(--ink-secondary);text-decoration:none;">Metrics Guide</a> · <a href="../showcase/executive-brief.html" style="color:var(--ink-secondary);text-decoration:none;">Executive Brief</a> · <a href="../showcase/library.html" style="color:var(--ink-secondary);text-decoration:none;">Library</a></div>
   </footer>
 
 </main>
@@ -2407,24 +1541,56 @@
           <text x="${padL}" y="${H - 3}" font-size="8.5" fill="var(--ink-secondary)">* Illustrative reference distributions, not from a cited report.</text>
         </svg>`;
     } else {
-      const W = 520, H = 290;
+      const W = 520, H = 295;
+      // Gaussian KDE of log10(max(LoC,1)) across 2,418 PRs since 2026-05-10, Silverman bandwidth h = 0.0990, on log10([10, 5012]) -> x in [45, 490], peak y = 90, y_base = 236.
+      // Generated by: python3 scripts/showcase-pr-size.py --svg
+      const ptsLeft = "45.0,236 45.0,219.2 54.9,216.7 64.8,215.2 74.7,214.4 84.6,213.4 94.4,212.1 104.3,210.6 114.2,208.6 124.1,205.1 134.0,199.8 143.9,193.1 153.8,185.6 163.7,177.5 173.6,169.5 183.4,161.7 193.3,152.0 203.2,138.0 213.1,121.5 223.0,108.3 232.9,101.5 242.8,98.3 252.7,95.1 262.6,91.7 272.4,90.0 282.3,90.9 292.2,93.5 302.1,96.7 309.0,99.6 309.0,236";
+      const ptsRight = "309.0,236 309.0,99.6 312.0,100.9 321.9,107.4 331.8,117.1 341.7,128.9 351.6,140.7 361.4,151.5 371.3,162.1 381.2,173.1 391.1,184.1 401.0,194.3 410.9,202.6 420.8,208.4 430.7,212.0 440.6,215.2 450.4,219.0 460.3,222.9 470.2,226.5 480.1,229.3 490.0,231.1 490.0,236";
+      const ptsLine = "45.0,219.2 54.9,216.7 64.8,215.2 74.7,214.4 84.6,213.4 94.4,212.1 104.3,210.6 114.2,208.6 124.1,205.1 134.0,199.8 143.9,193.1 153.8,185.6 163.7,177.5 173.6,169.5 183.4,161.7 193.3,152.0 203.2,138.0 213.1,121.5 223.0,108.3 232.9,101.5 242.8,98.3 252.7,95.1 262.6,91.7 272.4,90.0 282.3,90.9 292.2,93.5 302.1,96.7 312.0,100.9 321.9,107.4 331.8,117.1 341.7,128.9 351.6,140.7 361.4,151.5 371.3,162.1 381.2,173.1 391.1,184.1 401.0,194.3 410.9,202.6 420.8,208.4 430.7,212.0 440.6,215.2 450.4,219.0 460.3,222.9 470.2,226.5 480.1,229.3 490.0,231.1";
       wrap.innerHTML = `
         <svg class="chart-svg" viewBox="0 0 ${W} ${H}">
-          <line x1="40" y1="240" x2="495" y2="240" stroke="var(--line-strong)" />
-          <!-- Elite Bell Curve peaking around 80-180 LoC -->
-          <path d="M 45 240 C 85 235, 115 65, 175 65 C 235 65, 275 215, 360 238 L 490 240" fill="var(--emerald-soft)" stroke="var(--emerald)" stroke-width="2.5" />
-          <!-- AIDA Shifted Bell Curve peaking around 400-1000 LoC -->
-          <path d="M 55 240 C 130 235, 225 90, 315 90 C 395 90, 445 190, 495 232" fill="var(--accent-soft)" stroke="var(--accent)" stroke-width="2.5" />
-          <!-- 400 LoC Threshold Line -->
-          <line x1="275" y1="30" x2="275" y2="240" stroke="var(--crimson)" stroke-dasharray="5 4" stroke-width="1.5" />
-          <text x="275" y="22" text-anchor="middle" font-size="9.5" fill="var(--crimson)" font-weight="700">SmartBear/Cisco 400-LoC Guidance</text>
-          <text x="175" y="52" text-anchor="middle" font-size="10" fill="var(--emerald)">Illustrative* Elite (~120 LoC)</text>
-          <text x="345" y="76" text-anchor="middle" font-size="10" fill="var(--accent)">AIDA (Median 225 / Mean 665 LoC; schematic)</text>
-          <text x="65" y="258" font-size="9.5" fill="var(--ink-secondary)">25 LoC</text>
-          <text x="175" y="258" text-anchor="middle" font-size="9.5" fill="var(--ink-secondary)">120 LoC</text>
-          <text x="275" y="258" text-anchor="middle" font-size="9.5" fill="var(--ink)">400 LoC</text>
-          <text x="385" y="258" text-anchor="middle" font-size="9.5" fill="var(--ink-secondary)">1,000 LoC</text>
-          <text x="475" y="258" text-anchor="end" font-size="9.5" fill="var(--ink-secondary)">3,500+ LoC</text>
+          <!-- Illustrative Elite reference curve centered around ~120 LoC (x=223) on log10 scale -->
+          <path d="M 45 236 C 95 234, 155 68, 215 68 C 265 68, 298 205, 355 235 L 490 236" fill="none" stroke="var(--emerald)" stroke-width="1.8" stroke-dasharray="3 3" opacity="0.85" />
+          <text x="178" y="60" text-anchor="middle" font-size="9" fill="var(--emerald)">Illustrative* Elite (~120 LoC)</text>
+
+          <!-- AIDA Empirical Log10(LoC) Density: Left 68.4% (<=400 LoC) vs Right 31.6% (>400 LoC) -->
+          <polygon points="${ptsLeft}" fill="var(--blue-soft)" />
+          <polygon points="${ptsRight}" fill="var(--crimson-soft)" />
+          <polyline points="${ptsLine}" fill="none" stroke="var(--accent)" stroke-width="2.5" />
+
+          <!-- Share callouts inside the two regions -->
+          <text x="218" y="182" text-anchor="middle" font-size="9.5" fill="var(--blue)" font-weight="700">68.4% ≤ 400 LoC</text>
+          <text x="362" y="196" text-anchor="middle" font-size="9.5" fill="var(--crimson)" font-weight="700">31.6% &gt; 400 LoC</text>
+
+          <!-- AIDA Median (p50 = 225 LoC) at x = 267.9 (LEFT of 400 LoC) -->
+          <line x1="268" y1="74" x2="268" y2="236" stroke="var(--blue)" stroke-width="1.8" />
+          <circle cx="268" cy="91" r="3.5" fill="var(--blue)" />
+          <text x="264" y="70" text-anchor="end" font-size="9.5" fill="var(--blue)" font-weight="700">Median: 225 LoC (p50)</text>
+
+          <!-- SmartBear/Cisco 400-LoC Guidance at x = 309.0 -->
+          <line x1="309" y1="28" x2="309" y2="236" stroke="var(--crimson)" stroke-dasharray="5 4" stroke-width="1.8" />
+          <text x="309" y="20" text-anchor="middle" font-size="9.5" fill="var(--crimson)" font-weight="700">400-LoC Review Guidance (p68.4)</text>
+
+          <!-- AIDA Mean (589.9 LoC) at x = 336.8 (pulled right by heavy tail) -->
+          <line x1="337" y1="108" x2="337" y2="236" stroke="var(--amber)" stroke-dasharray="2 2" stroke-width="1.6" />
+          <circle cx="337" cy="123" r="3.5" fill="var(--amber)" />
+          <text x="343" y="114" text-anchor="start" font-size="9" fill="var(--amber)" font-weight="700">Mean: 590 LoC (tail-skewed)</text>
+
+          <!-- AIDA p90 (1,010 LoC) at x = 375.4 -->
+          <line x1="375" y1="145" x2="375" y2="236" stroke="var(--ink-muted)" stroke-dasharray="2 3" stroke-width="1.2" />
+          <text x="380" y="149" text-anchor="start" font-size="8.5" fill="var(--ink-secondary)">p90: 1,010 LoC (10.1% &gt;1k)</text>
+
+          <!-- Baseline & Log10 Axis Labels -->
+          <line x1="40" y1="236" x2="495" y2="236" stroke="var(--line-strong)" />
+          <text x="45" y="253" text-anchor="middle" font-size="9" fill="var(--ink-secondary)">10</text>
+          <text x="111" y="253" text-anchor="middle" font-size="9" fill="var(--ink-secondary)">25</text>
+          <text x="210" y="253" text-anchor="middle" font-size="9" fill="var(--ink-secondary)">100</text>
+          <text x="268" y="253" text-anchor="middle" font-size="9" fill="var(--blue)" font-weight="700">225</text>
+          <text x="309" y="253" text-anchor="middle" font-size="9" fill="var(--crimson)" font-weight="700">400</text>
+          <text x="337" y="265" text-anchor="middle" font-size="8.5" fill="var(--amber)">590 (Mean)</text>
+          <text x="375" y="253" text-anchor="middle" font-size="9" fill="var(--ink-secondary)">1k</text>
+          <text x="464" y="253" text-anchor="middle" font-size="9" fill="var(--ink-secondary)">3.5k+</text>
+          <text x="268" y="284" text-anchor="middle" font-size="8.5" fill="var(--ink-secondary)">Gaussian KDE of log₁₀(LoC) across 2,418 AIDA PRs: median 225 LoC sits left of 400 LoC; heavy &gt;1k tail pulls mean to 590 LoC.</text>
         </svg>`;
     }
   }
@@ -2599,7 +1765,7 @@
       kicker: "GITCLEAR & SMARTBEAR REVIEW CEILING",
       title: "Oversized Batch Rate: PRs Exceeding 400 LoC (31.6%)",
       body: "Percentage of merged PRs whose diff (insertions + deletions) exceeds 400 lines. The SmartBear/Cisco case study (Cohen, 2006) recommends reviewing no more than 200–400 LoC at a time.",
-      meta: "Illustrative* median ~26% >400 LoC · elite <15% · AIDA: 31.6% since 2026-05-10 (10.1% >1,000 LoC; 40.1% >400 in trailing 60d)"
+      meta: "Illustrative* median ~26% >400 LoC · elite <15% · AIDA: 31.6% since 2026-05-10 (10.1% >1,000 LoC; 40.0% >400 in trailing 60d)"
     },
     "<21d Rework Churn": {
       kicker: "LINEARB CODE EVOLUTION METRIC",
@@ -2659,7 +1825,7 @@
       kicker: "SMARTBEAR/CISCO & GITCLEAR BATCH-SIZE METRIC",
       title: "Oversized PR Rate (>400 LoC Diff)",
       body: "Share of merged pull requests exceeding 400 changed lines (insertions + deletions). The SmartBear/Cisco Systems case study (Cohen, 2006) recommends reviewing no more than 200–400 LoC at a time.",
-      meta: "AIDA PRs since 2026-05-10: 31.6% >400 LoC · median 225 · p90 1,008"
+      meta: "AIDA PRs since 2026-05-10: 31.6% >400 LoC · median 225 · p90 1,010"
     },
     "LinearB <21-Day Rework Churn (30d)": {
       kicker: "FILE-LEVEL <21D COMMIT-WINDOW PROXY",
@@ -2713,7 +1879,7 @@
       kicker: "SMARTBEAR/CISCO REVIEW-SIZE GUIDANCE",
       title: "SmartBear/Cisco 200–400 LoC Review Guidance",
       body: "The SmartBear/Cisco Systems case study (Cohen, 2006; 2,500 reviews) recommends reviewing no more than 200–400 LoC at a time. Industry bucket distributions in the chart are *illustrative, not from a cited report.",
-      meta: "AIDA since 2026-05-10: median 225 LoC · mean 664.8 · 31.6% >400 LoC"
+      meta: "AIDA since 2026-05-10: median 225 LoC · mean 589.9 · 31.6% >400 LoC"
     },
     "Anatomy of Cycle Time: AIDA vs. LinearB Tiers": {
       kicker: "LINEARB-STYLE CYCLE TIME PHASES",
