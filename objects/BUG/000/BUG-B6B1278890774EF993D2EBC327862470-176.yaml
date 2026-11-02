@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T10:12:04.230556201Z
-modified_at: 2026-11-02T12:37:28.933092588Z
+modified_at: 2026-11-02T16:22:37.589290870Z
 req_type: Bug
 tags:
 - alias
@@ -229,6 +229,21 @@ comments:
   created_at: 2026-11-02T12:37:14.032095567Z
   modified_at: 2026-11-02T12:37:14.032095567Z
   session_id: 1f56bd1e-c059-4f73-b8df-e18b2170fdfc
+- id: 01a19d11-e315-7460-829f-06e4d0bf49e9
+  author: joe
+  content: |-
+    ROUND 3 pushed at 7a07ed87c62 (PR #3253; title and body updated to the full scope). Per the 12:37 findings:
+    F1 / amendment 1: review_alias::snapshot_labels proves identity from ONE committed store snapshot. The store must be its own git top level; objects/ and registry/{node_aliases,retired_ids}.toml must be clean with no untracked files; mappings are read from the pinned HEAD's blobs; HEAD and cleanliness are rechecked after the store loads; git queries are time- and output-bounded. A label bridges only when it resolves to the same full UUID and nothing else. Used by review verdict <spec> and the hold-release arming reads. Tests: snapshot identity (committed alias, uncommitted remap with clean objects, committed remap, untracked object), retired-ID UUID binding, alias-cannot-borrow.
+    F2 / amendments 6-7: ledger/checked.rs::Discovery reads every change ledger once per operation from the pinned directory (strict parse, bounded torn-line re-read, entry/file/byte/event budgets). The by-spec index is only checked for consistency. Test: stale or missing index after append.
+    F3 / amendment 3: cheap_outstanding_refusal_candidate and done_spec_outstanding_refusal now return RefusalCheck; Unavailable is protective, and only Absent falls back to primary_root. Batch rework rows share one Selector. The queue pickup display reports an unselectable review. reviewer_row_actionability is single-label, so it is unchanged.
+    F4: (a) bug_2403_alias_release_tests runs the production arming readers through auto_release_with: a native approval releases a friendly-armed hold; a wrong head, an invalid grant and an unrelated spec each refuse; a new refusal or remap between passes refuses with both refusals retained; unproved labels do not release. (b) GitLab-origin record --pr keeps the PR-N mapping and the receipt, with no MR-N record. (c) A concurrent origin replacement between the spec write and the handshake does not leak into the handshake.
+    F5 / amendment 8: the BUG-2398 artifact floor holds through the remapped selectors (absent grant never positive, invalid grant refused, durable grant positive in both label orders, no obsolete findings). Hold release is rerouted (read_arming_body/read_arming_history/with_proved_labels). A linked legacy file or directory now refuses selection.
+    F7: a refused legacy verdict file is Unsafe (rv::checked_verdict_file). PR title and body updated.
+    CI fixes: legacy-read ratchet (no direct read_verdict_body in review_alias), review_alias.rs classified as a gate kernel, borrow test rewritten.
+    Tests: bug_2403 filter 23/23 pass. A wider targeted run had 418 pass; its failures were 3 assertions since fixed and 4 isolated-child tests that abort in this seat because they cannot write the hermetic HOME (sandbox, not code). make check-ci-fast EXIT 0 (RUSTC_WRAPPER= because the sandbox denies sccache). check-ci-compile and test-touched were not run locally (host load 20-30); CI is the full gate.
+  created_at: 2026-11-02T16:22:37.589290870Z
+  modified_at: 2026-11-02T16:22:37.589290870Z
+  session_id: f3d7b8d5-952d-41f2-876a-c5ac09da1661
 history:
 - id: 01a196a4-b6bb-7730-a79a-e4a546bf516d
   author: joe
