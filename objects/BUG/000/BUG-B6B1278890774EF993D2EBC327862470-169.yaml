@@ -18,12 +18,12 @@ description: |-
   1. Wire `.codex/hooks.json` and `.codex/hooks/*.sh` into `Scaffolder::preview`, `apply`, `upgrade`, header injection (`mod.rs:607`), and `0o755` chmod (`mod.rs:2888`).
   2. Ensure worktree lane role/grant resolution works across Codex hooks and CLI invocations when `$CLAUDE_ENV_FILE` is absent.
   3. Add `.codex/` and `.agents/` to `EXCLUDE_PATTERNS` in `aida-commit-msg:99`, support `$aida-capture` in `aida-capture-prompt.sh`, and include `AIDA_SESSION_PROJECT` / `CODEX_PROJECT_DIR` in `aida-advisor-code-guard.sh`.
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T06:48:25.173889038Z
-modified_at: 2026-11-02T11:18:10.462526328Z
+modified_at: 2026-11-02T11:19:55.436135474Z
 req_type: Bug
 tags:
 - architecture
@@ -51,6 +51,68 @@ comments:
   created_at: 2026-11-02T11:15:27.473515392Z
   modified_at: 2026-11-02T11:15:27.473515392Z
   session_id: 1f56bd1e-c059-4f73-b8df-e18b2170fdfc
+- id: 01a19bfc-96d0-7943-b399-a2a7089aa17e
+  author: joe
+  content: |-
+    ## SKETCH (implementer, for advisor signoff), BUG-2395
+
+    No code has been written. This sketch follows the proxy decision: (A) portable scaffold and template fixes are kept apart from (B) the authority-bearing Codex lane identity.
+
+    ### Part A: portable scaffold and diagnostic fixes (no authority impact)
+
+    **A1. Codex hooks become a first-class scaffold surface** (`aida-core/src/scaffolding/mod.rs`, `codex_hooks.rs`)
+    - Gate: emit the Codex artifacts in `Scaffolder::preview` only when the project already carries Codex hook wiring, meaning `.codex/hooks.json` exists and references `/.codex/hooks/` (the same "opted in" test `antigravity_hooks_wired` uses). A Claude-only repo never sprouts `.codex/`. `aida init` keeps calling `scaffold_codex_hooks` for first wiring.
+    - Handlers: each `codex_hooks::handler_names()` entry becomes a `FileCategory::Template` artifact at `.codex/hooks/<name>`, built from the same embedded master as `.claude/hooks/<name>` (one script set, two wirings: unchanged).
+    - Wiring: `.codex/hooks.json` becomes `FileCategory::ManagedMerge`. `slots_for_file` gets a path-aware arm (today it matches on the bare file name, and `hooks.json` also names the Antigravity file). AIDA owns only the hook entries whose command references `/.codex/hooks/aida-*`, and user-added matcher groups and hooks survive the merge. **Question for advisor:** is entry-level ownership inside `/hooks/<Event>` acceptable, or should AIDA own whole `/hooks/<Event>` slots the way `settings.json` does? My lean is entry-level, because Codex users are more likely to hand-add hooks and whole-slot ownership would clobber them on upgrade.
+    - `wrap_with_aida_header`: treat `.codex/hooks/` like `.claude/hooks/` (shebang stays on line 1, header after it). `apply_with_options` chmods `.codex/hooks/*` to `0o755`.
+    - status/diff/apply/upgrade then cover the Codex files through the same artifact pipeline, so no separate code path is needed. Symlink refusal and `refuse_in_adopted_worktree` apply unchanged.
+
+    **A2. `aida-commit-msg`**: `EXCLUDE_PATTERNS` gains `.codex/` and `.agents/`. Both are scaffold mirrors that legitimately carry foreign trace IDs.
+
+    **A3. `aida-capture-prompt.sh`**
+    - The filing-activity regex also counts `$aida-capture` (the Codex skill invocation).
+    - The Claude transcript fallback runs only when the payload omits `transcript_path` *and* the session is not Codex (`CODEX_PROJECT_DIR`/codex payload marker). Otherwise exit 0 silently. We do not guess `~/.codex/sessions`.
+    - The `systemMessage` uses vendor-neutral wording: "run the aida-capture skill (`/aida-capture` in Claude Code, `$aida-capture` in Codex)".
+
+    **A4. `aida-advisor-code-guard.sh`**: `__aida_guard_target_outside_repo` anchors become `AIDA_SESSION_PROJECT`, `CLAUDE_PROJECT_DIR`, `CODEX_PROJECT_DIR`, then `$PWD`. Each unlistable project-dir anchor stays fail-closed (guarded) exactly as `CLAUDE_PROJECT_DIR` does today. This only widens what counts as "the repo" and never loosens the guard for a path inside any anchor's worktree list.
+
+    ### Part B: lane role/grant on Codex when `$CLAUDE_ENV_FILE` is absent (authority boundary)
+
+    Constraints from the proxy decision: we never mint or recover a grant from writable project context, we do not assume a child hook `eval` affects the parent, there is no invented `CODEX_ENV_FILE`, no credentials go into project files, BUG-2398 transport is reused, and ungranted refusal is preserved.
+
+    **B1. Supported path = the BUG-2398 managed child transport.** A Codex lane launched by AIDA (`aida queue work`, `aida agent new codex`, worktree lanes, coordinators) already receives the lease's child grant selector and seat via explicit `Command` env, and via `-c shell_environment_policy.set.*` for tool shells (`codex_tool_env::prepare_launch`). Hooks inherit the Codex process env, so `aida-role-context.sh`, `aida-mail-notice.sh` and tool shells already see the right seat. The work here is to **verify** that every lane-launch site that sets a lease role/child grant is in the BUG-2398 `LAUNCH_INVENTORY` (the ratchet already enforces this). If a lane site is missing, add it to the inventory rather than inventing a new channel.
+
+    **B2. Unmanaged Codex in a lane worktree** (the operator runs `codex` by hand in `aida-worktrees/<lane>`). In `aida-session-context.sh` `lane_env_correction()`, when `CLAUDE_ENV_FILE` is unset:
+    - Keep today's hook-subshell `eval` (harmless, scoped to that hook).
+    - **Do not** claim persistence. When the computed correction is non-empty (meaning inherited role/grant ≠ lane's), emit SessionStart `additionalContext` that says plainly: "this session's environment is not the lane's (role X, grant for seat Y); AIDA commands will run without the lane's seat. Relaunch with `aida queue work <SPEC>` / `aida agent new codex` for the lane identity." The text carries no grant selector.
+    - Fail closed: no export of the lease's child grant anywhere persistent.
+
+    **B3. CLI-side guard (the part needing an explicit ruling).** Today only the MCP server self-corrects (`lane_env::apply_in_process`, which *exports* the lease child grant). For Codex CLI calls I propose a **narrowing-only** in-process correction at CLI start, used only when the cwd is a lane worktree and `CLAUDE_ENV_FILE` is unset:
+    - `GrantFix::Unset`: drop an inherited grant that is not for the lane's seat (it protects against acting with the advisor's grant inside an implementer lane).
+    - Relabel `AIDA_SESSION_ROLE` to the lease role (a display/routing label, not authority) and unset `AIDA_SESSION_PURPOSE`.
+    - `GrantFix::Export`: **NOT applied** on this path. The lease is writable project context, so the CLI never adopts the lease's child grant from it. The session stays ungranted and seat-gated commands refuse with the existing hint.
+    - A lease that cannot be read inside a linked worktree drops grant and purpose (same fail-closed rule as `apply_in_process`).
+
+    **Questions for advisor:**
+    1. Do you approve B3 (narrowing-only CLI correction), or do you want B2 diagnostics only (no CLI env mutation at all)? My lean is B3. Without it, an unmanaged Codex in a lane keeps exercising the inherited advisor grant, which is the misattribution STORY-1662 fixed for Claude.
+    2. Should the existing MCP `apply_in_process` keep its `Export` arm for Codex-hosted MCP servers? It is out of scope here and I would leave it unchanged, but flag it.
+
+    ### Tests (fixtures / fake HOME only; no real hook/settings edits)
+    - **unit (aida-core scaffolding):** preview includes `.codex/hooks/*` + `.codex/hooks.json` only when wiring is present; header after shebang; managed-merge keeps a user hook entry and re-adds a missing AIDA entry; apply sets 0o755; upgrade rewrites a stale `.codex/hooks/aida-session-context.sh`; Claude-only repo gets no `.codex/`.
+    - **unit:** `codex_hooks_match_settings` pin still holds.
+    - **fixture (shell):** commit-msg with a staged `.codex/hooks/x.sh` carrying a foreign trace emits no warning; capture-prompt counts `$aida-capture` and emits neutral text; advisor-code-guard honors `AIDA_SESSION_PROJECT`/`CODEX_PROJECT_DIR` anchors and stays guarded when an anchor is unlistable.
+    - **command-level (lane_env):** with `CLAUDE_ENV_FILE` unset in a lane worktree, (a) a mismatched inherited grant is dropped, (b) the lease child grant is never exported by the CLI path, (c) an ungranted seat-gated command still refuses, (d) the hook emits the relaunch notice and no selector.
+    - **ratchet:** BUG-2398 `LAUNCH_INVENTORY` covers each lane launch site.
+
+    ### Expected files
+    `aida-core/src/scaffolding/{mod.rs,codex_hooks.rs,managed_merge.rs}`, `aida-core/templates/hooks/{aida-session-context.sh,aida-commit-msg,aida-capture-prompt.sh,aida-advisor-code-guard.sh}` (+ `make sync-templates` mirrors), `aida-cli-lib/src/lane_env.rs` and the CLI-start call site (B3 only), tests alongside.
+
+    ### Coordination
+    STORY-2256 (Completed) touched `aida-session-context.sh` session-start arming. A1 is precisely what lets that ship to existing Codex repos, and B2 edits stay inside `lane_env_correction()`. TASK-2689 (generated guidance for `.agents/skills`) is not touched. A3's neutral wording follows the same `/x` vs `$x` convention.
+  created_at: 2026-11-02T11:19:44.592025233Z
+  modified_at: 2026-11-02T11:19:44.592025233Z
+  session_id: 01a19bfb22af
+  harness_version: 2.1.316 (Claude Code)
 history:
 - id: 01a195dd-f3fe-78f1-905f-d5b9c92b6293
   author: joe
@@ -75,6 +137,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a19bfc-c12c-75f2-80c8-e03176caf2d9
+  author: joe
+  timestamp: 2026-11-02T11:19:55.436160467Z
+  session_id: 01a19bfb22af
+  harness_version: 2.1.316 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 6dc7d4977ac5e47c42ddfb26597fe3ec5fb70b60
   branch: main
@@ -83,3 +154,9 @@ filed_at:
   aida_build_sha: 962ca07af25
   vendor: antigravity
   session: 01a194b1bcfb
+attention_reason:
+  category: design-fork
+  detail: 'Architecture-tagged spec: the advisor directed sketch-first and no code until signoff. The sketch is posted as a spec comment. Two forks need a ruling: (1) Codex lane identity without CLAUDE_ENV_FILE, either a narrowing-only CLI correction (drop a mismatched grant, relabel the role, never export the lease grant) or hook diagnostics only; (2) .codex/hooks.json managed-merge ownership, entry-level or whole /hooks/<Event> slots.'
+  lean: B3 narrowing-only CLI correction plus a relaunch notice; entry-level ownership of aida-* hook entries in .codex/hooks.json
+  raised_by: implementer
+  raised_at: 2026-11-02T11:19:55.436135474Z
