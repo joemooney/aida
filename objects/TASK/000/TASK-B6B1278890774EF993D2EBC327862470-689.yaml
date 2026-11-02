@@ -1,0 +1,27 @@
+id: 01a19b68-a831-73e1-9ddb-a22deefc9813
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-689
+title: 'NON-BLOCKING cosmetic (carried from round 1 #5) supervisor.rs run_egress_probe …'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-2706, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  NON-BLOCKING cosmetic (carried from round 1 #5) supervisor.rs run_egress_probe accepts test-only fault selectors in production code; gate them behind cfg(test), as preflight_timeout_fixture is. Also, ci.yml:325 'grep -q ...task_2706_egress_ipc_live ... ok$' fails without an ::error:: line; add one.
+  Reviewed sha: e5846fc839b0b6dccbaefecdbfd7cc3e1fc2ebf2
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-02T08:38:09.713904520Z
+modified_at: 2026-11-02T08:38:09.713904520Z
+req_type: Task
+tags:
+- carried-from:TASK-2706
+- finding-hash:329c66db
+- from-review:TASK-2706
+- kind:carried-forward
+filed_at:
+  code_sha: 10f5a8651300808d3177617f5d3444019650725b
+  branch: main
+  dirty: true
+  aida_version: 0.16.0
+  aida_build_sha: 6a3f67671a9
+  vendor: claude
