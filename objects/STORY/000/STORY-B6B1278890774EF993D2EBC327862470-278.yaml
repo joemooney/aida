@@ -21,7 +21,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T04:45:50.173634412Z
-modified_at: 2026-11-02T03:36:51.125663018Z
+modified_at: 2026-11-02T04:32:05.295598945Z
 req_type: Story
 tags:
 - fork
@@ -87,6 +87,13 @@ comments:
   created_at: 2026-11-02T03:22:23.466544085Z
   modified_at: 2026-11-02T03:22:23.466544085Z
   session_id: 126bbd5a-a92f-452b-ab0b-2637a1db42c2
+- id: 01a19a87-5eaf-7c83-973d-296f77b4bbee
+  author: joe
+  content: 'Round 2 (2d8c53a786e) addresses all six review findings: (1) the punt tier forks the live Codex thread through AdvisorPass::CodexFork and the advisor-tier Codex arm with is_fork; (2) the fork and cold-boot launch lines come from pure fns and the watch tests capture and assert them; (3) Codex registrations are checked for project containment and liveness (codex PID identity or a fresh rollout); (4) register prefers CODEX_THREAD_ID, records the codex PID, and adds --vendor codex for --uuid; (5) the exec-fork probe is bounded at 10s with a TimedOut reason; (6) test comment reworded. Local test runs could not complete: the test build exceeded the 10-minute tool limit twice. cargo check/clippy --tests and make check-ci-fast pass; CI runs the tests. The help golden was hand-updated for --vendor using a textwrap reproduction of the existing wrap.'
+  created_at: 2026-11-02T04:32:05.295598945Z
+  modified_at: 2026-11-02T04:32:05.295598945Z
+  session_id: 01a19a54c7f2
+  harness_version: 2.1.316 (Claude Code)
 history:
 - id: 01a1956d-d26a-7a83-9ddc-67ed991509ed
   author: joe
