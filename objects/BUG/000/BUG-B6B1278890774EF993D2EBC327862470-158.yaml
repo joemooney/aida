@@ -17,12 +17,12 @@ description: |
   - A ship with 25 or more seat clones finishes step 5 in under 30s, or reports progress and continues in the background.
   - The merge-lease is released before the cleanup step, and a test asserts it.
   - A test covers the unpushed check with a large shipped set and no per-SHA spawn.
-status: InProgress
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T06:30:56.167167026Z
-modified_at: 2026-11-02T02:57:04.472327725Z
+modified_at: 2026-11-02T04:14:55.651658285Z
 req_type: Bug
 tags:
 - area:ship
@@ -143,6 +143,21 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a19a77-a89c-7a93-a641-02ca1b9a7bbe
+  author: aida-auto-bump
+  timestamp: 2026-11-02T04:14:55.644531043Z
+  session_id: 126bbd5a-a92f-452b-ab0b-2637a1db42c2
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a19a77-a8a3-78c2-83cb-5737b421976b
+  timestamp: 2026-11-02T04:14:55.651652964Z
+  agent: aida
+  commit_sha: 2acbbd622d98d90a2e72ce9bce85f59b04c98be4
+  summary: 'All 3 ACs verified at head: merge lease dropped before cleanup (runtime-asserted in bug_1953 CLI fixture via worker ''held: no'' line), one cat-file batch + stdin rev-list (25 clones x 6400 SHAs test counts git calls), unattended cleanup detaches after 20s with PID/log progress; all 8 round-1 findings addressed; build/test CI green, only the procedural merge-hold gate pending.'
+  review_verdict: approved
 execution_mode: drain
 filed_at:
   code_sha: 962ca07af25ca4de3426bdd951fb2d6782568184
@@ -152,3 +167,7 @@ filed_at:
   aida_build_sha: a83e05d785d
   vendor: claude
   session: a31b25d9-60a5-4347-a85b-4c74ab06f274
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-02T04:14:55.644523512Z
+  completion_sha: 2acbbd622d98d90a2e72ce9bce85f59b04c98be4
