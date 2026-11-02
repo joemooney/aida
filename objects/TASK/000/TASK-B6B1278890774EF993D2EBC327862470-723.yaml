@@ -1,5 +1,6 @@
 id: 01a19dd6-7d24-7dd0-9127-d7167077729a
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-723
+agreed_id: TASK-2777
 title: 'cosmetic: bug_2415_bwrap_session_end_ends_a_clone_pushed_by_explicit_refspec re…'
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on BUG-2415, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
@@ -18,6 +19,11 @@ tags:
 - finding-hash:86fa67ce
 - from-review:BUG-2415
 - kind:carried-forward
+history:
+- id: 01a19df0-9f38-7a93-980e-1bf51aefff30
+  author: joe
+  timestamp: 2026-11-02T20:25:54.744478568Z
+  changes: []
 filed_at:
   code_sha: dc661f7b7d0801fcee66d9f6feb6dd981fff55a7
   branch: main
