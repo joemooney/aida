@@ -1,0 +1,35 @@
+id: 01a19d68-6453-7d73-827e-5f1807408f75
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-321
+agreed_id: STORY-2323
+title: 'Review PR-3269: [AI:claude] docs(showcase): print PR-size bucket shares, correct Small to 25.1%, overview favicons, downscale logos (TASK-2762 TASK-2763)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a19d5f`) for branch `task-2762-work`.
+
+  - PR: <https://github.com/joemooney/aida/pull/3269>
+  - Branch: `task-2762-work` → `main`
+
+  ## Covers
+
+  - TASK-2762
+  - TASK-2763
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 3269` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-02T17:57:06.771190518Z
+modified_at: 2026-11-02T17:57:06.771190518Z
+req_type: Story
+filed_at:
+  code_sha: 51684a86699528b715c7c951b17cef2060aef03e
+  branch: main
+  dirty: true
+  aida_version: 0.16.0
+  aida_build_sha: 6a3f67671a9
+  vendor: claude
+  session: ee0bf351-6b17-486f-a38e-cfbb1343c426
