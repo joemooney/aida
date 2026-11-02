@@ -28,21 +28,52 @@ pub enum DocsCommand {
         output: Option<PathBuf>,
     },
 
-    /// Print AIDA's machinery + lifecycle glossary from the binary's
-    /// embedded copy.
+    /// Print AIDA's product, machinery and lifecycle glossary from the
+    /// binary's embedded copy.
     ///
-    /// Surfaces the canonical vocabulary (orchestrator, phase, drain, lease,
+    /// Surfaces the plain-language product terms (merge hold, mandate, grant,
+    /// hub, …), the machinery vocabulary (orchestrator, phase, drain, lease,
     /// role, scope, worktree, …) and the spec-lifecycle verbs (committed,
     /// pushed, merged, completed, released) without hunting for the file under
     /// .aida/discipline/ — and stays correct even if the project's
-    /// scaffolded copy is missing or stale. Default prints both sections.
+    /// scaffolded copy is missing or stale. Default prints all three sections;
+    /// any section flag prints only the sections named.
+    // trace:STORY-2219 | ai:claude
     Glossary {
+        /// Print only the product glossary (merge hold, mandate, grant, hub, …).
+        #[clap(long)]
+        product: bool,
         /// Print only the machinery glossary (orchestrator, drain, lease, …).
         #[clap(long)]
         machinery: bool,
         /// Print only the lifecycle vocabulary (the spec-state verbs).
         #[clap(long)]
         lifecycle: bool,
+    },
+
+    /// Review documentation for drift that has built up: command text this
+    /// build no longer has, and terms the website defines with no glossary
+    /// entry. Reviews the CLI docs, the website pages, the glossary and
+    /// READMEs touched since `--since` (default: the last recorded sweep;
+    /// every one on the first sweep). A normal run follows `[docs_sweep]
+    /// mode`: `report` mails the findings to the product seat, `pr` batches
+    /// mechanical fixes into one documentation-only PR. The scheduled
+    /// `docs-sweep` job runs it daily while the queue is idle.
+    // trace:STORY-2220 | ai:claude
+    Sweep {
+        /// Review changes since this git revision instead of the last
+        /// recorded sweep.
+        #[clap(long, value_name = "REF")]
+        since: Option<String>,
+
+        /// Print the findings only: send no mail, open no PR, file no specs,
+        /// and leave the last-swept revision where it is.
+        #[clap(long)]
+        report_only: bool,
+
+        /// Emit the findings as JSON.
+        #[clap(long)]
+        json: bool,
     },
 }
 

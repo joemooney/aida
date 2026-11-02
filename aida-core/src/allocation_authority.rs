@@ -358,6 +358,178 @@ pub fn refuse_foreign_root_record(root: &Path) -> Result<()> {
     Ok(())
 }
 
+/// Who orders this clone's block claims, and on which remote.
+// trace:STORY-B6B1278890774EF993D2EBC327862470-164 | ai:claude
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum ClaimAuthority {
+    /// The root claims, pushing to `origin`: the store records a root, or
+    /// no hub is declared and this clone is the (legacy) authoritative one.
+    Rooted,
+    /// Single-hub mode: the store records no root and declares exactly one
+    /// hub, which this clone reaches as `remote`. Claims are ordered by CAS
+    /// push to that remote and stamped with the hub's pool id.
+    HubCas { remote: String, hub: String },
+}
+
+impl ClaimAuthority {
+    /// The remote a claim is pulled from and pushed to.
+    pub fn remote(&self) -> &str {
+        match self {
+            Self::Rooted => "origin",
+            Self::HubCas { remote, .. } => remote,
+        }
+    }
+
+    /// The pool id a new `type_prefix` claim is stamped with.
+    pub fn pool_id(&self, type_prefix: &str) -> Option<String> {
+        match self {
+            Self::Rooted => None,
+            Self::HubCas { hub, .. } => Some(crate::store_hubs::hub_pool_id(hub, type_prefix)),
+        }
+    }
+}
+
+/// Refusal when the store declares more than one hub and records no root.
+pub const MULTI_HUB_NEEDS_ROOT: &str = "run `aida node enroll-root` on the primary clone: with more than one hub, only an enrolled root can split the number space between them";
+
+/// The store's allocation mode, from its root record and declared hubs.
+// trace:STORY-B6B1278890774EF993D2EBC327862470-164 | ai:claude
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum StoreMode {
+    /// `registry/root.yaml` names a root: it splits the number space.
+    Rooted { root: String, hubs: Vec<String> },
+    /// One hub, no root: the hub's store ref orders claims.
+    SingleHub { hub: String, remote: Option<String> },
+    /// More than one hub and no root: claims are refused.
+    MultiHubNoRoot { hubs: Vec<String> },
+    /// No hub declared on the shared code default branch.
+    Undeclared,
+}
+
+/// The store's allocation mode as this clone sees it.
+// trace:STORY-B6B1278890774EF993D2EBC327862470-164 | ai:claude
+pub fn store_mode(root: &Path) -> Result<StoreMode> {
+    let hubs = crate::store_hubs::committed(root)?;
+    let names: Vec<String> = hubs.hubs.iter().map(|h| h.name.clone()).collect();
+    if let Some(record) = crate::allocation_lineage::RootRecord::load(root)? {
+        return Ok(StoreMode::Rooted {
+            root: record.holder_node,
+            hubs: names,
+        });
+    }
+    Ok(match hubs.hubs.as_slice() {
+        [] => StoreMode::Undeclared,
+        [hub] => StoreMode::SingleHub {
+            hub: hub.name.clone(),
+            remote: crate::store_hubs::remote_reaching(root, &hubs, hub),
+        },
+        _ => StoreMode::MultiHubNoRoot { hubs: names },
+    })
+}
+
+/// Who may order a block claim from this clone, or why none may. Replaces
+/// the root-only gate at every claim site.
+// trace:STORY-B6B1278890774EF993D2EBC327862470-164 | ai:claude
+pub fn claim_authority(root: &Path) -> Result<ClaimAuthority> {
+    match store_mode(root)? {
+        StoreMode::Rooted { .. } => {
+            require_global(root)?;
+            Ok(ClaimAuthority::Rooted)
+        }
+        StoreMode::Undeclared => {
+            if resolve(root)?.authoritative {
+                return Ok(ClaimAuthority::Rooted);
+            }
+            bail!("this store declares no hub, so this clone may allocate only node-local IDs. Declare the one git server the store syncs through under [store.hubs] in .aida/config.toml, commit it and push it to the shared default branch (or enroll a root with `aida node enroll-root`)")
+        }
+        StoreMode::SingleHub {
+            hub,
+            remote: Some(remote),
+        } => Ok(ClaimAuthority::HubCas { remote, hub }),
+        StoreMode::SingleHub { hub, remote: None } => {
+            let hubs = crate::store_hubs::committed(root)?;
+            let declared = hubs.get(&hub);
+            let urls = declared.map(|h| h.urls.join(", ")).unwrap_or_default();
+            let why = declared
+                .map(|h| crate::store_hubs::partial_reach_problems(root, &hubs, h))
+                .unwrap_or_default();
+            let why = if why.is_empty() {
+                String::new()
+            } else {
+                format!(" ({})", why.join("; "))
+            };
+            bail!("no git remote of this clone reaches the store's hub `{hub}` ({urls}){why}; claims are ordered only on the hub, so a remote counts only when every URL it fetches from and pushes to is the hub's and store pushes to it are not redirected. Push to the declared hub, or declare a second hub (that needs `aida node enroll-root`)")
+        }
+        StoreMode::MultiHubNoRoot { hubs } => bail!(
+            "this store declares more than one hub ({}) and has no allocation root, so nothing orders their block claims; {MULTI_HUB_NEEDS_ROOT}. Blocks already held keep dispensing",
+            hubs.join(", ")
+        ),
+    }
+}
+
+/// The claims declared hub `hub`'s store ref records, as of this clone's
+/// remote-tracking copy, while the store records no root. `None` once a
+/// root is recorded (lineage decides then), when `hub` is not declared on
+/// the shared default branch, or when no remote of this clone reaches it
+/// (see [`crate::store_hubs::remote_reaching`]). Each hub-stamped block is
+/// checked against its own stamped hub, so a clone reaching several
+/// declared hubs keeps every block it holds; a store that gained a second
+/// hub without a root refuses new claims, but blocks already ordered on a
+/// hub keep dispensing.
+// trace:STORY-B6B1278890774EF993D2EBC327862470-164 | ai:claude
+fn hub_claims(root: &Path, hub: &str) -> Result<Option<Vec<crate::node::AgreedIdBlock>>> {
+    if crate::allocation_lineage::RootRecord::load(root)?.is_some() {
+        return Ok(None);
+    }
+    let hubs = crate::store_hubs::committed(root)?;
+    let Some(declared) = hubs.get(hub) else {
+        return Ok(None);
+    };
+    match crate::store_hubs::remote_reaching(root, &hubs, declared) {
+        Some(remote) => Ok(Some(hub_ref_blocks(root, &remote)?)),
+        None => Ok(None),
+    }
+}
+
+/// The hub context the lineage view's single-hub field carries: the first
+/// declared hub this clone reaches, with its claims. Blocks stamped for any
+/// other reached hub resolve through [`hub_remotes`].
+// trace:STORY-B6B1278890774EF993D2EBC327862470-164 | ai:claude
+fn single_hub_blocks(root: &Path) -> Result<Option<(String, Vec<crate::node::AgreedIdBlock>)>> {
+    if crate::allocation_lineage::RootRecord::load(root)?.is_some() {
+        return Ok(None);
+    }
+    let hubs = crate::store_hubs::committed(root)?;
+    let Some((hub, remote)) = hubs.hubs.iter().find_map(|h| {
+        crate::store_hubs::remote_reaching(root, &hubs, h).map(|r| (h.name.clone(), r))
+    }) else {
+        return Ok(None);
+    };
+    Ok(Some((hub, hub_ref_blocks(root, &remote)?)))
+}
+
+/// The block claims `remote`'s store ref records, as of this clone's
+/// remote-tracking copy (`refs/remotes/<remote>/<store branch>`). Empty when
+/// that ref or its `registry/blocks.yaml` does not exist (nothing is on the
+/// hub yet).
+// trace:STORY-B6B1278890774EF993D2EBC327862470-164 | ai:claude
+// remote-creds-ok(TASK-2001): reads the local remote-tracking ref only; no network
+fn hub_ref_blocks(root: &Path, remote: &str) -> Result<Vec<crate::node::AgreedIdBlock>> {
+    let branch = crate::git_ops::current_branch(root).unwrap_or_else(|_| "aida-store".to_string());
+    let out = crate::git_ops::host_git_command(root)
+        .args([
+            "show",
+            &format!("refs/remotes/{remote}/{branch}:registry/blocks.yaml"),
+        ])
+        .output()?;
+    if !out.status.success() {
+        return Ok(Vec::new());
+    }
+    let registry: crate::node::BlockRegistry =
+        serde_yaml::from_slice(&out.stdout).unwrap_or_default();
+    Ok(registry.blocks)
+}
+
 /// The lineage inputs for this (non-root or root) clone, read from the store
 /// and the clone-local setting.
 fn with_lineage_view<T>(
@@ -366,19 +538,111 @@ fn with_lineage_view<T>(
     mode: &AllocationMode,
     f: impl FnOnce(&crate::allocation_lineage::LineageView<'_>) -> T,
 ) -> Result<T> {
-    use crate::allocation_lineage::{LineageView, PoolRegistry, RootRecord};
-    let pools = PoolRegistry::load(root)?;
     let blocks = crate::node::BlockRegistry::load(&root.join("registry/blocks.yaml"))?;
+    with_lineage_view_of(root, node, mode, &blocks.blocks, f)
+}
+
+/// Run `f` against this clone's lineage view (store records, clone-local
+/// setting, and in single-hub mode the hub's claims), as `aida node show`
+/// reports it.
+// trace:STORY-B6B1278890774EF993D2EBC327862470-164 | ai:claude
+pub fn with_clone_lineage_view<T>(
+    root: &Path,
+    node: &str,
+    f: impl FnOnce(&crate::allocation_lineage::LineageView<'_>) -> T,
+) -> Result<T> {
+    let mode = resolve(root)?;
+    with_lineage_view(root, node, &mode, f)
+}
+
+/// [`with_lineage_view`] over a block list the caller already holds.
+// trace:STORY-B6B1278890774EF993D2EBC327862470-164 | ai:claude
+fn with_lineage_view_of<T>(
+    root: &Path,
+    node: &str,
+    mode: &AllocationMode,
+    blocks: &[crate::node::AgreedIdBlock],
+    f: impl FnOnce(&crate::allocation_lineage::LineageView<'_>) -> T,
+) -> Result<T> {
+    use crate::allocation_lineage::{HubSpend, LineageView, PoolRegistry, RootRecord};
+    let pools = PoolRegistry::load(root)?;
     let root_record = RootRecord::load(root)?;
+    let hub = single_hub_blocks(root)?;
+    let hub_remotes = hub_remotes(root)?;
     let view = LineageView {
         pools: &pools.pools,
-        blocks: &blocks.blocks,
+        blocks,
         root: root_record.as_ref(),
         node,
         role: mode.role,
         upstream: mode.upstream.as_deref(),
+        hub: hub.as_ref().map(|(hub, on_hub)| HubSpend { hub, on_hub }),
+        hub_remotes: &hub_remotes,
     };
     Ok(f(&view))
+}
+
+/// Each declared hub this clone reaches, with the remote it reaches it as
+/// and the claims on that remote's store ref: promoted pools are checked
+/// against them once a root is recorded, and before that each hub-stamped
+/// block is checked against its own stamped hub's claims.
+// trace:STORY-B6B1278890774EF993D2EBC327862470-164 | ai:claude
+fn hub_remotes(root: &Path) -> Result<Vec<crate::allocation_lineage::HubReach>> {
+    let hubs = crate::store_hubs::committed(root)?;
+    let mut out = Vec::new();
+    for h in &hubs.hubs {
+        let Some(remote) = crate::store_hubs::remote_reaching(root, &hubs, h) else {
+            continue;
+        };
+        let on_hub = hub_ref_blocks(root, &remote)?;
+        out.push(crate::allocation_lineage::HubReach {
+            hub: h.name.clone(),
+            remote,
+            on_hub,
+        });
+    }
+    Ok(out)
+}
+
+/// Why `block` may not be spent in single-hub mode although the dispenser
+/// found it active: it carries the hub's pool id but the identical claim is
+/// not on the hub's store ref (committed locally and never pushed, or only
+/// present in an imported store). `None` outside single-hub mode, for a
+/// block that is not hub-stamped, and for a claim that is on the hub. This
+/// is the check an authoritative (legacy root) clone's dispense applies;
+/// a non-root clone gets it through [`delegated_block_in`].
+// trace:STORY-B6B1278890774EF993D2EBC327862470-164 | ai:claude
+pub fn unpushed_hub_claim(
+    root: &Path,
+    block: &crate::node::AgreedIdBlock,
+) -> Result<Option<crate::allocation_lineage::Unusable>> {
+    let Some((name, typ)) = block
+        .pool_id
+        .as_deref()
+        .and_then(crate::store_hubs::parse_hub_pool_id)
+    else {
+        return Ok(None);
+    };
+    if !typ.eq_ignore_ascii_case(&block.type_prefix) {
+        return Ok(None);
+    }
+    if crate::allocation_lineage::RootRecord::load(root)?.is_some() {
+        return Ok(None);
+    }
+    // Checked against the block's own stamped hub. A stamped hub this clone
+    // does not reach (no remote whose every fetch and push URL is the hub's)
+    // cannot vouch for the claim, so the block is not spent.
+    let on_hub = hub_claims(root, name)?.unwrap_or_default();
+    if on_hub
+        .iter()
+        .any(|b| crate::allocation_lineage::same_claim(b, block))
+    {
+        return Ok(None);
+    }
+    Ok(Some(crate::allocation_lineage::Unusable::NotOnHub {
+        type_prefix: block.type_prefix.to_ascii_uppercase(),
+        hub: name.to_string(),
+    }))
 }
 
 /// Index (in `registry/blocks.yaml`) of the delegated `type_prefix` block a
@@ -402,7 +666,6 @@ pub fn delegated_block_in(
     type_prefix: &str,
     blocks: &[crate::node::AgreedIdBlock],
 ) -> Result<Option<usize>> {
-    use crate::allocation_lineage::{LineageView, PoolRegistry, RootRecord};
     let mode = resolve(root)?;
     if mode.authoritative {
         return Ok(None);
@@ -410,17 +673,9 @@ pub fn delegated_block_in(
     let Ok(node) = node(root) else {
         return Ok(None);
     };
-    let pools = PoolRegistry::load(root)?;
-    let root_record = RootRecord::load(root)?;
-    let view = LineageView {
-        pools: &pools.pools,
-        blocks,
-        root: root_record.as_ref(),
-        node: &node,
-        role: mode.role,
-        upstream: mode.upstream.as_deref(),
-    };
-    Ok(view.spendable_block(type_prefix).ok())
+    with_lineage_view_of(root, &node, &mode, blocks, |view| {
+        view.spendable_block(type_prefix).ok()
+    })
 }
 
 /// Whether `agreed_id` lies inside a delegated block this non-root clone may
@@ -2313,3 +2568,7 @@ mod tests {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "tests/claim_authority_tests.rs"]
+mod claim_authority_tests;
