@@ -215,13 +215,9 @@ fn bug_2394_configured_servers_read_names_only_never_credentials() {
 #[test]
 fn bug_2394_claude_trust_check_is_gated_on_claude_being_a_launch_vendor() {
     use crate::doctor_cmd::claude_launch_active;
-    // Explicit enabled list decides.
-    assert!(!claude_launch_active(Some(false), None));
-    assert!(!claude_launch_active(Some(false), Some("claude")));
-    assert!(claude_launch_active(Some(true), Some("codex")));
-    // No enabled list: an explicit non-Claude default vendor turns it off.
-    assert!(!claude_launch_active(None, Some("codex")));
-    assert!(claude_launch_active(None, Some("Claude")));
-    // Unconfigured keeps the historical Claude default.
-    assert!(claude_launch_active(None, None));
+    // An explicit enabled list decides.
+    assert!(!claude_launch_active(Some(false)));
+    assert!(claude_launch_active(Some(true)));
+    // No enabled list: every vendor is enabled, whatever `[agents] vendor` says.
+    assert!(claude_launch_active(None));
 }

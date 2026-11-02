@@ -2478,7 +2478,7 @@ pub(crate) fn codex_mcp_flags(
                 .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
         {
             anyhow::bail!(
-                "[agents] mcp = \"{}\" cannot be enforced for codex: MCP server `{name}` in the \
+                "[agents] mcp `{}` cannot be enforced for codex: MCP server `{name}` in the \
                  Codex config has a name a `-c mcp_servers.<name>.enabled=false` override cannot \
                  address. Rename that server, or set [agents] mcp = \"native\" to leave Codex's \
                  MCP configuration alone",
