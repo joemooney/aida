@@ -1285,13 +1285,16 @@ pub(crate) fn queue_fresh_pickup_policy(
     }
     if matches!(req.status, RequirementStatus::Done) {
         if let Some(root) = project_root {
-            if done_spec_outstanding_refusal(
-                root,
-                req.agreed_id.as_deref().unwrap_or_default(),
-                req.spec_id.as_deref().unwrap_or_default(),
-            )
-            .is_some()
-            {
+            // BUG-2403: an unselectable review is protective, not merge-ready.
+            // trace:BUG-2403 | ai:claude
+            if !matches!(
+                done_spec_outstanding_refusal(
+                    root,
+                    req.agreed_id.as_deref().unwrap_or_default(),
+                    req.spec_id.as_deref().unwrap_or_default(),
+                ),
+                RefusalCheck::Clear
+            ) {
                 return QueueFreshPickup::AwaitingRework;
             }
         }
@@ -4975,10 +4978,20 @@ pub(crate) fn handle_queue_command(
                     // rejected the branch — that is how a rejected commit got
                     // merged and marked done. trace:BUG-775 | ai:claude
                     if let Ok(root) = find_project_root() {
-                        if let Some(v) = crate::gate::review_verdict::read_recorded_verdict_any(
+                        // BUG-2403: an unselectable review says so instead
+                        // of reading as no verdict. trace:BUG-2403 | ai:claude
+                        let selection = crate::gate::review_alias::select_verdict(
                             &root,
                             &[&display_id_owned, spec_id],
-                        ) {
+                        );
+                        if let Some(reason) = selection.unavailable_reason() {
+                            println!(
+                                "  {} {}",
+                                "Review verdict:".bold(),
+                                format!("cannot be selected ({reason})").yellow().bold()
+                            );
+                        }
+                        if let Some(v) = selection.fail_closed() {
                             let line = crate::review_verdict_display::verdict_notice_line(&v);
                             if v.kind.blocks_done() {
                                 println!("  {} {}", "Review verdict:".bold(), line.yellow().bold());
@@ -17180,28 +17193,48 @@ pub(crate) fn recover_action_label(action: queue_recover::RecoverAction) -> &'st
 /// across every spec being checked, rather than each check resolving its own
 /// — the per-spec spawn this split exists to avoid.
 // trace:TASK-1456 | ai:claude
+/// BUG-2403: what a Done spec's refusal check found. `Unavailable` (its
+/// current review cannot be selected: ambiguous or refused evidence) is
+/// protective — never classified as merge-ready.
+// trace:BUG-2403 | ai:claude
+#[derive(Debug)]
+pub(crate) enum RefusalCheck {
+    Clear,
+    Outstanding(crate::gate::review_verdict::RecordedVerdict),
+    Unavailable(String),
+}
+
 fn cheap_outstanding_refusal_candidate(
-    project_root: &std::path::Path,
-    primary_root: &std::path::Path,
+    selector: &mut crate::gate::review_alias::Selector<'_>,
+    primary: &mut Option<crate::gate::review_alias::Selector<'_>>,
     display_id: &str,
     spec_id: &str,
-) -> Option<crate::gate::review_verdict::RecordedVerdict> {
-    let verdict = crate::gate::review_verdict::read_recorded_verdict_any(
-        project_root,
-        &[display_id, spec_id],
-    )
-    .or_else(|| {
-        (primary_root != project_root)
-            .then(|| {
-                crate::gate::review_verdict::read_recorded_verdict_any(
-                    primary_root,
-                    &[display_id, spec_id],
-                )
-            })
-            .flatten()
-    })?;
-    crate::gate::review_verdict::is_outstanding_refusal(&verdict, /* spec_completed */ false)
-        .then_some(verdict)
+) -> RefusalCheck {
+    use crate::gate::review_alias::AliasSelection;
+    // BUG-2403: one selection across both labels. Only an ABSENT verdict
+    // falls back to the primary checkout; ambiguous or refused evidence is
+    // reported as unavailable, never read as "no outstanding refusal".
+    // trace:BUG-2403 | ai:claude
+    let mut selection = selector.select(&[display_id, spec_id]);
+    if matches!(selection, AliasSelection::Absent) {
+        if let Some(primary) = primary.as_mut() {
+            selection = primary.select(&[display_id, spec_id]);
+        }
+    }
+    let unavailable = selection.unavailable_reason().map(str::to_string);
+    match selection.fail_closed() {
+        Some(verdict)
+            if crate::gate::review_verdict::is_outstanding_refusal(
+                &verdict, /* spec_completed */ false,
+            ) =>
+        {
+            RefusalCheck::Outstanding(verdict)
+        }
+        _ => match unavailable {
+            Some(reason) => RefusalCheck::Unavailable(reason),
+            None => RefusalCheck::Clear,
+        },
+    }
 }
 
 /// BUG-1515: whether a `Done` spec's most recently recorded review verdict is
@@ -17233,20 +17266,30 @@ pub(crate) fn done_spec_outstanding_refusal(
     project_root: &std::path::Path,
     display_id: &str,
     spec_id: &str,
-) -> Option<crate::gate::review_verdict::RecordedVerdict> {
+) -> RefusalCheck {
     let primary_root = main_worktree_root_from(project_root);
+    let mut selector = crate::gate::review_alias::Selector::new(project_root);
+    let mut primary = (primary_root != project_root)
+        .then(|| crate::gate::review_alias::Selector::new(&primary_root));
     let verdict =
-        cheap_outstanding_refusal_candidate(project_root, &primary_root, display_id, spec_id)?;
+        match cheap_outstanding_refusal_candidate(&mut selector, &mut primary, display_id, spec_id)
+        {
+            RefusalCheck::Outstanding(v) => v,
+            other => return other,
+        };
     let relation = verdict_tip_relation(
         project_root,
         verdict.reviewed_branch.as_deref(),
         verdict.reviewed_sha.as_deref(),
     );
-    matches!(
+    if matches!(
         relation,
         crate::gate::review_verdict::TipRelation::AtReviewedSha
-    )
-    .then_some(verdict)
+    ) {
+        RefusalCheck::Outstanding(verdict)
+    } else {
+        RefusalCheck::Clear
+    }
 }
 
 /// Cap on how many candidates [`resolve_done_rework_ids`] will run the git
@@ -17326,19 +17369,30 @@ pub(crate) fn resolve_done_rework_ids(
     // with no local verdict (the common case), an O(N) `git worktree list`
     // spawn. trace:TASK-1456 | ai:claude
     let primary_root = main_worktree_root_from(project_root);
-    let candidates: Vec<(uuid::Uuid, crate::gate::review_verdict::RecordedVerdict)> = done_rows
-        .iter()
-        .filter_map(|r| {
-            let verdict = cheap_outstanding_refusal_candidate(
-                project_root,
-                &primary_root,
-                r.agreed_id.as_deref().unwrap_or_default(),
-                r.spec_id.as_deref().unwrap_or_default(),
-            )?;
-            Some((r.id, verdict))
-        })
-        .collect();
-    candidates
+    // BUG-2403: one ledger discovery for the whole batch; a row whose review
+    // cannot be selected is kept (protective), without a tip check.
+    // trace:BUG-2403 | ai:claude
+    let mut selector = crate::gate::review_alias::Selector::new(project_root);
+    let mut primary = (primary_root != project_root)
+        .then(|| crate::gate::review_alias::Selector::new(&primary_root));
+    let mut unavailable: std::collections::HashSet<uuid::Uuid> = Default::default();
+    let mut candidates: Vec<(uuid::Uuid, crate::gate::review_verdict::RecordedVerdict)> =
+        Vec::new();
+    for r in done_rows {
+        match cheap_outstanding_refusal_candidate(
+            &mut selector,
+            &mut primary,
+            r.agreed_id.as_deref().unwrap_or_default(),
+            r.spec_id.as_deref().unwrap_or_default(),
+        ) {
+            RefusalCheck::Outstanding(v) => candidates.push((r.id, v)),
+            RefusalCheck::Unavailable(_) => {
+                unavailable.insert(r.id);
+            }
+            RefusalCheck::Clear => {}
+        }
+    }
+    let mut ids: std::collections::HashSet<uuid::Uuid> = candidates
         .into_iter()
         .take(MAX_REWORK_TIP_CHECKS)
         .filter_map(|(id, verdict)| {
@@ -17353,7 +17407,9 @@ pub(crate) fn resolve_done_rework_ids(
             )
             .then_some(id)
         })
-        .collect()
+        .collect();
+    ids.extend(unavailable);
+    ids
 }
 
 /// Personal work queue commands

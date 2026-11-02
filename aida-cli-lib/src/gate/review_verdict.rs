@@ -1961,6 +1961,26 @@ pub(crate) fn verdict_file_refused(path: &Path) -> bool {
     read_verdict_body(path).is_err() && std::fs::symlink_metadata(path).is_ok()
 }
 
+/// BUG-2403: the legacy verdict file at `path`, read for a cross-label
+/// selection through the same anchored handle as every other reader: `Ok(None)`
+/// only when nothing exists at `path`; the body and that handle's mtime when
+/// it is readable; `Err` when something exists but is refused (linked,
+/// non-regular) or cannot be read — never silently absent, so a refused file
+/// can never hide a newer refusal behind another label's older approval.
+// trace:BUG-2403 | ai:claude
+pub(crate) fn checked_verdict_file(
+    path: &Path,
+) -> Result<Option<(String, Option<std::time::SystemTime>)>, String> {
+    match read_verdict_file(path) {
+        Ok((body, meta)) => Ok(Some((body, meta.modified().ok()))),
+        Err(_) if std::fs::symlink_metadata(path).is_err() => Ok(None),
+        Err(e) => Err(format!(
+            "the verdict file {} exists but was refused ({e})",
+            path.display()
+        )),
+    }
+}
+
 /// TASK-2137: for a refused verdict file (see [`verdict_file_refused`]),
 /// whether it was modified at or after `since`. `None` when the file is not
 /// refused. A refused file with no readable mtime (a link) counts as stale.

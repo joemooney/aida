@@ -346,16 +346,22 @@ fn bug_2403_drain_stamp_keeps_the_same_head_receipt_only() {
     );
 }
 
-/// Production path: a granted `aida review record <spec> --pr N` writes the
-/// handshake with the SAME receipt the spec record carries, so the PR key,
-/// the spec key and auto-release's projected read all see it.
-#[test]
-fn bug_2403_record_pr_handshake_keeps_origin_release_receipt() {
+/// A git project root under a hermetic reviewer seat whose `--pr`
+/// handshake anchor is the project's own `PR-N` file; `origin` (when given)
+/// is set as the remote so the forge kind is detected from it. Runs one
+/// granted `aida review record <spec> --pr N` approval, with `between` run
+/// after the spec write and before the handshake is built.
+fn record_pr(
+    origin: Option<&str>,
+    spec: &str,
+    pr: u64,
+    between: Option<crate::AfterSpecRecordHook>,
+) -> (tempfile::TempDir, PathBuf, crate::test_env::AmbientGuard) {
     let tmp = tempfile::tempdir().unwrap();
     let root = tmp.path().canonicalize().unwrap();
     std::fs::create_dir_all(root.join(".aida")).unwrap();
     let root_str = root.to_str().unwrap().to_string();
-    let _ambient = crate::test_env::AmbientGuard::hermetic_with_seat_and(
+    let ambient = crate::test_env::AmbientGuard::hermetic_with_seat_and(
         &root,
         "reviewer",
         &[],
@@ -368,42 +374,65 @@ fn bug_2403_record_pr_handshake_keeps_origin_release_receipt() {
         ],
     );
     let head = crate::test_git::commit_fixture(&root);
+    if let Some(url) = origin {
+        let out = crate::test_git::git_command()
+            .arg("-C")
+            .arg(&root)
+            .args(["remote", "add", "origin", url])
+            .output()
+            .unwrap();
+        assert!(out.status.success());
+    }
+    let branch = format!("{}-work", spec.to_ascii_lowercase());
     let subject = crate::ReviewPrSubject {
-        head_ref: "bug-24031-work".into(),
+        head_ref: branch.clone(),
         commit_subjects: vec![],
     };
     let reviewer = crate::gate::review_authority::IdentitySource {
         session_ids: vec!["independent-2403".into()],
         ..Default::default()
     };
-    crate::with_review_pr_subject(subject, || {
+    crate::AFTER_SPEC_RECORD_HOOK.with(|h| *h.borrow_mut() = between);
+    let result = crate::with_review_pr_subject(subject, || {
         crate::gate::review_authority::with_identity_source(reviewer, || {
             crate::handle_review_record_at(
                 root.clone(),
-                "BUG-24031",
+                spec,
                 "approved",
                 Some(&head),
-                Some("bug-24031-work"),
+                Some(&branch),
                 Some("looks right"),
                 &[],
                 &[],
-                Some(24031),
+                Some(pr),
             )
         })
-    })
-    .expect("a granted approval records");
+    });
+    crate::AFTER_SPEC_RECORD_HOOK.with(|h| *h.borrow_mut() = None);
+    result.expect("a granted approval records");
+    (tmp, root, ambient)
+}
 
+fn handshake_of(root: &Path, pr_key: &str) -> JsonObj {
+    project::verdict_records(root, pr_key)
+        .into_iter()
+        .rev()
+        .find(|r| r.get("mode").and_then(|m| m.as_str()) == Some(PHASE3_MODE))
+        .expect("the phase-3 handshake is on the change's ledger")
+}
+
+/// Production path: a granted `aida review record <spec> --pr N` writes the
+/// handshake with the SAME receipt the spec record carries, so the PR key,
+/// the spec key and auto-release's projected read all see it.
+#[test]
+fn bug_2403_record_pr_handshake_keeps_origin_release_receipt() {
+    let (_tmp, root, _env) = record_pr(None, "BUG-24031", 24031, None);
     let spec_record = selected(&root, "BUG-24031");
     let receipt = spec_record
         .get("release_grant")
         .cloned()
         .expect("the granted record carries its record-time receipt");
-    let events: Vec<_> = project::verdict_records(&root, "PR-24031");
-    let handshake = events
-        .iter()
-        .rev()
-        .find(|r| r.get("mode").and_then(|m| m.as_str()) == Some(PHASE3_MODE))
-        .expect("the phase-3 handshake is on the PR's ledger");
+    let handshake = handshake_of(&root, "PR-24031");
     assert_eq!(handshake.get("release_grant"), Some(&receipt));
     for k in [
         "reviewed_sha",
@@ -416,4 +445,65 @@ fn bug_2403_record_pr_handshake_keeps_origin_release_receipt() {
     let pr_current: Value =
         serde_json::from_str(&rv::current_verdict(&root, "PR-24031").unwrap().body).unwrap();
     assert_eq!(pr_current.get("release_grant"), Some(&receipt));
+}
+
+/// Review finding 4b: on a GitLab-origin project the `--pr` handshake keeps
+/// its existing mapping contract (the orchestrator's `PR-N` anchor; no
+/// `MR-N` record is invented) and the same-origin receipt.
+#[test]
+fn bug_2403_gitlab_record_pr_handshake_keeps_mapping_and_receipt() {
+    let (_tmp, root, _env) = record_pr(
+        Some("https://gitlab.com/example/aida-fixture.git"),
+        "BUG-24032",
+        24032,
+        None,
+    );
+    assert_eq!(
+        crate::forge::resolve_open_change_forge_kind(&root),
+        crate::forge::ForgeKind::GitLab
+    );
+    let spec_record = selected(&root, "BUG-24032");
+    let receipt = spec_record.get("release_grant").cloned().unwrap();
+    let handshake = handshake_of(&root, "PR-24032");
+    assert_eq!(handshake.get("release_grant"), Some(&receipt));
+    assert!(
+        project::verdict_records(&root, "MR-24032").is_empty(),
+        "PR-N and MR-N stay distinct changes"
+    );
+}
+
+/// Review finding 4c: a concurrent reviewer replaces the spec record
+/// between the handler's write and its handshake build. The handshake still
+/// carries THIS handler's act of review (recorder, time, head, receipt), not
+/// the replacement it would have re-read.
+#[test]
+fn bug_2403_record_pr_handshake_ignores_a_concurrent_origin_replacement() {
+    let replaced: std::rc::Rc<std::cell::RefCell<Option<JsonObj>>> = Default::default();
+    let seen = replaced.clone();
+    let hook: crate::AfterSpecRecordHook = Box::new(move |root: &Path, spec: &str| {
+        let path = rv::verdict_path(root, spec);
+        let mut other = origin("request_changes", OTHER, &ts(0));
+        other.remove("release_grant");
+        other.insert("recorded_by".into(), json!("concurrent-reviewer"));
+        rv::write_verdict_object(&path, &other).unwrap();
+        *seen.borrow_mut() = Some(other);
+    });
+    let (_tmp, root, _env) = record_pr(None, "BUG-24033", 24033, Some(hook));
+    assert!(replaced.borrow().is_some(), "the replacement ran");
+    let handshake = handshake_of(&root, "PR-24033");
+    assert_eq!(handshake.get("verdict"), Some(&json!("approved")));
+    assert_ne!(
+        handshake.get("recorded_by"),
+        Some(&json!("concurrent-reviewer"))
+    );
+    assert_ne!(handshake.get("reviewed_sha"), Some(&json!(OTHER)));
+    assert!(
+        handshake.get("release_grant").is_some(),
+        "the handler's own receipt, never the replacement's absence"
+    );
+    // The replacement really landed (it is retained in the spec's history);
+    // the handshake did not borrow its provenance.
+    assert!(project::verdict_records(&root, "BUG-24033")
+        .iter()
+        .any(|r| r.get("recorded_by") == Some(&json!("concurrent-reviewer"))));
 }

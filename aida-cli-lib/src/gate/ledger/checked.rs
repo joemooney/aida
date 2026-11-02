@@ -223,82 +223,204 @@ fn parse_events(
     Ok(out)
 }
 
-/// Every verdict event the ledger holds for the spec label `spec`, oldest
-/// first, read strictly through [`ledger_dirs`]/[`read_entry`]: the indexed
-/// changes' events bound to that label, plus its unbound ledger (a record
-/// already bound to a change is read once, from the change). Same set and
-/// order as [`super::project`]'s lossy reader would give on clean evidence.
-// trace:BUG-2403 | ai:claude
-pub(crate) fn spec_verdict_events(
-    root: &Path,
-    spec: &str,
-    budget: &mut Budget,
-) -> Result<Vec<GateEvent>, Unsafe> {
-    let Some(spec) = spec_key(spec) else {
-        return Err(Unsafe(format!("{spec:?} is not a spec label")));
+/// Directory entries one discovery pass may list.
+pub(crate) const MAX_LEDGER_ENTRIES: usize = 16_384;
+/// Change ledgers one discovery pass may read.
+pub(crate) const MAX_CHANGE_LEDGERS: usize = 4_096;
+/// Re-reads of a ledger whose final line was torn by a concurrent append.
+const TORN_RETRIES: usize = 2;
+
+/// The names in the pinned directory `dir`, which `path` names: listed by
+/// path (std has no portable read-by-descriptor) and accepted only when the
+/// path still names that same pinned directory before and after the
+/// listing, so a swapped or linked directory cannot feed the list. Bounded
+/// by [`MAX_LEDGER_ENTRIES`]; any error refuses.
+fn list_pinned(dir: &File, path: &Path) -> Result<Vec<String>, Unsafe> {
+    use std::os::unix::fs::MetadataExt;
+    let refuse = |e: String| {
+        Unsafe(format!(
+            "refusing gate-ledger discovery in {}: {e}",
+            path.display()
+        ))
     };
-    let Some((ledger, by_spec)) = ledger_dirs(root)? else {
-        return Ok(Vec::new());
-    };
-    let Some(by_spec) = by_spec else {
-        return Ok(Vec::new());
-    };
-    let index_name = format!("{spec}.json");
-    let changes: Vec<ChangeKey> = match read_entry(&by_spec, &index_name, MAX_INDEX_BYTES, budget)?
-    {
-        None => Vec::new(),
-        Some(body) => {
-            let index: SpecIndex = serde_json::from_slice(&body)
-                .map_err(|e| Unsafe(format!("refusing gate-ledger index {index_name}: {e}")))?;
-            if index.changes.len() > MAX_CHANGES_PER_SPEC {
-                return Err(Unsafe(format!(
-                    "refusing gate-ledger index {index_name}: it names more than {MAX_CHANGES_PER_SPEC} changes"
-                )));
-            }
-            index
-                .changes
-                .iter()
-                .map(|c| {
-                    ChangeKey::parse(c).ok_or_else(|| {
-                        Unsafe(format!(
-                            "refusing gate-ledger index {index_name}: {c:?} is not a change key"
-                        ))
-                    })
-                })
-                .collect::<Result<_, _>>()?
+    let pinned = dir.metadata().map_err(|e| refuse(e.to_string()))?;
+    let same = || -> Result<(), Unsafe> {
+        let now = std::fs::symlink_metadata(path).map_err(|e| refuse(e.to_string()))?;
+        if !now.is_dir() || now.dev() != pinned.dev() || now.ino() != pinned.ino() {
+            return Err(refuse(
+                "the directory was replaced while it was listed".into(),
+            ));
         }
+        Ok(())
     };
-    let mut bound = Vec::new();
-    for change in changes {
-        let key = change.as_key();
-        let name = format!("{key}.jsonl");
-        let Some(body) = read_entry(&ledger, &name, MAX_LEDGER_BYTES, budget)? else {
-            return Err(Unsafe(format!(
-                "refusing gate-ledger index {index_name}: it names {key}, whose ledger is missing"
+    same()?;
+    let mut names = Vec::new();
+    for entry in std::fs::read_dir(path).map_err(|e| refuse(e.to_string()))? {
+        let entry = entry.map_err(|e| refuse(e.to_string()))?;
+        if names.len() >= MAX_LEDGER_ENTRIES {
+            return Err(refuse(format!(
+                "it holds more than {MAX_LEDGER_ENTRIES} entries"
             )));
-        };
-        bound.extend(
-            parse_events(&name, &body, &key, budget)?
-                .into_iter()
-                .filter(|e| {
-                    e.verdict_record().is_some() && e.spec.as_deref() == Some(spec.as_str())
-                }),
+        }
+        names.push(
+            entry
+                .file_name()
+                .into_string()
+                .map_err(|n| refuse(format!("{n:?} is not a UTF-8 name")))?,
         );
     }
-    let unbound_name = format!("{spec}.jsonl");
-    let unbound = match read_entry(&by_spec, &unbound_name, MAX_LEDGER_BYTES, budget)? {
-        None => Vec::new(),
-        Some(body) => parse_events(&unbound_name, &body, &spec, budget)?
-            .into_iter()
-            .filter(|e| e.verdict_record().is_some())
-            .filter(|u| {
-                !bound
-                    .iter()
-                    .any(|b| b.verdict_record() == u.verdict_record())
-            })
-            .collect(),
+    same()?;
+    names.sort();
+    Ok(names)
+}
+
+/// One change ledger, read and parsed strictly; a final line torn by a
+/// concurrent append is re-read a bounded number of times, then refuses.
+fn read_change(
+    ledger: &File,
+    name: &str,
+    change: &str,
+    budget: &mut Budget,
+) -> Result<Option<Vec<GateEvent>>, Unsafe> {
+    let mut attempt = 0;
+    loop {
+        let Some(body) = read_entry(ledger, name, MAX_LEDGER_BYTES, budget)? else {
+            return Ok(None);
+        };
+        let torn = !body.is_empty() && !body.ends_with(b"\n");
+        if torn && attempt < TORN_RETRIES {
+            attempt += 1;
+            std::thread::sleep(std::time::Duration::from_millis(20));
+            continue;
+        }
+        return parse_events(name, &body, change, budget).map(Some);
+    }
+}
+
+/// One bounded, strict discovery pass over a store's gate ledger: every
+/// change ledger in the pinned ledger directory read once, its verdict
+/// events grouped by the spec label each is bound to.
+///
+/// BUG-2403 (signoff amendments 6-7): the `by-spec` index is only a
+/// discovery hint — `store::write_events` appends before it indexes and only
+/// warns when indexing fails — so completeness is proved by DISCOVERY, not
+/// by index success. A caller selecting for many specs (a list view) builds
+/// one `Discovery` and asks it per spec, so no file is read twice per
+/// operation. Listing, file count and aggregate bytes/events are bounded;
+/// exhausting any bound refuses rather than answering from a partial read.
+// trace:BUG-2403 | ai:claude
+pub(crate) struct Discovery {
+    /// `None` when the ledger has no `by-spec` directory.
+    by_spec: Option<File>,
+    discovered: Vec<String>,
+    /// Upper-cased spec label -> its change-bound verdict events.
+    bound: std::collections::HashMap<String, Vec<GateEvent>>,
+}
+
+/// Discover the gate ledger under `root`; `Ok(None)` when it does not exist.
+// trace:BUG-2403 | ai:claude
+pub(crate) fn discover(root: &Path, budget: &mut Budget) -> Result<Option<Discovery>, Unsafe> {
+    let Some((ledger, by_spec)) = ledger_dirs(root)? else {
+        return Ok(None);
     };
-    let mut out: Vec<GateEvent> = bound.into_iter().chain(unbound).collect();
-    out.sort_by(|a, b| a.at.cmp(&b.at).then(a.seq.cmp(&b.seq)));
-    Ok(out)
+    let ledger_path = super::ledger_dir(root);
+    let mut discovered: Vec<String> = Vec::new();
+    let mut bound: std::collections::HashMap<String, Vec<GateEvent>> = Default::default();
+    for name in list_pinned(&ledger, &ledger_path)? {
+        let Some(change) = name
+            .strip_suffix(".jsonl")
+            .and_then(ChangeKey::parse)
+            .filter(|c| format!("{}.jsonl", c.as_key()) == name)
+        else {
+            continue;
+        };
+        if discovered.len() >= MAX_CHANGE_LEDGERS {
+            return Err(Unsafe(format!(
+                "refusing gate-ledger discovery: more than {MAX_CHANGE_LEDGERS} change ledgers"
+            )));
+        }
+        let key = change.as_key();
+        discovered.push(key.clone());
+        let Some(events) = read_change(&ledger, &name, &key, budget)? else {
+            return Err(Unsafe(format!(
+                "refusing gate-ledger discovery: {name} vanished while it was read"
+            )));
+        };
+        for e in events.into_iter().filter(|e| e.verdict_record().is_some()) {
+            if let Some(spec) = e.spec.as_deref() {
+                bound
+                    .entry(spec.trim().to_ascii_uppercase())
+                    .or_default()
+                    .push(e);
+            }
+        }
+    }
+    Ok(Some(Discovery {
+        by_spec,
+        discovered,
+        bound,
+    }))
+}
+
+impl Discovery {
+    /// Every verdict event for each spec label in `labels`, oldest first per
+    /// label: the discovered change-bound events plus the label's unbound
+    /// ledger (a record already bound to a change is read once, from the
+    /// change). The label's index is checked against the discovery: a
+    /// change it names whose ledger is missing, or a malformed index, refuses.
+    // trace:BUG-2403 | ai:claude
+    pub(crate) fn events_for(
+        &self,
+        labels: &[String],
+        budget: &mut Budget,
+    ) -> Result<Vec<(String, Vec<GateEvent>)>, Unsafe> {
+        let mut out = Vec::new();
+        for label in labels {
+            let spec =
+                spec_key(label).ok_or_else(|| Unsafe(format!("{label:?} is not a spec label")))?;
+            let mut events = self.bound.get(&spec).cloned().unwrap_or_default();
+            if let Some(by_spec) = &self.by_spec {
+                let index_name = format!("{spec}.json");
+                if let Some(body) = read_entry(by_spec, &index_name, MAX_INDEX_BYTES, budget)? {
+                    let index: SpecIndex = serde_json::from_slice(&body).map_err(|e| {
+                        Unsafe(format!("refusing gate-ledger index {index_name}: {e}"))
+                    })?;
+                    if index.changes.len() > MAX_CHANGES_PER_SPEC {
+                        return Err(Unsafe(format!(
+                            "refusing gate-ledger index {index_name}: it names more than {MAX_CHANGES_PER_SPEC} changes"
+                        )));
+                    }
+                    for c in &index.changes {
+                        let key = ChangeKey::parse(c).map(|k| k.as_key()).ok_or_else(|| {
+                            Unsafe(format!(
+                                "refusing gate-ledger index {index_name}: {c:?} is not a change key"
+                            ))
+                        })?;
+                        if !self.discovered.contains(&key) {
+                            return Err(Unsafe(format!(
+                                "refusing gate-ledger index {index_name}: it names {key}, whose ledger is missing"
+                            )));
+                        }
+                    }
+                }
+                let unbound_name = format!("{spec}.jsonl");
+                if let Some(body) = read_entry(by_spec, &unbound_name, MAX_LEDGER_BYTES, budget)? {
+                    let unbound: Vec<GateEvent> =
+                        parse_events(&unbound_name, &body, &spec, budget)?
+                            .into_iter()
+                            .filter(|e| e.verdict_record().is_some())
+                            .filter(|u| {
+                                !events
+                                    .iter()
+                                    .any(|b| b.verdict_record() == u.verdict_record())
+                            })
+                            .collect();
+                    events.extend(unbound);
+                }
+            }
+            events.sort_by(|a, b| a.at.cmp(&b.at).then(a.seq.cmp(&b.seq)));
+            out.push((spec, events));
+        }
+        Ok(out)
+    }
 }

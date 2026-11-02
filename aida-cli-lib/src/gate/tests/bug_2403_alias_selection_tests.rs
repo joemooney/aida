@@ -233,30 +233,37 @@ fn bug_2403_alias_cannot_borrow_authority() {
     let mut other = aida_core::Requirement::new("other".into(), "d".into());
     other.spec_id = Some("STORY-B6B1278890774EF993D2EBC327862470-263".into());
     other.agreed_id = Some("STORY-2221".into());
-    let mut store = aida_core::RequirementsStore::new();
-    store.requirements = vec![real, other];
+    let mut reqs = vec![real, other];
+    let maps = SnapshotMaps::default();
+    let labels = |reqs: &[aida_core::Requirement], key: &str| {
+        let mut got = resolve_labels(reqs, &maps, key).unwrap();
+        got.sort();
+        got
+    };
 
     let mut both = vec![FRIENDLY.to_string(), NATIVE.to_string()];
     both.sort();
-    let mut got = labels_for(&store, FRIENDLY);
-    got.sort();
-    assert_eq!(got, both);
-    let mut got = labels_for(&store, NATIVE);
-    got.sort();
-    assert_eq!(got, both);
-    assert_eq!(labels_for(&store, "STORY-9999"), vec!["STORY-9999"]);
+    assert_eq!(labels(&reqs, FRIENDLY), both);
+    assert_eq!(labels(&reqs, NATIVE), both);
+    assert_eq!(labels(&reqs, "STORY-9999"), vec!["STORY-9999"]);
     assert_eq!(
-        labels_for(&store, "STORY-B6B1278890774EF993D2EBC327862470"),
+        labels(&reqs, "STORY-B6B1278890774EF993D2EBC327862470"),
         vec!["STORY-B6B1278890774EF993D2EBC327862470"],
         "a node prefix bridges nothing"
     );
-    assert_eq!(labels_for(&store, "PR-3194"), vec!["PR-3194"]);
+    assert_eq!(
+        labels(&reqs, "PR-3194"),
+        vec!["PR-3194"],
+        "a change key is its own ledger"
+    );
 
-    // A friendly label two requirements claim is ambiguous: literal only.
+    // A friendly label two requirements claim is ambiguous: the key itself
+    // refuses, and reached from the native side it is dropped, not bridged.
     let mut clash = aida_core::Requirement::new("clash".into(), "d".into());
     clash.spec_id = Some(FRIENDLY.into());
-    store.requirements.push(clash);
-    assert_eq!(labels_for(&store, FRIENDLY), vec![FRIENDLY]);
+    reqs.push(clash);
+    assert!(resolve_labels(&reqs, &maps, FRIENDLY).is_err());
+    assert_eq!(labels(&reqs, NATIVE), vec![NATIVE.to_string()]);
 
     // An unrelated spec on the shared PR is not one of this spec's labels.
     let (_tmp, root) = root();
@@ -417,4 +424,229 @@ fn bug_2403_selection_unsafe_evidence_refuses() {
     let (_t, root, _ledger) = two_label_fixture();
     let v = selected(select_verdict(&root, &[FRIENDLY, NATIVE]));
     assert_eq!(v.raw, "request_changes");
+}
+
+/// Finding 2 (amendment 6): the `by-spec` index is a hint. A newer native
+/// refusal appended to a change ledger whose index entry never landed (the
+/// writer appends first and only warns when indexing fails) is still
+/// discovered, so the older friendly approval cannot be selected over it;
+/// with the index deleted outright the same holds.
+#[test]
+fn bug_2403_stale_or_missing_index_after_append_still_discovers_the_refusal() {
+    let _env = uncontained();
+    let (_tmp, root) = root();
+    append(
+        &root,
+        ChangeKey::pr(3185),
+        FRIENDLY,
+        record("approved", OLD_HEAD, &ts(-600), &[]),
+    );
+    append(
+        &root,
+        ChangeKey::pr(3186),
+        NATIVE,
+        record("request_changes", NEW_HEAD, &ts(-60), &["newer"]),
+    );
+    let by_spec = crate::gate::ledger::ledger_dir(&root).join("by-spec");
+    // The index lags: the native label's entry is gone.
+    std::fs::remove_file(by_spec.join(format!("{NATIVE}.json"))).unwrap();
+    let v = selected(select_verdict(&root, &[FRIENDLY, NATIVE]));
+    assert_eq!(
+        v.raw, "request_changes",
+        "index lag must not hide the refusal"
+    );
+    assert_eq!(v.findings, vec!["newer".to_string()]);
+    // No index at all.
+    std::fs::remove_dir_all(&by_spec).unwrap();
+    let v = selected(select_verdict(&root, &[NATIVE, FRIENDLY]));
+    assert_eq!(v.raw, "request_changes");
+    // The Option API and the queue-done gate agree.
+    assert_eq!(
+        crate::gate::review_verdict::read_recorded_verdict_any(&root, &[FRIENDLY, NATIVE])
+            .map(|v| v.raw),
+        Some("request_changes".to_string())
+    );
+}
+
+/// Finding 5: a linked or unreadable legacy verdict FILE under one label is
+/// refused evidence (never "absent"), so the other label's older approval is
+/// not selected past it; the same refusal holds for a linked directory.
+#[test]
+fn bug_2403_linked_legacy_verdict_file_refuses_selection() {
+    let _env = uncontained();
+    let (_tmp, root) = root();
+    append(
+        &root,
+        ChangeKey::pr(3185),
+        FRIENDLY,
+        record("approved", OLD_HEAD, &ts(-600), &[]),
+    );
+    let path = crate::gate::review_verdict::verdict_path(&root, NATIVE);
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    let elsewhere = root.join("elsewhere.json");
+    std::fs::write(
+        &elsewhere,
+        serde_json::to_string(&record("request_changes", NEW_HEAD, &ts(-5), &["linked"])).unwrap(),
+    )
+    .unwrap();
+    std::os::unix::fs::symlink(&elsewhere, &path).unwrap();
+    assert_unsafe_no_approval(&root, "symlinked legacy verdict file");
+    std::fs::remove_file(&path).unwrap();
+    std::fs::create_dir(&path).unwrap();
+    assert_unsafe_no_approval(&root, "a directory in place of the verdict file");
+}
+
+/// A git-canonical store fixture: `<root>/.aida/config.toml` naming
+/// `<root>/.aida-store`, a git-initialised store holding the one requirement
+/// with both labels, committed.
+fn snapshot_store() -> (tempfile::TempDir, PathBuf, PathBuf) {
+    let (tmp, root) = root();
+    std::fs::create_dir_all(root.join(".aida")).unwrap();
+    std::fs::write(
+        root.join(".aida").join("config.toml"),
+        "store_path = \".aida-store\"\n",
+    )
+    .unwrap();
+    let store = root.join(".aida-store");
+    std::fs::create_dir_all(&store).unwrap();
+    aida_core::git_ops::init(&store).unwrap();
+    aida_core::git_ops::configure_user(&store, "fixture", "fixture@localhost").unwrap();
+    let backend = crate::test_env::home_fixture_cached_backend(
+        &store,
+        &aida_core::CachedGitBackend::default_cache_path(&store),
+    )
+    .unwrap();
+    let mut req = aida_core::Requirement::new("real".into(), "d".into());
+    req.spec_id = Some(NATIVE.into());
+    req.agreed_id = Some(FRIENDLY.into());
+    aida_core::db::DatabaseBackend::add_requirement(&backend, req).unwrap();
+    commit_store(&store, "fixture");
+    (tmp, root, store)
+}
+
+fn commit_store(store: &Path, msg: &str) {
+    for args in [
+        vec!["add", "-A"],
+        vec!["commit", "-q", "--allow-empty", "-m", msg],
+    ] {
+        let out = crate::test_git::git_command()
+            .arg("-C")
+            .arg(store)
+            .args(&args)
+            .output()
+            .unwrap();
+        assert!(
+            out.status.success(),
+            "{}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+    }
+}
+
+fn sorted(mut v: Vec<String>) -> Vec<String> {
+    v.sort();
+    v
+}
+
+/// Finding 1 (amendment 1): identity is proved against ONE committed store
+/// snapshot. Friendly, native and committed node-label forms bridge to the
+/// same requirement; a node-label mapping CHANGED in the working tree (the
+/// objects clean) refuses, as do dirty or untracked objects; a committed
+/// remap that stops resolving the label bridges nothing.
+#[test]
+fn bug_2403_snapshot_identity_is_bound_to_the_committed_mappings() {
+    let _env = uncontained();
+    let (_tmp, root, store) = snapshot_store();
+    let both = sorted(vec![FRIENDLY.to_string(), NATIVE.to_string()]);
+    assert_eq!(sorted(snapshot_labels(&root, FRIENDLY).unwrap()), both);
+    assert_eq!(sorted(snapshot_labels(&root, NATIVE).unwrap()), both);
+    assert_eq!(snapshot_labels(&root, "PR-3194").unwrap(), vec!["PR-3194"]);
+    assert_eq!(
+        snapshot_labels(&root, "STORY-9999").unwrap(),
+        vec!["STORY-9999"]
+    );
+
+    // A committed node label bridges its alias form too.
+    let registry = store.join("registry");
+    std::fs::create_dir_all(&registry).unwrap();
+    let aliases = registry.join("node_aliases.toml");
+    std::fs::write(
+        &aliases,
+        "[[binding]]\nlabel = \"HOME\"\nnode = \"b6b1278890774ef993d2ebc327862470\"\n",
+    )
+    .unwrap();
+    commit_store(&store, "alias");
+    let with_alias = sorted(vec![
+        FRIENDLY.to_string(),
+        NATIVE.to_string(),
+        "STORY-HOME-262".to_string(),
+    ]);
+    assert_eq!(
+        sorted(snapshot_labels(&root, "STORY-HOME-262").unwrap()),
+        with_alias
+    );
+    assert_eq!(
+        sorted(snapshot_labels(&root, FRIENDLY).unwrap()),
+        with_alias
+    );
+
+    // The mapping changes in the working tree while every object is clean:
+    // the snapshot no longer proves identity.
+    std::fs::write(
+        &aliases,
+        "[[binding]]\nlabel = \"AWAY\"\nnode = \"b6b1278890774ef993d2ebc327862470\"\n",
+    )
+    .unwrap();
+    let err = snapshot_labels(&root, FRIENDLY).unwrap_err();
+    assert!(err.0.contains("uncommitted"), "{err}");
+
+    // Committed, the remap drops the old label rather than bridging it.
+    commit_store(&store, "remap");
+    assert_eq!(
+        snapshot_labels(&root, "STORY-HOME-262").unwrap(),
+        vec!["STORY-HOME-262"]
+    );
+
+    // An untracked object refuses too.
+    std::fs::create_dir_all(store.join("objects")).unwrap();
+    std::fs::write(store.join("objects").join("stray.yaml"), "x: 1\n").unwrap();
+    assert!(snapshot_labels(&root, FRIENDLY).is_err());
+}
+
+/// The pure resolver: retired IDs bridge only with the recorded UUID; a
+/// node label naming no stored requirement bridges nothing.
+#[test]
+fn bug_2403_retired_ids_bridge_only_with_the_same_uuid() {
+    let mut real = aida_core::Requirement::new("real".into(), "d".into());
+    real.spec_id = Some(NATIVE.into());
+    real.agreed_id = Some(FRIENDLY.into());
+    let uuid = real.id.to_string();
+    let reqs = vec![real];
+    let good = SnapshotMaps::parse(
+        None,
+        Some(&format!(
+            "[[retired]]\nold = \"STORY-1-418\"\nnew = \"{NATIVE}\"\nuuid = \"{uuid}\"\n"
+        )),
+    )
+    .unwrap();
+    assert_eq!(
+        sorted(resolve_labels(&reqs, &good, "STORY-1-418").unwrap()),
+        sorted(vec![
+            FRIENDLY.to_string(),
+            NATIVE.to_string(),
+            "STORY-1-418".to_string()
+        ])
+    );
+    let wrong = SnapshotMaps::parse(
+        None,
+        Some(&format!(
+            "[[retired]]\nold = \"STORY-1-418\"\nnew = \"{NATIVE}\"\nuuid = \"00000000-0000-0000-0000-000000000000\"\n"
+        )),
+    )
+    .unwrap();
+    assert_eq!(
+        resolve_labels(&reqs, &wrong, "STORY-1-418").unwrap(),
+        vec!["STORY-1-418"]
+    );
+    assert!(SnapshotMaps::parse(Some("not = [toml"), None).is_err());
 }

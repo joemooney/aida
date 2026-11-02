@@ -2350,6 +2350,18 @@ pub(crate) fn drive_root_or_project_root() -> Result<std::path::PathBuf> {
     find_project_root()
 }
 
+/// BUG-2403: test seam run between `aida review record`'s spec write and its
+/// `--pr` handshake build (see `handle_review_record_at`).
+// trace:BUG-2403 | ai:claude
+#[cfg(test)]
+pub(crate) type AfterSpecRecordHook = Box<dyn Fn(&std::path::Path, &str)>;
+
+#[cfg(test)]
+thread_local! {
+    pub(crate) static AFTER_SPEC_RECORD_HOOK: std::cell::RefCell<Option<AfterSpecRecordHook>> =
+        const { std::cell::RefCell::new(None) };
+}
+
 // BUG-912: phase-3 reviewers may run inside the review worktree while the
 // orchestrator polls an explicit verdict-file anchor in the parent project.
 // The PR handshake must honor that exact file when present; otherwise prefer
@@ -3413,6 +3425,15 @@ pub(crate) fn handle_review_record_at(
     // the orchestrator-visible anchor. The verdict string is the tolerant-parse
     // canonical label so `auto_complete::Verdict::parse` accepts it byte-for-byte.
     if let Some(n) = pr {
+        // BUG-2403 (review finding 4c): a test may replace the spec record
+        // here, as a concurrent reviewer could, to prove the handshake is
+        // built from this handler's own object. trace:BUG-2403 | ai:claude
+        #[cfg(test)]
+        AFTER_SPEC_RECORD_HOOK.with(|hook| {
+            if let Some(hook) = hook.borrow().as_ref() {
+                hook(&project_root, spec);
+            }
+        });
         let handshake = review_pr_handshake_path(&project_root, n);
         // trace:BUG-1743 | ai:claude
         #[cfg(test)]
@@ -4182,15 +4203,22 @@ pub(crate) fn review_verdict_show_body(
     crate::gate::review_verdict::VerdictSource,
 )> {
     // BUG-2403: a spec key reads every label of the ONE requirement it
-    // resolves to (native and friendly), so `review verdict STORY-N` and
-    // `review verdict <native>` answer with the same, newest record. A key
-    // that does not resolve unambiguously stays literal.
+    // resolves to (native, friendly, node-label and retired forms), proved
+    // against one clean committed store snapshot, so `review verdict STORY-N`
+    // and `review verdict <native>` answer with the same, newest record. A key
+    // whose identity cannot be proved (dirty or moving store, ambiguity)
+    // bridges nothing: it is read under its literal label only, and says so.
     // trace:BUG-2403 | ai:claude
-    let labels = match crate::gate::ledger::ChangeKey::parse(key) {
-        Some(_) => vec![key.to_string()],
-        None => crate::load_store_for_lookup(project_root)
-            .map(|store| crate::gate::review_alias::labels_for(&store, key))
-            .unwrap_or_else(|| vec![key.to_string()]),
+    let labels = match crate::gate::review_alias::snapshot_labels(project_root, key) {
+        Ok(labels) if !labels.is_empty() => labels,
+        Ok(_) => vec![key.to_string()],
+        Err(e) => {
+            eprintln!(
+                "warning: {} is read under its literal label only; its other labels cannot be proved: {e}",
+                key.to_ascii_uppercase()
+            );
+            vec![key.to_string()]
+        }
     };
     let current = match labels.as_slice() {
         [_, _, ..] => {
