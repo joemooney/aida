@@ -14,7 +14,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-02T05:01:03.079385668Z
-modified_at: 2026-11-02T06:29:02.013800431Z
+modified_at: 2026-11-02T06:51:05.536807921Z
 req_type: Task
 tags:
 - carried-from:BUG-B6B1278890774EF993D2EBC327862470-159
@@ -42,6 +42,13 @@ comments:
   created_at: 2026-11-02T06:26:49.798587419Z
   modified_at: 2026-11-02T06:26:49.798587419Z
   session_id: 1f56bd1e-c059-4f73-b8df-e18b2170fdfc
+- id: 01a19b06-a1c0-7803-b0a7-5e8e8996b928
+  author: joe
+  content: 'PR #3240 bundles TASK-2742/2737/2731. Local cargo test and check-ci-fast were not run: the cold target dir and the 60s headless per-call cap meant aida-core could not compile. CI is the first compile.'
+  created_at: 2026-11-02T06:51:05.536807921Z
+  modified_at: 2026-11-02T06:51:05.536807921Z
+  session_id: 01a19af26aff
+  harness_version: 2.1.316 (Claude Code)
 history:
 - id: 01a19abc-8d4f-7c32-824b-5498d0b2cb3d
   author: joe
