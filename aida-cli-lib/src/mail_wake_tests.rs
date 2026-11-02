@@ -411,3 +411,159 @@ fn story_home_096_agents_toml_mail_wake_default() {
     std::fs::write(&file, "[agents.codex]\nmail_wake = \"no\"\n").unwrap();
     assert!(crate::load_agents_tool_bool(project, "codex", "mail_wake").is_err());
 }
+
+// A row a hand-started Codex session's SessionStart hook wrote (no launcher,
+// no decision) adopts the default and arms on its exact thread; the opt-outs
+// still hold; other vendors and decided rows are left alone.
+// trace:STORY-2256 | ai:claude
+// trace:STORY-b6b1278890774ef993d2ebc327862470-279.acef3e5d | ai:claude
+#[test]
+fn story_2256_hook_arms_a_hand_started_codex_row() {
+    let dir = tempfile::tempdir().unwrap();
+    let project = dir.path();
+    let calls = Cell::new(0);
+    let ok = |_: &Path| {
+        calls.set(calls.get() + 1);
+        Ok(())
+    };
+
+    let hand = row(project, "codex", 60, None, Some(THREAD));
+    let armed = arm_session(project, &hand, None, || None, ok).unwrap();
+    assert_eq!(armed.state, MailWake::Armed);
+    assert_eq!(armed.warning, None);
+    assert_eq!(calls.get(), 1);
+    assert_eq!(
+        on_disk(project, "codex-60").mail_wake,
+        Some(MailWake::Armed)
+    );
+
+    // `[agents.codex] mail_wake = false` opts a hand-started seat out.
+    let opted = row(project, "codex", 61, None, Some(THREAD));
+    assert_eq!(arm_session(project, &opted, None, || Some(false), ok), None);
+    assert_eq!(on_disk(project, "codex-61").mail_wake, Some(MailWake::Off));
+
+    // `agent new --no-mail-wake` names `off` to its child, which wins even
+    // when the hook writes the row before the launcher stamps it.
+    let flagged = row(project, "codex", 62, None, Some(THREAD));
+    assert_eq!(
+        arm_session(project, &flagged, Some("off"), || Some(true), ok),
+        None
+    );
+    assert_eq!(on_disk(project, "codex-62").mail_wake, Some(MailWake::Off));
+
+    // An already-decided row, or a non-Codex row, is not re-decided.
+    let decided = row(project, "codex", 63, Some("off"), Some(THREAD));
+    assert_eq!(arm_session(project, &decided, None, || None, ok), None);
+    let claude = row(project, "claude", 64, None, Some(THREAD));
+    assert_eq!(arm_session(project, &claude, None, || None, ok), None);
+    assert_eq!(on_disk(project, "claude-64").mail_wake, None);
+    assert_eq!(calls.get(), 1, "only the first row installed the service");
+
+    // No thread yet: the row waits as pending, never guessed.
+    let early = row(project, "codex", 65, None, None);
+    assert_eq!(arm_session(project, &early, None, || None, ok), None);
+    assert_eq!(
+        on_disk(project, "codex-65").mail_wake,
+        Some(MailWake::Pending)
+    );
+}
+
+// A refused service install (containment, no user manager) leaves the
+// hand-started row `failed`, not `pending`, with the one command to run.
+// trace:STORY-2256 | ai:claude
+// trace:STORY-b6b1278890774ef993d2ebc327862470-279.ac8fcb4d | ai:claude
+#[test]
+fn story_2256_refused_install_marks_a_hand_started_row_failed() {
+    let dir = tempfile::tempdir().unwrap();
+    let project = dir.path();
+    let hand = row(project, "codex", 66, None, Some(THREAD));
+    let failed = arm_session(
+        project,
+        &hand,
+        None,
+        || None,
+        |_| anyhow::bail!("systemctl --user refused"),
+    )
+    .unwrap();
+    assert_eq!(failed.state, MailWake::Failed);
+    let warning = failed.warning.unwrap();
+    assert!(
+        warning.contains("aida mailbox wake-service install")
+            && warning.contains("aida agent wake arm codex-agent-03"),
+        "{warning}"
+    );
+    assert_eq!(
+        on_disk(project, "codex-66").mail_wake,
+        Some(MailWake::Failed)
+    );
+}
+
+// The launcher's later `pending` stamp never downgrades a row the child's
+// hook already armed.
+// trace:STORY-2256 | ai:claude
+#[test]
+fn story_2256_launcher_stamp_keeps_a_hook_armed_row() {
+    let dir = tempfile::tempdir().unwrap();
+    let project = dir.path();
+    let armed = row(project, "codex", 67, Some("armed"), Some(THREAD));
+    let after = agent_registry::set_mail_wake_on_row(project, &armed, MailWake::Pending).unwrap();
+    assert_eq!(after.mail_wake, Some(MailWake::Armed));
+    let after = agent_registry::set_mail_wake_on_row(project, &armed, MailWake::Off).unwrap();
+    assert_eq!(
+        after.mail_wake,
+        Some(MailWake::Off),
+        "an opt-out still wins"
+    );
+}
+
+// `aida session start` on a Codex project says whether the wake will arm.
+// trace:STORY-2256 | ai:claude
+// trace:STORY-b6b1278890774ef993d2ebc327862470-279.acd12657 | ai:claude
+#[test]
+fn story_2256_session_start_names_the_wake() {
+    let root = Path::new("/work/aida");
+    let installed = session_start_wake_line("codex", None, true, root).unwrap();
+    assert!(installed.contains("arms when codex starts"), "{installed}");
+    let missing = session_start_wake_line("codex", None, false, root).unwrap();
+    assert!(
+        missing.contains("(cd /work/aida && aida mailbox wake-service install)"),
+        "{missing}"
+    );
+    let off = session_start_wake_line("codex", Some(false), false, root).unwrap();
+    assert!(off.contains("off"), "{off}");
+    assert_eq!(session_start_wake_line("claude", None, false, root), None);
+}
+
+// Default `aida doctor`: a live Codex agent with no wake service installed
+// is a finding with the install command; an installed service, or only
+// opted-out / non-Codex agents, is quiet.
+// trace:STORY-2256 | ai:claude
+// trace:STORY-b6b1278890774ef993d2ebc327862470-279.ac32d207 | ai:claude
+#[test]
+fn story_2256_doctor_flags_live_codex_without_the_service() {
+    use crate::codex_mail_health::service_findings_in;
+    let dir = tempfile::tempdir().unwrap();
+    let project = dir.path();
+    let codex = row(project, "codex", 70, None, Some(THREAD));
+    let off = row(project, "codex", 71, Some("off"), Some(THREAD));
+    let claude = row(project, "claude", 72, None, Some(THREAD));
+
+    let findings = service_findings_in(project, &[codex.clone(), off.clone()], false);
+    assert_eq!(findings.len(), 1, "{findings:?}");
+    assert_eq!(findings[0].id, "codex-mail-wake:service-not-installed");
+    assert!(findings[0].summary.contains("codex-agent-03"));
+    assert!(findings[0]
+        .action
+        .contains("aida mailbox wake-service install"));
+    assert!(service_findings_in(project, &[codex], true).is_empty());
+    assert!(service_findings_in(project, &[off, claude], false).is_empty());
+}
+
+// The mail-wake guide says hand-launched Codex seats are covered.
+// trace:STORY-b6b1278890774ef993d2ebc327862470-279.ac0ad877 | ai:claude
+#[test]
+fn story_2256_doc_covers_hand_launched_codex_seats() {
+    let doc = include_str!("../../docs/agents/codex-mail-wake.md");
+    assert!(doc.contains("Hand-launched Codex seats are covered"));
+    assert!(doc.contains("aida session start --owns <ID>"));
+}

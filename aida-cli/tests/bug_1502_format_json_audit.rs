@@ -211,6 +211,20 @@ fn json(out: &Output, label: &str) -> serde_json::Value {
     })
 }
 
+// trace:TASK-2705 | ai:codex
+fn audit_json(out: &Output, path: &str) -> serde_json::Value {
+    if path != "aida config permissions probe" {
+        return json(out, path);
+    }
+    assert!(!out.status.success(), "unsupported vendor must refuse");
+    let value: serde_json::Value =
+        serde_json::from_slice(&out.stdout).expect("closed probe refusal must emit a JSON report");
+    assert_eq!(value["status"], "unsupported");
+    assert_eq!(value["ordinary_launch_supported"], false);
+    assert_eq!(value["aida_containment_applied"], false);
+    value
+}
+
 fn normalize_volatile(mut value: serde_json::Value) -> serde_json::Value {
     // Separate process invocations can cross a one-second boundary while
     // reporting the same session. The contract is the field/schema and all
@@ -489,6 +503,19 @@ fn checked_in_audit_is_exhaustive_and_every_honoured_probe_parses() {
         .collect();
 
     let probes: &[(&str, &[&str])] = &[
+        // Closed unsupported-vendor report exercises JSON without OS prerequisites.
+        // A named refusal exits nonzero while preserving the structured report.
+        // trace:TASK-2705 | ai:codex
+        (
+            "aida config permissions probe",
+            &[
+                "config",
+                "permissions",
+                "probe",
+                "--vendor",
+                "unregistered-audit-fixture",
+            ],
+        ),
         // trace:TASK-2347 | ai:codex
         (
             "aida mailbox wake-snapshot",
@@ -519,10 +546,10 @@ fn checked_in_audit_is_exhaustive_and_every_honoured_probe_parses() {
     for (path, args) in probes {
         let mut via_format = args.to_vec();
         via_format.extend(["--format", "json"]);
-        let format_value = json(&aida(&repo, &home, &via_format), path);
+        let format_value = audit_json(&aida(&repo, &home, &via_format), path);
         let mut via_flag = args.to_vec();
         via_flag.push("--json");
-        let flag_value = json(&aida(&repo, &home, &via_flag), path);
+        let flag_value = audit_json(&aida(&repo, &home, &via_flag), path);
         assert_eq!(
             normalize_volatile(format_value),
             normalize_volatile(flag_value),
