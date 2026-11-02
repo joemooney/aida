@@ -222,11 +222,22 @@ pub(crate) fn run_with_retry(
     sink: &mut dyn RetrySink,
     mut build: impl FnMut() -> Command,
 ) -> std::io::Result<Output> {
+    run_with_retry_checked(label, config, sink, || Ok(build()))
+}
+
+// trace:BUG-b6b1278890774ef993d2ebc327862470-179 | ai:codex
+/// A fallible pre-attempt gate; refusal never launches another transport.
+pub(crate) fn run_with_retry_checked(
+    label: &str,
+    config: &RetryConfig,
+    sink: &mut dyn RetrySink,
+    mut build: impl FnMut() -> std::io::Result<Command>,
+) -> std::io::Result<Output> {
     let mut attempt: u32 = 0;
     loop {
         attempt += 1;
         // trace:BUG-1735 | ai:claude
-        let out = build().output_retrying_etxtbsy()?;
+        let out = build()?.output_retrying_etxtbsy()?;
         if out.status.success() || attempt >= config.max_attempts {
             return Ok(out);
         }

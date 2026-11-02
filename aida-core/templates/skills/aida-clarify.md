@@ -33,7 +33,7 @@ drain then burns down.
 - The human invokes `/aida-clarify <SPEC>` directly on one under-specified
   spec, or
 - `aida questions clarify` launches an **interactive** advisor session
-  (`claude "/aida-clarify <specs>"`, never headless `claude -p`) seeded with
+  using the configured vendor (Claude or Codex), seeded with
   the swept set, and walks the human through each in turn.
 
 This is an **interactive** skill — it asks the human real questions and waits

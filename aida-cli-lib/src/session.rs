@@ -1421,6 +1421,35 @@ pub fn spawn_claude_headless(
     spawn_vendor_headless(vendor, prompt, session_id, log_path, tee_opts, contained)
 }
 
+/// The vendor and seat a one-shot headless analysis pass (`dryrun --ai`,
+/// `intent`, `questions research`) launches with: the configured vendor, on
+/// the implementer seat these passes have always run under. The seat decides
+/// which delegation the launcher's grant must carry, so it does not change
+/// with the vendor.
+// trace:BUG-2389 | ai:claude
+pub(crate) fn analysis_headless_launch(
+    project_root: &Path,
+) -> (HeadlessVendor, aida_core::agents_config::AgentSeat) {
+    (
+        resolve_headless_vendor(project_root),
+        aida_core::agents_config::AgentSeat::Implementer,
+    )
+}
+
+/// Spawn a headless analysis pass on [`analysis_headless_launch`]'s vendor
+/// and seat, uncontained unless the parent is.
+// trace:BUG-2389 | ai:claude
+pub(crate) fn spawn_analysis_headless(
+    project_root: &Path,
+    prompt: &str,
+    session_id: &str,
+    log_path: &Path,
+    tee_opts: &crate::headless_tee::TeeOptions,
+) -> Result<std::process::ExitStatus> {
+    let (vendor, seat) = analysis_headless_launch(project_root);
+    spawn_vendor_headless_with_seat(vendor, seat, prompt, session_id, log_path, tee_opts, false)
+}
+
 /// Compose the (program, argv) for a headless run of `vendor`'s CLI — the ONE
 /// place both the spawn path ([`spawn_vendor_headless`]) and the exec path
 /// ([`exec_claude_headless`], the `--no-human` phase-1 implementer) build the
@@ -2222,6 +2251,58 @@ pub(crate) fn interactive_reviewer_launch_plan(
              headless AGY reviewer."
         ),
     }
+}
+
+/// The interactive advisor plan: the reviewer plan's vendor mapping, with an
+/// advisor-worded containment refusal checked first. Pure: it reserves no
+/// handle, so the dry-run preview uses it too.
+// trace:BUG-2389 | ai:claude
+pub(crate) fn advisor_interactive_launch_plan(
+    vendor: HeadlessVendor,
+    prompt: &str,
+    contained: bool,
+) -> Result<ReviewerLaunchPlan> {
+    let contained = aida_contained_env()? || contained;
+    require_vendor_containment(vendor, contained, "interactive advisor session")?;
+    let prompt =
+        crate::intake::materialize_skill_invocation(prompt, vendor == HeadlessVendor::Claude);
+    interactive_reviewer_launch_plan(
+        vendor,
+        None,
+        None,
+        &prompt,
+        &uuid::Uuid::now_v7().to_string(),
+        contained,
+    )
+}
+
+/// Use the shared interactive vendor plan with an advisor's own child grant.
+// trace:BUG-2389 | ai:codex
+pub(crate) fn build_advisor_interactive_command(
+    vendor: HeadlessVendor,
+    prompt: &str,
+    grant_env: &str,
+    contained: bool,
+) -> Result<std::process::Command> {
+    let contained = aida_contained_env()? || contained;
+    let root = headless_worktree_root();
+    let plan = advisor_interactive_launch_plan(vendor, prompt, contained)?;
+    let (program, args) = os_wrapped_program_and_args(&root, &plan.program, plan.args)?;
+    if plan.contained {
+        prepare_contained_mailbox_for_launch(&root)?;
+    }
+    let mut cmd = std::process::Command::new(program);
+    cmd.args(args);
+    apply_headless_child_seat_env(&mut cmd, "advisor", grant_env);
+    apply_child_agent_identity(&mut cmd, vendor, "advisor");
+    apply_headless_harness_version(&mut cmd, vendor, &root);
+    if plan.contained {
+        cmd.env("AIDA_CONTAINED", "1");
+    } else {
+        cmd.env_remove("AIDA_CONTAINED");
+    }
+    stamp_containment_posture(&mut cmd, containment_posture(vendor, contained)?);
+    Ok(cmd)
 }
 
 /// Spawn (not exec) an [`interactive_reviewer_launch_plan`] and wait,
@@ -4662,11 +4743,180 @@ fn build_exec_vendor_headless_command_for(
     grant_env: &str,
     resume: bool,
 ) -> Result<std::process::Command> {
+    build_coordinator_headless_command_inner(
+        vendor, prompt, session_id, contained, model, effort, seat, grant_env, resume, None, true,
+    )
+}
+
+/// Launch coordinators through the same vendor, identity and containment adapter
+/// as queue phases, retaining their permission override and output mode.
+/// The caller resolves `vendor` once and passes the same value to every message
+/// and to the launch, so what is printed is what runs.
+// trace:BUG-2389 | ai:codex
+// trace:BUG-2389 | ai:claude
+pub(crate) fn build_coordinator_headless_command(
+    vendor: HeadlessVendor,
+    prompt: &str,
+    mode: &str,
+    seat: aida_core::agents_config::AgentSeat,
+    grant_env: &str,
+    contained: bool,
+    stream: bool,
+) -> Result<std::process::Command> {
+    let root = headless_worktree_root();
+    let tuning = resolve_agent_tuning(&root, vendor, seat);
+    let prompt =
+        crate::intake::materialize_skill_invocation(prompt, vendor == HeadlessVendor::Claude);
+    let mut command = build_coordinator_headless_command_inner(
+        vendor,
+        &prompt,
+        &uuid::Uuid::now_v7().to_string(),
+        contained,
+        tuning.model.as_deref(),
+        tuning.effort.as_deref(),
+        seat.as_str(),
+        grant_env,
+        false,
+        Some(mode),
+        stream,
+    )?;
+    command.env("AIDA_HEADLESS_VENDOR", vendor.as_str());
+    Ok(command)
+}
+
+/// The program and argv [`build_coordinator_headless_command`] would launch,
+/// for a dry-run preview. Building the preview reserves no child handle,
+/// probes no harness version and prepares no mailbox.
+// trace:BUG-2389 | ai:claude
+pub(crate) fn coordinator_headless_preview(
+    vendor: HeadlessVendor,
+    prompt: &str,
+    mode: &str,
+    seat: aida_core::agents_config::AgentSeat,
+    contained: bool,
+    stream: bool,
+) -> Result<(String, Vec<String>)> {
+    let root = headless_worktree_root();
+    let tuning = resolve_agent_tuning(&root, vendor, seat);
+    let prompt =
+        crate::intake::materialize_skill_invocation(prompt, vendor == HeadlessVendor::Claude);
+    let contained = aida_contained_env()? || contained;
+    let (program, mut args) = compose_headless_command_for(
+        vendor,
+        &prompt,
+        "preview",
+        contained,
+        tuning.model.as_deref(),
+        tuning.effort.as_deref(),
+        false,
+    )?;
+    adapt_coordinator_args(vendor, &mut args, Some(mode), contained, stream);
+    Ok((program, args))
+}
+
+/// The permission mode a headless coordinator launches with. Claude resolves
+/// the operator's `--permission-mode` (or the default) against containment.
+/// Other vendors have no such flag, so passing one is refused rather than
+/// silently ignored.
+// trace:BUG-2389 | ai:claude
+pub(crate) fn coordinator_permission_mode(
+    vendor: HeadlessVendor,
+    permission_mode: Option<&str>,
+    contained: bool,
+) -> Result<String> {
+    if vendor == HeadlessVendor::Claude {
+        return resolve_headless_claude_posture(permission_mode, contained);
+    }
+    if permission_mode.is_some() {
+        anyhow::bail!(
+            "--permission-mode is only supported when the configured vendor is claude (it is {})",
+            vendor.as_str()
+        );
+    }
+    Ok(String::new())
+}
+
+/// Turn the shared queue-phase argv into a coordinator's: Claude takes the
+/// caller's permission mode (`dontAsk` when contained) and, for a quiet
+/// launch, plain text output; a streaming launch with a mode adds partial
+/// message events for burndown's live progress. A quiet Codex launch drops
+/// `--json`.
+// trace:BUG-2389 | ai:codex
+// trace:BUG-2389 | ai:claude
+fn adapt_coordinator_args(
+    vendor: HeadlessVendor,
+    args: &mut Vec<String>,
+    mode: Option<&str>,
+    contained: bool,
+    stream: bool,
+) {
+    if vendor != HeadlessVendor::Claude {
+        if !stream {
+            args.retain(|arg| arg != "--json");
+        }
+        return;
+    }
+    if let Some(mode) = mode {
+        let resolved = if contained { "dontAsk" } else { mode }.to_string();
+        if let Some(i) = args.iter().position(|arg| arg == "--permission-mode") {
+            if let Some(slot) = args.get_mut(i + 1) {
+                *slot = resolved;
+            }
+        }
+    }
+    if !stream {
+        if let Some(i) = args.iter().position(|arg| arg == "--output-format") {
+            args.drain(i..(i + 2).min(args.len()));
+        }
+        args.retain(|arg| arg != "--verbose");
+    } else if mode.is_some() && !args.iter().any(|a| a == "--include-partial-messages") {
+        // Insert before `--verbose` so the prompt stays the trailing positional;
+        // without `--verbose`, insert before the prompt.
+        let i = args
+            .iter()
+            .position(|a| a == "--verbose")
+            .unwrap_or(args.len().saturating_sub(1));
+        args.insert(i, "--include-partial-messages".to_string());
+    }
+}
+
+/// Wait on a coordinator `cmd`, releasing the child handle `guard` protects
+/// only if the spawn itself fails. Disarm at spawn: a running child owns the
+/// handle it was given.
+// trace:BUG-2389 | ai:claude
+pub(crate) fn coordinator_status_with_handle_guard(
+    cmd: &mut std::process::Command,
+    mut guard: Option<crate::agent_handle::LaunchReservationGuard>,
+) -> std::io::Result<std::process::ExitStatus> {
+    use crate::process_retry::RetryEtxtbsy;
+    let mut child = cmd.spawn_retrying_etxtbsy()?;
+    if let Some(guard) = guard.as_mut() {
+        guard.disarm();
+    }
+    child.wait()
+}
+
+// trace:BUG-2389 | ai:codex
+#[allow(clippy::too_many_arguments)]
+fn build_coordinator_headless_command_inner(
+    vendor: HeadlessVendor,
+    prompt: &str,
+    session_id: &str,
+    contained: bool,
+    model: Option<&str>,
+    effort: Option<&str>,
+    seat: &str,
+    grant_env: &str,
+    resume: bool,
+    mode: Option<&str>,
+    stream: bool,
+) -> Result<std::process::Command> {
     use std::process::Command;
     // trace:BUG-2172 | ai:codex
     let contained = aida_contained_env()? || contained;
-    let (program, args) =
+    let (program, mut args) =
         compose_headless_command_for(vendor, prompt, session_id, contained, model, effort, resume)?;
+    adapt_coordinator_args(vendor, &mut args, mode, contained, stream);
     // TASK-1169 / ADR-22: same bounded ceiling as the spawn path — the exec
     // path is the `--no-human` phase-1 implementer, which must not diverge.
     // trace:TASK-1169 | ai:claude
@@ -4941,7 +5191,7 @@ fn reserve_child_handle(
 }
 
 // trace:STORY-1843 | ai:codex
-fn child_reservation_guard() -> Option<crate::agent_handle::LaunchReservationGuard> {
+pub(crate) fn child_reservation_guard() -> Option<crate::agent_handle::LaunchReservationGuard> {
     child_handle_root().map(|root| crate::agent_handle::LaunchReservationGuard::new(&root))
 }
 
@@ -9725,6 +9975,316 @@ mod tests {
             cargs.contains(&"/aida-review --pr 7".to_string()),
             "claude expands its own skills — its path must be byte-identical"
         );
+    }
+
+    // trace:BUG-2389 | ai:codex
+    #[test]
+    fn bug_2389_coordinators_route_configured_vendor_and_keep_child_contracts() {
+        for vendor in [HeadlessVendor::Claude, HeadlessVendor::Codex] {
+            let root = tempfile::tempdir().unwrap();
+            assert!(std::process::Command::new("git")
+                .args(["init", "--quiet"])
+                .arg(root.path())
+                .status()
+                .unwrap()
+                .success());
+            let _ambient = crate::test_env::AmbientGuard::hermetic_and(
+                root.path(),
+                None,
+                &[
+                    ("AIDA_HEADLESS_VENDOR", None),
+                    ("AIDA_AGENT_CMD", Some("/bin/true")),
+                    ("AIDA_OS_WRAP", Some("0")),
+                    ("AIDA_CONTAINED", None),
+                    ("AIDA_SESSION_PURPOSE", Some("parent-purpose")),
+                ],
+            );
+            let _cwd = contained_cwd_seam::pin(root.path());
+            set_headless_vendor_override(None);
+            std::fs::create_dir_all(root.path().join(".aida")).unwrap();
+            std::fs::write(
+                root.path().join(".aida/agents.toml"),
+                format!("[agents]\nvendor = {:?}\n", vendor.as_str()),
+            )
+            .unwrap();
+            // The handlers resolve once and hand the result to the builders.
+            let resolved = resolve_headless_vendor(root.path());
+            assert_eq!(resolved, vendor);
+            assert_eq!(
+                crate::session::analysis_headless_launch(root.path()).0,
+                vendor
+            );
+            let intake = crate::intake::IntakeConfig::default();
+            let commands = [
+                crate::burndown_run::build_burndown_quiet_command(
+                    resolved,
+                    "/aida-burndown --max 2",
+                    "bypassPermissions",
+                    "child-grant",
+                    "CEILING",
+                    "10",
+                    false,
+                )
+                .unwrap(),
+                crate::burndown_run::build_burndown_verbose_command(
+                    resolved,
+                    "/aida-burndown --max 2",
+                    "bypassPermissions",
+                    "child-grant",
+                    "CEILING",
+                    "10",
+                    false,
+                )
+                .unwrap(),
+                crate::autopilot_intake::build_autopilot_intake_command(
+                    resolved,
+                    "/aida-assess",
+                    "bypassPermissions",
+                    "child-grant",
+                    false,
+                    &[],
+                    &[],
+                    &intake,
+                    "stop",
+                    crate::backlog::RiskLevel::Low,
+                    None,
+                    false,
+                )
+                .unwrap(),
+                crate::questions::build_questions_clarify_command(
+                    resolved,
+                    "/aida-clarify BUG-2389",
+                    "child-grant",
+                    false,
+                )
+                .unwrap(),
+            ];
+            for (i, command) in commands.iter().enumerate() {
+                let args: Vec<_> = command
+                    .get_args()
+                    .map(|a| a.to_string_lossy().into_owned())
+                    .collect();
+                assert_eq!(command.get_program(), "/bin/true");
+                let env = |key: &str| {
+                    command
+                        .get_envs()
+                        .find(|(k, _)| *k == key)
+                        .map(|(_, v)| v.map(|v| v.to_string_lossy().into_owned()))
+                };
+                assert_eq!(
+                    env(crate::gate::seat_authority::GRANT_ENV),
+                    Some(Some("child-grant".into()))
+                );
+                assert_eq!(env("AIDA_SESSION_PURPOSE"), Some(None));
+                assert_eq!(
+                    env("AIDA_SESSION_ROLE"),
+                    Some(Some(if i < 2 { "implementer" } else { "advisor" }.into()))
+                );
+                if i < 3 {
+                    assert_eq!(env("AIDA_HEADLESS"), Some(Some("1".into())));
+                    assert_eq!(
+                        env("AIDA_HEADLESS_VENDOR"),
+                        Some(Some(vendor.as_str().into()))
+                    );
+                }
+                if vendor == HeadlessVendor::Codex {
+                    assert!(!args.iter().any(|a| a == "-p" || a == "--permission-mode"));
+                    assert_eq!(args.first().map(String::as_str) == Some("exec"), i < 3);
+                    assert_eq!(args.iter().any(|a| a == "--json"), i == 1);
+                    let prompt = args.last().unwrap();
+                    assert!(!prompt.starts_with("/aida-"), "{prompt}");
+                    if i < 2 {
+                        assert!(prompt.contains("--max 2"));
+                        assert!(!prompt.contains("--vendor claude"));
+                    }
+                } else if i < 3 {
+                    assert!(args.iter().any(|a| a == "-p"));
+                    assert_eq!(args.iter().any(|a| a == "stream-json"), i == 1);
+                    assert_eq!(
+                        args.iter().any(|a| a == "--include-partial-messages"),
+                        i == 1
+                    );
+                }
+            }
+        }
+    }
+
+    /// `dryrun --ai`, `intent` and `questions research` launch on the
+    /// configured vendor and keep the implementer seat they ran under before
+    /// BUG-2389, so a launcher grant that delegates implementer still works.
+    // trace:BUG-2389 | ai:claude
+    #[test]
+    fn bug_2389_analysis_passes_route_configured_vendor_on_implementer_seat() {
+        for vendor in [HeadlessVendor::Claude, HeadlessVendor::Codex] {
+            let root = tempfile::tempdir().unwrap();
+            std::fs::create_dir(root.path().join(".git")).unwrap();
+            let _ambient = crate::test_env::AmbientGuard::hermetic_and(
+                root.path(),
+                None,
+                &[("AIDA_HEADLESS_VENDOR", None)],
+            );
+            set_headless_vendor_override(None);
+            std::fs::create_dir_all(root.path().join(".aida")).unwrap();
+            std::fs::write(
+                root.path().join(".aida/agents.toml"),
+                format!("[agents]\nvendor = {:?}\n", vendor.as_str()),
+            )
+            .unwrap();
+            assert_eq!(
+                analysis_headless_launch(root.path()),
+                (vendor, aida_core::agents_config::AgentSeat::Implementer)
+            );
+        }
+        // Every analysis call site goes through the shared helper.
+        for (file, src, sites) in [
+            ("plan_intent.rs", include_str!("plan_intent.rs"), 2),
+            ("questions.rs", include_str!("questions.rs"), 1),
+        ] {
+            assert_eq!(
+                src.matches("spawn_analysis_headless(").count(),
+                sites,
+                "{file}: analysis passes must launch via spawn_analysis_headless"
+            );
+            assert!(
+                !src.contains("spawn_claude_headless("),
+                "{file}: no Claude-only analysis spawn"
+            );
+        }
+    }
+
+    /// `--permission-mode` is a Claude flag: burndown and intake refuse it on
+    /// another vendor instead of silently dropping it.
+    // trace:BUG-2389 | ai:claude
+    #[test]
+    fn bug_2389_coordinator_permission_mode_is_claude_only() {
+        let _env = crate::test_env::EnvVarsGuard::apply(&[("AIDA_CONTAINED", None)]);
+        let err = coordinator_permission_mode(HeadlessVendor::Codex, Some("acceptEdits"), false)
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("--permission-mode"), "{err}");
+        assert!(err.contains("codex"), "{err}");
+        assert_eq!(
+            coordinator_permission_mode(HeadlessVendor::Codex, None, false).unwrap(),
+            ""
+        );
+        assert_eq!(
+            coordinator_permission_mode(HeadlessVendor::Claude, Some("acceptEdits"), false)
+                .unwrap(),
+            "acceptEdits"
+        );
+        assert_eq!(
+            coordinator_permission_mode(HeadlessVendor::Claude, None, false).unwrap(),
+            "bypassPermissions"
+        );
+    }
+
+    /// The argv adapter never panics when `--verbose` is absent, keeps the
+    /// prompt last, and leaves an existing partial-messages flag alone.
+    // trace:BUG-2389 | ai:claude
+    #[test]
+    fn bug_2389_adapt_coordinator_args_tolerates_missing_verbose() {
+        let mut args: Vec<String> = ["-p", "--permission-mode", "bypassPermissions", "prompt"]
+            .map(String::from)
+            .to_vec();
+        adapt_coordinator_args(
+            HeadlessVendor::Claude,
+            &mut args,
+            Some("acceptEdits"),
+            false,
+            true,
+        );
+        assert_eq!(args[2], "acceptEdits");
+        assert!(args.iter().any(|a| a == "--include-partial-messages"));
+        assert_eq!(args.last().unwrap(), "prompt");
+        let before = args.clone();
+        adapt_coordinator_args(
+            HeadlessVendor::Claude,
+            &mut args,
+            Some("acceptEdits"),
+            false,
+            true,
+        );
+        assert_eq!(args, before);
+        // A trailing `--permission-mode` with no value is left as is.
+        let mut dangling: Vec<String> = vec!["--permission-mode".into()];
+        adapt_coordinator_args(
+            HeadlessVendor::Claude,
+            &mut dangling,
+            Some("x"),
+            false,
+            false,
+        );
+        assert_eq!(dangling, vec!["--permission-mode".to_string()]);
+    }
+
+    /// The dry-run preview is the launch argv (modulo the session id) and
+    /// reserves no child handle.
+    // trace:BUG-2389 | ai:claude
+    #[test]
+    fn bug_2389_coordinator_preview_matches_launch_without_reserving() {
+        let root = tempfile::tempdir().unwrap();
+        std::fs::create_dir(root.path().join(".git")).unwrap();
+        let _ambient = crate::test_env::AmbientGuard::hermetic_and(
+            root.path(),
+            None,
+            &[
+                ("AIDA_AGENT_CMD", Some("/bin/true")),
+                ("AIDA_OS_WRAP", Some("0")),
+                ("AIDA_CONTAINED", None),
+            ],
+        );
+        let _cwd = contained_cwd_seam::pin(root.path());
+        let seat = aida_core::agents_config::AgentSeat::Implementer;
+        let cases = [HeadlessVendor::Claude, HeadlessVendor::Codex]
+            .into_iter()
+            .flat_map(|vendor| [(vendor, false), (vendor, true)]);
+        let previews: Vec<_> = cases
+            .map(|(vendor, stream)| {
+                let (program, preview) = coordinator_headless_preview(
+                    vendor,
+                    "/aida-burndown --max 2",
+                    "acceptEdits",
+                    seat,
+                    false,
+                    stream,
+                )
+                .unwrap();
+                assert_eq!(program, "/bin/true");
+                (vendor, stream, preview)
+            })
+            .collect();
+        let handles = crate::agent_handle::handles_dir(root.path());
+        let reserved = std::fs::read_dir(&handles).map_or(0, |d| d.count());
+        assert_eq!(reserved, 0, "a preview must not reserve a child handle");
+        for (vendor, stream, preview) in previews {
+            {
+                let launched: Vec<String> = build_coordinator_headless_command(
+                    vendor,
+                    "/aida-burndown --max 2",
+                    "acceptEdits",
+                    seat,
+                    "",
+                    false,
+                    stream,
+                )
+                .unwrap()
+                .get_args()
+                .map(|a| a.to_string_lossy().into_owned())
+                .collect();
+                let without_session = |args: &[String]| -> Vec<String> {
+                    let mut out = args.to_vec();
+                    if let Some(i) = out.iter().position(|a| a == "--session-id") {
+                        out.drain(i..i + 2);
+                    }
+                    out
+                };
+                assert_eq!(without_session(&preview), without_session(&launched));
+                if vendor == HeadlessVendor::Claude {
+                    assert!(preview.iter().any(|a| a == "acceptEdits"));
+                    assert_eq!(preview.iter().any(|a| a == "stream-json"), stream);
+                }
+            }
+        }
     }
 
     #[test]
