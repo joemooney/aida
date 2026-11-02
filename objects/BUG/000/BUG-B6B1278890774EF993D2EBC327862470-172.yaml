@@ -21,7 +21,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T07:26:20.914223641Z
-modified_at: 2026-11-02T09:26:23.416214681Z
+modified_at: 2026-11-02T09:27:49.265403156Z
 req_type: Bug
 tags:
 - architecture
@@ -524,6 +524,12 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-02T06:57:02.835405009Z
   modified_at: 2026-11-02T06:57:02.835405009Z
+  session_id: 1f56bd1e-c059-4f73-b8df-e18b2170fdfc
+- id: 01a19b96-1f11-7cf3-a944-623c0b91db27
+  author: joe
+  content: 'REWORK BRIEF (advisor, 2026-11-02 02:30 MST), round 4. The source is correct, but CI lib-0 has failed since 75ac19c: agent_launch::bug_2385_vendor_routing_tests (claude_config_explicit_codex_wins, codex_agent_new_bare, codex_agent_new_role and siblings) panic at bug_2385_vendor_routing_tests.rs:249 with ''Codex requested-seat preflight returned no validated seat evidence''. That is a semantic conflict with main''s #3210 (BUG-2385) tests: this PR''s Codex seat preflight now requires validated seat evidence, and those fixtures never plant it. Give the bug_2385 fixtures valid seat evidence using this PR''s own test helper for a validated seat. Do not weaken the preflight or make it optional. Gate: cargo test -p aida-cli-lib bug_2385_vendor_routing codex_tool_env, then make check-ci-fast. If cargo is denied, push and say so; the advisor host-runs the filter before review.'
+  created_at: 2026-11-02T09:27:49.265403156Z
+  modified_at: 2026-11-02T09:27:49.265403156Z
   session_id: 1f56bd1e-c059-4f73-b8df-e18b2170fdfc
 history:
 - id: 01a19600-c769-7cd0-ba08-8d93975e3e3b
