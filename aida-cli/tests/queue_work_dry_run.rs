@@ -1506,8 +1506,11 @@ fn task_1337_post_setup_launch_error_prints_manual_guided_continuation() {
         text.contains(&format!("aida worktree enter {spec}")),
         "{text}"
     );
+    // BUG-2396: the continuation follows the configured vendor, so a
+    // codex-only project is told to relaunch Codex, not Claude.
+    // trace:BUG-2396 | ai:claude
     assert!(
-        text.contains(&format!("claude \"/aida-guided-implement {spec}\"")),
+        text.contains(&format!("codex '$aida-guided-implement {spec}'")),
         "{text}"
     );
     assert!(

@@ -2865,6 +2865,166 @@ pub(crate) fn print_status_claude_code_section(project_root: &std::path::Path) {
     println!();
 }
 
+/// How recently a Codex rollout must have been written to count as a live
+/// session in `aida status`. Codex has no live-session listing like
+/// `claude agents`, so recent writes are the signal.
+// trace:BUG-2396 | ai:claude
+const CODEX_RECENT_WINDOW: std::time::Duration = std::time::Duration::from_secs(30 * 60);
+
+/// One recently-written Codex rollout attributed to this project.
+// trace:BUG-2396 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct CodexRollout {
+    pub(crate) session_id: String,
+    pub(crate) cwd: std::path::PathBuf,
+}
+
+/// Rollouts under `sessions_root` written at or after `since`, split into
+/// this project's (first-line `session_meta` cwd under one of `roots`, the
+/// same attribution `aida doctor check runaway-seats` uses) and a count of
+/// everyone else's.
+// trace:BUG-2396 | ai:claude
+pub(crate) fn recent_codex_rollouts(
+    sessions_root: &std::path::Path,
+    roots: &[std::path::PathBuf],
+    since: std::time::SystemTime,
+) -> (Vec<CodexRollout>, usize) {
+    let mut files = Vec::new();
+    crate::runaway_seats::walk_jsonl(sessions_root, &mut files);
+    let mut in_scope = Vec::new();
+    let mut elsewhere = 0;
+    for path in files {
+        let is_rollout = path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .is_some_and(|n| n.starts_with("rollout-"));
+        let recent = std::fs::metadata(&path)
+            .and_then(|m| m.modified())
+            .is_ok_and(|t| t >= since);
+        if !is_rollout || !recent {
+            continue;
+        }
+        match crate::runaway_seats::codex_rollout_meta(&path).flatten() {
+            Some((session_id, cwd)) if roots.iter().any(|r| cwd.starts_with(r)) => {
+                in_scope.push(CodexRollout { session_id, cwd })
+            }
+            _ => elsewhere += 1,
+        }
+    }
+    in_scope.sort_by(|a, b| a.session_id.cmp(&b.session_id));
+    (in_scope, elsewhere)
+}
+
+/// The `─── Codex ───` section lines. `leases` are `(scope, role, worktree)`.
+/// A rollout links to the lease whose worktree holds its cwd; one whose cwd
+/// is the project root is an interactive shell; the rest are drift. Pure.
+// trace:BUG-2396 | ai:claude
+pub(crate) fn codex_section_lines(
+    project_root: &std::path::Path,
+    in_scope: &[CodexRollout],
+    elsewhere: usize,
+    leases: &[(String, Option<String>, std::path::PathBuf)],
+) -> Vec<String> {
+    let short = |id: &str| id.chars().take(8).collect::<String>();
+    let mut lines = vec![
+        "─── Codex ───".bold().to_string(),
+        format!(
+            "  Recent (written in the last {} min): {} in project, {} elsewhere",
+            CODEX_RECENT_WINDOW.as_secs() / 60,
+            in_scope.len().to_string().cyan(),
+            elsewhere.to_string().dimmed(),
+        ),
+    ];
+    let mut linked = Vec::new();
+    let mut shells = 0;
+    let mut drift = Vec::new();
+    for r in in_scope {
+        // The deepest worktree wins: the project root holds every worktree.
+        let lease = leases
+            .iter()
+            .filter(|(_, _, wt)| r.cwd.starts_with(wt))
+            .max_by_key(|(_, _, wt)| wt.components().count());
+        match lease {
+            Some(l) => linked.push((r, l)),
+            // A subdirectory of the project root is a shell, not drift.
+            // trace:BUG-2396 | ai:claude
+            None if r.cwd.starts_with(project_root) => shells += 1,
+            None => drift.push(r),
+        }
+    }
+    if !linked.is_empty() {
+        lines.push(format!(
+            "  Linked (lease ↔ Codex session): {}",
+            linked.len().to_string().green()
+        ));
+        for (r, (scope, role, _)) in &linked {
+            lines.push(format!(
+                "    {}  {}  ({})",
+                short(&r.session_id).yellow(),
+                scope.cyan(),
+                role.as_deref().unwrap_or("?").dimmed(),
+            ));
+        }
+    }
+    if shells > 0 {
+        lines.push(format!(
+            "  Interactive shells in project root: {}",
+            shells.to_string().dimmed()
+        ));
+    }
+    if !drift.is_empty() {
+        lines.push(format!(
+            "  In worktree without lease ({}): {}",
+            drift.len().to_string().yellow(),
+            "rogue Codex or stale lease cleanup".dimmed(),
+        ));
+        for r in drift.iter().take(5) {
+            lines.push(format!(
+                "    {}  {}",
+                short(&r.session_id).yellow(),
+                r.cwd.display().to_string().dimmed(),
+            ));
+        }
+        if drift.len() > 5 {
+            lines.push(format!(
+                "    {}",
+                format!("... and {} more", drift.len() - 5).dimmed()
+            ));
+        }
+    }
+    lines
+}
+
+/// `aida status`'s Codex counterpart to the Claude Code section: this
+/// project's recently-written Codex rollouts (`~/.codex/sessions`, or
+/// `AIDA_CODEX_SESSIONS_DIR`) joined to session leases. Silent when no
+/// rollout of this project was written recently.
+// trace:BUG-2396 | ai:claude
+pub(crate) fn print_status_codex_section(project_root: &std::path::Path) {
+    let Some(sessions_root) = crate::vendor_activity::codex_sessions_root() else {
+        return;
+    };
+    if !sessions_root.is_dir() {
+        return;
+    }
+    let since = std::time::SystemTime::now()
+        .checked_sub(CODEX_RECENT_WINDOW)
+        .unwrap_or(std::time::UNIX_EPOCH);
+    let roots = crate::runaway_seats::project_seat_roots(project_root);
+    let (in_scope, elsewhere) = recent_codex_rollouts(&sessions_root, &roots, since);
+    if in_scope.is_empty() {
+        return;
+    }
+    let leases: Vec<_> = list_leases(project_root)
+        .into_iter()
+        .map(|l| (l.scope, l.role, l.worktree_path))
+        .collect();
+    for line in codex_section_lines(project_root, &in_scope, elsewhere, &leases) {
+        println!("{line}");
+    }
+    println!();
+}
+
 /// SPIKE-30 helper: render a compact status chip from a Claude agent entry.
 /// Uses `status` when set; falls back to `kind` (e.g. "interactive") when
 /// not — the live JSON for a freshly-spawned session typically omits status
@@ -3297,3 +3457,84 @@ mod task_2631_containment_tests;
 #[cfg(test)]
 #[path = "tests/bug_2386_resume_routing_tests.rs"]
 mod bug_2386_resume_routing_tests;
+
+#[cfg(test)]
+mod bug2396_codex_section_tests {
+    use super::*;
+    use std::path::{Path, PathBuf};
+
+    fn rollout(dir: &Path, name: &str, id: &str, cwd: &Path) {
+        let line = serde_json::json!({
+            "timestamp": "2026-11-01T00:00:00Z",
+            "type": "session_meta",
+            "payload": {"id": id, "cwd": cwd},
+        });
+        std::fs::write(dir.join(name), format!("{line}\n")).unwrap();
+    }
+
+    // trace:BUG-2396 | ai:claude
+    #[test]
+    fn rollouts_attribute_by_session_meta_cwd_and_link_to_leases() {
+        colored::control::set_override(false);
+        let tmp = tempfile::tempdir().unwrap();
+        let project = tmp.path().join("proj");
+        let wt = tmp.path().join("proj-wt");
+        let other = tmp.path().join("other");
+        let day = tmp.path().join("sessions/2026/11/01");
+        std::fs::create_dir_all(&day).unwrap();
+        rollout(&day, "rollout-a.jsonl", "aaaaaaaa-1", &project);
+        rollout(&day, "rollout-b.jsonl", "bbbbbbbb-2", &wt.join("sub"));
+        rollout(&day, "rollout-c.jsonl", "cccccccc-3", &other);
+        rollout(&day, "not-a-rollout.jsonl", "dddddddd-4", &project);
+        std::fs::write(day.join("rollout-e.jsonl"), "{\"type\":\"x\"}\n").unwrap();
+
+        let roots = vec![project.clone(), wt.clone()];
+        let (in_scope, elsewhere) =
+            recent_codex_rollouts(&tmp.path().join("sessions"), &roots, std::time::UNIX_EPOCH);
+        let ids: Vec<_> = in_scope.iter().map(|r| r.session_id.as_str()).collect();
+        assert_eq!(ids, ["aaaaaaaa-1", "bbbbbbbb-2"]);
+        assert_eq!(elsewhere, 2, "foreign cwd and meta-less rollout");
+
+        // Nothing written since a future cutoff.
+        let future = std::time::SystemTime::now() + std::time::Duration::from_secs(3600);
+        assert!(
+            recent_codex_rollouts(&tmp.path().join("sessions"), &roots, future)
+                .0
+                .is_empty()
+        );
+
+        let leases: Vec<(String, Option<String>, PathBuf)> = vec![
+            ("BUG-1".into(), Some("implementer".into()), wt.clone()),
+            ("MAIN".into(), None, project.clone()),
+        ];
+        let lines = codex_section_lines(&project, &in_scope, elsewhere, &leases[..1]);
+        let text = lines.join("\n");
+        assert!(lines[0].contains("─── Codex ───"), "{text}");
+        assert!(text.contains("2 in project, 2 elsewhere"), "{text}");
+        assert!(text.contains("Linked (lease ↔ Codex session): 1"), "{text}");
+        assert!(text.contains("bbbbbbbb  BUG-1  (implementer)"), "{text}");
+        assert!(
+            text.contains("Interactive shells in project root: 1"),
+            "{text}"
+        );
+
+        // The deepest lease worktree wins over a lease on the project root.
+        let both = codex_section_lines(&project, &in_scope[1..], 0, &leases).join("\n");
+        assert!(both.contains("bbbbbbbb  BUG-1"), "{both}");
+
+        let drift = codex_section_lines(&project, &in_scope[1..], 0, &[]).join("\n");
+        assert!(drift.contains("In worktree without lease (1)"), "{drift}");
+
+        // A project-root subdirectory is a shell, not worktree drift.
+        let sub = vec![CodexRollout {
+            session_id: "eeeeeeee-5".into(),
+            cwd: project.join("subdir"),
+        }];
+        let sub_text = codex_section_lines(&project, &sub, 0, &[]).join("\n");
+        assert!(
+            sub_text.contains("Interactive shells in project root: 1"),
+            "{sub_text}"
+        );
+        assert!(!sub_text.contains("without lease"), "{sub_text}");
+    }
+}

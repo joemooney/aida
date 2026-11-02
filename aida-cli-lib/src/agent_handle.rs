@@ -67,6 +67,11 @@ pub(crate) const INHERITED_SESSION_ENV: &[&str] = &[
     "AIDA_HOOK_PAYLOAD",
     LAUNCH_TOKEN_ENV,
     HANDLE_ENV,
+    // A parent's launch-decided mail wake never stands in for the child's:
+    // every spawn path clears it so the `[agents.codex]` default applies
+    // unless the launcher sets it explicitly afterwards.
+    // trace:TASK-2737 | ai:claude
+    crate::mail_wake::LAUNCH_WAKE_ENV,
 ];
 
 /// Vendor names and aliases. A handle may not be one: `--to codex` must

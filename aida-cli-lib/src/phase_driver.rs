@@ -2061,22 +2061,49 @@ impl RealPhaseDriver {
         // has no `--resume` / session model, so the fork-from-live JSONL
         // machinery (Claude-specific) must not run; force the pass to cold-boot
         // and host a fresh spawn per punt. trace:TASK-894 | ai:claude
+        // STORY-2255: a Codex vendor forks instead through
+        // `AdvisorPass::CodexFork` (`codex exec fork <thread>`); only a
+        // Claude JSONL plan is refused here, and a Codex fork on another
+        // vendor likewise. trace:STORY-2255 | ai:claude
         let vendor = session::resolve_headless_vendor(&self.project_root);
         let pass = match pass {
             AdvisorPass::Fork(_) if vendor != session::HeadlessVendor::Claude => {
                 if !self.json {
                     eprintln!(
-                        "  {} vendor `{}` has no resumable session — hosting a fresh advisor per punt (no fork).",
+                        "  {} {}",
                         "◆".dimmed(),
-                        vendor.as_str()
+                        advisor::cold_boot_line(
+                            vendor.as_str(),
+                            "a Claude advisor session cannot be forked into this vendor",
+                        )
+                    );
+                }
+                AdvisorPass::ColdBoot
+            }
+            AdvisorPass::CodexFork(_) if vendor != session::HeadlessVendor::Codex => {
+                if !self.json {
+                    eprintln!(
+                        "  {} {}",
+                        "◆".dimmed(),
+                        advisor::cold_boot_line(
+                            vendor.as_str(),
+                            "a Codex thread can only be forked by codex",
+                        )
                     );
                 }
                 AdvisorPass::ColdBoot
             }
             other => other,
         };
+        // trace:STORY-2255 | ai:claude
+        let codex_thread = match &pass {
+            AdvisorPass::CodexFork(thread) => Some(thread.clone()),
+            _ => None,
+        };
 
         let (advisor_uuid, forked_from) = match &pass {
+            // The Codex arm of the advisor tier forks `advisor_uuid` itself.
+            AdvisorPass::CodexFork(thread) => (thread.clone(), None),
             AdvisorPass::Fork(plan) => match advisor::execute_fork(plan) {
                 Ok(_) => (plan.fork_uuid.clone(), Some(plan.live.clone())),
                 Err(e) => {
@@ -2091,7 +2118,14 @@ impl RealPhaseDriver {
             },
             AdvisorPass::ColdBoot => (uuid::Uuid::now_v7().to_string(), None),
         };
-        let is_fork = forked_from.is_some();
+        let is_fork = forked_from.is_some() || codex_thread.is_some();
+        // A Codex fork reuses the live thread id across punts, so its log is
+        // keyed by a fresh run id rather than the thread. trace:STORY-2255
+        let log_id = if codex_thread.is_some() {
+            uuid::Uuid::now_v7().to_string()
+        } else {
+            advisor_uuid.clone()
+        };
 
         let log_path = self
             .project_root
@@ -2100,7 +2134,7 @@ impl RealPhaseDriver {
             .join(format!(
                 "advise-{}-{}.jsonl",
                 self.spec,
-                &advisor_uuid[..advisor_uuid.len().min(8)]
+                &log_id[..log_id.len().min(8)]
             ));
         if let Some(dir) = log_path.parent() {
             let _ = std::fs::create_dir_all(dir);
@@ -2121,6 +2155,13 @@ impl RealPhaseDriver {
                     mb,
                     live.discovery.label(),
                 );
+            } else if let Some(thread) = codex_thread.as_deref() {
+                // trace:STORY-2255 | ai:claude
+                eprintln!(
+                    "  {} {} for the design-fork…",
+                    "◆".cyan(),
+                    advisor::codex_fork_line(thread)
+                );
             } else {
                 eprintln!(
                     "  {} spawning a headless advisor (cold-boot) for the design-fork…",
@@ -2136,10 +2177,12 @@ impl RealPhaseDriver {
         // live advisor context file (same prepend the assess cold-boot uses),
         // so unattended punt decisions match the live session. trace:STORY-626
         // TASK-894: build the per-vendor `(program, args)` — Claude resumes the
-        // forked session or cold-boots; Codex always hosts a fresh `codex exec`
-        // (no resume). `is_fork` is always false for a non-Claude vendor (the
-        // pass was forced to cold-boot above), so the fork JSONL is never read.
+        // forked session or cold-boots; Codex hosts a fresh `codex exec`, or
+        // (STORY-2255) with `is_fork` runs `codex exec fork <advisor_uuid>`,
+        // `advisor_uuid` being the live thread. A Claude fork JSONL is never
+        // read for a non-Claude vendor (that pass was forced to cold-boot above).
         // trace:TASK-894 | ai:claude
+        // trace:STORY-2255 | ai:claude
         // TASK-1045: for a non-Claude vendor the `/aida-advise` slash token is
         // inert (Codex/Gemini don't read `.claude/skills/`), so inline the
         // embedded skill body; Claude keeps the slash form and expands it.
@@ -2216,6 +2259,33 @@ impl RealPhaseDriver {
             vendor,
             self.contained,
         );
+        // trace:BUG-2398 | ai:codex — Codex tools get their own delegation,
+        // never the consult launcher's ambient advisor selector.
+        let codex_grant = if vendor == session::HeadlessVendor::Codex {
+            let grant = crate::gate::seat_authority::issue_launch_child(
+                &self.project_root,
+                "advisor",
+                &crate::current_user_id(None),
+                false,
+            )
+            .map_err(|e| {
+                PhaseFailure::of(FailureKind::Spawn, format!("advisor delegation: {e:#}"))
+            })?;
+            child_cmd
+                .env(crate::gate::seat_authority::GRANT_ENV, &grant.id)
+                .env("AIDA_USER", crate::current_user_id(None))
+                .env("AIDA_PROJECT_ROOT", &self.project_root);
+            if let Err(error) = crate::codex_tool_env::prepare_launch(&mut child_cmd) {
+                session::revoke_headless_child_grant(&grant.id);
+                return Err(PhaseFailure::of(
+                    FailureKind::Spawn,
+                    format!("advisor seat preflight: {error:#}"),
+                ));
+            }
+            Some(grant.id)
+        } else {
+            None
+        };
         let status = child_cmd
             .stdout(std::process::Stdio::from(log))
             .status_retrying_etxtbsy()
@@ -2224,7 +2294,11 @@ impl RealPhaseDriver {
                     FailureKind::Spawn,
                     format!("advisor tier: could not launch the advisor session: {e}"),
                 )
-            })?;
+            });
+        if let Some(id) = codex_grant {
+            session::revoke_headless_child_grant(&id);
+        }
+        let status = status?;
         tee_handle.stop();
         self.commit_contained_child_store_changes("advisor tier")?;
 

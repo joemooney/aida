@@ -63,15 +63,13 @@ pub(crate) fn handle_compete_command(
     gate: Option<&str>,
     dry_run: bool,
     judge: bool,
-    judge_vendor: &str,
+    judge_vendor: Option<&str>,
 ) -> Result<()> {
     use compete::{ArmResult, Ran, ReportGlyphs, VendorAdapter};
 
     // Resolve the judge vendor up front so a typo fails fast (before any vendor
     // runs), not after the expensive arms. trace:TASK-869 | ai:claude
-    let judge_vendor = compete::JudgeVendor::parse(judge_vendor).ok_or_else(|| {
-        anyhow::anyhow!("unknown --judge-vendor `{judge_vendor}` — supported: claude, codex")
-    })?;
+    let judge_vendor = resolve_judge_vendor(judge_vendor, find_project_root().ok().as_deref())?;
 
     if vendors.is_empty() {
         anyhow::bail!(
@@ -593,7 +591,8 @@ pub(crate) fn handle_zen_compete(spec_arg: &str, dry_run: bool) -> Result<()> {
         );
         (passers[0].0.clone(), None)
     } else {
-        let judge_vendor = compete::JudgeVendor::default();
+        // trace:BUG-2396 | ai:claude — the blind judge follows `[agents] vendor`.
+        let judge_vendor = resolve_judge_vendor(None, Some(&project_root))?;
         let judge_bin = resolved_judge_binary(judge_vendor);
         if !binary_on_path(&judge_bin) {
             anyhow::bail!(
@@ -815,6 +814,25 @@ pub(crate) fn handle_zen_compete(spec_arg: &str, dry_run: bool) -> Result<()> {
         current_branch
     );
     Ok(())
+}
+
+/// The judge vendor: an explicit `--judge-vendor` (a typo is an error), else
+/// `[agents] vendor` for `project_root`, else Claude.
+// trace:BUG-2396 | ai:claude
+pub(crate) fn resolve_judge_vendor(
+    explicit: Option<&str>,
+    project_root: Option<&std::path::Path>,
+) -> Result<compete::JudgeVendor> {
+    match explicit {
+        Some(raw) => compete::JudgeVendor::parse(raw).ok_or_else(|| {
+            anyhow::anyhow!("unknown --judge-vendor `{raw}` — supported: claude, codex")
+        }),
+        None => Ok(compete::default_judge_vendor(
+            project_root
+                .and_then(aida_core::agents_config::resolve_default_vendor)
+                .as_deref(),
+        )),
+    }
 }
 
 /// The judge binary that would be spawned: the `AIDA_COMPETE_JUDGE` env
@@ -1126,6 +1144,14 @@ pub(crate) fn build_compete_arm_command(
     } else {
         cmd.env_remove("AIDA_CONTAINED");
     }
+    if vendor == "codex" {
+        // Compete arms and judges do not receive a delegated seat.
+        // trace:BUG-2398 | ai:codex
+        cmd.env(crate::gate::seat_authority::GRANT_ENV, "")
+            .env("AIDA_PROJECT_ROOT", worktree_dir)
+            .env("AIDA_AGENT_TYPE", "codex");
+        crate::codex_tool_env::prepare_launch(&mut cmd)?;
+    }
     Ok(cmd)
 }
 
@@ -1399,8 +1425,9 @@ mod containment_tests {
             (vec!["unknown".to_string()], false),
         ] {
             for dry_run in [false, true] {
-                let err = handle_compete_command("TASK-1", &vendors, None, dry_run, judge, "codex")
-                    .unwrap_err();
+                let err =
+                    handle_compete_command("TASK-1", &vendors, None, dry_run, judge, Some("codex"))
+                        .unwrap_err();
                 assert!(err.to_string().contains("[contained]"), "{err:#}");
                 assert_eq!(git(&["show-ref"]), before_refs);
                 assert_eq!(git(&["worktree", "list", "--porcelain"]), before_worktrees);
@@ -1454,10 +1481,15 @@ mod containment_tests {
         )
         .is_err());
         assert!(session::spawn_claude_resume_with_grant("sid", None, true, None).is_err());
-        assert!(
-            handle_compete_command("TASK-1", &["claude".into()], None, false, false, "claude")
-                .is_err()
-        );
+        assert!(handle_compete_command(
+            "TASK-1",
+            &["claude".into()],
+            None,
+            false,
+            false,
+            Some("claude")
+        )
+        .is_err());
         let log = dir.path().join("must-not-exist.log");
         assert!(session::spawn_vendor_headless_with_seat_granted(
             session::HeadlessVendor::Claude,
@@ -1539,12 +1571,14 @@ pub(crate) struct CompeteArgs {
     /// Which vendor renders the rubric judgment (claude or codex). The judge
     /// PROMPT is identical for both — only the executing model changes — so a
     /// codex judge over a claude-vs-codex run is no longer the same model
-    /// grading itself, removing the self-evaluation caveat. Defaults to
-    /// claude (unchanged behaviour). Set AIDA_COMPETE_JUDGE to override the
-    /// judge binary. Only applies with --judge.
+    /// grading itself, removing the self-evaluation caveat. Defaults to the
+    /// project's `[agents] vendor`, else claude. A codex judge runs in a
+    /// read-only sandbox. Set AIDA_COMPETE_JUDGE to override the judge binary.
+    /// Only applies with --judge.
     // trace:TASK-869 | ai:claude
-    #[clap(long = "judge-vendor", default_value = "claude")]
-    pub judge_vendor: String,
+    // trace:BUG-2396 | ai:claude
+    #[clap(long = "judge-vendor")]
+    pub judge_vendor: Option<String>,
 }
 
 // `aida compete` self-loads the store (to assemble the brief) and
@@ -1570,7 +1604,7 @@ fn run_compete(
         gate.as_deref(),
         *dry_run,
         *judge,
-        judge_vendor,
+        judge_vendor.as_deref(),
     );
 }
 
@@ -1588,3 +1622,35 @@ pub(crate) static COMPETE: crate::command_registry::CommandReg =
         },
         run: crate::command_registry::Handler::Early(run_compete),
     };
+
+#[cfg(test)]
+mod bug2396_judge_vendor_tests {
+    use super::*;
+
+    // trace:BUG-2396 | ai:claude
+    #[test]
+    fn judge_vendor_defaults_to_agents_vendor_and_keeps_explicit_override() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(dir.path().join(".aida")).unwrap();
+        std::fs::write(
+            dir.path().join(".aida/config.toml"),
+            "[agents]\nvendor = \"codex\"\n",
+        )
+        .unwrap();
+        let root = Some(dir.path());
+        assert_eq!(
+            resolve_judge_vendor(None, root).unwrap(),
+            compete::JudgeVendor::Codex
+        );
+        assert_eq!(
+            resolve_judge_vendor(Some("claude"), root).unwrap(),
+            compete::JudgeVendor::Claude
+        );
+        assert!(resolve_judge_vendor(Some("gemini"), root).is_err());
+        let plain = tempfile::tempdir().unwrap();
+        assert_eq!(
+            resolve_judge_vendor(None, Some(plain.path())).unwrap(),
+            compete::JudgeVendor::Claude
+        );
+    }
+}

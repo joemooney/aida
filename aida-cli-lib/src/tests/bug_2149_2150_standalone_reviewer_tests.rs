@@ -99,6 +99,10 @@ fn run_mock_reviewer_in(
     make_tree: impl FnOnce(&std::path::Path, &std::path::Path),
     setup: impl Fn(&Launch<'_>, &mut crate::test_env::EnvVarsGuard) -> String,
 ) -> (Result<()>, std::path::PathBuf) {
+    assert!(
+        !crate::test_env::run_path_isolated_test(),
+        "fixture requires its exact isolated child"
+    );
     let (home, project) = codex_only_project(tmp);
     let worktree = tmp.join("reviewer-worktree");
     make_tree(&project, &worktree);
@@ -151,6 +155,13 @@ fn run_mock_reviewer_in(
         &["reviewer"],
     );
     env.set_key(crate::gate::seat_authority::GRANT_ENV, &launcher_grant);
+    assert!(
+        !crate::test_env::run_path_isolated_test(),
+        "fixture requires its exact isolated child"
+    );
+    // The mock writes the worktree verdict by absolute path. Keep the
+    // invoking CLI in the real fixture project for roster and lease lookup.
+    std::env::set_current_dir(&project).unwrap();
     let script = setup(
         &Launch {
             project: &project,
@@ -160,7 +171,7 @@ fn run_mock_reviewer_in(
         &mut env,
     );
     env.set_key(crate::gate::seat_authority::GRANT_ENV, &launcher_grant);
-    crate::test_exec::write_executable(&mock, script);
+    crate::test_exec::write_executable(&mock, crate::test_exec::codex_probe_script(script));
     crate::session::set_headless_vendor_override(None);
     let launch_vendor = crate::session::resolve_enabled_headless_vendor(&project).unwrap();
 
@@ -526,7 +537,12 @@ fn standalone_reviewer_reaps_its_finished_review_once_the_verdict_is_collected()
         });
     result.expect("a verified review verdict must succeed");
 
-    assert!(crate::list_leases(&project).is_empty());
+    assert!(
+        crate::list_leases(&project).is_empty(),
+        "review lease retained: dirty={}, removal check={:?}",
+        crate::session_reap::worktree_status_dirty(&worktree),
+        aida_core::worktree_holders::check_worktree_removal(&worktree)
+    );
     assert!(!worktree.exists());
     assert!(!review_branch_exists(&project));
 }

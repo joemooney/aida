@@ -2423,9 +2423,12 @@ the queue, close delivered epics). Subcommands manage the live-advisor registrat
 Usage: aida advisor [OPTIONS] [COMMAND]
 
 Commands:
-  register    Record the current Claude session as the live advisor — writes `~/.aida/advisor.toml`.
-              With no `--uuid`, reads `CLAUDE_CODE_SESSION_ID` from the environment (Claude Code
-              sets it on every session). Pass `--uuid <id>` to register a specific session id
+  register    Record the current Claude or Codex session as the live advisor — writes
+              `~/.aida/advisor.toml`. With no `--uuid`, reads `CODEX_THREAD_ID` (a Codex thread,
+              which `advisor watch` forks with `codex exec fork`), else `CLAUDE_CODE_SESSION_ID`
+              (Claude Code sets it on every session). A Codex session started from a Claude session
+              inherits both, and the Codex thread is the one running here. Pass `--uuid <id>` to
+              register a specific session id, with `--vendor codex` for a Codex thread
   unregister  Clear the registration. Idempotent — succeeds even when nothing is registered
   watch       Presence-gated fork-from-live watch loop: while `away`, fork the live advisor only
               when `aida awaiting` is non-empty and run a garden + mailbox-triage + escalate pass
@@ -2468,15 +2471,22 @@ Options:
   -h, --help
           Print help (see a summary with '-h')
 ===== aida advisor register
-Record the current Claude session as the live advisor — writes `~/.aida/advisor.toml`. With no
-`--uuid`, reads `CLAUDE_CODE_SESSION_ID` from the environment (Claude Code sets it on every
-session). Pass `--uuid <id>` to register a specific session id
+Record the current Claude or Codex session as the live advisor — writes `~/.aida/advisor.toml`. With
+no `--uuid`, reads `CODEX_THREAD_ID` (a Codex thread, which `advisor watch` forks with `codex exec
+fork`), else `CLAUDE_CODE_SESSION_ID` (Claude Code sets it on every session). A Codex session
+started from a Claude session inherits both, and the Codex thread is the one running here. Pass
+`--uuid <id>` to register a specific session id, with `--vendor codex` for a Codex thread
 
 Usage: aida advisor register [OPTIONS]
 
 Options:
       --uuid <UUID>
-          Claude session UUID. Defaults to `$CLAUDE_CODE_SESSION_ID`
+          Session id. Defaults to `$CODEX_THREAD_ID`, else `$CLAUDE_CODE_SESSION_ID`
+
+      --vendor <VENDOR>
+          Vendor of the `--uuid` session: `claude` (default) or `codex`
+          
+          [possible values: claude, codex]
 
       --project-slug <SLUG>
           Override the cwd-derived project slug. Rare — the default is derived from the current
@@ -13082,6 +13092,15 @@ Options:
       --check
           Exit 1 (instead of 0) when no role is active
 
+      --probe-seat
+          Validate a delegated seat without printing selectors or secrets
+
+      --expect <EXPECT>
+          Seat the delegated child grant must hold
+
+      --expect-role-instance <EXPECT_ROLE_INSTANCE>
+          Require the launch's driver/companion restriction to survive
+
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
           compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
@@ -16613,10 +16632,8 @@ Options:
           Which vendor renders the rubric judgment (claude or codex). The judge PROMPT is identical
           for both — only the executing model changes — so a codex judge over a claude-vs-codex run
           is no longer the same model grading itself, removing the self-evaluation caveat. Defaults
-          to claude (unchanged behaviour). Set AIDA_COMPETE_JUDGE to override the judge binary. Only
-          applies with --judge
-          
-          [default: claude]
+          to the project's `[agents] vendor`, else claude. A codex judge runs in a read-only
+          sandbox. Set AIDA_COMPETE_JUDGE to override the judge binary. Only applies with --judge
 
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
@@ -31890,7 +31907,7 @@ Working on aida itself
       "advisor",
       "register"
     ],
-    "about": "Record the current Claude session as the live advisor — writes `~/.aida/advisor.toml`. With no `--uuid`, reads `CLAUDE_CODE_SESSION_ID` from the environment (Claude Code sets it on every session). Pass `--uuid <id>` to register a specific session id",
+    "about": "Record the current Claude or Codex session as the live advisor — writes `~/.aida/advisor.toml`. With no `--uuid`, reads `CODEX_THREAD_ID` (a Codex thread, which `advisor watch` forks with `codex exec fork`), else `CLAUDE_CODE_SESSION_ID` (Claude Code sets it on every session). A Codex session started from a Claude session inherits both, and the Codex thread is the one running here. Pass `--uuid <id>` to register a specific session id, with `--vendor codex` for a Codex thread",
     "flags": [
       {
         "name": "canonical-ids",
@@ -31915,7 +31932,12 @@ Working on aida itself
       {
         "name": "uuid",
         "takes_value": true,
-        "help": "Claude session UUID. Defaults to `$CLAUDE_CODE_SESSION_ID`"
+        "help": "Session id. Defaults to `$CODEX_THREAD_ID`, else `$CLAUDE_CODE_SESSION_ID`"
+      },
+      {
+        "name": "vendor",
+        "takes_value": true,
+        "help": "Vendor of the `--uuid` session: `claude` (default) or `codex`"
       }
     ],
     "hidden": false
@@ -42640,6 +42662,21 @@ Working on aida itself
         "help": "Exit 1 (instead of 0) when no role is active"
       },
       {
+        "name": "expect",
+        "takes_value": true,
+        "help": "Seat the delegated child grant must hold"
+      },
+      {
+        "name": "expect-context-sha256",
+        "takes_value": true,
+        "help": "Integrity digest of this launch's explicit nonsecret child context"
+      },
+      {
+        "name": "expect-role-instance",
+        "takes_value": true,
+        "help": "Require the launch's driver/companion restriction to survive"
+      },
+      {
         "name": "format",
         "takes_value": true,
         "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
@@ -42648,6 +42685,11 @@ Working on aida itself
         "name": "help",
         "takes_value": false,
         "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "probe-seat",
+        "takes_value": false,
+        "help": "Validate a delegated seat without printing selectors or secrets"
       }
     ],
     "hidden": false
@@ -46143,7 +46185,7 @@ Working on aida itself
       {
         "name": "judge-vendor",
         "takes_value": true,
-        "help": "Which vendor renders the rubric judgment (claude or codex). The judge PROMPT is identical for both — only the executing model changes — so a codex judge over a claude-vs-codex run is no longer the same model grading itself, removing the self-evaluation caveat. Defaults to claude (unchanged behaviour). Set AIDA_COMPETE_JUDGE to override the judge binary. Only applies with --judge"
+        "help": "Which vendor renders the rubric judgment (claude or codex). The judge PROMPT is identical for both — only the executing model changes — so a codex judge over a claude-vs-codex run is no longer the same model grading itself, removing the self-evaluation caveat. Defaults to the project's `[agents] vendor`, else claude. A codex judge runs in a read-only sandbox. Set AIDA_COMPETE_JUDGE to override the judge binary. Only applies with --judge"
       },
       {
         "name": "vendors",

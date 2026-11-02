@@ -956,6 +956,22 @@ fn codex_interactive_session_config(contained: bool) -> Result<crate::AgentLaunc
     Ok(config)
 }
 
+/// The child role a `session start --launch` hands the codex launcher: the
+/// `--role` flag, else the scope default the session records (`reviewer` for
+/// a review target, otherwise `implementer`), so the child runs the role its
+/// lease names. The launcher's `AIDA_SESSION_ROLE` is deliberately not
+/// consulted (TASK-1462: a launcher's role is never cloned into its child).
+/// Resolved in preflight so the launcher never opens its interactive role
+/// picker after the worktree and lease exist (a cancel there orphaned both).
+// trace:TASK-2742 | ai:claude
+pub(crate) fn start_launch_child_role(explicit: Option<&str>, owns: &str) -> String {
+    explicit
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(str::to_string)
+        .unwrap_or_else(|| crate::agent_launch::agent_new_scope_role(owns).to_string())
+}
+
 /// `aida session new` — capture role + title up-front, append a record
 /// to `~/.aida/session-launches.log`, then exec the configured
 /// interactive vendor (`claude --permission-mode <mode>`, or codex through the
@@ -1712,6 +1728,29 @@ pub(crate) fn compose_headless_command(
     model: Option<&str>,
     effort: Option<&str>,
 ) -> Result<(String, Vec<String>)> {
+    compose_headless_command_forking(vendor, prompt, session_id, contained, model, effort, None)
+}
+
+/// [`compose_headless_command`], optionally forking the Codex thread
+/// `fork_thread` (`codex exec fork <thread> <prompt>`) instead of a fresh
+/// `codex exec`. The fork reuses the exact posture the fresh launch would
+/// get, so a contained fork carries the same flags and no bypass flag.
+/// `Some` on a non-Codex vendor is an error.
+// trace:STORY-2255 | ai:claude
+pub(crate) fn compose_headless_command_forking(
+    vendor: HeadlessVendor,
+    prompt: &str,
+    session_id: &str,
+    contained: bool,
+    model: Option<&str>,
+    effort: Option<&str>,
+    fork_thread: Option<&str>,
+) -> Result<(String, Vec<String>)> {
+    anyhow::ensure!(
+        fork_thread.is_none() || vendor == HeadlessVendor::Codex,
+        "only a codex thread can be forked with `exec fork`, not {}",
+        vendor.as_str()
+    );
     // trace:BUG-2172 | ai:codex
     let contained = aida_contained_env()? || contained;
     // BUG-2144: fail closed before composing anything. Every headless launch
@@ -1750,18 +1789,76 @@ pub(crate) fn compose_headless_command(
     } else {
         std::borrow::Cow::Borrowed(prompt)
     };
-    os_wrapped_program_and_args(
-        &worktree,
-        &resolve_agent_program(vendor.program()),
-        headless_vendor_args(
-            vendor,
-            &effective_prompt,
-            session_id,
-            contained,
-            model,
-            effort,
-        )?,
-    )
+    let args = headless_vendor_args(
+        vendor,
+        &effective_prompt,
+        session_id,
+        contained,
+        model,
+        effort,
+    )?;
+    let args = match fork_thread {
+        Some(thread) => codex_exec_fork_args(args, thread)?,
+        None => args,
+    };
+    os_wrapped_program_and_args(&worktree, &resolve_agent_program(vendor.program()), args)
+}
+
+/// Rewrite a fresh `codex [posture] exec [opts] PROMPT` argv into
+/// `codex [posture] exec fork [opts] THREAD PROMPT`. Only the subcommand and
+/// the positional change; every posture flag is kept as built. The prompt is
+/// the final element of every Codex headless argv.
+// trace:STORY-2255 | ai:claude
+pub(crate) fn codex_exec_fork_args(mut args: Vec<String>, thread: &str) -> Result<Vec<String>> {
+    let thread = thread.trim();
+    anyhow::ensure!(!thread.is_empty(), "cannot fork an empty codex thread id");
+    let exec = args
+        .iter()
+        .position(|a| a == "exec")
+        .context("codex argv has no `exec` subcommand to fork")?;
+    anyhow::ensure!(
+        args.len() > exec + 1,
+        "codex argv has no prompt after `exec`"
+    );
+    args.insert(exec + 1, "fork".to_string());
+    let prompt_at = args.len() - 1;
+    args.insert(prompt_at, thread.to_string());
+    Ok(args)
+}
+
+/// How long the `codex exec fork --help` probe may run. A codex that blocks
+/// (an update or login prompt, a wedged npm shim) must not hang an advisor
+/// tick. trace:STORY-2255 | ai:claude
+pub(crate) const CODEX_EXEC_FORK_PROBE_TIMEOUT: std::time::Duration =
+    std::time::Duration::from_secs(10);
+
+/// Whether the installed codex has `exec fork` (codex-cli 0.166+). Probes
+/// `codex exec fork --help`, bounded by [`CODEX_EXEC_FORK_PROBE_TIMEOUT`].
+/// A spawn failure or non-zero exit is [`advisor::ExecForkSupport::Missing`];
+/// a probe that does not answer in time is `TimedOut`.
+// trace:STORY-2255 | ai:claude
+pub(crate) fn codex_exec_fork_support() -> crate::advisor::ExecForkSupport {
+    codex_exec_fork_support_within(CODEX_EXEC_FORK_PROBE_TIMEOUT)
+}
+
+pub(crate) fn codex_exec_fork_support_within(
+    timeout: std::time::Duration,
+) -> crate::advisor::ExecForkSupport {
+    use crate::advisor::ExecForkSupport;
+    let mut cmd =
+        std::process::Command::new(resolve_agent_program(HeadlessVendor::Codex.program()));
+    cmd.args(["exec", "fork", "--help"])
+        .stdin(std::process::Stdio::null());
+    match crate::command_output_with_timeout_detail(cmd, timeout) {
+        crate::BoundedCommandOutput::Completed(out)
+            if out.status.success()
+                && String::from_utf8_lossy(&out.stdout).contains("SESSION_ID") =>
+        {
+            ExecForkSupport::Supported
+        }
+        crate::BoundedCommandOutput::TimedOut => ExecForkSupport::TimedOut,
+        _ => ExecForkSupport::Missing,
+    }
 }
 
 /// BUG-044: [`compose_headless_command`], with `resume` rewriting the
@@ -1854,6 +1951,49 @@ pub(crate) fn spawn_vendor_headless_with_seat_granted(
     tee_opts: &crate::headless_tee::TeeOptions,
     contained: bool,
 ) -> Result<(std::process::ExitStatus, String)> {
+    spawn_vendor_headless_forking(
+        vendor, seat, prompt, session_id, log_path, tee_opts, contained, None,
+    )
+}
+
+/// Fork the live Codex thread `thread` headless (`codex exec fork <thread>
+/// <prompt>`) under `seat`, with every guard of a fresh headless launch:
+/// containment refusal, posture, grant, env. The live thread is only read;
+/// Codex writes the fork as a new session.
+// trace:STORY-2255 | ai:claude
+pub(crate) fn spawn_codex_headless_fork(
+    seat: aida_core::agents_config::AgentSeat,
+    prompt: &str,
+    thread: &str,
+    session_id: &str,
+    log_path: &Path,
+    tee_opts: &crate::headless_tee::TeeOptions,
+    contained: bool,
+) -> Result<std::process::ExitStatus> {
+    spawn_vendor_headless_forking(
+        HeadlessVendor::Codex,
+        seat,
+        prompt,
+        session_id,
+        log_path,
+        tee_opts,
+        contained,
+        Some(thread),
+    )
+    .map(|(status, _)| status)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn spawn_vendor_headless_forking(
+    vendor: HeadlessVendor,
+    seat: aida_core::agents_config::AgentSeat,
+    prompt: &str,
+    session_id: &str,
+    log_path: &Path,
+    tee_opts: &crate::headless_tee::TeeOptions,
+    contained: bool,
+    fork_thread: Option<&str>,
+) -> Result<(std::process::ExitStatus, String)> {
     use std::process::{Command, Stdio};
     // trace:BUG-2172 | ai:codex
     let contained = aida_contained_env()? || contained;
@@ -1888,13 +2028,14 @@ pub(crate) fn spawn_vendor_headless_with_seat_granted(
     // every headless phase behaves identically whoever launched it.
     // trace:TASK-1169 | ai:claude
     let (ceiling_key, ceiling_value) = crate::bg_wait_ceiling_env(Some(&headless_worktree_root()));
-    let (program, args) = compose_headless_command(
+    let (program, args) = compose_headless_command_forking(
         vendor,
         prompt,
         session_id,
         contained,
         tuning.model.as_deref(),
         tuning.effort.as_deref(),
+        fork_thread,
     )?;
     // trace:BUG-b6b1278890774ef993d2ebc327862470-045 | ai:claude
     let child_grant = crate::gate::seat_authority::issue_launch_child(
@@ -1938,6 +2079,14 @@ pub(crate) fn spawn_vendor_headless_with_seat_granted(
         cmd.env("AIDA_CONTAINMENT_POSTURE", "none");
     }
     stamp_containment_posture(&mut cmd, posture);
+    if vendor == HeadlessVendor::Codex {
+        cmd.env("AIDA_USER", crate::current_user_id(None))
+            .env("AIDA_PROJECT_ROOT", headless_worktree_root());
+        if let Err(error) = crate::codex_tool_env::prepare_launch(&mut cmd) {
+            revoke_headless_child_grant(&child_grant.id);
+            return Err(error);
+        }
+    }
     // A watch-launched reviewer is recorded before the wait. trace:TASK-1993 | ai:claude
     let status = reviewer_status_with_handle_guard(cmd.stdout(Stdio::from(log)), &mut handle_guard)
         .with_context(|| format!("failed to spawn {}", vendor.program()))?;
@@ -2323,6 +2472,36 @@ pub fn exec_codex_session(
         build_codex_session_command(initial_prompt, bypass, model, grant_id)
     };
     stamp_containment_posture(&mut cmd, posture);
+    // trace:BUG-2398 | ai:codex — this is the already-delegated tab's seat.
+    cmd.env(
+        crate::gate::seat_authority::GRANT_ENV,
+        grant_id.unwrap_or(""),
+    )
+    .env("AIDA_USER", crate::current_user_id(None))
+    .env("AIDA_PROJECT_ROOT", headless_worktree_root())
+    .env("AIDA_AGENT_TYPE", "codex");
+    if let Some(id) = grant_id.filter(|id| !id.is_empty()) {
+        if let crate::gate::seat_authority::GrantCheck::Valid(grant) =
+            crate::gate::seat_authority::grant_check_for(
+                &headless_worktree_root(),
+                id,
+                &crate::current_user_id(None),
+            )
+        {
+            cmd.env("AIDA_SESSION_ROLE", grant.seat);
+        }
+    }
+    for key in [
+        "AIDA_SESSION_ID",
+        "AIDA_SESSION_SCOPE",
+        "AIDA_AGENT_NAME",
+        "AIDA_AGENT_CONTEXT_FILE",
+    ] {
+        if let Some(value) = std::env::var_os(key) {
+            cmd.env(key, value);
+        }
+    }
+    crate::codex_tool_env::prepare_launch(&mut cmd)?;
     #[cfg(unix)]
     {
         use std::os::unix::process::CommandExt;
@@ -2609,6 +2788,14 @@ pub(crate) fn spawn_reviewer_launch_plan_granted(
     stamp_containment_posture(&mut cmd, posture);
     if posture == ContainmentPosture::Native {
         eprintln!("  codex: {}", posture.label());
+    }
+    if plan.vendor == HeadlessVendor::Codex {
+        cmd.env("AIDA_USER", crate::current_user_id(None))
+            .env("AIDA_PROJECT_ROOT", project_root);
+        if let Err(error) = crate::codex_tool_env::prepare_launch(&mut cmd) {
+            revoke_headless_child_grant(&grant.id);
+            return Err(error);
+        }
     }
     // A watch-launched reviewer is recorded before the wait. trace:TASK-1993 | ai:claude
     let status = reviewer_status_with_handle_guard(&mut cmd, &mut handle_guard)
@@ -2904,7 +3091,9 @@ fn agent_selection_allows_vendor(
     }
 }
 
-fn enabled_headless_vendors(selection: crate::init_cmd::AgentSelection) -> Vec<HeadlessVendor> {
+pub(crate) fn enabled_headless_vendors(
+    selection: crate::init_cmd::AgentSelection,
+) -> Vec<HeadlessVendor> {
     let mut vendors = Vec::new();
     if selection.claude {
         vendors.push(HeadlessVendor::Claude);
@@ -5220,20 +5409,48 @@ fn adapt_coordinator_args(
     }
 }
 
-/// Wait on a coordinator `cmd`, releasing the child handle `guard` protects
-/// only if the spawn itself fails. Disarm at spawn: a running child owns the
-/// handle it was given.
-// trace:BUG-2389 | ai:claude
-pub(crate) fn coordinator_status_with_handle_guard(
+/// Codex finalization for a coordinator child (burndown, autopilot intake,
+/// questions clarify): stamp the child's own user and project root, then
+/// carry its delegated seat into Codex tool shells. A refusal is returned
+/// before anything spawns; the caller revokes the child grant it issued.
+/// Other vendors pass through untouched.
+// trace:BUG-2398 | ai:claude
+pub(crate) fn finalize_coordinator_launch(
+    vendor: HeadlessVendor,
     cmd: &mut std::process::Command,
+    project_root: &Path,
+) -> Result<()> {
+    if vendor != HeadlessVendor::Codex {
+        return Ok(());
+    }
+    cmd.env("AIDA_USER", crate::current_user_id(None))
+        .env("AIDA_PROJECT_ROOT", project_root);
+    crate::codex_tool_env::prepare_launch(cmd)
+}
+
+/// Finalize, then wait on a coordinator `cmd`, releasing the child handle
+/// `guard` protects unless the child actually spawns. Disarm at spawn: a
+/// running child owns the handle it was given. `stdout` is applied only after
+/// finalization, which rebuilds the Command and would drop earlier stdio.
+// trace:BUG-2389 | ai:claude
+// trace:BUG-2398 | ai:claude
+pub(crate) fn coordinator_status_with_handle_guard(
+    vendor: HeadlessVendor,
+    cmd: &mut std::process::Command,
+    project_root: &Path,
+    stdout: Option<std::process::Stdio>,
     mut guard: Option<crate::agent_handle::LaunchReservationGuard>,
-) -> std::io::Result<std::process::ExitStatus> {
+) -> Result<std::process::ExitStatus> {
     use crate::process_retry::RetryEtxtbsy;
+    finalize_coordinator_launch(vendor, cmd, project_root)?;
+    if let Some(stdout) = stdout {
+        cmd.stdout(stdout);
+    }
     let mut child = cmd.spawn_retrying_etxtbsy()?;
     if let Some(guard) = guard.as_mut() {
         guard.disarm();
     }
-    child.wait()
+    Ok(child.wait()?)
 }
 
 // trace:BUG-2389 | ai:codex
@@ -5769,6 +5986,15 @@ fn run_vendor_headless_child(
     if let Some(id) = lease_id {
         child_cmd.env(crate::headless_background::LANE_MARKER_ENV, id);
     }
+    if vendor == HeadlessVendor::Codex {
+        child_cmd
+            .env("AIDA_USER", crate::current_user_id(None))
+            .env("AIDA_PROJECT_ROOT", headless_worktree_root());
+        if let Some(id) = lease_id {
+            child_cmd.env(crate::gate::review_authority::WORKER_SESSION_ENV, id);
+        }
+        crate::codex_tool_env::prepare_launch(&mut child_cmd)?;
+    }
     let mut child = child_cmd
         .stdout(Stdio::from(log))
         .spawn_retrying_etxtbsy()
@@ -6195,20 +6421,27 @@ pub(crate) fn advisor_tier_program_and_args_with_posture(
             )
         }
         HeadlessVendor::Codex => {
-            // No resume model — a fresh spawn per punt against the seeded prompt.
-            // `is_fork` is intentionally ignored here. trace:TASK-894 | ai:claude
+            // A fresh `codex exec` per punt against the seeded prompt, or, when
+            // `is_fork`, `codex exec fork <advisor_uuid> <prompt>`: the caller
+            // passes the registered live Codex thread as `advisor_uuid`. The
+            // fork keeps the fresh launch's posture flags (contained or not).
+            // trace:TASK-894 | ai:claude
+            // trace:STORY-2255 | ai:claude
             // TASK-1081: same mock resolver as the Claude arm. trace:TASK-1081
-            (
-                resolve_agent_program(HeadlessVendor::Codex.program()),
-                headless_vendor_args_contained_in(
-                    vendor,
-                    seeded_prompt,
-                    advisor_uuid,
-                    contained_in,
-                    model,
-                    effort,
-                )?,
-            )
+            let args = headless_vendor_args_contained_in(
+                vendor,
+                seeded_prompt,
+                advisor_uuid,
+                contained_in,
+                model,
+                effort,
+            )?;
+            let args = if is_fork {
+                codex_exec_fork_args(args, advisor_uuid)?
+            } else {
+                args
+            };
+            (resolve_agent_program(HeadlessVendor::Codex.program()), args)
         }
         HeadlessVendor::Agy => {
             // AGY, like Codex, has no AIDA-addressable resume/session model, so
@@ -9982,18 +10215,30 @@ mod tests {
         assert!(args.contains(&advisor_uuid.to_string()), "{args:?}");
         assert!(args.contains(&"/aida-advise".to_string()), "{args:?}");
 
-        // Codex: a fresh `codex exec <seeded>` per punt, ignoring `is_fork` —
-        // codex has no resume model. trace:TASK-894
+        // Codex: a fresh `codex exec <seeded>` per punt; with `is_fork`,
+        // `codex exec fork <thread> <seeded>` where the caller passes the live
+        // Codex thread as `advisor_uuid`. trace:TASK-894
+        // trace:STORY-2255 | ai:claude
         for is_fork in [false, true] {
             let (prog, args) =
                 advisor_tier_program_and_args(HeadlessVendor::Codex, is_fork, seeded, advisor_uuid);
             assert_eq!(prog, "codex", "is_fork={is_fork}");
-            assert_eq!(args, codex_headless_args(seeded), "is_fork={is_fork}");
+            let expected = if is_fork {
+                codex_exec_fork_args(codex_headless_args(seeded), advisor_uuid).unwrap()
+            } else {
+                codex_headless_args(seeded)
+            };
+            assert_eq!(args, expected, "is_fork={is_fork}");
             assert_eq!(args.first().map(String::as_str), Some("exec"), "{args:?}");
             assert_eq!(args.last().map(String::as_str), Some(seeded), "{args:?}");
+            assert_eq!(args.get(1).map(String::as_str) == Some("fork"), is_fork);
+            assert_eq!(
+                args.contains(&advisor_uuid.to_string()),
+                is_fork,
+                "{args:?}"
+            );
             // Never carries claude's resume / session flags.
             assert!(!args.contains(&"--resume".to_string()), "{args:?}");
-            assert!(!args.contains(&advisor_uuid.to_string()), "{args:?}");
             assert!(!args.contains(&"-p".to_string()), "{args:?}");
         }
 
@@ -11925,7 +12170,7 @@ mod tests {
         let env_out = tmp.path().join("env.txt");
         crate::test_exec::write_executable(
             &fake,
-            format!("#!/bin/sh\nenv | sort > '{}'\nexit 0\n", env_out.display()),
+            format!("#!/bin/sh\ncase \" $* \" in *\" --probe-seat \"*) echo \"seat_grant_valid=true expected_seat=true\"; exit 0;; esac\nenv | sort > '{}'\nexit 0\n", env_out.display()),
         );
         let log_path = tmp.path().join("headless.log");
         let tee_opts = crate::headless_tee::TeeOptions {
@@ -12404,9 +12649,9 @@ mod tests {
         for vendor in ["claude", "codex"] {
             crate::test_exec::write_executable(
                 &bin.path().join(vendor),
-                format!(
+                crate::test_exec::codex_probe_script(format!(
                     "#!/bin/sh\n[ \"$1\" = --version ] && {{ echo '{vendor} 9.9.9'; exit 0; }}\nprintf 'HV=%s\\n' \"${{AIDA_HARNESS_VERSION-unset}}\"\n"
-                ),
+                )),
             );
         }
         let path = format!(
@@ -12426,6 +12671,9 @@ mod tests {
                 ("AIDA_HARNESS_VERSION", Some("launcher-version")),
             ],
         );
+        // The real child probe resolves the roster from cwd, as a real
+        // queue pickup does. This test runs in its exact isolated process.
+        std::env::set_current_dir(root.path()).unwrap();
         let tee = crate::headless_tee::TeeOptions {
             enabled: false,
             label: None,
@@ -12497,6 +12745,35 @@ mod tests {
                 "{vendor:?} {seat} child must not inherit the lane name"
             );
         }
+    }
+
+    /// A headless codex child (queue/dispatch/session spawn, not `agent new`)
+    /// never inherits its parent's launch-decided mail wake, so its own
+    /// SessionStart hook falls back to the `[agents.codex]` default.
+    // trace:TASK-2737 | ai:claude
+    #[test]
+    fn headless_codex_child_never_inherits_the_parent_mail_wake() {
+        let _env = crate::test_env::EnvVarsGuard::apply(&[
+            ("AIDA_CONTAINED", None),
+            ("AIDA_OS_WRAP", None),
+            (crate::mail_wake::LAUNCH_WAKE_ENV, Some("off")),
+        ]);
+        let cmd = build_exec_vendor_headless_command(
+            HeadlessVendor::Codex,
+            "prompt",
+            "sid",
+            false,
+            None,
+            None,
+            "implementer",
+            "",
+        )
+        .unwrap();
+        let wake = cmd
+            .get_envs()
+            .find(|(k, _)| *k == crate::mail_wake::LAUNCH_WAKE_ENV)
+            .map(|(_, v)| v);
+        assert_eq!(wake, Some(None), "the parent's wake must be removed");
     }
 
     // trace:BUG-2006 | ai:antigravity

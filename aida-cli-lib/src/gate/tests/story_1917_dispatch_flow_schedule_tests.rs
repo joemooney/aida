@@ -163,6 +163,16 @@ impl Drop for FlowHookGuard {
 }
 
 fn write_approved_verdict(root: &Path, pr: u64, head_sha: &str, verdict_word: &str) {
+    if verdict_word == "APPROVED" {
+        // Synthetic heads in this runner fixture resolve to a real commit
+        // date; durable independent authority is no longer optional.
+        git(
+            root,
+            &["update-ref", &format!("refs/heads/{head_sha}"), "HEAD"],
+        );
+        write_attested_approval(root, pr, head_sha);
+        return;
+    }
     let verdicts_dir = root.join(".aida").join("review-verdicts");
     std::fs::create_dir_all(&verdicts_dir).unwrap();
     let rec = serde_json::json!({
@@ -540,18 +550,16 @@ fn story_1917_flow_runner_fast_path_re_review_loop_changes_requested_and_no_ship
     .unwrap();
     let verdicts_dir = f.root.join(".aida").join("review-verdicts");
     let grant_id = std::env::var(crate::gate::seat_authority::GRANT_ENV).unwrap();
+    write_approved_verdict(&f.root, 402, "bbbb2222", "APPROVED");
+    let prepared = state_dir.join("authorized-402.json");
+    std::fs::rename(verdicts_dir.join("PR-402.json"), &prepared).unwrap();
     let fake_aida_402 = f.write_executable_script(
         "fake-aida-flow-402.sh",
         &format!(
-            "#!/bin/sh\nset -eu\n\
-             echo \"$*\" >> '{}'\n\
-             cat > '{}/PR-402.json' <<'EOF'\n\
-             {{\"schema_version\":1,\"pr\":402,\"verdict\":\"APPROVED\",\"head_sha\":\"bbbb2222\",\"timestamp\":\"2026-10-25T00:00:00Z\",\"reviewer_session\":\"s1\",\"reviewer_vendor\":\"claude\",\"reviewer_model\":\"claude-opus-4-7\",\"author_vendor\":\"claude\",\"author_model\":\"claude-opus-4-7\",\"findings_count\":0,\"summary\":\"ok\",\"spec_ids\":[\"TASK-100\"],\"grant_id\":\"{}\"}}\n\
-             EOF\n\
-             exit 0\n",
+            "#!/bin/sh\necho review >> '{}'\ncp '{}' '{}/PR-402.json'\n",
             review_calls_log.display(),
-            verdicts_dir.display(),
-            grant_id
+            prepared.display(),
+            verdicts_dir.display()
         ),
     );
     TEST_AIDA_BIN.with(|c| *c.borrow_mut() = Some(fake_aida_402));
@@ -1471,12 +1479,13 @@ fn add_human_ship_gate(root: &Path) {
 
 type Hook = std::cell::RefCell<Option<Box<dyn FnMut()>>>;
 
-/// The network only: CI is registered and green, hold-gate rows are absent,
-/// merges are counted. `on_watch_ci` / `on_check_rows` fire inside the
-/// native waits.
+/// The network only: CI is registered and its one required row (`Build`,
+/// see [`put_fake_gh_on_path`]) passes, hold-gate rows are absent, merges are
+/// counted. `on_check_rows` fires inside every native wait that reads rows —
+/// the train CI readiness snapshot and the hold-gate wait.
+// trace:STORY-1917 trace:BUG-2401 | ai:claude
 #[derive(Default)]
 struct NetForge {
-    on_watch_ci: Hook,
     on_check_rows: Hook,
     on_merge: Hook,
     merges: std::cell::Cell<usize>,
@@ -1562,7 +1571,6 @@ impl crate::forge::Forge for NetForge {
         &self,
         _: &crate::forge::ChangeRef,
     ) -> anyhow::Result<crate::gate::dispatch_types::CiState> {
-        fire(&self.on_watch_ci);
         Ok(crate::gate::dispatch_types::CiState::Success)
     }
     fn stream_ci_for_branch(
@@ -1602,7 +1610,12 @@ impl crate::forge::Forge for NetForge {
         _: &crate::forge::ChangeRef,
     ) -> anyhow::Result<Vec<crate::ci_gate::CheckRow>> {
         fire(&self.on_check_rows);
-        Ok(Vec::new())
+        Ok(vec![crate::ci_gate::CheckRow {
+            name: "Build".into(),
+            workflow: "CI".into(),
+            bucket: "pass".into(),
+            run_id: None,
+        }])
     }
 }
 
@@ -1780,11 +1793,27 @@ fn hold_record(pr: u64) -> crate::gate::merge_hold_core::MergeHoldRecord {
     }
 }
 
-/// A `gh` on PATH for the train's own `gh pr view/edit` body refresh.
+/// A hermetic `gh` on PATH (the caller must be path-isolated): the train PR's
+/// head/base/state at the built tip, a base protection requiring `Build`, one
+/// short page of effective rules, and a silent success for the train's own
+/// `gh pr view/edit` body refresh. Never the operator's real `gh`.
+// trace:STORY-1917 trace:BUG-2401 | ai:claude
 fn put_fake_gh_on_path(f: &mut FlowFixture) {
     let bin = f._tmp.path().join("fake-bin");
     std::fs::create_dir_all(&bin).unwrap();
-    crate::test_exec::write_executable(&bin.join("gh"), "#!/bin/sh\nexit 0\n");
+    crate::test_exec::write_executable(
+        &bin.join("gh"),
+        r#"#!/bin/sh
+case "$*" in
+  'pr view '*' --json headRefOid,baseRefName,state')
+    echo '{"headRefOid":"7121a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1","baseRefName":"main","state":"OPEN"}' ;;
+  'api repos/{owner}/{repo}/branches/main/protection')
+    echo '{"required_status_checks":{"contexts":["Build"]}}' ;;
+  'api repos/{owner}/{repo}/rules/branches/main?'*) echo '[]' ;;
+esac
+exit 0
+"#,
+    );
     let path = format!(
         "{}:{}",
         bin.display(),
@@ -1813,6 +1842,19 @@ fn story_1917_native_train_held_member_mandate_replaced_during_hold_gate_wait_ne
 
     let forge = NetForge::default();
     let (mdir, principal) = (f.mandate_dir.clone(), f.principal.clone());
+    let cover = crate::gate::mandate_ship::MandateCover {
+        id: mandate_a.id.clone(),
+        principal: f.principal.clone(),
+    };
+    let mut ports = live_ports(&f, &forge, &ctx, member(9701, Some(cover)));
+    let base = origin_main(&f.root);
+    let mut rails = crate::pr_train::ForgeRails::new(&mut ports, "native".into());
+    let m = rails.ports.gate(9701).unwrap();
+    let built = crate::pr_train::Rails::build(&mut rails, &base, &[m]).unwrap();
+    let verdicts = crate::pr_train::Rails::test(&mut rails, std::slice::from_ref(&built)).unwrap();
+    assert_eq!(verdicts, vec![crate::pr_train::CiVerdict::Green]);
+    // Armed after the CI readiness reads, so the replacement lands inside the
+    // hold-gate wait that follows the real release.
     *forge.on_check_rows.borrow_mut() = Some(Box::new(move || {
         mandate::stop(&mdir, &|| Ok(()), &principal, Utc::now()).unwrap();
         let set: BTreeSet<Scope> = [Scope::ShipHeld, Scope::Dispatch].into_iter().collect();
@@ -1829,17 +1871,6 @@ fn story_1917_native_train_held_member_mandate_replaced_during_hold_gate_wait_ne
         )
         .unwrap();
     }));
-    let cover = crate::gate::mandate_ship::MandateCover {
-        id: mandate_a.id.clone(),
-        principal: f.principal.clone(),
-    };
-    let mut ports = live_ports(&f, &forge, &ctx, member(9701, Some(cover)));
-    let base = origin_main(&f.root);
-    let mut rails = crate::pr_train::ForgeRails::new(&mut ports, "native".into());
-    let m = rails.ports.gate(9701).unwrap();
-    let built = crate::pr_train::Rails::build(&mut rails, &base, &[m]).unwrap();
-    let verdicts = crate::pr_train::Rails::test(&mut rails, std::slice::from_ref(&built)).unwrap();
-    assert_eq!(verdicts, vec![crate::pr_train::CiVerdict::Green]);
     // The real release ran: the marker is gone until the abort re-arms it.
     let err = crate::pr_train::Rails::land(&mut rails, &built).unwrap_err();
     assert!(
@@ -1860,7 +1891,11 @@ fn story_1917_native_train_held_member_mandate_replaced_during_hold_gate_wait_ne
 /// with the typed error and the forge sees no merge call.
 #[test]
 fn story_1917_native_train_unheld_member_grant_revoked_before_merge_never_merges() {
-    let f = native_fixture(false);
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let mut f = native_fixture(false);
+    put_fake_gh_on_path(&mut f);
     f.start_mandate(&[Scope::ShipHeld, Scope::Dispatch], false);
     let ctx = establish_train_ctx(&f, vec![9702]);
     let forge = NetForge::default();
@@ -1898,7 +1933,11 @@ fn story_1917_native_train_unheld_member_grant_revoked_before_merge_never_merges
 // trace:STORY-1917 | ai:claude
 #[test]
 fn story_1917_native_train_authority_lost_after_merge_names_the_cause() {
-    let f = native_fixture(false);
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let mut f = native_fixture(false);
+    put_fake_gh_on_path(&mut f);
     f.start_mandate(&[Scope::ShipHeld, Scope::Dispatch], false);
     let ctx = establish_train_ctx(&f, vec![9705]);
     let forge = NetForge::default();
@@ -1928,17 +1967,23 @@ fn story_1917_native_train_authority_lost_after_merge_names_the_cause() {
 }
 
 /// A human gate added, or the worker's claim changed, while the real CI wait
-/// runs: the real post-wait checkpoint refuses and the train never lands.
+/// reads the train's check rows: the real post-read checkpoint refuses and
+/// the train never lands.
+// trace:STORY-1917 trace:BUG-2401 | ai:claude
 #[test]
 fn story_1917_native_train_human_gate_or_claim_change_during_ci_wait_refuses() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
     for case in ["human-gate", "claim"] {
-        let f = native_fixture(false);
+        let mut f = native_fixture(false);
+        put_fake_gh_on_path(&mut f);
         f.start_mandate(&[Scope::ShipHeld, Scope::Dispatch], false);
         let ctx = establish_train_ctx(&f, vec![9703]);
         let forge = NetForge::default();
         let root = f.root.clone();
         let req_id = ctx.request_id().to_string();
-        *forge.on_watch_ci.borrow_mut() = Some(Box::new(move || {
+        *forge.on_check_rows.borrow_mut() = Some(Box::new(move || {
             if case == "human-gate" {
                 add_human_ship_gate(&root);
             } else {
@@ -2820,4 +2865,116 @@ fn story_1917_native_pr_ship_held_refuses_at_each_checkpoint_and_rearms_only_its
         reset_home_mandates();
         native_ship(9712, true).assert_refused_at(*at);
     }
+}
+
+/// Real compatibility recorder output must neither skip a fresh review nor
+/// report approval success through either flow mode. A fresh authorized
+/// recording invocation, rather than a fabricated attestation, restores success.
+// trace:BUG-2398 | ai:codex
+#[test]
+fn bug_2398_dispatch_flow_ungranted_artifact_requires_fresh_authorized_review() {
+    use crate::gate::{review_authority as ra, review_verdict as rv, seat_authority as sa};
+    let mut f = FlowFixture::new(&["reviewer", "implementer"]);
+    f.start_mandate(&[Scope::ShipHeld, Scope::Dispatch], false);
+    let _hooks = FlowHookGuard;
+    let head = crate::resolve_commit_sha(&f.root, "HEAD").unwrap();
+    let parent = std::env::var(sa::GRANT_ENV).unwrap();
+    f.ambient.set_key(sa::GRANT_ENV, "");
+    f.ambient
+        .set_key("AIDA_AGENT_NAME", "codex-reviewer-fixture");
+    f.ambient.set_key("AIDA_AGENT_TYPE", "codex");
+    f.ambient
+        .set_key("AIDA_SESSION_ID", "independent-2398-reviewer");
+    let identity = ra::IdentitySource {
+        session_ids: vec!["independent-2398-reviewer".into()],
+        ..Default::default()
+    };
+    ra::with_identity_source(identity, || {
+        crate::handle_review_record_at(
+            f.root.clone(),
+            "TASK-100",
+            "approved",
+            Some(&head),
+            Some("main"),
+            Some("actual named non-TTY ungranted recorder"),
+            &[],
+            &[],
+            None,
+        )
+    })
+    .unwrap();
+    let ungranted = rv::current_verdict(&f.root, "TASK-100").unwrap().body;
+    std::fs::create_dir_all(rv::verdict_path(&f.root, "PR-601").parent().unwrap()).unwrap();
+    let reviewer = sa::test_support::mint_grant_for(&f.root, &f.principal, "reviewer", &[]);
+    f.ambient.set_key(sa::GRANT_ENV, &parent);
+    f.ambient.unset_key("AIDA_SESSION_ID");
+    let gh_body = serde_json::json!({"headRefOid":head, "headRefName":"feature-2398", "baseRefName":"main", "state":"OPEN", "mergeStateStatus":"CLEAN", "title":"fixture (TASK-100)"});
+    let view_file = f._tmp.path().join("pr-view.json");
+    std::fs::write(&view_file, gh_body.to_string()).unwrap();
+    let gh = f.write_executable_script(
+        "gh-2398",
+        &format!("#!/bin/sh\ncat '{}'\n", view_file.display()),
+    );
+    f.ambient.set_key("AIDA_TEST_GH_BINARY", gh);
+    TEST_FLOW_WAIT_CI_HOOK.with(|c| {
+        *c.borrow_mut() = Some(Box::new(|_, _, ctx, ship| {
+            ctx.reverify_now(ship)?;
+            Ok(crate::gate::dispatch_types::CiState::Success)
+        }))
+    });
+    TEST_FLOW_SHIP_HOOK.with(|c| {
+        *c.borrow_mut() = Some(Box::new(|_, _| panic!("ungranted artifact reached ship")))
+    });
+    let calls = f._tmp.path().join("review-calls");
+    let no_review = f.write_executable_script(
+        "review-no-authority",
+        &format!("#!/bin/sh\necho review >> '{}'\n", calls.display()),
+    );
+    TEST_AIDA_BIN.with(|c| *c.borrow_mut() = Some(no_review));
+    for (pr, no_ship) in [(601, false), (602, true), (603, true)] {
+        std::fs::write(rv::verdict_path(&f.root, &format!("PR-{pr}")), &ungranted).unwrap();
+        if pr == 603 {
+            let aida = crate::test_exec::matching_aida_cli().display().to_string();
+            let fresh = f.write_executable_script("review-fresh-authority", &format!(
+                "#!/bin/sh\nset -eu\necho authorized >> '{}'\nAIDA_SESSION_GRANT='{}' AIDA_USER='{}' AIDA_SESSION_ID=independent-2398-reviewer AIDA_ROLE_INSTANCE=driver AIDA_PROJECT_ROOT='{}' '{}' review record TASK-100 --verdict approved --sha '{}'\nAIDA_PROJECT_ROOT='{}' '{}' review verdict TASK-100 --json > '{}/PR-603.json'\n",
+                calls.display(), reviewer, f.principal, f.root.display(), aida, head,
+                f.root.display(), aida, f.root.join(".aida/review-verdicts").display()
+            ));
+            TEST_AIDA_BIN.with(|c| *c.borrow_mut() = Some(fresh));
+        }
+        let now = Utc::now();
+        let sub = submit_request(
+            &f.root,
+            &f.mandate_dir,
+            &f.principal,
+            &DispatchRequestVerb::Flow {
+                pr,
+                no_ship,
+                vendor: Some(DispatchVendor::Claude),
+            },
+            now,
+        )
+        .unwrap();
+        let result =
+            execute_one_request(&f.root, &f.mandate_dir, &sub.request.id, true, now).unwrap();
+        assert_eq!(
+            result.status,
+            if pr == 603 {
+                DispatchStatus::Done
+            } else {
+                DispatchStatus::Failed
+            },
+            "{result:?}"
+        );
+        if pr != 603 {
+            assert!(!result.summary.contains("with green CI"), "{result:?}");
+        }
+    }
+    let calls = std::fs::read_to_string(calls).unwrap();
+    assert_eq!(
+        calls.lines().filter(|line| *line == "review").count(),
+        2,
+        "both modes must invoke fresh review"
+    );
+    assert!(calls.contains("authorized"));
 }

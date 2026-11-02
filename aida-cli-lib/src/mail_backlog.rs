@@ -40,7 +40,6 @@ pub(crate) const OPERATOR_SEAT: &str = "operator";
 const REMINDER_SENDER: &str = "aida-mail-backlog-guard";
 const DEFAULT_MAX_AGE_MINS: i64 = 30;
 const DEFAULT_RENUDGE_MINS: i64 = 60;
-const SUBJECT_MAX: usize = 80;
 
 /// `[doctor.mail_backlog]` thresholds.
 #[derive(Debug, Clone, Copy)]
@@ -104,9 +103,14 @@ pub(crate) struct Backlog {
 impl Backlog {
     fn summary(&self) -> String {
         format!(
-            "{}: unread [{}] from {}, {} old: {}",
+            "{}: {} [{}] from {}, {} old: {}",
             self.recipient,
-            self.kind,
+            if self.kind.starts_with("pending ") {
+                "pending binding"
+            } else {
+                "unread"
+            },
+            self.kind.strip_prefix("pending ").unwrap_or(self.kind),
             self.from,
             format_age(self.age),
             self.subject
@@ -189,68 +193,6 @@ fn role_wake(role: &str, holders: &[&AgentRegistryEntry]) -> Wake {
         .unwrap_or(Wake::Operator)
 }
 
-/// PURE: the overdue unread requests/handoffs addressed to a live agent's
-/// handle or a role a live agent holds. `is_read(recipient, msg)` is the
-/// read evidence; mail with no recoverable time is never aged.
-pub(crate) fn evaluate(
-    messages: &[Message],
-    is_read: &dyn Fn(&str, &Message) -> bool,
-    live: &[AgentRegistryEntry],
-    policy: &Policy,
-    now: DateTime<Utc>,
-) -> Vec<Backlog> {
-    let mut by_handle: BTreeMap<String, &AgentRegistryEntry> = BTreeMap::new();
-    let mut by_role: BTreeMap<String, Vec<&AgentRegistryEntry>> = BTreeMap::new();
-    for e in live {
-        by_handle.insert(key(&e.id), e);
-        if let Some(name) = &e.name {
-            by_handle.insert(key(name), e);
-        }
-        if let Some(role) = entry_role(e) {
-            by_role.entry(role).or_default().push(e);
-        }
-    }
-    let now_ms = now.timestamp_millis();
-    let mut out = Vec::new();
-    for m in messages {
-        if m.deleted || m.retracted || m.archived || m.timestamp <= 0 {
-            continue;
-        }
-        let kind = match m.intent {
-            Intent::Request => "request",
-            Intent::Handoff => "handoff",
-            Intent::Fyi => continue,
-        };
-        let Recipient::Agent(to) = &m.to else {
-            continue;
-        };
-        let wake = if let Some(e) = by_handle.get(&key(to)) {
-            agent_wake(e)
-        } else {
-            let role = crate::canonical_role_name(to);
-            match by_role.get(&role) {
-                Some(holders) => role_wake(&role, holders),
-                None => continue,
-            }
-        };
-        let age = Duration::milliseconds(now_ms - m.timestamp);
-        if age < policy.max_age || is_read(to, m) {
-            continue;
-        }
-        out.push(Backlog {
-            id: format!("{}:{}", key(to), m.id),
-            recipient: to.clone(),
-            from: m.from.clone(),
-            kind,
-            age,
-            subject: aida_core::mailbox::subject_line(m, SUBJECT_MAX),
-            wake,
-        });
-    }
-    out.sort_by(|a, b| b.age.cmp(&a.age).then(a.id.cmp(&b.id)));
-    out
-}
-
 /// PURE: the findings to nudge this tick, grouped by wake path. A finding is
 /// due when it was never nudged or its last nudge is at least the re-nudge
 /// interval old.
@@ -284,36 +226,180 @@ pub(crate) fn scan_and_route(project_root: &Path, route: bool) -> Vec<DoctorFind
     let policy = Policy::from_config(cfg.as_ref());
     let store_root = crate::detect_distributed_store_from(project_root)
         .unwrap_or_else(|| project_root.join(".aida-store"));
-    let messages = match read_merged(project_root, &store_root) {
-        Ok(m) => m,
-        Err(err) => {
-            eprintln!("warning: mail-backlog could not read the mailbox: {err:#}");
-            return Vec::new();
-        }
-    };
-    let evidence = crate::mailbox_store::ReadEvidence::load_fail_closed(project_root);
-    let live = crate::agent_registry::load_live_entries(project_root);
     let now = Utc::now();
-    let backlog = evaluate(
-        &messages,
-        &|to, m| evidence.read_by(to, m),
-        &live,
+    let (backlog, unknown) = inspect_backlog(
+        project_root,
+        &store_root,
         &policy,
         now,
+        &aida_core::mailbox_logical::ReadLimits::explicit_read(),
     );
     if route {
-        route_backlog(project_root, &store_root, &backlog, &policy, now);
+        route_backlog_observed(project_root, &store_root, &backlog, &policy, now, &unknown);
     }
-    backlog
+    let mut findings: Vec<_> = backlog
         .into_iter()
         .map(Backlog::into_doctor_finding)
-        .collect()
+        .collect();
+    if unknown.any() {
+        findings.push(unknown_finding(&unknown));
+    }
+    findings
 }
 
-fn read_merged(project_root: &Path, store_root: &Path) -> anyhow::Result<Vec<Message>> {
-    let local = crate::mailbox_store::read_local_messages(project_root)?;
-    let canonical = crate::mailbox_store::read_canonical_messages(store_root)?;
-    Ok(aida_core::mailbox::merge_dedup(&local, &canonical))
+/// Where inspection could not reach a conclusion. `all` is a whole-scan gap
+/// (directory, context, or sources unreadable with no reader to scope it);
+/// otherwise only the recipients of the readers actually affected are
+/// unknown, so one bad row cannot poison the rest of the scan.
+// trace:BUG-b6b1278890774ef993d2ebc327862470-178 | ai:claude
+#[derive(Debug, Default)]
+pub(crate) struct Unknown {
+    all: bool,
+    keys: BTreeSet<String>,
+}
+
+impl Unknown {
+    pub(crate) fn any(&self) -> bool {
+        self.all || !self.keys.is_empty()
+    }
+
+    fn whole() -> Self {
+        Self {
+            all: true,
+            keys: BTreeSet::new(),
+        }
+    }
+
+    /// Mark every recipient key an affected reader could own.
+    fn reader(&mut self, e: &AgentRegistryEntry) {
+        self.keys.insert(key(&handle(e)));
+        self.keys.insert(key(&e.id));
+        self.keys.extend(entry_role(e).map(|r| key(&r)));
+    }
+
+    /// Whether nudge record `id` (`<recipient key>:<message id>`) is in an
+    /// unknown scope, so its absence from the backlog proves nothing.
+    fn covers(&self, id: &str) -> bool {
+        self.all
+            || id.split_once(':').is_some_and(|(to, _)| {
+                self.keys.contains(to) || self.keys.contains(&key(&crate::canonical_role_name(to)))
+            })
+    }
+}
+
+// trace:BUG-b6b1278890774ef993d2ebc327862470-178 | ai:codex
+fn unknown_finding(unknown: &Unknown) -> DoctorFinding {
+    let scope = if unknown.all {
+        "all recipients".to_string()
+    } else {
+        unknown.keys.iter().cloned().collect::<Vec<_>>().join(", ")
+    };
+    DoctorFinding {
+        category: CATEGORY.into(), id: format!("{CATEGORY}:unknown"),
+        summary: format!("Mail backlog inspection is incomplete for {scope}; some delivery or read state is unknown."),
+        action: "Restore mailbox source, receipt and live-reader evidence, then rerun the check. Prior reminders remain retained.".into(),
+        safe_heal: false,
+    }
+}
+
+// trace:BUG-b6b1278890774ef993d2ebc327862470-178 | ai:codex
+fn inspect_backlog(
+    project_root: &Path,
+    store_root: &Path,
+    policy: &Policy,
+    now: DateTime<Utc>,
+    limits: &aida_core::mailbox_logical::ReadLimits,
+) -> (Vec<Backlog>, Unknown) {
+    use aida_core::mailbox_logical::{inspect_mail, InspectionState, MailboxContext};
+    let home = crate::mailbox_store::mailbox_home(project_root);
+    let root = home.root();
+    let directory = match crate::mailbox_resolver::RecipientDirectory::load(root, store_root) {
+        Ok(directory) => directory,
+        Err(_) => return (Vec::new(), Unknown::whole()),
+    };
+    let store = std::fs::symlink_metadata(store_root)
+        .is_ok()
+        .then_some(store_root);
+    let ctx = match MailboxContext::resolve_or_local(root, store) {
+        Ok(ctx) => ctx,
+        Err(_) => return (Vec::new(), Unknown::whole()),
+    };
+    // A skipped (unreadable/invalid) registry row is not a reader, exactly as
+    // for send and the own inbox; it does not make other recipients unknown.
+    let mut unknown = Unknown::default();
+    let mut grouped: BTreeMap<String, (Backlog, Vec<&AgentRegistryEntry>)> = BTreeMap::new();
+    let readers = directory.inspection_readers();
+    if readers.is_empty() {
+        unknown.all = !aida_core::mailbox_logical::inspection_sources_complete(&ctx, limits);
+    }
+    for (entry, subject) in readers {
+        let subject = match subject {
+            Ok(s) => s,
+            Err(_) => {
+                unknown.reader(entry);
+                continue;
+            }
+        };
+        let inspection = inspect_mail(&ctx, &subject, limits);
+        if !inspection.complete || !inspection.unknown_ids.is_empty() {
+            unknown.reader(entry);
+        }
+        for record in inspection.records {
+            if !matches!(
+                record.state,
+                InspectionState::Unread | InspectionState::Pending
+            ) || record.timestamp <= 0
+            {
+                continue;
+            }
+            let kind = match record.intent {
+                Intent::Request if record.state == InspectionState::Pending => "pending request",
+                Intent::Handoff if record.state == InspectionState::Pending => "pending handoff",
+                Intent::Request => "request",
+                Intent::Handoff => "handoff",
+                Intent::Fyi => continue,
+            };
+            let Recipient::Agent(to) = record.to else {
+                continue;
+            };
+            let age = Duration::milliseconds(now.timestamp_millis() - record.timestamp);
+            if age < policy.max_age {
+                continue;
+            }
+            let id = format!("{}:{}", key(&to), record.id);
+            let (_, owners) = grouped.entry(id.clone()).or_insert_with(|| {
+                (
+                    Backlog {
+                        id,
+                        recipient: to,
+                        from: record.from,
+                        kind,
+                        age,
+                        subject: record.subject,
+                        wake: Wake::Operator,
+                    },
+                    Vec::new(),
+                )
+            });
+            owners.push(entry);
+        }
+    }
+    let mut backlog = grouped
+        .into_values()
+        .map(|(mut b, owners)| {
+            b.wake = if owners
+                .iter()
+                .any(|e| key(&handle(e)) == key(&b.recipient) || key(&e.id) == key(&b.recipient))
+            {
+                agent_wake(owners[0])
+            } else {
+                role_wake(&crate::canonical_role_name(&b.recipient), &owners)
+            };
+            b
+        })
+        .collect::<Vec<_>>();
+    backlog.sort_by(|a, b| b.age.cmp(&a.age).then(a.id.cmp(&b.id)));
+    (backlog, unknown)
 }
 
 fn nudged_path(project_root: &Path) -> PathBuf {
@@ -332,19 +418,22 @@ fn load_nudged(project_root: &Path) -> BTreeMap<String, DateTime<Utc>> {
 
 /// Nudge every due finding. Only a nudge that landed is recorded, so a
 /// failed one retries next tick; records for mail no longer in the backlog
-/// (read, deleted, or its agent gone) are dropped.
-fn route_backlog(
+/// (read, deleted, or its agent gone) are dropped unless `unknown` covers
+/// their recipient.
+// trace:BUG-b6b1278890774ef993d2ebc327862470-178 | ai:codex
+fn route_backlog_observed(
     project_root: &Path,
     store_root: &Path,
     backlog: &[Backlog],
     policy: &Policy,
     now: DateTime<Utc>,
+    unknown: &Unknown,
 ) {
     let previous = load_nudged(project_root);
     let current: BTreeSet<&str> = backlog.iter().map(|b| b.id.as_str()).collect();
     let mut nudged: BTreeMap<String, DateTime<Utc>> = previous
         .iter()
-        .filter(|(id, _)| current.contains(id.as_str()))
+        .filter(|(id, _)| current.contains(id.as_str()) || unknown.covers(id))
         .map(|(id, at)| (id.clone(), *at))
         .collect();
 
@@ -539,119 +628,69 @@ mod tests {
         e
     }
 
-    fn mail(id: &str, to: &str, intent: Intent, age_mins: i64) -> Message {
-        Message {
-            subject: Some(format!("subject {id}")),
-            id: id.to_string(),
-            thread_id: id.to_string(),
-            from: "advisor".to_string(),
-            to: Recipient::Agent(to.to_string()),
-            timestamp: (now() - Duration::minutes(age_mins)).timestamp_millis(),
-            in_reply_to: None,
-            body: "body".to_string(),
-            urgent: false,
-            intent,
-            retracted: false,
-            deleted: false,
-            archived: false,
-            from_source: aida_core::mailbox::SenderSource::Explicit,
-            from_role: None,
-            relayed_from: None,
-        }
-    }
-
-    fn unread(_: &str, _: &Message) -> bool {
-        false
-    }
-
     fn codex() -> AgentRegistryEntry {
         let mut e = agent("codex-1", "codex-agent-04", "codex", Some("implementer"));
         e.mail_wake = Some(MailWake::Armed);
         e
     }
 
+    // The detection paths (age threshold, read state, intent and recipient
+    // filtering) run through inspect_backlog in the focused tests; these
+    // cover the pure summary, re-nudge and wake-path helpers.
+    // trace:TASK-b6b1278890774ef993d2ebc327862470-690 | ai:claude
     #[test]
-    fn stale_request_to_live_agent_is_one_finding_and_one_nudge() {
-        let live = [codex()];
-        let msgs = [mail("m1", "codex-agent-04", Intent::Request, 45)];
-        let policy = Policy::default();
-        let backlog = evaluate(&msgs, &unread, &live, &policy, now());
-        assert_eq!(backlog.len(), 1);
-        let b = &backlog[0];
-        assert_eq!(b.wake, Wake::Mail("codex-agent-04".into()));
+    fn summary_names_the_finding_and_renudge_waits_the_interval() {
+        let mut b = backlog_item("codex-agent-04:m1", Wake::Mail("codex-agent-04".into()));
+        b.recipient = "codex-agent-04".into();
         let summary = b.summary();
         for part in [
             "codex-agent-04",
-            "[request]",
+            "unread [request]",
             "advisor",
             "45m",
-            "subject m1",
+            "subject codex-agent-04:m1",
         ] {
             assert!(summary.contains(part), "{part} missing from {summary}");
         }
+        b.kind = "pending handoff";
+        assert!(b.summary().contains("pending binding [handoff]"));
 
+        let backlog = [b];
+        let policy = Policy::default();
         let nudges = due_nudges(&backlog, &BTreeMap::new(), &policy, now());
-        assert_eq!(nudges.len(), 1);
         assert_eq!(nudges[&Wake::Mail("codex-agent-04".into())].len(), 1);
-
         // Nudged ten minutes ago: not again until the re-nudge interval.
         let mut nudged = BTreeMap::new();
-        nudged.insert(b.id.clone(), now() - Duration::minutes(10));
+        nudged.insert(backlog[0].id.clone(), now() - Duration::minutes(10));
         assert!(due_nudges(&backlog, &nudged, &policy, now()).is_empty());
-        nudged.insert(b.id.clone(), now() - Duration::minutes(60));
+        nudged.insert(backlog[0].id.clone(), now() - Duration::minutes(60));
         assert_eq!(due_nudges(&backlog, &nudged, &policy, now()).len(), 1);
     }
 
-    #[test]
-    fn fresh_request_is_not_a_finding() {
-        let live = [codex()];
-        let msgs = [mail("m1", "codex-agent-04", Intent::Handoff, 10)];
-        assert!(evaluate(&msgs, &unread, &live, &Policy::default(), now()).is_empty());
-    }
-
-    #[test]
-    fn read_request_clears_the_finding() {
-        let live = [codex()];
-        let msgs = [mail("m1", "codex-agent-04", Intent::Request, 90)];
-        let read = |to: &str, m: &Message| to == "codex-agent-04" && m.id == "m1";
-        assert!(evaluate(&msgs, &read, &live, &Policy::default(), now()).is_empty());
-    }
-
-    #[test]
-    fn fyi_and_mail_to_unknown_recipients_are_ignored() {
-        let live = [codex()];
-        let msgs = [
-            mail("m1", "codex-agent-04", Intent::Fyi, 90),
-            mail("m2", "codex-agent-99", Intent::Request, 90),
-            mail("m3", "product", Intent::Request, 90),
-        ];
-        assert!(evaluate(&msgs, &unread, &live, &Policy::default(), now()).is_empty());
-    }
-
+    // trace:TASK-b6b1278890774ef993d2ebc327862470-690 | ai:claude
     #[test]
     fn wake_paths_by_recipient_kind() {
         let claude = agent("claude-7", "claude-advisor-1", "claude", Some("advisor"));
         let agy = agent("agy-1", "antigravity-1", "antigravity", Some("reviewer"));
-        let live = [codex(), claude, agy];
-        let msgs = [
-            mail("a", "advisor", Intent::Request, 40),
-            mail("b", "claude-advisor-1", Intent::Handoff, 40),
-            mail("c", "implementer", Intent::Request, 40),
-            mail("d", "antigravity-1", Intent::Request, 40),
-        ];
-        let backlog = evaluate(&msgs, &unread, &live, &Policy::default(), now());
-        let wake = |id: &str| {
-            backlog
-                .iter()
-                .find(|b| b.id.ends_with(&format!(":{id}")))
-                .unwrap()
-                .wake
-                .clone()
-        };
-        assert_eq!(wake("a"), Wake::Seat("advisor".into()));
-        assert_eq!(wake("b"), Wake::Seat("advisor".into()));
-        assert_eq!(wake("c"), Wake::Mail("codex-agent-04".into()));
-        assert_eq!(wake("d"), Wake::Operator);
+        let codex = codex();
+        // Direct mail: armed Codex by mail, a Claude seat holder by its seat,
+        // anything else to the operator.
+        assert_eq!(agent_wake(&codex), Wake::Mail("codex-agent-04".into()));
+        assert_eq!(agent_wake(&claude), Wake::Seat("advisor".into()));
+        assert_eq!(agent_wake(&agy), Wake::Operator);
+        let mut unarmed = codex.clone();
+        unarmed.mail_wake = None;
+        assert_eq!(agent_wake(&unarmed), Wake::Operator);
+        // Role mail: a Claude holder wins, else an armed Codex holder.
+        assert_eq!(
+            role_wake("advisor", &[&codex, &claude]),
+            Wake::Seat("advisor".into())
+        );
+        assert_eq!(
+            role_wake("implementer", &[&agy, &codex]),
+            Wake::Mail("codex-agent-04".into())
+        );
+        assert_eq!(role_wake("reviewer", &[&agy, &unarmed]), Wake::Operator);
     }
 
     #[test]
@@ -681,7 +720,24 @@ mod tests {
         }
     }
 
-    // The route_backlog I/O layer: a landed nudge is recorded in
+    fn route_all_known(
+        project_root: &Path,
+        store_root: &Path,
+        backlog: &[Backlog],
+        policy: &Policy,
+        now: DateTime<Utc>,
+    ) {
+        route_backlog_observed(
+            project_root,
+            store_root,
+            backlog,
+            policy,
+            now,
+            &Unknown::default(),
+        );
+    }
+
+    // The route_backlog_observed I/O layer, every recipient known: a landed nudge is recorded in
     // nudged.json once and not repeated inside the re-nudge interval; a
     // failed nudge is not recorded, so the next tick retries it; records for
     // mail that left the backlog are dropped.
@@ -697,7 +753,7 @@ mod tests {
         let mail = backlog_item("codex-agent-04:m2", Wake::Mail("codex-agent-04".into()));
 
         // Tick 1: both land, both are recorded, the seat job is due.
-        route_backlog(root, &store, &[seat.clone(), mail.clone()], &policy, t0);
+        route_all_known(root, &store, &[seat.clone(), mail.clone()], &policy, t0);
         let nudged = load_nudged(root);
         assert_eq!(nudged.get("advisor:m1"), Some(&t0));
         assert_eq!(nudged.get("codex-agent-04:m2"), Some(&t0));
@@ -713,7 +769,7 @@ mod tests {
         assert_eq!(reminders[0].to, Recipient::Agent("codex-agent-04".into()));
 
         // Tick 2, inside the re-nudge interval: no second reminder, records kept.
-        route_backlog(
+        route_all_known(
             root,
             &store,
             &[seat.clone(), mail.clone()],
@@ -734,7 +790,7 @@ mod tests {
         std::fs::write(&broken_store, "file, not a directory").unwrap();
         let operator = backlog_item("ghost:m3", Wake::Operator);
         let t3 = t0 + Duration::minutes(20);
-        route_backlog(
+        route_all_known(
             root,
             &broken_store,
             &[seat.clone(), operator.clone()],
@@ -754,7 +810,7 @@ mod tests {
 
         // Tick 4: the store is writable again; the failed nudge retries and lands.
         let t4 = t0 + Duration::minutes(25);
-        route_backlog(root, &store, &[seat, operator], &policy, t4);
+        route_all_known(root, &store, &[seat, operator], &policy, t4);
         let nudged = load_nudged(root);
         assert_eq!(nudged.get("ghost:m3"), Some(&t4));
         assert_eq!(nudged.get("advisor:m1"), Some(&t0), "not re-nudged early");
@@ -765,7 +821,7 @@ mod tests {
         );
 
         // Everything cleared: every record is dropped.
-        route_backlog(root, &store, &[], &policy, t4);
+        route_all_known(root, &store, &[], &policy, t4);
         assert!(load_nudged(root).is_empty());
     }
 
@@ -793,3 +849,7 @@ mod tests {
         );
     }
 }
+
+#[cfg(test)]
+#[path = "tests/mail_backlog_bug2405_tests.rs"]
+mod focused_bug2405;

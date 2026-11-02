@@ -11125,13 +11125,38 @@ pub(crate) fn queue_work_delegation_refusal(
 }
 
 // trace:TASK-1337 | ai:codex
-fn queue_work_manual_continuation(id: &str, guided: bool) -> String {
+// trace:BUG-2396 | ai:claude — the launch line follows the resolved host vendor.
+fn queue_work_manual_continuation(
+    id: &str,
+    guided: bool,
+    vendor: crate::session::HeadlessVendor,
+) -> String {
     let skill = if guided {
         "aida-guided-implement"
     } else {
         "aida-pickup"
     };
-    format!("Pickup setup exists; manual continuation:\n  aida worktree enter {id}\n  claude \"/{skill} {id}\"")
+    format!(
+        "Pickup setup exists; manual continuation:\n  aida worktree enter {id}\n  {}",
+        crate::vendor_hints::launch_with_skill(vendor, skill, id)
+    )
+}
+
+#[cfg(test)]
+mod bug2396_manual_continuation_tests {
+    use crate::session::HeadlessVendor;
+
+    // trace:BUG-2396 | ai:claude
+    #[test]
+    fn manual_continuation_renders_codex_and_claude() {
+        let codex = super::queue_work_manual_continuation("BUG-1", false, HeadlessVendor::Codex);
+        assert!(codex.ends_with("\n  codex '$aida-pickup BUG-1'"), "{codex}");
+        let claude = super::queue_work_manual_continuation("BUG-1", true, HeadlessVendor::Claude);
+        assert!(
+            claude.ends_with("\n  claude '/aida-guided-implement BUG-1'"),
+            "{claude}"
+        );
+    }
 }
 
 /// Explicit/rework branches must be available before any setup mutation.
@@ -13800,7 +13825,9 @@ pub(crate) fn handle_queue_work(
     {
         eprintln!(
             "{}",
-            queue_work_manual_continuation(&plan.anchor_display, guided)
+            // The vendor actually launched (honours `[agents] enabled`),
+            // not the raw flag/default token. trace:BUG-2396 | ai:claude
+            queue_work_manual_continuation(&plan.anchor_display, guided, launch_vendor)
         );
     }
     setup_result
