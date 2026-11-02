@@ -7,12 +7,12 @@ description: |-
 
   NON-BLOCKING cosmetic supervisor.rs:263-279 vs 364-390: synthetic_layout() duplicates the dir/protected-path setup run_probe_inner repeats inline; start the lane from synthetic_layout() and add controls.
   Reviewed sha: 94367e74ed9e9af0c2242dfc9799de38e2b4e1b1
-status: Draft
+status: Rejected
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-02T03:43:47.928825831Z
-modified_at: 2026-11-02T06:25:36.562909075Z
+modified_at: 2026-11-02T06:25:38.891968034Z
 req_type: Task
 tags:
 - carried-from:TASK-2705
@@ -32,6 +32,14 @@ history:
   timestamp: 2026-11-02T04:14:43.867443341Z
   session_id: 126bbd5a-a92f-452b-ab0b-2637a1db42c2
   changes: []
+- id: 01a19aef-564b-7622-b901-6158bfd2767e
+  author: joe
+  timestamp: 2026-11-02T06:25:38.891965780Z
+  session_id: 1f56bd1e-c059-4f73-b8df-e18b2170fdfc
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Rejected
 filed_at:
   code_sha: 9a2168d8563579456bf669bb816ebdf5ff3aa355
   branch: main
