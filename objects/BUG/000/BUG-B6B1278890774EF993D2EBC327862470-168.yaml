@@ -21,7 +21,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T06:48:07.778727918Z
-modified_at: 2026-11-02T11:17:23.658766064Z
+modified_at: 2026-11-02T11:20:43.447632429Z
 req_type: Bug
 tags:
 - audit
@@ -47,6 +47,31 @@ comments:
   content: 'PROXY DECISION: approve full Codex plan-only read-only enforcement, scoped MCP off/aida selection and vendor-aware trust diagnostics after BUG2398 argv finalization. Never change global Codex config, grant authority or user approval policy; never auto-approve MCP calls to work around approval_policy=never. Read actual installed supported config; preserve explicit read-only against raw default flags on every plan path. Prefer enforcing only selected configured servers with exact escaped overrides; if a requested MCP posture cannot be enforced, fail or clearly report that unsupported posture as acceptance permits, with evidence. Test Claude/Codex and explicit policy precedence, read-only actual write refusal, server selection without credentials in argv, disabled Claude trust noise and relevant Codex trust behavior. Independent sensitive review/operator merge floor.'
   created_at: 2026-11-01T08:19:55.419399205Z
   modified_at: 2026-11-01T08:19:55.419399205Z
+- id: 01a19bfd-7cb7-7db1-8152-7d7e00bd6f7c
+  author: joe
+  content: |-
+    ## Implementer approach
+
+    ### Acceptance criteria as tests
+    - **Unit (AC1):** `codex_read_only_args` strips `--dangerously-bypass-approvals-and-sandbox` and any prior `--sandbox`/`-s` value (incl. the native `workspace-write` default flags) and leaves exactly one `--sandbox read-only`; queue-work Codex interactive launch + its dry-run preview map `permission_mode == plan` to it. Command-level test on the preview string for plan vs bypass vs native.
+    - **No automated test (AC1 actual write refusal):** `codex sandbox -c sandbox_mode=read-only` cannot run inside the implementer bwrap sandbox (nested user namespaces refused) — reported as a gap; argv is the tested contract.
+    - **Unit (AC2):** `codex_mcp_flags(surface, servers)` — `off` emits `-c mcp_servers.<n>.enabled=false` for every server in `$CODEX_HOME/config.toml` (+ project `.codex/config.toml`); `aida` disables all but `aida`, injecting the vouched `command="aida"`/`args=["mcp-serve"]` only when not configured; `native` emits nothing; a name not addressable by a dotted `-c` path fails the launch; no env/credential values ever appear in argv. Fixture test reading a temp CODEX_HOME. Verified live on codex-cli 0.166.0 that `-c mcp_servers.<n>.enabled=false` disables config servers; plugin-provided servers (e.g. cua_repl) reject that override (`invalid transport`), so they are reported as not enforceable in the launch preview / note rather than silently claimed.
+    - **Unit (AC3):** doctor Claude folder-trust scan is skipped when `[agents] enabled` excludes claude, or no enabled list and `[agents] vendor` resolves to a non-Claude vendor.
+
+    ### Expected files
+    - `aida-cli-lib/src/session.rs` (codex read-only + MCP flag helpers, exec_codex_session)
+    - `aida-cli-lib/src/queue_cmd.rs` (interactive Codex plan posture + preview)
+    - `aida-cli-lib/src/lib_part2.rs`, `aida-cli-lib/src/agent_launch.rs` (agent new codex MCP flags + preview line)
+    - `aida-cli-lib/src/doctor_cmd.rs` (vendor gate)
+    - new test module under `aida-cli-lib/src/tests/`
+
+    ### Ambiguities / conflicts as questions
+    - Codex worktree trust: Codex keeps per-path `[projects.*] trust_level` in its own config; whether linked worktrees inherit the main checkout's trust is not verifiable from here. I will not emit a Codex trust finding without evidence — filed as a follow-up instead.
+    - MCP scope: Claude applies `[agents] mcp` only on `aida agent new`; I mirror that for Codex (agent new) rather than also changing headless drains, to keep vendor parity — follow-up filed for headless/queue-work seats.
+  created_at: 2026-11-02T11:20:43.447632429Z
+  modified_at: 2026-11-02T11:20:43.447632429Z
+  session_id: 01a19bfa65d6
+  harness_version: 2.1.316 (Claude Code)
 history:
 - id: 01a195dd-b979-7b63-b353-ebf808b482d9
   author: joe
