@@ -1,0 +1,27 @@
+id: 01a199c4-ecb4-7ca2-b535-c1e2b529c381
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-670
+title: 'cosmetic/non-blocking: forge.rs merge_checked — a train gate refusal raised ins…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on BUG-B6B1278890774EF993D2EBC327862470-179, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  cosmetic/non-blocking: forge.rs merge_checked — a train gate refusal raised inside the retry closure (VerifiedTrainMerge::enforce or the per-attempt read_hold) is wrapped as io::Error under context 'could not invoke `gh pr merge`', so the message misattributes a deliberate refusal to an invocation failure and MergeHoldRefusal can no longer be downcast from that error (no train-path consumer downcasts today).
+  Reviewed sha: 9995fac7dfea705ee3c076014210819bd7095bac
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-02T00:59:42.132892050Z
+modified_at: 2026-11-02T00:59:42.132892050Z
+req_type: Task
+tags:
+- carried-from:BUG-B6B1278890774EF993D2EBC327862470-179
+- finding-hash:480c6944
+- from-review:BUG-B6B1278890774EF993D2EBC327862470-179
+- kind:carried-forward
+filed_at:
+  code_sha: 36e0badba8ffcabbfbfaff2981704128806bdcb7
+  branch: main
+  dirty: true
+  aida_version: 0.16.0
+  aida_build_sha: 6a3f67671a9
+  vendor: claude
