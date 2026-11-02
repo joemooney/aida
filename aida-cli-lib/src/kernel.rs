@@ -286,6 +286,18 @@ pub(crate) fn resolve_forge_binary(
     test_env: &str,
     debug_env: &str,
 ) -> Option<std::path::PathBuf> {
+    resolve_forge_binary_before(exe_base, test_env, debug_env, None)
+}
+
+/// Preserve ordinary fallback resolution; scoped spec lookup supplies one
+/// absolute deadline covering every candidate probe as well as API commands.
+// trace:BUG-2400 | ai:codex
+pub(crate) fn resolve_forge_binary_before(
+    exe_base: &str,
+    test_env: &str,
+    debug_env: &str,
+    deadline: Option<std::time::Instant>,
+) -> Option<std::path::PathBuf> {
     if !test_env.is_empty() {
         if let Ok(test_path) = std::env::var(test_env) {
             return Some(std::path::PathBuf::from(test_path));
@@ -313,14 +325,29 @@ pub(crate) fn resolve_forge_binary(
     // instead of returning a path that the real caller will choke on.
     let mut check_candidate =
         |candidate: &std::path::Path, source: &str| -> Option<std::path::PathBuf> {
+            if deadline.is_some_and(|d| std::time::Instant::now() >= d) {
+                return None;
+            }
             tried.push(candidate.to_path_buf());
             if !is_executable(candidate) {
                 return None;
             }
-            match std::process::Command::new(candidate)
-                .arg("--version")
-                .output_retrying_etxtbsy()
-            {
+            let mut cmd = std::process::Command::new(candidate);
+            cmd.arg("--version");
+            let output = match deadline {
+                Some(d) => command_output_with_timeout(
+                    cmd,
+                    d.saturating_duration_since(std::time::Instant::now()),
+                )
+                .ok_or_else(|| {
+                    std::io::Error::new(
+                        std::io::ErrorKind::TimedOut,
+                        "forge CLI probe failed or timed out",
+                    )
+                }),
+                None => cmd.output_retrying_etxtbsy(),
+            };
+            match output {
                 Ok(o) if o.status.success() => {
                     if debug {
                         eprintln!(

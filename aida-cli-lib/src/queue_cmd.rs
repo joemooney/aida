@@ -16800,10 +16800,22 @@ pub(crate) fn handle_queue_integrate(
             // and apply the pure newest-canonical policy: pick the newest
             // mergeable PR, report the rest as ignored-this-pass, or PARK when
             // none are clean. When only one PR is found this is a no-op (the
-            // common case). The forge list is best-effort — an empty result (gh
-            // missing/failing, or no title/body match) falls back to the existing
-            // single-PR drive path. trace:TASK-843 | ai:claude
-            let multi_prs = all_open_prs_for_spec_via_forge(&project_root, id);
+            // common case). The forge list is best-effort; unknown enumeration
+            // falls back to the existing single-PR drive path. trace:TASK-843 | ai:claude
+            // Preserve the existing best-effort policy: an unknown enumeration
+            // leaves the already-probed primary path in charge. Never describe
+            // this as proof that there are no duplicates. trace:BUG-2400 | ai:codex
+            let multi_prs = match all_open_prs_for_spec_via_forge(&project_root, id) {
+                Ok(prs) => prs,
+                Err(_) => {
+                    println!(
+                        "  {} {} — open PR enumeration incomplete; retaining primary PR path",
+                        "·".dimmed(),
+                        id
+                    );
+                    Vec::new()
+                }
+            };
             if multi_prs.len() > 1 {
                 // Mergeability per candidate from the pass snapshot (CONFLICTING
                 // → not mergeable; anything else admissible — the --from-pr drive

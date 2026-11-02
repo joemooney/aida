@@ -546,7 +546,7 @@ persistence.
 - `--refresh` — force regeneration when the cached comprehension is stale or the spec changed in ways the drift stamp didn't catch.
 - `--json` — machine-readable envelope (`spec`, `audience`, `comprehension`, `generated_at`, `model`, `stale`) for downstream consumers.
 
-**Gotchas.** The output is an LLM synthesis, so it costs a generation on the first call (and on `--refresh`); thereafter it's a cache read. The STALE marker is your cue that the neighborhood drifted — re-run with `--refresh` if the cached read no longer fits.
+**Gotchas.** The output is an LLM synthesis, so it costs a generation on the first call (and on `--refresh`); thereafter it's a cache read. The STALE marker is your cue that the neighborhood drifted — re-run with `--refresh` if the cached read no longer fits. The synthesis runs headless on the configured `[agents] vendor` (Claude or Codex). <!-- trace:BUG-2389 | ai:claude -->
 
 **Chains with** — pairs with `aida show <ID>` (the literal contract) and `aida why <ID>` (the stuck-state classifier): `intent` for the *why it exists*, `why` for the *why it's still open*, `show` for the facts.
 

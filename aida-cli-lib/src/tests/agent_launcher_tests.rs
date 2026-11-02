@@ -4475,9 +4475,20 @@ fn build_agent_new_bg_command_exports_when_contained_and_strips_when_uncontained
 // trace:BUG-2124 | ai:antigravity
 #[test]
 fn uncontained_launchers_strip_inherited_aida_contained() {
-    let _env = crate::test_env::EnvVarsGuard::apply(&[("AIDA_CONTAINED", None)]);
     let tmp = tempfile::tempdir().unwrap();
     let project = tmp.path().to_path_buf();
+
+    // trace:BUG-2389 | ai:codex
+    let _ambient = crate::test_env::AmbientGuard::hermetic_and(
+        &project,
+        None,
+        &[
+            ("AIDA_HEADLESS_VENDOR", Some("claude")),
+            ("AIDA_AGENT_CMD", Some("/bin/true")),
+            ("AIDA_OS_WRAP", Some("0")),
+            ("AIDA_CONTAINED", None),
+        ],
+    );
 
     // 1. phase_driver advisor
     let advisor_cmd = crate::phase_driver::build_phase_driver_advisor_command(
@@ -4518,7 +4529,13 @@ fn uncontained_launchers_strip_inherited_aida_contained() {
 
     // 3. burndown quiet
     let burndown_quiet_cmd = crate::burndown_run::build_burndown_quiet_command(
-        "prompt", "mode", "", "CEILING", "10", false,
+        crate::session::HeadlessVendor::Claude,
+        "prompt",
+        "mode",
+        "",
+        "CEILING",
+        "10",
+        false,
     )
     .unwrap();
     assert!(
@@ -4536,6 +4553,7 @@ fn uncontained_launchers_strip_inherited_aida_contained() {
 
     // 4. burndown verbose
     let burndown_verbose_cmd = crate::burndown_run::build_burndown_verbose_command(
+        crate::session::HeadlessVendor::Claude,
         "prompt",
         "mode",
         "child-grant-id",
@@ -4560,6 +4578,7 @@ fn uncontained_launchers_strip_inherited_aida_contained() {
     // 5. autopilot intake
     let cfg = crate::intake::IntakeConfig::default();
     let intake_cmd = crate::autopilot_intake::build_autopilot_intake_command(
+        crate::session::HeadlessVendor::Claude,
         "prompt",
         "mode",
         "child-grant-id",
@@ -4587,9 +4606,13 @@ fn uncontained_launchers_strip_inherited_aida_contained() {
     );
 
     // 6. questions clarify
-    let clarify_cmd =
-        crate::questions::build_questions_clarify_command("prompt", "child-grant-id", false)
-            .unwrap();
+    let clarify_cmd = crate::questions::build_questions_clarify_command(
+        crate::session::HeadlessVendor::Claude,
+        "prompt",
+        "child-grant-id",
+        false,
+    )
+    .unwrap();
     assert!(
         clarify_cmd
             .get_envs()
@@ -4784,4 +4807,52 @@ fn task_117_agent_list_and_aliases_keep_their_flags_and_avoid_launch_rewrite() {
     assert!(!agent.get_subcommands().any(|sub| sub.get_name() == "ls"));
     let list = agent.find_subcommand("list").unwrap();
     assert!(list.get_visible_aliases().any(|alias| alias == "ls"));
+}
+
+// trace:BUG-2387 | ai:codex
+#[test]
+fn codex_derisk_agent_argv_expands_workflow_after_context_preamble() {
+    let tmp = TempDir::new().unwrap();
+    let plan =
+        prepare_agent_launch_dry(tmp.path(), Some("advisor".into()), None, "codex", None).unwrap();
+    let launch = derisk_launch_request("BUG-2387");
+    let options = AgentPromptOptions::new(Some(launch.prompt.clone()), false);
+    for vendor in ["codex", "claude"] {
+        let config = AgentLaunchConfig {
+            agent_type: vendor,
+            binary: vendor,
+            default_args: Vec::new(),
+            prompt_style: AgentPromptStyle::Positional,
+            contained: false,
+        };
+        let args = agent_initial_prompt_args(&config, &plan, &options);
+        assert_eq!(args.len(), 1);
+        let body = &args[0];
+        if vendor == "claude" {
+            assert_eq!(body, &launch.prompt);
+        } else {
+            assert!(body.starts_with("Read your AIDA launch context first:"));
+            assert!(body.contains("cat \"$AIDA_AGENT_CONTEXT_FILE\""));
+            assert!(body.contains("# De-risk a Supervised Spec"));
+            assert!(body.contains("decision risk"));
+            assert!(body.contains("Codex prompt arguments: `BUG-2387`"));
+            assert!(!body.lines().any(|line| line.starts_with("/aida-")));
+            assert!(body.ends_with("Do not implement the spec."));
+            assert!(render_agent_show_prompt(&options, &args).contains(body));
+        }
+    }
+    let guided = guided_review_launch_request("BUG-2387");
+    let config = AgentLaunchConfig {
+        agent_type: "codex",
+        binary: "codex",
+        default_args: Vec::new(),
+        prompt_style: AgentPromptStyle::Positional,
+        contained: false,
+    };
+    let args = agent_initial_prompt_args(
+        &config,
+        &plan,
+        &AgentPromptOptions::new(Some(guided.prompt.clone()), false),
+    );
+    assert_eq!(args, vec![guided.prompt]);
 }
