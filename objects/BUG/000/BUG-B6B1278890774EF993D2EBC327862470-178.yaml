@@ -11,7 +11,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T16:42:07.593722571Z
-modified_at: 2026-11-02T07:37:09.853926073Z
+modified_at: 2026-11-02T07:37:11.217704639Z
 req_type: Bug
 tags:
 - doctor
@@ -126,6 +126,25 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Design, implementation and focused tests match the BUG-2405 advisor ruling, and lib-0/lib-1/cli/rest/contracts are green at 3b5c57c. But required CI (gates) fails: the Executable fixture ratchet flags the moved test file, so not every CI lane is green.. No triage reason was given.'
   created_at: 2026-11-02T07:37:09.853924458Z
   modified_at: 2026-11-02T07:37:09.853924458Z
+  session_id: 1f56bd1e-c059-4f73-b8df-e18b2170fdfc
+- id: 01a19b30-d49a-7171-b203-f7a208bad8c5
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-b6b1278890774ef993d2ebc327862470-178):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 3b5c57c779bd
+    Recorded: 2026-11-02T07:35:26.470805217+00:00
+    Review comment: https://github.com/joemooney/aida/pull/3214#issuecomment-6571681182
+    Findings:
+    1. BLOCKER CI (gates): 'Executable fixture ratchet' fails at head 3b5c57c (run 41404436806, job 125143166286), and so does 'Require every CI lane'. Reproduced locally: python3 -m unittest tests/test_executable_fixture_ratchet.py -> 'aida-cli-lib/src/tests/mail_backlog_bug2405_tests.rs: line 599: executable mode must use test_exec::mark_executable'. Round 4 moved the file under src/tests/, the only directory test_test_sources_do_not_set_executable_modes_directly scans, and line 599 calls Permissions::from_mode(0o775) on the agents/ and handles/ directories (group_writable_registry_still_inspects_genuine_backlog). Those are directory-permission fixtures, not executables. Fix it without weakening the ratchet for real executables: either add a narrow, documented directory-mode exemption to tests/test_executable_fixture_ratchet.py with its own unit case, or set the directory mode through a small helper that does not match the from_mode(0o7xx literal pattern, with a comment explaining why. Then get every required lane green at the new head.
+    2. PROCESS: run make check-ci-fast before pushing. It includes this ~1s python gate, which would have caught finding 1 locally. The ruling's focused cargo gate (focused_bug2405) has still never run locally; CI lib-1 at 3b5c57c is the only execution evidence. Name the check-ci-fast result on the spec when you re-request review.
+    3. MINOR (carried over from round 4, still unaddressed) aida-cli-lib/src/mail_backlog.rs:200 evaluate() and :487 route_backlog() are #[cfg(test)]-only. The old mail_backlog::tests at :748-:812 still exercise the retired evaluate() path, not inspect_backlog. Port them to inspect_backlog/scan_and_route or delete them.
+    4. MINOR (carried over) aida-core/src/mailbox_logical.rs inspect_mail and mail_backlog.rs inspect_backlog: each live reader runs a full snapshot_for_policy with a fresh ReadLimits budget, so the cost is O(readers x mailbox size), and a reader that runs out of budget is reported unknown. Share one inventory pass, or document the scaling in the inspect_backlog doc comment.
+    5. COSMETIC (carried over) aida-core/src/mailbox_logical.rs inspect_mail hard-codes subject_line(m, 80), duplicating mail_backlog::SUBJECT_MAX (mail_backlog.rs:43). Pass the limit in or share the constant.
+    6. COSMETIC (carried over) docs/cli/03-work-autonomy.md:415-438: the new unindented two-paragraph block, plus a trailing double blank line, sits between the '- **substrate**' bullet and its indented '  **Runaway-seat watchdog**' continuation. That orphans the watchdog paragraph from the list. Indent the new text into the bullet, or move it after the list.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-02T07:37:11.066024286Z
+  modified_at: 2026-11-02T07:37:11.066024286Z
   session_id: 1f56bd1e-c059-4f73-b8df-e18b2170fdfc
 history:
 - id: 01a198c4-4a0e-78f2-a498-045eec94c002
