@@ -631,14 +631,25 @@ fn resolve_branch(cwd: &str) -> Option<String> {
 }
 
 pub fn resume(id: Option<String>, limit: usize) -> Result<()> {
+    resume_with(&headless_worktree_root(), || match id {
+        Some(prefix) => resolve_resume_target(&prefix),
+        None => pick_interactive(limit),
+    })
+}
+
+/// [`resume`] with the project root and the target lookup supplied, so a test
+/// can drive the containment decision without a real session store.
+// trace:BUG-2393 | ai:claude
+pub(crate) fn resume_with(
+    project_root: &Path,
+    resolve_target: impl FnOnce() -> Result<ResumeTarget>,
+) -> Result<()> {
     // BUG-2157: a contained parent (strict parse, so a typo refuses) resumes
     // contained. Read before the picker so a refusal precedes any interaction.
-    // trace:BUG-2157 | ai:claude
-    let parent_contained = aida_contained_env()?;
-    let target = match id {
-        Some(prefix) => resolve_resume_target(&prefix)?,
-        None => pick_interactive(limit)?,
-    };
+    // BUG-2393: configured containment counts too, not only the env.
+    // trace:BUG-2157 BUG-2393 | ai:claude
+    let parent_contained = drain_contained(project_root)?;
+    let target = resolve_target()?;
     if parent_contained {
         let cwd = std::env::current_dir().context("failed to read the current directory")?;
         let mut cmd = build_contained_resume_command(&target, &cwd)?;
@@ -849,9 +860,85 @@ fn exec_or_spawn_claude(cmd: &mut std::process::Command) -> Result<()> {
     }
 }
 
+// trace:BUG-b6b1278890774ef993d2ebc327862470-159 | ai:codex
+pub(crate) fn interactive_session_vendor() -> Result<String> {
+    let root = crate::find_main_worktree_root().unwrap_or(std::env::current_dir()?);
+    Ok(aida_core::agents_config::resolve_default_vendor(&root)
+        .unwrap_or_else(|| "claude".to_string()))
+}
+
+// Validate the actual vendor and trusted posture before prompts, launch logs,
+// worktrees or leases. The tracked launcher repeats its own ordinary guards.
+// trace:BUG-b6b1278890774ef993d2ebc327862470-159 | ai:codex
+pub(crate) fn preflight_interactive_session(
+    vendor: &str,
+    permission_mode: Option<&str>,
+    contained: bool,
+) -> Result<()> {
+    anyhow::ensure!(
+        matches!(vendor, "claude" | "codex"),
+        "unsupported interactive session vendor `{vendor}`"
+    );
+    anyhow::ensure!(
+        crate::find_executable_on_path(vendor).is_some(),
+        "`{vendor}` is not on PATH — install the configured vendor before launching"
+    );
+    let root = crate::find_main_worktree_root().unwrap_or(std::env::current_dir()?);
+    crate::enforce_agent_type_enabled(&root, vendor)?;
+    if contained {
+        containment_posture_in(&root, vendor, true)?;
+    }
+    if vendor == "claude" {
+        return refuse_uncontained_session_under_contained_parent(permission_mode, contained);
+    }
+    anyhow::ensure!(
+        permission_mode.is_none(),
+        "--permission-mode is only supported by claude"
+    );
+    let config = codex_interactive_session_config(contained)?;
+    crate::refuse_uncontained_child_of_contained_parent(&config)
+}
+
+/// Refuse an explicit `--name` that cannot become a Codex agent handle, before
+/// any worktree or lease exists (the tracked launcher would refuse it later).
+// trace:BUG-b6b1278890774ef993d2ebc327862470-159 | ai:claude
+pub(crate) fn preflight_codex_agent_handle(name: &str) -> Result<()> {
+    let root = crate::find_main_worktree_root().unwrap_or(std::env::current_dir()?);
+    let reserved = crate::agent_handle::reserved_addresses(&root);
+    crate::agent_handle::validate_explicit_handle(name, &reserved)
+}
+
+// Use the existing sanctioned Codex flags and trusted native opt-in; never
+// interpret native as AIDA containment or widen the child's write boundary.
+// trace:BUG-b6b1278890774ef993d2ebc327862470-159 | ai:codex
+fn codex_interactive_session_config(contained: bool) -> Result<crate::AgentLaunchConfig> {
+    let root = crate::find_main_worktree_root().unwrap_or(std::env::current_dir()?);
+    let mut config = crate::AgentLaunchConfig {
+        agent_type: "codex",
+        binary: "codex",
+        default_args: vec![crate::CODEX_NO_DAEMON_FLAG.to_string()],
+        prompt_style: crate::AgentPromptStyle::Positional,
+        contained: false,
+    };
+    if contained {
+        containment_posture_in(&root, "codex", true)?;
+        config
+            .default_args
+            .extend(crate::tool_contained_flags("codex")?);
+    }
+    crate::apply_agent_default_flags(
+        &mut config,
+        &root,
+        crate::AgentDefaultFlagOptions::new(true, Vec::new(), None),
+        contained,
+    )?;
+    Ok(config)
+}
+
 /// `aida session new` — capture role + title up-front, append a record
-/// to `~/.aida/session-launches.log`, then exec `claude
-/// --permission-mode <mode>`. Subsequent `aida session list` calls read
+/// to `~/.aida/session-launches.log`, then exec the configured
+/// interactive vendor (`claude --permission-mode <mode>`, or codex through the
+/// tracked launcher). Subsequent `aida session list` calls read
 /// the launches log and join it with the .jsonl files (cwd + start-time
 /// match) to surface the user-chosen title and authoritative role —
 /// instead of falling back to the grep heuristic.
@@ -860,7 +947,16 @@ fn exec_or_spawn_claude(cmd: &mut std::process::Command) -> Result<()> {
 /// STORY-495: `permission_mode` is now `Option<&str>`. `None` means honor
 /// Claude's native permission posture — no `--permission-mode` is injected
 /// (the faithful-launcher default). `Some(mode)` injects it explicitly.
-pub fn new_session(
+///
+/// Callers run [`preflight_interactive_session`] once, before any setup; this
+/// launcher does not repeat it. A start --launch pins the vendor before
+/// allocating the seat, including when project agents.toml is absent in the
+/// newly created child worktree.
+// trace:BUG-b6b1278890774ef993d2ebc327862470-159 | ai:claude
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn new_session_for_vendor(
+    vendor: &str,
+    spec: Option<String>,
     title: Option<String>,
     permission_mode: Option<&str>,
     role_override: Option<String>,
@@ -868,6 +964,38 @@ pub fn new_session(
     contained: bool,
     set_terminal_title: bool,
 ) -> Result<()> {
+    if vendor == "codex" {
+        // The tracked launcher owns child grant/subject/scope, registration,
+        // finalization and terminal restoration. BUG-2398's adapter belongs
+        // inside that launcher; this wrapper does not copy its pending policy.
+        let cwd = std::env::current_dir()?;
+        let root = crate::find_main_worktree_root().unwrap_or(cwd.clone());
+        let Some(role) = crate::resolve_child_role(&root, role_override, "codex")? else {
+            return Ok(());
+        };
+        return crate::agent_new_with_config(
+            codex_interactive_session_config(contained)?,
+            Some(role),
+            spec,
+            false,
+            Some(&cwd),
+            crate::AgentContextOptions::new(true, false),
+            set_terminal_title,
+            false,
+            false,
+            false,
+            crate::AgentPromptOptions::new(None, true),
+            crate::AgentResumeOptions::new(false, None, false, true),
+            crate::AgentDefaultFlagOptions::new(false, Vec::new(), None),
+            // `aida session start --name` / the derived session name, same as
+            // the display name the Claude path passes to `claude --name`.
+            display_name,
+            title,
+            // Configured bypass retains the shared launcher's consent downgrade.
+            // Only a selected sandbox posture is explicit on this wrapper.
+            contained,
+        );
+    }
     // BUG-2157: fail closed — a contained parent never launches an
     // uncontained or re-postured claude, whichever caller got here.
     // trace:BUG-2157 | ai:claude
@@ -1437,8 +1565,9 @@ pub(crate) fn analysis_headless_launch(
 }
 
 /// Spawn a headless analysis pass on [`analysis_headless_launch`]'s vendor
-/// and seat, uncontained unless the parent is.
-// trace:BUG-2389 | ai:claude
+/// and seat, contained when the parent is or the project/user configuration
+/// asks for it ([`drain_contained`]).
+// trace:BUG-2389 BUG-2393 | ai:claude
 pub(crate) fn spawn_analysis_headless(
     project_root: &Path,
     prompt: &str,
@@ -1447,7 +1576,13 @@ pub(crate) fn spawn_analysis_headless(
     tee_opts: &crate::headless_tee::TeeOptions,
 ) -> Result<std::process::ExitStatus> {
     let (vendor, seat) = analysis_headless_launch(project_root);
-    spawn_vendor_headless_with_seat(vendor, seat, prompt, session_id, log_path, tee_opts, false)
+    // BUG-2393: configured containment (`[agents] contained`, `[contained]
+    // enable`) applies even when `AIDA_CONTAINED` is not in the environment.
+    // trace:BUG-2393 | ai:claude
+    let contained = drain_contained(project_root)?;
+    spawn_vendor_headless_with_seat(
+        vendor, seat, prompt, session_id, log_path, tee_opts, contained,
+    )
 }
 
 /// Compose the (program, argv) for a headless run of `vendor`'s CLI — the ONE
@@ -2988,6 +3123,47 @@ pub(crate) fn drain_contained(project_root: &Path) -> Result<bool> {
         "[contained] could not read the contained posture — refusing to launch rather than \
          run uncontained. Fix the file named below and retry",
     )
+}
+
+/// The vendor and containment of a headless launch rooted at `project_root`:
+/// the configured vendor, containment from the env OR the project/user
+/// configuration ([`drain_contained`]), and a refusal when that vendor cannot
+/// run contained. `what` names the launch in the refusal. Shared by the
+/// burndown and intake coordinators and `questions remedy`/`clarify`, so none
+/// of them can drift back to an env-only read.
+// trace:BUG-2393 | ai:claude
+pub(crate) fn resolve_headless_launch_posture(
+    project_root: &Path,
+    what: &str,
+) -> Result<(HeadlessVendor, bool)> {
+    let contained = drain_contained(project_root)?;
+    let vendor = resolve_headless_vendor(project_root);
+    require_vendor_containment(vendor, contained, what)?;
+    Ok((vendor, contained))
+}
+
+/// A headless coordinator's launch (`burndown run`, `autopilot intake`):
+/// [`resolve_headless_launch_posture`] plus its permission mode.
+// trace:BUG-2393 | ai:claude
+pub(crate) struct CoordinatorLaunch {
+    pub vendor: HeadlessVendor,
+    pub contained: bool,
+    pub mode: String,
+}
+
+// trace:BUG-2393 | ai:claude
+pub(crate) fn resolve_coordinator_launch(
+    project_root: &Path,
+    permission_mode: Option<&str>,
+) -> Result<CoordinatorLaunch> {
+    let (vendor, contained) =
+        resolve_headless_launch_posture(project_root, "headless coordinator")?;
+    let mode = coordinator_permission_mode(vendor, permission_mode, contained)?;
+    Ok(CoordinatorLaunch {
+        vendor,
+        contained,
+        mode,
+    })
 }
 
 /// BUG-2146 (#2665 review): parse `AIDA_CONTAINED`. Case-insensitive

@@ -289,7 +289,15 @@ fn bug_2378_root_registered_by_label_verifies_identifies_and_syncs_after_backfil
     assert!(shown.contains(&format!("Node {node}")), "{shown}");
     assert!(shown.contains("Label: HOME"), "{shown}");
     assert!(shown.contains("Active on this clone: yes"), "{shown}");
-    assert!(!shown.contains("Node 7"), "{shown}");
+    // Match the whole heading: the root's id is a random hex UUID, so a
+    // substring check on "Node 7" fails whenever that UUID starts with 7.
+    // trace:BUG-2382 | ai:claude
+    assert!(
+        !shown
+            .lines()
+            .any(|line| line.trim() == "Node 7" || line.trim().starts_with("Node 7 ")),
+        "{shown}"
+    );
     assert!(!shown.contains("not in the shared registry"), "{shown}");
     let retired = f.aida_ok(&["node", "show", "7"]);
     assert!(retired.contains("Retired:    yes"), "{retired}");

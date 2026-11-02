@@ -919,6 +919,8 @@ fn run_headless(
     let tee =
         crate::headless_tee::TeeOptions::from_env_and_flag(false).with_label(label.to_string());
     let session_id = uuid::Uuid::now_v7().to_string();
+    // Resolved before the cwd moves to the scratch dir. trace:BUG-2393 | ai:claude
+    let contained = crate::session::drain_contained(project_root)?;
     let previous_dir = std::env::current_dir().ok();
     // ADR-44: the probe runs INSIDE an empty directory outside the project so
     // the headless launcher's cwd (and any file the agent might reach for)
@@ -932,7 +934,7 @@ fn run_headless(
         &session_id,
         log_path,
         &tee,
-        false,
+        contained,
     );
     if let Some(d) = previous_dir {
         let _ = std::env::set_current_dir(d);
