@@ -21,7 +21,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T07:26:20.914223641Z
-modified_at: 2026-11-02T10:06:01.685827564Z
+modified_at: 2026-11-02T10:06:03.358210917Z
 req_type: Bug
 tags:
 - architecture
@@ -569,6 +569,21 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Prior lib-0 blocker is fixed (lib-0 green at e46ec62) and source for all 4 ACs holds, but CI lib-1 is now red at e46ec62. It was green at c8b068b and is green on main at the merged base 8ab45ba. The probable cause is that main''s merged STORY-2255 Codex-fork fixtures don''t answer the new seat preflight.. No triage reason was given.'
   created_at: 2026-11-02T10:06:01.685822323Z
   modified_at: 2026-11-02T10:06:01.685822323Z
+  session_id: 1f56bd1e-c059-4f73-b8df-e18b2170fdfc
+- id: 01a19bb9-1fd7-77c2-b2d2-9b8cf9c0b3b4
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2398):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: e46ec629981d
+    Recorded: 2026-11-02T10:04:30.607883677+00:00
+    Findings:
+    1. P1 CI regression (blocking): CI (lib-1) fails at head e46ec629981d (run 41423596911, job 125204746374), so the Build (ubuntu-latest) aggregate is red too. lib-1 was green at c8b068b and main's CI is green at the merged base 8ab45ba (run 41423134362). The new red therefore comes from merging main's STORY-2255 (#3227) into this branch. The sandbox could not fetch the job log, but the probable cause found by reading is this. STORY-2255 added advisor_watch tests (codex_tick_forks_the_registered_thread_without_touching_it, codex_tick_cold_boots_without_a_thread_or_exec_fork, and the other run_codex_tick users). Their fake codex (advisor_watch.rs codex_fixture, around lines 522-526) only answers 'exec fork --help' and writes argv to AIDA_TEST_CAPTURE. Those ticks launch through session::spawn_codex_headless_fork / spawn_vendor_headless_with_seat, then spawn_vendor_headless_forking, which issues an advisor child grant and calls codex_tool_env::prepare_launch. The preflight runs the fake and requires 'seat_grant_valid=true expected_seat=true', so the launch bails with 'returned no validated seat evidence' (and the capture holds the probe argv). Fix it the same way as 94de292 did for BUG-2385: wrap the fixture with crate::test_exec::codex_probe_script (cwd/roster as the other fixtures need). Keep the preflight and every STORY-2255 assertion, including the byte-identical-rollout check, and get every PR CI shard green. If the lib-1 log shows a different test, fix that root cause instead; do not weaken or ignore the test.
+    2. Non-blocking (minor, carried): launch_markers in bug_2398_final_spawn_boundary_ratchet counts only the fully-qualified '.env(crate::gate::seat_authority::GRANT_ENV' form, so an imported GRANT_ENV, a literal 'AIDA_SESSION_GRANT' or .envs([...]) would evade the inventory. The inventory matches production at e46ec62 (re-counted by hand: agent_launch 3, autopilot_intake 3, burndown_run 4, compete_cmd 1, supervisor 1, dispatch 1, phase_driver 1, phase_driver_trait 1, questions 2, session 12/5 prepare_launch), and STORY-2255's Codex fork path finalizes through spawn_vendor_headless_forking.
+    3. Non-blocking (carried): the real-Codex fixtures for acc739ef skip in CI when codex is not on PATH, so that criterion's real-fixture evidence rests on operator host runs (docs/testing/bug-2398-rework.md).
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-02T10:06:03.223988533Z
+  modified_at: 2026-11-02T10:06:03.223988533Z
   session_id: 1f56bd1e-c059-4f73-b8df-e18b2170fdfc
 history:
 - id: 01a19600-c769-7cd0-ba08-8d93975e3e3b
