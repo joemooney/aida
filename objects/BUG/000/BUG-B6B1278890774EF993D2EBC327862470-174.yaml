@@ -19,12 +19,18 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T09:27:24.546816181Z
-modified_at: 2026-11-02T01:26:05.439825406Z
+modified_at: 2026-11-02T02:24:58.725173232Z
 req_type: Bug
 tags:
 - ci
 - merge-train
 - registration
+relationships:
+- rel_type:
+    custom: implemented-by
+  target_id: 01a19996-ab89-7893-a904-8398e320cfae
+  created_at: 2026-11-02T02:24:58.725169799Z
+  created_by: joe
 comments:
 - id: 01a19678-1490-78e1-a397-469d7b8ee71f
   author: joe
@@ -92,6 +98,11 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a19a13-0362-7b43-bc0c-9eefe8052370
+  author: joe
+  timestamp: 2026-11-02T02:24:59.746767712Z
+  session_id: 126bbd5a-a92f-452b-ab0b-2637a1db42c2
+  changes: []
 filed_at:
   code_sha: 4ce0af750fcb68d4adf57496e4e002aefd8ace77
   branch: main
