@@ -4,6 +4,9 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>AIDA Engineering Architecture & Delivery Audit — DORA, GitClear & LinearB Benchmark Report</title>
+  <link rel="icon" type="image/png" href="assets/aida-icon.png" />
+  <link rel="icon" href="assets/favicon.ico" sizes="any" />
+  <link rel="apple-touch-icon" href="assets/aida-icon.png" />
   <style>
     :root, [data-theme="paper"] {
       --bg: #f4f1e9;
@@ -84,9 +87,48 @@
       font-weight: 750; font-size: 22px; letter-spacing: -0.8px;
     }
     .brand-mark {
-      display: grid; place-items: center; width: 32px; height: 32px;
-      background: var(--accent); color: #fff; font-size: 22px; line-height: 1;
+      display: grid; place-items: center; width: 34px; height: 34px;
+      background: #232a26; border: 1px solid #3c443e; border-radius: 4px;
+      padding: 3px; overflow: hidden;
     }
+    .brand-mark img {
+      width: 100%; height: 100%; object-fit: contain; display: block;
+    }
+    .hero-brand-bar {
+      display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+      margin-bottom: 18px;
+    }
+    .brand-badge-light {
+      display: inline-flex; align-items: center; gap: 12px;
+      padding: 8px 14px; background: #f6f4ef; border: 1px solid var(--line);
+      border-radius: 3px; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+    }
+    .brand-badge-light img { height: 42px; width: auto; display: block; }
+    .brand-badge-dark {
+      display: inline-flex; align-items: center; gap: 10px;
+      padding: 6px 12px; background: #07090e; border: 1px solid #39413c;
+      border-radius: 3px;
+    }
+    .brand-badge-dark img { height: 44px; width: auto; display: block; }
+    .verdict-head-row {
+      display: flex; align-items: flex-start; justify-content: space-between;
+      gap: 16px; margin-bottom: 10px;
+    }
+    .verdict-orbital-logo {
+      width: 78px; height: auto; border: 1px solid #39413c;
+      border-radius: 3px; background: #07090e; flex-shrink: 0; display: block;
+    }
+    .footer-brand-strip {
+      display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+    }
+    .footer-logo-chip {
+      display: inline-flex; align-items: center; padding: 5px 10px;
+      background: #f6f4ef; border: 1px solid var(--line); border-radius: 3px;
+    }
+    .footer-logo-chip.dark {
+      background: #07090e; border-color: #39413c;
+    }
+    .footer-logo-chip img { height: 34px; width: auto; display: block; }
     .brand-sub {
       font-family: var(--mono); font-size: 10px; letter-spacing: 1px;
       color: var(--ink-secondary); border-left: 1px solid var(--line);
@@ -281,7 +323,7 @@
 <header class="topbar">
   <div class="shell topbar-inner">
     <a href="index.html" class="brand" title="Back to AIDA Showcase">
-      <span class="brand-mark">✳</span>
+      <span class="brand-mark"><img src="assets/aida-icon-64.png" width="26" height="26" alt="AIDA Arch Icon" /></span>
       <span>AIDA</span>
       <span class="brand-sub">ENGINEERING AUDIT · NOV 2026</span>
     </a>
@@ -319,6 +361,17 @@
     </div>
     <div class="hero-grid">
       <div>
+        <div class="hero-brand-bar" aria-label="AIDA Brand Identity">
+          <span class="brand-badge-light" title="AIDA Geometric Monolith Mark">
+            <img src="assets/aida-logo-geometric.png" width="76" height="87" alt="AIDA geometric logo" />
+          </span>
+          <span class="brand-badge-light" title="AIDA Sculpted Bronze Arch Mark">
+            <img src="assets/aida-logo-arch.png" width="85" height="84" alt="AIDA sculpted arch logo" />
+          </span>
+          <span class="brand-badge-dark" title="AIDA Dark Factory Orbital Mark">
+            <img src="assets/aida-logo-orbital.jpg" width="110" height="86" alt="AIDA orbital logo" />
+          </span>
+        </div>
         <h1>High merge cadence.<br /><span>Monolithic friction.</span></h1>
         <p class="hero-lead">
           An empirical engineering audit of the <strong>AIDA (`v0.16.0`)</strong> codebase at pinned trunk commit
@@ -335,8 +388,13 @@
       </div>
 
       <aside class="verdict-card" aria-label="Executive Audit Diagnosis">
-        <div class="card-kicker">EXECUTIVE DIAGNOSIS</div>
-        <h3>High Trunk Integration Velocity Paired with Batch-Size &amp; Hub Coupling Friction</h3>
+        <div class="verdict-head-row">
+          <div>
+            <div class="card-kicker">EXECUTIVE DIAGNOSIS</div>
+            <h3 style="margin-bottom:0;">High Trunk Integration Velocity Paired with Batch-Size &amp; Hub Coupling Friction</h3>
+          </div>
+          <img class="verdict-orbital-logo" src="assets/aida-logo-orbital.jpg" width="78" height="61" alt="AIDA orbital emblem" />
+        </div>
         <p>
           AIDA merges <strong>12.9–14.35 PRs/day</strong> onto <code>main</code> (peaking at <strong>833 PRs</strong> in June 2026), and
           <code>aida review watch</code> is designed to dispatch a reviewer as soon as a branch is pushed (pickup latency is a design
@@ -1133,7 +1191,12 @@
   </section>
 
   <footer>
-    <div>AIDA ENGINEERING ARCHITECTURE &amp; DELIVERY AUDIT · PINNED COMMIT <code>6a3f67671a974703590efde5ae2a323f3f7471fa</code></div>
+    <div class="footer-brand-strip">
+      <span class="footer-logo-chip"><img src="assets/aida-logo-arch.png" width="54" height="53" alt="AIDA arch logo" loading="lazy" /></span>
+      <span class="footer-logo-chip"><img src="assets/aida-logo-geometric.png" width="48" height="55" alt="AIDA geometric logo" loading="lazy" /></span>
+      <span class="footer-logo-chip dark"><img src="assets/aida-logo-orbital.jpg" width="68" height="53" alt="AIDA orbital logo" loading="lazy" /></span>
+      <span>AIDA ENGINEERING ARCHITECTURE &amp; DELIVERY AUDIT · PINNED COMMIT <code>6a3f67671a974703590efde5ae2a323f3f7471fa</code></span>
+    </div>
     <div><a href="index.html" style="color:var(--accent);text-decoration:none;">← Back to AIDA Showcase</a> · <a href="metrics.html" style="color:var(--ink-secondary);text-decoration:none;">Metrics Guide</a> · <a href="executive-brief.html" style="color:var(--ink-secondary);text-decoration:none;">Executive Brief</a> · <a href="library.html" style="color:var(--ink-secondary);text-decoration:none;">Library</a></div>
   </footer>
 
