@@ -1,0 +1,30 @@
+id: 01a19abc-c35e-7ad3-9cf8-a3ce513816fc
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-684
+title: 'non-blocking/minor: the new existing-story link-repair failure early-return (re…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on BUG-2404, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  non-blocking/minor: the new existing-story link-repair failure early-return (review_gates.rs ~1285-1300) has no test; only the new-story link failure path is exercised
+
+  PR: #3230
+  Reviewed sha: 7801f2292def9a6afe27d759f4fedb09ffb7eb82
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-02T05:30:24.478852805Z
+modified_at: 2026-11-02T05:30:24.478852805Z
+req_type: Task
+tags:
+- carried-from:BUG-2404
+- finding-hash:1f18e812
+- from-review:PR-3230
+- kind:carried-forward
+filed_at:
+  code_sha: 952552f2b786703862676a2bfc233082a538f09f
+  branch: main
+  dirty: true
+  aida_version: 0.16.0
+  aida_build_sha: 6a3f67671a9
+  vendor: claude
+  session: 126bbd5a-a92f-452b-ab0b-2637a1db42c2
