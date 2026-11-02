@@ -1,0 +1,34 @@
+id: 01a19df2-a10d-7d50-846f-74bf3b5202f9
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-327
+agreed_id: STORY-2329
+title: 'Review PR-3273: [AI:claude] feat(agents): aida agent new codex --bg — detached Codex lane with own grant, lease and supervisor (STORY-2254)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a19c7a`) for branch `story-2254-work`.
+
+  - PR: <https://github.com/joemooney/aida/pull/3273>
+  - Branch: `story-2254-work` → `main`
+
+  ## Covers
+
+  - STORY-2254
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 3273` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-02T20:28:06.285693792Z
+modified_at: 2026-11-02T20:28:06.285693792Z
+req_type: Story
+filed_at:
+  code_sha: b8c7d3f6e51240a4450dbe3c6881badfb2ec26f9
+  branch: main
+  dirty: true
+  aida_version: 0.16.0
+  aida_build_sha: 6a3f67671a9
+  vendor: claude
+  session: ee0bf351-6b17-486f-a38e-cfbb1343c426
