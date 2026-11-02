@@ -222,9 +222,11 @@ pub(crate) struct Sources {
     pub(crate) state_path: Option<PathBuf>,
 }
 
-/// The real sources for `project_root`.
+/// The project root, its worktrees, and its contained clone seats: every
+/// directory a seat of this project runs in. Shared with `aida status`'s
+/// Codex section (BUG-2396).
 // trace:STORY-1462 | ai:claude
-pub(crate) fn default_sources(project_root: &Path) -> Sources {
+pub(crate) fn project_seat_roots(project_root: &Path) -> Vec<PathBuf> {
     let mut roots = vec![project_root.to_path_buf()];
     // TASK-2053: contained seats' private clones are seats too.
     // trace:TASK-2053 | ai:claude
@@ -239,6 +241,13 @@ pub(crate) fn default_sources(project_root: &Path) -> Sources {
             roots.push(wt);
         }
     }
+    roots
+}
+
+/// The real sources for `project_root`.
+// trace:STORY-1462 | ai:claude
+pub(crate) fn default_sources(project_root: &Path) -> Sources {
+    let roots = project_seat_roots(project_root);
     let transcript_dirs = match crate::home_dir() {
         Some(home) => roots
             .iter()
@@ -628,6 +637,16 @@ struct CodexMetaPayload {
 /// when its first line is still being written (decide on a later run).
 // trace:BUG-2391 | ai:claude
 fn codex_session_scope(path: &Path, roots: &[PathBuf]) -> Option<Option<String>> {
+    let meta = codex_rollout_meta(path)?;
+    Some(meta.and_then(|(id, cwd)| roots.iter().any(|r| cwd.starts_with(r)).then_some(id)))
+}
+
+/// `Some(Some((session id, cwd)))` from a Codex rollout's first-line
+/// `session_meta`; `Some(None)` when that line names no cwd or is not a
+/// `session_meta`; `None` while the first line is still being written.
+// trace:BUG-2391 | ai:claude
+// trace:BUG-2396 | ai:claude — shared with `aida status`'s Codex section.
+pub(crate) fn codex_rollout_meta(path: &Path) -> Option<Option<(String, PathBuf)>> {
     use std::io::Read;
     let file = fs::File::open(path).ok()?;
     let mut reader = BufReader::new(file).take(MAX_LINE_BYTES as u64 + 1);
@@ -646,19 +665,16 @@ fn codex_session_scope(path: &Path, roots: &[PathBuf]) -> Option<Option<String>>
     else {
         return Some(None);
     };
-    let Some(cwd) = payload.cwd.as_deref().map(Path::new) else {
+    let Some(cwd) = payload.cwd.map(PathBuf::from) else {
         return Some(None);
     };
-    if !roots.iter().any(|r| cwd.starts_with(r)) {
-        return Some(None);
-    }
     let id = payload.session_id.or(payload.id).unwrap_or_else(|| {
         path.file_stem()
             .unwrap_or_default()
             .to_string_lossy()
             .to_string()
     });
-    Some(Some(id))
+    Some(Some((id, cwd)))
 }
 
 /// Byte gate for Codex lines: only the event kinds the rules read, plus
@@ -937,7 +953,7 @@ fn file_mtime(path: &Path) -> Option<DateTime<Utc>> {
         .map(DateTime::<Utc>::from)
 }
 
-fn walk_jsonl(dir: &Path, out: &mut Vec<PathBuf>) {
+pub(crate) fn walk_jsonl(dir: &Path, out: &mut Vec<PathBuf>) {
     let Ok(entries) = fs::read_dir(dir) else {
         return;
     };

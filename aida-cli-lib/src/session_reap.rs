@@ -2010,13 +2010,18 @@ pub(crate) struct ReapOptions {
 /// operator must type, so it is intentionally part of this command hint (like
 /// `aida queue next` / `aida ps`), not opaque noise.
 // trace:TASK-1179 | ai:claude
-pub(crate) fn format_next_up_suggestion(next_spec: &str) -> String {
+// trace:BUG-2396 | ai:claude — the agent launch follows `vendor`.
+pub(crate) fn format_next_up_suggestion(
+    next_spec: &str,
+    vendor: crate::session::HeadlessVendor,
+) -> String {
     format!(
         "\nNext up: {spec} is queued. Launch it in a fresh worktree:\n    \
          aida worktree enter {spec}          # take the lease + cd into a ready worktree, or\n    \
-         aida agent new claude --spec {spec}   # launch an agent on it\n  \
+         {agent}   # launch an agent on it\n  \
          (suggestion only — no session was started.)",
-        spec = next_spec
+        spec = next_spec,
+        agent = crate::vendor_hints::agent_new_cmd(vendor, &format!("--spec {next_spec}"), false),
     )
 }
 
@@ -2026,11 +2031,15 @@ pub(crate) fn format_next_up_suggestion(next_spec: &str) -> String {
 /// Pure so all three cases (emit / nothing-reaped / empty-queue) are testable
 /// without a store or a live process.
 // trace:TASK-1179 | ai:claude
-pub(crate) fn next_up_suggestion(reaped_count: usize, next_spec: Option<&str>) -> Option<String> {
+pub(crate) fn next_up_suggestion(
+    reaped_count: usize,
+    next_spec: Option<&str>,
+    vendor: crate::session::HeadlessVendor,
+) -> Option<String> {
     match (reaped_count, next_spec) {
         // Nothing was reaped, or the queue holds no next spec → no handoff.
         (0, _) | (_, None) => None,
-        (_, Some(spec)) => Some(format_next_up_suggestion(spec)),
+        (_, Some(spec)) => Some(format_next_up_suggestion(spec, vendor)),
     }
 }
 
@@ -2300,7 +2309,11 @@ pub(crate) fn run_session_reap(opts: ReapOptions) -> Result<()> {
     } else {
         None
     };
-    if let Some(block) = next_up_suggestion(reaped_count, next_spec.as_deref()) {
+    if let Some(block) = next_up_suggestion(
+        reaped_count,
+        next_spec.as_deref(),
+        crate::vendor_hints::hint_vendor(&project_root),
+    ) {
         report.next_up = next_spec;
         if !opts.json {
             println!("{block}");

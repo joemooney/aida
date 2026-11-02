@@ -7544,6 +7544,8 @@ fn print_doctor_status_diagnostics(
     print_status_presence_line(project_root);
     print_status_agents_section(&user_ctx, true);
     print_status_claude_code_section(project_root);
+    // trace:BUG-2396 | ai:claude
+    print_status_codex_section(project_root);
     print_status_worktrees_section(project_root, true);
     print_status_open_prs_section(project_root, true);
     print_status_coordination_section(&store_path, chrono::Utc::now(), true);
