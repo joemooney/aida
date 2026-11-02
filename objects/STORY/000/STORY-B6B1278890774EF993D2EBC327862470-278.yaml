@@ -16,12 +16,12 @@ description: |-
 
   ## Notes
   TASK-1308 (deferred) stays the dogfood-wave proof; this story removes the technical gap it cites.
-status: InProgress
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T04:45:50.173634412Z
-modified_at: 2026-11-02T07:09:17.102318891Z
+modified_at: 2026-11-02T07:09:23.906869653Z
 req_type: Story
 tags:
 - fork
@@ -164,6 +164,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a19b17-64d2-72d2-b114-ad7d59dd9b08
+  author: joe
+  timestamp: 2026-11-02T07:09:24.050771364Z
+  session_id: 1f56bd1e-c059-4f73-b8df-e18b2170fdfc
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Approved
 filed_at:
   code_sha: a83e05d785df667dfa986cf3eb310a3f0637b602
   branch: main
