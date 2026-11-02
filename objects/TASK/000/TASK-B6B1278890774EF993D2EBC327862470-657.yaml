@@ -11,7 +11,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T09:06:06.223993645Z
-modified_at: 2026-11-02T21:22:41.700021419Z
+modified_at: 2026-11-02T21:23:52.911730052Z
 req_type: Task
 tags:
 - architecture
@@ -116,6 +116,16 @@ comments:
   created_at: 2026-11-02T21:14:57.396817428Z
   modified_at: 2026-11-02T21:14:57.396817428Z
   session_id: 1223f4be-280a-49c7-8c07-d806b16b4122
+- id: 01a19e25-b1cf-7dc2-8991-52df33f0f264
+  author: joe
+  content: |-
+    ADVISOR REWORK BRIEF (14:25), PR #3274 strict round 1. Final round.
+    1. BLOCKING: cache_rows_never_grant_authority (task_2707_cache_authority_tests.rs:67-73) stops at the FIRST #[cfg(test)], so role.rs (87/1516 lines), dispatch_authority.rs (34/2091), dispatch_lock.rs and others are barely scanned. Fix: strip only #[cfg(test)]-gated ITEMS, meaning the attribute plus the item or block it gates (skip balanced braces, or the next statement), or parse with syn. Then scan the whole remaining production text. Add a test proving that a cache read placed after an early #[cfg(test)] hook is caught.
+    2. BUNDLE: correct the contained_boundary.rs:131-133 doc (the launcher only migrates; it does not create the directory).
+    Gate: LIGHT, cargo test -p aida-cli-lib task_2707 plus make check-ci-fast (outside the sandbox with RUSTC_WRAPPER=). Push.
+  created_at: 2026-11-02T21:23:52.911730052Z
+  modified_at: 2026-11-02T21:23:52.911730052Z
+  session_id: ee0bf351-6b17-486f-a38e-cfbb1343c426
 history:
 - id: 01a1965c-1e90-7483-8313-1b32a588eaef
   author: joe
