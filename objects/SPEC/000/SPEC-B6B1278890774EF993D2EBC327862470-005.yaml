@@ -3,12 +3,12 @@ spec_id: SPEC-b6b1278890774ef993d2ebc327862470-005
 agreed_id: TASK-2721
 title: Native Codex implementer sandbox makes seat .git read-only, blocking commit and PR completion
 description: 'BUG-2387 standalone Codex implementation on 2026-11-01: workspace files are writable, but the runtime permission profile explicitly marks the seat''s .git directory read-only. `git add aida-cli-lib/src/session.rs ...` fails: fatal: Unable to create ''<seat>/.git/index.lock'': Read-only file system. The session has approval policy never, so it cannot request a writable Git boundary. Local AIDA status writes also refuse because .aida/cache.db is a symlink to the main checkout outside writable roots; AIDA MCP works for spec updates. Reconcile native sandbox launch permissions with the required implementer commit/push/PR workflow, retaining intended authority protections. BUG-2387 code changes remain uncommitted in /home/joe/ai/aida-worktrees/aida-seat-aida-bug-b6b1278890774ef993d2ebc327862470-161 until a writable session can finalize.'
-status: Draft
+status: Superseded
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-01T21:53:02.571133134Z
-modified_at: 2026-11-02T02:31:46.347337268Z
+modified_at: 2026-11-02T02:31:48.287283186Z
 req_type: Task
 tags:
 - from-implementer:BUG-2387
@@ -26,6 +26,14 @@ history:
   author: joe
   timestamp: 2026-11-01T22:44:58.917382910Z
   changes: []
+- id: 01a19a19-3f3f-7e12-9ee8-b79d113df0d8
+  author: joe
+  timestamp: 2026-11-02T02:31:48.287281090Z
+  session_id: 126bbd5a-a92f-452b-ab0b-2637a1db42c2
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   aida_version: 0.16.0
   aida_build_sha: 6a3f67671a9
