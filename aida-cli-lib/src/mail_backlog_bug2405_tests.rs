@@ -89,7 +89,15 @@ fn found(r: &MailRepo, id: &str) -> bool {
 fn incomplete(r: &MailRepo) -> bool {
     scan(&r.main).iter().any(|f| f.id == "mail-backlog:unknown")
 }
+/// Runs the real `aida mailbox inbox`, which resolves its reader from the
+/// process cwd: callers must be path-isolated (`run_path_isolated_test`) and
+/// enter `r.main` first, or the host checkout's identity leaks in (CI lib-1).
 fn inbox(r: &MailRepo, peek: bool) {
+    assert_eq!(
+        std::env::current_dir().unwrap(),
+        r.main,
+        "enter the fixture repository before running the real inbox"
+    );
     crate::mailbox_cmd::handle_mailbox_command(
         &crate::cli::MailboxCommand::Inbox {
             agent: None,
@@ -102,6 +110,11 @@ fn inbox(r: &MailRepo, peek: bool) {
         &r.store,
     )
     .unwrap();
+}
+/// The project marker the real inbox's cwd lookup needs to find `r.main`.
+fn project_marker(r: &MailRepo) {
+    std::fs::create_dir_all(r.main.join(".aida")).unwrap();
+    std::fs::write(r.main.join(".aida/config.toml"), "").unwrap();
 }
 fn common(r: &MailRepo) -> PathBuf {
     MailboxContext::resolve(&r.main, Some(&r.store))
@@ -122,8 +135,15 @@ fn private_dir(path: &Path) {
 
 #[test]
 fn old_cohort_new_owner_uuid_receipts_and_real_postflush_ack() {
+    // The real inbox resolves its reader from the cwd.
+    // trace:BUG-b6b1278890774ef993d2ebc327862470-178 | ai:claude
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
     let _env = isolated();
     let r = mail_repo();
+    project_marker(&r);
+    std::env::set_current_dir(&r.main).unwrap();
     let (_, b) = reader(&r, std::process::id(), "codex", "reader-b");
     let child = FixtureProcess::new();
     let (mut c_row, c) = reader(&r, child.pid(), "codex", "reader-c");
@@ -368,7 +388,10 @@ fn local_unknown_global_partial_preserve_findings_and_nudge_state() {
     assert!(found(&r, "known"));
     scan_and_route(&r.main, true);
     assert_eq!(load_nudged(&r.main), previous);
-    assert!(!!own(&r).is_partial());
+    assert!(
+        own(&r).is_partial(),
+        "a corrupt sibling mailbox row makes the own view partial"
+    );
     let mut limits = explicit_limits();
     limits.max_entries = 0;
     let (_, unknown) = inspect_backlog(&r.main, &r.store, &Policy::default(), Utc::now(), &limits);
@@ -595,8 +618,15 @@ fn group_writable_registry_still_inspects_genuine_backlog() {
 // trace:BUG-b6b1278890774ef993d2ebc327862470-178 | ai:claude
 #[test]
 fn unrelated_bad_rows_scope_unknown_to_affected_readers() {
+    // The real inbox resolves its reader from the cwd.
+    // trace:BUG-b6b1278890774ef993d2ebc327862470-178 | ai:claude
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
     let _env = isolated();
     let r = mail_repo();
+    project_marker(&r);
+    std::env::set_current_dir(&r.main).unwrap();
     reader(&r, std::process::id(), "codex", "reader-b");
     let agents = crate::agent_registry::agents_dir(&r.main);
     // A second live reader in another role, with a valid reservation for now.
