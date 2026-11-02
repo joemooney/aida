@@ -9,12 +9,12 @@ description: |-
 
   PR: #3210
   Reviewed sha: 7f52bc900e847eecadaac674f05153e875238040
-status: InProgress
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-02T05:01:03.079385668Z
-modified_at: 2026-11-02T07:35:21.115131057Z
+modified_at: 2026-11-02T12:57:52.733569595Z
 req_type: Task
 tags:
 - carried-from:BUG-B6B1278890774EF993D2EBC327862470-159
@@ -147,6 +147,21 @@ history:
   timestamp: 2026-11-02T07:35:22.198047189Z
   session_id: 1f56bd1e-c059-4f73-b8df-e18b2170fdfc
   changes: []
+- id: 01a19c56-6f56-76f0-80e0-1d8b13bbe760
+  author: aida-auto-bump
+  timestamp: 2026-11-02T12:57:52.726142999Z
+  session_id: ee0bf351-6b17-486f-a38e-cfbb1343c426
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a19c56-6f5d-7373-9fe2-b6d36496fdae
+  timestamp: 2026-11-02T12:57:52.733564933Z
+  agent: aida
+  commit_sha: 0ce3c0ba6e620e3a6cf48cc50ce5dbc5235cc4b3
+  summary: 'All three bundled specs pass at 7269371, and CI is green on every job at that head. TASK-2742: the codex start --launch child role is resolved in preflight as --role else the scope default, so it matches the role the lease records and never reads AIDA_SESSION_ROLE. Delegation is checked before claim or worktree, and the undelegated refusal test proves no lease or worktree is left. TASK-2737: AIDA_MAIL_WAKE is in INHERITED_SESSION_ENV, so every child spawn path scrubs it, and agent new still sets its own value afterwards. TASK-2731: codex coverage is gated on a last_codex_available watchdog field (an old state file reads false), and codex_sessions_root honours CODEX_HOME. Both round-1 findings are fixed.'
+  review_verdict: approved
 execution_mode: drain
 filed_at:
   code_sha: 8a4a56e74891a9abf236d344bfe41facaeb7df09
@@ -156,3 +171,7 @@ filed_at:
   aida_build_sha: 6a3f67671a9
   vendor: claude
   session: 126bbd5a-a92f-452b-ab0b-2637a1db42c2
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-02T12:57:52.726136901Z
+  completion_sha: 0ce3c0ba6e620e3a6cf48cc50ce5dbc5235cc4b3
