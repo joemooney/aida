@@ -113,8 +113,11 @@ pub enum ConfigPermissionsCommand {
     /// This does not enable vendor launches or change permission policy.
     // trace:TASK-2705 | ai:codex
     Probe {
+        /// Vendor whose containment capability to trace (claude, codex, or opencode).
+        // trace:TASK-2734 | ai:claude
         #[clap(long)]
         vendor: String,
+        /// Emit machine-readable JSON.
         #[clap(long)]
         json: bool,
     },
