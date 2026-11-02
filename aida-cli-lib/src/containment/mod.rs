@@ -123,6 +123,22 @@ pub(crate) struct ProbeReport {
 /// Policy is reported, never executed. The probe itself uses only built-in argv.
 // trace:TASK-2705 | ai:codex
 pub(crate) fn probe(root: &Path, vendor: &str) -> ProbeReport {
+    probe_with_runners(
+        root,
+        vendor,
+        |isolation| supervisor::run_probe(|| isolation.state = IsolationState::Available),
+        || supervisor::run_egress_probe("normal"),
+    )
+}
+
+// Separate fixed runners allow report-credit tests without host isolation support.
+// trace:TASK-2706 | ai:codex
+fn probe_with_runners(
+    root: &Path,
+    vendor: &str,
+    filesystem: impl FnOnce(&mut Isolation) -> anyhow::Result<supervisor::TracerOutcome>,
+    egress: impl FnOnce() -> anyhow::Result<Vec<String>>,
+) -> ProbeReport {
     let mut report = ProbeReport {
         version: 1,
         vendor: vendor.into(),
@@ -148,7 +164,7 @@ pub(crate) fn probe(root: &Path, vendor: &str) -> ProbeReport {
         ],
         checks: Vec::new(),
     };
-    let mut run = || -> anyhow::Result<supervisor::TracerOutcome> {
+    let run = || -> anyhow::Result<supervisor::TracerOutcome> {
         let mut capabilities: Capabilities = toml::from_str(include_str!("vendors.toml"))?;
         anyhow::ensure!(capabilities.version == 1, "unsupported capability schema");
         let capability = capabilities
@@ -187,8 +203,7 @@ pub(crate) fn probe(root: &Path, vendor: &str) -> ProbeReport {
             .transpose()?;
         report.configured_posture = posture;
         report.stage = ProbeStage::FilesystemSupervisor;
-        let isolation = &mut report.isolation;
-        supervisor::run_probe(|| isolation.state = IsolationState::Available)
+        filesystem(&mut report.isolation)
     };
     match run() {
         Ok(supervisor::TracerOutcome::IsolationUnavailable {
@@ -220,7 +235,7 @@ pub(crate) fn probe(root: &Path, vendor: &str) -> ProbeReport {
             // report the extended tracer ready. Preserve actual A coverage
             // on a B refusal; never credit unfinished protections.
             report.stage = ProbeStage::EgressLocalIpc;
-            match supervisor::run_egress_probe("normal") {
+            match egress() {
                 Ok(checks) => {
                     report.checks.extend(checks);
                     report

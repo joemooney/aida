@@ -419,3 +419,106 @@ fn task_2705_policy_errors_are_redacted_and_aida_selector_stays_closed() {
         crate::session::ContainmentPosture::Aida
     );
 }
+
+// Exercise the actual Python host preflight with closed capability fixtures.
+// Any attempt to proceed past preflight is a test failure, including fallback.
+// trace:TASK-2706 | ai:codex
+fn kernel_refusal(fault: &str) -> String {
+    assert!(matches!(
+        fault,
+        "arch" | "abi0" | "abi9" | "no_notif" | "notif_size"
+    ));
+    const FIXTURE: &str = r#"
+fault = sys.argv[1]
+C.set_errno(0)
+platform.machine = lambda: 'unsupported' if fault == 'arch' else 'x86_64'
+class KernelFixture:
+    def syscall(self, number, *args):
+        if number == 444:
+            return {'abi0': 0, 'abi9': 9}.get(fault, 8)
+        assert number == 317, 'unexpected syscall or fallback'
+        if fault == 'no_notif':
+            return -1
+        sizes = C.cast(args[2], C.POINTER(C.c_ushort))
+        for i, value in enumerate([C.sizeof(Notification), C.sizeof(Response), C.sizeof(Data)]):
+            sizes[i] = value + (1 if fault == 'notif_size' else 0)
+        return 0
+LIBC = KernelFixture()
+def forbid_fallback():
+    raise AssertionError('preflight continued or fell back')
+policy_checks = forbid_fallback
+host([], '/unused-kernel-refusal-fixture', -1, 'normal')
+"#;
+    let output = std::process::Command::new("/usr/bin/python3")
+        .args(["-I", "-S", "-c"])
+        .arg(format!("{}\n{FIXTURE}", include_str!("egress_probe.py")))
+        .arg(fault)
+        .env_clear()
+        .output()
+        .unwrap();
+    assert!(!output.status.success());
+    assert!(output.stdout.is_empty(), "refusal must not emit checks");
+    let error = String::from_utf8(output.stderr).unwrap();
+    assert!(!error.contains("AssertionError"), "{error}");
+    error.lines().last().unwrap().to_owned()
+}
+
+// trace:TASK-2706 | ai:codex
+#[test]
+fn task_2706_unsupported_kernel_refuses_without_fallback() {
+    for (fault, reason) in [
+        ("arch", "socket broker architecture unsupported"),
+        (
+            "abi0",
+            "Landlock capability unavailable; socket-policy selection refused",
+        ),
+        (
+            "abi9",
+            "Landlock Unix-connect backend required on ABI>=9; broker not selected",
+        ),
+        (
+            "no_notif",
+            "seccomp notification size probe unavailable (errno 0)",
+        ),
+        ("notif_size", "seccomp notification ABI unsupported"),
+    ] {
+        assert_eq!(kernel_refusal(fault), format!("RuntimeError: {reason}"));
+    }
+}
+
+// trace:TASK-2706 | ai:codex
+#[test]
+fn task_2706_slice_b_refusal_preserves_only_slice_a_credit() {
+    let root = tempfile::tempdir().unwrap();
+    trusted_fixture(root.path(), "[contained.vendors]\ncodex = \"aida\"\n");
+    let slice_a = vec![
+        "write_workspace".to_owned(),
+        "supervisor_teardown".to_owned(),
+    ];
+    let refusal = kernel_refusal("abi9");
+    let report = probe_with_runners(
+        root.path(),
+        "codex",
+        |isolation| {
+            isolation.state = IsolationState::Available;
+            Ok(supervisor::TracerOutcome::Passed(slice_a.clone()))
+        },
+        || anyhow::bail!("{refusal}"),
+    );
+    assert_eq!(report.status, ProbeStatus::Refused);
+    assert!(matches!(report.stage, ProbeStage::EgressLocalIpc));
+    assert_eq!(report.cause, refusal);
+    assert_eq!(report.checks, slice_a);
+    assert_eq!(
+        report.remaining_protections,
+        vec![
+            "egress_and_local_ipc",
+            "delegated_grant",
+            "native_composition",
+            "vendor_lifecycle",
+        ]
+    );
+    assert_eq!(report.isolation.state, IsolationState::Available);
+    assert!(!report.aida_containment_applied);
+    assert!(!report.ordinary_launch_supported);
+}
