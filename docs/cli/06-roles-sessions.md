@@ -186,6 +186,14 @@ before.
 Scripts that want only the refusal pass `--grant-inline no`.
 <!-- trace:STORY-2215 | ai:claude -->
 
+Interactive Codex launches expand portable `/aida-*` invocation lines into
+their embedded workflow bodies, including queue pickup, planning, review and
+de-risking. Launch previews show the same rendered prompt. If an invocation
+has no portable embedded body, AIDA uses Codex's `$aida-*` installed-skill
+syntax and instructs the agent to stop and report an unavailable skill rather
+than reconstruct its workflow. Ordinary prose and Claude prompts are preserved.
+<!-- trace:BUG-2387 | ai:codex -->
+
 **Key options (rationale only).**
 - `new <claude|codex|antigravity>` — the tool is a subcommand, not a flag, because each agent has a slightly different spawn shape. `list-roles` enumerates the supported role taxonomy.
 - `new claude --spec <ID>` — creates a scoped worktree + lease *before* launch, so the agent starts already isolated on its spec. An ownership conflict is checked before bypass/resume prompts. To re-enter an inactive same-role lease, pass `--cwd` with its exact owning worktree; the existing session identity is retained. Live agents, branch/role mismatches, and reasoned holds refuse re-entry. Inspect with `aida session leases --all`; do not end the session just to redispatch it. <!-- trace:BUG-2002 | ai:codex -->
