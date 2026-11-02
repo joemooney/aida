@@ -23,7 +23,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T06:45:38.111981577Z
-modified_at: 2026-11-02T08:21:24.485483451Z
+modified_at: 2026-11-02T08:21:25.746348322Z
 req_type: Bug
 tags:
 - architecture
@@ -212,6 +212,22 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Round-4 bug_1808 regression and DrainLock compile error are fixed, but main''s bug_2393 contained-resume test still asserts ''refusing to resume'', which the new Codex refusal never emits. CI at e3eaa87 was still queued at review time (pushed without a local build again).. No triage reason was given.'
   created_at: 2026-11-02T08:21:24.485480961Z
   modified_at: 2026-11-02T08:21:24.485480961Z
+  session_id: 1f56bd1e-c059-4f73-b8df-e18b2170fdfc
+- id: 01a19b59-55f5-7190-ac4a-42c6da97eb1f
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2386):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: e3eaa87e9e52
+    Recorded: 2026-11-02T08:20:26.783533374+00:00
+    Findings:
+    1. [blocker] Carried from round 4, not addressed: aida-cli-lib/src/tests/bug_2393_configured_containment_tests.rs:271 (session_resume_honours_configured_containment_without_the_env) resumes a codex ResumeTarget under [agents] contained = true and asserts the error contains 'refusing to resume'. resume_with -> build_contained_resume_command (session.rs:682-683) -> require_vendor_containment errors with '...refusing to launch the resumed codex session uncontained' / '`codex` cannot run an AIDA-contained session; refusing to launch it', so the assertion fails as soon as the lib test build compiles. Fix one of two ways: keep 'refusing to resume' in the Codex refusal context (e.g. .context("[contained] refusing to resume codex session <id> uncontained")), or update the test to the opt-in semantics. If you update it, test both branches: not opted in is refused with the new text, and [contained.vendors] codex = "native" builds a native-sandbox command with no bypass flag.
+    2. [blocker] No CI evidence at e3eaa87: run 41411880631 jobs were still queued or in progress at review time, and this is the third round pushed without a local compile. Before pushing, run cargo test --profile agent -p aida-cli-lib --lib --no-run, then the targeted tests bug_2393_configured_containment_tests, bug_2386_resume_routing_tests and cargo test -p aida-cli --test bug_1808_delegation_preflight. If cargo is denied in the seat, say so and wait for green CI before requesting review.
+    3. [minor] codex_resume.rs:181-210 recorded_resume. (a) Carried from rounds 2 and 4, still unaddressed and no follow-up filed: step 4 never ties the id to the lease it consults, so a typo'd or foreign id passed to queue work SPEC --resume resumes the scope's newest bound Codex thread (bug_2386_resume_routing_tests.rs asserts this with 'aida-no-log'). (b) New in 2b41dd4: when step 4 hits a lease error (an ambiguous or unbounded rollout), step 5 swallows it unless Codex is the configured vendor, so a Codex lane with ambiguous rollouts gets claude --resume <aida-id> instead of the named refusal the advisor ruled for (Q1). Only fall through to the configured vendor when no lease for the scope tried to bind a thread, or else file a follow-up task.
+    4. [cosmetic] Carried from round 4: session.rs:656 and :7813 exec a Codex command through exec_or_spawn_claude. The name is misleading; rename it to the generic exec_or_spawn or add a comment.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-02T08:21:25.621943111Z
+  modified_at: 2026-11-02T08:21:25.621943111Z
   session_id: 1f56bd1e-c059-4f73-b8df-e18b2170fdfc
 history:
 - id: 01a195db-6c30-7600-a068-211ab6c2eed8
