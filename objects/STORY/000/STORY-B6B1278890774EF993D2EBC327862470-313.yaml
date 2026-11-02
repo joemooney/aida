@@ -8,13 +8,20 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-02T12:46:46.980613333Z
-modified_at: 2026-11-02T12:46:46.980613333Z
+modified_at: 2026-11-02T13:00:24.289106867Z
 req_type: Story
 tags:
 - area:lanes
 - area:sessions
 - from:advisor
 - regroup:R1
+comments:
+- id: 01a19c58-bf61-7dd2-b307-75ca1241b853
+  author: joe
+  content: 'ADVISOR TRIAGE (2026-11-02 06:08 MST): APPROVED. The ''Expected'' clause is the acceptance criterion; add a regression test that reproduces the observed failure.'
+  created_at: 2026-11-02T13:00:24.289106867Z
+  modified_at: 2026-11-02T13:00:24.289106867Z
+  session_id: ee0bf351-6b17-486f-a38e-cfbb1343c426
 filed_at:
   code_sha: 5b21d041d218b3030c4878b5cabb862da086026e
   branch: main
