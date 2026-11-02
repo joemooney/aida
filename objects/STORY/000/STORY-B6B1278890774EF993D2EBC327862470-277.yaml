@@ -15,12 +15,12 @@ description: |
   3. Every headless spawn applies `headless_wait_envs` (the task1169 guardrails pass unchanged).
   4. Under `[agents] contained` it uses the posture TASK-2631 resolves (native for codex, or AIDA's sandbox once STORY-2238 lands). It never launches uncontained silently.
   5. Recover the code from PR-3188's history (commit 2bb95a7, agent_codex_background.rs) as a starting point.
-status: NeedsAttention
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T04:28:44.095278434Z
-modified_at: 2026-11-02T20:45:54.848044298Z
+modified_at: 2026-11-02T20:45:58.199095548Z
 req_type: Story
 tags:
 - architecture
@@ -274,6 +274,12 @@ comments:
   created_at: 2026-11-02T20:45:54.848044298Z
   modified_at: 2026-11-02T20:45:54.848044298Z
   session_id: ee0bf351-6b17-486f-a38e-cfbb1343c426
+- id: 01a19e02-fc37-7a10-8051-9e19c0117663
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: Gate seam, posture refusal, headless env and strict lease/registry/authorship seams are sound, but AC1 (live detached worker visible in aida ps) has no end-to-end evidence, the signed test matrix is largely missing, cross-route admission is incomplete, and recover-launch fails open on unreadable /proc; CI was still pending at review.. No triage reason was given.'
+  created_at: 2026-11-02T20:45:58.199068424Z
+  modified_at: 2026-11-02T20:45:58.199068424Z
+  session_id: ee0bf351-6b17-486f-a38e-cfbb1343c426
 history:
 - id: 01a1955e-16e5-7240-960f-01af4eb41bfe
   author: joe
@@ -312,6 +318,14 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a19e02-fc37-7a10-8051-9e054997016c
+  author: joe
+  timestamp: 2026-11-02T20:45:58.199062414Z
+  session_id: ee0bf351-6b17-486f-a38e-cfbb1343c426
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: a83e05d785df667dfa986cf3eb310a3f0637b602
   branch: main
@@ -320,11 +334,3 @@ filed_at:
   aida_build_sha: c7170b43665
   vendor: claude
   session: 77a7a933-9a3f-4243-9a44-892bcedf206c
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: Gate seam, posture refusal, headless env and strict lease/registry/authorship seams are sound, but AC1 (live detached worker visible in aida ps) has no end-to-end evidence, the signed test matrix is largely missing, cross-route admission is incomplete, and recover-launch fails open on unreadable /proc; CI was still pending at review.
-  recovery_hint: address the review findings, move STORY-2254 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-02T20:33:21.983598594Z
