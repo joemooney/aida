@@ -7,12 +7,12 @@ description: |-
 
   [minor, non-blocking] Mean PR size 'mean 664.8' (and 'Mean 665' schematic label) does not reproduce from the documented method: first-parent (#N) shortstat ins+del since 2026-05-10 at 6a3f67671a9 gives mean 589.9 (591.3 excluding 6 zero-size merges). Appears at showcase lines 529, 737, 1503, 1797 and report lines 1448, 1656, 2422, 2716.
   Reviewed sha: 7fba6fb5ae38ad6e3bce3f11c5262cfbb6ec48ff
-status: Draft
+status: Rejected
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-01T22:45:12.025079260Z
-modified_at: 2026-11-02T02:31:57.664861438Z
+modified_at: 2026-11-02T02:31:58.856359856Z
 req_type: Task
 tags:
 - carried-from:TASK-2709
@@ -31,6 +31,14 @@ history:
   author: joe
   timestamp: 2026-11-01T23:28:35.990070072Z
   changes: []
+- id: 01a19a19-6888-74d0-8a81-e24a82fdb9ed
+  author: joe
+  timestamp: 2026-11-02T02:31:58.856357679Z
+  session_id: 126bbd5a-a92f-452b-ab0b-2637a1db42c2
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Rejected
 filed_at:
   code_sha: 4e8e63b03ff3c32f3799af8829e1ef9e2f28fc1f
   branch: main
