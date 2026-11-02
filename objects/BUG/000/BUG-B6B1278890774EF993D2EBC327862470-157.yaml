@@ -19,7 +19,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T02:25:46.947809262Z
-modified_at: 2026-11-02T12:10:49.469529242Z
+modified_at: 2026-11-02T12:54:34.356553863Z
 req_type: Bug
 tags:
 - area:agents
@@ -411,6 +411,12 @@ comments:
   modified_at: 2026-11-02T12:10:49.469529242Z
   session_id: 01a19c20d4ea
   harness_version: 2.1.316 (Claude Code)
+- id: 01a19c53-6874-7f31-9369-8aa15f7d40fa
+  author: joe
+  content: 'ADVISOR BRIEF (2026-11-02 05:59 MST): part 1 at 7c29857 is accepted pending CI. Finish in PR #3192, with no follow-up chain: (c) the real Codex boundary fixture (production launcher plus prepare_launch plus codex sandbox conversion, reporting native-async and host-witnessed evidence separately); part 2, the generation snapshot plus a per-lane overlay with the cold fallback that only reports ''seed: cold (<reason>)'', the primary-inode-unchanged test and the generation GC test. First fix CI at 7c29857: Build (ubuntu-latest) and CI (gates) are red, because this head was never compiled. This is a HOST claude --bg lane, so cargo works here. Gate: LIGHT with the lane_job, seat_target_seed and codex_tool_env filters plus make check-ci-fast. Push to the PR branch.'
+  created_at: 2026-11-02T12:54:34.356553863Z
+  modified_at: 2026-11-02T12:54:34.356553863Z
+  session_id: ee0bf351-6b17-486f-a38e-cfbb1343c426
 history:
 - id: 01a19525-88eb-79e3-aab8-8d511ad2f605
   author: aida-session-start
