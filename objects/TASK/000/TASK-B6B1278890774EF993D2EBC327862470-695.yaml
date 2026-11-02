@@ -1,0 +1,30 @@
+id: 01a19ba5-eb15-7a21-9ed0-03e8fc4c5bcf
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-695
+title: 'Non-blocking (minor, carried): resolve_register_identity prefers CODEX_THREAD_I…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on STORY-2255, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  Non-blocking (minor, carried): resolve_register_identity prefers CODEX_THREAD_ID, so a Claude session started from a Codex shell registers the parent Codex thread.
+
+  PR: #3227
+  Reviewed sha: 4738c574ba3eccdd96fc329aafca8f5a98c75e6c
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-02T09:45:04.533592169Z
+modified_at: 2026-11-02T09:45:04.533592169Z
+req_type: Task
+tags:
+- carried-from:STORY-2255
+- finding-hash:1eaf8f78
+- from-review:PR-3227
+- kind:carried-forward
+filed_at:
+  code_sha: 8ab45ba1c8731a979e678fdf3c041459e7434c46
+  branch: main
+  dirty: true
+  aida_version: 0.16.0
+  aida_build_sha: 6a3f67671a9
+  vendor: claude
+  session: 1f56bd1e-c059-4f73-b8df-e18b2170fdfc
