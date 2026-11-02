@@ -11,7 +11,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-01T09:06:06.223993645Z
-modified_at: 2026-11-02T09:08:43.913555013Z
+modified_at: 2026-11-02T14:33:50.325695506Z
 req_type: Task
 tags:
 - architecture
@@ -57,6 +57,12 @@ comments:
   created_at: 2026-11-02T09:08:43.913555013Z
   modified_at: 2026-11-02T09:08:43.913555013Z
   session_id: 1f56bd1e-c059-4f73-b8df-e18b2170fdfc
+- id: 01a19cae-49f5-70c3-8a75-5f57ce4c180b
+  author: joe
+  content: 'ADVISOR (07:42): STORY-2238''s sketch is signed (see that spec''s 07:40 signoff). This spec ships first as PR0: the cache relocation into main/.aida/cache/ only. PR1 (headless contained Codex) follows after PR0 merges and passes the live host check.'
+  created_at: 2026-11-02T14:33:50.325695506Z
+  modified_at: 2026-11-02T14:33:50.325695506Z
+  session_id: ee0bf351-6b17-486f-a38e-cfbb1343c426
 history:
 - id: 01a1965c-1e90-7483-8313-1b32a588eaef
   author: joe
