@@ -14,12 +14,12 @@ description: |
   2. The lane's target dir is warm on first use: seeded or shared with the primary's agent-profile target, so the first targeted run isn't a cold full build.
   3. The implementer prompt names that path in place of `setsid nohup`, and a lane that cannot run it says so in its result line (`untested=true`) so the advisor knows.
   4. Test: a headless lane fixture runs one filtered cargo test via the sanctioned path and reports its pass/fail.
-status: NeedsAttention
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T02:25:46.947809262Z
-modified_at: 2026-11-01T10:34:54.041007985Z
+modified_at: 2026-11-02T00:03:07.680390038Z
 req_type: Bug
 tags:
 - area:agents
@@ -216,6 +216,12 @@ comments:
   content: 'ADVISOR VERIFIED remaining blocker at07becb320ceaf7bc406cb72f1445797d598e7537: reviewer09 report /tmp/aida-review3192-current-result.md, PRledger16. Root inspected LaneJobs::apply_env585 supplies only ordinary envvars, seat_dirs1037 reads only envvars, and newdrainfixture runs /bin/sh not actual restrictedCodextool. Fivepriorblockers fixed; nativecore runner discovery/submission/result/tally proof remains unmet. Do NOT rerun unchanged six-finding brief or claim fullvendorproof. Nextstep is a precise transport SKETCH/design fork (own-context/typedlease path and threatmodel) with independent signoff before furthercode; coordinate BUG2398 fixed whitelist, no inheritall, no bearerargv/grantforwarding/no unconfined fallback. Preserve allnewtally/security/liveCI fixes; samePR, nofollowupchain. Broader touched799pass13fail remains failed, not green. Latestrulinggoverns despitefriendlykey staleprojections (BUG2403).'
   created_at: 2026-11-01T10:33:26.252442458Z
   modified_at: 2026-11-01T10:33:26.252442458Z
+- id: 01a19991-2120-79a1-861d-ea455aa526cc
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: AC1/AC3/AC4 native tool integration unmet: env-only runner discovery and direct shell fixture bypass Codex core tool policy; other five blockers corrected.. No triage reason was given.'
+  created_at: 2026-11-02T00:03:07.680383547Z
+  modified_at: 2026-11-02T00:03:07.680383547Z
+  session_id: 126bbd5a-a92f-452b-ab0b-2637a1db42c2
 history:
 - id: 01a19525-88eb-79e3-aab8-8d511ad2f605
   author: aida-session-start
@@ -345,6 +351,14 @@ history:
   author: joe
   timestamp: 2026-11-01T10:34:55.042750175Z
   changes: []
+- id: 01a19991-2120-79a1-861d-ea37ea457fc6
+  author: joe
+  timestamp: 2026-11-02T00:03:07.680373367Z
+  session_id: 126bbd5a-a92f-452b-ab0b-2637a1db42c2
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: 7518617e469376bbe5debebd7cadd980e08656e5
   branch: main
@@ -357,11 +371,3 @@ implementation_info:
   implemented: true
   implemented_at: 2026-11-01T04:19:25.125387348Z
   implemented_by: joe
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'AC1/AC3/AC4 native tool integration unmet: env-only runner discovery and direct shell fixture bypass Codex core tool policy; other five blockers corrected.'
-  recovery_hint: address the review findings, move BUG-B6B1278890774EF993D2EBC327862470-157 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-01T10:27:37.228376576Z
