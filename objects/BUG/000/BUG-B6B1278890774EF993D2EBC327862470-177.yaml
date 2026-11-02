@@ -13,12 +13,12 @@ description: |
   3. Original durable retry behavior remains when downstream relationship/queue operations fail; do not claim queued from add success. Tests use fake HOME/store/forge only. Existing ordinary role/author/reviewer/hold floors remain; no authority expansion or global configuration.
 
   Implementation touches pr_lookup.rs also changed by BUG2400, so serialize after BUG2400 completes. LIGHT one focused autoqueue/parser regression plus fast; >10/sharedinfra adds actual touched/compile only as required. No full-suite/slot bypass. Push normal, independent review before merge.
-status: Approved
+status: InProgress
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T12:33:50.987786326Z
-modified_at: 2026-11-02T03:22:25.743030228Z
+modified_at: 2026-11-02T03:41:27.704994455Z
 req_type: Bug
 tags:
 - forge
@@ -118,6 +118,13 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
+- id: 01a19a59-0518-7bb2-8fe9-3b39ed2d4b0d
+  author: aida-session-start
+  timestamp: 2026-11-02T03:41:27.704991708Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 execution_mode: drain
 filed_at:
   code_sha: 471540a8c477a50a81170f338d81532cb5dbd329
