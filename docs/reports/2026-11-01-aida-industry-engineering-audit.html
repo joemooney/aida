@@ -774,7 +774,7 @@
           </div>
           <div class="tab-group">
             <button class="tab-btn active" onclick="renderSizingChart('bars', this)">Bucket Histogram</button>
-            <button class="tab-btn" onclick="renderSizingChart('bell', this)">Schematic Shift</button>
+            <button class="tab-btn" onclick="renderSizingChart('bell', this)">Log-Scale Density</button>
           </div>
         </div>
         <div class="svg-chart-wrap" id="sizing-svg-container"></div>
@@ -1540,24 +1540,55 @@
           <text x="${padL}" y="${H - 3}" font-size="8.5" fill="var(--ink-secondary)">* Illustrative reference distributions, not from a cited report.</text>
         </svg>`;
     } else {
-      const W = 520, H = 290;
+      const W = 520, H = 295;
+      // Empirical log10(LoC) KDE across 2,418 PRs since 2026-05-10 mapped on log10([10, 5012]) -> x in [45, 490], y_base = 236
+      const ptsLeft = "45.0,236 45.0,206.9 54.9,204.7 64.8,204.8 74.7,206.1 84.6,207.4 94.4,207.9 104.3,207.0 114.2,204.7 124.1,201.0 134.0,196.0 143.9,189.9 153.8,182.8 163.7,174.9 173.6,166.0 183.4,156.2 193.3,145.4 203.2,133.9 213.1,122.6 223.0,112.4 232.9,104.1 242.8,97.9 252.7,93.6 262.6,91.0 267.9,90.3 272.4,90.0 282.3,90.5 292.2,92.6 302.1,96.3 309.0,99.8 309.0,236";
+      const ptsRight = "309.0,236 309.0,99.8 312.0,101.7 321.9,108.8 331.8,117.5 341.7,127.5 351.6,138.3 361.4,149.5 371.3,160.6 381.2,171.4 391.1,181.5 401.0,190.6 410.9,198.4 420.8,204.7 430.7,209.8 440.6,214.0 450.4,217.4 460.3,220.4 470.2,222.9 480.1,225.3 490.0,227.5 490.0,236";
+      const ptsLine = "45.0,206.9 54.9,204.7 64.8,204.8 74.7,206.1 84.6,207.4 94.4,207.9 104.3,207.0 114.2,204.7 124.1,201.0 134.0,196.0 143.9,189.9 153.8,182.8 163.7,174.9 173.6,166.0 183.4,156.2 193.3,145.4 203.2,133.9 213.1,122.6 223.0,112.4 232.9,104.1 242.8,97.9 252.7,93.6 262.6,91.0 272.4,90.0 282.3,90.5 292.2,92.6 302.1,96.3 312.0,101.7 321.9,108.8 331.8,117.5 341.7,127.5 351.6,138.3 361.4,149.5 371.3,160.6 381.2,171.4 391.1,181.5 401.0,190.6 410.9,198.4 420.8,204.7 430.7,209.8 440.6,214.0 450.4,217.4 460.3,220.4 470.2,222.9 480.1,225.3 490.0,227.5";
       wrap.innerHTML = `
         <svg class="chart-svg" viewBox="0 0 ${W} ${H}">
-          <line x1="40" y1="240" x2="495" y2="240" stroke="var(--line-strong)" />
-          <!-- Elite Bell Curve peaking around 80-180 LoC -->
-          <path d="M 45 240 C 85 235, 115 65, 175 65 C 235 65, 275 215, 360 238 L 490 240" fill="var(--emerald-soft)" stroke="var(--emerald)" stroke-width="2.5" />
-          <!-- AIDA Shifted Bell Curve peaking around 400-1000 LoC -->
-          <path d="M 55 240 C 130 235, 225 90, 315 90 C 395 90, 445 190, 495 232" fill="var(--accent-soft)" stroke="var(--accent)" stroke-width="2.5" />
-          <!-- 400 LoC Threshold Line -->
-          <line x1="275" y1="30" x2="275" y2="240" stroke="var(--crimson)" stroke-dasharray="5 4" stroke-width="1.5" />
-          <text x="275" y="22" text-anchor="middle" font-size="9.5" fill="var(--crimson)" font-weight="700">SmartBear/Cisco 400-LoC Guidance</text>
-          <text x="175" y="52" text-anchor="middle" font-size="10" fill="var(--emerald)">Illustrative* Elite (~120 LoC)</text>
-          <text x="345" y="76" text-anchor="middle" font-size="10" fill="var(--accent)">AIDA (Median 225 / Mean 665 LoC; schematic)</text>
-          <text x="65" y="258" font-size="9.5" fill="var(--ink-secondary)">25 LoC</text>
-          <text x="175" y="258" text-anchor="middle" font-size="9.5" fill="var(--ink-secondary)">120 LoC</text>
-          <text x="275" y="258" text-anchor="middle" font-size="9.5" fill="var(--ink)">400 LoC</text>
-          <text x="385" y="258" text-anchor="middle" font-size="9.5" fill="var(--ink-secondary)">1,000 LoC</text>
-          <text x="475" y="258" text-anchor="end" font-size="9.5" fill="var(--ink-secondary)">3,500+ LoC</text>
+          <!-- Illustrative Elite reference curve centered around ~120 LoC (x=223) on log10 scale -->
+          <path d="M 45 236 C 95 234, 155 68, 215 68 C 265 68, 298 205, 355 235 L 490 236" fill="none" stroke="var(--emerald)" stroke-width="1.8" stroke-dasharray="3 3" opacity="0.85" />
+          <text x="178" y="60" text-anchor="middle" font-size="9" fill="var(--emerald)">Illustrative* Elite (~120 LoC)</text>
+
+          <!-- AIDA Empirical Log10(LoC) Density: Left 68.4% (<=400 LoC) vs Right 31.6% (>400 LoC) -->
+          <polygon points="${ptsLeft}" fill="var(--blue-soft)" />
+          <polygon points="${ptsRight}" fill="var(--crimson-soft)" />
+          <polyline points="${ptsLine}" fill="none" stroke="var(--accent)" stroke-width="2.5" />
+
+          <!-- Share callouts inside the two regions -->
+          <text x="218" y="182" text-anchor="middle" font-size="9.5" fill="var(--blue)" font-weight="700">68.4% ≤ 400 LoC</text>
+          <text x="362" y="196" text-anchor="middle" font-size="9.5" fill="var(--crimson)" font-weight="700">31.6% &gt; 400 LoC</text>
+
+          <!-- AIDA Median (p50 = 225 LoC) at x = 267.9 (LEFT of 400 LoC) -->
+          <line x1="268" y1="74" x2="268" y2="236" stroke="var(--blue)" stroke-width="1.8" />
+          <circle cx="268" cy="90" r="3.5" fill="var(--blue)" />
+          <text x="264" y="70" text-anchor="end" font-size="9.5" fill="var(--blue)" font-weight="700">Median: 225 LoC (p50)</text>
+
+          <!-- SmartBear/Cisco 400-LoC Guidance at x = 309.0 -->
+          <line x1="309" y1="28" x2="309" y2="236" stroke="var(--crimson)" stroke-dasharray="5 4" stroke-width="1.8" />
+          <text x="309" y="20" text-anchor="middle" font-size="9.5" fill="var(--crimson)" font-weight="700">400-LoC Review Guidance (p68.4)</text>
+
+          <!-- AIDA Mean (665 LoC) at x = 345.4 (pulled right by heavy tail) -->
+          <line x1="345" y1="108" x2="345" y2="236" stroke="var(--amber)" stroke-dasharray="2 2" stroke-width="1.6" />
+          <circle cx="345" cy="131" r="3.5" fill="var(--amber)" />
+          <text x="351" y="114" text-anchor="start" font-size="9" fill="var(--amber)" font-weight="700">Mean: 665 LoC (tail-skewed)</text>
+
+          <!-- AIDA p90 (1,008 LoC) at x = 375.2 -->
+          <line x1="375" y1="145" x2="375" y2="236" stroke="var(--ink-muted)" stroke-dasharray="2 3" stroke-width="1.2" />
+          <text x="380" y="149" text-anchor="start" font-size="8.5" fill="var(--ink-secondary)">p90: 1,008 LoC (10.1% &gt;1k)</text>
+
+          <!-- Baseline & Log10 Axis Labels -->
+          <line x1="40" y1="236" x2="495" y2="236" stroke="var(--line-strong)" />
+          <text x="45" y="253" text-anchor="middle" font-size="9" fill="var(--ink-secondary)">10</text>
+          <text x="111" y="253" text-anchor="middle" font-size="9" fill="var(--ink-secondary)">25</text>
+          <text x="210" y="253" text-anchor="middle" font-size="9" fill="var(--ink-secondary)">100</text>
+          <text x="268" y="253" text-anchor="middle" font-size="9" fill="var(--blue)" font-weight="700">225</text>
+          <text x="309" y="253" text-anchor="middle" font-size="9" fill="var(--crimson)" font-weight="700">400</text>
+          <text x="345" y="265" text-anchor="middle" font-size="8.5" fill="var(--amber)">665 (Mean)</text>
+          <text x="375" y="253" text-anchor="middle" font-size="9" fill="var(--ink-secondary)">1k</text>
+          <text x="464" y="253" text-anchor="middle" font-size="9" fill="var(--ink-secondary)">3.5k+</text>
+          <text x="268" y="284" text-anchor="middle" font-size="8.5" fill="var(--ink-secondary)">Empirical log₁₀(LoC) density across 2,418 AIDA PRs: median 225 LoC sits left of 400 LoC; heavy &gt;1k tail pulls mean to 665 LoC.</text>
         </svg>`;
     }
   }
