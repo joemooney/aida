@@ -1,0 +1,30 @@
+id: 01a19a24-8097-7561-a59d-1e7f584e2442
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-672
+title: 'Non-blocking (minor): shift.rs COVERED_VENDORS is a static claim. The budget-ev…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on BUG-2391, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  Non-blocking (minor): shift.rs COVERED_VENDORS is a static claim. The budget-evidence guard passes for vendor codex even when the last watchdog run reported the codex-sessions source as 'unavailable' (runaway_seats.rs scan: a missing dir is pushed as unavailable and does not degrade the verdict when Claude sources are available). vendor_activity::codex_sessions_root also ignores CODEX_HOME, which Codex itself honours. So a relocated Codex home leaves the watchdog blind to Codex spend while shift tick treats codex as measured. AIDA never sets CODEX_HOME today. Consider gating the codex coverage claim on the codex-sessions source being available in the aggregates, and honouring CODEX_HOME.
+
+  PR: #3220
+  Reviewed sha: 99766ca785bb272b92cefc0411107e5872fc75de
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-02T02:44:05.911386046Z
+modified_at: 2026-11-02T02:44:05.911386046Z
+req_type: Task
+tags:
+- carried-from:BUG-2391
+- finding-hash:11481938
+- from-review:PR-3220
+- kind:carried-forward
+filed_at:
+  code_sha: 1451c90f17a78a2826aa6422bb9ac48fdef19765
+  branch: main
+  dirty: true
+  aida_version: 0.16.0
+  aida_build_sha: 6a3f67671a9
+  vendor: claude
+  session: 126bbd5a-a92f-452b-ab0b-2637a1db42c2
