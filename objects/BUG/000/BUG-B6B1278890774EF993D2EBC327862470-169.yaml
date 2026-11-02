@@ -18,12 +18,12 @@ description: |-
   1. Wire `.codex/hooks.json` and `.codex/hooks/*.sh` into `Scaffolder::preview`, `apply`, `upgrade`, header injection (`mod.rs:607`), and `0o755` chmod (`mod.rs:2888`).
   2. Ensure worktree lane role/grant resolution works across Codex hooks and CLI invocations when `$CLAUDE_ENV_FILE` is absent.
   3. Add `.codex/` and `.agents/` to `EXCLUDE_PATTERNS` in `aida-commit-msg:99`, support `$aida-capture` in `aida-capture-prompt.sh`, and include `AIDA_SESSION_PROJECT` / `CODEX_PROJECT_DIR` in `aida-advisor-code-guard.sh`.
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T06:48:25.173889038Z
-modified_at: 2026-11-02T13:11:29.953408451Z
+modified_at: 2026-11-02T13:11:32.431769896Z
 req_type: Bug
 tags:
 - architecture
@@ -167,6 +167,12 @@ comments:
   created_at: 2026-11-02T13:11:29.953408451Z
   modified_at: 2026-11-02T13:11:29.953408451Z
   session_id: ee0bf351-6b17-486f-a38e-cfbb1343c426
+- id: 01a19c62-f14f-7fe2-a3fe-0c7e89e53283
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: A1 scaffold wiring, A2-A4 template fixes and the verify-only Part B are sound and CI is green at df73a5a, but the two Codex handler writers disagree: aida init writes header-less handlers that the new scaffold preview/status then reports as drift on every fresh Codex init.. No triage reason was given.'
+  created_at: 2026-11-02T13:11:32.431763891Z
+  modified_at: 2026-11-02T13:11:32.431763891Z
+  session_id: ee0bf351-6b17-486f-a38e-cfbb1343c426
 history:
 - id: 01a195dd-f3fe-78f1-905f-d5b9c92b6293
   author: joe
@@ -233,6 +239,14 @@ history:
   - field_name: status
     old_value: Done
     new_value: NeedsAttention
+- id: 01a19c62-f14f-7fe2-a3fe-0c631c909e7b
+  author: joe
+  timestamp: 2026-11-02T13:11:32.431746868Z
+  session_id: ee0bf351-6b17-486f-a38e-cfbb1343c426
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: 6dc7d4977ac5e47c42ddfb26597fe3ec5fb70b60
   branch: main
@@ -245,11 +259,3 @@ implementation_info:
   implemented: true
   implemented_at: 2026-11-02T12:25:02.722927003Z
   implemented_by: joe
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'A1 scaffold wiring, A2-A4 template fixes and the verify-only Part B are sound and CI is green at df73a5a, but the two Codex handler writers disagree: aida init writes header-less handlers that the new scaffold preview/status then reports as drift on every fresh Codex init.'
-  recovery_hint: address the review findings, move BUG-2395 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-02T13:10:06.481885750Z
