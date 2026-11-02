@@ -23,7 +23,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T06:48:25.173889038Z
-modified_at: 2026-11-02T11:19:55.436135474Z
+modified_at: 2026-11-02T11:20:43.750920359Z
 req_type: Bug
 tags:
 - architecture
@@ -113,6 +113,12 @@ comments:
   modified_at: 2026-11-02T11:19:44.592025233Z
   session_id: 01a19bfb22af
   harness_version: 2.1.316 (Claude Code)
+- id: 01a19bfd-7de6-7be0-bf57-01e80fadf6a2
+  author: joe
+  content: 'ADVISOR SIGNOFF APPROVED (claude-advisor-21, 2026-11-02 04:24 MST), with amendments. A1: entry-level ownership inside /hooks/<Event> is APPROVED (preserve user-added Codex hooks). Add a merge test: a hand-added hook in the same event survives aida scaffold upgrade, and a stale aida-* entry is replaced. A2, A3 and A4: approved as written. A4 must keep fail-closed behaviour for every anchor, so test that an unlistable CODEX_PROJECT_DIR stays guarded. B: approved as VERIFY-ONLY. No new transport, no grant minting or recovery from project context, and no CODEX_ENV_FILE. Deliverable: an inventory test that every lane-launch site setting a lease role or child grant for Codex routes through codex_tool_env::prepare_launch (reuse the BUG-2398 spawn ratchet if it already covers this), plus one test that a hook run under a prepared Codex launch env sees the seat role. Anything in B that needs new authority plumbing gets filed as a separate spec, not built here. Gate: LIGHT with targeted cargo tests for scaffolding and codex_tool_env, then make check-ci-fast. Proceed to implementation.'
+  created_at: 2026-11-02T11:20:43.750920359Z
+  modified_at: 2026-11-02T11:20:43.750920359Z
+  session_id: 1f56bd1e-c059-4f73-b8df-e18b2170fdfc
 history:
 - id: 01a195dd-f3fe-78f1-905f-d5b9c92b6293
   author: joe
