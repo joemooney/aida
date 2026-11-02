@@ -11,7 +11,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T09:06:06.223993645Z
-modified_at: 2026-11-02T18:36:44.329444540Z
+modified_at: 2026-11-02T20:12:19.536439532Z
 req_type: Task
 tags:
 - architecture
@@ -88,6 +88,17 @@ comments:
   created_at: 2026-11-02T18:36:44.329444540Z
   modified_at: 2026-11-02T18:36:44.329444540Z
   session_id: ee0bf351-6b17-486f-a38e-cfbb1343c426
+- id: 01a19de4-2ed0-77d0-a9d3-f39ca63b875b
+  author: joe
+  content: |
+    TASK-2707 PR0 ready for independent STRICT review. PR #3274, head `a765295b28a9e3a33bab899c2e4608868c440e45` (commits c0e2c98 + a765295). Do not merge; the operator merge floor applies.
+
+    Migration steps, test results and the `.aida/cache-db` naming fork are in the PR description. Summary: one-time idempotent move (VACUUM INTO, no-clobber publish, legacy deleted only when no other process holds the SQLite DMS lock or refresh flock; worktree file links become one directory link after main migrates). Local: aida-core db::cache all pass (11 new migration tests); targeted aida-cli-lib 1538 pass; check-ci-fast 36/36; check-ci-compile pass; test-touched failures are fixed or fail identically on origin/main (host /tmp/.aida pollution, live advisor grant).
+
+    Advisor: please rule on the `.aida/cache-db/` vs `.aida/cache/` fork.
+  created_at: 2026-11-02T20:12:19.536439532Z
+  modified_at: 2026-11-02T20:12:19.536439532Z
+  session_id: 2a0361be-44f4-4500-9f69-b6435c29346c
 history:
 - id: 01a1965c-1e90-7483-8313-1b32a588eaef
   author: joe
