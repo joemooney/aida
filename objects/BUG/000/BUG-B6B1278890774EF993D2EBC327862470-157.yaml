@@ -19,7 +19,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T02:25:46.947809262Z
-modified_at: 2026-11-02T11:16:33.981390996Z
+modified_at: 2026-11-02T11:28:02.647613507Z
 req_type: Bug
 tags:
 - area:agents
@@ -241,6 +241,13 @@ comments:
   created_at: 2026-11-02T06:34:26.242614928Z
   modified_at: 2026-11-02T06:34:26.242614928Z
   session_id: 1f56bd1e-c059-4f73-b8df-e18b2170fdfc
+- id: 01a19c04-3057-7050-bd25-3373f0192e2f
+  author: joe
+  content: Commit d003fb32e79 references this requirement
+  created_at: 2026-11-02T11:28:02.647613507Z
+  modified_at: 2026-11-02T11:28:02.647613507Z
+  session_id: 01a19bf99f66
+  harness_version: 2.1.316 (Claude Code)
 history:
 - id: 01a19525-88eb-79e3-aab8-8d511ad2f605
   author: aida-session-start
