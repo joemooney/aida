@@ -19,7 +19,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T02:25:46.947809262Z
-modified_at: 2026-11-02T06:06:00.343868564Z
+modified_at: 2026-11-02T06:34:26.242614928Z
 req_type: Bug
 tags:
 - area:agents
@@ -234,6 +234,12 @@ comments:
     Gate: LIGHT. Run `cargo test -p aida-cli-lib lane_job::tests`, then make check-ci-fast, then push.
   created_at: 2026-11-02T06:06:00.343868564Z
   modified_at: 2026-11-02T06:06:00.343868564Z
+  session_id: 1f56bd1e-c059-4f73-b8df-e18b2170fdfc
+- id: 01a19af7-6242-75e2-be79-0c203598dae4
+  author: joe
+  content: 'ADVISOR EVIDENCE (2026-11-01 23:40 MST): fresh-claim headless lanes TASK-2734 (seat -674) and BUG-2386 (seat -160) could not git commit or run cargo (''permission mode refused git commit, cargo test and backgrounded processes''), while --force-claim rework lanes on existing seats (BUG-2393, BUG-2396, BUG-2405) committed and pushed. 135 seat worktrees had no ~/.claude.json trust entry; the advisor trusted them all at 23:38. The next fresh-claim lane shows whether trust was the cause.'
+  created_at: 2026-11-02T06:34:26.242614928Z
+  modified_at: 2026-11-02T06:34:26.242614928Z
   session_id: 1f56bd1e-c059-4f73-b8df-e18b2170fdfc
 history:
 - id: 01a19525-88eb-79e3-aab8-8d511ad2f605
