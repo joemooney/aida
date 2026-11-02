@@ -6,12 +6,12 @@ description: |-
   Acceptance: (1) On sliceA contract, synthetic lane in unshared netns reaches only allowed fixture host via host-owned typed proxy channel; deny direct TCP/UDP/DNS, private-address/rebinding, host/port/protocol bypass per C12. (2) Enforce C5 pathname and abstract Unix IPC. HostABI8 needs approved seccomp-notify broker; no mutable-user-memory CONTINUE/FD/path/rename race. Host D-Bus/SSH/Codex daemon and inherited-FD escapes denied; only typed channels/private own endpoints allowed. (3) Proxy/broker death tears down lane; unsupported kernel refuses; live regression cannot skip. (4) Diagnostics and end-to-end fixture deliver observable actual coverage, no ordinary vendor enablement or real credentials/model calls. Layers: trusted host policy, network/IPC broker, runner lifetime, CLI diagnostics and negative tests. Signed sliceB.
 
   All signed STORY2238 sketch C1-C12 and BUG2398 B1-B4 apply. Linux only, fakeHOME/synthetic tests, no global user settings or schedules. No partial backend may report AIDA containment applied or launch ordinary agents until all required protections are ready; named refusal, no fallback. STRICT independent review, operator merge floor. LIGHT one targeted test plus fast gates; shared infra or >10files adds touched-test/compile, fullsuiteCI only. Longcargo background, no slotbypass. Parent all7AC remain open until final installed-tool evidence; no slice alone completes parent.
-status: NeedsAttention
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T09:05:52.470755532Z
-modified_at: 2026-11-02T05:23:36.320188255Z
+modified_at: 2026-11-02T06:12:24.011814924Z
 req_type: Task
 tags:
 - architecture
@@ -54,6 +54,12 @@ comments:
   modified_at: 2026-11-02T05:23:28.712605058Z
   session_id: 01a19aaffa08
   harness_version: 2.1.316 (Claude Code)
+- id: 01a19ae3-354b-7ad2-b21e-1c7a78a92ba0
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was punted on: other: Implementation can''t be verified in this headless seat: no user namespaces (bwrap fails), seccomp blocks AF_UNIX sockets, and the 60s per-call limit kills background cargo, so a cold aida-cli-lib build never finishes. STRICT seccomp/proxy unsafe code shouldn''t ship uncompiled. Mechanism prototype + design notes are posted as a spec comment.. No triage reason was given.'
+  created_at: 2026-11-02T06:12:24.011810742Z
+  modified_at: 2026-11-02T06:12:24.011810742Z
+  session_id: 1f56bd1e-c059-4f73-b8df-e18b2170fdfc
 history:
 - id: 01a1965b-c73c-7f92-bea8-1e28e5f1ff36
   author: joe
@@ -103,6 +109,14 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a19ae3-354b-7ad2-b21e-1c6d879b1b77
+  author: joe
+  timestamp: 2026-11-02T06:12:24.011804203Z
+  session_id: 1f56bd1e-c059-4f73-b8df-e18b2170fdfc
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: 4ce0af750fcb68d4adf57496e4e002aefd8ace77
   branch: main
@@ -110,9 +124,3 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: 4ce0af750fc
   vendor: codex
-attention_reason:
-  category: other
-  detail: 'Implementation can''t be verified in this headless seat: no user namespaces (bwrap fails), seccomp blocks AF_UNIX sockets, and the 60s per-call limit kills background cargo, so a cold aida-cli-lib build never finishes. STRICT seccomp/proxy unsafe code shouldn''t ship uncompiled. Mechanism prototype + design notes are posted as a spec comment.'
-  lean: Run this on an operator-guided or host seat that can build incrementally and run bwrap/userns live; follow the posted broker/proxy design notes. Decide first how slice C reaches the in-netns relay, since inet connect can't be brokered.
-  raised_by: implementer
-  raised_at: 2026-11-02T05:23:36.320188255Z
