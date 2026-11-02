@@ -7,12 +7,12 @@ description: |-
 
   [cosmetic, non-blocking] Branch commit 56d6c2e8ba8 still carries the (TASK-HOME-130) trailer; the squash title uses (TASK-2709), but a default squash body lists every commit subject. TASK-2542 is already Completed, so this is at most a no-op re-touch.
   Reviewed sha: 7fba6fb5ae38ad6e3bce3f11c5262cfbb6ec48ff
-status: Draft
+status: Rejected
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-01T22:45:16.487820563Z
-modified_at: 2026-11-02T02:31:54.910324987Z
+modified_at: 2026-11-02T02:31:56.508085755Z
 req_type: Task
 tags:
 - carried-from:TASK-2709
@@ -31,6 +31,14 @@ history:
   author: joe
   timestamp: 2026-11-01T23:28:35.931324389Z
   changes: []
+- id: 01a19a19-5f5c-7060-9e8c-eb61117b5391
+  author: joe
+  timestamp: 2026-11-02T02:31:56.508083391Z
+  session_id: 126bbd5a-a92f-452b-ab0b-2637a1db42c2
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Rejected
 filed_at:
   code_sha: 4e8e63b03ff3c32f3799af8829e1ef9e2f28fc1f
   branch: main
