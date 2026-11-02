@@ -165,7 +165,66 @@ pub(crate) fn scan(project: &Path) -> Vec<DoctorFinding> {
         chrono::Utc::now().timestamp() as f64,
     );
     findings.extend(unarmed_findings(project, &live, chrono::Utc::now()));
+    findings.extend(service_findings(project));
     findings
+}
+
+/// The default `aida doctor` check: live Codex sessions that should be woken
+/// for mail while the project's wake service is not installed. Reads the
+/// registry and one unit file only.
+// trace:STORY-2256 | ai:claude
+pub(crate) fn service_findings(project: &Path) -> Vec<DoctorFinding> {
+    let live = crate::agent_registry::load_live_entries(project);
+    service_findings_in(
+        project,
+        &live,
+        crate::mailbox_wake_run::service_installed(project),
+    )
+}
+
+/// [`service_findings`] over the live rows `live`.
+// trace:STORY-2256 | ai:claude
+pub(crate) fn service_findings_in(
+    project: &Path,
+    live: &[crate::agent_registry::AgentRegistryEntry],
+    installed: bool,
+) -> Vec<DoctorFinding> {
+    use crate::agent_registry::MailWake;
+    use crate::mail_wake::WakeAdapter;
+    if installed {
+        return Vec::new();
+    }
+    let waiting: Vec<String> = live
+        .iter()
+        .filter(|e| e.ended_at.is_none())
+        .filter(|e| WakeAdapter::for_vendor(&e.agent_type) == WakeAdapter::Codex)
+        .filter(|e| {
+            !matches!(
+                e.mail_wake,
+                Some(MailWake::Off | MailWake::Unsupported | MailWake::Retired)
+            )
+        })
+        .map(|e| e.name.clone().unwrap_or_else(|| e.id.clone()))
+        .collect();
+    if waiting.is_empty() {
+        return Vec::new();
+    }
+    vec![DoctorFinding {
+        category: CATEGORY.into(),
+        id: format!("{CATEGORY}:service-not-installed"),
+        summary: format!(
+            "{} live Codex agent(s) ({}) but the mail-wake service is not installed; their \
+             mail arrives only on their next turn",
+            waiting.len(),
+            waiting.join(", ")
+        ),
+        action: format!(
+            "Install it: (cd {} && aida mailbox wake-service install), then arm each agent \
+             with `aida agent wake arm <agent>`",
+            project.display()
+        ),
+        safe_heal: false,
+    }]
 }
 
 /// A launch's wake left `pending` this long never got its thread armed.

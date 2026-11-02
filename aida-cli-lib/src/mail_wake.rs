@@ -8,7 +8,12 @@
 //! on disk. Antigravity has no live-injection primitive: its rows read
 //! `unsupported`, and its launch warns once that mail arrives on its next
 //! turn.
+//!
+//! A Codex session started any other way (`aida session start` then
+//! `codex`) gets the same wake: its SessionStart hook finds a row nothing
+//! has decided, records the `[agents.codex] mail_wake` default, and arms it.
 // trace:STORY-HOME-096 | ai:claude
+// trace:STORY-2256 | ai:claude
 use crate::agent_registry::{AgentRegistryEntry, MailWake};
 use anyhow::Result;
 use std::path::Path;
@@ -215,6 +220,97 @@ pub(crate) fn arm_pending(
             warning: Some(format!("mail wake not recorded: {why:#}")),
         }),
     }
+}
+
+/// The variable `agent new` sets on its child naming the mail wake the
+/// launch decided (`pending`, `off`, `unsupported`), so the child's own
+/// SessionStart hook honours `--no-mail-wake` even when it writes the row
+/// before the launcher stamps it.
+// trace:STORY-2256 | ai:claude
+pub(crate) const LAUNCH_WAKE_ENV: &str = "AIDA_MAIL_WAKE";
+
+/// The wake a SessionStart hook records on a row nothing has decided yet:
+/// the launcher's decision when it named one, else the default a hand-started
+/// Codex session gets (`[agents.codex] mail_wake`, on unless set to false).
+/// `None` for vendors the hook leaves alone.
+// trace:STORY-2256 | ai:claude
+pub(crate) fn session_wake(
+    agent_type: &str,
+    launcher: Option<&str>,
+    config_default: impl FnOnce() -> Option<bool>,
+) -> Option<MailWake> {
+    if WakeAdapter::for_vendor(agent_type) != WakeAdapter::Codex {
+        return None;
+    }
+    let decided = match launcher.map(str::trim) {
+        Some("pending") => Some(MailWake::Pending),
+        Some("off") => Some(MailWake::Off),
+        Some("unsupported") => Some(MailWake::Unsupported),
+        _ => None,
+    };
+    decided.or_else(|| launch_wake(agent_type, false, config_default(), None).state)
+}
+
+/// Arm the mail wake of the session whose SessionStart hook recorded
+/// `entry`, whatever launched it: a Codex row nothing has decided yet takes
+/// [`session_wake`]'s state first, then a `pending` row arms on its exact
+/// recorded thread through [`arm_pending`].
+// trace:STORY-2256 | ai:claude
+pub(crate) fn arm_session(
+    project_root: &Path,
+    entry: &AgentRegistryEntry,
+    launcher: Option<&str>,
+    config_default: impl FnOnce() -> Option<bool>,
+    ensure_service: impl FnOnce(&Path) -> Result<()>,
+) -> Option<Armed> {
+    let adopted;
+    let entry = match entry.mail_wake {
+        Some(_) => entry,
+        None => {
+            let state = session_wake(&entry.agent_type, launcher, config_default)?;
+            adopted =
+                match crate::agent_registry::adopt_mail_wake_on_row(project_root, entry, state) {
+                    Ok(row) => row,
+                    Err(why) => {
+                        return Some(Armed {
+                            state: MailWake::Failed,
+                            warning: Some(format!("mail wake not recorded: {why:#}")),
+                        })
+                    }
+                };
+            &adopted
+        }
+    };
+    arm_pending(project_root, entry, ensure_service)
+}
+
+/// The `Mail wake:` line `aida session start` prints for a Codex project:
+/// whether the seat's SessionStart hook will arm its wake, and the one
+/// command that installs the service when it is not there yet.
+// trace:STORY-2256 | ai:claude
+pub(crate) fn session_start_wake_line(
+    vendor: &str,
+    config_default: Option<bool>,
+    service_installed: bool,
+    project_root: &Path,
+) -> Option<String> {
+    if WakeAdapter::for_vendor(vendor) != WakeAdapter::Codex {
+        return None;
+    }
+    Some(match (config_default, service_installed) {
+        (Some(false), _) => {
+            "Mail wake: off ([agents.codex] mail_wake = false); mail arrives on the next turn"
+                .to_string()
+        }
+        (_, true) => {
+            "Mail wake: arms when codex starts (the wake service is installed)".to_string()
+        }
+        (_, false) => format!(
+            "Mail wake: arms when codex starts; it installs the wake service first. \
+             If that is refused, run: (cd {} && aida mailbox wake-service install)",
+            project_root.display()
+        ),
+    })
 }
 
 /// Retire a row's wake when its session ends. True when it changed.

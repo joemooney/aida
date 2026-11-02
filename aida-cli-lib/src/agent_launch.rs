@@ -6741,6 +6741,14 @@ fn run_agent_generation(
         .stderr(std::process::Stdio::inherit());
     // trace:STORY-1843 | ai:claude
     crate::agent_handle::apply_launch_env(&mut command, &plan.project_root, &plan.name);
+    // The child's SessionStart hook may write its row before this launcher
+    // stamps it: it reads the launch's decision from here, and a value
+    // inherited from a parent session never stands in for it.
+    // trace:STORY-2256 | ai:claude
+    match mail_wake {
+        Some(state) => command.env(crate::mail_wake::LAUNCH_WAKE_ENV, state.as_str()),
+        None => command.env_remove(crate::mail_wake::LAUNCH_WAKE_ENV),
+    };
     apply_harness_version(
         &mut command,
         harness_version_probe_program_and_args(binary, config, plan, true)?,
