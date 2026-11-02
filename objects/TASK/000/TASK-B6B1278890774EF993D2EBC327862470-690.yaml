@@ -9,12 +9,12 @@ description: |-
 
   PR: #3214
   Reviewed sha: de14432815609f5237675390d376556ef7927b4d
-status: InProgress
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-02T09:06:23.625586402Z
-modified_at: 2026-11-02T09:22:15.011074382Z
+modified_at: 2026-11-02T12:09:15.250160544Z
 req_type: Task
 tags:
 - carried-from:BUG-B6B1278890774EF993D2EBC327862470-178
@@ -74,6 +74,21 @@ history:
   timestamp: 2026-11-02T09:44:48.628191859Z
   session_id: 1f56bd1e-c059-4f73-b8df-e18b2170fdfc
   changes: []
+- id: 01a19c29-eaec-7922-8b56-a69085ab86f1
+  author: aida-auto-bump
+  timestamp: 2026-11-02T12:09:15.244351744Z
+  session_id: 1f56bd1e-c059-4f73-b8df-e18b2170fdfc
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a19c29-eaf2-7793-a3e1-6271e463b421
+  timestamp: 2026-11-02T12:09:15.250156361Z
+  agent: aida
+  commit_sha: 5b21d041d218b3030c4878b5cabb862da086026e
+  summary: 'All 3 bundled tasks met: test-only evaluate()/route_backlog() deleted with meaningful tests ported to inspect_backlog/agent_wake/role_wake/route_backlog_observed; SUBJECT_MAX shared from aida_core::mailbox and used by mailbox_logical; docs mail-backlog block indented under substrate bullet. CI green at e72e2dbd.'
+  review_verdict: approved
 execution_mode: drain
 filed_at:
   code_sha: f7892bcf9b28cd9659cd5461cbb35a64c744ecd0
@@ -83,3 +98,7 @@ filed_at:
   aida_build_sha: 6a3f67671a9
   vendor: claude
   session: 1f56bd1e-c059-4f73-b8df-e18b2170fdfc
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-02T12:09:15.244347388Z
+  completion_sha: 5b21d041d218b3030c4878b5cabb862da086026e
