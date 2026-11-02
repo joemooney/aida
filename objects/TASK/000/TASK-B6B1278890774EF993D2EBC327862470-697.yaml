@@ -1,0 +1,30 @@
+id: 01a19ba5-ff57-7e93-a84f-73cf8bc1dc49
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-697
+title: 'Non-blocking (known deferral, carried): the calibration-ON shadow fork in phase…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on STORY-2255, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  Non-blocking (known deferral, carried): the calibration-ON shadow fork in phase_driver_trait still plans only a Claude JSONL fork, so a Codex-hosted calibration shadow cold-boots.
+
+  PR: #3227
+  Reviewed sha: 4738c574ba3eccdd96fc329aafca8f5a98c75e6c
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-02T09:45:09.719882471Z
+modified_at: 2026-11-02T09:45:09.719882471Z
+req_type: Task
+tags:
+- carried-from:STORY-2255
+- finding-hash:08ff1c22
+- from-review:PR-3227
+- kind:carried-forward
+filed_at:
+  code_sha: 8ab45ba1c8731a979e678fdf3c041459e7434c46
+  branch: main
+  dirty: true
+  aida_version: 0.16.0
+  aida_build_sha: 6a3f67671a9
+  vendor: claude
+  session: 1f56bd1e-c059-4f73-b8df-e18b2170fdfc
