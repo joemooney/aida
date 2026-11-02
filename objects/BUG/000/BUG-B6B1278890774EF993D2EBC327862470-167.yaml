@@ -22,7 +22,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T06:47:54.074794793Z
-modified_at: 2026-11-02T03:50:13.213725429Z
+modified_at: 2026-11-02T04:35:08.638345082Z
 req_type: Bug
 tags:
 - audit
@@ -72,6 +72,13 @@ comments:
   created_at: 2026-11-02T03:40:44.170154127Z
   modified_at: 2026-11-02T03:40:44.170154127Z
   session_id: 126bbd5a-a92f-452b-ab0b-2637a1db42c2
+- id: 01a19a8a-2ade-7c80-b4ea-9ba0445fcae3
+  author: joe
+  content: 'Round 2 (cf3656b95fb): (1) dropped the AIDA_HOME pin that hid the minted seat grant, which caused the 5 test panics. (2) The Build job is the CI-lane aggregator and was red only because lib-1 was. (3) burndown/intake now go through session::resolve_coordinator_launch and resume through session::resume_with, with behavioural env-unset tests for both. (4) Added a direct launch_questions_remedy test, plus a clarify posture test through the shared resolve_headless_launch_posture. Locally: cargo check --tests is clean and make check-ci-fast passes 36/36. The lib test binary takes >10 min to link and cannot run in this sandbox, so CI lib lanes are the test verification.'
+  created_at: 2026-11-02T04:35:08.638345082Z
+  modified_at: 2026-11-02T04:35:08.638345082Z
+  session_id: 01a19a61042e
+  harness_version: 2.1.316 (Claude Code)
 history:
 - id: 01a195dd-7495-70a1-9fe4-3bf923e003f5
   author: joe
