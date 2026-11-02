@@ -21,7 +21,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T07:26:20.914223641Z
-modified_at: 2026-11-02T09:27:53.796958819Z
+modified_at: 2026-11-02T09:27:54.922768305Z
 req_type: Bug
 tags:
 - architecture
@@ -536,6 +536,21 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Source for all 4 ACs holds and the coordinator-launch rework (75ac19c) is correct by reading, but CI lib-0 has been red at every head since 75ac19c (75ac19c, cda93f6, c8b068b), while lib-0 was green at e9419d0/4107f3b and on main at the merged bases. Approval is blocked until the PR''s own CI is green.. No triage reason was given.'
   created_at: 2026-11-02T09:27:53.796956982Z
   modified_at: 2026-11-02T09:27:53.796956982Z
+  session_id: 1f56bd1e-c059-4f73-b8df-e18b2170fdfc
+- id: 01a19b96-34a2-7a83-bb7f-a5fd7aca43de
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2398):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: c8b068beb847
+    Recorded: 2026-11-02T09:26:22.990533389+00:00
+    Findings:
+    1. P1 CI regression (blocking): CI (lib-0) fails at head c8b068beb847 (run 41417964697), and also at cda93f6 (run 41407767701) and 75ac19c (run 41407478214). The same shard was green at 4107f3b/e9419d0, and main's lib-0 was green at the bases merged in (55be964 run 41407027876, d21c58b run 41410803802), so 75ac19c introduced it. The reviewer sandbox cannot fetch job logs (blob host denied), so the failing test is not identified here. Likely suspects: the new bug_2398_coordinator_codex_launch_keeps_delegated_seat (fake codex + AmbientGuard + probe in CI without codex/keyring), the reworked bug_2398_final_spawn_boundary_ratchet (LAUNCH_INVENTORY counts and the CARGO_MANIFEST_DIR walk), or an existing coordinator/burndown test whose Codex child now goes through prepare_launch. Read the lib-0 log, fix the root cause (do not weaken or ignore the test), and get every PR CI shard green, including the Build (ubuntu-latest) gate.
+    2. Non-blocking (minor, carried): launch_markers in bug_2398_final_spawn_boundary_ratchet counts only the fully-qualified '.env(crate::gate::seat_authority::GRANT_ENV' form. A site that imports GRANT_ENV, or writes .env("AIDA_SESSION_GRANT", ..) or .envs([...]), would evade the inventory. No current production site escapes (grep at c8b068b).
+    3. Non-blocking (carried): the real-Codex fixtures for acc739ef skip in CI when codex is not on PATH, so that criterion's real-fixture evidence rests on operator runs (docs/testing/bug-2398-rework.md).
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-02T09:27:54.786227667Z
+  modified_at: 2026-11-02T09:27:54.786227667Z
   session_id: 1f56bd1e-c059-4f73-b8df-e18b2170fdfc
 history:
 - id: 01a19600-c769-7cd0-ba08-8d93975e3e3b
