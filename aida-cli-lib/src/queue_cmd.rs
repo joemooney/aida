@@ -10832,61 +10832,97 @@ fn review_ref_from_verdict_filename(path: &std::path::Path) -> String {
     stem.to_string()
 }
 
-fn verdict_mentions_spec(
-    verdict: &crate::gate::review_verdict::RecordedVerdict,
-    ids: &[&str],
-) -> bool {
-    let haystack = [
-        verdict.summary.as_deref(),
-        verdict.review_comment.as_deref(),
-        verdict.comment_url.as_deref(),
-    ]
-    .into_iter()
-    .flatten()
-    .chain(verdict.findings.iter().map(String::as_str))
-    .collect::<Vec<_>>()
-    .join("\n")
-    .to_ascii_uppercase();
-    ids.iter()
-        .filter(|id| !id.trim().is_empty() && **id != "???")
-        .any(|id| haystack.contains(&id.to_ascii_uppercase()))
+/// BUG-2403: is the change-keyed verdict `key` (`PR-N`/`MR-N`) PROVED to
+/// concern one of `labels`? Only the gate ledger's own binding counts: the
+/// spec's `by-spec` index names that change (written when the change was
+/// opened or recorded for the spec), or the change's newest verdict event
+/// is recorded for the spec. Prose that merely mentions an ID, a file name
+/// or a sort order never binds a review to a spec.
+// trace:BUG-2403 | ai:claude
+fn change_verdict_bound_to(project_root: &std::path::Path, key: &str, labels: &[String]) -> bool {
+    let Some(change) = crate::gate::ledger::ChangeKey::parse(key) else {
+        return false;
+    };
+    let Ok(store) = crate::gate::ledger::store_root(project_root) else {
+        return false;
+    };
+    let indexed = labels.iter().any(|label| {
+        crate::gate::ledger::project::changes_for_spec(&store, label).contains(&change)
+    });
+    indexed
+        || crate::gate::ledger::project::newest_verdict_event(project_root, key).is_some_and(|e| {
+            e.spec
+                .as_deref()
+                .is_some_and(|spec| labels.iter().any(|l| l.eq_ignore_ascii_case(spec)))
+        })
 }
 
+/// The findings block a rework pickup leads with: the CURRENT review of the
+/// spec, selected once across its native and friendly labels.
+///
+/// BUG-2403: this used to try the friendly label first and return its record
+/// however stale, then fall back to any blocking verdict whose prose
+/// mentioned the ID, in file-name order. A current approval therefore
+/// replayed an obsolete refusal's findings, and the recurrence guard compared
+/// that stale block. Now the selected current record answers (an approval
+/// yields no block); ambiguous or refused evidence yields no block rather
+/// than a guess; only when no spec-keyed record exists does a change-keyed
+/// review answer, and only one whose ledger binding proves it concerns this
+/// spec — two such changes are ambiguous, not sorted to a winner.
+// trace:BUG-2403 | ai:claude
 pub(crate) fn rework_findings_block_for_spec(
     project_root: &std::path::Path,
     display_id: &str,
     spec_id: &str,
 ) -> Option<String> {
+    use crate::gate::review_alias::{select_verdict, spec_labels, AliasSelection};
     let ids = [display_id, spec_id];
-    for id in ids
-        .iter()
-        .filter(|id| !id.trim().is_empty() && **id != "???")
-    {
-        if let Some(v) = crate::gate::review_verdict::read_recorded_verdict(project_root, id) {
-            return crate::review_verdict_display::rework_findings_comment(id, id, &v);
+    let labels = spec_labels(&ids);
+    let shown = labels
+        .first()
+        .cloned()
+        .unwrap_or_else(|| display_id.to_string());
+    match select_verdict(project_root, &ids) {
+        // Named by the caller's first label, not the answering partition's:
+        // the recurrence guard compares whole blocks, so the same findings
+        // must render the same whichever label recorded them.
+        AliasSelection::Selected(s) => {
+            return crate::review_verdict_display::rework_findings_comment(
+                &shown, &shown, &s.verdict,
+            );
+        }
+        AliasSelection::Absent => {}
+        unavailable => {
+            eprintln!(
+                "warning: no review findings imported for {shown}: its current review cannot be selected ({})",
+                unavailable.unavailable_reason().unwrap_or_default()
+            );
+            return None;
         }
     }
 
     // M1: every key with a verdict, the ledger's included, each read as the
     // gates weigh it. trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
-    let mut blocking = crate::gate::review_verdict::list_active_verdicts(project_root)
+    // trace:TASK-1191 | ai:codex
+    let mut bound = crate::gate::review_verdict::list_active_verdicts(project_root)
         .into_iter()
         .filter(|(_, verdict)| verdict.kind.blocks_done())
-        .map(|(key, verdict)| {
-            (
-                crate::gate::review_verdict::verdict_path(project_root, &key),
-                verdict,
-            )
-        })
+        .filter(|(key, _)| change_verdict_bound_to(project_root, key, &labels))
         .collect::<Vec<_>>();
-    blocking.sort_by(|a, b| a.0.cmp(&b.0));
-
-    // trace:TASK-1191 | ai:codex
-    let selected = blocking
-        .iter()
-        .find(|(_, v)| verdict_mentions_spec(v, &ids))?;
-    let review_ref = review_ref_from_verdict_filename(&selected.0);
-    crate::review_verdict_display::rework_findings_comment(display_id, &review_ref, &selected.1)
+    if bound.len() > 1 {
+        eprintln!(
+            "warning: no review findings imported for {shown}: {} changes each hold a current refusal for it ({})",
+            bound.len(),
+            bound.iter().map(|(k, _)| k.as_str()).collect::<Vec<_>>().join(", ")
+        );
+        return None;
+    }
+    let (key, verdict) = bound.pop()?;
+    let review_ref = review_ref_from_verdict_filename(&crate::gate::review_verdict::verdict_path(
+        project_root,
+        &key,
+    ));
+    crate::review_verdict_display::rework_findings_comment(display_id, &review_ref, &verdict)
 }
 
 /// BUG-225: render the copy-pasteable `claude` command line for a

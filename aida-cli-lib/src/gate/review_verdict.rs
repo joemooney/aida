@@ -1198,13 +1198,17 @@ fn choose_current(
     ledger.or_else(|| file_body.map(from_file))
 }
 
-/// Read the recorded verdict trying several id forms (agreed id, spec id) —
-/// whichever file exists first wins. Callers hold both forms and the verdict
-/// may have been filed under either.
+/// Read the recorded verdict of ONE requirement known by several labels (its
+/// agreed id and its spec id), which callers read off the same requirement.
+///
+/// BUG-2403: this used to take the first label that answered, so a stale
+/// friendly-label record overrode a later canonical one. Every label's
+/// current record is now compared ([`crate::gate::review_alias`]) and the
+/// newest answers. Ambiguous or refused evidence yields only a blocking
+/// candidate, never an approval (fail closed for every `Option` caller).
+// trace:BUG-2403 | ai:claude
 pub fn read_recorded_verdict_any(project_root: &Path, ids: &[&str]) -> Option<RecordedVerdict> {
-    ids.iter()
-        .filter(|id| !id.trim().is_empty() && **id != "???")
-        .find_map(|id| read_recorded_verdict(project_root, id))
+    crate::gate::review_alias::select_verdict(project_root, ids).fail_closed()
 }
 
 /// Write (or update) the verdict record for `spec`, preserving any fields the
@@ -3224,13 +3228,29 @@ pub(crate) fn evaluate_review_verdict_gate(
     // sha itself resolves either way because worktrees share the object
     // store. trace:BUG-775 | ai:claude
     let primary_root = crate::main_worktree_root_from(project_root);
-    let verdict = read_recorded_verdict_any(project_root, &[display_id, spec_id]).or_else(|| {
-        (primary_root != project_root)
-            .then(|| read_recorded_verdict_any(&primary_root, &[display_id, spec_id]))
-            .flatten()
-    });
-    let Some(verdict) = verdict else {
-        return (VerdictGate::Proceed, None);
+    // BUG-2403: one selection across both labels; evidence that cannot be
+    // selected (ambiguous or refused) and carries no refusal stops the gate
+    // instead of reading as "no verdict".
+    // trace:BUG-2403 | ai:claude
+    let select =
+        |root: &Path| crate::gate::review_alias::select_verdict(root, &[display_id, spec_id]);
+    let mut selection = select(project_root);
+    if matches!(selection, crate::gate::review_alias::AliasSelection::Absent)
+        && primary_root != project_root
+    {
+        selection = select(&primary_root);
+    }
+    let unavailable = selection.unavailable_reason().map(str::to_string);
+    let Some(verdict) = selection.fail_closed() else {
+        return match unavailable {
+            Some(reason) => (
+                VerdictGate::Refuse(vec![format!(
+                    "{display_id}'s review verdict cannot be selected: {reason}"
+                )]),
+                None,
+            ),
+            None => (VerdictGate::Proceed, None),
+        };
     };
     // BUG-1466 / BUG-1538: this used to return early here for every verdict
     // that does not block_done() — which includes APPROVED, the consequential

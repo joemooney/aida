@@ -4181,7 +4181,41 @@ pub(crate) fn review_verdict_show_body(
     serde_json::Value,
     crate::gate::review_verdict::VerdictSource,
 )> {
-    let current = crate::gate::review_verdict::current_verdict(project_root, key)?;
+    // BUG-2403: a spec key reads every label of the ONE requirement it
+    // resolves to (native and friendly), so `review verdict STORY-N` and
+    // `review verdict <native>` answer with the same, newest record. A key
+    // that does not resolve unambiguously stays literal.
+    // trace:BUG-2403 | ai:claude
+    let labels = match crate::gate::ledger::ChangeKey::parse(key) {
+        Some(_) => vec![key.to_string()],
+        None => crate::load_store_for_lookup(project_root)
+            .map(|store| crate::gate::review_alias::labels_for(&store, key))
+            .unwrap_or_else(|| vec![key.to_string()]),
+    };
+    let current = match labels.as_slice() {
+        [_, _, ..] => {
+            let ids: Vec<&str> = labels.iter().map(String::as_str).collect();
+            match crate::gate::review_alias::select_verdict(project_root, &ids) {
+                crate::gate::review_alias::AliasSelection::Selected(s) => {
+                    crate::gate::review_verdict::CurrentVerdict {
+                        body: s.body,
+                        source: s.source,
+                        written_at: s.order_time.map(std::time::SystemTime::from),
+                    }
+                }
+                crate::gate::review_alias::AliasSelection::Absent => return None,
+                unavailable => {
+                    eprintln!(
+                        "warning: {}'s review verdict cannot be selected: {}",
+                        key.to_ascii_uppercase(),
+                        unavailable.unavailable_reason().unwrap_or_default()
+                    );
+                    return None;
+                }
+            }
+        }
+        _ => crate::gate::review_verdict::current_verdict(project_root, key)?,
+    };
     let v = crate::gate::review_verdict::parse_recorded_verdict(&current.body)?;
     let actionability = crate::gate::review_verdict::review_actionability(
         project_root,

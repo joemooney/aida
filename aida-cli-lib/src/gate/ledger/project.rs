@@ -9,7 +9,7 @@ use crate::gate::review_verdict::{same_reviewed_sha, JsonObj};
 use std::path::{Path, PathBuf};
 
 /// A spec ID usable as a file name: no separators, no `..`, no change key.
-fn spec_key(spec: &str) -> Option<String> {
+pub(crate) fn spec_key(spec: &str) -> Option<String> {
     let key = spec.trim().to_ascii_uppercase();
     let safe = !key.is_empty()
         && !key.starts_with('.')
@@ -28,9 +28,9 @@ fn index_file(root: &Path, spec: &str) -> Option<PathBuf> {
 }
 
 #[derive(Debug, Default, serde::Serialize, serde::Deserialize)]
-struct SpecIndex {
+pub(super) struct SpecIndex {
     #[serde(default)]
-    changes: Vec<String>,
+    pub(super) changes: Vec<String>,
 }
 
 /// Every key the ledger holds verdicts under, read from `start`: each
@@ -192,7 +192,13 @@ fn verdict_events(root: &Path, key: &str) -> Vec<GateEvent> {
 // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
 pub(crate) fn newest_verdict_event(start: &Path, key: &str) -> Option<GateEvent> {
     let root = store_root(start).ok()?;
-    let mut events = verdict_events(&root, key);
+    newest_of(verdict_events(&root, key))
+}
+
+/// The answering event of one label's verdict events (oldest first): the
+/// last, or the ordinary origin a proved phase-3 overlay duplicates.
+// trace:BUG-2403 | ai:claude
+pub(crate) fn newest_of(mut events: Vec<GateEvent>) -> Option<GateEvent> {
     let newest = events.pop()?;
     // BUG-2403: a retained receipt-less phase-3 overlay answers with the
     // ordinary record it duplicates, when that pairing is proved.

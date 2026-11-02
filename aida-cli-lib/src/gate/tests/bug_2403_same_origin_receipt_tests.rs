@@ -328,6 +328,9 @@ fn bug_2403_drain_stamp_keeps_the_same_head_receipt_only() {
     assert_eq!(got.get("recorded_by"), o.get("recorded_by"));
     assert_eq!(got.get("recorded_at"), o.get("recorded_at"));
     assert_eq!(got.get("ci_terminal_green"), Some(&json!(true)));
+    // Review finding 4: the kept origin is not also archived as a round of
+    // its own, so one act of review is never counted twice.
+    assert!(got.get("rounds").is_none(), "{got:?}");
 
     crate::pr_merge_gate::stamp_pr_review_verdict(&root, 2403, Some(OTHER), None, None, None)
         .unwrap();

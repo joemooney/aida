@@ -254,7 +254,40 @@ fn keep_origin_receipt(
     }
     if let Some(receipt) = crate::gate::review_verdict::same_origin_receipt(origin, &candidate) {
         candidate.insert("release_grant".to_string(), receipt);
+        drop_just_archived_origin(origin, &mut candidate);
         *object = candidate;
+    }
+}
+
+/// BUG-2403 review finding 4: the builder archived the record it replaced —
+/// the origin itself — into `rounds` before the stamp kept that origin's
+/// recorder and time. The top level IS that act of review again, so the
+/// archived copy would count one review twice (inflating round numbering and
+/// feeding a same-findings consecutive-round comparison). Drop exactly the
+/// round this build appended when it is the origin; history the origin
+/// already carried is untouched.
+// trace:BUG-2403 | ai:claude
+fn drop_just_archived_origin(
+    origin: &crate::gate::review_verdict::JsonObj,
+    object: &mut crate::gate::review_verdict::JsonObj,
+) {
+    let rounds_len = |o: &crate::gate::review_verdict::JsonObj| {
+        o.get("rounds")
+            .and_then(|r| r.as_array())
+            .map_or(0, Vec::len)
+    };
+    let before = rounds_len(origin);
+    let mut snapshot = origin.clone();
+    snapshot.remove("rounds");
+    snapshot.remove("unarchived_rounds");
+    let Some(rounds) = object.get_mut("rounds").and_then(|r| r.as_array_mut()) else {
+        return;
+    };
+    if rounds.len() == before + 1 && rounds.last().and_then(|r| r.as_object()) == Some(&snapshot) {
+        rounds.pop();
+        if rounds.is_empty() {
+            object.remove("rounds");
+        }
     }
 }
 
