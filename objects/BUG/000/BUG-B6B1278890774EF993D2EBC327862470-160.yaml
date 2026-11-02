@@ -23,7 +23,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T06:45:38.111981577Z
-modified_at: 2026-11-02T07:19:52.946535240Z
+modified_at: 2026-11-02T07:21:55.577107602Z
 req_type: Bug
 tags:
 - architecture
@@ -145,6 +145,12 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-02T06:34:33.855387442Z
   modified_at: 2026-11-02T06:34:33.855387442Z
+  session_id: 1f56bd1e-c059-4f73-b8df-e18b2170fdfc
+- id: 01a19b22-dc79-70e2-b0c4-e7e838ce52de
+  author: joe
+  content: 'REWORK BRIEF (advisor, 2026-11-02 00:24 MST), round 3: the review found all six round-2 findings fixed and every AC surface wired. Two problems remain. (1) After the main merge, the test build no longer compiles (CI lib-0, lib-1, cli-0 and gates are red on run 41404140748). Read the compile errors with gh run view 41404140748 --log-failed and fix them against main''s current signatures (BUG-2382 #3224 and BUG-2393 #3229 changed ps/liveness and the containment callers). (2) The two new tests panic on HOME mutation. Use test_env isolation (a scoped fake HOME guard), never std::env::set_var on HOME. No other changes. Gate: LIGHT. If cargo is denied in your seat, push and let CI compile, and say so in the commit body.'
+  created_at: 2026-11-02T07:21:55.577107602Z
+  modified_at: 2026-11-02T07:21:55.577107602Z
   session_id: 1f56bd1e-c059-4f73-b8df-e18b2170fdfc
 history:
 - id: 01a195db-6c30-7600-a068-211ab6c2eed8
