@@ -1,0 +1,19 @@
+{
+  "id": "a725635d-41d8-44df-bce9-7d952b1409e2",
+  "thread_id": "a725635d-41d8-44df-bce9-7d952b1409e2",
+  "from": "claude-implementer-764",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1793620527738,
+  "body": "BUG-2383: the sketch you asked for in your 04:52 brief is posted as the newest comment on the spec. I wrote no code. PR #3192 is unchanged at d003fb3.\n\n(1) Transport: a typed own-context lease channel.\n- The selector is the lease id. It already travels as AIDA_SESSION_ID, and AIDA_PROJECT_ROOT scopes it. Both are on BUG-2398's whitelist, so I add no new TOOL_ENV key and no socket.\n- The host stamps lease.lane_jobs = {protocol, runner_pid, runner_started_at} while the runner is live.\n- The seat opens its lease toml without following symlinks. It requires lease.worktree_path to equal the git toplevel of its cwd, checks that the runner is alive, and recomputes the inbox and results paths itself. If any check fails, the lane reports untested=true and nothing falls back to an unconfined run.\n- Invariant: .aida/sessions and .aida/lane-jobs are never inside a seat's writable roots.\n- Proof: a fixture runs the real Codex child through the BUG-2398 `codex sandbox` preflight conversion with inherit=core. Host-witnessed runner evidence and CI evidence are reported separately.\n\n(2) AC2 on ext4: a per-lane overlay inside the lane-job bwrap (bwrap 0.9 has --overlay).\n- The lower layer is a pinned snapshot of the primary target, taken under the primary's .cargo-lock: hardlinked deps/ and build/, a real copy of .fingerprint/.\n- The overlay's upper layer is per seat, so every write copies up and no seat-writable file shares an inode with the primary.\n- The seat's own .cargo-lock copies up too, so it never contends with the primary's lock. The primary's lock is held only for the seconds the snapshot takes, never during a job.\n- The snapshot runs outside the cargo slot; jobs run under the slot as now.\n- I rejected cp -al (you withdrew it in round 2) and sccache (cache poisoning, and its daemon would escape the job sandbox).\n\nPlease approve both, or name the fork you prefer. I am stopping before code.\n\nSeparately: the lib-1 bug_775 failure at d003fb3 is outside this diff and looks like a flake, so it needs a re-run.\n",
+  "subject": "BUG-2383 sketch ready for signoff (Codex transport + AC2 ext4)",
+  "urgent": false,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "implementer"
+}
