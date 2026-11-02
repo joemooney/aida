@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-181
 agreed_id: BUG-2412
 title: A killed aida pr train leaves its train PR open, and the next train refuses the member as 'already riding live train PR' with no liveness check
 description: 'Observed 2026-11-02 02:05: an advisor-side timeout killed ''aida pr train 3214 3240'' mid-bisect. Train PR #3248 (land #3240) stayed open with no owning process. The next train refused #3240: ''it is already riding live train PR #3248; a PR rides one train at a time''. Manual fix: gh pr close 3248. Expected: a train records its owner pid or lease; a later train treats a train PR whose owner is dead as abandoned (close or adopt it) instead of blocking. Related: BUG-2220.'
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-02T12:46:17.872589821Z
-modified_at: 2026-11-02T16:03:44.910025863Z
+modified_at: 2026-11-02T16:46:51.340644460Z
 req_type: Bug
 tags:
 - area:merge-train
@@ -48,6 +48,15 @@ history:
   timestamp: 2026-11-02T16:03:46.230041626Z
   session_id: ee0bf351-6b17-486f-a38e-cfbb1343c426
   changes: []
+- id: 01a19d28-11cc-7a52-93ea-c7b097611119
+  author: aida-orchestrator
+  timestamp: 2026-11-02T16:46:51.340668216Z
+  session_id: 01a19d22850d
+  harness_version: 2.1.316 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 5b21d041d218b3030c4878b5cabb862da086026e
   branch: main
@@ -56,3 +65,11 @@ filed_at:
   aida_build_sha: 6a3f67671a9
   vendor: claude
   session: 1f56bd1e-c059-4f73-b8df-e18b2170fdfc
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'BUG-2413 PASS; BUG-2412 PARTIAL: the abandoned-train check probes a pid that is only valid in the PID namespace that recorded it, so a later train in another sandboxed Bash call closes a LIVE train PR and deletes its branch'
+  recovery_hint: address the review findings, move BUG-2412 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-11-02T16:46:51.340644460Z
