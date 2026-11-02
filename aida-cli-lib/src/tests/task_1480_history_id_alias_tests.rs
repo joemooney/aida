@@ -24,7 +24,7 @@ fn req(spec_id: &str, agreed_id: Option<&str>, title: &str) -> Requirement {
 fn open_backend() -> (tempfile::TempDir, CachedGitBackend) {
     let dir = tempdir().unwrap();
     let store_root = dir.path().join("store");
-    let cache_path = dir.path().join(".aida").join("cache.db");
+    let cache_path = aida_core::db::project_cache_path(&dir.path());
     std::fs::create_dir_all(&store_root).unwrap();
     let backend = crate::test_env::home_fixture_cached_backend(&store_root, &cache_path).unwrap();
     (dir, backend)

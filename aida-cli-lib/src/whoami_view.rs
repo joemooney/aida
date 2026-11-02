@@ -418,7 +418,7 @@ pub(crate) fn queue_head(
     )
     .ok()?;
     let conn = rusqlite::Connection::open_with_flags(
-        main_root.join(".aida/cache.db"),
+        aida_core::db::migrated_project_cache_path(&main_root),
         rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY,
     )
     .ok()?;

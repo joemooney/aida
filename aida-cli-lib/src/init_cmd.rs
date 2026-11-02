@@ -1036,9 +1036,13 @@ pub(crate) fn resolve_init_footprint(
 
 // trace:STORY-830 | ai:codex
 fn ensure_minimal_cache(root: &std::path::Path, db_path: &std::path::Path) {
-    let cache_path = root.join(".aida").join("cache.db");
+    // trace:TASK-2707 | ai:claude
+    let cache_path = aida_core::db::project_cache_path(root);
     if cache_path.exists() {
         return;
+    }
+    if let Some(dir) = cache_path.parent() {
+        let _ = std::fs::create_dir_all(dir);
     }
     let source = if db_path.is_absolute() {
         db_path.to_path_buf()
@@ -6582,7 +6586,7 @@ mod story_1674_minimal_cache_tests {
         )
         .unwrap();
         ensure_minimal_cache(root, std::path::Path::new("requirements.yaml"));
-        let cache = SqliteBackend::new(root.join(".aida").join("cache.db")).unwrap();
+        let cache = SqliteBackend::new(aida_core::db::project_cache_path(&root)).unwrap();
         let copied = cache.load().unwrap();
         let row = copied
             .requirements

@@ -545,6 +545,11 @@ pub(crate) fn is_store_tracked_runtime_path(path: &str) -> bool {
     let Some(name) = path.strip_prefix(".aida/") else {
         return false;
     };
+    // TASK-2707: the cache's own directory holds only the cache and sidecars.
+    // trace:TASK-2707 | ai:claude
+    if let Some(inner) = name.strip_prefix("cache-db/") {
+        return !inner.contains('/') && inner.starts_with("cache.db");
+    }
     // No further nesting — `.aida/<name>` only, not `.aida/sub/<name>`.
     if name.contains('/') {
         return false;

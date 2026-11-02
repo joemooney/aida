@@ -695,8 +695,8 @@ fn executor_pushes_one_exact_store_ref_with_identity_hook_and_no_code_hooks() {
         fs::read(fixture.common.join("aida-transport.json")).unwrap()
     );
     assert!(!fixture.common.join("FETCH_HEAD").exists());
-    assert!(!fixture.root.join(".aida/cache.db").exists());
-    assert!(!store.join(".aida/cache.db").exists());
+    assert!(!fixture.root.join(".aida/cache-db/cache.db").exists());
+    assert!(!store.join(".aida/cache-db/cache.db").exists());
     assert_eq!(fixture.git_at(&store, &["status", "--porcelain=v1"]), "");
 }
 
@@ -2382,8 +2382,8 @@ fn pull_fast_forwards_only_the_store_after_scanning_and_names_moved_refs() {
     assert!(!fixture.common.join("FETCH_HEAD").exists());
     assert!(!fixture.common.join("aida-transport-pull.json").exists());
     assert!(!fixture.common.join("aida-transport-receipt.json").exists());
-    assert!(!store.join(".aida/cache.db").exists());
-    assert!(!fixture.root.join(".aida/cache.db").exists());
+    assert!(!store.join(".aida/cache-db/cache.db").exists());
+    assert!(!fixture.root.join(".aida/cache-db/cache.db").exists());
 
     let again = fixture.aida(&["pull"]);
     assert!(again.status.success(), "{}", diagnostics(&again));

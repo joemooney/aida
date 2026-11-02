@@ -583,7 +583,7 @@ fn a_holder_started_just_before_the_teardown_keeps_the_lease_and_tree() {
     // The session's runtime links must survive too, or `aida` run from
     // inside the tree would see a bare `.aida/` (a fresh local cache, no
     // lease).
-    for link in [".aida-store", ".aida/sessions", ".aida/cache.db"] {
+    for link in [".aida-store", ".aida/sessions", ".aida/cache-db"] {
         assert!(
             s.worktree.join(link).is_symlink(),
             "{link} must still be a symlink after the late refusal"
@@ -641,7 +641,7 @@ fn a_failed_salvage_keeps_the_lease_and_names_the_recovery_command() {
         "uncommitted work",
         "the uncommitted work must survive"
     );
-    for link in [".aida-store", ".aida/sessions", ".aida/cache.db"] {
+    for link in [".aida-store", ".aida/sessions", ".aida/cache-db"] {
         assert!(
             s.worktree.join(link).is_symlink(),
             "{link} must be restored after the failed salvage"

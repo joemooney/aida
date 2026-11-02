@@ -318,7 +318,7 @@ pub(crate) fn refresh_agent_packs_at(
     if let Some(selection) = crate::init_cmd::read_enabled_agent_selection(project_root) {
         selection.apply_to_scaffold_config(&mut config, false);
     }
-    let db_path = project_root.join(".aida").join("cache.db");
+    let db_path = aida_core::db::project_cache_path(project_root);
     let mut scaffolder = aida_core::scaffolding::Scaffolder::with_database(
         project_root.to_path_buf(),
         config,
@@ -1370,7 +1370,7 @@ global = true
             &store,
             root,
             &aida_core::scaffolding::ScaffoldConfig::default(),
-            &root.join(".aida/cache.db"),
+            &aida_core::db::project_cache_path(&root),
         );
         assert!(status.matching.contains(&claude_capture));
         assert!(status.matching.contains(&codex_learn));

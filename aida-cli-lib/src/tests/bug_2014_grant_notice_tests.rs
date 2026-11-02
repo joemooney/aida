@@ -60,7 +60,7 @@ fn deterministic_crossings_renewal_and_poisoned_store() {
     assert!(seen[2].contains("advisor seat grant expired"));
     assert!(seen[2].contains("aida role enter advisor"));
     assert!(!seen.iter().any(|message| message.contains("product")));
-    assert!(!root.path().join(".aida/cache.db").exists());
+    assert!(!aida_core::db::project_cache_path(&root.path()).exists());
     assert_eq!(std::fs::read_to_string(&poison).unwrap(), "spec_id: [");
     // Same-id renewal starts a new epoch; a newly minted id also starts fresh.
     change(&id, |grant| {

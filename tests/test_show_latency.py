@@ -87,7 +87,7 @@ def check_in(binary, temp):
     require(run([binary, "init", "--no-skills", "--no-hooks"], root, env))
     require(run([binary, "add", "--title", "original title", "--type", "task"], root, env))
     require(run([binary, "cache", "rebuild"], root, env))
-    cache, store = root / ".aida/cache.db", root / ".aida-store"
+    cache, store = root / ".aida/cache-db/cache.db", root / ".aida-store"
     with sqlite3.connect(cache) as conn:
         uuid, spec = conn.execute("SELECT id, spec_id FROM requirements_cache WHERE title='original title'").fetchone()
     obj, = (store / "objects").rglob(f"{spec}.yaml")

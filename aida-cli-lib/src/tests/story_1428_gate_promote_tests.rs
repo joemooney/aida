@@ -26,7 +26,7 @@ fn fixture(recurrence: u32) -> Fixture {
     std::fs::create_dir_all(&store).unwrap();
     let backend = crate::test_env::home_fixture_cached_backend(
         &store,
-        &dir.path().join(".aida").join("cache.db"),
+        &aida_core::db::project_cache_path(&dir.path()),
     )
     .unwrap();
     let mut f = Requirement::new("ETXTBSY on fixture".into(), "seen again".into());

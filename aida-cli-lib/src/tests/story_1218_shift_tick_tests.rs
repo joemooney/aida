@@ -1090,7 +1090,7 @@ fn shift_dry_run_on_fixture_queue_prints_argv_specs_guards_mail_and_writes_nothi
     std::fs::create_dir_all(&store).unwrap();
     let backend = crate::test_env::home_fixture_cached_backend(
         &store,
-        &tmp.path().join(".aida").join("cache.db"),
+        &aida_core::db::project_cache_path(&tmp.path()),
     )
     .unwrap();
     let add = |spec: &str, mode: Option<ExecutionMode>, role: Option<&str>| {
@@ -2059,7 +2059,7 @@ fn shift_redrive_requeue_puts_parks_at_the_queue_head_and_the_next_wave_selects_
     std::fs::create_dir_all(&store).unwrap();
     let backend = crate::test_env::home_fixture_cached_backend(
         &store,
-        &tmp.path().join(".aida").join("cache.db"),
+        &aida_core::db::project_cache_path(&tmp.path()),
     )
     .unwrap();
     let queued = |spec: &str, position: i64| {
@@ -2492,7 +2492,7 @@ fn shift_redrive_unwritable_events_file_requeues_nothing() {
     std::fs::create_dir_all(&store).unwrap();
     let backend = crate::test_env::home_fixture_cached_backend(
         &store,
-        &tmp.path().join(".aida").join("cache.db"),
+        &aida_core::db::project_cache_path(&tmp.path()),
     )
     .unwrap();
     for (spec, mins) in [("TASK-8", 90), ("TASK-9", 30)] {
@@ -2631,7 +2631,7 @@ fn shift_redrive_real_cap_branch_from_the_tick() {
     std::fs::create_dir_all(&store).unwrap();
     let backend = crate::test_env::home_fixture_cached_backend(
         &store,
-        &tmp.path().join(".aida").join("cache.db"),
+        &aida_core::db::project_cache_path(&tmp.path()),
     )
     .unwrap();
     let park = backend.add_requirement(drain_park("TASK-9", 30)).unwrap();

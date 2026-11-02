@@ -3905,7 +3905,7 @@ pub(crate) fn scaffold_enabled_agent_profile(
     }
     let mut config = ScaffoldConfig::default();
     selection.apply_to_scaffold_config(&mut config, false);
-    let db_path = project_root.join(".aida").join("cache.db");
+    let db_path = aida_core::db::project_cache_path(project_root);
     let mut scaffolder = aida_core::scaffolding::Scaffolder::with_database(
         project_root.to_path_buf(),
         config,

@@ -83,7 +83,7 @@ def stale_allowed_outputs_cover_deferred_writer_busy_and_worker_running(binary):
         require(run([binary, "init", "--no-skills", "--no-hooks"], root, env))
         require(run([binary, "add", "--title", "cache-label-seed", "--type", "task", "--status", "draft"], root, env))
         require(run([binary, "cache", "rebuild"], root, env))
-        cache = root / ".aida/cache.db"
+        cache = root / ".aida/cache-db/cache.db"
         store = root / ".aida-store"
         with sqlite3.connect(cache) as conn:
             original_head = conn.execute("SELECT value FROM cache_meta WHERE key='source_head_sha'").fetchone()[0]

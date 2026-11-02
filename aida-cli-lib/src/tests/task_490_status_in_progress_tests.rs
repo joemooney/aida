@@ -84,7 +84,7 @@ fn collect_queue_snapshot_pulls_in_progress_past_display_budget_with_lease() {
     let dir = tempdir().unwrap();
     let project_root = dir.path();
     let store_root = project_root.join("store");
-    let cache_path = project_root.join(".aida").join("cache.db");
+    let cache_path = aida_core::db::project_cache_path(&project_root);
     std::fs::create_dir_all(&store_root).unwrap();
     let backend = CachedGitBackend::open(&store_root, &cache_path).unwrap();
 
