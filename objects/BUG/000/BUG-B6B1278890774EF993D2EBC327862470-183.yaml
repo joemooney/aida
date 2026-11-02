@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-02T12:46:32.235262603Z
-modified_at: 2026-11-02T13:40:10.500508619Z
+modified_at: 2026-11-02T13:41:27.020677267Z
 req_type: Bug
 tags:
 - area:ci
@@ -26,6 +26,16 @@ comments:
   content: 'ADVISOR TRIAGE (2026-11-02 06:08 MST): APPROVED. The ''Expected'' clause is the acceptance criterion; add a regression test that reproduces the observed failure.'
   created_at: 2026-11-02T13:00:12.512429355Z
   modified_at: 2026-11-02T13:00:12.512429355Z
+  session_id: ee0bf351-6b17-486f-a38e-cfbb1343c426
+- id: 01a19c7e-536c-7a02-8be4-2b3b07c44865
+  author: joe
+  content: |-
+    ADVISOR REWORK BRIEF (06:46 MST), PR #3259 round 1 at f036535. Final round.
+    1. BLOCKING: in scripts/test-timings.py check(), an untouched row within limit x untouched_factor hits 'continue' before found.append, so stalled() never sees it. Repro: touched A at 10.5s and untouched B at 11.0s with overlapping JUnit spans. Base reports both as runner-stall notes and exits 0; this PR makes A a violation and exits 1. Fixed means every over-limit row, tolerated ones included, goes to stalled() first, and only then is each classified as stall, tolerated or violation. Add exactly that repro as a regression test.
+    2. BUNDLE: make the CI 'Test time budget' step print the changed-file count (or the explicit 'no parent commit' fallback), and state in the PR which branch run 41450856620 took.
+    Gate: FASTTRACK plus the timing-script Python tests and make check-ci-fast; no cargo. Push to the PR branch.
+  created_at: 2026-11-02T13:41:27.020677267Z
+  modified_at: 2026-11-02T13:41:27.020677267Z
   session_id: ee0bf351-6b17-486f-a38e-cfbb1343c426
 history:
 - id: 01a19c58-9a38-7550-bec8-4fc7e0a9f697
