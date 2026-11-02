@@ -7,12 +7,12 @@ description: |-
 
   [cosmetic, non-blocking] Small offsets from the stated 'inclusive decile' p90: 175d p90 1,010 (page 1,008); 60d p90 1,483 and 40.0% >400 (page 1,485 / 40.1%); 30d p90 1,791 (page 1,782); June 24.2% >400 (page 24.1%); 175d <=100 bucket 25.1% (page 25.0%). None changes a conclusion.
   Reviewed sha: 7fba6fb5ae38ad6e3bce3f11c5262cfbb6ec48ff
-status: Draft
+status: Rejected
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-01T22:45:14.268661919Z
-modified_at: 2026-11-02T02:32:00.040704961Z
+modified_at: 2026-11-02T02:32:01.381305127Z
 req_type: Task
 tags:
 - carried-from:TASK-2709
@@ -31,6 +31,14 @@ history:
   author: joe
   timestamp: 2026-11-01T23:28:36.049440863Z
   changes: []
+- id: 01a19a19-7265-75c1-bc35-9ace8bada8ab
+  author: joe
+  timestamp: 2026-11-02T02:32:01.381302432Z
+  session_id: 126bbd5a-a92f-452b-ab0b-2637a1db42c2
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Rejected
 filed_at:
   code_sha: 4e8e63b03ff3c32f3799af8829e1ef9e2f28fc1f
   branch: main
