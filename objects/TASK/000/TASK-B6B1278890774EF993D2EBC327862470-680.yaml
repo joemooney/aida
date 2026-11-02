@@ -14,13 +14,20 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-02T04:15:19.540652644Z
-modified_at: 2026-11-02T04:15:19.540652644Z
+modified_at: 2026-11-02T06:26:15.864991127Z
 req_type: Task
 tags:
 - carried-from:STORY-2256
 - finding-hash:e5eb9787
 - from-review:PR-3225
 - kind:carried-forward
+comments:
+- id: 01a19aef-e6b8-74f0-889d-5819e1dd0f1f
+  author: joe
+  content: 'ADVISOR RULING (2026-11-01 23:30 MST): bundled into TASK-2742, which carries the fix.'
+  created_at: 2026-11-02T06:26:15.864991127Z
+  modified_at: 2026-11-02T06:26:15.864991127Z
+  session_id: 1f56bd1e-c059-4f73-b8df-e18b2170fdfc
 history:
 - id: 01a19aa1-adbc-77e0-8e9f-51e859531ad8
   author: joe
