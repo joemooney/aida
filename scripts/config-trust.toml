@@ -223,6 +223,12 @@ sites = 1
 channels = ["worktree"]
 sites = 1
 
+# BUG-2394: codex_configured_mcp_servers reads only the [mcp_servers] table
+# NAMES from $CODEX_HOME/config.toml and the project's .codex/config.toml.
+[readers."aida-cli-lib/src/session.rs"]
+channels = ["other-file"]
+sites = 2
+
 [readers."aida-cli-lib/src/autopilot_intake.rs"]
 channels = ["worktree"]
 sites = 1
