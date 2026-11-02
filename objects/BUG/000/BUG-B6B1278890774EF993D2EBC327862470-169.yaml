@@ -23,7 +23,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T06:48:25.173889038Z
-modified_at: 2026-11-02T11:23:34.349169409Z
+modified_at: 2026-11-02T11:24:53.530158815Z
 req_type: Bug
 tags:
 - architecture
@@ -125,6 +125,30 @@ comments:
   created_at: 2026-11-02T11:22:34.690090807Z
   modified_at: 2026-11-02T11:22:34.690090807Z
   session_id: 1f56bd1e-c059-4f73-b8df-e18b2170fdfc
+- id: 01a19c01-4d9a-7eb2-ad00-2b4670ea6538
+  author: joe
+  content: |-
+    ## Implementer approach
+
+    Scope follows the advisor signoff (comment 3): A1-A4 as sketched, entry-level ownership of `.codex/hooks.json`. Part B is verify-only.
+
+    ### Acceptance criteria as tests
+    - **Unit (scaffolding):** preview includes `.codex/hooks/*` and `.codex/hooks.json` only when Codex wiring exists; a Claude-only repo gets no `.codex/`. The header goes after the shebang for `.codex/hooks/x`. Apply chmods 0o755. A stale `.codex/hooks/aida-session-context.sh` is reported as drift and rewritten.
+    - **Unit (managed_merge):** for `.codex/hooks.json`, a hand-added hook in the same event survives the merge, a stale `aida-*` entry is replaced, a merged doc is not drift, and settings.json keeps whole-slot semantics.
+    - **Fixture (shell):** commit-msg ignores a foreign trace in `.codex/`/`.agents/`. capture-prompt counts `$aida-capture` and its wording is vendor-neutral. advisor-code-guard honors the `AIDA_SESSION_PROJECT`/`CODEX_PROJECT_DIR` anchors, and an unlistable `CODEX_PROJECT_DIR` stays guarded.
+    - **Unit (codex_tool_env, B verify-only):** inventory test that the Codex lane-launch sites route through `prepare_launch` (reusing the BUG-2398 ratchet if it already covers this), plus a test that a hook run under a prepared launch env sees the seat role.
+
+    ### Expected files
+    - `aida-core/src/scaffolding/{mod.rs,codex_hooks.rs,managed_merge.rs}`, `aida-core/src/report.rs`, `aida-cli-lib/src/scaffold_cmd.rs` (slot-match call sites)
+    - `aida-core/templates/hooks/{aida-commit-msg,aida-capture-prompt.sh,aida-advisor-code-guard.sh}` plus their tests
+    - codex_tool_env tests (B)
+
+    ### Ambiguities / conflicts as questions
+    - None. B2 diagnostics and B3 CLI correction are out of scope under the verify-only ruling.
+  created_at: 2026-11-02T11:24:53.530158815Z
+  modified_at: 2026-11-02T11:24:53.530158815Z
+  session_id: 01a19c0013fe
+  harness_version: 2.1.316 (Claude Code)
 history:
 - id: 01a195dd-f3fe-78f1-905f-d5b9c92b6293
   author: joe
