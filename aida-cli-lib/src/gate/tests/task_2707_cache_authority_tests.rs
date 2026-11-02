@@ -63,13 +63,138 @@ fn authority_sources(src: &Path) -> Vec<PathBuf> {
     out
 }
 
-/// The production part of a source file: everything before its first
-/// `#[cfg(test)]`, minus `//` comments (prose may name the cache).
+/// 1-based inclusive line ranges of every `#[cfg(test)]`-gated node in `src`
+/// (the attribute plus the item, impl/trait member, statement, match arm,
+/// field or variant it gates). A gated node of a kind not listed here stays
+/// in the scan, so the ratchet errs toward scanning too much, never too
+/// little. `cfg(all(.., test, ..))` counts as test-only; `cfg(any(..))` and
+/// `cfg(not(test))` do not.
+fn test_gated_line_ranges(src: &str) -> Result<Vec<(usize, usize)>, syn::Error> {
+    use syn::spanned::Spanned;
+    use syn::visit::Visit;
+
+    fn meta_is_test(meta: &syn::Meta) -> bool {
+        match meta {
+            syn::Meta::Path(path) => path.is_ident("test"),
+            syn::Meta::List(list) if list.path.is_ident("all") => list
+                .parse_args_with(
+                    syn::punctuated::Punctuated::<syn::Meta, syn::Token![,]>::parse_terminated,
+                )
+                .is_ok_and(|inner| inner.iter().any(meta_is_test)),
+            _ => false,
+        }
+    }
+    fn gated(attrs: &[syn::Attribute]) -> bool {
+        attrs.iter().any(|attr| {
+            attr.path().is_ident("cfg")
+                && attr
+                    .parse_args::<syn::Meta>()
+                    .is_ok_and(|m| meta_is_test(&m))
+        })
+    }
+
+    struct Gated(Vec<(usize, usize)>);
+    impl Gated {
+        fn record(&mut self, node: &impl Spanned) {
+            let span = node.span();
+            self.0.push((span.start().line, span.end().line));
+        }
+    }
+    macro_rules! prune {
+        ($($method:ident: $ty:ty => $walk:path;)*) => {$(
+            fn $method(&mut self, node: &'ast $ty) {
+                if gated(&node.attrs) {
+                    self.record(node);
+                } else {
+                    $walk(self, node);
+                }
+            }
+        )*};
+    }
+    impl<'ast> Visit<'ast> for Gated {
+        fn visit_item(&mut self, node: &'ast syn::Item) {
+            let attrs: &[syn::Attribute] = match node {
+                syn::Item::Const(i) => &i.attrs,
+                syn::Item::Enum(i) => &i.attrs,
+                syn::Item::ExternCrate(i) => &i.attrs,
+                syn::Item::Fn(i) => &i.attrs,
+                syn::Item::ForeignMod(i) => &i.attrs,
+                syn::Item::Impl(i) => &i.attrs,
+                syn::Item::Macro(i) => &i.attrs,
+                syn::Item::Mod(i) => &i.attrs,
+                syn::Item::Static(i) => &i.attrs,
+                syn::Item::Struct(i) => &i.attrs,
+                syn::Item::Trait(i) => &i.attrs,
+                syn::Item::TraitAlias(i) => &i.attrs,
+                syn::Item::Type(i) => &i.attrs,
+                syn::Item::Union(i) => &i.attrs,
+                syn::Item::Use(i) => &i.attrs,
+                _ => &[],
+            };
+            if gated(attrs) {
+                self.record(node);
+            } else {
+                syn::visit::visit_item(self, node);
+            }
+        }
+        fn visit_impl_item(&mut self, node: &'ast syn::ImplItem) {
+            let attrs: &[syn::Attribute] = match node {
+                syn::ImplItem::Const(i) => &i.attrs,
+                syn::ImplItem::Fn(i) => &i.attrs,
+                syn::ImplItem::Type(i) => &i.attrs,
+                syn::ImplItem::Macro(i) => &i.attrs,
+                _ => &[],
+            };
+            if gated(attrs) {
+                self.record(node);
+            } else {
+                syn::visit::visit_impl_item(self, node);
+            }
+        }
+        fn visit_trait_item(&mut self, node: &'ast syn::TraitItem) {
+            let attrs: &[syn::Attribute] = match node {
+                syn::TraitItem::Const(i) => &i.attrs,
+                syn::TraitItem::Fn(i) => &i.attrs,
+                syn::TraitItem::Type(i) => &i.attrs,
+                syn::TraitItem::Macro(i) => &i.attrs,
+                _ => &[],
+            };
+            if gated(attrs) {
+                self.record(node);
+            } else {
+                syn::visit::visit_trait_item(self, node);
+            }
+        }
+        prune! {
+            visit_local: syn::Local => syn::visit::visit_local;
+            visit_stmt_macro: syn::StmtMacro => syn::visit::visit_stmt_macro;
+            visit_arm: syn::Arm => syn::visit::visit_arm;
+            visit_field: syn::Field => syn::visit::visit_field;
+            visit_variant: syn::Variant => syn::visit::visit_variant;
+            visit_field_value: syn::FieldValue => syn::visit::visit_field_value;
+        }
+    }
+
+    let file = syn::parse_file(src)?;
+    let mut gated_ranges = Gated(Vec::new());
+    gated_ranges.visit_file(&file);
+    Ok(gated_ranges.0)
+}
+
+/// The production part of a source file: every line outside a
+/// `#[cfg(test)]`-gated node, minus `//` comments (prose may name the cache).
 fn production_lines(src: &str) -> Vec<(usize, &str)> {
+    let gated = test_gated_line_ranges(src).unwrap_or_else(|e| {
+        panic!(
+            "authority source does not parse at line {}: {e}",
+            e.span().start().line
+        )
+    });
     src.lines()
         .enumerate()
-        .take_while(|(_, line)| line.trim() != "#[cfg(test)]")
-        .map(|(n, line)| (n + 1, line.split("//").next().unwrap_or("")))
+        .map(|(n, line)| (n + 1, line))
+        .filter(|(n, _)| !gated.iter().any(|(lo, hi)| (lo..=hi).contains(&n)))
+        .map(|(n, line)| (n, line.split("//").next().unwrap_or("")))
         .collect()
 }
 
@@ -83,6 +208,39 @@ fn cache_offenders(src: &str) -> Vec<(usize, &'static str)> {
                 .map(move |token| (n, *token))
         })
         .collect()
+}
+
+/// Round-1 review: the scan used to stop at the first `#[cfg(test)]`, so a
+/// cache read placed after an early test-only hook went unseen. Only the gated
+/// node is skipped now; everything after it is still production code.
+#[test]
+fn cache_read_after_an_early_test_hook_is_caught() {
+    let planted = "pub struct Role {\n\
+                   \x20   #[cfg(test)]\n\
+                   \x20   pub probe: CachedGitBackend,\n\
+                   }\n\
+                   #[cfg(test)]\n\
+                   fn hook() { let _ = rusqlite::Connection::open_in_memory(); }\n\
+                   impl Role {\n\
+                   \x20   #[cfg(test)]\n\
+                   \x20   fn seam(&self) { let _ = aida_core::Cache::open(p); }\n\
+                   \x20   fn authority(&self, root: &Path) -> bool {\n\
+                   \x20       #[cfg(test)]\n\
+                   \x20       let _ = aida_core::db::project_cache_path(root);\n\
+                   \x20       let c = aida_core::db::open_or_create(root);\n\
+                   \x20       c.is_ok()\n\
+                   \x20   }\n\
+                   }\n\
+                   #[cfg(all(test, unix))]\n\
+                   mod t { fn x() { CachedGitBackend::default_cache_path(p); } }\n\
+                   #[cfg(not(test))]\n\
+                   fn live() { let _ = rusqlite::Connection::open_in_memory(); }\n";
+    let found = cache_offenders(planted);
+    assert_eq!(
+        found,
+        vec![(13, "db::open_or_create"), (20, "rusqlite")],
+        "only the ungated reads after the early test hooks are offenders"
+    );
 }
 
 #[test]

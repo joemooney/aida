@@ -129,8 +129,9 @@ pub(crate) fn path_deny_rules(path: &Path) -> Vec<String> {
 /// yields. Nothing else in the main checkout is added.
 ///
 /// Claude Code's Linux sandbox skips any write path that does not exist at
-/// launch; the launcher creates the cache directory first
-/// (`aida_core::db::ensure_project_cache_dir`).
+/// launch. The launcher only migrates a legacy cache into the directory first
+/// (`aida_core::db::migrate_legacy_cache_layout`); it does not create it, so a
+/// missing cache directory is not granted and shows up as a doctor gap.
 // trace:BUG-1929 trace:TASK-2707 | ai:claude
 pub(crate) fn contained_store_write_paths(main: &Path) -> Vec<PathBuf> {
     let mut paths = Vec::new();
