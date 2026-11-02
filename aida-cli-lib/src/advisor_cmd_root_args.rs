@@ -14,15 +14,22 @@ use std::path::PathBuf;
 #[derive(Subcommand, Debug)]
 pub enum AdvisorCommand {
     /// Record the current Claude or Codex session as the live advisor — writes
-    /// `~/.aida/advisor.toml`. With no `--uuid`, reads `CLAUDE_CODE_SESSION_ID`
-    /// (Claude Code sets it on every session), else `CODEX_THREAD_ID` (a Codex
-    /// thread, which `advisor watch` forks with `codex exec fork`). Pass
-    /// `--uuid <id>` to register a specific Claude session id.
+    /// `~/.aida/advisor.toml`. With no `--uuid`, reads `CODEX_THREAD_ID` (a
+    /// Codex thread, which `advisor watch` forks with `codex exec fork`), else
+    /// `CLAUDE_CODE_SESSION_ID` (Claude Code sets it on every session). A Codex
+    /// session started from a Claude session inherits both, and the Codex
+    /// thread is the one running here. Pass `--uuid <id>` to register a
+    /// specific session id, with `--vendor codex` for a Codex thread.
     // trace:STORY-2255 | ai:claude
     Register {
-        /// Claude session UUID. Defaults to `$CLAUDE_CODE_SESSION_ID`.
+        /// Session id. Defaults to `$CODEX_THREAD_ID`, else
+        /// `$CLAUDE_CODE_SESSION_ID`.
         #[clap(long, value_name = "UUID")]
         uuid: Option<String>,
+
+        /// Vendor of the `--uuid` session: `claude` (default) or `codex`.
+        #[clap(long, value_name = "VENDOR", requires = "uuid", value_parser = ["claude", "codex"])]
+        vendor: Option<String>,
 
         /// Override the cwd-derived project slug. Rare — the default is
         /// derived from the current directory the same way Claude Code

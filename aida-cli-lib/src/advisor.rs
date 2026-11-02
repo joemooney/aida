@@ -248,7 +248,9 @@ pub struct AdvisorRegistration {
     pub claude_pid_start: Option<String>,
     /// The vendor of the live session. `None` (every pre-existing
     /// registration) means Claude, whose `uuid` names a JSONL; `"codex"`
-    /// means `uuid` is a Codex thread id that `codex exec fork` can fork.
+    /// means `uuid` is a Codex thread id that `codex exec fork` can fork,
+    /// and `claude_pid`/`claude_pid_start` (despite the historical names)
+    /// record the ancestor codex process.
     // trace:STORY-2255 | ai:claude
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub vendor: Option<String>,
@@ -275,14 +277,28 @@ pub enum CodexForkDecision {
     ColdBoot(String),
 }
 
+/// Result of probing the installed codex for `exec fork`.
+// trace:STORY-2255 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ExecForkSupport {
+    Supported,
+    Missing,
+    /// The probe did not answer within its bound (a blocking update or
+    /// login prompt, a wedged shim); treated as unsupported.
+    TimedOut,
+}
+
 /// Pure decision for a Codex tick. `registration` is the live-advisor record
-/// (if any) and `exec_fork_supported` is whether the installed codex has
-/// `exec fork`.
+/// (if any), `project_root` the project the tick runs for, `thread_is_live`
+/// the liveness check for the registered thread, and `exec_fork` the probe of
+/// the installed codex. The probes run only once every cheaper check passes.
 // trace:STORY-2255 | ai:claude
 pub fn plan_codex_fork(
     config: &AdvisorConfig,
     registration: Option<&AdvisorRegistration>,
-    exec_fork_supported: bool,
+    project_root: &Path,
+    thread_is_live: impl FnOnce(&AdvisorRegistration) -> bool,
+    exec_fork: impl FnOnce() -> ExecForkSupport,
 ) -> CodexForkDecision {
     if matches!(config.fork_mode, ForkMode::Never) {
         return CodexForkDecision::ColdBoot("`[advisor] fork_mode = \"never\"`".to_string());
@@ -302,15 +318,125 @@ pub fn plan_codex_fork(
     if thread.is_empty() {
         return CodexForkDecision::ColdBoot("the registered Codex thread id is empty".to_string());
     }
-    if !exec_fork_supported {
-        return CodexForkDecision::ColdBoot(
+    if !registered_in_project(&reg.project_root, project_root) {
+        return CodexForkDecision::ColdBoot(format!(
+            "the registered Codex thread belongs to another project ({})",
+            reg.project_root
+        ));
+    }
+    if !thread_is_live(reg) {
+        return CodexForkDecision::ColdBoot(format!(
+            "the registered Codex thread {thread} is no longer live (its codex process is gone \
+             and its rollout is idle or missing); re-run `aida advisor register` in the live session"
+        ));
+    }
+    match exec_fork() {
+        ExecForkSupport::Supported => CodexForkDecision::Fork {
+            thread: thread.to_string(),
+        },
+        ExecForkSupport::Missing => CodexForkDecision::ColdBoot(
             "the installed codex has no `exec fork` subcommand (codex-cli 0.166 or later has it)"
                 .to_string(),
-        );
+        ),
+        ExecForkSupport::TimedOut => CodexForkDecision::ColdBoot(
+            "`codex exec fork --help` did not answer in time, so `exec fork` is treated as unavailable"
+                .to_string(),
+        ),
     }
-    CodexForkDecision::Fork {
-        thread: thread.to_string(),
+}
+
+/// Whether a registration recorded at `registered` (the cwd of `aida advisor
+/// register`) belongs to `project_root`: the same directory or one under it.
+// trace:STORY-2255 | ai:claude
+fn registered_in_project(registered: &str, project_root: &Path) -> bool {
+    let registered = registered.trim();
+    if registered.is_empty() {
+        return false;
     }
+    let canon = |p: &Path| p.canonicalize().unwrap_or_else(|_| p.to_path_buf());
+    canon(Path::new(registered)).starts_with(canon(project_root))
+}
+
+/// The Codex fork decision for a tick in `project_root`: reads the live
+/// registration, then checks liveness and probes the installed codex.
+// trace:STORY-2255 | ai:claude
+pub fn codex_fork_decision(project_root: &Path, config: &AdvisorConfig) -> CodexForkDecision {
+    plan_codex_fork(
+        config,
+        read_registration().as_ref(),
+        project_root,
+        codex_thread_is_alive,
+        session::codex_exec_fork_support,
+    )
+}
+
+/// Liveness for a registered Codex thread, the rule [`is_alive`] applies to
+/// Claude: the recorded codex PID (with its start identity) is still
+/// running, or the thread's rollout was written within
+/// [`ALIVE_JSONL_WINDOW`]. A dead PID with a missing rollout is not live.
+// trace:STORY-2255 | ai:claude
+pub fn codex_thread_is_alive(reg: &AdvisorRegistration) -> bool {
+    if let Some(pid) = reg.claude_pid {
+        if process_probe::process_identity_is_alive(pid, reg.claude_pid_start.as_deref()) {
+            return true;
+        }
+    }
+    let Some(mtime) = codex_rollout_path(reg.uuid.trim())
+        .and_then(|p| std::fs::metadata(p).ok())
+        .and_then(|m| m.modified().ok())
+    else {
+        return false;
+    };
+    SystemTime::now()
+        .duration_since(mtime)
+        .map(|age| age <= ALIVE_JSONL_WINDOW)
+        .unwrap_or(true)
+}
+
+/// The rollout Codex keeps for `thread`
+/// (`$CODEX_HOME/sessions/YYYY/MM/DD/rollout-<ts>-<thread>.jsonl`, with
+/// `CODEX_HOME` defaulting to `~/.codex`).
+// trace:STORY-2255 | ai:claude
+fn codex_rollout_path(thread: &str) -> Option<PathBuf> {
+    if thread.is_empty() {
+        return None;
+    }
+    let codex_home = std::env::var_os("CODEX_HOME")
+        .filter(|v| !v.is_empty())
+        .map(PathBuf::from)
+        .or_else(|| advisor_home_dir().map(|h| h.join(".codex")))?;
+    let suffix = format!("-{thread}.jsonl");
+    let mut dirs = vec![codex_home.join("sessions")];
+    while let Some(dir) = dirs.pop() {
+        let Ok(read) = std::fs::read_dir(&dir) else {
+            continue;
+        };
+        for entry in read.flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                dirs.push(path);
+            } else if path
+                .file_name()
+                .and_then(|n| n.to_str())
+                .is_some_and(|n| n.starts_with("rollout-") && n.ends_with(&suffix))
+            {
+                return Some(path);
+            }
+        }
+    }
+    None
+}
+
+/// The launch-log line for a forked Codex tick; it names the forked thread.
+// trace:STORY-2255 | ai:claude
+pub fn codex_fork_line(thread: &str) -> String {
+    format!("forking live Codex thread {thread} (`codex exec fork`)")
+}
+
+/// The one line a cold-booted tick prints, naming why it could not fork.
+// trace:STORY-2255 | ai:claude
+pub fn cold_boot_line(vendor: &str, why: &str) -> String {
+    format!("cold-booting a `{vendor}` advisor ({why})")
 }
 
 /// Path to the per-user registration file (`~/.aida/advisor.toml`).

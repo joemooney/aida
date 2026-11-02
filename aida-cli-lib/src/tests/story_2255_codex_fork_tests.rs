@@ -124,6 +124,31 @@ fn contained_fork_uses_the_native_posture_without_bypass() {
     assert_eq!(&forked[..flags.len()], &flags[..]);
     assert_eq!(forked, session::codex_exec_fork_args(fresh, "T").unwrap());
 
+    // The punt-tier advisor fork keeps the contained posture the same way.
+    let tier = |is_fork| {
+        session::advisor_tier_program_and_args_with_posture(
+            HeadlessVendor::Codex,
+            is_fork,
+            "P",
+            "T",
+            None,
+            None,
+            Some(root.path()),
+        )
+        .unwrap()
+        .1
+    };
+    let (fresh_tier, forked_tier) = (tier(false), tier(true));
+    assert!(
+        !forked_tier.iter().any(|a| a.contains("dangerously-bypass")),
+        "{forked_tier:?}"
+    );
+    assert_eq!(&forked_tier[..flags.len()], &flags[..]);
+    assert_eq!(
+        forked_tier,
+        session::codex_exec_fork_args(fresh_tier, "T").unwrap()
+    );
+
     // Uncontained keeps the historical bypass posture, forked or not.
     let (_, open) = session::compose_headless_command_forking(
         HeadlessVendor::Codex,
@@ -140,22 +165,38 @@ fn contained_fork_uses_the_native_posture_without_bypass() {
         .any(|a| a == "--dangerously-bypass-approvals-and-sandbox"));
 }
 
-// `aida advisor register` records a Codex thread only when there is no
-// explicit id and no Claude session id; Claude keeps precedence.
+// `aida advisor register`: an explicit `--uuid` registers as `--vendor`
+// (Claude by default). Otherwise the Codex thread wins: a Codex session started
+// from a Claude seat inherits CLAUDE_CODE_SESSION_ID, and the innermost
+// session is the Codex one.
 #[test]
-fn register_identity_prefers_claude_then_codex_thread() {
+fn register_identity_prefers_explicit_then_codex_thread_then_claude() {
     use crate::advisor_cmd_root::resolve_register_identity as id;
+    let codex = || Some("codex".to_string());
     assert_eq!(
-        id(Some("x"), Some("c".into()), Some("t".into())),
+        id(Some("x"), None, Some("c".into()), Some("t".into())),
         Some(("x".to_string(), None))
     );
     assert_eq!(
-        id(None, Some("c".into()), Some("t".into())),
+        id(Some("x"), Some("claude"), None, None),
+        Some(("x".to_string(), None))
+    );
+    assert_eq!(
+        id(Some("x"), Some("codex"), Some("c".into()), None),
+        Some(("x".to_string(), codex()))
+    );
+    // Inherited Claude env inside a Codex session: the Codex thread wins.
+    assert_eq!(
+        id(None, None, Some("c".into()), Some("t".into())),
+        Some(("t".to_string(), codex()))
+    );
+    assert_eq!(
+        id(None, None, Some("c".into()), None),
         Some(("c".to_string(), None))
     );
     assert_eq!(
-        id(None, None, Some("t".into())),
-        Some(("t".to_string(), Some("codex".to_string())))
+        id(None, None, None, Some("t".into())),
+        Some(("t".to_string(), codex()))
     );
-    assert_eq!(id(None, None, None), None);
+    assert_eq!(id(None, None, None, None), None);
 }

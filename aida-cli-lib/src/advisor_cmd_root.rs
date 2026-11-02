@@ -146,9 +146,11 @@ pub(crate) fn render_advisor_handoff(
 pub(crate) fn handle_advisor_command(cmd: &crate::AdvisorCommand) -> anyhow::Result<()> {
     use crate::*;
     match cmd {
-        AdvisorCommand::Register { uuid, project_slug } => {
-            handle_advisor_register(uuid.as_deref(), project_slug.as_deref())
-        }
+        AdvisorCommand::Register {
+            uuid,
+            vendor,
+            project_slug,
+        } => handle_advisor_register(uuid.as_deref(), vendor.as_deref(), project_slug.as_deref()),
         AdvisorCommand::Unregister => {
             advisor::clear_registration()?;
             println!("Advisor registration cleared.");
@@ -200,6 +202,7 @@ mod story_363_handoff_tests;
 
 pub(crate) fn handle_advisor_register(
     uuid: Option<&str>,
+    vendor: Option<&str>,
     project_slug: Option<&str>,
 ) -> Result<()> {
     // A Codex session exports CODEX_THREAD_ID instead of a Claude session
@@ -207,6 +210,7 @@ pub(crate) fn handle_advisor_register(
     // trace:STORY-2255 | ai:claude
     let (uuid, vendor) = resolve_register_identity(
         uuid,
+        vendor,
         nonempty_env("CLAUDE_CODE_SESSION_ID"),
         nonempty_env("CODEX_THREAD_ID"),
     )
@@ -277,43 +281,59 @@ fn nonempty_env(key: &str) -> Option<String> {
         .filter(|v| !v.is_empty())
 }
 
-/// Which session `aida advisor register` records: an explicit `--uuid` or
-/// the Claude session id register as Claude (unchanged); otherwise the Codex
-/// thread id registers as Codex. Returns `(id, vendor)`, `vendor` `None` for
-/// Claude.
+/// Which session `aida advisor register` records. An explicit `--uuid`
+/// registers as `--vendor` (Claude when omitted). Otherwise the Codex thread
+/// id wins over the Claude session id: a Codex session started from a Claude
+/// seat or shell inherits `CLAUDE_CODE_SESSION_ID`, so `CODEX_THREAD_ID` is
+/// the innermost, more specific signal. Returns `(id, vendor)`, `vendor`
+/// `None` for Claude.
 // trace:STORY-2255 | ai:claude
 pub(crate) fn resolve_register_identity(
     explicit: Option<&str>,
+    explicit_vendor: Option<&str>,
     claude_session: Option<String>,
     codex_thread: Option<String>,
 ) -> Option<(String, Option<String>)> {
     if let Some(id) = explicit {
-        return Some((id.to_string(), None));
+        let vendor = explicit_vendor
+            .filter(|v| v.trim().eq_ignore_ascii_case("codex"))
+            .map(|_| "codex".to_string());
+        return Some((id.to_string(), vendor));
     }
-    if let Some(id) = claude_session {
-        return Some((id, None));
+    if let Some(id) = codex_thread {
+        return Some((id, Some("codex".to_string())));
     }
-    codex_thread.map(|id| (id, Some("codex".to_string())))
+    claude_session.map(|id| (id, None))
 }
 
-/// Register the current Codex thread as the live advisor. Codex keeps its
-/// own session store, so there is no Claude project slug or PID to record.
+/// Register a Codex thread as the live advisor. Codex keeps its own session
+/// store, so there is no Claude project slug. When `thread` is this process's
+/// own `CODEX_THREAD_ID`, the ancestor codex PID is recorded for the liveness
+/// check (stored in the historical `claude_pid` fields).
 // trace:STORY-2255 | ai:claude
 fn register_codex_thread(thread: &str) -> Result<()> {
     let cwd = std::env::current_dir().context("cannot read current directory")?;
+    let own_thread = nonempty_env("CODEX_THREAD_ID").as_deref() == Some(thread);
+    let codex_pid = own_thread
+        .then(|| process_probe::nearest_codex_ancestor_pid(std::process::id()))
+        .flatten();
     let reg = advisor::AdvisorRegistration {
         uuid: thread.to_string(),
         project_slug: String::new(),
         project_root: cwd.to_string_lossy().to_string(),
         registered_at: chrono::Utc::now().to_rfc3339(),
-        claude_pid: None,
-        claude_pid_start: None,
+        claude_pid: codex_pid,
+        claude_pid_start: codex_pid.and_then(process_probe::process_start_identity),
         vendor: Some("codex".to_string()),
     };
     advisor::write_registration(&reg)?;
     println!("Registered live Codex advisor session.");
     println!("  thread:        {thread}");
     println!("  project root:  {}", cwd.display());
+    match codex_pid {
+        Some(pid) => println!("  codex pid:     {pid}"),
+        None => println!("  codex pid:     (not found; liveness uses the rollout's last write)"),
+    }
     println!(
         "\n`AIDA_HEADLESS_VENDOR=codex aida advisor watch` will now fork this thread with \
          `codex exec fork`."
@@ -755,6 +775,47 @@ pub(crate) fn handle_advisor_dashboard(
 pub(crate) enum AdvisorPass {
     ColdBoot,
     Fork(advisor::ForkPlan),
+    /// `codex exec fork <thread>` of the registered live Codex thread.
+    // trace:STORY-2255 | ai:claude
+    CodexFork(String),
+}
+
+/// The primary (non-calibration) punt-tier pass for `vendor`: Claude plans
+/// the JSONL fork; Codex forks the registered live thread with `codex exec
+/// fork`, or cold-boots and prints one line saying why; other vendors
+/// cold-boot. trace:STORY-2255 | ai:claude
+pub(crate) fn primary_advisor_pass(
+    vendor: crate::session::HeadlessVendor,
+    project_root: &std::path::Path,
+    config: &advisor::AdvisorConfig,
+    quiet: bool,
+) -> AdvisorPass {
+    use crate::session::HeadlessVendor;
+    match vendor {
+        HeadlessVendor::Claude => match advisor::plan_fork(project_root, config) {
+            Some(plan) => AdvisorPass::Fork(plan),
+            None => AdvisorPass::ColdBoot,
+        },
+        HeadlessVendor::Codex => match advisor::codex_fork_decision(project_root, config) {
+            advisor::CodexForkDecision::Fork { thread } => AdvisorPass::CodexFork(thread),
+            advisor::CodexForkDecision::ColdBoot(why) => cold_boot_saying(vendor, &why, quiet),
+        },
+        HeadlessVendor::Agy => {
+            let why = format!("`{}` has no fork-from-live transport", vendor.as_str());
+            cold_boot_saying(vendor, &why, quiet)
+        }
+    }
+}
+
+fn cold_boot_saying(vendor: crate::session::HeadlessVendor, why: &str, quiet: bool) -> AdvisorPass {
+    if !quiet {
+        eprintln!(
+            "  {} {}",
+            "◆".dimmed(),
+            advisor::cold_boot_line(vendor.as_str(), why)
+        );
+    }
+    AdvisorPass::ColdBoot
 }
 
 /// STORY-347: resolve the effective calibration mode for the current

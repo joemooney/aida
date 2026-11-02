@@ -1654,18 +1654,39 @@ pub(crate) fn codex_exec_fork_args(mut args: Vec<String>, thread: &str) -> Resul
     Ok(args)
 }
 
+/// How long the `codex exec fork --help` probe may run. A codex that blocks
+/// (an update or login prompt, a wedged npm shim) must not hang an advisor
+/// tick. trace:STORY-2255 | ai:claude
+pub(crate) const CODEX_EXEC_FORK_PROBE_TIMEOUT: std::time::Duration =
+    std::time::Duration::from_secs(10);
+
 /// Whether the installed codex has `exec fork` (codex-cli 0.166+). Probes
-/// `codex exec fork --help`; any spawn failure or non-zero exit is "no".
+/// `codex exec fork --help`, bounded by [`CODEX_EXEC_FORK_PROBE_TIMEOUT`].
+/// A spawn failure or non-zero exit is [`advisor::ExecForkSupport::Missing`];
+/// a probe that does not answer in time is `TimedOut`.
 // trace:STORY-2255 | ai:claude
-pub(crate) fn codex_supports_exec_fork() -> bool {
-    std::process::Command::new(resolve_agent_program(HeadlessVendor::Codex.program()))
-        .args(["exec", "fork", "--help"])
-        .stdin(std::process::Stdio::null())
-        .output()
-        .map(|out| {
-            out.status.success() && String::from_utf8_lossy(&out.stdout).contains("SESSION_ID")
-        })
-        .unwrap_or(false)
+pub(crate) fn codex_exec_fork_support() -> crate::advisor::ExecForkSupport {
+    codex_exec_fork_support_within(CODEX_EXEC_FORK_PROBE_TIMEOUT)
+}
+
+pub(crate) fn codex_exec_fork_support_within(
+    timeout: std::time::Duration,
+) -> crate::advisor::ExecForkSupport {
+    use crate::advisor::ExecForkSupport;
+    let mut cmd =
+        std::process::Command::new(resolve_agent_program(HeadlessVendor::Codex.program()));
+    cmd.args(["exec", "fork", "--help"])
+        .stdin(std::process::Stdio::null());
+    match crate::command_output_with_timeout_detail(cmd, timeout) {
+        crate::BoundedCommandOutput::Completed(out)
+            if out.status.success()
+                && String::from_utf8_lossy(&out.stdout).contains("SESSION_ID") =>
+        {
+            ExecForkSupport::Supported
+        }
+        crate::BoundedCommandOutput::TimedOut => ExecForkSupport::TimedOut,
+        _ => ExecForkSupport::Missing,
+    }
 }
 
 /// BUG-044: [`compose_headless_command`], with `resume` rewriting the
@@ -5927,20 +5948,27 @@ pub(crate) fn advisor_tier_program_and_args_with_posture(
             )
         }
         HeadlessVendor::Codex => {
-            // No resume model — a fresh spawn per punt against the seeded prompt.
-            // `is_fork` is intentionally ignored here. trace:TASK-894 | ai:claude
+            // A fresh `codex exec` per punt against the seeded prompt, or, when
+            // `is_fork`, `codex exec fork <advisor_uuid> <prompt>`: the caller
+            // passes the registered live Codex thread as `advisor_uuid`. The
+            // fork keeps the fresh launch's posture flags (contained or not).
+            // trace:TASK-894 | ai:claude
+            // trace:STORY-2255 | ai:claude
             // TASK-1081: same mock resolver as the Claude arm. trace:TASK-1081
-            (
-                resolve_agent_program(HeadlessVendor::Codex.program()),
-                headless_vendor_args_contained_in(
-                    vendor,
-                    seeded_prompt,
-                    advisor_uuid,
-                    contained_in,
-                    model,
-                    effort,
-                )?,
-            )
+            let args = headless_vendor_args_contained_in(
+                vendor,
+                seeded_prompt,
+                advisor_uuid,
+                contained_in,
+                model,
+                effort,
+            )?;
+            let args = if is_fork {
+                codex_exec_fork_args(args, advisor_uuid)?
+            } else {
+                args
+            };
+            (resolve_agent_program(HeadlessVendor::Codex.program()), args)
         }
         HeadlessVendor::Agy => {
             // AGY, like Codex, has no AIDA-addressable resume/session model, so
@@ -9519,18 +9547,30 @@ mod tests {
         assert!(args.contains(&advisor_uuid.to_string()), "{args:?}");
         assert!(args.contains(&"/aida-advise".to_string()), "{args:?}");
 
-        // Codex: a fresh `codex exec <seeded>` per punt, ignoring `is_fork` —
-        // codex has no resume model. trace:TASK-894
+        // Codex: a fresh `codex exec <seeded>` per punt; with `is_fork`,
+        // `codex exec fork <thread> <seeded>` where the caller passes the live
+        // Codex thread as `advisor_uuid`. trace:TASK-894
+        // trace:STORY-2255 | ai:claude
         for is_fork in [false, true] {
             let (prog, args) =
                 advisor_tier_program_and_args(HeadlessVendor::Codex, is_fork, seeded, advisor_uuid);
             assert_eq!(prog, "codex", "is_fork={is_fork}");
-            assert_eq!(args, codex_headless_args(seeded), "is_fork={is_fork}");
+            let expected = if is_fork {
+                codex_exec_fork_args(codex_headless_args(seeded), advisor_uuid).unwrap()
+            } else {
+                codex_headless_args(seeded)
+            };
+            assert_eq!(args, expected, "is_fork={is_fork}");
             assert_eq!(args.first().map(String::as_str), Some("exec"), "{args:?}");
             assert_eq!(args.last().map(String::as_str), Some(seeded), "{args:?}");
+            assert_eq!(args.get(1).map(String::as_str) == Some("fork"), is_fork);
+            assert_eq!(
+                args.contains(&advisor_uuid.to_string()),
+                is_fork,
+                "{args:?}"
+            );
             // Never carries claude's resume / session flags.
             assert!(!args.contains(&"--resume".to_string()), "{args:?}");
-            assert!(!args.contains(&advisor_uuid.to_string()), "{args:?}");
             assert!(!args.contains(&"-p".to_string()), "{args:?}");
         }
 
