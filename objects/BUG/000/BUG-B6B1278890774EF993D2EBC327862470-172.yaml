@@ -21,7 +21,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T07:26:20.914223641Z
-modified_at: 2026-11-02T10:08:21.876967099Z
+modified_at: 2026-11-02T10:11:39.735655039Z
 req_type: Bug
 tags:
 - architecture
@@ -585,6 +585,13 @@ comments:
   created_at: 2026-11-02T10:06:03.223988533Z
   modified_at: 2026-11-02T10:06:03.223988533Z
   session_id: 1f56bd1e-c059-4f73-b8df-e18b2170fdfc
+- id: 01a19bbe-4257-7012-972e-385d44597613
+  author: joe
+  content: 'Round 5 rework at 33537dbb9d6: wrapped the STORY-2255 advisor_watch codex_fixture (used by every run_codex_tick test: codex_tick_forks_the_registered_thread_without_touching_it, codex_tick_cold_boots_without_a_thread_or_exec_fork, codex_tick_cold_boots_for_another_project_or_a_stale_thread) with test_exec::codex_probe_script. The preflight is unchanged and every STORY-2255 assertion is kept. Sweep of c8b068b..e46ec62, the only delta since the last all-green head: no other spawning Codex fixture was added. story_2255_codex_fork_tests only composes argv. The other advisor_watch fakes are Claude fakes or the bounded exec-fork --help probe. Every other Codex fixture was green in all CI shards at c8b068b. NOT RUN locally: cargo test -p aida-cli-lib --lib codex and make check-ci-fast. This seat cannot detach a background process and limits each call to 60s, and the target dir is cold. The advisor host-run gate is still required. Only rustfmt --check passed.'
+  created_at: 2026-11-02T10:11:39.735655039Z
+  modified_at: 2026-11-02T10:11:39.735655039Z
+  session_id: 01a19bbb393c
+  harness_version: 2.1.316 (Claude Code)
 history:
 - id: 01a19600-c769-7cd0-ba08-8d93975e3e3b
   author: joe
