@@ -12,7 +12,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-02T03:43:39.805406873Z
-modified_at: 2026-11-02T06:26:05.046630742Z
+modified_at: 2026-11-02T06:26:48.666293309Z
 req_type: Task
 tags:
 - carried-from:TASK-2705
@@ -24,6 +24,17 @@ relationships:
   target_id: 01a19a5a-ff3d-7de0-8ef7-277bf69eed96
   created_at: 2026-11-02T06:26:05.046625913Z
   created_by: joe
+comments:
+- id: 01a19af0-66da-77e1-8642-701932374fd3
+  author: joe
+  content: |
+    ADVISOR BRIEF (2026-11-01 23:32 MST). FASTTRACK bundle, one PR:
+    (1) config_cmd_args.rs:115-120: add doc comments to probe --vendor and --json so --help shows text, matching Show's "Emit machine-readable JSON." Regenerate the help golden through its test, not by hand.
+    (2) TASK-2733: delete the stale sentence in docs/testing/task-2705-rework.md:50-52 that says preflight returns a typed refusal when unshare, mount or umount is denied with EPERM/EACCES/ENOSPC. Code (supervisor.rs:287-293) classifies only nested unshare.
+    Gate: make check-ci-fast plus `cargo test -p aida-cli-lib cli_help_snapshot`. Do not touch supervisor.rs (TASK-2706 is editing it).
+  created_at: 2026-11-02T06:26:48.666293309Z
+  modified_at: 2026-11-02T06:26:48.666293309Z
+  session_id: 1f56bd1e-c059-4f73-b8df-e18b2170fdfc
 history:
 - id: 01a19a77-7afb-76e3-981c-0f0504e273e9
   author: joe
