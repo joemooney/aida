@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T20:47:36.637006946Z
-modified_at: 2026-09-27T14:54:23.858310980Z
+modified_at: 2026-11-02T22:34:57.349667975Z
 req_type: Task
 relationships:
 - rel_type: BlockedBy
@@ -72,6 +72,12 @@ comments:
   created_at: 2026-09-27T14:54:23.858310980Z
   modified_at: 2026-09-27T14:54:23.858310980Z
   session_id: da36c066-c384-494e-a7cf-abffb3cfe52d
+- id: 01a19e66-c3c5-7571-91b3-1a4b7aabd309
+  author: joe
+  content: 'ADVISOR REGROUP (2026-11-02 15:40): closing. Obsolete: BUG-1655 is completed and .aida/config.toml already uses CronJobFailed:performance-guard.'
+  created_at: 2026-11-02T22:34:57.349667975Z
+  modified_at: 2026-11-02T22:34:57.349667975Z
+  session_id: ee0bf351-6b17-486f-a38e-cfbb1343c426
 history:
 - id: 01a0e269-1067-7852-9759-65daff96d2f7
   author: aida-session-start
