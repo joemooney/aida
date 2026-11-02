@@ -1,0 +1,35 @@
+id: 01a19cff-aded-7b01-a5b3-c0f8399938c0
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-320
+agreed_id: STORY-2322
+title: 'Review PR-3266: [AI:claude] fix(train): close a dead owner''s train PR, superseded specs gate on their carrier''s mode (BUG-2412 BUG-2413)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a19c59`) for branch `bug-2412-work`.
+
+  - PR: <https://github.com/joemooney/aida/pull/3266>
+  - Branch: `bug-2412-work` → `main`
+
+  ## Covers
+
+  - BUG-2412
+  - BUG-2413
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 3266` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-02T16:02:44.333734297Z
+modified_at: 2026-11-02T16:02:44.333734297Z
+req_type: Story
+filed_at:
+  code_sha: 6fafff141a37de5cd8d6dc06261deb83590f55b1
+  branch: main
+  dirty: true
+  aida_version: 0.16.0
+  aida_build_sha: 6a3f67671a9
+  vendor: claude
+  session: ee0bf351-6b17-486f-a38e-cfbb1343c426
