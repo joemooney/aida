@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-182
 agreed_id: BUG-2413
 title: Train refuses a drain PR when its trailer names superseded bundled specs whose execution mode is unset (treated as supervised)
 description: 'Observed on #3239 (TASK-2733), #3240 (TASK-2731/2737) and #3250 (TASK-HOME-692/693): each carrier was drain, but bundled specs superseded into it kept mode unset and the train refused ''X is marked unset (supervised): its merge needs a human''. Workaround: aida edit <each> --mode drain. Expected: a spec superseded-by the carrier inherits the carrier''s mode for gating (or is ignored by the gate), and an unset mode on a superseded spec never forces supervision.'
-status: Approved
+status: InProgress
 priority: Medium
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-02T12:46:25.266631877Z
-modified_at: 2026-11-02T13:00:09.586977012Z
+modified_at: 2026-11-02T13:02:36.584505650Z
 req_type: Bug
 tags:
 - area:autonomy
@@ -30,6 +30,14 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a19c5a-c428-76c3-be0d-5c2d11ebc400
+  author: aida-session-start
+  timestamp: 2026-11-02T13:02:36.584502290Z
+  session_id: d59043a7-c594-4874-8853-3327e6f348fe
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 5b21d041d218b3030c4878b5cabb862da086026e
   branch: main
