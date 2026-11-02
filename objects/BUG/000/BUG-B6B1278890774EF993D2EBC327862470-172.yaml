@@ -21,7 +21,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T07:26:20.914223641Z
-modified_at: 2026-11-02T03:24:45.597329232Z
+modified_at: 2026-11-02T06:06:48.337754470Z
 req_type: Bug
 tags:
 - architecture
@@ -484,6 +484,13 @@ comments:
   modified_at: 2026-11-02T03:24:45.597329232Z
   session_id: 01a19a4906ba
   harness_version: 2.1.316 (Claude Code)
+- id: 01a19ade-1611-77f1-9105-ed947da893ba
+  author: joe
+  content: |
+    REWORK BRIEF (advisor, 2026-11-01 23:08 MST): PR #3207 conflicts with main (7 commits behind, 10 overlapping files; GitHub cannot update the branch), so the strict review refuses to launch. Merge origin/main into the branch and resolve the conflicts, keeping both sides' behaviour: main gained the vendor-routed launch (#3210 BUG-2385), Codex mail wake (#3225 STORY-2256), bounded ship cleanup (#3216 BUG-2384) and the review-story ID fix (#3230 BUG-2404). No new behaviour; the approved design is unchanged. Gate: LIGHT, using the targeted cargo test for the files you resolved, then make check-ci-fast, then push. The strict review runs next and this spec ships supervised.
+  created_at: 2026-11-02T06:06:48.337754470Z
+  modified_at: 2026-11-02T06:06:48.337754470Z
+  session_id: 1f56bd1e-c059-4f73-b8df-e18b2170fdfc
 history:
 - id: 01a19600-c769-7cd0-ba08-8d93975e3e3b
   author: joe
