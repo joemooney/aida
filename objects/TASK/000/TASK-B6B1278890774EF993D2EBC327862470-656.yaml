@@ -11,7 +11,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T09:05:52.470755532Z
-modified_at: 2026-11-02T07:50:20.014047781Z
+modified_at: 2026-11-02T07:50:21.348394349Z
 req_type: Task
 tags:
 - architecture
@@ -107,6 +107,23 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Design and code meet TASK-2706/TASK-2735 acceptance on read, but CI gates is red: the PR''s own required-live bwrap gate (now running containment::tests) exits 101 at cf5264e; ''unsupported kernel refuses'' and the B-refusal credit path are untested.. No triage reason was given.'
   created_at: 2026-11-02T07:50:20.014045337Z
   modified_at: 2026-11-02T07:50:20.014045337Z
+  session_id: 1f56bd1e-c059-4f73-b8df-e18b2170fdfc
+- id: 01a19b3c-e322-7942-8a44-e31c226f670c
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (TASK-2706):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: cf5264e057be
+    Recorded: 2026-11-02T07:43:08.414421767+00:00
+    Findings:
+    1. BLOCKING (CI red, PR-caused): CI (gates) job 125148706796, step 'Live bwrap OS-wrap confinement gate', exits 101 (cargo test failure) at cf5264e. Main's same step is green. This PR widened the filter to containment::tests under AIDA_REQUIRE_CODEX_CONTAINMENT_LIVE=1 (ci.yml:311-312). lib-0/lib-1 (nextest, one process per test) passed, which points to a failure specific to the in-process parallel libtest run: timing-sensitive fault fixtures, or concurrent bwrap lanes alongside bug_2169/task_2053/bug_2224. The reviewer sandbox cannot fetch the job log (blob host denied). Pull the log with 'gh run view 41406214697 --log-failed', name the failing test, fix it, and re-push.
+    2. MAJOR (AC3 'unsupported kernel refuses' unverified; strict tier): the refusal paths in egress_probe.py:442-451 have no test: non-x86_64, Landlock ABI<=0, ABI>=9 ('Landlock Unix-connect backend required'), and seccomp notification-size mismatch. The probe-level credit behavior on a slice-B refusal is also untested: mod.rs:219-234 should leave status Refused, stage EgressLocalIpc, keep egress_and_local_ipc in remaining_protections and keep the slice-A checks. Add closed fault selectors (for example abi9 and no_notif) and a test asserting the named refusal plus the uncredited ProbeReport fields.
+    3. MINOR (timing flake risk, possible cause of the gate failure): fault fixtures use short absolute deadlines. supervisor_timeout gets 2s (supervisor.rs run_egress_probe) and the preflight stall fixture gets 1s (nested_userns_preflight_inner). If bwrap has not written --info-fd within that window under parallel load, the error becomes 'timeout before namespace readiness ... teardown unverified' and the test's exact-string assertion fails. Start the deadline after namespace capture, or lengthen it for the fixtures.
+    4. MINOR (CI coverage regression): ci.yml:118 now runs 'sysctl kernel.apparmor_restrict_unprivileged_userns=0' for every shard. No CI lane still exercises the AppArmor-restricted IsolationUnavailable refusal arm of assert_ready_or_isolation_unavailable (task_2705_* tests) end-to-end. Keep one restricted lane, or scope the sysctl to the steps that need live namespaces.
+    5. COSMETIC: run_egress_probe accepts test-only fault selectors (proxy_before/after, broker_before/after, timeout, supervisor_timeout) in production code, while preflight_timeout_fixture is #[cfg(test)]. Gate fault injection behind cfg(test) or a test-only entry point. Also, the ci.yml:323 'grep -q ... task_2706_egress_ipc_live ... ok$' fails without an ::error:: message; add one.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-02T07:50:21.218138170Z
+  modified_at: 2026-11-02T07:50:21.218138170Z
   session_id: 1f56bd1e-c059-4f73-b8df-e18b2170fdfc
 history:
 - id: 01a1965b-c73c-7f92-bea8-1e28e5f1ff36
