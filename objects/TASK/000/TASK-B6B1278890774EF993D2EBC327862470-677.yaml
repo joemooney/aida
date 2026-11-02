@@ -12,13 +12,20 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-02T03:43:50.682530060Z
-modified_at: 2026-11-02T03:43:50.682530060Z
+modified_at: 2026-11-02T06:25:40.148118303Z
 req_type: Task
 tags:
 - carried-from:TASK-2705
 - finding-hash:8f844ee4
 - from-review:TASK-2705
 - kind:carried-forward
+comments:
+- id: 01a19aef-5b34-75a1-bae9-2c10a78a4e41
+  author: joe
+  content: 'ADVISOR RULING (2026-11-01 23:30 MST, ruled once per the 2026-10-28 operator order): accepted as-is, no change. Reason: the silent pass on Unknown is intended when live isolation is not required; the required-live path fails closed, and the host live proof is attested on TASK-2705 (CI runner forbids userns).'
+  created_at: 2026-11-02T06:25:40.148118303Z
+  modified_at: 2026-11-02T06:25:40.148118303Z
+  session_id: 1f56bd1e-c059-4f73-b8df-e18b2170fdfc
 history:
 - id: 01a19a77-7b22-7163-8bff-50196330765c
   author: joe
