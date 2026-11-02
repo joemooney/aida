@@ -415,11 +415,11 @@ pub(crate) fn handle_burndown_run(
     let prompt = burndown_skill_prompt(status, tag, batch, max, concurrency);
     // Resolved once: the preview, the messages and the launch all use this
     // vendor and containment. trace:BUG-2389 BUG-2393 | ai:claude
-    let launch_root = find_project_root()?;
-    let contained = session::drain_contained(&launch_root)?;
-    let vendor = session::resolve_headless_vendor(&launch_root);
-    session::require_vendor_containment(vendor, contained, "headless coordinator")?;
-    let mode_str = session::coordinator_permission_mode(vendor, permission_mode, contained)?;
+    let session::CoordinatorLaunch {
+        vendor,
+        contained,
+        mode: mode_str,
+    } = session::resolve_coordinator_launch(&find_project_root()?, permission_mode)?;
     let mode = &mode_str;
     let (project_verbose, global_verbose) = find_project_root()
         .ok()

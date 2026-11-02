@@ -346,10 +346,8 @@ mod tests {
     fn cold_boot_honours_configured_containment_without_the_env() {
         let tmp = tempfile::tempdir().unwrap();
         let project = tmp.path().join("project");
-        let home = tmp.path().join("home");
         std::fs::create_dir_all(project.join(".aida-store")).unwrap();
         std::fs::create_dir_all(project.join(".aida")).unwrap();
-        std::fs::create_dir_all(home.join(".aida")).unwrap();
         std::fs::write(
             project.join(".aida/config.toml"),
             "store_path = \".aida-store\"\n",
@@ -374,7 +372,6 @@ mod tests {
             "advisor",
             &["advisor"],
             &[
-                ("AIDA_HOME", Some(home.to_str().unwrap())),
                 ("AIDA_AGENT_CMD", Some(fake.to_str().unwrap())),
                 ("AIDA_OS_WRAP", Some("0")),
                 ("AIDA_CONTAINED", None),

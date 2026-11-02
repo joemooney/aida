@@ -11,13 +11,12 @@
 // trace:BUG-2393 | ai:claude
 use crate::session;
 
-/// A project root (with a `.aida-store` so the seat grant can be minted), an
-/// isolated `AIDA_HOME`, a fake agent that records its env and argv, and the
+/// A project root (with a `.aida-store` so the seat grant can be minted), a
+/// fake agent that records its env and argv, and the
 /// capture file it writes.
 struct Fixture {
     _tmp: tempfile::TempDir,
     project: std::path::PathBuf,
-    home: String,
     fake: String,
     capture: std::path::PathBuf,
 }
@@ -25,10 +24,8 @@ struct Fixture {
 fn fixture(agents_toml: Option<&str>) -> Fixture {
     let tmp = tempfile::tempdir().unwrap();
     let project = tmp.path().join("project");
-    let home = tmp.path().join("home");
     std::fs::create_dir_all(project.join(".aida-store")).unwrap();
     std::fs::create_dir_all(project.join(".aida")).unwrap();
-    std::fs::create_dir_all(home.join(".aida")).unwrap();
     std::fs::write(
         project.join(".aida/config.toml"),
         "store_path = \".aida-store\"\n",
@@ -48,7 +45,6 @@ fn fixture(agents_toml: Option<&str>) -> Fixture {
     );
     Fixture {
         project,
-        home: home.to_string_lossy().into_owned(),
         fake: fake.to_string_lossy().into_owned(),
         capture,
         _tmp: tmp,
@@ -56,13 +52,15 @@ fn fixture(agents_toml: Option<&str>) -> Fixture {
 }
 
 impl Fixture {
+    /// No `AIDA_HOME` pin: the seat grant is minted under the hermetic test
+    /// home before these extra pins apply, so a pinned home would hide it
+    /// ("session grant is missing"). `cfg(test)` already fences the home.
     fn ambient(&self, contained_env: Option<&str>) -> crate::test_env::AmbientGuard {
         crate::test_env::AmbientGuard::hermetic_with_seat_and(
             &self.project,
             "advisor",
             &["advisor", "implementer"],
             &[
-                ("AIDA_HOME", Some(self.home.as_str())),
                 ("AIDA_AGENT_CMD", Some(self.fake.as_str())),
                 ("AIDA_OS_WRAP", Some("0")),
                 ("AIDA_HEADLESS_VENDOR", None),
@@ -213,6 +211,145 @@ fn compete_arms_and_judge_honour_configured_containment() {
     );
 }
 
+const CONTAINED_CODEX_AGENTS: &str = "[agents]\ncontained = true\nvendor = \"codex\"\n";
+
+/// Acceptance 2, `burndown run` and `autopilot intake`: both coordinators
+/// resolve their launch through `resolve_coordinator_launch` (pinned by the
+/// source ratchet below). With the env unset, configured containment
+/// contains a Claude coordinator (`dontAsk`, no bypass, no
+/// `--permission-mode` override) and refuses a Codex one before any spawn.
+#[test]
+fn coordinator_launch_honours_configured_containment_without_the_env() {
+    let fx = fixture(Some(CONTAINED_AGENTS));
+    {
+        let _ambient = fx.ambient(None);
+        let launch = session::resolve_coordinator_launch(&fx.project, None).unwrap();
+        assert_eq!(launch.vendor, session::HeadlessVendor::Claude);
+        assert!(launch.contained, "configured containment applies");
+        assert_eq!(launch.mode, "dontAsk");
+        let err = session::resolve_coordinator_launch(&fx.project, Some("bypassPermissions"))
+            .err()
+            .expect("a contained coordinator refuses a permission override");
+        assert!(format!("{err:#}").contains("[contained]"), "{err:#}");
+    }
+    std::fs::write(fx.project.join(".aida/agents.toml"), CONTAINED_CODEX_AGENTS).unwrap();
+    let _ambient = fx.ambient(None);
+    let err = session::resolve_coordinator_launch(&fx.project, None)
+        .err()
+        .expect("Codex cannot run a contained coordinator");
+    let msg = format!("{err:#}");
+    assert!(msg.contains("cannot run a contained session"), "{msg}");
+    assert!(msg.contains("headless coordinator"), "{msg}");
+}
+
+/// Without a knob or env the coordinator stays uncontained (bypass default).
+#[test]
+fn coordinator_launch_without_env_or_knob_is_uncontained() {
+    let fx = fixture(None);
+    let _ambient = fx.ambient(None);
+    let launch = session::resolve_coordinator_launch(&fx.project, None).unwrap();
+    assert!(!launch.contained);
+    assert_eq!(launch.mode, "bypassPermissions");
+}
+
+/// Acceptance 2, `session resume`: with the env unset, configured containment
+/// refuses to resume a Codex session (it cannot run contained) instead of
+/// resuming it uncontained; a malformed knob refuses before the target lookup.
+#[test]
+fn session_resume_honours_configured_containment_without_the_env() {
+    let fx = fixture(Some(CONTAINED_AGENTS));
+    {
+        let _ambient = fx.ambient(None);
+        let err = session::resume_with(&fx.project, || {
+            Ok(session::ResumeTarget {
+                agent: "codex".to_string(),
+                id: "01a067ec".to_string(),
+                worktree: None,
+            })
+        })
+        .expect_err("a configured-contained resume refuses a codex session");
+        assert!(format!("{err:#}").contains("refusing to resume"), "{err:#}");
+    }
+    std::fs::write(
+        fx.project.join(".aida/agents.toml"),
+        "[agents]\ncontained = \"yes\"\n",
+    )
+    .unwrap();
+    let _ambient = fx.ambient(None);
+    let err = session::resume_with(&fx.project, || {
+        panic!("a malformed knob must refuse before the session lookup")
+    })
+    .expect_err("malformed knob refuses");
+    assert!(format!("{err:#}").contains("[contained]"), "{err:#}");
+}
+
+/// Acceptance 2, `questions remedy`: with the env unset, configured
+/// containment contains the Claude advisor child and refuses Codex before any
+/// spawn (dry run included).
+#[test]
+fn questions_remedy_honours_configured_containment_without_the_env() {
+    let fx = fixture(Some(CONTAINED_AGENTS));
+    {
+        let _ambient = fx.ambient(None);
+        let status = crate::questions::launch_questions_remedy(&fx.project, "STORY-1", false)
+            .unwrap()
+            .expect("not a dry run");
+        assert!(status.success());
+    }
+    fx.assert_contained_claude_launch();
+
+    std::fs::remove_file(&fx.capture).unwrap();
+    std::fs::write(fx.project.join(".aida/agents.toml"), CONTAINED_CODEX_AGENTS).unwrap();
+    let _ambient = fx.ambient(None);
+    for dry_run in [true, false] {
+        let err = crate::questions::launch_questions_remedy(&fx.project, "STORY-1", dry_run)
+            .expect_err("Codex cannot run a contained remedy");
+        assert!(
+            format!("{err:#}").contains("cannot run a contained session"),
+            "dry_run={dry_run}: {err:#}"
+        );
+    }
+    assert!(!fx.capture.exists(), "Codex is refused before the spawn");
+}
+
+/// Acceptance 2, `questions clarify`: it resolves through the same
+/// `resolve_headless_launch_posture` as `questions remedy` (pinned by the
+/// ratchet), so configured containment with the env unset refuses Codex and
+/// yields a contained Claude advisor plan.
+#[test]
+fn questions_clarify_posture_honours_configured_containment_without_the_env() {
+    let fx = fixture(Some(CONTAINED_AGENTS));
+    {
+        let _ambient = fx.ambient(None);
+        let (vendor, contained) =
+            session::resolve_headless_launch_posture(&fx.project, "interactive advisor session")
+                .unwrap();
+        assert_eq!(vendor, session::HeadlessVendor::Claude);
+        assert!(contained);
+        let plan =
+            session::advisor_interactive_launch_plan(vendor, "/aida-clarify X", contained).unwrap();
+        assert!(
+            plan.args.iter().any(|a| a == "--settings"),
+            "{:?}",
+            plan.args
+        );
+        assert!(
+            !plan.args.iter().any(|a| a.contains("bypassPermissions")),
+            "{:?}",
+            plan.args
+        );
+    }
+    std::fs::write(fx.project.join(".aida/agents.toml"), CONTAINED_CODEX_AGENTS).unwrap();
+    let _ambient = fx.ambient(None);
+    let err = session::resolve_headless_launch_posture(&fx.project, "interactive advisor session")
+        .err()
+        .expect("Codex cannot run a contained clarify");
+    assert!(
+        format!("{err:#}").contains("cannot run a contained session"),
+        "{err:#}"
+    );
+}
+
 /// Acceptance 1: every listed headless spawn or resume call site resolves
 /// containment through `drain_contained`. The env-only read and the literal
 /// `false` argument are gone from the listed modules, so a new call site there
@@ -239,6 +376,33 @@ fn listed_headless_callers_resolve_configured_containment() {
         assert!(
             !flat.contains("&tee, false, ") && !flat.contains("&tee, false)"),
             "{file}: a headless spawn passes a literal `false` for contained"
+        );
+    }
+    // The behavioural tests above drive the shared resolvers; these pin that
+    // the entry points actually use them.
+    for (file, src, resolver, uses) in [
+        (
+            "burndown_run.rs",
+            include_str!("../burndown_run.rs"),
+            "resolve_coordinator_launch(",
+            1,
+        ),
+        (
+            "autopilot_intake.rs",
+            include_str!("../autopilot_intake.rs"),
+            "resolve_coordinator_launch(",
+            1,
+        ),
+        (
+            "questions.rs",
+            include_str!("../questions.rs"),
+            "resolve_headless_launch_posture(",
+            2,
+        ),
+    ] {
+        assert!(
+            src.matches(resolver).count() >= uses,
+            "{file}: launch resolves through `{resolver}`"
         );
     }
     let session_src = include_str!("../session.rs");
