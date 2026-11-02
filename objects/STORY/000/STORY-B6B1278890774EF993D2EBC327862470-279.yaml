@@ -18,7 +18,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T04:46:21.481096158Z
-modified_at: 2026-11-02T00:49:22.685438868Z
+modified_at: 2026-11-02T01:49:50.736269602Z
 req_type: Story
 tags:
 - mail-wake
@@ -69,6 +69,19 @@ comments:
     - Already-live Codex rows from before this change arm on their next SessionStart, not mid-session; the new doctor finding covers the gap.
   created_at: 2026-11-02T00:49:22.685438868Z
   modified_at: 2026-11-02T00:49:22.685438868Z
+  session_id: 01a199b7e840
+  harness_version: 2.1.316 (Claude Code)
+- id: 01a199f2-d510-7853-a4f3-caf5afcc1cd4
+  author: joe
+  content: |-
+    ## Implementer findings (could not file as draft TASKs: `aida add` refused with "requirement ID allocation failed: Read-only file system" inside the sandbox, and MCP file_finding was denied)
+
+    1. **kind:design-choice, severity:minor** — the SessionStart hook arms hand-started Codex rows without a `codex --version` probe (it would add up to 5s per session start), so a pre-0.164.0 Codex reads `armed`, not `unsupported`. `agent new codex` keeps the check.
+    2. **kind:bug-spotted, severity:major** — the headless seat cannot run aida-cli-lib unit tests: the agent-profile test build hit the 10-minute tool ceiling twice (`cargo ps` 0/2 busy), and detached `setsid nohup` builds are killed when the sandboxed command returns. Shipped after `cargo check --tests`, `cargo clippy --tests -- -D warnings`, and `make check-ci-fast` (36 gates) only; CI runs the new tests. The cargo wrapper also prints `burst.last: Read-only file system` in the sandbox.
+
+    Branch: story-b6b1278890774ef993d2ebc327862470-279 · Commit: 74841f8ad4d
+  created_at: 2026-11-02T01:49:50.736269602Z
+  modified_at: 2026-11-02T01:49:50.736269602Z
   session_id: 01a199b7e840
   harness_version: 2.1.316 (Claude Code)
 history:

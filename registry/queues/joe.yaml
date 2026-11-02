@@ -70,12 +70,6 @@
   for_role: reviewer
   added_by_machine: imac
 - user_id: joe
-  requirement_id: 01a193be-2e9b-7d53-a582-b11c8b7c3f33
-  position: 189000
-  added_by: joe
-  added_at: 2026-11-02T01:28:04.176825851Z
-  for_role: advisor
-- user_id: joe
   requirement_id: 01a19866-d18b-7bc0-941d-e40043cc1b00
   position: 190000
   added_by: joe

@@ -3,13 +3,26 @@ spec_id: STORY-b6b1278890774ef993d2ebc327862470-170
 agreed_id: STORY-2210
 title: 'aida node hub add: register a second writable hub under an enrolled root and grant it a child pool per type'
 description: 'Split from STORY-HOME-164 by advisor signoff 2026-10-31 13:56 (Q3). After STORY-164 lands: ''aida node hub add <name> --url <url>'' refuses without an enrolled root (names ''aida node enroll-root''); writes the [store.hubs] entry; the root grants a child pool per type in use, homed on the new hub, carved from the root pool''s free_ranges (excludes every existing block); the grant is pushed by CAS to the root''s hub and reaches the new hub by sync or bundle; clones on the new hub claim through the PR-3170 delegated path with upstream=<new hub remote>. Tests: grant disjoint from all pre-grant blocks; refusal without root; a clone on h2 claims from the h2 pool. Docs: storage guide multi-hub section; help golden. Depends on STORY-HOME-164.'
-status: InProgress
+status: Done
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T20:54:36.955943290Z
-modified_at: 2026-11-02T01:28:46.617263089Z
+modified_at: 2026-11-02T01:53:50.901513686Z
 req_type: Story
+comments:
+- id: 01a199f5-f8d9-70b1-9b1f-9fa52a410987
+  author: joe
+  content: |-
+    ## Implementer findings (draft TASK filing is blocked in this sandbox: read-only ID allocation; recorded here for advisor triage)
+
+    1. **followup-suggestion / minor:** a hub's pool is one fixed grant per type (`hub:<name>:<TYPE>`, `--size`, default 1000). Once it runs out, delegated claims are refused, and re-running `aida node hub add` grants nothing more for that type because the pool id already exists. Growing a hub needs a second pool per type that `hub_grant()` and `place_claim` also recognise.
+    2. **design-choice / minor:** "types in use" means every type with a block or pool (never `*`); a type first used later is granted by re-running hub add (idempotent). The root's own hub is the declared hub its `origin` reaches; adding it only declares it. A legacy rooted store with no root pool for a type gets `hub:<root hub>:<TYPE>` materialized in the grant commit (refused if no declared hub is reached by origin). A non-root clone claims (ClaimAuthority::Delegated) only with a declared upstream reaching a granted hub. Granted pools raise the floor for the root's own claims, single-hub claims and the agreed-ID backfill. Child pool holder_node is `hub:<name>`.
+    3. **verification gap:** aida-cli-lib cannot be compiled within this seat's 60s per-call limit, so the node_hub unit tests, the two new story_164 integration cases (`hub_add_without_an_enrolled_root_refuses`, `hub_add_grants_a_disjoint_pool_a_clone_of_the_new_hub_claims_from`) and the hand-edited help golden are verified by CI only. aida-core lib+tests type-check locally; fmt, help-golden co-change, portability, git-maintenance, glyph and trace-header gates pass.
+  created_at: 2026-11-02T01:53:16.505661208Z
+  modified_at: 2026-11-02T01:53:16.505661208Z
+  session_id: 01a199df8618
+  harness_version: 2.1.316 (Claude Code)
 history:
 - id: 01a1942b-6c50-70b2-8fd4-95bd0998c2c6
   author: aida-backfill-agreed-ids
@@ -26,6 +39,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a199f6-7fa8-7231-a902-823fe8727058
+  author: joe
+  timestamp: 2026-11-02T01:53:51.016471024Z
+  session_id: 01a199df8618
+  harness_version: 2.1.316 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 filed_at:
   code_sha: a4a6e2a6d182df7805362e00c9393fec18752684
   branch: main
@@ -34,3 +56,7 @@ filed_at:
   aida_build_sha: 271e42d3680
   vendor: claude
   session: f5694f22-ff09-4e87-8934-e79adca4efba
+implementation_info:
+  implemented: true
+  implemented_at: 2026-11-02T01:53:50.901513686Z
+  implemented_by: joe
