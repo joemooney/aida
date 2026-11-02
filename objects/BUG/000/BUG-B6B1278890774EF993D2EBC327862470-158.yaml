@@ -22,12 +22,18 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T06:30:56.167167026Z
-modified_at: 2026-11-02T01:26:59.443117218Z
+modified_at: 2026-11-02T02:21:21.532430953Z
 req_type: Bug
 tags:
 - area:ship
 - merge-lease
 - performance
+relationships:
+- rel_type:
+    custom: implemented-by
+  target_id: 01a1993f-dc32-7672-a3b4-6e613e6385a7
+  created_at: 2026-11-02T02:21:21.532427952Z
+  created_by: joe
 comments:
 - id: 01a195d0-c28b-7d92-8490-74b84838f30e
   author: joe
@@ -116,6 +122,11 @@ history:
   timestamp: 2026-11-02T00:14:53.770924391Z
   session_id: 01a1999b9cd3
   harness_version: 2.1.316 (Claude Code)
+  changes: []
+- id: 01a19a0f-b2f5-7942-bfc0-a016b0dfbffd
+  author: joe
+  timestamp: 2026-11-02T02:21:22.549185048Z
+  session_id: 126bbd5a-a92f-452b-ab0b-2637a1db42c2
   changes: []
 execution_mode: drain
 filed_at:
