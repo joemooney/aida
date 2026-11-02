@@ -1335,7 +1335,7 @@ fn no_lease_field_holds_a_credential() {
     let fields: Vec<&str> = src[start..end]
         .lines()
         .filter_map(|l| l.trim().strip_prefix("pub(crate) "))
-        .filter_map(|l| l.split(':').next())
+        .filter_map(|l| l.split_once(':').map(|(name, _)| name))
         .collect();
     assert!(fields.contains(&"worktree_path"), "{fields:?}");
     // BUG-237's zen intent nonce only corroborates an inherited AIDA_ZEN=1;
