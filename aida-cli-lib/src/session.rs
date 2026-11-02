@@ -680,7 +680,13 @@ pub(crate) fn build_contained_resume_command(
     // sandbox when `[contained.vendors]` opts it in, else is refused — never
     // resumed uncontained. trace:BUG-2386 | ai:claude
     if target.agent == "codex" {
-        require_vendor_containment(HeadlessVendor::Codex, true, "resumed codex session")?;
+        require_vendor_containment(HeadlessVendor::Codex, true, "resumed codex session")
+            .with_context(|| {
+                format!(
+                    "refusing to resume codex session `{}` uncontained",
+                    target.id
+                )
+            })?;
         let mut cmd = codex_session_resume_command(target, true)?;
         if cmd.get_current_dir().is_none() {
             cmd.current_dir(launcher_cwd);
