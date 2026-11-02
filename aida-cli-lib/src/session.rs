@@ -1709,6 +1709,36 @@ pub(crate) fn compose_headless_command_forking(
     effort: Option<&str>,
     fork_thread: Option<&str>,
 ) -> Result<(String, Vec<String>)> {
+    compose_headless_lane_command(
+        vendor,
+        prompt,
+        session_id,
+        contained,
+        model,
+        effort,
+        fork_thread,
+        false,
+    )
+}
+
+/// [`compose_headless_command_forking`] for a lane that may be a plan lane.
+/// BUG-2394: `read_only` (a `--plan-only --no-human` pickup or the drain's
+/// `--plan-phase` prelude) puts a Codex `exec` under `--sandbox read-only`
+/// through [`codex_read_only_args`], the same helper the interactive plan
+/// lane uses, before any OS wrapper is added. Claude's headless posture is
+/// unchanged.
+// trace:BUG-2394 | ai:claude
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn compose_headless_lane_command(
+    vendor: HeadlessVendor,
+    prompt: &str,
+    session_id: &str,
+    contained: bool,
+    model: Option<&str>,
+    effort: Option<&str>,
+    fork_thread: Option<&str>,
+    read_only: bool,
+) -> Result<(String, Vec<String>)> {
     anyhow::ensure!(
         fork_thread.is_none() || vendor == HeadlessVendor::Codex,
         "only a codex thread can be forked with `exec fork`, not {}",
@@ -1763,6 +1793,12 @@ pub(crate) fn compose_headless_command_forking(
     let args = match fork_thread {
         Some(thread) => codex_exec_fork_args(args, thread)?,
         None => args,
+    };
+    // trace:BUG-2394 | ai:claude
+    let args = if read_only && vendor == HeadlessVendor::Codex {
+        codex_read_only_args(args)
+    } else {
+        args
     };
     os_wrapped_program_and_args(&worktree, &resolve_agent_program(vendor.program()), args)
 }
@@ -1837,9 +1873,11 @@ pub(crate) fn compose_headless_command_for(
     model: Option<&str>,
     effort: Option<&str>,
     resume: bool,
+    read_only: bool,
 ) -> Result<(String, Vec<String>)> {
-    let (program, args) =
-        compose_headless_command(vendor, prompt, session_id, contained, model, effort)?;
+    let (program, args) = compose_headless_lane_command(
+        vendor, prompt, session_id, contained, model, effort, None, read_only,
+    )?;
     if !resume {
         return Ok((program, args));
     }
@@ -2409,8 +2447,11 @@ pub(crate) fn codex_plan_read_only(permission_mode: Option<&str>) -> bool {
 }
 
 /// BUG-2394: the MCP server names a Codex launch would load from its config
-/// files — `$CODEX_HOME/config.toml` (default `~/.codex/config.toml`) and the
-/// project's `.codex/config.toml`. Only the table names are read; no command,
+/// files — `$CODEX_HOME/config.toml` (default `~/.codex/config.toml`) and,
+/// only when Codex trusts the project, the project's `.codex/config.toml`.
+/// Codex ignores an untrusted project's config, and a `-c` override for a
+/// server it never loaded creates a transport-less entry that refuses to start,
+/// so such servers are not listed. Only the table names are read; no command,
 /// env or credential value leaves this function. Unreadable / malformed files
 /// contribute nothing (Codex itself refuses to start on a malformed config).
 // trace:BUG-2394 | ai:claude
@@ -2419,20 +2460,16 @@ pub(crate) fn codex_configured_mcp_servers(project_root: &Path) -> Vec<String> {
         .filter(|v| !v.is_empty())
         .map(PathBuf::from)
         .or_else(|| crate::home_dir().map(|h| h.join(".codex")));
-    let mut files = Vec::new();
-    if let Some(home) = codex_home {
-        files.push(home.join("config.toml"));
-    }
-    files.push(project_root.join(".codex").join("config.toml"));
+    let home_config = codex_home.and_then(|home| read_toml_table(&home.join("config.toml")));
+    let project_config = codex_project_trusted(home_config.as_ref(), project_root)
+        .then(|| read_toml_table(&project_root.join(".codex").join("config.toml")))
+        .flatten();
     let mut names = Vec::new();
-    for file in files {
-        let Ok(raw) = std::fs::read_to_string(&file) else {
-            continue;
-        };
-        let Ok(value) = raw.parse::<toml::Table>() else {
-            continue;
-        };
-        if let Some(servers) = value.get("mcp_servers").and_then(|v| v.as_table()) {
+    for table in [home_config.as_ref(), project_config.as_ref()]
+        .into_iter()
+        .flatten()
+    {
+        if let Some(servers) = table.get("mcp_servers").and_then(|v| v.as_table()) {
             for name in servers.keys() {
                 if !names.contains(name) {
                     names.push(name.clone());
@@ -2442,6 +2479,41 @@ pub(crate) fn codex_configured_mcp_servers(project_root: &Path) -> Vec<String> {
     }
     names.sort();
     names
+}
+
+fn read_toml_table(path: &Path) -> Option<toml::Table> {
+    std::fs::read_to_string(path)
+        .ok()?
+        .parse::<toml::Table>()
+        .ok()
+}
+
+/// BUG-2394: whether Codex loads `project_root`'s own `.codex/config.toml`:
+/// its user config marks the project `[projects."<path>"] trust_level =
+/// "trusted"`, under the path as given or canonicalized. Anything else is
+/// untrusted, so no override is emitted for that file's servers.
+// trace:BUG-2394 | ai:claude
+pub(crate) fn codex_project_trusted(
+    home_config: Option<&toml::Table>,
+    project_root: &Path,
+) -> bool {
+    let Some(projects) = home_config
+        .and_then(|c| c.get("projects"))
+        .and_then(|v| v.as_table())
+    else {
+        return false;
+    };
+    let canonical = std::fs::canonicalize(project_root).ok();
+    [Some(project_root.to_path_buf()), canonical]
+        .into_iter()
+        .flatten()
+        .any(|path| {
+            path.to_str()
+                .and_then(|key| projects.get(key))
+                .and_then(|entry| entry.get("trust_level"))
+                .and_then(|v| v.as_str())
+                == Some("trusted")
+        })
 }
 
 /// BUG-2394: the `-c` overrides that hold a Codex seat to `surface`, given the
@@ -3966,8 +4038,9 @@ pub(crate) fn claude_contained_flags_for_roots(write_roots: &[PathBuf]) -> Resul
 /// structural — on-demand schema loading does not rescue it. No shipped skill references the MCP
 /// surface, and every generated seat brief already speaks in `aida ...` CLI verbs.
 ///
-/// Only claude exposes launch-time MCP flags. Codex and antigravity register MCP in their own
-/// config files, so this cannot be enforced at launch for them.
+/// Claude enforces it with launch-time MCP flags; Codex with per-server `-c` overrides
+/// ([`codex_mcp_flags`]), where an unset value means `aida` (BUG-2394). Antigravity registers MCP
+/// in its own config files, so this cannot be enforced at launch for it.
 // trace:TASK-1558 | ai:claude
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub(crate) enum AgentMcpSurface {
@@ -5234,7 +5307,7 @@ pub(crate) fn build_exec_vendor_headless_command(
     grant_env: &str,
 ) -> Result<std::process::Command> {
     build_exec_vendor_headless_command_for(
-        vendor, prompt, session_id, contained, model, effort, seat, grant_env, false,
+        vendor, prompt, session_id, contained, model, effort, seat, grant_env, false, false,
     )
 }
 
@@ -5252,9 +5325,11 @@ fn build_exec_vendor_headless_command_for(
     seat: &str,
     grant_env: &str,
     resume: bool,
+    read_only: bool,
 ) -> Result<std::process::Command> {
     build_coordinator_headless_command_inner(
         vendor, prompt, session_id, contained, model, effort, seat, grant_env, resume, None, true,
+        read_only,
     )
 }
 
@@ -5289,6 +5364,7 @@ pub(crate) fn build_coordinator_headless_command(
         false,
         Some(mode),
         stream,
+        false,
     )?;
     command.env("AIDA_HEADLESS_VENDOR", vendor.as_str());
     Ok(command)
@@ -5318,6 +5394,7 @@ pub(crate) fn coordinator_headless_preview(
         contained,
         tuning.model.as_deref(),
         tuning.effort.as_deref(),
+        false,
         false,
     )?;
     adapt_coordinator_args(vendor, &mut args, Some(mode), contained, stream);
@@ -5448,12 +5525,14 @@ fn build_coordinator_headless_command_inner(
     resume: bool,
     mode: Option<&str>,
     stream: bool,
+    read_only: bool,
 ) -> Result<std::process::Command> {
     use std::process::Command;
     // trace:BUG-2172 | ai:codex
     let contained = aida_contained_env()? || contained;
-    let (program, mut args) =
-        compose_headless_command_for(vendor, prompt, session_id, contained, model, effort, resume)?;
+    let (program, mut args) = compose_headless_command_for(
+        vendor, prompt, session_id, contained, model, effort, resume, read_only,
+    )?;
     adapt_coordinator_args(vendor, &mut args, mode, contained, stream);
     // TASK-1169 / ADR-22: same bounded ceiling as the spawn path — the exec
     // path is the `--no-human` phase-1 implementer, which must not diverge.
@@ -5506,6 +5585,7 @@ pub(crate) fn exec_vendor_headless(
     seat: &str,
     child_grant: &crate::gate::seat_authority::HeadlessChildGrant,
     lane_tree: Option<(&Path, &str)>,
+    read_only: bool,
 ) -> Result<()> {
     let run_once = |prompt: &str, log: &Path, resume: bool, hold: Option<&dyn Fn() -> bool>| {
         run_vendor_headless_child(
@@ -5521,6 +5601,8 @@ pub(crate) fn exec_vendor_headless(
             &HeadlessChildHooks {
                 resume,
                 hold_reap: hold,
+                // trace:BUG-2394 | ai:claude
+                read_only,
                 ..HeadlessChildHooks::default()
             },
         )
@@ -5821,6 +5903,9 @@ pub(crate) struct HeadlessChildHooks<'a> {
     /// BUG-044: while true, a vendor still alive after its final result is
     /// left running rather than reaped (its own background build is going).
     pub(crate) hold_reap: Option<&'a dyn Fn() -> bool>,
+    /// BUG-2394: a plan lane (`--plan-only --no-human`, drain `--plan-phase`).
+    /// A Codex child runs under `--sandbox read-only`; Claude is unaffected.
+    pub(crate) read_only: bool,
 }
 
 /// BUG-044: `args` (a composed `--session-id <id>` launch) rewritten to
@@ -5932,6 +6017,7 @@ fn run_vendor_headless_child(
         seat,
         grant_env,
         hooks.resume,
+        hooks.read_only,
     )?;
     // trace:STORY-1662 | ai:claude
     if let Some(customize) = hooks.customize {

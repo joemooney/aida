@@ -818,10 +818,11 @@ pub(crate) fn apply_agent_default_flags(
                 .extend(session::claude_mcp_flags(surface));
         }
         // BUG-2394: Codex has no strict-MCP flag; hold it to the same surface by
-        // disabling each server its config files declare with exact `-c` overrides.
+        // disabling each server its loaded config files declare with exact `-c`
+        // overrides. Unset means `aida` for Codex: only an explicit `off` drops it.
         // trace:BUG-2394 | ai:claude
         if config.agent_type == "codex" {
-            let surface = load_agents_mcp(project_root)?;
+            let surface = crate::agent_config::load_codex_agents_mcp(project_root)?;
             let flags = session::codex_mcp_flags(
                 surface,
                 &session::codex_configured_mcp_servers(project_root),

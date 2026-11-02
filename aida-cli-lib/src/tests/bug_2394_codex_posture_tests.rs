@@ -183,9 +183,12 @@ fn bug_2394_configured_servers_read_names_only_never_credentials() {
     let project = tmp.path().join("project");
     std::fs::create_dir_all(&codex_home).unwrap();
     std::fs::create_dir_all(project.join(".codex")).unwrap();
+    // The project is trusted, so Codex loads (and AIDA reads) its config.
     std::fs::write(
         codex_home.join("config.toml"),
-        "model = \"x\"\n[mcp_servers.aida]\ncommand = \"aida\"\nargs = [\"mcp-serve\"]\n\
+        "model = \"x\"\n".to_string()
+            + &trusted_project_toml(&project)
+            + "[mcp_servers.aida]\ncommand = \"aida\"\nargs = [\"mcp-serve\"]\n\
          [mcp_servers.secret_srv]\ncommand = \"srv\"\n[mcp_servers.secret_srv.env]\n\
          API_TOKEN = \"SUPER-SECRET-VALUE\"\n",
     )
@@ -204,12 +207,10 @@ fn bug_2394_configured_servers_read_names_only_never_credentials() {
     assert!(!joined.contains("API_TOKEN"), "{joined}");
     assert!(!joined.contains("evil"), "{joined}");
 
-    // A missing CODEX_HOME config contributes nothing.
+    // A missing CODEX_HOME config contributes nothing, and without it no
+    // project is trusted, so the project file is not read either.
     home.reset(tmp.path().join("absent"));
-    assert_eq!(
-        codex_configured_mcp_servers(&project),
-        s(&["aida", "project_srv"])
-    );
+    assert!(codex_configured_mcp_servers(&project).is_empty());
 }
 
 #[test]
@@ -220,4 +221,230 @@ fn bug_2394_claude_trust_check_is_gated_on_claude_being_a_launch_vendor() {
     assert!(claude_launch_active(Some(true)));
     // No enabled list: every vendor is enabled, whatever `[agents] vendor` says.
     assert!(claude_launch_active(None));
+}
+
+/// Env for composing a headless argv: no agent-cmd override, no inherited
+/// containment, no OS wrapper.
+fn headless_env() -> crate::test_env::EnvVarsGuard {
+    crate::test_env::EnvVarsGuard::apply(&[
+        ("AIDA_AGENT_CMD", None),
+        ("AIDA_CONTAINED", None),
+        ("AIDA_OS_WRAP", None),
+    ])
+}
+
+// `aida queue work X --plan-only --no-human --vendor codex`: the standalone
+// implementer and the drain lane both compose through
+// `compose_headless_command_for` with `read_only = plan_only`.
+#[test]
+fn bug_2394_headless_no_human_plan_only_codex_exec_is_read_only() {
+    let _env = headless_env();
+    let (_, args) = compose_headless_command_for(
+        HeadlessVendor::Codex,
+        "/aida-plan BUG-1",
+        "sid",
+        false,
+        Some("m"),
+        None,
+        false,
+        true,
+    )
+    .unwrap();
+    assert_eq!(
+        sandbox_values(&args),
+        vec!["read-only".to_string()],
+        "{args:?}"
+    );
+    assert!(
+        !args
+            .iter()
+            .any(|a| a == "--dangerously-bypass-approvals-and-sandbox"),
+        "{args:?}"
+    );
+    assert!(args.iter().any(|a| a == "exec"), "{args:?}");
+    assert!(args.windows(2).any(|w| w[0] == "--model" && w[1] == "m"));
+
+    // The ordinary (non-plan) headless lane keeps its historical posture.
+    let (_, write) = compose_headless_command_for(
+        HeadlessVendor::Codex,
+        "/aida-pickup BUG-1",
+        "sid",
+        false,
+        None,
+        None,
+        false,
+        false,
+    )
+    .unwrap();
+    assert!(sandbox_values(&write).is_empty(), "{write:?}");
+
+    // Claude's headless argv is unchanged by the flag.
+    let claude = |read_only| {
+        compose_headless_command_for(
+            HeadlessVendor::Claude,
+            "/aida-plan BUG-1",
+            "sid",
+            false,
+            None,
+            None,
+            false,
+            read_only,
+        )
+        .unwrap()
+        .1
+    };
+    assert_eq!(claude(true), claude(false));
+}
+
+// The drain's `--plan-phase` prelude reaches the vendor through the
+// `exec_vendor_headless` hooks: the built child command carries the read-only
+// sandbox.
+#[test]
+fn bug_2394_drain_plan_phase_codex_child_command_is_read_only() {
+    let _env = headless_env();
+    let cmd = build_exec_vendor_headless_command_for(
+        HeadlessVendor::Codex,
+        "/aida-plan BUG-1",
+        "sid",
+        false,
+        None,
+        None,
+        "implementer",
+        "",
+        false,
+        true,
+    )
+    .unwrap();
+    let args: Vec<String> = cmd
+        .get_args()
+        .map(|a| a.to_string_lossy().into_owned())
+        .collect();
+    assert_eq!(
+        sandbox_values(&args),
+        vec!["read-only".to_string()],
+        "{args:?}"
+    );
+    assert!(!args
+        .iter()
+        .any(|a| a == "--dangerously-bypass-approvals-and-sandbox"));
+}
+
+// Both headless plan paths in `handle_queue_work` pass `plan_only` (which is
+// `--plan-only || --plan-phase`) as the read-only flag.
+#[test]
+fn bug_2394_queue_work_headless_plan_paths_pass_plan_only() {
+    let queue =
+        std::fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("src/queue_cmd.rs"))
+            .unwrap();
+    let call = queue
+        .find("session::exec_vendor_headless(")
+        .expect("drain lane launch");
+    let args = &queue[call..call + queue[call..].find(");").unwrap()];
+    assert!(args.trim_end().ends_with("plan_only,"), "{args}");
+    let launch = queue
+        .find("crate::standalone_implementer::Launch {")
+        .expect("standalone launch");
+    let fields = &queue[launch..launch + queue[launch..].find("});").unwrap()];
+    assert!(fields.contains("read_only: plan_only"), "{fields}");
+}
+
+/// `[projects."<project>"] trust_level = "trusted"`, serialized by the TOML
+/// writer so any path (quotes, backslashes) is escaped correctly.
+fn trusted_project_toml(project: &Path) -> String {
+    let mut entry = toml::Table::new();
+    entry.insert("trust_level".into(), "trusted".into());
+    let mut projects = toml::Table::new();
+    projects.insert(project.to_string_lossy().into_owned(), entry.into());
+    let mut root = toml::Table::new();
+    root.insert("projects".into(), projects.into());
+    toml::to_string(&root).unwrap()
+}
+
+/// A temp CODEX_HOME whose config declares an `aida` server, plus a project
+/// whose `.codex/config.toml` declares `project_only`; `trusted` marks that
+/// project trusted in the CODEX_HOME config.
+fn codex_home_with(trusted: bool) -> (tempfile::TempDir, PathBuf, PathBuf) {
+    let tmp = tempfile::TempDir::new().unwrap();
+    let codex_home = tmp.path().join("codex-home");
+    let project = tmp.path().join("project");
+    std::fs::create_dir_all(&codex_home).unwrap();
+    std::fs::create_dir_all(project.join(".codex")).unwrap();
+    let trust = if trusted {
+        trusted_project_toml(&project)
+    } else {
+        String::new()
+    };
+    std::fs::write(
+        codex_home.join("config.toml"),
+        trust + "[mcp_servers.aida]\ncommand = \"aida\"\n",
+    )
+    .unwrap();
+    std::fs::write(
+        project.join(".codex").join("config.toml"),
+        "[mcp_servers.project_only]\ncommand = \"p\"\n",
+    )
+    .unwrap();
+    (tmp, codex_home, project)
+}
+
+// A server named only in an untrusted project's `.codex/config.toml` is never
+// loaded by Codex, so no override (which would create a transport-less entry)
+// is emitted for it.
+#[test]
+fn bug_2394_untrusted_project_only_server_gets_no_override() {
+    let (_tmp, codex_home, project) = codex_home_with(false);
+    let _home = crate::test_env::EnvVarGuard::set("CODEX_HOME", &codex_home);
+    let servers = codex_configured_mcp_servers(&project);
+    assert_eq!(servers, s(&["aida"]));
+    for surface in [AgentMcpSurface::Off, AgentMcpSurface::Aida] {
+        let flags = codex_mcp_flags(surface, &servers).unwrap().join(" ");
+        assert!(!flags.contains("project_only"), "{surface:?}: {flags}");
+    }
+}
+
+#[test]
+fn bug_2394_trusted_project_server_is_overridden() {
+    let (_tmp, codex_home, project) = codex_home_with(true);
+    let _home = crate::test_env::EnvVarGuard::set("CODEX_HOME", &codex_home);
+    let servers = codex_configured_mcp_servers(&project);
+    assert_eq!(servers, s(&["aida", "project_only"]));
+    let flags = codex_mcp_flags(AgentMcpSurface::Off, &servers).unwrap();
+    assert!(flags.contains(&"mcp_servers.project_only.enabled=false".to_string()));
+}
+
+// Ruling: an unset `[agents] mcp` keeps the aida server on a Codex seat; only
+// an explicit `off` drops it. Claude's default is unchanged.
+#[test]
+fn bug_2394_codex_mcp_unset_means_aida_and_off_must_be_explicit() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let home = tempfile::TempDir::new().unwrap();
+    let project = tempfile::TempDir::new().unwrap();
+    let home_path = home.path().to_str().unwrap();
+    let _env =
+        crate::test_env::EnvVarsGuard::apply(&[("HOME", Some(home_path)), ("AIDA_HOME", None)]);
+    assert_eq!(
+        crate::agent_config::load_codex_agents_mcp(project.path()).unwrap(),
+        AgentMcpSurface::Aida
+    );
+    assert_eq!(
+        crate::agent_config::load_agents_mcp(project.path()).unwrap(),
+        AgentMcpSurface::Off
+    );
+    // Unset → aida → the aida server is kept (or injected), never disabled.
+    let flags = codex_mcp_flags(AgentMcpSurface::Aida, &s(&["aida", "other"])).unwrap();
+    assert!(!flags.contains(&"mcp_servers.aida.enabled=false".to_string()));
+    assert!(flags.contains(&"mcp_servers.aida.enabled=true".to_string()));
+
+    std::fs::create_dir_all(project.path().join(".aida")).unwrap();
+    std::fs::write(
+        project.path().join(".aida/agents.toml"),
+        "[agents]\nmcp = \"off\"\n",
+    )
+    .unwrap();
+    assert_eq!(
+        crate::agent_config::load_codex_agents_mcp(project.path()).unwrap(),
+        AgentMcpSurface::Off
+    );
 }

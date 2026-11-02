@@ -5788,7 +5788,7 @@ pub(crate) fn render_agent_launch_noexec(
     }
     if config.agent_type == "codex" {
         // trace:BUG-2394 | ai:claude
-        let surface = load_agents_mcp(&plan.project_root)
+        let surface = crate::agent_config::load_codex_agents_mcp(&plan.project_root)
             .map(|s| s.as_str())
             .unwrap_or("(invalid — see [agents] mcp)");
         out.push_str(&format!(
