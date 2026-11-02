@@ -1,0 +1,30 @@
+id: 01a19aa1-e2e7-7381-a0e3-7fb90c2688cf
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-683
+title: 'NON-BLOCKING (minor): codex ''aida session start --owns X --launch'' without --ro…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on BUG-B6B1278890774EF993D2EBC327862470-159, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  NON-BLOCKING (minor): codex 'aida session start --owns X --launch' without --role at a TTY reaches resolve_child_role's interactive role picker (session.rs new_session_for_vendor codex branch) only AFTER the worktree and lease are created; Esc returns Ok(()) leaving an orphan lease/worktree with no agent. The claude path never prompts (defaults role to AIDA_SESSION_ROLE or '-'), and the codex path also ignores AIDA_SESSION_ROLE. Suggest defaulting role from AIDA_SESSION_ROLE/implementer (or resolving it in preflight) for the start --launch path.
+
+  PR: #3210
+  Reviewed sha: 7f52bc900e847eecadaac674f05153e875238040
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-02T05:01:03.079385668Z
+modified_at: 2026-11-02T05:01:03.079385668Z
+req_type: Task
+tags:
+- carried-from:BUG-B6B1278890774EF993D2EBC327862470-159
+- finding-hash:89525786
+- from-review:PR-3210
+- kind:carried-forward
+filed_at:
+  code_sha: 8a4a56e74891a9abf236d344bfe41facaeb7df09
+  branch: main
+  dirty: true
+  aida_version: 0.16.0
+  aida_build_sha: 6a3f67671a9
+  vendor: claude
+  session: 126bbd5a-a92f-452b-ab0b-2637a1db42c2
