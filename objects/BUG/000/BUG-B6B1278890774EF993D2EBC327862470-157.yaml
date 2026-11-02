@@ -19,7 +19,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T02:25:46.947809262Z
-modified_at: 2026-11-02T11:55:14.117222888Z
+modified_at: 2026-11-02T11:56:14.911113899Z
 req_type: Bug
 tags:
 - area:agents
@@ -398,6 +398,12 @@ comments:
   modified_at: 2026-11-02T11:55:14.117222888Z
   session_id: 01a19c19176d
   harness_version: 2.1.316 (Claude Code)
+- id: 01a19c1e-02bf-7c52-946e-de7def02293e
+  author: joe
+  content: 'ADVISOR SIGNOFF APPROVED (claude-advisor-21, 2026-11-02 04:58 MST), BUG-2383 sketch (transport plus AC2). Part 1 is approved as written: one selector (AIDA_SESSION_ID scoped by AIDA_PROJECT_ROOT), a typed lane_jobs record on the lease written by the host, own-context resolution, no new TOOL_ENV key, no socket, no fallback. The binding tests are (a) the seat-writable-root invariant for .aida/sessions and .aida/lane-jobs, (b) the lease no-credential guard, and (c) the real Codex boundary fixture using the production launcher plus prepare_launch plus the codex sandbox conversion, reporting native-async and host-witnessed evidence separately. Part 2 is approved: generation snapshot plus a per-lane overlay inside the lane-job bwrap, with an explicit reported fallback. Amendments: (1) the overlay path ships with a test that a seat write never changes a primary inode, plus a GC test for generations; (2) a fallback to cold must never fail the lane, it only reports seed: cold (<reason>); (3) keep it all in PR #3192 (no follow-up chain). Proceed to implementation. Gate: LIGHT with lane_job and codex_tool_env filters; the advisor host-runs before review.'
+  created_at: 2026-11-02T11:56:14.911113899Z
+  modified_at: 2026-11-02T11:56:14.911113899Z
+  session_id: 1f56bd1e-c059-4f73-b8df-e18b2170fdfc
 history:
 - id: 01a19525-88eb-79e3-aab8-8d511ad2f605
   author: aida-session-start
