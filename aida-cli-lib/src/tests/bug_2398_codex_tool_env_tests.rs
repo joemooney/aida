@@ -5,6 +5,7 @@
 use super::*;
 use std::path::Path;
 
+// trace:BUG-b6b1278890774ef993d2ebc327862470-172.ac7d6a3b | ai:claude
 #[test]
 fn bug_2398_whitelist_encoding_absent_empty_and_secret_ratchet() {
     for key in TOOL_ENV {
@@ -175,11 +176,17 @@ fn run_codex_sandbox(
     output(&mut cmd)
 }
 
+// trace:BUG-b6b1278890774ef993d2ebc327862470-172.ac022c22 | ai:claude
+// trace:BUG-b6b1278890774ef993d2ebc327862470-172.ac7d6a3b | ai:claude
+// trace:BUG-b6b1278890774ef993d2ebc327862470-172.acc739ef | ai:claude
 #[test]
 fn bug_2398_real_codex_core_delegated_roles_and_reviewer_recording() {
     real_codex_roles(false);
 }
 
+// trace:BUG-b6b1278890774ef993d2ebc327862470-172.ac022c22 | ai:claude
+// trace:BUG-b6b1278890774ef993d2ebc327862470-172.ac7d6a3b | ai:claude
+// trace:BUG-b6b1278890774ef993d2ebc327862470-172.acc739ef | ai:claude
 #[test]
 fn bug_2398_real_native_codex_core_delegated_roles_and_reviewer_recording() {
     real_codex_roles(true);
@@ -386,6 +393,7 @@ fn real_codex_roles(native: bool) {
     );
 }
 
+// trace:BUG-b6b1278890774ef993d2ebc327862470-172.ac51a4f1 | ai:claude
 #[test]
 #[cfg(target_os = "linux")]
 fn bug_2398_preflight_refuses_cause_before_model_and_baseline_skips_probe() {
@@ -681,6 +689,7 @@ fn assert_recorded_authority_boundaries(root: &Path, child_grant: &str, authoriz
 
 /// This command-level matrix runs in CI even when Codex is unavailable.
 /// The real-tool fixture above adds the core-policy crossing to the same checks.
+// trace:BUG-b6b1278890774ef993d2ebc327862470-172.acc739ef | ai:claude
 #[test]
 fn bug_2398_actual_recorder_artifacts_require_durable_independent_authority() {
     use crate::gate::{review_authority as ra, seat_authority as sa};
@@ -907,4 +916,199 @@ fn bug_2398_baseline_cannot_be_replaced_by_later_child_context() {
         "shell_environment_policy.set.KEEP_ME=\"preserved\"",
     ]);
     prepare_launch(&mut child).unwrap();
+}
+
+/// Codex's DEFAULT `inherit = "all"` passes the launcher's own environment to
+/// tool shells. A whitelisted key the launcher has but the child never
+/// assigned must not reach the child (nor fail its context preflight).
+// trace:BUG-b6b1278890774ef993d2ebc327862470-172.ac022c22 | ai:claude
+// trace:BUG-b6b1278890774ef993d2ebc327862470-172.ac7d6a3b | ai:claude
+#[test]
+fn bug_2398_real_codex_inherit_all_drops_unassigned_launcher_context() {
+    use crate::gate::seat_authority::{self as authority, test_support::mint_grant_for};
+    let codex = Command::new("codex").arg("--version").output();
+    if !codex.is_ok_and(|out| out.status.success()) {
+        eprintln!("SKIP: codex is not installed");
+        return;
+    }
+    let _env = crate::test_env::EnvVarsGuard::apply(&[
+        ("AIDA_USER", Some("bug2398-parent")),
+        ("AIDA_SESSION_SCOPE", Some("PARENT-SCOPE")),
+        (
+            "AIDA_AGENT_CONTEXT_FILE",
+            Some("/parent/launcher-context.md"),
+        ),
+        ("AIDA_ROLE_INSTANCE", Some("driver")),
+    ]);
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    let config = root.join("codex-config");
+    std::fs::create_dir(&config).unwrap();
+    std::fs::write(
+        config.join("config.toml"),
+        "[shell_environment_policy]\ninherit = \"all\"\n",
+    )
+    .unwrap();
+    let parent = mint_grant_for(root, "bug2398-parent", "advisor", &["implementer"]);
+    let store = crate::detect_distributed_store_from(root).unwrap();
+    aida_core::git_ops::init(&store).unwrap();
+    crate::test_git::commit_fixture(root);
+    let parent = authority::read_grant(&parent).unwrap();
+    let implementer =
+        authority::issue_child_from(parent, "implementer", "bug2398-child", true).unwrap();
+    // Control: the fixture really inherits the launcher's ambient value.
+    let mut raw = Command::new("codex");
+    raw.current_dir(root)
+        .env("CODEX_HOME", &config)
+        .args(["sandbox", "-c", "sandbox_mode=\"danger-full-access\"", "--"])
+        .args(["sh", "-c", "test \"$AIDA_SESSION_SCOPE\" = PARENT-SCOPE"]);
+    assert!(
+        output(&mut raw).status.success(),
+        "inherit=all fixture must expose ambient launcher keys"
+    );
+    let mut child = Command::new("codex");
+    child
+        .env("AIDA_SESSION_GRANT", &implementer.id)
+        .env("AIDA_SESSION_ROLE", "implementer")
+        .env("AIDA_USER", "bug2398-child")
+        .env("AIDA_PROJECT_ROOT", root)
+        .env("AIDA_CONTAINMENT_POSTURE", "aida")
+        .env("AIDA_AGENT_TYPE", "codex");
+    let aida_path = crate::test_exec::matching_aida_cli();
+    let _aida_probe = crate::kernel::test_aida_exe::set(aida_path.clone());
+    let aida = aida_path.to_string_lossy().into_owned();
+    // run_codex_sandbox unwraps prepare_launch: the preflight must pass.
+    let out = run_codex_sandbox(
+        &config,
+        root,
+        &child,
+        &[&aida, "role", "current", "--check"],
+        false,
+    );
+    let text = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        out.status.success() && text.lines().any(|l| l == "implementer"),
+        "inherit=all launch with ambient launcher context: {text}"
+    );
+    let out = run_codex_sandbox(
+        &config,
+        root,
+        &child,
+        &[
+            "sh",
+            "-c",
+            "test -z \"${AIDA_SESSION_SCOPE+x}\" && test -z \"${AIDA_AGENT_CONTEXT_FILE+x}\" && test -z \"${AIDA_ROLE_INSTANCE+x}\" && test \"$AIDA_USER\" = bug2398-child",
+        ],
+        false,
+    );
+    assert!(
+        out.status.success(),
+        "unassigned launcher keys must be absent: {}",
+        String::from_utf8_lossy(&out.stdout)
+    );
+}
+
+/// The Codex advisor-tier consult mints its own delegated `advisor` child,
+/// revokes it after exit, and refuses before launch when the launcher's
+/// grant does not delegate `advisor`.
+// trace:BUG-b6b1278890774ef993d2ebc327862470-172.ac022c22 | ai:claude
+// trace:BUG-b6b1278890774ef993d2ebc327862470-172.ac51a4f1 | ai:claude
+#[test]
+fn bug_2398_codex_advisor_consult_delegates_own_child_and_refuses_without_delegation() {
+    use crate::gate::seat_authority::{self as authority, test_support::mint_grant_for};
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let tmp = tempfile::tempdir().unwrap();
+    let home = tmp.path().join("home");
+    let project = tmp.path().join("project");
+    std::fs::create_dir_all(home.join(".aida")).unwrap();
+    std::fs::create_dir_all(&project).unwrap();
+    assert!(Command::new("git")
+        .args(["init", "-q"])
+        .current_dir(&project)
+        .status()
+        .unwrap()
+        .success());
+    let capture = tmp.path().join("advisor-grant.txt");
+    let fake = tmp.path().join("fake-codex");
+    crate::test_exec::write_executable(
+        &fake,
+        crate::test_exec::codex_probe_script(format!(
+            "#!/bin/sh\nprintf '%s' \"$AIDA_SESSION_GRANT\" > '{}'\nexit 0\n",
+            capture.display()
+        )),
+    );
+    let fake = fake.to_string_lossy().into_owned();
+    let mut env = crate::test_env::EnvVarsGuard::apply(&[
+        ("AIDA_HOME", Some(home.to_str().unwrap())),
+        ("HOME", Some(home.to_str().unwrap())),
+        ("AIDA_HEADLESS_VENDOR", Some("codex")),
+        ("AIDA_AGENT_CMD", Some(&fake)),
+        ("AIDA_OS_WRAP", Some("0")),
+        ("AIDA_TEE_HEADLESS", Some("0")),
+        ("AIDA_CONTAINED", None),
+        (authority::GRANT_ENV, None),
+    ]);
+    let _aida_probe = crate::kernel::test_aida_exe::set(crate::test_exec::matching_aida_cli());
+    crate::session::set_headless_vendor_override(None);
+    let driver = crate::phase_driver::RealPhaseDriver::new(
+        project.clone(),
+        "BUG-2398".to_string(),
+        "test-queue".to_string(),
+        None,
+        true,
+        None,
+        crate::AutonomyMode::Default,
+        "run-token".to_string(),
+        false,
+        false,
+        false,
+        false,
+        crate::auto_complete::LifecycleSkip::default(),
+        crate::auto_complete::AutoCompleteVariant::Full,
+    );
+    let consult = || {
+        driver.spawn_advisor_session(
+            crate::advisor_cmd_root::AdvisorPass::ColdBoot,
+            &crate::advisor::AdvisorConfig::default(),
+            &tmp.path().join("response.json"),
+            &tmp.path().join("request.json"),
+        )
+    };
+    let user = crate::current_user_id(None);
+
+    // Refusal: the launcher grant does not delegate `advisor`.
+    let narrow = mint_grant_for(&project, &user, "advisor", &["implementer"]);
+    env.set_key(authority::GRANT_ENV, &narrow);
+    let failure = consult().expect_err("undelegated advisor consult must refuse");
+    assert!(
+        failure.reason.contains("advisor delegation")
+            && failure.reason.contains("does not delegate `advisor`")
+            && failure.reason.contains("--delegate-seat advisor"),
+        "{}",
+        failure.reason
+    );
+    assert!(!capture.exists(), "refusal must precede any model launch");
+
+    // Success: a fresh advisor child, never the launcher's selector, revoked
+    // once the consult exits.
+    let launcher = mint_grant_for(&project, &user, "advisor", &["implementer", "advisor"]);
+    env.set_key(authority::GRANT_ENV, &launcher);
+    let failure = consult().expect_err("the fake advisor writes no response");
+    assert!(
+        failure.reason.contains("no usable response"),
+        "the consult must fail only for the missing response: {}",
+        failure.reason
+    );
+    let child = std::fs::read_to_string(&capture).unwrap();
+    assert!(!child.is_empty() && child != launcher && child != narrow);
+    let record = authority::read_grant(&child).unwrap();
+    assert_eq!(record.seat, "advisor");
+    assert_eq!(record.parent_grant_id.as_deref(), Some(launcher.as_str()));
+    assert!(
+        record.revoked_at.is_some(),
+        "consult child must be revoked after exit"
+    );
+    crate::session::set_headless_vendor_override(None);
 }
