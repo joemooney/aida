@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "spec": "STORY-2315",
+  "publishes": [
+    {
+      "at": "2026-11-02T18:20:40.762975509Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-02T14:24:17.388247366Z",
+      "spec": "STORY-2315",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-11-02T16:05:27.555727079Z",
+      "spec": "STORY-2315",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-11-02T18:19:22.194222891Z",
+      "spec": "STORY-2315",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 3265
+      }
+    },
+    {
+      "ts": "2026-11-02T18:20:40.555309186Z",
+      "spec": "STORY-2315",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "481261d1d316f01592da34f5da2faf2f53c91f31",
+        "pr": 3265,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
