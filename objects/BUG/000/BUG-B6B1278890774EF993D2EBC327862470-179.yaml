@@ -16,12 +16,12 @@ description: |
   2. Restore the EXISTING approved train carry-over contract through typed, provenance-preserving, bounded normal wiring. No raw ledger/projection edits, copied/restamped source signatures, arbitrary skip-review flag, weakened standalone current-head gate or trust in human-editable member-line alone. Preserve all member approval/authorship/hold/mandate/supervision/drive/CI/current-main and normal merge lease checks. Independent sketch/signoff before authority/gate code.
   3. Prove refusal for forged/manual manifests, changed patches or member heads, moved main, conflicting/non-authorized source reviews and holds; preserve current record-time authority semantics. Match positive evidence to actual normal final merge boundary.
   4. One focused approval/ledger/train regression plus fast gate; shared test infrastructure or >10 changedfiles adds touched/compile; fullsuiteCI, no slotbypass/outertimeout/blindrebuilds. Fresh independent strict review. Do not reopen/rewrite PR3212, change existing ledger events or manually approve its rewritten head. Validate a new ordinary train only after normal reviewed fix is live.
-status: InProgress
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T19:40:25.090169463Z
-modified_at: 2026-11-01T23:33:22.826354809Z
+modified_at: 2026-11-02T00:59:37.725793860Z
 req_type: Bug
 tags:
 - architecture
@@ -91,6 +91,22 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a199c4-db59-78b1-bcaa-6864680bb03f
+  author: aida-auto-bump
+  timestamp: 2026-11-02T00:59:37.689934452Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a199c4-db7d-7321-9015-763700a53f3e
+  timestamp: 2026-11-02T00:59:37.725789855Z
+  agent: joe
+  brief_ref: .aida/agent-briefs/codex/BUG-b6b1278890774ef993d2ebc327862470-179-2026-11-01T195519Z.md
+  commit_sha: 36e0badba8ffcabbfbfaff2981704128806bdcb7
+  pr: 3215
+  summary: 'All 4 ACs met at 9995fac: sealed invocation-bound VerifiedTrainMerge restores STORY-1690 carry-over through the shared GitHub gate (hold+corpus re-checked before every attempt), standalone merge_change unchanged, 33 adversarial refusal cases + real builder/M1/final-gate positive path; CI green at exact head (merge-hold-gate fails only by design: supervised hold needs human/advisor clear). BUG-2406 protocol: touches test files — met.'
+  review_verdict: approved
 filed_at:
   code_sha: 6a3f67671a974703590efde5ae2a323f3f7471fa
   branch: main
@@ -98,3 +114,7 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: 6a3f67671a9
   vendor: codex
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-02T00:59:37.689929402Z
+  completion_sha: 36e0badba8ffcabbfbfaff2981704128806bdcb7
