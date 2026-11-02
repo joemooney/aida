@@ -7,12 +7,12 @@ description: |-
 
   NON-BLOCKING minor egress_probe.py:345-350 (mutable_sockaddr race): the pointer mutator alternates between private.sock and /lane/state/host.sock, a path that does not exist. A regression to CONTINUE/re-read on the pointer axis would get ENOENT and never reach a host listener, so the host's accept-queue check (egress_probe.py:569) cannot observe it. Only the symlink/rename axis targets a real host endpoint. Point the mutated sockaddr at /host-services/host.sock so the check is meaningful.
   Reviewed sha: e5846fc839b0b6dccbaefecdbfd7cc3e1fc2ebf2
-status: Draft
+status: Superseded
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-02T08:38:03.142029554Z
-modified_at: 2026-11-02T09:08:08.819949580Z
+modified_at: 2026-11-02T09:08:11.318084323Z
 req_type: Task
 tags:
 - carried-from:TASK-2706
@@ -32,6 +32,14 @@ history:
   timestamp: 2026-11-02T09:06:09.177068640Z
   session_id: 1f56bd1e-c059-4f73-b8df-e18b2170fdfc
   changes: []
+- id: 01a19b84-25b6-7d11-9f30-17ee1bc11f24
+  author: joe
+  timestamp: 2026-11-02T09:08:11.318081977Z
+  session_id: 1f56bd1e-c059-4f73-b8df-e18b2170fdfc
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: 10f5a8651300808d3177617f5d3444019650725b
   branch: main
