@@ -5787,6 +5787,14 @@ pub(crate) fn render_agent_launch_noexec(
         out.push_str(&format!("  aida surface (agents.toml mcp): {surface}\n"));
     }
     if config.agent_type == "codex" {
+        // trace:BUG-2394 | ai:claude
+        let surface = load_agents_mcp(&plan.project_root)
+            .map(|s| s.as_str())
+            .unwrap_or("(invalid — see [agents] mcp)");
+        out.push_str(&format!(
+            "  aida surface (agents.toml mcp): {surface} ({})\n",
+            session::CODEX_MCP_PLUGIN_NOTE
+        ));
         out.push_str(&format!(
             "  codex sandbox: {}\n",
             resolved_flag_value(&exec_args, "--sandbox").unwrap_or("codex default")

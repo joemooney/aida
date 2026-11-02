@@ -2379,6 +2379,141 @@ pub fn codex_session_args(initial_prompt: &str, bypass: bool, model: Option<&str
     args
 }
 
+/// BUG-2394: force Codex's read-only sandbox onto an assembled argv. A plan
+/// lane must not write, so every bypass flag and every earlier sandbox choice
+/// (including the native posture's `--sandbox workspace-write` default) is
+/// removed and exactly one `--sandbox read-only` is prepended. Approval flags
+/// are kept: under `--ask-for-approval never` a write is refused, not asked.
+// trace:BUG-2394 | ai:claude
+pub(crate) fn codex_read_only_args(args: Vec<String>) -> Vec<String> {
+    let mut out = vec!["--sandbox".to_string(), "read-only".to_string()];
+    let mut iter = args.into_iter();
+    while let Some(arg) = iter.next() {
+        if arg == "--dangerously-bypass-approvals-and-sandbox" || arg.starts_with("--sandbox=") {
+            continue;
+        }
+        if arg == "--sandbox" || arg == "-s" {
+            iter.next();
+            continue;
+        }
+        out.push(arg);
+    }
+    out
+}
+
+/// BUG-2394: whether a resolved queue-work permission mode asks Codex for the
+/// read-only plan posture (`--plan-only`, or an explicit `--permission-mode plan`).
+// trace:BUG-2394 | ai:claude
+pub(crate) fn codex_plan_read_only(permission_mode: Option<&str>) -> bool {
+    permission_mode == Some("plan")
+}
+
+/// BUG-2394: the MCP server names a Codex launch would load from its config
+/// files — `$CODEX_HOME/config.toml` (default `~/.codex/config.toml`) and the
+/// project's `.codex/config.toml`. Only the table names are read; no command,
+/// env or credential value leaves this function. Unreadable / malformed files
+/// contribute nothing (Codex itself refuses to start on a malformed config).
+// trace:BUG-2394 | ai:claude
+pub(crate) fn codex_configured_mcp_servers(project_root: &Path) -> Vec<String> {
+    let codex_home = std::env::var_os("CODEX_HOME")
+        .filter(|v| !v.is_empty())
+        .map(PathBuf::from)
+        .or_else(|| crate::home_dir().map(|h| h.join(".codex")));
+    let mut files = Vec::new();
+    if let Some(home) = codex_home {
+        files.push(home.join("config.toml"));
+    }
+    files.push(project_root.join(".codex").join("config.toml"));
+    let mut names = Vec::new();
+    for file in files {
+        let Ok(raw) = std::fs::read_to_string(&file) else {
+            continue;
+        };
+        let Ok(value) = raw.parse::<toml::Table>() else {
+            continue;
+        };
+        if let Some(servers) = value.get("mcp_servers").and_then(|v| v.as_table()) {
+            for name in servers.keys() {
+                if !names.contains(name) {
+                    names.push(name.clone());
+                }
+            }
+        }
+    }
+    names.sort();
+    names
+}
+
+/// BUG-2394: the `-c` overrides that hold a Codex seat to `surface`, given the
+/// MCP servers its config files declare (`configured`).
+///
+/// - `off`: every configured server gets `mcp_servers.<name>.enabled=false`.
+/// - `aida`: the same for every server except `aida`; `aida` is enabled, and
+///   when it is not configured AIDA's own vouched definition is injected.
+/// - `native`: nothing — Codex's own configuration applies.
+///
+/// Codex addresses `-c` keys by a plain dotted path, so a server name outside
+/// `[A-Za-z0-9_-]` cannot be targeted exactly; that is an error rather than a
+/// silently unenforced posture. Servers contributed by Codex plugins are not in
+/// the config files and reject an `enabled` override (probed on codex-cli
+/// 0.166.0: `invalid transport`), so they are outside this enforcement —
+/// [`CODEX_MCP_PLUGIN_NOTE`] says so wherever the posture is reported.
+// trace:BUG-2394 | ai:claude
+pub(crate) fn codex_mcp_flags(
+    surface: AgentMcpSurface,
+    configured: &[String],
+) -> Result<Vec<String>> {
+    if surface == AgentMcpSurface::Native {
+        return Ok(Vec::new());
+    }
+    let keep_aida = surface == AgentMcpSurface::Aida;
+    let mut args = Vec::new();
+    for name in configured {
+        if keep_aida && name == "aida" {
+            continue;
+        }
+        if name.is_empty()
+            || !name
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
+        {
+            anyhow::bail!(
+                "[agents] mcp = \"{}\" cannot be enforced for codex: MCP server `{name}` in the \
+                 Codex config has a name a `-c mcp_servers.<name>.enabled=false` override cannot \
+                 address. Rename that server, or set [agents] mcp = \"native\" to leave Codex's \
+                 MCP configuration alone",
+                surface.as_str()
+            );
+        }
+        args.extend([
+            "-c".to_string(),
+            format!("mcp_servers.{name}.enabled=false"),
+        ]);
+    }
+    if keep_aida {
+        if configured.iter().any(|n| n == "aida") {
+            args.extend([
+                "-c".to_string(),
+                "mcp_servers.aida.enabled=true".to_string(),
+            ]);
+        } else {
+            args.extend([
+                "-c".to_string(),
+                "mcp_servers.aida.command=\"aida\"".to_string(),
+                "-c".to_string(),
+                "mcp_servers.aida.args=[\"mcp-serve\"]".to_string(),
+            ]);
+        }
+    }
+    Ok(args)
+}
+
+/// BUG-2394: the limit of [`codex_mcp_flags`], stated wherever the Codex MCP
+/// posture is reported.
+// trace:BUG-2394 | ai:claude
+pub(crate) const CODEX_MCP_PLUGIN_NOTE: &str =
+    "config-file servers only; MCP servers contributed by Codex plugins are not covered";
+
 /// TASK-895: replace this process with an interactive `codex <prompt>` session —
 /// the Codex analogue of [`exec_claude_with_session`], for a Codex tab hosted by
 /// the AIDA TUI. The hosted `aida queue work` process is replaced by `codex`, so
@@ -2388,6 +2523,7 @@ pub fn codex_session_args(initial_prompt: &str, bypass: bool, model: Option<&str
 pub(crate) fn build_codex_session_command(
     initial_prompt: &str,
     bypass: bool,
+    read_only: bool,
     model: Option<&str>,
     grant_id: Option<&str>,
 ) -> std::process::Command {
@@ -2398,8 +2534,30 @@ pub(crate) fn build_codex_session_command(
     cmd.env_remove("AIDA_CONTAINED");
     // trace:TASK-2631 | ai:codex
     cmd.env("AIDA_CONTAINMENT_POSTURE", "none");
-    cmd.args(codex_session_args(initial_prompt, bypass, model));
+    cmd.args(codex_interactive_session_args(
+        initial_prompt,
+        bypass,
+        read_only,
+        model,
+    ));
     cmd
+}
+
+/// BUG-2394: [`codex_session_args`] with the plan lane's read-only posture
+/// applied. Read-only wins over bypass: a plan lane never writes.
+// trace:BUG-2394 | ai:claude
+pub(crate) fn codex_interactive_session_args(
+    initial_prompt: &str,
+    bypass: bool,
+    read_only: bool,
+    model: Option<&str>,
+) -> Vec<String> {
+    let args = codex_session_args(initial_prompt, bypass && !read_only, model);
+    if read_only {
+        codex_read_only_args(args)
+    } else {
+        args
+    }
 }
 
 // trace:TASK-895 | ai:claude
@@ -2407,6 +2565,7 @@ pub(crate) fn build_codex_session_command(
 pub fn exec_codex_session(
     initial_prompt: &str,
     bypass: bool,
+    read_only: bool,
     model: Option<&str>,
     grant_id: Option<&str>,
 ) -> Result<()> {
@@ -2415,16 +2574,20 @@ pub fn exec_codex_session(
     let posture = containment_posture(HeadlessVendor::Codex, requested)?;
     let mut cmd = if posture == ContainmentPosture::Native {
         let mut cmd = std::process::Command::new("codex");
-        cmd.args(crate::tool_contained_flags("codex")?)
-            .args(codex_session_args(initial_prompt, false, model))
-            .env_remove("AIDA_CONTAINED");
+        let mut args = crate::tool_contained_flags("codex")?;
+        args.extend(codex_session_args(initial_prompt, false, model));
+        // trace:BUG-2394 | ai:claude — a plan lane narrows the native sandbox.
+        if read_only {
+            args = codex_read_only_args(args);
+        }
+        cmd.args(args).env_remove("AIDA_CONTAINED");
         if let Some(id) = grant_id {
             cmd.env(crate::gate::seat_authority::GRANT_ENV, id);
         }
         eprintln!("  codex: {}", posture.label());
         cmd
     } else {
-        build_codex_session_command(initial_prompt, bypass, model, grant_id)
+        build_codex_session_command(initial_prompt, bypass, read_only, model, grant_id)
     };
     stamp_containment_posture(&mut cmd, posture);
     // trace:BUG-2398 | ai:codex — this is the already-delegated tab's seat.
@@ -11897,7 +12060,7 @@ mod tests {
     // trace:BUG-2006 | ai:antigravity
     #[test]
     fn build_codex_session_command_strips_aida_contained() {
-        let cmd = build_codex_session_command("prompt", false, None, None);
+        let cmd = build_codex_session_command("prompt", false, false, None, None);
         let envs: Vec<(&std::ffi::OsStr, Option<&std::ffi::OsStr>)> = cmd.get_envs().collect();
         assert!(
             envs.iter()
@@ -12479,3 +12642,8 @@ pub(crate) fn stamp_containment_posture(
         },
     );
 }
+
+// trace:BUG-2394 | ai:claude
+#[cfg(test)]
+#[path = "tests/bug_2394_codex_posture_tests.rs"]
+mod bug_2394_codex_posture_tests;

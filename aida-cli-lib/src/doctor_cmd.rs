@@ -3111,6 +3111,15 @@ mod bug_1738_mirror_hook_drift_tests {
 /// config reads as unknown rather than as a false alarm.
 // trace:BUG-1700 | ai:claude
 fn scan_agent_worktree_trust(project_root: &std::path::Path) -> Vec<DoctorFinding> {
+    // BUG-2394: the Claude Code folder-trust modal only matters where Claude
+    // launches; a Codex-only project must not be warned about ~/.claude.json.
+    // trace:BUG-2394 | ai:claude
+    if !claude_launch_active(
+        crate::init_cmd::read_enabled_agent_selection(project_root).map(|s| s.claude),
+        aida_core::agents_config::resolve_default_vendor(project_root).as_deref(),
+    ) {
+        return Vec::new();
+    }
     let configured = crate::worktree_pool_config_worktree_parent(project_root);
     let resolved = resolve_worktree_parent(project_root, configured.as_deref());
     let parent = normalize_path_lexically(&resolved);
@@ -3131,6 +3140,21 @@ fn scan_agent_worktree_trust(project_root: &std::path::Path) -> Vec<DoctorFindin
         .unwrap_or_default();
     seat_trust_findings(&mut findings, enabled, &stale);
     findings
+}
+
+/// BUG-2394: whether Claude is a launch vendor for this project. An explicit
+/// `[agents] enabled` list decides (`enabled_claude`); without one, an explicit
+/// non-Claude `[agents] vendor` means Claude is not the project's launcher.
+/// Unconfigured projects keep the historical Claude default. Pure.
+// trace:BUG-2394 | ai:claude
+pub(crate) fn claude_launch_active(
+    enabled_claude: Option<bool>,
+    default_vendor: Option<&str>,
+) -> bool {
+    match enabled_claude {
+        Some(enabled) => enabled,
+        None => default_vendor.is_none_or(|v| v.trim().eq_ignore_ascii_case("claude")),
+    }
 }
 
 /// BUG-049: fold the per-seat pre-trust state into the worktree-trust findings.
