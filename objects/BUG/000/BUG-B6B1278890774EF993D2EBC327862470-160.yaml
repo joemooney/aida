@@ -23,7 +23,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T06:45:38.111981577Z
-modified_at: 2026-11-02T08:48:09.006829157Z
+modified_at: 2026-11-02T08:48:10.149196582Z
 req_type: Bug
 tags:
 - architecture
@@ -240,6 +240,22 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Round-5 fix is correct (Codex refusal now carries ''refusing to resume''), but CI is red at 89be86e: gates fails the portability ratchet on a new test helper, and lib-1 ''Run tests'' fails.. No triage reason was given.'
   created_at: 2026-11-02T08:48:09.006827595Z
   modified_at: 2026-11-02T08:48:09.006827595Z
+  session_id: 1f56bd1e-c059-4f73-b8df-e18b2170fdfc
+- id: 01a19b71-d128-7e61-bab8-8c48c564e9a7
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2386):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 89be86e229d6
+    Recorded: 2026-11-02T08:46:07.926344133+00:00
+    Findings:
+    1. [blocker] CI gates step 'Check Rust test portability ratchet' fails at 89be86e (run 41412686647): aida-cli-lib/src/tests/bug_2386_resume_routing_tests.rs:88 write_lease interpolates tree.display() into a TOML basic string (worktree_path = "{}"), rule toml-path-interpolation. A Windows-style path with backslashes would produce invalid TOML. Quote it with aida_core::toml_quote::toml_string (or build the lease via toml_edit) and confirm scripts/check-portability.sh prints no new findings. Earlier rounds never reached this step because an earlier gates step failed first.
+    2. [blocker] CI lib-1 'Run tests' fails at 89be86e (job 125169099609) and also failed at e3eaa87 (job 125166537519). The reviewer seat could not read the job log (log hosts denied by sandbox) or finish a local build, so the failing test is unnamed. By code trace bug_2393 session_resume_honours_configured_containment_without_the_env should now pass. Read gh run view 41412686647 --log-failed, fix every failing test, and reach green lib-1 before requesting review. The new bug_2386_resume_routing_tests have not yet run green in any CI shard.
+    3. [minor] Carried from rounds 2, 4 and 5, still unfixed and no follow-up filed: codex_resume.rs:181-210 recorded_resume. (a) Step 4 never ties the id to the lease it consults, so a typo'd or foreign id passed to queue work SPEC --resume resumes the scope's newest bound Codex thread. (b) A lease lookup error (ambiguous or unbounded rollout) is swallowed unless Codex is the configured vendor, so the named refusal (advisor ruling Q1) becomes claude --resume <id>. Fix here or file a follow-up task.
+    4. [cosmetic] Carried: session.rs:656 and :7819 exec a Codex command through exec_or_spawn_claude; rename it to exec_or_spawn or add a comment.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-02T08:48:10.024839198Z
+  modified_at: 2026-11-02T08:48:10.024839198Z
   session_id: 1f56bd1e-c059-4f73-b8df-e18b2170fdfc
 history:
 - id: 01a195db-6c30-7600-a068-211ab6c2eed8
