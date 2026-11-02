@@ -16,12 +16,12 @@ description: |-
   1. `aida queue work <SPEC> --plan-only` on Codex enforces read-only sandbox posture (`--sandbox read-only`) instead of normal write flags.
   2. Investigate/wire Codex CLI `-c` config overrides for `[agents] mcp = "off" | "aida"` (or surface clearly in `aida config permissions show` when `mcp` cannot be enforced for the active vendor).
   3. Gate `scan_agent_worktree_trust` (`~/.claude.json` folder trust doctor findings) on Claude being an active/enabled vendor for the project, and support Codex worktree trust if applicable.
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T06:48:07.778727918Z
-modified_at: 2026-11-02T17:58:17.599107848Z
+modified_at: 2026-11-02T17:58:20.403553911Z
 req_type: Bug
 tags:
 - audit
@@ -150,6 +150,12 @@ comments:
   created_at: 2026-11-02T17:58:17.599107848Z
   modified_at: 2026-11-02T17:58:17.599107848Z
   session_id: ee0bf351-6b17-486f-a38e-cfbb1343c426
+- id: 01a19d69-83f3-7713-a11c-60b16c1c6110
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: AC1/AC2/AC3 code and new bug_2394 tests match the advisor rulings, but CI lib-1 is red at head e9e8aee (and fe215b; green at ed4b341): the unset->aida Codex MCP default injects -c mcp_servers.aida.* into every codex apply_agent_default_flags launch, breaking existing exact-argv launcher tests. No triage reason was given.'
+  created_at: 2026-11-02T17:58:20.403549423Z
+  modified_at: 2026-11-02T17:58:20.403549423Z
+  session_id: ee0bf351-6b17-486f-a38e-cfbb1343c426
 history:
 - id: 01a195dd-b979-7b63-b353-ebf808b482d9
   author: joe
@@ -242,6 +248,14 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a19d69-83f3-7713-a11c-60a29a9e31c2
+  author: joe
+  timestamp: 2026-11-02T17:58:20.403533038Z
+  session_id: ee0bf351-6b17-486f-a38e-cfbb1343c426
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 execution_mode: drain
 filed_at:
   code_sha: 6dc7d4977ac5e47c42ddfb26597fe3ec5fb70b60
@@ -255,11 +269,3 @@ implementation_info:
   implemented: true
   implemented_at: 2026-11-02T11:46:51.224322639Z
   implemented_by: joe
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'AC1/AC2/AC3 code and new bug_2394 tests match the advisor rulings, but CI lib-1 is red at head e9e8aee (and fe215b; green at ed4b341): the unset->aida Codex MCP default injects -c mcp_servers.aida.* into every codex apply_agent_default_flags launch, breaking existing exact-argv launcher tests'
-  recovery_hint: address the review findings, move BUG-2394 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-02T17:56:21.994447362Z
