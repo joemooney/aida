@@ -7,12 +7,12 @@ description: |-
 
   cosmetic/non-blocking: forge.rs merge_checked — a train gate refusal raised inside the retry closure (VerifiedTrainMerge::enforce or the per-attempt read_hold) is wrapped as io::Error under context 'could not invoke `gh pr merge`', so the message misattributes a deliberate refusal to an invocation failure and MergeHoldRefusal can no longer be downcast from that error (no train-path consumer downcasts today).
   Reviewed sha: 9995fac7dfea705ee3c076014210819bd7095bac
-status: Draft
+status: Rejected
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-02T00:59:42.132892050Z
-modified_at: 2026-11-02T02:32:20.673659540Z
+modified_at: 2026-11-02T02:32:22.148269694Z
 req_type: Task
 tags:
 - carried-from:BUG-B6B1278890774EF993D2EBC327862470-179
@@ -32,6 +32,14 @@ history:
   timestamp: 2026-11-02T01:22:43.369097239Z
   session_id: 126bbd5a-a92f-452b-ab0b-2637a1db42c2
   changes: []
+- id: 01a19a19-c384-74b1-af9c-1a2f0d72bd56
+  author: joe
+  timestamp: 2026-11-02T02:32:22.148267458Z
+  session_id: 126bbd5a-a92f-452b-ab0b-2637a1db42c2
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Rejected
 filed_at:
   code_sha: 36e0badba8ffcabbfbfaff2981704128806bdcb7
   branch: main
