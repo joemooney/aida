@@ -22,7 +22,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T06:30:56.167167026Z
-modified_at: 2026-11-02T00:14:53.655287509Z
+modified_at: 2026-11-02T01:26:59.443117218Z
 req_type: Bug
 tags:
 - area:ship
@@ -67,6 +67,13 @@ comments:
   created_at: 2026-11-01T23:42:30.882608777Z
   modified_at: 2026-11-01T23:42:30.882608777Z
   session_id: 126bbd5a-a92f-452b-ab0b-2637a1db42c2
+- id: 01a199dd-e873-7fe2-9350-3b5cd02f98b1
+  author: joe
+  content: 'Round 2 (740f59f8db0, PR #3216): all 8 findings addressed. TASK-1145 attended prune preserved — a ship at a TTY runs the cleanup worker in the foreground with inherited stdio (no advisor ruling needed; behaviour unchanged). Worker owns the EndLease ledger entry (--pr); probe cap scoped to ship cleanup; merge-lease release asserted at runtime in the bug_1953 CLI fixture via --merge-lock; cleanup logs capped at 20. Gates failure was the help-golden co-change guard; the stray/ line is tests/test_ci_test_shards.py self-test output.'
+  created_at: 2026-11-02T01:26:59.443117218Z
+  modified_at: 2026-11-02T01:26:59.443117218Z
+  session_id: 01a1999b9cd3
+  harness_version: 2.1.316 (Claude Code)
 history:
 - id: 01a19903-07e8-75a2-b046-5be385601f6c
   author: aida-session-start
