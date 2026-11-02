@@ -1,8 +1,8 @@
 - user_id: role:advisor
   requirement_id: 01a195db-46bf-7663-922c-79ab2a65098b
-  position: -37000
+  position: -38000
   added_by: role:advisor
-  added_at: 2026-11-02T08:03:39.462742124Z
+  added_at: 2026-11-02T08:21:26.969443550Z
   for_role: advisor
 - user_id: role:advisor
   requirement_id: 01a1965b-ab56-7033-9381-508eb11738ed
