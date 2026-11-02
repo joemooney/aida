@@ -712,7 +712,7 @@ fn shift_refuses_when_budget_evidence_missing_or_stale() {
         ),
         (
             "uncovered vendor",
-            Box::new(|p: &mut Probes| p.vendor = "codex".into()),
+            Box::new(|p: &mut Probes| p.vendor = "agy".into()),
         ),
     ];
     for (name, mutate) in cases {
@@ -726,14 +726,22 @@ fn shift_refuses_when_budget_evidence_missing_or_stale() {
     let cfg = cfg_with(
         None,
         Some(&format!(
-            "[repo.\"{REPO}\"]\nenabled = true\nallow_uncovered_vendors = [\"codex\"]\n"
+            "[repo.\"{REPO}\"]\nenabled = true\nallow_uncovered_vendors = [\"agy\"]\n"
         )),
     );
     let mut p = probes(vec![drain("TASK-1")]);
-    p.vendor = "codex".into();
+    p.vendor = "agy".into();
     let (r, _) = run(&cfg, &p, &mut ShiftState::default(), &ctx());
     let g = guard(&r, "budget-evidence");
     assert!(g.pass && g.detail.contains("NOT measured"), "{}", g.detail);
+    // BUG-2391: Codex spend is measured, so a Codex wave needs no override.
+    // trace:BUG-2391 | ai:claude
+    let mut p = probes(vec![drain("TASK-1")]);
+    p.vendor = "codex".into();
+    let (r, _) = run(&cfg_on(), &p, &mut ShiftState::default(), &ctx());
+    let g = guard(&r, "budget-evidence");
+    assert!(g.pass && g.detail.contains("measured"), "{}", g.detail);
+    assert!(!g.detail.contains("NOT"), "{}", g.detail);
     // The override is local-only: the committed config cannot grant it.
     let committed = cfg_with(
         Some("[shift]\nallow_uncovered_vendors = [\"codex\"]\n"),
@@ -1383,9 +1391,10 @@ fn shift_resume_requires_a_human_at_a_tty_and_a_yes() {
 }
 
 /// A9: the probe resolves the vendor the way `queue work` launches. With
-/// `[agents] enabled` listing only a non-claude profile and no explicit
-/// vendor, the wave would spend on that profile, so the claude-only
-/// watchdog evidence does not cover it and the guard refuses.
+/// `[agents] enabled` listing only the Antigravity profile and no explicit
+/// vendor, the wave would spend on `agy`, which the watchdog evidence (Claude
+/// transcripts and Codex sessions) does not cover, so the guard refuses.
+// trace:BUG-2391 | ai:claude
 #[test]
 fn shift_budget_guard_uses_the_launch_path_vendor() {
     let _env = crate::test_env::EnvVarGuard::unset("AIDA_HEADLESS_VENDOR");
@@ -1393,12 +1402,12 @@ fn shift_budget_guard_uses_the_launch_path_vendor() {
     std::fs::create_dir_all(tmp.path().join(".aida")).unwrap();
     std::fs::write(
         tmp.path().join(".aida").join("agents.toml"),
-        "[agents]\nenabled = [\"codex\"]\n",
+        "[agents]\nenabled = [\"antigravity\"]\n",
     )
     .unwrap();
     let (vendor, err) = resolve_wave_vendor(tmp.path());
     assert!(
-        vendor != "claude" || err.is_some(),
+        (vendor != "claude" && vendor != "codex") || err.is_some(),
         "the launch resolves to the only enabled profile (or refuses): {vendor} {err:?}"
     );
     let mut p = probes(vec![drain("TASK-1")]);
