@@ -960,6 +960,20 @@ fn pre_test_failures_and_zero_matches_stay_untested() {
             101,
         ),
     ] {
+        // The classification is the tally's: feed each output to it directly.
+        // Running every case through a real Runner cost ~1.5s apiece (its
+        // 500ms poll) and broke the 10s test budget. trace:BUG-2383 | ai:claude
+        let tally = Tally::default();
+        tally.record_exit(
+            &job(&["cargo", "test", "--profile", "agent"]),
+            output.as_bytes(),
+        );
+        assert_eq!(tally.untested(), name != "failed_test", "{name}");
+        // Two cases still go end to end, proving the runner hands the job's
+        // real output file and exit code to the tally.
+        if !matches!(name, "compile" | "failed_test") {
+            continue;
+        }
         let tmp = tempfile::tempdir().unwrap();
         let mut lane = fixture_lane(tmp.path());
         let cargo = tmp.path().join("cargo-result");
