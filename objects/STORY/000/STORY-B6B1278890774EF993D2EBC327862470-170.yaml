@@ -3,12 +3,12 @@ spec_id: STORY-b6b1278890774ef993d2ebc327862470-170
 agreed_id: STORY-2210
 title: 'aida node hub add: register a second writable hub under an enrolled root and grant it a child pool per type'
 description: 'Split from STORY-HOME-164 by advisor signoff 2026-10-31 13:56 (Q3). After STORY-164 lands: ''aida node hub add <name> --url <url>'' refuses without an enrolled root (names ''aida node enroll-root''); writes the [store.hubs] entry; the root grants a child pool per type in use, homed on the new hub, carved from the root pool''s free_ranges (excludes every existing block); the grant is pushed by CAS to the root''s hub and reaches the new hub by sync or bundle; clones on the new hub claim through the PR-3170 delegated path with upstream=<new hub remote>. Tests: grant disjoint from all pre-grant blocks; refusal without root; a clone on h2 claims from the h2 pool. Docs: storage guide multi-hub section; help golden. Depends on STORY-HOME-164.'
-status: Approved
+status: InProgress
 priority: Medium
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T20:54:36.955943290Z
-modified_at: 2026-10-31T20:54:36.955943290Z
+modified_at: 2026-11-02T01:28:46.617263089Z
 req_type: Story
 history:
 - id: 01a1942b-6c50-70b2-8fd4-95bd0998c2c6
@@ -19,6 +19,13 @@ history:
   - field_name: agreed_id
     old_value: ''
     new_value: STORY-2210
+- id: 01a199df-8b19-7a32-b6c5-10b92a7d6e28
+  author: aida-session-start
+  timestamp: 2026-11-02T01:28:46.617259471Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: a4a6e2a6d182df7805362e00c9393fec18752684
   branch: main
