@@ -3,12 +3,12 @@ spec_id: STORY-b6b1278890774ef993d2ebc327862470-170
 agreed_id: STORY-2210
 title: 'aida node hub add: register a second writable hub under an enrolled root and grant it a child pool per type'
 description: 'Split from STORY-HOME-164 by advisor signoff 2026-10-31 13:56 (Q3). After STORY-164 lands: ''aida node hub add <name> --url <url>'' refuses without an enrolled root (names ''aida node enroll-root''); writes the [store.hubs] entry; the root grants a child pool per type in use, homed on the new hub, carved from the root pool''s free_ranges (excludes every existing block); the grant is pushed by CAS to the root''s hub and reaches the new hub by sync or bundle; clones on the new hub claim through the PR-3170 delegated path with upstream=<new hub remote>. Tests: grant disjoint from all pre-grant blocks; refusal without root; a clone on h2 claims from the h2 pool. Docs: storage guide multi-hub section; help golden. Depends on STORY-HOME-164.'
-status: InProgress
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T20:54:36.955943290Z
-modified_at: 2026-11-02T07:36:06.624209369Z
+modified_at: 2026-11-02T08:08:30.146995311Z
 req_type: Story
 relationships:
 - rel_type:
@@ -130,6 +130,21 @@ history:
   timestamp: 2026-11-02T07:36:06.824225291Z
   session_id: 1f56bd1e-c059-4f73-b8df-e18b2170fdfc
   changes: []
+- id: 01a19b4d-80bc-79a1-a83b-7090e641f899
+  author: aida-auto-bump
+  timestamp: 2026-11-02T08:08:30.140874904Z
+  session_id: 1f56bd1e-c059-4f73-b8df-e18b2170fdfc
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a19b4d-80c2-7111-b7e7-9abecbd98997
+  timestamp: 2026-11-02T08:08:30.146991412Z
+  agent: aida
+  commit_sha: d21c58bbc52de6cf2a9a1fabfec94628dc4e42a7
+  summary: Every STORY-2210 acceptance criterion is met with tests (story_164_single_hub.rs, allocation_lineage_tests.rs, node_hub_tests.rs), all round-2 findings are fixed in c546872 (time-budget entries, bare-hub read, URL-conflict/invalid-name/no-pool refusal tests, re-run hint on declare failure), and all CI jobs pass at 7362adf; the only red check is merge-hold-gate, which needs operator clearance and is not a code defect.
+  review_verdict: approved
 execution_mode: drain
 filed_at:
   code_sha: a4a6e2a6d182df7805362e00c9393fec18752684
@@ -143,3 +158,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-11-02T01:53:50.901513686Z
   implemented_by: joe
+  completed_at: 2026-11-02T08:08:30.140868808Z
+  completion_sha: d21c58bbc52de6cf2a9a1fabfec94628dc4e42a7
