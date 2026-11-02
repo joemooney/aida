@@ -18,7 +18,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T12:33:50.987786326Z
-modified_at: 2026-11-02T02:34:42.224239153Z
+modified_at: 2026-11-02T02:36:24.311678390Z
 req_type: Bug
 tags:
 - forge
@@ -35,6 +35,30 @@ comments:
   content: 'Additional live output: aida add --canonical-ids STILL printed Added: BUG-2404 (BUG-B6B1278890774EF993D2EBC327862470-177) - title. Therefore do not assume that flag alone fixes the current parser. Use actual supported stored identity or strict parsing/resolution of the complete supported display forms; no JSON add projection currently exists. The initial --format json attempt refused before creation, exact-title search returned empty, then one ordinary add succeeded; no duplicate requirement was filed.'
   created_at: 2026-11-01T12:42:26.951194948Z
   modified_at: 2026-11-01T12:42:26.951194948Z
+- id: 01a19a1d-7577-7291-ae3d-f0ce9b925dcb
+  author: joe
+  content: |-
+    ## Implementer approach
+
+    ### Acceptance criteria as tests
+    - **Unit (parser):** `parse_spec_id_from_add_output` strict exact-ID parsing — `Added: AGREED (LOCAL) - title` returns the stored local spec_id (canonical); no-alias `Added: ID - title`; canonical node-local `STORY-<32hex>-N`; legacy `ID: X`; ANSI; title containing ` - ` and ID-like tokens; diagnostics lines containing ID-like text are ignored; malformed (`Added: Some title`, `Added: A (B C)`), conflicting (two Added lines naming different IDs / Added vs ID: disagree), and empty output all return None.
+    - **Fixture (autoqueue end-to-end, fake gh + recording fake aida, temp HOME/store):** child `aida add` prints `Added: STORY-2272 (STORY-<node>-288) - Review PR-42: ...` → exactly one `add` call, `rel add <canonical> TASK-77 --type implements`, `queue add <canonical> --for reviewer`; outcome Filed with that canonical id. The child add is invoked with `--canonical-ids` (existing contract).
+    - **Fixture:** queue add fails → outcome SkippedNeedsAttention naming the filed canonical story (durable retry, not claimed queued), exactly one add.
+    - **Fixture:** ambiguous/malformed add output → SkippedNeedsAttention, no rel/queue calls with garbage IDs, no second add.
+    - Existing-review-story retry and GitHub/GitLab behavior: unchanged code paths, covered by existing tests (bug_2208, bug_1609, BUG-HOME-041 tests).
+
+    ### Expected files
+    - `aida-cli-lib/src/pr_lookup.rs` (parser + `--canonical-ids` on child add + error distinction)
+    - `aida-cli-lib/src/review_gates.rs` (caller message; test module registration)
+    - `aida-cli-lib/src/tests/bug_2404_add_output_identity_tests.rs` (new)
+    - `aida-cli-lib/src/tests/statusline_tests.rs` (existing parser test kept green)
+
+    ### Ambiguities / conflicts as questions
+    - Which of agreed vs local to queue: choosing the stored `spec_id` (local, canonical node form) — the spec text names that as the canonical identity; both resolve to the same row.
+  created_at: 2026-11-02T02:36:24.311678390Z
+  modified_at: 2026-11-02T02:36:24.311678390Z
+  session_id: 01a19a1be265
+  harness_version: 2.1.316 (Claude Code)
 history:
 - id: 01a1971a-87d1-7701-a3aa-f40a198b947d
   author: joe

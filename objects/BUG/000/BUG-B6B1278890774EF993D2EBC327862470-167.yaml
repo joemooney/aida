@@ -22,7 +22,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T06:47:54.074794793Z
-modified_at: 2026-11-02T02:34:15.933515781Z
+modified_at: 2026-11-02T02:35:48.440837076Z
 req_type: Bug
 tags:
 - audit
@@ -42,6 +42,25 @@ comments:
   content: 'PROXY DECISION: source confirms ambient-only/literal false containment callers. Approve full inventory correction using trusted project/user containment resolution AND strict inherited AIDA_CONTAINED; no caller may downgrade a contained parent. Preserve TASK2631 native posture as explicitly selected and STORY2238 future wrapper, no special Codex escape. Sequence overlapping questions/plan_intent/intake/burndown after BUG2389; require tests for configuration-only containment with ambient unset, explicit parent containment, unavailable containment refusal, Claude/Codex parity and compete arms/judge. Independent sensitive review and operator merge floor remain.'
   created_at: 2026-11-01T08:10:18.520556649Z
   modified_at: 2026-11-01T08:10:18.520556649Z
+- id: 01a19a1c-e958-7b93-8d1e-8b6f771046c0
+  author: joe
+  content: |-
+    ## Implementer approach
+
+    ### Acceptance criteria as tests
+    - **Unit (1):** every listed site resolves containment through `session::drain_contained(project_root)?` instead of literal `false` / `aida_contained_env()?`: `spawn_analysis_headless` (shared by questions research, dryrun --ai, intent), questions remedy + clarify, advisor_watch fork/cold-boot, reconstitute run_headless, burndown run, autopilot intake, compete preflight/arm/judge/dry-run, `session resume`. A source ratchet asserts no listed module keeps the ambient-only form.
+    - **Unit (2):** with `AIDA_CONTAINED` unset and `[agents] contained = true` in the project agents.toml: advisor-watch cold boot and remedy/analysis spawns hand the fake vendor `AIDA_CONTAINED=1` + contained flags (Claude) and refuse Codex before spawn; burndown/intake dry-run refuse Codex and preview contained Claude; compete preflight refuses codex arms/judge, arm/judge command carries AIDA_CONTAINED=1; `session resume` of a codex target refuses. Plus explicit-parent (`AIDA_CONTAINED=1`) and malformed-config refusal cases.
+
+    ### Expected files
+    - `aida-cli-lib/src/{session,advisor_watch,questions,plan_intent,reconstitute,burndown_run,autopilot_intake,compete_cmd}.rs`
+    - `aida-cli-lib/src/tests/agent_launcher_tests.rs` (compete arm signature) + a new `tests/bug_2393_*` test module
+
+    ### Ambiguities / conflicts as questions
+    - `lib_part2.rs`, `agent_launch.rs`, `queue_cmd.rs` also read `aida_contained_env()` only; they are outside the filed inventory, so I leave them and file a follow-up finding rather than widen scope.
+  created_at: 2026-11-02T02:35:48.440837076Z
+  modified_at: 2026-11-02T02:35:48.440837076Z
+  session_id: 01a19a1b79b2
+  harness_version: 2.1.316 (Claude Code)
 history:
 - id: 01a195dd-7495-70a1-9fe4-3bf923e003f5
   author: joe
