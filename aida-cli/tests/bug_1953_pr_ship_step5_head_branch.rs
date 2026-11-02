@@ -218,6 +218,11 @@ fn ship_by_number_from_main_matches_the_lease_on_the_pr_head_branch() {
         .env("AIDA_PR_SHIP_ALLOW_IN_DRIVE", "1")
         // A standalone implementer child refuses `pr ship` (STORY-1662).
         .env_remove("AIDA_STANDALONE_IMPLEMENTER")
+        // The cleanup worker must be this build; an inherited AIDA_BIN (set
+        // in agent sessions) would point it at an older installed binary.
+        // trace:BUG-2384 | ai:claude
+        .env_remove("AIDA_BIN")
+        .env_remove("AIDA_BUILD_PROFILE")
         .output()
         .unwrap();
     let text = format!(
@@ -230,14 +235,27 @@ fn ship_by_number_from_main_matches_the_lease_on_the_pr_head_branch() {
     // older installed binary that does not know the internal subcommand.
     // trace:BUG-2384 | ai:codex
     assert!(text.contains("cleanup: pid"), "cleanup must start: {text}");
-    let logs = std::fs::read_dir(repo.join(".aida/cleanup-logs")).unwrap();
+    let logs: Vec<String> = std::fs::read_dir(repo.join(".aida/cleanup-logs"))
+        .unwrap()
+        .filter_map(Result::ok)
+        .map(|entry| std::fs::read_to_string(entry.path()).unwrap_or_default())
+        .collect();
     assert!(
-        logs.filter_map(Result::ok).any(|entry| {
-            std::fs::read_to_string(entry.path())
-                .unwrap_or_default()
-                .contains("cleanup: acquired the cleanup lock")
-        }),
-        "the current binary must dispatch the cleanup worker: {text}"
+        logs.iter()
+            .any(|log| log.contains("cleanup: acquired the cleanup lock")),
+        "the current binary must dispatch the cleanup worker: {text}\nlogs: {logs:?}"
+    );
+    // The real `pr ship` released its merge lease before the worker started:
+    // the worker records the lock file's state as its first line.
+    // trace:BUG-2384 | ai:claude
+    assert!(
+        logs.iter()
+            .any(|log| log.contains("merge lease") && log.contains("held: no")),
+        "cleanup must start after the merge lease is released: {logs:?}"
+    );
+    assert!(
+        !logs.iter().any(|log| log.contains("held: yes")),
+        "cleanup ran while the merge lease was held: {logs:?}"
     );
 
     assert!(state.join("merged").exists(), "the PR must merge: {text}");

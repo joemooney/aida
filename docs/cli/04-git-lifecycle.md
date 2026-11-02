@@ -119,19 +119,26 @@ PR. It never merges; `--dry-run` imports and pushes nothing.
 
 **Post-merge cleanup.** The main merge lease covers check → merge → pull and
 is released before session cleanup, including when pull is skipped or fails.
-Session end, reap and merged-worktree pruning run sequentially in a detached
-worker, serialized by a separate cleanup lock that never blocks merges. Ship
-waits up to 20 seconds, then reports the worker PID and its
-`.aida/cleanup-logs/<uuid>.log` progress path and returns while cleanup continues.
-`--no-cleanup` skips the worker. Each clone probe has a shared 10-second budget;
-timeouts and unreadable evidence retain the clone with a diagnostic. Shipped
-heads are checked in one Git batch, with exclusions streamed to revision walks.
-Existing salvage, mail retention, live-process and protected-lease gates still
-apply. Destructive doctor heals that require a human TTY are skipped by the
-detached worker; inspect retained trees with `aida doctor --category
-merged-agent-worktrees`. A completed ship does not promise every retained tree
-was removed.
-<!-- trace:BUG-2384 | ai:codex -->
+Session end, reap and merged-worktree pruning run sequentially in one cleanup
+worker, serialized by a separate cleanup lock that never blocks merges.
+
+- **At a terminal**, the worker runs in the foreground with your terminal, so
+  the attended merged-worktree prune works as it always has.
+- **Unattended** (no terminal: agents, CI, scripts), the worker is detached.
+  Ship waits up to 20 seconds, then reports the worker PID and its
+  `.aida/cleanup-logs/<uuid>.log` progress path and returns while cleanup
+  continues. Ship keeps the 20 newest logs. Destructive doctor heals that need
+  a human at a terminal are skipped; inspect retained trees with
+  `aida doctor --category merged-agent-worktrees`.
+
+The worker records the final lease-end outcome in the ship activity log, even
+when it finishes after ship has returned. `--no-cleanup` skips the worker.
+During ship cleanup each clone probe has a shared 10-second budget; timeouts and
+unreadable evidence retain the clone with a diagnostic. Shipped heads are
+checked in one Git batch, with exclusions streamed to revision walks. Existing
+salvage, mail retention, live-process and protected-lease gates still apply. A
+completed ship does not promise every retained tree was removed.
+<!-- trace:BUG-2384 | ai:codex | ai:claude -->
 
 **Non-completing slices.** The squash subject's trailing `(SPEC-ID)` group is
 what completes a spec at merge time. Ship derives it from an explicit title

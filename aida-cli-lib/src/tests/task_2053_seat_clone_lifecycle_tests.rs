@@ -2076,9 +2076,9 @@ fn bug_b6b_049_bwrap_destroy_drops_the_clone_trust_entry_only_when_on() {
 // without mutating this test process's PATH. Includes missing objects and a blob
 // so the batch must not turn either into evidence that work is already shipped.
 // trace:BUG-2384 | ai:codex
+#[cfg(unix)]
 #[test]
 fn bug_2384_large_shipped_set_uses_one_batch_per_clone() {
-    use std::os::unix::fs::PermissionsExt;
     let temp = tempfile::tempdir().unwrap();
     let seed = temp.path().join("seed");
     std::fs::create_dir(&seed).unwrap();
@@ -2101,12 +2101,10 @@ fn bug_2384_large_shipped_set_uses_one_batch_per_clone() {
         .unwrap();
     assert!(real_git.status.success());
     let wrapper = bin.join("git");
-    std::fs::write(
+    crate::test_exec::write_executable(
         &wrapper,
         "#!/bin/sh\nprintf '%s\\n' \"$*\" >> \"$GIT_TEST_CALLS\"\nexec \"$GIT_TEST_REAL\" \"$@\"\n",
-    )
-    .unwrap();
-    std::fs::set_permissions(&wrapper, std::fs::Permissions::from_mode(0o755)).unwrap();
+    );
     let inherited = std::env::var_os("PATH").unwrap_or_default();
     let path = std::env::join_paths(std::iter::once(bin).chain(std::env::split_paths(&inherited)))
         .unwrap();
@@ -2181,4 +2179,18 @@ fn bug_2384_expired_clone_scan_keeps_unknown_diagnostic() {
         Probe::Unknown(why) => assert!(why.contains("deadline elapsed"), "{why}"),
         other => panic!("an elapsed budget must retain the clone: {other:?}"),
     }
+}
+
+// Outside ship cleanup (no worker scope, no env handoff) a probe keeps the
+// caller's deadline, including "no deadline": doctor, seat destroy/list and
+// salvage are not capped by the ship cleanup budget.
+// trace:BUG-2384 | ai:claude
+#[test]
+fn bug_2384_probe_cap_is_scoped_to_ship_cleanup() {
+    if std::env::var_os(SHIP_CLEANUP_PROBE_ENV).is_some() {
+        return; // an outer ship cleanup scope; nothing to assert here
+    }
+    assert_eq!(ship_cleanup_cap(None), None);
+    let later = std::time::Instant::now() + std::time::Duration::from_secs(3600);
+    assert_eq!(ship_cleanup_cap(Some(later)), Some(later));
 }
