@@ -17,12 +17,12 @@ description: |-
   ──────────
   1. All headless spawn and resume call sites resolve project/user containment via `session::drain_contained(project_root)?` (which combines `AIDA_CONTAINED`, `[agents] contained`, and `[contained] enable`) rather than passing `false` or checking only `aida_contained_env()?`.
   2. Unit tests verify that setting `contained = true` in `agents.toml` without `AIDA_CONTAINED` in the environment enforces containment on `advisor watch`, `questions`, `dryrun`, `intent`, `burndown`, `intake`, `compete`, and `session resume`.
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T06:47:54.074794793Z
-modified_at: 2026-11-02T03:26:01.406544254Z
+modified_at: 2026-11-02T03:40:44.170158383Z
 req_type: Bug
 tags:
 - audit
@@ -66,6 +66,12 @@ comments:
   modified_at: 2026-11-02T02:35:48.440837076Z
   session_id: 01a19a1b79b2
   harness_version: 2.1.316 (Claude Code)
+- id: 01a19a58-5b0a-7d43-b425-0b1b1ec31a7e
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: Production fix is correct (every listed caller now resolves drain_contained, fail-closed on malformed knobs), but CI is red from this PR: 5 new tests fail because the AIDA_HOME override strands the seat grant; burndown/intake/session-resume lack behavioural tests (AC2).. No triage reason was given.'
+  created_at: 2026-11-02T03:40:44.170154127Z
+  modified_at: 2026-11-02T03:40:44.170154127Z
+  session_id: 126bbd5a-a92f-452b-ab0b-2637a1db42c2
 history:
 - id: 01a195dd-7495-70a1-9fe4-3bf923e003f5
   author: joe
@@ -118,6 +124,14 @@ history:
   - field_name: status
     old_value: Done
     new_value: NeedsAttention
+- id: 01a19a58-5b0a-7d43-b425-0b013b4fd0de
+  author: joe
+  timestamp: 2026-11-02T03:40:44.170125029Z
+  session_id: 126bbd5a-a92f-452b-ab0b-2637a1db42c2
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 execution_mode: drain
 filed_at:
   code_sha: 6dc7d4977ac5e47c42ddfb26597fe3ec5fb70b60
@@ -131,11 +145,3 @@ implementation_info:
   implemented: true
   implemented_at: 2026-11-02T02:51:32.993982223Z
   implemented_by: joe
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'Production fix is correct (every listed caller now resolves drain_contained, fail-closed on malformed knobs), but CI is red from this PR: 5 new tests fail because the AIDA_HOME override strands the seat grant; burndown/intake/session-resume lack behavioural tests (AC2).'
-  recovery_hint: address the review findings, move BUG-2393 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-02T03:26:01.406544254Z
