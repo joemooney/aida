@@ -13,13 +13,20 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-02T09:06:35.432011773Z
-modified_at: 2026-11-02T09:06:35.432011773Z
+modified_at: 2026-11-02T09:20:32.402952009Z
 req_type: Task
 tags:
 - carried-from:BUG-B6B1278890774EF993D2EBC327862470-178
 - finding-hash:86f19384
 - from-review:PR-3214
 - kind:carried-forward
+comments:
+- id: 01a19b8f-7492-7901-98fb-ab4dda789e0f
+  author: joe
+  content: 'ADVISOR RULING (2026-11-02 02:22 MST): bundled into TASK-HOME-690.'
+  created_at: 2026-11-02T09:20:32.402952009Z
+  modified_at: 2026-11-02T09:20:32.402952009Z
+  session_id: 1f56bd1e-c059-4f73-b8df-e18b2170fdfc
 filed_at:
   code_sha: f7892bcf9b28cd9659cd5461cbb35a64c744ecd0
   branch: main
