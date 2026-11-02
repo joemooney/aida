@@ -3,12 +3,12 @@ spec_id: STORY-b6b1278890774ef993d2ebc327862470-313
 agreed_id: STORY-2315
 title: Lane relaunch ends a finished lane's dead lease itself when the seat is clean and its HEAD is already in the PR
 description: 'Pain 2026-11-01/02: nearly every rework or review requeue failed with ''could not end dead lease <id> ... add --force''. The advisor wrote freelease.sh: for each lease on the PR branch (or pr-N), skip live pids; require a clean seat and seat HEAD an ancestor of the PR head; then aida session end --force --yes. Acceptance: aida queue work --steal (and rev/rework launches) applies exactly this safe check and ends such leases automatically, refusing only when the seat is dirty, has commits the PR lacks, or a process is live. Candidate for the regroup R1 (session lifecycle: lease passes to the PR on open).'
-status: InProgress
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-02T12:46:46.980613333Z
-modified_at: 2026-11-02T17:46:16.090643520Z
+modified_at: 2026-11-02T18:20:35.005142416Z
 req_type: Story
 tags:
 - area:lanes
@@ -93,6 +93,20 @@ history:
   timestamp: 2026-11-02T17:46:17.414007142Z
   session_id: ee0bf351-6b17-486f-a38e-cfbb1343c426
   changes: []
+- id: 01a19d7d-e06c-7a33-8883-4683577b07d8
+  author: aida-auto-bump
+  timestamp: 2026-11-02T18:20:34.796903353Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a19d7d-e13d-7f22-a1aa-b37682ad86ca
+  timestamp: 2026-11-02T18:20:35.005137577Z
+  agent: aida
+  commit_sha: 481261d1d316f01592da34f5da2faf2f53c91f31
+  summary: 'Round 2: all four round-1 rework items fixed. queue work --steal and the review launch share one verdict-to-action mapping (end_action): force-end only when the owner is dead, the seat is clean and its HEAD is in the PR on origin; refuse only for a dirty seat or commits the PR lacks; live or unprovable leases keep plain session end. Every blocking review lease (incl. previous reviewer pr-N) is handled. Host git goes through host_git_command. Full PR CI green at 775d92c (merge-hold-gate is the supervisory hold, not a code failure).'
+  review_verdict: approved
 filed_at:
   code_sha: 5b21d041d218b3030c4878b5cabb862da086026e
   branch: main
@@ -101,3 +115,7 @@ filed_at:
   aida_build_sha: 6a3f67671a9
   vendor: claude
   session: 1f56bd1e-c059-4f73-b8df-e18b2170fdfc
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-02T18:20:34.796896510Z
+  completion_sha: 481261d1d316f01592da34f5da2faf2f53c91f31
