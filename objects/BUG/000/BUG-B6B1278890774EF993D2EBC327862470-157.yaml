@@ -19,7 +19,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T02:25:46.947809262Z
-modified_at: 2026-11-02T11:48:18.667570026Z
+modified_at: 2026-11-02T11:49:50.770956252Z
 req_type: Bug
 tags:
 - area:agents
@@ -260,6 +260,12 @@ comments:
   content: 'ADVISOR HOST CHECK (2026-11-02 04:44 MST) at d003fb3: cargo test -p aida-cli-lib --lib lane_job::tests gave 23 passed in 7.62s, nothing over budget.'
   created_at: 2026-11-02T11:43:21.534875084Z
   modified_at: 2026-11-02T11:43:21.534875084Z
+  session_id: 1f56bd1e-c059-4f73-b8df-e18b2170fdfc
+- id: 01a19c18-2632-7081-95c9-9bdb4f293ffb
+  author: joe
+  content: 'ADVISOR BRIEF (2026-11-02 04:52 MST): the time-budget fix is accepted. Per the 10:33 verified-blocker ruling, the next step is a SKETCH, not code. Write one sketch comment on this spec covering: (1) the Codex native core-tool transport: how a restricted inherit=core Codex tool shell discovers and submits to the lane job runner and reads its result and tally, through a typed own-context lease channel. BUG-2398 has merged; its codex_tool_env seat-metadata whitelist (shell_environment_policy.set.*) carries public seat context only, so name exactly which non-secret selector it may carry (for example a lease id or job-socket path), with a threat model: no bearer tokens, no inherit-all, no argv grants, no unconfined fallback. (2) AC2 warm target on ext4 (no reflink): pick one of a shared read-only primary target plus a per-lane overlay, cp -al hardlinked deps, or a sccache-style cache, and state the cargo-lock and slot interaction. Mail the advisor and stop before code. Keep every existing fix in PR #3192.'
+  created_at: 2026-11-02T11:49:50.770956252Z
+  modified_at: 2026-11-02T11:49:50.770956252Z
   session_id: 1f56bd1e-c059-4f73-b8df-e18b2170fdfc
 history:
 - id: 01a19525-88eb-79e3-aab8-8d511ad2f605
