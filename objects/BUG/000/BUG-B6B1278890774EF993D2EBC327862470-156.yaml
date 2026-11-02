@@ -18,7 +18,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T02:22:11.107502056Z
-modified_at: 2026-11-02T00:30:54.082686181Z
+modified_at: 2026-11-02T00:32:59.116433555Z
 req_type: Bug
 tags:
 - area:agents
@@ -35,6 +35,34 @@ comments:
   created_at: 2026-11-01T05:58:16.927195754Z
   modified_at: 2026-11-01T05:58:16.927195754Z
   session_id: a31b25d9-60a5-4347-a85b-4c74ab06f274
+- id: 01a199ac-76ec-78a3-a610-a4787e7e0379
+  author: joe
+  content: |-
+    ## Implementer approach
+
+    Cause in code: `gather_running_work` (aida-cli-lib/src/ps_integrate.rs) feeds `build_running_work` the claude-only `probe_live_claude_sessions()` slice, so a hand-started codex in the clone never counts as the worktree's live session (BUG-1941's occupant rule only sees claude). Any other process (cargo test under a headless lane whose agent cwd is elsewhere) is invisible too.
+
+    Fix:
+    1. Feed `aida ps` claude + codex sessions (codex rows projected from the same memoized `/proc` walk, jsonl None). A codex whose cwd is the clone now makes the lease Live and the row carries its pid (AC1).
+    2. Backstop: after rows are built, any row still reading `salvageable` gets a `/proc` scan for ANY live process (inspector ancestry excluded) with its cwd inside the worktree. If one exists, the row becomes `unknown` and the hint reads "unbound agent in clone — pid N (name) ..." with no salvage-commit recipe (AC2 + advisor comment).
+
+    ### Acceptance criteria as tests
+    - **Unit:** `ps_live_sessions` projects a codex agent process into the live slice; `build_running_work` with an exited creator pid plus a live codex session in the clone gives `LeaseState::Live` and a non-salvageable dispatch (AC1, AC3 positive).
+    - **Unit:** `apply_unbound_occupant` turns Salvageable + occupant into Unknown with an "unbound agent in clone" hint naming the pid and no `git commit`; with no occupant it leaves Salvageable and the salvage hint unchanged (AC2, AC3 regression).
+    - **Unit:** `live_process_with_cwd_in` finds this test process's child in a temp dir and excludes listed pids.
+
+    ### Expected files
+    - `aida-core/src/liveness.rs` (codex→LiveSession projection, cwd scan helper)
+    - `aida-cli-lib/src/process_probe.rs` (re-exports)
+    - `aida-cli-lib/src/ps_integrate.rs`, `aida-cli-lib/src/dispatch_health_ps.rs`
+    - new `aida-cli-lib/src/tests/bug_2382_unbound_agent_tests.rs` + tests mod registration
+
+    ### Ambiguities / conflicts as questions
+    - Re-binding the lease pid on the agent's first AIDA call (AC1 option A) is not done; the vendor-process probe (option B) is used instead because it needs no write path. OK?
+  created_at: 2026-11-02T00:32:59.116433555Z
+  modified_at: 2026-11-02T00:32:59.116433555Z
+  session_id: 01a199aa89d4
+  harness_version: 2.1.316 (Claude Code)
 history:
 - id: 01a194ea-5f72-7e03-8745-ebc42cce4fcf
   author: joe
