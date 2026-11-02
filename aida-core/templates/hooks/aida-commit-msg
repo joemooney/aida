@@ -96,7 +96,10 @@ HAS_TRACE_FILES=false
 # the scaffold gets a confusing "Staged files trace to: TASK-586 …" warning for
 # ids that aren't theirs. (`.md` already covers the markdown skills/commands +
 # the docs/aida discipline pack.) trace:TASK-128 | ai:claude
-EXCLUDE_PATTERNS="requirements.yaml requirements.yaml.lock requirements.db .md .claude/"
+# `.codex/` (Codex hook handlers) and `.agents/` (the portable skill pack and
+# Antigravity hooks) are scaffold mirrors of the same templates, so they carry
+# the same foreign ids. trace:BUG-2395 | ai:claude
+EXCLUDE_PATTERNS="requirements.yaml requirements.yaml.lock requirements.db .md .claude/ .codex/ .agents/"
 
 for file in $STAGED_FILES; do
     # Skip excluded files

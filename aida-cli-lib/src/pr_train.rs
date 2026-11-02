@@ -1429,19 +1429,129 @@ pub(crate) fn train_rider_refusal(
     None
 }
 
+/// The train PR body line naming the process that opened the train:
+/// `aida-train-owner: host=<host> pid=<pid> start=<kernel start identity>
+/// pidns=<pid namespace inode> boot=<boot id>`. A later train reads it to
+/// tell a live train from one whose process died.
+// trace:BUG-2412 | ai:claude
+pub(crate) const OWNER_LINE: &str = "aida-train-owner:";
+
+/// The process that opened a train PR, as its body records it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct TrainOwner {
+    pub host: String,
+    pub pid: u32,
+    /// Kernel start identity, so a recycled pid reads dead. `None` when the
+    /// platform could not report one.
+    pub start: Option<String>,
+    /// PID namespace inode the pid was recorded in: a pid only means
+    /// something in its own namespace (each sandboxed Bash call gets a fresh
+    /// one). `None` when the platform could not report one.
+    pub pid_ns: Option<String>,
+    /// Boot id at record time: a pid from an earlier boot means nothing now.
+    pub boot: Option<String>,
+}
+
+/// The owner line for this process.
+// trace:BUG-2412 | ai:claude
+pub(crate) fn owner_line_for_self() -> String {
+    let pid = std::process::id();
+    owner_line(&TrainOwner {
+        host: crate::coordination::hostname(),
+        pid,
+        start: aida_core::liveness::process_start_identity(pid),
+        pid_ns: aida_core::local_pid_ns(),
+        boot: aida_core::local_boot_id(),
+    })
+}
+
+/// The owner line for `owner`.
+// trace:BUG-2412 | ai:claude
+pub(crate) fn owner_line(owner: &TrainOwner) -> String {
+    format!(
+        "{OWNER_LINE} host={} pid={} start={} pidns={} boot={}",
+        owner.host,
+        owner.pid,
+        owner.start.as_deref().unwrap_or_default(),
+        owner.pid_ns.as_deref().unwrap_or_default(),
+        owner.boot.as_deref().unwrap_or_default(),
+    )
+}
+
+/// The owner a train PR body records, or `None` when it has no well-formed
+/// owner line (a train opened before BUG-2412, or a hand-edited body).
+// trace:BUG-2412 | ai:claude
+pub(crate) fn parse_owner_line(body: &str) -> Option<TrainOwner> {
+    let rest = body
+        .lines()
+        .find_map(|l| l.trim_start().strip_prefix(OWNER_LINE))?;
+    let (mut host, mut pid, mut start, mut pid_ns, mut boot) = (None, None, None, None, None);
+    let present = |v: &str| Some(v.to_string()).filter(|v| !v.is_empty());
+    for field in rest.split_whitespace() {
+        match field.split_once('=')? {
+            ("host", v) if !v.is_empty() => host = Some(v.to_string()),
+            ("pid", v) => pid = v.parse::<u32>().ok().filter(|p| *p != 0),
+            ("start", v) => start = present(v),
+            ("pidns", v) => pid_ns = present(v),
+            ("boot", v) => boot = present(v),
+            _ => {}
+        }
+    }
+    Some(TrainOwner {
+        host: host?,
+        pid: pid?,
+        start,
+        pid_ns,
+        boot,
+    })
+}
+
+/// BUG-2412: whether an open train PR is abandoned — its body names an owner
+/// this process can see (same host, same boot, same PID namespace) whose
+/// process is gone or whose pid now belongs to another process. Any owner
+/// whose liveness cannot be read here is never judged abandoned and keeps
+/// blocking its riders: no owner line, another host, a missing or different
+/// boot id, or a missing, foreign or unresolvable PID namespace (a pid probed
+/// across namespaces names an unrelated process, or none).
+// trace:BUG-2412 | ai:claude
+pub(crate) fn train_abandoned(
+    body: &str,
+    our_host: &str,
+    alive: impl Fn(u32, Option<&str>) -> bool,
+) -> Option<TrainOwner> {
+    let owner = parse_owner_line(body)?;
+    if owner.host != our_host || owner.pid_ns.is_none() || owner.boot.is_none() {
+        return None;
+    }
+    // Reuse the cache lock's same-boot / same-namespace test: a recorded
+    // identity that differs from ours, or ours unresolvable, hides the pid.
+    let pid = aida_core::CacheLockInfo {
+        pid: owner.pid,
+        boot_id: owner.boot.clone(),
+        pid_ns: owner.pid_ns.clone(),
+        ..Default::default()
+    }
+    .visible_pid()?;
+    (!alive(pid, owner.start.as_deref())).then_some(owner)
+}
+
 /// The live trains a second train must not double-carry: every open
 /// `train/*` PR with its parsed members line, and every train PR named by a
 /// live train merge-lease and not already open (its PR can close mid-land
 /// while the lease is still held, so its members are read by number). A
 /// closed train PR with no live lease, or a lease whose holder is dead or
-/// TTL-expired, is stale and appears in neither list.
-// trace:BUG-2220 | ai:claude
+/// TTL-expired, is stale and appears in neither list. BUG-2412: an open train
+/// PR whose recorded owner is dead ([`train_abandoned`]) is not live either;
+/// it is returned in the third list for the caller to close — unless a live
+/// train merge-lease still names it, in which case it stays open and blocking.
+// trace:BUG-2220 trace:BUG-2412 | ai:claude
 #[allow(clippy::type_complexity)]
 fn live_trains(
     main_worktree: &Path,
 ) -> Result<(
     Vec<(u64, Option<Vec<(u64, String)>>)>,
     Vec<(u64, Option<Vec<(u64, String)>>)>,
+    Vec<(u64, String, TrainOwner)>,
 )> {
     #[derive(serde::Deserialize)]
     struct Row {
@@ -1466,18 +1576,35 @@ fn live_trains(
         ],
     )?;
     let rows: Vec<Row> = serde_json::from_str(&raw).context("could not parse `gh pr list` JSON")?;
-    let open: Vec<(u64, Option<Vec<(u64, String)>>)> = rows
+    let our_host = crate::coordination::hostname();
+    let leases: Vec<crate::merge_lock::Holder> = crate::merge_lock::live_status(main_worktree)
+        .into_iter()
+        .map(|(_, holder)| holder)
+        .filter(|holder| holder.note == TRAIN_LEASE_NOTE && holder.pr.is_some())
+        .collect();
+    let mut open: Vec<(u64, Option<Vec<(u64, String)>>)> = Vec::new();
+    let mut abandoned: Vec<(u64, String, TrainOwner)> = Vec::new();
+    for r in rows
         .into_iter()
         .filter(|r| r.head_ref.starts_with(BRANCH_PREFIX))
-        .map(|r| (r.number, parse_members_line(&r.body)))
-        .collect();
+    {
+        match train_abandoned(
+            &r.body,
+            &our_host,
+            aida_core::liveness::process_identity_is_alive,
+        ) {
+            // A live train lease on this PR means a train is still landing
+            // it: never close it.
+            Some(owner) if !leases.iter().any(|h| h.pr == Some(r.number)) => {
+                abandoned.push((r.number, r.head_ref, owner))
+            }
+            _ => open.push((r.number, parse_members_line(&r.body))),
+        }
+    }
     let mut leased: Vec<(u64, Option<Vec<(u64, String)>>)> = Vec::new();
-    for (_, holder) in crate::merge_lock::live_status(main_worktree) {
+    for holder in leases {
         let Some(train) = holder.pr else { continue };
-        if holder.note != TRAIN_LEASE_NOTE
-            || open.iter().any(|(n, _)| *n == train)
-            || leased.iter().any(|(n, _)| *n == train)
-        {
+        if open.iter().any(|(n, _)| *n == train) || leased.iter().any(|(n, _)| *n == train) {
             continue;
         }
         // An unreadable body names nobody (the rider gate fails open, as for
@@ -1504,7 +1631,53 @@ fn live_trains(
         });
         leased.push((train, parse_members_line(&body)));
     }
-    Ok((open, leased))
+    Ok((open, leased, abandoned))
+}
+
+/// Why an abandoned train PR is closed, as its closing comment says.
+// trace:BUG-2412 | ai:claude
+pub(crate) fn abandoned_train_note(owner: &TrainOwner) -> String {
+    format!(
+        "Closed by a later `aida pr train`: the train that opened this PR (pid {} on {}) \
+         is no longer running, so the PR is abandoned. Its members ride the next train.",
+        owner.pid, owner.host
+    )
+}
+
+/// Close abandoned train PR `train` and delete its branch; a dry run only
+/// says it would. Failures warn: the train is already excluded from the
+/// rider gate, so a failed close never blocks this train.
+// trace:BUG-2412 | ai:claude
+fn close_abandoned_train(
+    main_worktree: &Path,
+    train: u64,
+    branch: &str,
+    owner: &TrainOwner,
+    dry_run: bool,
+) {
+    if dry_run {
+        println!(
+            "  train PR #{train} is abandoned (its owner pid {} is gone); \
+             a real run closes it",
+            owner.pid
+        );
+        return;
+    }
+    let note = abandoned_train_note(owner);
+    match gh_stdout(
+        main_worktree,
+        &["pr", "close", &train.to_string(), "--comment", &note],
+    ) {
+        Ok(_) => println!(
+            "  closed abandoned train PR #{train} (its owner pid {} is gone)",
+            owner.pid
+        ),
+        Err(e) => eprintln!("  warning: could not close abandoned train PR #{train}: {e:#}"),
+    }
+    let _ = origin_git(
+        main_worktree,
+        &["push", "--quiet", "origin", "--delete", branch],
+    );
 }
 
 /// The member gate, live.
@@ -1884,7 +2057,9 @@ impl TrainForge for LiveTrainForge<'_> {
                 branch: branch.to_string(),
                 base: self.base.clone(),
                 title: format!("[train] land {}", prs.join(", ")),
-                body: train_pr_body(train),
+                // BUG-2412: record the owner so a later train can tell this
+                // train died. trace:BUG-2412 | ai:claude
+                body: format!("{}{}\n", train_pr_body(train), owner_line_for_self()),
                 draft: false,
             },
             &specs,
@@ -2677,7 +2852,13 @@ pub(crate) fn pr_train_handler_with_dispatch_ctx(
     // second train from carrying a PR already riding a live one — wasted CI
     // and a confused "who landed it". Read the live trains once and refuse
     // such candidates, naming the other train. trace:BUG-2220 | ai:claude
-    let (open_trains, leased_trains) = live_trains(&main_worktree)?;
+    let (open_trains, leased_trains, abandoned) = live_trains(&main_worktree)?;
+    // BUG-2412: a train PR whose owning process died (a killed or timed-out
+    // `aida pr train`) would otherwise block its riders forever. Close it so
+    // its members ride this train. trace:BUG-2412 | ai:claude
+    for (train, branch, owner) in &abandoned {
+        close_abandoned_train(&main_worktree, *train, branch, owner, opts.dry_run);
+    }
     let mut members = Vec::new();
     let mut refused = Vec::new();
     let mut waiting = Vec::new();

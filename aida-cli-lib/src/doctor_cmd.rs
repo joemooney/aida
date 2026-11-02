@@ -3111,6 +3111,15 @@ mod bug_1738_mirror_hook_drift_tests {
 /// config reads as unknown rather than as a false alarm.
 // trace:BUG-1700 | ai:claude
 fn scan_agent_worktree_trust(project_root: &std::path::Path) -> Vec<DoctorFinding> {
+    // BUG-2394: the Claude Code folder-trust modal only matters where Claude
+    // launches; a project whose `[agents] enabled` list omits claude must not
+    // be warned about ~/.claude.json.
+    // trace:BUG-2394 | ai:claude
+    if !claude_launch_active(
+        crate::init_cmd::read_enabled_agent_selection(project_root).map(|s| s.claude),
+    ) {
+        return Vec::new();
+    }
     let configured = crate::worktree_pool_config_worktree_parent(project_root);
     let resolved = resolve_worktree_parent(project_root, configured.as_deref());
     let parent = normalize_path_lexically(&resolved);
@@ -3131,6 +3140,17 @@ fn scan_agent_worktree_trust(project_root: &std::path::Path) -> Vec<DoctorFindin
         .unwrap_or_default();
     seat_trust_findings(&mut findings, enabled, &stale);
     findings
+}
+
+/// BUG-2394: whether Claude is a launch vendor for this project. Only an
+/// explicit `[agents] enabled` list that omits claude turns it off
+/// (`enabled_claude == Some(false)`). `[agents] vendor` names the DEFAULT
+/// vendor and deactivates nothing: with no enabled list every vendor is
+/// enabled, and a `vendor = "codex"` project still launches Claude (reviewer
+/// lanes, `--vendor claude`, bg seats). Pure.
+// trace:BUG-2394 | ai:claude
+pub(crate) fn claude_launch_active(enabled_claude: Option<bool>) -> bool {
+    enabled_claude.unwrap_or(true)
 }
 
 /// BUG-049: fold the per-seat pre-trust state into the worktree-trust findings.
@@ -3785,6 +3805,46 @@ mod bug_1744_trust_breadth_tests {
         drop(scan_agent_worktree_trust(project_root.path()));
 
         assert_eq!(std::fs::read(&config_path).unwrap(), before);
+    }
+
+    /// BUG-2394: run the trust scan with no folder trusted and the project's
+    /// `.aida/config.toml` set to `config_toml`.
+    // trace:BUG-2394 | ai:claude
+    fn trust_scan_with_config(config_toml: &str) -> Vec<DoctorFinding> {
+        let fake_home = tempfile::tempdir().unwrap();
+        let project_root = tempfile::tempdir().unwrap();
+        std::fs::write(fake_home.path().join(".claude.json"), r#"{"projects":{}}"#).unwrap();
+        std::fs::create_dir_all(project_root.path().join(".aida")).unwrap();
+        std::fs::write(project_root.path().join(".aida/config.toml"), config_toml).unwrap();
+        let fake_home_path = fake_home.path().to_str().unwrap();
+        let _env = crate::test_env::EnvVarsGuard::set(&[("HOME", fake_home_path)]);
+        scan_agent_worktree_trust(project_root.path())
+    }
+
+    // `[agents] vendor` is only the default vendor: with no enabled list Claude
+    // still launches, so its folder-trust check must still run.
+    // trace:BUG-2394 | ai:claude
+    #[test]
+    fn bug_2394_codex_default_vendor_keeps_the_claude_trust_check() {
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
+        let findings = trust_scan_with_config("[agents]\nvendor = \"codex\"\n");
+        assert!(
+            findings.iter().any(|f| f.id == "worktree-folder-trust"),
+            "vendor=codex with no enabled list must keep the Claude trust check: {findings:?}"
+        );
+    }
+
+    // trace:BUG-2394 | ai:claude
+    #[test]
+    fn bug_2394_enabled_list_without_claude_silences_the_claude_trust_check() {
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
+        let findings =
+            trust_scan_with_config("[agents]\nvendor = \"codex\"\nenabled = [\"codex\"]\n");
+        assert!(findings.is_empty(), "{findings:?}");
     }
 }
 

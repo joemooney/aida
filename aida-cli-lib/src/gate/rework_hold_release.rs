@@ -608,6 +608,75 @@ struct AutoReleaseIo<'a> {
     labels: &'a dyn Fn() -> Result<()>,
 }
 
+/// BUG-2403: the labels an arming key `key` is read under — every label
+/// the committed store snapshot proves for the ONE requirement it names
+/// ([`crate::gate::review_alias::snapshot_labels`]). A change key, or a key
+/// whose identity cannot be proved (no git-canonical store, dirt, a moving
+/// HEAD, ambiguity), is read under its literal label only: unproved labels
+/// bridge nothing, and the literal read keeps every existing refusal.
+// trace:BUG-2403 | ai:claude
+pub(crate) fn arming_labels(root: &Path, key: &str) -> Vec<String> {
+    match crate::gate::review_alias::snapshot_labels(root, key) {
+        Ok(labels) if labels.len() > 1 => labels,
+        _ => vec![key.to_string()],
+    }
+}
+
+/// `ids` plus every label [`arming_labels`] proves for each, deduplicated
+/// case-insensitively, so the verdict corpus a release reconciles holds
+/// every label's record of each covered requirement.
+// trace:BUG-2403 | ai:claude
+pub(crate) fn with_proved_labels(root: &Path, ids: Vec<String>) -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    for id in ids {
+        for label in std::iter::once(id.clone()).chain(arming_labels(root, &id)) {
+            if !out.iter().any(|o| o.eq_ignore_ascii_case(&label)) {
+                out.push(label);
+            }
+        }
+    }
+    out
+}
+
+/// The arming key's current verdict body, selected once across
+/// [`arming_labels`]. Ambiguous or refused evidence refuses the release; it
+/// never reads as a missing verdict or falls back to an older approval.
+// trace:BUG-2403 | ai:claude
+pub(crate) fn read_arming_body(root: &Path, project: &Path, key: &str) -> Result<Value> {
+    use crate::gate::review_alias::{AliasSelection, Selector};
+    let labels = arming_labels(root, key);
+    if labels.len() > 1 {
+        let ids: Vec<&str> = labels.iter().map(String::as_str).collect();
+        return match Selector::new(root).select(&ids) {
+            AliasSelection::Selected(s) => Ok(serde_json::from_str(&s.body)?),
+            AliasSelection::Absent => bail!("arming verdict {key} is missing"),
+            other => bail!(
+                "arming verdict {key} cannot be selected across its labels: {}",
+                other.unavailable_reason().unwrap_or_default()
+            ),
+        };
+    }
+    let current = rv::current_verdict(root, key)
+        .or_else(|| rv::current_verdict(project, key))
+        .with_context(|| format!("arming verdict {key} is missing"))?;
+    Ok(serde_json::from_str(&current.body)?)
+}
+
+/// The retained round history of every label in [`arming_labels`], so each
+/// arming refusal recorded under any label of the requirement stays in the
+/// history the approval must be strictly newer than.
+// trace:BUG-2403 | ai:claude
+pub(crate) fn read_arming_history(root: &Path, key: &str) -> Result<RetainedHistory> {
+    let labels = arming_labels(root, key);
+    let mut history = RetainedHistory::projected(root, &labels[0])?;
+    for label in &labels[1..] {
+        let more = RetainedHistory::projected(root, label)?;
+        history.location = format!("{}; {}", history.location, more.location);
+        history.archived.extend(more.archived);
+    }
+    Ok(history)
+}
+
 pub(crate) fn auto_release(project: &Path, pr: u64) -> Result<Outcome> {
     let root = crate::main_worktree_root_from(project);
     let Some(hold) = mh::read_hold_record(&root, pr) else {
@@ -635,7 +704,9 @@ pub(crate) fn auto_release(project: &Path, pr: u64) -> Result<Outcome> {
                 let mut sink = crate::network_retry::StderrSink;
                 let headlines = forge.change_commit_headlines(pr, &mut sink)?;
                 let title = forge.change_metadata(pr, &mut sink)?.title;
-                let ids = covered_spec_ids(&headlines, &title, &hold);
+                // BUG-2403: each covered spec's proved labels join the corpus.
+                // trace:BUG-2403 | ai:claude
+                let ids = with_proved_labels(&root, covered_spec_ids(&headlines, &title, &hold));
                 let store = crate::pr_lookup::load_review_story_inventory(&root)
                     .context("covered spec store is unreadable; human clear required")?;
                 Ok((ids, store))
@@ -645,13 +716,12 @@ pub(crate) fn auto_release(project: &Path, pr: u64) -> Result<Outcome> {
             // it), from the shared store root, never from a verdict file.
             // trace:TASK-1801 trace:BUG-2186 | ai:claude
             // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
-            read_body: &|key| {
-                let current = rv::current_verdict(&root, key)
-                    .or_else(|| rv::current_verdict(project, key))
-                    .with_context(|| format!("arming verdict {key} is missing"))?;
-                Ok(serde_json::from_str(&current.body)?)
-            },
-            read_history: &|key| RetainedHistory::projected(&root, key),
+            // BUG-2403: a spec key is read across every label the store
+            // snapshot proves for it, on each pass (so a refusal or remap
+            // between passes changes the answer and refuses the release).
+            // trace:BUG-2403 | ai:claude
+            read_body: &|key| read_arming_body(&root, project, key),
+            read_history: &|key| read_arming_history(&root, key),
             read_corpus: &|ids| {
                 mh::corpus_gate_bodies(&[project, &root], pr, ids).map_err(anyhow::Error::msg)
             },
@@ -986,3 +1056,7 @@ mod bug_2186_tests;
 #[cfg(test)]
 #[path = "tests/bug_2123_composed_rework_release_tests.rs"]
 mod bug_2123_tests;
+
+#[cfg(test)]
+#[path = "tests/bug_2403_alias_release_tests.rs"]
+mod bug_2403_alias_release_tests;
