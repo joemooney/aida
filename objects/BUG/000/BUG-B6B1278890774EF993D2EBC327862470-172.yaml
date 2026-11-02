@@ -21,7 +21,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T07:26:20.914223641Z
-modified_at: 2026-11-02T06:55:02.038949060Z
+modified_at: 2026-11-02T06:56:52.942325524Z
 req_type: Bug
 tags:
 - architecture
@@ -498,6 +498,12 @@ comments:
   modified_at: 2026-11-02T06:47:10.051597347Z
   session_id: 01a19ae1acbb
   harness_version: 2.1.316 (Claude Code)
+- id: 01a19b0b-eece-7713-ac4e-5e322c8a5baf
+  author: joe
+  content: 'REWORK BRIEF (advisor, 2026-11-01 23:58 MST): the strict review at d39ccc8 is valid. Main brought in the managed Codex coordinator launches from #3217 (BUG-2389), which issue an advisor child grant but skip codex_tool_env::prepare_launch, so AC1 fails at this head. In this PR: (1) route every #3217 coordinator launch site through codex_tool_env::prepare_launch, and test that a coordinator-launched Codex tool shell keeps its delegated seat; (2) make the spawn ratchet enumerate Codex launch sites, so a new site that skips prepare_launch fails the test (one inventory, refuse unknown). No other changes. Gate: LIGHT, using cargo test -p aida-cli-lib with the codex_tool_env and spawn-ratchet filters, then make check-ci-fast. A strict delta review follows, and this ships supervised.'
+  created_at: 2026-11-02T06:56:52.942325524Z
+  modified_at: 2026-11-02T06:56:52.942325524Z
+  session_id: 1f56bd1e-c059-4f73-b8df-e18b2170fdfc
 history:
 - id: 01a19600-c769-7cd0-ba08-8d93975e3e3b
   author: joe
