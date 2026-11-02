@@ -3489,6 +3489,19 @@ pub(crate) fn session_start_with_receipt(
                 None => eprintln!("  {}", line.command.cyan()),
             }
         }
+        // STORY-2256: a hand-started Codex seat's SessionStart hook arms its
+        // mail wake; say so, and name the install command when it is needed.
+        // trace:STORY-2256 | ai:claude
+        let wake_project = main_worktree_root_from(&project_root);
+        if let Some(line) = crate::mail_wake::session_start_wake_line(
+            &vendor,
+            crate::agent_config::load_agents_tool_bool(&wake_project, "codex", "mail_wake")
+                .unwrap_or(None),
+            crate::mailbox_wake_run::service_installed(&wake_project),
+            &wake_project,
+        ) {
+            eprintln!("  {}", line.dimmed());
+        }
         eprintln!();
         eprintln!("When finished:");
         eprintln!("  {}", format!("aida session end {}", &id[..8]).dimmed());
