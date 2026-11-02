@@ -18,12 +18,12 @@ description: |-
   1. Wire `.codex/hooks.json` and `.codex/hooks/*.sh` into `Scaffolder::preview`, `apply`, `upgrade`, header injection (`mod.rs:607`), and `0o755` chmod (`mod.rs:2888`).
   2. Ensure worktree lane role/grant resolution works across Codex hooks and CLI invocations when `$CLAUDE_ENV_FILE` is absent.
   3. Add `.codex/` and `.agents/` to `EXCLUDE_PATTERNS` in `aida-commit-msg:99`, support `$aida-capture` in `aida-capture-prompt.sh`, and include `AIDA_SESSION_PROJECT` / `CODEX_PROJECT_DIR` in `aida-advisor-code-guard.sh`.
-status: InProgress
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T06:48:25.173889038Z
-modified_at: 2026-11-02T17:09:44.662334183Z
+modified_at: 2026-11-02T17:37:50.652522150Z
 req_type: Bug
 tags:
 - architecture
@@ -265,6 +265,20 @@ history:
   timestamp: 2026-11-02T17:09:45.992080633Z
   session_id: ee0bf351-6b17-486f-a38e-cfbb1343c426
   changes: []
+- id: 01a19d56-becd-7c21-8e75-1177ece2933b
+  author: aida-auto-bump
+  timestamp: 2026-11-02T17:37:50.285394613Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a19d56-c03c-7191-bb1f-dd373c75e271
+  timestamp: 2026-11-02T17:37:50.652517476Z
+  agent: aida
+  commit_sha: 51684a86699528b715c7c951b17cef2060aef03e
+  summary: 'Round 2: both round-1 rework items fixed (scaffold_codex_hooks writes header-wrapped handlers via wrap_with_aida_header + bug_2395_fresh_codex_init_is_not_scaffold_drift; guard trace tag on own line). A1-A4 + verify-only Part B meet all 3 acceptance criteria with tests; CI green at 294e697 (merge-hold-gate is the expected supervised hold).'
+  review_verdict: approved
 filed_at:
   code_sha: 6dc7d4977ac5e47c42ddfb26597fe3ec5fb70b60
   branch: main
@@ -277,3 +291,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-11-02T12:25:02.722927003Z
   implemented_by: joe
+  completed_at: 2026-11-02T17:37:50.285387113Z
+  completion_sha: 51684a86699528b715c7c951b17cef2060aef03e
