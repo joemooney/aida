@@ -2287,7 +2287,9 @@ case "$*" in
     if [ -f moving ] && [ -f viewed ]; then cat moved.json; else cat head.json; fi
     touch viewed ;;
   'api repos/{owner}/{repo}/branches/release%2Fnext/protection') if [ -f unavailable ]; then echo 'HTTP 403' >&2; exit 1; fi; cat protection.json ;;
-  'api repos/{owner}/{repo}/rules/branches/release%2Fnext') cat rules.json ;;
+  'api repos/{owner}/{repo}/rules/branches/release%2Fnext?per_page=100&page='*)
+    p=${2##*page=}
+    if [ -f "rules-$p.json" ]; then cat "rules-$p.json"; elif [ "$p" = 1 ]; then cat rules.json; else echo '[]'; fi ;;
   'pr checks '*) cat rows.json ;;
   *) echo "unexpected forge call: $*" >&2; exit 1 ;;
 esac
@@ -2397,6 +2399,40 @@ esac
     write(dir, "rules.json", r#"[{"type":"workflows"}]"#);
     assert!(host.train_ci_snapshot(&change, &tip, &[]).is_err());
     write(dir, "rules.json", "[]");
+    // A full first page is followed: a required context or an unsupported
+    // workflow rule on a later page is never dropped (GitHub pages rules).
+    // trace:BUG-2401 | ai:claude
+    let full_page = serde_json::to_string(&vec![
+        serde_json::json!({"type":"deletion"});
+        crate::status_prs::TRAIN_RULE_PAGE_SIZE
+    ])
+    .unwrap();
+    write(dir, "rules-1.json", &full_page);
+    write(
+        dir,
+        "rules-2.json",
+        r#"[{"type":"required_status_checks","parameters":{"required_status_checks":[{"context":"page-two-only"}]}}]"#,
+    );
+    match host.train_ci_snapshot(&change, &tip, &[]).unwrap() {
+        TrainCiReadiness::Missing(names) => assert_eq!(names, vec!["page-two-only".to_string()]),
+        other => panic!("later-page required check must be missing, got {other:?}"),
+    }
+    write(dir, "rules-2.json", r#"[{"type":"workflows"}]"#);
+    assert!(host.train_ci_snapshot(&change, &tip, &[]).is_err());
+    write(dir, "rules-2.json", r#"{"message":"Server Error"}"#);
+    assert!(host.train_ci_snapshot(&change, &tip, &[]).is_err());
+    // More full pages than the bound: incomplete policy refuses.
+    for page in 1..=crate::status_prs::TRAIN_RULE_PAGE_LIMIT {
+        write(dir, &format!("rules-{page}.json"), &full_page);
+    }
+    assert!(host
+        .train_ci_snapshot(&change, &tip, &[])
+        .unwrap_err()
+        .to_string()
+        .contains("policy incomplete"));
+    for page in 1..=crate::status_prs::TRAIN_RULE_PAGE_LIMIT {
+        std::fs::remove_file(dir.join(format!("rules-{page}.json"))).unwrap();
+    }
     write(
         dir,
         "protection.json",

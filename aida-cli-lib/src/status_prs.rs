@@ -986,6 +986,12 @@ pub(crate) fn required_status_checks_uncached(
     )
 }
 
+/// Effective-rules page size (GitHub's maximum) and the most pages a train
+/// readiness read follows before refusing the policy as incomplete.
+// trace:BUG-2401 | ai:claude
+pub(crate) const TRAIN_RULE_PAGE_SIZE: usize = 100;
+pub(crate) const TRAIN_RULE_PAGE_LIMIT: usize = 10;
+
 /// Fresh, base-specific protection and effective ruleset evidence for a train.
 /// Unlike observed `gh pr checks --required` rows, this includes contexts that
 /// have not registered yet. Unreadable or unsupported policy refuses readiness.
@@ -1021,14 +1027,31 @@ pub(crate) fn train_required_status_checks(
                 )
             })?
     };
-    let rules = read(&format!("repos/{{owner}}/{{repo}}/rules/branches/{branch}"))?;
+    // GitHub pages effective rules (default 30 per page). Every page is read;
+    // a page count past the bound refuses rather than judging a partial policy.
+    // trace:BUG-2401 | ai:claude
+    let mut complete = false;
+    for page in 1..=TRAIN_RULE_PAGE_LIMIT {
+        let rules = read(&format!(
+            "repos/{{owner}}/{{repo}}/rules/branches/{branch}?per_page={TRAIN_RULE_PAGE_SIZE}&page={page}"
+        ))?;
+        anyhow::ensure!(
+            rules.status.success(),
+            "required-check rules unavailable (page {page}): {}",
+            String::from_utf8_lossy(&rules.stderr).trim()
+        );
+        let value: serde_json::Value = serde_json::from_slice(&rules.stdout)?;
+        let len = value.as_array().map_or(0, Vec::len);
+        required.extend(train_rule_contexts(&value)?);
+        if len < TRAIN_RULE_PAGE_SIZE {
+            complete = true;
+            break;
+        }
+    }
     anyhow::ensure!(
-        rules.status.success(),
-        "required-check rules unavailable: {}",
-        String::from_utf8_lossy(&rules.stderr).trim()
+        complete,
+        "required-check rules exceed {TRAIN_RULE_PAGE_LIMIT} pages; policy incomplete"
     );
-    let value: serde_json::Value = serde_json::from_slice(&rules.stdout)?;
-    required.extend(train_rule_contexts(&value)?);
     required.sort();
     required.dedup();
     Ok(required)
