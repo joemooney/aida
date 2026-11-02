@@ -708,3 +708,30 @@ fn registry_id_direct_mail_matches_own_inbox() {
     assert!(!unknown.any());
     assert!(items.iter().all(|b| !b.id.ends_with(":by-id")));
 }
+
+// Only overdue requests/handoffs to a live reader are backlog: `[fyi]` mail
+// and mail to a recipient no live reader answers for are ignored.
+// trace:TASK-b6b1278890774ef993d2ebc327862470-690 | ai:claude
+#[test]
+fn fyi_and_mail_to_unknown_recipients_are_ignored() {
+    let _env = isolated();
+    let r = mail_repo();
+    reader(&r, std::process::id(), "codex", "reader-b");
+    let ts = (Utc::now() - Duration::hours(2)).timestamp_millis();
+    let mut fyi = mail("fyi", "reader-b", ts, false);
+    fyi.intent = Intent::Fyi;
+    crate::mailbox_store::write_message(&r.main, &fyi).unwrap();
+    direct(&r.main, "stranger", "reader-zz");
+    direct(&r.main, "other-role", "product");
+    direct(&r.main, "real", "reader-b");
+    let (items, unknown) = inspect_backlog(
+        &r.main,
+        &r.store,
+        &Policy::default(),
+        Utc::now(),
+        &explicit_limits(),
+    );
+    assert!(!unknown.any());
+    let ids: Vec<_> = items.iter().map(|b| b.id.as_str()).collect();
+    assert_eq!(ids, ["reader-b:real"]);
+}
