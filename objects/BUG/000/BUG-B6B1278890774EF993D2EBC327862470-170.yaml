@@ -28,7 +28,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T06:49:16.503535709Z
-modified_at: 2026-11-02T05:09:39.197391578Z
+modified_at: 2026-11-02T06:05:55.854193637Z
 req_type: Bug
 tags:
 - audit
@@ -71,6 +71,16 @@ comments:
   modified_at: 2026-11-02T04:04:14.419828939Z
   session_id: 01a19a69fc5e
   harness_version: 2.1.316 (Claude Code)
+- id: 01a19add-490e-72b3-9243-c77ed8fdfe36
+  author: joe
+  content: |
+    REWORK BRIEF (advisor, 2026-11-01 22:58 MST): PR #3233, CI red at 4738d5bb with two failures caused by this PR.
+    1. aida-cli/tests/queue_work_dry_run.rs:1509 `task_1337_post_setup_launch_error_prints_manual_guided_continuation`: the fixture is codex-only and now hits `failed to exec codex: No such file or directory`. The manual/guided continuation text the test asserts no longer prints, so restore that continuation for the vendor-routed path (or fix the hint wording the test pins if the change was intended, and say so in the commit).
+    2. aida-cli-lib story_1888 `gate_kernels_reach_outside_only_through_listed_leaves`: gate/mandate_drive.rs now imports crate::session::HeadlessVendor and crate::vendor_hints::agent_new_cmd. Do not import them inside gate/: pass the vendor and rendered command in from the caller (mandate_drive.rs outside gate/), or move a pure helper onto gate/kernel_deps.rs. Do not add FACADE_EXTERNAL_LEAVES entries.
+    Gate: LIGHT. Run `cargo test -p aida-cli --test queue_work_dry_run task_1337` and `cargo test -p aida-cli-lib story_1888_gate_paths`, then make check-ci-fast, then push. No other findings to bundle.
+  created_at: 2026-11-02T06:05:55.854193637Z
+  modified_at: 2026-11-02T06:05:55.854193637Z
+  session_id: 1f56bd1e-c059-4f73-b8df-e18b2170fdfc
 history:
 - id: 01a195de-cf31-72b1-94fc-417a657ca801
   author: joe
