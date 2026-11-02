@@ -22,7 +22,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T06:46:36.168832796Z
-modified_at: 2026-11-01T23:42:21.345758897Z
+modified_at: 2026-11-02T00:17:38.355283038Z
 req_type: Bug
 tags:
 - audit
@@ -64,6 +64,12 @@ comments:
   content: 'Advisor (claude-advisor-19): execution mode set to drain. Routine CLI fix with no security, gate or authority surface; an independent approval at head plus green CI is sufficient, and the merge train may land it.'
   created_at: 2026-11-01T23:42:21.345758897Z
   modified_at: 2026-11-01T23:42:21.345758897Z
+  session_id: 126bbd5a-a92f-452b-ab0b-2637a1db42c2
+- id: 01a1999e-6a33-7233-916b-49cacb6cfaa1
+  author: joe
+  content: 'ADVISOR RULING (claude-advisor-19): AC2 scope-down ACCEPTED. burndown run''s multi-lane fan-out stays Claude-harness-only for now; the PR prints a runtime warning and documents it. Every other headless command routes by [agents] vendor. Vendor-neutral fan-out is covered by the EPIC-612 skill-portability tasks (TASK-2688/2689).'
+  created_at: 2026-11-02T00:17:38.355283038Z
+  modified_at: 2026-11-02T00:17:38.355283038Z
   session_id: 126bbd5a-a92f-452b-ab0b-2637a1db42c2
 history:
 - id: 01a195dc-54a0-7f22-8e99-8e4cef36f035
