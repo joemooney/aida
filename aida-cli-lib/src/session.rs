@@ -1463,28 +1463,44 @@ pub(crate) fn codex_inline_prompt(prompt: &str) -> Option<String> {
     }
 }
 
-/// Render interactive AIDA invocations, including standalone invocation lines
-/// after an agent launch-context preamble. Ordinary prose is left verbatim.
+/// Render the ONE interactive AIDA invocation line of a Codex launch prompt.
+///
+/// Only the intended invocation is expanded: the first line, or — when the
+/// prompt opens with the agent launch-context preamble — the first `/aida-*`
+/// line inside that preamble paragraph (e.g. `aida derisk`). Every other line,
+/// including pasted usage blocks such as `/aida-review --pr 7   Explicit PR
+/// number` later in free-form `--prompt` text, stays verbatim so several
+/// workflow bodies are never inlined mid-prompt.
+///
 /// Commands without a portable embedded body use Codex's installed-skill syntax;
 /// the explicit stop instruction prevents an unavailable skill being invented.
-// trace:BUG-2387 | ai:codex
+// trace:BUG-2387 | ai:claude
 pub(crate) fn codex_interactive_prompt(prompt: &str) -> String {
-    prompt
-        .split('\n')
-        .map(|line| {
-            let Some(command) = line.strip_prefix("/aida-") else {
-                return line.to_string();
-            };
-            codex_inline_prompt(line).unwrap_or_else(|| {
-                format!(
-                    "$aida-{command}\n\nUse the installed Codex skill requested above. \
-                     If it is unavailable, stop and report that the skill is unavailable; \
-                     do not reconstruct or claim to have run its workflow."
-                )
-            })
-        })
-        .collect::<Vec<_>>()
-        .join("\n")
+    let mut lines: Vec<&str> = prompt.split('\n').collect();
+    let target = if lines[0].starts_with("/aida-") {
+        Some(0)
+    } else if lines[0] == crate::agent_launch_prompt::LAUNCH_CONTEXT_PREAMBLE {
+        lines
+            .iter()
+            .take_while(|line| !line.trim().is_empty())
+            .position(|line| line.starts_with("/aida-"))
+    } else {
+        None
+    };
+    let Some(index) = target else {
+        return prompt.to_string();
+    };
+    let line = lines[index];
+    let rendered = codex_inline_prompt(line).unwrap_or_else(|| {
+        format!(
+            "${}\n\nUse the installed Codex skill requested above. \
+             If it is unavailable, stop and report that the skill is unavailable; \
+             do not reconstruct or claim to have run its workflow.",
+            &line[1..]
+        )
+    });
+    lines[index] = &rendered;
+    lines.join("\n")
 }
 
 /// BUG-806: the PATH a phase session should run with — the directory of the
@@ -8501,6 +8517,46 @@ mod tests {
             assert!(body.starts_with(&prompt.replacen('/', "$", 1)));
             assert!(body.contains("If it is unavailable, stop"));
         }
+    }
+
+    // BUG-2387 review round 2: only the intended invocation line expands —
+    // the first line, or the first `/aida-*` line inside the launch-context
+    // preamble paragraph. Pasted usage lines later in free-form prompt text
+    // (column-0 `/aida-review --pr 7 ...`) stay verbatim.
+    // trace:BUG-2387 | ai:claude
+    #[test]
+    fn interactive_codex_prompt_expands_only_the_invocation_line() {
+        let usage = "/aida-review --pr 7   Explicit PR number\n/aida-plan BUG-1";
+        // Free-form prose first: nothing expands, even column-0 usage lines.
+        let prose = format!("Please explain these usages:\n{usage}");
+        assert_eq!(codex_interactive_prompt(&prose), prose);
+
+        // Invocation first: only line 0 expands; the pasted block is kept.
+        let first = format!("/aida-pickup BUG-2387\n\nNotes:\n{usage}");
+        let body = codex_interactive_prompt(&first);
+        assert!(!body.starts_with('/'), "{body}");
+        assert!(body.ends_with(&format!("Notes:\n{usage}")), "{body}");
+        assert!(
+            !body.contains("# Plan Requirement Implementation"),
+            "second workflow inlined: {body}"
+        );
+
+        // Preamble: the invocation inside the preamble paragraph expands;
+        // `/aida-*` lines after the paragraph break do not.
+        let preamble = format!(
+            "{}\ncat \"$AIDA_AGENT_CONTEXT_FILE\"\n/aida-derisk BUG-2387\n\nUsage:\n{usage}",
+            crate::agent_launch_prompt::LAUNCH_CONTEXT_PREAMBLE
+        );
+        let body = codex_interactive_prompt(&preamble);
+        assert!(
+            !body.contains("$AIDA_AGENT_CONTEXT_FILE\"\n/aida-derisk"),
+            "{body}"
+        );
+        assert!(
+            body.contains("Codex prompt arguments: `BUG-2387`"),
+            "{body}"
+        );
+        assert!(body.ends_with(&format!("Usage:\n{usage}")), "{body}");
     }
 
     // BUG-743: when the queue/do resolver reports the uniform
