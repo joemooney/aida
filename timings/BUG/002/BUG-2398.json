@@ -1,0 +1,144 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-2398",
+  "publishes": [
+    {
+      "at": "2026-11-02T11:14:24.194462Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-01T12:21:34.585645288Z",
+      "spec": "BUG-2398",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "STRICT full review: companion constructor gap, effective metadata override/probe gap, four CI ratchets and fresh authorized dispatch/reviewer lifecycle regressions; native host fixture pass acknowledged.",
+        "recovery_hint": "address the review findings, move BUG-B6B1278890774EF993D2EBC327862470-172 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-11-01T12:24:24.124298791Z",
+      "spec": "BUG-2398",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "Final STRICT full review: effective child metadata override/probe integrity gap, four CI ratchets and fresh authorized dispatch/reviewer lifecycle failures. Preliminary exec-companion finding withdrawn: caller forbids companion. Native host fixture pass acknowledged.",
+        "recovery_hint": "address the review findings, move BUG-B6B1278890774EF993D2EBC327862470-172 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-11-01T12:26:39.503326702Z",
+      "spec": "BUG-2398",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-01T14:29:24.841908484Z",
+      "spec": "BUG-2398",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "STRICT: effective-context and authority rework conforms; new hidden-option golden snapshot breaks required CI, and exact-newhead native host completion proof remains absent.",
+        "recovery_hint": "address the review findings, move BUG-B6B1278890774EF993D2EBC327862470-172 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-11-01T14:55:34.580680545Z",
+      "spec": "BUG-2398",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-01T16:10:14.204401121Z",
+      "spec": "BUG-2398",
+      "seat": "reviewer",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "verdict": "APPROVED",
+        "reviewed_sha": "f20ed5bfbdd9b8f618658f7bb97b689014241393"
+      }
+    },
+    {
+      "ts": "2026-11-02T06:57:02.630544755Z",
+      "spec": "BUG-2398",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-02T09:27:54.675280789Z",
+      "spec": "BUG-2398",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-02T10:06:03.098444247Z",
+      "spec": "BUG-2398",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-02T11:11:12.121341937Z",
+      "spec": "BUG-2398",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 3207
+      }
+    },
+    {
+      "ts": "2026-11-02T11:11:24.619368752Z",
+      "spec": "BUG-2398",
+      "seat": "advisor",
+      "kind": {
+        "event": "GateHeld",
+        "gate": "closure-hold",
+        "reason": "merged (2b9eaa5) but completion held at Done — closure criteria unmet: \"tag `closure:pending` is set\"",
+        "actor": "joe"
+      }
+    },
+    {
+      "ts": "2026-11-02T11:14:24.053528411Z",
+      "spec": "BUG-2398",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "2b9eaa5c3210f8343c475e9993c55cbadb9083d5",
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
