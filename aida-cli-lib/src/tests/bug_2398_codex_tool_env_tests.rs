@@ -514,10 +514,36 @@ const LAUNCH_INVENTORY: &[(&str, usize, Finalization)] = &[
 
 /// Child-launch markers in whitespace-normalized source: a grant selector
 /// assigned to a Command, the shared seat-env helper, or a coordinator spawn.
+/// The selector counts in every spelling a launch site could use: the
+/// fully-qualified or imported `GRANT_ENV` path, an import or `let` alias of
+/// it, the literal `"AIDA_SESSION_GRANT"`, each as the key of `.env(..)` or
+/// anywhere inside one `.envs(..)` call.
+// trace:TASK-2759 | ai:claude
 fn launch_markers(normalized: &str) -> usize {
-    normalized
-        .matches(".env(crate::gate::seat_authority::GRANT_ENV")
-        .count()
+    let aliases = grant_env_aliases(normalized);
+    let is_key = |arg: &str| {
+        let arg = arg.trim_start_matches('&');
+        arg == "\"AIDA_SESSION_GRANT\""
+            || arg == "GRANT_ENV"
+            || arg.ends_with("::GRANT_ENV")
+            || aliases.iter().any(|alias| alias == arg)
+    };
+    let env_sites = normalized
+        .split(".env(")
+        .skip(1)
+        .filter(|call| is_key(call.split([',', ')']).next().unwrap_or_default()))
+        .count();
+    let envs_sites = normalized
+        .split(".envs(")
+        .skip(1)
+        .filter(|call| {
+            call_args(call)
+                .split(|c: char| !(c.is_alphanumeric() || c == '_' || c == ':' || c == '"'))
+                .any(is_key)
+        })
+        .count();
+    env_sites
+        + envs_sites
         + normalized
             .matches("apply_headless_child_seat_env(&mut")
             .count()
@@ -527,6 +553,105 @@ fn launch_markers(normalized: &str) -> usize {
         - normalized
             .matches("fncoordinator_status_with_handle_guard(")
             .count()
+}
+
+/// The text of one call's arguments: `rest` starts just after the opening
+/// parenthesis; stops at its matching close.
+fn call_args(rest: &str) -> &str {
+    let mut depth = 0usize;
+    for (at, c) in rest.char_indices() {
+        match c {
+            '(' | '[' | '{' => depth += 1,
+            ')' | ']' | '}' if depth == 0 => return &rest[..at],
+            ')' | ']' | '}' => depth -= 1,
+            _ => {}
+        }
+    }
+    rest
+}
+
+/// Local names bound to the grant selector: `use ..GRANT_ENV as NAME` and
+/// `let NAME = ..GRANT_ENV;` (or the literal) in normalized source.
+fn grant_env_aliases(normalized: &str) -> Vec<String> {
+    let ident = |s: &str| {
+        s.chars()
+            .take_while(|c| c.is_alphanumeric() || *c == '_')
+            .collect::<String>()
+    };
+    let mut aliases: Vec<String> = normalized
+        .split("GRANT_ENVas")
+        .skip(1)
+        .map(ident)
+        .filter(|name| !name.is_empty())
+        .collect();
+    for binding in normalized.split("let").skip(1) {
+        let binding = binding.strip_prefix("mut").unwrap_or(binding);
+        let name = ident(binding);
+        let rest = &binding[name.len()..];
+        let value = match rest.chars().next() {
+            Some('=') => &rest[1..],
+            Some(':') => rest.split_once('=').map_or("", |(_, v)| v),
+            _ => continue,
+        };
+        let value = value.split(';').next().unwrap_or_default();
+        if !name.is_empty()
+            && (value == "GRANT_ENV"
+                || value.ends_with("::GRANT_ENV")
+                || value == "\"AIDA_SESSION_GRANT\"")
+        {
+            aliases.push(name);
+        }
+    }
+    aliases
+}
+
+/// Whether the final ratchet would flag `src` as an unlisted launch site if
+/// it were the production file `rel`.
+fn flagged_as_unlisted(rel: &str, src: &str) -> bool {
+    let normalized = src.split_whitespace().collect::<String>();
+    launch_markers(&normalized) > 0 && !LAUNCH_INVENTORY.iter().any(|(f, ..)| *f == rel)
+}
+
+// One negative test per selector spelling the inventory scan must catch.
+// trace:TASK-2759 | ai:claude
+#[test]
+fn task_2759_ratchet_flags_imported_grant_env_and_aliases() {
+    let imported = "use crate::gate::seat_authority::GRANT_ENV;\n\
+                    fn launch(cmd: &mut Command, g: &str) { cmd.env(GRANT_ENV, g); }";
+    assert!(flagged_as_unlisted("fixture_imported.rs", imported));
+    let renamed = "use crate::gate::seat_authority::GRANT_ENV as SELECTOR;\n\
+                   fn launch(cmd: &mut Command, g: &str) { cmd.env(SELECTOR, g); }";
+    assert!(flagged_as_unlisted("fixture_renamed.rs", renamed));
+    let bound = "fn launch(cmd: &mut Command, g: &str) {\n\
+                 let key = crate::gate::seat_authority::GRANT_ENV;\n cmd.env(key, g); }";
+    assert!(flagged_as_unlisted("fixture_bound.rs", bound));
+}
+
+// trace:TASK-2759 | ai:claude
+#[test]
+fn task_2759_ratchet_flags_literal_grant_selector() {
+    let literal = "fn launch(cmd: &mut Command, g: &str) {\n\
+                   cmd.env(\"AIDA_SESSION_GRANT\", g); }";
+    assert!(flagged_as_unlisted("fixture_literal.rs", literal));
+}
+
+// trace:TASK-2759 | ai:claude
+#[test]
+fn task_2759_ratchet_flags_envs_array_grant_selector() {
+    let envs = "fn launch(cmd: &mut Command, g: &str) {\n\
+                cmd.envs([(\"AIDA_SESSION_ROLE\", \"reviewer\"),\n\
+                (crate::gate::seat_authority::GRANT_ENV, g)]); }";
+    assert!(flagged_as_unlisted("fixture_envs.rs", envs));
+    let envs_literal = "fn launch(cmd: &mut Command, g: &str) {\n\
+                        cmd.envs([(\"AIDA_SESSION_GRANT\", g)]); }";
+    assert!(flagged_as_unlisted("fixture_envs_literal.rs", envs_literal));
+    // A grant-free `.envs(..)` and a selector that is only removed or read
+    // are not launch sites.
+    let clean = "fn launch(cmd: &mut Command) {\n\
+                 cmd.envs(crate::headless_wait_envs(k, v))\n\
+                 .env_remove(crate::gate::seat_authority::GRANT_ENV);\n\
+                 let _ = std::env::var(GRANT_ENV); }";
+    assert!(!flagged_as_unlisted("fixture_clean.rs", clean));
 }
 
 fn production_sources(dir: &Path, out: &mut Vec<std::path::PathBuf>) {
