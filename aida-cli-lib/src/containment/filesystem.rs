@@ -56,6 +56,10 @@ impl Boundary {
             boundary.add(&source, dest, true)?;
         }
         boundary.add(&root.join("outside"), "/outside", false)?;
+        // trace:TASK-2706 | ai:codex — expose only synthetic host-service
+        // controls, on a separate RO mount. The lane cannot rename/link their
+        // socket inodes into the broker's private runtime allow-root.
+        boundary.add(&root.join("host-services"), "/host-services", false)?;
         // Entire protected directories, including missing child names: no
         // writable ancestor of protected metadata is re-admitted afterward.
         for name in [".aida", ".git", ".agents", ".codex", ".claude"] {

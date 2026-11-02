@@ -268,6 +268,10 @@ fn synthetic_layout() -> Result<tempfile::TempDir> {
     for dir in ["workspace", "store", "cache", "state"] {
         std::fs::create_dir(root.path().join(dir))?;
     }
+    std::fs::set_permissions(
+        root.path().join("state"),
+        std::fs::Permissions::from_mode(0o700),
+    )?;
     for name in [".aida", ".git", ".agents", ".codex", ".claude"] {
         std::fs::create_dir(root.path().join("workspace").join(name))?;
     }
@@ -275,6 +279,7 @@ fn synthetic_layout() -> Result<tempfile::TempDir> {
         std::fs::write(root.path().join("workspace").join(name), "protected")?;
     }
     std::fs::write(root.path().join("outside"), "outside-control")?;
+    std::fs::create_dir(root.path().join("host-services"))?;
     Ok(root)
 }
 
@@ -296,23 +301,56 @@ pub(super) fn classify_preflight_failure(phase: &str, errno: i32) -> Option<Isol
 /// available; `Ok(Some(..))` is a typed host property (see
 /// `classify_preflight_failure`). Every other failure stays an error.
 fn nested_userns_preflight() -> Result<Option<TracerOutcome>> {
+    nested_userns_preflight_inner(false)
+}
+
+#[cfg(test)]
+pub(super) fn preflight_timeout_fixture() -> Result<Option<TracerOutcome>> {
+    nested_userns_preflight_inner(true)
+}
+
+fn nested_userns_preflight_inner(stall: bool) -> Result<Option<TracerOutcome>> {
     let root = synthetic_layout()?;
     let boundary = super::filesystem::Boundary::synthetic(root.path())?;
     let mut cmd = Command::new("/usr/bin/bwrap");
     boundary.append_to(&mut cmd);
-    cmd.args(["--", "/usr/bin/python3", "-I", "-S", "-c", NESTED_PREFLIGHT])
+    let script = if stall {
+        format!("import time; time.sleep(30)\n{NESTED_PREFLIGHT}")
+    } else {
+        NESTED_PREFLIGHT.to_string()
+    };
+    cmd.args(["--", "/usr/bin/python3", "-I", "-S", "-c", &script])
         .env_clear();
-    let finished = match run_owned(
+    // trace:TASK-2735 | ai:codex — preflight owns a namespace too. Capture
+    // exactly the same init identity and verify its teardown on every outcome.
+    let (cmd, fds, info, mut barrier) = with_info_channel(cmd, boundary.fds())?;
+    let mut namespace = None;
+    let ended = run_owned(
         cmd,
-        boundary.fds(),
-        None,
-        DEADLINE,
+        fds,
+        Some(info),
+        if stall {
+            Duration::from_secs(1)
+        } else {
+            DEADLINE
+        },
         "nested user namespace preflight unavailable",
-        |_| {},
-    )? {
+        |bytes| {
+            capture_namespace(bytes, &mut namespace);
+            barrier.release_if_captured(&namespace);
+        },
+    );
+    verify_captured_namespace(&namespace)?;
+    let finished = match ended? {
         Ended::Exited(finished) => finished,
         Ended::TimedOut => {
-            anyhow::bail!("nested user namespace preflight timeout; wrapper reaped")
+            anyhow::ensure!(
+                namespace.is_some(),
+                "preflight timeout without namespace identity; teardown unverified"
+            );
+            anyhow::bail!(
+                "nested user namespace preflight timeout; wrapper and namespace init reaped"
+            )
         }
     };
     anyhow::ensure!(
@@ -353,6 +391,167 @@ fn nested_userns_preflight() -> Result<Option<TracerOutcome>> {
     }
 }
 
+// trace:TASK-2706 TASK-2735 | ai:codex
+type NamespaceIdentity = Option<(String, std::path::PathBuf)>;
+type InfoChannel = (std::fs::File, std::fs::File);
+
+struct NamespaceBarrier {
+    // Keep the read end live through spawn; only it is re-admitted at exec.
+    _reader: std::fs::File,
+    writer: Option<std::fs::File>,
+}
+impl NamespaceBarrier {
+    fn release_if_captured(&mut self, namespace: &NamespaceIdentity) {
+        use std::io::Write;
+        if namespace.is_some() {
+            if let Some(mut writer) = self.writer.take() {
+                // Failure leaves bwrap blocked/refused, bounded by run_owned.
+                let _ = writer.write_all(b"R");
+            }
+        }
+    }
+}
+
+fn with_info_channel(
+    cmd: Command,
+    mut fds: Vec<i32>,
+) -> Result<(Command, Vec<i32>, InfoChannel, NamespaceBarrier)> {
+    let mut pipe = [-1; 2];
+    unsafe {
+        anyhow::ensure!(
+            libc::pipe2(pipe.as_mut_ptr(), libc::O_CLOEXEC) == 0,
+            "probe readiness pipe unavailable"
+        );
+    }
+    let reader = unsafe { std::fs::File::from_raw_fd(pipe[0]) };
+    let writer = unsafe { std::fs::File::from_raw_fd(pipe[1]) };
+    let mut block = [-1; 2];
+    unsafe {
+        anyhow::ensure!(
+            libc::pipe2(block.as_mut_ptr(), libc::O_CLOEXEC) == 0,
+            "namespace barrier unavailable"
+        );
+    }
+    let barrier = NamespaceBarrier {
+        _reader: unsafe { std::fs::File::from_raw_fd(block[0]) },
+        writer: Some(unsafe { std::fs::File::from_raw_fd(block[1]) }),
+    };
+    let mut result = Command::new(cmd.get_program());
+    result
+        .args(["--info-fd", &writer.as_raw_fd().to_string()])
+        .args(["--block-fd", &barrier._reader.as_raw_fd().to_string()])
+        .args(cmd.get_args())
+        .env_clear();
+    fds.push(writer.as_raw_fd());
+    fds.push(barrier._reader.as_raw_fd());
+    Ok((result, fds, (reader, writer), barrier))
+}
+
+fn capture_namespace(bytes: &[u8], namespace: &mut NamespaceIdentity) {
+    if namespace.is_none() {
+        if let Ok(value) = serde_json::from_slice::<serde_json::Value>(bytes) {
+            if let Some(pid) = value.get("child-pid").and_then(|p| p.as_u64()) {
+                let path = format!("/proc/{pid}/ns/pid");
+                if let Ok(identity) = std::fs::read_link(&path) {
+                    *namespace = Some((path, identity));
+                }
+            }
+        }
+    }
+}
+
+fn verify_captured_namespace(namespace: &NamespaceIdentity) -> Result<()> {
+    if let Some((path, identity)) = namespace {
+        require_namespace_gone(path, identity)?;
+    }
+    Ok(())
+}
+
+/// Closed synthetic egress/IPC lane, never an ordinary launch. The host helper
+/// owns all brokers and bwrap; Rust independently owns that helper and observes
+/// bwrap's actual namespace-init identity. Killing either owner tears down the
+/// lane via bwrap --die-with-parent, then verifies the captured namespace gone.
+// trace:TASK-2706 | ai:codex
+pub(super) fn run_egress_probe(fault: &str) -> Result<Vec<String>> {
+    anyhow::ensure!(
+        matches!(
+            fault,
+            "normal"
+                | "proxy_before"
+                | "proxy_after"
+                | "broker_before"
+                | "broker_after"
+                | "timeout"
+                | "supervisor_timeout"
+        ),
+        "invalid fixed fault selector"
+    );
+    host_prerequisites()?;
+    let root = synthetic_layout()?;
+    let boundary = super::filesystem::Boundary::synthetic(root.path())?;
+    let mut bwrap = Command::new("/usr/bin/bwrap");
+    boundary.append_to(&mut bwrap);
+    let (bwrap, fds, (reader, writer), mut barrier) = with_info_channel(bwrap, boundary.fds())?;
+    // The host helper passes info-fd separately so it is not in the mount vector.
+    let args: Vec<_> = bwrap
+        .get_args()
+        .skip(2)
+        .map(|s| s.to_string_lossy().into_owned())
+        .collect();
+    const SCRIPT: &str = include_str!("egress_probe.py");
+    let mut cmd = Command::new("/usr/bin/python3");
+    cmd.args(["-I", "-S", "-c"])
+        .arg(format!("{SCRIPT}\nSOURCE = sys.argv[1]\nhost(json.loads(sys.argv[2]), sys.argv[3], int(sys.argv[4]), sys.argv[5])"))
+        .arg(SCRIPT).arg(serde_json::to_string(&args)?)
+        .arg(root.path()).arg(writer.as_raw_fd().to_string()).arg(fault)
+        .env_clear();
+    let mut namespace = None;
+    let ended = run_owned(
+        cmd,
+        fds,
+        Some((reader, writer)),
+        if fault == "supervisor_timeout" {
+            Duration::from_secs(2)
+        } else {
+            DEADLINE
+        },
+        "fixed egress host helper unavailable",
+        |bytes| {
+            capture_namespace(bytes, &mut namespace);
+            barrier.release_if_captured(&namespace);
+        },
+    );
+    verify_captured_namespace(&namespace)?;
+    let finished = match ended? {
+        Ended::Exited(finished) => finished,
+        Ended::TimedOut => {
+            anyhow::ensure!(namespace.is_some(),
+                "fixed egress helper timeout before namespace readiness; helper reaped, namespace teardown unverified");
+            anyhow::bail!(
+                "fixed egress helper timeout; owned egress wrapper and namespace init reaped"
+            );
+        }
+    };
+    anyhow::ensure!(
+        finished.status.success(),
+        "fixed egress/IPC probe refused{}: {}",
+        if namespace.is_some() {
+            "; owned egress wrapper and namespace init reaped"
+        } else {
+            "; namespace readiness unavailable"
+        },
+        String::from_utf8_lossy(&finished.stderr)
+    );
+    anyhow::ensure!(
+        namespace.is_some(),
+        "egress namespace identity readiness unavailable"
+    );
+    let mut checks: Vec<String> =
+        serde_json::from_slice(&finished.stdout).context("invalid fixed egress result channel")?;
+    checks.push("egress_namespace_init_reaped".into());
+    Ok(checks)
+}
+
 // The boolean selects only a fixed stalled test lane, never executable input.
 fn run_probe_inner(timeout_fixture: bool, on_available: impl FnOnce()) -> Result<TracerOutcome> {
     host_prerequisites()?;
@@ -388,6 +587,7 @@ fn run_probe_inner(timeout_fixture: bool, on_available: impl FnOnce()) -> Result
         )?;
     }
     std::fs::write(root.path().join("outside"), "outside-control")?;
+    std::fs::create_dir(root.path().join("host-services"))?;
     // Non-CLOEXEC inherited host socket: actual launch must close it. A socket
     // descriptor would permit host service access despite namespace separation.
     let (leaked, peer) = std::os::unix::net::UnixStream::pair()?;
@@ -582,8 +782,16 @@ fn run_owned(
     cmd.stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
+    let parent_pid = std::process::id() as libc::pid_t;
     unsafe {
         cmd.pre_exec(move || {
+            // trace:TASK-2706 | ai:codex — the helper must not outlive its
+            // Rust supervisor. bwrap in turn binds the namespace to the helper.
+            if libc::prctl(libc::PR_SET_PDEATHSIG, libc::SIGKILL) < 0
+                || libc::getppid() != parent_pid
+            {
+                return Err(std::io::Error::from_raw_os_error(libc::ECHILD));
+            }
             // Only async-signal-safe syscalls after fork. No authority/keyring
             // logic. Refuse rather than inherit unknown descriptors.
             if libc::syscall(libc::SYS_close_range, 3u32, u32::MAX, 4u32) != 0 {
