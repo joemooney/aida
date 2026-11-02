@@ -11,7 +11,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T16:42:07.593722571Z
-modified_at: 2026-11-02T07:38:03.520043335Z
+modified_at: 2026-11-02T07:43:10.187750768Z
 req_type: Bug
 tags:
 - doctor
@@ -146,6 +146,13 @@ comments:
   created_at: 2026-11-02T07:37:11.066024286Z
   modified_at: 2026-11-02T07:37:11.066024286Z
   session_id: 1f56bd1e-c059-4f73-b8df-e18b2170fdfc
+- id: 01a19b36-4f6b-7633-a408-008afb3c09db
+  author: joe
+  content: 'Round 5 (de14432): fixed the executable-fixture ratchet failure at mail_backlog_bug2405_tests.rs:599. I did NOT apply the brief literally, for two reasons. (1) test_exec::mark_executable sets 0o755, so the dirs would no longer be group-writable and the test would lose the 0o775 umask case it covers. (2) test_fixture_executability_uses_the_shared_writer rejects mark_executable(&dir), because only &ro and &locked_dir are allowed. Instead I used the reviewer''s option (b): a named const GROUP_WRITABLE_DIR = 0o775, with a comment. The ratchet itself is unchanged. Local gates: python3 -m unittest tests/test_executable_fixture_ratchet.py OK (7 tests); rustfmt --check OK. make check-ci-fast did NOT complete. Its first RUN gate (cargo check -p aida-cli --no-default-features) takes over 60s and was cut off three times by the headless 60s per-call cap, and background mode was denied. No gate failed before the cutoff. CI at de14432 is the compile evidence. Findings 3-6 were not addressed, per the brief''s ''No other changes''.'
+  created_at: 2026-11-02T07:43:10.187750768Z
+  modified_at: 2026-11-02T07:43:10.187750768Z
+  session_id: 01a19b319d2e
+  harness_version: 2.1.316 (Claude Code)
 history:
 - id: 01a198c4-4a0e-78f2-a498-045eec94c002
   author: joe

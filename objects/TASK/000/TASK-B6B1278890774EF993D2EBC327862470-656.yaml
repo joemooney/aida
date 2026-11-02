@@ -6,12 +6,12 @@ description: |-
   Acceptance: (1) On sliceA contract, synthetic lane in unshared netns reaches only allowed fixture host via host-owned typed proxy channel; deny direct TCP/UDP/DNS, private-address/rebinding, host/port/protocol bypass per C12. (2) Enforce C5 pathname and abstract Unix IPC. HostABI8 needs approved seccomp-notify broker; no mutable-user-memory CONTINUE/FD/path/rename race. Host D-Bus/SSH/Codex daemon and inherited-FD escapes denied; only typed channels/private own endpoints allowed. (3) Proxy/broker death tears down lane; unsupported kernel refuses; live regression cannot skip. (4) Diagnostics and end-to-end fixture deliver observable actual coverage, no ordinary vendor enablement or real credentials/model calls. Layers: trusted host policy, network/IPC broker, runner lifetime, CLI diagnostics and negative tests. Signed sliceB.
 
   All signed STORY2238 sketch C1-C12 and BUG2398 B1-B4 apply. Linux only, fakeHOME/synthetic tests, no global user settings or schedules. No partial backend may report AIDA containment applied or launch ordinary agents until all required protections are ready; named refusal, no fallback. STRICT independent review, operator merge floor. LIGHT one targeted test plus fast gates; shared infra or >10files adds touched-test/compile, fullsuiteCI only. Longcargo background, no slotbypass. Parent all7AC remain open until final installed-tool evidence; no slice alone completes parent.
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T09:05:52.470755532Z
-modified_at: 2026-11-02T07:23:21.320742272Z
+modified_at: 2026-11-02T07:43:08.535897435Z
 req_type: Task
 tags:
 - architecture
@@ -181,6 +181,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a19b36-48f7-7e83-a4d6-1cde1e2af055
+  author: aida-orchestrator
+  timestamp: 2026-11-02T07:43:08.535918558Z
+  session_id: 01a19b279a78
+  harness_version: 2.1.316 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 4ce0af750fcb68d4adf57496e4e002aefd8ace77
   branch: main
@@ -188,3 +197,11 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: 4ce0af750fc
   vendor: codex
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'Design and code meet TASK-2706/TASK-2735 acceptance on read, but CI gates is red: the PR''s own required-live bwrap gate (now running containment::tests) exits 101 at cf5264e; ''unsupported kernel refuses'' and the B-refusal credit path are untested.'
+  recovery_hint: address the review findings, move TASK-2706 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-11-02T07:43:08.535897435Z
