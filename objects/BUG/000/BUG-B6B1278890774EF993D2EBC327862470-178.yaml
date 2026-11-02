@@ -11,7 +11,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T16:42:07.593722571Z
-modified_at: 2026-11-02T06:05:58.949036201Z
+modified_at: 2026-11-02T06:13:50.651553763Z
 req_type: Bug
 tags:
 - doctor
@@ -71,6 +71,13 @@ comments:
   created_at: 2026-11-02T06:05:58.949036201Z
   modified_at: 2026-11-02T06:05:58.949036201Z
   session_id: 1f56bd1e-c059-4f73-b8df-e18b2170fdfc
+- id: 01a19ae4-87bb-7e70-8b45-0d1a9089ae2b
+  author: joe
+  content: 'Round 3 (81382bbaf2b): CI lib-1 failures root-caused. The two tests that drive the real ''aida mailbox inbox'' resolve the reader from the process cwd, which on CI is the crate checkout, not the fixture repo, so reader-b was never in the audience and the ACK never landed. Fix: both tests now run path-isolated (run_path_isolated_test), mark fixture main with .aida/config.toml, and set_current_dir into it; inbox() asserts the precondition. No production code changed. The double-negated is_partial assert is fixed too. Local gate NOT run: cargo is denied in this headless seat and make check-ci-fast exceeds the 60s per-call cap. Only rustfmt --check passed. CI on PR #3214 is the verification.'
+  created_at: 2026-11-02T06:13:50.651553763Z
+  modified_at: 2026-11-02T06:13:50.651553763Z
+  session_id: 01a19adf83f8
+  harness_version: 2.1.316 (Claude Code)
 history:
 - id: 01a198c4-4a0e-78f2-a498-045eec94c002
   author: joe
