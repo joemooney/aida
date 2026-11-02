@@ -3,12 +3,12 @@ spec_id: STORY-b6b1278890774ef993d2ebc327862470-313
 agreed_id: STORY-2315
 title: Lane relaunch ends a finished lane's dead lease itself when the seat is clean and its HEAD is already in the PR
 description: 'Pain 2026-11-01/02: nearly every rework or review requeue failed with ''could not end dead lease <id> ... add --force''. The advisor wrote freelease.sh: for each lease on the PR branch (or pr-N), skip live pids; require a clean seat and seat HEAD an ancestor of the PR head; then aida session end --force --yes. Acceptance: aida queue work --steal (and rev/rework launches) applies exactly this safe check and ends such leases automatically, refusing only when the seat is dirty, has commits the PR lacks, or a process is live. Candidate for the regroup R1 (session lifecycle: lease passes to the PR on open).'
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-02T12:46:46.980613333Z
-modified_at: 2026-11-02T14:24:16.302286535Z
+modified_at: 2026-11-02T16:02:23.012122886Z
 req_type: Story
 tags:
 - area:lanes
@@ -39,6 +39,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a19cff-5aa4-7a83-893a-d4986dbf45b3
+  author: aida-orchestrator
+  timestamp: 2026-11-02T16:02:23.012144550Z
+  session_id: 01a19cfc990f
+  harness_version: 2.1.316 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 5b21d041d218b3030c4878b5cabb862da086026e
   branch: main
@@ -47,3 +56,11 @@ filed_at:
   aida_build_sha: 6a3f67671a9
   vendor: claude
   session: 1f56bd1e-c059-4f73-b8df-e18b2170fdfc
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'Logic matches the freelease check, but CI is red: the TASK-2143 raw-git ratchet fails on the new pr_lease_takeover.rs, and neither call site has a regression test'
+  recovery_hint: address the review findings, move STORY-2315 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-11-02T16:02:23.012122886Z
