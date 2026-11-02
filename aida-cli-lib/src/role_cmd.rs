@@ -683,7 +683,7 @@ struct RoleRequirementDisplay {
 }
 
 fn open_role_enter_cache(project_root: &std::path::Path) -> Option<rusqlite::Connection> {
-    let cache_path = project_root.join(".aida/cache.db");
+    let cache_path = aida_core::db::project_cache_path(project_root);
     if !cache_path.exists() {
         return None;
     }
@@ -1571,7 +1571,9 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         std::fs::create_dir_all(dir.path().join(".aida")).unwrap();
         let id = uuid::Uuid::new_v4();
-        let conn = rusqlite::Connection::open(dir.path().join(".aida/cache.db")).unwrap();
+        let cache_path = aida_core::db::project_cache_path(&dir.path());
+        std::fs::create_dir_all(cache_path.parent().unwrap()).unwrap();
+        let conn = rusqlite::Connection::open(&cache_path).unwrap();
         conn.execute_batch(
             "CREATE TABLE requirements_cache (
                 id TEXT PRIMARY KEY NOT NULL,
@@ -1796,7 +1798,9 @@ mod tests {
     fn role_enter_cache_lookup_fails_closed_on_stale_schema() {
         let dir = tempfile::tempdir().unwrap();
         std::fs::create_dir_all(dir.path().join(".aida")).unwrap();
-        let conn = rusqlite::Connection::open(dir.path().join(".aida/cache.db")).unwrap();
+        let cache_path = aida_core::db::project_cache_path(&dir.path());
+        std::fs::create_dir_all(cache_path.parent().unwrap()).unwrap();
+        let conn = rusqlite::Connection::open(&cache_path).unwrap();
         conn.execute_batch("CREATE TABLE something_else (id TEXT);")
             .unwrap();
         drop(conn);

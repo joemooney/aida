@@ -381,7 +381,7 @@ pub(crate) fn handle_mass_change_command(
 ) -> Result<()> {
     let root = mode_root()?;
     let now = Utc::now();
-    let deferred = || count_open_deferred_findings(&root.join(".aida").join("cache.db"));
+    let deferred = || count_open_deferred_findings(&aida_core::db::project_cache_path(&root));
     match action {
         "on" => {
             let actor = crate::current_user_id(None);
@@ -462,7 +462,7 @@ pub(crate) fn print_status_line(project_root: &Path) {
     if matches!(st, MassChangeState::Off) {
         return;
     }
-    let n = count_open_deferred_findings(&root.join(".aida").join("cache.db"));
+    let n = count_open_deferred_findings(&aida_core::db::project_cache_path(&root));
     if let Some(line) = status_line(&st, now, n) {
         use colored::Colorize;
         println!("{}", line.yellow().bold());

@@ -100,7 +100,8 @@ fn actionable_matches_queue_list_on_a_padded_fixture() {
 
     // Cache with the liveness fields role_queue_actionable reads.
     std::fs::create_dir_all(root.join(".aida")).unwrap();
-    let cache_path = root.join(".aida/cache.db");
+    let cache_path = aida_core::db::project_cache_path(&root);
+    std::fs::create_dir_all(cache_path.parent().unwrap()).unwrap();
     let conn = rusqlite::Connection::open(&cache_path).unwrap();
     conn.execute_batch(
         "CREATE TABLE requirements_cache (

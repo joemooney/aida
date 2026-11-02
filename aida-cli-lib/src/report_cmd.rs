@@ -814,7 +814,7 @@ mod tests {
         std::fs::create_dir_all(&store_root).unwrap();
         aida_core::git_ops::init(&store_root).unwrap();
         aida_core::git_ops::configure_user(&store_root, "Test", "test@example.com").unwrap();
-        let cache_path = tmp.path().join(".aida").join("cache.db");
+        let cache_path = aida_core::db::project_cache_path(&tmp.path());
         let backend =
             crate::test_env::home_fixture_cached_backend(&store_root, &cache_path).unwrap();
 
@@ -875,7 +875,7 @@ mod tests {
         std::fs::create_dir_all(&store_root).unwrap();
         aida_core::git_ops::init(&store_root).unwrap();
         aida_core::git_ops::configure_user(&store_root, "Test", "test@example.com").unwrap();
-        let cache_path = tmp.path().join(".aida").join("cache.db");
+        let cache_path = aida_core::db::project_cache_path(&tmp.path());
         let backend =
             crate::test_env::home_fixture_cached_backend(&store_root, &cache_path).unwrap();
         let mut shipped = Requirement::new("AIDA: shipped".into(), "body".into());
@@ -929,7 +929,7 @@ mod tests {
         std::fs::create_dir_all(&store_root).unwrap();
         aida_core::git_ops::init(&store_root).unwrap();
         aida_core::git_ops::configure_user(&store_root, "Test", "test@example.com").unwrap();
-        let cache_path = tmp.path().join(".aida").join("cache.db");
+        let cache_path = aida_core::db::project_cache_path(&tmp.path());
         let backend =
             crate::test_env::home_fixture_cached_backend(&store_root, &cache_path).unwrap();
         let mut first = Requirement::new("AIDA: first".into(), "body".into());

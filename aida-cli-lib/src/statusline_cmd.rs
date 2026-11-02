@@ -90,7 +90,7 @@ pub(crate) fn handle_statusline_command(
     // cache.db yet (fresh `aida init` with no reads). Render contract
     // below: skip `Fresh`, surface everything else.
     // trace:STORY-78 | ai:claude
-    let cache_path = project_root.join(".aida/cache.db");
+    let cache_path = aida_core::db::project_cache_path(&project_root);
     let cache_freshness = if cache_path.exists() {
         match rusqlite::Connection::open_with_flags(
             &cache_path,

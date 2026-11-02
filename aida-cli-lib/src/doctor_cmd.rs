@@ -1316,7 +1316,7 @@ fn contained_store_boundary_findings(project_root: &std::path::Path) -> Vec<Doct
     }
     let main = crate::main_worktree_root_from(project_root);
     let store = aida_core::store_locate::detect_distributed_store_from(project_root);
-    let cache = project_root.join(".aida").join("cache.db");
+    let cache = aida_core::db::project_cache_path(project_root);
     crate::contained_boundary::contained_store_boundary_gaps(&main, store.as_deref(), &cache)
         .into_iter()
         .enumerate()
@@ -2143,7 +2143,7 @@ fn scan_scaffold_drift(
             });
         }
     }
-    let db_path = project_root.join(".aida/cache.db");
+    let db_path = aida_core::db::project_cache_path(project_root);
     let status = check_scaffold_status(store, project_root, &config, &db_path);
     // Compare path components so Windows' backslashes do not hide scaffold
     // drift from doctor. trace:BUG-1685 | ai:codex
@@ -11391,7 +11391,7 @@ hostname = "localhost"
             &store,
             dir.path(),
             &ScaffoldConfig::default(),
-            &dir.path().join(".aida/cache.db"),
+            &aida_core::db::project_cache_path(&dir.path()),
         );
         assert!(
             status
@@ -11489,7 +11489,7 @@ hostname = "localhost"
                 &store,
                 root,
                 &ScaffoldConfig::default(),
-                &root.join(".aida/cache.db"),
+                &aida_core::db::project_cache_path(&root),
             );
             let drifted: Vec<_> = status
                 .modified
@@ -11702,7 +11702,7 @@ User content.
             &store,
             root,
             &ScaffoldConfig::default(),
-            &root.join(".aida/cache.db"),
+            &aida_core::db::project_cache_path(&root),
         );
         let flagged: Vec<_> = status
             .modified
@@ -12941,6 +12941,7 @@ User content.
         let main = base.join("main");
         std::fs::create_dir_all(main.join(".aida")).unwrap();
         std::fs::create_dir_all(main.join(".aida-store")).unwrap();
+        // TASK-2707: a legacy main cache; linking migrates it.
         std::fs::write(main.join(".aida").join("cache.db"), b"").unwrap();
         let record = |pid: u32| {
             serde_json::to_string(&aida_core::CacheLockInfo {
@@ -12959,7 +12960,8 @@ User content.
             let stray = wt.join(".aida").join("cache.db.lock-info");
             std::fs::create_dir_all(wt.join(".aida")).unwrap();
             crate::link_worktree_runtime_state(&main, &wt).unwrap();
-            assert!(wt.join(".aida").join("cache.db").is_symlink());
+            // TASK-2707: one directory link to main's cache directory.
+            assert!(wt.join(".aida").join("cache-db").is_symlink());
             std::fs::write(&stray, record(pid)).unwrap();
             // Re-running the start site (a reused worktree) retires it.
             crate::link_worktree_runtime_state(&main, &wt).unwrap();
@@ -12972,11 +12974,11 @@ User content.
             crate::link_worktree_runtime_state(&main, &wt).unwrap();
             std::fs::write(&stray, record(pid)).unwrap();
             crate::unlink_worktree_aida_runtime(&wt.join(".aida"));
-            assert!(!wt.join(".aida").join("cache.db").exists());
+            assert!(!wt.join(".aida").join("cache-db").exists());
             assert_eq!(stray.exists(), expect_kept, "session end, {label} owner");
         }
-        // The shared cache and main's own sidecar location are untouched.
-        assert!(main.join(".aida").join("cache.db").exists());
+        // The shared cache (migrated into its own directory) is untouched.
+        assert!(aida_core::db::project_cache_path(&main).exists());
     }
 
     // BUG-1644: from a sibling worktree whose `.aida/cache.db` symlinks to the
@@ -12995,11 +12997,17 @@ User content.
         std::fs::create_dir_all(&main_aida).unwrap();
         std::fs::create_dir_all(wt.join(".aida")).unwrap();
         std::fs::create_dir_all(wt.join(".aida-store")).unwrap();
-        let main_cache = main_aida.join("cache.db");
+        // TASK-2707: the worktree reaches main's cache directory by one link.
+        let main_cache = aida_core::db::cache_dir_in(&main_aida).join("cache.db");
+        std::fs::create_dir_all(main_cache.parent().unwrap()).unwrap();
         std::fs::write(&main_cache, b"").unwrap();
-        std::os::unix::fs::symlink(&main_cache, wt.join(".aida").join("cache.db")).unwrap();
+        std::os::unix::fs::symlink(
+            main_cache.parent().unwrap(),
+            aida_core::db::cache_dir_in(&wt.join(".aida")),
+        )
+        .unwrap();
         let wt_cache = aida_core::CachedGitBackend::default_cache_path(&wt.join(".aida-store"));
-        assert_eq!(wt_cache, wt.join(".aida").join("cache.db"));
+        assert_eq!(wt_cache, aida_core::db::project_cache_path(&wt));
 
         let record = |pid: u32| {
             serde_json::to_string(&aida_core::CacheLockInfo {

@@ -48,7 +48,7 @@ fn spec(spec_id: &str, rels: Vec<Relationship>) -> Requirement {
 fn open_git_backend() -> (tempfile::TempDir, std::path::PathBuf, CachedGitBackend) {
     let dir = tempdir().unwrap();
     let store_root = dir.path().join("store");
-    let cache_path = dir.path().join(".aida").join("cache.db");
+    let cache_path = aida_core::db::project_cache_path(&dir.path());
     std::fs::create_dir_all(&store_root).unwrap();
     aida_core::git_ops::init(&store_root).unwrap();
     aida_core::git_ops::configure_user(&store_root, "fixture", "fixture@localhost").unwrap();

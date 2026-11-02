@@ -46,3 +46,9 @@ pub(crate) mod ship;
 pub(crate) mod solo_review;
 // BUG-HOME-048: completion trailers complete only the specs a PR covers.
 pub(crate) mod trailer_coverage;
+
+// TASK-2707: the shared cache is never consulted for authority.
+// trace:TASK-2707 | ai:claude
+#[cfg(test)]
+#[path = "tests/task_2707_cache_authority_tests.rs"]
+mod task_2707_cache_authority_tests;

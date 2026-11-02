@@ -123,26 +123,20 @@ pub(crate) fn path_deny_rules(path: &Path) -> Vec<String> {
 /// session's `aida` binary (run through sandboxed Bash) must write to claim a
 /// spec, comment, or finish a queue item. Per the operator ruling the set is
 /// exactly `<main>/.aida-store` (a directory: the objects plus
-/// `.aida/store-write.lock`) and the `<main>/.aida/cache.db*` files, for each
-/// spelling of `main` that [`contained_write_roots`] yields. Nothing else in
-/// the main checkout is added.
+/// `.aida/store-write.lock`) and the cache's own directory
+/// `<main>/.aida/cache-db` (TASK-2707: it holds only `cache.db` and its
+/// sidecars), for each spelling of `main` that [`contained_write_roots`]
+/// yields. Nothing else in the main checkout is added.
 ///
-/// Claude Code's Linux sandbox binds each `sandbox.filesystem.allowWrite`
-/// entry as is, with no glob expansion, and skips any path that does not
-/// exist at launch, so the cache files are listed one by one rather than as
-/// `cache.db*`. Their sidecars persist across connections
-/// (`aida_core::db::prime_cache_sidecars`).
-// trace:BUG-1929 | ai:claude
+/// Claude Code's Linux sandbox skips any write path that does not exist at
+/// launch; the launcher creates the cache directory first
+/// (`aida_core::db::ensure_project_cache_dir`).
+// trace:BUG-1929 trace:TASK-2707 | ai:claude
 pub(crate) fn contained_store_write_paths(main: &Path) -> Vec<PathBuf> {
     let mut paths = Vec::new();
     for base in contained_write_roots(main) {
         paths.push(base.join(".aida-store"));
-        let cache = base.join(".aida").join("cache.db");
-        for suffix in std::iter::once("").chain(aida_core::db::CACHE_SANDBOX_SIDECARS) {
-            let mut name = cache.as_os_str().to_os_string();
-            name.push(suffix);
-            paths.push(PathBuf::from(name));
-        }
+        paths.push(aida_core::db::cache_dir_in(&base.join(".aida")));
     }
     paths
 }
@@ -470,12 +464,15 @@ pub(crate) fn contained_store_boundary_gaps(
         }
     }
     let cache = canonical(&aida_core::db::shared_cache_path(resolved_cache));
-    if !expressible.iter().any(|p| canonical(p) == cache) {
+    let cache_dir = cache.parent().map(Path::to_path_buf).unwrap_or_default();
+    if !expressible.iter().any(|p| canonical(p) == cache_dir) {
         gaps.push(format!(
-            "the AIDA cache at {} is not the main checkout's {}/.aida/cache.db, so \
+            "the AIDA cache at {} is not the main checkout's {}/.aida/{}/{}, so \
              contained sessions cannot write it",
             cache.display(),
-            main.display()
+            main.display(),
+            aida_core::db::CACHE_DIR_NAME,
+            aida_core::db::CACHE_FILE_NAME,
         ));
     }
     for path in contained_store_write_paths(&canonical(main)) {
