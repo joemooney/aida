@@ -14,13 +14,20 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-02T04:15:25.413435811Z
-modified_at: 2026-11-02T04:15:25.413435811Z
+modified_at: 2026-11-02T06:25:49.944551740Z
 req_type: Task
 tags:
 - carried-from:STORY-2256
 - finding-hash:eb00edcd
 - from-review:PR-3225
 - kind:carried-forward
+comments:
+- id: 01a19aef-8178-7701-9d07-d5460f04450b
+  author: joe
+  content: 'ADVISOR RULING (2026-11-01 23:30 MST, ruled once per the 2026-10-28 operator order): accepted as-is, no change. Reason: doc-comment wording only; behaviour (requiring the AIDA marker) is the safer of the two.'
+  created_at: 2026-11-02T06:25:49.944551740Z
+  modified_at: 2026-11-02T06:25:49.944551740Z
+  session_id: 1f56bd1e-c059-4f73-b8df-e18b2170fdfc
 history:
 - id: 01a19aa1-ae17-7171-a0aa-744300e2120a
   author: joe
