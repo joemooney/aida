@@ -1,6 +1,9 @@
 # Build artifacts
 /target/
 **/target/
+# Ad-hoc sibling cargo target dirs (e.g. a CARGO_TARGET_DIR=target-base baseline
+# build against origin/main). trace:TASK-2707 | ai:claude
+/target-*/
 debug/
 release/
 
