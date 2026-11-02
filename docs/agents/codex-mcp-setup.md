@@ -403,8 +403,18 @@ and the user's credential exclusions. The launcher adds per-invocation
 `shell_environment_policy.set.<name>` overrides for an exact whitelist of its
 child's grant selector, subject, role, agent name/type, project root, lease,
 scope, context-file path, containment posture and headless marker. Existing
-user `set` entries remain intact. Absent child assignments stay absent; a
-baseline child's grant is explicitly empty. No global Codex config is edited.
+user `set` entries remain intact. Absent child assignments stay absent: the
+launcher removes every whitelisted name the child does not assign from the
+Codex process environment, so even under the default `inherit = "all"` a
+launcher's own lease, scope or context-file path never reaches the child's tool
+shell. A baseline child's grant is explicitly empty. No global Codex config is
+edited.
+
+A Codex advisor-tier consult in a drain mints its own delegated `advisor` child
+grant (revoked when the consult exits) instead of handing the tool shell the
+drain launcher's grant. The launcher's active grant must therefore delegate
+`advisor`; otherwise the consult refuses before launch with the `aida role
+enter ... --delegate-seat advisor` command that widens it.
 
 The grant UUID is a public selector and is visible in the process arguments.
 It grants no authority by itself: the existing subject, roster, key possession

@@ -85,6 +85,16 @@ pub(crate) fn codex_tool_env_overrides(child: &Command) -> Result<Vec<String>> {
 /// Call once, after the child grant, identity and customization are final,
 /// immediately before spawn/exec. Other vendors never enter this adapter.
 pub(crate) fn prepare_launch(child: &mut Command) -> Result<()> {
+    // The child Command is the full source of truth for whitelisted metadata:
+    // under Codex's default inherit="all", a key the launcher process has but
+    // the child never assigned would otherwise leak into the tool shell and
+    // fail the context digest (or present the launcher's own context).
+    // trace:BUG-2398 | ai:claude
+    for key in TOOL_ENV {
+        if !child.get_envs().any(|(k, _)| k == *key) {
+            child.env_remove(key);
+        }
+    }
     let overrides = codex_tool_env_overrides(child)?;
     let grant = child
         .get_envs()
