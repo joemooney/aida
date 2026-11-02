@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-701
 agreed_id: TASK-2835
 title: 'Showcase: integrate the AIDA brand logos, architecture icon and favicons, with a reproducible PR-size chart'
 description: 'Owns the brand and favicon work in PR #3235 (branch agy2/showcase-logos). It was attributed to TASK-2709, but that spec is completed and its scope is audit publication. Acceptance: (1) build.py --check is clean and the showcase unittests pass. (2) The published pages have no broken relative links and no external runtime dependencies. (3) Every number shown on the PR-size chart (mean marker, methodology mean) reproduces from the documented git shortstat method; the methodology note names the density estimator (KDE kernel and bandwidth) and gives the exact command.'
-status: InProgress
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-02T13:04:06.806646695Z
-modified_at: 2026-11-02T13:50:06.718396387Z
+modified_at: 2026-11-02T14:07:38.748413541Z
 req_type: Task
 tags:
 - docs
@@ -34,6 +34,21 @@ history:
   timestamp: 2026-11-02T13:50:06.924956975Z
   session_id: ee0bf351-6b17-486f-a38e-cfbb1343c426
   changes: []
+- id: 01a19c96-4e24-7243-9597-7fedece9ae3d
+  author: aida-auto-bump
+  timestamp: 2026-11-02T14:07:38.532086831Z
+  session_id: ee0bf351-6b17-486f-a38e-cfbb1343c426
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a19c96-4efc-7d92-a1b3-6726ec24d863
+  timestamp: 2026-11-02T14:07:38.748408542Z
+  agent: aida
+  commit_sha: 20d11bb5b2b5314b9886bd640d3473dae049be7d
+  summary: 'Delta review at c38c342 after the advisor''s 2-round-cap ruling. TASK-2835 AC1 verified: build.py --check clean, 21 showcase build/publish unittests pass locally and in CI gates. AC2 verified: the published site (publish.py --out at HEAD, 17 pages) has 0 broken relative links and no external runtime deps; the report copy''s ../showcase/ paths resolve. AC3 verified: python3 scripts/showcase-pr-size.py --svg at 6a3f67671a9 prints 2,418 PRs, median 225, p90 1010.3, mean 589.9, 31.6%/10.1%, 60d 40.0%/p90 1483, 30d p90 1791.4, June 24.2%. ptsLeft/ptsRight/ptsLine match byte-for-byte in both HTML copies, the mean marker is at x=336.8 (curve y~123), the methodology names the Gaussian KDE, Silverman h=0.0990, grid, boundary handling and the exact command, and no stale 664.8/665/1,008/40.1 figures remain. TASK-2709 (completed; commits re-trailed via the PR title per the ruling): AC1/AC2 hold, AC3 is this approval. CI: all lanes green except cli-0 ''Test time budget'' (tests passed; the same step is red on main bb8b4b88db, so not caused by this PR) and the merge-hold-gate, which is waiting on this review.'
+  review_verdict: approved
 execution_mode: drain
 filed_at:
   code_sha: 0ce3c0ba6e620e3a6cf48cc50ce5dbc5235cc4b3
@@ -43,3 +58,7 @@ filed_at:
   aida_build_sha: 6a3f67671a9
   vendor: claude
   session: ee0bf351-6b17-486f-a38e-cfbb1343c426
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-02T14:07:38.532079561Z
+  completion_sha: 20d11bb5b2b5314b9886bd640d3473dae049be7d
