@@ -107,11 +107,17 @@ fn operator_notification_names_start_advisor_and_move_commands() {
         },
     ];
 
-    let msg = format_operator_notification(&items);
+    let msg = format_operator_notification(&items, crate::session::HeadlessVendor::Claude);
     assert!(msg.contains("2 item(s) stuck, no advisor running"), "{msg}");
     assert!(
         msg.contains("start one: aida agent new claude --role advisor"),
         "{msg}"
+    );
+    // trace:BUG-2396 | ai:claude
+    let codex = format_operator_notification(&items, crate::session::HeadlessVendor::Codex);
+    assert!(
+        codex.contains("start one: aida agent new codex --role advisor"),
+        "{codex}"
     );
     assert!(
         msg.contains("move: aida queue work TASK-1 --resume"),
