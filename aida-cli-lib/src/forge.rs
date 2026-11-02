@@ -1010,6 +1010,18 @@ pub trait Forge {
         sink: &mut dyn crate::network_retry::RetrySink,
     ) -> Result<MergeResult>;
 
+    // trace:BUG-b6b1278890774ef993d2ebc327862470-179 | ai:codex
+    /// Only a normal invocation's verified train context can enter this path.
+    fn merge_train_change(
+        &self,
+        _c: &ChangeRef,
+        _opts: &MergeOptions,
+        _sink: &mut dyn crate::network_retry::RetrySink,
+        _context: &mut crate::pr_train::VerifiedTrainMerge<'_>,
+    ) -> Result<MergeResult> {
+        anyhow::bail!("verified train merging is unsupported by this forge")
+    }
+
     /// `gh pr comment` / `glab mr note` / pure-git log-only.
     fn comment(&self, c: &ChangeRef, body: &str) -> Result<()>;
 
@@ -1528,7 +1540,7 @@ pub fn forge_for_open_change(project_root: &Path) -> Box<dyn Forge> {
 /// chokepoint never weighs a verdict under a foreign bare id.
 // trace:BUG-1774 | ai:claude
 // trace:BUG-B6B1278890774EF993D2EBC327862470-048 | ai:claude
-fn corpus_gate_spec_hints(project_root: &Path, c: &ChangeRef) -> Vec<String> {
+pub(crate) fn corpus_gate_spec_hints(project_root: &Path, c: &ChangeRef) -> Vec<String> {
     let mut ids = crate::pr_ship::extract_spec_ids_from_text(&c.branch);
     if let Some(title) = c.title.as_deref() {
         for id in crate::pr_ship::extract_spec_ids_from_text(title) {
@@ -1552,11 +1564,151 @@ fn merge_gate_live_head(forge: &dyn Forge, c: &ChangeRef) -> Option<String> {
         .filter(|s| !s.is_empty())
 }
 
+// trace:BUG-b6b1278890774ef993d2ebc327862470-179 | ai:codex
+/// Unlike the informational trait accessor, authorization cannot turn a failed
+/// required-check read into an empty list.
+pub(crate) fn github_required_checks(root: &Path, change: &ChangeRef) -> Result<Vec<String>> {
+    let out = Command::new("gh")
+        .current_dir(root)
+        .args([
+            "pr",
+            "checks",
+            &change.id.to_string(),
+            "--required",
+            "--json",
+            "name,bucket,workflow,link",
+        ])
+        .output_retrying_etxtbsy()?;
+    required_checks_from_output(
+        out.status.success(),
+        &String::from_utf8_lossy(&out.stdout),
+        &String::from_utf8_lossy(&out.stderr),
+    )
+}
+
+/// Classify `gh pr checks --required` output. A repository without required
+/// status checks makes gh exit non-zero with its literal "no required checks
+/// reported" answer: that is a positive empty policy, not a failed read, and
+/// the exact-tip judgment still requires every reported check to pass. Any
+/// other non-zero exit stays a failed read (fail closed).
+// trace:BUG-b6b1278890774ef993d2ebc327862470-179 | ai:claude
+pub(crate) fn required_checks_from_output(
+    success: bool,
+    stdout: &str,
+    stderr: &str,
+) -> Result<Vec<String>> {
+    if !success {
+        // prose-ok: matches gh's literal 'no required checks reported' answer
+        anyhow::ensure!(
+            stderr
+                .to_ascii_lowercase()
+                .contains("no required checks reported"),
+            "train required-check read failed"
+        );
+        return Ok(Vec::new());
+    }
+    let rows =
+        crate::ci_gate::parse_check_rows(stdout).context("cannot read train required checks")?;
+    Ok(rows.into_iter().map(|r| r.name).collect())
+}
+
 pub struct GitHubForge {
     project_root: PathBuf,
 }
 
 impl GitHubForge {
+    fn merge_checked(
+        &self,
+        c: &ChangeRef,
+        opts: &MergeOptions,
+        sink: &mut dyn crate::network_retry::RetrySink,
+        mut train: Option<&mut crate::pr_train::VerifiedTrainMerge<'_>>,
+    ) -> Result<MergeResult> {
+        // STORY-516: route the pre-EPIC-35 `aida pr ship` / orchestrator merge
+        // through here without changing behaviour. Two things the inline call
+        // site did that this must preserve:
+        //   1. argv shape — the squash path reuses the SPEC-410-pinned
+        //      `pr_ship::merge_args` so the argv stays byte-identical (and there
+        //      is one source of truth). Non-squash methods build argv inline.
+        //   2. transient-blip resilience — wrap the `gh` call in network_retry
+        //      so a momentary GH-API blip retries instead of aborting (BUG-286).
+        //      Retry events go to the caller-supplied `sink` (StderrSink for
+        //      pr ship; DualSink for the orchestrator).
+        // On a non-zero exit we return Err carrying gh's stderr (the merge_change
+        // contract), so the caller keeps its activity-log + recovery-hint + bail.
+        // trace:STORY-516 trace:BUG-286 | ai:claude
+        //
+        // BUG-1167: the substrate merge-hold chokepoint. EVERY AIDA merge —
+        // `aida pr merge`, the drain's wave/orchestrator phase, an integrator
+        // sweep — funnels through here, so a single fail-closed check refuses a
+        // supervised PR that any of them (or a stale-binary concurrent merger)
+        // would otherwise race the client-side hold to merge. The marker is
+        // cleared only by an explicit human/advisor review (`aida merge-hold
+        // clear <pr>`). A drain-mode PR is never marked, so its auto-merge is
+        // untouched. trace:BUG-1167 | ai:claude
+        if let Some(reason) = crate::gate::merge_hold_core::read_hold(&self.project_root, c.id) {
+            return Err(MergeHoldRefusal::new(c.id, &reason).into());
+        }
+        // BUG-1774: the corpus half of the chokepoint — a blocking verdict
+        // holds the merge whatever producer wrote the artifact, marker or no
+        // marker. The head is resolved lazily (a PR with no verdict artifacts
+        // pays no forge read): a pinned merge can only land `match_head`, so
+        // that IS the head the corpus is judged at; otherwise the live head.
+        // trace:BUG-1774 | ai:claude
+        if train.is_none() {
+            crate::gate::merge_hold_core::enforce_corpus_gate_before_merge(
+                &self.project_root,
+                c.id,
+                &corpus_gate_spec_hints(&self.project_root, c),
+                // TASK-1968: a clean-merge carry-over is proven against the PR's
+                // base. trace:TASK-1968 | ai:claude
+                Some(c.base.as_str()),
+                || {
+                    opts.match_head
+                        .clone()
+                        .or_else(|| merge_gate_live_head(self, c))
+                },
+            )?;
+        }
+        let args: Vec<String> = github_merge_argv(c.id, opts);
+        let cfg = crate::network_retry::RetryConfig::load(&self.project_root);
+        let project_root = self.project_root.clone();
+        let out = crate::network_retry::run_with_retry_checked(
+            &format!("gh pr merge {}", c.id),
+            &cfg,
+            sink,
+            || {
+                // trace:BUG-b6b1278890774ef993d2ebc327862470-179 | ai:codex
+                if let Some(context) = train.as_deref_mut() {
+                    if let Some(reason) =
+                        crate::gate::merge_hold_core::read_hold(&self.project_root, c.id)
+                    {
+                        return Err(std::io::Error::other(MergeHoldRefusal::new(c.id, &reason)));
+                    }
+                    context
+                        .enforce(self, &self.project_root, c, opts)
+                        .map_err(std::io::Error::other)?;
+                }
+                let mut cmd = Command::new("gh");
+                cmd.current_dir(&project_root)
+                    .args(args.iter().map(String::as_str));
+                Ok(cmd)
+            },
+        )
+        .context("could not invoke `gh pr merge`")?;
+        anyhow::ensure!(
+            out.status.success(),
+            "gh pr merge failed for #{}: {}",
+            c.id,
+            String::from_utf8_lossy(&out.stderr).trim()
+        );
+        Ok(MergeResult {
+            merged: true,
+            sha: None,
+            method: opts.method,
+        })
+    }
+
     pub fn new(project_root: &Path) -> Self {
         Self {
             project_root: project_root.to_path_buf(),
@@ -2101,76 +2253,18 @@ impl Forge for GitHubForge {
         opts: &MergeOptions,
         sink: &mut dyn crate::network_retry::RetrySink,
     ) -> Result<MergeResult> {
-        // STORY-516: route the pre-EPIC-35 `aida pr ship` / orchestrator merge
-        // through here without changing behaviour. Two things the inline call
-        // site did that this must preserve:
-        //   1. argv shape — the squash path reuses the SPEC-410-pinned
-        //      `pr_ship::merge_args` so the argv stays byte-identical (and there
-        //      is one source of truth). Non-squash methods build argv inline.
-        //   2. transient-blip resilience — wrap the `gh` call in network_retry
-        //      so a momentary GH-API blip retries instead of aborting (BUG-286).
-        //      Retry events go to the caller-supplied `sink` (StderrSink for
-        //      pr ship; DualSink for the orchestrator).
-        // On a non-zero exit we return Err carrying gh's stderr (the merge_change
-        // contract), so the caller keeps its activity-log + recovery-hint + bail.
-        // trace:STORY-516 trace:BUG-286 | ai:claude
-        //
-        // BUG-1167: the substrate merge-hold chokepoint. EVERY AIDA merge —
-        // `aida pr merge`, the drain's wave/orchestrator phase, an integrator
-        // sweep — funnels through here, so a single fail-closed check refuses a
-        // supervised PR that any of them (or a stale-binary concurrent merger)
-        // would otherwise race the client-side hold to merge. The marker is
-        // cleared only by an explicit human/advisor review (`aida merge-hold
-        // clear <pr>`). A drain-mode PR is never marked, so its auto-merge is
-        // untouched. trace:BUG-1167 | ai:claude
-        if let Some(reason) = crate::gate::merge_hold_core::read_hold(&self.project_root, c.id) {
-            return Err(MergeHoldRefusal::new(c.id, &reason).into());
-        }
-        // BUG-1774: the corpus half of the chokepoint — a blocking verdict
-        // holds the merge whatever producer wrote the artifact, marker or no
-        // marker. The head is resolved lazily (a PR with no verdict artifacts
-        // pays no forge read): a pinned merge can only land `match_head`, so
-        // that IS the head the corpus is judged at; otherwise the live head.
-        // trace:BUG-1774 | ai:claude
-        crate::gate::merge_hold_core::enforce_corpus_gate_before_merge(
-            &self.project_root,
-            c.id,
-            &corpus_gate_spec_hints(&self.project_root, c),
-            // TASK-1968: a clean-merge carry-over is proven against the PR's
-            // base. trace:TASK-1968 | ai:claude
-            Some(c.base.as_str()),
-            || {
-                opts.match_head
-                    .clone()
-                    .or_else(|| merge_gate_live_head(self, c))
-            },
-        )?;
-        let args: Vec<String> = github_merge_argv(c.id, opts);
-        let cfg = crate::network_retry::RetryConfig::load(&self.project_root);
-        let project_root = self.project_root.clone();
-        let out = crate::network_retry::run_with_retry(
-            &format!("gh pr merge {}", c.id),
-            &cfg,
-            sink,
-            || {
-                let mut cmd = Command::new("gh");
-                cmd.current_dir(&project_root)
-                    .args(args.iter().map(String::as_str));
-                cmd
-            },
-        )
-        .context("could not invoke `gh pr merge`")?;
-        anyhow::ensure!(
-            out.status.success(),
-            "gh pr merge failed for #{}: {}",
-            c.id,
-            String::from_utf8_lossy(&out.stderr).trim()
-        );
-        Ok(MergeResult {
-            merged: true,
-            sha: None,
-            method: opts.method,
-        })
+        self.merge_checked(c, opts, sink, None)
+    }
+
+    // trace:BUG-b6b1278890774ef993d2ebc327862470-179 | ai:codex
+    fn merge_train_change(
+        &self,
+        c: &ChangeRef,
+        opts: &MergeOptions,
+        sink: &mut dyn crate::network_retry::RetrySink,
+        context: &mut crate::pr_train::VerifiedTrainMerge<'_>,
+    ) -> Result<MergeResult> {
+        self.merge_checked(c, opts, sink, Some(context))
     }
 
     fn comment(&self, c: &ChangeRef, body: &str) -> Result<()> {
