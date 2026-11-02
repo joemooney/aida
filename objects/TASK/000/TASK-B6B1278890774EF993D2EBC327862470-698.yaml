@@ -7,12 +7,12 @@ description: |-
 
   Non-blocking (minor, carried): launch_markers in bug_2398_final_spawn_boundary_ratchet counts only the fully-qualified '.env(crate::gate::seat_authority::GRANT_ENV' form, so an imported GRANT_ENV, a literal 'AIDA_SESSION_GRANT' or .envs([...]) would evade the spawn inventory.
   Reviewed sha: 5e7e44e9eb959e0f527383c4a0a9c5dd223557ea
-status: InProgress
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-02T11:14:25.148757386Z
-modified_at: 2026-11-02T16:07:16.067969378Z
+modified_at: 2026-11-02T16:23:17.346669404Z
 req_type: Task
 tags:
 - carried-from:BUG-2398
@@ -53,6 +53,21 @@ history:
   timestamp: 2026-11-02T16:07:16.229317399Z
   session_id: ee0bf351-6b17-486f-a38e-cfbb1343c426
   changes: []
+- id: 01a19d12-7991-7272-acbc-d0adfa6d79b5
+  author: aida-auto-bump
+  timestamp: 2026-11-02T16:23:16.113254611Z
+  session_id: ee0bf351-6b17-486f-a38e-cfbb1343c426
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a19d12-7e62-75a0-abf8-722c58f25a35
+  timestamp: 2026-11-02T16:23:17.346664466Z
+  agent: aida
+  commit_sha: 15c0fa4d6051d6ba558fdb9fec01901e2fd27c4f
+  summary: 'All TASK-2759 acceptance met: launch_markers now counts imported/use-as/let-aliased GRANT_ENV, the literal AIDA_SESSION_GRANT, and .envs(..) forms, with a negative fixture test per form plus a clean control; test-only change, inventory unchanged, PR CI green at head.'
+  review_verdict: approved
 execution_mode: drain
 filed_at:
   code_sha: 2b9eaa5c3210f8343c475e9993c55cbadb9083d5
@@ -62,3 +77,7 @@ filed_at:
   aida_build_sha: 6a3f67671a9
   vendor: claude
   session: 1f56bd1e-c059-4f73-b8df-e18b2170fdfc
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-02T16:23:16.113247181Z
+  completion_sha: 15c0fa4d6051d6ba558fdb9fec01901e2fd27c4f
