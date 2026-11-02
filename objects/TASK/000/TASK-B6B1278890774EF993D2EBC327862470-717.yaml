@@ -1,5 +1,6 @@
 id: 01a19d3c-6c99-7110-9107-6d9d68829354
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-717
+agreed_id: TASK-2772
 title: 'Host claude --bg lanes cannot run the LIGHT gate inside Claude''s Bash sandbox: cargo-slot dir and sccache socket are denied'
 description: 'Observed 2026-11-02 (advisor fire wave, 12 host lanes). BUG-2395, BUG-2386 and other lanes stalled 30-80 min: make check-ci-fast queued forever for a cargo slot (the sandbox cannot write the slot directory, while cargo ps showed free slots), or failed with ''sccache: error: Operation not permitted''. The workaround was to run the gate outside the sandbox with RUSTC_WRAPPER= (the advisor did this for BUG-2395 b830e84). Related to BUG-2383, which covers headless lanes. Expected: the generated lane sandbox settings allow the cargo slot dir and the sccache socket, or the gate degrades to no-sccache automatically. Also seen: a stopped lane left its cargo/bwrap/claude process tree alive in the worktree, blocking the next reviewer (''in use by 15 live processes'').'
 status: Draft
@@ -12,6 +13,11 @@ req_type: Task
 tags:
 - from-advisor:general
 - kind:observation
+history:
+- id: 01a19d56-7263-7a81-8e07-d3c0a007091a
+  author: joe
+  timestamp: 2026-11-02T17:37:30.723289610Z
+  changes: []
 filed_at:
   code_sha: 15c0fa4d6051d6ba558fdb9fec01901e2fd27c4f
   branch: main
