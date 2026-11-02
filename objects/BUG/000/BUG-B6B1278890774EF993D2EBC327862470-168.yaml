@@ -16,12 +16,12 @@ description: |-
   1. `aida queue work <SPEC> --plan-only` on Codex enforces read-only sandbox posture (`--sandbox read-only`) instead of normal write flags.
   2. Investigate/wire Codex CLI `-c` config overrides for `[agents] mcp = "off" | "aida"` (or surface clearly in `aida config permissions show` when `mcp` cannot be enforced for the active vendor).
   3. Gate `scan_agent_worktree_trust` (`~/.claude.json` folder trust doctor findings) on Claude being an active/enabled vendor for the project, and support Codex worktree trust if applicable.
-status: InProgress
+status: Done
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T06:48:07.778727918Z
-modified_at: 2026-11-02T11:20:43.447632429Z
+modified_at: 2026-11-02T11:46:51.224322639Z
 req_type: Bug
 tags:
 - audit
@@ -72,6 +72,18 @@ comments:
   modified_at: 2026-11-02T11:20:43.447632429Z
   session_id: 01a19bfa65d6
   harness_version: 2.1.316 (Claude Code)
+- id: 01a19c14-f85a-72d2-a5aa-d0a5112d0892
+  author: joe
+  content: |-
+    ## Implementer findings (could not be filed as draft TASKs: `aida add` ID allocation is refused by the seat sandbox — read-only git dir — and MCP file_finding is denied)
+
+    1. **kind:deviation, minor** — Local `cargo test` / `make check-ci-fast` were NOT run: the headless 60s-per-call cap plus sandboxed background jobs being killed per command cannot fit the aida-cli-lib test compile (>10 min). CI is the first execution of `aida-cli-lib/src/tests/bug_2394_codex_posture_tests.rs`. The AC1 live write-refusal probe (`codex sandbox -c sandbox_mode=read-only`) cannot run inside the implementer bwrap (nested userns refused).
+    2. **kind:followup-suggestion, minor** — `[agents] mcp` is now enforced for Codex only on `aida agent new codex` (mirroring where Claude applies `claude_mcp_flags`). Queue-work interactive Codex (`exec_codex_session`), headless `codex exec`, and codex exec fork still load every config MCP server; Claude queue-work/headless never gets `--strict-mcp-config` either. Plugin-provided Codex MCP servers (e.g. cua_repl) reject `-c mcp_servers.<n>.enabled=false` on codex-cli 0.166.0 (`invalid transport`); only `--disable plugins` removes them, which also drops plugin skills.
+    3. **kind:followup-suggestion, minor** — No Codex trust doctor finding added: Codex keeps per-path `[projects."<path>"] trust_level`; whether linked worktrees / seat clones inherit the main checkout trust was not verifiable here. Also `queue_cmd.rs` still runs `preflight_contained_reviewer` only for `HeadlessVendor::Claude`.
+  created_at: 2026-11-02T11:46:22.426139313Z
+  modified_at: 2026-11-02T11:46:22.426139313Z
+  session_id: 01a19bfa65d6
+  harness_version: 2.1.316 (Claude Code)
 history:
 - id: 01a195dd-b979-7b63-b353-ebf808b482d9
   author: joe
@@ -96,6 +108,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a19c15-6945-7bb3-ae41-fecdf8959306
+  author: joe
+  timestamp: 2026-11-02T11:46:51.333415610Z
+  session_id: 01a19bfa65d6
+  harness_version: 2.1.316 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 filed_at:
   code_sha: 6dc7d4977ac5e47c42ddfb26597fe3ec5fb70b60
   branch: main
@@ -104,3 +125,7 @@ filed_at:
   aida_build_sha: 962ca07af25
   vendor: antigravity
   session: 01a194b1bcfb
+implementation_info:
+  implemented: true
+  implemented_at: 2026-11-02T11:46:51.224322639Z
+  implemented_by: joe
