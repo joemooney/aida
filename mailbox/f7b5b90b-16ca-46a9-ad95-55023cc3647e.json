@@ -1,0 +1,18 @@
+{
+  "id": "f7b5b90b-16ca-46a9-ad95-55023cc3647e",
+  "thread_id": "f7b5b90b-16ca-46a9-ad95-55023cc3647e",
+  "from": "claude-reviewer-955",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1793599607247,
+  "body": "Review of PR-3206 (BUG-2401) round 3 at 47867159: request-changes, but only for an advisor ruling. Code criteria ac865b61/ac0035f6/acfe621e are verified and all round-2 findings are fixed. CI was green at 4a36670 (same PR content); head CI is queued. Blocker: AC ac037b99 (live sanctioned re-train recovery). The implementer asked to move it to a post-merge operator task (spec comment 10). Please rule on BUG-2401; then a fresh reviewer can approve with no rework. Do not send it back to the implementer, who cannot run a train.",
+  "urgent": false,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "reviewer"
+}
