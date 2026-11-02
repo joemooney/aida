@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T10:12:04.230556201Z
-modified_at: 2026-11-02T11:45:32.588188398Z
+modified_at: 2026-11-02T11:45:33.574013208Z
 req_type: Bug
 tags:
 - alias
@@ -175,6 +175,22 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Slice-1 code (signoff amendments 4+5) looks correct, but the (BUG-2403) trailer would merge-complete the whole bug while spec Required behavior 1-2 / amendments 1-3,6-8 (alias selection, rework findings, recurrence, checked reader) are unfixed; CI not yet green and slice coverage gaps remain.. No triage reason was given.'
   created_at: 2026-11-02T11:45:32.588182947Z
   modified_at: 2026-11-02T11:45:32.588182947Z
+  session_id: 1f56bd1e-c059-4f73-b8df-e18b2170fdfc
+- id: 01a19c14-3905-7de3-abc5-d9497c9e16fc
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2403):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 941ccb39e43a
+    Recorded: 2026-11-02T11:43:15.903100251+00:00
+    Findings:
+    1. BLOCKING scope: the commit subject's trailing (BUG-2403) drives merge-time completion, but this PR implements only signoff amendments 4-5. Required behavior 1 (consistent friendly/native/canonical selection; stale alias must not override) and 2 (friendly/canonical reads agree; rework findings + recurrence guard; hold refusal matrix) are not addressed: project.rs verdict_events/spec_key literal partitions, review_verdict.rs read_recorded_verdict_any first-hit, and queue_cmd.rs rework_findings_block_for_spec display-first + substring fallback are untouched, so the PR3185 #19-vs-#20 and PR3194 #7 rework-import defects still reproduce. Fix: have the advisor file a follow-up spec for amendments 1-3 and 6-8 (the PR body says the seat could not), then retarget this slice's commit trailer to a slice spec (or keep BUG-2403 open via a child), so merging does not close BUG-2403 with its core defect live. Alternatively implement the remaining amendments here.
+    2. CI not green at 941ccb39: cli-0, lib-0, lib-1, contracts, gates and rest still pending at review time, and per the PR body no local cargo run (focused bug_2403 filter or make check-ci-fast) completed, so the six new tests including the end-to-end granted record --pr test have never been seen to compile or pass. Re-review needs a green CI run at the pushed head.
+    3. Slice-4/5 coverage gaps the signoff named as required evidence: (a) bug_2403_record_pr_handshake_keeps_origin_release_receipt asserts the receipt is present but never runs a lawful non-sensitive Rework auto-release through rework_hold_release to prove it now passes all existing gates; (b) no GitLab MR repeat of the record --pr handshake (only the projection-level PR-11/MR-11 distinctness check); (c) no concurrent-origin-replacement test proving the handshake uses the in-memory verdict_obj rather than a re-read another reviewer replaced; (d) no equal-time/ambiguous-origin projection case; (e) BUG-2398's bug_2398_actual_recorder_artifacts_require_durable_independent_authority not re-verified through the new projection (CI pending). Add (a)-(d) to aida-cli-lib/src/gate/tests/bug_2403_same_origin_receipt_tests.rs.
+    4. Minor: pr_merge_gate.rs keep_origin_receipt relabels the stamp to the reviewer's recorded_by/recorded_at AFTER build_verdict_object already archived that same reviewer round into rounds (archive key used recorder 'aida drain reviewer'), so the top-level record is now an exact duplicate of the archived round (same recorder, time, verdict, findings). Round history counts one act of review twice, which can inflate record_outcome round numbering and feed a same-findings consecutive-round comparison (the false-recurrence class BUG-2403 is about). The archiving is pre-existing, but the relabel makes the duplicate indistinguishable; when the origin is kept, drop the just-archived identical round or document why it is harmless.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-02T11:45:33.445419849Z
+  modified_at: 2026-11-02T11:45:33.445419849Z
   session_id: 1f56bd1e-c059-4f73-b8df-e18b2170fdfc
 history:
 - id: 01a196a4-b6bb-7730-a79a-e4a546bf516d
