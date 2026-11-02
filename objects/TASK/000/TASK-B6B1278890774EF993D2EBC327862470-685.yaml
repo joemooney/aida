@@ -1,0 +1,30 @@
+id: 01a19abc-cc08-74a2-908d-97ab34ade8a2
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-685
+title: 'non-blocking/minor: the child ''aida add'' non-zero-exit path (pr_lookup.rs ~1699…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on BUG-2404, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  non-blocking/minor: the child 'aida add' non-zero-exit path (pr_lookup.rs ~1699, message changed from 'see warning above' to 'not confirmed: aida add failed: ...') is not exercised by the new fixture
+
+  PR: #3230
+  Reviewed sha: 7801f2292def9a6afe27d759f4fedb09ffb7eb82
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-02T05:30:26.696275433Z
+modified_at: 2026-11-02T05:30:26.696275433Z
+req_type: Task
+tags:
+- carried-from:BUG-2404
+- finding-hash:d1253314
+- from-review:PR-3230
+- kind:carried-forward
+filed_at:
+  code_sha: 952552f2b786703862676a2bfc233082a538f09f
+  branch: main
+  dirty: true
+  aida_version: 0.16.0
+  aida_build_sha: 6a3f67671a9
+  vendor: claude
+  session: 126bbd5a-a92f-452b-ab0b-2637a1db42c2
