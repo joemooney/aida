@@ -8,12 +8,17 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-01T21:53:02.571133134Z
-modified_at: 2026-11-02T02:31:48.287283186Z
+modified_at: 2026-11-02T02:31:50.073561742Z
 req_type: Task
 tags:
 - from-implementer:BUG-2387
 - kind:bug-spotted
 - severity:major
+relationships:
+- rel_type: SupersededBy
+  target_id: 01a19600-3f6f-7672-b6b2-6611ff226175
+  created_at: 2026-11-02T02:31:50.073558486Z
+  created_by: joe
 comments:
 - id: 01a19a19-37ab-7463-8f9a-60c13e092749
   author: joe
@@ -34,6 +39,11 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Superseded
+- id: 01a19a19-4a50-7531-b7fa-1435e52bb989
+  author: joe
+  timestamp: 2026-11-02T02:31:51.120682521Z
+  session_id: 126bbd5a-a92f-452b-ab0b-2637a1db42c2
+  changes: []
 filed_at:
   aida_version: 0.16.0
   aida_build_sha: 6a3f67671a9
