@@ -924,6 +924,20 @@ fn codex_interactive_session_config(contained: bool) -> Result<crate::AgentLaunc
     Ok(config)
 }
 
+/// The child role a `session start --launch` hands the codex launcher when no
+/// `--role` was given: the operator's `AIDA_SESSION_ROLE`, then `implementer`.
+/// Resolved in preflight so the launcher never opens its interactive role
+/// picker after the worktree and lease exist (a cancel there orphaned both).
+// trace:TASK-2742 | ai:claude
+pub(crate) fn start_launch_default_role(explicit: Option<String>) -> String {
+    explicit
+        .filter(|s| !s.trim().is_empty())
+        .or_else(|| std::env::var("AIDA_SESSION_ROLE").ok())
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .unwrap_or_else(|| "implementer".to_string())
+}
+
 /// `aida session new` — capture role + title up-front, append a record
 /// to `~/.aida/session-launches.log`, then exec the configured
 /// interactive vendor (`claude --permission-mode <mode>`, or codex through the
@@ -11956,6 +11970,35 @@ mod tests {
                 "{vendor:?} {seat} child must not inherit the lane name"
             );
         }
+    }
+
+    /// A headless codex child (queue/dispatch/session spawn, not `agent new`)
+    /// never inherits its parent's launch-decided mail wake, so its own
+    /// SessionStart hook falls back to the `[agents.codex]` default.
+    // trace:TASK-2737 | ai:claude
+    #[test]
+    fn headless_codex_child_never_inherits_the_parent_mail_wake() {
+        let _env = crate::test_env::EnvVarsGuard::apply(&[
+            ("AIDA_CONTAINED", None),
+            ("AIDA_OS_WRAP", None),
+            (crate::mail_wake::LAUNCH_WAKE_ENV, Some("off")),
+        ]);
+        let cmd = build_exec_vendor_headless_command(
+            HeadlessVendor::Codex,
+            "prompt",
+            "sid",
+            false,
+            None,
+            None,
+            "implementer",
+            "",
+        )
+        .unwrap();
+        let wake = cmd
+            .get_envs()
+            .find(|(k, _)| *k == crate::mail_wake::LAUNCH_WAKE_ENV)
+            .map(|(_, v)| v);
+        assert_eq!(wake, Some(None), "the parent's wake must be removed");
     }
 
     // trace:BUG-2006 | ai:antigravity

@@ -462,6 +462,12 @@ struct State {
     last_run_at: Option<DateTime<Utc>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     last_verdict: Option<String>,
+    /// Whether the last run read a Codex sessions tree (`codex-sessions`
+    /// source `available`). The budget-evidence guard claims Codex spend is
+    /// measured only when this is true.
+    // trace:TASK-2731 | ai:claude
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    last_codex_available: Option<bool>,
     /// Codex session file -> its session id when it is this project's,
     /// `None` when its `session_meta` cwd is another project's. Holds only
     /// files seen in the last run, so it never grows with `~/.codex`.
@@ -1657,6 +1663,13 @@ pub(crate) fn scan(
     // trace:STORY-1218 | ai:claude
     state.last_run_at = Some(now);
     state.last_verdict = Some(verdict.to_string());
+    // trace:TASK-2731 | ai:claude
+    state.last_codex_available = Some(
+        coverage
+            .sources
+            .iter()
+            .any(|s| s.source == "codex-sessions" && s.state == "available"),
+    );
     save_state(sources.state_path.as_deref(), &state);
 
     coverage.verdict = verdict.into();
@@ -1676,6 +1689,10 @@ pub(crate) struct BudgetEvidence {
     pub(crate) last_run_at: Option<DateTime<Utc>>,
     /// That run's verdict (`ok`, `tripped`, `degraded`, `unknown`).
     pub(crate) last_verdict: Option<String>,
+    /// Whether that run could read Codex sessions; `false` for a state file
+    /// written before this was recorded (unproven is not measured).
+    // trace:TASK-2731 | ai:claude
+    pub(crate) codex_available: bool,
 }
 
 /// `None` when the state file is missing, unreadable or of another version.
@@ -1696,6 +1713,7 @@ pub(crate) fn budget_evidence(state_path: &Path, now: DateTime<Utc>) -> Option<B
         spent_24h,
         last_run_at: state.last_run_at,
         last_verdict: state.last_verdict,
+        codex_available: state.last_codex_available.unwrap_or(false),
     })
 }
 
@@ -3026,9 +3044,23 @@ mod tests {
         assert!(ev.spent_24h > 0, "{ev:?}");
         assert_eq!(ev.last_run_at, Some(now));
         assert_eq!(ev.last_verdict.as_deref(), Some(cov.verdict.as_str()));
+        // TASK-2731: no Codex sessions tree, so Codex spend was not measured.
+        // trace:TASK-2731 | ai:claude
+        assert!(!ev.codex_available, "{ev:?}");
         // Two days later the same aggregates fall out of the trailing day.
         let later = budget_evidence(&state_path, now + Duration::days(2)).unwrap();
         assert_eq!(later.spent_24h, 0);
+        // Once the tree exists, the next run records Codex as measured.
+        std::fs::create_dir_all(&src.codex_dirs[0]).unwrap();
+        scan(
+            "aida",
+            &src,
+            &WatchdogPolicy::default(),
+            now + Duration::minutes(1),
+            &HashMap::new(),
+        );
+        let ev = budget_evidence(&state_path, now + Duration::minutes(1)).unwrap();
+        assert!(ev.codex_available, "{ev:?}");
     }
 
     /// BUG-1962: an ended or idle session with trailing compactions reports

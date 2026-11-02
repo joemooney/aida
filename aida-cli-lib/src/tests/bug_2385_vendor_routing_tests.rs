@@ -50,6 +50,7 @@ routing_cases! {
     codex_session_start: "codex", "start";
     codex_session_start_unnamed: "codex", "start-unnamed";
     codex_session_start_bad_name_refused: "codex", "bad-name";
+    codex_session_start_env_role: "codex", "start-env-role";
     codex_agent_new_bare: "codex", "bare";
     codex_agent_new_role: "codex", "role";
     codex_agent_new_spec: "codex", "spec";
@@ -143,9 +144,13 @@ fn wrapper_launches_configured_vendor(vendor: &str, surface: &str) {
                 &root,
                 "routing-fixture",
                 "advisor",
-                &["implementer"],
+                &["implementer", "integrator"],
             );
             env.set_key(crate::gate::seat_authority::GRANT_ENV, &parent);
+            // TASK-2742: no --role, so the codex child takes the operator's role.
+            if surface == "start-env-role" {
+                env.set_key("AIDA_SESSION_ROLE", "integrator");
+            }
             let argv = tmp.path().join("argv");
             let context = tmp.path().join("context");
             let actual_vendor = if surface == "explicit" {
@@ -191,7 +196,7 @@ fn wrapper_launches_configured_vendor(vendor: &str, surface: &str) {
                 ],
                 // The ordinary start: no --name, so the derived display name
                 // ("impl@BUG-2385") must not become the codex agent handle.
-                "start-unnamed" => vec![
+                "start-unnamed" | "start-env-role" => vec![
                     "aida",
                     "session",
                     "start",
@@ -253,7 +258,13 @@ fn wrapper_launches_configured_vendor(vendor: &str, surface: &str) {
             let fields: Vec<_> = context.lines().collect();
             if actual_vendor == "codex" {
                 assert_eq!(fields[0], "codex");
-                assert_eq!(fields[1], "implementer");
+                // trace:TASK-2742 | ai:claude
+                let expected_role = if surface == "start-env-role" {
+                    "integrator"
+                } else {
+                    "implementer"
+                };
+                assert_eq!(fields[1], expected_role, "{vendor}/{surface}");
                 assert!(!fields[5].is_empty());
                 assert_ne!(fields[5], parent, "child must hold its own grant");
                 assert!(!args.contains("dangerously-bypass"));
@@ -289,8 +300,10 @@ fn wrapper_launches_configured_vendor(vendor: &str, surface: &str) {
                     fields[6]
                 );
             }
-            if matches!(surface, "start" | "start-unnamed" | "spec" | "bypass-start")
-                && actual_vendor == "codex"
+            if matches!(
+                surface,
+                "start" | "start-unnamed" | "start-env-role" | "spec" | "bypass-start"
+            ) && actual_vendor == "codex"
             {
                 assert_eq!(fields[2], "BUG-2385");
                 assert_eq!(crate::list_leases(&root).len(), 1);
@@ -457,4 +470,33 @@ fn trusted_native_and_parent_refusals_precede_session_setup() {
     assert!(error.contains("contained"), "{error}");
     assert!(!root.join(".aida/sessions").exists());
     std::env::set_current_dir(&original_cwd).unwrap();
+}
+
+/// The codex start --launch role is always concrete, so the launcher's
+/// `resolve_child_role` returns it without opening the picker — no picker
+/// cancel can run after the worktree and lease exist.
+// trace:TASK-2742 | ai:claude
+#[test]
+fn codex_start_launch_role_never_reaches_the_picker() {
+    let mut env = crate::test_env::EnvVarsGuard::apply(&[("AIDA_SESSION_ROLE", None)]);
+    assert_eq!(session::start_launch_default_role(None), "implementer");
+    assert_eq!(
+        session::start_launch_default_role(Some("  ".into())),
+        "implementer"
+    );
+    env.set_key("AIDA_SESSION_ROLE", "integrator");
+    assert_eq!(session::start_launch_default_role(None), "integrator");
+    assert_eq!(
+        session::start_launch_default_role(Some("reviewer".into())),
+        "reviewer"
+    );
+    env.set_key("AIDA_SESSION_ROLE", "");
+    assert_eq!(session::start_launch_default_role(None), "implementer");
+    // A concrete role short-circuits the picker even on a TTY.
+    let tmp = tempfile::tempdir().unwrap();
+    let role = session::start_launch_default_role(None);
+    assert_eq!(
+        crate::resolve_child_role(tmp.path(), Some(role), "codex").unwrap(),
+        Some("implementer".to_string())
+    );
 }
