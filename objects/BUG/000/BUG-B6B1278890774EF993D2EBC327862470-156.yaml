@@ -13,12 +13,12 @@ description: |
   1. A session started with `aida session start --owns <ID>` and then joined by an interactive codex (or claude) process in that clone/worktree reads `live` in `aida ps` while the agent runs. Re-bind it on the agent's first AIDA call or hook, or use the vendor activity adapter (STORY-1054), for example the Codex session's rollout file mtime or a process whose cwd is the clone.
   2. A process-dead verdict that rests only on the creator pid never emits a salvage recipe while a vendor process has the clone as its cwd. In that case it says "unbound agent in clone" and names the pid.
   3. Tests: a creator pid that exited plus a live vendor process in the clone gives live; no vendor process gives the current salvageable output (regression).
-status: Done
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T02:22:11.107502056Z
-modified_at: 2026-11-02T02:23:10.667083213Z
+modified_at: 2026-11-02T02:31:53.289467555Z
 req_type: Bug
 tags:
 - area:agents
@@ -100,6 +100,15 @@ history:
   timestamp: 2026-11-02T02:23:11.651553534Z
   session_id: 126bbd5a-a92f-452b-ab0b-2637a1db42c2
   changes: []
+- id: 01a19a19-52c9-7830-a870-a2fb92695429
+  author: aida-orchestrator
+  timestamp: 2026-11-02T02:31:53.289485519Z
+  session_id: 01a19a170979
+  harness_version: 2.1.316 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: NeedsAttention
 execution_mode: drain
 filed_at:
   code_sha: 7518617e469376bbe5debebd7cadd980e08656e5
@@ -113,3 +122,11 @@ implementation_info:
   implemented: true
   implemented_at: 2026-11-02T01:23:14.725518619Z
   implemented_by: joe
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'Logic meets BUG-2382 AC1-3 (codex joins live probe; unbound-occupant pass withholds salvage; tests cover live/regression), but CI is red from this PR: the Rust test portability ratchet rejects a /tmp literal in the new test file.'
+  recovery_hint: address the review findings, move BUG-2382 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-11-02T02:31:53.289467555Z
