@@ -10,12 +10,12 @@ description: |
   2. Regression fixtures record oldfriendly verdict, newer canonical/phase3 verdict atchangedhead; friendly/canonical reads agree. Cover approve→requestchanges and refusal→approve, reworkfindings + recurrenceguard, holdstillrefuseswronghead/invalidgrant/unrelatedspec and accepts only lawfulfreshidentityevidence. Both GitHub PR and GitLab MR handshakes mustretain existingmappingcontracts.
   3. Repair only supported resolution/projection, never direct JSON/ledgerediting, forgedattestation or manualbypass. Existing security/hold/authority and bounded nonsymlink handle reads stayintact. No globalrole/grantsandboxchange.
   4. Sensitivegate code: SKETCHONLY first, independentadvisorsignoff beforeimplementation. Avoid concurrentgate/review_verdict overlap with activeBUG2398; diagnose/read now, codeafter. Independentfreshreview andnormalgates. LIGHTtargetedfilter+fast, >10/sharedinfraadditionalgates, nofullsuite/slotbypass.
-status: InProgress
+status: Done
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T10:12:04.230556201Z
-modified_at: 2026-11-02T11:17:25.216773597Z
+modified_at: 2026-11-02T11:36:14.525442720Z
 req_type: Bug
 tags:
 - alias
@@ -176,6 +176,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a19c0b-b22e-7cc1-b667-24bbb74491ae
+  author: joe
+  timestamp: 2026-11-02T11:36:14.638155848Z
+  session_id: 01a19bfa71ce
+  harness_version: 2.1.316 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 filed_at:
   code_sha: 6fefb63280c352be0194c2cfadf54a085eb55471
   branch: main
@@ -183,3 +192,7 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: 4ce0af750fc
   vendor: codex
+implementation_info:
+  implemented: true
+  implemented_at: 2026-11-02T11:36:14.525442720Z
+  implemented_by: joe
