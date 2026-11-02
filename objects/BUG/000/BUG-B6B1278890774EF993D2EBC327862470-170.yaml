@@ -28,7 +28,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T06:49:16.503535709Z
-modified_at: 2026-11-02T04:00:00.932801841Z
+modified_at: 2026-11-02T04:04:14.419828939Z
 req_type: Bug
 tags:
 - audit
@@ -49,6 +49,28 @@ comments:
   content: 'PROXY DECISION: approve every listed hint/status surface AND actual compete judge Codex path, preserving explicit vendor override and deliberate vendor-specific sections. Reuse shared vendor/launch helpers and enforce read-only judge; no raw unsandboxed child or new grant rules. Current emitted workflow hints visibly still recommend /aida-pr, and worktree next block still prints Claude despite Codex lane. Cover Codex-only, Claude and mixed fixture outputs, unsupported vendor truthful hints, real Codex rollout attribution and existing doctor failure semantics. Sequence session/queue overlaps after BUG2385/2387/2398. If more than10files, required touched-test/compile gates apply; otherwise LIGHT one targeted filter plus fast gates, no whole-workspace suite.'
   created_at: 2026-11-01T08:20:17.944077903Z
   modified_at: 2026-11-01T08:20:17.944077903Z
+- id: 01a19a6d-dfd3-7dd0-9d4b-746974b3a8af
+  author: joe
+  content: |-
+    ## Implementer approach
+
+    ### Acceptance criteria as tests
+    - **Unit (vendor_hints):** one shared `vendor_hints` module resolves `[agents] vendor` (claude default) and renders skill refs (`/aida-x` for Claude, `$aida-x` for Codex when the skill ships in `.agents/skills`, a truthful `aida skill render aida-x` fallback otherwise), interactive launch lines (single-quoted `codex '$aida-pickup ID'`), and `aida agent new <vendor>` (`--bg` only for claude). Tests: claude, codex, agy, codex+claude-only skill.
+    - **Unit per surface (AC1):** worktree next block, queue-work manual continuation, `aida ps` spec-less hint, supervise no-advisor line, mandate advisor mail, session reap hint, workflow_hints drained/precheck lines — each builder takes the vendor; tests assert Codex output (`$aida-pr`, `codex`, no `--bg`) and unchanged Claude output.
+    - **Unit (AC2 compete):** `--judge-vendor` loses its hardcoded default; explicit flag > `[agents] vendor` > claude (fixture test with config.toml). Codex judge argv becomes `codex exec --sandbox read-only` (read-only enforced; no bypass flag). `ask_ai_argv` already has a Codex arm (asserted).
+    - **Unit/fixture (AC2 status):** new `─── Codex ───` status section from `~/.codex/sessions` rollouts (AIDA_CODEX_SESSIONS_DIR), attributed by first-line `session_meta` cwd (shared with runaway-seats), linked to leases by cwd; fixture test with in-project, worktree and foreign rollouts. Claude section kept as-is (deliberate vendor-specific). Inbox hint uses the vendor skill ref. Doctor diagnostics prints both sections; no failure-semantics change.
+
+    ### Expected files
+    - `aida-cli-lib/src/vendor_hints.rs` (new), `lib.rs`
+    - `worktree_gc.rs`, `queue_cmd.rs`, `dispatch_health_ps.rs`, `supervise_cmd.rs`, `gate/mandate_drive.rs`, `session_reap.rs`, `workflow_hints.rs`
+    - `compete.rs`, `compete_cmd.rs`, `status_cmd.rs`, `status_sections.rs`, `doctor_cmd.rs`, `runaway_seats.rs`, help golden snapshot
+
+    ### Ambiguities / conflicts as questions
+    - `phase_driver_trait.rs` `/aida-pr` in the advisor resume prompt goes to `spawn_claude_headless_resume` (Claude-only) and `@claude review once` triggers the Claude GitHub app: treated as deliberate vendor-specific, left unchanged. OK?
+  created_at: 2026-11-02T04:04:14.419828939Z
+  modified_at: 2026-11-02T04:04:14.419828939Z
+  session_id: 01a19a69fc5e
+  harness_version: 2.1.316 (Claude Code)
 history:
 - id: 01a195de-cf31-72b1-94fc-417a657ca801
   author: joe
