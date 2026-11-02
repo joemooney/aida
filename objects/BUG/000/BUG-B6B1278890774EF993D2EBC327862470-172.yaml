@@ -21,7 +21,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T07:26:20.914223641Z
-modified_at: 2026-11-02T06:57:00.979521631Z
+modified_at: 2026-11-02T06:57:03.017395403Z
 req_type: Bug
 tags:
 - architecture
@@ -509,6 +509,21 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: The PR''s own patch is unchanged since the approved e9419d0 apart from a clean conflict resolution, and the authority-consumer fixes still hold. But the main merge brought in managed Codex coordinator launches (#3217 BUG-2389) that issue an advisor child grant and skip codex_tool_env::prepare_launch, so AC1 is unmet at this head. The spawn ratchet cannot detect new sites. CI shards were still pending at review.. No triage reason was given.'
   created_at: 2026-11-02T06:57:00.979519776Z
   modified_at: 2026-11-02T06:57:00.979519776Z
+  session_id: 1f56bd1e-c059-4f73-b8df-e18b2170fdfc
+- id: 01a19b0c-1573-7723-900c-5abc7a13aa60
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2398):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: b26b7debdcc5
+    Recorded: 2026-11-02T06:55:01.585032572+00:00
+    Findings:
+    1. P1 correctness (AC ac022c22/ac7d6a3b): the main merge added managed native Codex coordinator launches that issue a delegated advisor child grant (GRANT_ENV) and spawn through session::coordinator_status_with_handle_guard without codex_tool_env::prepare_launch: burndown_run.rs:630-643 (quiet, build_burndown_quiet_command), burndown_run.rs:2125-2136 (verbose, build_burndown_verbose_command), autopilot_intake.rs:1007-1012, questions.rs:1618-1628. Under shell_environment_policy inherit=core their tool shells lose the delegated seat, which is the exact BUG-2398 symptom. Fix: for vendor==Codex, after the grant is assigned set AIDA_USER/AIDA_PROJECT_ROOT, call prepare_launch, and revoke the child grant on refusal. Configure stdout/stdio only AFTER prepare_launch: burndown verbose sets stdout before spawn, and prepare_launch rebuilds the Command, which drops stdio.
+    2. P2 test-coverage: bug_2398_final_spawn_boundary_ratchet (tests/bug_2398_codex_tool_env_tests.rs:476-492) counts prepare_launch only in a fixed list of six files, so it cannot detect a new managed Codex spawn site elsewhere. That is how finding 1 got through. Add the coordinator files, and make the ratchet structural (for example, every caller of coordinator_status_with_handle_guard, and every vendor-routed command that sets GRANT_ENV, reaches prepare_launch for Codex). Add a wiring test proving one coordinator path (burndown or questions) emits the -c shell_environment_policy.set overrides and revokes its grant on preflight refusal.
+    3. P3 non-blocking, carried over: the env_remove of unassigned whitelist keys (codex_tool_env.rs:93-97) is still exercised only by bug_2398_real_codex_inherit_all_drops_unassigned_launcher_context, which SKIPs without codex on PATH (as in CI). Add a CI-runnable unit test: ambient AIDA_SESSION_SCOPE/AIDA_AGENT_CONTEXT_FILE in the parent and a baseline child, asserting get_envs() shows explicit removals and that no -c override is emitted for them.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-02T06:57:02.835405009Z
+  modified_at: 2026-11-02T06:57:02.835405009Z
   session_id: 1f56bd1e-c059-4f73-b8df-e18b2170fdfc
 history:
 - id: 01a19600-c769-7cd0-ba08-8d93975e3e3b
