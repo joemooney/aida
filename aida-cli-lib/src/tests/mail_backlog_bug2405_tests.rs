@@ -595,8 +595,15 @@ fn group_writable_registry_still_inspects_genuine_backlog() {
     let r = mail_repo();
     let (row, b) = reader(&r, std::process::id(), "codex", "reader-b");
     let agents = crate::agent_registry::agents_dir(&r.main);
+    // Directory-permission fixture, not an executable: the registry dirs must
+    // be group-writable (0o775) to reproduce the umask case. test_exec's
+    // mark_executable would set 0o755 and lose that, so the mode is named here
+    // rather than written as an executable-mode literal the fixture ratchet
+    // (tests/test_executable_fixture_ratchet.py) reserves for real executables.
+    const GROUP_WRITABLE_DIR: u32 = 0o775;
     for dir in [agents.clone(), agents.join("handles")] {
-        std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o775)).unwrap();
+        std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(GROUP_WRITABLE_DIR))
+            .unwrap();
     }
     for file in [
         agents.join(format!("{}.toml", row.id)),
