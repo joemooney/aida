@@ -1,0 +1,27 @@
+id: 01a19dd6-5941-7bd3-bf49-45bbcd9c9fc5
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-720
+title: 'cosmetic: bug_2415_bwrap_session_end_ends_a_clone_pushed_by_explicit_refspec re…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on BUG-2411, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  cosmetic: bug_2415_bwrap_session_end_ends_a_clone_pushed_by_explicit_refspec returns early when bwrap is not live; CI logs could not be fetched from the review sandbox to confirm it ran rather than skipped.
+  Reviewed sha: d49d147b29df9ef04cd98e8323bfb1e6d13a3917
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-02T19:57:12.897896727Z
+modified_at: 2026-11-02T19:57:12.897896727Z
+req_type: Task
+tags:
+- carried-from:BUG-2411
+- finding-hash:86fa67ce
+- from-review:BUG-2411
+- kind:carried-forward
+filed_at:
+  code_sha: dc661f7b7d0801fcee66d9f6feb6dd981fff55a7
+  branch: main
+  dirty: true
+  aida_version: 0.16.0
+  aida_build_sha: 6a3f67671a9
+  vendor: claude
