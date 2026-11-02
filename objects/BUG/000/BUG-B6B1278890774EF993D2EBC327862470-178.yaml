@@ -11,7 +11,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T16:42:07.593722571Z
-modified_at: 2026-11-02T06:49:01.096584627Z
+modified_at: 2026-11-02T06:52:53.410463268Z
 req_type: Bug
 tags:
 - doctor
@@ -78,6 +78,12 @@ comments:
   modified_at: 2026-11-02T06:13:50.651553763Z
   session_id: 01a19adf83f8
   harness_version: 2.1.316 (Claude Code)
+- id: 01a19b08-4722-7f21-8ce2-d9bd1e04ef82
+  author: joe
+  content: 'REWORK BRIEF (advisor, 2026-11-01 23:53 MST), round 4: lib-1 is green now. lib-0 fails only bug_1723_config_trust_tests::every_config_toml_site_is_inventoried: aida-cli-lib/src/mail_backlog_bug2405_tests.rs has a config.toml literal, and the guard classifies the file as production code because it sits outside src/tests/. Move the file under aida-cli-lib/src/tests/ (mount it the same way), or add its [readers] entry to scripts/config-trust.toml with the classification the guard asks for. Moving it is preferred. Gate: cargo test -p aida-cli-lib bug_1723_config_trust plus focused_bug2405, then make check-ci-fast.'
+  created_at: 2026-11-02T06:52:53.410463268Z
+  modified_at: 2026-11-02T06:52:53.410463268Z
+  session_id: 1f56bd1e-c059-4f73-b8df-e18b2170fdfc
 history:
 - id: 01a198c4-4a0e-78f2-a498-045eec94c002
   author: joe
