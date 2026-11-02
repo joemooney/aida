@@ -2025,7 +2025,8 @@ fn task_1865_leased_lookup(
         std::time::Duration::ZERO,
     )
     .unwrap();
-    live_trains(&root).unwrap()
+    let (open, leased, _abandoned) = live_trains(&root).unwrap();
+    (open, leased)
 }
 
 /// An unreadable leased train body still names nobody (the rider gate fails
@@ -2741,4 +2742,342 @@ esac
         host.train_ci_snapshot(&change, &tip, &[]).unwrap(),
         TrainCiReadiness::Red(_)
     ));
+}
+
+// ── BUG-2412: a train PR whose owner died does not block its riders ───────
+
+/// An owner recorded in this process's PID namespace and boot.
+// trace:BUG-2412 | ai:claude
+fn bug_2412_local_owner(host: &str, pid: u32, start: &str) -> TrainOwner {
+    TrainOwner {
+        host: host.into(),
+        pid,
+        start: Some(start.into()),
+        pid_ns: aida_core::local_pid_ns(),
+        boot: aida_core::local_boot_id(),
+    }
+}
+
+/// Whether this platform reports a PID namespace and boot id, without which
+/// no owner is ever judged dead (so the abandon paths cannot be exercised).
+// trace:BUG-2412 | ai:claude
+fn bug_2412_identity_readable() -> bool {
+    aida_core::local_pid_ns().is_some() && aida_core::local_boot_id().is_some()
+}
+
+/// The owner line round-trips, and a body without one (a pre-BUG-2412
+/// train, or a hand edit) names no owner.
+// trace:BUG-2412 | ai:claude
+#[test]
+fn bug_2412_owner_line_round_trips_and_a_missing_line_names_nobody() {
+    let owner = TrainOwner {
+        host: "box".into(),
+        pid: 4242,
+        start: Some("linux-starttime:77".into()),
+        pid_ns: Some("4026531836".into()),
+        boot: Some("boot-a".into()),
+    };
+    let body = format!(
+        "Train.\n\n{MEMBERS_LINE} #1@abc1234\n{}\n",
+        owner_line(&owner)
+    );
+    assert_eq!(parse_owner_line(&body), Some(owner.clone()));
+    assert_eq!(
+        parse_members_line(&body),
+        Some(vec![(1, "abc1234".to_string())]),
+        "the owner line leaves the members line the merge-hold gate reads intact"
+    );
+    let no_start = TrainOwner {
+        start: None,
+        pid_ns: None,
+        boot: None,
+        ..owner
+    };
+    assert_eq!(parse_owner_line(&owner_line(&no_start)), Some(no_start));
+    assert_eq!(parse_owner_line("Train.\n"), None);
+    assert_eq!(
+        parse_owner_line(&format!("{OWNER_LINE} host=box pid=x")),
+        None
+    );
+}
+
+/// Only a dead owner in this host's boot and PID namespace makes a train
+/// abandoned: this process's own train stays live, and another host's, an
+/// ownerless, a foreign-namespace, an unrecorded-namespace or another boot's
+/// train keeps blocking (its liveness cannot be read here).
+// trace:BUG-2412 | ai:claude
+#[test]
+fn bug_2412_only_a_dead_same_host_owner_abandons_a_train() {
+    let alive = aida_core::liveness::process_identity_is_alive;
+    let ours = format!("x\n{}\n", owner_line_for_self());
+    let host = crate::coordination::hostname();
+    assert_eq!(train_abandoned(&ours, &host, alive), None, "a live owner");
+    if !bug_2412_identity_readable() {
+        return;
+    }
+    let dead = bug_2412_local_owner(&host, 999_999_999, "linux-starttime:1");
+    let dead_body = format!("x\n{}\n", owner_line(&dead));
+    assert_eq!(
+        train_abandoned(&dead_body, &host, alive),
+        Some(dead.clone())
+    );
+    assert_eq!(
+        train_abandoned(&dead_body, "another-host", alive),
+        None,
+        "another host's train is never judged from here"
+    );
+    assert_eq!(train_abandoned("x\n", &host, alive), None, "no owner line");
+    // The owner pid was recorded in another sandboxed call's PID namespace:
+    // probing it here says nothing, so the train is never closed.
+    let foreign_ns = TrainOwner {
+        pid_ns: Some("1".into()),
+        ..dead.clone()
+    };
+    assert_eq!(
+        train_abandoned(&owner_line(&foreign_ns), &host, alive),
+        None,
+        "an owner in a foreign PID namespace is unreadable, not dead"
+    );
+    let unrecorded_ns = TrainOwner {
+        pid_ns: None,
+        ..dead.clone()
+    };
+    assert_eq!(
+        train_abandoned(&owner_line(&unrecorded_ns), &host, alive),
+        None,
+        "an owner with no recorded PID namespace is unreadable"
+    );
+    let other_boot = TrainOwner {
+        boot: Some("another-boot".into()),
+        ..dead.clone()
+    };
+    assert_eq!(
+        train_abandoned(&owner_line(&other_boot), &host, alive),
+        None,
+        "an owner from another boot is unreadable"
+    );
+    let unrecorded_boot = TrainOwner {
+        boot: None,
+        ..dead.clone()
+    };
+    assert_eq!(
+        train_abandoned(&owner_line(&unrecorded_boot), &host, alive),
+        None,
+        "an owner with no recorded boot id is unreadable"
+    );
+    // A recycled pid (alive, but a different start identity) is dead.
+    let recycled = bug_2412_local_owner(&host, std::process::id(), "linux-starttime:1");
+    if aida_core::liveness::process_start_identity(std::process::id()).is_some() {
+        assert!(train_abandoned(&format!("{}\n", owner_line(&recycled)), &host, alive).is_some());
+    }
+}
+
+/// The observed failure: `aida pr train 3214 3240` was killed mid-run and
+/// left train PR #3248 (members #3240) open with no owning process; the next
+/// train refused #3240 as "already riding live train PR #3248". Now the
+/// lookup reports #3248 abandoned, #3240 boards, a real run closes #3248 with
+/// a comment, and an ownerless legacy train, a train owned from another PID
+/// namespace, and a dead-owner train still named by a live train lease all
+/// keep blocking their riders and are never closed.
+// trace:BUG-2412 | ai:claude
+#[cfg(unix)]
+#[test]
+fn bug_2412_a_killed_trains_pr_is_abandoned_and_closed_not_blocking() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    if !bug_2412_identity_readable() {
+        return;
+    }
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path().join("main");
+    write_retry_config(&root);
+    let dead = bug_2412_local_owner("train-host", 999_999_999, "linux-starttime:1");
+    let foreign = TrainOwner {
+        pid_ns: Some("1".into()),
+        ..dead.clone()
+    };
+    let rows = serde_json::json!([
+        {
+            "number": 3248,
+            "headRefName": "train/killed-1",
+            "body": format!("Train.\n\n{MEMBERS_LINE} #3240@abc1234\n{}\n", owner_line(&dead)),
+        },
+        {
+            "number": 3249,
+            "headRefName": "train/legacy-1",
+            "body": format!("Train.\n\n{MEMBERS_LINE} #3214@def5678\n"),
+        },
+        {
+            "number": 3250,
+            "headRefName": "train/sandboxed-1",
+            "body": format!("Train.\n\n{MEMBERS_LINE} #3260@0123abc\n{}\n", owner_line(&foreign)),
+        },
+        {"number": 3240, "headRefName": "bug-1-work", "body": "member"},
+    ]);
+    let list = tmp.path().join("list.json");
+    std::fs::write(&list, rows.to_string()).unwrap();
+    let log = tmp.path().join("gh.log");
+    let bin = tmp.path().join("bin");
+    std::fs::create_dir_all(&bin).unwrap();
+    crate::test_exec::write_executable(
+        &bin.join("gh"),
+        format!(
+            "#!/bin/sh\n\
+             echo \"$@\" >> '{log}'\n\
+             if [ \"$1\" = pr ] && [ \"$2\" = list ]; then cat '{list}'; exit 0; fi\n\
+             if [ \"$1\" = pr ] && [ \"$2\" = close ]; then exit 0; fi\n\
+             echo unexpected gh args: \"$@\" >&2\n\
+             exit 1\n",
+            log = log.display(),
+            list = list.display()
+        ),
+    );
+    let path = format!(
+        "{}:{}",
+        bin.display(),
+        std::env::var("PATH").unwrap_or_default()
+    );
+    let _env = crate::test_env::EnvVarsGuard::apply(&[
+        ("PATH", Some(path.as_str())),
+        ("AIDA_HOST_OVERRIDE", Some("train-host")),
+    ]);
+    let (open, leased, abandoned) = live_trains(&root).unwrap();
+    assert_eq!(
+        abandoned,
+        vec![(3248, "train/killed-1".to_string(), dead.clone())]
+    );
+    assert_eq!(
+        open,
+        vec![
+            (3249, Some(vec![(3214, "def5678".to_string())])),
+            (3250, Some(vec![(3260, "0123abc".to_string())])),
+        ]
+    );
+    assert!(
+        train_rider_refusal(3260, &open, &leased).is_some(),
+        "a train owned from a foreign PID namespace is live as far as we can tell"
+    );
+    assert!(
+        train_rider_refusal(3240, &open, &leased).is_none(),
+        "#3240 boards: its old train's owner is dead"
+    );
+    assert!(
+        train_rider_refusal(3214, &open, &leased).is_some(),
+        "an ownerless train is not judged dead and still blocks"
+    );
+    close_abandoned_train(&root, 3248, "train/killed-1", &dead, true);
+    let calls = std::fs::read_to_string(&log).unwrap();
+    assert!(
+        !calls.contains("pr close"),
+        "a dry run closes nothing: {calls}"
+    );
+    close_abandoned_train(&root, 3248, "train/killed-1", &dead, false);
+    let calls = std::fs::read_to_string(&log).unwrap();
+    assert!(
+        calls.contains("pr close 3248 --comment Closed by a later `aida pr train`"),
+        "{calls}"
+    );
+    // A live train merge-lease still naming #3248 means a train is landing
+    // it: it is not abandoned, it keeps blocking #3240, and nothing closes it.
+    let _lease = crate::merge_lock::acquire(
+        &root,
+        "main",
+        Some(3248),
+        TRAIN_LEASE_NOTE,
+        std::time::Duration::ZERO,
+    )
+    .unwrap();
+    let (open, leased, abandoned) = live_trains(&root).unwrap();
+    assert!(
+        abandoned.is_empty(),
+        "a leased train is never closed: {abandoned:?}"
+    );
+    assert!(
+        open.iter().any(|(n, _)| *n == 3248),
+        "the leased train stays live: {open:?}"
+    );
+    assert!(train_rider_refusal(3240, &open, &leased).is_some());
+}
+
+// ── BUG-2413: a bundled spec superseded into a drain carrier ──────────────
+
+// trace:BUG-2413 | ai:claude
+fn bug_2413_spec(mode: Option<aida_core::ExecutionMode>) -> aida_core::Requirement {
+    let mut r = aida_core::Requirement::new("t".into(), "d".into());
+    r.execution_mode = mode;
+    r
+}
+
+// trace:BUG-2413 | ai:claude
+fn bug_2413_supersede(bundled: &mut aida_core::Requirement, carrier: &aida_core::Requirement) {
+    bundled.status = aida_core::RequirementStatus::Superseded;
+    bundled.relationships.push(aida_core::Relationship {
+        rel_type: aida_core::RelationshipType::SupersededBy,
+        target_id: carrier.id,
+        created_at: None,
+        created_by: None,
+    });
+}
+
+/// The observed failure: carrier TASK-2731 is drain, bundled TASK-2737 was
+/// superseded into it with its mode unset, and the train refused "TASK-2737
+/// is marked unset (supervised)". It now gates on the carrier's drain.
+// trace:BUG-2413 | ai:claude
+#[test]
+fn bug_2413_a_superseded_unset_spec_gates_on_its_drain_carrier() {
+    use aida_core::ExecutionMode;
+    let carrier = bug_2413_spec(Some(ExecutionMode::Drain));
+    let mut bundled = bug_2413_spec(None);
+    bug_2413_supersede(&mut bundled, &carrier);
+    let store = vec![carrier.clone(), bundled.clone()];
+    let mode = crate::pr_cmd::gating_execution_mode(&store, &bundled);
+    assert_eq!(mode, Some(ExecutionMode::Drain));
+    let records = vec![
+        ("TASK-2731".to_string(), Vec::new(), carrier.execution_mode),
+        ("TASK-2737".to_string(), Vec::new(), mode),
+    ];
+    assert_eq!(
+        member_spec_policy_refusal(records, false, || Err(None)),
+        None,
+        "a drain carrier with its bundled spec needs no human"
+    );
+}
+
+/// The inheritance never loosens the gate: a bundled spec's own mode wins, a
+/// supervised carrier still supervises, an unset spec with no superseded-by
+/// edge stays supervised, and a cycle terminates.
+// trace:BUG-2413 | ai:claude
+#[test]
+fn bug_2413_inheritance_never_loosens_the_supervised_gate() {
+    use aida_core::ExecutionMode;
+    let guided = bug_2413_spec(Some(ExecutionMode::Guided));
+    let mut bundled = bug_2413_spec(None);
+    bug_2413_supersede(&mut bundled, &guided);
+    let store = vec![guided.clone(), bundled.clone()];
+    assert_eq!(
+        crate::pr_cmd::gating_execution_mode(&store, &bundled),
+        Some(ExecutionMode::Guided)
+    );
+    let drain = bug_2413_spec(Some(ExecutionMode::Drain));
+    let mut own = bug_2413_spec(Some(ExecutionMode::Guided));
+    bug_2413_supersede(&mut own, &drain);
+    assert_eq!(
+        crate::pr_cmd::gating_execution_mode(&[drain, own.clone()], &own),
+        Some(ExecutionMode::Guided),
+        "a spec's own mode is never overridden"
+    );
+    let lone = bug_2413_spec(None);
+    assert_eq!(
+        crate::pr_cmd::gating_execution_mode(std::slice::from_ref(&lone), &lone),
+        None
+    );
+    let mut a = bug_2413_spec(None);
+    let mut b = bug_2413_spec(None);
+    bug_2413_supersede(&mut a, &b);
+    bug_2413_supersede(&mut b, &a);
+    assert_eq!(
+        crate::pr_cmd::gating_execution_mode(&[a.clone(), b], &a),
+        None
+    );
 }
