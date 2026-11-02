@@ -6,12 +6,12 @@ description: |-
   Acceptance: (1) Common data-driven vendor capability/trusted-policy/launch-boundary contract and a closed model-free doctor/config probe, with precise ready/unsupported/refused cause. No arbitrary harness or stored shell through partial backend. (2) Same intended production filesystem/supervisor builder executes fixed synthetic lane with private namespaces/proc, capdrop, terminal-injection refusal, FD hygiene, typed own-write roots/protected paths and teardown. (3) Required-live fixture proves permitted synthetic writes, denied outside/proc/FD/protected-path writes and process teardown; unavailable bwrap/userns/TTY/channel fails closed. (4) Current real-vendor behavior unchanged and unsupported partial backend remains unselectable. Layers: trusted config/capability data, public diagnostics, runtime supervisor/filesystem, integration tests. Signed sliceA.
 
   All signed STORY2238 sketch C1-C12 and BUG2398 B1-B4 apply. Linux only, fakeHOME/synthetic tests, no global user settings or schedules. No partial backend may report AIDA containment applied or launch ordinary agents until all required protections are ready; named refusal, no fallback. STRICT independent review, operator merge floor. LIGHT one targeted test plus fast gates; shared infra or >10files adds touched-test/compile, fullsuiteCI only. Longcargo background, no slotbypass. Parent all7AC remain open until final installed-tool evidence; no slice alone completes parent.
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T09:05:27.409838422Z
-modified_at: 2026-11-01T22:37:23.492028187Z
+modified_at: 2026-11-02T00:32:02.051370610Z
 req_type: Task
 tags:
 - architecture
@@ -269,6 +269,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a199ab-9803-72c2-a8ae-26b10083d425
+  author: aida-orchestrator
+  timestamp: 2026-11-02T00:32:02.051398736Z
+  session_id: 01a199a8ae85
+  harness_version: 2.1.316 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 4ce0af750fcb68d4adf57496e4e002aefd8ace77
   branch: main
@@ -276,3 +285,11 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: 4ce0af750fc
   vendor: codex
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: Ruling remedy implemented and CI green, but required-live tests now pass on host-policy denial, so AC3 has no exact-head required-live proof
+  recovery_hint: address the review findings, move TASK-2705 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-11-02T00:32:02.051370610Z
