@@ -1605,7 +1605,11 @@ const ROLE_LAUNCH_SITES: &[(&str, usize, RoleRoute)] = &[
         RoleRoute::AidaChild("reviewer gate runs `aida queue work`, which finalizes in session.rs"),
     ),
     ("phase_driver.rs", 2, RoleRoute::LaunchInventory),
-    ("session.rs", 6, RoleRoute::LaunchInventory),
+    // BUG-2386 adds two: `finalize_codex_resume` (interactive resume, seat
+    // from the delegated grant) and `spawn_vendor_headless_resume_granted`
+    // (punt/bg resume); both finalize through `prepare_launch`.
+    // trace:BUG-2386 | ai:claude
+    ("session.rs", 8, RoleRoute::LaunchInventory),
     ("zen_drive_root.rs", 1, RoleRoute::LaunchInventory),
 ];
 

@@ -198,7 +198,7 @@ fn recorded_resume_places_rollout_log_transcript_and_lease_ids_and_refuses_the_r
         recorded_resume(&fx.project, "claude-sid", None).unwrap(),
         (HeadlessVendor::Claude, "claude-sid".to_string())
     );
-    // 4. A Codex lane's AIDA id whose log is gone: the scope's stamped lease
+    // 4. A Codex lane resumed by its lease id: the scope's stamped lease
     // binds the thread, never a `claude --resume` on a non-Claude id.
     write_lease(
         &fx.project,
@@ -209,8 +209,26 @@ fn recorded_resume_places_rollout_log_transcript_and_lease_ids_and_refuses_the_r
         "vendor_session_id = \"019a-stamped\"\n",
     );
     assert_eq!(
-        recorded_resume(&fx.project, "aida-no-log", Some("BUG-1")).unwrap(),
+        recorded_resume(&fx.project, "lease-codex", Some("BUG-1")).unwrap(),
         (HeadlessVendor::Codex, "019a-stamped".to_string())
+    );
+    // 4b. A Codex lane's AIDA id whose log never got to `thread.started`:
+    // the log name ties the id to the lease's branch, so the stamp answers.
+    std::fs::write(
+        fx.project
+            .join(".aida/headless-logs/b-aida-no-thread.jsonl"),
+        "",
+    )
+    .unwrap();
+    assert_eq!(
+        recorded_resume(&fx.project, "aida-no-thread", Some("BUG-1")).unwrap(),
+        (HeadlessVendor::Codex, "019a-stamped".to_string())
+    );
+    // 4c. A foreign or mistyped id belongs to no lease in the scope: it falls
+    // through to the configured vendor and never resumes the scope's thread.
+    assert_eq!(
+        recorded_resume(&fx.project, "aida-typo", Some("BUG-1")).unwrap(),
+        (HeadlessVendor::Claude, "aida-typo".to_string())
     );
     // 5. Nothing places the id: it resumes on the configured vendor (Claude
     // by default), so resume does not regress for an id no transcript names.
@@ -234,6 +252,14 @@ fn recorded_resume_places_rollout_log_transcript_and_lease_ids_and_refuses_the_r
         .expect_err("configured Codex with no bound thread refuses");
     assert!(
         format!("{err:#}").contains("cannot tell which agent recorded session `unknown-id`"),
+        "{err:#}"
+    );
+    // 7. Under configured Codex, a foreign id in a scope whose lease binds a
+    // thread still refuses: the scope's newest thread is never a guess.
+    let err = recorded_resume(&fx.project, "aida-typo", Some("BUG-1"))
+        .expect_err("a foreign id never resumes the scope's thread");
+    assert!(
+        format!("{err:#}").contains("cannot tell which agent recorded session `aida-typo`"),
         "{err:#}"
     );
 }
@@ -316,7 +342,7 @@ fn codex_resume_command_honours_a_flag_only_containment_request() {
     codex_native_policy(root.path(), false);
     // `--sandbox` alone (no env, no knob) still runs Codex's native sandbox,
     // and a bypass request never widens a contained resume.
-    let cmd = session::build_codex_resume_command("019a-thread", true, None, true).unwrap();
+    let cmd = session::build_codex_resume_command("019a-thread", true, false, None, true).unwrap();
     let args = args_of(&cmd);
     assert!(
         args.windows(2)
@@ -332,7 +358,7 @@ fn codex_resume_command_honours_a_flag_only_containment_request() {
         "{args:?}"
     );
     // Without the flag, the bypass request maps to Codex's bypass flag.
-    let cmd = session::build_codex_resume_command("019a-thread", true, None, false).unwrap();
+    let cmd = session::build_codex_resume_command("019a-thread", true, false, None, false).unwrap();
     assert!(
         args_of(&cmd)
             .iter()
@@ -340,6 +366,27 @@ fn codex_resume_command_honours_a_flag_only_containment_request() {
         "{:?}",
         args_of(&cmd)
     );
+    // BUG-2394: a resumed `--plan-only` lane keeps the read-only sandbox on
+    // both postures; bypass and workspace-write never survive it.
+    for contained in [true, false] {
+        let cmd = session::build_codex_resume_command("019a-thread", true, true, None, contained)
+            .unwrap();
+        let args = args_of(&cmd);
+        assert!(
+            args.windows(2).any(|w| w == ["--sandbox", "read-only"]),
+            "{args:?}"
+        );
+        assert!(
+            !args
+                .iter()
+                .any(|a| a.contains("dangerously-bypass") || a == "workspace-write"),
+            "{args:?}"
+        );
+        assert!(
+            args.windows(2).any(|w| w == ["resume", "019a-thread"]),
+            "{args:?}"
+        );
+    }
 }
 
 #[test]

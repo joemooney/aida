@@ -13619,6 +13619,12 @@ pub(crate) fn handle_queue_work(
             // uniform bypass posture to Codex's actual flag here; `None` and every
             // non-bypass Claude permission mode keep Codex native.
             let codex_bypass = permission_mode.as_deref() == Some("bypassPermissions");
+            // BUG-2394: `--plan-only` resolves to `plan`, which Codex has no
+            // permission-mode for — map it to the read-only sandbox instead of
+            // falling through to the ordinary write posture. A resumed plan
+            // lane keeps it too (BUG-2386).
+            // trace:BUG-2394 | ai:claude
+            let codex_read_only = session::codex_plan_read_only(permission_mode.as_deref());
             // BUG-2386: `--resume` continues the recorded Codex thread instead
             // of silently starting a fresh session. trace:BUG-2386 | ai:claude
             if let QueueWorkLaunch::Resume(id) = &launch {
@@ -13639,22 +13645,24 @@ pub(crate) fn handle_queue_work(
                         "resuming codex session {} in {} ({})",
                         &thread[..thread.len().min(8)],
                         lease.worktree_path.display(),
-                        if codex_bypass { "bypass" } else { "native" },
+                        if codex_read_only {
+                            "read-only sandbox"
+                        } else if codex_bypass {
+                            "bypass"
+                        } else {
+                            "native"
+                        },
                     )
                     .cyan()
                 );
                 return session::exec_codex_resume(
                     &thread,
                     codex_bypass,
+                    codex_read_only,
                     child_grant_id.as_deref(),
                     contained,
                 );
             }
-            // BUG-2394: `--plan-only` resolves to `plan`, which Codex has no
-            // permission-mode for — map it to the read-only sandbox instead of
-            // falling through to the ordinary write posture.
-            // trace:BUG-2394 | ai:claude
-            let codex_read_only = session::codex_plan_read_only(permission_mode.as_deref());
             eprintln!(
                 "{} {}",
                 crate::glyph(crate::glyphs::Glyph::FlowActive)
@@ -14168,14 +14176,16 @@ pub(crate) fn run_standalone_reviewer(
                         &crate::current_user_id(None),
                         session::containment_applied(recorded, contained),
                     )?;
+                    // A reviewer never runs a plan lane; the seat comes from
+                    // the reviewer grant, set by `finalize_codex_resume`.
                     let mut cmd = session::build_codex_resume_command(
                         &resume_id,
                         permission_mode == Some("bypassPermissions"),
+                        false,
                         Some(&grant.id),
                         contained,
                     )?;
-                    cmd.current_dir(worktree)
-                        .env("AIDA_SESSION_ROLE", "reviewer");
+                    cmd.current_dir(worktree);
                     // trace:BUG-2386 | ai:claude
                     if let Err(error) = session::finalize_codex_resume(&mut cmd, project_root) {
                         session::revoke_headless_child_grant(&grant.id);

@@ -653,7 +653,7 @@ pub(crate) fn resume_with(
     if parent_contained {
         let cwd = std::env::current_dir().context("failed to read the current directory")?;
         let mut cmd = build_contained_resume_command(&target, &cwd)?;
-        return exec_or_spawn_claude(&mut cmd);
+        return exec_or_spawn_agent(&mut cmd);
     }
     exec_resume_command(&target, None, false)
 }
@@ -863,7 +863,7 @@ pub(crate) fn stage_resume_transcript(id: &str, listed_in: &Path, cwd: &Path) ->
 
 /// Replace this process with `cmd` (spawn + wait where exec is unavailable).
 // trace:BUG-2157 | ai:claude
-fn exec_or_spawn_claude(cmd: &mut std::process::Command) -> Result<()> {
+fn exec_or_spawn_agent(cmd: &mut std::process::Command) -> Result<()> {
     // BUG-2386: a Codex resume execs through here too; name the real program.
     let program = cmd.get_program().to_string_lossy().into_owned();
     #[cfg(unix)]
@@ -2733,11 +2733,13 @@ pub fn exec_codex_session(
 /// otherwise `bypass` maps to Codex's bypass flag. `grant_id` binds the
 /// child's seat grant. `contained` is the caller's own request (e.g.
 /// `queue work --sandbox`), OR-ed with the parent env and the knob so a
-/// flag-only request is never dropped.
+/// flag-only request is never dropped. `read_only` keeps a plan lane's
+/// read-only sandbox (BUG-2394) on the resumed thread; it wins over bypass.
 // trace:BUG-2386 | ai:claude
 pub(crate) fn build_codex_resume_command(
     thread_id: &str,
     bypass: bool,
+    read_only: bool,
     grant_id: Option<&str>,
     contained: bool,
 ) -> Result<std::process::Command> {
@@ -2751,6 +2753,7 @@ pub(crate) fn build_codex_resume_command(
         thread_id,
         native,
         bypass && !native,
+        read_only,
     )?);
     // An explicit grant decision either way: the delegated grant, or the
     // empty baseline selector (BUG-2398 finalization refuses neither-nor).
@@ -2774,10 +2777,11 @@ pub(crate) fn build_codex_resume_command(
 pub fn exec_codex_resume(
     thread_id: &str,
     bypass: bool,
+    read_only: bool,
     grant_id: Option<&str>,
     contained: bool,
 ) -> Result<()> {
-    let mut cmd = build_codex_resume_command(thread_id, bypass, grant_id, contained)?;
+    let mut cmd = build_codex_resume_command(thread_id, bypass, read_only, grant_id, contained)?;
     finalize_codex_resume(&mut cmd, &headless_worktree_root())?;
     #[cfg(unix)]
     {
@@ -4000,11 +4004,14 @@ pub(crate) fn codex_resume_exec_args(
 /// <thread>`. A native-contained resume takes Codex's own sandbox flags and
 /// never the bypass; otherwise the uniform `[agents] bypass` posture maps to
 /// Codex's bypass flag, as a fresh interactive launch does (BUG-743).
+/// `read_only` (a plan lane, BUG-2394) forces Codex's read-only sandbox over
+/// either posture, exactly as a fresh plan-only launch does.
 // trace:BUG-2386 | ai:claude
 pub(crate) fn codex_interactive_resume_args(
     thread_id: &str,
     native_contained: bool,
     bypass: bool,
+    read_only: bool,
 ) -> Result<Vec<String>> {
     anyhow::ensure!(
         crate::codex_resume::valid_thread_id(thread_id),
@@ -4018,7 +4025,12 @@ pub(crate) fn codex_interactive_resume_args(
         Vec::new()
     };
     args.extend(["resume".to_string(), thread_id.to_string()]);
-    Ok(args)
+    // trace:BUG-2394 | ai:claude — a plan lane never writes, resumed or not.
+    Ok(if read_only {
+        codex_read_only_args(args)
+    } else {
+        args
+    })
 }
 
 // trace:TASK-1581 | ai:antigravity — test-only default-argument wrapper; every
@@ -8316,7 +8328,7 @@ fn exec_resume_command(
         // BUG-2386: exec `codex resume <id>` rather than printing it. The
         // resume is native (no bypass): a resume never widens the posture a
         // fresh `aida session new` would need consent for.
-        "codex" => exec_or_spawn_claude(&mut codex_session_resume_command(target, contained)?),
+        "codex" => exec_or_spawn_agent(&mut codex_session_resume_command(target, contained)?),
         _ => {
             let (program, args) = resume_command_for(target);
             anyhow::bail!(
@@ -8337,7 +8349,7 @@ pub(crate) fn codex_session_resume_command(
     target: &ResumeTarget,
     contained: bool,
 ) -> Result<std::process::Command> {
-    let mut cmd = build_codex_resume_command(&target.id, false, None, contained)?;
+    let mut cmd = build_codex_resume_command(&target.id, false, false, None, contained)?;
     if let Some(cwd) = codex_resume_cwd(target) {
         cmd.current_dir(cwd);
     }
@@ -8408,7 +8420,7 @@ pub fn exec_claude_resume(
     grant_id: Option<&str>,
 ) -> Result<()> {
     let mut cmd = build_claude_resume_exec_command(id, permission_mode, contained, grant_id)?;
-    exec_or_spawn_claude(&mut cmd)
+    exec_or_spawn_agent(&mut cmd)
 }
 
 /// TASK-2031: the tree a contained `aida session resume` is bounded to: the
@@ -11430,25 +11442,42 @@ mod tests {
     #[test]
     fn codex_interactive_resume_argv_per_posture() {
         assert_eq!(
-            codex_interactive_resume_args("t-1", false, false).unwrap(),
+            codex_interactive_resume_args("t-1", false, false, false).unwrap(),
             ["resume", "t-1"]
         );
         assert_eq!(
-            codex_interactive_resume_args("t-1", false, true).unwrap(),
+            codex_interactive_resume_args("t-1", false, true, false).unwrap(),
             [
                 "--dangerously-bypass-approvals-and-sandbox",
                 "resume",
                 "t-1"
             ]
         );
-        let native = codex_interactive_resume_args("t-1", true, true).unwrap();
+        let native = codex_interactive_resume_args("t-1", true, true, false).unwrap();
         assert!(
             !native.iter().any(|a| a.contains("dangerously")),
             "a contained resume never carries the bypass: {native:?}"
         );
         assert_eq!(&native[native.len() - 2..], ["resume", "t-1"]);
         assert!(native.iter().any(|a| a == "workspace-write"), "{native:?}");
-        assert!(codex_interactive_resume_args("-x", false, false).is_err());
+        assert!(codex_interactive_resume_args("-x", false, false, false).is_err());
+        // BUG-2394: a plan-only resume keeps the read-only sandbox and never
+        // the bypass, on either posture. trace:BUG-2394 | ai:claude
+        assert_eq!(
+            codex_interactive_resume_args("t-1", false, true, true).unwrap(),
+            ["--sandbox", "read-only", "resume", "t-1"]
+        );
+        let plan_native = codex_interactive_resume_args("t-1", true, false, true).unwrap();
+        assert_eq!(&plan_native[..2], ["--sandbox", "read-only"]);
+        assert_eq!(
+            plan_native.iter().filter(|a| *a == "--sandbox").count(),
+            1,
+            "{plan_native:?}"
+        );
+        assert!(!plan_native
+            .iter()
+            .any(|a| a.contains("dangerously") || a == "workspace-write"));
+        assert!(plan_native.ends_with(&["resume".to_string(), "t-1".to_string()]));
         assert!(vendor_can_resume(HeadlessVendor::Codex));
         assert!(!vendor_can_resume(HeadlessVendor::Agy));
     }

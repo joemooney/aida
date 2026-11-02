@@ -145,8 +145,10 @@ pub(crate) fn find_rollout(root: &Path, id: &str) -> Option<CodexRollout> {
 /// 2. an AIDA session id whose headless log started a Codex thread resumes
 ///    that thread;
 /// 3. an id Claude recorded a transcript for is a Claude session;
-/// 4. otherwise the `scope`'s lease decides: its stamped `vendor_session_id`,
-///    else the one rollout started in its tree since it began.
+/// 4. otherwise a `scope` lease the id belongs to ([`lease_owns_id`]) decides:
+///    its stamped `vendor_session_id`, else the one rollout started in its
+///    tree since it began. A foreign or mistyped id belongs to no lease and
+///    falls through; it never resumes the newest thread in the scope.
 ///
 /// 5. nothing names the id: it resumes on the configured vendor
 ///    ([`crate::session::resolve_headless_vendor`], Claude by default), so a
@@ -175,14 +177,16 @@ pub(crate) fn recorded_resume(
     if claude_transcript_exists(id) {
         return Ok((HeadlessVendor::Claude, id.to_string()));
     }
-    // The scope's leases, newest first: the first that binds a thread (its
-    // stamp, else its one rollout since it began) answers. A lease minted for
-    // this very resume binds nothing and is passed over.
+    // The scope's leases the id belongs to, newest first: the first that
+    // binds a thread (its stamp, else its one rollout since it began)
+    // answers. A lease minted for this very resume binds nothing and is
+    // passed over. trace:BUG-2386 | ai:claude
     let mut leases: Vec<crate::leases::SessionLease> = scope
         .map(|scope| {
             crate::leases::list_leases(project_root)
                 .into_iter()
                 .filter(|l| l.scope.eq_ignore_ascii_case(scope))
+                .filter(|l| lease_owns_id(project_root, l, id))
                 .collect()
         })
         .unwrap_or_default();
@@ -219,6 +223,28 @@ pub(crate) fn recorded_resume(
              `aida session list` to see resumable ids, or start a fresh run."
         ),
     }
+}
+
+/// Whether resume id `id` belongs to `lease`: it is the lease's own id, the
+/// vendor id stamped on it, or the AIDA session id of a headless run on the
+/// lease's branch (its log is `<branch>-<id>.jsonl`). Anything else is a
+/// foreign or mistyped id the lease must not answer for.
+// trace:BUG-2386 | ai:claude
+pub(crate) fn lease_owns_id(
+    project_root: &Path,
+    lease: &crate::leases::SessionLease,
+    id: &str,
+) -> bool {
+    if !valid_thread_id(id) {
+        return false;
+    }
+    lease.id == id
+        || lease_vendor_session_id(project_root, &lease.id).as_deref() == Some(id)
+        || project_root
+            .join(".aida")
+            .join("headless-logs")
+            .join(format!("{}-{id}.jsonl", lease.branch))
+            .is_file()
 }
 
 /// Whether Claude recorded a transcript for session `id`
