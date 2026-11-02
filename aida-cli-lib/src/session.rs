@@ -6392,19 +6392,6 @@ pub(crate) fn spawn_vendor_headless_resume_granted(
     };
     let tuning = resolve_agent_tuning(cwd, vendor, agent_seat);
     let effective_prompt = codex_inline_prompt(prompt).unwrap_or_else(|| prompt.to_string());
-    let fresh = headless_vendor_args_contained_in(
-        vendor,
-        &effective_prompt,
-        target.session_id,
-        contained.then_some(cwd),
-        tuning.model.as_deref(),
-        tuning.effort.as_deref(),
-    )?;
-    let (program, args) = os_wrapped_program_and_args(
-        cwd,
-        &resolve_agent_program(vendor.program()),
-        codex_resume_exec_args(fresh, target.resume_id)?,
-    )?;
     if let Some(dir) = log_path.parent() {
         std::fs::create_dir_all(dir)
             .with_context(|| format!("failed to create {}", dir.display()))?;
@@ -6413,6 +6400,24 @@ pub(crate) fn spawn_vendor_headless_resume_granted(
         .with_context(|| format!("failed to create headless log {}", log_path.display()))?;
     let tee = crate::headless_tee::start_tee(log_path, tee_opts);
     let (ceiling_key, ceiling_value) = crate::bg_wait_ceiling_env(Some(cwd));
+    // Same order as the Claude resume path: the argv comes from the shared
+    // headless builder right beside the launch (BUG-342 ratchet).
+    // trace:BUG-2386 | ai:claude
+    let (program, args) = os_wrapped_program_and_args(
+        cwd,
+        &resolve_agent_program(vendor.program()),
+        codex_resume_exec_args(
+            headless_vendor_args_contained_in(
+                vendor,
+                &effective_prompt,
+                target.session_id,
+                contained.then_some(cwd),
+                tuning.model.as_deref(),
+                tuning.effort.as_deref(),
+            )?,
+            target.resume_id,
+        )?,
+    )?;
     let child_grant = crate::gate::seat_authority::issue_launch_child(
         cwd,
         seat,

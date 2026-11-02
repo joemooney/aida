@@ -81,16 +81,24 @@ fn write_rollout(root: &Path, id: &str, cwd: &Path, ts: &str) {
 fn write_lease(project: &Path, id: &str, scope: &str, tree: &Path, started: &str, extra: &str) {
     let dir = crate::leases::leases_dir(project);
     std::fs::create_dir_all(&dir).unwrap();
-    std::fs::write(
-        dir.join(format!("{id}.toml")),
-        format!(
-            "id = \"{id}\"\nscope = \"{scope}\"\nslug = \"s\"\nowner = \"t\"\n\
-             worktree_path = \"{}\"\nbranch = \"b\"\nstarted_at = \"{started}\"\n\
-             hostname = \"h\"\n{extra}",
-            tree.display()
-        ),
-    )
-    .unwrap();
+    let mut lease = toml::Table::new();
+    for (key, value) in [
+        ("id", id),
+        ("scope", scope),
+        ("slug", "s"),
+        ("owner", "t"),
+        ("branch", "b"),
+        ("started_at", started),
+        ("hostname", "h"),
+    ] {
+        lease.insert(key.into(), toml::Value::String(value.into()));
+    }
+    lease.insert(
+        "worktree_path".into(),
+        toml::Value::String(tree.to_string_lossy().into_owned()),
+    );
+    let body = format!("{}{extra}", toml::to_string(&lease).unwrap());
+    std::fs::write(dir.join(format!("{id}.toml")), body).unwrap();
 }
 
 // ── require_resume_vendor ──────────────────────────────────────────────────
