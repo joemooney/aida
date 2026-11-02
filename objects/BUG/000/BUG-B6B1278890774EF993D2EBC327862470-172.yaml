@@ -21,7 +21,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T07:26:20.914223641Z
-modified_at: 2026-11-02T10:11:39.735655039Z
+modified_at: 2026-11-02T10:51:09.246462933Z
 req_type: Bug
 tags:
 - architecture
@@ -592,6 +592,12 @@ comments:
   modified_at: 2026-11-02T10:11:39.735655039Z
   session_id: 01a19bbb393c
   harness_version: 2.1.316 (Claude Code)
+- id: 01a19be2-6a3e-7712-94d8-9c582e98d1dd
+  author: joe
+  content: 'Fixed the 3 failing STORY-2255 advisor_watch codex_tick tests (commit 5ed79950af0, pushed to PR #3207 branch). Cause: the granted advisor child''s requested-seat preflight runs the real matching CLI from the inherited cwd. The tests ran from the repo checkout, so the probe read the operator roster, which does not list the hermetic test user: RosterDenied. Fix (test-only, preflight unchanged): each test isolates with test_env::run_path_isolated_test(), the same helper the BUG-2385 routing fixtures use, and sets cwd to the fixture project, whose roster mint_grant_for seeds with the advisor seat. Second stale assertion uncovered: the cold-boot argv now leads with the -c shell_environment_policy.set.* seat-metadata overrides, so assert_not_forked skips the leading -c pairs before requiring exec. Results: cargo test --profile agent -p aida-cli-lib --lib codex = 143 passed, 0 failed (was 140 passed, 3 failed). make check-ci-fast: 36 gates passed.'
+  created_at: 2026-11-02T10:51:09.246462933Z
+  modified_at: 2026-11-02T10:51:09.246462933Z
+  session_id: 73d9f998-5fe0-4420-8f9e-46b696dea2de
 history:
 - id: 01a19600-c769-7cd0-ba08-8d93975e3e3b
   author: joe
