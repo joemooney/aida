@@ -14,12 +14,12 @@ description: |
   4. Validate live recovery with a sanctioned train and exact protected-head checks before landing. Do not simply retry blind or substitute raw gh merge. Record prior3202 failure and full recovery evidence.
 
   LIGHT one targeted train/CI filter plus fastgates; fixtures/fakeHOME only, no actual admin/protection changes. Independent review, ordinary guarded integration. Claude quota exhausted; implement on Codex.
-status: NeedsAttention
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T09:27:24.546816181Z
-modified_at: 2026-11-01T13:37:43.429360897Z
+modified_at: 2026-11-02T00:03:09.772316279Z
 req_type: Bug
 tags:
 - ci
@@ -56,6 +56,12 @@ comments:
   content: 'Serialized BUG-2398 rework coordination: source baseline f05e1b9e6a22, local origin/main 471540a8c477. The shared story_1917_dispatch_flow_schedule_tests.rs change in this rework is only the matching CLI path for the genuinely authorized PR603 recorder invocation; no train-policy fixture/assertion edits and no BUG-2401 implementation were applied. Actual make test-touched on that baseline reports all 19 tests in this module passing. This result must not be transferred to the different BUG-2401 required-policy implementation baseline or treated as resolving its four reported overlapping fixture failures. BUG-2401 rework remains serialized after BUG-2398 per the advisor ruling.'
   created_at: 2026-11-01T13:37:43.429348384Z
   modified_at: 2026-11-01T13:37:43.429348384Z
+- id: 01a19991-294c-7c02-b7a5-9a390e903ef0
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: Independent STRICT codex-reviewer-12: incomplete effective-rule pagination and four introduced native authority-fixture failures.. No triage reason was given.'
+  created_at: 2026-11-02T00:03:09.772311997Z
+  modified_at: 2026-11-02T00:03:09.772311997Z
+  session_id: 126bbd5a-a92f-452b-ab0b-2637a1db42c2
 history:
 - id: 01a19681-5be8-7f43-92cc-a5b427eacd3f
   author: aida-session-start
@@ -71,6 +77,14 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a19991-294c-7c02-b7a5-9a26fa16eddd
+  author: joe
+  timestamp: 2026-11-02T00:03:09.772304290Z
+  session_id: 126bbd5a-a92f-452b-ab0b-2637a1db42c2
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: 4ce0af750fcb68d4adf57496e4e002aefd8ace77
   branch: main
@@ -78,11 +92,3 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: 4ce0af750fc
   vendor: codex
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'Independent STRICT codex-reviewer-12: incomplete effective-rule pagination and four introduced native authority-fixture failures.'
-  recovery_hint: address the review findings, move BUG-B6B1278890774EF993D2EBC327862470-174 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-01T11:28:34.819921189Z
