@@ -13,12 +13,12 @@ description: |-
   4. `aida session start --owns ID` on a Codex project prints whether mail wake will arm (ties to BUG-2379's Next: block).
   5. End-to-end fixture: a hand-started Codex session gets a row that reads `armed`; mail to its handle produces exactly one queued notification; ending it retires the row.
   6. docs/agents/codex-mail-wake.md says hand-launched Codex seats are covered.
-status: InProgress
+status: Done
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T04:46:21.481096158Z
-modified_at: 2026-11-02T01:49:50.736269602Z
+modified_at: 2026-11-02T01:56:03.799654553Z
 req_type: Story
 tags:
 - mail-wake
@@ -104,6 +104,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a199f8-86c2-79d0-b596-301daee61e9f
+  author: joe
+  timestamp: 2026-11-02T01:56:03.906916578Z
+  session_id: 01a199b7e840
+  harness_version: 2.1.316 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 filed_at:
   code_sha: a83e05d785df667dfa986cf3eb310a3f0637b602
   branch: main
@@ -111,3 +120,7 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: a83e05d785d
   vendor: claude
+implementation_info:
+  implemented: true
+  implemented_at: 2026-11-02T01:56:03.799654553Z
+  implemented_by: joe
