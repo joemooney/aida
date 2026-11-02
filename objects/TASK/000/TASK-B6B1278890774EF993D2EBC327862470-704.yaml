@@ -14,13 +14,20 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-02T14:09:46.852984287Z
-modified_at: 2026-11-02T14:09:46.852984287Z
+modified_at: 2026-11-02T15:58:22.341454495Z
 req_type: Task
 tags:
 - carried-from:TASK-2835
 - finding-hash:8af6c917
 - from-review:PR-3235
 - kind:carried-forward
+comments:
+- id: 01a19cfb-ae85-7a92-8d85-7ed4c28001e1
+  author: joe
+  content: 'ADVISOR RULING (08:50): APPROVED, bundled with TASK-2762.'
+  created_at: 2026-11-02T15:58:22.341454495Z
+  modified_at: 2026-11-02T15:58:22.341454495Z
+  session_id: ee0bf351-6b17-486f-a38e-cfbb1343c426
 history:
 - id: 01a19ca3-f290-7170-97aa-f79c6df187c5
   author: joe
