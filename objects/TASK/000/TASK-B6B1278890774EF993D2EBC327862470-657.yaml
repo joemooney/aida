@@ -11,7 +11,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T09:06:06.223993645Z
-modified_at: 2026-11-02T21:57:55.460345049Z
+modified_at: 2026-11-02T21:59:28.544167830Z
 req_type: Task
 tags:
 - architecture
@@ -131,6 +131,18 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: PR0 cache move is sound (migration, dir link, sandbox dir grant, tests), but the signed cache_rows_never_grant_authority ratchet scans only up to the first #[cfg(test)] line, so most authority production code is never checked. No triage reason was given.'
   created_at: 2026-11-02T21:23:55.863325641Z
   modified_at: 2026-11-02T21:23:55.863325641Z
+  session_id: ee0bf351-6b17-486f-a38e-cfbb1343c426
+- id: 01a19e46-4820-77b0-9984-bbed9580e129
+  author: joe
+  content: |-
+    ADVISOR RULING (15:01), PR #3274 round 2 (cap reached). One last push plus a delta review, per the 10-28 order. Bundle everything now:
+    1. BLOCKING CI: fix the fixtures that write under .aida/ before cache-db/ exists (store_lock.rs:451-466 bug_home_041, plus whatever lib-0 and Build report in run 41530883100), by creating the cache dir in the fixture or calling ensure_project_cache_dir. Run the failing tests by name locally.
+    2. relink_legacy_worktree: link only when the target cache-db dir exists; otherwise return NothingToDo and keep the legacy links.
+    3. move_legacy_database: sweep stale .cache-db-migrate.* files (owner pid dead) first.
+    4. Route the raw read-only readers (statusline, status_awaiting, whoami_view, role_cmd, mass_change) through a shared path helper that calls migrate_legacy_cache_layout.
+    Gate: LIGHT plus the named failing tests; make check-ci-fast; outside the sandbox with RUSTC_WRAPPER=.
+  created_at: 2026-11-02T21:59:28.544167830Z
+  modified_at: 2026-11-02T21:59:28.544167830Z
   session_id: ee0bf351-6b17-486f-a38e-cfbb1343c426
 history:
 - id: 01a1965c-1e90-7483-8313-1b32a588eaef
