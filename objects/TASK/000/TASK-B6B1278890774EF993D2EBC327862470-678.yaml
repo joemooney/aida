@@ -14,13 +14,20 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-02T04:15:13.715678125Z
-modified_at: 2026-11-02T04:15:13.715678125Z
+modified_at: 2026-11-02T06:25:44.963457769Z
 req_type: Task
 tags:
 - carried-from:BUG-2384
 - finding-hash:1027a83b
 - from-review:PR-3216
 - kind:carried-forward
+comments:
+- id: 01a19aef-6e03-71f1-a57e-c5449f9096f4
+  author: joe
+  content: 'ADVISOR RULING (2026-11-01 23:30 MST, ruled once per the 2026-10-28 operator order): accepted as-is, no change. Reason: attended ships are bounded by the per-clone 10s cap with progress lines, and the merge lease is no longer held, so no other ship is blocked.'
+  created_at: 2026-11-02T06:25:44.963457769Z
+  modified_at: 2026-11-02T06:25:44.963457769Z
+  session_id: 1f56bd1e-c059-4f73-b8df-e18b2170fdfc
 history:
 - id: 01a19aa1-ade1-75f3-bf1a-a6d387714daa
   author: joe
