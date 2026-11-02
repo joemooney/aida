@@ -20,7 +20,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T04:28:44.095278434Z
-modified_at: 2026-11-02T22:33:15.018263012Z
+modified_at: 2026-11-02T22:34:18.496375177Z
 req_type: Story
 tags:
 - architecture
@@ -284,6 +284,16 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: Gate seam, posture refusal, headless env and strict lease/registry/authorship seams are sound, but AC1 (live detached worker visible in aida ps) has no end-to-end evidence, the signed test matrix is largely missing, cross-route admission is incomplete, and recover-launch fails open on unreadable /proc; CI was still pending at review.. No triage reason was given.'
   created_at: 2026-11-02T20:45:58.199068424Z
   modified_at: 2026-11-02T20:45:58.199068424Z
+  session_id: ee0bf351-6b17-486f-a38e-cfbb1343c426
+- id: 01a19e66-2c00-7631-9374-ae8b6be339d9
+  author: joe
+  content: |-
+    ADVISOR RULING (15:36), PR #3273 round 2 (cap reached). One last push for two small items, then a delta review. The remaining gates are operator-only: (a) the live 'aida ps' AC1 run with a human-minted delegating grant, (b) the operator merge floor.
+    1. Criterion tags: use the trace format 'aida criteria' resolves. Check how other specs tag criteria (e.g. 'rg trace:.*ac[0-9a-f]{8} aida-cli-lib/src | head'), and verify that 'aida criteria STORY-2254' reports all 5 traced.
+    2. The normal-exit path must run the same occupancy scan as recover-launch before it releases the scope (fail closed on unknown).
+    Gate: LIGHT plus 'aida criteria STORY-2254'; outside the sandbox with RUSTC_WRAPPER=.
+  created_at: 2026-11-02T22:34:18.496375177Z
+  modified_at: 2026-11-02T22:34:18.496375177Z
   session_id: ee0bf351-6b17-486f-a38e-cfbb1343c426
 history:
 - id: 01a1955e-16e5-7240-960f-01af4eb41bfe
