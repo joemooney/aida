@@ -28,7 +28,28 @@ fn task_2705_closed_containment_tracer() {
     let required = std::env::var("AIDA_REQUIRE_BWRAP_LIVE").as_deref() == Ok("1")
         || std::env::var("AIDA_REQUIRE_CODEX_CONTAINMENT_LIVE").as_deref() == Ok("1");
     match supervisor::run_probe() {
-        Ok(checks) => {
+        // Host confines nested userns: assert the typed result, never a pass.
+        // trace:TASK-2705 | ai:claude
+        Ok(supervisor::TracerOutcome::HostPolicyDenied { phase, errno }) => {
+            assert!(
+                [libc::EPERM, libc::EACCES, libc::ENOSPC].contains(&errno),
+                "{phase} {errno}"
+            );
+            assert!(
+                ["unshare", "mount_positive", "unmount_positive"].contains(&phase.as_str()),
+                "{phase}"
+            );
+            // The stalled lane hits the same up-front probe, never a pass.
+            assert!(matches!(
+                supervisor::timeout_probe(),
+                Ok(supervisor::TracerOutcome::HostPolicyDenied { .. })
+            ));
+            eprintln!(
+                "HOST-POLICY-DENIED live containment tracer (typed result asserted, \
+                 not acceptance evidence): phase={phase} errno={errno}"
+            );
+        }
+        Ok(supervisor::TracerOutcome::Passed(checks)) => {
             let timeout = supervisor::timeout_probe().unwrap_err();
             assert!(
                 format!("{timeout:#}").contains("owned wrapper and namespace init reaped"),
@@ -140,6 +161,43 @@ fn task_2705_policy_and_partial_backend_remain_closed() {
     assert!(!report.ordinary_launch_supported);
 }
 
+/// Full isolation path when the host allows it; otherwise the typed
+/// `isolation=unavailable reason=host_policy_denied` refusal with phase and
+/// errno, closed with no checks or credit. Never a silent pass.
+// trace:TASK-2705 | ai:claude
+#[cfg(test)]
+fn assert_ready_or_host_policy_denied(report: &ProbeReport, required: bool) {
+    match report.isolation.state {
+        IsolationState::Unavailable => {
+            assert_eq!(report.status, ProbeStatus::Refused, "{}", report.cause);
+            assert_eq!(
+                report.isolation.reason,
+                Some(IsolationReason::HostPolicyDenied)
+            );
+            assert!(report.isolation.phase.is_some());
+            assert!(report.isolation.errno.is_some_and(|e| e != 0));
+            assert!(
+                report.cause.contains("host policy denied"),
+                "{}",
+                report.cause
+            );
+            assert!(report.checks.is_empty());
+            assert!(!report.aida_containment_applied);
+            let json = serde_json::to_value(report).unwrap();
+            assert_eq!(json["isolation"]["state"], "unavailable");
+            assert_eq!(json["isolation"]["reason"], "host_policy_denied");
+        }
+        IsolationState::Available => {
+            assert_eq!(report.status, ProbeStatus::Ready, "{}", report.cause);
+        }
+        IsolationState::Unknown => assert!(
+            !required,
+            "required-live probe refused before isolation: {}",
+            report.cause
+        ),
+    }
+}
+
 #[cfg(test)]
 #[test]
 fn task_2705_trusted_snapshot_cannot_execute_stored_shell() {
@@ -163,11 +221,10 @@ fn task_2705_trusted_snapshot_cannot_execute_stored_shell() {
     assert!(!report.ordinary_launch_supported);
     assert!(!report.aida_containment_applied);
     assert!(!marker.exists());
-    if std::env::var("AIDA_REQUIRE_BWRAP_LIVE").as_deref() == Ok("1")
-        || std::env::var("AIDA_REQUIRE_CODEX_CONTAINMENT_LIVE").as_deref() == Ok("1")
-    {
-        assert_eq!(report.status, ProbeStatus::Ready, "{}", report.cause);
-    }
+    let required = std::env::var("AIDA_REQUIRE_BWRAP_LIVE").as_deref() == Ok("1")
+        || std::env::var("AIDA_REQUIRE_CODEX_CONTAINMENT_LIVE").as_deref() == Ok("1");
+    // Any host-policy denial must be the typed report, whether or not required.
+    assert_ready_or_host_policy_denied(&report, required);
     let other = probe(root.path(), "opencode");
     assert!(matches!(
         other.capability.as_ref().unwrap().native,
@@ -175,10 +232,8 @@ fn task_2705_trusted_snapshot_cannot_execute_stored_shell() {
     ));
     assert!(!other.ordinary_launch_supported);
     assert!(!other.aida_containment_applied);
-    if std::env::var("AIDA_REQUIRE_BWRAP_LIVE").as_deref() == Ok("1")
-        || std::env::var("AIDA_REQUIRE_CODEX_CONTAINMENT_LIVE").as_deref() == Ok("1")
-    {
-        assert_eq!(other.status, ProbeStatus::Ready, "{}", other.cause);
+    assert_ready_or_host_policy_denied(&other, required);
+    if other.status == ProbeStatus::Ready {
         assert!(other.checks.iter().any(|c| c == "write_workspace"));
     }
     // Production selector is deliberately still refused for partial AIDA Codex.

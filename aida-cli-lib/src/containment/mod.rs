@@ -33,6 +33,30 @@ enum ProbeStage {
     Complete,
 }
 
+/// Whether the host lets the fixed lane build its nested isolation layer.
+/// `Unknown` until the filesystem/supervisor stage runs. trace:TASK-2705 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub(crate) enum IsolationState {
+    Unknown,
+    Available,
+    Unavailable,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub(crate) enum IsolationReason {
+    HostPolicyDenied,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub(crate) struct Isolation {
+    pub state: IsolationState,
+    pub reason: Option<IsolationReason>,
+    pub phase: Option<String>,
+    pub errno: Option<i32>,
+}
+
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
 enum NativeAdapter {
@@ -76,6 +100,7 @@ pub(crate) struct ProbeReport {
     configured_posture: Option<ConfiguredPosture>,
     stage: ProbeStage,
     capability: Option<Capability>,
+    pub isolation: Isolation,
     // Always false, including a successful synthetic tracer. No runtime stamp
     // is accepted as authority for these fields.
     aida_containment_applied: bool,
@@ -97,6 +122,12 @@ pub(crate) fn probe(root: &Path, vendor: &str) -> ProbeReport {
         configured_posture: None,
         stage: ProbeStage::Capability,
         capability: None,
+        isolation: Isolation {
+            state: IsolationState::Unknown,
+            reason: None,
+            phase: None,
+            errno: None,
+        },
         aida_containment_applied: false,
         ordinary_launch_supported: false,
         remaining_protections: [
@@ -107,7 +138,7 @@ pub(crate) fn probe(root: &Path, vendor: &str) -> ProbeReport {
         ],
         checks: Vec::new(),
     };
-    let mut run = || -> anyhow::Result<Vec<String>> {
+    let mut run = || -> anyhow::Result<supervisor::TracerOutcome> {
         let mut capabilities: Capabilities = toml::from_str(include_str!("vendors.toml"))?;
         anyhow::ensure!(capabilities.version == 1, "unsupported capability schema");
         let capability = capabilities
@@ -149,7 +180,21 @@ pub(crate) fn probe(root: &Path, vendor: &str) -> ProbeReport {
         supervisor::run_probe()
     };
     match run() {
-        Ok(checks) => {
+        Ok(supervisor::TracerOutcome::HostPolicyDenied { phase, errno }) => {
+            // Typed host property, not a tracer failure and never a pass.
+            report.cause = format!(
+                "isolation unavailable: host policy denied nested user namespace \
+                 (phase {phase}, errno {errno}); no fallback"
+            );
+            report.isolation = Isolation {
+                state: IsolationState::Unavailable,
+                reason: Some(IsolationReason::HostPolicyDenied),
+                phase: Some(phase),
+                errno: Some(errno),
+            };
+        }
+        Ok(supervisor::TracerOutcome::Passed(checks)) => {
+            report.isolation.state = IsolationState::Available;
             report.checks = checks;
             report.status = ProbeStatus::Ready;
             report.stage = ProbeStage::Complete;

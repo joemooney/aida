@@ -38,6 +38,24 @@ fixed unknown vendor: both JSON spellings must emit equal reports while the
 command exits nonzero and grants no launch or containment credit. The
 synthetic grant setter uses the authority owner's `GRANT_ENV` constant.
 
+## Host policy denial of nested user namespaces
+
+On GitHub's Ubuntu 26.04 runner, bwrap runs under the AppArmor
+`bwrap-userns-restrict` policy. Its `unpriv_bwrap` child profile includes
+`audit deny capability`, so a nested `unshare` inside bwrap fails with EPERM.
+The advisor ruling (2026-11-01) treats this as a property of the host, not an
+AIDA defect. The tracer now runs a fixed nested-userns probe once, up front,
+inside the same boundary. That probe tries `unshare`, a positive tmpfs mount and
+an unmount. If any of them is denied with EPERM/EACCES/ENOSPC, the probe returns
+a typed refusal and the full lane does not run. The refusal carries
+`isolation.state = unavailable`, `isolation.reason = host_policy_denied`, and
+the failing phase and errno. It has no checks, no pass and no containment
+credit. The two tests that need nested user namespaces assert this typed result
+when the host denies them, and the full isolation path when it allows them.
+The temporary CI profile-inventory, prerequisite and artifact steps were
+investigation scaffolding and have been removed. Nothing elevates privilege or
+changes host policy.
+
 This remains the closed model-free slice. Ordinary partial-backend launch is
 unsupported, applied-containment credit remains false, and all seven parent
 acceptance criteria and independent review/operator merge gates remain open.

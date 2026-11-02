@@ -200,17 +200,41 @@ print(json.dumps(checks), flush=True)
 if os.sys.argv[5] == 'timeout': time.sleep(30)
 "#;
 
-pub(super) fn run_probe() -> Result<Vec<String>> {
+/// Typed tracer outcome. A host that confines bwrap so a nested user namespace
+/// cannot gain capabilities (e.g. Ubuntu's AppArmor `unpriv_bwrap` child
+/// profile, `audit deny capability`) is a host property, not a tracer defect:
+/// it is reported as isolation unavailable, never as a pass.
+// trace:TASK-2705 | ai:claude
+#[derive(Debug)]
+pub(super) enum TracerOutcome {
+    Passed(Vec<String>),
+    HostPolicyDenied { phase: String, errno: i32 },
+}
+
+/// Fixed nested-userns capability probe, run inside the same bwrap boundary
+/// as the tracer lane. Only reports the phase and errno; no other output.
+const NESTED_PREFLIGHT: &str = r#"
+import os, json, ctypes
+libc=ctypes.CDLL(None, use_errno=True)
+def report(phase, rc):
+    print(json.dumps(dict(phase=phase, errno=0 if rc==0 else ctypes.get_errno())), flush=True)
+    if rc!=0: os._exit(0)
+report('unshare', libc.unshare(0x10000000 | 0x00020000))
+os.mkdir('/tmp/nested-preflight')
+report('mount_positive', libc.mount(b'tmpfs', b'/tmp/nested-preflight', b'tmpfs', 0, None))
+report('unmount_positive', libc.umount2(b'/tmp/nested-preflight', 2))
+"#;
+
+pub(super) fn run_probe() -> Result<TracerOutcome> {
     run_probe_inner(false)
 }
 
 #[cfg(test)]
-pub(super) fn timeout_probe() -> Result<Vec<String>> {
+pub(super) fn timeout_probe() -> Result<TracerOutcome> {
     run_probe_inner(true)
 }
 
-// The boolean selects only a fixed stalled test lane, never executable input.
-fn run_probe_inner(timeout_fixture: bool) -> Result<Vec<String>> {
+fn host_prerequisites() -> Result<()> {
     terminal_preflight(false, None)?;
     anyhow::ensure!(
         cfg!(target_os = "linux"),
@@ -224,6 +248,132 @@ fn run_probe_inner(timeout_fixture: bool) -> Result<Vec<String>> {
         std::path::Path::new("/usr/bin/python3").exists(),
         "fixed model-free Python probe unavailable"
     );
+    Ok(())
+}
+
+/// Minimal synthetic layout `Boundary::synthetic` pins; no controls needed.
+fn synthetic_layout() -> Result<tempfile::TempDir> {
+    let root = tempfile::Builder::new()
+        .prefix("aida-containment-probe-")
+        .tempdir()?;
+    std::fs::set_permissions(root.path(), std::fs::Permissions::from_mode(0o700))?;
+    for dir in ["workspace", "store", "cache", "state"] {
+        std::fs::create_dir(root.path().join(dir))?;
+    }
+    for name in [".aida", ".git", ".agents", ".codex", ".claude"] {
+        std::fs::create_dir(root.path().join("workspace").join(name))?;
+    }
+    for name in ["AGENTS.md", "CLAUDE.md", ".mcp.json"] {
+        std::fs::write(root.path().join("workspace").join(name), "protected")?;
+    }
+    std::fs::write(root.path().join("outside"), "outside-control")?;
+    Ok(root)
+}
+
+/// Probe nested-userns capability ONCE, before the full lane. `Ok(None)` means
+/// available; `Ok(Some(..))` is a typed host-policy denial (EPERM/EACCES/ENOSPC
+/// at a named phase). Outer bwrap failure stays an error with its own cause.
+fn nested_userns_preflight() -> Result<Option<(String, i32)>> {
+    let root = synthetic_layout()?;
+    let boundary = super::filesystem::Boundary::synthetic(root.path())?;
+    let mut cmd = Command::new("/usr/bin/bwrap");
+    boundary.append_to(&mut cmd);
+    cmd.args(["--", "/usr/bin/python3", "-I", "-S", "-c", NESTED_PREFLIGHT])
+        .env_clear()
+        .stdin(Stdio::null());
+    let fds = boundary.fds();
+    unsafe {
+        cmd.pre_exec(move || {
+            if libc::syscall(libc::SYS_close_range, 3u32, u32::MAX, 4u32) != 0 {
+                return Err(std::io::Error::last_os_error());
+            }
+            for fd in &fds {
+                if libc::fcntl(*fd, libc::F_SETFD, 0) < 0 {
+                    return Err(std::io::Error::last_os_error());
+                }
+            }
+            Ok(())
+        });
+    }
+    let mut run = OwnedRun {
+        child: cmd
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .context("nested user namespace preflight unavailable")?,
+        reaped: false,
+    };
+    let mut stdout = run.child.stdout.take().unwrap();
+    let mut stderr = run.child.stderr.take().unwrap();
+    for fd in [stdout.as_raw_fd(), stderr.as_raw_fd()] {
+        unsafe {
+            anyhow::ensure!(
+                libc::fcntl(fd, libc::F_SETFL, libc::O_NONBLOCK) == 0,
+                "nonblocking preflight channel unavailable"
+            );
+        }
+    }
+    let (mut output, mut error) = (Vec::new(), Vec::new());
+    let (mut out_eof, mut err_eof, mut status) = (false, false, None);
+    let deadline = Instant::now() + DEADLINE;
+    while !(out_eof && err_eof && status.is_some()) {
+        if !out_eof {
+            out_eof = read_available(&mut stdout, &mut output)?;
+        }
+        if !err_eof {
+            err_eof = read_available(&mut stderr, &mut error)?;
+        }
+        if status.is_none() {
+            status = run.child.try_wait()?;
+            run.reaped = status.is_some();
+        }
+        if Instant::now() >= deadline {
+            run.stop_and_reap()?;
+            anyhow::bail!("nested user namespace preflight timeout; wrapper reaped");
+        }
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    anyhow::ensure!(
+        status.unwrap().success(),
+        "fixed probe refused (bwrap/userns/filesystem): {}",
+        String::from_utf8_lossy(&error)
+    );
+    #[derive(serde::Deserialize)]
+    struct Phase {
+        phase: String,
+        errno: i32,
+    }
+    let phases = String::from_utf8_lossy(&output)
+        .lines()
+        .map(serde_json::from_str::<Phase>)
+        .collect::<std::result::Result<Vec<_>, _>>()
+        .context("invalid nested user namespace preflight channel")?;
+    match phases.iter().find(|p| p.errno != 0) {
+        Some(p) if [libc::EPERM, libc::EACCES, libc::ENOSPC].contains(&p.errno) => {
+            Ok(Some((p.phase.clone(), p.errno)))
+        }
+        Some(p) => anyhow::bail!(
+            "nested user namespace preflight failed at {} (errno {})",
+            p.phase,
+            p.errno
+        ),
+        None => {
+            anyhow::ensure!(
+                phases.len() == 3,
+                "nested user namespace preflight incomplete"
+            );
+            Ok(None)
+        }
+    }
+}
+
+// The boolean selects only a fixed stalled test lane, never executable input.
+fn run_probe_inner(timeout_fixture: bool) -> Result<TracerOutcome> {
+    host_prerequisites()?;
+    // trace:TASK-2705 | ai:claude — typed host-policy result, never a pass.
+    if let Some((phase, errno)) = nested_userns_preflight()? {
+        return Ok(TracerOutcome::HostPolicyDenied { phase, errno });
+    }
     let root = tempfile::Builder::new()
         .prefix("aida-containment-probe-")
         .tempdir()?;
@@ -465,7 +615,7 @@ fn run_probe_inner(timeout_fixture: bool) -> Result<Vec<String>> {
     require_namespace_gone(&path, &identity)?;
     checks.push("namespace_init_reaped".into());
     drop((leaked, peer, host_file, host_directory));
-    Ok(checks)
+    Ok(TracerOutcome::Passed(checks))
 }
 
 fn read_available(reader: &mut impl Read, bytes: &mut Vec<u8>) -> Result<bool> {
