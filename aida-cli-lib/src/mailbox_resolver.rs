@@ -292,6 +292,46 @@ impl RecipientDirectory {
         &self.warnings
     }
 
+    // trace:BUG-b6b1278890774ef993d2ebc327862470-178 | ai:codex
+    /// Inspection is read-only and stricter than send's fresh-but-unverified
+    /// cohort. A failed observation remains diagnostic unknown, never authority.
+    pub(crate) fn inspection_readers(
+        &self,
+    ) -> Vec<(
+        &AgentRegistryEntry,
+        Result<aida_core::mailbox_identity::InspectionSubject>,
+    )> {
+        self.agents
+            .iter()
+            .filter(|e| {
+                e.source != "role-enter"
+                    && agent_registry::observed_liveness(
+                        &self.project,
+                        e,
+                        agent_registry::current_pid_namespace(),
+                    ) != Some(false)
+            })
+            .map(|entry| {
+                let subject = if agent_registry::observed_liveness(
+                    &self.project,
+                    entry,
+                    agent_registry::current_pid_namespace(),
+                )
+                .is_none()
+                {
+                    Err(anyhow::anyhow!("reader liveness unknown"))
+                } else {
+                    aida_core::mailbox_identity::InspectionSubject::observe(
+                        &agent_registry::agents_dir(&self.project)
+                            .join(format!("{}.toml", entry.id)),
+                    )
+                    .map_err(|_| anyhow::anyhow!("reader identity/reservation unknown"))
+                };
+                (entry, subject)
+            })
+            .collect()
+    }
+
     fn reader_may_exist(&self, entry: &AgentRegistryEntry) -> bool {
         self.live_ids.contains(&entry.id) || self.unknown_ids.contains(&entry.id)
     }
