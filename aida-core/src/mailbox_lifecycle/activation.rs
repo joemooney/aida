@@ -206,6 +206,47 @@ pub fn dry_run_report(project_root: &Path) -> ActivationReport {
     report
 }
 
+/// BUG-2411: re-validate, read-only, an activation recorded by another source
+/// build. A fresh, complete scan of this machine in which every mail writer
+/// host runs this very build is the same evidence [`record`] writes down, so a
+/// retirement may honour it for itself without anyone re-recording (a dev
+/// rebuild changes the source build and would otherwise strand every
+/// mail-bearing checkout). Nothing is written; any writer of another build,
+/// an unidentifiable executable, an incomplete scan or a build that names no
+/// source still refuses (fail closed). In unit tests the scan is replaced by
+/// [`FRESH_SCAN`] (default: refuse) so a test never depends on this machine.
+// trace:BUG-2411 | ai:claude
+pub(crate) fn fresh_scan_admits() -> bool {
+    #[cfg(test)]
+    {
+        FRESH_SCAN.with(|f| f.get())
+    }
+    #[cfg(not(test))]
+    {
+        if super::source_build().is_none() {
+            return false;
+        }
+        let Ok(meta) = std::fs::metadata("/proc/self/exe") else {
+            return false;
+        };
+        let me = BuildIdentity {
+            exe_id: (meta.dev(), meta.ino()),
+            digest: None,
+        };
+        let proc = Path::new("/proc");
+        let (mut processes, incomplete) = scan_proc(proc, std::process::id());
+        let me = fill_digests(proc, &mut processes, me, &proc.join("self/exe"));
+        classify(&processes, Some(&me), std::process::id(), incomplete, false).would_record
+    }
+}
+
+#[cfg(test)]
+thread_local! {
+    /// What [`fresh_scan_admits`] answers in this test thread.
+    // trace:BUG-2411 | ai:claude
+    pub(crate) static FRESH_SCAN: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
 /// Record the activation under `project_root`'s anchor. A fresh scan runs
 /// first, and nothing is written unless it shows every writer host admitting
 /// with a complete scan; the returned report says which (`recorded`). The
