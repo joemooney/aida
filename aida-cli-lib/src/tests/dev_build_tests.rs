@@ -72,6 +72,8 @@ struct FakeSteps {
     on_smoke: Option<Box<dyn FnMut()>>,
     /// What `version_sha` reports for the staged `aida`.
     staged_sha: Option<String>,
+    /// What `rerecord_retention` reports (the fresh scan's outcome).
+    rerecord: RetentionRerecord,
     calls: Vec<String>,
 }
 
@@ -89,6 +91,7 @@ impl FakeSteps {
             on_build: None,
             on_smoke: None,
             staged_sha: Some("abc1234567+dirty".into()),
+            rerecord: RetentionRerecord::NothingRecorded,
             calls: Vec::new(),
         }
     }
@@ -158,6 +161,10 @@ impl BuildSteps for FakeSteps {
     fn restart_mcp(&mut self, _l: &DevLayout) -> Result<()> {
         self.calls.push("restart_mcp".into());
         Ok(())
+    }
+    fn rerecord_retention(&mut self, _l: &DevLayout) -> RetentionRerecord {
+        self.calls.push("rerecord_retention".into());
+        self.rerecord.clone()
     }
     fn confirm(&mut self, _prompt: &str) -> bool {
         self.calls.push("confirm".into());
@@ -499,6 +506,68 @@ fn successful_build_promotes_keeps_prev_and_restarts_mcp() {
     names.sort();
     // `.lock` is the persistent live-dir lock file.
     assert_eq!(names, [".lock", ".promoted", "aida", "aida-server", "prev"]);
+}
+
+/// BUG-2411 ruling C: a promote whose fresh scan finds every mail writer on
+/// the new build re-records the retention activation, after the MCP restart.
+// trace:BUG-2411 | ai:claude
+#[test]
+fn bug_2411_promote_rerecords_retention_activation_when_the_scan_passes() {
+    let f = fixture();
+    put_live(&f.layout, "OLD");
+    let mut steps = FakeSteps::new(clean_main());
+    steps.rerecord = RetentionRerecord::Recorded;
+    let (r, out) = run(&f, &DevBuildOptions::default(), &mut steps);
+    assert_eq!(r.unwrap(), BuildOutcome::Promoted);
+    let at = |step: &str| steps.calls.iter().position(|c| c == step).unwrap();
+    assert!(
+        at("restart_mcp") < at("rerecord_retention"),
+        "{:?}",
+        steps.calls
+    );
+    assert!(
+        out.contains("activation re-recorded for the new build"),
+        "{out}"
+    );
+    assert!(!out.contains(RETENTION_RECORD_COMMAND), "{out}");
+}
+
+/// BUG-2411 ruling C: when the scan finds a writer on another build, nothing
+/// is re-recorded; the promote still succeeds and prints the operator command.
+// trace:BUG-2411 | ai:claude
+#[test]
+fn bug_2411_promote_prints_the_operator_command_when_another_build_writes_mail() {
+    let f = fixture();
+    put_live(&f.layout, "OLD");
+    let mut steps = FakeSteps::new(clean_main());
+    steps.rerecord = RetentionRerecord::NotRecorded {
+        why: "other mail writers are running: pid 42 /old/aida (it runs a different build than this one)".into(),
+    };
+    let (r, out) = run(&f, &DevBuildOptions::default(), &mut steps);
+    assert_eq!(r.unwrap(), BuildOutcome::Promoted);
+    assert!(out.contains("was not re-recorded"), "{out}");
+    assert!(out.contains("pid 42"), "{out}");
+    assert!(
+        out.contains(&format!("`{RETENTION_RECORD_COMMAND}`")),
+        "{out}"
+    );
+    assert!(!out.contains("activation re-recorded"), "{out}");
+}
+
+/// Building without promoting never touches the retention activation.
+// trace:BUG-2411 | ai:claude
+#[test]
+fn bug_2411_build_only_never_rerecords_retention_activation() {
+    let f = fixture();
+    let mut steps = FakeSteps::new(clean_main());
+    steps.rerecord = RetentionRerecord::Recorded;
+    let opts = DevBuildOptions {
+        no_promote: true,
+        ..Default::default()
+    };
+    let (r, _out) = run(&f, &opts, &mut steps);
+    assert!(matches!(r.unwrap(), BuildOutcome::BuiltOnly(_)));
+    assert!(!steps.called("rerecord_retention"));
 }
 
 #[test]
