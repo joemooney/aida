@@ -1,0 +1,30 @@
+id: 01a19d12-eb6e-7651-b2f7-f43e44728118
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-716
+title: 'Non-blocking (cosmetic): grant_env_aliases strips a ''mut'' prefix unconditionall…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-2759, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  Non-blocking (cosmetic): grant_env_aliases strips a 'mut' prefix unconditionally, so 'let mutable = GRANT_ENV;' registers alias 'able' and misses 'mutable' (bug_2398_codex_tool_env_tests.rs:589).
+
+  PR: #3264
+  Reviewed sha: d54cc7f11bc10a531942dbf9542e0c35ad360b85
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-02T16:23:45.262487628Z
+modified_at: 2026-11-02T16:23:45.262487628Z
+req_type: Task
+tags:
+- carried-from:TASK-2759
+- finding-hash:47387421
+- from-review:PR-3264
+- kind:carried-forward
+filed_at:
+  code_sha: 15c0fa4d6051d6ba558fdb9fec01901e2fd27c4f
+  branch: main
+  dirty: true
+  aida_version: 0.16.0
+  aida_build_sha: 6a3f67671a9
+  vendor: claude
+  session: ee0bf351-6b17-486f-a38e-cfbb1343c426
