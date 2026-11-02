@@ -31,10 +31,42 @@ fn skill_prompt_omits_unset_caps() {
     );
 }
 
+/// The production `--verbose` argv: what `build_burndown_verbose_command`
+/// launches for a Claude coordinator, uncontained, in a pinned project.
+// trace:TASK-804 | ai:claude
+// trace:BUG-2389 | ai:claude
+fn verbose_claude_argv(prompt: &str, mode: &str) -> Vec<String> {
+    let root = tempfile::tempdir().unwrap();
+    std::fs::create_dir(root.path().join(".git")).unwrap();
+    let _ambient = crate::test_env::AmbientGuard::hermetic_and(
+        root.path(),
+        None,
+        &[
+            ("AIDA_HEADLESS_VENDOR", Some("claude")),
+            ("AIDA_AGENT_CMD", Some("/bin/true")),
+            ("AIDA_OS_WRAP", Some("0")),
+            ("AIDA_CONTAINED", None),
+        ],
+    );
+    build_burndown_verbose_command(
+        crate::session::HeadlessVendor::Claude,
+        prompt,
+        mode,
+        "",
+        "CEILING",
+        "10",
+        false,
+    )
+    .unwrap()
+    .get_args()
+    .map(|a| a.to_string_lossy().into_owned())
+    .collect()
+}
+
 // trace:TASK-804 | ai:claude
 #[test]
 fn verbose_args_carry_the_stream_json_flags_and_passthrough_mode() {
-    let args = burndown_verbose_claude_args("/aida-burndown --status approved", "acceptEdits");
+    let args = verbose_claude_argv("/aida-burndown --status approved", "acceptEdits");
     // The mandatory stream-json trio so the tee can render live events.
     assert!(args.contains(&"--output-format".to_string()));
     assert!(args.contains(&"stream-json".to_string()));
@@ -54,7 +86,7 @@ fn verbose_args_default_mode_is_passed_through_verbatim() {
     // The launcher resolves the default to `bypassPermissions` before
     // calling this builder; the builder itself just threads whatever it's
     // handed, never injecting a posture of its own.
-    let args = burndown_verbose_claude_args("/aida-burndown", "bypassPermissions");
+    let args = verbose_claude_argv("/aida-burndown", "bypassPermissions");
     let mode_pos = args.iter().position(|a| a == "--permission-mode").unwrap();
     assert_eq!(args[mode_pos + 1], "bypassPermissions");
 }

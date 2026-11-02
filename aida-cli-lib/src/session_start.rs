@@ -1860,6 +1860,25 @@ pub(crate) fn session_start_with_receipt(
     // worktree's path and new sessions stack as nested-sibling-of-sibling
     // (~/ai/aida-pr-9-epic-20 instead of ~/ai/aida-epic-20).
     // trace:BUG-75 | ai:claude
+    // The vendor preflight runs before root discovery and any setup, so a
+    // missing vendor binary is reported even outside a git checkout.
+    // trace:BUG-b6b1278890774ef993d2ebc327862470-159 | ai:claude
+    let launch_vendor = if launch_claude {
+        let vendor = session::interactive_session_vendor()?;
+        session::preflight_interactive_session(&vendor, launch_permission_mode, launch_contained)?;
+        if vendor == "codex" {
+            if let Some(name) = launch_name
+                .as_deref()
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+            {
+                session::preflight_codex_agent_handle(name)?;
+            }
+        }
+        Some(vendor)
+    } else {
+        None
+    };
     let project_root = find_main_worktree_root()?;
     // A dash-led branch or base would reach `git worktree add` / `git
     // rev-parse` as an option. trace:BUG-1622 | ai:claude
@@ -1876,11 +1895,13 @@ pub(crate) fn session_start_with_receipt(
             .as_deref()
             .is_some_and(queue_cmd::role_is_stakeholder_only)
     {
-        return session::new_session(
+        return session::new_session_for_vendor(
+            launch_vendor.as_deref().expect("launch vendor preflight"),
+            None,
             launch_title,
             launch_permission_mode,
             launch_role,
-            launch_name,
+            launch_name.filter(|s| !s.trim().is_empty()),
             launch_contained,
             launch_set_title,
         )
@@ -3402,8 +3423,8 @@ pub(crate) fn session_start_with_receipt(
         // STORY-54: --launch collapses "start → cd → session new" into one
         // command. We chdir into the new worktree (so claude inherits it
         // and the launch-log records the worktree path, not the parent),
-        // then delegate to session::new_session for the title prompt,
-        // launch-log append, and `exec claude --permission-mode <mode>`.
+        // then delegate to session::new_session_for_vendor for the title
+        // prompt, launch-log append, and the configured vendor's launch.
         // exec replaces this process; control doesn't return here on
         // success.
         // trace:STORY-54 | ai:claude
@@ -3427,8 +3448,9 @@ pub(crate) fn session_start_with_receipt(
                 "{} {}",
                 crate::glyph(crate::glyphs::Glyph::InfoAlt).cyan(),
                 format!(
-                    "sourced .aida/session-env.sh ({}) into launched claude's env",
-                    applied_vars.join(", ")
+                    "sourced .aida/session-env.sh ({}) into launched {}'s env",
+                    applied_vars.join(", "),
+                    launch_vendor.as_deref().unwrap_or("claude")
                 )
                 .dimmed()
             );
@@ -3440,9 +3462,12 @@ pub(crate) fn session_start_with_receipt(
                 .green()
                 .bold(),
             format!(
-                "launching claude in {} ({})",
+                "launching {} in {} ({})",
+                launch_vendor.as_deref().unwrap_or("claude"),
                 worktree_path.display(),
-                if launch_contained {
+                if launch_contained && launch_vendor.as_deref() == Some("codex") {
+                    "native sandbox, not AIDA-contained".to_string()
+                } else if launch_contained {
                     "contained sandbox".to_string()
                 } else {
                     launch_permission_mode
@@ -3466,10 +3491,23 @@ pub(crate) fn session_start_with_receipt(
             .or_else(|| std::env::var("AIDA_SESSION_ROLE").ok())
             .filter(|s| !s.is_empty())
             .unwrap_or_else(|| "implementer".to_string());
-        let derived_name = launch_name
-            .filter(|s| !s.trim().is_empty())
-            .or_else(|| session::derive_session_name(owns, &branch_name, &role_for_name));
-        return session::new_session(
+        let launch_vendor = launch_vendor.as_deref().expect("launch vendor preflight");
+        let explicit_name = launch_name
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty());
+        // Codex receives the name as its agent handle, so only an explicit
+        // (preflight-validated) --name is forwarded; the derived display name
+        // ("impl@BUG-1") is not a valid handle and the launcher allocates one.
+        // trace:BUG-b6b1278890774ef993d2ebc327862470-159 | ai:claude
+        let derived_name = if launch_vendor == "codex" {
+            explicit_name
+        } else {
+            explicit_name
+                .or_else(|| session::derive_session_name(owns, &branch_name, &role_for_name))
+        };
+        return session::new_session_for_vendor(
+            launch_vendor,
+            Some(owns.to_string()),
             launch_title,
             launch_permission_mode,
             launch_role,
@@ -3501,6 +3539,19 @@ pub(crate) fn session_start_with_receipt(
                 }
                 None => eprintln!("  {}", line.command.cyan()),
             }
+        }
+        // STORY-2256: a hand-started Codex seat's SessionStart hook arms its
+        // mail wake; say so, and name the install command when it is needed.
+        // trace:STORY-2256 | ai:claude
+        let wake_project = main_worktree_root_from(&project_root);
+        if let Some(line) = crate::mail_wake::session_start_wake_line(
+            &vendor,
+            crate::agent_config::load_agents_tool_bool(&wake_project, "codex", "mail_wake")
+                .unwrap_or(None),
+            crate::mailbox_wake_run::service_installed(&wake_project),
+            &wake_project,
+        ) {
+            eprintln!("  {}", line.dimmed());
         }
         eprintln!();
         eprintln!("When finished:");

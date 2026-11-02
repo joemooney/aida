@@ -1279,9 +1279,15 @@ pub(crate) fn handle_research_command(
     let log_path = project_root.join(format!(".aida/research/{display_id}-{date}.log"));
     let tee = crate::headless_tee::TeeOptions::from_env_and_flag(false)
         .with_label(format!("research:{display_id}"));
-    let status =
-        crate::session::spawn_claude_headless(&prompt, &session_id, &log_path, &tee, false)
-            .context("spawning headless research agent")?;
+    // trace:BUG-2389 | ai:codex ai:claude
+    let status = crate::session::spawn_analysis_headless(
+        &find_project_root().unwrap_or_else(|_| project_root.to_path_buf()),
+        &prompt,
+        &session_id,
+        &log_path,
+        &tee,
+    )
+    .context("spawning headless research agent")?;
     if !status.success() {
         anyhow::bail!(
             "research agent exited with {} — see log {}",
@@ -1595,75 +1601,40 @@ pub(crate) fn questions_clarify(
         targets.join(", ").cyan()
     );
 
-    let contained = session::aida_contained_env()?;
-
-    // Build the interactive invocation. Unlike the headless drain, clarify
-    // needs a human at the keyboard, so it launches plain interactive
-    // `claude "<prompt>"` — NOT `claude -p`.
     let prompt = format!("/aida-clarify {}", targets.join(" "));
-
+    let project_root = find_project_root()?;
+    // trace:BUG-2393 | ai:claude
+    let (vendor, contained) =
+        session::resolve_headless_launch_posture(&project_root, "interactive advisor session")?;
     if dry_run {
+        // A preview must not reserve a child identity or probe a harness version.
+        // trace:BUG-2389 | ai:codex ai:claude
+        let plan = session::advisor_interactive_launch_plan(vendor, &prompt, contained)?;
         println!("\n{} dry run — not launching. Would run:", "·".dimmed());
-        if contained {
-            println!(
-                "  claude {} {prompt:?}",
-                crate::session::claude_contained_flags()?.join(" ")
-            );
-        } else {
-            println!("  claude {prompt:?}");
-        }
+        println!("  {} {:?}", plan.program, plan.args);
         return Ok(());
     }
-
+    // The builder reserves the child's handle; it is released unless the
+    // child actually spawns. trace:BUG-2389 | ai:claude
+    let handle_guard = session::child_reservation_guard();
+    let mut command = build_questions_clarify_command(vendor, &prompt, "", contained)?;
     println!(
-        "  {} launching interactive `claude` — answer its questions to author acceptance",
-        "→".green()
+        "  {} launching interactive `{}` — answer its questions to author acceptance",
+        "→".green(),
+        vendor.program()
     );
-    if contained {
-        println!(
-            "  {} {}",
-            "→".green(),
-            format!(
-                "claude {} {prompt:?}",
-                crate::session::claude_contained_flags()?.join(" ")
-            )
-            .dimmed()
-        );
-    } else {
-        println!(
-            "  {} {}",
-            "→".green(),
-            format!("claude {prompt:?}").dimmed()
-        );
-    }
-    println!();
-
-    // Interactive: inherit the terminal so the human can converse. `claude` is
-    // resolved off PATH (matching every other launch site); a missing binary
-    // surfaces as a guided error, not a raw ENOENT. STORY-762: on a
-    // codex-only machine the guidance names the alternatives instead of just
-    // demanding an install the machine may not permit — the clarify loop
-    // drives a Claude Code skill, so Codex parity arrives with the
-    // skills-parity work, not by swapping the binary here.
-    let project_root = find_project_root()?;
-    // Prepare before issuing authority: a filesystem refusal leaves no grant.
-    // trace:BUG-2218 TASK-2328 | ai:codex
-    if contained {
-        crate::session::prepare_contained_mailbox_for_launch(&project_root)?;
-    }
     let child_grant =
         crate::gate::seat_authority::issue_child(&project_root, "advisor", &current_user_id(None))?;
-    let status_code = build_questions_clarify_command(&prompt, &child_grant.id, contained)?
-        .status()
-        .map_err(|e| {
-            anyhow::anyhow!(
-                "failed to launch `claude` ({e}) — the acceptance-authoring loop drives a \
-                 Claude Code skill and needs the Claude Code CLI on PATH.\n\
-                 On a Codex-only machine, instead:\n\
-                 - answer questions directly: aida questions list / aida questions answer\n\
-                 - or edit acceptance by hand: aida edit <spec-id> --description ..."
-            )
-        });
+    command.env(crate::gate::seat_authority::GRANT_ENV, &child_grant.id);
+    // trace:BUG-2398 | ai:claude
+    let status_code = session::coordinator_status_with_handle_guard(
+        vendor,
+        &mut command,
+        &project_root,
+        None,
+        handle_guard,
+    )
+    .with_context(|| format!("failed to launch {}", vendor.program()));
     // trace:BUG-2170 | ai:antigravity
     crate::session::revoke_headless_child_grant(&child_grant.id);
     let status_code = status_code?;
@@ -1678,24 +1649,13 @@ pub(crate) fn questions_clarify(
 
 // trace:BUG-2124 trace:BUG-2171 trace:BUG-2170 | ai:antigravity
 pub(crate) fn build_questions_clarify_command(
+    vendor: session::HeadlessVendor,
     prompt: &str,
     child_grant_id: &str,
     contained: bool,
 ) -> Result<std::process::Command> {
-    let mut cmd = std::process::Command::new("claude");
-    if contained {
-        cmd.args(crate::session::claude_contained_flags()?);
-    }
-    cmd.arg(prompt)
-        .env("AIDA_SESSION_ROLE", "advisor")
-        .env(crate::gate::seat_authority::GRANT_ENV, child_grant_id);
-    crate::session::scrub_launcher_session_env(&mut cmd);
-    if contained {
-        cmd.env("AIDA_CONTAINED", "1");
-    } else {
-        cmd.env_remove("AIDA_CONTAINED");
-    }
-    Ok(cmd)
+    // trace:BUG-2389 | ai:codex
+    session::build_advisor_interactive_command(vendor, prompt, child_grant_id, contained)
 }
 
 /// `aida questions remedy <spec>` — the headless, bounded acceptance-authoring
@@ -1721,38 +1681,55 @@ pub(crate) fn questions_remedy(
 
     let project_root =
         find_project_root().unwrap_or_else(|_| std::env::current_dir().unwrap_or_default());
-    let vendor = session::resolve_headless_vendor(&project_root);
-    let prompt = questions_remedy_prompt(&req.display_id());
-    let log_path = questions_remedy_log_path(&project_root, &req.display_id());
-
-    println!("remedying {} with headless advisor", req.display_id());
-    println!("  vendor: {}", vendor.as_str());
-    println!("  log: {}", log_path.display());
-
-    if dry_run {
-        println!("\ndry run — not launching. Prompt:\n\n{prompt}");
+    let Some(status) = launch_questions_remedy(&project_root, &req.display_id(), dry_run)? else {
         return Ok(());
-    }
-
-    let tee = crate::headless_tee::TeeOptions::from_env_and_flag(false)
-        .with_label(format!("remedy-{}", req.display_id().to_ascii_lowercase()));
-    let session_id = uuid::Uuid::now_v7().to_string();
-    let status = session::spawn_vendor_headless_with_seat(
-        vendor,
-        aida_core::agents_config::AgentSeat::Advisor,
-        &prompt,
-        &session_id,
-        &log_path,
-        &tee,
-        false,
-    );
-    let status = status?;
+    };
     if status.success() {
         Ok(())
     } else {
         let code = status.code().unwrap_or(1);
         std::process::exit(code);
     }
+}
+
+/// The launch half of [`questions_remedy`], after the spec is resolved:
+/// resolve vendor and containment (env OR configuration; a vendor that cannot
+/// run contained is refused before anything spawns), then run the headless
+/// advisor. `None` for a dry run.
+// trace:TASK-1075 | ai:codex
+// trace:BUG-2393 | ai:claude
+pub(crate) fn launch_questions_remedy(
+    project_root: &std::path::Path,
+    spec: &str,
+    dry_run: bool,
+) -> Result<Option<std::process::ExitStatus>> {
+    let (vendor, contained) =
+        session::resolve_headless_launch_posture(project_root, "headless advisor")?;
+    let prompt = questions_remedy_prompt(spec);
+    let log_path = questions_remedy_log_path(project_root, spec);
+
+    println!("remedying {spec} with headless advisor");
+    println!("  vendor: {}", vendor.as_str());
+    println!("  log: {}", log_path.display());
+
+    if dry_run {
+        println!("\ndry run — not launching. Prompt:\n\n{prompt}");
+        return Ok(None);
+    }
+
+    let tee = crate::headless_tee::TeeOptions::from_env_and_flag(false)
+        .with_label(format!("remedy-{}", spec.to_ascii_lowercase()));
+    let session_id = uuid::Uuid::now_v7().to_string();
+    session::spawn_vendor_headless_with_seat(
+        vendor,
+        aida_core::agents_config::AgentSeat::Advisor,
+        &prompt,
+        &session_id,
+        &log_path,
+        &tee,
+        contained,
+    )
+    .map(Some)
 }
 
 // trace:TASK-1075 | ai:codex

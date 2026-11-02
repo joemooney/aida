@@ -21,17 +21,18 @@
 use super::*;
 
 /// Write a trivial "vendor" mock at `dir/mock-agent.sh` that appends each of
-/// its argv[1..] to `capture`, one per line, then exits 0.
+/// its argv[1..] to `capture`, NUL-delimited so multiline prompts stay one argument.
 // trace:BUG-1607 | ai:claude
+// trace:BUG-2387 | ai:codex
 #[cfg(unix)] // trace:BUG-1646 | ai:claude
 fn write_argv_capture_mock(dir: &std::path::Path, capture: &std::path::Path) -> std::path::PathBuf {
     let script = dir.join("mock-agent.sh");
     crate::test_exec::write_executable(
         &script,
-        format!(
-            "#!/bin/sh\nfor a in \"$@\"; do printf '%s\\n' \"$a\" >> \"{}\"; done\nexit 0\n",
+        crate::test_exec::codex_probe_script(format!(
+            "#!/bin/sh\nfor a in \"$@\"; do printf '%s\\0' \"$a\" >> \"{}\"; done\nexit 0\n",
             capture.display()
-        ),
+        )),
     );
     script
 }
@@ -40,7 +41,7 @@ fn write_argv_capture_mock(dir: &std::path::Path, capture: &std::path::Path) -> 
 fn read_captured_argv(capture: &std::path::Path) -> Vec<String> {
     std::fs::read_to_string(capture)
         .unwrap_or_default()
-        .lines()
+        .split_terminator('\0')
         .map(str::to_string)
         .collect()
 }
@@ -107,6 +108,7 @@ fn run_standalone_reviewer_with_codex_only_project_launches_codex_after_worktree
         &["reviewer"],
     );
     env.set_key(crate::gate::seat_authority::GRANT_ENV, &grant_id);
+    std::env::set_current_dir(&project).unwrap();
     crate::session::set_headless_vendor_override(None);
 
     // Resolve the vendor from the REAL codex-only project config — the same
@@ -151,6 +153,18 @@ fn run_standalone_reviewer_with_codex_only_project_launches_codex_after_worktree
     );
 
     let argv = read_captured_argv(&capture);
+    let mut prefix = 0;
+    while prefix + 1 < argv.len()
+        && argv[prefix] == "-c"
+        && argv[prefix + 1].starts_with("shell_environment_policy.set.")
+    {
+        prefix += 2;
+    }
+    assert!(
+        prefix > 0,
+        "child metadata overrides must precede vendor args"
+    );
+    let argv = argv[prefix..].to_vec();
     assert_eq!(
         argv,
         crate::session::codex_session_args(prompt, false, None),
@@ -235,6 +249,7 @@ fn review_spec_resolve_and_launch_uses_codex_for_codex_only_project() {
         &["reviewer"],
     );
     env.set_key(crate::gate::seat_authority::GRANT_ENV, &grant_id);
+    std::env::set_current_dir(&project).unwrap();
     let outer = crate::test_ambient::replace(Some(crate::test_ambient::Ambient {
         project_root: project.clone(),
         stdin_is_terminal: false,
@@ -257,6 +272,18 @@ fn review_spec_resolve_and_launch_uses_codex_for_codex_only_project() {
     assert!(status.success());
 
     let argv = read_captured_argv(&capture);
+    let mut prefix = 0;
+    while prefix + 1 < argv.len()
+        && argv[prefix] == "-c"
+        && argv[prefix + 1].starts_with("shell_environment_policy.set.")
+    {
+        prefix += 2;
+    }
+    assert!(
+        prefix > 0,
+        "child metadata overrides must precede vendor args"
+    );
+    let argv = argv[prefix..].to_vec();
     assert_eq!(
         argv,
         crate::session::codex_session_args(prompt, false, None),

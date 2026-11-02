@@ -1262,7 +1262,7 @@ fn launched_worker_is_bound_by_the_real_launch_binding() {
     let launch = &session_start[session_start.find("    if launch_claude {").unwrap()..];
     assert!(
         launch.find("export_worker_session_env(&id)").unwrap()
-            < launch.find("session::new_session(").unwrap(),
+            < launch.find("session::new_session_for_vendor(").unwrap(),
         "session start --launch exports the lease id before exec"
     );
     let queue = include_str!("../../queue_cmd.rs");

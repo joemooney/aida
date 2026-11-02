@@ -1,0 +1,19 @@
+# Shipped capability vocabulary for the closed tracer. No executable or shell
+# templates, user-supplied descriptors, credentials, or ordinary launch enablement.
+# trace:TASK-2705 | ai:codex
+version = 1
+
+[vendor.claude]
+native = "claude"
+ipc = "private_runtime"
+credentials = "unverified"
+
+[vendor.codex]
+native = "codex"
+ipc = "private_daemon"
+credentials = "unverified"
+
+[vendor.opencode]
+native = "none"
+ipc = "unverified"
+credentials = "unverified"

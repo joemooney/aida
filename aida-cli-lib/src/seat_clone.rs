@@ -1178,8 +1178,7 @@ fn run_sandboxed_until(
             "bwrap is not available to sandbox the probe".to_string(),
         )),
         crate::BoundedCommandOutput::TimedOut => Err(failed(format!(
-            "the sandboxed {program} did not finish within {}s",
-            timeout.as_secs()
+            "the sandboxed {program} did not finish within {timeout:?}"
         ))),
     }
 }
@@ -1201,6 +1200,15 @@ fn probe_run(
 /// from main (host-owned), never from the clone.
 // trace:TASK-2053 | ai:claude
 pub(crate) fn pinned_base(main: &Path, clone: &Path) -> Option<String> {
+    pinned_base_until(main, clone, None)
+}
+
+// trace:BUG-2384 | ai:codex
+fn pinned_base_until(
+    main: &Path,
+    clone: &Path,
+    deadline: Option<std::time::Instant>,
+) -> Option<String> {
     let pin = pin_ref(clone)?;
     let mut cmd = git(main);
     cmd.args([
@@ -1210,8 +1218,8 @@ pub(crate) fn pinned_base(main: &Path, clone: &Path) -> Option<String> {
         crate::git_arg_guard::END_OF_OPTIONS,
         &format!("{pin}^{{commit}}"),
     ]);
-    run(cmd, "read the seat's base pin")
-        .ok()
+    run_bounded(cmd, "", deadline)
+        .map(|s| s.trim().to_string())
         .filter(|sha| !sha.is_empty())
 }
 
@@ -1237,6 +1245,64 @@ pub(crate) fn probe_with_shipped(main: &Path, clone: &Path, shipped: &[String]) 
     probe_until(main, clone, shipped, None)
 }
 
+/// Environment variable through which `aida pr ship`'s cleanup worker hands
+/// its per-clone scan budget (whole seconds) to the `aida session end` it runs.
+// trace:BUG-2384 | ai:claude
+pub(crate) const SHIP_CLEANUP_PROBE_ENV: &str = "AIDA_SHIP_CLEANUP_PROBE_SECS";
+
+/// Per-clone scan budget during `aida pr ship` post-merge cleanup.
+// trace:BUG-2384 | ai:claude
+pub(crate) const SHIP_CLEANUP_PROBE_BUDGET: std::time::Duration =
+    std::time::Duration::from_secs(10);
+
+static SHIP_CLEANUP_SCOPE: std::sync::atomic::AtomicBool =
+    std::sync::atomic::AtomicBool::new(false);
+
+/// Called by the ship cleanup worker: its in-process reap and prune scans get
+/// the ship cleanup budget. Every other probe caller (doctor, seat destroy and
+/// list, salvage) keeps its own deadline and stays silent.
+// trace:BUG-2384 | ai:claude
+pub(crate) fn scope_probe_budget_to_ship_cleanup() {
+    SHIP_CLEANUP_SCOPE.store(true, std::sync::atomic::Ordering::Relaxed);
+}
+
+/// The ship cleanup scan budget, when this process runs inside ship cleanup
+/// (the worker itself, or a `session end` it launched); `None` otherwise.
+// trace:BUG-2384 | ai:claude
+fn ship_cleanup_probe_budget() -> Option<std::time::Duration> {
+    if SHIP_CLEANUP_SCOPE.load(std::sync::atomic::Ordering::Relaxed) {
+        return Some(SHIP_CLEANUP_PROBE_BUDGET);
+    }
+    let secs = std::env::var(SHIP_CLEANUP_PROBE_ENV).ok()?;
+    secs.trim()
+        .parse::<u64>()
+        .ok()
+        .map(std::time::Duration::from_secs)
+}
+
+/// `deadline`, tightened to the ship cleanup budget when inside ship cleanup.
+// trace:BUG-2384 | ai:claude
+fn ship_cleanup_cap(deadline: Option<std::time::Instant>) -> Option<std::time::Instant> {
+    let Some(budget) = ship_cleanup_probe_budget() else {
+        return deadline;
+    };
+    let scan_end = std::time::Instant::now() + budget;
+    Some(deadline.map_or(scan_end, |end| end.min(scan_end)))
+}
+
+/// [`ship_cleanup_cap`], plus the progress line ship cleanup prints per clone.
+// trace:BUG-2384 | ai:claude
+fn ship_cleanup_deadline(
+    deadline: Option<std::time::Instant>,
+    clone: &Path,
+) -> Option<std::time::Instant> {
+    if ship_cleanup_probe_budget().is_none() {
+        return deadline;
+    }
+    eprintln!("  inspecting seat clone {} (bounded scan)", clone.display());
+    ship_cleanup_cap(deadline)
+}
+
 // One deadline covers all four sandbox calls and the host git that checks the
 // clone's ref tips against main, rather than a fresh budget per call.
 // trace:TASK-2053 | ai:codex
@@ -1247,6 +1313,8 @@ pub(crate) fn probe_until(
     shipped: &[String],
     deadline: Option<std::time::Instant>,
 ) -> Probe {
+    // trace:BUG-2384 | ai:claude
+    let deadline = ship_cleanup_deadline(deadline, clone);
     let probe_run = |clone: &Path, main: &Path, args: &[&std::ffi::OsStr], program: &str| {
         run_sandboxed_until(clone, main, program, args, PROBE_OUTPUT_CAP, deadline)
             .map(|out| String::from_utf8_lossy(&out).into_owned())
@@ -1305,7 +1373,7 @@ pub(crate) fn probe_until(
     facts
         .dirty
         .retain(|line| !is_runtime_noise_entry(clone, line));
-    let base = pinned_base(main, clone).unwrap_or_default();
+    let base = pinned_base_until(main, clone, deadline).unwrap_or_default();
     // BUG-2224: a seat clone inherits refs (tags, `wip/*` branches) whose
     // commits the main checkout already holds; removing the clone loses none
     // of them. The clone's ref tips main reaches from its own refs (host git,
@@ -1545,6 +1613,10 @@ pub(crate) fn probe_counting_origin(
     shipped: &[String],
     deadline: Option<std::time::Instant>,
 ) -> Probe {
+    // Inside ship cleanup, share the clone budget with an optional origin
+    // refresh and second probe; other callers keep their own deadline.
+    // trace:BUG-2384 | ai:claude
+    let deadline = ship_cleanup_cap(deadline);
     let first = probe_until(main, clone, shipped, deadline);
     let Probe::Known(facts) = &first else {
         return first;
@@ -1785,9 +1857,16 @@ const TIPS_SEPARATOR: &str = "--";
 const UNPUSHED_COUNT_SCRIPT: &str = concat!(
     "set -u\n",
     stash_entries_sh!(),
+    // One batch checks all excused heads. Only commit objects become negative
+    // revisions; absent objects and tags never excuse work. Keep the large set
+    // on stdin to rev-list rather than expanding it into each process's argv.
+    // trace:BUG-2384 | ai:codex
     "base=$1\nshift\nshipped=''\n",
-    "for t in \"$@\"; do\n  if git cat-file -e \"$t^{commit}\" 2>/dev/null; then shipped=\"$shipped $t\"; fi\ndone\n",
-    "total=$(git rev-list --count --all $s --not --remotes=origin ${base:+\"$base\"} $shipped) || exit 1\n",
+    "if [ \"$#\" -gt 0 ]; then\n",
+    "  objects=$(printf '%s\\n' \"$@\" | git cat-file --batch-check='%(objectname) %(objecttype)') || exit 1\n",
+    "  shipped=$(printf '%s\\n' \"$objects\" | awk '$2 == \"commit\" {print \"^\" $1}') || exit 1\n",
+    "fi\n",
+    "total=$(printf '%s\\n' \"$shipped\" | git rev-list --stdin --count --all $s --not --remotes=origin ${base:+\"$base\"}) || exit 1\n",
     "printf '%s\\n' \"$total\"\n",
     "if [ \"$total\" -eq 0 ]; then exit 0; fi\n",
     "refs=$(git for-each-ref --format='%(refname)') || exit 1\n",
@@ -1796,11 +1875,11 @@ const UNPUSHED_COUNT_SCRIPT: &str = concat!(
     "fi\n",
     "printf '%s\\n' \"$refs\" | while IFS= read -r r; do\n",
     "  case $r in ''|refs/remotes/origin/*|refs/stash) continue;; esac\n",
-    "  n=$(git rev-list --count \"$r\" --not --remotes=origin ${base:+\"$base\"} $shipped) || exit 1\n",
+    "  n=$(printf '%s\\n' \"$shipped\" | git rev-list --stdin --count \"$r\" --not --remotes=origin ${base:+\"$base\"}) || exit 1\n",
     "  if [ \"$n\" -gt 0 ]; then printf '%s %s\\n' \"$n\" \"$r\"; fi\n",
     "done || exit 1\n",
     "if [ -n \"$s\" ]; then\n",
-    "  n=$(git rev-list --count $s --not --remotes=origin ${base:+\"$base\"} $shipped) || exit 1\n",
+    "  n=$(printf '%s\\n' \"$shipped\" | git rev-list --stdin --count $s --not --remotes=origin ${base:+\"$base\"}) || exit 1\n",
     "  if [ \"$n\" -gt 0 ]; then printf '%s refs/stash\\n' \"$n\"; fi\n",
     "fi\n"
 );

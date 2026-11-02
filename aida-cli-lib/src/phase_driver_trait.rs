@@ -2981,11 +2981,15 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                 &request_path,
             )?
         } else {
-            let fork_plan = advisor::plan_fork(&self.project_root, &advisor_cfg);
-            let pass = match fork_plan {
-                Some(plan) => AdvisorPass::Fork(plan),
-                None => AdvisorPass::ColdBoot,
-            };
+            // STORY-2255: a Codex vendor forks the registered live Codex
+            // thread (`codex exec fork`) or cold-boots saying why.
+            // trace:STORY-2255 | ai:claude
+            let pass = crate::advisor_cmd_root::primary_advisor_pass(
+                session::resolve_headless_vendor(&self.project_root),
+                &self.project_root,
+                &advisor_cfg,
+                self.json,
+            );
             self.spawn_advisor_session(pass, &advisor_cfg, &response_path, &request_path)?
         };
 
@@ -3855,9 +3859,24 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
             self.contained,
             child_grant.env_value(),
         );
-        let status = child_cmd
-            .stdout(std::process::Stdio::from(log))
-            .status_retrying_etxtbsy();
+        let prepared = if vendor == session::HeadlessVendor::Codex {
+            // trace:BUG-2398 | ai:codex
+            child_cmd
+                .env("AIDA_USER", crate::current_user_id(None))
+                .env("AIDA_PROJECT_ROOT", &self.project_root);
+            if let Some(lease) = &self.implementer_lease {
+                child_cmd.env(crate::gate::review_authority::WORKER_SESSION_ENV, lease);
+            }
+            crate::codex_tool_env::prepare_launch(&mut child_cmd)
+                .map_err(|e| std::io::Error::other(format!("{e:#}")))
+        } else {
+            Ok(())
+        };
+        let status = prepared.and_then(|()| {
+            child_cmd
+                .stdout(std::process::Stdio::from(log))
+                .status_retrying_etxtbsy()
+        });
         tee.stop();
         if let Some(id) = child_grant.id() {
             session::revoke_headless_child_grant(id);

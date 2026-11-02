@@ -42,6 +42,7 @@ Around that core sit the **launchers** and the **comms**. `aida agent new` and `
 - `prompt` (`set` / `show` / `clear`) — the per-role system-prompt addendum injected into Claude at session start via the role-context hook. The seam where a role carries *instructions*, not just identity.
 - `scaffold` — install the starter `implementer` / `advisor` / `reviewer` set globally; idempotent, safe to re-run. The one-time "give me the standard taxonomy."
 - `active` vs `current` — both print the active role, but with different exit-code contracts (`active` exits 1 with empty stdout when none; `current` exits 0 either way, `--check` flips it to 1). Pick by whether your script wants "fail if no role" or "tell me, never fail."
+- `current --probe-seat --expect <seat>` — model-free launcher preflight: validate the current delegated grant and seat label without printing a selector or secret. `--expect-role-instance driver|companion` also checks that launch restriction. Success prints `seat_grant_valid=true expected_seat=true`; a mismatch or unusable grant exits nonzero with its cause. Managed Codex launches use this under their actual tool-shell environment policy before model work. <!-- trace:BUG-2398 | ai:codex -->
 - `expiry` — how close this session's seat grant is to its 24h expiry. By default it prints one warning line when the grant expires within `--warn-within` (2h), naming the expiry time and the `eval "$(aida role enter <seat>)"` that renews it, and prints nothing otherwise. The SessionStart hook shows that line, and the statusline tags a held seat `(expires in 42m)` inside the same window. With `--refuse-within 1h` it instead prints a refusal on stderr and exits 3 when less than that is left: a relay runs it before each launch so a session never loses its seat halfway through. With `--refuse-within`, every exported grant is validated through the authority gate, including subject, roster, parent and handle checks. A rejected grant prints its rejection reason and renewal command on stderr and exits 3. Every valid exported grant, including an implementer grant, supplies expiry metadata, bounded by its parent's expiry. With no grant it is silent and exits 0. Warning-only callers and the statusline preserve informational expired-record timestamps, stay quiet for unreadable or revoked records, and suppress baseline implementer metadata. <!-- trace:TASK-1736 | ai:claude --> <!-- trace:BUG-2011 | ai:codex -->
 - `repair` — quarantine unparseable activity-log lines and rewrite a corrupted role file cleanly. The recovery hatch for a role whose log got mangled.
 
@@ -185,6 +186,14 @@ that is invalid, expired, or does not delegate the seat; those cases refuse as
 before.
 Scripts that want only the refusal pass `--grant-inline no`.
 <!-- trace:STORY-2215 | ai:claude -->
+
+Interactive Codex launches expand portable `/aida-*` invocation lines into
+their embedded workflow bodies, including queue pickup, planning, review and
+de-risking. Launch previews show the same rendered prompt. If an invocation
+has no portable embedded body, AIDA uses Codex's `$aida-*` installed-skill
+syntax and instructs the agent to stop and report an unavailable skill rather
+than reconstruct its workflow. Ordinary prose and Claude prompts are preserved.
+<!-- trace:BUG-2387 | ai:codex -->
 
 **Key options (rationale only).**
 - `new <claude|codex|antigravity>` — the tool is a subcommand, not a flag, because each agent has a slightly different spawn shape. `list-roles` enumerates the supported role taxonomy.
