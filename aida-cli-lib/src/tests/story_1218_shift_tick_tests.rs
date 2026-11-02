@@ -1391,9 +1391,10 @@ fn shift_resume_requires_a_human_at_a_tty_and_a_yes() {
 }
 
 /// A9: the probe resolves the vendor the way `queue work` launches. With
-/// `[agents] enabled` listing only a non-claude profile and no explicit
-/// vendor, the wave would spend on that profile, so the claude-only
-/// watchdog evidence does not cover it and the guard refuses.
+/// `[agents] enabled` listing only the Antigravity profile and no explicit
+/// vendor, the wave would spend on `agy`, which the watchdog evidence (Claude
+/// transcripts and Codex sessions) does not cover, so the guard refuses.
+// trace:BUG-2391 | ai:claude
 #[test]
 fn shift_budget_guard_uses_the_launch_path_vendor() {
     let _env = crate::test_env::EnvVarGuard::unset("AIDA_HEADLESS_VENDOR");
@@ -1401,12 +1402,12 @@ fn shift_budget_guard_uses_the_launch_path_vendor() {
     std::fs::create_dir_all(tmp.path().join(".aida")).unwrap();
     std::fs::write(
         tmp.path().join(".aida").join("agents.toml"),
-        "[agents]\nenabled = [\"codex\"]\n",
+        "[agents]\nenabled = [\"antigravity\"]\n",
     )
     .unwrap();
     let (vendor, err) = resolve_wave_vendor(tmp.path());
     assert!(
-        vendor != "claude" || err.is_some(),
+        (vendor != "claude" && vendor != "codex") || err.is_some(),
         "the launch resolves to the only enabled profile (or refuses): {vendor} {err:?}"
     );
     let mut p = probes(vec![drain("TASK-1")]);

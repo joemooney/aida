@@ -1613,7 +1613,8 @@ Safety floors that hold in every configuration:
   missing, more than an hour old, degraded or unknown, or blind to the wave's
   vendor. Claude and Codex spend are both measured: Codex sessions under
   `~/.codex/sessions` count when their `session_meta` cwd is the project, a
-  worktree or a clone seat. Any other vendor needs a local
+  worktree or a clone seat. Each Codex turn counts as one wake, whether the
+  session is interactive or a headless `codex exec` run. Any other vendor needs a local
   `allow_uncovered_vendors = ["<vendor>"]` override. Each wave is
   also capped by `--max-tokens`, `--max-iterations` and `--max-runtime`.
 - Circuit breakers in `.aida/shift-state.json`: at most 8 waves per 24h; two

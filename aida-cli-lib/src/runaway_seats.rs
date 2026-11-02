@@ -417,6 +417,25 @@ struct SessionAgg {
     // trace:BUG-1962 | ai:antigravity
     #[serde(default, skip_serializing_if = "Option::is_none")]
     last_written_at: Option<DateTime<Utc>>,
+    /// The Codex turn in progress, carried across incremental reads.
+    // trace:BUG-2391 | ai:claude
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    codex_turn: Option<CodexTurn>,
+}
+
+/// One Codex turn: the minute its wake was counted and the prompt hash
+/// recorded for it, so a later, better prompt source replaces the earlier
+/// one instead of counting the turn twice.
+// trace:BUG-2391 | ai:claude
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
+struct CodexTurn {
+    minute: i64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    prompt: Option<String>,
+    /// The prompt came from `event_msg/user_message`, which wins over the
+    /// turn's `response_item` user text.
+    #[serde(default)]
+    from_user_message: bool,
 }
 
 #[derive(Debug, Default, Serialize, Deserialize)]
@@ -555,8 +574,12 @@ struct CodexPayload {
     kind: Option<String>,
     /// `user_message` text.
     message: Option<serde_json::Value>,
-    /// `task_complete` final reply.
+    /// `task_complete` final reply; `null` for a tool-only turn.
     last_agent_message: Option<String>,
+    /// `response_item` message role.
+    role: Option<String>,
+    /// `response_item` message content parts.
+    content: Option<serde_json::Value>,
     /// `token_count` usage.
     info: Option<CodexInfo>,
 }
@@ -632,14 +655,16 @@ fn codex_session_scope(path: &Path, roots: &[PathBuf]) -> Option<Option<String>>
     Some(Some(id))
 }
 
-/// Byte gate for Codex lines: only the four event kinds the rules read.
+/// Byte gate for Codex lines: only the event kinds the rules read, plus
+/// user-role messages (a headless `codex exec` turn carries its prompt only
+/// there).
 // trace:BUG-2391 | ai:claude
 fn codex_worth_parsing(line: &[u8]) -> bool {
     static TYPE_TAG: std::sync::OnceLock<regex::bytes::Regex> = std::sync::OnceLock::new();
     TYPE_TAG
         .get_or_init(|| {
             regex::bytes::Regex::new(
-                r#""type":"(token_count|user_message|task_complete|compacted)""#,
+                r#""type":"(token_count|user_message|task_started|task_complete|compacted)"|"role":"user""#,
             )
             .expect("static regex")
         })
@@ -676,11 +701,33 @@ fn fold_codex_line(
         s.minutes.entry(minute).or_default().compactions += 1;
         return;
     }
+    let Some(p) = &line.payload else { return };
+    if line.kind.as_deref() == Some("response_item") {
+        // A headless `codex exec` turn emits no `user_message`: its prompt
+        // is the turn's last user-role text (earlier ones are injected
+        // context). A `user_message`, when present, is authoritative.
+        if p.kind.as_deref() == Some("message") && p.role.as_deref() == Some("user") {
+            let text = codex_user_text(p.content.as_ref());
+            if let Some(turn) = s.codex_turn.as_mut() {
+                if !turn.from_user_message && !text.trim().is_empty() {
+                    set_turn_prompt(&mut s.prompts, turn, prompt_hash(&text));
+                }
+            }
+        }
+        return;
+    }
     if line.kind.as_deref() != Some("event_msg") {
         return;
     }
-    let Some(p) = &line.payload else { return };
     match p.kind.as_deref() {
+        Some("task_started") => {
+            // One wake per turn, interactive or headless.
+            s.minutes.entry(minute).or_default().wakes += 1;
+            s.codex_turn = Some(CodexTurn {
+                minute,
+                ..Default::default()
+            });
+        }
         Some("token_count") => {
             let Some(info) = &p.info else { return };
             let Some(last) = &info.last_token_usage else {
@@ -710,26 +757,87 @@ fn fold_codex_line(
                 Some(serde_json::Value::String(t)) => t.as_str(),
                 _ => "",
             };
-            s.minutes.entry(minute).or_default().wakes += 1;
             // Codex does not mark injected prompts, so every prompt counts
             // toward the repeat rule; a human retyping one prompt 60 times
             // an hour is not an ordinary seat either.
-            *s.prompts
-                .entry(prompt_hash(text))
-                .or_default()
-                .entry(minute)
-                .or_default() += 1;
+            match s.codex_turn.as_mut() {
+                // The turn's wake was counted at `task_started`.
+                Some(turn) if !turn.from_user_message => {
+                    turn.from_user_message = true;
+                    set_turn_prompt(&mut s.prompts, turn, prompt_hash(text));
+                }
+                Some(_) => {}
+                // An older Codex without `task_started`: the prompt is the wake.
+                None => {
+                    s.minutes.entry(minute).or_default().wakes += 1;
+                    *s.prompts
+                        .entry(prompt_hash(text))
+                        .or_default()
+                        .entry(minute)
+                        .or_default() += 1;
+                }
+            }
         }
         Some("task_complete") => {
-            let text = p.last_agent_message.as_deref().unwrap_or("");
+            s.codex_turn = None;
             let b = s.minutes.entry(minute).or_default();
             b.replies += 1;
-            if text.trim().chars().count() <= policy.noop_reply_max_chars {
-                b.noop += 1;
+            // A `null` final message is a tool-only turn: it did work, so it
+            // is a reply but not a no-op.
+            if let Some(text) = p.last_agent_message.as_deref() {
+                if text.trim().chars().count() <= policy.noop_reply_max_chars {
+                    b.noop += 1;
+                }
             }
         }
         _ => {}
     }
+}
+
+/// Concatenated `input_text` parts of a Codex user-role message.
+// trace:BUG-2391 | ai:claude
+fn codex_user_text(content: Option<&serde_json::Value>) -> String {
+    let Some(serde_json::Value::Array(parts)) = content else {
+        return String::new();
+    };
+    parts
+        .iter()
+        .filter(|p| p.get("type").and_then(|t| t.as_str()) == Some("input_text"))
+        .filter_map(|p| p.get("text").and_then(|t| t.as_str()))
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+/// Record `hash` as `turn`'s prompt at the turn's minute, retracting any
+/// prompt recorded for it earlier so one turn counts once.
+// trace:BUG-2391 | ai:claude
+fn set_turn_prompt(
+    prompts: &mut BTreeMap<String, BTreeMap<i64, u32>>,
+    turn: &mut CodexTurn,
+    hash: String,
+) {
+    if turn.prompt.as_deref() == Some(hash.as_str()) {
+        return;
+    }
+    if let Some(old) = turn.prompt.take() {
+        if let Some(per_minute) = prompts.get_mut(&old) {
+            if let Some(n) = per_minute.get_mut(&turn.minute) {
+                *n = n.saturating_sub(1);
+                if *n == 0 {
+                    per_minute.remove(&turn.minute);
+                }
+            }
+            if per_minute.is_empty() {
+                prompts.remove(&old);
+            }
+        }
+    }
+    *prompts
+        .entry(hash.clone())
+        .or_default()
+        .entry(turn.minute)
+        .or_default() += 1;
+    turn.prompt = Some(hash);
 }
 
 /// Short, content-free key for an injected prompt: a hash of its collapsed
@@ -1733,9 +1841,25 @@ mod tests {
     /// The BUG-1589 storm shape as a Codex rollout: a `session_meta` naming
     /// `cwd`, then a mail tick every 8s answered "mail tick: quiet" on a
     /// ~520k context over 3 calls, each checkpoint re-emitted once unchanged
-    /// (which must count once), and a compaction every 50 ticks.
+    /// (which must count once), and a compaction every 50 ticks. Each turn
+    /// opens with `task_started` and carries its prompt as a user-role
+    /// `response_item` plus an `event_msg/user_message`, as interactive
+    /// Codex writes it.
     // trace:BUG-2391 | ai:claude
     fn codex_storm(session: &str, cwd: &Path, ticks: i64) -> String {
+        codex_rollout(session, cwd, ticks, false)
+    }
+
+    /// The storm as headless `codex exec` writes it: no `user_message`; each
+    /// turn's prompt is its last user-role `response_item`, after injected
+    /// context that differs per turn.
+    // trace:BUG-2391 | ai:claude
+    fn codex_exec_storm(session: &str, cwd: &Path, ticks: i64) -> String {
+        codex_rollout(session, cwd, ticks, true)
+    }
+
+    // trace:BUG-2391 | ai:claude
+    fn codex_rollout(session: &str, cwd: &Path, ticks: i64, exec: bool) -> String {
         let mut out = String::new();
         let line = |v: serde_json::Value| format!("{v}\n");
         out.push_str(&line(serde_json::json!({"timestamp":ts(0),"type":"session_meta",
@@ -1743,12 +1867,21 @@ mod tests {
         let mut total = 0u64;
         for i in 0..ticks {
             let at = 8 * i + 1;
-            out.push_str(&line(
-                serde_json::json!({"timestamp":ts(at),"type":"event_msg",
-                "payload":{"type":"user_message","message":TICK,"kind":"plain"}}),
-            ));
+            out.push_str(&line(serde_json::json!({"timestamp":ts(at),"type":"event_msg",
+                "payload":{"type":"task_started","turn_id":format!("t{i}"),"model_context_window":272_000}})));
+            if exec {
+                let ctx = format!("<environment_context>turn {i}</environment_context>");
+                out.push_str(&line(serde_json::json!({"timestamp":ts(at),"type":"response_item",
+                    "payload":{"type":"message","role":"user","content":[{"type":"input_text","text":ctx}]}})));
+            }
             out.push_str(&line(serde_json::json!({"timestamp":ts(at),"type":"response_item",
                 "payload":{"type":"message","role":"user","content":[{"type":"input_text","text":TICK}]}})));
+            if !exec {
+                out.push_str(&line(
+                    serde_json::json!({"timestamp":ts(at),"type":"event_msg",
+                    "payload":{"type":"user_message","message":TICK,"kind":"plain"}}),
+                ));
+            }
             for call in 0..3 {
                 total += 520_020;
                 let tc = serde_json::json!({"timestamp":ts(at + 1 + call),"type":"event_msg",
@@ -1841,6 +1974,91 @@ mod tests {
             token.summary.contains("over 1350 calls"),
             "{}",
             token.summary
+        );
+        // `task_started` and `user_message` are one turn: one wake, one prompt.
+        let wake = findings
+            .iter()
+            .find(|f| f.id == "wake-rate:codex-mine")
+            .unwrap();
+        assert!(wake.summary.contains(": 450 wakes"), "{}", wake.summary);
+        let repeat = findings
+            .iter()
+            .find(|f| f.id.starts_with("repeated-prompt:") && f.id.ends_with("codex-mine"))
+            .unwrap();
+        assert!(
+            repeat.summary.contains("fired 450 times"),
+            "{}",
+            repeat.summary
+        );
+    }
+
+    /// A headless `codex exec` storm, which writes no `user_message`, trips
+    /// wake-rate and repeated-prompt from `task_started` and the turn's last
+    /// user-role text, not the per-turn injected context.
+    // trace:BUG-2391 | ai:claude
+    #[test]
+    fn codex_exec_storm_trips_wake_and_repeat_rules() {
+        let tmp = tempfile::tempdir().unwrap();
+        let project = tmp.path().join("repo");
+        let day = tmp.path().join("codex/sessions/2026/09/21");
+        let src = codex_sources(tmp.path(), &project);
+        let body = codex_exec_storm("codex-exec", &project, 450);
+        assert!(!body.contains("\"user_message\""));
+        write(&day, "rollout-e.jsonl", &body);
+        let now = t0() + Duration::minutes(59);
+        let (findings, _) = scan(
+            "aida",
+            &src,
+            &WatchdogPolicy::default(),
+            now,
+            &HashMap::new(),
+        );
+        assert_eq!(
+            rules(&findings, "codex-exec"),
+            vec![
+                "compactions",
+                "idle-ratio",
+                "repeated-prompt",
+                "token-rate",
+                "wake-rate"
+            ]
+        );
+        let repeat: Vec<_> = findings
+            .iter()
+            .filter(|f| f.id.starts_with("repeated-prompt:") && f.id.ends_with("codex-exec"))
+            .collect();
+        assert_eq!(repeat.len(), 1, "{repeat:?}");
+        assert!(
+            repeat[0].summary.contains("fired 450 times"),
+            "{}",
+            repeat[0].summary
+        );
+    }
+
+    /// A tool-only turn (`last_agent_message: null`) is a reply, not a no-op.
+    // trace:BUG-2391 | ai:claude
+    #[test]
+    fn codex_null_final_message_is_not_a_noop() {
+        let tmp = tempfile::tempdir().unwrap();
+        let project = tmp.path().join("repo");
+        let day = tmp.path().join("codex/sessions/2026/09/21");
+        let src = codex_sources(tmp.path(), &project);
+        let body = codex_storm("codex-tools", &project, 60).replace(
+            "\"last_agent_message\":\"mail tick: quiet\"",
+            "\"last_agent_message\":null",
+        );
+        write(&day, "rollout-f.jsonl", &body);
+        let now = t0() + Duration::minutes(59);
+        let (findings, _) = scan(
+            "aida",
+            &src,
+            &WatchdogPolicy::default(),
+            now,
+            &HashMap::new(),
+        );
+        assert!(
+            !rules(&findings, "codex-tools").contains(&"idle-ratio".to_string()),
+            "{findings:?}"
         );
     }
 
