@@ -11,7 +11,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T09:05:27.409838422Z
-modified_at: 2026-11-02T00:32:02.051370610Z
+modified_at: 2026-11-02T00:41:27.556512304Z
 req_type: Task
 tags:
 - architecture
@@ -173,6 +173,12 @@ comments:
   content: 'ADVISOR RULING (claude-advisor-19, 2026-11-01 15:30 MST) on the CI nested-unshare EPERM fork. Evidence (/tmp/aida-TASK2705-exact-profile-collection-result.md): the GitHub Ubuntu 26.04 runner confines bwrap under AppArmor bwrap-userns-restrict, whose unpriv_bwrap child profile has ''audit deny capability'' (line 79). A nested unshare inside bwrap therefore cannot gain caps there. That is a property of the host, not an AIDA defect, and no further diagnosis is authorized or needed. REMEDY: (1) the tracer probes nested-userns capability ONCE up front and, when it is denied, reports a typed result (e.g. isolation=unavailable reason=host-policy-denied with the errno and phase) instead of failing; that is exactly the typed-policy reporting this task''s acceptance asks for. (2) The 2 tests that need nested userns assert the typed host-policy-denied result when the probe says denied, and the full isolation path when it is available; they never silently pass. (3) Remove the diagnostic profile-inventory/artifact collection steps added to .github/workflows/ci.yml in this PR; they were investigation scaffolding. (4) No privileged elevation, no policy changes, no CI runner changes. LIGHT gate: one targeted cargo test for the tracer module plus make check-ci-fast.'
   created_at: 2026-11-01T22:35:21.611202768Z
   modified_at: 2026-11-01T22:35:21.611202768Z
+  session_id: 126bbd5a-a92f-452b-ab0b-2637a1db42c2
+- id: 01a199b4-3904-7df2-bfef-865d9a4ce12b
+  author: joe
+  content: 'ADVISOR RULING round 3 (claude-advisor-19): fix ALL five findings from the 4781d45 review in this PR. (1) With AIDA_REQUIRE_BWRAP_LIVE=1 the tracer tests must FAIL on host-policy-denied; keep the typed denied assertion for the unset case. (3) Classify host-policy-denied ONLY for the observed case, unshare(CLONE_NEWUSER) returning EPERM/EACCES; ENOSPC becomes a distinct host-resource-limit reason; mount/umount failures stay ordinary failures. (4) Document the isolation JSON object and the host-policy refusal in docs/cli/07-project-setup.md. (5) Set isolation.state from the main run''s outcome; extract the duplicated spawn/poll code into one helper. (2) Live proof: this host permits nested userns (apparmor_restrict_unprivileged_userns=0; bwrap-in-bwrap unshare -Ur verified 17:50 MST). The advisor will run AIDA_REQUIRE_BWRAP_LIVE=1 on the host at the new exact head and record the output here; the implementer runs the targeted task_2705_ test unflagged plus make check-ci-fast.'
+  created_at: 2026-11-02T00:41:27.556512304Z
+  modified_at: 2026-11-02T00:41:27.556512304Z
   session_id: 126bbd5a-a92f-452b-ab0b-2637a1db42c2
 history:
 - id: 01a1965b-7cae-7260-83dd-5767f6772d90
