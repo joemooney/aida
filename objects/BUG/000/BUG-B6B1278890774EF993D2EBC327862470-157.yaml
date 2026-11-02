@@ -19,7 +19,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T02:25:46.947809262Z
-modified_at: 2026-11-02T00:06:44.584941184Z
+modified_at: 2026-11-02T06:06:00.343868564Z
 req_type: Bug
 tags:
 - area:agents
@@ -227,6 +227,14 @@ comments:
   created_at: 2026-11-02T00:03:07.680383547Z
   modified_at: 2026-11-02T00:03:07.680383547Z
   session_id: 126bbd5a-a92f-452b-ab0b-2637a1db42c2
+- id: 01a19add-5a97-7162-bf97-dece188793cd
+  author: joe
+  content: |
+    REWORK BRIEF (advisor, 2026-11-01 22:58 MST): PR #3192, CI lib-0 red at fef651be (00:03), and the branch is far behind main. All 4976 tests pass; the job fails on the test-time budget: `lane_job::tests::pre_test_failures_and_zero_matches_stay_untested` ran for 16.3s against the 10s limit for an unbudgeted test. Make that test fast: fake the job runner or shrink the fixture so it does not spawn real cargo. Add a scripts/test-time-budget.toml entry only if it must stay slow, with the reason. Merge origin/main first and resolve the conflicts.
+    Gate: LIGHT. Run `cargo test -p aida-cli-lib lane_job::tests`, then make check-ci-fast, then push.
+  created_at: 2026-11-02T06:06:00.343868564Z
+  modified_at: 2026-11-02T06:06:00.343868564Z
+  session_id: 1f56bd1e-c059-4f73-b8df-e18b2170fdfc
 history:
 - id: 01a19525-88eb-79e3-aab8-8d511ad2f605
   author: aida-session-start
