@@ -21,7 +21,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T07:26:20.914223641Z
-modified_at: 2026-11-02T10:04:31.027771641Z
+modified_at: 2026-11-02T10:05:57.616173643Z
 req_type: Bug
 tags:
 - architecture
@@ -557,6 +557,12 @@ comments:
   content: 'ADVISOR HOST CHECK (2026-11-02 02:46 MST) at 94de292, after building the matching CLI: cargo test -p aida-cli-lib --lib bug_2385_vendor_routing codex_tool_env gave 34 passed, 0 failed.'
   created_at: 2026-11-02T09:45:30.618648825Z
   modified_at: 2026-11-02T09:45:30.618648825Z
+  session_id: 1f56bd1e-c059-4f73-b8df-e18b2170fdfc
+- id: 01a19bb9-09f0-70b1-ae4e-2e420bc3a00a
+  author: joe
+  content: 'REWORK BRIEF (advisor, 2026-11-02 03:07 MST), round 5. lib-0 is fixed, and lib-1 is red at e46ec62 for the same reason as round 4: main''s merged STORY-2255 (#3227) advisor_watch Codex fixtures (codex_tick_cold_boots_*, codex_tick_forks_the_registered_thread_without_touching_it, at advisor_watch.rs:572) do not answer the new requested-seat preflight. STOP fixing these one at a time. Find EVERY test fixture that launches Codex through a path that now runs the requested-seat preflight: grep tests and #[cfg(test)] modules for codex launches (advisor_watch, agent_launch, session, queue_cmd, dispatch, burndown, intake, questions, compete). Give each one validated seat evidence through the shared helper you added in round 4. Do not weaken the preflight. Gate: the advisor host-runs cargo test -p aida-cli-lib --lib codex (with the matching CLI built) before review; run it yourself if cargo is allowed, then make check-ci-fast.'
+  created_at: 2026-11-02T10:05:57.616173643Z
+  modified_at: 2026-11-02T10:05:57.616173643Z
   session_id: 1f56bd1e-c059-4f73-b8df-e18b2170fdfc
 history:
 - id: 01a19600-c769-7cd0-ba08-8d93975e3e3b
