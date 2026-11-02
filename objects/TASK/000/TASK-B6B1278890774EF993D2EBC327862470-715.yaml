@@ -1,0 +1,30 @@
+id: 01a19d12-ca4e-7910-bb30-0408e4ec2b2e
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-715
+title: 'Non-blocking (minor): .env( key detection takes the text up to the first '','' or…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-2759, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  Non-blocking (minor): .env( key detection takes the text up to the first ',' or ')', so a method-call key such as cmd.env(GRANT_ENV.to_string(), g) or cmd.env(crate::gate::seat_authority::GRANT_ENV.to_owned(), g) yields 'GRANT_ENV.to_string(' and is not counted (bug_2398_codex_tool_env_tests.rs:533-536).
+
+  PR: #3264
+  Reviewed sha: d54cc7f11bc10a531942dbf9542e0c35ad360b85
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-02T16:23:36.782966684Z
+modified_at: 2026-11-02T16:23:36.782966684Z
+req_type: Task
+tags:
+- carried-from:TASK-2759
+- finding-hash:c78decdc
+- from-review:PR-3264
+- kind:carried-forward
+filed_at:
+  code_sha: 15c0fa4d6051d6ba558fdb9fec01901e2fd27c4f
+  branch: main
+  dirty: true
+  aida_version: 0.16.0
+  aida_build_sha: 6a3f67671a9
+  vendor: claude
+  session: ee0bf351-6b17-486f-a38e-cfbb1343c426
