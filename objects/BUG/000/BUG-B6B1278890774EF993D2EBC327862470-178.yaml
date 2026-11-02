@@ -11,7 +11,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T16:42:07.593722571Z
-modified_at: 2026-11-02T05:22:27.834485759Z
+modified_at: 2026-11-02T06:05:58.949036201Z
 req_type: Bug
 tags:
 - doctor
@@ -60,6 +60,17 @@ comments:
   modified_at: 2026-11-02T03:35:27.857008155Z
   session_id: 01a19a4b58a9
   harness_version: 2.1.316 (Claude Code)
+- id: 01a19add-5525-7e61-b71c-7c7c5b19615e
+  author: joe
+  content: |
+    REWORK BRIEF (advisor, 2026-11-01 22:58 MST): PR #3214, CI lib-1 red at 5c7796d1. The PR's own tests fail:
+    - mail_backlog_bug2405_tests.rs:149 `old_cohort_new_owner_uuid_receipts_and_real_postflush_ack`: assertion `!unread(&r, "mine")` fails, so the real post-flush ack does not clear the reader's unread entry.
+    - mail_backlog_bug2405_tests.rs:646 `unrelated_bad_rows_scope_unknown_to_affected_readers`: `reader-b:direct` still appears in items.
+    These pass locally only if the test environment differs from CI; check for HOME / AIDA_* env leaking from the host (use test_env isolation) or ordering dependence. Fix the code, not the assertions, unless the test encodes behaviour the round-2 ruling changed. Round-2 review findings are otherwise resolved; no other findings to bundle.
+    Gate: LIGHT. Run `cargo test -p aida-cli-lib focused_bug2405`, then make check-ci-fast, then push.
+  created_at: 2026-11-02T06:05:58.949036201Z
+  modified_at: 2026-11-02T06:05:58.949036201Z
+  session_id: 1f56bd1e-c059-4f73-b8df-e18b2170fdfc
 history:
 - id: 01a198c4-4a0e-78f2-a498-045eec94c002
   author: joe
