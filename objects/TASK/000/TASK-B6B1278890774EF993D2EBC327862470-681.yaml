@@ -1,0 +1,30 @@
+id: 01a19a78-111d-7ce3-8225-aeec2cd69122
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-681
+title: 'minor: no test shows that plain ''aida doctor'' (doctor_cmd.rs:1065) emits codex-…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on STORY-2256, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  minor: no test shows that plain 'aida doctor' (doctor_cmd.rs:1065) emits codex-mail-wake:service-not-installed, or that 'aida session start' prints the Mail wake line (session_start.rs:3492). Only the helpers service_findings_in and session_start_wake_line are unit-tested.
+
+  PR: #3225
+  Reviewed sha: 3bd3d670a3b9e59838cde5b5ea6006fd0dc70eae
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-02T04:15:22.397259731Z
+modified_at: 2026-11-02T04:15:22.397259731Z
+req_type: Task
+tags:
+- carried-from:STORY-2256
+- finding-hash:908292cb
+- from-review:PR-3225
+- kind:carried-forward
+filed_at:
+  code_sha: 20c834e8cdcc74f199d9ddff7126cba61b08c3c3
+  branch: main
+  dirty: true
+  aida_version: 0.16.0
+  aida_build_sha: 6a3f67671a9
+  vendor: claude
+  session: 126bbd5a-a92f-452b-ab0b-2637a1db42c2
