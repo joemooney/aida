@@ -12814,6 +12814,8 @@ User content.
         let cache_path =
             aida_core::CachedGitBackend::default_cache_path(&project_root.join(".aida-store"));
         let lock_info_path = aida_core::cache_lock_info_path(&cache_path);
+        // TASK-2707: the cache directory exists once the cache has been opened.
+        std::fs::create_dir_all(lock_info_path.parent().unwrap()).unwrap();
         let info = aida_core::CacheLockInfo {
             pid: BUG_1644_DEAD_PID,
             command: "aida list".to_string(),
@@ -12866,6 +12868,8 @@ User content.
         std::fs::create_dir_all(root.join(".aida-store")).unwrap();
         let cache = aida_core::CachedGitBackend::default_cache_path(&root.join(".aida-store"));
         let path = aida_core::cache_lock_info_path(&cache);
+        // TASK-2707: the cache directory exists once the cache has been opened.
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
         let seen = (chrono::Utc::now() - chrono::Duration::hours(10)).to_rfc3339();
         let info = aida_core::CacheLockInfo {
             pid: 19,
@@ -13078,6 +13082,8 @@ User content.
         std::fs::create_dir_all(root.join(".aida-store")).unwrap();
         let cache = aida_core::CachedGitBackend::default_cache_path(&root.join(".aida-store"));
         let path = aida_core::cache_lock_info_path(&cache);
+        // TASK-2707: the cache directory exists once the cache has been opened.
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
         let info = aida_core::CacheLockInfo {
             pid: u32::MAX,
             boot_id: Some("foreign boot".into()),
@@ -13112,6 +13118,8 @@ User content.
         let cache_path =
             aida_core::CachedGitBackend::default_cache_path(&project_root.join(".aida-store"));
         let lock_info_path = aida_core::cache_lock_info_path(&cache_path);
+        // TASK-2707: the cache directory exists once the cache has been opened.
+        std::fs::create_dir_all(lock_info_path.parent().unwrap()).unwrap();
         // pid 1 is always alive; a legacy (identity-less) record is PID-only.
         let info = aida_core::CacheLockInfo {
             pid: 1,
@@ -13161,6 +13169,8 @@ User content.
         let cache_path =
             aida_core::CachedGitBackend::default_cache_path(&project_root.join(".aida-store"));
         let lock_info_path = aida_core::cache_lock_info_path(&cache_path);
+        // TASK-2707: the cache directory exists once the cache has been opened.
+        std::fs::create_dir_all(lock_info_path.parent().unwrap()).unwrap();
         let info = aida_core::CacheLockInfo {
             pid: 1,
             command: "aida schedule tick --hook".to_string(),

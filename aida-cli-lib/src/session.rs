@@ -3952,10 +3952,11 @@ pub(crate) fn claude_contained_settings_json(write_roots: &[PathBuf]) -> Result<
                 }
             }
             refuse_unexpressible_main_git_deny(&main_git_deny)?;
-            // TASK-2707: the sandbox binds the cache DIRECTORY, which must exist
-            // (migrated out of the legacy layout) before launch.
+            // TASK-2707: the sandbox binds the cache DIRECTORY; move a legacy
+            // cache into it before launch. Nothing is created here (a missing
+            // directory is a doctor gap, as a missing cache file was).
             // trace:TASK-2707 | ai:claude
-            aida_core::db::ensure_project_cache_dir(&main);
+            aida_core::db::migrate_legacy_cache_layout(&main.join(".aida"));
             // Host-owned hooks must exist before the sandbox makes the common
             // git directory read-only. Every later store write re-verifies them
             // and refuses on failure; the write boundary is never widened.

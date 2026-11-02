@@ -162,6 +162,8 @@ fn tick_and_cache_refresh_run_concurrently_without_deadlock() {
     let _env = crate::test_env::EnvVarGuard::set("AIDA_HISTORY_CACHE", "1");
     let fx = Fixture::new();
     fx.append(1);
+    // TASK-2707: the cache directory exists once the cache has been opened.
+    aida_core::db::ensure_project_cache_dir(fx.root.path());
     let lock = aida_core::db::cache_refresh::RefreshLock::try_acquire(
         &aida_core::db::project_cache_path(fx.root.path()),
     )
