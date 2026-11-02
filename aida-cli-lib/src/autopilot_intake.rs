@@ -925,10 +925,12 @@ pub(crate) fn handle_intake_command(
     let prompt = intake::seeded_assess_prompt(&project_root, apply);
     // Resolved once: the preview, the messages and the launch all use this
     // vendor. trace:BUG-2389 | ai:codex ai:claude
-    let vendor = session::resolve_headless_vendor(&project_root);
-    let contained = session::aida_contained_env()?;
-    session::require_vendor_containment(vendor, contained, "headless coordinator")?;
-    let mode_str = session::coordinator_permission_mode(vendor, permission_mode, contained)?;
+    // trace:BUG-2393 | ai:claude
+    let session::CoordinatorLaunch {
+        vendor,
+        contained,
+        mode: mode_str,
+    } = session::resolve_coordinator_launch(&project_root, permission_mode)?;
     let mode = &mode_str;
 
     if dry_run {
@@ -1009,13 +1011,15 @@ pub(crate) fn handle_intake_command(
         crate::gate::seat_authority::issue_child(&project_root, "advisor", &current_user_id(None))?;
     command.env(crate::gate::seat_authority::GRANT_ENV, &child_grant.id);
 
-    let status_code = session::coordinator_status_with_handle_guard(&mut command, handle_guard)
-        .map_err(|e| {
-            anyhow::anyhow!(
-                "failed to launch {} headless intake pass: {e}",
-                vendor.program()
-            )
-        });
+    // trace:BUG-2398 | ai:claude
+    let status_code = session::coordinator_status_with_handle_guard(
+        vendor,
+        &mut command,
+        &project_root,
+        None,
+        handle_guard,
+    )
+    .with_context(|| format!("failed to launch {} headless intake pass", vendor.program()));
     // trace:BUG-2170 | ai:antigravity
     crate::session::revoke_headless_child_grant(&child_grant.id);
     let status_code = status_code?;

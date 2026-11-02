@@ -79,8 +79,10 @@ pub(crate) fn handle_compete_command(
     }
     // Refuse the entire run before briefs, worktrees, branches or any arm run.
     // trace:BUG-2172 | ai:codex
-    preflight_compete_containment(vendors, judge.then_some(judge_vendor))?;
+    // BUG-2393: resolve the root first so configured containment is read.
+    // trace:BUG-2393 | ai:claude
     let project_root = find_project_root()?;
+    preflight_compete_containment(&project_root, vendors, judge.then_some(judge_vendor))?;
     let store = load_store_for_lookup(&project_root)
         .ok_or_else(|| anyhow::anyhow!("could not load the AIDA requirements store"))?;
     let target = if let Ok(uuid) = uuid::Uuid::parse_str(spec_arg) {
@@ -215,8 +217,11 @@ pub(crate) fn handle_compete_command(
         if dry_run {
             // Preview vendor posture without preparing settings or an OS wrapper:
             // both operational helpers can write artifacts in an existing tree.
-            let actual_args =
-                compete_arm_argv(&argv, vendor, session::aida_contained_env()?, || {
+            let actual_args = compete_arm_argv(
+                &argv,
+                vendor,
+                session::drain_contained(&project_root)?,
+                || {
                     Ok(vec![
                         "--setting-sources".into(),
                         "project".into(),
@@ -225,7 +230,8 @@ pub(crate) fn handle_compete_command(
                         "--settings".into(),
                         "{}".into(),
                     ])
-                })?;
+                },
+            )?;
             println!(
                 "  {}: would create worktree on `{}` and run vendor argv (settings/OS wrapper resolved at launch): {} {}",
                 vendor,
@@ -429,14 +435,16 @@ pub(crate) fn handle_zen_compete(spec_arg: &str, dry_run: bool) -> Result<()> {
 
     // The fixed bake-off includes Codex, which has no contained adapter.
     // trace:BUG-2172 | ai:codex
+    // trace:BUG-2393 | ai:claude
+    let project_root = find_project_root()?;
     preflight_compete_containment(
+        &project_root,
         &compete::BAKEOFF_VENDORS
             .iter()
             .map(|s| s.to_string())
             .collect::<Vec<_>>(),
         None,
     )?;
-    let project_root = find_project_root()?;
     let store = load_store_for_lookup(&project_root)
         .ok_or_else(|| anyhow::anyhow!("could not load the AIDA requirements store"))?;
     let target = if let Ok(uuid) = uuid::Uuid::parse_str(spec_arg) {
@@ -874,8 +882,13 @@ pub(crate) fn build_compete_judge_command(
         compete::JudgeVendor::Claude => session::HeadlessVendor::Claude,
         compete::JudgeVendor::Codex => session::HeadlessVendor::Codex,
     };
-    let mut judge_cmd =
-        build_compete_arm_command(project_root, cmd_bin, cmd_args, headless_vendor.as_str())?;
+    let mut judge_cmd = build_compete_arm_command(
+        project_root,
+        project_root,
+        cmd_bin,
+        cmd_args,
+        headless_vendor.as_str(),
+    )?;
     if judge_vendor.needs_stdin_closed() {
         judge_cmd.stdin(std::process::Stdio::null());
     }
@@ -970,7 +983,8 @@ fn run_compete_arm(
     let log_dir = compete_log_dir(project_root, branch);
     let _ = std::fs::create_dir_all(&log_dir);
     let log_path = log_dir.join(format!("{vendor}.log"));
-    let mut arm_cmd = build_compete_arm_command(&worktree_dir, command, argv, vendor)?;
+    let mut arm_cmd =
+        build_compete_arm_command(project_root, &worktree_dir, command, argv, vendor)?;
     let vendor_out = arm_cmd.output_retrying_etxtbsy();
     let ran = match &vendor_out {
         Ok(o) if o.status.success() => Ran::Ok,
@@ -1064,12 +1078,16 @@ fn run_compete_arm(
 }
 
 /// Validate all children together, before any run artifacts or destructive cleanup.
+/// Containment is the parent's env or the project/user configuration
+/// ([`session::drain_contained`]).
 // trace:BUG-2172 | ai:codex
-fn preflight_compete_containment(
+// trace:BUG-2393 | ai:claude
+pub(crate) fn preflight_compete_containment(
+    project_root: &std::path::Path,
     vendors: &[String],
     judge: Option<compete::JudgeVendor>,
 ) -> Result<()> {
-    if !session::aida_contained_env()? {
+    if !session::drain_contained(project_root)? {
         return Ok(());
     }
     for name in vendors
@@ -1088,15 +1106,19 @@ fn preflight_compete_containment(
     Ok(())
 }
 
+/// `project_root` is where containment is configured; `worktree_dir` is where
+/// the child runs (an arm's candidate worktree, or the root for the judge).
 // trace:BUG-2124 | ai:antigravity
 pub(crate) fn build_compete_arm_command(
+    project_root: &std::path::Path,
     worktree_dir: &std::path::Path,
     command: &str,
     argv: &[String],
     vendor: &str,
 ) -> Result<std::process::Command> {
     // trace:BUG-2172 | ai:codex
-    let contained = session::aida_contained_env()?;
+    // trace:BUG-2393 | ai:claude
+    let contained = session::drain_contained(project_root)?;
     let headless_vendor = session::HeadlessVendor::parse(vendor);
     let args = compete_arm_argv(argv, vendor, contained, || {
         session::claude_contained_flags_for(worktree_dir)
@@ -1121,6 +1143,14 @@ pub(crate) fn build_compete_arm_command(
         cmd.env("AIDA_CONTAINED", "1");
     } else {
         cmd.env_remove("AIDA_CONTAINED");
+    }
+    if vendor == "codex" {
+        // Compete arms and judges do not receive a delegated seat.
+        // trace:BUG-2398 | ai:codex
+        cmd.env(crate::gate::seat_authority::GRANT_ENV, "")
+            .env("AIDA_PROJECT_ROOT", worktree_dir)
+            .env("AIDA_AGENT_TYPE", "codex");
+        crate::codex_tool_env::prepare_launch(&mut cmd)?;
     }
     Ok(cmd)
 }
@@ -1261,7 +1291,7 @@ mod containment_tests {
         let judge =
             build_compete_judge_command(dir.path(), &bin, &argv, compete::JudgeVendor::Claude)
                 .unwrap();
-        let arm = build_compete_arm_command(dir.path(), &bin, &argv, "claude").unwrap();
+        let arm = build_compete_arm_command(dir.path(), dir.path(), &bin, &argv, "claude").unwrap();
         let exec = session::build_exec_vendor_headless_command(
             session::HeadlessVendor::Claude,
             prompt,
@@ -1289,12 +1319,14 @@ mod containment_tests {
                 .get_envs()
                 .any(|(k, v)| k == "AIDA_CONTAINED" && v == Some(std::ffi::OsStr::new("1"))));
         }
-        assert!(build_compete_arm_command(dir.path(), "codex", &[], "codex").is_err());
+        assert!(build_compete_arm_command(dir.path(), dir.path(), "codex", &[], "codex").is_err());
         assert!(
             build_compete_judge_command(dir.path(), "codex", &[], compete::JudgeVendor::Codex)
                 .is_err()
         );
-        assert!(build_compete_arm_command(dir.path(), "unknown", &[], "unknown").is_err());
+        assert!(
+            build_compete_arm_command(dir.path(), dir.path(), "unknown", &[], "unknown").is_err()
+        );
     }
 
     /// BUG-050: an uncontained claude arm or judge carries the headless
@@ -1409,6 +1441,7 @@ mod containment_tests {
             .contains("[contained]"));
         assert_eq!(std::fs::read_to_string(&sentinel).unwrap(), "preserve me");
         assert!(preflight_compete_containment(
+            &root,
             &["claude".into()],
             Some(compete::JudgeVendor::Claude)
         )
@@ -1428,7 +1461,9 @@ mod containment_tests {
             None
         )
         .is_err());
-        assert!(build_compete_arm_command(dir.path(), "claude", &[], "claude").is_err());
+        assert!(
+            build_compete_arm_command(dir.path(), dir.path(), "claude", &[], "claude").is_err()
+        );
         assert!(build_compete_judge_command(
             dir.path(),
             "claude",

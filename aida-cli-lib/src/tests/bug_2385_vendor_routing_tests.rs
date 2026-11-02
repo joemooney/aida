@@ -157,9 +157,18 @@ fn wrapper_launches_configured_vendor(vendor: &str, surface: &str) {
             } else {
                 vendor
             };
-            crate::test_exec::write_executable(&bin.join(actual_vendor), format!(
+            let vendor_script = format!(
                 "#!/bin/sh\nif [ \"$1\" = --version ]; then echo '{actual_vendor} 9.9.9'; exit 0; fi\nprintf '%s\\n' \"$@\" > '{}'\nprintf '%s\\n' \"$AIDA_AGENT_TYPE\" \"$AIDA_SESSION_ROLE\" \"$AIDA_SESSION_SCOPE\" \"$AIDA_CONTAINMENT_POSTURE\" \"${{AIDA_CONTAINED-unset}}\" \"$AIDA_SESSION_GRANT\" \"$AIDA_AGENT_NAME\" > '{}'\n",
-                argv.display(), context.display()));
+                argv.display(), context.display());
+            // A granted Codex child must pass the requested-seat preflight:
+            // the fake answers it through the real matching CLI's probe.
+            // trace:BUG-2398 | ai:claude
+            let vendor_script = if actual_vendor == "codex" {
+                crate::test_exec::codex_probe_script(vendor_script)
+            } else {
+                vendor_script
+            };
+            crate::test_exec::write_executable(&bin.join(actual_vendor), vendor_script);
             crate::test_exec::write_executable(
                 &bin.join("aida"),
                 "#!/bin/sh\necho 'aida 0.16.0 fixture'\n",

@@ -263,13 +263,83 @@ fn claim_floor(
     type_prefix: &str,
     authority: &aida_core::allocation_authority::ClaimAuthority,
 ) -> Result<u32> {
+    use aida_core::allocation_authority::ClaimAuthority;
     let counter = read_agreed_counter(store_path, type_prefix);
+    // A claim placed above every block must also clear every range the
+    // root granted another hub (`aida node hub add`).
+    // trace:STORY-B6B1278890774EF993D2EBC327862470-170 | ai:claude
+    let pools = aida_core::allocation_lineage::PoolRegistry::load(store_path)?;
+    let counter = counter.max(aida_core::allocation_lineage::granted_ceiling(
+        &pools.pools,
+        type_prefix,
+    ));
     match authority {
-        aida_core::allocation_authority::ClaimAuthority::HubCas { .. } => Ok(counter.max(
+        ClaimAuthority::HubCas { .. } => Ok(counter.max(
             crate::doctor_backfill_agreed::hub_claim_floor(store_path, type_prefix)?,
         )),
-        aida_core::allocation_authority::ClaimAuthority::Rooted => Ok(counter),
+        ClaimAuthority::Rooted | ClaimAuthority::Delegated { .. } => Ok(counter),
     }
+}
+
+/// Append a new `type_prefix` claim of `size` IDs for `node_id` to
+/// `registry` and return it. A delegated clone (its hub holds a pool the
+/// root granted) carves the block from that pool's free space; every other
+/// claim starts above every block, granted pool and issued number of the
+/// type, stamped with the authority's pool.
+// trace:STORY-B6B1278890774EF993D2EBC327862470-170 | ai:claude
+#[allow(clippy::too_many_arguments)]
+fn place_claim(
+    store_path: &std::path::Path,
+    registry: &mut aida_core::BlockRegistry,
+    authority: &aida_core::allocation_authority::ClaimAuthority,
+    node_id: String,
+    owner: String,
+    host: String,
+    type_prefix: &str,
+    size: u32,
+) -> Result<aida_core::AgreedIdBlock> {
+    use aida_core::allocation_lineage as lineage;
+    if let aida_core::allocation_authority::ClaimAuthority::Delegated { hub, .. } = authority {
+        let pools = lineage::PoolRegistry::load(store_path)?;
+        let typ = type_prefix.to_uppercase();
+        let pool = lineage::hub_grant(&pools.pools, hub, &typ).ok_or_else(|| {
+            anyhow::anyhow!(
+                "the allocation root has granted hub `{hub}` no {typ} pool; on the root clone run `aida node hub add {hub} --url <url>` once the type is in use, then pull the store"
+            )
+        })?;
+        let (start, end) = lineage::carve_block(pool, &pools.pools, &registry.blocks, size)
+            .ok_or_else(|| {
+                anyhow::anyhow!(
+                    "hub `{hub}`'s {typ} pool ({}-{}) is exhausted; the allocation root grants hubs their pools",
+                    pool.range_start,
+                    pool.range_end
+                )
+            })?;
+        let block = aida_core::AgreedIdBlock {
+            node_id,
+            owner,
+            hostname: host,
+            type_prefix: typ,
+            range_start: start,
+            range_end: end,
+            next: start,
+            allocated_at: chrono::Utc::now(),
+            pool_id: Some(pool.pool_id.clone()),
+        };
+        registry.blocks.push(block.clone());
+        return Ok(block);
+    }
+    let counter_floor = claim_floor(store_path, type_prefix, authority)?;
+    let mut block = registry.claim_block_with_floor(
+        node_id,
+        owner,
+        host,
+        type_prefix.to_string(),
+        size,
+        counter_floor,
+    );
+    stamp_last_claim(registry, &mut block, authority);
+    Ok(block)
 }
 
 pub(crate) fn handle_block_command(cmd: &BlockCommand, store_path: &std::path::Path) -> Result<()> {
@@ -312,21 +382,21 @@ pub(crate) fn handle_block_command(cmd: &BlockCommand, store_path: &std::path::P
                             let mut registry = BlockRegistry::load(&blocks_path)?;
                             // Honor the agreed-id counter floor so a fresh block can't
                             // start at a number already issued in past merge-gate runs
-                            // or retire-legacy-ids migrations.
+                            // or retire-legacy-ids migrations (`place_claim`).
                             // trace:FR-1-073 | ai:claude
-                            let counter_floor = claim_floor(store_path, &type_prefix, &authority)?;
                             // BUG-715: redact the hostname before it lands in blocks.yaml.
                             let (block_host, _) =
                                 aida_core::git_ops::redacted_identity(&hostname(), None);
-                            let mut block = registry.claim_block_with_floor(
+                            let block = place_claim(
+                                store_path,
+                                &mut registry,
+                                &authority,
                                 node_id.clone(),
                                 std::env::var("USER").unwrap_or_else(|_| "unknown".into()),
                                 block_host,
-                                type_prefix.clone(),
+                                &type_prefix,
                                 *size,
-                                counter_floor,
-                            );
-                            stamp_last_claim(&mut registry, &mut block, &authority);
+                            )?;
                             registry.save_claimed(&blocks_path, &node_id)?;
 
                             // Commit the new block
@@ -992,21 +1062,21 @@ pub(crate) fn auto_allocate_block_inner(
                         return Ok(None);
                     }
 
-                    let counter_floor = claim_floor(store_path, type_prefix, &authority)?;
                     // BUG-715: redact owner (email) + hostname before they land in blocks.yaml.
                     let raw_owner = owner.to_string();
                     let raw_hn = hn.to_string();
                     let (block_host, block_owner) =
                         aida_core::git_ops::redacted_identity(&raw_hn, Some(raw_owner.as_str()));
-                    let mut block = registry.claim_block_with_floor(
+                    let block = place_claim(
+                        store_path,
+                        &mut registry,
+                        &authority,
                         node_id.to_string(),
                         block_owner.unwrap_or(raw_owner),
                         block_host,
-                        type_prefix.to_string(),
+                        type_prefix,
                         size,
-                        counter_floor,
-                    );
-                    stamp_last_claim(&mut registry, &mut block, &authority);
+                    )?;
                     registry.save_claimed(&blocks_path, node_id)?;
 
                     let commit_subject = match reason {
@@ -1235,9 +1305,11 @@ pub(crate) fn ensure_block_capacity(
     type_prefix: &str,
 ) -> Result<Option<AutoClaimOutcome>> {
     // trace:BUG-2017 | ai:codex — implicit refill is disabled on WORK.
-    // A single-hub clone that reaches the hub may claim like the root.
+    // A single-hub clone that reaches the hub may claim like the root, and a
+    // delegated clone may claim the types its hub holds a pool for.
     // trace:STORY-B6B1278890774EF993D2EBC327862470-164 | ai:claude
-    if aida_core::allocation_authority::claim_authority(store_path).is_err() {
+    // trace:STORY-B6B1278890774EF993D2EBC327862470-170 | ai:claude
+    if !aida_core::allocation_authority::can_claim_type(store_path, type_prefix) {
         return Ok(None);
     }
 
@@ -1256,6 +1328,11 @@ pub(crate) fn ensure_block_capacity(
     };
 
     if !cfg.is_enabled_for(&effective_prefix) {
+        return Ok(None);
+    }
+    // A delegated clone's hub holds per-type pools only, never a `*` pool.
+    // trace:STORY-B6B1278890774EF993D2EBC327862470-170 | ai:claude
+    if !aida_core::allocation_authority::can_claim_type(store_path, &effective_prefix) {
         return Ok(None);
     }
 
@@ -1342,9 +1419,11 @@ pub(crate) fn claim_first_block(
     size: u32,
 ) -> Result<Option<AutoClaimOutcome>> {
     // trace:BUG-2017 | ai:codex — implicit refill is disabled on WORK.
-    // A single-hub clone that reaches the hub may claim like the root.
+    // A single-hub clone that reaches the hub may claim like the root, and a
+    // delegated clone may claim the types its hub holds a pool for.
     // trace:STORY-B6B1278890774EF993D2EBC327862470-164 | ai:claude
-    if aida_core::allocation_authority::claim_authority(store_path).is_err() {
+    // trace:STORY-B6B1278890774EF993D2EBC327862470-170 | ai:claude
+    if !aida_core::allocation_authority::can_claim_type(store_path, type_prefix) {
         return Ok(None);
     }
 

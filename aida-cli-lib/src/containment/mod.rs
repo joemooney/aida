@@ -30,6 +30,7 @@ enum ProbeStage {
     Capability,
     TrustedPolicy,
     FilesystemSupervisor,
+    EgressLocalIpc,
     Complete,
 }
 
@@ -114,7 +115,7 @@ pub(crate) struct ProbeReport {
     // is accepted as authority for these fields.
     aida_containment_applied: bool,
     ordinary_launch_supported: bool,
-    remaining_protections: [&'static str; 4],
+    remaining_protections: Vec<&'static str>,
     checks: Vec<String>,
 }
 
@@ -122,6 +123,22 @@ pub(crate) struct ProbeReport {
 /// Policy is reported, never executed. The probe itself uses only built-in argv.
 // trace:TASK-2705 | ai:codex
 pub(crate) fn probe(root: &Path, vendor: &str) -> ProbeReport {
+    probe_with_runners(
+        root,
+        vendor,
+        |isolation| supervisor::run_probe(|| isolation.state = IsolationState::Available),
+        || supervisor::run_egress_probe("normal"),
+    )
+}
+
+// Separate fixed runners allow report-credit tests without host isolation support.
+// trace:TASK-2706 | ai:codex
+fn probe_with_runners(
+    root: &Path,
+    vendor: &str,
+    filesystem: impl FnOnce(&mut Isolation) -> anyhow::Result<supervisor::TracerOutcome>,
+    egress: impl FnOnce() -> anyhow::Result<Vec<String>>,
+) -> ProbeReport {
     let mut report = ProbeReport {
         version: 1,
         vendor: vendor.into(),
@@ -139,7 +156,7 @@ pub(crate) fn probe(root: &Path, vendor: &str) -> ProbeReport {
         },
         aida_containment_applied: false,
         ordinary_launch_supported: false,
-        remaining_protections: [
+        remaining_protections: vec![
             "egress_and_local_ipc",
             "delegated_grant",
             "native_composition",
@@ -147,7 +164,7 @@ pub(crate) fn probe(root: &Path, vendor: &str) -> ProbeReport {
         ],
         checks: Vec::new(),
     };
-    let mut run = || -> anyhow::Result<supervisor::TracerOutcome> {
+    let run = || -> anyhow::Result<supervisor::TracerOutcome> {
         let mut capabilities: Capabilities = toml::from_str(include_str!("vendors.toml"))?;
         anyhow::ensure!(capabilities.version == 1, "unsupported capability schema");
         let capability = capabilities
@@ -186,8 +203,7 @@ pub(crate) fn probe(root: &Path, vendor: &str) -> ProbeReport {
             .transpose()?;
         report.configured_posture = posture;
         report.stage = ProbeStage::FilesystemSupervisor;
-        let isolation = &mut report.isolation;
-        supervisor::run_probe(|| isolation.state = IsolationState::Available)
+        filesystem(&mut report.isolation)
     };
     match run() {
         Ok(supervisor::TracerOutcome::IsolationUnavailable {
@@ -215,11 +231,22 @@ pub(crate) fn probe(root: &Path, vendor: &str) -> ProbeReport {
         Ok(supervisor::TracerOutcome::Passed(checks)) => {
             debug_assert_eq!(report.isolation.state, IsolationState::Available);
             report.checks = checks;
-            report.status = ProbeStatus::Ready;
-            report.stage = ProbeStage::Complete;
-            report.cause =
-                "fixed filesystem/supervisor tracer passed; full backend remains unsupported"
-                    .into();
+            // trace:TASK-2706 | ai:codex — a filesystem pass alone cannot
+            // report the extended tracer ready. Preserve actual A coverage
+            // on a B refusal; never credit unfinished protections.
+            report.stage = ProbeStage::EgressLocalIpc;
+            match egress() {
+                Ok(checks) => {
+                    report.checks.extend(checks);
+                    report
+                        .remaining_protections
+                        .retain(|p| *p != "egress_and_local_ipc");
+                    report.status = ProbeStatus::Ready;
+                    report.stage = ProbeStage::Complete;
+                    report.cause = "fixed filesystem/supervisor/egress/IPC tracer passed; full backend remains unsupported".into();
+                }
+                Err(error) => report.cause = format!("{error:#}"),
+            }
         }
         Err(error) => {
             report.cause = format!("{error:#}");
