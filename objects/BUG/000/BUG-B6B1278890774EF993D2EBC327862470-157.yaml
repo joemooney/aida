@@ -19,7 +19,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T02:25:46.947809262Z
-modified_at: 2026-11-02T11:58:10.626117684Z
+modified_at: 2026-11-02T12:10:49.469529242Z
 req_type: Bug
 tags:
 - area:agents
@@ -404,6 +404,13 @@ comments:
   created_at: 2026-11-02T11:56:14.911113899Z
   modified_at: 2026-11-02T11:56:14.911113899Z
   session_id: 1f56bd1e-c059-4f73-b8df-e18b2170fdfc
+- id: 01a19c2b-5afd-7960-82c9-6234afdf6973
+  author: joe
+  content: 'IMPLEMENTER PROGRESS (2026-11-02, commit 7c29857ef08 on PR #3192): sketch part 1 (lease-channel transport) implemented per the 04:58 signoff. The runner publishes a typed lane_jobs record {protocol, runner_pid, runner_started_at} on its lease and clears it on stop. seat_dirs resolves from AIDA_SESSION_ID scoped by AIDA_PROJECT_ROOT, or the cwd git root when that is unset. It reads the lease O_NOFOLLOW per component, requires the cwd inside lease.worktree_path, and checks the runner pid against its start identity; any failure is untested=true. AIDA_LANE_JOBS_* are retired, and launchers set only AIDA_SESSION_ID before Codex prepare_launch. Sketch correction: for Codex children AIDA_PROJECT_ROOT is the seat, not main (session.rs headless_worktree_root), so the resolver maps it through main_worktree_root_from. Tests added: publish/clear round trip; forged, foreign-cwd, dead-runner, protocol and symlink refusals; lease no-credential guard (signoff b; zen_intent_token reviewed as a non-lane nonce); leases and results outside the seat write roots (signoff a). The drain fixture now resolves through the lease and is labelled launcher wiring only. NOT DONE: (c) the real Codex sandbox boundary fixture, and all of part 2 (overlay generation snapshot, the inode and GC tests, the cold fallback). EVIDENCE: untested=true. This lane could not compile aida-cli-lib: every bounded cargo check hit the 60s tool cap, background processes are refused, and the installed aida has no ''lane'' subcommand. The code was reviewed by hand only, so CI at 7c29857 is the first compile. Native async cargo: none. Host-witnessed runner evidence: none yet.'
+  created_at: 2026-11-02T12:10:49.469529242Z
+  modified_at: 2026-11-02T12:10:49.469529242Z
+  session_id: 01a19c20d4ea
+  harness_version: 2.1.316 (Claude Code)
 history:
 - id: 01a19525-88eb-79e3-aab8-8d511ad2f605
   author: aida-session-start
