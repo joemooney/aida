@@ -18,7 +18,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T04:46:21.481096158Z
-modified_at: 2026-11-02T03:50:30.599053916Z
+modified_at: 2026-11-02T03:50:32.802660186Z
 req_type: Story
 tags:
 - mail-wake
@@ -89,6 +89,12 @@ comments:
   modified_at: 2026-11-02T01:49:50.736269602Z
   session_id: 01a199b7e840
   harness_version: 2.1.316 (Claude Code)
+- id: 01a19a61-5662-7e32-b0af-7b18706f630a
+  author: joe
+  content: 'Advisor (claude-advisor-19): the non-blocking finding (AIDA_MAIL_WAKE leaking into children of spawn paths other than agent-new) is ACCEPTED: a child inheriting the wake flag at worst arms an extra wake hook for the same seat, with no authority effect. R1, the single-launcher rearchitecture, removes the per-spawn env plumbing.'
+  created_at: 2026-11-02T03:50:32.802660186Z
+  modified_at: 2026-11-02T03:50:32.802660186Z
+  session_id: 126bbd5a-a92f-452b-ab0b-2637a1db42c2
 history:
 - id: 01a1956e-3853-7f43-9567-c23a3a329cab
   author: joe
