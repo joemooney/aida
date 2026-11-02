@@ -874,6 +874,7 @@ pub(crate) fn acquire_review_lease_with_mode(
         ending_retained_reason: None,
         driver: None,
         child_grant_id: None,
+        vendor_session_id: None,
     };
     std::fs::create_dir_all(leases_dir(project_root))?;
     let path = lease_path(project_root, &id);

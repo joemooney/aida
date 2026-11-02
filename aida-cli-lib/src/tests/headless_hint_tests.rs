@@ -191,6 +191,12 @@ fn no_human_resume_paths_use_headless_resume_launcher() {
         .count()
         + src
             .matches("session::spawn_claude_headless_resume_granted(")
+            .count()
+        // BUG-2386: the vendor-neutral launcher routes Claude through the same
+        // shared headless resume argv. trace:BUG-2386 | ai:claude
+        + src.matches("session::spawn_vendor_headless_resume(").count()
+        + src
+            .matches("session::spawn_vendor_headless_resume_granted(")
             .count();
     assert!(
         count >= 3,

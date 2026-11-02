@@ -1943,7 +1943,7 @@ fi
 #
 #   quit                     stop the loop
 #   launch:<command>         eval <command> (typically `aida queue work …`)
-#   resume:<session-id>      claude --resume <session-id>
+#   resume:<session-id>      aida session resume <session-id>
 #   shell:<command>          eval <command> (e.g. `gh pr view 42`)
 #
 # Pass `--once` to disable the re-entry loop (debug / scripting). All
@@ -1979,7 +1979,8 @@ aida-tui() {
                 [ $_rc -ne 0 ] && command -v tput >/dev/null && tput reset 2>/dev/null
                 ;;
             resume:*)
-                claude --resume "${_intent#resume:}"
+                # BUG-2386: resume on the vendor that recorded the session.
+                command aida session resume "${_intent#resume:}"
                 _rc=$?
                 [ $_rc -ne 0 ] && command -v tput >/dev/null && tput reset 2>/dev/null
                 ;;

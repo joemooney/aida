@@ -330,6 +330,7 @@ fn bug_2130_solo_and_drain_locks_write_exact_identity_and_read_back_live() {
         launched_stale: false,
         specs: Vec::new(),
         child_grant_id: None,
+        vendor_session_id: None,
     };
     std::fs::write(
         crate::drain_lock::drain_lock_path(root),

@@ -34,6 +34,7 @@ fn ps_lease(id: &str, scope: &str, worktree: std::path::PathBuf) -> SessionLease
         ending_retained_reason: None,
         driver: None,
         child_grant_id: None,
+        vendor_session_id: None,
     }
 }
 

@@ -37,6 +37,7 @@ fn ps_lease(id: &str, scope: &str, owner: &str, worktree: PathBuf) -> SessionLea
         ending_retained_reason: None,
         driver: None,
         child_grant_id: None,
+        vendor_session_id: None,
     }
 }
 

@@ -299,6 +299,8 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         // advisor tier resolves the fork, `resume_implementer` `--resume`s
         // exactly this session. trace:STORY-306 | ai:claude
         self.implementer_session = Some(session_uuid.clone());
+        // trace:BUG-2386 | ai:claude
+        self.implementer_vendor = Some(headless_vendor);
 
         // BUG-1285: a FRESH drain launch (a brand-new orchestrator process,
         // not an in-run retry) can find a predecessor lease its own PREVIOUS
@@ -3245,15 +3247,35 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         // from the surrounding `[headless]` chatter. trace:TASK-307
         let tee_opts =
             crate::headless_tee::TeeOptions::from_env_and_flag(false).with_label("resume");
-        let status = session::spawn_claude_headless_resume(
-            &prompt,
+        // BUG-2386: resume on the vendor that recorded the session (a Codex
+        // drain resumes its thread), not a hardcoded `claude -p --resume`.
+        // trace:BUG-2386 | ai:claude
+        let vendor = self
+            .implementer_vendor
+            .unwrap_or_else(|| session::resolve_headless_vendor(&self.project_root));
+        let status = session::resolve_headless_resume_id(
+            vendor,
+            &self.project_root,
             &session_id,
-            &log_path,
+            self.implementer_lease.as_deref(),
             &worktree,
-            &tee_opts,
-            false,
-            "implementer",
+            None,
         )
+        .and_then(|resume_id| {
+            session::spawn_vendor_headless_resume(
+                &session::HeadlessResume {
+                    vendor,
+                    session_id: &session_id,
+                    resume_id: &resume_id,
+                },
+                &prompt,
+                &log_path,
+                &worktree,
+                &tee_opts,
+                false,
+                "implementer",
+            )
+        })
         .map_err(|e| {
             PhaseFailure::of(
                 FailureKind::Spawn,

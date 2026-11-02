@@ -207,6 +207,12 @@ pub(crate) struct RealPhaseDriver {
     /// so the resume must `current_dir(<this worktree>)`. `None` until
     /// `run_implementer` locates the lease.
     pub(crate) implementer_worktree: Option<std::path::PathBuf>,
+    /// BUG-2386: the vendor the phase-1 implementer ran on. A punt-resume
+    /// continues the session on the vendor that recorded it, never on
+    /// whatever the config resolves to by then. `None` until
+    /// `run_implementer` launches.
+    // trace:BUG-2386 | ai:claude
+    pub(crate) implementer_vendor: Option<crate::session::HeadlessVendor>,
     /// BUG-311: thread the user's `aida queue work --auto-complete --steal`
     /// flag through to the phase-1 implementer subprocess. Without this the
     /// outer `--steal` is dropped on the floor — phase 1's `handle_queue_work`
@@ -670,6 +676,7 @@ impl RealPhaseDriver {
             run_token,
             implementer_session: None,
             implementer_worktree: None,
+            implementer_vendor: None,
             steal,
             force_claim,
             allow_stale_base,
