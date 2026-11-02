@@ -299,23 +299,68 @@ pub(crate) fn scan_and_route(project_root: &Path, route: bool) -> Vec<DoctorFind
         &aida_core::mailbox_logical::ReadLimits::explicit_read(),
     );
     if route {
-        route_backlog_observed(project_root, &store_root, &backlog, &policy, now, !unknown);
+        route_backlog_observed(project_root, &store_root, &backlog, &policy, now, &unknown);
     }
     let mut findings: Vec<_> = backlog
         .into_iter()
         .map(Backlog::into_doctor_finding)
         .collect();
-    if unknown {
-        findings.push(unknown_finding());
+    if unknown.any() {
+        findings.push(unknown_finding(&unknown));
     }
     findings
 }
 
+/// Where inspection could not reach a conclusion. `all` is a whole-scan gap
+/// (directory, context, or sources unreadable with no reader to scope it);
+/// otherwise only the recipients of the readers actually affected are
+/// unknown, so one bad row cannot poison the rest of the scan.
+// trace:BUG-b6b1278890774ef993d2ebc327862470-178 | ai:claude
+#[derive(Debug, Default)]
+pub(crate) struct Unknown {
+    all: bool,
+    keys: BTreeSet<String>,
+}
+
+impl Unknown {
+    pub(crate) fn any(&self) -> bool {
+        self.all || !self.keys.is_empty()
+    }
+
+    fn whole() -> Self {
+        Self {
+            all: true,
+            keys: BTreeSet::new(),
+        }
+    }
+
+    /// Mark every recipient key an affected reader could own.
+    fn reader(&mut self, e: &AgentRegistryEntry) {
+        self.keys.insert(key(&handle(e)));
+        self.keys.insert(key(&e.id));
+        self.keys.extend(entry_role(e).map(|r| key(&r)));
+    }
+
+    /// Whether nudge record `id` (`<recipient key>:<message id>`) is in an
+    /// unknown scope, so its absence from the backlog proves nothing.
+    fn covers(&self, id: &str) -> bool {
+        self.all
+            || id.split_once(':').is_some_and(|(to, _)| {
+                self.keys.contains(to) || self.keys.contains(&key(&crate::canonical_role_name(to)))
+            })
+    }
+}
+
 // trace:BUG-b6b1278890774ef993d2ebc327862470-178 | ai:codex
-fn unknown_finding() -> DoctorFinding {
+fn unknown_finding(unknown: &Unknown) -> DoctorFinding {
+    let scope = if unknown.all {
+        "all recipients".to_string()
+    } else {
+        unknown.keys.iter().cloned().collect::<Vec<_>>().join(", ")
+    };
     DoctorFinding {
         category: CATEGORY.into(), id: format!("{CATEGORY}:unknown"),
-        summary: "Mail backlog inspection is incomplete; some delivery or read state is unknown.".into(),
+        summary: format!("Mail backlog inspection is incomplete for {scope}; some delivery or read state is unknown."),
         action: "Restore mailbox source, receipt and live-reader evidence, then rerun the check. Prior reminders remain retained.".into(),
         safe_heal: false,
     }
@@ -328,37 +373,41 @@ fn inspect_backlog(
     policy: &Policy,
     now: DateTime<Utc>,
     limits: &aida_core::mailbox_logical::ReadLimits,
-) -> (Vec<Backlog>, bool) {
+) -> (Vec<Backlog>, Unknown) {
     use aida_core::mailbox_logical::{inspect_mail, InspectionState, MailboxContext};
     let home = crate::mailbox_store::mailbox_home(project_root);
     let root = home.root();
     let directory = match crate::mailbox_resolver::RecipientDirectory::load(root, store_root) {
         Ok(directory) => directory,
-        Err(_) => return (Vec::new(), true),
+        Err(_) => return (Vec::new(), Unknown::whole()),
     };
     let store = std::fs::symlink_metadata(store_root)
         .is_ok()
         .then_some(store_root);
     let ctx = match MailboxContext::resolve_or_local(root, store) {
         Ok(ctx) => ctx,
-        Err(_) => return (Vec::new(), true),
+        Err(_) => return (Vec::new(), Unknown::whole()),
     };
-    let mut unknown = !directory.warnings().is_empty();
+    // A skipped (unreadable/invalid) registry row is not a reader, exactly as
+    // for send and the own inbox; it does not make other recipients unknown.
+    let mut unknown = Unknown::default();
     let mut grouped: BTreeMap<String, (Backlog, Vec<&AgentRegistryEntry>)> = BTreeMap::new();
     let readers = directory.inspection_readers();
     if readers.is_empty() {
-        unknown |= !aida_core::mailbox_logical::inspection_sources_complete(&ctx, limits);
+        unknown.all = !aida_core::mailbox_logical::inspection_sources_complete(&ctx, limits);
     }
     for (entry, subject) in readers {
         let subject = match subject {
             Ok(s) => s,
             Err(_) => {
-                unknown = true;
+                unknown.reader(entry);
                 continue;
             }
         };
         let inspection = inspect_mail(&ctx, &subject, limits);
-        unknown |= !inspection.complete || !inspection.unknown_ids.is_empty();
+        if !inspection.complete || !inspection.unknown_ids.is_empty() {
+            unknown.reader(entry);
+        }
         for record in inspection.records {
             if !matches!(
                 record.state,
@@ -442,7 +491,14 @@ fn route_backlog(
     policy: &Policy,
     now: DateTime<Utc>,
 ) {
-    route_backlog_observed(project_root, store_root, backlog, policy, now, true);
+    route_backlog_observed(
+        project_root,
+        store_root,
+        backlog,
+        policy,
+        now,
+        &Unknown::default(),
+    );
 }
 
 // trace:BUG-b6b1278890774ef993d2ebc327862470-178 | ai:codex
@@ -452,13 +508,13 @@ fn route_backlog_observed(
     backlog: &[Backlog],
     policy: &Policy,
     now: DateTime<Utc>,
-    complete: bool,
+    unknown: &Unknown,
 ) {
     let previous = load_nudged(project_root);
     let current: BTreeSet<&str> = backlog.iter().map(|b| b.id.as_str()).collect();
     let mut nudged: BTreeMap<String, DateTime<Utc>> = previous
         .iter()
-        .filter(|(id, _)| !complete || current.contains(id.as_str()))
+        .filter(|(id, _)| current.contains(id.as_str()) || unknown.covers(id))
         .map(|(id, at)| (id.clone(), *at))
         .collect();
 

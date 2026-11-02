@@ -467,6 +467,12 @@ pub fn inspection_sources_complete(ctx: &MailboxContext, limits: &ReadLimits) ->
 
 /// Observe delivery eligibility using exactly the own-inbox policy, without
 /// constructing the subject's audience or exposing its bodies or ACK plan.
+///
+/// Direct-mail keys are the handle only, matching what a handled session's
+/// own audience grants (`classified_identities` admits no registry id and
+/// only the handle as alias). Mail addressed solely to a registry id is in no
+/// own inbox, so reporting it would recreate guard/inbox disagreement.
+// trace:BUG-b6b1278890774ef993d2ebc327862470-178 | ai:claude
 pub fn inspect_mail(
     ctx: &MailboxContext,
     subject: &crate::mailbox_identity::InspectionSubject,

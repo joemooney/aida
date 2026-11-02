@@ -189,7 +189,7 @@ fn ownership_filtered_before_wake_preference_and_reminder_ack_is_separate() {
     let now = Utc::now();
     let policy = Policy::default();
     let (items, unknown) = inspect_backlog(&r.main, &r.store, &policy, now, &explicit_limits());
-    assert!(!unknown);
+    assert!(!unknown.any());
     assert_eq!(items.len(), 1);
     assert_eq!(items[0].wake, Wake::Mail("reader-b".into()));
     scan_and_route(&r.main, true);
@@ -372,7 +372,7 @@ fn local_unknown_global_partial_preserve_findings_and_nudge_state() {
     let mut limits = explicit_limits();
     limits.max_entries = 0;
     let (_, unknown) = inspect_backlog(&r.main, &r.store, &Policy::default(), Utc::now(), &limits);
-    assert!(unknown);
+    assert!(unknown.any());
 }
 
 #[test]
@@ -535,14 +535,14 @@ fn production_age_dedup_and_renudge_boundaries() {
         now - Duration::milliseconds(1),
         &explicit_limits(),
     );
-    assert!(!unknown);
+    assert!(!unknown.any());
     assert_eq!(
         items.len(),
         1,
         "replicas dedup; below age boundary excluded"
     );
     let (items, unknown) = inspect_backlog(&r.main, &r.store, &policy, now, &explicit_limits());
-    assert!(!unknown);
+    assert!(!unknown.any());
     assert_eq!(items.len(), 2, "exact age boundary included");
     let mut nudged = BTreeMap::new();
     nudged.insert("reviewer:replica".into(), now - Duration::minutes(60));
@@ -553,4 +553,121 @@ fn production_age_dedup_and_renudge_boundaries() {
     let due = due_nudges(&items, &nudged, &policy, now);
     let ids: Vec<_> = due.values().flatten().map(|b| b.id.as_str()).collect();
     assert_eq!(ids, ["reviewer:replica"]);
+}
+
+fn direct(root: &Path, id: &str, to: &str) {
+    let ts = (Utc::now() - Duration::hours(2)).timestamp_millis();
+    let mut m = mail(id, to, ts, false);
+    m.intent = Intent::Request;
+    crate::mailbox_store::write_message(root, &m).unwrap();
+}
+
+// The live registry is created under the user's umask (commonly 0775). The
+// inspection must accept exactly what the own reader accepts there.
+// trace:BUG-b6b1278890774ef993d2ebc327862470-178 | ai:claude
+#[test]
+fn group_writable_registry_still_inspects_genuine_backlog() {
+    use std::os::unix::fs::PermissionsExt;
+    let _env = isolated();
+    let r = mail_repo();
+    let (row, b) = reader(&r, std::process::id(), "codex", "reader-b");
+    let agents = crate::agent_registry::agents_dir(&r.main);
+    for dir in [agents.clone(), agents.join("handles")] {
+        std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o775)).unwrap();
+    }
+    for file in [
+        agents.join(format!("{}.toml", row.id)),
+        agents.join("handles/reader-b.toml"),
+    ] {
+        std::fs::set_permissions(&file, std::fs::Permissions::from_mode(0o664)).unwrap();
+    }
+    send(&r.main, "mine", Some(&[b]));
+    assert!(unread(&r, "mine"));
+    assert!(
+        found(&r, "mine"),
+        "a 0775 registry must not blind the guard"
+    );
+    assert!(!incomplete(&r));
+}
+
+// One bad row or one unverifiable reader is unknown for its own recipients
+// only: other recipients' backlog still appears and their nudges still prune.
+// trace:BUG-b6b1278890774ef993d2ebc327862470-178 | ai:claude
+#[test]
+fn unrelated_bad_rows_scope_unknown_to_affected_readers() {
+    let _env = isolated();
+    let r = mail_repo();
+    reader(&r, std::process::id(), "codex", "reader-b");
+    let agents = crate::agent_registry::agents_dir(&r.main);
+    // A second live reader in another role, with a valid reservation for now.
+    let other = FixtureProcess::new();
+    let (mut c_row, _) = reader(&r, other.pid(), "codex", "reader-c");
+    c_row.role = Some("advisor".into());
+    crate::agent_registry::write_entry(&r.main, &c_row).unwrap();
+    // A live row with no handle is not a reader, and not unknown.
+    let child = FixtureProcess::new();
+    let mut nameless = crate::agent_registry::register_existing_agent(
+        &r.main,
+        "codex",
+        child.pid(),
+        "reviewer".into(),
+        None,
+        r.main.clone(),
+        None,
+        None,
+    )
+    .unwrap();
+    nameless.name = None;
+    crate::agent_registry::write_entry(&r.main, &nameless).unwrap();
+    // An unparseable row is skipped, exactly as send and the own inbox do.
+    std::fs::write(agents.join("garbage.toml"), "not = [toml").unwrap();
+    direct(&r.main, "direct", "reader-b");
+    let policy = Policy::default();
+    let backlog =
+        |r: &MailRepo| inspect_backlog(&r.main, &r.store, &policy, Utc::now(), &explicit_limits());
+    let (items, unknown) = backlog(&r);
+    assert!(!unknown.any(), "{unknown:?}");
+    assert!(items.iter().any(|b| b.id == "reader-b:direct"));
+    assert!(!incomplete(&r));
+    scan_and_route(&r.main, true);
+    assert!(load_nudged(&r.main).contains_key("reader-b:direct"));
+
+    // reader-c loses its reservation: unknown for its recipients only.
+    std::fs::remove_file(agents.join("handles/reader-c.toml")).unwrap();
+    let (items, unknown) = backlog(&r);
+    assert!(unknown.any());
+    assert!(unknown.covers("reader-c:x") && unknown.covers("advisor:x"));
+    assert!(!unknown.covers("reader-b:direct"));
+    assert!(items.iter().any(|b| b.id == "reader-b:direct"));
+
+    // reader-b reads its mail: its nudge record prunes despite reader-c.
+    inbox(&r, false);
+    let (items, _) = backlog(&r);
+    assert!(items.iter().all(|b| b.id != "reader-b:direct"));
+    assert!(incomplete(&r));
+    scan_and_route(&r.main, true);
+    assert!(!load_nudged(&r.main).contains_key("reader-b:direct"));
+}
+
+// Mail addressed only to a registry id is in no own inbox; the guard matches.
+// trace:BUG-b6b1278890774ef993d2ebc327862470-178 | ai:claude
+#[test]
+fn registry_id_direct_mail_matches_own_inbox() {
+    let _env = isolated();
+    let r = mail_repo();
+    let (row, _) = reader(&r, std::process::id(), "codex", "reader-b");
+    direct(&r.main, "by-id", &row.id);
+    assert!(
+        !unread(&r, "by-id"),
+        "the own inbox does not serve registry-id mail"
+    );
+    let (items, unknown) = inspect_backlog(
+        &r.main,
+        &r.store,
+        &Policy::default(),
+        Utc::now(),
+        &explicit_limits(),
+    );
+    assert!(!unknown.any());
+    assert!(items.iter().all(|b| !b.id.ends_with(":by-id")));
 }

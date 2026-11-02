@@ -422,11 +422,6 @@ fn valid_handle(name: &str) -> bool {
 }
 
 fn read_bounded_regular(path: &Path) -> Option<String> {
-    read_regular(path, false)
-}
-
-fn read_regular(path: &Path, inspection: bool) -> Option<String> {
-    use std::os::unix::fs::MetadataExt;
     use std::os::unix::fs::OpenOptionsExt;
     let file = std::fs::OpenOptions::new()
         .read(true)
@@ -434,13 +429,7 @@ fn read_regular(path: &Path, inspection: bool) -> Option<String> {
         .open(path)
         .ok()?;
     let meta = file.metadata().ok()?;
-    if !meta.is_file()
-        || meta.len() > REGISTRY_ROW_BYTES
-        || (inspection
-            && (meta.nlink() != 1
-                || meta.uid() != unsafe { libc::geteuid() }
-                || meta.mode() & 0o022 != 0))
-    {
+    if !meta.is_file() || meta.len() > REGISTRY_ROW_BYTES {
         return None;
     }
     let mut body = String::new();
@@ -831,16 +820,22 @@ impl InspectionSubject {
     pub fn observe(row: &Path) -> Result<Self, BindingRefusal> {
         use std::os::fd::AsRawFd;
         use std::os::unix::fs::{MetadataExt, OpenOptionsExt};
-        // Pin the registry and reservation directories, refuse links and unsafe
-        // ownership/modes, then read bounded no-follow children through handles.
+        // Pin the registry and reservation directories (no symlinks), then read
+        // bounded no-follow children through the pinned handles. Trust is the
+        // own reader's rule exactly: the registry is created under the user's
+        // umask (commonly 0775), so a stricter mode/owner/nlink test here would
+        // refuse every real reader and blind the guard to genuine backlog.
         let pin = |path: &Path| -> Result<std::fs::File, BindingRefusal> {
             let file = std::fs::OpenOptions::new()
                 .read(true)
                 .custom_flags(libc::O_DIRECTORY | libc::O_NOFOLLOW | libc::O_NONBLOCK)
                 .open(path)
                 .map_err(|_| BindingRefusal::Unreadable)?;
-            let meta = file.metadata().map_err(|_| BindingRefusal::Unreadable)?;
-            if meta.uid() != unsafe { libc::geteuid() } || meta.mode() & 0o022 != 0 {
+            if !file
+                .metadata()
+                .map_err(|_| BindingRefusal::Unreadable)?
+                .is_dir()
+            {
                 return Err(BindingRefusal::Unreadable);
             }
             Ok(file)
@@ -850,7 +845,7 @@ impl InspectionSubject {
         let registry_path =
             std::path::PathBuf::from(format!("/proc/self/fd/{}", registry.as_raw_fd()));
         let pinned_row = registry_path.join(row.file_name().ok_or(BindingRefusal::Unreadable)?);
-        let body = read_regular(&pinned_row, true).ok_or(BindingRefusal::Unreadable)?;
+        let body = read_bounded_regular(&pinned_row).ok_or(BindingRefusal::Unreadable)?;
         let parsed: RegistryRow = toml::from_str(&body).map_err(|_| BindingRefusal::Corrupt)?;
         if row.file_stem().and_then(|s| s.to_str()) != Some(parsed.id.as_str()) {
             return Err(BindingRefusal::Corrupt);
@@ -877,7 +872,7 @@ impl InspectionSubject {
             std::path::PathBuf::from(format!("/proc/self/fd/{}", handles.as_raw_fd()))
                 .join(format!("{handle}.toml"));
         let reservation =
-            read_regular(&reservation_path, true).ok_or(BindingRefusal::Unreadable)?;
+            read_bounded_regular(&reservation_path).ok_or(BindingRefusal::Unreadable)?;
         let recipient = reservation_from_body(&reservation, &handle, &parsed.id, &sessions)
             .ok_or(BindingRefusal::Unreadable)?;
         // A replaced directory is an unknown observation, not fresh evidence.

@@ -419,12 +419,18 @@ Owned cohort mail uses each reader's UUID receipt, so one owner's ACK does not
 clear another owner's unread delivery. Eligible unbound role mail is labelled
 “pending binding”; the guard does not take it. Inspection returns routing
 metadata and read state, with no message bodies or authority to ACK. The ordinary
-inbox's identity and post-flush ACK rules remain unchanged.
+inbox's identity and post-flush ACK rules remain unchanged. A reader's direct
+mail is what its own inbox shows: mail addressed to its handle. Mail addressed
+only to a registry id, or to a session with no handle, appears in no own inbox,
+so the guard does not report it either.
 
 Incomplete sources, unverified reader reservations/liveness, receipt failures,
 and delivery-specific torn bindings or matching corrupt retained sidecars produce
-an explicit unknown finding. Known actionable work still appears. An incomplete
-scan retains prior nudge records rather than treating omitted mail as cleared.
+an explicit unknown finding naming the recipients affected. Known actionable work
+still appears. The unknown applies only to those recipients: an unreadable
+registry row, a stale row whose process cannot be checked, or one reader's
+failure does not hide or freeze other recipients' work. Prior nudge records are
+kept for those recipients rather than treating their missing mail as cleared.
 ACKing a reminder, displaying a notice, or completing a routed schedule job never
 ACKs the original requests. Age, message deduplication and re-nudge thresholds
 are unchanged.
