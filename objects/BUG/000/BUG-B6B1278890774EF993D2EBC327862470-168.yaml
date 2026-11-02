@@ -16,12 +16,12 @@ description: |-
   1. `aida queue work <SPEC> --plan-only` on Codex enforces read-only sandbox posture (`--sandbox read-only`) instead of normal write flags.
   2. Investigate/wire Codex CLI `-c` config overrides for `[agents] mcp = "off" | "aida"` (or surface clearly in `aida config permissions show` when `mcp` cannot be enforced for the active vendor).
   3. Gate `scan_agent_worktree_trust` (`~/.claude.json` folder trust doctor findings) on Claude being an active/enabled vendor for the project, and support Codex worktree trust if applicable.
-status: InProgress
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T06:48:07.778727918Z
-modified_at: 2026-11-02T17:58:38.236274037Z
+modified_at: 2026-11-02T20:26:01.114742538Z
 req_type: Bug
 tags:
 - audit
@@ -264,6 +264,20 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a19df0-b809-77a3-a28d-783415df7fe5
+  author: aida-auto-bump
+  timestamp: 2026-11-02T20:26:01.097546715Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a19df0-b81a-75a2-86a4-c411953bda9f
+  timestamp: 2026-11-02T20:26:01.114739937Z
+  agent: aida
+  commit_sha: b8c7d3f6e51240a4450dbe3c6881badfb2ec26f9
+  summary: 'Round-3 delta: CI fully green at 51fae81 (and 16930c6); launcher tests pin CODEX_HOME and assert the unset->aida MCP overrides honestly; headless Codex plan lanes restored to write posture per the 10:59 ruling with read_only plumbing fully removed; MCP trust re-keyed on the seat via rescope_codex_mcp_flags with a test; AC1/AC2/AC3 all verified by bug_2394 tests'
+  review_verdict: approved
 execution_mode: drain
 filed_at:
   code_sha: 6dc7d4977ac5e47c42ddfb26597fe3ec5fb70b60
@@ -277,3 +291,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-11-02T11:46:51.224322639Z
   implemented_by: joe
+  completed_at: 2026-11-02T20:26:01.097541159Z
+  completion_sha: b8c7d3f6e51240a4450dbe3c6881badfb2ec26f9
