@@ -14,12 +14,12 @@ description: |
   2. The lane's target dir is warm on first use: seeded or shared with the primary's agent-profile target, so the first targeted run isn't a cold full build.
   3. The implementer prompt names that path in place of `setsid nohup`, and a lane that cannot run it says so in its result line (`untested=true`) so the advisor knows.
   4. Test: a headless lane fixture runs one filtered cargo test via the sanctioned path and reports its pass/fail.
-status: NeedsAttention
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T02:25:46.947809262Z
-modified_at: 2026-11-02T11:49:50.770956252Z
+modified_at: 2026-11-02T11:49:55.883057643Z
 req_type: Bug
 tags:
 - area:agents
@@ -267,6 +267,12 @@ comments:
   created_at: 2026-11-02T11:49:50.770956252Z
   modified_at: 2026-11-02T11:49:50.770956252Z
   session_id: 1f56bd1e-c059-4f73-b8df-e18b2170fdfc
+- id: 01a19c18-3a2b-7923-81fd-95d21a9a9fe3
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Test-budget rework (d003fb3) is correct and lib-0 is green, but the 10:33 advisor-verified Codex core-tool transport blocker is unchanged (no sketch/punt filed), AC2 warm seeding cannot happen on the ext4 host, and CI is not green at head.. No triage reason was given.'
+  created_at: 2026-11-02T11:49:55.883055996Z
+  modified_at: 2026-11-02T11:49:55.883055996Z
+  session_id: 1f56bd1e-c059-4f73-b8df-e18b2170fdfc
 history:
 - id: 01a19525-88eb-79e3-aab8-8d511ad2f605
   author: aida-session-start
@@ -441,6 +447,14 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a19c18-3a2b-7923-81fd-95ccd3bb0a66
+  author: joe
+  timestamp: 2026-11-02T11:49:55.883046251Z
+  session_id: 1f56bd1e-c059-4f73-b8df-e18b2170fdfc
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: 7518617e469376bbe5debebd7cadd980e08656e5
   branch: main
@@ -453,11 +467,3 @@ implementation_info:
   implemented: true
   implemented_at: 2026-11-01T04:19:25.125387348Z
   implemented_by: joe
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: Test-budget rework (d003fb3) is correct and lib-0 is green, but the 10:33 advisor-verified Codex core-tool transport blocker is unchanged (no sketch/punt filed), AC2 warm seeding cannot happen on the ext4 host, and CI is not green at head.
-  recovery_hint: address the review findings, move BUG-2383 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-02T11:48:18.667570026Z
