@@ -11,7 +11,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T09:05:52.470755532Z
-modified_at: 2026-11-02T05:16:27.574438550Z
+modified_at: 2026-11-02T05:23:28.712605058Z
 req_type: Task
 tags:
 - architecture
@@ -33,6 +33,27 @@ comments:
   created_at: 2026-11-02T04:34:49.364189441Z
   modified_at: 2026-11-02T04:34:49.364189441Z
   session_id: 126bbd5a-a92f-452b-ab0b-2637a1db42c2
+- id: 01a19ab6-6b48-7462-b949-c98d3bbb9291
+  author: joe
+  content: |-
+    ## Implementer findings (headless Claude session, no code edits)
+
+    Why no code: this sandbox has max_user_namespaces=0 (bwrap cannot create namespaces), its seccomp blocks socket(AF_UNIX) (socketpair is allowed), and background processes die when each <=60s tool call ends, so a cold aida-cli-lib build cannot finish. The slice is unsafe/seccomp/proxy code under STRICT review. Writing it without compiling or running it would be guessing.
+
+    Verified mechanism (model-free Python prototype, TCP stand-in): a child installs a seccomp filter with SECCOMP_FILTER_FLAG_NEW_LISTENER that traps connect() as USER_NOTIF and sends the listener over a socketpair with SCM_RIGHTS. The host reads the sockaddr once (/proc/pid/mem), connects its own socket, then SECCOMP_IOCTL_NOTIF_ADDFD with SETFD (newfd=args[0]) followed by NOTIF_SEND val=0 -> the child connect succeeds on the broker-made socket. A disallowed target -> error=-EACCES. ioctls: RECV 0xc0502100, SEND 0xc0182101, ADDFD 0x40182103. Host: USER_NOTIF action available, pidfd_open works, Landlock ABI 8.
+
+    Design notes for the next implementer:
+    - Broker acts only on its copied sockaddr (never CONTINUE). Use pidfd_getfd for SO_DOMAIN/SO_TYPE and fdinfo for CLOEXEC, then NOTIF_ID_VALID after each read. Resolve allowed names beneath a pinned runtime dirfd with openat2 RESOLVE_BENEATH|NO_SYMLINKS|NO_MAGICLINKS, and connect via /proc/self/fd/N.
+    - The filter also needs: arch check (kill on foreign arch), x32 deny, AF_UNIX SOCK_DGRAM socket/socketpair -> EACCES (unconnected sendto bypasses connect), and io_uring_setup -> EPERM (IORING_OP_CONNECT bypasses seccomp).
+    - AF_INET connect inside the lane cannot be brokered: the host cannot setns into the child netns, and CONTINUE has an fd-swap race. So this slice must deny inet connect. Slice C's in-netns loopback HTTP relay therefore needs a design decision (e.g. a relay over a private Unix endpoint).
+    - The filter must be installed inside the lane after bwrap setup. bwrap's own netlink sendto would trap otherwise.
+    - Landlock ABI>=9 hosts: C5 says do not ship the broker. Refuse by name until a Landlock path exists.
+    - Proxy: an inherited SEQPACKET control channel. CONNECT-only, exact host+port, Host header must match, no IP literal/userinfo/trailing dot/wildcard. Resolve on the host side and pin the address; deny non-global addresses unless the fixture entry is explicitly trusted; hand the tunnel fd back via SCM_RIGHTS. Proxy or broker thread death -> run_owned abort hook -> stop_and_reap.
+    - A broker-only test (seccomp, no namespaces) can run on CI runners even where AppArmor denies nested userns.
+  created_at: 2026-11-02T05:23:28.712605058Z
+  modified_at: 2026-11-02T05:23:28.712605058Z
+  session_id: 01a19aaffa08
+  harness_version: 2.1.316 (Claude Code)
 history:
 - id: 01a1965b-c73c-7f92-bea8-1e28e5f1ff36
   author: joe
