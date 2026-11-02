@@ -20,7 +20,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T04:28:44.095278434Z
-modified_at: 2026-11-02T23:29:37.799693422Z
+modified_at: 2026-11-02T23:31:29.053032027Z
 req_type: Story
 tags:
 - architecture
@@ -300,6 +300,12 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: Round-2 delta: items 3-8 and 9 are fixed (cross-route admission under one lock, fail-closed recover-launch, abort on pid mismatch, signal-before-reap, bounded retention + --retire-unknown, doc placement, host evidence pasted). But item 2 is not met: the new criterion tags use STORY-2254.acXXXX, which aida criteria does not resolve, so all 5 criteria still report untraced. The normal-exit path also releases the scope with no occupancy scan. The live aida ps run (operator-only) and green CI are still outstanding.. No triage reason was given.'
   created_at: 2026-11-02T22:34:20.963494651Z
   modified_at: 2026-11-02T22:34:20.963494651Z
+  session_id: ee0bf351-6b17-486f-a38e-cfbb1343c426
+- id: 01a19e9a-849d-7a00-8eba-33b3e0740e42
+  author: joe
+  content: 'ADVISOR (16:33): PR #3273 r3 has both blockers fixed, but CI is red at the head (lib-0, lib-1, cli-0 Run tests; lib-0 Test time budget). Past the cap: this push may fix CI ONLY. Get the failing tests from ''gh run view <run> --log-failed'', fix each, and reproduce by name. Add a budget entry only with justification. The two open minors are accepted (record them on the PR). Then the operator does the live aida ps run and merges.'
+  created_at: 2026-11-02T23:31:29.053032027Z
+  modified_at: 2026-11-02T23:31:29.053032027Z
   session_id: ee0bf351-6b17-486f-a38e-cfbb1343c426
 history:
 - id: 01a1955e-16e5-7240-960f-01af4eb41bfe
