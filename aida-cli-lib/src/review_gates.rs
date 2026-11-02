@@ -1016,6 +1016,10 @@ pub(crate) fn review_coverage_from_commits(messages: &[String]) -> ReviewCoverag
 #[path = "tests/bug_2208_refs_only_review_tests.rs"]
 mod bug_2208_refs_only_review_tests;
 
+#[cfg(test)]
+#[path = "tests/bug_2404_add_output_identity_tests.rs"]
+mod bug_2404_add_output_identity_tests;
+
 /// The links an already-filed review story is missing: `(spec, "implements")`
 /// for each delivered spec and `(spec, "covers")` for each Refs-only slice
 /// that the story does not already point at. A run interrupted after `aida
@@ -1394,12 +1398,15 @@ pub(crate) fn try_auto_queue_pr_review_unbumped(
         pr.title
     );
     let new_id = match aida_subcmd_add_review_story(project_root, &title, &desc) {
-        Some(id) => id,
-        None => {
+        Ok(id) => id,
+        // trace:BUG-2404 | ai:claude
+        Err(reason) => {
             return AutoQueueOutcome::skipped_needs_attention(format!(
-                "auto-queue: `aida add` failed for {noun}-{} (see warning above)",
+                "auto-queue: review story for {noun}-{} not confirmed: {reason}",
                 pr.number
-            ));
+            ))
+            .with_pr(pr.number)
+            .with_specs(spec_ids);
         }
     };
 
