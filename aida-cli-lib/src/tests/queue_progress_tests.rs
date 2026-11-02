@@ -363,3 +363,38 @@ fn parse_batch_chain_rejects_empty_names() {
         "unexpected error: {err}"
     );
 }
+
+// trace:BUG-2387 | ai:codex
+#[test]
+fn deferred_codex_interactive_hints_carry_rendered_workflows() {
+    for command in ["pickup", "guided-implement", "plan"] {
+        let prompt = format!("/aida-{command} BUG-2387");
+        let hint = deferred_interactive_launch_hint(
+            session::HeadlessVendor::Codex,
+            &prompt,
+            None,
+            false,
+            Some("gpt-test"),
+        );
+        assert!(hint.starts_with("codex --model gpt-test 'Codex prompt arguments:"));
+        assert!(hint.contains("BUG-2387"));
+        assert!(!hint.contains(&prompt));
+        let claude = deferred_interactive_launch_hint(
+            session::HeadlessVendor::Claude,
+            &prompt,
+            None,
+            false,
+            None,
+        );
+        assert!(claude.contains(&prompt));
+    }
+    let hint = deferred_interactive_launch_hint(
+        session::HeadlessVendor::Codex,
+        "/aida-unknown BUG-2387",
+        None,
+        false,
+        None,
+    );
+    assert!(hint.starts_with("codex '$aida-unknown BUG-2387"));
+    assert!(hint.contains("If it is unavailable, stop"));
+}

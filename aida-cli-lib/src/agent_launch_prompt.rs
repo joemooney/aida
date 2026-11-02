@@ -16,6 +16,11 @@
 
 use crate::{canonical_role_name, load_role, seat_next_command, RoleState};
 
+/// First line of every launch-context preamble. The Codex interactive renderer
+/// keys on it to find the invocation line that follows the preamble.
+// trace:BUG-2387 | ai:claude
+pub(crate) const LAUNCH_CONTEXT_PREAMBLE: &str = "Read your AIDA launch context first:";
+
 /// Resolve and render the automatic initial prompt for a launch, reading the
 /// role file from `project_root` when one exists.
 pub(crate) fn role_launch_prompt(
@@ -69,8 +74,7 @@ pub(crate) fn render_role_launch_prompt(
 }
 
 fn context_header(agent_type: &str, spec: Option<&str>) -> String {
-    let mut out =
-        String::from("Read your AIDA launch context first:\ncat \"$AIDA_AGENT_CONTEXT_FILE\"\n");
+    let mut out = format!("{LAUNCH_CONTEXT_PREAMBLE}\ncat \"$AIDA_AGENT_CONTEXT_FILE\"\n");
     if let Some(spec) = spec {
         out.push_str(&format!("aida show {spec}\n"));
     }

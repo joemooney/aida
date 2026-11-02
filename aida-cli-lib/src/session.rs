@@ -1492,6 +1492,46 @@ pub(crate) fn codex_inline_prompt(prompt: &str) -> Option<String> {
     }
 }
 
+/// Render the ONE interactive AIDA invocation line of a Codex launch prompt.
+///
+/// Only the intended invocation is expanded: the first line, or — when the
+/// prompt opens with the agent launch-context preamble — the first `/aida-*`
+/// line inside that preamble paragraph (e.g. `aida derisk`). Every other line,
+/// including pasted usage blocks such as `/aida-review --pr 7   Explicit PR
+/// number` later in free-form `--prompt` text, stays verbatim so several
+/// workflow bodies are never inlined mid-prompt.
+///
+/// Commands without a portable embedded body use Codex's installed-skill syntax;
+/// the explicit stop instruction prevents an unavailable skill being invented.
+// trace:BUG-2387 | ai:claude
+pub(crate) fn codex_interactive_prompt(prompt: &str) -> String {
+    let mut lines: Vec<&str> = prompt.split('\n').collect();
+    let target = if lines[0].starts_with("/aida-") {
+        Some(0)
+    } else if lines[0] == crate::agent_launch_prompt::LAUNCH_CONTEXT_PREAMBLE {
+        lines
+            .iter()
+            .take_while(|line| !line.trim().is_empty())
+            .position(|line| line.starts_with("/aida-"))
+    } else {
+        None
+    };
+    let Some(index) = target else {
+        return prompt.to_string();
+    };
+    let line = lines[index];
+    let rendered = codex_inline_prompt(line).unwrap_or_else(|| {
+        format!(
+            "${}\n\nUse the installed Codex skill requested above. \
+             If it is unavailable, stop and report that the skill is unavailable; \
+             do not reconstruct or claim to have run its workflow.",
+            &line[1..]
+        )
+    });
+    lines[index] = &rendered;
+    lines.join("\n")
+}
+
 /// BUG-806: the PATH a phase session should run with — the directory of the
 /// binary that is ORCHESTRATING, prepended to the inherited PATH. Without
 /// this, a headless agent's login shell resolves `aida` however the machine's
@@ -2065,7 +2105,9 @@ pub fn codex_session_args(initial_prompt: &str, bypass: bool, model: Option<&str
     if let Some(model) = model.filter(|m| !m.trim().is_empty()) {
         args.extend(["--model".to_string(), model.to_string()]);
     }
-    args.push(initial_prompt.to_string());
+    // Interactive Codex does not expand custom /aida-* slash commands.
+    // trace:BUG-2387 | ai:codex
+    args.push(codex_interactive_prompt(initial_prompt));
     args
 }
 
@@ -8683,7 +8725,7 @@ mod tests {
     #[test]
     fn codex_session_args_native_is_just_the_prompt_positional() {
         let args = codex_session_args("/aida-pickup", false, None);
-        assert_eq!(args, vec!["/aida-pickup".to_string()]);
+        assert_eq!(args, vec![codex_inline_prompt("/aida-pickup").unwrap()]);
         assert!(!args.iter().any(|a| a == "--session-id"), "{args:?}");
         assert!(!args.iter().any(|a| a == "--resume"), "{args:?}");
         assert!(
@@ -8692,6 +8734,79 @@ mod tests {
                 .any(|a| a == "--dangerously-bypass-approvals-and-sandbox"),
             "interactive codex must not force the bypass: {args:?}"
         );
+    }
+
+    // trace:BUG-2387 | ai:codex
+    #[test]
+    fn interactive_codex_argv_expands_aida_workflows() {
+        for command in ["pickup", "guided-implement", "plan", "derisk"] {
+            let prompt = format!("/aida-{command} BUG-2387");
+            let args = codex_session_args(&prompt, false, Some("gpt-test"));
+            assert_eq!(&args[..2], &["--model", "gpt-test"]);
+            assert_eq!(args.len(), 3);
+            let body = &args[2];
+            assert!(body.contains("BUG-2387"), "{command}: arguments lost");
+            assert!(!body.starts_with('/'), "{command}: unexpanded invocation");
+            assert!(body.contains("Codex prompt arguments:"), "{command}");
+        }
+    }
+
+    // trace:BUG-2387 | ai:codex
+    #[test]
+    fn interactive_codex_prompt_preserves_prose_and_handles_missing_bodies() {
+        for prompt in [
+            "plain prose\nwith trailing newline\n",
+            "/help",
+            "$aida-pickup BUG-2387",
+            "Discuss /aida-review",
+        ] {
+            assert_eq!(codex_interactive_prompt(prompt), prompt);
+        }
+        for prompt in ["/aida-unknown BUG-2387", "/aida-advise PUNT-1"] {
+            let body = codex_interactive_prompt(prompt);
+            assert!(body.starts_with(&prompt.replacen('/', "$", 1)));
+            assert!(body.contains("If it is unavailable, stop"));
+        }
+    }
+
+    // BUG-2387 review round 2: only the intended invocation line expands —
+    // the first line, or the first `/aida-*` line inside the launch-context
+    // preamble paragraph. Pasted usage lines later in free-form prompt text
+    // (column-0 `/aida-review --pr 7 ...`) stay verbatim.
+    // trace:BUG-2387 | ai:claude
+    #[test]
+    fn interactive_codex_prompt_expands_only_the_invocation_line() {
+        let usage = "/aida-review --pr 7   Explicit PR number\n/aida-plan BUG-1";
+        // Free-form prose first: nothing expands, even column-0 usage lines.
+        let prose = format!("Please explain these usages:\n{usage}");
+        assert_eq!(codex_interactive_prompt(&prose), prose);
+
+        // Invocation first: only line 0 expands; the pasted block is kept.
+        let first = format!("/aida-pickup BUG-2387\n\nNotes:\n{usage}");
+        let body = codex_interactive_prompt(&first);
+        assert!(!body.starts_with('/'), "{body}");
+        assert!(body.ends_with(&format!("Notes:\n{usage}")), "{body}");
+        assert!(
+            !body.contains("# Plan Requirement Implementation"),
+            "second workflow inlined: {body}"
+        );
+
+        // Preamble: the invocation inside the preamble paragraph expands;
+        // `/aida-*` lines after the paragraph break do not.
+        let preamble = format!(
+            "{}\ncat \"$AIDA_AGENT_CONTEXT_FILE\"\n/aida-derisk BUG-2387\n\nUsage:\n{usage}",
+            crate::agent_launch_prompt::LAUNCH_CONTEXT_PREAMBLE
+        );
+        let body = codex_interactive_prompt(&preamble);
+        assert!(
+            !body.contains("$AIDA_AGENT_CONTEXT_FILE\"\n/aida-derisk"),
+            "{body}"
+        );
+        assert!(
+            body.contains("Codex prompt arguments: `BUG-2387`"),
+            "{body}"
+        );
+        assert!(body.ends_with(&format!("Usage:\n{usage}")), "{body}");
     }
 
     // BUG-743: when the queue/do resolver reports the uniform
@@ -8705,7 +8820,7 @@ mod tests {
             args,
             vec![
                 "--dangerously-bypass-approvals-and-sandbox".to_string(),
-                "/aida-pickup BUG-743".to_string()
+                codex_inline_prompt("/aida-pickup BUG-743").unwrap()
             ]
         );
         assert!(!args.iter().any(|a| a == "--session-id"), "{args:?}");
@@ -8741,7 +8856,7 @@ mod tests {
             vec![
                 "--model".to_string(),
                 "gpt-alias".to_string(),
-                "/aida-pickup STORY-1003".to_string()
+                codex_inline_prompt("/aida-pickup STORY-1003").unwrap()
             ]
         );
     }
@@ -9707,10 +9822,10 @@ mod tests {
             plan.args,
             codex_session_args("/aida-review --pr 42", false, None)
         );
-        assert_eq!(
-            plan.args.last().map(String::as_str),
-            Some("/aida-review --pr 42")
-        );
+        let body = plan.args.last().unwrap();
+        assert!(body.contains(".aida/review-verdicts/PR-N.json"));
+        assert!(body.contains("42"));
+        assert!(!body.starts_with('/'));
 
         // `--permission-mode bypassPermissions` maps to Codex's own bypass
         // flag (mirrors the general interactive Codex-tab dispatch, BUG-743).

@@ -21,15 +21,16 @@
 use super::*;
 
 /// Write a trivial "vendor" mock at `dir/mock-agent.sh` that appends each of
-/// its argv[1..] to `capture`, one per line, then exits 0.
+/// its argv[1..] to `capture`, NUL-delimited so multiline prompts stay one argument.
 // trace:BUG-1607 | ai:claude
+// trace:BUG-2387 | ai:codex
 #[cfg(unix)] // trace:BUG-1646 | ai:claude
 fn write_argv_capture_mock(dir: &std::path::Path, capture: &std::path::Path) -> std::path::PathBuf {
     let script = dir.join("mock-agent.sh");
     crate::test_exec::write_executable(
         &script,
         format!(
-            "#!/bin/sh\nfor a in \"$@\"; do printf '%s\\n' \"$a\" >> \"{}\"; done\nexit 0\n",
+            "#!/bin/sh\nfor a in \"$@\"; do printf '%s\\0' \"$a\" >> \"{}\"; done\nexit 0\n",
             capture.display()
         ),
     );
@@ -40,7 +41,7 @@ fn write_argv_capture_mock(dir: &std::path::Path, capture: &std::path::Path) -> 
 fn read_captured_argv(capture: &std::path::Path) -> Vec<String> {
     std::fs::read_to_string(capture)
         .unwrap_or_default()
-        .lines()
+        .split_terminator('\0')
         .map(str::to_string)
         .collect()
 }
