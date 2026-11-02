@@ -10,12 +10,12 @@ description: |
   2. Regression fixtures record oldfriendly verdict, newer canonical/phase3 verdict atchangedhead; friendly/canonical reads agree. Cover approve→requestchanges and refusal→approve, reworkfindings + recurrenceguard, holdstillrefuseswronghead/invalidgrant/unrelatedspec and accepts only lawfulfreshidentityevidence. Both GitHub PR and GitLab MR handshakes mustretain existingmappingcontracts.
   3. Repair only supported resolution/projection, never direct JSON/ledgerediting, forgedattestation or manualbypass. Existing security/hold/authority and bounded nonsymlink handle reads stayintact. No globalrole/grantsandboxchange.
   4. Sensitivegate code: SKETCHONLY first, independentadvisorsignoff beforeimplementation. Avoid concurrentgate/review_verdict overlap with activeBUG2398; diagnose/read now, codeafter. Independentfreshreview andnormalgates. LIGHTtargetedfilter+fast, >10/sharedinfraadditionalgates, nofullsuite/slotbypass.
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T10:12:04.230556201Z
-modified_at: 2026-11-02T12:00:35.972449851Z
+modified_at: 2026-11-02T12:05:18.881912814Z
 req_type: Bug
 tags:
 - alias
@@ -254,6 +254,15 @@ history:
   timestamp: 2026-11-02T12:00:37.009460995Z
   session_id: 1f56bd1e-c059-4f73-b8df-e18b2170fdfc
   changes: []
+- id: 01a19c26-4fa1-7843-bd35-c805a03f561f
+  author: aida-orchestrator
+  timestamp: 2026-11-02T12:05:18.881937681Z
+  session_id: 01a19c234d4c
+  harness_version: 2.1.316 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 6fefb63280c352be0194c2cfadf54a085eb55471
   branch: main
@@ -265,3 +274,11 @@ implementation_info:
   implemented: true
   implemented_at: 2026-11-02T11:36:14.525442720Z
   implemented_by: joe
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: Round 2 adds sound cross-label selection (review_alias.rs, strict ledger/checked.rs) and the finding-4 drain-stamp fix, but the advisor ruling requires the full BUG-2403 scope in this PR and the implementer's own round-2 note lists unfinished signed amendments (1, 6) and required tests (3a-c); lib/gates CI still pending at 02a4d48.
+  recovery_hint: address the review findings, move BUG-2403 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-11-02T12:05:18.881912814Z
