@@ -1070,7 +1070,7 @@ fn drain_launcher_supplies_jobs_for_all_implementer_vendors_and_reports_evidence
                         Some(main.as_path()),
                         Some(lease),
                         &lane.seat,
-                        runner_alive,
+                        seat_runner_alive,
                     )
                     .expect("the published runner resolves");
                     assert_eq!(
@@ -1104,8 +1104,13 @@ fn drain_launcher_supplies_jobs_for_all_implementer_vendors_and_reports_evidence
                 },
             );
             assert!(
-                resolve_seat_dirs(Some(main.as_path()), Some(lease), &lane.seat, runner_alive)
-                    .is_err(),
+                resolve_seat_dirs(
+                    Some(main.as_path()),
+                    Some(lease),
+                    &lane.seat,
+                    seat_runner_alive
+                )
+                .is_err(),
                 "a stopped runner is unpublished"
             );
             let warning = phase_test_warning(&main, Some(lease));
@@ -1173,7 +1178,7 @@ fn a_runner_is_published_on_its_lease_and_cleared_when_it_stops() {
             Some(main.as_path()),
             Some(lane.lease_id.as_str()),
             &lane.seat,
-            runner_alive
+            seat_runner_alive
         )
         .is_err(),
         "no record, no runner"
@@ -1192,7 +1197,7 @@ fn a_runner_is_published_on_its_lease_and_cleared_when_it_stops() {
         Some(main.as_path()),
         Some(lane.lease_id.as_str()),
         &lane.seat,
-        runner_alive,
+        seat_runner_alive,
     )
     .unwrap();
     assert_eq!(
@@ -1209,7 +1214,7 @@ fn a_runner_is_published_on_its_lease_and_cleared_when_it_stops() {
         Some(main.as_path()),
         Some(lane.lease_id.as_str()),
         &sub,
-        runner_alive
+        seat_runner_alive
     )
     .is_ok());
     drop(runner);
@@ -1219,7 +1224,7 @@ fn a_runner_is_published_on_its_lease_and_cleared_when_it_stops() {
         Some(main.as_path()),
         Some(lane.lease_id.as_str()),
         &lane.seat,
-        runner_alive
+        seat_runner_alive
     )
     .is_err());
 }
@@ -1234,7 +1239,7 @@ fn seat_resolution_refuses_forged_foreign_stale_and_symlinked_selectors() {
     let main = tmp.path().join("main");
     write_fixture_lease(&main, &lane.lease_id, &lane.seat);
     publish(&main, &lane.lease_id).unwrap();
-    let ok = |_: &RunnerRecord| true;
+    let ok = |_: &RunnerRecord, _: &Path| true;
     let resolve =
         |root: Option<&Path>, id: Option<&str>, cwd: &Path| resolve_seat_dirs(root, id, cwd, ok);
     assert!(resolve(
@@ -1274,7 +1279,7 @@ fn seat_resolution_refuses_forged_foreign_stale_and_symlinked_selectors() {
         Some(main.as_path()),
         Some(lane.lease_id.as_str()),
         &lane.seat,
-        |_| false
+        |_, _| false
     )
     .is_err());
     let recycled = RunnerRecord {
@@ -1363,9 +1368,10 @@ fn no_lease_field_holds_a_credential() {
     }
 }
 
-// Signoff test (a): neither the lease directory nor the results directory is
-// inside a seat-writable root, so a seat cannot forge a runner record or a
-// result. trace:BUG-2383 | ai:claude
+// Signoff test (a): neither the lease directory nor the results directory
+// (with the runner heartbeat in it) is inside a seat-writable root, so a seat
+// cannot forge a runner record, its liveness or a result.
+// trace:BUG-2383 | ai:claude
 #[cfg(unix)]
 #[test]
 fn leases_and_results_are_outside_every_seat_writable_root() {
@@ -1378,7 +1384,11 @@ fn leases_and_results_are_outside_every_seat_writable_root() {
     // root; the temp dirs both also grant hold no checkout.
     let roots = crate::contained_boundary::contained_write_roots(&seat);
     assert!(!roots.is_empty());
-    for host_only in [main.join(".aida/sessions"), results_dir(&main, "lease-x")] {
+    for host_only in [
+        main.join(".aida/sessions"),
+        results_dir(&main, "lease-x"),
+        heartbeat_path(&results_dir(&main, "lease-x")),
+    ] {
         for root in &roots {
             assert!(
                 !host_only.starts_with(root),
@@ -1387,5 +1397,311 @@ fn leases_and_results_are_outside_every_seat_writable_root() {
                 root.display()
             );
         }
+    }
+}
+
+// Fork 1 ruling (2026-11-02 06:36): the seat sees the runner as live only
+// through a fresh heartbeat from that same runner; stale, foreign, future,
+// missing, symlinked or garbled heartbeats mean untested, never a hang.
+// trace:BUG-2383 | ai:claude
+#[cfg(unix)]
+#[test]
+fn the_seat_trusts_only_a_fresh_heartbeat_from_the_recorded_runner() {
+    use std::time::{SystemTime, UNIX_EPOCH};
+    let tmp = tempfile::tempdir().unwrap();
+    let results = tmp.path().join("results");
+    std::fs::create_dir_all(&results).unwrap();
+    let record = RunnerRecord {
+        protocol: PROTOCOL,
+        runner_pid: 1,
+        runner_started_at: "start-a".into(),
+    };
+    let now = SystemTime::now();
+    let ms = now.duration_since(UNIX_EPOCH).unwrap().as_millis() as u64;
+    let beat = |started: &str, protocol: u32, at: u64| Heartbeat {
+        protocol,
+        runner_started_at: started.into(),
+        counter: 3,
+        written_at_ms: at,
+    };
+    assert!(!heartbeat_fresh(&results, &record, now), "missing");
+    write_heartbeat(&results, &beat("start-a", PROTOCOL, ms - 1_000)).unwrap();
+    assert!(heartbeat_fresh(&results, &record, now));
+    let stale = ms - HEARTBEAT_FRESH.as_millis() as u64 - 1;
+    write_heartbeat(&results, &beat("start-a", PROTOCOL, stale)).unwrap();
+    assert!(!heartbeat_fresh(&results, &record, now), "stale");
+    write_heartbeat(&results, &beat("start-b", PROTOCOL, ms)).unwrap();
+    assert!(!heartbeat_fresh(&results, &record, now), "another runner");
+    write_heartbeat(&results, &beat("start-a", PROTOCOL + 1, ms)).unwrap();
+    assert!(!heartbeat_fresh(&results, &record, now), "another protocol");
+    write_heartbeat(&results, &beat("start-a", PROTOCOL, ms + 60_000)).unwrap();
+    assert!(!heartbeat_fresh(&results, &record, now), "from the future");
+    std::fs::write(heartbeat_path(&results), b"not json").unwrap();
+    assert!(!heartbeat_fresh(&results, &record, now), "garbled");
+    let elsewhere = tmp.path().join("elsewhere.json");
+    std::fs::write(
+        &elsewhere,
+        serde_json::to_vec(&beat("start-a", PROTOCOL, ms)).unwrap(),
+    )
+    .unwrap();
+    std::fs::remove_file(heartbeat_path(&results)).unwrap();
+    std::os::unix::fs::symlink(&elsewhere, heartbeat_path(&results)).unwrap();
+    assert!(!heartbeat_fresh(&results, &record, now), "symlinked");
+}
+
+// A published runner beats before publication returns and stops beating
+// (and removes its heartbeat) when it stops. trace:BUG-2383 | ai:claude
+#[cfg(unix)]
+#[test]
+fn a_published_runner_heartbeats_until_it_stops() {
+    let tmp = tempfile::tempdir().unwrap();
+    let lane = fixture_lane(tmp.path());
+    let main = tmp.path().join("main");
+    write_fixture_lease(&main, &lane.lease_id, &lane.seat);
+    let runner = Runner::start_published(lane.clone(), &main);
+    let doc: toml::Value = toml::from_str(&lease_body(&main, &lane.lease_id)).unwrap();
+    let record: RunnerRecord = doc[LEASE_FIELD].clone().try_into().unwrap();
+    assert!(seat_runner_alive(&record, &lane.results));
+    let beat: Heartbeat =
+        serde_json::from_slice(&std::fs::read(heartbeat_path(&lane.results)).unwrap()).unwrap();
+    assert_eq!(beat.runner_started_at, record.runner_started_at);
+    assert_eq!(beat.protocol, PROTOCOL);
+    drop(runner);
+    assert!(!heartbeat_path(&lane.results).exists());
+    assert!(!seat_runner_alive(&record, &lane.results));
+}
+
+/// Wait for `cmd` with a watchdog, returning (exit code, combined output).
+#[cfg(unix)]
+fn run_bounded(cmd: &mut std::process::Command, limit: Duration) -> (Option<i32>, String) {
+    let mut log = tempfile::tempfile().unwrap();
+    cmd.stdin(std::process::Stdio::null())
+        .stdout(log.try_clone().unwrap())
+        .stderr(log.try_clone().unwrap());
+    let mut child = cmd.spawn().unwrap();
+    let deadline = Instant::now() + limit;
+    let status = loop {
+        if let Some(status) = child.try_wait().unwrap() {
+            break status;
+        }
+        if Instant::now() >= deadline {
+            let _ = child.kill();
+            panic!("the codex tool shell did not finish within {limit:?}");
+        }
+        std::thread::sleep(Duration::from_millis(50));
+    };
+    use std::io::{Read, Seek, SeekFrom};
+    log.seek(SeekFrom::Start(0)).unwrap();
+    let mut out = String::new();
+    log.read_to_string(&mut out).unwrap();
+    (status.code(), out)
+}
+
+// Signoff test (c), the real Codex boundary: the production Codex implementer
+// child (the drain launcher's own command builder, the runner's selector,
+// the launcher's Codex env, `prepare_launch`) is run through the seat
+// preflight's `codex sandbox` conversion under `inherit = "core"`, once with
+// the uncontained posture and once natively sandboxed (`--sandbox
+// workspace-write`, the contained posture's flags: its own PID namespace).
+// Inside, `aida lane job run` resolves the runner through the lease alone,
+// submits, and reads the result; the host tally counts the test. Negatives:
+// no runner, a cwd outside the seat, a forged lease id. Skips (never passes)
+// when codex is missing or its sandbox cannot start. trace:BUG-2383 | ai:claude
+#[cfg(unix)]
+#[test]
+fn codex_core_tool_shell_reaches_the_runner_through_its_lease() {
+    use crate::session::{build_exec_vendor_headless_command_for, HeadlessVendor};
+    if !std::process::Command::new("codex")
+        .arg("--version")
+        .output()
+        .is_ok_and(|o| o.status.success())
+    {
+        eprintln!("SKIP: codex is not installed");
+        return;
+    }
+    let _env = crate::test_env::EnvVarsGuard::apply(&[
+        ("AIDA_CONTAINED", None),
+        ("AIDA_SESSION_ID", None),
+        ("AIDA_PROJECT_ROOT", None),
+    ]);
+    let aida = crate::test_exec::matching_aida_cli();
+    let tmp = tempfile::tempdir().unwrap();
+    let main = tmp.path().join("main");
+    std::fs::create_dir_all(&main).unwrap();
+    let git = |dir: &Path, args: &[&str]| {
+        let ok = crate::test_git::git_command()
+            .current_dir(dir)
+            .args(args)
+            .output()
+            .unwrap();
+        assert!(ok.status.success(), "git {args:?}: {ok:?}");
+    };
+    git(&main, &["init", "-q", "-b", "main"]);
+    std::fs::write(main.join("README"), "fixture\n").unwrap();
+    git(&main, &["add", "README"]);
+    git(
+        &main,
+        &[
+            "-c",
+            "user.name=f",
+            "-c",
+            "user.email=f@localhost",
+            "commit",
+            "-qm",
+            "init",
+        ],
+    );
+    // A linked worktree: an `aida-seat-*` name would mark it a seat clone.
+    let seat = tmp.path().join("lane-codex-worktree");
+    git(
+        &main,
+        &[
+            "worktree",
+            "add",
+            "-q",
+            "-b",
+            "lane",
+            seat.to_str().unwrap(),
+        ],
+    );
+    let lease = "lease-codex";
+    write_fixture_lease(&main, lease, &seat);
+    let config = tmp.path().join("codex-home");
+    std::fs::create_dir_all(&config).unwrap();
+    std::fs::write(
+        config.join("config.toml"),
+        "[shell_environment_policy]\ninherit = \"core\"\n",
+    )
+    .unwrap();
+    // The host side: a fixture cargo behind the real runner, published.
+    let mut lane = fixture_lane(tmp.path());
+    lane.seat = seat.clone();
+    lane.inbox = seat.join(INBOX_RELATIVE);
+    lane.results = results_dir(&main, lease);
+    lane.lease_id = lease.into();
+    lane.prepare().unwrap();
+    // The production child, finalized exactly as run_vendor_headless_child
+    // does for Codex.
+    let child_for = |native: bool, selector: Option<&str>| {
+        let mut child = build_exec_vendor_headless_command_for(
+            HeadlessVendor::Codex,
+            "fixture prompt",
+            "codex-session",
+            false,
+            None,
+            None,
+            "implementer",
+            "",
+            false,
+        )
+        .unwrap();
+        if native {
+            let args: Vec<String> = child
+                .get_args()
+                .map(|a| a.to_string_lossy().into_owned())
+                .filter(|a| a != "--dangerously-bypass-approvals-and-sandbox")
+                .collect();
+            let mut contained = std::process::Command::new(child.get_program());
+            for (k, v) in child.get_envs() {
+                match v {
+                    Some(v) => contained.env(k, v),
+                    None => contained.env_remove(k),
+                };
+            }
+            contained
+                .args(crate::tool_contained_flags("codex").unwrap())
+                .args(args);
+            child = contained;
+        }
+        // Production order: the runner's selector (customize), then the
+        // launcher's Codex env, whose worker session is the same lease id.
+        lane.apply_selector(&mut child);
+        child
+            .env("AIDA_USER", "codex-fixture")
+            .env("AIDA_PROJECT_ROOT", &seat)
+            .env("CODEX_HOME", &config)
+            .env(crate::gate::review_authority::WORKER_SESSION_ENV, lease);
+        if let Some(id) = selector {
+            child.env("AIDA_SESSION_ID", id);
+        }
+        crate::codex_tool_env::prepare_launch(&mut child).unwrap();
+        child
+    };
+    let job_argv = [
+        aida.as_os_str(),
+        std::ffi::OsStr::new("lane"),
+        std::ffi::OsStr::new("job"),
+        std::ffi::OsStr::new("run"),
+        std::ffi::OsStr::new("--"),
+        std::ffi::OsStr::new("cargo"),
+        std::ffi::OsStr::new("test"),
+        std::ffi::OsStr::new("--profile"),
+        std::ffi::OsStr::new("agent"),
+        std::ffi::OsStr::new("--"),
+        std::ffi::OsStr::new("passing"),
+    ];
+    let in_tool_shell = |child: &std::process::Command, cwd: &Path| {
+        let mut shell =
+            crate::codex_tool_env::tool_shell_command_for_test(child, &job_argv).unwrap();
+        shell.current_dir(cwd);
+        run_bounded(&mut shell, Duration::from_secs(90))
+    };
+    // Control: the tool shell drops a plain launcher variable (inherit=core).
+    let mut probe = crate::codex_tool_env::tool_shell_command_for_test(
+        &child_for(false, None),
+        &[
+            std::ffi::OsStr::new("sh"),
+            std::ffi::OsStr::new("-c"),
+            std::ffi::OsStr::new(
+                "test -z \"$BUG2383_LAUNCHER_ONLY\" && test -n \"$AIDA_SESSION_ID\"",
+            ),
+        ],
+    )
+    .unwrap();
+    probe.env("BUG2383_LAUNCHER_ONLY", "x").current_dir(&seat);
+    let (code, out) = run_bounded(&mut probe, Duration::from_secs(30));
+    if code != Some(0) && out.contains("namespace") {
+        eprintln!("SKIP: the codex sandbox cannot start here: {out}");
+        return;
+    }
+    assert_eq!(code, Some(0), "inherit=core control: {out}");
+    for native in [false, true] {
+        let runner = Runner::start_published(lane.clone(), &main);
+        let (code, out) = in_tool_shell(&child_for(native, None), &seat);
+        if native && code != Some(0) && out.contains("namespace") {
+            eprintln!("SKIP: the native codex sandbox cannot start here: {out}");
+            return;
+        }
+        assert_eq!(code, Some(0), "native={native}: {out}");
+        assert!(
+            out.contains("test passing ... ok"),
+            "native={native}: {out}"
+        );
+        // A cwd outside the seat, and a forged lease id, are refused.
+        let (code, out) = in_tool_shell(&child_for(native, None), &main);
+        assert_ne!(code, Some(0), "outside the seat: {out}");
+        assert!(out.contains("untested=true"), "{out}");
+        let (code, out) = in_tool_shell(&child_for(native, Some("lease-forged")), &seat);
+        assert_ne!(code, Some(0), "forged: {out}");
+        assert!(out.contains("untested=true"), "{out}");
+        let tally = runner.stop();
+        assert!(
+            !tally.untested(),
+            "native={native}: the host tally counted the test"
+        );
+        // No runner: untested, never a direct cargo run.
+        let (code, out) = in_tool_shell(&child_for(native, None), &seat);
+        assert_ne!(code, Some(0), "no runner: {out}");
+        assert!(out.contains("untested=true"), "{out}");
+        eprintln!(
+            "EVIDENCE host-witnessed runner: codex sandbox ({}) on this host submitted a job, \
+             read rc=0 and the host tally counted the test; native async cargo in the tool \
+             shell: none (all cargo goes through the runner)",
+            if native {
+                "workspace-write, own PID namespace"
+            } else {
+                "danger-full-access"
+            }
+        );
     }
 }

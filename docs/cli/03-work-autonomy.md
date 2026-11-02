@@ -259,14 +259,18 @@ resume policy remains separate. A drain whose implementer ran no test to complet
 says `untested=true` in that phase's output.
 
 A seat clone's cargo target is seeded from the primary's agent-profile target
-when the clone is created, and again before the first job. The seed copies
-`deps/`, `.fingerprint/` and `build/` with copy-on-write reflinks only, so a
-seat never shares a file with the primary's target. On a filesystem without
-reflinks (ext4, for one) nothing is seeded and the seat builds cold, and the
-job output says `not seeded`. A cold build of a large crate can take longer
-than the default 900-second timeout, so the runner gives a job on an unseeded
-target the largest timeout (3600 seconds) unless the job sets its own
-`AIDA_CARGO_TIMEOUT`.
+when the clone is created, and again before the first job. Where the
+filesystem supports copy-on-write reflinks, the seed copies `deps/`,
+`.fingerprint/` and `build/` with reflinks (`seed: reflink`). Where it does not
+(ext4, for one), the runner takes a read-only generation snapshot of the
+primary's target and mounts it as the lower layer of a per-lane overlay inside
+the job's sandbox (`seed: overlay gen=<id>`): the seat's writes land in its own
+upper layer and never touch a file of the primary's target. Snapshots no live
+lease uses are removed. If neither works, the seat builds cold and the job
+output says `seed: cold (<reason>)`; the lane carries on. A cold build of a
+large crate can take longer than the default 900-second timeout, so the runner
+gives a job on a cold target the largest timeout (3600 seconds) unless the job
+sets its own `AIDA_CARGO_TIMEOUT`.
 <!-- trace:BUG-2383 | ai:claude -->
 
 ### `aida backlog`

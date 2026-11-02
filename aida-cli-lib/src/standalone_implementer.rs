@@ -104,7 +104,7 @@ cargo yourself and do not background it. Hand the run to the launcher instead: \
 `aida lane job run -- cargo test --profile agent -p <crate> --lib -- <filter>`. It accepts \
 `cargo test|check|build --profile agent ...`, runs in this seat inside a sandbox, with its own \
 target, under the cargo slot limiter, and returns within 50 seconds. The runner picks the run's \
-timeout: 900 seconds on a seeded target, 3600 when the output says `not seeded` (a cold build \
+timeout: 900 seconds on a warm target, 3600 when the output says `seed: cold` (a cold build \
 can take half an hour); set `AIDA_CARGO_TIMEOUT=<secs>` only to override it. When \
 it finishes it prints the output tail and exits with cargo's exit code; while it still runs it \
 prints the job id and exits 75, and you continue with `aida lane job wait <id>` until it \

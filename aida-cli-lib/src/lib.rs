@@ -610,6 +610,9 @@ mod grant_expiry_notice;
 mod seat_rotation;
 // trace:BUG-2383 | ai:claude
 mod seat_target_seed;
+// trace:BUG-2383 | ai:claude
+#[cfg(unix)]
+mod seat_target_overlay;
 // trace:STORY-B6B1278890774EF993D2EBC327862470-101 | ai:claude
 mod agent_rotation;
 mod seats;

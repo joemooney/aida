@@ -490,7 +490,7 @@ Test locally by the spec's tier; the full workspace suite runs only in CI
 and a detached `setsid nohup` run dies with it, so run cargo through the
 launcher: `aida lane job run -- cargo test --profile agent -p <crate> --lib --
 <filter>`, then `aida lane job wait <id>` while it exits 75 (still running).
-The runner allows a cold (`not seeded`) target 3600 seconds and a seeded one
+The runner allows a cold (`seed: cold`) target 3600 seconds and a seeded one
 900; `AIDA_CARGO_TIMEOUT=<secs>` overrides. If it says the session has no lane job runner, or
 refuses the run (jobs run only inside bubblewrap), ship and say
 `untested=true` in your result. trace:BUG-2383 | ai:claude

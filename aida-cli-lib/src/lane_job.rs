@@ -62,9 +62,11 @@
 //! `AIDA_PROJECT_ROOT`. While a [`Runner`] serves the lane, the host stamps a
 //! typed [`RunnerRecord`] on that lease ([`LEASE_FIELD`]); the seat side
 //! ([`resolve_seat_dirs`]) reads the lease without following a symlink,
-//! requires its cwd to be inside the lease's own worktree and the recorded
-//! runner to be alive with the recorded start identity, and derives both
-//! directories from the lease. The lease id is a name, not a capability: no
+//! requires its cwd to be inside the lease's own worktree and a fresh
+//! [`Heartbeat`] from the recorded runner in the host-only results directory,
+//! and derives both directories from the lease. A seat tool shell (Claude's
+//! and Codex's alike) runs in a private PID namespace and cannot see the
+//! runner's pid, so the pid check stays host-side only. The lease id is a name, not a capability: no
 //! token, path or grant travels in env or argv, and any failure means
 //! `untested=true`, never a direct cargo run.
 // trace:BUG-2383 | ai:claude
@@ -92,6 +94,83 @@ pub(crate) struct RunnerRecord {
     pub(crate) protocol: u32,
     pub(crate) runner_pid: u32,
     pub(crate) runner_started_at: String,
+}
+
+/// The heartbeat file in a lane's results directory.
+pub(crate) const HEARTBEAT_FILE: &str = "heartbeat.json";
+/// How often a published runner rewrites its heartbeat.
+pub(crate) const HEARTBEAT_EVERY: Duration = Duration::from_secs(5);
+/// How old a heartbeat may be for the seat to treat the runner as live.
+pub(crate) const HEARTBEAT_FRESH: Duration = Duration::from_secs(30);
+
+/// The runner's liveness proof, rewritten every [`HEARTBEAT_EVERY`] by the
+/// host in the lane's results directory, which no seat can write (advisor
+/// ruling on fork 1, 2026-11-02 06:36). It names the record it belongs to by
+/// protocol and runner start identity, so a heartbeat left by an earlier
+/// runner never vouches for a later record.
+// trace:BUG-2383 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub(crate) struct Heartbeat {
+    pub(crate) protocol: u32,
+    pub(crate) runner_started_at: String,
+    /// Increases by one with every rewrite.
+    pub(crate) counter: u64,
+    /// Wall time of the rewrite, milliseconds since the Unix epoch.
+    pub(crate) written_at_ms: u64,
+}
+
+/// `<results>/heartbeat.json`.
+pub(crate) fn heartbeat_path(results: &Path) -> PathBuf {
+    results.join(HEARTBEAT_FILE)
+}
+
+fn unix_ms(at: std::time::SystemTime) -> u64 {
+    at.duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis() as u64)
+        .unwrap_or(0)
+}
+
+/// Write `beat` atomically (a temporary file renamed into place).
+// trace:BUG-2383 | ai:claude
+pub(crate) fn write_heartbeat(results: &Path, beat: &Heartbeat) -> Result<()> {
+    let tmp = results.join(format!(".{HEARTBEAT_FILE}.tmp"));
+    std::fs::write(&tmp, serde_json::to_vec(beat)?)
+        .with_context(|| format!("write {}", tmp.display()))?;
+    std::fs::rename(&tmp, heartbeat_path(results))
+        .with_context(|| format!("publish {}", heartbeat_path(results).display()))
+}
+
+/// Whether `results` holds a heartbeat from `record`'s runner younger than
+/// [`HEARTBEAT_FRESH`] at `now`. Missing, unreadable, symlinked, foreign or
+/// stale means not live, so the seat reports `untested=true` rather than
+/// waiting on a runner that is gone. A heartbeat stamped in the future (more
+/// than [`HEARTBEAT_EVERY`] ahead) is not trusted either.
+// trace:BUG-2383 | ai:claude
+pub(crate) fn heartbeat_fresh(
+    results: &Path,
+    record: &RunnerRecord,
+    now: std::time::SystemTime,
+) -> bool {
+    let path = heartbeat_path(results);
+    if std::fs::symlink_metadata(&path).map_or(true, |m| !m.file_type().is_file()) {
+        return false;
+    }
+    let Ok(body) = std::fs::read(&path) else {
+        return false;
+    };
+    let Ok(beat) = serde_json::from_slice::<Heartbeat>(&body) else {
+        return false;
+    };
+    let now = unix_ms(now);
+    beat.protocol == record.protocol
+        && beat.runner_started_at == record.runner_started_at
+        && beat.written_at_ms <= now + HEARTBEAT_EVERY.as_millis() as u64
+        && now.saturating_sub(beat.written_at_ms) < HEARTBEAT_FRESH.as_millis() as u64
+}
+
+/// The seat side's liveness check: a fresh heartbeat in `results`.
+pub(crate) fn seat_runner_alive(record: &RunnerRecord, results: &Path) -> bool {
+    heartbeat_fresh(results, record, std::time::SystemTime::now())
 }
 
 /// The inbox, relative to the seat root.
@@ -631,6 +710,10 @@ impl LaneJobs {
 pub(crate) struct Runner {
     stop: Arc<AtomicBool>,
     handle: Option<std::thread::JoinHandle<()>>,
+    /// The heartbeat thread of a published runner.
+    heartbeat: Option<std::thread::JoinHandle<()>>,
+    /// The results directory the heartbeat is written to.
+    results: PathBuf,
     pub(crate) tally: Arc<Tally>,
     /// The main root and lease id whose [`RunnerRecord`] this runner
     /// stamped, cleared again when it stops.
@@ -648,7 +731,10 @@ impl Runner {
         let lease_id = lane.lease_id.clone();
         let mut runner = Self::start(lane);
         match publish(main_root, &lease_id) {
-            Ok(()) => runner.published = Some((main_root.to_path_buf(), lease_id)),
+            Ok(record) => {
+                runner.heartbeat = start_heartbeat(&runner.results, record, runner.stop.clone());
+                runner.published = Some((main_root.to_path_buf(), lease_id));
+            }
             Err(e) => eprintln!(
                 "  lane job: could not publish the runner on lease {lease_id}, so the \
                  implementer cannot find it and its result says untested=true: {e:#}"
@@ -661,6 +747,7 @@ impl Runner {
     pub(crate) fn start(lane: LaneJobs) -> Self {
         let stop = Arc::new(AtomicBool::new(false));
         let tally = Arc::new(Tally::default());
+        let results = lane.results.clone();
         let handle = {
             let stop = stop.clone();
             let tally = tally.clone();
@@ -672,6 +759,8 @@ impl Runner {
         Self {
             stop,
             handle,
+            heartbeat: None,
+            results,
             tally,
             published: None,
         }
@@ -688,10 +777,56 @@ impl Runner {
         if let Some(handle) = self.handle.take() {
             let _ = handle.join();
         }
+        if let Some(handle) = self.heartbeat.take() {
+            let _ = handle.join();
+            let _ = std::fs::remove_file(heartbeat_path(&self.results));
+        }
         if let Some((main_root, lease_id)) = self.published.take() {
             let _ = unpublish(main_root.as_path(), &lease_id);
         }
     }
+}
+
+/// Write the first heartbeat for `record` now, then rewrite it every
+/// [`HEARTBEAT_EVERY`] on its own thread until `stop`. Writing the first one
+/// before returning means a seat launched right after publication already
+/// finds the runner live. `None` when the first write fails: the seat then
+/// never sees the runner as live and the lane reports `untested=true`.
+// trace:BUG-2383 | ai:claude
+fn start_heartbeat(
+    results: &Path,
+    record: RunnerRecord,
+    stop: Arc<AtomicBool>,
+) -> Option<std::thread::JoinHandle<()>> {
+    let beat = move |counter: u64| Heartbeat {
+        protocol: record.protocol,
+        runner_started_at: record.runner_started_at.clone(),
+        counter,
+        written_at_ms: unix_ms(std::time::SystemTime::now()),
+    };
+    if let Err(e) = write_heartbeat(results, &beat(0)) {
+        eprintln!(
+            "  lane job: could not write the runner heartbeat, so the implementer cannot \
+             find the runner and its result says untested=true: {e:#}"
+        );
+        return None;
+    }
+    let results = results.to_path_buf();
+    std::thread::Builder::new()
+        .name("lane-job-heartbeat".into())
+        .spawn(move || {
+            let mut counter = 0;
+            let mut last = Instant::now();
+            while !stop.load(Ordering::Relaxed) {
+                std::thread::sleep(Duration::from_millis(100));
+                if last.elapsed() >= HEARTBEAT_EVERY {
+                    counter += 1;
+                    let _ = write_heartbeat(&results, &beat(counter));
+                    last = Instant::now();
+                }
+            }
+        })
+        .ok()
 }
 
 /// The lease file of `lease_id` under `main_root`.
@@ -734,21 +869,19 @@ fn rewrite_record(main_root: &Path, lease_id: &str, record: Option<&RunnerRecord
     })
 }
 
-/// Stamp this process as `lease_id`'s lane job runner.
+/// Stamp this process as `lease_id`'s lane job runner, returning the record.
 // trace:BUG-2383 | ai:claude
-pub(crate) fn publish(main_root: &Path, lease_id: &str) -> Result<()> {
+pub(crate) fn publish(main_root: &Path, lease_id: &str) -> Result<RunnerRecord> {
     let pid = std::process::id();
     let started = crate::process_probe::process_start_identity(pid)
         .context("this process has no readable start identity")?;
-    rewrite_record(
-        main_root,
-        lease_id,
-        Some(&RunnerRecord {
-            protocol: PROTOCOL,
-            runner_pid: pid,
-            runner_started_at: started,
-        }),
-    )
+    let record = RunnerRecord {
+        protocol: PROTOCOL,
+        runner_pid: pid,
+        runner_started_at: started,
+    };
+    rewrite_record(main_root, lease_id, Some(&record))?;
+    Ok(record)
 }
 
 /// Clear `lease_id`'s runner record.
@@ -800,39 +933,126 @@ fn run_loop(_lane: &LaneJobs, _stop: &AtomicBool, _tally: &Tally) {}
 /// What the seed before the first job found.
 #[derive(Debug, Clone)]
 pub(crate) struct SeedNote {
-    /// Which path ran, for the lane log and every job's output.
+    /// Which path ran, for the lane log and every job's output: `seed:
+    /// reflink`, `seed: warm`, `seed: overlay gen=<id>` or `seed: cold
+    /// (<reason>)`.
     pub(crate) note: String,
     /// Nothing was seeded or already warm: the first build is cold, so a job
     /// gets [`MAX_TIMEOUT_SECS`] by default ([`timeout_for`]).
     pub(crate) cold: bool,
+    /// The overlay every job of this lane mounts its profile directory on.
+    #[cfg(unix)]
+    pub(crate) overlay: Option<crate::seat_target_overlay::LaneOverlay>,
+}
+
+impl SeedNote {
+    fn cold(target: Option<&Path>, why: &str) -> Self {
+        Self::new(target, format!("seed: cold ({why})"), true)
+    }
+
+    fn new(target: Option<&Path>, note: String, cold: bool) -> Self {
+        let note = match target {
+            Some(t) => format!("seat target {}: {note}", t.display()),
+            None => note,
+        };
+        Self {
+            note,
+            cold,
+            #[cfg(unix)]
+            overlay: None,
+        }
+    }
+}
+
+/// The main checkout of `lane`, from its results directory
+/// (`<main>/.aida/lane-jobs/<lease>`).
+fn lane_main_root(lane: &LaneJobs) -> Option<&Path> {
+    lane.results.ancestors().nth(3)
 }
 
 /// Seed the seat's cargo target from the primary's before the first job, and
 /// say which path ran.
 fn seed_lane_target(lane: &LaneJobs) -> SeedNote {
+    let note = seed_lane_target_with(lane, "unshare");
+    lane.log(&note.note);
+    note
+}
+
+/// [`seed_lane_target`] with the `unshare` program to use. Order: a lane
+/// already on an overlay keeps it; else a reflink seed (or an already warm
+/// target); else a generation overlay (BUG-2383 part 2); else cold. A cold
+/// fallback only reports `seed: cold (<reason>)`: it never fails the lane.
+// trace:BUG-2383 | ai:claude
+pub(crate) fn seed_lane_target_with(lane: &LaneJobs, unshare: &str) -> SeedNote {
     let Some(target) = lane.target_dir() else {
-        return SeedNote {
-            note: "the seat has no cargo target of its own; not seeded".into(),
-            cold: true,
-        };
+        return SeedNote::cold(None, "the seat has no cargo target of its own");
     };
-    let (note, cold) = match target.parent().and_then(Path::parent) {
-        Some(main_target) if main_target.file_name() == Some(std::ffi::OsStr::new("target")) => {
-            let results = crate::seat_target_seed::seed_seat_target(
-                main_target,
-                &target,
-                crate::seat_target_seed::LOCK_WAIT,
-            );
-            (
-                crate::seat_target_seed::describe(&results),
-                crate::seat_target_seed::is_cold(&results),
-            )
+    let Some(main_target) = target
+        .parent()
+        .and_then(Path::parent)
+        .filter(|t| t.file_name() == Some(std::ffi::OsStr::new("target")))
+    else {
+        return SeedNote::cold(Some(&target), "not under the primary's target");
+    };
+    #[cfg(unix)]
+    let on_overlay = crate::seat_target_overlay::lane_has_overlay(&target);
+    #[cfg(not(unix))]
+    let on_overlay = false;
+    let reflink_why = if on_overlay {
+        "the lane runs on an overlay".to_string()
+    } else {
+        use crate::seat_target_seed::{seed_seat_target, Seeded, LOCK_WAIT};
+        let results = seed_seat_target(main_target, &target, LOCK_WAIT);
+        if results.iter().any(|(_, s)| *s == Seeded::Reflinked) {
+            return SeedNote::new(Some(&target), "seed: reflink".into(), false);
         }
-        _ => ("not under the primary's target; not seeded".into(), true),
+        if results.iter().any(|(_, s)| *s == Seeded::AlreadyWarm) {
+            return SeedNote::new(Some(&target), "seed: warm".into(), false);
+        }
+        crate::seat_target_seed::describe(&results)
     };
-    let note = format!("seat target {}: {note}", target.display());
-    lane.log(&note);
-    SeedNote { note, cold }
+    #[cfg(unix)]
+    {
+        match overlay_for(lane, main_target, &target, unshare) {
+            Ok(overlay) => {
+                let mut note = SeedNote::new(
+                    Some(&target),
+                    format!("seed: overlay gen={}", overlay.generation),
+                    false,
+                );
+                note.overlay = Some(overlay);
+                note
+            }
+            Err(why) => SeedNote::cold(Some(&target), &format!("{reflink_why}; overlay: {why}")),
+        }
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = unshare;
+        SeedNote::cold(Some(&target), &reflink_why)
+    }
+}
+
+/// Snapshot (or reuse) the primary's current generation, collect unpinned
+/// ones, pin it for this lane, ready the lane's overlay and prove it mounts.
+#[cfg(unix)]
+fn overlay_for(
+    lane: &LaneJobs,
+    main_target: &Path,
+    target: &Path,
+    unshare: &str,
+) -> std::result::Result<crate::seat_target_overlay::LaneOverlay, String> {
+    use crate::seat_target_overlay as ov;
+    use crate::seat_target_seed::{LOCK_WAIT, SEED_PROFILES};
+    let profile = SEED_PROFILES[0];
+    let generation = ov::snapshot(main_target, profile, LOCK_WAIT)?;
+    ov::pin(&generation, &lane.lease_id)?;
+    if let Some(main_root) = lane_main_root(lane) {
+        ov::gc(main_target, main_root, Some(&generation.dir));
+    }
+    let overlay = ov::prepare_lane(target, profile, &generation)?;
+    ov::probe(unshare, &overlay)?;
+    Ok(overlay)
 }
 
 /// The next job in the inbox, oldest name first, taken out of the inbox
@@ -1035,7 +1255,10 @@ fn run_one(
             &cargo.to_string_lossy(),
             args,
         ) {
-            Ok((program, args)) => (program, args, "inside bubblewrap"),
+            Ok((program, args)) => match overlay_wrapped(seed, program, args) {
+                Ok((program, args, how)) => (program, args, how),
+                Err(why) => return refuse(&why),
+            },
             Err(e) => return refuse(&format!("{e:#}")),
         },
         #[cfg(test)]
@@ -1121,11 +1344,47 @@ fn run_one(
             let _ = writeln!(f, "\nlane job {how} after {}s", started.elapsed().as_secs());
         }
     }
+    #[cfg(unix)]
+    if let Some(overlay) = &seed.overlay {
+        if crate::seat_target_overlay::stale(&overlay.lower) {
+            use std::io::Write;
+            let line = format!(
+                "seed: overlay-stale (the primary rewrote a file of generation {} in place; \
+                 only this seat's build is affected)",
+                overlay.generation
+            );
+            if let Ok(mut f) = std::fs::OpenOptions::new().append(true).open(&out_file) {
+                let _ = writeln!(f, "lane job: {line}");
+            }
+            lane.log(&line);
+        }
+    }
     finish(lane, id, rc);
     lane.log(&format!(
         "{id} {how} rc={rc} after {}s",
         started.elapsed().as_secs()
     ));
+}
+
+/// The bubblewrap launch, inside the lane's overlay namespace when the seed
+/// set one up (BUG-2383 part 2).
+// trace:BUG-2383 | ai:claude
+fn overlay_wrapped(
+    seed: &SeedNote,
+    program: String,
+    args: Vec<String>,
+) -> std::result::Result<(String, Vec<String>, &'static str), String> {
+    #[cfg(unix)]
+    if let Some(overlay) = &seed.overlay {
+        let (program, args) = crate::seat_target_overlay::wrap("unshare", overlay, &program, args)?;
+        return Ok((
+            program,
+            args,
+            "inside bubblewrap, on the lane's target overlay",
+        ));
+    }
+    let _ = seed;
+    Ok((program, args, "inside bubblewrap"))
 }
 
 /// Stop the job's whole process group: SIGTERM, then SIGKILL.
@@ -1165,7 +1424,9 @@ struct LeaseView {
 }
 
 /// Whether `record` names a live runner: its pid is running and has the
-/// recorded start identity.
+/// recorded start identity. Host side only (reap and diagnostics): a seat
+/// tool shell has its own PID namespace and checks [`seat_runner_alive`].
+#[cfg_attr(not(test), allow(dead_code))]
 pub(crate) fn runner_alive(record: &RunnerRecord) -> bool {
     crate::process_probe::process_start_identity(record.runner_pid).as_deref()
         == Some(record.runner_started_at.as_str())
@@ -1215,7 +1476,7 @@ pub(crate) fn resolve_seat_dirs(
     project_root: Option<&Path>,
     lease_id: Option<&str>,
     cwd: &Path,
-    alive: impl Fn(&RunnerRecord) -> bool,
+    alive: impl Fn(&RunnerRecord, &Path) -> bool,
 ) -> Result<(PathBuf, PathBuf)> {
     let lease_id = lease_id
         .filter(|id| valid_lease_id(id))
@@ -1246,10 +1507,14 @@ pub(crate) fn resolve_seat_dirs(
             record.protocol
         );
     }
-    if !alive(&record) {
-        anyhow::bail!("lease {lease_id}'s lane job runner is not running");
+    let results = results_dir(&main, lease_id);
+    if !alive(&record, &results) {
+        anyhow::bail!(
+            "lease {lease_id}'s lane job runner has no fresh heartbeat (it stopped, or never \
+             started)"
+        );
     }
-    Ok((worktree.join(INBOX_RELATIVE), results_dir(&main, lease_id)))
+    Ok((worktree.join(INBOX_RELATIVE), results))
 }
 
 /// This seat's inbox and results directories, resolved through its lease
@@ -1260,7 +1525,7 @@ pub(crate) fn seat_dirs() -> Result<(PathBuf, PathBuf)> {
         .map(PathBuf::from);
     let lease = std::env::var("AIDA_SESSION_ID").ok();
     let cwd = std::env::current_dir().context("no current directory")?;
-    resolve_seat_dirs(root.as_deref(), lease.as_deref(), &cwd, runner_alive).map_err(|why| {
+    resolve_seat_dirs(root.as_deref(), lease.as_deref(), &cwd, seat_runner_alive).map_err(|why| {
         anyhow::anyhow!(
             "this session has no lane job runner ({why:#}). Only a headless implementer \
              launched by `aida queue work <SPEC> --no-human` has one. Report the work as \

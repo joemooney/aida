@@ -5137,7 +5137,7 @@ pub(crate) fn build_exec_vendor_headless_command(
 /// (Claude) instead of starting it.
 // trace:BUG-B6B1278890774EF993D2EBC327862470-044 | ai:claude
 #[allow(clippy::too_many_arguments)]
-fn build_exec_vendor_headless_command_for(
+pub(crate) fn build_exec_vendor_headless_command_for(
     vendor: HeadlessVendor,
     prompt: &str,
     session_id: &str,
