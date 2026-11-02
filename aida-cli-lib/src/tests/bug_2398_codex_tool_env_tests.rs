@@ -1568,3 +1568,155 @@ fn bug_2403_bug_2398_recorder_artifacts_hold_through_remapped_selectors() {
     ra::with_identity_source(identity, record).unwrap();
     check(true);
 }
+
+/// How a production file that assigns `AIDA_SESSION_ROLE` to a child Command
+/// gets that role to a Codex child's hooks and tool shells.
+// trace:BUG-2395 | ai:claude
+#[derive(Debug)]
+enum RoleRoute {
+    /// The file is in `LAUNCH_INVENTORY`, whose ratchet pins its Codex
+    /// finalization (prepare_launch or the coordinator spawn).
+    LaunchInventory,
+    /// The child is another `aida` process whose own Codex spawn finalizes.
+    AidaChild(&'static str),
+    /// A Codex launch that does not finalize yet; the reason names the
+    /// follow-up. Moving an entry out of here is the fix, not editing it.
+    KnownGap(&'static str),
+}
+
+/// BUG-2395 (verify-only, advisor ruling): every production file that hands a
+/// child its lane role, pinned by exact count. A new role-assigning site fails
+/// here until it is audited for Codex finalization and recorded.
+// trace:BUG-2395 | ai:claude
+const ROLE_LAUNCH_SITES: &[(&str, usize, RoleRoute)] = &[
+    ("agent_launch.rs", 2, RoleRoute::LaunchInventory),
+    ("autopilot_intake.rs", 1, RoleRoute::LaunchInventory),
+    ("dispatch.rs", 1, RoleRoute::LaunchInventory),
+    (
+        "orchestrator_leases.rs",
+        1,
+        RoleRoute::AidaChild("reviewer gate runs `aida queue work`, which finalizes in session.rs"),
+    ),
+    ("phase_driver.rs", 2, RoleRoute::LaunchInventory),
+    ("session.rs", 6, RoleRoute::LaunchInventory),
+    (
+        "zen_drive_root.rs",
+        1,
+        RoleRoute::KnownGap(
+            "guided `codex` launch sets the implementer role without prepare_launch; \
+             reported on BUG-2395 as a follow-up (new grant decision = separate spec)",
+        ),
+    ),
+];
+
+// trace:BUG-2395 | ai:claude
+#[test]
+fn bug_2395_every_role_launch_site_is_inventoried() {
+    let src = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+    let mut files = Vec::new();
+    production_sources(&src, &mut files);
+    let mut found = std::collections::BTreeMap::new();
+    for path in files {
+        let normalized: String = std::fs::read_to_string(&path)
+            .unwrap()
+            .split_whitespace()
+            .collect();
+        let n = normalized.matches(".env(\"AIDA_SESSION_ROLE\",").count();
+        if n > 0 {
+            let rel = path
+                .strip_prefix(&src)
+                .unwrap()
+                .to_string_lossy()
+                .into_owned();
+            found.insert(rel, n);
+        }
+    }
+    for (rel, n) in &found {
+        let Some((_, expected, _)) = ROLE_LAUNCH_SITES.iter().find(|(f, ..)| f == rel) else {
+            panic!(
+                "{rel} assigns a child AIDA_SESSION_ROLE but is not in ROLE_LAUNCH_SITES: a \
+                 Codex child must finalize through codex_tool_env::prepare_launch; audit and record it"
+            );
+        };
+        assert_eq!(
+            n, expected,
+            "{rel}: role-launch site count changed; re-audit it"
+        );
+    }
+    for (rel, _, route) in ROLE_LAUNCH_SITES {
+        assert!(
+            found.contains_key(*rel),
+            "stale ROLE_LAUNCH_SITES entry {rel}"
+        );
+        match route {
+            RoleRoute::LaunchInventory => assert!(
+                LAUNCH_INVENTORY.iter().any(|(f, _, how)| f == rel
+                    && matches!(
+                        how,
+                        Finalization::PrepareLaunch(_) | Finalization::CoordinatorSpawn
+                    )),
+                "{rel} claims LAUNCH_INVENTORY finalization but is not finalized there"
+            ),
+            RoleRoute::AidaChild(why) | RoleRoute::KnownGap(why) => assert!(!why.is_empty()),
+        }
+    }
+}
+
+/// BUG-2395 (verify-only): hooks inherit the Codex process env, so a hook run
+/// under a prepared Codex launch env sees the seat role, and the tool-shell
+/// transport carries the same role.
+// trace:BUG-2395 | ai:claude
+#[cfg(target_os = "linux")]
+#[test]
+fn bug_2395_hook_under_prepared_codex_launch_sees_seat_role() {
+    let tmp = tempfile::TempDir::new().unwrap();
+    let project = tmp.path().join("project");
+    std::fs::create_dir_all(project.join(".aida/roles")).unwrap();
+    std::fs::write(
+        project.join(".aida/roles/implementer.toml"),
+        "purpose = \"Lane fixture purpose\"\n",
+    )
+    .unwrap();
+
+    let mut cmd = Command::new("codex");
+    cmd.args(["exec", "--", "prompt"])
+        .current_dir(&project)
+        .env("AIDA_SESSION_GRANT", "")
+        .env("AIDA_SESSION_ROLE", "implementer");
+    prepare_launch(&mut cmd).unwrap();
+    assert!(
+        cmd.get_args().any(|a| a.to_string_lossy()
+            == "shell_environment_policy.set.AIDA_SESSION_ROLE=\"implementer\""),
+        "tool shells get the seat role: {:?}",
+        cmd.get_args().collect::<Vec<_>>()
+    );
+
+    let hook = tmp.path().join("aida-role-context.sh");
+    std::fs::write(
+        &hook,
+        aida_core::templates::EMBEDDED_TEMPLATES
+            .get("hooks/aida-role-context.sh")
+            .unwrap(),
+    )
+    .unwrap();
+    let mut run = Command::new("bash");
+    run.arg(&hook)
+        .current_dir(&project)
+        .env_clear()
+        .env("PATH", "/usr/bin:/bin")
+        .env("HOME", tmp.path())
+        .env("CODEX_PROJECT_DIR", &project)
+        .stdin(std::process::Stdio::null());
+    for (k, v) in cmd.get_envs() {
+        if let Some(v) = v {
+            run.env(k, v);
+        }
+    }
+    let out = run.output().unwrap();
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        stdout.contains("AIDA active role: implementer") && stdout.contains("Lane fixture purpose"),
+        "hook did not see the prepared seat role: {stdout}{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+}
