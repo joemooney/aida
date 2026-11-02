@@ -23,7 +23,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T06:45:38.111981577Z
-modified_at: 2026-11-02T08:01:45.220094071Z
+modified_at: 2026-11-02T08:03:31.821682214Z
 req_type: Bug
 tags:
 - architecture
@@ -172,6 +172,12 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-02T07:22:00.977974395Z
   modified_at: 2026-11-02T07:22:00.977974395Z
+  session_id: 1f56bd1e-c059-4f73-b8df-e18b2170fdfc
+- id: 01a19b48-f36d-7620-ac66-89cac47b5513
+  author: joe
+  content: 'REWORK BRIEF (advisor, 2026-11-02 01:05 MST), round 4. Exact CI failures at 4c238ba: (1) the only compile error is aida-cli-lib/src/tests/bug_2130_liveness_identity_tests.rs:333, E0560: drain_lock::DrainLock has no field vendor_session_id. Delete that field line; main''s DrainLock does not have it. This one error breaks lib-0, lib-1 and gates. (2) cli-1: aida-cli/tests/bug_1808_delegation_preflight.rs lines 253, 300 and 334 panic because headless resume of the synthetic session id 0199a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b now stops with ''cannot tell which agent recorded session'' before the delegation preflight runs. Resume must not regress for an id no transcript names: when nothing identifies the vendor, fall back to the lease''s vendor and then to the configured [agents] vendor (Claude by default), and keep the explicit refusal only when an identification conflicts. Do not weaken those tests. No other changes. Gate: LIGHT. Run cargo test -p aida-cli --test bug_1808_delegation_preflight, then make check-ci-fast. If cargo is denied, push and say so.'
+  created_at: 2026-11-02T08:03:31.821682214Z
+  modified_at: 2026-11-02T08:03:31.821682214Z
   session_id: 1f56bd1e-c059-4f73-b8df-e18b2170fdfc
 history:
 - id: 01a195db-6c30-7600-a068-211ab6c2eed8
