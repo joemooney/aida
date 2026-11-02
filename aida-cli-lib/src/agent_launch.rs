@@ -59,29 +59,35 @@ pub(crate) fn handle_session_command(cmd: &SessionCommand) -> Result<()> {
             // STORY-495: faithful default — resolve to None (native) unless an
             // explicit `--permission-mode` or the uniform `[agents] bypass`
             // knob says otherwise.
+            let vendor = session::interactive_session_vendor()?;
             let mut mode =
-                resolve_interactive_launch_mode(permission_mode.as_deref(), *sandbox, true)?;
+                session_launch_mode(&vendor, permission_mode.as_deref(), *sandbox, true)?;
+            session::preflight_interactive_session(&vendor, mode.mode.as_deref(), mode.contained)?;
             let mut argv = mode
                 .mode
                 .iter()
                 .flat_map(|m| ["--permission-mode".to_string(), m.clone()])
                 .collect::<Vec<_>>();
-            gate_agent_bypass(
-                &find_main_worktree_root().unwrap_or(std::env::current_dir()?),
-                "claude",
-                &mut argv,
-                false,
-                permission_mode.is_some(),
-            )?;
+            if vendor == "claude" {
+                gate_agent_bypass(
+                    &find_main_worktree_root().unwrap_or(std::env::current_dir()?),
+                    &vendor,
+                    &mut argv,
+                    false,
+                    permission_mode.is_some(),
+                )?;
+            }
             if mode.mode.as_deref() == Some("bypassPermissions")
                 && !argv.iter().any(|a| a == "bypassPermissions")
             {
                 mode.mode = None;
             }
-            if mode.mode.is_none() && !mode.contained {
+            if vendor == "claude" && mode.mode.is_none() && !mode.contained {
                 maybe_show_faithful_launcher_notice();
             }
-            session::new_session(
+            session::new_session_for_vendor(
+                &vendor,
+                None,
                 title.clone(),
                 mode.mode.as_deref(),
                 role.clone(),
@@ -112,9 +118,16 @@ pub(crate) fn handle_session_command(cmd: &SessionCommand) -> Result<()> {
             let args: Vec<String> = std::env::args().collect();
             validate_session_start_args(&args)?;
             // STORY-495: faithful default for the `--launch` path.
+            let vendor = if *launch {
+                session::interactive_session_vendor()?
+            } else {
+                "claude".into()
+            };
             let mut mode =
-                resolve_interactive_launch_mode(permission_mode.as_deref(), *sandbox, *launch)?;
-            if *launch {
+                session_launch_mode(&vendor, permission_mode.as_deref(), *sandbox, *launch)?;
+            // session_start_with_receipt runs the one vendor preflight before
+            // any worktree or lease setup.
+            if *launch && vendor == "claude" {
                 let mut argv = mode
                     .mode
                     .iter()
@@ -133,7 +146,7 @@ pub(crate) fn handle_session_command(cmd: &SessionCommand) -> Result<()> {
                     mode.mode = None;
                 }
             }
-            if *launch && mode.mode.is_none() && !mode.contained {
+            if *launch && vendor == "claude" && mode.mode.is_none() && !mode.contained {
                 maybe_show_faithful_launcher_notice();
             }
             // STORY-714: --pool / --no-pool win over the config; None = config.
@@ -165,7 +178,7 @@ pub(crate) fn handle_session_command(cmd: &SessionCommand) -> Result<()> {
                     !*launch,
                     /* review_coexistence */ None,
                     // trace:BUG-2169 | ai:claude
-                    mode.contained,
+                    mode.contained && vendor == "claude",
                 )
             };
             // BUG-1918: `--launch` claims FOR the agent it starts; without
@@ -317,18 +330,52 @@ pub(crate) fn handle_terminal_command(cmd: &TerminalCommand) -> Result<()> {
 
 pub(crate) fn handle_agent_command(cmd: &AgentCommand) -> Result<()> {
     match cmd {
-        // trace:TASK-837 | ai:claude — bare `aida agent new` (no agent-type
-        // subcommand): at a TTY, open an arrow-key picker of the agent types,
-        // then dispatch the chosen type with its default options. Non-TTY keeps
-        // clap's help-on-missing-subcommand behavior (don't block scripts).
-        AgentCommand::New { command } => match command {
-            Some(c) => dispatch_agent_new(c),
-            // Esc/cancel (or non-TTY) → clean no-op exit, same as the role picker.
-            None => match pick_agent_type_interactively()? {
-                Some(c) => dispatch_agent_new(&c),
-                None => Ok(()),
-            },
-        },
+        // trace:BUG-b6b1278890774ef993d2ebc327862470-159 | ai:codex
+        AgentCommand::New {
+            command,
+            role,
+            spec,
+        } => {
+            let mut resolved;
+            let command = if let Some(command) = command {
+                anyhow::ensure!(
+                    role.is_none() && spec.is_none(),
+                    "place --role and --spec after the explicit vendor subcommand"
+                );
+                command
+            } else {
+                let root = find_main_worktree_root().unwrap_or(std::env::current_dir()?);
+                let vendor = aida_core::agents_config::resolve_default_vendor(&root);
+                resolved = match vendor {
+                    Some(vendor) => agent_new_command_for_type(&vendor).ok_or_else(|| {
+                        anyhow::anyhow!("unsupported interactive vendor `{vendor}`")
+                    })?,
+                    None if role.is_some() || spec.is_some() => {
+                        agent_new_command_for_type("claude").unwrap()
+                    }
+                    None => match pick_agent_type_interactively()? {
+                        Some(command) => command,
+                        None => return Ok(()),
+                    },
+                };
+                match &mut resolved {
+                    AgentNewCommand::Claude {
+                        role: r, spec: s, ..
+                    }
+                    | AgentNewCommand::Codex {
+                        role: r, spec: s, ..
+                    }
+                    | AgentNewCommand::Antigravity {
+                        role: r, spec: s, ..
+                    } => {
+                        *r = role.clone();
+                        *s = spec.clone();
+                    }
+                }
+                &resolved
+            };
+            dispatch_agent_new(command)
+        }
         AgentCommand::Register {
             pid,
             agent_type,
@@ -3520,6 +3567,29 @@ pub(crate) fn agent_resume_args(
 #[path = "tests/spike_34_bg_dispatch_tests.rs"]
 mod spike_34_bg_dispatch_tests;
 
+// trace:BUG-b6b1278890774ef993d2ebc327862470-159 | ai:codex
+pub(crate) fn session_launch_mode(
+    vendor: &str,
+    flag: Option<&str>,
+    sandbox: bool,
+    launches: bool,
+) -> Result<ResolvedClaudeLaunch> {
+    if vendor == "claude" {
+        return resolve_interactive_launch_mode(flag, sandbox, launches);
+    }
+    anyhow::ensure!(
+        flag.is_none(),
+        "--permission-mode is only supported by claude"
+    );
+    let root = find_main_worktree_root().unwrap_or(std::env::current_dir()?);
+    let contained = sandbox || load_agents_contained(&root)? || session::aida_contained_env()?;
+    // No preflight here: each entry point runs it exactly once.
+    Ok(ResolvedClaudeLaunch {
+        mode: None,
+        contained,
+    })
+}
+
 /// `launches`: this command will actually start claude. Only then does a
 /// contained parent (`AIDA_CONTAINED`, parsed strictly) govern the posture.
 pub(crate) fn resolve_interactive_launch_mode(
@@ -3664,6 +3734,14 @@ pub(crate) fn agent_initial_prompt_args(
     };
     let Some(prompt) = prompt else {
         return Vec::new();
+    };
+    // De-risk launches carry an invocation after the launch-context preamble.
+    // Keep previews and real launches on the same Codex renderer.
+    // trace:BUG-2387 | ai:codex
+    let prompt = if config.agent_type == "codex" {
+        session::codex_interactive_prompt(&prompt)
+    } else {
+        prompt
     };
     match config.prompt_style {
         AgentPromptStyle::Positional => vec![prompt],
@@ -5255,6 +5333,16 @@ fresh `aida agent new ... --spec NEXT-ID` session.\n"
         out.push_str(&section);
     }
 
+    // STORY-2243: the operator's standing goal, advisor seat only, for every
+    // vendor (read from the store, not from any harness `/goal`).
+    // trace:STORY-2243 | ai:claude
+    if let Some(section) = crate::goal_cmd::goal_advisor::render_launch_goal_section(
+        &plan.project_root.join(".aida-store"),
+        role,
+    ) {
+        out.push_str(&section);
+    }
+
     // STORY-1226: the seat's due jobs from the `[schedule]` registry, so a
     // freshly launched seat starts with the periodic work that applies to it
     // — identical under every vendor (one registry, one view). No vendor is
@@ -6739,6 +6827,14 @@ fn run_agent_generation(
         .env_remove(crate::gate::seat_authority::GRANT_ENV); // trace:TASK-1752 | ai:claude
                                                              // trace:STORY-1843 | ai:claude
     crate::agent_handle::apply_launch_env(&mut command, &plan.project_root, &plan.name);
+    // The child's SessionStart hook may write its row before this launcher
+    // stamps it: it reads the launch's decision from here, and a value
+    // inherited from a parent session never stands in for it.
+    // trace:STORY-2256 | ai:claude
+    match mail_wake {
+        Some(state) => command.env(crate::mail_wake::LAUNCH_WAKE_ENV, state.as_str()),
+        None => command.env_remove(crate::mail_wake::LAUNCH_WAKE_ENV),
+    };
     apply_harness_version(
         &mut command,
         harness_version_probe_program_and_args(binary, config, plan, true)?,
@@ -7397,3 +7493,7 @@ fn agent_containment_posture(config: &AgentLaunchConfig) -> &'static str {
 #[cfg(test)]
 #[path = "tests/story_2215_inline_grant_env_tests.rs"]
 mod story_2215_inline_grant_env_tests;
+
+#[cfg(test)]
+#[path = "tests/bug_2385_vendor_routing_tests.rs"]
+mod bug_2385_vendor_routing_tests;

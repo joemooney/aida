@@ -21,6 +21,19 @@ pub(crate) use pr_cmd_args::*;
 // trace:STORY-90 | ai:claude
 pub(crate) fn handle_pr_command(cmd: &PrCommand) -> Result<()> {
     match cmd {
+        // Internal worker preserves the existing cleanup gates after ship exits.
+        // trace:BUG-2384 | ai:codex
+        PrCommand::PostShipCleanup {
+            pr,
+            lease,
+            merge_lock,
+            sweep,
+        } => post_ship_cleanup_worker(PostShipCleanupArgs {
+            pr: *pr,
+            lease: lease.as_deref(),
+            merge_lock: merge_lock.as_deref(),
+            sweep: *sweep,
+        }),
         PrCommand::AutoQueueReview { branch } => pr_auto_queue_review(branch.as_deref()),
         PrCommand::Rebase {
             n,
@@ -2947,9 +2960,9 @@ pub(crate) fn pr_ship_with_method_and_dispatch_ctx(
     // STORY-1171 / TASK-1243: hold the branch merge-lease across check→merge→pull
     // (ADR-38) so no two same-machine mergers race to this branch. Keyed on the
     // PR's base branch, held on the MAIN clone (all mergers resolve here), and
-    // released when this handler returns. Bounded-wait-then-refuse on contention.
+    // released after pull, before cleanup. Bounded-wait-then-refuse on contention.
     // trace:STORY-1171 | ai:claude
-    let _merge_lease = acquire_merge_lease(&main_worktree, pr_number)?;
+    let merge_lease = acquire_merge_lease(&main_worktree, pr_number)?;
     dispatch_ship_checkpoint_ledgered(
         &main_worktree,
         dispatch_ctx,
@@ -3996,6 +4009,13 @@ pub(crate) fn pr_ship_with_method_and_dispatch_ctx(
         }
     }
 
+    // Cleanup must not serialize unrelated merges, even after --no-pull or
+    // a recoverable pull failure. The worker never acquires this merge lease.
+    // trace:BUG-2384 | ai:codex
+    let merge_lock_path = merge_lease.path().to_path_buf();
+    drop(merge_lease);
+    let mut cleanup_lease = None;
+
     // ---- Step 5: end the lease (worktree cleanup). ----
     if no_cleanup {
         eprintln!("  step 5: skipping `aida session end` (--no-cleanup)");
@@ -4050,38 +4070,7 @@ pub(crate) fn pr_ship_with_method_and_dispatch_ctx(
                             &lease.worktree_path,
                         )
                     );
-                    let aida_bin = pr_ship_post_merge_aida_exe();
-                    let end_status = std::process::Command::new(&aida_bin)
-                        .current_dir(&main_worktree)
-                        .args(["session", "end", &lease.id, "--yes", "--skip-ci"])
-                        .status_retrying_etxtbsy()
-                        .context("could not invoke `aida session end`")?;
-                    if !end_status.success() {
-                        log_ship_activity(
-                            &main_worktree,
-                            Some(pr_number),
-                            &ShipStep::EndLease,
-                            &StepOutcome::Failed(format!("exit {}", end_status)),
-                        );
-                        let hint = recovery_hint(&ShipStep::EndLease, Some(pr_number), forge_kind);
-                        eprintln!(
-                            "{} session end failed",
-                            crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold()
-                        );
-                        eprintln!("  {}", hint);
-                    } else {
-                        eprintln!(
-                            "  {} ended lease {}",
-                            crate::glyph(crate::glyphs::Glyph::Check).green(),
-                            lease.id
-                        );
-                        log_ship_activity(
-                            &main_worktree,
-                            Some(pr_number),
-                            &ShipStep::EndLease,
-                            &StepOutcome::Ok,
-                        );
-                    }
+                    cleanup_lease = Some(lease.id);
                 }
             }
             None => {
@@ -4097,42 +4086,59 @@ pub(crate) fn pr_ship_with_method_and_dispatch_ctx(
         }
     }
 
-    // TASK-1145: after an AIDA-managed squash merge lands, opportunistically
-    // prune verified merged agent worktrees. This reuses the destructive
-    // doctor heal gate, so unattended/autonomous contexts get a visible skip
-    // rather than a forced removal. Best-effort: post-merge GC must never turn a
-    // landed PR into a failed ship.
-    // trace:TASK-1145 | ai:codex
-    // `--no-cleanup` skips this step too: it is worktree cleanup, and the
-    // flag's point is to leave post-merge state alone. The merge result has
-    // already printed by now, so a slow cleanup never hides it.
-    // trace:BUG-B6B1278890774EF993D2EBC327862470-033 | ai:claude
-    run_post_merge_worktree_gc(
-        merged_this_run,
-        no_cleanup,
-        // TASK-1177: reap first — a session whose spec is now finished, whose
-        // branch just merged, and whose process has already exited is torn down
-        // whole (worktree + lease + branch) instead of leaving a stranded
-        // worktree for a human to clean up at the spec boundary. A session that
-        // is still RUNNING is left completely alone; it reaps on a later pass
-        // once it exits on its own. Quiet on the common no-op, and best-effort:
-        // reaping must never turn a landed PR into a failed ship.
-        // trace:TASK-1177 | ai:claude
-        || {
-            crate::session_reap::run_session_reap(crate::session_reap::ReapOptions {
-                dry_run: false,
-                yes: true,
-                json: false,
-                quiet_when_empty: true,
-                release_unknown_owner: false,
-                // trace:BUG-2197 | ai:claude — never release leases unconfirmed.
-                release_protected: false,
-            })
-        },
-        // trace:BUG-1718 | ai:codex
-        doctor_cmd::run_merged_agent_worktree_gc_quiet,
-        &mut std::io::stderr(),
-    );
+    // One sequential worker ends the target lease, then reaps/prunes. Its
+    // output goes to a log so a slow sweep can outlive this invocation without
+    // keeping headless output pipes or the merge lease open.
+    // trace:BUG-2384 | ai:codex
+    // The worker records the final EndLease outcome in the ship activity
+    // ledger itself (it may finish after this process exits); ship records
+    // only a worker that never started.
+    // An operator at a terminal keeps TASK-1145's attended prune: the worker
+    // runs in the foreground with this process's TTY stdin, so the doctor
+    // heal gate sees an attended context exactly as before. Only unattended
+    // (no TTY) ships detach the worker behind a bounded wait.
+    // trace:BUG-2384 trace:TASK-1145 | ai:claude
+    if !no_cleanup && (cleanup_lease.is_some() || merged_this_run) {
+        let mut cmd = std::process::Command::new(pr_ship_post_merge_aida_exe());
+        cmd.current_dir(&main_worktree)
+            .args(["pr", "post-ship-cleanup", "--pr", &pr_number.to_string()])
+            .arg("--merge-lock")
+            .arg(&merge_lock_path);
+        if let Some(lease) = &cleanup_lease {
+            cmd.args(["--lease", lease]);
+        }
+        if merged_this_run {
+            cmd.arg("--sweep");
+        }
+        let attended = std::io::IsTerminal::is_terminal(&std::io::stdin());
+        let run = if attended {
+            run_ship_cleanup_attended(cmd)
+        } else {
+            run_ship_cleanup_command(&main_worktree, cmd, std::time::Duration::from_secs(20))
+        };
+        match run {
+            Ok(_) => {}
+            Err(ShipCleanupError::Exited(error)) => {
+                // The worker ran and already logged its own EndLease outcome.
+                eprintln!("  post-merge cleanup failed: {error:#}");
+            }
+            Err(ShipCleanupError::NotStarted(error)) => {
+                eprintln!("  post-merge cleanup failed: {error:#}");
+                if cleanup_lease.is_some() {
+                    log_ship_activity(
+                        &main_worktree,
+                        Some(pr_number),
+                        &ShipStep::EndLease,
+                        &StepOutcome::Failed(error.to_string()),
+                    );
+                }
+            }
+        }
+    } else if no_cleanup && merged_this_run {
+        eprintln!(
+            "  step 6: skipping the session reap and merged agent worktree pruning (--no-cleanup)"
+        );
+    }
 
     // BUG-1537: `merged_this_run` (set only where THIS invocation performed
     // the merge, never in the `already_merged` no-op path) is the one signal
@@ -4175,6 +4181,238 @@ pub(crate) fn pr_ship_with_method_and_dispatch_ctx(
     // unused-import doesn't fire if a future refactor narrows usage.
     let _ = format_activity_event;
     Ok(())
+}
+
+/// Arguments of the internal `aida pr post-ship-cleanup` worker.
+// trace:BUG-2384 | ai:claude
+pub(crate) struct PostShipCleanupArgs<'a> {
+    pub(crate) pr: Option<u64>,
+    pub(crate) lease: Option<&'a str>,
+    pub(crate) merge_lock: Option<&'a std::path::Path>,
+    pub(crate) sweep: bool,
+}
+
+// trace:BUG-2384 | ai:codex
+fn post_ship_cleanup_worker(args: PostShipCleanupArgs<'_>) -> Result<()> {
+    let main = main_worktree_root_from(&find_project_root()?);
+    // Record, before any cleanup work, whether the ship's merge lease is
+    // still on disk: cleanup must never run while it serializes merges.
+    // trace:BUG-2384 | ai:claude
+    if let Some(lock) = args.merge_lock {
+        eprintln!(
+            "  cleanup: merge lease {} held: {}",
+            lock.display(),
+            if lock.exists() { "yes" } else { "no" }
+        );
+    }
+    // Ship cleanup's seat-clone scans are capped; other probe callers are not.
+    // trace:BUG-2384 | ai:claude
+    crate::seat_clone::scope_probe_budget_to_ship_cleanup();
+    // Multiple ships may now finish their merge sections while a cleanup is
+    // still active. Serialize their workers independently of the merge lease;
+    // never let two post-ship sweeps retire/remove the same tree concurrently.
+    // The permanent sidecar is not unlinked on release.
+    use fs2::FileExt;
+    let cleanup_lock = std::fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .create(true)
+        .truncate(false)
+        .open(main.join(".aida/post-ship-cleanup.lock"))?;
+    eprintln!("  cleanup: waiting for the cleanup lock (merges remain unblocked)");
+    cleanup_lock.lock_exclusive()?;
+    eprintln!("  cleanup: acquired the cleanup lock");
+    let mut end_failure = None;
+    if let Some(lease) = args.lease {
+        let status = std::process::Command::new(pr_ship_post_merge_aida_exe())
+            .current_dir(&main)
+            .env(
+                crate::seat_clone::SHIP_CLEANUP_PROBE_ENV,
+                crate::seat_clone::SHIP_CLEANUP_PROBE_BUDGET
+                    .as_secs()
+                    .to_string(),
+            )
+            .args(["session", "end", lease, "--yes", "--skip-ci"])
+            .status_retrying_etxtbsy();
+        // The worker owns the final EndLease ledger entry: it may finish long
+        // after the ship invocation that launched it has exited.
+        // trace:BUG-2384 | ai:claude
+        use pr_ship::{ShipStep, StepOutcome};
+        let outcome = match status {
+            Ok(status) if status.success() => {
+                eprintln!("  cleanup: ended lease {lease}");
+                StepOutcome::Ok
+            }
+            Ok(status) => {
+                let failure = format!(
+                    "session end failed ({status}); run `aida session end {lease} --yes --skip-ci` to retry"
+                );
+                eprintln!("  {failure}");
+                end_failure = Some(failure.clone());
+                StepOutcome::Failed(failure)
+            }
+            Err(error) => {
+                let failure = format!("could not invoke `aida session end {lease}`: {error:#}");
+                eprintln!("  {failure}");
+                end_failure = Some(failure.clone());
+                StepOutcome::Failed(failure)
+            }
+        };
+        log_ship_activity(&main, args.pr, &ShipStep::EndLease, &outcome);
+    }
+    run_post_merge_worktree_gc(
+        args.sweep,
+        false,
+        || {
+            crate::session_reap::run_session_reap(crate::session_reap::ReapOptions {
+                dry_run: false,
+                yes: true,
+                json: false,
+                quiet_when_empty: true,
+                release_unknown_owner: false,
+                release_protected: false,
+            })
+        },
+        doctor_cmd::run_merged_agent_worktree_gc_quiet,
+        &mut std::io::stderr(),
+    );
+    if let Some(failure) = end_failure {
+        anyhow::bail!(failure);
+    }
+    Ok(())
+}
+
+/// Why a post-ship cleanup run did not succeed: the worker never started
+/// (ship must record the EndLease failure), or it ran and exited non-zero
+/// (it already recorded its own outcome).
+// trace:BUG-2384 | ai:claude
+#[derive(Debug)]
+enum ShipCleanupError {
+    NotStarted(anyhow::Error),
+    Exited(anyhow::Error),
+}
+
+impl std::fmt::Display for ShipCleanupError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::NotStarted(e) | Self::Exited(e) => write!(f, "{e:#}"),
+        }
+    }
+}
+
+/// Cleanup logs kept under `.aida/cleanup-logs/`; older ones are pruned
+/// whenever a new worker log is opened.
+// trace:BUG-2384 | ai:claude
+const CLEANUP_LOGS_KEPT: usize = 20;
+
+/// Remove all but the newest `keep - 1` cleanup logs, making room for the
+/// one about to be created. Best-effort: retention never blocks cleanup.
+// trace:BUG-2384 | ai:claude
+fn prune_cleanup_logs(logs: &std::path::Path, keep: usize) {
+    let Ok(entries) = std::fs::read_dir(logs) else {
+        return;
+    };
+    let mut found: Vec<(std::time::SystemTime, std::path::PathBuf)> = entries
+        .filter_map(std::result::Result::ok)
+        .map(|entry| entry.path())
+        .filter(|path| path.extension().is_some_and(|ext| ext == "log"))
+        .filter_map(|path| {
+            let modified = std::fs::metadata(&path).ok()?.modified().ok()?;
+            Some((modified, path))
+        })
+        .collect();
+    found.sort_by(|a, b| b.0.cmp(&a.0));
+    for (_, path) in found.into_iter().skip(keep.saturating_sub(1)) {
+        let _ = std::fs::remove_file(path);
+    }
+}
+
+/// An operator's terminal ship: run the worker in the foreground with
+/// inherited stdio, so it sees the same attended TTY the ship did.
+// trace:BUG-2384 trace:TASK-1145 | ai:claude
+fn run_ship_cleanup_attended(
+    mut cmd: std::process::Command,
+) -> std::result::Result<bool, ShipCleanupError> {
+    let status = cmd
+        .status_retrying_etxtbsy()
+        .map_err(|e| ShipCleanupError::NotStarted(e.into()))?;
+    if !status.success() {
+        return Err(ShipCleanupError::Exited(anyhow::anyhow!(
+            "cleanup exited with {status}"
+        )));
+    }
+    Ok(true)
+}
+
+// The foreground wait is bounded, but cleanup itself is never killed midway
+// through mail retention or salvage. A detached worker keeps its safety gates.
+// `true` means completed, `false` means continuing in the background.
+// trace:BUG-2384 | ai:codex
+fn run_ship_cleanup_command(
+    main: &std::path::Path,
+    mut cmd: std::process::Command,
+    wait: std::time::Duration,
+) -> std::result::Result<bool, ShipCleanupError> {
+    use std::os::unix::{fs::OpenOptionsExt, process::CommandExt};
+    use std::process::Stdio;
+    let not_started = |e: std::io::Error| ShipCleanupError::NotStarted(e.into());
+    let logs = main.join(".aida/cleanup-logs");
+    std::fs::create_dir_all(&logs).map_err(not_started)?;
+    prune_cleanup_logs(&logs, CLEANUP_LOGS_KEPT);
+    let path = logs.join(format!("{}.log", uuid::Uuid::new_v4()));
+    let log = std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .mode(0o600)
+        .open(&path)
+        .map_err(not_started)?;
+    cmd.stdin(Stdio::null())
+        .stdout(log.try_clone().map_err(not_started)?)
+        .stderr(log);
+    // Detach from terminal lifetime, stdin and the launcher's output pipes.
+    unsafe {
+        cmd.pre_exec(|| {
+            if libc::setsid() < 0 {
+                return Err(std::io::Error::last_os_error());
+            }
+            Ok(())
+        });
+    }
+    let mut child = cmd.spawn_retrying_etxtbsy().map_err(not_started)?;
+    let end = std::time::Instant::now() + wait;
+    eprintln!(
+        "  cleanup: pid {}, progress log {}",
+        child.id(),
+        path.display()
+    );
+    loop {
+        match child.try_wait() {
+            Ok(Some(status)) if !status.success() => {
+                return Err(ShipCleanupError::Exited(anyhow::anyhow!(
+                    "cleanup exited with {status}; details: {}",
+                    path.display()
+                )));
+            }
+            Ok(Some(_)) => {
+                eprintln!("  cleanup completed; details: {}", path.display());
+                return Ok(true);
+            }
+            Ok(None) => {}
+            Err(error) => return Err(ShipCleanupError::Exited(error.into())),
+        }
+        if std::time::Instant::now() >= end {
+            eprintln!(
+                "  cleanup continuing in background (pid {}); progress: {}",
+                child.id(),
+                path.display()
+            );
+            std::thread::spawn(move || {
+                let _ = child.wait();
+            });
+            return Ok(false);
+        }
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    }
 }
 
 /// Step 6 of `aida pr ship`: after a merge this run performed, reap exited
@@ -9558,5 +9796,117 @@ mod story_1663_rebase_ship_tests {
                 "{rel} must state that rebase ship leaves the owning spec's status unchanged"
             );
         }
+    }
+}
+
+// The cleanup worker detaches with setsid; these tests spawn POSIX `sh`.
+#[cfg(test)]
+#[cfg(unix)]
+mod bug_2384_cleanup_tests {
+    use super::*;
+
+    // Merge-lease release before the worker starts is asserted at runtime by
+    // the real `aida pr ship` in aida-cli/tests/bug_1953_pr_ship_step5_head_branch.rs.
+
+    // Retention: opening a new worker log keeps at most CLEANUP_LOGS_KEPT
+    // logs, dropping the oldest, and never touches non-log files.
+    // trace:BUG-2384 | ai:claude
+    #[test]
+    fn bug_2384_cleanup_logs_are_bounded() {
+        let temp = tempfile::tempdir().unwrap();
+        let main = temp.path();
+        let logs = main.join(".aida/cleanup-logs");
+        std::fs::create_dir_all(&logs).unwrap();
+        let base = std::time::SystemTime::now() - std::time::Duration::from_secs(3600);
+        for i in 0..CLEANUP_LOGS_KEPT + 5 {
+            let path = logs.join(format!("old-{i:02}.log"));
+            std::fs::write(&path, "x").unwrap();
+            std::fs::File::options()
+                .write(true)
+                .open(&path)
+                .unwrap()
+                .set_modified(base + std::time::Duration::from_secs(i as u64))
+                .unwrap();
+        }
+        std::fs::write(logs.join("keep.txt"), "x").unwrap();
+        let cmd = std::process::Command::new("true");
+        assert!(run_ship_cleanup_command(main, cmd, std::time::Duration::from_secs(5)).unwrap());
+        let names: Vec<String> = std::fs::read_dir(&logs)
+            .unwrap()
+            .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+            .collect();
+        let log_count = names.iter().filter(|n| n.ends_with(".log")).count();
+        assert_eq!(log_count, CLEANUP_LOGS_KEPT, "{names:?}");
+        assert!(names.contains(&"keep.txt".to_string()));
+        assert!(!names.contains(&"old-00.log".to_string()), "{names:?}");
+        assert!(names.contains(&format!("old-{:02}.log", CLEANUP_LOGS_KEPT + 4)));
+    }
+
+    // The attended (TTY) path runs the worker in the foreground and reports
+    // an exit failure as `Exited`, a missing binary as `NotStarted`.
+    // trace:BUG-2384 trace:TASK-1145 | ai:claude
+    #[test]
+    fn bug_2384_attended_cleanup_runs_in_foreground() {
+        let temp = tempfile::tempdir().unwrap();
+        let done = temp.path().join("done");
+        let mut cmd = std::process::Command::new("sh");
+        cmd.args(["-c", "sleep 0.2; touch \"$1\"", "cleanup"])
+            .arg(&done);
+        assert!(run_ship_cleanup_attended(cmd).unwrap());
+        assert!(
+            done.exists(),
+            "attended cleanup must finish before returning"
+        );
+        let failing = std::process::Command::new("false");
+        assert!(matches!(
+            run_ship_cleanup_attended(failing),
+            Err(ShipCleanupError::Exited(_))
+        ));
+        let missing = std::process::Command::new(temp.path().join("no-such-binary"));
+        assert!(matches!(
+            run_ship_cleanup_attended(missing),
+            Err(ShipCleanupError::NotStarted(_))
+        ));
+    }
+
+    // Check the runtime lock and background behavior together: cleanup sees no
+    // main lease, and a stalled worker does not keep its caller waiting.
+    // trace:BUG-2384 | ai:codex
+    #[test]
+    fn bug_2384_background_worker_has_no_merge_lease_and_keeps_log() {
+        let temp = tempfile::tempdir().unwrap();
+        let main = temp.path();
+        let lease =
+            crate::merge_lock::acquire(main, "main", None, "test", std::time::Duration::ZERO)
+                .unwrap();
+        let lock = crate::merge_lock::lock_path(main, "main");
+        assert!(lock.exists());
+        drop(lease);
+        let done = main.join("done");
+        let mut cmd = std::process::Command::new("sh");
+        cmd.args([
+            "-c",
+            "test ! -e \"$1\" || exit 9; echo started; sleep 0.2; echo finished; touch \"$2\"",
+            "cleanup",
+        ])
+        .arg(&lock)
+        .arg(&done);
+        assert!(!run_ship_cleanup_command(main, cmd, std::time::Duration::ZERO).unwrap());
+        let until = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        while !done.exists() && std::time::Instant::now() < until {
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        }
+        assert!(
+            done.exists(),
+            "background cleanup must finish after its caller returns"
+        );
+        let log = std::fs::read_dir(main.join(".aida/cleanup-logs"))
+            .unwrap()
+            .next()
+            .unwrap()
+            .unwrap()
+            .path();
+        assert!(std::fs::read_to_string(log).unwrap().contains("finished"));
+        assert!(!lock.exists());
     }
 }

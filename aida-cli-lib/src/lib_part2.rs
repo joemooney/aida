@@ -103,12 +103,19 @@ pub(crate) fn handle_retire_legacy_ids(
 }
 
 /// TASK-589: assemble the discipline-pack glossary from the binary's embedded
-/// templates — the machinery glossary and/or the lifecycle vocabulary. Reads
-/// the embedded copy (not the project's scaffolded files), so it is correct
-/// even when a project's `.aida/discipline/` is missing or stale. With
-/// neither flag (or both) it returns both sections, machinery first.
+/// templates — the product glossary, the machinery glossary and/or the
+/// lifecycle vocabulary. Reads the embedded copy (not the project's scaffolded
+/// files), so it is correct even when a project's `.aida/discipline/` is
+/// missing or stale. With no flag it returns every section in the order
+/// product, machinery, lifecycle, joined by a blank line; any flag selects only
+/// the sections it names, in that same order.
 /// trace:TASK-589 | ai:claude
-pub(crate) fn render_discipline_glossary(machinery: bool, lifecycle: bool) -> Result<String> {
+/// trace:STORY-2219 | ai:claude
+pub(crate) fn render_discipline_glossary(
+    product: bool,
+    machinery: bool,
+    lifecycle: bool,
+) -> Result<String> {
     let templates = aida_core::get_embedded_templates();
     let embedded = |key: &str| -> Result<String> {
         templates
@@ -117,22 +124,19 @@ pub(crate) fn render_discipline_glossary(machinery: bool, lifecycle: bool) -> Re
             .map(|t| t.content.clone())
             .ok_or_else(|| anyhow::anyhow!("embedded glossary `{key}` not found in this binary"))
     };
-    // Neither flag (default) or both flags → show both sections.
-    let both = machinery == lifecycle;
-    let show_machinery = both || machinery;
-    let show_lifecycle = both || lifecycle;
-
-    let mut out = String::new();
-    if show_machinery {
-        out.push_str(&embedded(".aida/discipline/machinery-glossary.md")?);
+    let all = !(product || machinery || lifecycle);
+    let sections = [
+        (product, ".aida/discipline/product-glossary.md"),
+        (machinery, ".aida/discipline/machinery-glossary.md"),
+        (lifecycle, ".aida/discipline/lifecycle-vocabulary.md"),
+    ];
+    let mut parts = Vec::new();
+    for (selected, key) in sections {
+        if all || selected {
+            parts.push(embedded(key)?);
+        }
     }
-    if show_machinery && show_lifecycle {
-        out.push_str("\n\n");
-    }
-    if show_lifecycle {
-        out.push_str(&embedded(".aida/discipline/lifecycle-vocabulary.md")?);
-    }
-    Ok(out)
+    Ok(parts.join("\n\n"))
 }
 
 /// Pure selection for the release-time doc-coverage gate (TASK-680).

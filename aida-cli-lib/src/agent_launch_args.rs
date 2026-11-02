@@ -887,6 +887,12 @@ pub enum AgentCommand {
     // `aida agent new` opens an arrow-key agent-type picker instead of
     // erroring to clap help (mirrors `aida human`/`aida solo`).
     New {
+        /// Role for a launch using the configured default vendor.
+        #[clap(long)]
+        role: Option<String>,
+        /// Spec for a launch using the configured default vendor.
+        #[clap(long, value_parser = crate::spec_arg::spec_id)]
+        spec: Option<String>,
         #[clap(subcommand)]
         command: Option<AgentNewCommand>,
     },

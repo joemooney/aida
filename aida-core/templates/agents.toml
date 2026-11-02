@@ -64,7 +64,8 @@
 # default_flags = []
 
 # [agents.codex]
-# default_flags = ["--ask-for-approval=never", "--sandbox=danger-full-access"]
+# Keep a write boundary even for unattended launches. trace:BUG-2392 | ai:codex
+# default_flags = ["--ask-for-approval=never", "--sandbox=workspace-write"]
 
 # [agents.antigravity]
 # default_flags = ["--dangerously-skip-permissions"]

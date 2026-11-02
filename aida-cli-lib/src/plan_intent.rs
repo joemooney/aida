@@ -238,9 +238,15 @@ pub(crate) fn run_dryrun_ai_pass(
     let log_path = dir.join(format!("{disp}-{date}.log"));
     let tee = crate::headless_tee::TeeOptions::from_env_and_flag(false)
         .with_label(format!("dryrun:{disp}"));
-    let status =
-        crate::session::spawn_claude_headless(&prompt, &session_id, &log_path, &tee, false)
-            .context("spawning headless /aida-dryrun agent")?;
+    // trace:BUG-2389 | ai:codex ai:claude
+    let status = crate::session::spawn_analysis_headless(
+        project_root,
+        &prompt,
+        &session_id,
+        &log_path,
+        &tee,
+    )
+    .context("spawning headless /aida-dryrun agent")?;
     if !status.success() {
         anyhow::bail!(
             "dryrun AI agent exited with {} — see log {}",
@@ -738,7 +744,7 @@ pub(crate) fn print_intent(
     Ok(())
 }
 
-/// Run the headless `/aida-intent` skill via `claude -p` over the spec + its
+/// Run the headless `/aida-intent` skill with the configured vendor over the spec + its
 /// graph neighborhood, parse the sidecar, and fold it into a
 /// [`aida_core::SpecIntent`] stamped with generated_at + source_hash. The spawn
 /// is the integration boundary; the pure transforms are unit-tested in
@@ -794,9 +800,15 @@ pub(crate) fn generate_intent(
     let log_path = dir.join(format!("{disp}-{date}.log"));
     let tee = crate::headless_tee::TeeOptions::from_env_and_flag(false)
         .with_label(format!("intent:{disp}"));
-    let status =
-        crate::session::spawn_claude_headless(&prompt, &session_id, &log_path, &tee, false)
-            .context("spawning headless /aida-intent agent")?;
+    // trace:BUG-2389 | ai:codex ai:claude
+    let status = crate::session::spawn_analysis_headless(
+        project_root,
+        &prompt,
+        &session_id,
+        &log_path,
+        &tee,
+    )
+    .context("spawning headless /aida-intent agent")?;
     if !status.success() {
         anyhow::bail!(
             "intent agent exited with {} — see log {}",
@@ -817,7 +829,13 @@ pub(crate) fn generate_intent(
     let _ = std::fs::remove_file(&sidecar_path);
 
     let model = if sidecar.model.trim().is_empty() {
-        std::env::var("AIDA_INTENT_MODEL").unwrap_or_else(|_| "claude".to_string())
+        std::env::var("AIDA_INTENT_MODEL").unwrap_or_else(|_| {
+            // The model the spawn above launched with. trace:BUG-2389 | ai:codex ai:claude
+            let (vendor, seat) = crate::session::analysis_headless_launch(project_root);
+            crate::session::resolve_agent_tuning(project_root, vendor, seat)
+                .model
+                .unwrap_or_else(|| vendor.as_str().to_string())
+        })
     } else {
         sidecar.model.clone()
     };

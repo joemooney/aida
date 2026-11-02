@@ -153,6 +153,17 @@ aida worktree reclaim [--apply] [--min-age-mins N] [--target-pct N] [--include-l
 aida --asciinema <subcommand>          # Record a demo/training/audit cast under .aida/casts/ (falls back to ~/.aida/casts/)
 ```
 
+Skill render (`aida skill render <name>` and `aida mcp skill render <name>`)
+uses this precedence: `.agents/skills/<name>/SKILL.md`,
+`.claude/skills/<name>/SKILL.md`, then legacy `.claude/skills/<name>.md`.
+Folder skills append `SKILL.local.md` when present, otherwise the selected
+pack's `<name>.local.md`; flat skills retain `<name>.local.md`. Overlays
+never cross packs. Lint scans both packs, including both copies of duplicate
+names, and excludes overlays and nested helper Markdown. An explicit lint
+path still selects just that file. Neither command needs a `.claude/` tree
+when portable `.agents/skills/` skills exist.
+<!-- trace:BUG-2388 | ai:codex -->
+
 - **Briefs** route work without scrollback (`.aida/agent-briefs/<agent>/`, local runtime state). MCP-speaking agents use the equivalent tools `list_briefs` / `read_brief` / `ack_brief`.
 - **`aida agent new`**'s role-context snapshot is a *startup* snapshot only — keep polling briefs/MCP for work filed after launch.
 - **MCP client setup + marketplace surfaces:** `docs/agents/aida-mcp-install-matrix.md` (Claude Code, Codex, Cursor, Windsurf, Continue, Cline, Copilot, Devin, Amp, …). Before publishing through a marketplace/registry, run `docs/security/marketplace-publication-checklist.md`.

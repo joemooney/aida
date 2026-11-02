@@ -1379,6 +1379,8 @@ fn collect_git_linkage_inner(
         // `is-ancestor`, under one shipped-check budget clipped to the show
         // deadline); a timeout yields `None` (`shipped_unknown`), never
         // `Some(false)`. Other callers resolve unbounded, as before.
+        // trace:BUG-2402 | ai:codex
+        let shipped_phase = crate::usage::phase("linkage.shipped");
         let verdict = match deadline {
             Some(d) => {
                 let shipped_deadline =
@@ -1399,6 +1401,7 @@ fn collect_git_linkage_inner(
                 })
                 .unwrap_or(Some(false)),
         };
+        drop(shipped_phase);
         shipped = verdict == Some(true);
         // trace:BUG-1993 | ai:claude
         shipped_unknown = verdict.is_none();
@@ -1426,6 +1429,8 @@ fn collect_git_linkage_inner(
             // referencing commit (still newest-first, so ties still prefer
             // recency) so a branch holding an older-but-still-relevant
             // commit is found too. trace:BUG-1528 | ai:claude
+            // trace:BUG-2402 | ai:codex
+            let branch_phase = crate::usage::phase("linkage.branch");
             let norm_id = |s: &str| s.to_ascii_lowercase().replace([' ', '_'], "-");
             let mut candidates: Vec<String> = Vec::new();
             let mut local_candidates: Vec<String> = Vec::new();
@@ -1550,7 +1555,9 @@ fn collect_git_linkage_inner(
             // --porcelain` so a stalled git cannot hang `aida show`, and record
             // `worktree_scan_incomplete` on timeout (PRIN-5). Other callers
             // run it unbounded. trace:BUG-1993 | ai:antigravity
+            drop(branch_phase);
             if let Some(b) = branch.as_deref() {
+                let _worktree_phase = crate::usage::phase("linkage.worktree");
                 let mut wt_cmd = PCmd::new("git");
                 wt_cmd
                     .arg("-C")
@@ -1591,6 +1598,8 @@ fn collect_git_linkage_inner(
     // find them; its lease names the spec, the branch and the clone.
     // trace:TASK-2053 | ai:claude
     if worktree.is_none() {
+        // trace:BUG-2402 | ai:codex
+        let _lease_phase = crate::usage::phase("linkage.leases");
         if let Some(lease) = crate::list_leases(project_root).into_iter().find(|lease| {
             lease.tree_kind == crate::seat_clone::TreeKind::Clone
                 && ids.iter().any(|id| id.eq_ignore_ascii_case(&lease.scope))
@@ -1603,7 +1612,11 @@ fn collect_git_linkage_inner(
         }
     }
 
-    let repo = workspace_repo_slug(project_root);
+    // trace:BUG-2402 | ai:codex
+    let repo = {
+        let _repo_phase = crate::usage::phase("linkage.repo");
+        workspace_repo_slug(project_root)
+    };
     // BUG-2221: a panic in the drift walk propagates as it did when serial.
     let drift_since_filing =
         drift_handle.and_then(|h| h.join().unwrap_or_else(|p| std::panic::resume_unwind(p)));

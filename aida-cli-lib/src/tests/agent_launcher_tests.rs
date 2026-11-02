@@ -80,6 +80,7 @@ fn parses_agent_new_claude_flags() {
                         extra_flags,
                         ..
                     }),
+                ..
             },
     } = cli.command.registered::<crate::agent_launch::AgentArgs>()
     else {
@@ -275,6 +276,7 @@ fn parses_agent_new_codex_flags() {
                         extra_flags,
                         ..
                     }),
+                ..
             },
     } = cli.command.registered::<crate::agent_launch::AgentArgs>()
     else {
@@ -302,6 +304,7 @@ fn parses_agent_new_noexec_aliases() {
         inner:
             AgentCommand::New {
                 command: Some(AgentNewCommand::Claude { noexec, .. }),
+                ..
             },
     } = cli.command.registered::<crate::agent_launch::AgentArgs>()
     else {
@@ -321,6 +324,7 @@ fn parses_agent_new_noexec_aliases() {
         inner:
             AgentCommand::New {
                 command: Some(AgentNewCommand::Antigravity { noexec, .. }),
+                ..
             },
     } = cli.command.registered::<crate::agent_launch::AgentArgs>()
     else {
@@ -408,6 +412,7 @@ fn parses_agent_new_no_exec_and_show_prompt_flags() {
             inner:
                 AgentCommand::New {
                     command: Some(AgentNewCommand::Claude { noexec, .. }),
+                    ..
                 },
         } = cli.command.registered::<crate::agent_launch::AgentArgs>()
         else {
@@ -423,6 +428,7 @@ fn parses_agent_new_no_exec_and_show_prompt_flags() {
         inner:
             AgentCommand::New {
                 command: Some(AgentNewCommand::Codex { show_prompt, .. }),
+                ..
             },
     } = cli.command.registered::<crate::agent_launch::AgentArgs>()
     else {
@@ -559,7 +565,7 @@ fn parses_agent_new_verbose_flag_for_every_vendor() {
             crate::command_registry::try_parse_from(["aida", "agent", "new", vendor, "--verbose"])
                 .unwrap();
         let crate::agent_launch::AgentArgs {
-            inner: AgentCommand::New { command },
+            inner: AgentCommand::New { command, .. },
         } = cli.command.registered::<crate::agent_launch::AgentArgs>()
         else {
             panic!("expected agent new command");
@@ -944,6 +950,7 @@ fn parses_agent_new_antigravity_flags() {
                         extra_flags,
                         ..
                     }),
+                ..
             },
     } = cli.command.registered::<crate::agent_launch::AgentArgs>()
     else {
@@ -2052,6 +2059,7 @@ fn parses_agent_new_context_flags() {
                         show_context,
                         ..
                     }),
+                ..
             },
     } = cli.command.registered::<crate::agent_launch::AgentArgs>()
     else {
@@ -2089,6 +2097,7 @@ fn parses_agent_new_resume_and_duplicate_flags() {
                         no_duplicate_check,
                         ..
                     }),
+                ..
             },
     } = cli.command.registered::<crate::agent_launch::AgentArgs>()
     else {
@@ -2378,7 +2387,7 @@ fn parses_agent_list_roles_flags() {
 fn parses_bare_agent_new_as_optional_subcommand() {
     let cli = crate::command_registry::try_parse_from(["aida", "agent", "new"]).unwrap();
     let crate::agent_launch::AgentArgs {
-        inner: AgentCommand::New { command },
+        inner: AgentCommand::New { command, .. },
     } = cli.command.registered::<crate::agent_launch::AgentArgs>()
     else {
         panic!("expected agent new command");
@@ -2488,6 +2497,7 @@ fn picked_type_matches_explicit_subcommand_defaults() {
     let crate::agent_launch::AgentArgs {
         inner: AgentCommand::New {
             command: Some(explicit),
+            ..
         },
     } = cli.command.registered::<crate::agent_launch::AgentArgs>()
     else {
@@ -3370,6 +3380,7 @@ fn agent_new_parses_prompt_file_and_rejects_conflicting_prompt_sources() {
         inner:
             AgentCommand::New {
                 command: Some(AgentNewCommand::Codex { prompt_file, .. }),
+                ..
             },
     } = cli.command.registered::<crate::agent_launch::AgentArgs>()
     else {
@@ -3895,6 +3906,7 @@ fn allow_duplicate_keeps_the_duplicate_check_on_unlike_no_duplicate_check() {
                             no_duplicate_check,
                             ..
                         }),
+                    ..
                 },
         } = cli.command.registered::<crate::agent_launch::AgentArgs>()
         else {
@@ -4477,9 +4489,20 @@ fn build_agent_new_bg_command_exports_when_contained_and_strips_when_uncontained
 // trace:BUG-2124 | ai:antigravity
 #[test]
 fn uncontained_launchers_strip_inherited_aida_contained() {
-    let _env = crate::test_env::EnvVarsGuard::apply(&[("AIDA_CONTAINED", None)]);
     let tmp = tempfile::tempdir().unwrap();
     let project = tmp.path().to_path_buf();
+
+    // trace:BUG-2389 | ai:codex
+    let _ambient = crate::test_env::AmbientGuard::hermetic_and(
+        &project,
+        None,
+        &[
+            ("AIDA_HEADLESS_VENDOR", Some("claude")),
+            ("AIDA_AGENT_CMD", Some("/bin/true")),
+            ("AIDA_OS_WRAP", Some("0")),
+            ("AIDA_CONTAINED", None),
+        ],
+    );
 
     // 1. phase_driver advisor
     let advisor_cmd = crate::phase_driver::build_phase_driver_advisor_command(
@@ -4520,7 +4543,13 @@ fn uncontained_launchers_strip_inherited_aida_contained() {
 
     // 3. burndown quiet
     let burndown_quiet_cmd = crate::burndown_run::build_burndown_quiet_command(
-        "prompt", "mode", "", "CEILING", "10", false,
+        crate::session::HeadlessVendor::Claude,
+        "prompt",
+        "mode",
+        "",
+        "CEILING",
+        "10",
+        false,
     )
     .unwrap();
     assert!(
@@ -4538,6 +4567,7 @@ fn uncontained_launchers_strip_inherited_aida_contained() {
 
     // 4. burndown verbose
     let burndown_verbose_cmd = crate::burndown_run::build_burndown_verbose_command(
+        crate::session::HeadlessVendor::Claude,
         "prompt",
         "mode",
         "child-grant-id",
@@ -4562,6 +4592,7 @@ fn uncontained_launchers_strip_inherited_aida_contained() {
     // 5. autopilot intake
     let cfg = crate::intake::IntakeConfig::default();
     let intake_cmd = crate::autopilot_intake::build_autopilot_intake_command(
+        crate::session::HeadlessVendor::Claude,
         "prompt",
         "mode",
         "child-grant-id",
@@ -4589,9 +4620,13 @@ fn uncontained_launchers_strip_inherited_aida_contained() {
     );
 
     // 6. questions clarify
-    let clarify_cmd =
-        crate::questions::build_questions_clarify_command("prompt", "child-grant-id", false)
-            .unwrap();
+    let clarify_cmd = crate::questions::build_questions_clarify_command(
+        crate::session::HeadlessVendor::Claude,
+        "prompt",
+        "child-grant-id",
+        false,
+    )
+    .unwrap();
     assert!(
         clarify_cmd
             .get_envs()
@@ -4786,4 +4821,90 @@ fn task_117_agent_list_and_aliases_keep_their_flags_and_avoid_launch_rewrite() {
     assert!(!agent.get_subcommands().any(|sub| sub.get_name() == "ls"));
     let list = agent.find_subcommand("list").unwrap();
     assert!(list.get_visible_aliases().any(|alias| alias == "ls"));
+}
+
+// trace:BUG-2387 | ai:codex
+#[test]
+fn codex_derisk_agent_argv_expands_workflow_after_context_preamble() {
+    let tmp = TempDir::new().unwrap();
+    let plan =
+        prepare_agent_launch_dry(tmp.path(), Some("advisor".into()), None, "codex", None).unwrap();
+    let launch = derisk_launch_request("BUG-2387");
+    let options = AgentPromptOptions::new(Some(launch.prompt.clone()), false);
+    for vendor in ["codex", "claude"] {
+        let config = AgentLaunchConfig {
+            agent_type: vendor,
+            binary: vendor,
+            default_args: Vec::new(),
+            prompt_style: AgentPromptStyle::Positional,
+            contained: false,
+        };
+        let args = agent_initial_prompt_args(&config, &plan, &options);
+        assert_eq!(args.len(), 1);
+        let body = &args[0];
+        if vendor == "claude" {
+            assert_eq!(body, &launch.prompt);
+        } else {
+            assert!(body.starts_with("Read your AIDA launch context first:"));
+            assert!(body.contains("cat \"$AIDA_AGENT_CONTEXT_FILE\""));
+            assert!(body.contains("# De-risk a Supervised Spec"));
+            assert!(body.contains("decision risk"));
+            assert!(body.contains("Codex prompt arguments: `BUG-2387`"));
+            assert!(!body.lines().any(|line| line.starts_with("/aida-")));
+            assert!(body.ends_with("Do not implement the spec."));
+            assert!(render_agent_show_prompt(&options, &args).contains(body));
+        }
+    }
+    let guided = guided_review_launch_request("BUG-2387");
+    let config = AgentLaunchConfig {
+        agent_type: "codex",
+        binary: "codex",
+        default_args: Vec::new(),
+        prompt_style: AgentPromptStyle::Positional,
+        contained: false,
+    };
+    let args = agent_initial_prompt_args(
+        &config,
+        &plan,
+        &AgentPromptOptions::new(Some(guided.prompt.clone()), false),
+    );
+    assert_eq!(args, vec![guided.prompt]);
+}
+
+// Every `aida agent` subcommand, hidden ones included, passes through the
+// bare-agent rewrite: `aida agent wake arm <agent>` (the manual-arm command
+// mail-wake failures print) was turned into `agent new wake` and exited 2.
+// trace:STORY-2256 | ai:claude
+#[test]
+fn story_2256_every_agent_subcommand_passes_the_default_new_rewrite() {
+    let mut command = crate::command_registry::built_command();
+    command.build();
+    let agent = command.find_subcommand("agent").unwrap();
+    for sub in agent.get_subcommands() {
+        let mut names = vec![sub.get_name().to_string()];
+        names.extend(sub.get_all_aliases().map(str::to_owned));
+        for name in names {
+            let args: Vec<String> = ["aida", "agent", &name]
+                .into_iter()
+                .map(str::to_owned)
+                .collect();
+            assert_eq!(
+                crate::rewrite_agent_default_new(&args),
+                args,
+                "`aida agent {name}` must not be rewritten to `agent new`"
+            );
+        }
+    }
+    let args: Vec<String> = ["aida", "agent", "wake", "arm", "codex-agent-05"]
+        .into_iter()
+        .map(str::to_owned)
+        .collect();
+    let cli =
+        crate::command_registry::try_parse_from(crate::rewrite_agent_default_new(&args)).unwrap();
+    assert!(matches!(
+        &cli.command
+            .registered::<crate::agent_launch::AgentArgs>()
+            .inner,
+        AgentCommand::Wake { .. }
+    ));
 }

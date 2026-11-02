@@ -21,6 +21,10 @@
 //!    untested combination.
 // trace:STORY-1690 | ai:claude
 
+#[path = "pr_train_verified.rs"]
+mod verified;
+pub(crate) use verified::VerifiedTrainMerge;
+
 use anyhow::{Context, Result};
 use std::collections::VecDeque;
 use std::path::{Path, PathBuf};
@@ -1448,6 +1452,16 @@ pub(crate) trait TrainForge {
     fn retire(&mut self, change: &crate::forge::ChangeRef, why: &str);
     /// Rebase-merge the train PR, pinned to `tip`.
     fn merge(&mut self, change: &crate::forge::ChangeRef, tip: &str) -> Result<()>;
+    // trace:BUG-b6b1278890774ef993d2ebc327862470-179 | ai:codex
+    fn merge_verified(
+        &mut self,
+        change: &crate::forge::ChangeRef,
+        train: &Built,
+        _lease: &dyn std::any::Any,
+    ) -> Result<()> {
+        self.merge(change, &train.tip)
+    }
+
     /// The commits main received for `cars` between `base` and `main`.
     fn landed(&mut self, base: &str, main: &str, cars: &[Car]) -> Vec<Option<String>>;
     /// The first parent of `commit`.
@@ -1642,6 +1656,15 @@ impl TrainForge for LiveTrainForge<'_> {
             &self.main_worktree,
             &["push", "--quiet", "origin", "--delete", &change.branch],
         );
+    }
+
+    fn merge_verified(
+        &mut self,
+        change: &crate::forge::ChangeRef,
+        train: &Built,
+        lease: &dyn std::any::Any,
+    ) -> Result<()> {
+        verified::merge(self, change, train, lease)
     }
 
     fn merge(&mut self, change: &crate::forge::ChangeRef, tip: &str) -> Result<()> {
@@ -2076,9 +2099,16 @@ impl Rails for ForgeRails<'_> {
             );
             return Ok(Landing::Stale);
         }
+        // Keep the exact under-lease release covers through the final gate
+        // and retries, including after the markers have been released.
+        // trace:BUG-b6b1278890774ef993d2ebc327862470-179 | ai:codex
+        let mut checked = train.clone();
+        for (car, member) in checked.cars.iter_mut().zip(&fresh) {
+            car.member.release = member.release.clone();
+        }
         if let Err(e) = self
             .ports
-            .merge(&change, &train.tip)
+            .merge_verified(&change, &checked, _lease.as_ref())
             .with_context(|| format!("train PR #{} was not merged", change.id))
         {
             // trace:BUG-2214 | ai:claude

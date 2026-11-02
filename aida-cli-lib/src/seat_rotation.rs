@@ -431,14 +431,23 @@ pub(crate) const ACTIVE_MANDATE_HEADER: &str = "ACTIVE MANDATE";
 /// then standing orders, then the handoff. `mandate` is the live
 /// `MANDATE ...` line read at show time — it is never copied into handoff
 /// text, so a rotation cannot carry a stale or expired mandate.
+///
+/// STORY-2243: the advisor's standing goal (`goal`, a ready block read live
+/// from the store) sits after the mandate and before the standing orders.
 // trace:STORY-1700 | ai:claude
-pub(crate) fn compose_handoff_show_with_mandate(
+// trace:STORY-2243 | ai:claude
+pub(crate) fn compose_handoff_show_with_goal(
     mandate: Option<&str>,
+    goal: Option<&str>,
     standing: Option<&str>,
     handoff: Option<&str>,
     seat: &str,
 ) -> String {
     let rest = compose_handoff_show(standing, handoff, seat);
+    let rest = match goal {
+        Some(block) => format!("{}\n\n{rest}", block.trim_end()),
+        None => rest,
+    };
     match mandate {
         Some(line) => format!("{ACTIVE_MANDATE_HEADER}\n{}\n\n{rest}", line.trim_end()),
         None => rest,

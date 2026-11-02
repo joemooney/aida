@@ -15,6 +15,7 @@ How to work effectively with AIDA — habits, vocabulary, and workflow patterns 
 | [`docs-lane.md`](docs-lane.md) | The single-writer docs lane (SPIKE-10 MVP) — one agent owns `docs/`, every other agent FLAGS via the `needs-docs` routing primitive instead of editing; drain via `/aida-burndown` filtered to docs + a periodic `/aida-docs-review` sweep; single-writer stays conventional |
 | [`observation-discipline.md`](observation-discipline.md) | When to file an `aida findings add` observation vs an immediate BUG/TASK; the recurrence-as-promotion signal |
 | [`lifecycle-vocabulary.md`](lifecycle-vocabulary.md) | Precise words for each lifecycle state — committed vs pushed vs merged vs completed vs released |
+| [`product-glossary.md`](product-glossary.md) | Plain-language product terms: merge hold, mandate, grant, hub, … |
 | [`machinery-glossary.md`](machinery-glossary.md) | One-paragraph definitions of AIDA's orchestration / session / autonomy machinery — orchestrator, phase, drain, lease, role, scope, session, worktree, sentinel, batch, autonomy mode |
 | [`tag-conventions.md`](tag-conventions.md) | The `aida:<subcommand>` colon-namespaced tag convention, plus the flat behavior/provenance namespace and existing colon namespaces (`batch:`, `lifecycle:`, …) |
 | [`workflow-patterns.md`](workflow-patterns.md) | `/goal` prompt phrasing, parallel-choice vs sequential-step UI, planning-pass file hygiene, and why recursive-failure-risk fixes ship at the keyboard not the drain |

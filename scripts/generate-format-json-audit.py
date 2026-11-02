@@ -17,6 +17,8 @@ from pathlib import Path
 
 
 VERIFIED = {
+    # trace:TASK-2705 | ai:codex
+    "aida config permissions probe": "config permissions probe --vendor unregistered-audit-fixture (structured refusal; nonzero exit)",
     # trace:TASK-2347 | ai:codex
     "aida mailbox wake-snapshot": "mailbox wake-snapshot --recipient advisor",
     "aida fasttrack status": "fasttrack status",
@@ -37,6 +39,9 @@ VERIFIED = {
     "aida fleet drive": "fleet drive (preview; changes nothing without --tick)",
     # trace:STORY-B6B1278890774EF993D2EBC327862470-098 | ai:claude
     "aida whoami": "whoami",
+    # trace:STORY-2243 | ai:claude
+    "aida goal advisor show": "goal advisor show",
+    "aida goal advisor history": "goal advisor history",
 }
 
 # Documented top-level fields of JSON leaves the hermetic audit cannot run.

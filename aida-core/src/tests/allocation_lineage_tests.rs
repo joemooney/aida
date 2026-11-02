@@ -233,6 +233,8 @@ fn view<'a>(
         node,
         role,
         upstream,
+        hub: None,
+        hub_remotes: &[],
     }
 }
 
@@ -458,5 +460,243 @@ fn cycle_message_tells_on_cycle_pools_from_pools_that_reach_one() {
     assert!(
         messages.contains(&"the lineage of pool c reaches a cycle at pool a".to_string()),
         "{messages:?}"
+    );
+}
+
+// --- Single-hub mode: virtual hub pools, NotOnHub, materialization ---
+// trace:STORY-B6B1278890774EF993D2EBC327862470-164 | ai:claude
+
+fn hub_view<'a>(
+    blocks: &'a [AgreedIdBlock],
+    root: Option<&'a RootRecord>,
+    on_hub: &'a [AgreedIdBlock],
+) -> LineageView<'a> {
+    LineageView {
+        pools: &[],
+        blocks,
+        root,
+        node: LEAF,
+        role: AllocationRole::Node,
+        upstream: None,
+        hub: Some(HubSpend {
+            hub: "github",
+            on_hub,
+        }),
+        hub_remotes: &[],
+    }
+}
+
+#[test]
+fn single_hub_block_on_the_hub_ref_is_spendable_without_a_root_or_upstream() {
+    let blocks = vec![block(LEAF, "BUG", 1, 100, Some("hub:github:BUG"))];
+    let v = hub_view(&blocks, None, &blocks);
+    assert_eq!(v.spendable_block("BUG"), Ok(0));
+    assert!(check_invariants(&[], &blocks, None).is_empty());
+}
+
+#[test]
+fn single_hub_claim_not_on_the_hub_ref_is_not_spendable() {
+    let blocks = vec![block(LEAF, "BUG", 1, 100, Some("hub:github:BUG"))];
+    // Never pushed: the hub's ref has no such claim.
+    let v = hub_view(&blocks, None, &[]);
+    assert_eq!(
+        v.spendable_block("BUG"),
+        Err(Unusable::NotOnHub {
+            type_prefix: "BUG".into(),
+            hub: "github".into()
+        })
+    );
+    // A claim for another hub, or with a different range, is not this one.
+    // A hub this clone does not reach cannot vouch for its claim.
+    let other = vec![block(LEAF, "BUG", 1, 100, Some("hub:gitlab:BUG"))];
+    let v = hub_view(&other, None, &other);
+    assert_eq!(
+        v.spendable_block("BUG"),
+        Err(Unusable::NotOnHub {
+            type_prefix: "BUG".into(),
+            hub: "gitlab".into()
+        })
+    );
+    let moved = vec![block(LEAF, "BUG", 1, 99, Some("hub:github:BUG"))];
+    let v = hub_view(&blocks, None, &moved);
+    assert!(matches!(
+        v.spendable_block("BUG"),
+        Err(Unusable::NotOnHub { .. })
+    ));
+}
+
+#[test]
+fn hub_claims_still_list_overlaps_and_type_mismatches() {
+    let blocks = vec![
+        block(LEAF, "BUG", 1, 100, Some("hub:github:BUG")),
+        block(HUB, "BUG", 50, 150, Some("hub:gitlab:BUG")),
+        block(HUB, "TASK", 1, 10, Some("hub:github:BUG")),
+    ];
+    let conflicts = check_invariants(&[], &blocks, None);
+    assert!(
+        conflicts
+            .iter()
+            .any(|c| matches!(c, LineageConflict::Overlap { .. })),
+        "{conflicts:?}"
+    );
+    assert!(
+        conflicts
+            .iter()
+            .any(|c| matches!(c, LineageConflict::TypeMismatch { .. })),
+        "{conflicts:?}"
+    );
+}
+
+#[test]
+fn with_a_root_an_unmaterialized_hub_pool_is_an_unknown_parent() {
+    let blocks = vec![block(LEAF, "BUG", 1, 100, Some("hub:github:BUG"))];
+    let r = root();
+    let conflicts = check_invariants(&[], &blocks, Some(&r));
+    assert!(matches!(
+        conflicts.as_slice(),
+        [LineageConflict::UnknownParent { .. }]
+    ));
+    // The hub context only applies while no root is recorded.
+    let v = hub_view(&blocks, Some(&r), &blocks);
+    assert!(v.spendable_block("BUG").is_err());
+}
+
+#[test]
+fn materialized_pools_keep_every_block_lineage_and_free_space_excludes_them() {
+    let blocks = vec![
+        block(LEAF, "BUG", 1, 100, Some("hub:github:BUG")),
+        block(HUB, "BUG", 101, 200, Some("hub:github:BUG")),
+        block(LEAF, "TASK", 1, 100, Some("hub:github:TASK")),
+        block(LEAF, "FR", 1, 100, None),
+    ];
+    let pools = pools_to_materialize(&[], &blocks, ROOT);
+    assert_eq!(
+        pools.iter().map(|p| p.pool_id.as_str()).collect::<Vec<_>>(),
+        ["hub:github:BUG", "hub:github:TASK"]
+    );
+    assert!(pools
+        .iter()
+        .all(|p| p.parent_pool_id.is_none() && p.holder_node == ROOT && p.range_start == 1));
+    assert_eq!(pools[0].home_ref, "github/aida-store");
+    let r = root();
+    assert!(check_invariants(&pools, &blocks, Some(&r)).is_empty());
+    for b in blocks.iter().filter(|b| b.pool_id.is_some()) {
+        let chain = lineage(&pools, b.pool_id.as_deref().unwrap()).unwrap();
+        assert_eq!(chain.last().unwrap().holder_node, ROOT);
+    }
+    // A later grant carved from the root pool can never reuse an earlier ID.
+    let free = free_ranges(&pools[0], &pools, &blocks);
+    assert_eq!(free.first(), Some(&(201, u32::MAX)));
+    // Already-recorded pools are not materialized again.
+    assert!(pools_to_materialize(&pools, &blocks, ROOT).is_empty());
+}
+
+// AC5: after enroll-root, a non-root clone's block in a promoted hub pool
+// stays spendable through whichever of its remotes reaches the hub, with or
+// without a declared upstream; a clone that reaches no such hub is told so.
+// trace:STORY-B6B1278890774EF993D2EBC327862470-164.ac2f7ade | ai:claude
+#[test]
+fn a_promoted_hub_pool_is_spendable_through_the_remote_reaching_its_hub() {
+    let blocks = vec![block(LEAF, "BUG", 1, 100, Some("hub:github:BUG"))];
+    let pools = pools_to_materialize(&[], &blocks, ROOT);
+    let r = root();
+    let reaches = [HubReach {
+        hub: "github".into(),
+        remote: "origin".into(),
+        on_hub: blocks.clone(),
+    }];
+    let mut v = view(&pools, &blocks, Some(&r), LEAF, AllocationRole::Node, None);
+    v.hub_remotes = &reaches;
+    assert_eq!(v.spendable_block("BUG"), Ok(0));
+    // A declared upstream that is the hub's remote also passes...
+    v.upstream = Some("origin");
+    assert_eq!(v.spendable_block("BUG"), Ok(0));
+    // ...one that is another remote does not.
+    v.upstream = Some("gitlab");
+    assert!(matches!(
+        v.spendable_block("BUG"),
+        Err(Unusable::WrongUpstream { .. })
+    ));
+    // No remote of this clone reaches the hub.
+    let v = view(&pools, &blocks, Some(&r), LEAF, AllocationRole::Node, None);
+    assert_eq!(
+        v.spendable_block("BUG"),
+        Err(Unusable::HubUnreached {
+            type_prefix: "BUG".into(),
+            hub: "github".into()
+        })
+    );
+}
+
+// AC3 after AC5: enrollment does not launder a claim the hub never ordered.
+// A non-root clone's pre-enrollment hub claim that was never pushed
+// (deferred or local-only), or that arrived only through an imported store,
+// is not on the hub's store ref, so it stays unspendable once the root is
+// enrolled and its pool is promoted.
+// trace:STORY-B6B1278890774EF993D2EBC327862470-164.ac00342e | ai:claude
+#[test]
+fn a_promoted_hub_pool_block_not_on_the_hub_ref_is_not_spendable() {
+    let blocks = vec![block(LEAF, "BUG", 1, 100, Some("hub:github:BUG"))];
+    let pools = pools_to_materialize(&[], &blocks, ROOT);
+    let r = root();
+    // The hub's ref holds another node's claim and an earlier, different
+    // range of this node's, never this one.
+    let reaches = [HubReach {
+        hub: "github".into(),
+        remote: "upstream".into(),
+        on_hub: vec![
+            block(HUB, "BUG", 101, 200, Some("hub:github:BUG")),
+            block(LEAF, "BUG", 1, 50, Some("hub:github:BUG")),
+        ],
+    }];
+    let mut v = view(&pools, &blocks, Some(&r), LEAF, AllocationRole::Node, None);
+    v.hub_remotes = &reaches;
+    let refused = Err(Unusable::NotOnHub {
+        type_prefix: "BUG".into(),
+        hub: "github".into(),
+    });
+    assert_eq!(v.spendable_block("BUG"), refused);
+    // A declared upstream that is the hub's remote does not change that.
+    v.upstream = Some("upstream");
+    assert_eq!(v.spendable_block("BUG"), refused);
+}
+
+// AC4: multi-hub, no root: a clone reaching both declared hubs keeps a block
+// stamped for the later-ordered hub, checked against that hub's own claims
+// (not the first reached hub's).
+// trace:STORY-B6B1278890774EF993D2EBC327862470-164.ac9679fe | ai:claude
+#[test]
+fn a_block_stamped_for_the_later_reached_hub_stays_spendable() {
+    let blocks = vec![block(LEAF, "BUG", 1, 100, Some("hub:gitlab:BUG"))];
+    let reaches = [
+        HubReach {
+            hub: "github".into(),
+            remote: "origin".into(),
+            on_hub: Vec::new(),
+        },
+        HubReach {
+            hub: "gitlab".into(),
+            remote: "lab".into(),
+            on_hub: blocks.clone(),
+        },
+    ];
+    let mut v = hub_view(&blocks, None, &[]);
+    v.hub_remotes = &reaches;
+    assert_eq!(v.spendable_block("BUG"), Ok(0));
+    // Not on the later hub's ref: still refused, naming that hub.
+    let unpushed = [
+        reaches[0].clone(),
+        HubReach {
+            on_hub: Vec::new(),
+            ..reaches[1].clone()
+        },
+    ];
+    v.hub_remotes = &unpushed;
+    assert_eq!(
+        v.spendable_block("BUG"),
+        Err(Unusable::NotOnHub {
+            type_prefix: "BUG".into(),
+            hub: "gitlab".into()
+        })
     );
 }

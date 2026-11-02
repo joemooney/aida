@@ -119,6 +119,10 @@ pub(crate) enum Working {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub(crate) struct GoalLine {
+    /// The operator's standing goal, shown in the advisor seat only.
+    // trace:STORY-2243 | ai:claude
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub advisor_goal: Option<String>,
     /// The active mandate's one-line status (time left, principal, gates).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub mandate: Option<String>,
@@ -251,6 +255,11 @@ pub(crate) fn collect_with(
     let goal = goal_line(&mandate, purpose, now, || {
         crate::mandate_gates::describe(Some(main_root))
     });
+    // trace:STORY-2243 | ai:claude
+    let goal = with_advisor_goal(
+        goal,
+        crate::goal_cmd::goal_advisor::whoami_goal_text(&store, &role),
+    );
 
     WhoamiView {
         handle: resolved_handle(facts),
@@ -359,7 +368,32 @@ pub(crate) fn goal_line(
         }
         _ => None,
     };
-    (mandate.is_some() || purpose.is_some()).then_some(GoalLine { mandate, purpose })
+    (mandate.is_some() || purpose.is_some()).then_some(GoalLine {
+        advisor_goal: None,
+        mandate,
+        purpose,
+    })
+}
+
+/// [`goal_line`] with the advisor's standing goal added (`advisor_goal` is
+/// only ever `Some` in the advisor seat).
+// trace:STORY-2243 | ai:claude
+pub(crate) fn with_advisor_goal(
+    goal: Option<GoalLine>,
+    advisor_goal: Option<String>,
+) -> Option<GoalLine> {
+    match (goal, advisor_goal) {
+        (Some(mut g), a) => {
+            g.advisor_goal = a;
+            Some(g)
+        }
+        (None, Some(a)) => Some(GoalLine {
+            advisor_goal: Some(a),
+            mandate: None,
+            purpose: None,
+        }),
+        (None, None) => None,
+    }
 }
 
 /// The next item for `role` as `<ID> <title>`, from the same source and in
@@ -483,15 +517,31 @@ impl WhoamiView {
         }
     }
 
+    /// The advisor seat prints its purpose on its own `purpose:` line, so
+    /// `goal:` carries the operator's goal. trace:STORY-2243 | ai:claude
+    fn purpose_on_own_line(&self) -> bool {
+        self.role == "advisor"
+    }
+
     fn goal_text(&self) -> Option<String> {
         let g = self.goal.as_ref()?;
+        let inline_purpose = (!self.purpose_on_own_line())
+            .then_some(())
+            .and(g.purpose.as_ref());
         let parts: Vec<String> = g
-            .mandate
+            .advisor_goal
             .iter()
             .cloned()
-            .chain(g.purpose.iter().map(|p| format!("purpose: {p}")))
+            .chain(g.mandate.iter().cloned())
+            .chain(inline_purpose.map(|p| format!("purpose: {p}")))
             .collect();
         (!parts.is_empty()).then(|| parts.join(" · "))
+    }
+
+    fn purpose_text(&self) -> Option<&str> {
+        self.purpose_on_own_line()
+            .then(|| self.goal.as_ref()?.purpose.as_deref())
+            .flatten()
     }
 
     fn worktree_text(&self) -> String {
@@ -527,6 +577,9 @@ impl WhoamiView {
         if let Some(goal) = self.goal_text() {
             out.push_str(&format!("goal:     {goal}\n"));
         }
+        if let Some(purpose) = self.purpose_text() {
+            out.push_str(&format!("purpose:  {purpose}\n"));
+        }
         out.push_str(&format!("worktree: {}\n", self.worktree_text()));
         out
     }
@@ -549,6 +602,9 @@ impl WhoamiView {
         lines.push(format!("working: {}", self.working_text()));
         if let Some(goal) = self.goal_text() {
             lines.push(format!("goal: {goal}"));
+        }
+        if let Some(purpose) = self.purpose_text() {
+            lines.push(format!("purpose: {purpose}"));
         }
         lines.push(format!("worktree: {}", self.worktree_text()));
         let mut out = lines.join("\n");

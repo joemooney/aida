@@ -1,13 +1,19 @@
 use super::*;
 
-/// TASK-589: with no flags, both glossary sections render, machinery first.
+const PRODUCT: &str = "# Product glossary";
+const MACHINERY: &str = "# Machinery glossary";
+const LIFECYCLE: &str = "# Lifecycle vocabulary";
+
+/// TASK-589 / STORY-2219: with no flags, every glossary section renders, in
+/// the order product, machinery, lifecycle.
+/// trace:STORY-2219 | ai:claude
 #[test]
-fn default_renders_both_glossary_sections_machinery_first() {
-    let out = render_discipline_glossary(false, false).unwrap();
-    let m = out.find("# Machinery glossary");
-    let l = out.find("# Lifecycle vocabulary");
-    assert!(m.is_some(), "machinery section present");
-    assert!(l.is_some(), "lifecycle section present");
+fn default_renders_all_glossary_sections_product_first() {
+    let out = render_discipline_glossary(false, false, false).unwrap();
+    let p = out.find(PRODUCT).expect("product section present");
+    let m = out.find(MACHINERY).expect("machinery section present");
+    let l = out.find(LIFECYCLE).expect("lifecycle section present");
+    assert!(p < m, "product glossary renders before machinery glossary");
     assert!(
         m < l,
         "machinery glossary renders before lifecycle vocabulary"
@@ -17,24 +23,73 @@ fn default_renders_both_glossary_sections_machinery_first() {
 /// Each filter flag isolates its own section.
 #[test]
 fn filter_flags_isolate_their_section() {
-    let machinery = render_discipline_glossary(true, false).unwrap();
-    assert!(machinery.contains("# Machinery glossary"));
+    let product = render_discipline_glossary(true, false, false).unwrap();
+    assert!(product.contains(PRODUCT));
     assert!(
-        !machinery.contains("# Lifecycle vocabulary"),
-        "--machinery omits the lifecycle section"
+        !product.contains(MACHINERY) && !product.contains(LIFECYCLE),
+        "--product omits the other sections"
     );
 
-    let lifecycle = render_discipline_glossary(false, true).unwrap();
-    assert!(lifecycle.contains("# Lifecycle vocabulary"));
+    let machinery = render_discipline_glossary(false, true, false).unwrap();
+    assert!(machinery.contains(MACHINERY));
     assert!(
-        !lifecycle.contains("# Machinery glossary"),
-        "--lifecycle omits the machinery section"
+        !machinery.contains(LIFECYCLE) && !machinery.contains(PRODUCT),
+        "--machinery omits the other sections"
+    );
+
+    let lifecycle = render_discipline_glossary(false, false, true).unwrap();
+    assert!(lifecycle.contains(LIFECYCLE));
+    assert!(
+        !lifecycle.contains(MACHINERY) && !lifecycle.contains(PRODUCT),
+        "--lifecycle omits the other sections"
     );
 }
 
-/// Passing both flags is the same as passing neither — show everything.
+/// Two flags print exactly those two sections; all three print everything.
 #[test]
-fn both_flags_render_both_sections() {
-    let out = render_discipline_glossary(true, true).unwrap();
-    assert!(out.contains("# Machinery glossary") && out.contains("# Lifecycle vocabulary"));
+fn combined_flags_render_only_the_named_sections() {
+    let out = render_discipline_glossary(false, true, true).unwrap();
+    assert!(out.contains(MACHINERY) && out.contains(LIFECYCLE));
+    assert!(!out.contains(PRODUCT));
+    assert_eq!(
+        render_discipline_glossary(true, true, true).unwrap(),
+        render_discipline_glossary(false, false, false).unwrap()
+    );
+}
+
+/// The product glossary carries the first batch of end-user terms the website
+/// glossary anchors on.
+#[test]
+fn product_glossary_defines_the_first_batch_of_terms() {
+    let out = render_discipline_glossary(true, false, false).unwrap();
+    for term in [
+        "Merge hold",
+        "Review story",
+        "Rework round",
+        "Brief",
+        "Mailbox",
+        "Handoff",
+        "Commit trailer",
+        "Grant",
+        "Child grant",
+        "Roster",
+        "Seat",
+        "Role",
+        "Mandate",
+        "Deputy",
+        "Operator-only",
+        "Supervised spec",
+        "Hub",
+        "Ref",
+        "Pool",
+        "Block",
+        "Root",
+        "Agreed ID",
+        "Local ID",
+    ] {
+        assert!(
+            out.contains(&format!("\n### {term}\n")),
+            "product glossary defines `{term}`"
+        );
+    }
 }

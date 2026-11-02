@@ -508,3 +508,28 @@ command = "dispatch tick"
 every = "2m"
 while = "mandate.dispatch_active == true && dispatch.pending > 0"
 enabled = true
+
+# STORY-2220: the background docs sweep. Daily, and only while the queue is
+# idle and the drain lock is free, so it never takes a lane from feature work;
+# when the `while` gate is closed the run is skipped, not queued. It reviews
+# the docs touched since the last sweep and, in the default report mode, mails
+# the findings to the product seat (one mail per run, none when clean).
+# `[docs_sweep] mode = "pr"` batches mechanical fixes into one docs-only PR.
+# trace:STORY-2220 | ai:claude
+[[schedule.jobs]]
+name = "docs-sweep"
+command = "docs sweep"
+every = "1d"
+while = "queue.project_work_idle == true && drain.lock_free == true"
+enabled = true
+
+# STORY-2220: what a docs-sweep run does. `report` (the default) sends the
+# findings to the product seat; `pr` opens at most one docs-only PR per run
+# with every mechanical fix (at most `max_files` files), and files a draft
+# spec for each finding that needs judgment.
+# trace:STORY-2220 | ai:claude
+[docs_sweep]
+mode = "report"
+max_files = 20
+# The glossary source is a template master; its .aida/ mirror is regenerated.
+regenerate = ["make sync-templates"]

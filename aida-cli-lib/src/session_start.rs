@@ -1860,6 +1860,25 @@ pub(crate) fn session_start_with_receipt(
     // worktree's path and new sessions stack as nested-sibling-of-sibling
     // (~/ai/aida-pr-9-epic-20 instead of ~/ai/aida-epic-20).
     // trace:BUG-75 | ai:claude
+    // The vendor preflight runs before root discovery and any setup, so a
+    // missing vendor binary is reported even outside a git checkout.
+    // trace:BUG-b6b1278890774ef993d2ebc327862470-159 | ai:claude
+    let launch_vendor = if launch_claude {
+        let vendor = session::interactive_session_vendor()?;
+        session::preflight_interactive_session(&vendor, launch_permission_mode, launch_contained)?;
+        if vendor == "codex" {
+            if let Some(name) = launch_name
+                .as_deref()
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+            {
+                session::preflight_codex_agent_handle(name)?;
+            }
+        }
+        Some(vendor)
+    } else {
+        None
+    };
     let project_root = find_main_worktree_root()?;
     // A dash-led branch or base would reach `git worktree add` / `git
     // rev-parse` as an option. trace:BUG-1622 | ai:claude
@@ -1876,11 +1895,13 @@ pub(crate) fn session_start_with_receipt(
             .as_deref()
             .is_some_and(queue_cmd::role_is_stakeholder_only)
     {
-        return session::new_session(
+        return session::new_session_for_vendor(
+            launch_vendor.as_deref().expect("launch vendor preflight"),
+            None,
             launch_title,
             launch_permission_mode,
             launch_role,
-            launch_name,
+            launch_name.filter(|s| !s.trim().is_empty()),
             launch_contained,
             launch_set_title,
         )
@@ -3389,8 +3410,8 @@ pub(crate) fn session_start_with_receipt(
         // STORY-54: --launch collapses "start → cd → session new" into one
         // command. We chdir into the new worktree (so claude inherits it
         // and the launch-log records the worktree path, not the parent),
-        // then delegate to session::new_session for the title prompt,
-        // launch-log append, and `exec claude --permission-mode <mode>`.
+        // then delegate to session::new_session_for_vendor for the title
+        // prompt, launch-log append, and the configured vendor's launch.
         // exec replaces this process; control doesn't return here on
         // success.
         // trace:STORY-54 | ai:claude
@@ -3414,8 +3435,9 @@ pub(crate) fn session_start_with_receipt(
                 "{} {}",
                 crate::glyph(crate::glyphs::Glyph::InfoAlt).cyan(),
                 format!(
-                    "sourced .aida/session-env.sh ({}) into launched claude's env",
-                    applied_vars.join(", ")
+                    "sourced .aida/session-env.sh ({}) into launched {}'s env",
+                    applied_vars.join(", "),
+                    launch_vendor.as_deref().unwrap_or("claude")
                 )
                 .dimmed()
             );
@@ -3427,9 +3449,12 @@ pub(crate) fn session_start_with_receipt(
                 .green()
                 .bold(),
             format!(
-                "launching claude in {} ({})",
+                "launching {} in {} ({})",
+                launch_vendor.as_deref().unwrap_or("claude"),
                 worktree_path.display(),
-                if launch_contained {
+                if launch_contained && launch_vendor.as_deref() == Some("codex") {
+                    "native sandbox, not AIDA-contained".to_string()
+                } else if launch_contained {
                     "contained sandbox".to_string()
                 } else {
                     launch_permission_mode
@@ -3453,10 +3478,23 @@ pub(crate) fn session_start_with_receipt(
             .or_else(|| std::env::var("AIDA_SESSION_ROLE").ok())
             .filter(|s| !s.is_empty())
             .unwrap_or_else(|| "implementer".to_string());
-        let derived_name = launch_name
-            .filter(|s| !s.trim().is_empty())
-            .or_else(|| session::derive_session_name(owns, &branch_name, &role_for_name));
-        return session::new_session(
+        let launch_vendor = launch_vendor.as_deref().expect("launch vendor preflight");
+        let explicit_name = launch_name
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty());
+        // Codex receives the name as its agent handle, so only an explicit
+        // (preflight-validated) --name is forwarded; the derived display name
+        // ("impl@BUG-1") is not a valid handle and the launcher allocates one.
+        // trace:BUG-b6b1278890774ef993d2ebc327862470-159 | ai:claude
+        let derived_name = if launch_vendor == "codex" {
+            explicit_name
+        } else {
+            explicit_name
+                .or_else(|| session::derive_session_name(owns, &branch_name, &role_for_name))
+        };
+        return session::new_session_for_vendor(
+            launch_vendor,
+            Some(owns.to_string()),
             launch_title,
             launch_permission_mode,
             launch_role,
@@ -3470,19 +3508,37 @@ pub(crate) fn session_start_with_receipt(
     if std::env::var_os("AIDA_SUPPRESS_SESSION_NEXT").is_none() {
         eprintln!();
         eprintln!("Next:");
-        eprintln!(
-            "  {}",
-            format!("claude    # then /aida-implement {}", owns).cyan()
-        );
-        eprintln!("  {}", format!("cd {}", worktree_path.display()).cyan());
-        // Point at the filtered path, not a raw `source` of a worktree file a
-        // branch can commit. trace:BUG-1624 | ai:claude
-        if cargo_target_dir.is_some() {
-            eprintln!(
-                "  {}    {}",
-                format!("aida worktree enter {owns}").cyan(),
-                "# cd in + warm build cache (filtered session env)".dimmed()
-            );
+        // BUG-2379: a private clone cannot be re-entered with `aida worktree
+        // enter`, and the launcher follows `[agents] vendor`.
+        // trace:BUG-2379 | ai:claude
+        let vendor = aida_core::agents_config::resolve_default_vendor(&project_root)
+            .unwrap_or_else(|| "claude".to_string());
+        for line in session_next_lines(
+            owns,
+            &worktree_path,
+            tree_kind == crate::seat_clone::TreeKind::Clone,
+            &vendor,
+            cargo_target_dir.is_some(),
+        ) {
+            match line.comment {
+                Some(comment) => {
+                    eprintln!("  {}    {}", line.command.cyan(), comment.dimmed())
+                }
+                None => eprintln!("  {}", line.command.cyan()),
+            }
+        }
+        // STORY-2256: a hand-started Codex seat's SessionStart hook arms its
+        // mail wake; say so, and name the install command when it is needed.
+        // trace:STORY-2256 | ai:claude
+        let wake_project = main_worktree_root_from(&project_root);
+        if let Some(line) = crate::mail_wake::session_start_wake_line(
+            &vendor,
+            crate::agent_config::load_agents_tool_bool(&wake_project, "codex", "mail_wake")
+                .unwrap_or(None),
+            crate::mailbox_wake_run::service_installed(&wake_project),
+            &wake_project,
+        ) {
+            eprintln!("  {}", line.dimmed());
         }
         eprintln!();
         eprintln!("When finished:");
@@ -3499,6 +3555,76 @@ pub(crate) fn session_start_with_receipt(
         lease_id: Some(id),
         cleanup: rollback,
     })
+}
+
+/// One `Next:` line of `aida session start`: a command and an optional dimmed
+/// trailing comment.
+// trace:BUG-2379 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct NextLine {
+    pub(crate) command: String,
+    pub(crate) comment: Option<&'static str>,
+}
+
+/// The interactive launch line for `vendor`: Codex invokes skills as
+/// `$aida-…`, Claude (and anything else) as `/aida-…`.
+// trace:BUG-2379 | ai:claude
+pub(crate) fn vendor_launch_line(vendor: &str, owns: &str) -> String {
+    let vendor = vendor.trim();
+    let vendor = if vendor.is_empty() { "claude" } else { vendor };
+    let sigil = if vendor.eq_ignore_ascii_case("codex") {
+        '$'
+    } else {
+        '/'
+    };
+    format!("{vendor}    # then {sigil}aida-implement {owns}")
+}
+
+/// The `Next:` block `aida session start` prints when it does not launch.
+///
+/// A linked worktree keeps the historical shape (launcher, `cd`, and the
+/// filtered `aida worktree enter` when a build cache is shared). A contained
+/// seat's private clone is not a linked worktree, so `aida worktree enter`
+/// refuses it: the block names the clone and `cd`s into it first, then the
+/// launcher, and never suggests `aida worktree enter`.
+// trace:BUG-2379 | ai:claude
+pub(crate) fn session_next_lines(
+    owns: &str,
+    tree: &std::path::Path,
+    is_clone: bool,
+    vendor: &str,
+    shares_build_cache: bool,
+) -> Vec<NextLine> {
+    let launch = NextLine {
+        command: vendor_launch_line(vendor, owns),
+        comment: None,
+    };
+    let cd = format!("cd {}", tree.display());
+    if is_clone {
+        return vec![
+            NextLine {
+                command: cd,
+                comment: Some("# the seat's private clone (not a linked worktree)"),
+            },
+            launch,
+        ];
+    }
+    let mut lines = vec![
+        launch,
+        NextLine {
+            command: cd,
+            comment: None,
+        },
+    ];
+    // Point at the filtered path, not a raw `source` of a worktree file a
+    // branch can commit. trace:BUG-1624 | ai:claude
+    if shares_build_cache {
+        lines.push(NextLine {
+            command: format!("aida worktree enter {owns}"),
+            comment: Some("# cd in + warm build cache (filtered session env)"),
+        });
+    }
+    lines
 }
 
 /// BUG-61: enumerate live `claude` processes whose cwd is at-or-under
@@ -3555,3 +3681,7 @@ mod bug_734_empty_worktree_probe_tests;
 #[cfg(test)]
 #[path = "tests/bug_2215_session_claim_rollback_tests.rs"]
 mod claim_rollback_tests;
+
+#[cfg(test)]
+#[path = "tests/bug_2379_session_next_block_tests.rs"]
+mod bug_2379_session_next_block_tests;

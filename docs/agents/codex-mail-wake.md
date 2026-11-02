@@ -26,6 +26,18 @@ reads `armed` even if the other attempt failed first. Ending
 the agent, or `aida agent gc` finding its process gone, retires the row; the
 ledger is kept.
 
+Hand-launched Codex seats are covered too. A seat started any other way, for
+example `aida session start --owns <ID>` and then `codex`, gets the same wake:
+its SessionStart hook writes the agent's registry row, arms it on the exact
+thread the hook reports, and installs the service if it is missing. If the
+install is refused (for example inside containment), the session still starts,
+the hook prints the one command to run, and the row reads `failed`. On a Codex
+project, `aida session start` prints a `Mail wake:` line saying whether the
+wake will arm and, when the service is missing, the install command. A Codex
+session that was already running before its project had this behaviour arms on
+its next start.
+<!-- trace:STORY-2256 | ai:claude -->
+
 - `--no-mail-wake` opts one launch out. `[agents.codex] mail_wake = false` in
   `~/.aida/agents.toml` or `.aida/agents.toml` makes off the default. A value
   that is not `true` or `false` gets a warning, and the launch uses the default.
@@ -38,7 +50,9 @@ ledger is kept.
   (stale snapshots, unread accepted mail, uncertain submissions) as well as the
   advisor registration below. It also lists every live agent whose wake
   `failed`, or is still `pending` ten minutes after it started, with the exact
-  commands that arm it by hand. `wake-service install` prints the
+  commands that arm it by hand. Plain `aida doctor` also reports a finding,
+  with the install command, when any live Codex agent should be woken and the
+  service is not installed. `wake-service install` prints the
   `[[schedule.jobs]]` block that runs it every 15 minutes; add it to
   `.aida/config.toml` yourself.
 
@@ -48,8 +62,19 @@ By hand:
 aida mailbox wake-service install --dry-run   # print the user unit
 aida mailbox wake-service install             # from the main checkout
 aida agent wake arm codex-agent-02            # once the agent has started
-aida mailbox wake-service status              # unit + armed agents
+aida mailbox wake-service status              # unit + runtime state + armed agents
 ```
+
+Installation reports success only after daemon reload, enable/start, and an
+active-state check succeed; a failed manager command returns an error. A unit
+file may remain after a failed install. Status keeps `installed` as file presence
+and reports `runtime.running`, `runtime.failed`, and the manager's load, active,
+substate and result fields separately. If the user manager cannot be queried,
+runtime booleans are `null` with an error. Re-run install from the main checkout
+after correcting the failure. Generated working directories retain literal
+internal spaces and dollar signs and escape percent specifiers; paths that unit
+line parsing cannot preserve safely are refused.
+<!-- trace:BUG-2397 | ai:codex -->
 
 Each armed agent is woken for mail addressed to its handle or to its role (for
 example `codex-agent-02` and `implementer`), never for another seat's mail. The

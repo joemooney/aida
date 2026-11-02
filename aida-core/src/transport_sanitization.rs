@@ -104,6 +104,8 @@ const FIXED_FILES: &[(&str, &str)] = &[
     // trace:STORY-B6B1278890774EF993D2EBC327862470-095 | ai:claude
     ("registry/pools.yaml", "yaml"),
     ("registry/root.yaml", "yaml"),
+    // The advisor's standing goal. trace:STORY-2243 | ai:claude
+    ("registry/advisor_goal.yaml", "yaml"),
     (".aida/.advisor-seat-hint-shown", "txt"),
     (".aida/.format-hint-shown", "txt"),
 ];

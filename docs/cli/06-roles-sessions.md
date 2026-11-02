@@ -82,7 +82,7 @@ Around that core sit the **launchers** and the **comms**. `aida agent new` and `
 
 **Don't reach for it when** — you want to grant yourself a seat your roster doesn't allow; that is a roster change, made at an interactive TTY with `aida team allow-seat`, not something a session can mint. And don't try to mint a direct grant from inside an AIDA-managed agent session (one launched with an agent name/type): those sessions hold whatever their launcher gave them (see the table above).
 
-**Gotchas.** Grants expire after at most 24 hours; a child grant shares its parent's expiry and becomes invalid when the parent is revoked (`aida role end`) or the roster no longer allows the seat. Entering a seat revokes the grant the shell held before, so one shell holds one seat at a time. The model separates *sessions*, not OS users: it does not claim protection against another process running as the same user that copies a grant handle — that residual same-user limit is recorded in the accepted decision on TTY-established, session-bound seats (see the [decisions index](../aida/05-decisions/README.md)) and is deliberately out of scope here. <!-- trace:ADR-66 -->
+**Gotchas.** Grants expire after 24 hours by default (`--ttl` up to `[seat] max_grant_hours`, never more than 168h); a child grant shares its parent's expiry and becomes invalid when the parent is revoked (`aida role end`) or the roster no longer allows the seat. Entering a seat revokes the grant the shell held before, so one shell holds one seat at a time. The model separates *sessions*, not OS users: it does not claim protection against another process running as the same user that copies a grant handle — that residual same-user limit is recorded in the accepted decision on TTY-established, session-bound seats (see the [decisions index](../aida/05-decisions/README.md)) and is deliberately out of scope here. <!-- trace:ADR-66 -->
 
 **Chains with** — `aida team` (roster ceiling, TTY-only writes), `aida agent new` / `aida queue work` (child issuance; see the launcher table), the MCP server authority line in `aida status` ([Chapter 8](08-reporting.md)), and the role-gated verbs in [Chapter 3](03-work-autonomy.md). <!-- trace:DOC-6 | ai:claude -->
 
@@ -186,6 +186,14 @@ that is invalid, expired, or does not delegate the seat; those cases refuse as
 before.
 Scripts that want only the refusal pass `--grant-inline no`.
 <!-- trace:STORY-2215 | ai:claude -->
+
+Interactive Codex launches expand portable `/aida-*` invocation lines into
+their embedded workflow bodies, including queue pickup, planning, review and
+de-risking. Launch previews show the same rendered prompt. If an invocation
+has no portable embedded body, AIDA uses Codex's `$aida-*` installed-skill
+syntax and instructs the agent to stop and report an unavailable skill rather
+than reconstruct its workflow. Ordinary prose and Claude prompts are preserved.
+<!-- trace:BUG-2387 | ai:codex -->
 
 **Key options (rationale only).**
 - `new <claude|codex|antigravity>` — the tool is a subcommand, not a flag, because each agent has a slightly different spawn shape. `list-roles` enumerates the supported role taxonomy.

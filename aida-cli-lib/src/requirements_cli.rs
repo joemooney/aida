@@ -3251,6 +3251,29 @@ fn run_add(
                                                 &type_prefix,
                                             ),
                                         };
+                                        // Single-hub mode: a hub-stamped claim that
+                                        // never reached the hub is not spendable on an
+                                        // authoritative clone either.
+                                        // trace:STORY-B6B1278890774EF993D2EBC327862470-164 | ai:claude
+                                        let active = match active {
+                                            Some(idx) if delegated_idx.is_none() => {
+                                                match aida_core::allocation_authority::unpushed_hub_claim(
+                                                    store_path,
+                                                    &registry.blocks[idx],
+                                                )? {
+                                                    Some(reason) => {
+                                                        eprintln!(
+                                                            "{} Issuing a node-local ID: {reason}.",
+                                                            crate::glyph(crate::glyphs::Glyph::InfoAlt)
+                                                                .cyan(),
+                                                        );
+                                                        None
+                                                    }
+                                                    None => Some(idx),
+                                                }
+                                            }
+                                            other => other,
+                                        };
                                         match active {
                                             None => {
                                                 // No block for this type. Under `blocks-only`

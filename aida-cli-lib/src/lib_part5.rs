@@ -3707,52 +3707,81 @@ pub(crate) fn with_review_pr_subject<R>(subject: ReviewPrSubject, f: impl FnOnce
 /// object store (commit subjects best effort: a range not fetched locally
 /// leaves the head branch to decide).
 // trace:BUG-1918 | ai:claude
+// trace:BUG-b6b1278890774ef993d2ebc327862470-179 | ai:codex
+#[cfg(test)]
+thread_local! {
+    static TEST_REVIEW_PR_TRANSPORT: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+#[cfg(test)]
+pub(crate) struct ReviewPrTransportGuard(bool);
+#[cfg(test)]
+impl Drop for ReviewPrTransportGuard {
+    fn drop(&mut self) {
+        TEST_REVIEW_PR_TRANSPORT.with(|enabled| enabled.set(self.0));
+    }
+}
+
+/// Use the production reader in one isolated fake-HOME transport fixture.
+/// Other unit tests keep the existing no-forge default and injected subjects.
+#[cfg(test)]
+pub(crate) fn review_pr_transport_fixture() -> ReviewPrTransportGuard {
+    assert!(crate::test_env::is_path_isolated_process());
+    ReviewPrTransportGuard(TEST_REVIEW_PR_TRANSPORT.with(|enabled| enabled.replace(true)))
+}
+
 pub(crate) fn review_pr_subject_from_forge(
     project_root: &std::path::Path,
     n: u64,
 ) -> Result<ReviewPrSubject> {
     #[cfg(test)]
     {
-        let _ = project_root;
-        TEST_REVIEW_PR_SUBJECT
-            .with(|s| s.borrow().clone())
-            .ok_or_else(|| anyhow::anyhow!("no forge under test (PR-{n})"))
+        if let Some(subject) = TEST_REVIEW_PR_SUBJECT.with(|s| s.borrow().clone()) {
+            return Ok(subject);
+        }
+        if !TEST_REVIEW_PR_TRANSPORT.with(|enabled| enabled.get()) {
+            return Err(anyhow::anyhow!("no forge under test (PR-{n})"));
+        }
     }
-    #[cfg(not(test))]
-    {
-        let info = crate::pr_cmd::fetch_change_info_via_resolved_forge(
-            project_root,
-            n,
-            crate::forge::resolve_open_change_forge_kind(project_root),
-        )?;
-        let commit_subjects = [format!("origin/{}", info.base_ref), info.base_ref.clone()]
-            .iter()
-            .find_map(|base| {
-                let out = std::process::Command::new("git")
-                    .arg("-C")
-                    .arg(project_root)
-                    .args([
-                        "log",
-                        "--format=%s",
-                        &format!("{base}..{}", info.head_oid),
-                        "--",
-                    ])
-                    .output()
-                    .ok()
-                    .filter(|o| o.status.success())?;
-                Some(
-                    String::from_utf8_lossy(&out.stdout)
-                        .lines()
-                        .map(str::to_string)
-                        .collect::<Vec<_>>(),
-                )
-            })
-            .unwrap_or_default();
-        Ok(ReviewPrSubject {
-            head_ref: info.head_ref,
-            commit_subjects,
+    review_pr_subject_from_forge_transport(project_root, n)
+}
+
+fn review_pr_subject_from_forge_transport(
+    project_root: &std::path::Path,
+    n: u64,
+) -> Result<ReviewPrSubject> {
+    let info = crate::pr_cmd::fetch_change_info_via_resolved_forge(
+        project_root,
+        n,
+        crate::forge::resolve_open_change_forge_kind(project_root),
+    )?;
+    let commit_subjects = [format!("origin/{}", info.base_ref), info.base_ref.clone()]
+        .iter()
+        .find_map(|base| {
+            let out = std::process::Command::new("git")
+                .arg("-C")
+                .arg(project_root)
+                .args([
+                    "log",
+                    "--format=%s",
+                    &format!("{base}..{}", info.head_oid),
+                    "--",
+                ])
+                .output()
+                .ok()
+                .filter(|o| o.status.success())?;
+            Some(
+                String::from_utf8_lossy(&out.stdout)
+                    .lines()
+                    .map(str::to_string)
+                    .collect::<Vec<_>>(),
+            )
         })
-    }
+        .unwrap_or_default();
+    Ok(ReviewPrSubject {
+        head_ref: info.head_ref,
+        commit_subjects,
+    })
 }
 
 #[cfg(test)]

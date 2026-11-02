@@ -809,6 +809,7 @@ fn print_allocation_report(store_path: &std::path::Path) -> Result<()> {
         aida_core::node::BlockRegistry::load(&store_path.join("registry").join("blocks.yaml"))?;
     let root = RootRecord::load(store_path)?;
     println!();
+    print_store_mode(store_path)?;
     println!("Block delegation (this clone)");
     println!(
         "  Role:      {}",
@@ -871,49 +872,45 @@ fn print_allocation_report(store_path: &std::path::Path) -> Result<()> {
     }
     match &node {
         None => println!("  Blocks:    this clone has no node binding"),
-        Some(node) => {
-            let view = LineageView {
-                pools: &pools.pools,
-                blocks: &blocks.blocks,
-                root: root.as_ref(),
-                node,
-                role: mode.role,
-                upstream: mode.upstream.as_deref(),
-            };
-            let mine: Vec<_> = blocks
-                .blocks
-                .iter()
-                .filter(|b| &b.node_id == node)
-                .collect();
-            if mine.is_empty() {
-                println!("  Blocks:    none held by node {node}");
-            } else {
-                println!("  Blocks:");
-                for b in mine {
-                    // The root keeps dispensing its blocks recorded before lineage.
-                    let status = if mode.authoritative && b.pool_id.is_none() {
-                        if b.is_exhausted() {
-                            "exhausted".to_string()
+        Some(node) => aida_core::allocation_authority::with_clone_lineage_view(
+            store_path,
+            node,
+            |view: &LineageView<'_>| {
+                let mine: Vec<_> = blocks
+                    .blocks
+                    .iter()
+                    .filter(|b| &b.node_id == node)
+                    .collect();
+                if mine.is_empty() {
+                    println!("  Blocks:    none held by node {node}");
+                } else {
+                    println!("  Blocks:");
+                    for b in mine {
+                        // The root keeps dispensing its blocks recorded before lineage.
+                        let status = if mode.authoritative && b.pool_id.is_none() {
+                            if b.is_exhausted() {
+                                "exhausted".to_string()
+                            } else {
+                                "in use by the root (no lineage recorded yet)".to_string()
+                            }
                         } else {
-                            "in use by the root (no lineage recorded yet)".to_string()
-                        }
-                    } else {
-                        match view.block_status(b) {
-                            Ok(()) => "spendable".to_string(),
-                            Err(why) => format!("not spendable: {why}"),
-                        }
-                    };
-                    println!(
-                        "    {} {}-{}  next {}  pool {}  {status}",
-                        b.type_prefix,
-                        b.range_start,
-                        b.range_end,
-                        b.next,
-                        b.pool_id.as_deref().unwrap_or("-"),
-                    );
+                            match view.block_status(b) {
+                                Ok(()) => "spendable".to_string(),
+                                Err(why) => format!("not spendable: {why}"),
+                            }
+                        };
+                        println!(
+                            "    {} {}-{}  next {}  pool {}  {status}",
+                            b.type_prefix,
+                            b.range_start,
+                            b.range_end,
+                            b.next,
+                            b.pool_id.as_deref().unwrap_or("-"),
+                        );
+                    }
                 }
-            }
-        }
+            },
+        )?,
     }
     let conflicts = check_invariants(&pools.pools, &blocks.blocks, root.as_ref());
     if !conflicts.is_empty() {
@@ -921,6 +918,90 @@ fn print_allocation_report(store_path: &std::path::Path) -> Result<()> {
         for c in conflicts {
             println!("    {c}");
         }
+    }
+    Ok(())
+}
+
+/// List the single-hub pools enroll-root turns (or would turn) into root
+/// pools, with how many blocks and dispensed IDs each keeps.
+// trace:STORY-B6B1278890774EF993D2EBC327862470-164 | ai:claude
+fn print_materialized(
+    pools: &[aida_core::allocation_lineage::PoolRecord],
+    blocks: &[aida_core::AgreedIdBlock],
+    dry_run: bool,
+) {
+    if pools.is_empty() {
+        return;
+    }
+    println!(
+        "{} the single-hub pools as root pools (same ids; no block or ID is renumbered):",
+        if dry_run { "Would record" } else { "Recorded" }
+    );
+    for p in pools {
+        let held: Vec<_> = blocks
+            .iter()
+            .filter(|b| b.pool_id.as_deref() == Some(p.pool_id.as_str()))
+            .collect();
+        let issued: u64 = held
+            .iter()
+            .map(|b| u64::from(b.next.saturating_sub(b.range_start)))
+            .sum();
+        println!(
+            "  {}  {} blocks, {issued} IDs issued, home {}",
+            p.pool_id,
+            held.len(),
+            p.home_ref
+        );
+    }
+}
+
+/// `Mode:` and `Hubs:` lines: single-hub (no root needed), multi-hub with
+/// its root, or multi-hub with no root (claims refused), plus mirrors and
+/// any mirror-and-hub config error.
+// trace:STORY-B6B1278890774EF993D2EBC327862470-164 | ai:claude
+fn print_store_mode(store_path: &std::path::Path) -> Result<()> {
+    use aida_core::allocation_authority::{store_mode, StoreMode, MULTI_HUB_NEEDS_ROOT};
+    let hubs = aida_core::store_hubs::committed(store_path)?;
+    println!("Store allocation");
+    let line = match store_mode(store_path)? {
+        StoreMode::SingleHub { hub, remote } => format!(
+            "single-hub (hub {hub}{})",
+            match remote {
+                Some(r) => format!(" → this clone reaches it as `{r}`"),
+                None => " → no remote of this clone reaches it".into(),
+            }
+        ),
+        StoreMode::Rooted { root, hubs } if hubs.len() > 1 => {
+            format!("multi-hub (root node {root}): {}", hubs.join(", "))
+        }
+        StoreMode::Rooted { root, .. } => format!("rooted (root node {root})"),
+        StoreMode::MultiHubNoRoot { hubs } => format!(
+            "multi-hub, NO ROOT: claims refused ({}); {MULTI_HUB_NEEDS_ROOT}",
+            hubs.join(", ")
+        ),
+        StoreMode::Undeclared => {
+            let pending = aida_core::store_hubs::working(store_path)
+                .map(|w| !w.hubs.is_empty())
+                .unwrap_or(false);
+            if pending {
+                "no hub committed yet ([store.hubs] is in .aida/config.toml but not on the default branch; commit it)".into()
+            } else {
+                "no hub declared (declare it under [store.hubs] in .aida/config.toml)".into()
+            }
+        }
+    };
+    println!("  Mode:      {line}");
+    for hub in &hubs.hubs {
+        println!("  Hub:       {}  {}", hub.name, hub.urls.join(", "));
+    }
+    if !hubs.mirror_remotes.is_empty() {
+        println!(
+            "  Mirrors:   {} (never hubs)",
+            hubs.mirror_remotes.join(", ")
+        );
+    }
+    for problem in aida_core::store_hubs::config_conflicts(store_path, &hubs) {
+        println!("  {} {problem}", "!".yellow().bold());
     }
     Ok(())
 }
@@ -941,13 +1022,28 @@ fn handle_enroll_root(store_path: &std::path::Path, dry_run: bool) -> Result<()>
                 println!("Node {node} is already the allocation root; would mark this clone as root.")
             }
         }
+        if lineage::enroll_preflight(store_path, &node)? == EnrollOutcome::Enrolled {
+            let pools = lineage::PoolRegistry::load(store_path)?;
+            let blocks = aida_core::node::BlockRegistry::load(
+                &store_path.join("registry").join("blocks.yaml"),
+            )?;
+            let to_materialize = lineage::pools_to_materialize(&pools.pools, &blocks.blocks, &node);
+            print_materialized(&to_materialize, &blocks.blocks, true);
+        }
         if let Some(upstream) = &mode.upstream {
             println!("Would drop this clone's upstream `{upstream}` (the root has none).");
         }
         println!("Nothing written (dry run).");
         return Ok(());
     }
+    let pools = lineage::PoolRegistry::load(store_path)?;
+    let blocks =
+        aida_core::node::BlockRegistry::load(&store_path.join("registry").join("blocks.yaml"))?;
+    let to_materialize = lineage::pools_to_materialize(&pools.pools, &blocks.blocks, &node);
     let outcome = lineage::enroll_root(store_path, &node)?;
+    if outcome == EnrollOutcome::Enrolled {
+        print_materialized(&to_materialize, &blocks.blocks, false);
+    }
     aida_core::allocation_authority::write_mode(store_path, AllocationRole::Root, None)?;
     match outcome {
         EnrollOutcome::Enrolled => println!(

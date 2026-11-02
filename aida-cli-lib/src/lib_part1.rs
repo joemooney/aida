@@ -1445,6 +1445,11 @@ pub(crate) fn rewrite_agent_default_new(args: &[String]) -> Vec<String> {
             "pause",
             "resume",
             "stop",
+            // The hidden `wake` (and `describe`) were rewritten to
+            // `agent new wake …`, so the documented manual-arm command
+            // failed. trace:STORY-2256 | ai:claude
+            "describe",
+            "wake",
             "list-roles",
             "help",
         ];
@@ -1551,6 +1556,18 @@ pub(crate) const LIST_LENS_ALIASES: &[ListLensAlias] = &[
         meaning: "active work — leased specs + drain in-flight status",
     },
 ];
+
+/// Every built-in pre-clap argv rewrite, in dispatch order, returning the
+/// rewritten argv and the deprecated groom verb typed (if any). One function so
+/// `aida docs sweep` checks documented commands exactly as dispatch reads them.
+// trace:STORY-2220 | ai:claude
+pub(crate) fn builtin_alias_rewrites(args: &[String]) -> (Vec<String>, Option<String>) {
+    rewrite_groom_alias(&rewrite_queue_default_list(&rewrite_agent_default_new(
+        &rewrite_list_alias(&rewrite_type_alias(&rewrite_advisor_assess(
+            &rewrite_personal_view_alias(args),
+        ))),
+    )))
+}
 
 /// TASK-862: top-level personal-view shortcuts. `aida mylist` rewrites to
 /// `aida list me` (the current user's owned/assigned specs — STORY-662's `me`
@@ -1802,12 +1819,7 @@ pub(crate) fn run() -> Result<()> {
     // the canonical `aida groom` before clap, and capture which deprecated
     // spelling (if any) the operator typed so we can print a non-blocking hint
     // once argv parsing succeeds. trace:STORY-708 | ai:claude
-    let (after_alias_rewrites, groom_deprecated_verb) =
-        rewrite_groom_alias(&rewrite_queue_default_list(&rewrite_agent_default_new(
-            &rewrite_list_alias(&rewrite_type_alias(&rewrite_advisor_assess(
-                &rewrite_personal_view_alias(&expanded),
-            ))),
-        )));
+    let (after_alias_rewrites, groom_deprecated_verb) = builtin_alias_rewrites(&expanded);
     // Git-style extensions: a head that is still not a real subcommand after
     // every built-in and user-alias stage runs `aida-<name>` from PATH.
     // trace:STORY-1641 | ai:claude

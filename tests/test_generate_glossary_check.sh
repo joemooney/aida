@@ -5,10 +5,12 @@ set -euo pipefail
 # for the generated AIDA Book glossary page (docs/cli/12-glossary.md).
 #
 # A stub AIDA_BIN stands in for `aida docs glossary`; it reproduces
-# render_discipline_glossary: the two embedded discipline templates (trailing
-# newline trimmed, as build.rs embeds them) joined by a blank line. The real
-# binary is exercised by CI's "Book glossary drift guard" step.
+# render_discipline_glossary: the selected embedded discipline templates
+# (in product, machinery, lifecycle order; trailing newline trimmed, as
+# build.rs embeds them) joined by a blank line. The real binary is exercised
+# by CI's "Book glossary drift guard" step.
 # trace:BUG-1950 | ai:claude
+# trace:STORY-2219 | ai:claude
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 GEN="$ROOT/docs/cli/generate-glossary.sh"
 TMP="$(mktemp -d)"
@@ -16,24 +18,77 @@ trap 'rm -rf "$TMP"' EXIT
 
 cat >"$TMP/aida" <<'SH'
 #!/usr/bin/env bash
-[ "$*" = "docs glossary --format human" ] || { echo "stub: unexpected args: $*" >&2; exit 64; }
 D="${STUB_TEMPLATE_DIR:?}"
-printf '%s\n\n%s' "$(cat "$D/machinery-glossary.md")" "$(cat "$D/lifecycle-vocabulary.md")"
+[ "${1:-} ${2:-}" = "docs glossary" ] || { echo "stub: unexpected args: $*" >&2; exit 64; }
+shift 2
+p=0 m=0 l=0 fmt=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --product) p=1 ;;
+    --machinery) m=1 ;;
+    --lifecycle) l=1 ;;
+    --format) fmt="${2:-}"; shift ;;
+    *) echo "stub: unexpected arg: $1" >&2; exit 64 ;;
+  esac
+  shift
+done
+[ "$fmt" = human ] || { echo "stub: --format human is required" >&2; exit 64; }
+[ $((p + m + l)) -eq 0 ] && p=1 m=1 l=1
+out=""
+for pair in "$p:product-glossary" "$m:machinery-glossary" "$l:lifecycle-vocabulary"; do
+  [ "${pair%%:*}" = 1 ] || continue
+  part="$(cat "$D/${pair#*:}.md")"
+  if [ -z "$out" ]; then out="$part"; else out="$out"$'\n\n'"$part"; fi
+done
+printf '%s' "$out"
 SH
 chmod +x "$TMP/aida"
 
+# The fixture has the collisions the real templates have: product "Role" and
+# machinery "role" share an id, both sections have a "Terms" heading, and the
+# templates link each other by file name.
 mkdir -p "$TMP/tpl"
+cat >"$TMP/tpl/product-glossary.md" <<'MD'
+# Product glossary
+
+<!-- trace:STORY-1 | ai:claude -->
+
+Developer terms are in the [machinery glossary](machinery-glossary.md), and
+lifecycle states in the [lifecycle vocabulary](lifecycle-vocabulary.md).
+
+## Terms
+
+### Hub
+
+A Git server. See [the guide](../../../../docs/air-gapped-development.md#the-parts).
+
+### Role
+
+A job. Held by a [hub](#hub) user; see [Terms](#terms).
+MD
 cat >"$TMP/tpl/machinery-glossary.md" <<'MD'
 # Machinery glossary
+
+## Terms
 
 ### drain
 
 Works the ready set. trace:STORY-1 | ai:claude
+
+### role
+
+Capability profile. Not the [role](#role) of a person; see [Terms](#terms),
+[`lifecycle-vocabulary.md`](lifecycle-vocabulary.md#merged) and the literal
+`[x](lifecycle-vocabulary.md)`.
 MD
 cat >"$TMP/tpl/lifecycle-vocabulary.md" <<'MD'
 # Lifecycle vocabulary
 
 Say "PR opened for TASK-12".
+
+### merged
+
+On main. See [drain](machinery-glossary.md#drain).
 MD
 
 PAGE="$TMP/12-glossary.md"
@@ -51,12 +106,58 @@ if ! gen --check; then
   exit 1
 fi
 grep -Fx "## Machinery glossary" "$PAGE" >/dev/null
+grep -Fx "## Product glossary" "$PAGE" >/dev/null
+grep -Fx "A Git server. See [the guide](../air-gapped-development.md#the-parts)." "$PAGE" >/dev/null
 grep -Fx "Works the ready set." "$PAGE" >/dev/null
 grep -F 'Say "PR opened for `<spec-id>`".' "$PAGE" >/dev/null
 if grep -F "trace:" "$PAGE" >/dev/null; then
   echo "FAIL: trace provenance leaked into the generated page" >&2
   exit 1
 fi
+
+# (a2) The book prints machinery, lifecycle, then product, so the developer
+#      headings keep their bare ids and the product repeats get `-1`. Links
+#      between templates become in-page anchors; bare anchors name the heading
+#      in their own section; inline code is left as written.
+order="$(grep -E '^## (Machinery glossary|Lifecycle vocabulary|Product glossary)$' "$PAGE" | tr '\n' '|')"
+[ "$order" = "## Machinery glossary|## Lifecycle vocabulary|## Product glossary|" ] \
+  || { echo "FAIL: book section order is '$order'" >&2; exit 1; }
+for want in \
+  'Developer terms are in the [machinery glossary](#machinery-glossary), and' \
+  'lifecycle states in the [lifecycle vocabulary](#lifecycle-vocabulary).' \
+  'A job. Held by a [hub](#hub) user; see [Terms](#terms-1).' \
+  'Capability profile. Not the [role](#role) of a person; see [Terms](#terms),' \
+  '[`lifecycle-vocabulary.md`](#merged) and the literal' \
+  '`[x](lifecycle-vocabulary.md)`.' \
+  'On main. See [drain](#drain).'; do
+  grep -Fx -- "$want" "$PAGE" >/dev/null \
+    || { echo "FAIL: generated page lacks: $want" >&2; cat "$PAGE" >&2; exit 1; }
+done
+if grep -E '\]\((machinery-glossary|lifecycle-vocabulary|product-glossary)\.md' "$PAGE" \
+  | grep -vF '`[x](lifecycle-vocabulary.md)`' >/dev/null; then
+  echo "FAIL: a link to an unpublished template page survived" >&2
+  exit 1
+fi
+python3 "$ROOT/docs/cli/glossary-anchors.py" --verify "$PAGE"
+
+# (a3) The anchor check catches a link that lands in the wrong section and a
+#      link with no heading.
+sed 's/see \[Terms\](#terms-1)/see [Terms](#terms)/' "$PAGE" >"$TMP/wrong.md"
+if python3 "$ROOT/docs/cli/glossary-anchors.py" --verify "$TMP/wrong.md" 2>"$TMP/out"; then
+  echo "FAIL: a product link landing on the machinery heading was not caught" >&2
+  exit 1
+fi
+grep -F "has its own #terms-1" "$TMP/out" >/dev/null
+# trace:STORY-2219 | ai:Codex
+cp "$TMP/tpl/product-glossary.md" "$TMP/product-glossary.saved.md"
+printf '\nSee [nothing](#no-such-term).\n' >>"$TMP/tpl/product-glossary.md"
+if gen; then
+  echo "FAIL: an unresolved anchor did not fail generation" >&2
+  exit 1
+fi
+grep -F "no heading for #no-such-term" "$TMP/out" >/dev/null
+cp "$TMP/product-glossary.saved.md" "$TMP/tpl/product-glossary.md"
+gen
 
 # (b) A hand edit of the page fails --check and leaves the page untouched.
 sed 's/Works the ready set\./Works the ready set, by hand./' "$PAGE" >"$PAGE.tmp" && mv "$PAGE.tmp" "$PAGE"
@@ -97,5 +198,9 @@ if ! AIDA_BIN="$TMP/aida" STUB_TEMPLATE_DIR="$ROOT/aida-core/templates/.aida/dis
   cat "$TMP/out" >&2
   exit 1
 fi
+
+# (g) Every in-page anchor in the committed chapter resolves to the heading
+#     in its own section.
+python3 "$ROOT/docs/cli/glossary-anchors.py" --verify "$ROOT/docs/cli/12-glossary.md"
 
 echo "ok: generate-glossary.sh --check"

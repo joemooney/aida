@@ -115,6 +115,10 @@ fn classified_flags() -> Vec<(&'static str, Kind)> {
             NotATimeBound("git revision range"),
         ),
         (
+            "aida docs sweep --since",
+            NotATimeBound("git revision, not a time"),
+        ),
+        (
             "aida doc coverage --since",
             NotATimeBound("git ref/tag marking the release boundary"),
         ),
