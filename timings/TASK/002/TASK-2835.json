@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "spec": "TASK-2835",
+  "publishes": [
+    {
+      "at": "2026-11-02T14:09:28.247517821Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-02T13:05:22.236952716Z",
+      "spec": "TASK-2835",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-11-02T14:07:11.501942459Z",
+      "spec": "TASK-2835",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 3235
+      }
+    },
+    {
+      "ts": "2026-11-02T14:09:28.015751314Z",
+      "spec": "TASK-2835",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "20d11bb5b2b5314b9886bd640d3473dae049be7d",
+        "pr": 3235,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
