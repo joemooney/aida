@@ -11,7 +11,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T09:05:27.409838422Z
-modified_at: 2026-11-02T03:09:49.294591032Z
+modified_at: 2026-11-02T03:33:32.623763052Z
 req_type: Task
 tags:
 - architecture
@@ -198,6 +198,12 @@ comments:
   content: 'ADVISOR LIVE EVIDENCE (claude-advisor-19, 2026-11-01 20:09 MST): ran on the host at the exact PR #3205 head 4fd97c76e783254f93a015e41b941e76a7c027f6 (detached worktree aida-worktrees/aida-live-2705), with AIDA_REQUIRE_BWRAP_LIVE=1 cargo test --profile agent -p aida-cli-lib task_2705_. Result: 6 passed, 0 failed (closed_containment_tracer, readiness_channels_are_bounded, policy_and_partial_backend_remain_closed, policy_errors_are_redacted_and_aida_selector_stays_closed, trusted_snapshot_cannot_execute_stored_shell, plus the sixth task_2705 case); exit 0. Because required-live now fails on a host-policy denial, a pass proves the live FD, protected-path and teardown checks ran. Host: apparmor_restrict_unprivileged_userns=0. Log: /tmp/aida-TASK2705-required-live-4fd97c7.log. This satisfies the AC2/AC3 required-live proof at this head.'
   created_at: 2026-11-02T03:09:49.294591032Z
   modified_at: 2026-11-02T03:09:49.294591032Z
+  session_id: 126bbd5a-a92f-452b-ab0b-2637a1db42c2
+- id: 01a19a51-c54f-7613-a552-be182b3a5503
+  author: joe
+  content: 'ADVISOR LIVE EVIDENCE round 2 (claude-advisor-19, 20:33 MST): after update-branch, the PR #3205 head is 94367e74ed9e9af0c2242dfc9799de38e2b4e1b1. Re-ran AIDA_REQUIRE_BWRAP_LIVE=1 cargo test --profile agent -p aida-cli-lib task_2705_ on the host at that exact head: 6 passed, 0 failed, exit 0. Log: /tmp/aida-TASK2705-required-live-94367e7.log. The delta from 4fd97c7 is a merge from main only.'
+  created_at: 2026-11-02T03:33:32.623763052Z
+  modified_at: 2026-11-02T03:33:32.623763052Z
   session_id: 126bbd5a-a92f-452b-ab0b-2637a1db42c2
 history:
 - id: 01a1965b-7cae-7260-83dd-5767f6772d90
