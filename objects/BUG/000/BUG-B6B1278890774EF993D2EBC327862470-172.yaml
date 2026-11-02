@@ -16,12 +16,12 @@ description: |
   Sketch and independent advisor signoff before code; strict review for authority plumbing. This finding is separate from the native cache path writable-root refusal, which is recorded on STORY-2238. User's global Codex config must remain unchanged. Codex implementer lane after signoff; LIGHT targeted grant/launch test plus make check-ci-fast, CI is the full gate.
 
   Scope amendment: the initial adapter-only sketch expands only to the weak positive-approval consumers identified in codex-advisor08 ruling: gate/dispatch_authority::verdict_at_head + dispatch_flow, human reviewed classification and gate/review_verdict::review_actionability consumers. Preserve named ungranted record artifacts as nonauthoritative; do not change roster, issuance, grants, direct-human receipts or protected merge policy. Independent design signoff on this amendment and strict implementation review are required before completion.
-status: InProgress
+status: Done
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T07:26:20.914223641Z
-modified_at: 2026-11-02T10:51:09.246462933Z
+modified_at: 2026-11-02T11:11:23.588587032Z
 req_type: Bug
 tags:
 - architecture
@@ -598,6 +598,11 @@ comments:
   created_at: 2026-11-02T10:51:09.246462933Z
   modified_at: 2026-11-02T10:51:09.246462933Z
   session_id: 73d9f998-5fe0-4420-8f9e-46b696dea2de
+- id: 01a19bf4-f343-7481-b517-8174c45e17ff
+  author: aida-auto-bump
+  content: '[aida:closure-held] Code merged to the default branch (commit 2b9eaa5), but completion is held at Done: the spec''s own declared closure criteria are unmet: "tag `closure:pending` is set". Whoever owns those criteria (the spec''s owner or the advisor) resolves them by checking the box in the spec''s Closure section, or removing the tag, via `aida edit BUG-2398 --description ...` / `aida edit BUG-2398 --remove-tag closure:pending`. The next `aida pull` completes it once nothing holds it; to replay by hand, run `aida db reconcile-status --spec BUG-2398 --since 2b9eaa5^`. If the blockers form a cycle, or you decide to ship regardless, a human runs `aida edit BUG-2398 --status completed`. (merge sha: 2b9eaa5c3210f8343c475e9993c55cbadb9083d5)'
+  created_at: 2026-11-02T11:11:23.971351193Z
+  modified_at: 2026-11-02T11:11:23.971351193Z
 history:
 - id: 01a19600-c769-7cd0-ba08-8d93975e3e3b
   author: joe
@@ -829,6 +834,13 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a19bf4-f343-7481-b517-816c773bbcd4
+  author: aida-auto-bump
+  timestamp: 2026-11-02T11:11:23.971327743Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 filed_at:
   code_sha: 53c89700b4da50b5593a2079ed4cc3abaae5cdfe
   branch: main
