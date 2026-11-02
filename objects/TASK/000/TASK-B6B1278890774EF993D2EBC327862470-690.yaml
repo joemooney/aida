@@ -13,7 +13,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-02T09:06:23.625586402Z
-modified_at: 2026-11-02T09:20:38.345484279Z
+modified_at: 2026-11-02T09:20:41.409558691Z
 req_type: Task
 tags:
 - carried-from:BUG-B6B1278890774EF993D2EBC327862470-178
@@ -29,6 +29,13 @@ relationships:
   target_id: 01a19b82-af28-74c3-a32a-83275e59aaf7
   created_at: 2026-11-02T09:20:38.345478745Z
   created_by: joe
+comments:
+- id: 01a19b8f-97c1-7f13-8d3c-f7e83a110f18
+  author: joe
+  content: 'ADVISOR BRIEF (2026-11-02 02:22 MST), FASTTRACK-sized LIGHT bundle, one PR: (1) delete the cfg(test)-only retired mail_backlog::evaluate() (mail_backlog.rs:200) and route_backlog() (:486), porting any still-meaningful mail_backlog::tests onto inspect_backlog and deleting the rest. (2) TASK-HOME-692: replace the hard-coded subject_line(m, 80) in aida-core/src/mailbox_logical.rs:497 with the shared SUBJECT_MAX, moving the constant to aida-core if needed. (3) TASK-HOME-693: fix docs/cli/03-work-autonomy.md:415-438 so the new block does not orphan the indented ''Runaway-seat watchdog'' continuation of the substrate bullet. Gate: cargo test -p aida-cli-lib mail_backlog, then make check-ci-fast.'
+  created_at: 2026-11-02T09:20:41.409558691Z
+  modified_at: 2026-11-02T09:20:41.409558691Z
+  session_id: 1f56bd1e-c059-4f73-b8df-e18b2170fdfc
 history:
 - id: 01a19b8f-6c8c-7c03-ad82-d3d055fa9302
   author: joe
