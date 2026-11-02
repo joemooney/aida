@@ -214,6 +214,13 @@ impl RedRefinement {
     }
 }
 
+/// The one check-name comparator every CI gate shares (red classification,
+/// hold tolerance, train readiness): forge check names match
+/// case-insensitively. trace:BUG-2401 | ai:claude
+pub(crate) fn check_name_eq(a: &str, b: &str) -> bool {
+    a.eq_ignore_ascii_case(b)
+}
+
 /// Pure classification of the rows. `required` is the branch-protection
 /// required-check name set (empty when the repo declares none — then nothing
 /// is "non-required by policy", but the allow-list still applies because a
@@ -228,7 +235,7 @@ pub(crate) fn classify_red(
     // TASK-1287: an explicit `pr ship` may confirm a label-only supervised
     // hold even when no drain-created marker exists.
     let mut out = RedRefinement::default();
-    let is_required = |name: &str| required.iter().any(|r| r.eq_ignore_ascii_case(name));
+    let is_required = |name: &str| required.iter().any(|r| check_name_eq(r, name));
     for row in rows {
         let informational = !is_required(&row.name) && cfg.is_informational(row);
         if row.is_pending() {
@@ -240,7 +247,7 @@ pub(crate) fn classify_red(
         if !row.is_red() {
             continue;
         }
-        if row.name.eq_ignore_ascii_case(HOLD_GATE_CHECK) {
+        if check_name_eq(&row.name, HOLD_GATE_CHECK) {
             if hold_marker_present || hold_label_present {
                 out.hold_gate_is_the_hold = true;
             } else {

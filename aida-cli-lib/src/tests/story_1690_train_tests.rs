@@ -2170,9 +2170,575 @@ fn bug_2219_exhausted_retries_return_the_final_failure() {
 #[test]
 fn bug_2219_train_network_helpers_route_through_the_retry_runner() {
     let src = include_str!("../pr_train.rs");
-    for name in ["fn gh_stdout(", "fn origin_git("] {
+    // trace:BUG-2401 | ai:claude — the required-check policy reads too.
+    for name in ["fn gh_stdout(", "fn origin_git(", "fn train_policy_read("] {
         let start = src.find(name).expect(name);
         let body = &src[start..start + 700];
         assert!(body.contains("net_output("), "{name} must retry transients");
     }
+}
+
+// trace:BUG-2401 | ai:codex
+fn required_train_rows() -> Vec<crate::ci_gate::CheckRow> {
+    (0..7)
+        .map(|i| crate::ci_gate::CheckRow {
+            name: format!("Build lane {i}"),
+            bucket: "pass".into(),
+            workflow: "CI".into(),
+            run_id: None,
+        })
+        .chain(std::iter::once(crate::ci_gate::CheckRow {
+            name: crate::ci_gate::HOLD_GATE_CHECK.into(),
+            bucket: "pass".into(),
+            workflow: "hold".into(),
+            run_id: None,
+        }))
+        .collect()
+}
+
+#[test]
+// trace:BUG-2401 | ai:codex
+fn train_required_aggregate_registration_and_precedence() {
+    use crate::ci_gate::{CheckRow, CiGateConfig};
+    let required = vec![
+        "Build (ubuntu-latest)".into(),
+        crate::ci_gate::HOLD_GATE_CHECK.into(),
+    ];
+    let cfg = CiGateConfig {
+        informational_checks: vec!["Build*".into()],
+        informational_workflows: vec![],
+    };
+    let mut rows = required_train_rows();
+    // Exact #3202 shape: seven passing lanes plus hold, no protected aggregate.
+    assert!(matches!(
+        train_ci_readiness(&rows, &required, &cfg, false),
+        TrainCiReadiness::Missing(_)
+    ));
+    // Preserve genuine red-train rerun/bisection even before registration.
+    rows[0].bucket = "fail".into();
+    assert!(matches!(
+        train_ci_readiness(&rows, &required, &CiGateConfig::default(), false),
+        TrainCiReadiness::Red(_)
+    ));
+    rows[0].bucket = "pass".into();
+    // A held member must never make an absent aggregate green either.
+    rows.last_mut().unwrap().bucket = "fail".into();
+    assert!(matches!(
+        train_ci_readiness(&rows, &required, &cfg, true),
+        TrainCiReadiness::Missing(_)
+    ));
+    rows.push(CheckRow {
+        name: required[0].clone(),
+        bucket: "pending".into(),
+        workflow: "CI".into(),
+        run_id: None,
+    });
+    for bucket in ["pending", "unknown"] {
+        rows.last_mut().unwrap().bucket = bucket.into();
+        assert!(matches!(
+            train_ci_readiness(&rows, &required, &cfg, true),
+            TrainCiReadiness::Pending(_)
+        ));
+    }
+    // A skipped required check is a terminal refusal naming it, never a wait
+    // until the CI ceiling. trace:BUG-2401 | ai:claude
+    rows.last_mut().unwrap().bucket = "skipping".into();
+    match train_ci_readiness(&rows, &required, &cfg, true) {
+        TrainCiReadiness::Refused(why) => {
+            assert!(why.contains("skipped: Build (ubuntu-latest)"), "{why}")
+        }
+        other => panic!("a skipped required check must refuse, got {other:?}"),
+    }
+    rows.last_mut().unwrap().bucket = "fail".into();
+    assert!(matches!(
+        train_ci_readiness(&rows, &required, &cfg, true),
+        TrainCiReadiness::Red(_)
+    ));
+    rows.last_mut().unwrap().bucket = "pass".into();
+    assert_eq!(
+        train_ci_readiness(&rows, &required, &cfg, true),
+        TrainCiReadiness::Green
+    );
+    assert!(matches!(
+        train_ci_readiness(&rows, &required, &cfg, false),
+        TrainCiReadiness::Red(_)
+    ));
+    rows[7].bucket = "pass".into();
+    rows.push(CheckRow {
+        name: "Build informational".into(),
+        bucket: "pending".into(),
+        workflow: "other".into(),
+        run_id: None,
+    });
+    assert_eq!(
+        train_ci_readiness(&rows, &required, &cfg, false),
+        TrainCiReadiness::Green
+    );
+    assert!(matches!(
+        train_ci_readiness(&[], &[], &cfg, false),
+        TrainCiReadiness::Missing(_)
+    ));
+}
+
+#[test]
+// trace:BUG-2401 | ai:codex
+fn train_required_ci_live_ports_refuse_stale_and_final_missing() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let root = tempfile::tempdir().unwrap();
+    let dir = root.path();
+    // Fast transient retries for the policy-read case (BUG-2219 runner).
+    write(
+        dir,
+        ".aida/config.toml",
+        "[orchestrator]\nretry_max_attempts = 3\nretry_base_delay_ms = 1\n",
+    );
+    let gh = dir.join("gh");
+    crate::test_exec::write_executable(
+        &gh,
+        r#"#!/bin/sh
+case "$*" in
+  'pr view '*)
+    if [ -f moving ] && [ -f viewed ]; then cat moved.json; else cat head.json; fi
+    touch viewed ;;
+  'api repos/{owner}/{repo}/branches/release%2Fnext/protection')
+    if [ -f flaky ]; then rm flaky; echo 'error connecting to api.github.com' >&2; exit 1; fi
+    if [ -f unprotected ]; then echo '{"message":"Branch not protected"}'; echo 'gh: Branch not protected (HTTP 404)' >&2; exit 1; fi
+    if [ -f unavailable ]; then echo 'HTTP 403' >&2; exit 1; fi; cat protection.json ;;
+  'api repos/{owner}/{repo}/rules/branches/release%2Fnext?per_page=100&page='*)
+    p=${2##*page=}
+    if [ -f "rules-$p.json" ]; then cat "rules-$p.json"; elif [ "$p" = 1 ]; then cat rules.json; else echo '[]'; fi ;;
+  'pr checks '*) cat rows.json ;;
+  *) echo "unexpected forge call: $*" >&2; exit 1 ;;
+esac
+"#,
+    );
+    let path = format!("{}:{}", dir.display(), std::env::var("PATH").unwrap());
+    let _env = crate::test_env::EnvVarsGuard::set(&[
+        ("PATH", path.as_str()),
+        ("AIDA_TEST_GH_BINARY", gh.to_str().unwrap()),
+    ]);
+    let tip = "a".repeat(40);
+    let change = crate::forge::ChangeRef {
+        id: 3202,
+        url: "fixture".into(),
+        branch: "train".into(),
+        base: "release/next".into(),
+        title: None,
+    };
+    write(
+        dir,
+        "head.json",
+        &serde_json::json!({"headRefOid":tip,"baseRefName":change.base,"state":"OPEN"}).to_string(),
+    );
+    write(
+        dir,
+        "moved.json",
+        &serde_json::json!({"headRefOid":"b".repeat(40),"baseRefName":change.base,"state":"OPEN"})
+            .to_string(),
+    );
+    write(
+        dir,
+        "protection.json",
+        r#"{"required_status_checks":{"contexts":["Build (ubuntu-latest)","merge-hold-gate"]}}"#,
+    );
+    write(dir, "rules.json", "[]");
+    let rows_json = |aggregate: Option<&str>| {
+        let mut rows: Vec<_> = required_train_rows()
+            .into_iter()
+            .map(|r| serde_json::json!({"name":r.name,"bucket":r.bucket,"workflow":r.workflow}))
+            .collect();
+        if let Some(bucket) = aggregate {
+            rows.push(
+                serde_json::json!({"name":"Build (ubuntu-latest)","bucket":bucket,"workflow":"CI"}),
+            );
+        }
+        serde_json::to_string(&rows).unwrap()
+    };
+    let forge = crate::forge::forge_for_kind(dir, crate::forge::ForgeKind::GitHub);
+    let mut host = LiveTrainForge {
+        project_root: dir.into(),
+        main_worktree: dir.into(),
+        base: change.base.clone(),
+        forge: forge.as_ref(),
+        named: true,
+        dispatch_ctx: None,
+        dispatch_abort: None,
+    };
+    // Delayed registration and settlement at the exact protected train head.
+    for (bucket, expected) in [
+        (None, "missing"),
+        (Some("pending"), "pending"),
+        (Some("pass"), "green"),
+        (Some("fail"), "red"),
+    ] {
+        write(dir, "rows.json", &rows_json(bucket));
+        let state = host.train_ci_snapshot(&change, &tip, &[]).unwrap();
+        assert!(match expected {
+            "missing" => matches!(state, TrainCiReadiness::Missing(_)),
+            "pending" => matches!(state, TrainCiReadiness::Pending(_)),
+            "green" => state == TrainCiReadiness::Green,
+            _ => matches!(state, TrainCiReadiness::Red(_)),
+        });
+    }
+    // Initial success does not authorize landing after a later row disappears.
+    write(dir, "rows.json", &rows_json(Some("pass")));
+    let train = Built {
+        base: "base".into(),
+        tip: tip.clone(),
+        cars: vec![],
+        dropped: vec![],
+    };
+    assert!(matches!(
+        host.wait_ci(&change, &train).unwrap(),
+        CiVerdict::Green
+    ));
+    write(dir, "rows.json", &rows_json(None));
+    assert!(host
+        .merge(&change, &tip)
+        .unwrap_err()
+        .to_string()
+        .contains("final CI recheck"));
+    write(dir, "unavailable", "");
+    assert!(host.train_ci_snapshot(&change, &tip, &[]).is_err());
+    std::fs::remove_file(dir.join("unavailable")).unwrap();
+    write(
+        dir,
+        "rules.json",
+        r#"[{"type":"required_status_checks","parameters":{"required_status_checks":[{"context":"ruleset-only"}]}}]"#,
+    );
+    write(dir, "rows.json", &rows_json(Some("pass")));
+    assert!(matches!(
+        host.train_ci_snapshot(&change, &tip, &[]).unwrap(),
+        TrainCiReadiness::Missing(_)
+    ));
+    write(dir, "rules.json", "{}");
+    assert!(host.train_ci_snapshot(&change, &tip, &[]).is_err());
+    write(dir, "rules.json", r#"[{"type":"workflows"}]"#);
+    assert!(host.train_ci_snapshot(&change, &tip, &[]).is_err());
+    write(dir, "rules.json", "[]");
+    // A full first page is followed: a required context or an unsupported
+    // workflow rule on a later page is never dropped (GitHub pages rules).
+    // trace:BUG-2401 | ai:claude
+    let full_page = serde_json::to_string(&vec![
+        serde_json::json!({"type":"deletion"});
+        crate::status_prs::TRAIN_RULE_PAGE_SIZE
+    ])
+    .unwrap();
+    write(dir, "rules-1.json", &full_page);
+    write(
+        dir,
+        "rules-2.json",
+        r#"[{"type":"required_status_checks","parameters":{"required_status_checks":[{"context":"page-two-only"}]}}]"#,
+    );
+    match host.train_ci_snapshot(&change, &tip, &[]).unwrap() {
+        TrainCiReadiness::Missing(names) => assert_eq!(names, vec!["page-two-only".to_string()]),
+        other => panic!("later-page required check must be missing, got {other:?}"),
+    }
+    write(dir, "rules-2.json", r#"[{"type":"workflows"}]"#);
+    assert!(host.train_ci_snapshot(&change, &tip, &[]).is_err());
+    write(dir, "rules-2.json", r#"{"message":"Server Error"}"#);
+    assert!(host.train_ci_snapshot(&change, &tip, &[]).is_err());
+    // More full pages than the bound: incomplete policy refuses.
+    for page in 1..=crate::status_prs::TRAIN_RULE_PAGE_LIMIT {
+        write(dir, &format!("rules-{page}.json"), &full_page);
+    }
+    assert!(host
+        .train_ci_snapshot(&change, &tip, &[])
+        .unwrap_err()
+        .to_string()
+        .contains("policy incomplete"));
+    for page in 1..=crate::status_prs::TRAIN_RULE_PAGE_LIMIT {
+        std::fs::remove_file(dir.join(format!("rules-{page}.json"))).unwrap();
+    }
+    write(
+        dir,
+        "protection.json",
+        r#"{"required_status_checks":{"contexts":[42]}}"#,
+    );
+    assert!(host.train_ci_snapshot(&change, &tip, &[]).is_err());
+    write(dir, "protection.json", r#"{"required_status_checks":null}"#);
+    write(dir, "rows.json", "[]");
+    assert!(matches!(
+        host.train_ci_snapshot(&change, &tip, &[]).unwrap(),
+        TrainCiReadiness::Missing(_)
+    ));
+    write(dir, "rows.json", &rows_json(Some("pass")));
+    assert_eq!(
+        host.train_ci_snapshot(&change, &tip, &[]).unwrap(),
+        TrainCiReadiness::Green
+    );
+    // GitHub omits `required_status_checks` on a protected branch with no
+    // status-check requirement: absent reads as nothing required, like null;
+    // a present but malformed section still refuses. trace:BUG-2401 | ai:claude
+    write(
+        dir,
+        "protection.json",
+        r#"{"url":"fixture","enforce_admins":{"enabled":true}}"#,
+    );
+    assert_eq!(
+        host.train_ci_snapshot(&change, &tip, &[]).unwrap(),
+        TrainCiReadiness::Green
+    );
+    write(
+        dir,
+        "protection.json",
+        r#"{"required_status_checks":{"contexts":"Build"}}"#,
+    );
+    assert!(host.train_ci_snapshot(&change, &tip, &[]).is_err());
+    // The 'Branch not protected' 404 is a positive "nothing required" (rules
+    // still apply); every other protection failure stays unknown above.
+    write(dir, "unprotected", "");
+    assert_eq!(
+        host.train_ci_snapshot(&change, &tip, &[]).unwrap(),
+        TrainCiReadiness::Green
+    );
+    std::fs::remove_file(dir.join("unprotected")).unwrap();
+    // One transient policy-read failure is retried (BUG-2219) and the CI
+    // wait carries on to green instead of stopping the run.
+    write(dir, "protection.json", r#"{"required_status_checks":null}"#);
+    write(dir, "flaky", "");
+    assert!(matches!(
+        host.wait_ci(&change, &train).unwrap(),
+        CiVerdict::Green
+    ));
+    assert!(!dir.join("flaky").exists(), "the transient failure was hit");
+    std::fs::remove_file(dir.join("viewed")).unwrap();
+    write(dir, "moving", "");
+    assert!(host
+        .train_ci_snapshot(&change, &tip, &[])
+        .unwrap_err()
+        .to_string()
+        .contains("changed"));
+    assert!(host.merge(&change, &tip).is_err());
+}
+
+// trace:BUG-2401 | ai:claude
+fn bug2401_row(name: &str, bucket: &str) -> crate::ci_gate::CheckRow {
+    crate::ci_gate::CheckRow {
+        name: name.into(),
+        bucket: bucket.into(),
+        workflow: "CI".into(),
+        run_id: None,
+    }
+}
+
+/// An aggregate that registers only after its lanes finish is pending while
+/// they run, never missing (and never green); names share one comparator.
+#[test]
+// trace:BUG-2401 | ai:claude
+fn bug2401_absent_aggregate_behind_running_lanes_is_pending() {
+    let cfg = crate::ci_gate::CiGateConfig::default();
+    let required = vec!["Build (ubuntu-latest)".to_string()];
+    let mut rows = required_train_rows();
+    rows[3].bucket = "pending".into();
+    match train_ci_readiness(&rows, &required, &cfg, false) {
+        TrainCiReadiness::Pending(names) => {
+            assert!(names[0].starts_with("Build (ubuntu-latest)"), "{names:?}")
+        }
+        other => panic!("absent aggregate behind a running lane: {other:?}"),
+    }
+    rows[3].bucket = "pass".into();
+    assert!(matches!(
+        train_ci_readiness(&rows, &required, &cfg, false),
+        TrainCiReadiness::Missing(_)
+    ));
+    // Case differences neither leave a present check "missing" nor skip it.
+    rows.push(bug2401_row("build (UBUNTU-latest)", "pending"));
+    assert!(matches!(
+        train_ci_readiness(&rows, &required, &cfg, false),
+        TrainCiReadiness::Pending(_)
+    ));
+    rows.last_mut().unwrap().bucket = "pass".into();
+    assert_eq!(
+        train_ci_readiness(&rows, &required, &cfg, false),
+        TrainCiReadiness::Green
+    );
+}
+
+/// The wait loop: a long-lane build (aggregate absent behind pending lanes
+/// for well over 600s) still ends green; the 600s registration bound starts
+/// only once every observed row has settled.
+#[test]
+// trace:BUG-2401 | ai:claude
+fn bug2401_wait_loop_bounds_registration_only_after_lanes_settle() {
+    let pending = || TrainCiReadiness::Pending(vec!["Build (ubuntu-latest)".into()]);
+    let missing = || TrainCiReadiness::Missing(vec!["Build (ubuntu-latest)".into()]);
+    let run = |script: Vec<TrainCiReadiness>, settle_limit: u64| {
+        let mut script = script.into_iter();
+        let clock = std::cell::Cell::new(0u64);
+        wait_train_ci(
+            3206,
+            settle_limit,
+            || Ok(script.next().expect("the loop must not outlive its script")),
+            || clock.get(),
+            || clock.set(clock.get() + TRAIN_CI_POLL_SECS),
+        )
+    };
+    // ~17 minutes of lanes with no aggregate row, then it registers green.
+    let mut long = (0..100).map(|_| pending()).collect::<Vec<_>>();
+    long.push(TrainCiReadiness::Green);
+    assert_eq!(run(long, 3600).unwrap(), CiVerdict::Green);
+    // Lanes ran 1000s; the aggregate then stays absent: refused 600s later,
+    // not at once (the clock started when the lanes settled).
+    let mut late = (0..100).map(|_| pending()).collect::<Vec<_>>();
+    late.extend((0..70).map(|_| missing()));
+    let err = run(late, 0).unwrap_err().to_string();
+    assert!(err.contains("no CI registered within 600s"), "{err}");
+    // A run of Missing interrupted by Pending restarts the bound.
+    let mut reset = (0..50).map(|_| missing()).collect::<Vec<_>>();
+    reset.push(pending());
+    reset.extend((0..50).map(|_| missing()));
+    reset.push(TrainCiReadiness::Green);
+    assert_eq!(run(reset, 0).unwrap(), CiVerdict::Green);
+    // Absence never turns green, and the ordinary ceiling still bounds a wait.
+    let stuck = (0..100).map(|_| pending()).collect::<Vec<_>>();
+    assert!(run(stuck, 500)
+        .unwrap_err()
+        .to_string()
+        .contains("not ready"));
+    assert!(matches!(
+        run(vec![TrainCiReadiness::Red("x".into())], 0).unwrap(),
+        CiVerdict::Red(_)
+    ));
+    // A refusal stops on the first poll with its reason, well inside the ceiling.
+    // trace:BUG-2401 | ai:claude
+    let err = run(
+        vec![TrainCiReadiness::Refused(
+            "required checks were skipped: X".into(),
+        )],
+        3600,
+    )
+    .unwrap_err()
+    .to_string();
+    assert!(
+        err.contains("refused: required checks were skipped: X"),
+        "{err}"
+    );
+}
+
+/// Composed live snapshot + wait loop with a mandate-admitted held member:
+/// the hold gate fails within seconds while lanes run and the aggregate is
+/// unregistered; the train waits, then ends green once the lanes and the
+/// aggregate pass (BUG-2214 tolerance). An unadmitted hold is red at once.
+#[test]
+// trace:BUG-2401 | ai:claude
+fn bug2401_held_member_train_waits_through_pending_lanes_to_green() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let root = tempfile::tempdir().unwrap();
+    let dir = root.path();
+    let gh = dir.join("gh");
+    crate::test_exec::write_executable(
+        &gh,
+        r#"#!/bin/sh
+case "$*" in
+  'pr view '*) cat head.json ;;
+  'api repos/{owner}/{repo}/branches/main/protection') cat protection.json ;;
+  'api repos/{owner}/{repo}/rules/branches/main?per_page=100&page='*) echo '[]' ;;
+  'pr checks '*) n=$(cat poll); cat "rows-$n.json" ;;
+  *) echo "unexpected forge call: $*" >&2; exit 1 ;;
+esac
+"#,
+    );
+    let path = format!("{}:{}", dir.display(), std::env::var("PATH").unwrap());
+    let _env = crate::test_env::EnvVarsGuard::set(&[
+        ("PATH", path.as_str()),
+        ("AIDA_TEST_GH_BINARY", gh.to_str().unwrap()),
+    ]);
+    let tip = "c".repeat(40);
+    let change = crate::forge::ChangeRef {
+        id: 3206,
+        url: "fixture".into(),
+        branch: "train".into(),
+        base: "main".into(),
+        title: None,
+    };
+    write(
+        dir,
+        "head.json",
+        &serde_json::json!({"headRefOid":tip,"baseRefName":"main","state":"OPEN"}).to_string(),
+    );
+    write(
+        dir,
+        "protection.json",
+        r#"{"required_status_checks":{"contexts":["Build (ubuntu-latest)","merge-hold-gate"]}}"#,
+    );
+    let rows = |lanes: &str, aggregate: Option<&str>| {
+        let mut rows: Vec<_> = (0..7)
+            .map(|i| serde_json::json!({"name":format!("Build lane {i}"),"bucket":lanes,"workflow":"CI"}))
+            .collect();
+        rows.push(serde_json::json!({"name":"merge-hold-gate","bucket":"fail","workflow":"hold"}));
+        if let Some(b) = aggregate {
+            rows.push(
+                serde_json::json!({"name":"Build (ubuntu-latest)","bucket":b,"workflow":"CI"}),
+            );
+        }
+        serde_json::to_string(&rows).unwrap()
+    };
+    write(dir, "rows-0.json", &rows("pending", None));
+    write(dir, "rows-1.json", &rows("pending", None));
+    write(dir, "rows-2.json", &rows("pass", Some("pending")));
+    write(dir, "rows-3.json", &rows("pass", Some("pass")));
+    let forge = crate::forge::forge_for_kind(dir, crate::forge::ForgeKind::GitHub);
+    let mut host = LiveTrainForge {
+        project_root: dir.into(),
+        main_worktree: dir.into(),
+        base: "main".into(),
+        forge: forge.as_ref(),
+        named: true,
+        dispatch_ctx: None,
+        dispatch_abort: None,
+    };
+    let car = |m: Member| Car {
+        member: m,
+        commit: "c".into(),
+        patch_id: "p".into(),
+    };
+    let held_labels =
+        |_: u64| -> std::result::Result<Option<crate::merge_hold::PinnedChange>, String> {
+            Ok(Some(crate::merge_hold::PinnedChange {
+                merged: false,
+                state: crate::merge_hold::ChangeState::Open,
+                head_sha: None,
+                hold_label: true,
+                recorded_label: true,
+                cleared_label: false,
+            }))
+        };
+    let run = |host: &mut LiveTrainForge<'_>, cars: &[Car]| {
+        write(dir, "poll", "0");
+        let polls = std::cell::Cell::new(0u32);
+        wait_train_ci(
+            change.id,
+            0,
+            || host.train_ci_snapshot_with(&change, &tip, cars, None, held_labels),
+            || u64::from(polls.get()) * 400,
+            || {
+                polls.set(polls.get() + 1);
+                write(dir, "poll", &polls.get().to_string());
+            },
+        )
+        .map(|v| (v, polls.get()))
+    };
+    // Admitted held member: waits through pending lanes (and 1200s of no
+    // aggregate), then green once lanes + aggregate pass.
+    let covered = vec![car(covered_member(7))];
+    assert_eq!(run(&mut host, &covered).unwrap(), (CiVerdict::Green, 3));
+    // A held member the mandate does not cover: the hold-gate red is real.
+    let plain = vec![car(member(7, "head7", "s"))];
+    let (verdict, polls) = run(&mut host, &plain).unwrap();
+    assert!(matches!(verdict, CiVerdict::Red(_)), "{verdict:?}");
+    assert_eq!(
+        polls, 0,
+        "an unexplained hold-gate red is red on the first poll"
+    );
+    // The final merge recheck carries no tolerance: a still-red hold gate
+    // (not re-run green after release) refuses.
+    assert!(matches!(
+        host.train_ci_snapshot(&change, &tip, &[]).unwrap(),
+        TrainCiReadiness::Red(_)
+    ));
 }

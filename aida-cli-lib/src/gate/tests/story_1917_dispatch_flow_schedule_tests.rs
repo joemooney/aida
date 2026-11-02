@@ -1471,12 +1471,13 @@ fn add_human_ship_gate(root: &Path) {
 
 type Hook = std::cell::RefCell<Option<Box<dyn FnMut()>>>;
 
-/// The network only: CI is registered and green, hold-gate rows are absent,
-/// merges are counted. `on_watch_ci` / `on_check_rows` fire inside the
-/// native waits.
+/// The network only: CI is registered and its one required row (`Build`,
+/// see [`put_fake_gh_on_path`]) passes, hold-gate rows are absent, merges are
+/// counted. `on_check_rows` fires inside every native wait that reads rows —
+/// the train CI readiness snapshot and the hold-gate wait.
+// trace:STORY-1917 trace:BUG-2401 | ai:claude
 #[derive(Default)]
 struct NetForge {
-    on_watch_ci: Hook,
     on_check_rows: Hook,
     on_merge: Hook,
     merges: std::cell::Cell<usize>,
@@ -1562,7 +1563,6 @@ impl crate::forge::Forge for NetForge {
         &self,
         _: &crate::forge::ChangeRef,
     ) -> anyhow::Result<crate::gate::dispatch_types::CiState> {
-        fire(&self.on_watch_ci);
         Ok(crate::gate::dispatch_types::CiState::Success)
     }
     fn stream_ci_for_branch(
@@ -1602,7 +1602,12 @@ impl crate::forge::Forge for NetForge {
         _: &crate::forge::ChangeRef,
     ) -> anyhow::Result<Vec<crate::ci_gate::CheckRow>> {
         fire(&self.on_check_rows);
-        Ok(Vec::new())
+        Ok(vec![crate::ci_gate::CheckRow {
+            name: "Build".into(),
+            workflow: "CI".into(),
+            bucket: "pass".into(),
+            run_id: None,
+        }])
     }
 }
 
@@ -1780,11 +1785,27 @@ fn hold_record(pr: u64) -> crate::gate::merge_hold_core::MergeHoldRecord {
     }
 }
 
-/// A `gh` on PATH for the train's own `gh pr view/edit` body refresh.
+/// A hermetic `gh` on PATH (the caller must be path-isolated): the train PR's
+/// head/base/state at the built tip, a base protection requiring `Build`, one
+/// short page of effective rules, and a silent success for the train's own
+/// `gh pr view/edit` body refresh. Never the operator's real `gh`.
+// trace:STORY-1917 trace:BUG-2401 | ai:claude
 fn put_fake_gh_on_path(f: &mut FlowFixture) {
     let bin = f._tmp.path().join("fake-bin");
     std::fs::create_dir_all(&bin).unwrap();
-    crate::test_exec::write_executable(&bin.join("gh"), "#!/bin/sh\nexit 0\n");
+    crate::test_exec::write_executable(
+        &bin.join("gh"),
+        r#"#!/bin/sh
+case "$*" in
+  'pr view '*' --json headRefOid,baseRefName,state')
+    echo '{"headRefOid":"7121a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1","baseRefName":"main","state":"OPEN"}' ;;
+  'api repos/{owner}/{repo}/branches/main/protection')
+    echo '{"required_status_checks":{"contexts":["Build"]}}' ;;
+  'api repos/{owner}/{repo}/rules/branches/main?'*) echo '[]' ;;
+esac
+exit 0
+"#,
+    );
     let path = format!(
         "{}:{}",
         bin.display(),
@@ -1813,6 +1834,19 @@ fn story_1917_native_train_held_member_mandate_replaced_during_hold_gate_wait_ne
 
     let forge = NetForge::default();
     let (mdir, principal) = (f.mandate_dir.clone(), f.principal.clone());
+    let cover = crate::gate::mandate_ship::MandateCover {
+        id: mandate_a.id.clone(),
+        principal: f.principal.clone(),
+    };
+    let mut ports = live_ports(&f, &forge, &ctx, member(9701, Some(cover)));
+    let base = origin_main(&f.root);
+    let mut rails = crate::pr_train::ForgeRails::new(&mut ports, "native".into());
+    let m = rails.ports.gate(9701).unwrap();
+    let built = crate::pr_train::Rails::build(&mut rails, &base, &[m]).unwrap();
+    let verdicts = crate::pr_train::Rails::test(&mut rails, std::slice::from_ref(&built)).unwrap();
+    assert_eq!(verdicts, vec![crate::pr_train::CiVerdict::Green]);
+    // Armed after the CI readiness reads, so the replacement lands inside the
+    // hold-gate wait that follows the real release.
     *forge.on_check_rows.borrow_mut() = Some(Box::new(move || {
         mandate::stop(&mdir, &|| Ok(()), &principal, Utc::now()).unwrap();
         let set: BTreeSet<Scope> = [Scope::ShipHeld, Scope::Dispatch].into_iter().collect();
@@ -1829,17 +1863,6 @@ fn story_1917_native_train_held_member_mandate_replaced_during_hold_gate_wait_ne
         )
         .unwrap();
     }));
-    let cover = crate::gate::mandate_ship::MandateCover {
-        id: mandate_a.id.clone(),
-        principal: f.principal.clone(),
-    };
-    let mut ports = live_ports(&f, &forge, &ctx, member(9701, Some(cover)));
-    let base = origin_main(&f.root);
-    let mut rails = crate::pr_train::ForgeRails::new(&mut ports, "native".into());
-    let m = rails.ports.gate(9701).unwrap();
-    let built = crate::pr_train::Rails::build(&mut rails, &base, &[m]).unwrap();
-    let verdicts = crate::pr_train::Rails::test(&mut rails, std::slice::from_ref(&built)).unwrap();
-    assert_eq!(verdicts, vec![crate::pr_train::CiVerdict::Green]);
     // The real release ran: the marker is gone until the abort re-arms it.
     let err = crate::pr_train::Rails::land(&mut rails, &built).unwrap_err();
     assert!(
@@ -1860,7 +1883,11 @@ fn story_1917_native_train_held_member_mandate_replaced_during_hold_gate_wait_ne
 /// with the typed error and the forge sees no merge call.
 #[test]
 fn story_1917_native_train_unheld_member_grant_revoked_before_merge_never_merges() {
-    let f = native_fixture(false);
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let mut f = native_fixture(false);
+    put_fake_gh_on_path(&mut f);
     f.start_mandate(&[Scope::ShipHeld, Scope::Dispatch], false);
     let ctx = establish_train_ctx(&f, vec![9702]);
     let forge = NetForge::default();
@@ -1898,7 +1925,11 @@ fn story_1917_native_train_unheld_member_grant_revoked_before_merge_never_merges
 // trace:STORY-1917 | ai:claude
 #[test]
 fn story_1917_native_train_authority_lost_after_merge_names_the_cause() {
-    let f = native_fixture(false);
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let mut f = native_fixture(false);
+    put_fake_gh_on_path(&mut f);
     f.start_mandate(&[Scope::ShipHeld, Scope::Dispatch], false);
     let ctx = establish_train_ctx(&f, vec![9705]);
     let forge = NetForge::default();
@@ -1928,17 +1959,23 @@ fn story_1917_native_train_authority_lost_after_merge_names_the_cause() {
 }
 
 /// A human gate added, or the worker's claim changed, while the real CI wait
-/// runs: the real post-wait checkpoint refuses and the train never lands.
+/// reads the train's check rows: the real post-read checkpoint refuses and
+/// the train never lands.
+// trace:STORY-1917 trace:BUG-2401 | ai:claude
 #[test]
 fn story_1917_native_train_human_gate_or_claim_change_during_ci_wait_refuses() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
     for case in ["human-gate", "claim"] {
-        let f = native_fixture(false);
+        let mut f = native_fixture(false);
+        put_fake_gh_on_path(&mut f);
         f.start_mandate(&[Scope::ShipHeld, Scope::Dispatch], false);
         let ctx = establish_train_ctx(&f, vec![9703]);
         let forge = NetForge::default();
         let root = f.root.clone();
         let req_id = ctx.request_id().to_string();
-        *forge.on_watch_ci.borrow_mut() = Some(Box::new(move || {
+        *forge.on_check_rows.borrow_mut() = Some(Box::new(move || {
             if case == "human-gate" {
                 add_human_ship_gate(&root);
             } else {
