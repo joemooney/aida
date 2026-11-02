@@ -989,6 +989,11 @@ pub fn subject_is_present(subject: &Option<String>) -> bool {
     subject.as_deref().is_some_and(|s| !s.trim().is_empty())
 }
 
+/// Subject width for routing/inspection records (mail-backlog findings and
+/// the logical mailbox inspection that feeds them).
+// trace:TASK-b6b1278890774ef993d2ebc327862470-690 | ai:claude
+pub const SUBJECT_MAX: usize = 80;
+
 /// Explicit subject when present and non-blank, otherwise the first non-empty
 /// line of `body`, trimmed and truncated to `max` chars (with an ellipsis when
 /// cut). A retracted message has no readable body, so it renders as a
