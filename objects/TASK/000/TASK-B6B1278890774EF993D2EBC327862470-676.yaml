@@ -12,13 +12,20 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-02T03:43:47.928825831Z
-modified_at: 2026-11-02T03:43:47.928825831Z
+modified_at: 2026-11-02T06:25:36.562909075Z
 req_type: Task
 tags:
 - carried-from:TASK-2705
 - finding-hash:a13e1af3
 - from-review:TASK-2705
 - kind:carried-forward
+comments:
+- id: 01a19aef-4d32-7930-be70-6fea26a011de
+  author: joe
+  content: 'ADVISOR RULING (2026-11-01 23:30 MST, ruled once per the 2026-10-28 operator order): accepted as-is, no change. Reason: refactor-only duplication in a test-support path; no behaviour change.'
+  created_at: 2026-11-02T06:25:36.562909075Z
+  modified_at: 2026-11-02T06:25:36.562909075Z
+  session_id: 1f56bd1e-c059-4f73-b8df-e18b2170fdfc
 history:
 - id: 01a19a77-7a9b-74e3-ac17-73d97100d91f
   author: joe
