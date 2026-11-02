@@ -3847,7 +3847,7 @@ impl Drop for IssuedLaunchGrant {
 
 // Match session_start's scope default without accepting ambient role labels.
 // trace:BUG-2188 | ai:codex
-fn agent_new_scope_role(scope: &str) -> &'static str {
+pub(crate) fn agent_new_scope_role(scope: &str) -> &'static str {
     if parse_review_scope(scope).is_some() {
         "reviewer"
     } else {
@@ -3858,7 +3858,7 @@ fn agent_new_scope_role(scope: &str) -> &'static str {
 // Agent-new has always required delegated grants for seated children. Keep
 // that policy, and give scrubbed launchers the actual terminal recovery.
 // trace:BUG-2188 | ai:codex
-fn preflight_agent_new_delegation(
+pub(crate) fn preflight_agent_new_delegation(
     project_root: &std::path::Path,
     role: Option<&str>,
 ) -> Result<()> {
