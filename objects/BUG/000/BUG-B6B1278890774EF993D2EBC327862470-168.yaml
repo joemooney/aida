@@ -16,12 +16,12 @@ description: |-
   1. `aida queue work <SPEC> --plan-only` on Codex enforces read-only sandbox posture (`--sandbox read-only`) instead of normal write flags.
   2. Investigate/wire Codex CLI `-c` config overrides for `[agents] mcp = "off" | "aida"` (or surface clearly in `aida config permissions show` when `mcp` cannot be enforced for the active vendor).
   3. Gate `scan_agent_worktree_trust` (`~/.claude.json` folder trust doctor findings) on Claude being an active/enabled vendor for the project, and support Codex worktree trust if applicable.
-status: Approved
+status: InProgress
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T06:48:07.778727918Z
-modified_at: 2026-11-02T17:58:20.403553911Z
+modified_at: 2026-11-02T17:58:38.236274037Z
 req_type: Bug
 tags:
 - audit
@@ -256,6 +256,14 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
+- id: 01a19d69-c99c-7240-b2a2-01aaa041e09a
+  author: aida-session-start
+  timestamp: 2026-11-02T17:58:38.236269802Z
+  session_id: ee0bf351-6b17-486f-a38e-cfbb1343c426
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 execution_mode: drain
 filed_at:
   code_sha: 6dc7d4977ac5e47c42ddfb26597fe3ec5fb70b60
