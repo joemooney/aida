@@ -149,6 +149,11 @@ fn fixture() -> Fixture {
 
 #[test]
 fn recorded_resume_places_rollout_log_transcript_and_lease_ids_and_refuses_the_rest() {
+    // HOME is swapped below: run in an isolated child with its own fake HOME.
+    // trace:BUG-2386 | ai:claude
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
     let fx = fixture();
     let _env = EnvVarsGuard::apply(&[
         ("AIDA_CODEX_SESSIONS_DIR", fx.sessions.to_str()),
@@ -214,6 +219,11 @@ fn recorded_resume_places_rollout_log_transcript_and_lease_ids_and_refuses_the_r
 
 #[test]
 fn rollout_fallback_refuses_a_rollout_from_before_the_lease_started() {
+    // HOME is swapped below: run in an isolated child with its own fake HOME.
+    // trace:BUG-2386 | ai:claude
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
     let fx = fixture();
     let _env = EnvVarsGuard::apply(&[
         ("AIDA_CODEX_SESSIONS_DIR", fx.sessions.to_str()),

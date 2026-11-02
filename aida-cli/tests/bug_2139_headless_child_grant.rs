@@ -507,6 +507,11 @@ fn orchestrated_headless_reviewer_without_delegation_is_refused_without_mutation
 fn headless_resume_child_gets_its_own_grant() {
     let fx = fixture();
     clear_dump(&fx);
+    // A resume id must be placed by its recorder; Claude recorded this one.
+    // trace:BUG-2386 | ai:claude
+    let transcripts = fx.home.join(".claude/projects/-repo");
+    std::fs::create_dir_all(&transcripts).unwrap();
+    std::fs::write(transcripts.join(format!("{RESUME_ID}.jsonl")), "{}\n").unwrap();
     let out = aida(&fx)
         .env("AIDA_SESSION_GRANT", &fx.advisor)
         .env("AIDA_SESSION_PURPOSE", "advisor relay")
