@@ -11,7 +11,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-01T09:06:06.223993645Z
-modified_at: 2026-11-02T09:08:39.206116779Z
+modified_at: 2026-11-02T09:08:43.913555013Z
 req_type: Task
 tags:
 - architecture
@@ -50,6 +50,13 @@ relationships:
   target_id: 01a19b68-9703-7730-bcb6-811ede0c47d6
   created_at: 2026-11-02T09:08:39.206111016Z
   created_by: joe
+comments:
+- id: 01a19b84-a509-7183-b646-174a9b12c66e
+  author: joe
+  content: 'ADVISOR (2026-11-02 02:08 MST): bundle these four TASK-2706 review findings into this slice. (a) TASK-2745: keep one CI lane AppArmor-restricted, or scope the apparmor sysctl, so the IsolationUnavailable arm runs end-to-end. (b) TASK-2746: egress_probe.py:345-350 should mutate the sockaddr toward /host-services/host.sock (a real host endpoint), so the accept-queue check means something. (c) TASK-2747: gate run_egress_probe''s test fault selectors behind cfg(test), and add an ::error:: line to the ci.yml:325 grep. (d) TASK-2748: start the fault-fixture deadlines after namespace capture (or lengthen them), so task_2706_egress_ipc_live cannot flake under load.'
+  created_at: 2026-11-02T09:08:43.913555013Z
+  modified_at: 2026-11-02T09:08:43.913555013Z
+  session_id: 1f56bd1e-c059-4f73-b8df-e18b2170fdfc
 history:
 - id: 01a1965c-1e90-7483-8313-1b32a588eaef
   author: joe
