@@ -1029,7 +1029,7 @@ blocks:
   type_prefix: STORY
   range_start: 2219
   range_end: 2318
-  next: 2286
+  next: 2287
   allocated_at: 2026-10-31T22:53:56.205121223Z
 - node_id: b6b1278890774ef993d2ebc327862470
   owner: aida-backfill-agreed-ids
