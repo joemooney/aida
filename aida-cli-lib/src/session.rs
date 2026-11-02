@@ -916,8 +916,9 @@ fn codex_interactive_session_config(contained: bool) -> Result<crate::AgentLaunc
 }
 
 /// `aida session new` — capture role + title up-front, append a record
-/// to `~/.aida/session-launches.log`, then exec `claude
-/// --permission-mode <mode>`. Subsequent `aida session list` calls read
+/// to `~/.aida/session-launches.log`, then exec the configured
+/// interactive vendor (`claude --permission-mode <mode>`, or codex through the
+/// tracked launcher). Subsequent `aida session list` calls read
 /// the launches log and join it with the .jsonl files (cwd + start-time
 /// match) to surface the user-chosen title and authoritative role —
 /// instead of falling back to the grep heuristic.
@@ -926,30 +927,12 @@ fn codex_interactive_session_config(contained: bool) -> Result<crate::AgentLaunc
 /// STORY-495: `permission_mode` is now `Option<&str>`. `None` means honor
 /// Claude's native permission posture — no `--permission-mode` is injected
 /// (the faithful-launcher default). `Some(mode)` injects it explicitly.
-pub fn new_session(
-    title: Option<String>,
-    permission_mode: Option<&str>,
-    role_override: Option<String>,
-    display_name: Option<String>,
-    contained: bool,
-    set_terminal_title: bool,
-) -> Result<()> {
-    let vendor = interactive_session_vendor()?;
-    new_session_for_vendor(
-        &vendor,
-        None,
-        title,
-        permission_mode,
-        role_override,
-        display_name,
-        contained,
-        set_terminal_title,
-    )
-}
-
-// A start --launch pins the vendor before allocating the seat, including when
-// project agents.toml is absent in the newly created child worktree.
-// trace:BUG-b6b1278890774ef993d2ebc327862470-159 | ai:codex
+///
+/// Callers run [`preflight_interactive_session`] once, before any setup; this
+/// launcher does not repeat it. A start --launch pins the vendor before
+/// allocating the seat, including when project agents.toml is absent in the
+/// newly created child worktree.
+// trace:BUG-b6b1278890774ef993d2ebc327862470-159 | ai:claude
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn new_session_for_vendor(
     vendor: &str,
@@ -961,7 +944,6 @@ pub(crate) fn new_session_for_vendor(
     contained: bool,
     set_terminal_title: bool,
 ) -> Result<()> {
-    preflight_interactive_session(vendor, permission_mode, contained)?;
     if vendor == "codex" {
         // The tracked launcher owns child grant/subject/scope, registration,
         // finalization and terminal restoration. BUG-2398's adapter belongs
@@ -985,7 +967,9 @@ pub(crate) fn new_session_for_vendor(
             crate::AgentPromptOptions::new(None, true),
             crate::AgentResumeOptions::new(false, None, false, true),
             crate::AgentDefaultFlagOptions::new(false, Vec::new(), None),
-            None,
+            // `aida session start --name` / the derived session name, same as
+            // the display name the Claude path passes to `claude --name`.
+            display_name,
             title,
             // Configured bypass retains the shared launcher's consent downgrade.
             // Only a selected sandbox posture is explicit on this wrapper.

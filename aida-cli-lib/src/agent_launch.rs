@@ -125,13 +125,8 @@ pub(crate) fn handle_session_command(cmd: &SessionCommand) -> Result<()> {
             };
             let mut mode =
                 session_launch_mode(&vendor, permission_mode.as_deref(), *sandbox, *launch)?;
-            if *launch {
-                session::preflight_interactive_session(
-                    &vendor,
-                    mode.mode.as_deref(),
-                    mode.contained,
-                )?;
-            }
+            // session_start_with_receipt runs the one vendor preflight before
+            // any worktree or lease setup.
             if *launch && vendor == "claude" {
                 let mut argv = mode
                     .mode
@@ -3580,7 +3575,7 @@ pub(crate) fn session_launch_mode(
     );
     let root = find_main_worktree_root().unwrap_or(std::env::current_dir()?);
     let contained = sandbox || load_agents_contained(&root)? || session::aida_contained_env()?;
-    session::preflight_interactive_session(vendor, None, contained)?;
+    // No preflight here: each entry point runs it exactly once.
     Ok(ResolvedClaudeLaunch {
         mode: None,
         contained,

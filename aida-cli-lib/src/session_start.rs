@@ -3399,8 +3399,8 @@ pub(crate) fn session_start_with_receipt(
         // STORY-54: --launch collapses "start → cd → session new" into one
         // command. We chdir into the new worktree (so claude inherits it
         // and the launch-log records the worktree path, not the parent),
-        // then delegate to session::new_session for the title prompt,
-        // launch-log append, and `exec claude --permission-mode <mode>`.
+        // then delegate to session::new_session_for_vendor for the title
+        // prompt, launch-log append, and the configured vendor's launch.
         // exec replaces this process; control doesn't return here on
         // success.
         // trace:STORY-54 | ai:claude

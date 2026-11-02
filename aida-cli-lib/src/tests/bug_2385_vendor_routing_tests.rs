@@ -32,23 +32,45 @@ fn dispatch(args: &[&str]) -> Result<()> {
     }
 }
 
-#[test]
-fn all_three_wrappers_launch_both_vendors_and_preserve_explicit_precedence() {
+// One test per vendor x surface: each case pays a git fixture plus a full
+// tracked launch, so a single 16-case loop blew the 10 s per-test budget.
+macro_rules! routing_cases {
+    ($($name:ident: $vendor:literal, $surface:literal;)*) => {
+        $(
+            #[test]
+            fn $name() {
+                wrapper_launches_configured_vendor($vendor, $surface);
+            }
+        )*
+    };
+}
+
+routing_cases! {
+    codex_session_new: "codex", "new";
+    codex_session_start: "codex", "start";
+    codex_agent_new_bare: "codex", "bare";
+    codex_agent_new_role: "codex", "role";
+    codex_agent_new_spec: "codex", "spec";
+    codex_config_explicit_claude_wins: "codex", "explicit";
+    codex_bypass_session_new: "codex", "bypass-new";
+    codex_bypass_session_start: "codex", "bypass-start";
+    claude_session_new: "claude", "new";
+    claude_session_start: "claude", "start";
+    claude_agent_new_bare: "claude", "bare";
+    claude_agent_new_role: "claude", "role";
+    claude_agent_new_spec: "claude", "spec";
+    claude_config_explicit_codex_wins: "claude", "explicit";
+    claude_bypass_session_new: "claude", "bypass-new";
+    claude_bypass_session_start: "claude", "bypass-start";
+}
+
+fn wrapper_launches_configured_vendor(vendor: &str, surface: &str) {
     if crate::test_env::run_path_isolated_test() {
         return;
     }
     let original_cwd = std::env::current_dir().unwrap();
-    for vendor in ["codex", "claude"] {
-        for surface in [
-            "new",
-            "start",
-            "bare",
-            "role",
-            "spec",
-            "explicit",
-            "bypass-new",
-            "bypass-start",
-        ] {
+    {
+        {
             let tmp = tempfile::tempdir().unwrap();
             let root = tmp.path().join("project");
             let home = tmp.path().join("home");
@@ -133,7 +155,7 @@ fn all_three_wrappers_launch_both_vendors_and_preserve_explicit_precedence() {
                 vendor
             };
             crate::test_exec::write_executable(&bin.join(actual_vendor), format!(
-                "#!/bin/sh\nif [ \"$1\" = --version ]; then echo '{actual_vendor} 9.9.9'; exit 0; fi\nprintf '%s\\n' \"$@\" > '{}'\nprintf '%s\\n' \"$AIDA_AGENT_TYPE\" \"$AIDA_SESSION_ROLE\" \"$AIDA_SESSION_SCOPE\" \"$AIDA_CONTAINMENT_POSTURE\" \"${{AIDA_CONTAINED-unset}}\" \"$AIDA_SESSION_GRANT\" > '{}'\n",
+                "#!/bin/sh\nif [ \"$1\" = --version ]; then echo '{actual_vendor} 9.9.9'; exit 0; fi\nprintf '%s\\n' \"$@\" > '{}'\nprintf '%s\\n' \"$AIDA_AGENT_TYPE\" \"$AIDA_SESSION_ROLE\" \"$AIDA_SESSION_SCOPE\" \"$AIDA_CONTAINMENT_POSTURE\" \"${{AIDA_CONTAINED-unset}}\" \"$AIDA_SESSION_GRANT\" \"$AIDA_AGENT_NAME\" > '{}'\n",
                 argv.display(), context.display()));
             crate::test_exec::write_executable(
                 &bin.join("aida"),
@@ -157,6 +179,8 @@ fn all_three_wrappers_launch_both_vendors_and_preserve_explicit_precedence() {
                     "--owns",
                     "BUG-2385",
                     "--launch",
+                    "--name",
+                    "routing-name",
                     "--title",
                     "fixture",
                     "--no-title",
@@ -210,6 +234,10 @@ fn all_three_wrappers_launch_both_vendors_and_preserve_explicit_precedence() {
                     assert_eq!(fields[0], "claude");
                     assert_ne!(fields[5], parent);
                 }
+            }
+            if matches!(surface, "start" | "bypass-start") && actual_vendor == "codex" {
+                // --name reaches the tracked launcher as the agent's name.
+                assert_eq!(fields[6], "routing-name", "{vendor}/{surface}");
             }
             if matches!(surface, "start" | "spec" | "bypass-start") && actual_vendor == "codex" {
                 assert_eq!(fields[2], "BUG-2385");
