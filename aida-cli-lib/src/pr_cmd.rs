@@ -1290,10 +1290,41 @@ pub(crate) fn ship_gate_spec_records_for_ids(
         });
         if let Some(req) = found {
             let tags: Vec<String> = req.tags.iter().cloned().collect();
-            out.push((id, tags, req.execution_mode));
+            out.push((id, tags, gating_execution_mode(&store.requirements, req)));
         }
     }
     out
+}
+
+/// BUG-2413: the execution mode the merge gates read for `req`. A spec with
+/// no mode of its own that was superseded into a carrier (a bundled spec
+/// shipped by the carrier's PR) gates on the carrier's mode, following the
+/// superseded-by chain, so an unset mode left on a bundled spec never forces
+/// supervision the carrier's own mode would not. A spec with its own mode, or
+/// with no resolvable superseded-by edge, gates on its own mode as before
+/// (unset stays supervised, fail safe).
+// trace:BUG-2413 | ai:claude
+pub(crate) fn gating_execution_mode(
+    requirements: &[aida_core::Requirement],
+    req: &aida_core::Requirement,
+) -> Option<aida_core::ExecutionMode> {
+    let mut current = req;
+    // Bounded: a superseded-by cycle must not loop the gate.
+    for _ in 0..8 {
+        if let Some(mode) = current.execution_mode {
+            return Some(mode);
+        }
+        let carrier = current
+            .relationships
+            .iter()
+            .find(|r| r.rel_type == aida_core::RelationshipType::SupersededBy)
+            .and_then(|r| requirements.iter().find(|c| c.id == r.target_id));
+        match carrier {
+            Some(c) => current = c,
+            None => return None,
+        }
+    }
+    None
 }
 
 /// The spec-IDs referenced by the commits about to ship whose spec carries

@@ -983,7 +983,14 @@ fn agent_default_flags_merge_user_base_project_override_and_extra() {
         "[agents.codex]\ndefault_flags = [\"--project-codex\"]\n",
     )
     .unwrap();
-    let _home_guard = crate::test_env::EnvVarGuard::set("AIDA_HOME", &home);
+    // BUG-2394: an unset `[agents] mcp` is `aida` for Codex, so these launches
+    // carry the aida MCP overrides. Pin CODEX_HOME to an empty dir so the
+    // host's own ~/.codex servers never reach the expected argv.
+    let codex_home = tmp.path().join("codex-home");
+    let _home_guard = crate::test_env::EnvVarsGuard::set(&[
+        ("AIDA_HOME", home.to_str().unwrap()),
+        ("CODEX_HOME", codex_home.to_str().unwrap()),
+    ]);
 
     let mut codex = AgentLaunchConfig {
         agent_type: "codex",
@@ -1001,7 +1008,15 @@ fn agent_default_flags_merge_user_base_project_override_and_extra() {
     .unwrap();
     assert_eq!(
         codex.default_args,
-        vec!["--built-in", "--project-codex", "--extra"]
+        vec![
+            "--built-in",
+            "--project-codex",
+            "-c",
+            "mcp_servers.aida.command=\"aida\"",
+            "-c",
+            "mcp_servers.aida.args=[\"mcp-serve\"]",
+            "--extra"
+        ]
     );
 
     let mut antigravity = AgentLaunchConfig {
@@ -1057,7 +1072,14 @@ fn agent_model_config_and_flag_append_vendor_model_args() {
         "[agents.codex]\nmodel = \"team-codex\"\n",
     )
     .unwrap();
-    let _home_guard = crate::test_env::EnvVarGuard::set("AIDA_HOME", &home);
+    // BUG-2394: an unset `[agents] mcp` is `aida` for Codex, so these launches
+    // carry the aida MCP overrides. Pin CODEX_HOME to an empty dir so the
+    // host's own ~/.codex servers never reach the expected argv.
+    let codex_home = tmp.path().join("codex-home");
+    let _home_guard = crate::test_env::EnvVarsGuard::set(&[
+        ("AIDA_HOME", home.to_str().unwrap()),
+        ("CODEX_HOME", codex_home.to_str().unwrap()),
+    ]);
 
     let mut codex = AgentLaunchConfig {
         agent_type: "codex",
@@ -1073,7 +1095,17 @@ fn agent_model_config_and_flag_append_vendor_model_args() {
         false,
     )
     .unwrap();
-    assert_eq!(codex.default_args, vec!["--model", "team-codex"]);
+    assert_eq!(
+        codex.default_args,
+        vec![
+            "-c",
+            "mcp_servers.aida.command=\"aida\"",
+            "-c",
+            "mcp_servers.aida.args=[\"mcp-serve\"]",
+            "--model",
+            "team-codex"
+        ]
+    );
 
     let mut explicit = AgentLaunchConfig {
         agent_type: "codex",
@@ -1095,7 +1127,15 @@ fn agent_model_config_and_flag_append_vendor_model_args() {
     .unwrap();
     assert_eq!(
         explicit.default_args,
-        vec!["--model", "flag-codex", "--tail"]
+        vec![
+            "-c",
+            "mcp_servers.aida.command=\"aida\"",
+            "-c",
+            "mcp_servers.aida.args=[\"mcp-serve\"]",
+            "--model",
+            "flag-codex",
+            "--tail"
+        ]
     );
 }
 
@@ -1660,7 +1700,14 @@ fn apply_agent_default_flags_per_tool_flags_override_knob() {
         "[agents]\nbypass = true\n\n[agents.codex]\ndefault_flags = [\"--my-flag\"]\n",
     )
     .unwrap();
-    let _home_guard = crate::test_env::EnvVarGuard::set("AIDA_HOME", &home);
+    // BUG-2394: an unset `[agents] mcp` is `aida` for Codex, so these launches
+    // carry the aida MCP overrides. Pin CODEX_HOME to an empty dir so the
+    // host's own ~/.codex servers never reach the expected argv.
+    let codex_home = tmp.path().join("codex-home");
+    let _home_guard = crate::test_env::EnvVarsGuard::set(&[
+        ("AIDA_HOME", home.to_str().unwrap()),
+        ("CODEX_HOME", codex_home.to_str().unwrap()),
+    ]);
 
     let mut codex = AgentLaunchConfig {
         agent_type: "codex",
@@ -1676,8 +1723,18 @@ fn apply_agent_default_flags_per_tool_flags_override_knob() {
         /* explicit_permission */ false,
     )
     .unwrap();
-    // Only the per-tool flag — no `--dangerously-bypass-...` injected.
-    assert_eq!(codex.default_args, vec!["--my-flag"]);
+    // Only the per-tool flag (plus the aida MCP overrides) — no
+    // `--dangerously-bypass-...` injected.
+    assert_eq!(
+        codex.default_args,
+        vec![
+            "--my-flag",
+            "-c",
+            "mcp_servers.aida.command=\"aida\"",
+            "-c",
+            "mcp_servers.aida.args=[\"mcp-serve\"]",
+        ]
+    );
 }
 
 /// STORY-495: `--no-default-flags` skips agents.toml entirely, so the
@@ -4701,7 +4758,14 @@ fn codex_fresh_launch_does_not_double_no_daemon() {
         "[agents.codex]\ndefault_flags = [\"--no-daemon\", \"--project-codex\"]\n",
     )
     .unwrap();
-    let _home_guard = crate::test_env::EnvVarGuard::set("AIDA_HOME", &home);
+    // BUG-2394: an unset `[agents] mcp` is `aida` for Codex, so these launches
+    // carry the aida MCP overrides. Pin CODEX_HOME to an empty dir so the
+    // host's own ~/.codex servers never reach the expected argv.
+    let codex_home = tmp.path().join("codex-home");
+    let _home_guard = crate::test_env::EnvVarsGuard::set(&[
+        ("AIDA_HOME", home.to_str().unwrap()),
+        ("CODEX_HOME", codex_home.to_str().unwrap()),
+    ]);
 
     let launcher = || AgentLaunchConfig {
         agent_type: "codex",
@@ -4722,7 +4786,14 @@ fn codex_fresh_launch_does_not_double_no_daemon() {
     .unwrap();
     assert_eq!(
         from_config.default_args,
-        vec!["--no-daemon", "--project-codex"]
+        vec![
+            "--no-daemon",
+            "--project-codex",
+            "-c",
+            "mcp_servers.aida.command=\"aida\"",
+            "-c",
+            "mcp_servers.aida.args=[\"mcp-serve\"]",
+        ]
     );
 
     // `--extra-flag=--no-daemon` with config defaults skipped.

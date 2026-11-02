@@ -11017,9 +11017,13 @@ pub(crate) fn deferred_interactive_launch_hint(
         }
         session::HeadlessVendor::Codex => {
             let bypass = permission_mode == Some("bypassPermissions");
+            // trace:BUG-2394 | ai:claude
+            let read_only = session::codex_plan_read_only(permission_mode);
             format!(
                 "codex {}",
-                shell_join_display(&session::codex_session_args(prompt, bypass, model))
+                shell_join_display(&session::codex_interactive_session_args(
+                    prompt, bypass, read_only, model
+                ))
             )
         }
         session::HeadlessVendor::Agy => {
@@ -13646,6 +13650,11 @@ pub(crate) fn handle_queue_work(
                     contained,
                 );
             }
+            // BUG-2394: `--plan-only` resolves to `plan`, which Codex has no
+            // permission-mode for — map it to the read-only sandbox instead of
+            // falling through to the ordinary write posture.
+            // trace:BUG-2394 | ai:claude
+            let codex_read_only = session::codex_plan_read_only(permission_mode.as_deref());
             eprintln!(
                 "{} {}",
                 crate::glyph(crate::glyphs::Glyph::FlowActive)
@@ -13654,7 +13663,13 @@ pub(crate) fn handle_queue_work(
                 format!(
                     "launching codex in {} ({}, prompt `{}`)",
                     lease.worktree_path.display(),
-                    if codex_bypass { "bypass" } else { "native" },
+                    if codex_read_only {
+                        "read-only sandbox"
+                    } else if codex_bypass {
+                        "bypass"
+                    } else {
+                        "native"
+                    },
                     prompt
                 )
                 .cyan()
@@ -13662,6 +13677,7 @@ pub(crate) fn handle_queue_work(
             return session::exec_codex_session(
                 &prompt,
                 codex_bypass,
+                codex_read_only,
                 resolved_model.as_deref(),
                 child_grant_id.as_deref(),
             );
