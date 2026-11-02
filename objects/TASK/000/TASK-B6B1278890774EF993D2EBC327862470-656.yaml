@@ -6,12 +6,12 @@ description: |-
   Acceptance: (1) On sliceA contract, synthetic lane in unshared netns reaches only allowed fixture host via host-owned typed proxy channel; deny direct TCP/UDP/DNS, private-address/rebinding, host/port/protocol bypass per C12. (2) Enforce C5 pathname and abstract Unix IPC. HostABI8 needs approved seccomp-notify broker; no mutable-user-memory CONTINUE/FD/path/rename race. Host D-Bus/SSH/Codex daemon and inherited-FD escapes denied; only typed channels/private own endpoints allowed. (3) Proxy/broker death tears down lane; unsupported kernel refuses; live regression cannot skip. (4) Diagnostics and end-to-end fixture deliver observable actual coverage, no ordinary vendor enablement or real credentials/model calls. Layers: trusted host policy, network/IPC broker, runner lifetime, CLI diagnostics and negative tests. Signed sliceB.
 
   All signed STORY2238 sketch C1-C12 and BUG2398 B1-B4 apply. Linux only, fakeHOME/synthetic tests, no global user settings or schedules. No partial backend may report AIDA containment applied or launch ordinary agents until all required protections are ready; named refusal, no fallback. STRICT independent review, operator merge floor. LIGHT one targeted test plus fast gates; shared infra or >10files adds touched-test/compile, fullsuiteCI only. Longcargo background, no slotbypass. Parent all7AC remain open until final installed-tool evidence; no slice alone completes parent.
-status: NeedsAttention
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T09:05:52.470755532Z
-modified_at: 2026-11-02T03:58:12.483169401Z
+modified_at: 2026-11-02T04:34:49.364193059Z
 req_type: Task
 tags:
 - architecture
@@ -26,6 +26,13 @@ relationships:
   target_id: 01a1965b-4971-7252-abdf-997331f285fd
   created_at: 2026-11-01T09:16:01.154363045Z
   created_by: joe
+comments:
+- id: 01a19a89-df94-7172-949a-9e5e6fa2549a
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was punted on: other: Implementer session stopped before any code edits; this slice needs a different implementer session or operator-guided work.. No triage reason was given.'
+  created_at: 2026-11-02T04:34:49.364189441Z
+  modified_at: 2026-11-02T04:34:49.364189441Z
+  session_id: 126bbd5a-a92f-452b-ab0b-2637a1db42c2
 history:
 - id: 01a1965b-c73c-7f92-bea8-1e28e5f1ff36
   author: joe
@@ -51,6 +58,14 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a19a89-df94-7172-949a-9e49c4dbb334
+  author: joe
+  timestamp: 2026-11-02T04:34:49.364168007Z
+  session_id: 126bbd5a-a92f-452b-ab0b-2637a1db42c2
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: 4ce0af750fcb68d4adf57496e4e002aefd8ace77
   branch: main
@@ -58,9 +73,3 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: 4ce0af750fc
   vendor: codex
-attention_reason:
-  category: other
-  detail: Implementer session stopped before any code edits; this slice needs a different implementer session or operator-guided work.
-  lean: Re-dispatch to a fresh implementer, or run it as guided implementation with the operator.
-  raised_by: implementer
-  raised_at: 2026-11-02T03:58:12.483169401Z
