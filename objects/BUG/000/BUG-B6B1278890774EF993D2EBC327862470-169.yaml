@@ -23,7 +23,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-01T06:48:25.173889038Z
-modified_at: 2026-11-01T08:20:10.483078848Z
+modified_at: 2026-11-02T11:15:27.473515392Z
 req_type: Bug
 tags:
 - architecture
@@ -45,6 +45,12 @@ comments:
   content: 'PROXY DECISION: approve SKETCH ONLY before code because hook-to-tool grant transport is an authority boundary. Source confirms Codex init-only hook writer and Claude-only generated merge/header paths. Sketch must separate portable scaffold/diagnostic fixes from supported Codex hook persistence; never mint/recover a grant from writable project context, assume child hook eval affects a parent, invent CODEX_ENV_FILE, or copy credentials/bearer tokens into project files. Reuse BUG2398 explicit managed child transport and preserve ungranted refusal. Independent advisor must approve supported hook API and tests before code. Coordinate STORY2256 session-start arming and TASK2689 generated guidance; fixtures/fakeHOME only, no real hook/settings edits in tests. Preserve user-managed hook merge boundaries and executable shebang/header behavior.'
   created_at: 2026-11-01T08:20:05.025758455Z
   modified_at: 2026-11-01T08:20:05.025758455Z
+- id: 01a19bf8-aa71-7d43-aa34-ed352433eea2
+  author: joe
+  content: 'ADVISOR (2026-11-02 04:18 MST): this is tagged architecture with no signed sketch. The implementer lane writes a sketch first (scaffold: .codex/hooks*; hook templates session-context, commit-msg, capture-prompt and advisor-code-guard become vendor-neutral) as a spec comment, mails the advisor, and stops before code. The advisor rules promptly.'
+  created_at: 2026-11-02T11:15:27.473515392Z
+  modified_at: 2026-11-02T11:15:27.473515392Z
+  session_id: 1f56bd1e-c059-4f73-b8df-e18b2170fdfc
 history:
 - id: 01a195dd-f3fe-78f1-905f-d5b9c92b6293
   author: joe
