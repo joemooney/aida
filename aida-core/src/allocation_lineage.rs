@@ -352,6 +352,138 @@ pub fn pools_to_materialize(
     out
 }
 
+/// The highest number any granted (non-root) pool of `type_prefix` covers,
+/// or 0. A claim placed by "above every block" (the root's own claims, a
+/// hub claim, the agreed-ID backfill) must also start above this, or it
+/// could land inside a range the root already granted to another hub.
+// trace:STORY-B6B1278890774EF993D2EBC327862470-170 | ai:claude
+pub fn granted_ceiling(pools: &[PoolRecord], type_prefix: &str) -> u32 {
+    pools
+        .iter()
+        .filter(|p| p.parent_pool_id.is_some() && p.type_prefix.eq_ignore_ascii_case(type_prefix))
+        .map(|p| p.range_end)
+        .max()
+        .unwrap_or(0)
+}
+
+/// The pool the root granted hub `hub` for `type_prefix`: the child pool
+/// `hub:<hub>:<TYPE>` homed on that hub. Clones of the hub claim their
+/// blocks inside it.
+// trace:STORY-B6B1278890774EF993D2EBC327862470-170 | ai:claude
+pub fn hub_grant<'a>(
+    pools: &'a [PoolRecord],
+    hub: &str,
+    type_prefix: &str,
+) -> Option<&'a PoolRecord> {
+    let id = crate::store_hubs::hub_pool_id(hub, type_prefix);
+    pools
+        .iter()
+        .find(|p| p.pool_id == id && p.parent_pool_id.is_some() && promoted_hub(p) == Some(hub))
+}
+
+/// Carve the child pool the root grants hub `hub` from `root_pool`: `size`
+/// IDs starting above `floor` (every number a spec, block, counter or
+/// earlier grant of the type holds) inside the root pool's free space, so
+/// no ID issued before the grant can ever be issued again from it. The pool
+/// is `hub:<hub>:<TYPE>`, homed on `<hub>/aida-store` (each clone resolves
+/// the hub to whichever of its remotes reaches it).
+// trace:STORY-B6B1278890774EF993D2EBC327862470-170 | ai:claude
+pub fn hub_child_pool(
+    hub: &str,
+    root_pool: &PoolRecord,
+    pools: &[PoolRecord],
+    blocks: &[AgreedIdBlock],
+    floor: u32,
+    size: u32,
+) -> Result<PoolRecord> {
+    anyhow::ensure!(size > 0, "a hub pool needs at least one ID");
+    let typ = root_pool.type_prefix.to_ascii_uppercase();
+    let floor = floor.max(granted_ceiling(pools, &typ));
+    let (start, end) = free_ranges(root_pool, pools, blocks)
+        .into_iter()
+        .find_map(|(start, end)| {
+            let start = start.max(floor.checked_add(1)?);
+            let last = start.checked_add(size - 1)?;
+            (start <= end && last <= end).then_some((start, last))
+        })
+        .with_context(|| {
+            format!(
+                "{} has no free run of {size} {typ} IDs above {floor} to grant hub `{hub}`",
+                root_pool.label()
+            )
+        })?;
+    Ok(PoolRecord {
+        pool_id: crate::store_hubs::hub_pool_id(hub, &typ),
+        type_prefix: typ,
+        range_start: start,
+        range_end: end,
+        parent_pool_id: Some(root_pool.pool_id.clone()),
+        holder_node: format!("{}{hub}", crate::store_hubs::HUB_POOL_PREFIX),
+        home_ref: format!("{hub}/aida-store"),
+    })
+}
+
+/// The range of a new block of at most `size` IDs inside `pool`: the first
+/// free run of the pool (its range minus every child pool and block).
+/// `None` when the pool is exhausted.
+// trace:STORY-B6B1278890774EF993D2EBC327862470-170 | ai:claude
+pub fn carve_block(
+    pool: &PoolRecord,
+    pools: &[PoolRecord],
+    blocks: &[AgreedIdBlock],
+    size: u32,
+) -> Option<(u32, u32)> {
+    let (start, end) = free_ranges(pool, pools, blocks).into_iter().next()?;
+    let want = start.saturating_add(size.max(1) - 1);
+    Some((start, want.min(end)))
+}
+
+/// Append the pools `plan` computes to `registry/pools.yaml` and push the
+/// commit by CAS to `remote` (the root's hub), so the grant is ordered
+/// against that hub's own claims. `plan` runs under the store lock against
+/// the freshly pulled store on every attempt and returns only the pools
+/// still to record; an empty plan writes nothing. Returns what was
+/// recorded.
+// trace:STORY-B6B1278890774EF993D2EBC327862470-170 | ai:claude
+pub fn record_pools(
+    store_root: &Path,
+    remote: &str,
+    message: &str,
+    plan: impl Fn(&Path) -> Result<Vec<PoolRecord>>,
+) -> Result<Vec<PoolRecord>> {
+    use crate::git_ops;
+    const MAX_RETRIES: u32 = 10;
+    let branch = git_ops::current_branch(store_root).unwrap_or_else(|_| "aida-store".to_string());
+    let local_only = !git_ops::has_remote(store_root, remote);
+    for attempt in 0..MAX_RETRIES {
+        let committed = crate::db::with_store_write_lock(store_root, || {
+            if attempt > 0 && !local_only {
+                git_ops::pull_rebase(store_root, remote, &branch)?;
+            }
+            let new_pools = plan(store_root)?;
+            if new_pools.is_empty() {
+                return Ok(None);
+            }
+            let mut pools = PoolRegistry::load(store_root)?;
+            pools.pools.extend(new_pools.iter().cloned());
+            let path = store_root.join(POOLS_YAML_REL);
+            std::fs::create_dir_all(path.parent().context("invalid pool registry path")?)?;
+            crate::write_atomic(&path, serde_yaml::to_string(&pools)?)?;
+            git_ops::add(store_root, &[POOLS_YAML_REL])?;
+            git_ops::commit(store_root, message)?;
+            Ok(Some((git_ops::head_sha(store_root)?, new_pools)))
+        })?;
+        let Some((sha, new_pools)) = committed else {
+            return Ok(Vec::new());
+        };
+        if local_only || git_ops::push_exact(store_root, remote, &sha, &branch)? {
+            return Ok(new_pools);
+        }
+        let _ = git_ops::rollback_commit_if_head_matches(store_root, &sha);
+    }
+    bail!("could not record the pool grant after {MAX_RETRIES} attempts (the store push to `{remote}` kept being rejected); run `aida db sync --pull` and retry")
+}
+
 /// Check the tree: children are disjoint and inside a same-typed parent,
 /// parents exist without cycles, and root pools belong to the root.
 pub fn check_invariants(
