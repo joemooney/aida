@@ -11125,13 +11125,38 @@ pub(crate) fn queue_work_delegation_refusal(
 }
 
 // trace:TASK-1337 | ai:codex
-fn queue_work_manual_continuation(id: &str, guided: bool) -> String {
+// trace:BUG-2396 | ai:claude — the launch line follows the resolved host vendor.
+fn queue_work_manual_continuation(
+    id: &str,
+    guided: bool,
+    vendor: crate::session::HeadlessVendor,
+) -> String {
     let skill = if guided {
         "aida-guided-implement"
     } else {
         "aida-pickup"
     };
-    format!("Pickup setup exists; manual continuation:\n  aida worktree enter {id}\n  claude \"/{skill} {id}\"")
+    format!(
+        "Pickup setup exists; manual continuation:\n  aida worktree enter {id}\n  {}",
+        crate::vendor_hints::launch_with_skill(vendor, skill, id)
+    )
+}
+
+#[cfg(test)]
+mod bug2396_manual_continuation_tests {
+    use crate::session::HeadlessVendor;
+
+    // trace:BUG-2396 | ai:claude
+    #[test]
+    fn manual_continuation_renders_codex_and_claude() {
+        let codex = super::queue_work_manual_continuation("BUG-1", false, HeadlessVendor::Codex);
+        assert!(codex.ends_with("\n  codex '$aida-pickup BUG-1'"), "{codex}");
+        let claude = super::queue_work_manual_continuation("BUG-1", true, HeadlessVendor::Claude);
+        assert!(
+            claude.ends_with("\n  claude '/aida-guided-implement BUG-1'"),
+            "{claude}"
+        );
+    }
 }
 
 /// Explicit/rework branches must be available before any setup mutation.
@@ -12795,12 +12820,41 @@ pub(crate) fn handle_queue_work(
                 )
                 .cyan()
             );
+            // STORY-2315: a finished lane's dead lease whose seat is clean and
+            // whose HEAD is already in the PR loses nothing to `--force`, so
+            // --steal ends it itself instead of stopping on plain `session
+            // end`'s refusal. The verdict-to-action mapping is shared with the
+            // review launch (pr_lease_takeover::end_action).
+            // trace:STORY-2315 | ai:claude
+            let pr_branch = crate::pr_lease_takeover::pr_branch_for_lease(
+                &project_root_for_conflict,
+                &conflict,
+            );
+            let force_end = match crate::pr_lease_takeover::plan_lease_end(
+                &project_root_for_conflict,
+                &conflict,
+                pr_branch.as_deref(),
+            ) {
+                crate::pr_lease_takeover::LeaseEndAction::ForceEnd => {
+                    eprintln!(
+                        "  {} lease {}'s session has exited and its seat on `{}` is clean and already in the PR — ending it",
+                        crate::glyph(crate::glyphs::Glyph::Info).cyan(),
+                        &conflict.id[..conflict.id.len().min(8)],
+                        conflict.branch
+                    );
+                    true
+                }
+                crate::pr_lease_takeover::LeaseEndAction::Bail(message) => {
+                    anyhow::bail!("--steal could not end lease {}: {}", conflict_id, message);
+                }
+                crate::pr_lease_takeover::LeaseEndAction::PlainEnd => false,
+            };
             session_end(
                 Some(&conflict.id),
                 /* spec */ None,
                 /* branch */ None,
                 /* yes */ true,
-                /* force */ false,
+                /* force */ force_end, // trace:STORY-2315 | ai:claude
                 /* purge_cc */ false,
                 /* wait_ci */ false,
                 /* watch_ci */ false,
@@ -13744,7 +13798,9 @@ pub(crate) fn handle_queue_work(
     {
         eprintln!(
             "{}",
-            queue_work_manual_continuation(&plan.anchor_display, guided)
+            // The vendor actually launched (honours `[agents] enabled`),
+            // not the raw flag/default token. trace:BUG-2396 | ai:claude
+            queue_work_manual_continuation(&plan.anchor_display, guided, launch_vendor)
         );
     }
     setup_result

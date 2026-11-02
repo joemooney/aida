@@ -169,6 +169,8 @@ mod phase_gates;
 mod plan_followups;
 mod plan_intent;
 mod plan_report;
+// trace:STORY-2315 | ai:claude
+mod pr_lease_takeover;
 mod pr_lookup;
 mod pr_merge_gate;
 mod project_capabilities;
@@ -433,6 +435,8 @@ mod headless_linger;
 mod headless_tail;
 mod headless_tee;
 mod vendor_activity;
+// trace:BUG-2396 | ai:claude — vendor-aware next-step hints.
+mod vendor_hints;
 // trace:TASK-990 | ai:claude — `aida watch` streaming event classifier.
 mod watch;
 // trace:STORY-658 | ai:claude — `aida health` at-a-glance vital-signs read.

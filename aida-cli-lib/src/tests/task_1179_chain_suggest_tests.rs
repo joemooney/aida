@@ -10,11 +10,13 @@
 
 use super::*;
 
+const CLAUDE: crate::session::HeadlessVendor = crate::session::HeadlessVendor::Claude;
+
 #[test]
 fn suggests_next_spec_when_a_reap_landed_and_queue_has_one() {
     // Acceptance 1: after a reap removes a finished session, if there's a next
     // queued spec the output names the exact launch command for that spec.
-    let block = next_up_suggestion(1, Some("TASK-2")).expect("a suggestion is emitted");
+    let block = next_up_suggestion(1, Some("TASK-2"), CLAUDE).expect("a suggestion is emitted");
     assert!(
         block.contains("TASK-2"),
         "block names the next spec: {block}"
@@ -33,7 +35,7 @@ fn suggests_next_spec_when_a_reap_landed_and_queue_has_one() {
 fn suggest_only_never_implies_a_launch() {
     // Acceptance 2: suggest-only — the block explicitly states no session was
     // started, so nothing in the output can be mistaken for an auto-spawn.
-    let block = next_up_suggestion(3, Some("STORY-9")).expect("a suggestion is emitted");
+    let block = next_up_suggestion(3, Some("STORY-9"), CLAUDE).expect("a suggestion is emitted");
     assert!(
         block.contains("suggestion only"),
         "block makes the suggest-only posture explicit: {block}"
@@ -48,21 +50,33 @@ fn suggest_only_never_implies_a_launch() {
 fn nothing_reaped_emits_no_suggestion() {
     // Acceptance 3a: when nothing was reaped, no suggestion is printed even
     // though the queue has a next spec.
-    assert_eq!(next_up_suggestion(0, Some("TASK-2")), None);
+    assert_eq!(next_up_suggestion(0, Some("TASK-2"), CLAUDE), None);
 }
 
 #[test]
 fn empty_queue_emits_no_suggestion() {
     // Acceptance 3b: when a reap landed but the queue is empty, no suggestion.
-    assert_eq!(next_up_suggestion(2, None), None);
+    assert_eq!(next_up_suggestion(2, None, CLAUDE), None);
     // And the degenerate both-empty case is likewise silent.
-    assert_eq!(next_up_suggestion(0, None), None);
+    assert_eq!(next_up_suggestion(0, None, CLAUDE), None);
 }
 
 #[test]
 fn formatter_is_stable_and_names_the_spec_operand() {
     // The spec id is the operand the operator types, so it must appear verbatim
     // in both launch commands.
-    let block = format_next_up_suggestion("BUG-42");
+    let block = format_next_up_suggestion("BUG-42", CLAUDE);
     assert_eq!(block.matches("BUG-42").count(), 3);
+}
+
+// trace:BUG-2396 | ai:claude
+#[test]
+fn codex_project_suggests_the_codex_agent_lane() {
+    let block = next_up_suggestion(1, Some("TASK-2"), crate::session::HeadlessVendor::Codex)
+        .expect("a suggestion is emitted");
+    assert!(
+        block.contains("aida agent new codex --spec TASK-2"),
+        "{block}"
+    );
+    assert!(!block.contains("agent new claude"), "{block}");
 }
