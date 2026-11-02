@@ -2942,7 +2942,9 @@ pub(crate) fn codex_section_lines(
             .max_by_key(|(_, _, wt)| wt.components().count());
         match lease {
             Some(l) => linked.push((r, l)),
-            None if r.cwd == project_root => shells += 1,
+            // A subdirectory of the project root is a shell, not drift.
+            // trace:BUG-2396 | ai:claude
+            None if r.cwd.starts_with(project_root) => shells += 1,
             None => drift.push(r),
         }
     }
@@ -3513,5 +3515,17 @@ mod bug2396_codex_section_tests {
 
         let drift = codex_section_lines(&project, &in_scope[1..], 0, &[]).join("\n");
         assert!(drift.contains("In worktree without lease (1)"), "{drift}");
+
+        // A project-root subdirectory is a shell, not worktree drift.
+        let sub = vec![CodexRollout {
+            session_id: "eeeeeeee-5".into(),
+            cwd: project.join("subdir"),
+        }];
+        let sub_text = codex_section_lines(&project, &sub, 0, &[]).join("\n");
+        assert!(
+            sub_text.contains("Interactive shells in project root: 1"),
+            "{sub_text}"
+        );
+        assert!(!sub_text.contains("without lease"), "{sub_text}");
     }
 }

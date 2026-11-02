@@ -2796,7 +2796,9 @@ fn agent_selection_allows_vendor(
     }
 }
 
-fn enabled_headless_vendors(selection: crate::init_cmd::AgentSelection) -> Vec<HeadlessVendor> {
+pub(crate) fn enabled_headless_vendors(
+    selection: crate::init_cmd::AgentSelection,
+) -> Vec<HeadlessVendor> {
     let mut vendors = Vec::new();
     if selection.claude {
         vendors.push(HeadlessVendor::Claude);

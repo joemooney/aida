@@ -13769,11 +13769,9 @@ pub(crate) fn handle_queue_work(
     {
         eprintln!(
             "{}",
-            queue_work_manual_continuation(
-                &plan.anchor_display,
-                guided,
-                crate::vendor_hints::vendor_from_token(vendor)
-            )
+            // The vendor actually launched (honours `[agents] enabled`),
+            // not the raw flag/default token. trace:BUG-2396 | ai:claude
+            queue_work_manual_continuation(&plan.anchor_display, guided, launch_vendor)
         );
     }
     setup_result
