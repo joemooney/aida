@@ -416,6 +416,7 @@ fn story_home_096_agents_toml_mail_wake_default() {
 // no decision) adopts the default and arms on its exact thread; the opt-outs
 // still hold; other vendors and decided rows are left alone.
 // trace:STORY-2256 | ai:claude
+// trace:STORY-b6b1278890774ef993d2ebc327862470-279.acef3e5d | ai:claude
 #[test]
 fn story_2256_hook_arms_a_hand_started_codex_row() {
     let dir = tempfile::tempdir().unwrap();
@@ -470,6 +471,7 @@ fn story_2256_hook_arms_a_hand_started_codex_row() {
 // A refused service install (containment, no user manager) leaves the
 // hand-started row `failed`, not `pending`, with the one command to run.
 // trace:STORY-2256 | ai:claude
+// trace:STORY-b6b1278890774ef993d2ebc327862470-279.ac8fcb4d | ai:claude
 #[test]
 fn story_2256_refused_install_marks_a_hand_started_row_failed() {
     let dir = tempfile::tempdir().unwrap();
@@ -516,6 +518,7 @@ fn story_2256_launcher_stamp_keeps_a_hook_armed_row() {
 
 // `aida session start` on a Codex project says whether the wake will arm.
 // trace:STORY-2256 | ai:claude
+// trace:STORY-b6b1278890774ef993d2ebc327862470-279.acd12657 | ai:claude
 #[test]
 fn story_2256_session_start_names_the_wake() {
     let root = Path::new("/work/aida");
@@ -535,6 +538,7 @@ fn story_2256_session_start_names_the_wake() {
 // is a finding with the install command; an installed service, or only
 // opted-out / non-Codex agents, is quiet.
 // trace:STORY-2256 | ai:claude
+// trace:STORY-b6b1278890774ef993d2ebc327862470-279.ac32d207 | ai:claude
 #[test]
 fn story_2256_doctor_flags_live_codex_without_the_service() {
     use crate::codex_mail_health::service_findings_in;
@@ -553,4 +557,13 @@ fn story_2256_doctor_flags_live_codex_without_the_service() {
         .contains("aida mailbox wake-service install"));
     assert!(service_findings_in(project, &[codex], true).is_empty());
     assert!(service_findings_in(project, &[off, claude], false).is_empty());
+}
+
+// The mail-wake guide says hand-launched Codex seats are covered.
+// trace:STORY-b6b1278890774ef993d2ebc327862470-279.ac0ad877 | ai:claude
+#[test]
+fn story_2256_doc_covers_hand_launched_codex_seats() {
+    let doc = include_str!("../../docs/agents/codex-mail-wake.md");
+    assert!(doc.contains("Hand-launched Codex seats are covered"));
+    assert!(doc.contains("aida session start --owns <ID>"));
 }
