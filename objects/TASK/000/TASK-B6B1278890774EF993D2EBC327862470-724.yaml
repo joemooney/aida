@@ -1,0 +1,27 @@
+id: 01a19df0-cf89-7a53-a1f5-90ee788e5a01
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-724
+title: 'NON-BLOCKING (test gap, minor) agent_launch.rs rescope_codex_mcp_flags: the old…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on BUG-2394, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  NON-BLOCKING (test gap, minor) agent_launch.rs rescope_codex_mcp_flags: the old.is_empty() && defaults_applied branch (project_root yields no overrides but the seat does, e.g. mcp=off with only a seat-trusted project server) is untested.
+  Reviewed sha: 51fae8189dedd90172bbe81e9af7cd3d228f8e4d
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-02T20:26:07.113409958Z
+modified_at: 2026-11-02T20:26:07.113409958Z
+req_type: Task
+tags:
+- carried-from:BUG-2394
+- finding-hash:afcab2d7
+- from-review:BUG-2394
+- kind:carried-forward
+filed_at:
+  code_sha: b8c7d3f6e51240a4450dbe3c6881badfb2ec26f9
+  branch: main
+  dirty: true
+  aida_version: 0.16.0
+  aida_build_sha: 6a3f67671a9
+  vendor: claude
