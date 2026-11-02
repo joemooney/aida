@@ -23,7 +23,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T06:45:38.111981577Z
-modified_at: 2026-11-02T07:21:59.794838816Z
+modified_at: 2026-11-02T07:22:01.108176320Z
 req_type: Bug
 tags:
 - architecture
@@ -157,6 +157,21 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Round-2 rework addresses all six prior findings and every AC surface is wired, but the test build no longer compiles after the main merge (CI lib-0/lib-1/cli-0/gates red) and two new tests panic on HOME mutation.. No triage reason was given.'
   created_at: 2026-11-02T07:21:59.794837228Z
   modified_at: 2026-11-02T07:21:59.794837228Z
+  session_id: 1f56bd1e-c059-4f73-b8df-e18b2170fdfc
+- id: 01a19b22-f191-7c21-9bd0-06b2bbd53d13
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2386):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 61e48d2fe61a
+    Recorded: 2026-11-02T07:19:52.552587003+00:00
+    Findings:
+    1. [blocker] Test build does not compile: aida-cli-lib/src/tests/bug_2382_unbound_agent_tests.rs:25 builds a SessionLease literal (brought in by the main merge 61e48d2, from BUG-2382 #3224) without the new vendor_session_id field -> E0063. CI at 61e48d2: lib-0 'cannot plan lib-0: listing the lib tests exited 101', lib-1, cli-0 and gates (Live bwrap gate, exit 101) all fail. Add vendor_session_id: None there and re-check every SessionLease literal after each main merge.
+    2. [major] bug_2386_resume_routing_tests.rs:153-156 (recorded_resume_places_rollout_log_transcript_and_lease_ids_and_refuses_the_rest) and :218-221 (rollout_fallback_refuses_a_rollout_from_before_the_lease_started) set HOME through EnvVarsGuard::apply without run_path_isolated_test(); test_env::require_path_mutation_scope asserts on HOME, so both tests panic once the build compiles. Wrap them in run_path_isolated_test() (BUG-1994 pattern), or drop HOME: the rollout test only needs AIDA_CODEX_SESSIONS_DIR, and claude_transcript_exists could take a projects-root seam.
+    3. [minor] codex_resume.rs:173-197 recorded_resume step 4 never checks that the id belongs to the lease it consults: any id that no rollout, log or Claude transcript places resumes the newest stamped/bounded Codex thread of the scope (the test at bug_2386_resume_routing_tests.rs:189-200 asserts this with the unrelated id 'aida-no-log'). A typo'd or foreign id for queue work SPEC --resume continues some other session's thread instead of refusing, which contradicts the doc line 'An id none of these place refuses by name'. Tie the lease to the id (e.g. record the AIDA session id on the lease next to vendor_session_id and match it), or refuse and name the scope's bound thread as a suggestion.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-02T07:22:00.977974395Z
+  modified_at: 2026-11-02T07:22:00.977974395Z
   session_id: 1f56bd1e-c059-4f73-b8df-e18b2170fdfc
 history:
 - id: 01a195db-6c30-7600-a068-211ab6c2eed8
