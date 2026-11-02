@@ -13,13 +13,20 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-02T15:44:49.546233271Z
-modified_at: 2026-11-02T15:44:49.546233271Z
+modified_at: 2026-11-02T15:56:40.955523705Z
 req_type: Task
 tags:
 - carried-from:TASK-2754
 - finding-hash:a47644e6
 - from-review:PR-3262
 - kind:carried-forward
+comments:
+- id: 01a19cfa-227b-71e3-a8e9-fab42aee2425
+  author: joe
+  content: 'ADVISOR RULING (2026-11-02 08:50 MST, ruling-once): ACCEPTED, no work. Duplicate of TASK-b6b1278890774ef993d2ebc327862470-706 (same finding, recorded twice).'
+  created_at: 2026-11-02T15:56:40.955523705Z
+  modified_at: 2026-11-02T15:56:40.955523705Z
+  session_id: ee0bf351-6b17-486f-a38e-cfbb1343c426
 filed_at:
   code_sha: 6fafff141a37de5cd8d6dc06261deb83590f55b1
   branch: main
