@@ -529,6 +529,75 @@ pub(crate) fn hold_gate_tolerance(
     })
 }
 
+/// Required presence is checked before any informational or hold exception.
+// trace:BUG-2401 | ai:codex
+#[derive(Debug, PartialEq, Eq)]
+enum TrainCiReadiness {
+    Missing(Vec<String>),
+    Pending(Vec<String>),
+    Red(String),
+    Green,
+}
+
+// trace:BUG-2401 | ai:codex
+fn train_ci_readiness(
+    rows: &[crate::ci_gate::CheckRow],
+    required: &[String],
+    cfg: &crate::ci_gate::CiGateConfig,
+    tolerate_hold: bool,
+) -> TrainCiReadiness {
+    let refined = crate::ci_gate::classify_red(rows, required, cfg, tolerate_hold, false);
+    // A genuine red remains a red train (including rerun/bisection), even
+    // while an aggregate has not registered. Missing evidence never promotes it.
+    if refined.is_real() {
+        return TrainCiReadiness::Red(format!(
+            "failing checks: {}",
+            refined
+                .real
+                .iter()
+                .map(|row| row.name.as_str())
+                .collect::<Vec<_>>()
+                .join(", ")
+        ));
+    }
+    let missing: Vec<_> = required
+        .iter()
+        .filter(|name| !rows.iter().any(|r| r.name == **name))
+        .cloned()
+        .collect();
+    if !missing.is_empty() {
+        return TrainCiReadiness::Missing(missing);
+    }
+    if rows.is_empty() {
+        return TrainCiReadiness::Missing(vec!["CI checks".into()]);
+    }
+    // Required contexts must pass; skipped/unknown required rows are not green.
+    let pending: Vec<_> = rows
+        .iter()
+        .filter(|row| {
+            required.contains(&row.name)
+                && !matches!(row.bucket.as_str(), "pass" | "fail" | "cancel")
+                && !(tolerate_hold && row.name == crate::ci_gate::HOLD_GATE_CHECK)
+        })
+        .map(|r| r.name.clone())
+        .collect();
+    if !pending.is_empty() {
+        return TrainCiReadiness::Pending(pending);
+    }
+    if refined.has_pending() {
+        return TrainCiReadiness::Pending(refined.pending);
+    }
+    if rows.iter().any(|r| {
+        !matches!(
+            r.bucket.as_str(),
+            "pass" | "fail" | "cancel" | "skipping" | "pending"
+        )
+    }) {
+        return TrainCiReadiness::Pending(vec!["unclassified CI state".into()]);
+    }
+    TrainCiReadiness::Green
+}
+
 pub(crate) fn short(sha: &str) -> &str {
     &sha[..sha.len().min(10)]
 }
@@ -1510,6 +1579,53 @@ impl LiveTrainForge<'_> {
         })
     }
 
+    // trace:BUG-2401 | ai:codex
+    fn train_ci_snapshot(
+        &mut self,
+        change: &crate::forge::ChangeRef,
+        tip: &str,
+        cars: &[Car],
+    ) -> Result<TrainCiReadiness> {
+        self.dispatch_check()?;
+        // Bracket the policy/row reads: rows from a different head or base
+        // cannot promote the built train, including after hold release.
+        let assert_head = || -> Result<()> {
+            let body = gh_stdout(
+                &self.project_root,
+                &[
+                    "pr",
+                    "view",
+                    &change.id.to_string(),
+                    "--json",
+                    "headRefOid,baseRefName,state",
+                ],
+            )?;
+            let value: serde_json::Value = serde_json::from_str(&body)?;
+            anyhow::ensure!(
+                value["headRefOid"].as_str() == Some(tip)
+                    && value["baseRefName"].as_str() == Some(change.base.as_str())
+                    && value["state"] == "OPEN",
+                "train PR #{} head/base/state changed during CI readiness",
+                change.id
+            );
+            Ok(())
+        };
+        assert_head()?;
+        let required =
+            crate::status_prs::train_required_status_checks(&self.project_root, &change.base)?;
+        let rows = self.forge.check_rows(change)?;
+        let cfg = crate::ci_gate::read_ci_gate_config(&self.project_root);
+        // Only the existing, live member-label proof may tolerate a hold.
+        let tolerated = hold_gate_tolerance(&rows, cars, |pr| {
+            crate::merge_hold::fetch_pinned_change(&self.project_root, self.forge.kind(), pr)
+                .map_err(|e| e.to_string())
+        });
+        let state = train_ci_readiness(&rows, &required, &cfg, tolerated);
+        assert_head()?;
+        self.dispatch_check()?;
+        Ok(state)
+    }
+
     fn member_ref(&self, pr: u64) -> crate::forge::ChangeRef {
         crate::forge::ChangeRef {
             id: pr,
@@ -1597,6 +1713,36 @@ impl TrainForge for LiveTrainForge<'_> {
         use crate::forge::CheckRegistration;
         use crate::gate::dispatch_types::CiState;
         self.dispatch_check()?;
+        // trace:BUG-2401 | ai:codex
+        if self.forge.kind() == crate::forge::ForgeKind::GitHub {
+            let started = std::time::Instant::now();
+            let settle_limit = crate::ci_idle_timeout::ci_absolute_ceiling_secs(&self.project_root);
+            loop {
+                let state = self.train_ci_snapshot(change, &train.tip, &train.cars)?;
+                match state {
+                    TrainCiReadiness::Green => return Ok(CiVerdict::Green),
+                    TrainCiReadiness::Red(why) => return Ok(CiVerdict::Red(why)),
+                    waiting => {
+                        println!("  train PR #{} CI waiting: {waiting:?}", change.id);
+                        // Registration keeps its existing 600s bound. An
+                        // already running build gets the ordinary CI ceiling,
+                        // rather than being cut off by the registration timer.
+                        let limit = if matches!(waiting, TrainCiReadiness::Missing(_)) {
+                            600
+                        } else {
+                            settle_limit
+                        };
+                        anyhow::ensure!(
+                            limit == 0 || started.elapsed().as_secs() < limit,
+                            "train PR #{} CI not ready within {limit}s: {waiting:?}",
+                            change.id
+                        );
+                        std::thread::sleep(std::time::Duration::from_secs(10));
+                    }
+                }
+            }
+        }
+
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(600);
         loop {
             match self.forge.checks_registered(change)? {
@@ -1669,6 +1815,16 @@ impl TrainForge for LiveTrainForge<'_> {
 
     fn merge(&mut self, change: &crate::forge::ChangeRef, tip: &str) -> Result<()> {
         self.dispatch_check()?;
+        // trace:BUG-2401 | ai:codex — fresh policy, rows and head under the
+        // merge lease; no member-hold tolerance survives to the merge call.
+        if self.forge.kind() == crate::forge::ForgeKind::GitHub {
+            let state = self.train_ci_snapshot(change, tip, &[])?;
+            anyhow::ensure!(
+                state == TrainCiReadiness::Green,
+                "train PR #{} final CI recheck refused: {state:?}",
+                change.id
+            );
+        }
         let opts = crate::forge::MergeOptions {
             method: crate::forge::MergeMethod::Rebase,
             squash_subject: None,

@@ -2176,3 +2176,286 @@ fn bug_2219_train_network_helpers_route_through_the_retry_runner() {
         assert!(body.contains("net_output("), "{name} must retry transients");
     }
 }
+
+// trace:BUG-2401 | ai:codex
+fn required_train_rows() -> Vec<crate::ci_gate::CheckRow> {
+    (0..7)
+        .map(|i| crate::ci_gate::CheckRow {
+            name: format!("Build lane {i}"),
+            bucket: "pass".into(),
+            workflow: "CI".into(),
+            run_id: None,
+        })
+        .chain(std::iter::once(crate::ci_gate::CheckRow {
+            name: crate::ci_gate::HOLD_GATE_CHECK.into(),
+            bucket: "pass".into(),
+            workflow: "hold".into(),
+            run_id: None,
+        }))
+        .collect()
+}
+
+#[test]
+// trace:BUG-2401 | ai:codex
+fn train_required_aggregate_registration_and_precedence() {
+    use crate::ci_gate::{CheckRow, CiGateConfig};
+    let required = vec![
+        "Build (ubuntu-latest)".into(),
+        crate::ci_gate::HOLD_GATE_CHECK.into(),
+    ];
+    let cfg = CiGateConfig {
+        informational_checks: vec!["Build*".into()],
+        informational_workflows: vec![],
+    };
+    let mut rows = required_train_rows();
+    // Exact #3202 shape: seven passing lanes plus hold, no protected aggregate.
+    assert!(matches!(
+        train_ci_readiness(&rows, &required, &cfg, false),
+        TrainCiReadiness::Missing(_)
+    ));
+    // Preserve genuine red-train rerun/bisection even before registration.
+    rows[0].bucket = "fail".into();
+    assert!(matches!(
+        train_ci_readiness(&rows, &required, &CiGateConfig::default(), false),
+        TrainCiReadiness::Red(_)
+    ));
+    rows[0].bucket = "pass".into();
+    // A held member must never make an absent aggregate green either.
+    rows.last_mut().unwrap().bucket = "fail".into();
+    assert!(matches!(
+        train_ci_readiness(&rows, &required, &cfg, true),
+        TrainCiReadiness::Missing(_)
+    ));
+    rows.push(CheckRow {
+        name: required[0].clone(),
+        bucket: "pending".into(),
+        workflow: "CI".into(),
+        run_id: None,
+    });
+    for bucket in ["pending", "skipping", "unknown"] {
+        rows.last_mut().unwrap().bucket = bucket.into();
+        assert!(matches!(
+            train_ci_readiness(&rows, &required, &cfg, true),
+            TrainCiReadiness::Pending(_)
+        ));
+    }
+    rows.last_mut().unwrap().bucket = "fail".into();
+    assert!(matches!(
+        train_ci_readiness(&rows, &required, &cfg, true),
+        TrainCiReadiness::Red(_)
+    ));
+    rows.last_mut().unwrap().bucket = "pass".into();
+    assert_eq!(
+        train_ci_readiness(&rows, &required, &cfg, true),
+        TrainCiReadiness::Green
+    );
+    assert!(matches!(
+        train_ci_readiness(&rows, &required, &cfg, false),
+        TrainCiReadiness::Red(_)
+    ));
+    rows[7].bucket = "pass".into();
+    rows.push(CheckRow {
+        name: "Build informational".into(),
+        bucket: "pending".into(),
+        workflow: "other".into(),
+        run_id: None,
+    });
+    assert_eq!(
+        train_ci_readiness(&rows, &required, &cfg, false),
+        TrainCiReadiness::Green
+    );
+    assert!(matches!(
+        train_ci_readiness(&[], &[], &cfg, false),
+        TrainCiReadiness::Missing(_)
+    ));
+}
+
+#[test]
+// trace:BUG-2401 | ai:codex
+fn train_required_ci_live_ports_refuse_stale_and_final_missing() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let root = tempfile::tempdir().unwrap();
+    let dir = root.path();
+    let gh = dir.join("gh");
+    crate::test_exec::write_executable(
+        &gh,
+        r#"#!/bin/sh
+case "$*" in
+  'pr view '*)
+    if [ -f moving ] && [ -f viewed ]; then cat moved.json; else cat head.json; fi
+    touch viewed ;;
+  'api repos/{owner}/{repo}/branches/release%2Fnext/protection') if [ -f unavailable ]; then echo 'HTTP 403' >&2; exit 1; fi; cat protection.json ;;
+  'api repos/{owner}/{repo}/rules/branches/release%2Fnext?per_page=100&page='*)
+    p=${2##*page=}
+    if [ -f "rules-$p.json" ]; then cat "rules-$p.json"; elif [ "$p" = 1 ]; then cat rules.json; else echo '[]'; fi ;;
+  'pr checks '*) cat rows.json ;;
+  *) echo "unexpected forge call: $*" >&2; exit 1 ;;
+esac
+"#,
+    );
+    let path = format!("{}:{}", dir.display(), std::env::var("PATH").unwrap());
+    let _env = crate::test_env::EnvVarsGuard::set(&[
+        ("PATH", path.as_str()),
+        ("AIDA_TEST_GH_BINARY", gh.to_str().unwrap()),
+    ]);
+    let tip = "a".repeat(40);
+    let change = crate::forge::ChangeRef {
+        id: 3202,
+        url: "fixture".into(),
+        branch: "train".into(),
+        base: "release/next".into(),
+        title: None,
+    };
+    write(
+        dir,
+        "head.json",
+        &serde_json::json!({"headRefOid":tip,"baseRefName":change.base,"state":"OPEN"}).to_string(),
+    );
+    write(
+        dir,
+        "moved.json",
+        &serde_json::json!({"headRefOid":"b".repeat(40),"baseRefName":change.base,"state":"OPEN"})
+            .to_string(),
+    );
+    write(
+        dir,
+        "protection.json",
+        r#"{"required_status_checks":{"contexts":["Build (ubuntu-latest)","merge-hold-gate"]}}"#,
+    );
+    write(dir, "rules.json", "[]");
+    let rows_json = |aggregate: Option<&str>| {
+        let mut rows: Vec<_> = required_train_rows()
+            .into_iter()
+            .map(|r| serde_json::json!({"name":r.name,"bucket":r.bucket,"workflow":r.workflow}))
+            .collect();
+        if let Some(bucket) = aggregate {
+            rows.push(
+                serde_json::json!({"name":"Build (ubuntu-latest)","bucket":bucket,"workflow":"CI"}),
+            );
+        }
+        serde_json::to_string(&rows).unwrap()
+    };
+    let forge = crate::forge::forge_for_kind(dir, crate::forge::ForgeKind::GitHub);
+    let mut host = LiveTrainForge {
+        project_root: dir.into(),
+        main_worktree: dir.into(),
+        base: change.base.clone(),
+        forge: forge.as_ref(),
+        named: true,
+        dispatch_ctx: None,
+        dispatch_abort: None,
+    };
+    // Delayed registration and settlement at the exact protected train head.
+    for (bucket, expected) in [
+        (None, "missing"),
+        (Some("pending"), "pending"),
+        (Some("pass"), "green"),
+        (Some("fail"), "red"),
+    ] {
+        write(dir, "rows.json", &rows_json(bucket));
+        let state = host.train_ci_snapshot(&change, &tip, &[]).unwrap();
+        assert!(match expected {
+            "missing" => matches!(state, TrainCiReadiness::Missing(_)),
+            "pending" => matches!(state, TrainCiReadiness::Pending(_)),
+            "green" => state == TrainCiReadiness::Green,
+            _ => matches!(state, TrainCiReadiness::Red(_)),
+        });
+    }
+    // Initial success does not authorize landing after a later row disappears.
+    write(dir, "rows.json", &rows_json(Some("pass")));
+    let train = Built {
+        base: "base".into(),
+        tip: tip.clone(),
+        cars: vec![],
+        dropped: vec![],
+    };
+    assert!(matches!(
+        host.wait_ci(&change, &train).unwrap(),
+        CiVerdict::Green
+    ));
+    write(dir, "rows.json", &rows_json(None));
+    assert!(host
+        .merge(&change, &tip)
+        .unwrap_err()
+        .to_string()
+        .contains("final CI recheck"));
+    write(dir, "unavailable", "");
+    assert!(host.train_ci_snapshot(&change, &tip, &[]).is_err());
+    std::fs::remove_file(dir.join("unavailable")).unwrap();
+    write(
+        dir,
+        "rules.json",
+        r#"[{"type":"required_status_checks","parameters":{"required_status_checks":[{"context":"ruleset-only"}]}}]"#,
+    );
+    write(dir, "rows.json", &rows_json(Some("pass")));
+    assert!(matches!(
+        host.train_ci_snapshot(&change, &tip, &[]).unwrap(),
+        TrainCiReadiness::Missing(_)
+    ));
+    write(dir, "rules.json", "{}");
+    assert!(host.train_ci_snapshot(&change, &tip, &[]).is_err());
+    write(dir, "rules.json", r#"[{"type":"workflows"}]"#);
+    assert!(host.train_ci_snapshot(&change, &tip, &[]).is_err());
+    write(dir, "rules.json", "[]");
+    // A full first page is followed: a required context or an unsupported
+    // workflow rule on a later page is never dropped (GitHub pages rules).
+    // trace:BUG-2401 | ai:claude
+    let full_page = serde_json::to_string(&vec![
+        serde_json::json!({"type":"deletion"});
+        crate::status_prs::TRAIN_RULE_PAGE_SIZE
+    ])
+    .unwrap();
+    write(dir, "rules-1.json", &full_page);
+    write(
+        dir,
+        "rules-2.json",
+        r#"[{"type":"required_status_checks","parameters":{"required_status_checks":[{"context":"page-two-only"}]}}]"#,
+    );
+    match host.train_ci_snapshot(&change, &tip, &[]).unwrap() {
+        TrainCiReadiness::Missing(names) => assert_eq!(names, vec!["page-two-only".to_string()]),
+        other => panic!("later-page required check must be missing, got {other:?}"),
+    }
+    write(dir, "rules-2.json", r#"[{"type":"workflows"}]"#);
+    assert!(host.train_ci_snapshot(&change, &tip, &[]).is_err());
+    write(dir, "rules-2.json", r#"{"message":"Server Error"}"#);
+    assert!(host.train_ci_snapshot(&change, &tip, &[]).is_err());
+    // More full pages than the bound: incomplete policy refuses.
+    for page in 1..=crate::status_prs::TRAIN_RULE_PAGE_LIMIT {
+        write(dir, &format!("rules-{page}.json"), &full_page);
+    }
+    assert!(host
+        .train_ci_snapshot(&change, &tip, &[])
+        .unwrap_err()
+        .to_string()
+        .contains("policy incomplete"));
+    for page in 1..=crate::status_prs::TRAIN_RULE_PAGE_LIMIT {
+        std::fs::remove_file(dir.join(format!("rules-{page}.json"))).unwrap();
+    }
+    write(
+        dir,
+        "protection.json",
+        r#"{"required_status_checks":{"contexts":[42]}}"#,
+    );
+    assert!(host.train_ci_snapshot(&change, &tip, &[]).is_err());
+    write(dir, "protection.json", r#"{"required_status_checks":null}"#);
+    write(dir, "rows.json", "[]");
+    assert!(matches!(
+        host.train_ci_snapshot(&change, &tip, &[]).unwrap(),
+        TrainCiReadiness::Missing(_)
+    ));
+    write(dir, "rows.json", &rows_json(Some("pass")));
+    assert_eq!(
+        host.train_ci_snapshot(&change, &tip, &[]).unwrap(),
+        TrainCiReadiness::Green
+    );
+    std::fs::remove_file(dir.join("viewed")).unwrap();
+    write(dir, "moving", "");
+    assert!(host
+        .train_ci_snapshot(&change, &tip, &[])
+        .unwrap_err()
+        .to_string()
+        .contains("changed"));
+    assert!(host.merge(&change, &tip).is_err());
+}

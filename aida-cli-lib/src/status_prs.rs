@@ -986,6 +986,140 @@ pub(crate) fn required_status_checks_uncached(
     )
 }
 
+/// Effective-rules page size (GitHub's maximum) and the most pages a train
+/// readiness read follows before refusing the policy as incomplete.
+// trace:BUG-2401 | ai:claude
+pub(crate) const TRAIN_RULE_PAGE_SIZE: usize = 100;
+pub(crate) const TRAIN_RULE_PAGE_LIMIT: usize = 10;
+
+/// Fresh, base-specific protection and effective ruleset evidence for a train.
+/// Unlike observed `gh pr checks --required` rows, this includes contexts that
+/// have not registered yet. Unreadable or unsupported policy refuses readiness.
+// trace:BUG-2401 | ai:codex
+pub(crate) fn train_required_status_checks(
+    root: &std::path::Path,
+    base: &str,
+) -> anyhow::Result<Vec<String>> {
+    let gh = resolve_gh_binary().ok_or_else(|| anyhow::anyhow!("gh is unavailable"))?;
+    let branch = base
+        .replace('%', "%25")
+        .replace('/', "%2F")
+        .replace('#', "%23")
+        .replace('?', "%3F");
+    let read = |endpoint: &str| -> anyhow::Result<std::process::Output> {
+        let mut cmd = std::process::Command::new(&gh);
+        cmd.current_dir(root).args(["api", endpoint]);
+        command_output_with_timeout(cmd, FORGE_CLI_CALL_TIMEOUT)
+            .ok_or_else(|| anyhow::anyhow!("required-check policy read timed out: {endpoint}"))
+    };
+    let protection = read(&format!(
+        "repos/{{owner}}/{{repo}}/branches/{branch}/protection"
+    ))?;
+    let mut required = if protection.status.success() {
+        let value: serde_json::Value = serde_json::from_slice(&protection.stdout)?;
+        train_protection_contexts(&value)?
+    } else {
+        required_status_checks_outcome_from_stderr(&String::from_utf8_lossy(&protection.stderr))
+            .ok_or_else(|| {
+                anyhow::anyhow!(
+                    "required-check protection unavailable: {}",
+                    String::from_utf8_lossy(&protection.stderr).trim()
+                )
+            })?
+    };
+    // GitHub pages effective rules (default 30 per page). Every page is read;
+    // a page count past the bound refuses rather than judging a partial policy.
+    // trace:BUG-2401 | ai:claude
+    let mut complete = false;
+    for page in 1..=TRAIN_RULE_PAGE_LIMIT {
+        let rules = read(&format!(
+            "repos/{{owner}}/{{repo}}/rules/branches/{branch}?per_page={TRAIN_RULE_PAGE_SIZE}&page={page}"
+        ))?;
+        anyhow::ensure!(
+            rules.status.success(),
+            "required-check rules unavailable (page {page}): {}",
+            String::from_utf8_lossy(&rules.stderr).trim()
+        );
+        let value: serde_json::Value = serde_json::from_slice(&rules.stdout)?;
+        let len = value.as_array().map_or(0, Vec::len);
+        required.extend(train_rule_contexts(&value)?);
+        if len < TRAIN_RULE_PAGE_SIZE {
+            complete = true;
+            break;
+        }
+    }
+    anyhow::ensure!(
+        complete,
+        "required-check rules exceed {TRAIN_RULE_PAGE_LIMIT} pages; policy incomplete"
+    );
+    required.sort();
+    required.dedup();
+    Ok(required)
+}
+
+// trace:BUG-2401 | ai:codex
+fn train_protection_contexts(value: &serde_json::Value) -> anyhow::Result<Vec<String>> {
+    anyhow::ensure!(value.is_object(), "invalid branch protection");
+    let block = value
+        .get("required_status_checks")
+        .ok_or_else(|| anyhow::anyhow!("missing required_status_checks policy"))?;
+    if block.is_null() {
+        return Ok(Vec::new());
+    }
+    let contexts = block
+        .get("contexts")
+        .and_then(|v| v.as_array())
+        .ok_or_else(|| anyhow::anyhow!("invalid required contexts"))?;
+    let mut names = contexts
+        .iter()
+        .map(policy_context)
+        .collect::<anyhow::Result<Vec<_>>>()?;
+    if let Some(checks) = block.get("checks") {
+        for check in checks
+            .as_array()
+            .ok_or_else(|| anyhow::anyhow!("invalid required checks"))?
+        {
+            names.push(policy_context(&check["context"])?);
+        }
+    }
+    Ok(names)
+}
+
+// trace:BUG-2401 | ai:codex
+fn policy_context(value: &serde_json::Value) -> anyhow::Result<String> {
+    value
+        .as_str()
+        .filter(|s| !s.trim().is_empty())
+        .map(str::to_string)
+        .ok_or_else(|| anyhow::anyhow!("invalid required check name"))
+}
+
+// trace:BUG-2401 | ai:codex
+fn train_rule_contexts(value: &serde_json::Value) -> anyhow::Result<Vec<String>> {
+    let mut names = Vec::new();
+    for rule in value
+        .as_array()
+        .ok_or_else(|| anyhow::anyhow!("invalid effective branch rules"))?
+    {
+        let kind = rule["type"]
+            .as_str()
+            .ok_or_else(|| anyhow::anyhow!("missing rule type"))?;
+        anyhow::ensure!(
+            !matches!(kind, "workflows" | "required_workflows"),
+            "required workflow rules are unsupported for train readiness"
+        );
+        if kind == "required_status_checks" {
+            let checks = rule["parameters"]["required_status_checks"]
+                .as_array()
+                .ok_or_else(|| anyhow::anyhow!("invalid required status-check rule"))?;
+            for check in checks {
+                names.push(policy_context(&check["context"])?);
+            }
+        }
+    }
+    Ok(names)
+}
+
 /// BUG-1481: classify a failed `gh api .../protection` call's stderr into
 /// "nothing is required" vs "unknown". GitHub returns HTTP 404 for BOTH a
 /// genuinely unprotected branch (body `{"message":"Branch not protected",...}`)
