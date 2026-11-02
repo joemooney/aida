@@ -6,12 +6,12 @@ description: |-
   Acceptance: (1) Integrate A/B and BUG2398 into actual interactive/headless implementer/reviewer Codex and STORY2254 background, AIDA-applied reporting only with wrapper evidence. (2) Installed native workspace layer/private daemon lifecycle composes with own delegated keyring/context/companion semantics; host daemon cannot execute outside wrapper, valid reviewer attests and ungranted/wrong-seat fails authority. (3) Own git/index/refs, store/cache and required own-grant stamps work, protected hooks/config/unrelated metadata stay immutable. Credential leaves only; P3 exact refresh storage and signed C7 choice must be resolved before credential code, no silent API-key-only replacement for ChatGPT. (4) Actual model-free plus authenticated host evidence covers these paths and all earlier write/egress/FD/IPC negatives; no socket failure waived. Layers: launch/grants/auth, storage/git boundary, background supervisor, diagnostics and live tests. Signed sliceC.
 
   All signed STORY2238 sketch C1-C12 and BUG2398 B1-B4 apply. Linux only, fakeHOME/synthetic tests, no global user settings or schedules. No partial backend may report AIDA containment applied or launch ordinary agents until all required protections are ready; named refusal, no fallback. STRICT independent review, operator merge floor. LIGHT one targeted test plus fast gates; shared infra or >10files adds touched-test/compile, fullsuiteCI only. Longcargo background, no slotbypass. Parent all7AC remain open until final installed-tool evidence; no slice alone completes parent.
-status: NeedsAttention
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T09:06:06.223993645Z
-modified_at: 2026-11-02T21:59:28.544167830Z
+modified_at: 2026-11-02T21:59:30.850776480Z
 req_type: Task
 tags:
 - architecture
@@ -144,6 +144,12 @@ comments:
   created_at: 2026-11-02T21:59:28.544167830Z
   modified_at: 2026-11-02T21:59:28.544167830Z
   session_id: ee0bf351-6b17-486f-a38e-cfbb1343c426
+- id: 01a19e46-5122-7e80-b0a1-2c8db435ec5c
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: Round-1 fixes land (syn-based ratchet scans whole authority files, skips only cfg(test)-gated nodes, new early-hook control test; contained_boundary doc corrected), but CI is red at this head: rest and lib-0 fail in Run tests while main is green; the rest failure is a PR-caused fixture break in aida-core store_lock.rs. No triage reason was given.'
+  created_at: 2026-11-02T21:59:30.850770226Z
+  modified_at: 2026-11-02T21:59:30.850770226Z
+  session_id: ee0bf351-6b17-486f-a38e-cfbb1343c426
 history:
 - id: 01a1965c-1e90-7483-8313-1b32a588eaef
   author: joe
@@ -244,6 +250,14 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a19e46-5122-7e80-b0a1-2c7b7755ee41
+  author: joe
+  timestamp: 2026-11-02T21:59:30.850736322Z
+  session_id: ee0bf351-6b17-486f-a38e-cfbb1343c426
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: 4ce0af750fcb68d4adf57496e4e002aefd8ace77
   branch: main
@@ -251,11 +265,3 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: 4ce0af750fc
   vendor: codex
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'Round-1 fixes land (syn-based ratchet scans whole authority files, skips only cfg(test)-gated nodes, new early-hook control test; contained_boundary doc corrected), but CI is red at this head: rest and lib-0 fail in Run tests while main is green; the rest failure is a PR-caused fixture break in aida-core store_lock.rs'
-  recovery_hint: address the review findings, move TASK-2707 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-02T21:57:55.460345049Z
