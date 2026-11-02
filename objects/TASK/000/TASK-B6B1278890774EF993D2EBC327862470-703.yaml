@@ -1,5 +1,6 @@
 id: 01a19c98-3664-7f11-9740-154306f58445
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-703
+agreed_id: TASK-2760
 title: 'Non-blocking (carried from round 1): the standalone report lost its ''GENERATED …'
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on TASK-2835, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
@@ -20,6 +21,12 @@ tags:
 - finding-hash:30bc0049
 - from-review:PR-3235
 - kind:carried-forward
+history:
+- id: 01a19ca3-f203-7ce1-9146-6fa31e9107b6
+  author: joe
+  timestamp: 2026-11-02T14:22:32.451485125Z
+  session_id: ee0bf351-6b17-486f-a38e-cfbb1343c426
+  changes: []
 filed_at:
   code_sha: 20d11bb5b2b5314b9886bd640d3473dae049be7d
   branch: main
