@@ -527,7 +527,22 @@ fn pick_recent_session_for_role(
         return Ok(None);
     }
 
-    let sessions = session::list_role_sessions(role, 8).unwrap_or_default();
+    let mut sessions = session::list_role_sessions(role, 8).unwrap_or_default();
+    // STORY-2254: never offer to resume into a scope a detached launch
+    // attempt holds; the check runs inside the admission lock.
+    // trace:STORY-2254 | ai:claude
+    sessions.retain(|s| {
+        let Some(spec) = s.spec.as_deref().filter(|spec| !spec.trim().is_empty()) else {
+            return true;
+        };
+        match crate::agent_launch::codex_bg_receipt::scope_entry_blocker(project_root, role, spec) {
+            Some(blocker) => {
+                eprintln!("  not offering session {}: {blocker}", s.id);
+                false
+            }
+            None => true,
+        }
+    });
     if sessions.is_empty() {
         return Ok(None);
     }

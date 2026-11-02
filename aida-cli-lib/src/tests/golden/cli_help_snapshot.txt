@@ -17519,6 +17519,10 @@ Arguments:
           The attempt id the launch printed
 
 Options:
+      --retire-unknown
+          The attempt's receipt is unreadable: once nothing runs for it, move the receipt out of
+          admission (kept as evidence) so it no longer holds a scope
+
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
           compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
@@ -47264,6 +47268,11 @@ Working on aida itself
         "name": "help",
         "takes_value": false,
         "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "retire-unknown",
+        "takes_value": false,
+        "help": "The attempt's receipt is unreadable: once nothing runs for it, move the receipt out of admission (kept as evidence) so it no longer holds a scope"
       }
     ],
     "hidden": false

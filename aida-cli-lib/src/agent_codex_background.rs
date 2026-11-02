@@ -629,6 +629,8 @@ pub(crate) fn agent_new_codex_bg(mut req: CodexBgRequest) -> Result<()> {
             &project_root,
             &log_path,
         ),
+        // Inside the same lock hold: no other route's live lease holds it.
+        || refuse_live_scope_lease(&project_root, &scope),
     )?;
     let mut guard = DispatcherGuard {
         dir: dir.clone(),
@@ -642,8 +644,12 @@ pub(crate) fn agent_new_codex_bg(mut req: CodexBgRequest) -> Result<()> {
 
     req.resume.duplicate_check = true;
     let mut handle_guard = crate::agent_handle::LaunchReservationGuard::new(&project_root);
-    let (plan, setup_receipt) =
-        prepare_agent_launch_attempt(&project_root, role, spec, "codex", name, cwd_ref, false)?;
+    let (plan, setup_receipt) = {
+        // This invocation's own lease write is not refused by its own,
+        // already admitted, attempt.
+        let _own = receipt::OwnAttemptScope::enter(&attempt);
+        prepare_agent_launch_attempt(&project_root, role, spec, "codex", name, cwd_ref, false)?
+    };
     let mut setup_receipt = setup_receipt;
     if let Some(setup) = setup_receipt.as_mut() {
         let (dir, root, attempt, me) = (
@@ -766,11 +772,7 @@ pub(crate) fn agent_new_codex_bg(mut req: CodexBgRequest) -> Result<()> {
     )?;
     drop(theirs);
     let abort = |supervisor: &mut std::process::Child, why: String| -> anyhow::Error {
-        // The supervisor never ran a worker past its barrier without the
-        // transfer this invocation still owns; stop and reap it.
-        let _ = supervisor.kill();
-        let _ = supervisor.wait();
-        anyhow::anyhow!(why)
+        abort_supervisor(supervisor, None, why)
     };
     let init = SupervisorInit {
         attempt: attempt.clone(),
@@ -810,10 +812,18 @@ pub(crate) fn agent_new_codex_bg(mut req: CodexBgRequest) -> Result<()> {
             ))
         }
     };
-    anyhow::ensure!(
-        sup.pid == supervisor.id(),
-        "detached launch supervisor reported a foreign identity"
-    );
+    // trace:STORY-2254 | ai:claude — a mismatch is an abort, never a bare
+    // return that would leave the supervisor and its gated worker running.
+    if sup.pid != supervisor.id()
+        || aida_core::liveness::process_start_identity(sup.pid).as_deref()
+            != Some(sup.start.as_str())
+    {
+        return Err(abort_supervisor(
+            &mut supervisor,
+            Some(&worker),
+            "detached launch supervisor reported a foreign identity; it and its gated worker were stopped unrun".into(),
+        ));
+    }
 
     // Ownership transfer: durable first, then local disarm, then ack.
     let transfer = {
@@ -838,8 +848,9 @@ pub(crate) fn agent_new_codex_bg(mut req: CodexBgRequest) -> Result<()> {
         )
     };
     if let Err(error) = transfer {
-        return Err(abort(
+        return Err(abort_supervisor(
             &mut supervisor,
+            Some(&worker),
             format!("could not transfer the launch to its supervisor: {error:#}"),
         ));
     }
@@ -907,6 +918,85 @@ pub(crate) fn agent_new_codex_bg(mut req: CodexBgRequest) -> Result<()> {
     }
 }
 
+/// Refuse admission while another route's live (or unprovably dead) lease
+/// holds `scope`. Runs inside the admission lock; routes that write leases
+/// take the same lock ([`receipt::with_scope_entry`]).
+// trace:STORY-2254 | ai:claude
+pub(crate) fn refuse_live_scope_lease(
+    project_root: &std::path::Path,
+    scope: &ScopeKey,
+) -> Result<()> {
+    let main = main_worktree_root_from(project_root);
+    for lease in list_leases(&main) {
+        let role = lease
+            .role
+            .clone()
+            .unwrap_or_else(|| agent_new_scope_role(&lease.scope).to_string());
+        if ScopeKey::new(&role, &lease.scope) != *scope {
+            continue;
+        }
+        match crate::stale_lease_recovery_for_lease(&lease).base_verdict {
+            aida_core::liveness::StaleLeaseRecovery::Live => anyhow::bail!(
+                "refusing a detached driver: live session {} already holds {} {}",
+                &lease.id[..lease.id.len().min(8)],
+                scope.role,
+                scope.spec
+            ),
+            aida_core::liveness::StaleLeaseRecovery::UnknownLiveness => anyhow::bail!(
+                "refusing a detached driver: session {} holds {} {} and its owner cannot be proven gone",
+                &lease.id[..lease.id.len().min(8)],
+                scope.role,
+                scope.spec
+            ),
+            _ => {}
+        }
+    }
+    Ok(())
+}
+
+/// Dispatcher-side abort before ownership moved: stop the gated worker (only
+/// when it is provably the supervisor's own child, in its own group, with the
+/// reported start identity), then kill and reap the supervisor, then wait a
+/// bounded time for the orphaned barrier to be reaped by its new parent. The
+/// worker never executed: the barrier releases only after the transfer this
+/// invocation still owns.
+// trace:STORY-2254 | ai:claude
+pub(crate) fn abort_supervisor(
+    supervisor: &mut std::process::Child,
+    worker: Option<&ProcId>,
+    why: String,
+) -> anyhow::Error {
+    let owned_worker = worker.filter(|w| {
+        w.is_live()
+            && agent_registry::parent_pid_of(w.pid) == Some(supervisor.id())
+            // SAFETY: getpgid only reads another process's group id.
+            && unsafe { libc::getpgid(w.pid as libc::pid_t) } == w.pid as libc::pid_t
+    });
+    if let Some(w) = owned_worker {
+        // SAFETY: plain signal delivery to the verified barrier's own group,
+        // whose leader is still the supervisor's unreaped child.
+        unsafe {
+            libc::killpg(w.pid as libc::pid_t, libc::SIGKILL);
+        }
+    }
+    let _ = supervisor.kill();
+    let _ = supervisor.wait();
+    let mut why = why;
+    if let Some(w) = owned_worker {
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(3);
+        while w.is_live() && std::time::Instant::now() < deadline {
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        }
+        if w.is_live() {
+            why.push_str(&format!(
+                " (the stopped gated worker pid {} is not reaped yet)",
+                w.pid
+            ));
+        }
+    }
+    anyhow::anyhow!(why)
+}
+
 /// Spawn an aida helper (supervisor or barrier) with a minimal explicit
 /// environment, headless wait bounds, null stdin, the private log on
 /// stdout/stderr and `control` at fd 3.
@@ -919,6 +1009,29 @@ fn spawn_helper(
     control: &std::os::unix::net::UnixStream,
     new_session: bool,
 ) -> Result<std::process::Child> {
+    spawn_helper_with(
+        aida,
+        args,
+        project_root,
+        cwd,
+        log,
+        control,
+        new_session,
+        &[],
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn spawn_helper_with(
+    aida: &std::path::Path,
+    args: &[&str],
+    project_root: &std::path::Path,
+    cwd: &std::path::Path,
+    log: &std::fs::File,
+    control: &std::os::unix::net::UnixStream,
+    new_session: bool,
+    extra_env: &[(String, String)],
+) -> Result<std::process::Child> {
     use std::os::fd::AsRawFd;
     use std::os::unix::process::CommandExt;
     let (ceiling_key, ceiling_value) = crate::burndown_run::bg_wait_ceiling_env(Some(project_root));
@@ -928,6 +1041,7 @@ fn spawn_helper(
         .current_dir(cwd)
         .env_clear()
         .envs(ambient_env(std::env::vars_os(), HELPER_AMBIENT_ENV, &[]))
+        .envs(extra_env.iter().map(|(k, v)| (k, v)))
         .env("AIDA_HEADLESS", "1")
         .envs(crate::burndown_run::headless_wait_envs(
             ceiling_key,
@@ -1023,6 +1137,51 @@ fn build_worker_exec(
 
 // ---------------------------------------------------------------- supervisor
 
+/// A supervisor state transition, for deterministic fault injection in
+/// tests ([`SupervisorEnv::at`]). Production injects nothing.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Step {
+    /// The gated worker exists; the dispatcher has not been told yet.
+    Spawned,
+    /// Ownership is confirmed; nothing is bound yet.
+    BeforeBind,
+    BeforeLease,
+    BeforeAuthorship,
+    BeforeRegistry,
+    /// Registry, lease, authorship and grant all match; phase not yet
+    /// `registered`.
+    BeforeRegistered,
+    /// Everything is recorded; the barrier is still closed.
+    BeforeRelease,
+    /// Acceptance is durable and reported.
+    Accepted,
+}
+
+/// How the supervisor starts its exec barrier, and the injection point.
+pub(crate) struct SupervisorEnv {
+    pub barrier_program: std::path::PathBuf,
+    pub barrier_args: Vec<String>,
+    /// Extra explicit environment for the barrier helper (tests only).
+    pub barrier_env: Vec<(String, String)>,
+    /// Called at each [`Step`] with the gated worker's identity; an error is
+    /// the failure of that step.
+    pub at: Box<dyn Fn(Step, &ProcId) -> Result<()> + Send>,
+    pub exec_corroboration: std::time::Duration,
+}
+
+impl SupervisorEnv {
+    fn production() -> Result<Self> {
+        Ok(Self {
+            barrier_program: std::env::current_exe()
+                .context("cannot resolve this aida executable")?,
+            barrier_args: vec!["internal".into(), "codex-bg-barrier".into()],
+            barrier_env: Vec::new(),
+            at: Box::new(|_, _| Ok(())),
+            exec_corroboration: EXEC_CORROBORATION,
+        })
+    }
+}
+
 /// `aida internal codex-bg-supervise --attempt <ID>`.
 pub(crate) fn supervise_main(attempt: &str) -> Result<()> {
     use std::os::fd::FromRawFd;
@@ -1066,20 +1225,54 @@ pub(crate) fn supervise_main(attempt: &str) -> Result<()> {
         Ok(c) => c,
         Err(e) => return Err(fail(&mut to_parent, format!("{e:#}"))),
     };
+    supervise_attempt(
+        attempt,
+        init,
+        capability,
+        to_parent,
+        reader,
+        SupervisorEnv::production()?,
+    )
+}
+
+/// The supervisor's whole lifecycle for one attempt, from a received
+/// capability to terminal cleanup. `to_parent`/`reader` are the dispatcher
+/// channel.
+// trace:STORY-2254 | ai:claude
+pub(crate) fn supervise_attempt(
+    attempt: &str,
+    init: SupervisorInit,
+    capability: crate::gate::seat_authority::DetachedLaunchCapability,
+    mut to_parent: std::os::unix::net::UnixStream,
+    mut reader: BufReader<std::os::unix::net::UnixStream>,
+    env: SupervisorEnv,
+) -> Result<()> {
+    let fail = |to: &mut std::os::unix::net::UnixStream, reason: String| {
+        let _ = send(
+            to,
+            &Control::Failed {
+                reason: reason.clone(),
+                executed: false,
+            },
+        );
+        anyhow::anyhow!(reason)
+    };
     let me = ProcId::current().context("supervisor start identity unreadable")?;
     let dir = receipt::runtime_dir(&init.project_root)?;
     let (_, log) = private_log(&dir, attempt)?;
 
     // The gated worker: an exec barrier in its own process group.
     let (mut barrier_ctl, theirs) = std::os::unix::net::UnixStream::pair()?;
-    let mut child = spawn_helper(
-        &std::env::current_exe().context("cannot resolve this aida executable")?,
-        &["internal", "codex-bg-barrier"],
+    let barrier_args: Vec<&str> = env.barrier_args.iter().map(String::as_str).collect();
+    let mut child = spawn_helper_with(
+        &env.barrier_program,
+        &barrier_args,
         &init.project_root,
         &init.worker.cwd,
         &log,
         &theirs,
         false,
+        &env.barrier_env,
     )
     .map_err(|e| {
         fail(
@@ -1116,6 +1309,10 @@ pub(crate) fn supervise_main(attempt: &str) -> Result<()> {
             &mut to_parent,
             format!("could not hand the exec plan to the gated worker: {e}"),
         ));
+    }
+    if let Err(e) = (env.at)(Step::Spawned, &worker) {
+        stop(&mut child);
+        return Err(fail(&mut to_parent, format!("{e:#}")));
     }
     if send(
         &mut to_parent,
@@ -1195,37 +1392,44 @@ pub(crate) fn supervise_main(attempt: &str) -> Result<()> {
         anyhow::anyhow!(reason_text)
     };
     let root = init.project_root.clone();
-    if let Err(e) = crate::gate::seat_authority::accept_detached_launch_child(
-        capability,
-        &root,
-        worker.pid,
-        &worker.start,
-    ) {
+    let step = |step: Step| (env.at)(step, &worker);
+    if let Err(e) = step(Step::BeforeBind).and_then(|_| {
+        crate::gate::seat_authority::accept_detached_launch_child(
+            capability,
+            &root,
+            worker.pid,
+            &worker.start,
+        )
+    }) {
         return Err(refuse(
             &mut child,
             &mut to_parent,
             format!("grant binding refused: {e:#}"),
         ));
     }
-    if let Err(e) = session::stamp_lease_detached_worker_at(
-        &root,
-        &init.lease_id,
-        &init.grant_id,
-        worker.pid,
-        &worker.start,
-    ) {
+    if let Err(e) = step(Step::BeforeLease).and_then(|_| {
+        session::stamp_lease_detached_worker_at(
+            &root,
+            &init.lease_id,
+            &init.grant_id,
+            worker.pid,
+            &worker.start,
+        )
+    }) {
         return Err(refuse(
             &mut child,
             &mut to_parent,
             format!("lease stamp refused: {e:#}"),
         ));
     }
-    if let Err(e) = crate::gate::review_authority::record_detached_worker_strict(
-        &root,
-        &init.lease_id,
-        worker.pid,
-        &worker.start,
-    ) {
+    if let Err(e) = step(Step::BeforeAuthorship).and_then(|_| {
+        crate::gate::review_authority::record_detached_worker_strict(
+            &root,
+            &init.lease_id,
+            worker.pid,
+            &worker.start,
+        )
+    }) {
         return Err(refuse(
             &mut child,
             &mut to_parent,
@@ -1236,27 +1440,29 @@ pub(crate) fn supervise_main(attempt: &str) -> Result<()> {
         env!("CARGO_PKG_VERSION").to_string(),
         env!("AIDA_BUILD_GIT_SHA").to_string(),
     );
-    let row = agent_registry::register_detached_worker(
-        &root,
-        "codex",
-        worker.pid,
-        &worker.start,
-        agent_registry::SpawnedRow {
-            role: Some(init.role.clone()),
-            current_spec: Some(init.spec.clone()),
-            worktree_path: init.worker.cwd.clone(),
-            binary: Some(&binary_id),
-            name: Some(init.agent_name.clone()),
-            native_session_id: None,
-            resumed_from: None,
-            description: Some(
-                init.description
-                    .clone()
-                    .map(|d| format!("{d} (detached attempt {attempt})"))
-                    .unwrap_or_else(|| format!("detached codex attempt {attempt}")),
-            ),
-        },
-    );
+    let row = step(Step::BeforeRegistry).and_then(|_| {
+        agent_registry::register_detached_worker(
+            &root,
+            "codex",
+            worker.pid,
+            &worker.start,
+            agent_registry::SpawnedRow {
+                role: Some(init.role.clone()),
+                current_spec: Some(init.spec.clone()),
+                worktree_path: init.worker.cwd.clone(),
+                binary: Some(&binary_id),
+                name: Some(init.agent_name.clone()),
+                native_session_id: None,
+                resumed_from: None,
+                description: Some(
+                    init.description
+                        .clone()
+                        .map(|d| format!("{d} (detached attempt {attempt})"))
+                        .unwrap_or_else(|| format!("detached codex attempt {attempt}")),
+                ),
+            },
+        )
+    });
     let row = match row {
         Ok(row) => row,
         Err(e) => {
@@ -1273,7 +1479,7 @@ pub(crate) fn supervise_main(attempt: &str) -> Result<()> {
         agent_registry::MailWake::Unsupported
     };
     stamp_launch_mail_wake(&root, &row, wake);
-    let registered = {
+    let registered = step(Step::BeforeRegistered).and_then(|_| {
         let me = me.clone();
         receipt::compare_update(
             &dir,
@@ -1288,7 +1494,7 @@ pub(crate) fn supervise_main(attempt: &str) -> Result<()> {
             },
             |r| r.phase = Phase::Registered,
         )
-    };
+    });
     if let Err(e) = registered {
         return Err(refuse(
             &mut child,
@@ -1298,14 +1504,16 @@ pub(crate) fn supervise_main(attempt: &str) -> Result<()> {
     }
 
     // Release, then corroborate the vendor exec (EOF alone is not proof).
-    if let Err(e) = send(&mut barrier_ctl, &Control::Release) {
+    if let Err(e) =
+        step(Step::BeforeRelease).and_then(|_| send(&mut barrier_ctl, &Control::Release))
+    {
         return Err(refuse(
             &mut child,
             &mut to_parent,
             format!("could not release the gated worker: {e}"),
         ));
     }
-    barrier_ctl.set_read_timeout(Some(EXEC_CORROBORATION))?;
+    barrier_ctl.set_read_timeout(Some(env.exec_corroboration))?;
     let mut barrier_reader = BufReader::new(barrier_ctl);
     let exec_report = recv(&mut barrier_reader);
     if let Ok(Some(Control::Failed { reason, .. })) = exec_report {
@@ -1315,7 +1523,7 @@ pub(crate) fn supervise_main(attempt: &str) -> Result<()> {
             format!("the Codex exec failed: {reason}"),
         ));
     }
-    let accepted = corroborate_exec(&mut child, &init.expected);
+    let accepted = corroborate_exec(&mut child, &init.expected, env.exec_corroboration);
     let outcome = match accepted {
         Ok(exe) => {
             let me2 = me.clone();
@@ -1341,6 +1549,7 @@ pub(crate) fn supervise_main(attempt: &str) -> Result<()> {
                             exe: exe.display().to_string(),
                         },
                     );
+                    let _ = step(Step::Accepted);
                     None
                 }
                 Err(e) => Some(format!("acceptance could not be recorded: {e:#}")),
@@ -1365,9 +1574,10 @@ pub(crate) fn supervise_main(attempt: &str) -> Result<()> {
 }
 
 /// Poll the worker until its executable is the corroborated Codex binary.
-fn corroborate_exec(
+pub(crate) fn corroborate_exec(
     child: &mut std::process::Child,
     expected: &ExpectedExec,
+    within: std::time::Duration,
 ) -> std::result::Result<std::path::PathBuf, String> {
     let started = std::time::Instant::now();
     loop {
@@ -1385,7 +1595,7 @@ fn corroborate_exec(
                 return Ok(exe);
             }
         }
-        if started.elapsed() >= EXEC_CORROBORATION {
+        if started.elapsed() >= within {
             return Err("the worker did not become the native Codex executable in time; its process mapping cannot be proven, so it was stopped".into());
         }
         std::thread::sleep(std::time::Duration::from_millis(25));
@@ -1393,7 +1603,7 @@ fn corroborate_exec(
 }
 
 /// Own wait/reap and exact-generation terminal cleanup.
-fn supervise_until_exit(
+pub(crate) fn supervise_until_exit(
     dir: &std::path::Path,
     attempt: &str,
     init: &SupervisorInit,
@@ -1402,7 +1612,20 @@ fn supervise_until_exit(
     mut child: std::process::Child,
     failure: Option<String>,
 ) -> Result<()> {
-    let terminal = match child.wait() {
+    // Observe the exit WITHOUT reaping: while the leader is an unreaped
+    // zombie its pid (and so its process group id) cannot be reused, so the
+    // group signal below reaches only owned work, never an unrelated group.
+    // trace:STORY-2254 | ai:claude
+    let observed = wait_exit_unreaped(child.id());
+    if observed.is_ok() {
+        // Stop owned work left in the worker's group (a native descendant
+        // that escaped the group is not claimed to be stopped).
+        // SAFETY: the group's leader is this process's unreaped child.
+        unsafe {
+            libc::killpg(worker.pid as libc::pid_t, libc::SIGTERM);
+        }
+    }
+    let terminal = match observed.and_then(|_| child.wait()) {
         Ok(status) => {
             use std::os::unix::process::ExitStatusExt;
             TerminalRecord {
@@ -1416,12 +1639,6 @@ fn supervise_until_exit(
             ..TerminalRecord::default()
         },
     };
-    // Stop owned work left in the worker's group (a native descendant that
-    // escaped the group is not claimed to be stopped).
-    // SAFETY: plain signal delivery to the worker's own process group.
-    unsafe {
-        libc::killpg(worker.pid as libc::pid_t, libc::SIGTERM);
-    }
     let mut problems = Vec::new();
     if let Err(e) = agent_registry::mark_detached_worker_ended(
         &init.project_root,
@@ -1468,6 +1685,30 @@ fn supervise_until_exit(
         },
     )?;
     Ok(())
+}
+
+/// Block until child `pid` has exited, leaving it unreaped (`WNOWAIT`).
+// trace:STORY-2254 | ai:claude
+pub(crate) fn wait_exit_unreaped(pid: u32) -> std::io::Result<()> {
+    loop {
+        // SAFETY: waitid writes only into the zeroed siginfo we own.
+        let mut info: libc::siginfo_t = unsafe { std::mem::zeroed() };
+        let rc = unsafe {
+            libc::waitid(
+                libc::P_PID,
+                pid as libc::id_t,
+                &mut info,
+                libc::WEXITED | libc::WNOWAIT,
+            )
+        };
+        if rc == 0 {
+            return Ok(());
+        }
+        let error = std::io::Error::last_os_error();
+        if error.kind() != std::io::ErrorKind::Interrupted {
+            return Err(error);
+        }
+    }
 }
 
 fn set_cloexec(fd: i32) {
@@ -1530,16 +1771,45 @@ pub(crate) fn launch_status(attempt: &str) -> Result<()> {
     let Some(dir) = receipt::existing_runtime_dir(&root) else {
         anyhow::bail!("no detached launch receipts exist for this project");
     };
-    match receipt::read_receipt(&dir, &root, attempt) {
+    print!("{}", launch_status_at(&dir, &root, attempt));
+    Ok(())
+}
+
+/// The read-only status text for one attempt.
+// trace:STORY-2254 | ai:claude
+pub(crate) fn launch_status_at(
+    dir: &std::path::Path,
+    root: &std::path::Path,
+    attempt: &str,
+) -> String {
+    use std::fmt::Write as _;
+    let mut out = String::new();
+    match receipt::read_receipt(dir, root, attempt) {
         ReceiptRead::Unknown(why) => {
-            println!("attempt {attempt}: UNKNOWN ({why})");
-            println!("  an unknown receipt never frees its scope or permits cleanup");
+            let _ = writeln!(out, "attempt {attempt}: UNKNOWN ({why})");
+            match receipt::unknown_receipt_scope(dir, attempt) {
+                Some(scope) => {
+                    let _ = writeln!(
+                        out,
+                        "  holds:   {} {} (read leniently)",
+                        scope.role, scope.spec
+                    );
+                }
+                None => {
+                    let _ = writeln!(
+                        out,
+                        "  holds:   any scope while something may still run for it"
+                    );
+                }
+            }
+            let _ = writeln!(out, "  an unknown receipt never permits cleanup; once nothing runs for it: `aida agent recover-launch {attempt} --retire-unknown`");
         }
         ReceiptRead::Known(r) => {
-            println!("attempt {}: {}", r.attempt, r.phase.as_str());
-            println!("  scope:   {} {}", r.scope.role, r.scope.spec);
-            println!("  name:    {}", r.agent_name);
-            println!(
+            let _ = writeln!(out, "attempt {}: {}", r.attempt, r.phase.as_str());
+            let _ = writeln!(out, "  scope:   {} {}", r.scope.role, r.scope.spec);
+            let _ = writeln!(out, "  name:    {}", r.agent_name);
+            let _ = writeln!(
+                out,
                 "  owner:   {}",
                 match &r.owner {
                     Owner::Dispatcher(p) => format!("launcher pid {}{}", p.pid, live_label(p)),
@@ -1548,94 +1818,142 @@ pub(crate) fn launch_status(attempt: &str) -> Result<()> {
                 }
             );
             if let Some(w) = &r.worker {
-                println!("  worker:  pid {}{}", w.pid, live_label(w));
+                let _ = writeln!(out, "  worker:  pid {}{}", w.pid, live_label(w));
             }
             if let Some(lease) = &r.lease_id {
-                println!("  lease:   {lease}");
+                let _ = writeln!(out, "  lease:   {lease}");
             }
-            println!("  worktree: {}", r.worktree.display());
-            println!("  log:     {}", r.log_path.display());
+            let _ = writeln!(out, "  worktree: {}", r.worktree.display());
+            let _ = writeln!(out, "  log:     {}", r.log_path.display());
             if let Some(t) = &r.terminal {
-                match (&t.unknown, t.code, t.signal) {
-                    (Some(why), _, _) => println!("  exit:    unknown ({why})"),
+                let line = match (&t.unknown, t.code, t.signal) {
+                    (Some(why), _, _) => format!("unknown ({why})"),
                     (None, Some(code), _) => {
-                        println!("  exit:    code {code} (exit status is not task success)")
+                        format!("code {code} (exit status is not task success)")
                     }
-                    (None, None, Some(sig)) => println!("  exit:    signal {sig}"),
-                    _ => println!("  exit:    unknown"),
-                }
+                    (None, None, Some(sig)) => format!("signal {sig}"),
+                    _ => "unknown".into(),
+                };
+                let _ = writeln!(out, "  exit:    {line}");
             }
             if let Some(reason) = &r.reason {
-                println!("  reason:  {reason}");
+                let _ = writeln!(out, "  reason:  {reason}");
             }
         }
     }
-    Ok(())
+    out
 }
 
 fn live_label(p: &ProcId) -> &'static str {
-    if p.is_live() {
-        " (live)"
-    } else {
-        " (not running)"
+    match p.state() {
+        receipt::ProcState::Live => " (live)",
+        receipt::ProcState::Gone => " (not running)",
+        receipt::ProcState::Unknown(_) => " (liveness unknown)",
     }
 }
 
-/// `aida agent recover-launch <ATTEMPT>`: reconcile exactly that attempt.
-/// Never spawns, resumes, mints, binds or kills; repairs only exact owned
-/// bookkeeping, and only once the worker, the supervisor and every process
-/// in the worktree are corroborated gone.
-pub(crate) fn recover_launch(attempt: &str) -> Result<()> {
+/// `aida agent recover-launch <ATTEMPT> [--retire-unknown]`.
+pub(crate) fn recover_launch(attempt: &str, retire_unknown: bool) -> Result<()> {
     let root = main_worktree_root_from(&find_aida_project_root_from(&std::env::current_dir()?)?);
     let dir = receipt::existing_runtime_dir(&root)
         .context("no detached launch receipts exist for this project")?;
-    let r = match receipt::read_receipt(&dir, &root, attempt) {
-        ReceiptRead::Known(r) => *r,
-        ReceiptRead::Unknown(why) => anyhow::bail!(
-            "attempt {attempt} is UNKNOWN ({why}); nothing was changed and its scope stays held. Inspect the receipt directory {} by hand",
-            dir.display()
-        ),
-    };
-    if !r.phase.holds_scope() {
+    let own = own_process_chain();
+    if retire_unknown {
+        let kept = receipt::retire_unknown(&dir, &root, attempt)?;
         println!(
-            "attempt {attempt} is already {}; nothing to recover",
-            r.phase.as_str()
+            "retired unknown attempt {attempt}: no process runs for it; its receipt is kept as evidence at {}",
+            kept.display()
         );
         return Ok(());
     }
-    let live: Vec<String> = [("supervisor", &r.supervisor), ("worker", &r.worker)]
-        .into_iter()
-        .filter_map(|(what, p)| {
-            p.as_ref()
-                .filter(|p| p.is_live())
-                .map(|p| format!("{what} pid {}", p.pid))
-        })
-        .chain(match &r.owner {
-            Owner::Dispatcher(p) if p.is_live() => Some(format!("launcher pid {}", p.pid)),
-            _ => None,
-        })
-        .collect();
-    anyhow::ensure!(
-        live.is_empty(),
-        "attempt {attempt} still has live owned processes ({}); nothing was changed",
-        live.join(", ")
-    );
-    // This command and the shell that ran it are not occupants.
+    let message = recover_launch_at(&dir, &root, attempt, &own)?;
+    println!("{message}");
+    Ok(())
+}
+
+/// This process and its ancestors: the recovering shell is not an occupant.
+pub(crate) fn own_process_chain() -> std::collections::HashSet<u32> {
     let mut own = std::collections::HashSet::new();
     let mut pid = Some(std::process::id());
     while let Some(p) = pid.filter(|p| *p > 1 && own.insert(*p)) {
         pid = agent_registry::parent_pid_of(p);
     }
-    if let Some(occupant) = aida_core::liveness::live_process_with_cwd_in(&r.worktree, &own) {
-        anyhow::bail!(
-            "a process is still running in {} (pid {}, {}); nothing was changed",
-            r.worktree.display(),
-            occupant.pid,
-            occupant.name
-        );
+    own
+}
+
+/// Reconcile exactly `attempt`. Never spawns, resumes, mints, binds or
+/// kills; repairs only exact owned bookkeeping, and only once a FRESH scan
+/// corroborates that the worker, the supervisor, the launcher, every
+/// process in the worktree and every process left in the worker's group or
+/// the supervisor's session are gone. Fails CLOSED: an unreadable `/proc`,
+/// cwd or start identity, a missing recorded start, or a possibly escaped
+/// descendant means UNKNOWN: nothing is changed and nothing is revoked.
+// trace:STORY-2254 | ai:claude
+pub(crate) fn recover_launch_at(
+    dir: &std::path::Path,
+    root: &std::path::Path,
+    attempt: &str,
+    own: &std::collections::HashSet<u32>,
+) -> Result<String> {
+    let r = match receipt::read_receipt(dir, root, attempt) {
+        ReceiptRead::Known(r) => *r,
+        ReceiptRead::Unknown(why) => anyhow::bail!(
+            "attempt {attempt} is UNKNOWN ({why}); nothing was changed and its scope stays held. Once nothing runs for it, retire it with `aida agent recover-launch {attempt} --retire-unknown`"
+        ),
+    };
+    if !r.phase.holds_scope() {
+        return Ok(format!(
+            "attempt {attempt} is already {}; nothing to recover",
+            r.phase.as_str()
+        ));
+    }
+    let mut owned: Vec<(&str, &ProcId)> = Vec::new();
+    if let Owner::Dispatcher(p) = &r.owner {
+        owned.push(("launcher", p));
+    }
+    if let Some(p) = &r.supervisor {
+        owned.push(("supervisor", p));
+    }
+    if let Some(p) = &r.worker {
+        owned.push(("worker", p));
+    }
+    anyhow::ensure!(
+        r.worker.is_some() || r.phase == Phase::Prepared,
+        "attempt {attempt} is {} but records no worker identity; its state is UNKNOWN and nothing was changed",
+        r.phase.as_str()
+    );
+    for (what, p) in &owned {
+        match p.state() {
+            receipt::ProcState::Gone => {}
+            receipt::ProcState::Live => anyhow::bail!(
+                "attempt {attempt} still has its live {what} (pid {}); nothing was changed",
+                p.pid
+            ),
+            receipt::ProcState::Unknown(why) => anyhow::bail!(
+                "attempt {attempt}'s {what} cannot be proven gone ({why}); its state is UNKNOWN and nothing was changed"
+            ),
+        }
+    }
+    let probe = receipt::OccupancyProbe {
+        worktree: Some(&r.worktree),
+        group: r.worker.as_ref().map(|w| w.pid),
+        session: r.supervisor.as_ref().map(|s| s.pid),
+        attempt: Some(attempt),
+        // The launcher, supervisor and worker are the attempt's first
+        // processes; nothing started before all of them is its work.
+        not_before: owned.iter().filter_map(|(_, p)| p.start_tick()).min(),
+    };
+    match receipt::scan_occupancy(&probe, own) {
+        receipt::Occupancy::Clear => {}
+        receipt::Occupancy::Occupied(what) => anyhow::bail!(
+            "attempt {attempt} is not provably over: {what}; nothing was changed"
+        ),
+        receipt::Occupancy::Unknown(why) => anyhow::bail!(
+            "attempt {attempt} cannot be proven over ({why}); its state is UNKNOWN and nothing was changed"
+        ),
     }
     if let Some(w) = &r.worker {
-        agent_registry::mark_detached_worker_ended(&root, "codex", w.pid, &w.start)?;
+        agent_registry::mark_detached_worker_ended(root, "codex", w.pid, &w.start)?;
     }
     if let Some(grant) = &r.grant_id {
         crate::gate::seat_authority::revoke_by_id(grant)?;
@@ -1645,13 +1963,13 @@ pub(crate) fn recover_launch(attempt: &str) -> Result<()> {
     }
     let generation = r.generation;
     receipt::compare_update(
-        &dir,
-        &root,
+        dir,
+        root,
         attempt,
         |now| {
             anyhow::ensure!(
                 now.generation == generation,
-                "the attempt changed while recovering; nothing was changed"
+                "the attempt changed while recovering; nothing more was changed"
             );
             Ok(())
         },
@@ -1669,10 +1987,13 @@ pub(crate) fn recover_launch(attempt: &str) -> Result<()> {
             );
         },
     )?;
-    println!("recovered attempt {attempt}: its scope reservation is released; worktree, branch and lease are kept");
-    Ok(())
+    Ok(format!("recovered attempt {attempt}: its scope reservation is released; worktree, branch and lease are kept"))
 }
 
 #[cfg(all(test, target_os = "linux"))]
 #[path = "tests/story_2254_codex_background_tests.rs"]
 mod story_2254_codex_background_tests;
+
+#[cfg(all(test, target_os = "linux"))]
+#[path = "tests/story_2254_codex_bg_supervisor_tests.rs"]
+mod story_2254_codex_bg_supervisor_tests;

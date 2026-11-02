@@ -3253,7 +3253,22 @@ pub(crate) fn session_start_with_receipt(
     // trace:STORY-1429 | ai:claude
     // trace:BUG-2169 | ai:claude
     crate::seat_clone::failpoint::check_before_lease()?;
-    aida_core::write_atomic(&lease_file, toml::to_string_pretty(&lease)?)?;
+    // STORY-2254: session start --owns, queue work (drain and burndown
+    // launches) and agent new all write their lease here; a scope a detached
+    // launch attempt holds (active, pending or unknown) is refused, checked
+    // inside the admission lock together with the write.
+    // trace:STORY-2254 | ai:claude
+    {
+        let body = toml::to_string_pretty(&lease)?;
+        crate::agent_launch::codex_bg_receipt::with_scope_entry(
+            &project_root,
+            inherited_role
+                .as_deref()
+                .unwrap_or_else(|| crate::agent_launch::agent_new_scope_role(owns)),
+            owns,
+            || aida_core::write_atomic(&lease_file, &body).map_err(Into::into),
+        )?;
+    }
     if let Some(cleanup) = rollback.as_mut() {
         cleanup.lease_id = Some(id.clone());
     }

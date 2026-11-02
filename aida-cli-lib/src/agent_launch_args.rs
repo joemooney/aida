@@ -1048,6 +1048,11 @@ pub enum AgentCommand {
         /// The attempt id the launch printed.
         #[clap(value_name = "ATTEMPT-UUID")]
         attempt: String,
+        /// The attempt's receipt is unreadable: once nothing runs for it,
+        /// move the receipt out of admission (kept as evidence) so it no
+        /// longer holds a scope.
+        #[clap(long)]
+        retire_unknown: bool,
     },
 
     /// Arm or retire a session's mail wake (internal; `agent new` arms it).

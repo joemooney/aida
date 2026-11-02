@@ -817,8 +817,6 @@ fn append_authorship(project_root: &Path, lease: &SessionLease, extra: Vec<Strin
     append_authorship_as(project_root, lease, extra, true, None);
 }
 
-/// `with_creator_shell`: whether the lease's creating shell is part of the
-/// author's identity — not on a launch path, where it is the launcher's.
 /// STORY-2254: record a detached worker (`pid` with REQUIRED start `start`)
 /// as an author of lease `lease_id`, strictly: a missing or non-work lease,
 /// or a ledger append that does not persist, is an error rather than the
@@ -889,6 +887,8 @@ fn authorship_record(
     }
 }
 
+/// `with_creator_shell`: whether the lease's creating shell is part of the
+/// author's identity — not on a launch path, where it is the launcher's.
 fn append_authorship_as(
     project_root: &Path,
     lease: &SessionLease,

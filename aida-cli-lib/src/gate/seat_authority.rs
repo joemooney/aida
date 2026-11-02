@@ -2252,6 +2252,16 @@ impl DetachedLaunchCapability {
     /// parent) is exactly the issuer the grant was minted under. A parent
     /// that already exited (re-parented to init/a subreaper) cannot be
     /// proven, so the launch aborts before any worker can run.
+    /// Test-only: the capability as an in-process supervisor holds it after
+    /// [`Self::receive`] (whose parent-link proof needs a real dispatcher →
+    /// supervisor process pair). Every acceptance check still applies.
+    #[cfg(test)]
+    pub(crate) fn received_in_process_for_test(transfer: DetachedLaunchTransfer) -> Self {
+        Self {
+            inner: transfer,
+            supervisor: own_process_token(),
+        }
+    }
     pub(crate) fn receive(transfer: DetachedLaunchTransfer) -> Result<Self> {
         #[cfg(unix)]
         let parent = std::os::unix::process::parent_id();

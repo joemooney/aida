@@ -410,7 +410,10 @@ pub(crate) fn handle_agent_command(cmd: &AgentCommand) -> Result<()> {
         AgentCommand::Wake { command } => agent_wake(command),
         // trace:STORY-2254 | ai:claude
         AgentCommand::LaunchStatus { attempt } => agent_codex_background::launch_status(attempt),
-        AgentCommand::RecoverLaunch { attempt } => agent_codex_background::recover_launch(attempt),
+        AgentCommand::RecoverLaunch {
+            attempt,
+            retire_unknown,
+        } => agent_codex_background::recover_launch(attempt, *retire_unknown),
     }
 }
 
@@ -427,7 +430,7 @@ pub(crate) fn refuse_detached_scope_owner(
         return Ok(());
     };
     let role = role.unwrap_or_else(|| agent_new_scope_role(spec));
-    if let Some(blocker) = codex_bg_receipt::detached_scope_blocker(project_root, role, spec) {
+    if let Some(blocker) = codex_bg_receipt::scope_entry_blocker(project_root, role, spec) {
         anyhow::bail!("refusing to launch: {blocker}");
     }
     Ok(())
