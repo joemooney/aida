@@ -21,7 +21,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T06:48:07.778727918Z
-modified_at: 2026-11-02T17:56:21.994447362Z
+modified_at: 2026-11-02T17:58:17.599107848Z
 req_type: Bug
 tags:
 - audit
@@ -138,6 +138,17 @@ comments:
     Gate: LIGHT, one targeted cargo test -p aida-cli-lib bug_2394 plus make check-ci-fast. Push to the PR branch; do not open a new PR.
   created_at: 2026-11-02T12:54:22.414466615Z
   modified_at: 2026-11-02T12:54:22.414466615Z
+  session_id: ee0bf351-6b17-486f-a38e-cfbb1343c426
+- id: 01a19d69-78ff-7101-af16-da7c0e72e53d
+  author: joe
+  content: |-
+    ADVISOR RULING (10:59 MST), PR #3254 round 2 at e9e8aee. One last push plus a delta review, per the 10-28 order.
+    1+2 BLOCKING: CI lib-1 is red because the unset->aida MCP default appends -c mcp_servers.aida.* to every Codex apply_agent_default_flags launch, and codex_configured_mcp_servers reads the host's real ~/.codex. Fix: pin CODEX_HOME to a temp dir (or set [agents] mcp explicitly) in every affected launcher test, then update the exact-argv expectations honestly in agent_launcher_tests.rs (~L1002, ~L1069/L1088 and any others lib-1 names). Do not hide the flags.
+    3 RULING CHANGE (supersedes item 2 of my 05:58 brief): headless Codex plan lanes (--plan-only --no-human, drain --plan-phase) must write docs/plans/<date>-<slug>.md for 'aida plan promote', and Claude's headless plan lane keeps write posture. For parity, headless Codex plan lanes run workspace-write again; only the INTERACTIVE --plan-only stays --sandbox read-only. Update the bug_2394 headless tests to match.
+    4 BUNDLE: key codex_project_trusted on the launch cwd (the seat), not the launcher's project_root.
+    Gate: LIGHT, cargo test -p aida-cli-lib with the agent_launcher and bug_2394 filters, plus make check-ci-fast. Push to the PR branch.
+  created_at: 2026-11-02T17:58:17.599107848Z
+  modified_at: 2026-11-02T17:58:17.599107848Z
   session_id: ee0bf351-6b17-486f-a38e-cfbb1343c426
 history:
 - id: 01a195dd-b979-7b63-b353-ebf808b482d9
