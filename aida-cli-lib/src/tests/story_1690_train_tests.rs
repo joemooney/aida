@@ -2746,6 +2746,25 @@ esac
 
 // ── BUG-2412: a train PR whose owner died does not block its riders ───────
 
+/// An owner recorded in this process's PID namespace and boot.
+// trace:BUG-2412 | ai:claude
+fn bug_2412_local_owner(host: &str, pid: u32, start: &str) -> TrainOwner {
+    TrainOwner {
+        host: host.into(),
+        pid,
+        start: Some(start.into()),
+        pid_ns: aida_core::local_pid_ns(),
+        boot: aida_core::local_boot_id(),
+    }
+}
+
+/// Whether this platform reports a PID namespace and boot id, without which
+/// no owner is ever judged dead (so the abandon paths cannot be exercised).
+// trace:BUG-2412 | ai:claude
+fn bug_2412_identity_readable() -> bool {
+    aida_core::local_pid_ns().is_some() && aida_core::local_boot_id().is_some()
+}
+
 /// The owner line round-trips, and a body without one (a pre-BUG-2412
 /// train, or a hand edit) names no owner.
 // trace:BUG-2412 | ai:claude
@@ -2755,6 +2774,8 @@ fn bug_2412_owner_line_round_trips_and_a_missing_line_names_nobody() {
         host: "box".into(),
         pid: 4242,
         start: Some("linux-starttime:77".into()),
+        pid_ns: Some("4026531836".into()),
+        boot: Some("boot-a".into()),
     };
     let body = format!(
         "Train.\n\n{MEMBERS_LINE} #1@abc1234\n{}\n",
@@ -2768,6 +2789,8 @@ fn bug_2412_owner_line_round_trips_and_a_missing_line_names_nobody() {
     );
     let no_start = TrainOwner {
         start: None,
+        pid_ns: None,
+        boot: None,
         ..owner
     };
     assert_eq!(parse_owner_line(&owner_line(&no_start)), Some(no_start));
@@ -2778,9 +2801,10 @@ fn bug_2412_owner_line_round_trips_and_a_missing_line_names_nobody() {
     );
 }
 
-/// Only a same-host owner that is not alive makes a train abandoned: this
-/// process's own train stays live, and another host's or an ownerless train
-/// keeps blocking (its liveness cannot be read here).
+/// Only a dead owner in this host's boot and PID namespace makes a train
+/// abandoned: this process's own train stays live, and another host's, an
+/// ownerless, a foreign-namespace, an unrecorded-namespace or another boot's
+/// train keeps blocking (its liveness cannot be read here).
 // trace:BUG-2412 | ai:claude
 #[test]
 fn bug_2412_only_a_dead_same_host_owner_abandons_a_train() {
@@ -2788,25 +2812,61 @@ fn bug_2412_only_a_dead_same_host_owner_abandons_a_train() {
     let ours = format!("x\n{}\n", owner_line_for_self());
     let host = crate::coordination::hostname();
     assert_eq!(train_abandoned(&ours, &host, alive), None, "a live owner");
-    let dead = TrainOwner {
-        host: host.clone(),
-        pid: 999_999_999,
-        start: Some("linux-starttime:1".into()),
-    };
+    if !bug_2412_identity_readable() {
+        return;
+    }
+    let dead = bug_2412_local_owner(&host, 999_999_999, "linux-starttime:1");
     let dead_body = format!("x\n{}\n", owner_line(&dead));
-    assert_eq!(train_abandoned(&dead_body, &host, alive), Some(dead));
+    assert_eq!(
+        train_abandoned(&dead_body, &host, alive),
+        Some(dead.clone())
+    );
     assert_eq!(
         train_abandoned(&dead_body, "another-host", alive),
         None,
         "another host's train is never judged from here"
     );
     assert_eq!(train_abandoned("x\n", &host, alive), None, "no owner line");
-    // A recycled pid (alive, but a different start identity) is dead.
-    let recycled = TrainOwner {
-        host: host.clone(),
-        pid: std::process::id(),
-        start: Some("linux-starttime:1".into()),
+    // The owner pid was recorded in another sandboxed call's PID namespace:
+    // probing it here says nothing, so the train is never closed.
+    let foreign_ns = TrainOwner {
+        pid_ns: Some("1".into()),
+        ..dead.clone()
     };
+    assert_eq!(
+        train_abandoned(&owner_line(&foreign_ns), &host, alive),
+        None,
+        "an owner in a foreign PID namespace is unreadable, not dead"
+    );
+    let unrecorded_ns = TrainOwner {
+        pid_ns: None,
+        ..dead.clone()
+    };
+    assert_eq!(
+        train_abandoned(&owner_line(&unrecorded_ns), &host, alive),
+        None,
+        "an owner with no recorded PID namespace is unreadable"
+    );
+    let other_boot = TrainOwner {
+        boot: Some("another-boot".into()),
+        ..dead.clone()
+    };
+    assert_eq!(
+        train_abandoned(&owner_line(&other_boot), &host, alive),
+        None,
+        "an owner from another boot is unreadable"
+    );
+    let unrecorded_boot = TrainOwner {
+        boot: None,
+        ..dead.clone()
+    };
+    assert_eq!(
+        train_abandoned(&owner_line(&unrecorded_boot), &host, alive),
+        None,
+        "an owner with no recorded boot id is unreadable"
+    );
+    // A recycled pid (alive, but a different start identity) is dead.
+    let recycled = bug_2412_local_owner(&host, std::process::id(), "linux-starttime:1");
     if aida_core::liveness::process_start_identity(std::process::id()).is_some() {
         assert!(train_abandoned(&format!("{}\n", owner_line(&recycled)), &host, alive).is_some());
     }
@@ -2816,7 +2876,9 @@ fn bug_2412_only_a_dead_same_host_owner_abandons_a_train() {
 /// left train PR #3248 (members #3240) open with no owning process; the next
 /// train refused #3240 as "already riding live train PR #3248". Now the
 /// lookup reports #3248 abandoned, #3240 boards, a real run closes #3248 with
-/// a comment, and an ownerless legacy train still blocks its rider.
+/// a comment, and an ownerless legacy train, a train owned from another PID
+/// namespace, and a dead-owner train still named by a live train lease all
+/// keep blocking their riders and are never closed.
 // trace:BUG-2412 | ai:claude
 #[cfg(unix)]
 #[test]
@@ -2824,13 +2886,16 @@ fn bug_2412_a_killed_trains_pr_is_abandoned_and_closed_not_blocking() {
     if crate::test_env::run_path_isolated_test() {
         return;
     }
+    if !bug_2412_identity_readable() {
+        return;
+    }
     let tmp = tempfile::tempdir().unwrap();
     let root = tmp.path().join("main");
     write_retry_config(&root);
-    let dead = TrainOwner {
-        host: "train-host".into(),
-        pid: 999_999_999,
-        start: Some("linux-starttime:1".into()),
+    let dead = bug_2412_local_owner("train-host", 999_999_999, "linux-starttime:1");
+    let foreign = TrainOwner {
+        pid_ns: Some("1".into()),
+        ..dead.clone()
     };
     let rows = serde_json::json!([
         {
@@ -2842,6 +2907,11 @@ fn bug_2412_a_killed_trains_pr_is_abandoned_and_closed_not_blocking() {
             "number": 3249,
             "headRefName": "train/legacy-1",
             "body": format!("Train.\n\n{MEMBERS_LINE} #3214@def5678\n"),
+        },
+        {
+            "number": 3250,
+            "headRefName": "train/sandboxed-1",
+            "body": format!("Train.\n\n{MEMBERS_LINE} #3260@0123abc\n{}\n", owner_line(&foreign)),
         },
         {"number": 3240, "headRefName": "bug-1-work", "body": "member"},
     ]);
@@ -2879,7 +2949,14 @@ fn bug_2412_a_killed_trains_pr_is_abandoned_and_closed_not_blocking() {
     );
     assert_eq!(
         open,
-        vec![(3249, Some(vec![(3214, "def5678".to_string())]))]
+        vec![
+            (3249, Some(vec![(3214, "def5678".to_string())])),
+            (3250, Some(vec![(3260, "0123abc".to_string())])),
+        ]
+    );
+    assert!(
+        train_rider_refusal(3260, &open, &leased).is_some(),
+        "a train owned from a foreign PID namespace is live as far as we can tell"
     );
     assert!(
         train_rider_refusal(3240, &open, &leased).is_none(),
@@ -2901,6 +2978,26 @@ fn bug_2412_a_killed_trains_pr_is_abandoned_and_closed_not_blocking() {
         calls.contains("pr close 3248 --comment Closed by a later `aida pr train`"),
         "{calls}"
     );
+    // A live train merge-lease still naming #3248 means a train is landing
+    // it: it is not abandoned, it keeps blocking #3240, and nothing closes it.
+    let _lease = crate::merge_lock::acquire(
+        &root,
+        "main",
+        Some(3248),
+        TRAIN_LEASE_NOTE,
+        std::time::Duration::ZERO,
+    )
+    .unwrap();
+    let (open, leased, abandoned) = live_trains(&root).unwrap();
+    assert!(
+        abandoned.is_empty(),
+        "a leased train is never closed: {abandoned:?}"
+    );
+    assert!(
+        open.iter().any(|(n, _)| *n == 3248),
+        "the leased train stays live: {open:?}"
+    );
+    assert!(train_rider_refusal(3240, &open, &leased).is_some());
 }
 
 // ── BUG-2413: a bundled spec superseded into a drain carrier ──────────────

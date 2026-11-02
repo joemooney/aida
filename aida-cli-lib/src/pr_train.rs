@@ -1430,8 +1430,9 @@ pub(crate) fn train_rider_refusal(
 }
 
 /// The train PR body line naming the process that opened the train:
-/// `aida-train-owner: host=<host> pid=<pid> start=<kernel start identity>`.
-/// A later train reads it to tell a live train from one whose process died.
+/// `aida-train-owner: host=<host> pid=<pid> start=<kernel start identity>
+/// pidns=<pid namespace inode> boot=<boot id>`. A later train reads it to
+/// tell a live train from one whose process died.
 // trace:BUG-2412 | ai:claude
 pub(crate) const OWNER_LINE: &str = "aida-train-owner:";
 
@@ -1443,6 +1444,12 @@ pub(crate) struct TrainOwner {
     /// Kernel start identity, so a recycled pid reads dead. `None` when the
     /// platform could not report one.
     pub start: Option<String>,
+    /// PID namespace inode the pid was recorded in: a pid only means
+    /// something in its own namespace (each sandboxed Bash call gets a fresh
+    /// one). `None` when the platform could not report one.
+    pub pid_ns: Option<String>,
+    /// Boot id at record time: a pid from an earlier boot means nothing now.
+    pub boot: Option<String>,
 }
 
 /// The owner line for this process.
@@ -1453,6 +1460,8 @@ pub(crate) fn owner_line_for_self() -> String {
         host: crate::coordination::hostname(),
         pid,
         start: aida_core::liveness::process_start_identity(pid),
+        pid_ns: aida_core::local_pid_ns(),
+        boot: aida_core::local_boot_id(),
     })
 }
 
@@ -1460,10 +1469,12 @@ pub(crate) fn owner_line_for_self() -> String {
 // trace:BUG-2412 | ai:claude
 pub(crate) fn owner_line(owner: &TrainOwner) -> String {
     format!(
-        "{OWNER_LINE} host={} pid={} start={}",
+        "{OWNER_LINE} host={} pid={} start={} pidns={} boot={}",
         owner.host,
         owner.pid,
-        owner.start.as_deref().unwrap_or_default()
+        owner.start.as_deref().unwrap_or_default(),
+        owner.pid_ns.as_deref().unwrap_or_default(),
+        owner.boot.as_deref().unwrap_or_default(),
     )
 }
 
@@ -1474,12 +1485,15 @@ pub(crate) fn parse_owner_line(body: &str) -> Option<TrainOwner> {
     let rest = body
         .lines()
         .find_map(|l| l.trim_start().strip_prefix(OWNER_LINE))?;
-    let (mut host, mut pid, mut start) = (None, None, None);
+    let (mut host, mut pid, mut start, mut pid_ns, mut boot) = (None, None, None, None, None);
+    let present = |v: &str| Some(v.to_string()).filter(|v| !v.is_empty());
     for field in rest.split_whitespace() {
         match field.split_once('=')? {
             ("host", v) if !v.is_empty() => host = Some(v.to_string()),
             ("pid", v) => pid = v.parse::<u32>().ok().filter(|p| *p != 0),
-            ("start", v) => start = Some(v.to_string()).filter(|v| !v.is_empty()),
+            ("start", v) => start = present(v),
+            ("pidns", v) => pid_ns = present(v),
+            ("boot", v) => boot = present(v),
             _ => {}
         }
     }
@@ -1487,14 +1501,18 @@ pub(crate) fn parse_owner_line(body: &str) -> Option<TrainOwner> {
         host: host?,
         pid: pid?,
         start,
+        pid_ns,
+        boot,
     })
 }
 
 /// BUG-2412: whether an open train PR is abandoned — its body names an owner
-/// on this host whose process is gone (or whose pid now belongs to another
-/// process). A train with no owner line, or one owned on another host, is
-/// never judged abandoned: its liveness cannot be read here, so it keeps
-/// blocking its riders as before.
+/// this process can see (same host, same boot, same PID namespace) whose
+/// process is gone or whose pid now belongs to another process. Any owner
+/// whose liveness cannot be read here is never judged abandoned and keeps
+/// blocking its riders: no owner line, another host, a missing or different
+/// boot id, or a missing, foreign or unresolvable PID namespace (a pid probed
+/// across namespaces names an unrelated process, or none).
 // trace:BUG-2412 | ai:claude
 pub(crate) fn train_abandoned(
     body: &str,
@@ -1502,7 +1520,19 @@ pub(crate) fn train_abandoned(
     alive: impl Fn(u32, Option<&str>) -> bool,
 ) -> Option<TrainOwner> {
     let owner = parse_owner_line(body)?;
-    (owner.host == our_host && !alive(owner.pid, owner.start.as_deref())).then_some(owner)
+    if owner.host != our_host || owner.pid_ns.is_none() || owner.boot.is_none() {
+        return None;
+    }
+    // Reuse the cache lock's same-boot / same-namespace test: a recorded
+    // identity that differs from ours, or ours unresolvable, hides the pid.
+    let pid = aida_core::CacheLockInfo {
+        pid: owner.pid,
+        boot_id: owner.boot.clone(),
+        pid_ns: owner.pid_ns.clone(),
+        ..Default::default()
+    }
+    .visible_pid()?;
+    (!alive(pid, owner.start.as_deref())).then_some(owner)
 }
 
 /// The live trains a second train must not double-carry: every open
@@ -1512,7 +1542,8 @@ pub(crate) fn train_abandoned(
 /// closed train PR with no live lease, or a lease whose holder is dead or
 /// TTL-expired, is stale and appears in neither list. BUG-2412: an open train
 /// PR whose recorded owner is dead ([`train_abandoned`]) is not live either;
-/// it is returned in the third list for the caller to close.
+/// it is returned in the third list for the caller to close — unless a live
+/// train merge-lease still names it, in which case it stays open and blocking.
 // trace:BUG-2220 trace:BUG-2412 | ai:claude
 #[allow(clippy::type_complexity)]
 fn live_trains(
@@ -1546,6 +1577,11 @@ fn live_trains(
     )?;
     let rows: Vec<Row> = serde_json::from_str(&raw).context("could not parse `gh pr list` JSON")?;
     let our_host = crate::coordination::hostname();
+    let leases: Vec<crate::merge_lock::Holder> = crate::merge_lock::live_status(main_worktree)
+        .into_iter()
+        .map(|(_, holder)| holder)
+        .filter(|holder| holder.note == TRAIN_LEASE_NOTE && holder.pr.is_some())
+        .collect();
     let mut open: Vec<(u64, Option<Vec<(u64, String)>>)> = Vec::new();
     let mut abandoned: Vec<(u64, String, TrainOwner)> = Vec::new();
     for r in rows
@@ -1557,17 +1593,18 @@ fn live_trains(
             &our_host,
             aida_core::liveness::process_identity_is_alive,
         ) {
-            Some(owner) => abandoned.push((r.number, r.head_ref, owner)),
-            None => open.push((r.number, parse_members_line(&r.body))),
+            // A live train lease on this PR means a train is still landing
+            // it: never close it.
+            Some(owner) if !leases.iter().any(|h| h.pr == Some(r.number)) => {
+                abandoned.push((r.number, r.head_ref, owner))
+            }
+            _ => open.push((r.number, parse_members_line(&r.body))),
         }
     }
     let mut leased: Vec<(u64, Option<Vec<(u64, String)>>)> = Vec::new();
-    for (_, holder) in crate::merge_lock::live_status(main_worktree) {
+    for holder in leases {
         let Some(train) = holder.pr else { continue };
-        if holder.note != TRAIN_LEASE_NOTE
-            || open.iter().any(|(n, _)| *n == train)
-            || leased.iter().any(|(n, _)| *n == train)
-        {
+        if open.iter().any(|(n, _)| *n == train) || leased.iter().any(|(n, _)| *n == train) {
             continue;
         }
         // An unreadable body names nobody (the rider gate fails open, as for
