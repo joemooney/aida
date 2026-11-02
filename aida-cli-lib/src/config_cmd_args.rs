@@ -109,6 +109,15 @@ pub enum ConfigCommand {
 // trace:STORY-1127 | ai:codex
 #[derive(Subcommand, Debug)]
 pub enum ConfigPermissionsCommand {
+    /// Run the fixed, model-free filesystem/supervisor containment tracer.
+    /// This does not enable vendor launches or change permission policy.
+    // trace:TASK-2705 | ai:codex
+    Probe {
+        #[clap(long)]
+        vendor: String,
+        #[clap(long)]
+        json: bool,
+    },
     /// Show the resolved per-agent posture and diagnostics. Read-only.
     Show {
         /// Emit machine-readable JSON.
