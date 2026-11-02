@@ -208,18 +208,22 @@ pub(crate) fn handle_advisor_register(
     // A Codex session exports CODEX_THREAD_ID instead of a Claude session
     // id; registering it lets `advisor watch` fork it with `codex exec fork`.
     // trace:STORY-2255 | ai:claude
-    let (uuid, vendor) = resolve_register_identity(
-        uuid,
-        vendor,
-        nonempty_env("CLAUDE_CODE_SESSION_ID"),
-        nonempty_env("CODEX_THREAD_ID"),
-    )
-    .ok_or_else(|| {
-        anyhow::anyhow!(
+    let claude_session = nonempty_env("CLAUDE_CODE_SESSION_ID");
+    let codex_thread = nonempty_env("CODEX_THREAD_ID");
+    // Both ids set means one was inherited; only then is the process tree
+    // walked to find which vendor is actually running this command.
+    // trace:TASK-2754 | ai:claude
+    let innermost = (uuid.is_none() && claude_session.is_some() && codex_thread.is_some())
+        .then(|| innermost_agent_vendor(std::process::id()))
+        .flatten();
+    let (uuid, vendor) =
+        resolve_register_identity(uuid, vendor, claude_session, codex_thread, innermost)
+            .ok_or_else(|| {
+                anyhow::anyhow!(
             "no session id — pass `--uuid <id>`, or run from a Claude session (which exports \
              CLAUDE_CODE_SESSION_ID) or a Codex session (which exports CODEX_THREAD_ID)"
         )
-    })?;
+            })?;
     if vendor.is_some() {
         return register_codex_thread(&uuid);
     }
@@ -281,18 +285,46 @@ fn nonempty_env(key: &str) -> Option<String> {
         .filter(|v| !v.is_empty())
 }
 
+/// The agent vendor whose process sits nearest the caller in its ancestry.
+// trace:TASK-2754 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum InnermostVendor {
+    Claude,
+    Codex,
+}
+
+/// Which agent CLI is running this command, read from the process tree: the
+/// nearer of the closest `claude` and `codex` ancestors. `None` when neither
+/// is found.
+// trace:TASK-2754 | ai:claude
+fn innermost_agent_vendor(pid: u32) -> Option<InnermostVendor> {
+    let depth = |ancestor| crate::agent_registry::ancestor_depth(pid, ancestor);
+    let claude = process_probe::nearest_claude_ancestor_pid(pid).and_then(depth);
+    let codex = process_probe::nearest_codex_ancestor_pid(pid).and_then(depth);
+    match (claude, codex) {
+        (Some(claude), Some(codex)) if codex < claude => Some(InnermostVendor::Codex),
+        (Some(_), _) => Some(InnermostVendor::Claude),
+        (None, Some(_)) => Some(InnermostVendor::Codex),
+        (None, None) => None,
+    }
+}
+
 /// Which session `aida advisor register` records. An explicit `--uuid`
-/// registers as `--vendor` (Claude when omitted). Otherwise the Codex thread
-/// id wins over the Claude session id: a Codex session started from a Claude
-/// seat or shell inherits `CLAUDE_CODE_SESSION_ID`, so `CODEX_THREAD_ID` is
-/// the innermost, more specific signal. Returns `(id, vendor)`, `vendor`
-/// `None` for Claude.
+/// registers as `--vendor` (Claude when omitted). With only one of
+/// `CLAUDE_CODE_SESSION_ID` / `CODEX_THREAD_ID` set, that session registers.
+/// With both set, one was inherited from a parent session (a Claude session
+/// started from a Codex shell inherits `CODEX_THREAD_ID`, and vice versa), so
+/// `innermost` — the vendor nearest in the process tree — decides; when the
+/// tree is inconclusive the Claude session registers. Returns `(id, vendor)`,
+/// `vendor` `None` for Claude.
 // trace:STORY-2255 | ai:claude
+// trace:TASK-2754 | ai:claude
 pub(crate) fn resolve_register_identity(
     explicit: Option<&str>,
     explicit_vendor: Option<&str>,
     claude_session: Option<String>,
     codex_thread: Option<String>,
+    innermost: Option<InnermostVendor>,
 ) -> Option<(String, Option<String>)> {
     if let Some(id) = explicit {
         let vendor = explicit_vendor
@@ -300,10 +332,13 @@ pub(crate) fn resolve_register_identity(
             .map(|_| "codex".to_string());
         return Some((id.to_string(), vendor));
     }
-    if let Some(id) = codex_thread {
-        return Some((id, Some("codex".to_string())));
+    let codex = |id| Some((id, Some("codex".to_string())));
+    match (claude_session, codex_thread) {
+        (Some(_), Some(thread)) if innermost == Some(InnermostVendor::Codex) => codex(thread),
+        (Some(session), _) => Some((session, None)),
+        (None, Some(thread)) => codex(thread),
+        (None, None) => None,
     }
-    claude_session.map(|id| (id, None))
 }
 
 /// Register a Codex thread as the live advisor. Codex keeps its own session
