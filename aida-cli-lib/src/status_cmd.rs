@@ -622,7 +622,13 @@ pub(crate) fn handle_status_command_distributed(
             "Inbox:".bold().yellow(),
             draft_inbox,
             if draft_inbox == 1 { "" } else { "s" },
-            "/aida-triage".cyan()
+            // trace:BUG-2396 | ai:claude
+            crate::vendor_hints::skill_ref(
+                crate::vendor_hints::hint_vendor(&project_root),
+                "aida-triage",
+                ""
+            )
+            .cyan()
         );
         println!();
     }
@@ -656,6 +662,8 @@ pub(crate) fn handle_status_command_distributed(
 
     print_status_agents_section(&user_ctx, show_stale_agents);
     print_status_claude_code_section(&project_root);
+    // trace:BUG-2396 | ai:claude
+    print_status_codex_section(&project_root);
 
     // STORY-456: unified worktrees + open-PRs + recently-merged panes —
     // git worktree + session lease + liveness + commits-ahead + open PR in

@@ -139,7 +139,8 @@ fn nudge_pass(backend: &aida_core::CachedGitBackend, store_path: &Path) -> Resul
             due.len()
         )))
     } else {
-        let message = format_operator_notification(&due);
+        let message =
+            format_operator_notification(&due, crate::vendor_hints::hint_vendor(project_root));
         let outcome = notify::send_direct(
             project_root,
             "supervise_nudge",
@@ -344,10 +345,15 @@ fn format_nudge_body(items: &[StuckItem]) -> String {
     out
 }
 
-fn format_operator_notification(items: &[StuckItem]) -> String {
+// trace:BUG-2396 | ai:claude — the advisor launch follows `[agents] vendor`.
+fn format_operator_notification(
+    items: &[StuckItem],
+    vendor: crate::session::HeadlessVendor,
+) -> String {
     let mut out = format!(
-        "{} item(s) stuck, no advisor running -- start one: aida agent new claude --role advisor\n",
-        items.len()
+        "{} item(s) stuck, no advisor running -- start one: {}\n",
+        items.len(),
+        crate::vendor_hints::agent_new_cmd(vendor, "--role advisor", false)
     );
     out.push_str("\nStuck specs:\n");
     for item in items {

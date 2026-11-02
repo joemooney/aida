@@ -45,6 +45,12 @@ pub enum SlotChangeKind {
 /// machinery.
 /// trace:FR-1-047 | ai:claude
 pub fn slots_for_file(path: &Path) -> &'static [&'static str] {
+    // `.codex/hooks.json` shares its basename with `.agents/hooks.json`
+    // (Antigravity, merged by its own named-key writer), so it is matched on
+    // the path before the basename dispatch. trace:BUG-2395 | ai:claude
+    if is_codex_hooks_json(path) {
+        return CODEX_HOOK_SLOTS;
+    }
     let name = path.file_name().and_then(|s| s.to_str()).unwrap_or("");
     match name {
         "settings.json" => &[
@@ -71,6 +77,158 @@ pub fn slots_for_file(path: &Path) -> &'static [&'static str] {
         "settings.local.json" => &["/enabledMcpjsonServers"],
         _ => &[],
     }
+}
+
+/// The Codex hook events AIDA wires in `.codex/hooks.json`.
+// trace:BUG-2395 | ai:claude
+const CODEX_HOOK_SLOTS: &[&str] = &[
+    "/hooks/PreToolUse",
+    "/hooks/PostToolUse",
+    "/hooks/SessionStart",
+    "/hooks/UserPromptSubmit",
+    "/hooks/SubagentStart",
+    "/hooks/SubagentStop",
+    "/hooks/Stop",
+];
+
+/// A hook entry whose command contains this marker is AIDA's in
+/// `.codex/hooks.json`. The grant-expiry notice runs through a `$top/...`
+/// indirection, which still contains the marker.
+// trace:BUG-2395 | ai:claude
+const CODEX_AIDA_HOOK_MARKER: &str = "/.codex/hooks/aida-";
+
+fn is_codex_hooks_json(path: &Path) -> bool {
+    path.ends_with(".codex/hooks.json")
+}
+
+/// For files where AIDA owns individual hook entries inside each
+/// `/hooks/<Event>` slot rather than the whole slot, returns the command
+/// marker that identifies an AIDA entry. Today that is only
+/// `.codex/hooks.json`: Codex users hand-add hooks next to AIDA's, and a
+/// whole-slot merge would delete them on every upgrade.
+// trace:BUG-2395 | ai:claude
+fn entry_owner_marker(path: &Path) -> Option<&'static str> {
+    is_codex_hooks_json(path).then_some(CODEX_AIDA_HOOK_MARKER)
+}
+
+fn is_aida_hook(hook: &Value, marker: &str) -> bool {
+    hook.get("command")
+        .and_then(Value::as_str)
+        .is_some_and(|c| c.contains(marker))
+}
+
+/// The AIDA-owned part of a `/hooks/<Event>` array: each matcher group
+/// keeps only its AIDA hooks, and groups left with none are dropped.
+fn aida_entries(slot_value: Option<&Value>, marker: &str) -> Vec<Value> {
+    let Some(Value::Array(groups)) = slot_value else {
+        return Vec::new();
+    };
+    groups
+        .iter()
+        .filter_map(|group| {
+            let hooks = group.get("hooks")?.as_array()?;
+            let ours: Vec<Value> = hooks
+                .iter()
+                .filter(|h| is_aida_hook(h, marker))
+                .cloned()
+                .collect();
+            if ours.is_empty() {
+                return None;
+            }
+            let mut g = group.clone();
+            g["hooks"] = Value::Array(ours);
+            Some(g)
+        })
+        .collect()
+}
+
+/// The user-owned part of a `/hooks/<Event>` array: AIDA hooks removed, and
+/// a group dropped only when removing them left it empty. Groups that were
+/// not AIDA's are kept verbatim, in order.
+fn user_entries(slot_value: Option<&Value>, marker: &str) -> Vec<Value> {
+    let Some(Value::Array(groups)) = slot_value else {
+        return Vec::new();
+    };
+    groups
+        .iter()
+        .filter_map(|group| {
+            let Some(hooks) = group.get("hooks").and_then(Value::as_array) else {
+                return Some(group.clone());
+            };
+            if !hooks.iter().any(|h| is_aida_hook(h, marker)) {
+                return Some(group.clone());
+            }
+            let theirs: Vec<Value> = hooks
+                .iter()
+                .filter(|h| !is_aida_hook(h, marker))
+                .cloned()
+                .collect();
+            if theirs.is_empty() {
+                return None;
+            }
+            let mut g = group.clone();
+            g["hooks"] = Value::Array(theirs);
+            Some(g)
+        })
+        .collect()
+}
+
+/// Whether the user's value at `slot` of the managed-merge file `path`
+/// satisfies AIDA's. Entry-owned files compare only AIDA's entries; every
+/// other file defers to [`slot_value_matches`]. Every drift, diff, status,
+/// and merge check routes through this so they agree.
+// trace:BUG-2395 | ai:claude
+pub fn managed_slot_matches(
+    path: &Path,
+    slot: &str,
+    user: Option<&Value>,
+    aida: Option<&Value>,
+) -> bool {
+    match entry_owner_marker(path) {
+        Some(marker) => aida.is_none() || aida_entries(user, marker) == aida_entries(aida, marker),
+        None => slot_value_matches(slot, user, aida),
+    }
+}
+
+/// Slot-merge `user_doc` against `aida_doc` over every AIDA-owned slot of
+/// the managed-merge file `path`. For an entry-owned file each drifted slot
+/// becomes the user's own entries followed by AIDA's current entries, so a
+/// hand-added hook survives and a stale AIDA entry is replaced. Every other
+/// file uses [`slot_merge`] unchanged.
+// trace:BUG-2395 | ai:claude
+pub fn managed_slot_merge(
+    path: &Path,
+    user_doc: &Value,
+    aida_doc: &Value,
+) -> (Value, Vec<SlotChange>) {
+    let slots = slots_for_file(path);
+    let Some(marker) = entry_owner_marker(path) else {
+        return slot_merge(user_doc, aida_doc, slots);
+    };
+    let mut result = user_doc.clone();
+    let mut changes = Vec::new();
+    for slot in slots {
+        let Some(aida_val) = aida_doc.pointer(slot) else {
+            continue;
+        };
+        let user_val = result.pointer(slot);
+        if aida_entries(user_val, marker) == aida_entries(Some(aida_val), marker) {
+            continue;
+        }
+        let kind = if user_val.is_some() {
+            SlotChangeKind::Replaced
+        } else {
+            SlotChangeKind::Added
+        };
+        let mut merged = user_entries(user_val, marker);
+        merged.extend(aida_entries(Some(aida_val), marker));
+        set_or_create(&mut result, slot, Value::Array(merged));
+        changes.push(SlotChange {
+            slot: (*slot).to_string(),
+            kind,
+        });
+    }
+    (result, changes)
 }
 
 /// Slots whose value is a string array AIDA shares with the user: AIDA owns
@@ -233,6 +391,85 @@ mod tests {
         let bare = json!({"hooks": {}});
         let (merged, _) = slot_merge(&bare, &aida, slots);
         assert_eq!(merged["permissions"]["allow"], aida["permissions"]["allow"]);
+    }
+
+    fn codex_hook(name: &str) -> Value {
+        json!({"type": "command", "command": format!("$(git rev-parse --show-toplevel)/.codex/hooks/{name}")})
+    }
+
+    /// BUG-2395: `.codex/hooks.json` is entry-owned. A hand-added hook in the
+    /// same event (in its own group or sharing AIDA's group) survives an
+    /// upgrade, a stale AIDA entry is replaced, and the result is not drift.
+    // trace:BUG-2395 | ai:claude
+    #[test]
+    fn bug_2395_codex_hooks_json_merges_per_entry() {
+        let path = Path::new(".codex/hooks.json");
+        assert!(slots_for_file(path).contains(&"/hooks/Stop"));
+        let mine = json!({"type": "command", "command": "./scripts/my-hook.sh"});
+        let user = json!({
+            "hooks": {
+                "SessionStart": [
+                    {"hooks": [codex_hook("aida-session-context.sh"), mine.clone()]},
+                    {"matcher": "startup", "hooks": [mine.clone()]}
+                ],
+                "Stop": [{"hooks": [codex_hook("aida-old-stop.sh")]}]
+            },
+            "userKey": true
+        });
+        let aida = json!({
+            "hooks": {
+                "SessionStart": [{"hooks": [codex_hook("aida-session-context.sh"), codex_hook("aida-role-context.sh")]}],
+                "Stop": [{"hooks": [codex_hook("aida-capture-prompt.sh")]}]
+            }
+        });
+
+        for slot in ["/hooks/SessionStart", "/hooks/Stop"] {
+            assert!(!managed_slot_matches(
+                path,
+                slot,
+                user.pointer(slot),
+                aida.pointer(slot)
+            ));
+        }
+        let (merged, changes) = managed_slot_merge(path, &user, &aida);
+        assert_eq!(changes.len(), 2, "{changes:?}");
+        assert_eq!(
+            merged["hooks"]["SessionStart"],
+            json!([
+                {"hooks": [mine.clone()]},
+                {"matcher": "startup", "hooks": [mine]},
+                {"hooks": [codex_hook("aida-session-context.sh"), codex_hook("aida-role-context.sh")]}
+            ])
+        );
+        assert_eq!(
+            merged["hooks"]["Stop"], aida["hooks"]["Stop"],
+            "stale entry replaced"
+        );
+        assert_eq!(merged["userKey"], json!(true));
+
+        let (_, again) = managed_slot_merge(path, &merged, &aida);
+        assert!(again.is_empty(), "a merged doc is not drift: {again:?}");
+        for slot in slots_for_file(path) {
+            assert!(managed_slot_matches(
+                path,
+                slot,
+                merged.pointer(slot),
+                aida.pointer(slot)
+            ));
+        }
+    }
+
+    /// Whole-slot ownership still applies to `.claude/settings.json`, and
+    /// `.agents/hooks.json` is not mistaken for the Codex file.
+    // trace:BUG-2395 | ai:claude
+    #[test]
+    fn bug_2395_entry_ownership_is_codex_only() {
+        let settings = Path::new(".claude/settings.json");
+        let user = json!({"hooks": {"PreToolUse": [{"hooks": [{"command": "mine"}]}]}});
+        let aida = json!({"hooks": {"PreToolUse": [{"hooks": [{"command": "aida"}]}]}});
+        let (merged, _) = managed_slot_merge(settings, &user, &aida);
+        assert_eq!(merged["hooks"]["PreToolUse"], aida["hooks"]["PreToolUse"]);
+        assert!(slots_for_file(Path::new(".agents/hooks.json")).is_empty());
     }
 
     #[test]
