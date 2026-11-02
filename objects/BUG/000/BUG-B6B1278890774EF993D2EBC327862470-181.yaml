@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-02T12:46:17.872589821Z
-modified_at: 2026-11-02T16:46:51.340644460Z
+modified_at: 2026-11-02T16:55:21.543917682Z
 req_type: Bug
 tags:
 - area:merge-train
@@ -25,6 +25,16 @@ comments:
   content: 'ADVISOR TRIAGE (2026-11-02 06:08 MST): APPROVED. The ''Expected'' clause is the acceptance criterion; add a regression test that reproduces the observed failure.'
   created_at: 2026-11-02T13:00:00.064989153Z
   modified_at: 2026-11-02T13:00:00.064989153Z
+  session_id: ee0bf351-6b17-486f-a38e-cfbb1343c426
+- id: 01a19d2f-dac7-7fc2-98d9-0d9eb0c23132
+  author: joe
+  content: |-
+    ADVISOR REWORK BRIEF (09:52 MST), PR #3266 round 1 at ea013eb. Final round; BUG-2413 passed, keep it as is.
+    1. BLOCKING: a live train PR can be closed across PID namespaces (sandboxed Bash calls each get a fresh pidns). Record the pid namespace inode plus the boot id in the owner line, reusing cache_lock's local_pid_ns / in_foreign_pid_ns / visible_pid helpers, and never re-implement them. An owner in a foreign or unresolvable namespace, or with a different boot id, counts as UNREADABLE, which keeps blocking (never close). Only a same-namespace, same-boot owner whose pid is gone or whose start time differs counts as dead. Test: an owner line from a foreign pidns is not closed.
+    2. BUNDLE: skip the close when a live train merge-lease still names the PR, and test it.
+    Gate: LIGHT, ONE targeted cargo test -p aida-cli-lib with the bug_2412 and bug_2413 filters, plus make check-ci-fast. Push to the PR branch.
+  created_at: 2026-11-02T16:55:21.543917682Z
+  modified_at: 2026-11-02T16:55:21.543917682Z
   session_id: ee0bf351-6b17-486f-a38e-cfbb1343c426
 history:
 - id: 01a19c58-6b0d-7af0-bdd0-d2e54ea8d466
