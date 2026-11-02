@@ -1,0 +1,27 @@
+id: 01a19a5b-1836-7e13-824a-34f931f96fe7
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-675
+title: 'NON-BLOCKING minor supervisor.rs:305-317: preflight timeout reaps only the bwra…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-2705, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  NON-BLOCKING minor supervisor.rs:305-317: preflight timeout reaps only the bwrap wrapper; namespace-init teardown is not verified (no --info-fd) unlike the lane's require_namespace_gone. Relies on --die-with-parent; verify or document.
+  Reviewed sha: 94367e74ed9e9af0c2242dfc9799de38e2b4e1b1
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-02T03:43:43.670906043Z
+modified_at: 2026-11-02T03:43:43.670906043Z
+req_type: Task
+tags:
+- carried-from:TASK-2705
+- finding-hash:a9036afc
+- from-review:TASK-2705
+- kind:carried-forward
+filed_at:
+  code_sha: 9a2168d8563579456bf669bb816ebdf5ff3aa355
+  branch: main
+  dirty: true
+  aida_version: 0.16.0
+  aida_build_sha: 6a3f67671a9
+  vendor: claude
