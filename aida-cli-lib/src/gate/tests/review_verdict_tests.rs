@@ -975,7 +975,12 @@ fn explicit_path_writer_preserves_displaced_reviewer_evidence() {
 #[test]
 fn no_verdict_needs_review() {
     assert_eq!(
-        review_actionability(None, TipRelation::Unknown),
+        review_actionability(
+            std::path::Path::new("/nonexistent-bug2398"),
+            "TASK-1",
+            None,
+            TipRelation::Unknown
+        ),
         ReviewActionability::NeedsReview
     );
 }
@@ -985,18 +990,28 @@ fn no_verdict_needs_review() {
 fn blocking_verdict_at_current_head_is_awaiting_rework() {
     let v = rc("request-changes", Some("aaaa"));
     assert_eq!(
-        review_actionability(Some(&v), TipRelation::AtReviewedSha),
+        review_actionability(
+            std::path::Path::new("/nonexistent-bug2398"),
+            "TASK-1",
+            Some(&v),
+            TipRelation::AtReviewedSha
+        ),
         ReviewActionability::AwaitingRework
     );
 }
 
 // trace:BUG-1508 | ai:claude
 #[test]
-fn approving_verdict_at_current_head_is_resolved() {
+fn unattested_approving_verdict_at_current_head_needs_review() {
     let v = rc("approved", Some("aaaa"));
     assert_eq!(
-        review_actionability(Some(&v), TipRelation::AtReviewedSha),
-        ReviewActionability::Resolved
+        review_actionability(
+            std::path::Path::new("/nonexistent-bug2398"),
+            "TASK-1",
+            Some(&v),
+            TipRelation::AtReviewedSha
+        ),
+        ReviewActionability::NeedsReview
     );
 }
 
@@ -1007,7 +1022,12 @@ fn head_advanced_past_a_blocking_verdict_needs_review_again() {
     // actionable again -- even though the last word was "changes requested".
     let v = rc("request-changes", Some("aaaa"));
     assert_eq!(
-        review_actionability(Some(&v), TipRelation::AdvancedPast),
+        review_actionability(
+            std::path::Path::new("/nonexistent-bug2398"),
+            "TASK-1",
+            Some(&v),
+            TipRelation::AdvancedPast
+        ),
         ReviewActionability::NeedsReview
     );
 }
@@ -1017,7 +1037,12 @@ fn head_advanced_past_a_blocking_verdict_needs_review_again() {
 fn rewritten_branch_needs_review_even_with_a_prior_approval() {
     let v = rc("approved", Some("aaaa"));
     assert_eq!(
-        review_actionability(Some(&v), TipRelation::Rewritten),
+        review_actionability(
+            std::path::Path::new("/nonexistent-bug2398"),
+            "TASK-1",
+            Some(&v),
+            TipRelation::Rewritten
+        ),
         ReviewActionability::NeedsReview
     );
 }
@@ -1033,7 +1058,12 @@ fn permanently_indeterminate_verdict_is_treated_as_absent() {
     let relation = classify_tip_relation(v.reviewed_sha.as_deref(), Some("bbbb"), None);
     assert_eq!(relation, TipRelation::Unknown);
     assert_eq!(
-        review_actionability(Some(&v), relation),
+        review_actionability(
+            std::path::Path::new("/nonexistent-bug2398"),
+            "TASK-1",
+            Some(&v),
+            relation
+        ),
         ReviewActionability::NeedsReview
     );
 }
@@ -1172,7 +1202,12 @@ fn a_closed_verdict_reads_resolved_regardless_of_tip_relation() {
         TipRelation::Unknown,
     ] {
         assert_eq!(
-            review_actionability(Some(&v), relation),
+            review_actionability(
+                std::path::Path::new("/nonexistent-bug2398"),
+                "TASK-1",
+                Some(&v),
+                relation
+            ),
             ReviewActionability::Resolved,
             "closed verdict should read Resolved at relation {relation:?}"
         );

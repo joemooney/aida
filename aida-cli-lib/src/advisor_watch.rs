@@ -519,11 +519,15 @@ mod tests {
         } else {
             "echo 'error: unrecognized subcommand fork' >&2; exit 2"
         };
+        // The advisor child is granted, so its launch runs the requested-seat
+        // preflight: the fake answers that probe through the real matching
+        // CLI before the fork/capture body runs.
+        // trace:BUG-2398 | ai:claude
         crate::test_exec::write_executable(
             &fake,
-            &format!(
-                "#!/bin/sh\nif [ \"$1\" = exec ] && [ \"$2\" = fork ] && [ \"$3\" = --help ]; then {help}; fi\nprintf '%s\\n' \"$@\" > \"$AIDA_TEST_CAPTURE\"\n"
-            ),
+            crate::test_exec::codex_probe_script(format!(
+                "if [ \"$1\" = exec ] && [ \"$2\" = fork ] && [ \"$3\" = --help ]; then {help}; fi\nprintf '%s\\n' \"$@\" > \"$AIDA_TEST_CAPTURE\"\n"
+            )),
         );
         CodexFixture {
             _tmp: tmp,
@@ -656,9 +660,17 @@ mod tests {
     // trace:STORY-2255 | ai:claude
     #[test]
     fn codex_tick_forks_the_registered_thread_without_touching_it() {
+        // The granted advisor child's seat preflight runs the real CLI from
+        // the inherited cwd, so the cwd must be the fixture project whose
+        // roster grants the seat; isolate first (cwd is process-wide).
+        // trace:BUG-2398 | ai:claude
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
         let fx = codex_fixture(true);
         register_codex(&fx);
         let before = std::fs::read(&fx.rollout).unwrap();
+        std::env::set_current_dir(&fx.project).unwrap();
         let (argv, lines) = run_codex_tick(&fx);
         assert_eq!(lines.len(), 1, "{lines:?}");
         assert!(lines[0].contains("forking live Codex thread"), "{lines:?}");
@@ -706,7 +718,17 @@ mod tests {
     }
 
     fn assert_not_forked(argv: &[String]) {
-        assert_eq!(argv.first().map(String::as_str), Some("exec"), "{argv:?}");
+        // A granted child's argv leads with `-c <override>` pairs (the seat
+        // metadata Codex forwards to tool shells); the subcommand follows.
+        // trace:BUG-2398 | ai:claude
+        let mut rest = argv;
+        while let [flag, _value, tail @ ..] = rest {
+            if flag != "-c" {
+                break;
+            }
+            rest = tail;
+        }
+        assert_eq!(rest.first().map(String::as_str), Some("exec"), "{argv:?}");
         assert!(!argv.iter().any(|a| a == "fork" || a == THREAD), "{argv:?}");
     }
 
@@ -715,13 +737,22 @@ mod tests {
     // trace:STORY-2255 | ai:claude
     #[test]
     fn codex_tick_cold_boots_without_a_thread_or_exec_fork() {
+        // The granted advisor child's seat preflight runs the real CLI from
+        // the inherited cwd, so the cwd must be the fixture project whose
+        // roster grants the seat; isolate first (cwd is process-wide).
+        // trace:BUG-2398 | ai:claude
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
         let unregistered = codex_fixture(true);
+        std::env::set_current_dir(&unregistered.project).unwrap();
         let (argv, lines) = run_codex_tick(&unregistered);
         assert_not_forked(&argv);
         assert_one_cold_boot_line(&lines, "no live advisor is registered");
 
         let old_codex = codex_fixture(false);
         register_codex(&old_codex);
+        std::env::set_current_dir(&old_codex.project).unwrap();
         let (argv, lines) = run_codex_tick(&old_codex);
         assert_not_forked(&argv);
         assert_one_cold_boot_line(&lines, "has no `exec fork` subcommand");
@@ -732,10 +763,18 @@ mod tests {
     // trace:STORY-2255 | ai:claude
     #[test]
     fn codex_tick_cold_boots_for_another_project_or_a_stale_thread() {
+        // The granted advisor child's seat preflight runs the real CLI from
+        // the inherited cwd, so the cwd must be the fixture project whose
+        // roster grants the seat; isolate first (cwd is process-wide).
+        // trace:BUG-2398 | ai:claude
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
         let fx = codex_fixture(true);
         let elsewhere = fx._tmp.path().join("other-project");
         std::fs::create_dir_all(&elsewhere).unwrap();
         register_codex_in(&fx, &elsewhere);
+        std::env::set_current_dir(&fx.project).unwrap();
         let (argv, lines) = run_codex_tick(&fx);
         assert_not_forked(&argv);
         assert_one_cold_boot_line(&lines, "belongs to another project");
@@ -749,6 +788,7 @@ mod tests {
             .unwrap()
             .set_times(std::fs::FileTimes::new().set_modified(idle))
             .unwrap();
+        std::env::set_current_dir(&stale.project).unwrap();
         let (argv, lines) = run_codex_tick(&stale);
         assert_not_forked(&argv);
         assert_one_cold_boot_line(&lines, "is no longer live");

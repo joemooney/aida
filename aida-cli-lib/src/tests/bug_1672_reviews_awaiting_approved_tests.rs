@@ -7,7 +7,8 @@
 //!
 //! Fixtures: a temporary project root for the verdict files (never the live
 //! `.aida/`), and in-memory `Requirement` / `Comment` values for the comment
-//! trail. No git, no forge, no network.
+//! trail. No git, no forge, no network. These compatibility artifacts have
+//! no durable authority; BUG-2398 keeps them awaiting independent review.
 // trace:BUG-1672 | ai:claude
 
 use super::{latest_review_comment_verdict, review_comment_verdict, spec_review_approved};
@@ -175,7 +176,7 @@ fn newest_review_comment_decides() {
 /// at all: NOT reviews-awaiting (it is awaiting merge). The author is the
 /// operator's name, as on the real trails, and still counts.
 #[test]
-fn approved_by_comment_is_not_reviews_awaiting() {
+fn approval_prose_alone_still_needs_review() {
     let tmp = TempDir::new().unwrap();
     let req = spec_with(
         "",
@@ -193,8 +194,8 @@ fn approved_by_comment_is_not_reviews_awaiting() {
         ],
     );
     assert!(
-        spec_review_approved(tmp.path(), &req, SPEC, PR),
-        "an APPROVE review comment with no verdict file must read as reviewed"
+        !spec_review_approved(tmp.path(), &req, SPEC, PR),
+        "approval prose without durable authority must stay unreviewed"
     );
 }
 
@@ -240,14 +241,14 @@ fn request_changes_or_no_review_stays_reviews_awaiting() {
 /// writes, and (regression) the drain's PR-keyed record, both approve; a
 /// blocking or merge-closed spec-keyed record does not.
 #[test]
-fn verdict_files_under_either_key_approve() {
+fn unattested_verdict_files_under_either_key_need_review() {
     let tmp = TempDir::new().unwrap();
     let req = spec_with("", Vec::new());
 
     write_verdict(tmp.path(), SPEC, r#"{"verdict":"Approved","summary":"ok"}"#);
     assert!(
-        spec_review_approved(tmp.path(), &req, SPEC, PR),
-        "the spec-keyed verdict file must count as an approval"
+        !spec_review_approved(tmp.path(), &req, SPEC, PR),
+        "the unattested spec-keyed verdict cannot approve"
     );
 
     write_verdict(
@@ -274,8 +275,8 @@ fn verdict_files_under_either_key_approve() {
         r#"{"verdict":"APPROVED","summary":"ok"}"#,
     );
     assert!(
-        spec_review_approved(tmp.path(), &req, SPEC, PR),
-        "the original PR-keyed signal must keep working"
+        !spec_review_approved(tmp.path(), &req, SPEC, PR),
+        "an unattested PR-keyed signal cannot approve"
     );
 }
 
@@ -301,8 +302,8 @@ fn newest_review_wins_between_files_and_comments() {
 
         age_file(&path, 1);
         assert!(
-            spec_review_approved(tmp.path(), &blocking, SPEC, PR),
-            "{key}: an approving file newer than the request-changes comment clears it"
+            !spec_review_approved(tmp.path(), &blocking, SPEC, PR),
+            "{key}: an unattested newer file cannot clear review"
         );
     }
 }
@@ -322,8 +323,8 @@ fn blocking_files_override_older_approving_comments() {
             );
             age_file(&path, 30);
             assert!(
-                spec_review_approved(tmp.path(), &req, SPEC, PR),
-                "{key}: newer comment approval"
+                !spec_review_approved(tmp.path(), &req, SPEC, PR),
+                "{key}: newer approval prose still has no authority"
             );
         }
     }
@@ -350,8 +351,8 @@ fn newest_review_wins_across_spec_and_pr_files() {
             );
             age_file(&approval, 1);
             assert!(
-                spec_review_approved(tmp.path(), &req, SPEC, PR),
-                "{approval_key}: newer approval"
+                !spec_review_approved(tmp.path(), &req, SPEC, PR),
+                "{approval_key}: newer unattested approval"
             );
         }
     }
@@ -427,5 +428,5 @@ fn all_spec_alias_files_participate_in_ordering() {
     age_file(&blocker, 10);
     assert!(!spec_review_approved(tmp.path(), &req, SPEC, PR));
     age_file(&approval, 1);
-    assert!(spec_review_approved(tmp.path(), &req, SPEC, PR));
+    assert!(!spec_review_approved(tmp.path(), &req, SPEC, PR));
 }

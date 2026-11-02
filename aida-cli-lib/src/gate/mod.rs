@@ -33,6 +33,8 @@ pub(crate) mod pr_ship_batch;
 pub(crate) mod relay_launch;
 pub(crate) mod review_author;
 pub(crate) mod review_authority;
+// trace:BUG-2398 | ai:codex
+pub(crate) mod review_approval;
 // trace:TASK-1960 trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude — attested-approval carry-over across clean base merges.
 pub(crate) mod review_carryover;
 pub(crate) mod review_marker;
