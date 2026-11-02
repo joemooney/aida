@@ -1659,6 +1659,13 @@ pub(crate) fn supervise_until_exit(
             }
         }
     }
+    // The scope is released only once the same occupancy scan
+    // `recover-launch` runs proves the attempt over; anything left (or an
+    // unreadable process) keeps the scope held for recovery.
+    // trace:STORY-2254 | ai:claude
+    if let Some(why) = exit_occupancy(dir, &init.project_root, attempt) {
+        problems.push(why);
+    }
     let uncertain = terminal.unknown.is_some() || !problems.is_empty();
     let me = me.clone();
     receipt::compare_update(
@@ -1685,6 +1692,40 @@ pub(crate) fn supervise_until_exit(
         },
     )?;
     Ok(())
+}
+
+/// How long the normal exit waits for signalled work to leave before it
+/// concludes the attempt is not provably over.
+const EXIT_OCCUPANCY_GRACE: std::time::Duration = std::time::Duration::from_secs(3);
+
+/// `None` when a fresh scan proves the attempt over; otherwise why the
+/// scope must stay held. Re-scans briefly: work just signalled may still be
+/// exiting. Fails closed: the last non-clear result is the answer.
+// trace:STORY-2254 | ai:claude
+pub(crate) fn exit_occupancy(
+    dir: &std::path::Path,
+    root: &std::path::Path,
+    attempt: &str,
+) -> Option<String> {
+    let r = match receipt::read_receipt(dir, root, attempt) {
+        ReceiptRead::Known(r) => r,
+        ReceiptRead::Unknown(why) => {
+            return Some(format!("receipt unreadable for the exit scan: {why}"))
+        }
+    };
+    let own = own_process_chain();
+    let deadline = std::time::Instant::now() + EXIT_OCCUPANCY_GRACE;
+    loop {
+        let why = match attempt_occupancy(&r, &own) {
+            receipt::Occupancy::Clear => return None,
+            receipt::Occupancy::Occupied(what) => format!("attempt not provably over: {what}"),
+            receipt::Occupancy::Unknown(why) => format!("attempt cannot be proven over ({why})"),
+        };
+        if std::time::Instant::now() >= deadline {
+            return Some(why);
+        }
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    }
 }
 
 /// Block until child `pid` has exited, leaving it unreaped (`WNOWAIT`).
@@ -1871,6 +1912,34 @@ pub(crate) fn recover_launch(attempt: &str, retire_unknown: bool) -> Result<()> 
     Ok(())
 }
 
+/// The ONE occupancy scan both the normal exit and `recover-launch` run
+/// before releasing an attempt's scope: every process in the worktree, in
+/// the worker's group or the supervisor's session, or naming the attempt.
+// trace:STORY-2254 | ai:claude
+pub(crate) fn attempt_occupancy(
+    r: &LaunchReceipt,
+    own: &std::collections::HashSet<u32>,
+) -> receipt::Occupancy {
+    let launcher = match &r.owner {
+        Owner::Dispatcher(p) => Some(p),
+        _ => None,
+    };
+    let probe = receipt::OccupancyProbe {
+        worktree: Some(&r.worktree),
+        group: r.worker.as_ref().map(|w| w.pid),
+        session: r.supervisor.as_ref().map(|s| s.pid),
+        attempt: Some(&r.attempt),
+        // The launcher, supervisor and worker are the attempt's first
+        // processes; nothing started before all of them is its work.
+        not_before: [launcher, r.supervisor.as_ref(), r.worker.as_ref()]
+            .into_iter()
+            .flatten()
+            .filter_map(ProcId::start_tick)
+            .min(),
+    };
+    receipt::scan_occupancy(&probe, own)
+}
+
 /// This process and its ancestors: the recovering shell is not an occupant.
 pub(crate) fn own_process_chain() -> std::collections::HashSet<u32> {
     let mut own = std::collections::HashSet::new();
@@ -1934,16 +2003,7 @@ pub(crate) fn recover_launch_at(
             ),
         }
     }
-    let probe = receipt::OccupancyProbe {
-        worktree: Some(&r.worktree),
-        group: r.worker.as_ref().map(|w| w.pid),
-        session: r.supervisor.as_ref().map(|s| s.pid),
-        attempt: Some(attempt),
-        // The launcher, supervisor and worker are the attempt's first
-        // processes; nothing started before all of them is its work.
-        not_before: owned.iter().filter_map(|(_, p)| p.start_tick()).min(),
-    };
-    match receipt::scan_occupancy(&probe, own) {
+    match attempt_occupancy(&r, own) {
         receipt::Occupancy::Clear => {}
         receipt::Occupancy::Occupied(what) => anyhow::bail!(
             "attempt {attempt} is not provably over: {what}; nothing was changed"

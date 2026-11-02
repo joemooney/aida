@@ -51,7 +51,7 @@ fn request(spec: Option<&str>, role: Option<&str>) -> CodexBgRequest {
 }
 
 // trace:STORY-2254 | ai:claude
-// trace:STORY-2254.ac0b1daf | ai:claude
+// trace:STORY-b6b1278890774ef993d2ebc327862470-277.ac0b1daf | ai:claude
 #[test]
 fn story_2254_bg_positional_and_flag_spec() {
     assert_eq!(
@@ -96,7 +96,7 @@ fn story_2254_bg_positional_and_flag_spec() {
 }
 
 // trace:STORY-2254 | ai:claude
-// trace:STORY-2254.ac0b1daf | ai:claude
+// trace:STORY-b6b1278890774ef993d2ebc327862470-277.ac0b1daf | ai:claude
 #[test]
 fn story_2254_bg_conflicting_spec_forms_refuse() {
     let cli = crate::command_registry::try_parse_from([
@@ -109,7 +109,7 @@ fn story_2254_bg_conflicting_spec_forms_refuse() {
 }
 
 // trace:STORY-2254 | ai:claude
-// trace:STORY-2254.ac0b1daf | ai:claude
+// trace:STORY-b6b1278890774ef993d2ebc327862470-277.ac0b1daf | ai:claude
 #[test]
 fn story_2254_bg_rejects_unsupported_requests_before_setup() {
     assert!(validate_request(&request(Some("TASK-1"), Some("implementer"))).is_ok());
@@ -134,7 +134,7 @@ fn story_2254_bg_rejects_unsupported_requests_before_setup() {
 }
 
 // trace:STORY-2254 | ai:claude
-// trace:STORY-2254.acf38ac0 | ai:claude
+// trace:STORY-b6b1278890774ef993d2ebc327862470-277.acf38ac0 | ai:claude
 #[test]
 fn story_2254_bg_permission_override_refused() {
     let native: Vec<String> = [
@@ -174,7 +174,7 @@ fn story_2254_bg_permission_override_refused() {
 }
 
 // trace:STORY-2254 | ai:claude
-// trace:STORY-2254.acf38ac0 | ai:claude
+// trace:STORY-b6b1278890774ef993d2ebc327862470-277.acf38ac0 | ai:claude
 #[test]
 fn story_2254_bg_native_posture_requires_trusted_opt_in() {
     let tmp = tempfile::tempdir().unwrap();
@@ -202,7 +202,7 @@ fn story_2254_bg_native_posture_requires_trusted_opt_in() {
 }
 
 // trace:STORY-2254 | ai:claude
-// trace:STORY-2254.ac9b0efd | ai:claude
+// trace:STORY-b6b1278890774ef993d2ebc327862470-277.ac9b0efd | ai:claude
 #[test]
 fn story_2254_bg_exec_argv_shape() {
     let defaults: Vec<String> = [
@@ -235,8 +235,8 @@ fn story_2254_bg_exec_argv_shape() {
 }
 
 // trace:STORY-2254 | ai:claude
-// trace:STORY-2254.ac9b0efd | ai:claude
-// trace:STORY-2254.ac0b1daf | ai:claude
+// trace:STORY-b6b1278890774ef993d2ebc327862470-277.ac9b0efd | ai:claude
+// trace:STORY-b6b1278890774ef993d2ebc327862470-277.ac0b1daf | ai:claude
 #[test]
 fn story_2254_bg_shim_exec_mapping_proven_or_refused() {
     let tmp = tempfile::tempdir().unwrap();
@@ -283,7 +283,7 @@ fn story_2254_bg_shim_exec_mapping_proven_or_refused() {
 }
 
 // trace:STORY-2254 | ai:claude
-// trace:STORY-2254.ac3769a0 | ai:claude
+// trace:STORY-b6b1278890774ef993d2ebc327862470-277.ac3769a0 | ai:claude
 #[test]
 fn story_2254_bg_parent_env_and_bearer_names_not_forwarded() {
     let parent = [
@@ -324,7 +324,7 @@ fn story_2254_bg_parent_env_and_bearer_names_not_forwarded() {
 /// A helper is started with ONLY its explicit environment, the headless
 /// wait bounds, its private channel at fd 3, and its own process group.
 // trace:STORY-2254 | ai:claude
-// trace:STORY-2254.ac08e361 | ai:claude
+// trace:STORY-b6b1278890774ef993d2ebc327862470-277.ac08e361 | ai:claude
 #[test]
 fn story_2254_bg_headless_helper_gets_wait_envs_and_private_channel() {
     let tmp = tempfile::tempdir().unwrap();
@@ -391,7 +391,7 @@ fn write_lease(root: &std::path::Path, id: &str, body: &str) -> std::path::PathB
 }
 
 // trace:STORY-2254 | ai:claude
-// trace:STORY-2254.ac0b1daf | ai:claude
+// trace:STORY-b6b1278890774ef993d2ebc327862470-277.ac0b1daf | ai:claude
 #[test]
 fn story_2254_bg_strict_lease_stamp() {
     let tmp = tempfile::tempdir().unwrap();
@@ -435,7 +435,7 @@ fn story_2254_bg_strict_lease_stamp() {
 }
 
 // trace:STORY-2254 | ai:claude
-// trace:STORY-2254.ac0b1daf | ai:claude
+// trace:STORY-b6b1278890774ef993d2ebc327862470-277.ac0b1daf | ai:claude
 #[test]
 fn story_2254_bg_registers_actual_worker_pid_and_required_start() {
     let tmp = tempfile::tempdir().unwrap();
@@ -489,9 +489,9 @@ fn story_2254_bg_registers_actual_worker_pid_and_required_start() {
 /// the BUG-2398 adapter after its own grant and headless assignments, and
 /// binds only through the gate.
 // trace:STORY-2254 | ai:claude
-// trace:STORY-2254.ac3769a0 | ai:claude
-// trace:STORY-2254.ac08e361 | ai:claude
-// trace:STORY-2254.ac9b0efd | ai:claude
+// trace:STORY-b6b1278890774ef993d2ebc327862470-277.ac3769a0 | ai:claude
+// trace:STORY-b6b1278890774ef993d2ebc327862470-277.ac08e361 | ai:claude
+// trace:STORY-b6b1278890774ef993d2ebc327862470-277.ac9b0efd | ai:claude
 #[test]
 fn story_2254_bg_source_contract() {
     let src = include_str!("../agent_codex_background.rs");

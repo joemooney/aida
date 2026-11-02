@@ -152,6 +152,7 @@ impl Harness {
     }
 }
 
+#[cfg(target_os = "linux")]
 fn harness(spec: &str) -> Harness {
     let home = tempfile::tempdir().unwrap();
     let project = tempfile::tempdir().unwrap();
@@ -333,10 +334,11 @@ fn wait_gone(p: &ProcId) -> bool {
 /// only after the vendor executable is corroborated; on exit the supervisor
 /// records the status, ends exactly its own registry row (a successor's row
 /// is untouched), revokes its own child grant and releases the scope.
-// trace:STORY-2254.ac0b1daf | ai:claude
-// trace:STORY-2254.ac3769a0 | ai:claude
-// trace:STORY-2254.ac9b0efd | ai:claude
+// trace:STORY-b6b1278890774ef993d2ebc327862470-277.ac0b1daf | ai:claude
+// trace:STORY-b6b1278890774ef993d2ebc327862470-277.ac3769a0 | ai:claude
+// trace:STORY-b6b1278890774ef993d2ebc327862470-277.ac9b0efd | ai:claude
 #[test]
+#[cfg(target_os = "linux")]
 fn story_2254_bg_supervisor_end_to_end_accepts_registers_and_cleans_up() {
     let mut h = harness("TASK-2254");
     let init = h.init(h.sleep_worker("2"));
@@ -442,7 +444,7 @@ fn story_2254_bg_supervisor_end_to_end_accepts_registers_and_cleans_up() {
 /// The launcher disappears before it commits the transfer: the supervisor
 /// stops its gated worker unrun; nothing is bound and the attempt stays the
 /// (dead) launcher's for explicit recovery.
-// trace:STORY-2254.ac0b1daf | ai:claude
+// trace:STORY-b6b1278890774ef993d2ebc327862470-277.ac0b1daf | ai:claude
 #[test]
 fn story_2254_bg_parent_exit_before_transfer_stops_worker_unrun() {
     let mut h = harness("TASK-2255");
@@ -464,7 +466,7 @@ fn story_2254_bg_parent_exit_before_transfer_stops_worker_unrun() {
 /// The launcher commits the transfer, then disappears before acknowledging:
 /// the supervisor continues from the durable owner record (a lost ack is not
 /// guessed from EOF) and runs the attempt to its terminal state.
-// trace:STORY-2254.ac0b1daf | ai:claude
+// trace:STORY-b6b1278890774ef993d2ebc327862470-277.ac0b1daf | ai:claude
 #[test]
 fn story_2254_bg_parent_exit_after_transfer_lost_ack_supervisor_continues() {
     let mut h = harness("TASK-2256");
@@ -484,7 +486,7 @@ fn story_2254_bg_parent_exit_after_transfer_lost_ack_supervisor_continues() {
 /// launcher guard dropped after the transfer committed (but before its
 /// disarm) destroys nothing; one dropped while still the owner rolls back
 /// exactly its own grant and reservation.
-// trace:STORY-2254.ac0b1daf | ai:claude
+// trace:STORY-b6b1278890774ef993d2ebc327862470-277.ac0b1daf | ai:claude
 #[test]
 fn story_2254_bg_transfer_before_drop_never_rolls_back() {
     let h = harness("TASK-2257");
@@ -551,7 +553,7 @@ fn story_2254_bg_transfer_before_drop_never_rolls_back() {
 /// supervisor refuses before release (the worker never executes), revokes
 /// its own grant, and the scope the corrupt receipt names stays held until
 /// it is explicitly retired as provably dead.
-// trace:STORY-2254.ac0b1daf | ai:claude
+// trace:STORY-b6b1278890774ef993d2ebc327862470-277.ac0b1daf | ai:claude
 #[test]
 fn story_2254_bg_lost_or_corrupt_receipt_is_unknown_not_acceptance() {
     let mut h = harness("TASK-2259");
@@ -592,7 +594,7 @@ fn story_2254_bg_lost_or_corrupt_receipt_is_unknown_not_acceptance() {
 }
 
 /// A bootstrap killed before release is a failed launch, never acceptance.
-// trace:STORY-2254.ac0b1daf | ai:claude
+// trace:STORY-b6b1278890774ef993d2ebc327862470-277.ac0b1daf | ai:claude
 #[test]
 fn story_2254_bg_killed_bootstrap_is_not_acceptance() {
     let mut h = harness("TASK-2260");
@@ -622,7 +624,7 @@ fn story_2254_bg_killed_bootstrap_is_not_acceptance() {
 
 /// Strict authorship: a ledger append that cannot persist refuses the launch
 /// before release, rolling back exactly the attempt's own grant.
-// trace:STORY-2254.ac0b1daf | ai:claude
+// trace:STORY-b6b1278890774ef993d2ebc327862470-277.ac0b1daf | ai:claude
 #[test]
 fn story_2254_bg_strict_authorship_write_failure_refuses_before_exec() {
     let mut h = harness("TASK-2261");
@@ -657,7 +659,7 @@ fn story_2254_bg_strict_authorship_write_failure_refuses_before_exec() {
 /// A registry (handle/row) write failure after the ledger landed rolls back
 /// exactly: the worker never runs, its own grant is revoked, the receipt is
 /// released, and the lease is kept for re-entry.
-// trace:STORY-2254.ac0b1daf | ai:claude
+// trace:STORY-b6b1278890774ef993d2ebc327862470-277.ac0b1daf | ai:claude
 #[test]
 fn story_2254_bg_registry_failure_rolls_back_exactly() {
     let mut h = harness("TASK-2262");
@@ -688,7 +690,7 @@ fn story_2254_bg_registry_failure_rolls_back_exactly() {
 /// Terminal cleanup is a generation compare-update: once another owner
 /// (an explicit recovery) holds the attempt, the old supervisor's final
 /// write is refused and never clobbers the newer record.
-// trace:STORY-2254.ac0b1daf | ai:claude
+// trace:STORY-b6b1278890774ef993d2ebc327862470-277.ac0b1daf | ai:claude
 #[test]
 fn story_2254_bg_generation_cas_cleanup_never_clobbers() {
     let mut h = harness("TASK-2263");
@@ -720,7 +722,7 @@ fn story_2254_bg_generation_cas_cleanup_never_clobbers() {
 /// Before acceptance, no hook can arm a mail wake on the registered row,
 /// even one that names a native thread: a detached exec lane's wake is
 /// `unsupported`, and arming needs an accepted, pending row.
-// trace:STORY-2254.ac0b1daf | ai:claude
+// trace:STORY-b6b1278890774ef993d2ebc327862470-277.ac0b1daf | ai:claude
 #[test]
 fn story_2254_bg_pre_acceptance_hook_cannot_arm_wake() {
     let mut h = harness("TASK-2264");
@@ -771,8 +773,9 @@ fn story_2254_bg_pre_acceptance_hook_cannot_arm_wake() {
 /// worktree, or one left in the dead worker's process group, blocks it; an
 /// unrecorded start identity is unknown; nothing is revoked on refusal; once
 /// everything is provably gone, the very next call reconciles.
-// trace:STORY-2254.ac0b1daf | ai:claude
+// trace:STORY-b6b1278890774ef993d2ebc327862470-277.ac0b1daf | ai:claude
 #[test]
+#[cfg(target_os = "linux")]
 fn story_2254_bg_recover_launch_fresh_scan_fails_closed() {
     let h = harness("TASK-2265");
     let own = own_process_chain();
@@ -853,7 +856,7 @@ fn story_2254_bg_recover_launch_fresh_scan_fails_closed() {
 
 /// The occupancy scan itself fails closed on an unreadable process table or
 /// an unreadable process of this user.
-// trace:STORY-2254.ac0b1daf | ai:claude
+// trace:STORY-b6b1278890774ef993d2ebc327862470-277.ac0b1daf | ai:claude
 #[test]
 fn story_2254_bg_occupancy_scan_unreadable_is_unknown() {
     let tmp = tempfile::tempdir().unwrap();
@@ -893,7 +896,7 @@ fn story_2254_bg_occupancy_scan_unreadable_is_unknown() {
 
 /// `aida agent launch-status` and `aida agent recover-launch` through the
 /// CLI dispatcher, from inside the project.
-// trace:STORY-2254.ac0b1daf | ai:claude
+// trace:STORY-b6b1278890774ef993d2ebc327862470-277.ac0b1daf | ai:claude
 #[test]
 fn story_2254_bg_launch_status_and_recover_launch_cli() {
     if !crate::test_env::run_path_isolated_test() {
@@ -930,7 +933,7 @@ fn story_2254_bg_launch_status_and_recover_launch_cli() {
 /// Exec corroboration: an exit before the vendor is observed, or a process
 /// that never becomes the expected executable, is a failure; the vendor
 /// executable at the worker PID is acceptance.
-// trace:STORY-2254.ac0b1daf | ai:claude
+// trace:STORY-b6b1278890774ef993d2ebc327862470-277.ac0b1daf | ai:claude
 #[test]
 fn story_2254_bg_corroborate_exec_outcomes() {
     let sleep = canonical_program("sleep");
@@ -959,8 +962,9 @@ fn story_2254_bg_corroborate_exec_outcomes() {
 /// The dispatcher's abort stops the gated worker only when it is provably
 /// the supervisor's own child leading its own group, then kills and reaps
 /// the supervisor; a foreign process is never signalled.
-// trace:STORY-2254.ac0b1daf | ai:claude
+// trace:STORY-b6b1278890774ef993d2ebc327862470-277.ac0b1daf | ai:claude
 #[test]
+#[cfg(target_os = "linux")]
 fn story_2254_bg_abort_kills_owned_barrier_and_reaps_supervisor() {
     let spawn_fake_supervisor = || {
         let mut child = std::process::Command::new("sh")
@@ -1014,8 +1018,9 @@ fn story_2254_bg_abort_kills_owned_barrier_and_reaps_supervisor() {
 /// Terminal cleanup signals the worker's group while the exited leader is
 /// still an unreaped zombie (its pid, and so the group id, cannot be reused
 /// by an unrelated process), then reaps it.
-// trace:STORY-2254.ac0b1daf | ai:claude
+// trace:STORY-b6b1278890774ef993d2ebc327862470-277.ac0b1daf | ai:claude
 #[test]
+#[cfg(target_os = "linux")]
 fn story_2254_bg_until_exit_signals_group_before_reaping_leader() {
     let h = harness("TASK-2267");
     let mut leader = std::process::Command::new("sh")
@@ -1056,5 +1061,40 @@ fn story_2254_bg_until_exit_signals_group_before_reaping_leader() {
         (r.phase, r.terminal.unwrap().code),
         (Phase::Exited, Some(0))
     );
+    drop(h.env);
+}
+
+/// The normal exit runs the same occupancy scan as `recover-launch` before
+/// it releases the scope: a process left running in the worktree (outside
+/// the worker's group, so the exit signal never reaches it) keeps the scope
+/// held as recovery-required instead of a clean exit.
+// trace:STORY-b6b1278890774ef993d2ebc327862470-277.ac0b1daf | ai:claude
+#[test]
+fn story_2254_bg_until_exit_holds_scope_while_worktree_occupied() {
+    let h = harness("TASK-2268");
+    let mut lingerer = std::process::Command::new("sleep")
+        .arg("30")
+        .current_dir(&h.worktree)
+        .process_group(0)
+        .spawn()
+        .unwrap();
+    let leader = std::process::Command::new("true")
+        .process_group(0)
+        .spawn()
+        .unwrap();
+    let worker = ProcId {
+        pid: leader.id(),
+        start: aida_core::liveness::process_start_identity(leader.id()).unwrap(),
+    };
+    h.transfer(&h.me, &worker);
+    let init = h.init(h.sleep_worker("1"));
+    supervise_until_exit(&h.dir, &h.attempt, &init, &h.me, &worker, leader, None).unwrap();
+    let r = h.receipt();
+    let _ = lingerer.kill();
+    let _ = lingerer.wait();
+    assert_eq!(r.phase, Phase::RecoveryRequired);
+    assert!(r.phase.holds_scope(), "the scope stays held");
+    let reason = r.reason.unwrap_or_default();
+    assert!(reason.contains("not provably over"), "{reason}");
     drop(h.env);
 }

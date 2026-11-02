@@ -68,7 +68,7 @@ fn issue(root: &Path) -> (SeatGrant, DetachedLaunchCapability) {
 }
 
 // trace:STORY-2254 | ai:claude
-// trace:STORY-2254.ac3769a0 | ai:claude
+// trace:STORY-b6b1278890774ef993d2ebc327862470-277.ac3769a0 | ai:claude
 #[test]
 fn story_2254_bg_own_grant_binds_own_child_once() {
     let tmp = tempfile::tempdir().unwrap();
@@ -111,7 +111,7 @@ fn story_2254_bg_own_grant_binds_own_child_once() {
 }
 
 // trace:STORY-2254 | ai:claude
-// trace:STORY-2254.ac3769a0 | ai:claude
+// trace:STORY-b6b1278890774ef993d2ebc327862470-277.ac3769a0 | ai:claude
 #[test]
 fn story_2254_bg_bind_refuses_unreceived_foreign_pid_and_reused_start() {
     let tmp = tempfile::tempdir().unwrap();
@@ -152,7 +152,7 @@ fn story_2254_bg_bind_refuses_unreceived_foreign_pid_and_reused_start() {
 }
 
 // trace:STORY-2254 | ai:claude
-// trace:STORY-2254.ac3769a0 | ai:claude
+// trace:STORY-b6b1278890774ef993d2ebc327862470-277.ac3769a0 | ai:claude
 #[test]
 fn story_2254_bg_parent_revocation_and_child_revocation_fail_closed() {
     let tmp = tempfile::tempdir().unwrap();
@@ -176,7 +176,7 @@ fn story_2254_bg_parent_revocation_and_child_revocation_fail_closed() {
 }
 
 // trace:STORY-2254 | ai:claude
-// trace:STORY-2254.ac3769a0 | ai:claude
+// trace:STORY-b6b1278890774ef993d2ebc327862470-277.ac3769a0 | ai:claude
 #[test]
 fn story_2254_bg_issuance_requires_delegation() {
     let tmp = tempfile::tempdir().unwrap();

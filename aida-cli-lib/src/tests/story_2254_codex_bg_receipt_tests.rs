@@ -69,7 +69,7 @@ fn story_2254_runtime_dir_and_receipts_are_private() {
 }
 
 // trace:STORY-2254 | ai:claude
-// trace:STORY-2254.ac0b1daf | ai:claude
+// trace:STORY-b6b1278890774ef993d2ebc327862470-277.ac0b1daf | ai:claude
 #[test]
 fn story_2254_bg_two_same_scope_one_admitted_and_terminal_frees() {
     let f = fixture();
@@ -113,7 +113,7 @@ fn story_2254_bg_two_same_scope_one_admitted_and_terminal_frees() {
 /// cannot be read blocks every scope only while something may still run for
 /// its attempt; a provably dead one is retired explicitly, kept as evidence.
 // trace:STORY-2254 | ai:claude
-// trace:STORY-2254.ac0b1daf | ai:claude
+// trace:STORY-b6b1278890774ef993d2ebc327862470-277.ac0b1daf | ai:claude
 #[test]
 #[cfg(target_os = "linux")]
 fn story_2254_bg_corrupt_receipt_never_frees_scope() {
@@ -186,7 +186,7 @@ fn story_2254_bg_corrupt_receipt_never_frees_scope() {
 /// Terminal receipts are bounded by age and count; a receipt that still
 /// holds its scope, or an unknown one, is never pruned.
 // trace:STORY-2254 | ai:claude
-// trace:STORY-2254.ac0b1daf | ai:claude
+// trace:STORY-b6b1278890774ef993d2ebc327862470-277.ac0b1daf | ai:claude
 #[test]
 fn story_2254_bg_terminal_receipt_retention_is_bounded() {
     let f = fixture();
@@ -228,7 +228,7 @@ fn story_2254_bg_terminal_receipt_retention_is_bounded() {
 }
 
 // trace:STORY-2254 | ai:claude
-// trace:STORY-2254.ac0b1daf | ai:claude
+// trace:STORY-b6b1278890774ef993d2ebc327862470-277.ac0b1daf | ai:claude
 #[test]
 fn story_2254_bg_owner_transfer_is_a_compare_update() {
     let f = fixture();
@@ -287,7 +287,7 @@ fn story_2254_bg_owner_transfer_is_a_compare_update() {
 }
 
 // trace:STORY-2254 | ai:claude
-// trace:STORY-2254.ac3769a0 | ai:claude
+// trace:STORY-b6b1278890774ef993d2ebc327862470-277.ac3769a0 | ai:claude
 #[test]
 fn story_2254_receipt_holds_no_secrets_or_env() {
     let f = fixture();
@@ -330,7 +330,7 @@ fn write_scope_lease(root: &Path, id: &str, scope: &str) {
 /// never runs); the dispatcher's own lease write is exempt; and a detached
 /// admission checks live leases inside the same lock, so whichever of the two
 /// takes the lock first wins and the other refuses.
-// trace:STORY-2254.ac0b1daf | ai:claude
+// trace:STORY-b6b1278890774ef993d2ebc327862470-277.ac0b1daf | ai:claude
 #[test]
 fn story_2254_bg_cross_route_admission_is_checked_inside_the_lock() {
     let f = fixture();
@@ -383,7 +383,7 @@ fn story_2254_bg_cross_route_admission_is_checked_inside_the_lock() {
 
 /// Every route that writes a lease, or offers to resume into a scope,
 /// consults the shared admission record (source ratchet).
-// trace:STORY-2254.ac0b1daf | ai:claude
+// trace:STORY-b6b1278890774ef993d2ebc327862470-277.ac0b1daf | ai:claude
 #[test]
 fn story_2254_bg_every_lease_route_consults_admission() {
     let session_start = include_str!("../session_start.rs");
