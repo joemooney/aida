@@ -559,3 +559,73 @@ fn bug_2397_install_failures_and_runtime_status_use_stub_manager() {
     let error = systemctl(&["daemon-reload"]).unwrap_err();
     assert!(format!("{error:#}").contains("systemctl --user daemon-reload"));
 }
+
+// End to end for a hand-started Codex seat (`aida session start` then
+// `codex`): its SessionStart hook's row arms, mail to its handle queues
+// exactly one notification, and ending the session retires the row.
+// trace:STORY-2256 | ai:claude
+#[test]
+fn story_2256_hand_started_codex_session_arms_wakes_once_and_retires() {
+    let r = mail_repo();
+    let state = tempfile::tempdir().unwrap();
+    crate::mailbox_store::write_message(&r.sib, &mail("to-handle", "codex-agent-02", 10, false))
+        .unwrap();
+    // The row as a hand-started session's own SessionStart hook writes it:
+    // no launcher, no mail-wake decision, the hook's exact thread id.
+    let path = register_self(&r.main, "codex-agent-02", None);
+    let mut row: toml::Table = toml::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+    row.remove("native_session_id");
+    row.insert(
+        "claude_session_id".into(),
+        toml::Value::String(THREAD.into()),
+    );
+    row.insert(
+        "source".into(),
+        toml::Value::String("session-start-hook".into()),
+    );
+    std::fs::write(&path, toml::to_string(&row).unwrap()).unwrap();
+    let entry: AgentRegistryEntry =
+        toml::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+    assert_eq!(entry.mail_wake, None);
+
+    let installs = std::cell::Cell::new(0);
+    let armed = crate::mail_wake::arm_session(
+        &r.main,
+        &entry,
+        None,
+        || None,
+        |_| {
+            installs.set(installs.get() + 1);
+            Ok(())
+        },
+    )
+    .unwrap();
+    assert_eq!(armed.state, MailWake::Armed);
+    assert_eq!(installs.get(), 1, "the hook installs the missing service");
+    let on_disk: AgentRegistryEntry =
+        toml::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+    assert_eq!(on_disk.mail_wake, Some(MailWake::Armed));
+    assert_eq!(row_thread(&on_disk).as_deref(), Some(THREAD));
+
+    let queue = FakeQueue::ok();
+    let opts = options(&r, state.path());
+    let lock = WatchLock::acquire(state.path(), &r.main).unwrap();
+    let watcher = own("operator", None);
+    let reports = run_once(&opts, &lock, &watcher, &queue);
+    assert_eq!(reports.len(), 1, "{reports:?}");
+    let tick = reports[0]
+        .tick
+        .as_ref()
+        .unwrap_or_else(|| panic!("{reports:?}"));
+    assert!(tick.queue_submitted);
+    assert_eq!(tick.ids, vec!["to-handle"]);
+    run_once(&opts, &lock, &watcher, &queue);
+    assert_eq!(queue.sent.borrow().len(), 1, "exactly one notification");
+
+    let ended = crate::agent_registry::mark_agent_ended(&r.main, "codex", std::process::id())
+        .unwrap()
+        .unwrap();
+    assert_eq!(ended.mail_wake, Some(MailWake::Retired));
+    assert!(run_once(&opts, &lock, &watcher, &queue).is_empty());
+    assert_eq!(queue.sent.borrow().len(), 1);
+}

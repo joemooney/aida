@@ -860,6 +860,14 @@ pub(crate) fn ensure_service(project: &Path) -> Result<()> {
     }
 }
 
+/// Whether AIDA's watcher unit for `project` is installed (unit file
+/// presence, as `wake-service status` reports `installed`).
+// trace:STORY-2256 | ai:claude
+pub(crate) fn service_installed(project: &Path) -> bool {
+    std::fs::read_to_string(unit_path(&unit_name(project)))
+        .is_ok_and(|text| text.starts_with(&format!("# {UNIT_MARKER}\n")))
+}
+
 fn install_unit(path: &Path, name: &str, text: &str) -> Result<()> {
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)?;

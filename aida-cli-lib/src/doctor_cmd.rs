@@ -1058,6 +1058,15 @@ fn doctor_multi_agent(opts: DoctorRunOptions) -> Result<()> {
         findings.sort_by(|a, b| a.category.cmp(&b.category).then(a.id.cmp(&b.id)));
     }
 
+    // STORY-2256: live Codex agents with no mail-wake service installed. The
+    // default run reads only the registry and one unit file; the full
+    // `check codex-mail-wake` scan stays on its own light path.
+    // trace:STORY-2256 | ai:claude
+    if doctor_category_selected(opts.category.as_deref(), crate::codex_mail_health::CATEGORY)? {
+        findings.extend(crate::codex_mail_health::service_findings(&project_root));
+        findings.sort_by(|a, b| a.category.cmp(&b.category).then(a.id.cmp(&b.id)));
+    }
+
     // STORY-HOME-128: mail backlog (opt-in append path: only when --category
     // is explicitly passed, like lane-liveness). trace:STORY-HOME-128 | ai:claude
     if opts.category.is_some()

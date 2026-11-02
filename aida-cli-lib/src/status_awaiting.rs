@@ -1294,15 +1294,30 @@ pub(crate) fn notice_hook_session(
     (session_id, is_session_start)
 }
 
-/// Arm the mail wake a session's launch asked for, now that the session's
-/// thread is on its registry row. Warns, never blocks or fails the session.
+/// Arm the session's mail wake now that its thread is on its registry row:
+/// the one its launch asked for, or, for a Codex session started any other
+/// way, the `[agents.codex] mail_wake` default. Warns, never blocks or fails
+/// the session.
 // trace:STORY-HOME-096 BUG-B6B1278890774EF993D2EBC327862470-151 | ai:claude
+// trace:STORY-2256 | ai:claude
 fn arm_launch_mail_wake(
     project_root: &std::path::Path,
     entry: &agent_registry::AgentRegistryEntry,
 ) {
-    let armed =
-        crate::mail_wake::arm_pending(project_root, entry, crate::mailbox_wake_run::ensure_service);
+    let launcher = std::env::var(crate::mail_wake::LAUNCH_WAKE_ENV).ok();
+    let armed = crate::mail_wake::arm_session(
+        project_root,
+        entry,
+        launcher.as_deref(),
+        || {
+            crate::agent_config::load_agents_tool_bool(project_root, "codex", "mail_wake")
+                .unwrap_or_else(|why| {
+                    eprintln!("warning: {why:#}; mail wake uses the default");
+                    None
+                })
+        },
+        crate::mailbox_wake_run::ensure_service,
+    );
     if let Some(warning) = armed.and_then(|a| a.warning) {
         eprintln!("warning: {warning}");
     }
