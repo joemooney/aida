@@ -13,12 +13,12 @@ description: |
   3. Fixture regression: search for canonical166 returns unrelated057 first and true166 later; only166 selected. Unrelated-only rows give no associated PR so ordinary fresh pickup is not blocked. Existing true-open-PR collision and renamed/native/agreed ID cases still protect active work.
 
   Codex implementation lane, no global config changes. LIGHT one targeted pr_lookup/association test plus fast gates; fixtures only, CI full gate. Independent review before integration. This is a new observed operational defect, not a follow-up to a nonblocking review nit.
-status: InProgress
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T08:28:54.983776375Z
-modified_at: 2026-11-02T00:00:00.985351739Z
+modified_at: 2026-11-02T01:22:50.953772750Z
 req_type: Bug
 tags:
 - forge
@@ -344,6 +344,25 @@ history:
   timestamp: 2026-11-01T23:42:33.306976916Z
   session_id: 126bbd5a-a92f-452b-ab0b-2637a1db42c2
   changes: []
+- id: 01a199da-1dc3-70a2-a4fe-db8181e0a95c
+  author: aida-auto-bump
+  timestamp: 2026-11-02T01:22:50.947579305Z
+  session_id: 126bbd5a-a92f-452b-ab0b-2637a1db42c2
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a199da-1dc9-7760-a990-5c706e00cd4c
+  timestamp: 2026-11-02T01:22:50.953769252Z
+  agent: aida
+  commit_sha: c067486e71c1e17737eeeb31a078ce98cce11b1d
+  summary: 'Round 5: all round-4 findings resolved. One batched GraphQL read decides commit evidence (live: 13 open PRs in 1.0s, all complete/head-bound), so absence and full duplicate enumeration are reachable; single lookup short-circuits; -N/dated session branches match again. AC1-AC3 covered by bug_2400_* tests; CI green at exact head (run 41364769526). merge-hold-gate red is the supervised-hold policy gate, not a code defect.'
+  punted:
+  - 'punted: Exact association core fixed; all-open fallback enumeration and typed commit-query errors remain incomplete (AC1/AC2).'
+  - 'punted: Shared lookup and typed failures improved; commit-page completeness and aggregate timeout remain incomplete.'
+  - 'punted: Paging and production resolver improved; positive commit matches still bypass head/snapshot validation (AC1/AC2).'
+  review_verdict: approved
 execution_mode: drain
 filed_at:
   code_sha: ac1e318069f96c3f7e35be7ee0408f2ff4f5f284
@@ -352,3 +371,7 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: 9d26f95d2b3
   vendor: codex
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-02T01:22:50.947573498Z
+  completion_sha: c067486e71c1e17737eeeb31a078ce98cce11b1d
