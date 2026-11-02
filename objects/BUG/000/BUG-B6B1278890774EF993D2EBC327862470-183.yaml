@@ -1,0 +1,24 @@
+id: 01a19c4c-0d2b-7fd0-90b4-189bdb6fb410
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-183
+agreed_id: BUG-2414
+title: The 10s unbudgeted test-time gate fails CI on unrelated tests at about 10.0s under runner load, ejecting train members
+description: 'Observed 2026-11-01/02: PR #3226 cli-0 (bug_046_padded_id_cli edit_comment... 11.0s), train #3252 cli-0 (story_164_single_hub single_hub_clones_claim_by_cas... 10.0s), #3192 lib-0 (own test 16.3s, real). All tests passed; only the budget step failed. Two ejections or reruns cost about 40 min. Expected: the budget gate flags only tests the PR touched or added, or uses a tolerance or median over runs for untouched tests; untouched tests near the limit get budget entries.'
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-02T12:46:32.235262603Z
+modified_at: 2026-11-02T12:46:32.235262603Z
+req_type: Bug
+tags:
+- area:ci
+- area:tests
+- from:advisor
+filed_at:
+  code_sha: 5b21d041d218b3030c4878b5cabb862da086026e
+  branch: main
+  dirty: true
+  aida_version: 0.16.0
+  aida_build_sha: 6a3f67671a9
+  vendor: claude
+  session: 1f56bd1e-c059-4f73-b8df-e18b2170fdfc
