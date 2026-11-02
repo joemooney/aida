@@ -11,7 +11,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T09:05:27.409838422Z
-modified_at: 2026-11-02T01:33:04.941503727Z
+modified_at: 2026-11-02T01:48:54.275233656Z
 req_type: Task
 tags:
 - architecture
@@ -186,6 +186,13 @@ comments:
   created_at: 2026-11-02T00:41:29.819821141Z
   modified_at: 2026-11-02T00:41:29.819821141Z
   session_id: 126bbd5a-a92f-452b-ab0b-2637a1db42c2
+- id: 01a199f1-f883-7df3-8ac5-402e45dbbcc5
+  author: joe
+  content: 'Round 4 at 4fd97c76e78 fixes all five 4781d45 findings: (1) required-live flags now fail both tracer tests on isolation-unavailable; (3) only nested unshare EPERM/EACCES is host_policy_denied, ENOSPC there is host_resource_limit, mount/unmount failures are ordinary refusals; (4) isolation object and refusal documented in docs/cli/07-project-setup.md; (5) state=available once preflight passes, and preflight and lane share run_owned. (2) Required-live run at this head is pending the advisor, per ruling. Implementer gap: the targeted task_2705_ test and make check-ci-fast were NOT completed locally, because the cold aida-cli-lib build exceeds the headless 60s-per-call limit and detached builds were refused. rustfmt is clean; CI is the first compile.'
+  created_at: 2026-11-02T01:48:54.275233656Z
+  modified_at: 2026-11-02T01:48:54.275233656Z
+  session_id: 01a199e37773
+  harness_version: 2.1.316 (Claude Code)
 history:
 - id: 01a1965b-7cae-7260-83dd-5767f6772d90
   author: joe
