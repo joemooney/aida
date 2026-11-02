@@ -193,6 +193,14 @@ pub(crate) fn codex_sessions_root() -> Option<PathBuf> {
             return Some(PathBuf::from(trimmed));
         }
     }
+    // Codex itself keeps its sessions under `$CODEX_HOME` when that is set.
+    // trace:TASK-2731 | ai:claude
+    if let Ok(codex_home) = std::env::var("CODEX_HOME") {
+        let trimmed = codex_home.trim();
+        if !trimmed.is_empty() {
+            return Some(PathBuf::from(trimmed).join("sessions"));
+        }
+    }
     crate::home_dir().map(|home| home.join(".codex").join("sessions"))
 }
 
@@ -290,6 +298,30 @@ mod tests {
 
         assert_eq!(snap.source, Some("codex_rollout"));
         assert!(snap.last_activity.is_some());
+    }
+
+    /// The sessions tree follows `$CODEX_HOME` the way Codex does; the
+    /// explicit AIDA override still wins.
+    // trace:TASK-2731 | ai:claude
+    #[test]
+    fn codex_sessions_root_honours_codex_home() {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut env = crate::test_env::EnvVarsGuard::apply(&[
+            ("AIDA_CODEX_SESSIONS_DIR", None),
+            ("CODEX_HOME", tmp.path().join("ch").to_str()),
+        ]);
+        assert_eq!(
+            codex_sessions_root(),
+            Some(tmp.path().join("ch").join("sessions"))
+        );
+        env.set_key("AIDA_CODEX_SESSIONS_DIR", tmp.path().join("explicit"));
+        assert_eq!(codex_sessions_root(), Some(tmp.path().join("explicit")));
+        env.unset_key("AIDA_CODEX_SESSIONS_DIR");
+        env.set_key("CODEX_HOME", "  ");
+        assert_ne!(
+            codex_sessions_root(),
+            Some(PathBuf::from("  ").join("sessions"))
+        );
     }
 
     #[test]
