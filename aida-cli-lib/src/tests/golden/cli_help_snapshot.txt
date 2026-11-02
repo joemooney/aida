@@ -2423,9 +2423,12 @@ the queue, close delivered epics). Subcommands manage the live-advisor registrat
 Usage: aida advisor [OPTIONS] [COMMAND]
 
 Commands:
-  register    Record the current Claude session as the live advisor — writes `~/.aida/advisor.toml`.
-              With no `--uuid`, reads `CLAUDE_CODE_SESSION_ID` from the environment (Claude Code
-              sets it on every session). Pass `--uuid <id>` to register a specific session id
+  register    Record the current Claude or Codex session as the live advisor — writes
+              `~/.aida/advisor.toml`. With no `--uuid`, reads `CODEX_THREAD_ID` (a Codex thread,
+              which `advisor watch` forks with `codex exec fork`), else `CLAUDE_CODE_SESSION_ID`
+              (Claude Code sets it on every session). A Codex session started from a Claude session
+              inherits both, and the Codex thread is the one running here. Pass `--uuid <id>` to
+              register a specific session id, with `--vendor codex` for a Codex thread
   unregister  Clear the registration. Idempotent — succeeds even when nothing is registered
   watch       Presence-gated fork-from-live watch loop: while `away`, fork the live advisor only
               when `aida awaiting` is non-empty and run a garden + mailbox-triage + escalate pass
@@ -2468,15 +2471,22 @@ Options:
   -h, --help
           Print help (see a summary with '-h')
 ===== aida advisor register
-Record the current Claude session as the live advisor — writes `~/.aida/advisor.toml`. With no
-`--uuid`, reads `CLAUDE_CODE_SESSION_ID` from the environment (Claude Code sets it on every
-session). Pass `--uuid <id>` to register a specific session id
+Record the current Claude or Codex session as the live advisor — writes `~/.aida/advisor.toml`. With
+no `--uuid`, reads `CODEX_THREAD_ID` (a Codex thread, which `advisor watch` forks with `codex exec
+fork`), else `CLAUDE_CODE_SESSION_ID` (Claude Code sets it on every session). A Codex session
+started from a Claude session inherits both, and the Codex thread is the one running here. Pass
+`--uuid <id>` to register a specific session id, with `--vendor codex` for a Codex thread
 
 Usage: aida advisor register [OPTIONS]
 
 Options:
       --uuid <UUID>
-          Claude session UUID. Defaults to `$CLAUDE_CODE_SESSION_ID`
+          Session id. Defaults to `$CODEX_THREAD_ID`, else `$CLAUDE_CODE_SESSION_ID`
+
+      --vendor <VENDOR>
+          Vendor of the `--uuid` session: `claude` (default) or `codex`
+          
+          [possible values: claude, codex]
 
       --project-slug <SLUG>
           Override the cwd-derived project slug. Rare — the default is derived from the current
@@ -5760,6 +5770,8 @@ Commands:
                directory. Run once, on the primary clone
   upstream     Show or declare this clone's upstream: the one git remote it claims ID blocks from. A
                store mirror is never an upstream, and the root has none
+  hub          Manage the store's hubs: the writable git servers block claims are ordered on. A
+               store with more than one hub needs an enrolled root
   help         Print this message or the help of the given subcommand(s)
 
 Options:
@@ -6387,6 +6399,75 @@ Arguments:
 Options:
       --clear
           Remove the declared upstream (this clone issues node-local IDs)
+
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida node hub
+Manage the store's hubs: the writable git servers block claims are ordered on. A store with more
+than one hub needs an enrolled root
+
+Usage: aida node hub [OPTIONS] <COMMAND>
+
+Commands:
+  add   Register another writable hub and grant it ID pools. Run on the allocation root (refused
+        without one: `aida node enroll-root`). Declares the hub under [store.hubs] in
+        .aida/config.toml (commit and push that), and grants the hub a pool per ID type in use,
+        disjoint from every ID issued so far, pushed to the root's hub. Clones of the new hub set it
+        as their upstream and claim blocks from its pools
+  help  Print this message or the help of the given subcommand(s)
+
+Options:
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida node hub add
+Register another writable hub and grant it ID pools. Run on the allocation root (refused without
+one: `aida node enroll-root`). Declares the hub under [store.hubs] in .aida/config.toml (commit and
+push that), and grants the hub a pool per ID type in use, disjoint from every ID issued so far,
+pushed to the root's hub. Clones of the new hub set it as their upstream and claim blocks from its
+pools
+
+Usage: aida node hub add [OPTIONS] --url <URL> <NAME>
+
+Arguments:
+  <NAME>
+          Hub name (letters, digits, `-`, `_`), e.g. `gitlab`
+
+Options:
+      --url <URL>
+          The hub's git URL (ssh, https or a local path)
+
+      --size <SIZE>
+          IDs per type to grant the hub
+          
+          [default: 1000]
 
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
@@ -19232,10 +19313,10 @@ Usage: aida config permissions probe [OPTIONS] --vendor <VENDOR>
 
 Options:
       --vendor <VENDOR>
-          
+          Vendor whose containment capability to trace (claude, codex, or opencode)
 
       --json
-          
+          Emit machine-readable JSON
 
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
@@ -31818,7 +31899,7 @@ Working on aida itself
       "advisor",
       "register"
     ],
-    "about": "Record the current Claude session as the live advisor — writes `~/.aida/advisor.toml`. With no `--uuid`, reads `CLAUDE_CODE_SESSION_ID` from the environment (Claude Code sets it on every session). Pass `--uuid <id>` to register a specific session id",
+    "about": "Record the current Claude or Codex session as the live advisor — writes `~/.aida/advisor.toml`. With no `--uuid`, reads `CODEX_THREAD_ID` (a Codex thread, which `advisor watch` forks with `codex exec fork`), else `CLAUDE_CODE_SESSION_ID` (Claude Code sets it on every session). A Codex session started from a Claude session inherits both, and the Codex thread is the one running here. Pass `--uuid <id>` to register a specific session id, with `--vendor codex` for a Codex thread",
     "flags": [
       {
         "name": "canonical-ids",
@@ -31843,7 +31924,12 @@ Working on aida itself
       {
         "name": "uuid",
         "takes_value": true,
-        "help": "Claude session UUID. Defaults to `$CLAUDE_CODE_SESSION_ID`"
+        "help": "Session id. Defaults to `$CODEX_THREAD_ID`, else `$CLAUDE_CODE_SESSION_ID`"
+      },
+      {
+        "name": "vendor",
+        "takes_value": true,
+        "help": "Vendor of the `--uuid` session: `claude` (default) or `codex`"
       }
     ],
     "hidden": false
@@ -35919,6 +36005,69 @@ Working on aida itself
         "name": "help",
         "takes_value": false,
         "help": "Print help (see more with '--help')"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "node",
+      "hub"
+    ],
+    "about": "Manage the store's hubs: the writable git servers block claims are ordered on. A store with more than one hub needs an enrolled root",
+    "flags": [
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "node",
+      "hub",
+      "add"
+    ],
+    "about": "Register another writable hub and grant it ID pools. Run on the allocation root (refused without one: `aida node enroll-root`). Declares the hub under [store.hubs] in .aida/config.toml (commit and push that), and grants the hub a pool per ID type in use, disjoint from every ID issued so far, pushed to the root's hub. Clones of the new hub set it as their upstream and claim blocks from its pools",
+    "flags": [
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "size",
+        "takes_value": true,
+        "help": "IDs per type to grant the hub"
+      },
+      {
+        "name": "url",
+        "takes_value": true,
+        "help": "The hub's git URL (ssh, https or a local path)"
       }
     ],
     "hidden": false
@@ -48864,12 +49013,12 @@ Working on aida itself
       {
         "name": "json",
         "takes_value": false,
-        "help": ""
+        "help": "Emit machine-readable JSON"
       },
       {
         "name": "vendor",
         "takes_value": true,
-        "help": ""
+        "help": "Vendor whose containment capability to trace (claude, codex, or opencode)"
       }
     ],
     "hidden": true

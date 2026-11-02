@@ -661,7 +661,7 @@ does not apply AIDA's tool rules, write boundaries or network allowlist.
 #### Model-free containment tracer
 
 `aida config permissions probe --vendor codex --json` runs a closed Linux
-filesystem/supervisor diagnostic in fresh synthetic state. `claude` and
+filesystem/supervisor and egress/local-IPC diagnostic in fresh synthetic state. `claude` and
 `opencode` also have shipped capability descriptors; this does not launch those
 programs. The probe accepts no command, executable override, state path or
 stored shell. It reads policy from a pinned trusted default-branch commit and
@@ -670,8 +670,9 @@ never changes global settings or credentials.
 The JSON `status` is `ready`, `unsupported` (unknown vendor descriptor), or
 `refused` with a cause. A refusal exits nonzero. **Ready means only the fixed
 tracer passed.** `ordinary_launch_supported` and `aida_containment_applied`
-remain false, and `remaining_protections` names the unfinished egress/local-IPC,
-grant, native-composition and vendor-lifecycle work. Existing Claude and native
+remain false, and `remaining_protections` names unfinished protections. After
+both synthetic lanes pass, grant, native-composition and vendor-lifecycle work
+remain. Existing Claude and native
 Codex launch behavior remains as described above.
 
 The tracer uses pinned required mounts, read-only system paths, a read-only
@@ -685,6 +686,40 @@ not reach the lane. The supervisor bounds channels and execution, reaps its
 wrapper, and verifies namespace-init teardown after a lingering descendant.
 Interactive launch is not exposed; its future shared preflight requires
 `dev.tty.legacy_tiocsti=0`.
+
+The second lane runs in another unshared network namespace. A host-owned
+typed CONNECT channel permits one exact synthetic fixture host and ephemeral
+port; its host-only resolver pins the checked numeric address. The loopback
+fixture exception is built into the diagnostic and cannot be requested by the
+child or configured as a production exemption. Negative controls cover empty
+policies, mismatched Host authorities, IP literals, ports, protocols and private
+or rebinding DNS answers. No external service or model is contacted. These are
+host-granular tunnels; an allowed host could itself relay traffic. This is not
+URL or content filtering.
+
+On the deployed Landlock ABI 8 host, an embedded fixed Python/ctypes fixture
+installs seccomp notification filtering after namespace setup. The host broker
+copies a bounded sockaddr once, validates the notification and pins the private
+socket inode before connecting through its own descriptor. It injects only that
+approved connected socket with `NOTIF_ADDFD SETFD` and returns the connect
+result, never `CONTINUE`. Pointer, fd-slot, symlink and rename races cannot
+select another host endpoint. Private endpoint access is deliberately limited
+to the fixture's own socket; this is not yet a general vendor IPC adapter.
+Host-service controls sit on a separate read-only mount, preventing their
+inodes from being moved or linked into the private runtime. Host D-Bus, SSH,
+Codex-daemon and abstract-socket controls must remain unreachable. Internet,
+datagram and netlink sockets, io_uring and inherited host sockets are denied.
+
+The current broker fixture requires Linux x86-64, seccomp user notifications,
+`NOTIF_ADDFD SETFD`, pidfds and access to the notifying child's memory.
+Missing facilities refuse. On Landlock ABI 9 or newer it names the required
+Landlock Unix-connect backend and refuses rather than selecting the older
+broker branch. No ordinary vendor is enabled by this slice. The supervisor
+captures namespace identity behind a startup barrier, binds helper lifetime to
+its parent and verifies teardown after broker/proxy failure before or after
+readiness, timeouts, and the nested-userns preflight timeout. The
+`task_2706_egress_ipc_live` regression has no skip path.
+<!-- trace:TASK-2706 TASK-2735 | ai:codex -->
 
 The JSON report also carries an `isolation` object describing whether the host
 lets the lane build its nested user-namespace layer. Before the full lane, the
@@ -710,7 +745,7 @@ failure, never evidence; unflagged runs assert the typed refusal instead):
 
 ```sh
 AIDA_REQUIRE_BWRAP_LIVE=1 AIDA_REQUIRE_CODEX_CONTAINMENT_LIVE=1 \
-  cargo test -p aida-cli-lib --profile agent task_2705_ -- --nocapture
+  cargo test -p aida-cli-lib --lib --profile agent containment::tests -- --nocapture
 ```
 
 This does not establish actual vendor authentication, grants, Git/store/cache

@@ -700,3 +700,82 @@ fn a_block_stamped_for_the_later_reached_hub_stays_spendable() {
         })
     );
 }
+
+// STORY-170: the pool the root grants a second hub is disjoint from every
+// block issued before the grant (and from the floor of issued numbers), a
+// later grant to the same type starts above it, and the root's own pools
+// stay conflict-free with the grant recorded.
+// trace:STORY-B6B1278890774EF993D2EBC327862470-170 | ai:claude
+#[test]
+fn a_hub_grant_is_disjoint_from_every_pre_grant_block() {
+    let blocks = vec![
+        block(ROOT, "BUG", 1, 100, Some("hub:github:BUG")),
+        block(LEAF, "BUG", 101, 200, Some("hub:github:BUG")),
+        block(LEAF, "BUG", 5000, 5099, None),
+    ];
+    let mut pools = pools_to_materialize(&[], &blocks, ROOT);
+    // The floor is the highest number any spec, block or counter holds.
+    let grant = hub_child_pool("gitlab", &pools[0], &pools, &blocks, 5099, 1000).unwrap();
+    assert_eq!(grant.pool_id, "hub:gitlab:BUG");
+    assert_eq!(grant.parent_pool_id.as_deref(), Some("hub:github:BUG"));
+    assert_eq!(grant.home_ref, "gitlab/aida-store");
+    assert_eq!((grant.range_start, grant.range_end), (5100, 6099));
+    for b in &blocks {
+        assert!(
+            b.range_end < grant.range_start || b.range_start > grant.range_end,
+            "{b:?} overlaps {grant:?}"
+        );
+    }
+    pools.push(grant);
+    let r = root();
+    assert!(check_invariants(&pools, &blocks, Some(&r)).is_empty());
+    assert_eq!(granted_ceiling(&pools, "bug"), 6099);
+    assert!(hub_grant(&pools, "gitlab", "BUG").is_some());
+    assert!(
+        hub_grant(&pools, "github", "BUG").is_none(),
+        "a root pool is no grant"
+    );
+    // A second grant of the type starts above the first even at a low floor.
+    let next = hub_child_pool("airgap", &pools[0], &pools, &blocks, 0, 10).unwrap();
+    assert_eq!((next.range_start, next.range_end), (6100, 6109));
+}
+
+// STORY-170: a clone of the granted hub carves its blocks from the grant's
+// free space and spends them through the remote reaching that hub, with its
+// upstream set to it; the claim must be on that hub's store ref.
+// trace:STORY-B6B1278890774EF993D2EBC327862470-170 | ai:claude
+#[test]
+fn a_clone_of_the_granted_hub_claims_and_spends_inside_the_grant() {
+    let root_blocks = vec![block(ROOT, "BUG", 1, 100, Some("hub:github:BUG"))];
+    let mut pools = pools_to_materialize(&[], &root_blocks, ROOT);
+    let grant = hub_child_pool("gitlab", &pools[0], &pools, &root_blocks, 100, 1000).unwrap();
+    pools.push(grant.clone());
+    let (start, end) = carve_block(&grant, &pools, &root_blocks, 10).unwrap();
+    assert_eq!((start, end), (101, 110));
+    let mut blocks = root_blocks.clone();
+    blocks.push(block(LEAF, "BUG", start, end, Some("hub:gitlab:BUG")));
+    assert_eq!(carve_block(&grant, &pools, &blocks, 10), Some((111, 120)));
+    let r = root();
+    assert!(check_invariants(&pools, &blocks, Some(&r)).is_empty());
+    let reaches = [HubReach {
+        hub: "gitlab".into(),
+        remote: "origin".into(),
+        on_hub: blocks.clone(),
+    }];
+    let mut v = view(
+        &pools,
+        &blocks,
+        Some(&r),
+        LEAF,
+        AllocationRole::Node,
+        Some("origin"),
+    );
+    v.hub_remotes = &reaches;
+    assert_eq!(v.spendable_block("BUG"), Ok(1));
+    // An exhausted grant carves nothing.
+    let tiny = PoolRecord {
+        range_end: grant.range_start + 9,
+        ..grant
+    };
+    assert_eq!(carve_block(&tiny, &pools, &blocks, 10), None);
+}
