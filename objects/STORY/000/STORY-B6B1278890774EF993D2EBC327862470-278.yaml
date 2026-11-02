@@ -16,12 +16,12 @@ description: |-
 
   ## Notes
   TASK-1308 (deferred) stays the dogfood-wave proof; this story removes the technical gap it cites.
-status: Done
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T04:45:50.173634412Z
-modified_at: 2026-11-02T02:49:51.752609907Z
+modified_at: 2026-11-02T03:15:54.330053404Z
 req_type: Story
 tags:
 - fork
@@ -121,6 +121,15 @@ history:
   timestamp: 2026-11-02T02:49:52.790009065Z
   session_id: 126bbd5a-a92f-452b-ab0b-2637a1db42c2
   changes: []
+- id: 01a19a41-9f5a-76f3-9d93-79400b53863b
+  author: aida-orchestrator
+  timestamp: 2026-11-02T03:15:54.330073174Z
+  session_id: 01a19a3fbe4e
+  harness_version: 2.1.316 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: NeedsAttention
 filed_at:
   code_sha: a83e05d785df667dfa986cf3eb310a3f0637b602
   branch: main
@@ -132,3 +141,11 @@ implementation_info:
   implemented: true
   implemented_at: 2026-11-02T02:12:19.628129981Z
   implemented_by: joe
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'Advisor-watch Codex fork is solid (AC3/4/5/6 verified; codex 0.166 parses the composed argv), but AC1 ''and the product fork path'' is unmet: the punt tier still cold-boots Codex, and the AC1/AC2 log lines are untested. AC1 partial (watch verified by codex_tick_forks_the_registered_thread_without_touching_it; product path missing); AC2 verified by plan_codex_fork_names_every_fallback_reason + codex_tick_cold_boots_without_a_thread_or_exec_fork, printed line unverified; AC3 verified by fixture rollout byte-identity; AC4 verified by contained_fork_uses_the_native_posture_without_bypass; AC5 verified by seat-parity.md rows 14/18; AC6 verified by unchanged Claude branch + existing advisor.rs plan_fork tests + legacy_registration_stays_a_claude_fork.'
+  recovery_hint: address the review findings, move STORY-2255 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-11-02T03:15:54.330053404Z
