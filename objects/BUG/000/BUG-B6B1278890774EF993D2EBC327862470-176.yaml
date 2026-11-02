@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T10:12:04.230556201Z
-modified_at: 2026-11-02T11:43:16.360584186Z
+modified_at: 2026-11-02T11:45:28.715673740Z
 req_type: Bug
 tags:
 - alias
@@ -164,6 +164,12 @@ comments:
   content: 'Additional observed alias case PR3194 at 2c786c12: normal canonical approval ledger#14 has release_grant; same-origin phase3#15 lacks it; subsequent friendly normal #16 has it. Root lawful auto-release still refuses the canonical refusal at6b1 because selected canonical#15 lacks record-time provenance. Contrasts PR3185 where final friendly normal#24 allowed supported release. No ledger edits/clearance bypass. Fresh independent supported canonical-without-pr last decision requested, permanent sketch must preserve both alias selection and same-origin receipt semantics.'
   created_at: 2026-11-01T12:29:22.570980903Z
   modified_at: 2026-11-01T12:29:22.570980903Z
+- id: 01a19c14-268b-70a2-b0b4-751d39764d94
+  author: joe
+  content: 'ADVISOR RULING (2026-11-02 04:46 MST) on the PR #3253 review: do not split this bug and do not open follow-up PRs. Complete the remaining scope IN THIS PR: Required behavior 1-2 and signoff amendments 1-3 and 6-8 (canonical vs friendly alias selection of retained verdicts, rework-finding replay, recurrence guard, and the rest of the signed list), on top of the slice-1 code the review judged correct (amendments 4 and 5). Keep the (BUG-2403) trailer. Gate: LIGHT with targeted cargo tests for the review-verdict and gate-ledger modules, then make check-ci-fast. If cargo is denied, push and say so; the advisor host-runs the filter before the strict delta review.'
+  created_at: 2026-11-02T11:45:28.715673740Z
+  modified_at: 2026-11-02T11:45:28.715673740Z
+  session_id: 1f56bd1e-c059-4f73-b8df-e18b2170fdfc
 history:
 - id: 01a196a4-b6bb-7730-a79a-e4a546bf516d
   author: joe
