@@ -35926,6 +35926,69 @@ Working on aida itself
   {
     "path": [
       "aida",
+      "node",
+      "hub"
+    ],
+    "about": "Manage the store's hubs: the writable git servers block claims are ordered on. A store with more than one hub needs an enrolled root",
+    "flags": [
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "node",
+      "hub",
+      "add"
+    ],
+    "about": "Register another writable hub and grant it ID pools. Run on the allocation root (refused without one: `aida node enroll-root`). Declares the hub under [store.hubs] in .aida/config.toml (commit and push that), and grants the hub a pool per ID type in use, disjoint from every ID issued so far, pushed to the root's hub. Clones of the new hub set it as their upstream and claim blocks from its pools",
+    "flags": [
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "size",
+        "takes_value": true,
+        "help": "IDs per type to grant the hub"
+      },
+      {
+        "name": "url",
+        "takes_value": true,
+        "help": "The hub's git URL (ssh, https or a local path)"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
       "status"
     ],
     "about": "Show \"where am I right now\" — unified view of session, branch, PR/CI, queue, cache, and project state. Spiritual cousin of `git status`: one screen, no flag-guessing",
