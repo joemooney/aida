@@ -23,12 +23,12 @@ description: |-
   1. Resolve `[agents] vendor` (and render `$aida-*` or `aida pr create` when vendor is Codex) across `worktree_gc.rs`, `queue_cmd.rs`, `dispatch_health_ps.rs`, `supervise_cmd.rs`, `mandate_drive.rs`, `session_reap.rs`, and `workflow_hints.rs`.
   2. Resolve default `--judge-vendor` in `aida compete` from `[agents] vendor`, implement `compete::ask_ai_argv` for Codex (`codex exec --sandbox read-only`), and surface Codex session rollouts in `aida status`.
   3. Add unit tests verifying Codex output when `[agents] vendor = "codex"`.
-status: InProgress
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T06:49:16.503535709Z
-modified_at: 2026-11-02T06:56:24.929121968Z
+modified_at: 2026-11-02T13:16:22.949653665Z
 req_type: Bug
 tags:
 - audit
@@ -198,6 +198,21 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a19c67-601d-7320-8088-114ce10b2977
+  author: aida-auto-bump
+  timestamp: 2026-11-02T13:16:22.941820007Z
+  session_id: ee0bf351-6b17-486f-a38e-cfbb1343c426
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a19c67-6025-7523-acb8-e099d7a6ba17
+  timestamp: 2026-11-02T13:16:22.949648717Z
+  agent: aida
+  commit_sha: bb8b4b88db0af0af5874f572498594a2730e3a61
+  summary: BUG-2396 all 3 ACs met; all 6 round-2 findings fixed in 1eedd88 (launch_vendor continuation, enabled-only codex hint_vendor + test, skill-render args note, main-checkout resolution, dead code removed, subdir=shell). CI green at 85842ab (cli-0/1, lib-0/1, contracts, gates, rest); merge-hold-gate red is the supervised hold only.
+  review_verdict: approved
 execution_mode: drain
 filed_at:
   code_sha: 6dc7d4977ac5e47c42ddfb26597fe3ec5fb70b60
@@ -211,4 +226,6 @@ implementation_info:
   implemented: true
   implemented_at: 2026-11-02T05:09:39.197391578Z
   implemented_by: joe
+  completed_at: 2026-11-02T13:16:22.941813156Z
+  completion_sha: bb8b4b88db0af0af5874f572498594a2730e3a61
   reopened_at_sha: 952552f2b786703862676a2bfc233082a538f09f
