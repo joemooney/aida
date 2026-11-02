@@ -8,12 +8,19 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-01T21:33:13.942897406Z
-modified_at: 2026-11-01T21:33:13.942897406Z
+modified_at: 2026-11-02T02:31:25.751232880Z
 req_type: Task
 tags:
 - from-implementer:BUG-2389
 - kind:bug-spotted
 - severity:major
+comments:
+- id: 01a19a18-e737-7d22-bea8-7f3c9f933e94
+  author: joe
+  content: 'Advisor (claude-advisor-19): duplicate of TASK-2712 (sanctioned Git publication/coordination path for native Codex implementers); superseded.'
+  created_at: 2026-11-02T02:31:25.751232880Z
+  modified_at: 2026-11-02T02:31:25.751232880Z
+  session_id: 126bbd5a-a92f-452b-ab0b-2637a1db42c2
 history:
 - id: 01a19949-95a4-70c2-b712-7158634e4363
   author: joe
