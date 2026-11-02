@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-13T02:20:29.388195286Z
-modified_at: 2026-07-20T04:46:44.284935406Z
+modified_at: 2026-11-02T22:35:05.730125598Z
 req_type: Task
 tags:
 - followup-src:docs/plans/2026-07-12-story-711-advisor-lock.md
@@ -16,6 +16,13 @@ relationships:
 - rel_type: Child
   target_id: 019f07d3-ee11-7843-a845-dcab6e951cdf
   created_at: 2026-07-13T02:20:31.342203905Z
+comments:
+- id: 01a19e66-e482-74c3-b228-b23373bdcf0c
+  author: joe
+  content: 'ADVISOR REGROUP (2026-11-02 15:40): closing. Empty description; cross-clone lock policy belongs in SPIKE-88 / regroup target 5.'
+  created_at: 2026-11-02T22:35:05.730125598Z
+  modified_at: 2026-11-02T22:35:05.730125598Z
+  session_id: ee0bf351-6b17-486f-a38e-cfbb1343c426
 deferred: true
 deferred_at: 2026-07-20T04:46:44.284935406Z
 deferred_until: a real cross-clone lock collision is observed (its own stated condition)
