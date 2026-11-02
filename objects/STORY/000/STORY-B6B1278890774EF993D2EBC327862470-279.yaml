@@ -18,7 +18,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T04:46:21.481096158Z
-modified_at: 2026-11-02T00:45:30.144839465Z
+modified_at: 2026-11-02T00:49:22.685438868Z
 req_type: Story
 tags:
 - mail-wake
@@ -40,6 +40,37 @@ comments:
     Concrete EXISTING-STORY recovery defect: lib_part1.rs::rewrite_agent_default_new KNOWN_SUBCOMMANDS1444..1450 omits hidden Wake despite AgentCommand::Wake being real agent_launch_args1028/agent_launch369. Thus documented aida agent wake arm/retire rewrites to agent new wake and exit2 unknownsubcommand. aida agent help wake renders real command; leading GLOBAL --format toon prevents erroneousrewrite and executescorrecthandlerWITHallownershipchecks. Bundle parser passthrough+actualCLIregression into this EXISTINGSTORY2256, notnewfollowupchain; retaindefault-new,hiddenwake,self-vs-other/humanauthority andexactthreadbinding floors. Do not claim currentserviceabsence fromWAKE=- or idle fromthatcolumn. No sourceedited byroot.
   created_at: 2026-11-01T15:12:37.744608193Z
   modified_at: 2026-11-01T15:12:37.744608193Z
+- id: 01a199bb-78fd-70f0-879f-c5bbbc5d6c48
+  author: joe
+  content: |-
+    ## Implementer approach
+
+    ### Acceptance criteria as tests
+    1. **Unit (mail_wake_tests):** a hook-written Codex row with no mail_wake adopts `pending` and arms on its recorded thread; `[agents.codex] mail_wake = false` adopts `off`; the launcher's `AIDA_MAIL_WAKE=off` (set by `agent new --no-mail-wake`) wins even when the hook writes first; claude rows untouched.
+    2. **Unit:** ensure_service refusal leaves the adopted row `failed` with the one manual command (existing arm_pending path, now reached by hand-started rows).
+    3. **Unit (codex_mail_health):** a live Codex row (not off/unsupported) + no unit file => `codex-mail-wake:service-not-installed` finding with the install command; added to default `aida doctor` and to `check codex-mail-wake`.
+    4. **Unit:** `session_start_wake_line` for codex vendor (installed / not installed / off); claude prints nothing; wired into the BUG-2379 Next: block.
+    5. **Fixture (mailbox_wake_run_tests):** hand-started row (source session-start-hook, hook session id) -> arm_session -> `armed`; one run_once with mail to its handle => exactly one FakeQueue submission, second pass none; mark_agent_ended => `retired`, watcher skips it.
+    6. **Docs:** docs/agents/codex-mail-wake.md covers hand-launched seats.
+    Also bundled per comment: `aida agent wake arm|retire` (and `describe`) are passthrough in rewrite_agent_default_new, with a test that every agent subcommand is passthrough.
+
+    ### Expected files
+    - aida-cli-lib/src/mail_wake.rs, mail_wake_tests.rs
+    - aida-cli-lib/src/agent_registry.rs (adopt_mail_wake_on_row)
+    - aida-cli-lib/src/status_awaiting.rs (hook)
+    - aida-cli-lib/src/agent_launch.rs (child env)
+    - aida-cli-lib/src/codex_mail_health.rs, doctor_cmd.rs, mailbox_wake_run.rs (+tests)
+    - aida-cli-lib/src/session_start.rs
+    - aida-cli-lib/src/lib_part1.rs + agent_launcher_tests.rs
+    - docs/agents/codex-mail-wake.md
+
+    ### Ambiguities / conflicts as questions
+    - Codex version check for hand-started sessions: the hook does not spawn `codex --version` (it would add up to 5s to session start); a hook firing implies a Codex with hooks. Unknown version arms, matching launch_wake(None).
+    - Already-live Codex rows from before this change arm on their next SessionStart, not mid-session; the new doctor finding covers the gap.
+  created_at: 2026-11-02T00:49:22.685438868Z
+  modified_at: 2026-11-02T00:49:22.685438868Z
+  session_id: 01a199b7e840
+  harness_version: 2.1.316 (Claude Code)
 history:
 - id: 01a1956e-3853-7f43-9567-c23a3a329cab
   author: joe

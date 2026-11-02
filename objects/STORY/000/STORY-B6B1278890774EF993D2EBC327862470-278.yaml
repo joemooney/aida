@@ -21,7 +21,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T04:45:50.173634412Z
-modified_at: 2026-11-02T00:48:10.735977395Z
+modified_at: 2026-11-02T00:51:17.764724848Z
 req_type: Story
 tags:
 - fork
@@ -31,6 +31,33 @@ relationships:
 - rel_type: Child
   target_id: 01a19499-932e-79f0-a3e1-1299dfe355ad
   created_at: 2026-11-01T04:46:03.455974823Z
+comments:
+- id: 01a199bd-3a84-7263-b58e-4fa38bc4f4e9
+  author: joe
+  content: |-
+    ## Implementer approach
+
+    ### Acceptance criteria as tests
+    - **AC1, unit + command-level:** `plan_codex_fork` returns Fork{thread} for a Codex registration on a fork-capable codex; `codex_exec_fork_args` turns `codex exec --json … PROMPT` into `codex exec fork --json … <thread> PROMPT`; an advisor_watch test with a fake codex (AIDA_AGENT_CMD) captures argv `exec fork … <thread> <prompt>` and the stdout line names the forked thread.
+    - **AC2, unit:** `plan_codex_fork` returns ColdBoot(reason) for: no registration, a Claude registration, empty thread id, codex lacking `exec fork` (probe `codex exec fork --help`), fork_mode=never. advisor_watch prints exactly one `cold-booting … : <reason>` line.
+    - **AC3, fixture:** the fake-codex test seeds a fixture `CODEX_HOME/sessions/.../rollout-*-<thread>.jsonl`, runs the forked tick, and asserts the file bytes are identical (AIDA never copies or writes the live rollout; the fork is codex-native).
+    - **AC4, unit:** contained fork argv drops `--dangerously-bypass-approvals-and-sandbox` and carries the codex contained flags, by routing the fork through the same `headless_vendor_args` posture then rewriting `exec`→`exec fork`.
+    - **AC5, docs:** seat-parity rows 14/18 rewritten; row 18 → Works with `aida advisor register` (from Codex) + `AIDA_HEADLESS_VENDOR=codex aida advisor watch --once`.
+    - **AC6, regression unit:** Claude registration still produces a Claude JSONL ForkPlan; registration TOML without `vendor` deserializes as Claude.
+
+    ### Expected files
+    - `aida-cli-lib/src/advisor.rs` (registration vendor field, `plan_codex_fork`)
+    - `aida-cli-lib/src/advisor_watch.rs` (Codex fork branch, dry-run preview)
+    - `aida-cli-lib/src/advisor_cmd_root.rs` (register reads CODEX_THREAD_ID when no Claude session id)
+    - `aida-cli-lib/src/session.rs` (fork argv rewrite, capability probe, fork-aware spawn)
+    - `docs/agents/seat-parity.md`
+
+    ### Ambiguities / conflicts as questions
+    - There is no separate product-seat fork launcher in the code; the only fork sites are advisor watch and the orchestrator punt tier. Is "the product fork path" meant to be the punt tier? Lean: ship advisor watch, keep row 14 Degraded naming the missing product launcher, and file the punt-tier wiring as a follow-up rather than widen this change.
+  created_at: 2026-11-02T00:51:17.764724848Z
+  modified_at: 2026-11-02T00:51:17.764724848Z
+  session_id: 01a199ba5b90
+  harness_version: 2.1.316 (Claude Code)
 history:
 - id: 01a1956d-d26a-7a83-9ddc-67ed991509ed
   author: joe
@@ -51,6 +78,12 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a199ba-9552-7e81-bca3-6219af687145
+  author: joe
+  timestamp: 2026-11-02T00:48:24.402322204Z
+  session_id: 01a199ba5b90
+  harness_version: 2.1.316 (Claude Code)
+  changes: []
 filed_at:
   code_sha: a83e05d785df667dfa986cf3eb310a3f0637b602
   branch: main
