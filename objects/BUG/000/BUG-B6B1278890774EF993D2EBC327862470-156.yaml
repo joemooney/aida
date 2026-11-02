@@ -13,12 +13,12 @@ description: |
   1. A session started with `aida session start --owns <ID>` and then joined by an interactive codex (or claude) process in that clone/worktree reads `live` in `aida ps` while the agent runs. Re-bind it on the agent's first AIDA call or hook, or use the vendor activity adapter (STORY-1054), for example the Codex session's rollout file mtime or a process whose cwd is the clone.
   2. A process-dead verdict that rests only on the creator pid never emits a salvage recipe while a vendor process has the clone as its cwd. In that case it says "unbound agent in clone" and names the pid.
   3. Tests: a creator pid that exited plus a live vendor process in the clone gives live; no vendor process gives the current salvageable output (regression).
-status: InProgress
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T02:22:11.107502056Z
-modified_at: 2026-11-02T04:38:02.522440417Z
+modified_at: 2026-11-02T06:41:28.052886812Z
 req_type: Bug
 tags:
 - area:agents
@@ -167,6 +167,21 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a19afd-d1ee-7d11-b7f5-3cdca40d92c4
+  author: aida-auto-bump
+  timestamp: 2026-11-02T06:41:28.046276249Z
+  session_id: 1f56bd1e-c059-4f73-b8df-e18b2170fdfc
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a19afd-d1f4-7a10-b871-1ffe26e0d68b
+  timestamp: 2026-11-02T06:41:28.052882089Z
+  agent: aida
+  commit_sha: cea120d24320359fed368eebdaad08363f38506b
+  summary: 'BUG-2382 AC1-3 met: aida ps probes claude+codex so a hand-started codex in the clone reads live; a /proc cwd backstop turns salvageable into ''unbound agent/process in clone — pid N'' with no salvage recipe and prunes the orphan row; tests cover live + regression. All 7 CI jobs green at abd353b (merge-hold-gate is the supervised hold, not a defect). Non-blocking: worktree GC / stale classification / session_start remain claude-only (carried round-2 follow-up).'
+  review_verdict: approved
 execution_mode: drain
 filed_at:
   code_sha: 7518617e469376bbe5debebd7cadd980e08656e5
@@ -180,3 +195,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-11-02T01:23:14.725518619Z
   implemented_by: joe
+  completed_at: 2026-11-02T06:41:28.046268361Z
+  completion_sha: cea120d24320359fed368eebdaad08363f38506b
