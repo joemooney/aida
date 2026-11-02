@@ -349,7 +349,9 @@ fn queue_fixture(
         .unwrap();
     }
     std::fs::create_dir_all(main_root.join(".aida")).unwrap();
-    let conn = rusqlite::Connection::open(main_root.join(".aida/cache.db")).unwrap();
+    let cache_path = aida_core::db::project_cache_path(&main_root);
+    std::fs::create_dir_all(cache_path.parent().unwrap()).unwrap();
+    let conn = rusqlite::Connection::open(&cache_path).unwrap();
     conn.execute_batch(
         "CREATE TABLE requirements_cache (id TEXT PRIMARY KEY, agreed_id TEXT, \
          spec_id TEXT, title TEXT NOT NULL, status TEXT NOT NULL);",

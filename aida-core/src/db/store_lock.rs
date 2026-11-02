@@ -456,6 +456,9 @@ mod tests {
         let lock_info = super::super::cache_lock::cache_lock_info_path(
             &crate::CachedGitBackend::default_cache_path(&root),
         );
+        // The lock-info sidecar lives in the cache directory, which a fresh
+        // project has not created yet.
+        std::fs::create_dir_all(lock_info.parent().unwrap()).unwrap();
         let seen = (chrono::Utc::now() - chrono::Duration::hours(10)).to_rfc3339();
         let info = super::super::cache_lock::CacheLockInfo {
             pid: 19,

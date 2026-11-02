@@ -3245,20 +3245,10 @@ pub(crate) fn force_cleanup_lease(project_root: &std::path::Path, lease: &Sessio
     if store_link.is_symlink() {
         let _ = std::fs::remove_file(&store_link);
     }
-    let aida_dir = lease.worktree_path.join(".aida");
-    for runtime in &[
-        "sessions",
-        "roles",
-        "cache.db",
-        "cache.db-shm",
-        "cache.db-wal",
-        "pgdata",
-    ] {
-        let p = aida_dir.join(runtime);
-        if p.is_symlink() {
-            let _ = std::fs::remove_file(&p);
-        }
-    }
+    // TASK-2707: the shared strip (current links, `agents`, and the legacy
+    // per-file cache links) instead of a private copy of the list.
+    // trace:TASK-2707 | ai:claude
+    crate::worktree_gc::unlink_worktree_aida_runtime(&lease.worktree_path.join(".aida"));
 
     // `git worktree remove --force` — `--force` because the dirty-tree
     // refusal in `session_end` is gated by interactive prompts; an

@@ -162,8 +162,10 @@ fn tick_and_cache_refresh_run_concurrently_without_deadlock() {
     let _env = crate::test_env::EnvVarGuard::set("AIDA_HISTORY_CACHE", "1");
     let fx = Fixture::new();
     fx.append(1);
+    // TASK-2707: the cache directory exists once the cache has been opened.
+    aida_core::db::ensure_project_cache_dir(fx.root.path());
     let lock = aida_core::db::cache_refresh::RefreshLock::try_acquire(
-        &fx.root.path().join(".aida/cache.db"),
+        &aida_core::db::project_cache_path(fx.root.path()),
     )
     .unwrap()
     .unwrap();
@@ -291,7 +293,7 @@ fn history_cli_dispatch_skips_requirements_cache_and_busy_exits_zero() {
         .unwrap()
         .unwrap();
     drop(lock);
-    assert!(!fx.root.path().join(".aida/cache.db").exists());
+    assert!(!aida_core::db::project_cache_path(fx.root.path()).exists());
     for args in [
         vec!["aida", "cache", "refresh", "--if-behind"],
         vec!["aida", "cache", "refresh", "--history", "--worker"],

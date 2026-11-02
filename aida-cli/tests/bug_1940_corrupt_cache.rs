@@ -111,7 +111,8 @@ fn fixture() -> Fixture {
 }
 
 fn cache_path(fixture: &Fixture) -> PathBuf {
-    fixture.repo.join(".aida/cache.db")
+    // TASK-2707: the cache lives in its own directory.
+    fixture.repo.join(".aida/cache-db/cache.db")
 }
 
 /// The reported shape: the FTS table's shadow config table is gone, so every
@@ -125,7 +126,7 @@ fn break_fts(fixture: &Fixture) {
 }
 
 fn quarantined(fixture: &Fixture) -> Vec<String> {
-    let mut names: Vec<String> = std::fs::read_dir(fixture.repo.join(".aida"))
+    let mut names: Vec<String> = std::fs::read_dir(fixture.repo.join(".aida/cache-db"))
         .unwrap()
         .filter_map(|e| e.ok())
         .map(|e| e.file_name().to_string_lossy().to_string())
@@ -252,13 +253,13 @@ fn a_locked_healthy_cache_is_not_quarantined() {
     ok(&aida(&fx, &["cache", "verify"]));
 }
 
-/// Hold the cache refresh lock (`.aida/cache.db.refresh.lock`, a flock) from
+/// Hold the cache refresh lock (`.aida/cache-db/cache.db.refresh.lock`, a flock) from
 /// another process, as a concurrent refresh would.
 struct HeldRefreshLock(std::process::Child);
 
 impl HeldRefreshLock {
     fn hold(fixture: &Fixture) -> Self {
-        let lock = fixture.repo.join(".aida/cache.db.refresh.lock");
+        let lock = fixture.repo.join(".aida/cache-db/cache.db.refresh.lock");
         let ready = fixture.repo.join(".aida/lock-held");
         // `--close`: the lock fd is not inherited by the `sh`/`sleep` child,
         // so killing `flock` itself releases the lock.

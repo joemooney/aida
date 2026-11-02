@@ -873,25 +873,6 @@ fn persist_wal(conn: &Connection) {
     }
 }
 
-/// Open the cache at `path` once (when it exists) so its persistent WAL
-/// sidecars exist before a contained session is launched with file binds on
-/// them. Best effort; a missing or unopenable cache is left alone.
-// trace:BUG-1929 | ai:claude
-pub fn prime_cache_sidecars(path: &Path) {
-    if !path.is_file() {
-        return;
-    }
-    let lock_info_path = cache_lock_info_path(path);
-    if let Ok(conn) = open_connection_inner(path, &lock_info_path) {
-        let _ = conn.close();
-    }
-}
-
-/// The SQLite sidecars a contained session's sandbox binds individually.
-// trace:BUG-1929 | ai:claude
-pub const CACHE_SANDBOX_SIDECARS: [&str; 4] =
-    ["-wal", "-shm", ".refresh.lock", ".refresh-request.lock"];
-
 /// True when the error chain carries a sqlite result code from the CORRUPTION
 /// class — the file exists but isn't a valid sqlite database. `NotADatabase`
 /// (SQLITE_NOTADB, 26) is the "header is not a sqlite header" case that a
@@ -1589,6 +1570,12 @@ impl Cache {
     }
 
     fn open_at(path: PathBuf, allow_fallback: bool) -> Result<Self> {
+        // TASK-2707: a project cache path moves its `.aida` out of the legacy
+        // layout before the open, so nothing ever opens the legacy file.
+        // trace:TASK-2707 | ai:claude
+        if let Some(aida_dir) = super::cache_location::aida_dir_of_cache_path(&path) {
+            super::cache_location::migrate_legacy_cache_layout(aida_dir);
+        }
         if let Some(parent) = path.parent() {
             std::fs::create_dir_all(parent)
                 .with_context(|| format!("Failed to create cache parent dir: {:?}", parent))?;
@@ -8352,27 +8339,6 @@ mod tests {
         }
         let reopened = Cache::open(&path).unwrap();
         assert!(!reopened.is_read_only());
-    }
-
-    // BUG-1929: priming a cache that exists leaves its sidecars in place; a
-    // missing cache is not created.
-    // trace:BUG-1929 | ai:claude
-    #[test]
-    fn prime_cache_sidecars_creates_sidecars_only_for_an_existing_cache() {
-        let dir = tempdir().unwrap();
-        let missing = dir.path().join("missing").join("cache.db");
-        prime_cache_sidecars(&missing);
-        assert!(!missing.exists());
-
-        let path = dir.path().join("cache.db");
-        drop(Cache::open(&path).unwrap());
-        for suffix in ["-wal", "-shm"] {
-            let _ = std::fs::remove_file(format!("{}{suffix}", path.display()));
-        }
-        prime_cache_sidecars(&path);
-        for suffix in ["-wal", "-shm"] {
-            assert!(Path::new(&format!("{}{suffix}", path.display())).exists());
-        }
     }
 
     // BUG-1929: a read-only cache DIRECTORY with writable database and WAL

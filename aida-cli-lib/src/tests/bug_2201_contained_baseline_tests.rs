@@ -31,7 +31,8 @@ fn outside_project_fixture() -> (tempfile::TempDir, PathBuf, PathBuf) {
         r#"{"hooks":{"PreToolUse":[]}}"#,
     )
     .unwrap();
-    std::fs::write(main.join(".aida/cache.db"), b"").unwrap();
+    std::fs::create_dir_all(aida_core::db::cache_dir_in(&main.join(".aida"))).unwrap();
+    std::fs::write(aida_core::db::project_cache_path(&main), b"").unwrap();
     let gitdir = main.join(".git/worktrees/relay-pr-96");
     std::fs::create_dir_all(&gitdir).unwrap();
     std::fs::write(gitdir.join("commondir"), "../..\n").unwrap();
@@ -96,7 +97,7 @@ fn outside_project_reviewer_reads_its_worktree_and_the_main_store() {
     for path in [
         worktree.join("bin/relay.sh"),
         main.join(".aida-store/objects/TASK/000/TASK-119.yaml"),
-        main.join(".aida/cache.db"),
+        aida_core::db::project_cache_path(&main),
     ] {
         assert!(
             allowed(&settings, "Read", &path, elsewhere, elsewhere),

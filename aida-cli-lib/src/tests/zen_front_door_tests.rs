@@ -9,7 +9,7 @@ use tempfile::TempDir;
 #[test]
 fn free_text_thought_files_a_draft_then_would_drive_it() {
     let tmp = TempDir::new().unwrap();
-    let db_path = tmp.path().join(".aida").join("cache.db");
+    let db_path = aida_core::db::project_cache_path(&tmp.path());
     std::fs::create_dir_all(db_path.parent().unwrap()).unwrap();
     let storage = Storage::new(db_path);
 
@@ -38,7 +38,7 @@ fn free_text_thought_files_a_draft_then_would_drive_it() {
 #[test]
 fn ai_drafted_thought_files_acceptance_criteria() {
     let tmp = TempDir::new().unwrap();
-    let db_path = tmp.path().join(".aida").join("cache.db");
+    let db_path = aida_core::db::project_cache_path(&tmp.path());
     std::fs::create_dir_all(db_path.parent().unwrap()).unwrap();
     let storage = Storage::new(db_path);
 

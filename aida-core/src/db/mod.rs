@@ -11,6 +11,9 @@ mod cache;
 mod cache_binding;
 #[cfg(feature = "native")]
 mod cache_lock;
+// trace:TASK-2707 | ai:claude
+#[cfg(feature = "native")]
+mod cache_location;
 #[cfg(feature = "native")]
 pub mod cache_refresh;
 #[cfg(feature = "native")]
@@ -38,11 +41,17 @@ mod yaml_backend;
 #[cfg(feature = "native")]
 pub use cache::{
     cache_lock_info_path, compute_blocked, compute_degrees, edge_weight, expected_cache_status,
-    fast_fail_cache_enabled, is_cache_corruption_error, is_cache_lock_error, prime_cache_sidecars,
+    fast_fail_cache_enabled, is_cache_corruption_error, is_cache_lock_error,
     prune_quarantined_cache_files, quarantine_cache_files, read_cache_lock_info,
     set_fast_fail_cache, sort_summaries_natural_id, status_divergences, tag_cache_corruption,
     ArchiveFilter, Cache, CacheCorruption, CacheLockInfo, DeferFilter, Degrees, ListFilter,
-    RequirementSummary, SortOrder, StatusDivergence, CACHE_SANDBOX_SIDECARS, QUARANTINE_KEEP,
+    RequirementSummary, SortOrder, StatusDivergence, QUARANTINE_KEEP,
+};
+#[cfg(feature = "native")]
+pub use cache_location::{
+    aida_dir_of_cache_path, cache_dir_in, ensure_project_cache_dir, migrate_legacy_cache_layout,
+    migrated_project_cache_path, project_cache_path, CacheLayoutMigration, CACHE_DIR_NAME,
+    CACHE_FILE_NAME, LEGACY_CACHE_ENTRIES, LEGACY_QUARANTINE_PREFIX,
 };
 #[cfg(feature = "native")]
 pub use cache_lock::{
@@ -120,7 +129,7 @@ pub fn create_backend(
         BackendType::Sqlite => Ok(Box::new(SqliteBackend::new(path)?)),
         BackendType::Git => {
             // Git paths get the cache wrapper automatically (EPIC-1-001).
-            // Cache lives at the project's .aida/cache.db; if probe fails to
+            // Cache lives at the project's .aida/cache-db/cache.db; if probe fails to
             // locate one, falls back to a sibling file next to the store.
             let cache_path = CachedGitBackend::default_cache_path(path);
             Ok(Box::new(CachedGitBackend::open(path, &cache_path)?))
