@@ -13,13 +13,20 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-02T09:06:27.316926390Z
-modified_at: 2026-11-02T09:06:27.316926390Z
+modified_at: 2026-11-02T09:20:14.944508583Z
 req_type: Task
 tags:
 - carried-from:BUG-B6B1278890774EF993D2EBC327862470-178
 - finding-hash:9f89aade
 - from-review:PR-3214
 - kind:carried-forward
+comments:
+- id: 01a19b8f-3060-7d22-b989-40601bc51af2
+  author: joe
+  content: 'ADVISOR RULING (2026-11-02 02:22 MST): accepted as-is, no change. Reason: a handful of live readers per project and small mailboxes keep O(readers x mailbox) cheap; budget exhaustion already reports unknown rather than a wrong answer.'
+  created_at: 2026-11-02T09:20:14.944508583Z
+  modified_at: 2026-11-02T09:20:14.944508583Z
+  session_id: 1f56bd1e-c059-4f73-b8df-e18b2170fdfc
 filed_at:
   code_sha: f7892bcf9b28cd9659cd5461cbb35a64c744ecd0
   branch: main
