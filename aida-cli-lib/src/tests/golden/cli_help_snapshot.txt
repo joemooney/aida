@@ -19242,10 +19242,10 @@ Usage: aida config permissions probe [OPTIONS] --vendor <VENDOR>
 
 Options:
       --vendor <VENDOR>
-          
+          Vendor whose containment capability to trace (claude, codex, or opencode)
 
       --json
-          
+          Emit machine-readable JSON
 
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
@@ -48879,12 +48879,12 @@ Working on aida itself
       {
         "name": "json",
         "takes_value": false,
-        "help": ""
+        "help": "Emit machine-readable JSON"
       },
       {
         "name": "vendor",
         "takes_value": true,
-        "help": ""
+        "help": "Vendor whose containment capability to trace (claude, codex, or opencode)"
       }
     ],
     "hidden": true
