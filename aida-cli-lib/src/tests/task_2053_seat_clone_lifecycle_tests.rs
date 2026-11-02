@@ -1988,6 +1988,67 @@ fn bug_051_bwrap_session_end_ends_a_clone_whose_branch_is_an_ancestor_of_origin(
         .exists());
 }
 
+/// BUG-2415: a seat that pushed with an explicit refspec under a name other
+/// than its lease branch (`HEAD:refs/heads/<other>`) left no tracking ref in
+/// the clone or main, so the refresh fetch of the lease branch finds nothing.
+/// The probe now asks origin for its real branch tips: the pushed commit is on
+/// origin and session end, without `--force`, removes the clone. A commit
+/// origin lacks still counts.
+// trace:BUG-2415 | ai:claude
+#[cfg(target_os = "linux")]
+#[test]
+fn bug_2415_bwrap_session_end_ends_a_clone_pushed_by_explicit_refspec() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    if !bwrap_live() {
+        return;
+    }
+    let fx = fixture();
+    let id = "c0ffee002415";
+    let clone = seat(&fx, "bug2415", id);
+    seat_commit(&clone, "work.txt");
+    let origin = fx.origin.to_str().unwrap();
+    seat_git(
+        &clone,
+        &["push", "-q", origin, "HEAD:refs/heads/published-elsewhere"],
+    );
+    for dir in [&clone, &fx.main] {
+        for tracking in [
+            "refs/remotes/origin/feat",
+            "refs/remotes/origin/published-elsewhere",
+        ] {
+            if ref_exists(dir, tracking) {
+                git_ok(dir, &["update-ref", "-d", tracking]);
+            }
+        }
+    }
+    assert_eq!(known(probe(&fx.main, &clone)).unpushed, 1);
+    let counted = |clone: &Path| {
+        known(crate::seat_clone::probe_counting_origin(
+            &fx.main,
+            clone,
+            Some("feat"),
+            &[],
+            None,
+        ))
+        .unpushed
+    };
+    assert_eq!(counted(&clone), 0, "the pushed commit is on origin");
+
+    seat_commit(&clone, "more.txt");
+    assert_eq!(counted(&clone), 1, "a commit origin lacks still counts");
+    seat_git(
+        &clone,
+        &["push", "-q", origin, "HEAD:refs/heads/published-elsewhere"],
+    );
+
+    let _ambient = crate::test_env::AmbientGuard::hermetic(&fx.main, None);
+    end_session(id, false).unwrap();
+    assert!(!clone.exists());
+    assert!(!crate::lease_path(&fx.main, id).exists());
+}
+
 /// BUG-051: an untracked file refuses session end, and the refusal names it.
 // trace:BUG-B6B1278890774EF993D2EBC327862470-051.ac225260 | ai:claude
 // trace:BUG-B6B1278890774EF993D2EBC327862470-051.Tests | ai:claude

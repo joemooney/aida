@@ -641,6 +641,14 @@ fn drive(mut entry: JournalEntry, opts: &RetireOptions) -> Result<RetireOutcome>
                 let unactivated = match activation_state(&entry.anchor)? {
                     ActivationState::Current => None,
                     ActivationState::Absent => Some(RefusalReason::MailBearingBeforeActivation),
+                    // BUG-2411: another build's record is honoured when a
+                    // fresh scan shows every writer host runs this build.
+                    // trace:BUG-2411 | ai:claude
+                    ActivationState::OtherBuild { .. }
+                        if super::activation::fresh_scan_admits() =>
+                    {
+                        None
+                    }
                     ActivationState::OtherBuild { recorded, this } => {
                         Some(RefusalReason::ActivationForOtherBuild { recorded, this })
                     }

@@ -1474,6 +1474,101 @@ fn bug_2398_codex_advisor_consult_delegates_own_child_and_refuses_without_delega
     crate::session::set_headless_vendor_override(None);
 }
 
+/// BUG-2403 (signoff amendment 8): BUG-2398's recorder-artifact floor holds
+/// through the REMAPPED selectors too. An older friendly-label refusal and a
+/// newer native-label approval of the same requirement: the cross-label
+/// selection answers with the native approval, and that approval earns
+/// positive actionability only when it carries durable independent grant
+/// authority — the absent-grant artifact stays recordable but never
+/// resolves; an invalid presented grant still refuses recording; the
+/// protective refusal is never lost to an unselectable read.
+// trace:BUG-2403 | ai:claude
+#[test]
+fn bug_2403_bug_2398_recorder_artifacts_hold_through_remapped_selectors() {
+    use crate::gate::{review_authority as ra, review_verdict as rv, seat_authority as sa};
+    const FRIENDLY: &str = "TASK-24039";
+    const NATIVE: &str = "TASK-B6B1278890774EF993D2EBC327862470-399";
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    let mut ambient = crate::test_env::AmbientGuard::hermetic_and(
+        root,
+        None,
+        &[
+            ("AIDA_AGENT_NAME", Some("codex-reviewer-fixture")),
+            ("AIDA_AGENT_TYPE", Some("codex")),
+            ("AIDA_SESSION_ID", Some("independent-fixture-reviewer")),
+            ("AIDA_REVIEW_VERDICT_FILE", None),
+            ("AIDA_ROLE_INSTANCE", Some("driver")),
+            ("AIDA_CONTAINED", None),
+        ],
+    );
+    let head = crate::test_git::commit_fixture(root);
+    rv::record_verdict(
+        root,
+        FRIENDLY,
+        Some("request-changes"),
+        Some(&head),
+        Some("main"),
+        Some("older friendly refusal"),
+        &["obsolete finding".to_string()],
+        "ungranted-reviewer",
+    )
+    .unwrap();
+    std::thread::sleep(std::time::Duration::from_millis(15));
+    let record = || {
+        crate::handle_review_record_at(
+            root.to_path_buf(),
+            NATIVE,
+            "approved",
+            Some(&head),
+            Some("main"),
+            Some("actual recorder output"),
+            &[],
+            &[],
+            None,
+        )
+    };
+    let identity = ra::IdentitySource {
+        session_ids: vec!["independent-fixture-reviewer".into()],
+        ..Default::default()
+    };
+    let check = |authorized: bool| {
+        for ids in [[FRIENDLY, NATIVE], [NATIVE, FRIENDLY]] {
+            let v = rv::read_recorded_verdict_any(root, &ids).expect("a selection");
+            assert_eq!(v.kind, rv::VerdictKind::Approved, "{ids:?}");
+            let action =
+                rv::review_actionability(root, NATIVE, Some(&v), rv::TipRelation::AtReviewedSha);
+            assert_eq!(
+                action == rv::ReviewActionability::Resolved,
+                authorized,
+                "{ids:?}: {action:?}"
+            );
+        }
+        assert_eq!(
+            crate::queue_cmd::rework_findings_block_for_spec(root, FRIENDLY, NATIVE),
+            None,
+            "the obsolete friendly refusal's findings are not replayed"
+        );
+    };
+    // The absent-grant named-agent artifact: recordable, never positive.
+    ra::with_identity_source(identity.clone(), record).unwrap();
+    check(false);
+    // An invalid presented grant refuses recording.
+    ambient.set_key(sa::GRANT_ENV, uuid::Uuid::new_v4().to_string());
+    assert!(ra::with_identity_source(identity.clone(), record).is_err());
+    // A durable independent grant: positive through either label order.
+    let grant = sa::test_support::mint_grant_for(
+        root,
+        crate::test_env::HERMETIC_TEST_USER,
+        "reviewer",
+        &[],
+    );
+    ambient.set_key(sa::GRANT_ENV, &grant);
+    std::thread::sleep(std::time::Duration::from_millis(15));
+    ra::with_identity_source(identity, record).unwrap();
+    check(true);
+}
+
 /// How a production file that assigns `AIDA_SESSION_ROLE` to a child Command
 /// gets that role to a Codex child's hooks and tool shells.
 // trace:BUG-2395 | ai:claude

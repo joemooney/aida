@@ -748,6 +748,55 @@ fn r3_f4_a_mail_bearing_retirement_names_the_other_build_that_recorded() {
     );
 }
 
+/// BUG-2411: a dev rebuild changes the source build, so the recorded
+/// activation names another one. When a fresh scan shows every mail writer
+/// host runs this build, the retirement honours the record without anyone
+/// re-recording, and preserves the delivered mail; the record is not
+/// rewritten. Without that proof (another build's writer, or an unreadable
+/// one) the refusal stands and the mail stays in place.
+// trace:BUG-2411 | ai:claude
+#[test]
+fn bug_2411_another_builds_activation_is_revalidated_by_a_fresh_scan() {
+    let dir = repo();
+    seed_mail(dir.path());
+    let anchor = source(dir.path()).anchor;
+    let record_file = anchor.join(ACTIVATION_FILE);
+    write_json(
+        &record_file,
+        &Activation {
+            schema: SCHEMA,
+            all_writer_hosts_admitting: true,
+            recorded_at: "t".into(),
+            source_build: Some("0.0.0+other".into()),
+        },
+    )
+    .unwrap();
+    let before = std::fs::read(&record_file).unwrap();
+
+    // Another build's writer is running: refused, nothing moved.
+    super::activation::FRESH_SCAN.with(|f| f.set(false));
+    let refusal = retire_checkout(dir.path(), "test").unwrap_err();
+    assert!(refusal.needs_activation, "{}", refusal.reason);
+    assert!(checkout_holds_mail(dir.path()));
+
+    // Every writer runs this build: retired, the mail preserved.
+    super::activation::FRESH_SCAN.with(|f| f.set(true));
+    let retirement = retire_checkout(dir.path(), "test");
+    super::activation::FRESH_SCAN.with(|f| f.set(false));
+    let retirement = retirement.unwrap().expect("retired");
+    assert!(
+        !files_under(retirement.retained_dir()).is_empty(),
+        "the delivered mail is preserved"
+    );
+    retirement.reopen().unwrap();
+    assert!(checkout_holds_mail(dir.path()), "reopen puts the mail back");
+    assert_eq!(
+        std::fs::read(&record_file).unwrap(),
+        before,
+        "re-validation records nothing"
+    );
+}
+
 #[test]
 fn an_activation_recorded_by_another_build_is_not_honoured() {
     let dir = repo();
