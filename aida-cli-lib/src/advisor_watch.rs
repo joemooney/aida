@@ -519,11 +519,15 @@ mod tests {
         } else {
             "echo 'error: unrecognized subcommand fork' >&2; exit 2"
         };
+        // The advisor child is granted, so its launch runs the requested-seat
+        // preflight: the fake answers that probe through the real matching
+        // CLI before the fork/capture body runs.
+        // trace:BUG-2398 | ai:claude
         crate::test_exec::write_executable(
             &fake,
-            &format!(
-                "#!/bin/sh\nif [ \"$1\" = exec ] && [ \"$2\" = fork ] && [ \"$3\" = --help ]; then {help}; fi\nprintf '%s\\n' \"$@\" > \"$AIDA_TEST_CAPTURE\"\n"
-            ),
+            crate::test_exec::codex_probe_script(format!(
+                "if [ \"$1\" = exec ] && [ \"$2\" = fork ] && [ \"$3\" = --help ]; then {help}; fi\nprintf '%s\\n' \"$@\" > \"$AIDA_TEST_CAPTURE\"\n"
+            )),
         );
         CodexFixture {
             _tmp: tmp,
