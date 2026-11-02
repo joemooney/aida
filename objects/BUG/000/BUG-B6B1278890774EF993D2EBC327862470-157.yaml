@@ -19,7 +19,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T02:25:46.947809262Z
-modified_at: 2026-11-02T11:49:55.883057643Z
+modified_at: 2026-11-02T11:49:56.995872309Z
 req_type: Bug
 tags:
 - area:agents
@@ -272,6 +272,21 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Test-budget rework (d003fb3) is correct and lib-0 is green, but the 10:33 advisor-verified Codex core-tool transport blocker is unchanged (no sketch/punt filed), AC2 warm seeding cannot happen on the ext4 host, and CI is not green at head.. No triage reason was given.'
   created_at: 2026-11-02T11:49:55.883055996Z
   modified_at: 2026-11-02T11:49:55.883055996Z
+  session_id: 1f56bd1e-c059-4f73-b8df-e18b2170fdfc
+- id: 01a19c18-3e00-79e2-bda8-058358eda0e7
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2383):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: d003fb32e79b
+    Recorded: 2026-11-02T11:48:18.271491832+00:00
+    Findings:
+    1. P1 (carried, unchanged since 07becb32): AC1/AC4 Codex native transport. lane_job.rs:579-582 apply_env sets only plain AIDA_LANE_JOBS_INBOX/RESULTS; lane_job.rs:1037 seat_dirs reads only those env vars; codex_tool_env.rs:8-21 TOOL_ENV (BUG-2398, now merged) does not carry them, so under Codex shell_environment_policy inherit=core the tool shell has no runner and every Codex lane reports untested=true. That fails safe but leaves vendor-neutral AC1 unmet. drain_launcher_supplies_jobs_for_all_implementer_vendors_and_reports_evidence (bug_2383_lane_job_tests.rs:1017) still spawns /bin/sh with the env injected, not a real restricted Codex tool. Per the 2026-11-01 10:33 advisor ruling: file the transport sketch or punt (own-context/typed-lease channel, no inherit-all, no token argv) and get independent signoff before more code, or get an explicit advisor AC scope decision that excludes Codex inherit=core. Neither is on the spec.
+    2. P1 AC2 (accf30b1) unmet on the deployed host: the primary target is ext4 (stat -f /home/joe/ai/aida/target reports ext2/ext3). seat_target_seed.rs:13-17,181-201 only seeds with cp --reflink=always, so on this host every seat target stays unseeded and the first targeted run is a cold full build (3600s timeout), which is what AC2 forbids. Reflink-only follows the advisor's security ruling, so this needs an explicit advisor disposition: amend or accept AC2 as host-limited on the spec, or pick a safe sharing mechanism such as a read-only bind of the primary agent target plus a writable overlay. No test proves a warm first run on a non-reflink filesystem. seed_skips/describe tests only cover the skip message.
+    3. CI not green at d003fb32: CI (lib-1) fails review_gates::bug_775_commits_ahead_tests::concurrent_sibling_publication_has_one_winner_and_never_two_links (bug_775_commits_ahead_tests.rs:1078, expect 'both publishers read the verdict'). The diff does not touch phase_gates.rs or the sibling sweep, and main CI is green, so this looks like a concurrency flake, not this PR. Re-run lib-1 to green. Build (ubuntu-latest) was still pending. The merge-hold gate is red (supervised hold), which is expected and needs a human or advisor clear.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-02T11:49:56.864178Z
+  modified_at: 2026-11-02T11:49:56.864178Z
   session_id: 1f56bd1e-c059-4f73-b8df-e18b2170fdfc
 history:
 - id: 01a19525-88eb-79e3-aab8-8d511ad2f605
