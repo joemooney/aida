@@ -475,6 +475,9 @@ fn story1843_d1_a_torn_binding_is_local_to_its_delivery() {
     let a = reviewer("rev-a", Some(1));
     let (ctx, s) = snap(&r.main, &a);
     assert!(s.complete(), "a torn binding never makes the view partial");
+    // trace:BUG-b6b1278890774ef993d2ebc327862470-178 | ai:codex
+    assert_eq!(s.inspection_unknown_ids, ["torn"]);
+
     assert!(s.records.is_empty());
     let offered: Vec<_> = s
         .pending_deliveries
@@ -544,6 +547,9 @@ fn story1843_d1_retained_sidecars_are_looked_up_by_id_and_faults_stay_local() {
     std::fs::write(deliveries.join("legacy.json"), b"{not json").unwrap();
     let (_, s) = snap(&r.main, &a);
     assert!(s.complete(), "the fault is local to its message");
+    // trace:BUG-b6b1278890774ef993d2ebc327862470-178 | ai:codex
+    assert_eq!(s.inspection_unknown_ids, ["legacy"]);
+
     assert!(s.records.is_empty());
     assert_eq!(s.pending_deliveries.len(), 1);
 

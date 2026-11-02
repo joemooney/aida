@@ -292,6 +292,44 @@ impl RecipientDirectory {
         &self.warnings
     }
 
+    // trace:BUG-b6b1278890774ef993d2ebc327862470-178 | ai:codex | ai:claude
+    /// Inspection is read-only and stricter than send's fresh-but-unverified
+    /// cohort. A failed observation remains diagnostic unknown, never authority,
+    /// and is scoped to that one reader by the caller.
+    ///
+    /// Liveness follows send's [`reader_liveness`] exactly, including its
+    /// freshness TTL: a stale unprovable row is not a reader, so it cannot keep
+    /// the scan unknown forever. A live row with no handle is skipped, not
+    /// unknown: it has no handle reservation, so no own inbox serves it
+    /// handle-private or role-delivered mail to nudge about.
+    pub(crate) fn inspection_readers(
+        &self,
+    ) -> Vec<(
+        &AgentRegistryEntry,
+        Result<aida_core::mailbox_identity::InspectionSubject>,
+    )> {
+        use aida_core::mailbox_identity::{BindingRefusal, InspectionSubject};
+        let namespace = agent_registry::current_pid_namespace();
+        self.agents
+            .iter()
+            .filter_map(|entry| {
+                let subject = match reader_liveness(&self.project, entry, namespace) {
+                    Some(false) => return None,
+                    None => Err(anyhow::anyhow!("reader liveness unknown")),
+                    Some(true) => match InspectionSubject::observe(
+                        &agent_registry::agents_dir(&self.project)
+                            .join(format!("{}.toml", entry.id)),
+                    ) {
+                        Ok(subject) => Ok(subject),
+                        Err(BindingRefusal::NoHandle | BindingRefusal::Ended) => return None,
+                        Err(_) => Err(anyhow::anyhow!("reader identity/reservation unknown")),
+                    },
+                };
+                Some((entry, subject))
+            })
+            .collect()
+    }
+
     fn reader_may_exist(&self, entry: &AgentRegistryEntry) -> bool {
         self.live_ids.contains(&entry.id) || self.unknown_ids.contains(&entry.id)
     }
