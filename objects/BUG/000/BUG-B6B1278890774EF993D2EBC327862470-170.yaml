@@ -23,12 +23,12 @@ description: |-
   1. Resolve `[agents] vendor` (and render `$aida-*` or `aida pr create` when vendor is Codex) across `worktree_gc.rs`, `queue_cmd.rs`, `dispatch_health_ps.rs`, `supervise_cmd.rs`, `mandate_drive.rs`, `session_reap.rs`, and `workflow_hints.rs`.
   2. Resolve default `--judge-vendor` in `aida compete` from `[agents] vendor`, implement `compete::ask_ai_argv` for Codex (`codex exec --sandbox read-only`), and surface Codex session rollouts in `aida status`.
   3. Add unit tests verifying Codex output when `[agents] vendor = "codex"`.
-status: Done
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T06:49:16.503535709Z
-modified_at: 2026-11-02T06:05:55.854193637Z
+modified_at: 2026-11-02T06:09:39.802902532Z
 req_type: Bug
 tags:
 - audit
@@ -119,6 +119,14 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a19ae0-b439-7060-9444-bfa044562bc8
+  author: joe
+  timestamp: 2026-11-02T06:09:39.897429094Z
+  session_id: 1f56bd1e-c059-4f73-b8df-e18b2170fdfc
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Approved
 execution_mode: drain
 filed_at:
   code_sha: 6dc7d4977ac5e47c42ddfb26597fe3ec5fb70b60
@@ -132,3 +140,4 @@ implementation_info:
   implemented: true
   implemented_at: 2026-11-02T05:09:39.197391578Z
   implemented_by: joe
+  reopened_at_sha: 952552f2b786703862676a2bfc233082a538f09f
