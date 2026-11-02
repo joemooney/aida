@@ -18,12 +18,12 @@ description: |-
   1. `aida session resume` actually execs `codex resume <id>` (with resolved posture/containment) when resuming a Codex session.
   2. `aida queue work --resume` (interactive and headless), `standalone_implementer` background-wait resume, and `phase_driver_trait::resume_implementer_with_advisor_answer` support `HeadlessVendor::Codex` via `codex resume` / `codex exec resume` and `~/.codex/sessions` lookup.
   3. `aida role enter --resume` and `aida tui` (`Intent::Resume`, `TabVendor::Codex`) support resuming Codex sessions alongside Claude.
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T06:45:38.111981577Z
-modified_at: 2026-11-02T00:42:21.134745389Z
+modified_at: 2026-11-02T00:44:01.936211592Z
 req_type: Bug
 tags:
 - architecture
@@ -41,6 +41,70 @@ comments:
   content: 'ADVISOR DISPOSITION: APPROVED for SKETCH ONLY before code. Confirmed exec_resume_command merely prints Codex resume, queue work resumes only Claude, and role/TUI paths are separate. Cover every listed acceptance surface without mixing fresh launches or losing parent containment/grant binding. Correct CLI wording: role enter has a resume offer, not a --resume flag. Post a sketch naming shared vendor resume contract, transcript lookup/evidence, interactive vs headless argv, child grant/seat identity, background/punt continuation, refusal cases and tests. Obtain independent advisor signoff before implementation. Sequence after BUG-2385/2387 session edits; coordinate with STORY-2255 fork and STORY-2254 detached launch. No authority or bypass expansion is pre-approved.'
   created_at: 2026-11-01T07:03:45.574942302Z
   modified_at: 2026-11-01T07:03:45.574942302Z
+- id: 01a199b6-6c80-73d3-befa-81c67f7a25ba
+  author: joe
+  content: |-
+    ## Implementer sketch (pre-code; awaiting independent advisor signoff)
+
+    No code written. Per the 2026-11-01 disposition this is SKETCH ONLY; implementation waits on signoff and on BUG-2385 / BUG-2387 (both still in-progress) landing.
+
+    ### 1. Shared vendor resume contract (session.rs)
+    - New `ResumePlan { vendor: HeadlessVendor, program, args, cwd, env }` built by ONE builder `build_resume_command(vendor, id, mode: Interactive|Headless{prompt}, posture: {contained, permission_mode/bypass, model, effort}, grant_id)`.
+      - Claude interactive: `claude --resume <id> [--permission-mode m] [contained flags]` (existing `build_claude_resume_exec_command`, folded in).
+      - Claude headless: existing `resume_session_args` rewrite of `--session-id`→`--resume`.
+      - Codex interactive: `codex [tool_contained_flags("codex") | --dangerously-bypass-approvals-and-sandbox] resume <thread-id>`.
+      - Codex headless: `codex exec [contained flags | bypass] [-m model] resume <thread-id> <prompt>` (prompt through `codex_inline_prompt`, the BUG-799/BUG-2387 expansion, so `/aida-*` is not passed raw).
+      - Agy: keep refusal (no verified resume surface) with a named error.
+    - `compose_headless_command_for(resume=true)` drops its Claude-only `ensure!` and delegates here; BUG-342 ratchet still sees one builder.
+    - `exec_resume_command` execs the plan for codex instead of `println!`.
+
+    ### 2. Transcript lookup / evidence
+    - Claude: unchanged (`~/.claude/projects/<slug>/<id>.jsonl`, `stage_resume_transcript` for lease trees).
+    - Codex: promote `vendor_activity::codex_sessions_root` (honours `AIDA_CODEX_SESSIONS_DIR`) + rollout walk into a shared `codex_rollouts` module: `find_codex_rollout(thread_id) -> Option<PathBuf>`, plus `list_codex_sessions(cwd_filter)` reading each rollout's first `session_meta` line (id, cwd, timestamp) for pickers. No copy/staging needed: Codex rollouts are not cwd-keyed.
+    - **Id binding (the load-bearing gap):** headless Codex ignores the AIDA-minted `--session-id`; Codex mints its own thread id. Proposal: launch Codex headless with `--json`-equivalent stream already captured in the headless log, parse the first `thread.started.thread_id`, and record it on the lease/session record as `vendor_session_id`. Fallback when absent: newest rollout whose `session_meta.cwd` == lease worktree and start time >= launch time; ambiguity (>1 match) refuses rather than guesses. **Question for advisor:** stream-parse as canonical, rollout scan as fallback — or rollout scan only?
+
+    ### 3. Interactive vs headless argv
+    As in §1. Interactive `aida session resume`, `queue work --resume` (interactive tab) and TUI use Interactive mode; drain/punt/bg use Headless.
+
+    ### 4. Child grant / seat identity
+    - `grant_id` is threaded into `ResumePlan.env` via `seat_authority::GRANT_ENV` for every vendor (today only Claude carries it).
+    - Resume runs in the lease tree (`resume_lease_tree`) for all vendors, same as TASK-2031; seat identity env (`AIDA_SESSION_*`, role) copied exactly as the fresh Codex launch does; no new identity minted on resume.
+
+    ### 5. Containment
+    - `build_contained_resume_command`: replace `agent != "claude"` refusal with `require_vendor_containment(vendor, true, "resumed session")`. Codex contained resume uses `tool_contained_flags("codex")`, strips bypass, sets `AIDA_CONTAINED=1` + `AIDA_CONTAINMENT_POSTURE=aida`, `prepare_contained_mailbox_for_launch(tree)`. A contained parent never resumes a child uncontained (BUG-2151 ruling preserved); agy still refused.
+
+    ### 6. Background / punt continuation
+    - `standalone_implementer.rs:628`: `can_resume = plan_supports_resume(launch.vendor) && vendor_session_id.is_some()`.
+    - `phase_driver_trait::resume_implementer_with_advisor_answer`: replace `spawn_claude_headless_resume` with `spawn_headless_resume(vendor, id, prompt, posture, grant)` from §1; the punt's recorded vendor (not the current config) picks the vendor, so a config change mid-drain cannot resume a Codex thread with Claude.
+    - `queue_cmd` Resume gate (11645): replaced by "recorded vendor of the session must be resumable", not "configured vendor must be Claude".
+
+    ### 7. Role enter resume offer / TUI
+    - `role_cmd::prompt_role_session_resume`: merge Claude project-store sessions with `list_codex_sessions(cwd)`, tag each with vendor, print `codex resume '<id>'` for Codex (it prints, does not exec — unchanged behaviour shape; it is an offer, not a `--resume` flag).
+    - TUI: `Intent::Resume { vendor, id }`; `dispatch.rs` builds via the shared plan; `app.rs` lists Codex rollouts for `TabVendor::Codex`; dashboard hint text vendor-neutral.
+
+    ### Refusal cases (all named errors, no silent fallthrough)
+    agy resume; contained parent + vendor that cannot contain; Codex resume with no bound thread id and ambiguous/no rollout; recorded vendor disabled in `[agents]`; transcript missing (let the vendor CLI report, as Claude today).
+
+    ### Tests (unit, in session.rs / queue_cmd / role_cmd / aida-tui)
+    - argv goldens for each (vendor × interactive/headless × contained/bypass) plan; contained Codex plan has no bypass flag and sets AIDA_CONTAINED.
+    - `exec_resume_command` codex builds a Command (no println path).
+    - `compose_headless_command_for(Codex, resume=true)` ok; Agy errs.
+    - rollout lookup with `AIDA_CODEX_SESSIONS_DIR` fixture: found / missing / ambiguous-refuses; thread-id parse from a headless log fixture.
+    - grant env present on Codex resume.
+    - punt-resume selects the recorded vendor; bg `can_resume` true for Codex with bound id.
+    - role resume offer lists both vendors; TUI dispatch for `TabVendor::Codex`.
+
+    ### Expected files
+    session.rs, vendor_activity.rs (+ new codex_rollouts.rs), queue_cmd.rs, phase_driver_trait.rs, standalone_implementer.rs, role_cmd.rs, aida-tui/{intent,dispatch,app,dashboard}.rs, lease/session record type for `vendor_session_id`.
+
+    ### Open questions for advisor
+    1. Thread-id binding: stream-parse canonical + rollout fallback (recommended), or rollout scan only?
+    2. Is adding `vendor_session_id` to the lease/session record acceptable (data-model change), or should it live only in the headless log sidecar?
+    3. Scope: this is ~10 files / heft well above 3 — split into (a) shared contract + session resume + contained, (b) headless/punt/bg, (c) role/TUI?
+  created_at: 2026-11-02T00:43:51.808976074Z
+  modified_at: 2026-11-02T00:43:51.808976074Z
+  session_id: 01a199b504e5
+  harness_version: 2.1.316 (Claude Code)
 history:
 - id: 01a195db-6c30-7600-a068-211ab6c2eed8
   author: joe
@@ -66,6 +130,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a199b6-9410-7c22-b4bd-8b013a6e4239
+  author: joe
+  timestamp: 2026-11-02T00:44:01.936234245Z
+  session_id: 01a199b504e5
+  harness_version: 2.1.316 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 execution_mode: drain
 filed_at:
   code_sha: 6dc7d4977ac5e47c42ddfb26597fe3ec5fb70b60
@@ -75,3 +148,9 @@ filed_at:
   aida_build_sha: 962ca07af25
   vendor: antigravity
   session: 01a194b1bcfb
+attention_reason:
+  category: design-fork
+  detail: 'The advisor disposition requires a sketch and independent advisor signoff before any code, and says to sequence this after BUG-2385/BUG-2387 (both still in progress). The sketch is posted as a comment. The unresolved fork: headless Codex ignores AIDA''s pre-minted --session-id and creates its own thread id, so resume needs that id bound to the AIDA session. The options are parsing thread.started from the headless stream, scanning ~/.codex/sessions rollouts, or both. A recommended choice also adds vendor_session_id to the lease/session record, which is a data-model change.'
+  lean: 'Treat the stream-parsed thread id as canonical and fall back to a rollout scan by cwd and start time, refusing when the match is ambiguous. Store it as vendor_session_id on the lease record. Split into three PRs: shared resume contract + session resume + containment, then headless/punt/bg, then role offer/TUI.'
+  raised_by: implementer
+  raised_at: 2026-11-02T00:44:01.936211592Z
