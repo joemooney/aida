@@ -1,0 +1,73 @@
+{
+  "schema_version": 1,
+  "spec": "STORY-B6B1278890774EF993D2EBC327862470-279",
+  "publishes": [
+    {
+      "at": "2026-11-02T04:15:10.069584440Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-01T04:52:01.827040829Z",
+      "spec": "STORY-b6b1278890774ef993d2ebc327862470-279",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-02T00:45:30.694717286Z",
+      "spec": "STORY-b6b1278890774ef993d2ebc327862470-279",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-11-02T03:22:31.991048920Z",
+      "spec": "STORY-b6b1278890774ef993d2ebc327862470-279",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Done",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-02T03:24:38.492546580Z",
+      "spec": "STORY-b6b1278890774ef993d2ebc327862470-279",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-11-02T03:50:31.637218433Z",
+      "spec": "STORY-b6b1278890774ef993d2ebc327862470-279",
+      "seat": "advisor",
+      "kind": {
+        "event": "ExecutionModeChanged",
+        "after": "drain"
+      }
+    },
+    {
+      "ts": "2026-11-02T04:15:09.867536511Z",
+      "spec": "STORY-b6b1278890774ef993d2ebc327862470-279",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "20c834e8cdcc74f199d9ddff7126cba61b08c3c3",
+        "pr": 3225,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
