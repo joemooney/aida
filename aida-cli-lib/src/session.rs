@@ -924,18 +924,20 @@ fn codex_interactive_session_config(contained: bool) -> Result<crate::AgentLaunc
     Ok(config)
 }
 
-/// The child role a `session start --launch` hands the codex launcher when no
-/// `--role` was given: the operator's `AIDA_SESSION_ROLE`, then `implementer`.
+/// The child role a `session start --launch` hands the codex launcher: the
+/// `--role` flag, else the scope default the session records (`reviewer` for
+/// a review target, otherwise `implementer`), so the child runs the role its
+/// lease names. The launcher's `AIDA_SESSION_ROLE` is deliberately not
+/// consulted (TASK-1462: a launcher's role is never cloned into its child).
 /// Resolved in preflight so the launcher never opens its interactive role
 /// picker after the worktree and lease exist (a cancel there orphaned both).
 // trace:TASK-2742 | ai:claude
-pub(crate) fn start_launch_default_role(explicit: Option<String>) -> String {
+pub(crate) fn start_launch_child_role(explicit: Option<&str>, owns: &str) -> String {
     explicit
-        .filter(|s| !s.trim().is_empty())
-        .or_else(|| std::env::var("AIDA_SESSION_ROLE").ok())
-        .map(|s| s.trim().to_string())
+        .map(str::trim)
         .filter(|s| !s.is_empty())
-        .unwrap_or_else(|| "implementer".to_string())
+        .map(str::to_string)
+        .unwrap_or_else(|| crate::agent_launch::agent_new_scope_role(owns).to_string())
 }
 
 /// `aida session new` — capture role + title up-front, append a record

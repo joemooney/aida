@@ -3029,7 +3029,12 @@ mod tests {
             "s.jsonl",
             &ordinary_transcript("s", 2),
         );
-        let src = sources(tmp.path());
+        // A Codex tree that does not exist yet: the source reads unavailable.
+        // trace:TASK-2731 | ai:claude
+        let src = Sources {
+            codex_dirs: vec![tmp.path().join("codex").join("sessions")],
+            ..sources(tmp.path())
+        };
         let state_path = src.state_path.clone().unwrap();
         assert_eq!(budget_evidence(&state_path, t0()), None, "no state yet");
         let now = t0() + Duration::minutes(150);

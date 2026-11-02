@@ -1879,13 +1879,6 @@ pub(crate) fn session_start_with_receipt(
     } else {
         None
     };
-    // The codex launcher would otherwise reach the interactive role picker
-    // only after the worktree and lease exist, and a cancel there would orphan
-    // both. Resolve the child's role now, before any setup, the way the claude
-    // path does. The recorded/claimed session role is still `launch_role`.
-    // trace:TASK-2742 | ai:claude
-    let codex_child_role = (launch_vendor.as_deref() == Some("codex"))
-        .then(|| session::start_launch_default_role(launch_role.clone()));
     let project_root = find_main_worktree_root()?;
     // A dash-led branch or base would reach `git worktree add` / `git
     // rev-parse` as an option. trace:BUG-1622 | ai:claude
@@ -1914,6 +1907,19 @@ pub(crate) fn session_start_with_receipt(
         )
         .map(|_| SessionStartReceipt::existing(None));
     }
+    // The codex launcher would otherwise reach the interactive role picker
+    // only after the worktree and lease exist, and a cancel there would orphan
+    // both. Resolve the child's role now, before any setup, from the same
+    // resolution as the recorded session role, and refuse an undelegated child
+    // seat here, with nothing to undo, instead of after the claim.
+    // trace:TASK-2742 | ai:claude
+    let codex_child_role = if launch_vendor.as_deref() == Some("codex") {
+        let role = session::start_launch_child_role(launch_role.as_deref(), owns);
+        crate::agent_launch::preflight_agent_new_delegation(&project_root, Some(&role))?;
+        Some(role)
+    } else {
+        None
+    };
     // BUG-2169: decide the tree kind before any claim or lease is written, so
     // a malformed knob refuses with nothing to undo.
     // trace:BUG-2169 | ai:claude
