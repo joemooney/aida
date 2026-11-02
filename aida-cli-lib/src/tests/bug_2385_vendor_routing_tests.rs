@@ -48,6 +48,8 @@ macro_rules! routing_cases {
 routing_cases! {
     codex_session_new: "codex", "new";
     codex_session_start: "codex", "start";
+    codex_session_start_unnamed: "codex", "start-unnamed";
+    codex_session_start_bad_name_refused: "codex", "bad-name";
     codex_agent_new_bare: "codex", "bare";
     codex_agent_new_role: "codex", "role";
     codex_agent_new_spec: "codex", "spec";
@@ -56,6 +58,7 @@ routing_cases! {
     codex_bypass_session_start: "codex", "bypass-start";
     claude_session_new: "claude", "new";
     claude_session_start: "claude", "start";
+    claude_session_start_unnamed: "claude", "start-unnamed";
     claude_agent_new_bare: "claude", "bare";
     claude_agent_new_role: "claude", "role";
     claude_agent_new_spec: "claude", "spec";
@@ -186,6 +189,32 @@ fn wrapper_launches_configured_vendor(vendor: &str, surface: &str) {
                     "--no-title",
                     "--no-pool",
                 ],
+                // The ordinary start: no --name, so the derived display name
+                // ("impl@BUG-2385") must not become the codex agent handle.
+                "start-unnamed" => vec![
+                    "aida",
+                    "session",
+                    "start",
+                    "--owns",
+                    "BUG-2385",
+                    "--launch",
+                    "--title",
+                    "fixture",
+                    "--no-title",
+                    "--no-pool",
+                ],
+                "bad-name" => vec![
+                    "aida",
+                    "session",
+                    "start",
+                    "--owns",
+                    "BUG-2385",
+                    "--launch",
+                    "--name",
+                    "My Session",
+                    "--no-title",
+                    "--no-pool",
+                ],
                 "bare" => vec!["aida", "agent", "new"],
                 "role" => vec!["aida", "agent", "new", "--role", "implementer"],
                 "spec" => vec![
@@ -207,6 +236,16 @@ fn wrapper_launches_configured_vendor(vendor: &str, surface: &str) {
                     "--no-title",
                 ],
             };
+            if surface == "bad-name" {
+                // Refused in preflight: no worktree, lease or launch happened.
+                let error = format!("{:#}", dispatch(&args).unwrap_err());
+                assert!(error.contains("invalid agent name"), "{error}");
+                assert!(crate::list_leases(&root).is_empty());
+                assert!(!argv.exists());
+                assert!(!tmp.path().join("seats").exists());
+                std::env::set_current_dir(&original_cwd).unwrap();
+                return;
+            }
             dispatch(&args).unwrap_or_else(|e| panic!("{vendor}/{surface}: {e:#}"));
             let args = std::fs::read_to_string(&argv)
                 .unwrap_or_else(|e| panic!("{vendor}/{surface}: no actual child argv: {e}"));
@@ -230,7 +269,10 @@ fn wrapper_launches_configured_vendor(vendor: &str, surface: &str) {
                 assert!(!args.contains("--sandbox\n"));
                 assert!(!args.contains("bypassPermissions"));
                 // session new/start preserve Claude's existing direct launch contract.
-                if !matches!(surface, "new" | "start" | "bypass-new" | "bypass-start") {
+                if !matches!(
+                    surface,
+                    "new" | "start" | "start-unnamed" | "bypass-new" | "bypass-start"
+                ) {
                     assert_eq!(fields[0], "claude");
                     assert_ne!(fields[5], parent);
                 }
@@ -239,7 +281,17 @@ fn wrapper_launches_configured_vendor(vendor: &str, surface: &str) {
                 // --name reaches the tracked launcher as the agent's name.
                 assert_eq!(fields[6], "routing-name", "{vendor}/{surface}");
             }
-            if matches!(surface, "start" | "spec" | "bypass-start") && actual_vendor == "codex" {
+            if surface == "start-unnamed" && actual_vendor == "codex" {
+                // The launcher allocated a valid handle; the display name is not it.
+                assert!(
+                    aida_core::mailbox_identity::handle_spelling_rejection(fields[6]).is_none(),
+                    "{vendor}/{surface}: {}",
+                    fields[6]
+                );
+            }
+            if matches!(surface, "start" | "start-unnamed" | "spec" | "bypass-start")
+                && actual_vendor == "codex"
+            {
                 assert_eq!(fields[2], "BUG-2385");
                 assert_eq!(crate::list_leases(&root).len(), 1);
             }

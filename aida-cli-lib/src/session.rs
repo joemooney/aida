@@ -888,6 +888,15 @@ pub(crate) fn preflight_interactive_session(
     crate::refuse_uncontained_child_of_contained_parent(&config)
 }
 
+/// Refuse an explicit `--name` that cannot become a Codex agent handle, before
+/// any worktree or lease exists (the tracked launcher would refuse it later).
+// trace:BUG-b6b1278890774ef993d2ebc327862470-159 | ai:claude
+pub(crate) fn preflight_codex_agent_handle(name: &str) -> Result<()> {
+    let root = crate::find_main_worktree_root().unwrap_or(std::env::current_dir()?);
+    let reserved = crate::agent_handle::reserved_addresses(&root);
+    crate::agent_handle::validate_explicit_handle(name, &reserved)
+}
+
 // Use the existing sanctioned Codex flags and trusted native opt-in; never
 // interpret native as AIDA containment or widen the child's write boundary.
 // trace:BUG-b6b1278890774ef993d2ebc327862470-159 | ai:codex

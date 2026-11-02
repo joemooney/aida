@@ -1860,15 +1860,26 @@ pub(crate) fn session_start_with_receipt(
     // worktree's path and new sessions stack as nested-sibling-of-sibling
     // (~/ai/aida-pr-9-epic-20 instead of ~/ai/aida-epic-20).
     // trace:BUG-75 | ai:claude
-    let project_root = find_main_worktree_root()?;
-    // trace:BUG-b6b1278890774ef993d2ebc327862470-159 | ai:codex
+    // The vendor preflight runs before root discovery and any setup, so a
+    // missing vendor binary is reported even outside a git checkout.
+    // trace:BUG-b6b1278890774ef993d2ebc327862470-159 | ai:claude
     let launch_vendor = if launch_claude {
         let vendor = session::interactive_session_vendor()?;
         session::preflight_interactive_session(&vendor, launch_permission_mode, launch_contained)?;
+        if vendor == "codex" {
+            if let Some(name) = launch_name
+                .as_deref()
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+            {
+                session::preflight_codex_agent_handle(name)?;
+            }
+        }
         Some(vendor)
     } else {
         None
     };
+    let project_root = find_main_worktree_root()?;
     // A dash-led branch or base would reach `git worktree add` / `git
     // rev-parse` as an option. trace:BUG-1622 | ai:claude
     for (flag, value) in [("--branch", branch), ("--base", base)] {
@@ -1890,7 +1901,7 @@ pub(crate) fn session_start_with_receipt(
             launch_title,
             launch_permission_mode,
             launch_role,
-            launch_name,
+            launch_name.filter(|s| !s.trim().is_empty()),
             launch_contained,
             launch_set_title,
         )
@@ -3467,11 +3478,22 @@ pub(crate) fn session_start_with_receipt(
             .or_else(|| std::env::var("AIDA_SESSION_ROLE").ok())
             .filter(|s| !s.is_empty())
             .unwrap_or_else(|| "implementer".to_string());
-        let derived_name = launch_name
-            .filter(|s| !s.trim().is_empty())
-            .or_else(|| session::derive_session_name(owns, &branch_name, &role_for_name));
+        let launch_vendor = launch_vendor.as_deref().expect("launch vendor preflight");
+        let explicit_name = launch_name
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty());
+        // Codex receives the name as its agent handle, so only an explicit
+        // (preflight-validated) --name is forwarded; the derived display name
+        // ("impl@BUG-1") is not a valid handle and the launcher allocates one.
+        // trace:BUG-b6b1278890774ef993d2ebc327862470-159 | ai:claude
+        let derived_name = if launch_vendor == "codex" {
+            explicit_name
+        } else {
+            explicit_name
+                .or_else(|| session::derive_session_name(owns, &branch_name, &role_for_name))
+        };
         return session::new_session_for_vendor(
-            launch_vendor.as_deref().expect("launch vendor preflight"),
+            launch_vendor,
             Some(owns.to_string()),
             launch_title,
             launch_permission_mode,
