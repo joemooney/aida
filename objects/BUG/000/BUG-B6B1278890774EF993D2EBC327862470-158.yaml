@@ -17,12 +17,12 @@ description: |
   - A ship with 25 or more seat clones finishes step 5 in under 30s, or reports progress and continues in the background.
   - The merge-lease is released before the cleanup step, and a test asserts it.
   - A test covers the unpushed check with a large shipped set and no per-SHA spawn.
-status: InProgress
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T06:30:56.167167026Z
-modified_at: 2026-11-02T02:21:21.532430953Z
+modified_at: 2026-11-02T02:52:21.095423546Z
 req_type: Bug
 tags:
 - area:ship
@@ -128,6 +128,14 @@ history:
   timestamp: 2026-11-02T02:21:22.549185048Z
   session_id: 126bbd5a-a92f-452b-ab0b-2637a1db42c2
   changes: []
+- id: 01a19a2c-0ee7-7ab2-a255-79e920e6a67d
+  author: joe
+  timestamp: 2026-11-02T02:52:21.095421511Z
+  session_id: 126bbd5a-a92f-452b-ab0b-2637a1db42c2
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Approved
 execution_mode: drain
 filed_at:
   code_sha: 962ca07af25ca4de3426bdd951fb2d6782568184
