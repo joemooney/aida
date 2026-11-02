@@ -21,7 +21,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T07:26:20.914223641Z
-modified_at: 2026-11-02T03:24:00.982917919Z
+modified_at: 2026-11-02T03:24:45.597329232Z
 req_type: Bug
 tags:
 - architecture
@@ -477,6 +477,13 @@ comments:
   created_at: 2026-11-01T23:05:34.096973948Z
   modified_at: 2026-11-01T23:05:34.096973948Z
   session_id: 126bbd5a-a92f-452b-ab0b-2637a1db42c2
+- id: 01a19a49-ba9d-7fe3-896b-1d9502a3167b
+  author: joe
+  content: 'Pickup 2026-11-01 20:24 PDT: ruling''s golden-snapshot delta (hidden probe --expect-context-sha256) already landed as f20ed5bfbdd on PR #3207 (golden-only, 5 lines). Remote head now 4107f3b (adds e9419d0 + main merges); all CI shards green, merge-hold-gate failing as expected. PR is CONFLICTING with main in aida-cli-lib/src/tests/bug_1607_reviewer_vendor_tests.rs. Resolving it would go beyond the golden-only delta, so I did not resolve it and am escalating per the ruling. No changes made this session.'
+  created_at: 2026-11-02T03:24:45.597329232Z
+  modified_at: 2026-11-02T03:24:45.597329232Z
+  session_id: 01a19a4906ba
+  harness_version: 2.1.316 (Claude Code)
 history:
 - id: 01a19600-c769-7cd0-ba08-8d93975e3e3b
   author: joe
