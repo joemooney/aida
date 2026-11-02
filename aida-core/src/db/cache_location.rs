@@ -64,6 +64,20 @@ pub fn project_cache_path(project_root: &Path) -> PathBuf {
     cache_dir_in(&project_root.join(".aida")).join(CACHE_FILE_NAME)
 }
 
+/// [`project_cache_path`] for a reader that opens the database directly (not
+/// through `Cache::open`): it first moves `<project_root>/.aida` out of the
+/// legacy layout, so the reader never misses a cache still at the old path. It
+/// creates no directory when there is nothing to migrate, and leaves a
+/// symlinked `.aida` alone. Best effort, like the migration itself.
+// trace:TASK-2707 | ai:claude
+pub fn migrated_project_cache_path(project_root: &Path) -> PathBuf {
+    let aida_dir = project_root.join(".aida");
+    if std::fs::symlink_metadata(&aida_dir).is_ok_and(|m| m.file_type().is_dir()) {
+        migrate_legacy_cache_layout(&aida_dir);
+    }
+    project_cache_path(project_root)
+}
+
 /// When `cache_path` is `<x>/.aida/cache-db/cache.db`, the `<x>/.aida`
 /// directory whose layout governs it.
 pub fn aida_dir_of_cache_path(cache_path: &Path) -> Option<&Path> {
@@ -148,14 +162,20 @@ fn relink_legacy_worktree(aida_dir: &Path, legacy_link: &Path) -> CacheLayoutMig
         return CacheLayoutMigration::NothingToDo;
     };
     let link = cache_dir_in(aida_dir);
+    let target_dir = cache_dir_in(&target_aida);
     if target_aida != aida_dir && std::fs::symlink_metadata(&link).is_err() {
         // Migrate the checkout the legacy link pointed at first (the chain was
         // followed to its real file, so that checkout holds the database), so
         // the new link never points at a directory still to be filled.
         migrate_legacy_cache_layout(&target_aida);
-        let _ = std::fs::create_dir_all(cache_dir_in(&target_aida));
+        if !target_dir.is_dir() {
+            // The target checkout has no cache directory (its migration could
+            // not run, or it holds no cache at all): link nothing and keep the
+            // legacy links, which still reach whatever the old layout shares.
+            return CacheLayoutMigration::NothingToDo;
+        }
         #[cfg(unix)]
-        let linked = std::os::unix::fs::symlink(cache_dir_in(&target_aida), &link).is_ok();
+        let linked = std::os::unix::fs::symlink(&target_dir, &link).is_ok();
         #[cfg(not(unix))]
         let linked = false;
         if !linked && std::fs::symlink_metadata(&link).is_err() {
@@ -163,6 +183,11 @@ fn relink_legacy_worktree(aida_dir: &Path, legacy_link: &Path) -> CacheLayoutMig
             // links so this worktree still reaches the old shared file.
             return CacheLayoutMigration::NothingToDo;
         }
+    }
+    if !link.is_dir() {
+        // The directory link does not resolve to a cache directory: retiring
+        // the legacy links would strand this worktree, so keep them.
+        return CacheLayoutMigration::NothingToDo;
     }
     for name in ["cache.db", "cache.db-shm", "cache.db-wal"] {
         let path = aida_dir.join(name);
@@ -197,6 +222,7 @@ fn move_legacy_database(aida_dir: &Path, legacy: &Path) -> CacheLayoutMigration 
     if std::fs::create_dir_all(&dir).is_err() {
         return CacheLayoutMigration::NothingToDo;
     }
+    sweep_stale_migration_temps(aida_dir);
     let target = dir.join(CACHE_FILE_NAME);
     if std::fs::symlink_metadata(&target).is_err() {
         copy_snapshot(legacy, aida_dir, &target);
@@ -208,12 +234,54 @@ fn move_legacy_database(aida_dir: &Path, legacy: &Path) -> CacheLayoutMigration 
     CacheLayoutMigration::Moved
 }
 
+/// Prefix of the private `VACUUM INTO` temp files [`copy_snapshot`] writes
+/// beside the legacy database: `.cache-db-migrate.<pid>.<nanos>`.
+const MIGRATION_TEMP_PREFIX: &str = ".cache-db-migrate.";
+
+/// A migration temp file younger than this is never swept, even when its owner
+/// pid looks dead: a migrator in another PID namespace (a contained lane) has a
+/// pid this process cannot see.
+const MIGRATION_TEMP_MIN_AGE: std::time::Duration = std::time::Duration::from_secs(600);
+
+/// Remove `.cache-db-migrate.<pid>.*` temp files left by a migrator that died
+/// mid-copy: the owner pid is no longer alive and the file is not recent. A
+/// live migrator's temp file is never touched.
+// trace:TASK-2707 | ai:claude
+fn sweep_stale_migration_temps(aida_dir: &Path) {
+    let Ok(entries) = std::fs::read_dir(aida_dir) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let Ok(name) = entry.file_name().into_string() else {
+            continue;
+        };
+        let Some(pid) = name
+            .strip_prefix(MIGRATION_TEMP_PREFIX)
+            .and_then(|rest| rest.split('.').next())
+            .and_then(|pid| pid.parse::<u32>().ok())
+        else {
+            continue;
+        };
+        let Ok(meta) = entry.path().symlink_metadata() else {
+            continue;
+        };
+        let old_enough = meta
+            .modified()
+            .ok()
+            .and_then(|m| m.elapsed().ok())
+            .is_some_and(|age| age >= MIGRATION_TEMP_MIN_AGE);
+        if meta.file_type().is_file() && old_enough && !crate::liveness::pid_is_alive(pid) {
+            let _ = std::fs::remove_file(entry.path());
+        }
+    }
+}
+
 /// `VACUUM INTO` a private temp file beside the legacy database, then publish it
 /// at `target` only if nothing is there yet. Any failure leaves `target` absent,
 /// and the next open creates and refreshes a fresh cache.
 fn copy_snapshot(legacy: &Path, aida_dir: &Path, target: &Path) {
     let tmp = aida_dir.join(format!(
-        ".cache-db-migrate.{}.{}",
+        "{MIGRATION_TEMP_PREFIX}{}.{}",
         std::process::id(),
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)

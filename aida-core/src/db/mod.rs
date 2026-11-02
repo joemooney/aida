@@ -50,8 +50,8 @@ pub use cache::{
 #[cfg(feature = "native")]
 pub use cache_location::{
     aida_dir_of_cache_path, cache_dir_in, ensure_project_cache_dir, migrate_legacy_cache_layout,
-    project_cache_path, CacheLayoutMigration, CACHE_DIR_NAME, CACHE_FILE_NAME,
-    LEGACY_CACHE_ENTRIES, LEGACY_QUARANTINE_PREFIX,
+    migrated_project_cache_path, project_cache_path, CacheLayoutMigration, CACHE_DIR_NAME,
+    CACHE_FILE_NAME, LEGACY_CACHE_ENTRIES, LEGACY_QUARANTINE_PREFIX,
 };
 #[cfg(feature = "native")]
 pub use cache_lock::{

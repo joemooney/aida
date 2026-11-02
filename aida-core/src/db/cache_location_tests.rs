@@ -41,7 +41,7 @@ fn legacy_primary(root: &Path) -> PathBuf {
     }
     std::fs::write(aida.join("cache.db.refresh.log"), b"log").unwrap();
     std::fs::write(aida.join("cache.db.malformed-2026-10-10"), b"q").unwrap();
-    std::fs::write(aida.join("config.toml"), b"cfg").unwrap();
+    std::fs::write(aida.join("unrelated-state.txt"), b"cfg").unwrap();
     std::fs::create_dir_all(aida.join("cache")).unwrap();
     std::fs::write(aida.join("cache/worktree-verdicts.json"), b"{}").unwrap();
     aida
@@ -106,7 +106,10 @@ fn primary_legacy_cache_moves_into_its_own_directory_once() {
     assert!(dir.join("cache.db.malformed-2026-10-10").is_file());
     assert!(!aida.join("cache.db.malformed-2026-10-10").exists());
     // Unrelated state is untouched, and nothing but the cache lands in its dir.
-    assert_eq!(std::fs::read(aida.join("config.toml")).unwrap(), b"cfg");
+    assert_eq!(
+        std::fs::read(aida.join("unrelated-state.txt")).unwrap(),
+        b"cfg"
+    );
     assert!(aida.join("cache/worktree-verdicts.json").is_file());
     for entry in std::fs::read_dir(&dir).unwrap() {
         let name = entry.unwrap().file_name().into_string().unwrap();
@@ -277,6 +280,71 @@ fn legacy_worktree_file_links_become_one_directory_link() {
     );
 }
 
+/// A worktree whose legacy links point at a checkout with no cache directory
+/// (nothing to migrate there, so none is created) gets no directory link and
+/// keeps its legacy links.
+#[test]
+fn a_legacy_link_to_a_checkout_without_a_cache_dir_keeps_the_legacy_links() {
+    let tmp = tempfile::tempdir().unwrap();
+    let main_aida = aida_dir(&tmp.path().join("main"));
+    let wt_aida = aida_dir(&tmp.path().join("wt"));
+    for name in ["cache.db", "cache.db-shm", "cache.db-wal"] {
+        std::os::unix::fs::symlink(main_aida.join(name), wt_aida.join(name)).unwrap();
+    }
+
+    assert_eq!(
+        migrate_legacy_cache_layout(&wt_aida),
+        CacheLayoutMigration::NothingToDo
+    );
+    assert!(std::fs::symlink_metadata(cache_dir_in(&wt_aida)).is_err());
+    assert!(
+        !cache_dir_in(&main_aida).exists(),
+        "no target dir is invented"
+    );
+    for name in ["cache.db", "cache.db-shm", "cache.db-wal"] {
+        assert!(
+            std::fs::symlink_metadata(wt_aida.join(name))
+                .unwrap()
+                .file_type()
+                .is_symlink(),
+            "{name} kept"
+        );
+    }
+}
+
+/// A temp copy left by a migrator that died mid-copy (dead owner pid, not
+/// recent) is swept; a live owner's or a recent one is kept.
+#[test]
+fn stale_migration_temps_of_dead_owners_are_swept() {
+    let tmp = tempfile::tempdir().unwrap();
+    let aida = legacy_primary(tmp.path());
+    let old = std::time::SystemTime::now() - std::time::Duration::from_secs(3600);
+    let write = |name: &str, mtime: Option<std::time::SystemTime>| {
+        let path = aida.join(name);
+        let file = std::fs::File::create(&path).unwrap();
+        if let Some(t) = mtime {
+            file.set_modified(t).unwrap();
+        }
+        path
+    };
+    // pid 4194304 is above Linux's pid_max ceiling, so never alive.
+    let dead_stale = write(".cache-db-migrate.4194304.1", Some(old));
+    let dead_recent = write(".cache-db-migrate.4194304.2", None);
+    let live_stale = write(
+        &format!(".cache-db-migrate.{}.3", std::process::id()),
+        Some(old),
+    );
+
+    assert_eq!(
+        migrate_legacy_cache_layout(&aida),
+        CacheLayoutMigration::Moved
+    );
+    assert!(!dead_stale.exists(), "dead owner's stale temp is swept");
+    assert!(dead_recent.exists(), "a recent temp is never swept");
+    assert!(live_stale.exists(), "a live owner's temp is never swept");
+    assert_eq!(marker(&cache_dir_in(&aida).join("cache.db")), "legacy-row");
+}
+
 /// Racing migrators publish exactly one database and leave no temp copies.
 #[test]
 fn concurrent_migrators_publish_one_database() {
@@ -309,4 +377,25 @@ fn cache_open_at_the_project_path_migrates_first() {
     assert!(path.is_file());
     assert!(!aida.join("cache.db").exists());
     assert_eq!(marker(&path), "legacy-row");
+}
+
+/// A raw reader's path helper migrates a legacy project before handing out the
+/// path, and invents no directory when there is nothing to migrate.
+#[test]
+fn migrated_project_cache_path_moves_a_legacy_cache_first() {
+    let tmp = tempfile::tempdir().unwrap();
+    let legacy = tmp.path().join("legacy");
+    let aida = legacy_primary(&legacy);
+    let path = migrated_project_cache_path(&legacy);
+    assert_eq!(path, project_cache_path(&legacy));
+    assert_eq!(marker(&path), "legacy-row");
+    assert!(!aida.join("cache.db").exists());
+
+    let fresh = tmp.path().join("fresh");
+    let fresh_aida = aida_dir(&fresh);
+    assert_eq!(
+        migrated_project_cache_path(&fresh),
+        project_cache_path(&fresh)
+    );
+    assert!(!cache_dir_in(&fresh_aida).exists());
 }

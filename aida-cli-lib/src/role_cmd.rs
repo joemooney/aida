@@ -683,7 +683,7 @@ struct RoleRequirementDisplay {
 }
 
 fn open_role_enter_cache(project_root: &std::path::Path) -> Option<rusqlite::Connection> {
-    let cache_path = aida_core::db::project_cache_path(project_root);
+    let cache_path = aida_core::db::migrated_project_cache_path(project_root);
     if !cache_path.exists() {
         return None;
     }
