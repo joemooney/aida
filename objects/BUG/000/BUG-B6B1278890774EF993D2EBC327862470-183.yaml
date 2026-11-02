@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-183
 agreed_id: BUG-2414
 title: The 10s unbudgeted test-time gate fails CI on unrelated tests at about 10.0s under runner load, ejecting train members
 description: 'Observed 2026-11-01/02: PR #3226 cli-0 (bug_046_padded_id_cli edit_comment... 11.0s), train #3252 cli-0 (story_164_single_hub single_hub_clones_claim_by_cas... 10.0s), #3192 lib-0 (own test 16.3s, real). All tests passed; only the budget step failed. Two ejections or reruns cost about 40 min. Expected: the budget gate flags only tests the PR touched or added, or uses a tolerance or median over runs for untouched tests; untouched tests near the limit get budget entries.'
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-02T12:46:32.235262603Z
-modified_at: 2026-11-02T13:00:12.512429355Z
+modified_at: 2026-11-02T13:00:14.776088193Z
 req_type: Bug
 tags:
 - area:ci
@@ -21,6 +21,15 @@ comments:
   created_at: 2026-11-02T13:00:12.512429355Z
   modified_at: 2026-11-02T13:00:12.512429355Z
   session_id: ee0bf351-6b17-486f-a38e-cfbb1343c426
+history:
+- id: 01a19c58-9a38-7550-bec8-4fc7e0a9f697
+  author: joe
+  timestamp: 2026-11-02T13:00:14.776083754Z
+  session_id: ee0bf351-6b17-486f-a38e-cfbb1343c426
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: 5b21d041d218b3030c4878b5cabb862da086026e
   branch: main
