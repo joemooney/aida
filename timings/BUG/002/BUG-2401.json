@@ -1,0 +1,61 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-2401",
+  "publishes": [
+    {
+      "at": "2026-11-02T10:46:02.994915696Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-01T11:28:35.172324907Z",
+      "spec": "BUG-2401",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "Independent STRICT codex-reviewer-12: incomplete effective-rule pagination and four introduced native authority-fixture failures.",
+        "recovery_hint": "address the review findings, move BUG-B6B1278890774EF993D2EBC327862470-174 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-11-01T13:35:49.720186182Z",
+      "spec": "BUG-2401",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "BUG-2401",
+        "branch": "codex/bug-2401-required-ci",
+        "first_seen": "2026-11-01T13:35:49.720141005+00:00"
+      }
+    },
+    {
+      "ts": "2026-11-02T10:42:14.187959545Z",
+      "spec": "BUG-2401",
+      "seat": "advisor",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-11-02T10:43:00.659381018Z",
+      "spec": "BUG-2401",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 3206
+      }
+    },
+    {
+      "ts": "2026-11-02T10:46:02.844324293Z",
+      "spec": "BUG-2401",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "08dd5ee4f327fdd6e4180bba24abe5f4df9743ab",
+        "pr": 3206,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
