@@ -2503,9 +2503,18 @@ pub(crate) fn session_start_with_receipt(
         // Gracefully skipped when gh/glab isn't installed.
         // trace:TASK-76 | ai:claude
         if let Some(source_branch) = query_pr_source_branch(forge, n, &project_root) {
-            let conflicting = review_branch_conflicts(&project_root, &source_branch);
-            if !conflicting.is_empty() {
-                let l = &conflicting[0];
+            // STORY-2315: a previous reviewer's lease on the local `pr-N`
+            // branch blocks the checkout too, and every blocking lease is
+            // handled, not only the first. trace:STORY-2315 | ai:claude
+            let mut conflicting = review_branch_conflicts(&project_root, &source_branch);
+            if branch_name != source_branch {
+                for l in review_branch_conflicts(&project_root, &branch_name) {
+                    if !conflicting.iter().any(|c| c.id == l.id) {
+                        conflicting.push(l);
+                    }
+                }
+            }
+            for l in &conflicting {
                 // BUG-1205: there is nobody to answer the prompt under a
                 // headless drain (or any non-TTY caller). Decide from the
                 // substrate: a lease whose owning process is gone is ended
@@ -2556,9 +2565,47 @@ pub(crate) fn session_start_with_receipt(
                             source_branch,
                             l.id
                         );
+                        // STORY-2315: a dead lease whose seat is clean and
+                        // whose HEAD is already in the PR loses nothing to
+                        // `--force`; plain `session end` refused it, so pass
+                        // `--force` then. A dirty seat or one with commits the
+                        // PR lacks refuses with that reason; an unprovable
+                        // lease keeps the plain end.
+                        // trace:STORY-2315 | ai:claude
+                        let force = match crate::pr_lease_takeover::check_pr_lease(
+                            &project_root,
+                            l,
+                            &source_branch,
+                        ) {
+                            crate::pr_lease_takeover::PrLeaseCheck::SafeToForceEnd => true,
+                            crate::pr_lease_takeover::PrLeaseCheck::Refuse(reason) => {
+                                anyhow::bail!(
+                                    "{}",
+                                    crate::pr_lease_takeover::refusal_message(
+                                        l,
+                                        &source_branch,
+                                        &reason
+                                    )
+                                );
+                            }
+                            crate::pr_lease_takeover::PrLeaseCheck::Live => anyhow::bail!(
+                                "PR-{}'s source branch `{}` is held by lease {} ({}, worktree {}), whose process is still running — end that session or wait for it, then retry",
+                                n,
+                                source_branch,
+                                l.id,
+                                l.role.as_deref().unwrap_or("(unset)"),
+                                l.worktree_path.display()
+                            ),
+                            crate::pr_lease_takeover::PrLeaseCheck::NotProvable(_) => false,
+                        };
+                        let mut end_args =
+                            vec!["session", "end", l.id.as_str(), "--yes", "--skip-ci"];
+                        if force {
+                            end_args.push("--force");
+                        }
                         let ended = std::process::Command::new(crate::aida_exe_path())
                             .current_dir(&project_root)
-                            .args(["session", "end", &l.id, "--yes", "--skip-ci"])
+                            .args(&end_args)
                             .stdin(std::process::Stdio::null())
                             .status_retrying_etxtbsy()
                             .map(|st| st.success())

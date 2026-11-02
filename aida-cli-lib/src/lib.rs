@@ -166,6 +166,8 @@ mod phase_gates;
 mod plan_followups;
 mod plan_intent;
 mod plan_report;
+// trace:STORY-2315 | ai:claude
+mod pr_lease_takeover;
 mod pr_lookup;
 mod pr_merge_gate;
 mod project_capabilities;
