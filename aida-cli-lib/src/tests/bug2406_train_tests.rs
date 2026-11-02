@@ -91,6 +91,9 @@ if a[0]=='api':
     if endpoint.split('?',1)[0].endswith('/status'):
         sha=endpoint.split('/commits/')[1].split('/')[0]; emit(dict(sha=sha,total_count=0,statuses=[]))
     if '/pulls/' in endpoint: emit(meta(endpoint.split('/pulls/')[1].split('/')[0]))
+    # trace:BUG-2401 | ai:claude — the train's required-check policy reads.
+    if endpoint.endswith('/branches/main/protection'): emit(dict(required_status_checks=dict(contexts=['Build (ubuntu-latest)'])))
+    if '/rules/branches/main' in endpoint: emit([])
 if a[:2]==['repo','view']: emit(dict(nameWithOwner='fixture/train',defaultBranchRef=dict(name='main')))
 print('unexpected gh '+repr(a),file=sys.stderr); sys.exit(2)
 "##;

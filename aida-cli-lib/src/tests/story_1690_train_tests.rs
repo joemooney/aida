@@ -2459,3 +2459,218 @@ esac
         .contains("changed"));
     assert!(host.merge(&change, &tip).is_err());
 }
+
+// trace:BUG-2401 | ai:claude
+fn bug2401_row(name: &str, bucket: &str) -> crate::ci_gate::CheckRow {
+    crate::ci_gate::CheckRow {
+        name: name.into(),
+        bucket: bucket.into(),
+        workflow: "CI".into(),
+        run_id: None,
+    }
+}
+
+/// An aggregate that registers only after its lanes finish is pending while
+/// they run, never missing (and never green); names share one comparator.
+#[test]
+// trace:BUG-2401 | ai:claude
+fn bug2401_absent_aggregate_behind_running_lanes_is_pending() {
+    let cfg = crate::ci_gate::CiGateConfig::default();
+    let required = vec!["Build (ubuntu-latest)".to_string()];
+    let mut rows = required_train_rows();
+    rows[3].bucket = "pending".into();
+    match train_ci_readiness(&rows, &required, &cfg, false) {
+        TrainCiReadiness::Pending(names) => {
+            assert!(names[0].starts_with("Build (ubuntu-latest)"), "{names:?}")
+        }
+        other => panic!("absent aggregate behind a running lane: {other:?}"),
+    }
+    rows[3].bucket = "pass".into();
+    assert!(matches!(
+        train_ci_readiness(&rows, &required, &cfg, false),
+        TrainCiReadiness::Missing(_)
+    ));
+    // Case differences neither leave a present check "missing" nor skip it.
+    rows.push(bug2401_row("build (UBUNTU-latest)", "pending"));
+    assert!(matches!(
+        train_ci_readiness(&rows, &required, &cfg, false),
+        TrainCiReadiness::Pending(_)
+    ));
+    rows.last_mut().unwrap().bucket = "pass".into();
+    assert_eq!(
+        train_ci_readiness(&rows, &required, &cfg, false),
+        TrainCiReadiness::Green
+    );
+}
+
+/// The wait loop: a long-lane build (aggregate absent behind pending lanes
+/// for well over 600s) still ends green; the 600s registration bound starts
+/// only once every observed row has settled.
+#[test]
+// trace:BUG-2401 | ai:claude
+fn bug2401_wait_loop_bounds_registration_only_after_lanes_settle() {
+    let pending = || TrainCiReadiness::Pending(vec!["Build (ubuntu-latest)".into()]);
+    let missing = || TrainCiReadiness::Missing(vec!["Build (ubuntu-latest)".into()]);
+    let run = |script: Vec<TrainCiReadiness>, settle_limit: u64| {
+        let mut script = script.into_iter();
+        let clock = std::cell::Cell::new(0u64);
+        wait_train_ci(
+            3206,
+            settle_limit,
+            || Ok(script.next().expect("the loop must not outlive its script")),
+            || clock.get(),
+            || clock.set(clock.get() + TRAIN_CI_POLL_SECS),
+        )
+    };
+    // ~17 minutes of lanes with no aggregate row, then it registers green.
+    let mut long = (0..100).map(|_| pending()).collect::<Vec<_>>();
+    long.push(TrainCiReadiness::Green);
+    assert_eq!(run(long, 3600).unwrap(), CiVerdict::Green);
+    // Lanes ran 1000s; the aggregate then stays absent: refused 600s later,
+    // not at once (the clock started when the lanes settled).
+    let mut late = (0..100).map(|_| pending()).collect::<Vec<_>>();
+    late.extend((0..70).map(|_| missing()));
+    let err = run(late, 0).unwrap_err().to_string();
+    assert!(err.contains("no CI registered within 600s"), "{err}");
+    // A run of Missing interrupted by Pending restarts the bound.
+    let mut reset = (0..50).map(|_| missing()).collect::<Vec<_>>();
+    reset.push(pending());
+    reset.extend((0..50).map(|_| missing()));
+    reset.push(TrainCiReadiness::Green);
+    assert_eq!(run(reset, 0).unwrap(), CiVerdict::Green);
+    // Absence never turns green, and the ordinary ceiling still bounds a wait.
+    let stuck = (0..100).map(|_| pending()).collect::<Vec<_>>();
+    assert!(run(stuck, 500)
+        .unwrap_err()
+        .to_string()
+        .contains("not ready"));
+    assert!(matches!(
+        run(vec![TrainCiReadiness::Red("x".into())], 0).unwrap(),
+        CiVerdict::Red(_)
+    ));
+}
+
+/// Composed live snapshot + wait loop with a mandate-admitted held member:
+/// the hold gate fails within seconds while lanes run and the aggregate is
+/// unregistered; the train waits, then ends green once the lanes and the
+/// aggregate pass (BUG-2214 tolerance). An unadmitted hold is red at once.
+#[test]
+// trace:BUG-2401 | ai:claude
+fn bug2401_held_member_train_waits_through_pending_lanes_to_green() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let root = tempfile::tempdir().unwrap();
+    let dir = root.path();
+    let gh = dir.join("gh");
+    crate::test_exec::write_executable(
+        &gh,
+        r#"#!/bin/sh
+case "$*" in
+  'pr view '*) cat head.json ;;
+  'api repos/{owner}/{repo}/branches/main/protection') cat protection.json ;;
+  'api repos/{owner}/{repo}/rules/branches/main?per_page=100&page='*) echo '[]' ;;
+  'pr checks '*) n=$(cat poll); cat "rows-$n.json" ;;
+  *) echo "unexpected forge call: $*" >&2; exit 1 ;;
+esac
+"#,
+    );
+    let path = format!("{}:{}", dir.display(), std::env::var("PATH").unwrap());
+    let _env = crate::test_env::EnvVarsGuard::set(&[
+        ("PATH", path.as_str()),
+        ("AIDA_TEST_GH_BINARY", gh.to_str().unwrap()),
+    ]);
+    let tip = "c".repeat(40);
+    let change = crate::forge::ChangeRef {
+        id: 3206,
+        url: "fixture".into(),
+        branch: "train".into(),
+        base: "main".into(),
+        title: None,
+    };
+    write(
+        dir,
+        "head.json",
+        &serde_json::json!({"headRefOid":tip,"baseRefName":"main","state":"OPEN"}).to_string(),
+    );
+    write(
+        dir,
+        "protection.json",
+        r#"{"required_status_checks":{"contexts":["Build (ubuntu-latest)","merge-hold-gate"]}}"#,
+    );
+    let rows = |lanes: &str, aggregate: Option<&str>| {
+        let mut rows: Vec<_> = (0..7)
+            .map(|i| serde_json::json!({"name":format!("Build lane {i}"),"bucket":lanes,"workflow":"CI"}))
+            .collect();
+        rows.push(serde_json::json!({"name":"merge-hold-gate","bucket":"fail","workflow":"hold"}));
+        if let Some(b) = aggregate {
+            rows.push(
+                serde_json::json!({"name":"Build (ubuntu-latest)","bucket":b,"workflow":"CI"}),
+            );
+        }
+        serde_json::to_string(&rows).unwrap()
+    };
+    write(dir, "rows-0.json", &rows("pending", None));
+    write(dir, "rows-1.json", &rows("pending", None));
+    write(dir, "rows-2.json", &rows("pass", Some("pending")));
+    write(dir, "rows-3.json", &rows("pass", Some("pass")));
+    let forge = crate::forge::forge_for_kind(dir, crate::forge::ForgeKind::GitHub);
+    let mut host = LiveTrainForge {
+        project_root: dir.into(),
+        main_worktree: dir.into(),
+        base: "main".into(),
+        forge: forge.as_ref(),
+        named: true,
+        dispatch_ctx: None,
+        dispatch_abort: None,
+    };
+    let car = |m: Member| Car {
+        member: m,
+        commit: "c".into(),
+        patch_id: "p".into(),
+    };
+    let held_labels =
+        |_: u64| -> std::result::Result<Option<crate::merge_hold::PinnedChange>, String> {
+            Ok(Some(crate::merge_hold::PinnedChange {
+                merged: false,
+                state: crate::merge_hold::ChangeState::Open,
+                head_sha: None,
+                hold_label: true,
+                recorded_label: true,
+                cleared_label: false,
+            }))
+        };
+    let run = |host: &mut LiveTrainForge<'_>, cars: &[Car]| {
+        write(dir, "poll", "0");
+        let polls = std::cell::Cell::new(0u32);
+        wait_train_ci(
+            change.id,
+            0,
+            || host.train_ci_snapshot_with(&change, &tip, cars, held_labels),
+            || u64::from(polls.get()) * 400,
+            || {
+                polls.set(polls.get() + 1);
+                write(dir, "poll", &polls.get().to_string());
+            },
+        )
+        .map(|v| (v, polls.get()))
+    };
+    // Admitted held member: waits through pending lanes (and 1200s of no
+    // aggregate), then green once lanes + aggregate pass.
+    let covered = vec![car(covered_member(7))];
+    assert_eq!(run(&mut host, &covered).unwrap(), (CiVerdict::Green, 3));
+    // A held member the mandate does not cover: the hold-gate red is real.
+    let plain = vec![car(member(7, "head7", "s"))];
+    let (verdict, polls) = run(&mut host, &plain).unwrap();
+    assert!(matches!(verdict, CiVerdict::Red(_)), "{verdict:?}");
+    assert_eq!(
+        polls, 0,
+        "an unexplained hold-gate red is red on the first poll"
+    );
+    // The final merge recheck carries no tolerance: a still-red hold gate
+    // (not re-run green after release) refuses.
+    assert!(matches!(
+        host.train_ci_snapshot(&change, &tip, &[]).unwrap(),
+        TrainCiReadiness::Red(_)
+    ));
+}

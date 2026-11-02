@@ -505,19 +505,35 @@ pub(crate) fn member_label_refusal(
 pub(crate) fn hold_gate_tolerance(
     rows: &[crate::ci_gate::CheckRow],
     cars: &[Car],
-    mut labels: impl FnMut(u64) -> std::result::Result<Option<crate::merge_hold::PinnedChange>, String>,
+    labels: impl FnMut(u64) -> std::result::Result<Option<crate::merge_hold::PinnedChange>, String>,
 ) -> bool {
-    let hold_gate = |name: &str| name.eq_ignore_ascii_case(crate::ci_gate::HOLD_GATE_CHECK);
-    if !rows
-        .iter()
-        .any(|r| hold_gate(&r.name) && r.bucket != "pass")
-    {
-        return false;
-    }
+    let hold_gate =
+        |name: &str| crate::ci_gate::check_name_eq(name, crate::ci_gate::HOLD_GATE_CHECK);
     if rows
         .iter()
         .any(|r| !hold_gate(&r.name) && !matches!(r.bucket.as_str(), "pass" | "skipping"))
     {
+        return false;
+    }
+    hold_release_admitted(rows, cars, labels)
+}
+
+/// The member half of [`hold_gate_tolerance`], without its "every other row
+/// is green" half: a non-pass hold gate is explained by admitted held members
+/// whose live labels agree with the member gate. The train's readiness poll
+/// uses this while lanes still run (the hold gate fails within seconds, long
+/// before the lanes settle); readiness still needs every other row to settle
+/// green before it reports Green. Unreadable labels fail closed.
+// trace:BUG-2401 | ai:claude
+pub(crate) fn hold_release_admitted(
+    rows: &[crate::ci_gate::CheckRow],
+    cars: &[Car],
+    mut labels: impl FnMut(u64) -> std::result::Result<Option<crate::merge_hold::PinnedChange>, String>,
+) -> bool {
+    if !rows.iter().any(|r| {
+        crate::ci_gate::check_name_eq(&r.name, crate::ci_gate::HOLD_GATE_CHECK)
+            && r.bucket != "pass"
+    }) {
         return false;
     }
     if !cars.iter().any(|c| c.member.release.is_some()) {
@@ -560,12 +576,31 @@ fn train_ci_readiness(
                 .join(", ")
         ));
     }
+    // One comparator for every gate: classify_red and the hold tolerance
+    // match names case-insensitively too. trace:BUG-2401 | ai:claude
+    let same = crate::ci_gate::check_name_eq;
+    let is_required = |name: &str| required.iter().any(|r| same(r, name));
+    let settled = |row: &crate::ci_gate::CheckRow| {
+        matches!(row.bucket.as_str(), "pass" | "fail" | "cancel" | "skipping")
+    };
     let missing: Vec<_> = required
         .iter()
-        .filter(|name| !rows.iter().any(|r| r.name == **name))
+        .filter(|name| !rows.iter().any(|r| same(&r.name, name)))
         .cloned()
         .collect();
     if !missing.is_empty() {
+        // An aggregate with `needs:` + `always()` registers only after every
+        // lane finishes (~15 min). While any observed row still runs, its
+        // absence is ordinary pending, never green; the registration bound
+        // starts once every observed row has settled. trace:BUG-2401 | ai:claude
+        if rows.iter().any(|r| !settled(r)) {
+            return TrainCiReadiness::Pending(
+                missing
+                    .into_iter()
+                    .map(|n| format!("{n} (not registered yet)"))
+                    .collect(),
+            );
+        }
         return TrainCiReadiness::Missing(missing);
     }
     if rows.is_empty() {
@@ -575,9 +610,9 @@ fn train_ci_readiness(
     let pending: Vec<_> = rows
         .iter()
         .filter(|row| {
-            required.contains(&row.name)
+            is_required(&row.name)
                 && !matches!(row.bucket.as_str(), "pass" | "fail" | "cancel")
-                && !(tolerate_hold && row.name == crate::ci_gate::HOLD_GATE_CHECK)
+                && !(tolerate_hold && same(&row.name, crate::ci_gate::HOLD_GATE_CHECK))
         })
         .map(|r| r.name.clone())
         .collect();
@@ -596,6 +631,54 @@ fn train_ci_readiness(
         return TrainCiReadiness::Pending(vec!["unclassified CI state".into()]);
     }
     TrainCiReadiness::Green
+}
+
+/// Seconds between train CI readiness polls.
+const TRAIN_CI_POLL_SECS: u64 = 10;
+/// How long a required check may stay unregistered once every observed row
+/// has settled (the pre-BUG-2401 registration bound).
+const TRAIN_CI_REGISTRATION_SECS: u64 = 600;
+
+/// The train's CI wait over injected snapshot/clock/sleep ports. `Missing`
+/// is bounded by [`TRAIN_CI_REGISTRATION_SECS`] counted from when it was
+/// first seen with every observed row settled (readiness reports an absent
+/// aggregate behind running lanes as `Pending`); everything else is bounded
+/// by the ordinary CI ceiling (`settle_limit`, 0 = none).
+// trace:BUG-2401 | ai:claude
+fn wait_train_ci(
+    pr: u64,
+    settle_limit: u64,
+    mut snapshot: impl FnMut() -> Result<TrainCiReadiness>,
+    mut elapsed: impl FnMut() -> u64,
+    mut sleep: impl FnMut(),
+) -> Result<CiVerdict> {
+    let mut missing_since: Option<u64> = None;
+    loop {
+        let state = snapshot()?;
+        let now = elapsed();
+        let waiting = match state {
+            TrainCiReadiness::Green => return Ok(CiVerdict::Green),
+            TrainCiReadiness::Red(why) => return Ok(CiVerdict::Red(why)),
+            waiting => waiting,
+        };
+        println!("  train PR #{pr} CI waiting: {waiting:?}");
+        if let TrainCiReadiness::Missing(names) = &waiting {
+            let since = *missing_since.get_or_insert(now);
+            anyhow::ensure!(
+                now.saturating_sub(since) < TRAIN_CI_REGISTRATION_SECS,
+                "no CI registered within {TRAIN_CI_REGISTRATION_SECS}s for train PR #{pr} \
+                 after its other checks settled (missing: {})",
+                names.join(", ")
+            );
+        } else {
+            missing_since = None;
+        }
+        anyhow::ensure!(
+            settle_limit == 0 || now < settle_limit,
+            "train PR #{pr} CI not ready within {settle_limit}s: {waiting:?}"
+        );
+        sleep();
+    }
 }
 
 pub(crate) fn short(sha: &str) -> &str {
@@ -1586,6 +1669,23 @@ impl LiveTrainForge<'_> {
         tip: &str,
         cars: &[Car],
     ) -> Result<TrainCiReadiness> {
+        let root = self.project_root.clone();
+        let kind = self.forge.kind();
+        self.train_ci_snapshot_with(change, tip, cars, |pr| {
+            crate::merge_hold::fetch_pinned_change(&root, kind, pr).map_err(|e| e.to_string())
+        })
+    }
+
+    /// [`Self::train_ci_snapshot`] with the live member-label read injected
+    /// (tests stand in a pinned label read; production passes the forge's).
+    // trace:BUG-2401 | ai:claude
+    fn train_ci_snapshot_with(
+        &mut self,
+        change: &crate::forge::ChangeRef,
+        tip: &str,
+        cars: &[Car],
+        labels: impl FnMut(u64) -> std::result::Result<Option<crate::merge_hold::PinnedChange>, String>,
+    ) -> Result<TrainCiReadiness> {
         self.dispatch_check()?;
         // Bracket the policy/row reads: rows from a different head or base
         // cannot promote the built train, including after hold release.
@@ -1614,13 +1714,26 @@ impl LiveTrainForge<'_> {
         let required =
             crate::status_prs::train_required_status_checks(&self.project_root, &change.base)?;
         let rows = self.forge.check_rows(change)?;
+        // A forge that reports no CI at all refuses at once, as before; it
+        // never waits out the registration bound. trace:BUG-2401 | ai:claude
+        if rows.is_empty()
+            && required.is_empty()
+            && self.forge.checks_registered(change)? == crate::forge::CheckRegistration::NoCi
+        {
+            anyhow::bail!(
+                "the forge reports no CI for train PR #{}; a train lands only on a green CI",
+                change.id
+            );
+        }
         let cfg = crate::ci_gate::read_ci_gate_config(&self.project_root);
-        // Only the existing, live member-label proof may tolerate a hold.
-        let tolerated = hold_gate_tolerance(&rows, cars, |pr| {
-            crate::merge_hold::fetch_pinned_change(&self.project_root, self.forge.kind(), pr)
-                .map_err(|e| e.to_string())
-        });
-        let state = train_ci_readiness(&rows, &required, &cfg, tolerated);
+        // Only the existing, live member-label proof may tolerate a hold. The
+        // hold gate fails seconds after the train opens, while lanes still
+        // run: admission is decided from the members' live labels alone, and
+        // readiness still waits for every other row to settle green before
+        // Green (BUG-2214's tolerance, decided once the others settle).
+        // trace:BUG-2401 | ai:claude
+        let admitted = hold_release_admitted(&rows, cars, labels);
+        let state = train_ci_readiness(&rows, &required, &cfg, admitted);
         assert_head()?;
         self.dispatch_check()?;
         Ok(state)
@@ -1717,30 +1830,13 @@ impl TrainForge for LiveTrainForge<'_> {
         if self.forge.kind() == crate::forge::ForgeKind::GitHub {
             let started = std::time::Instant::now();
             let settle_limit = crate::ci_idle_timeout::ci_absolute_ceiling_secs(&self.project_root);
-            loop {
-                let state = self.train_ci_snapshot(change, &train.tip, &train.cars)?;
-                match state {
-                    TrainCiReadiness::Green => return Ok(CiVerdict::Green),
-                    TrainCiReadiness::Red(why) => return Ok(CiVerdict::Red(why)),
-                    waiting => {
-                        println!("  train PR #{} CI waiting: {waiting:?}", change.id);
-                        // Registration keeps its existing 600s bound. An
-                        // already running build gets the ordinary CI ceiling,
-                        // rather than being cut off by the registration timer.
-                        let limit = if matches!(waiting, TrainCiReadiness::Missing(_)) {
-                            600
-                        } else {
-                            settle_limit
-                        };
-                        anyhow::ensure!(
-                            limit == 0 || started.elapsed().as_secs() < limit,
-                            "train PR #{} CI not ready within {limit}s: {waiting:?}",
-                            change.id
-                        );
-                        std::thread::sleep(std::time::Duration::from_secs(10));
-                    }
-                }
-            }
+            return wait_train_ci(
+                change.id,
+                settle_limit,
+                || self.train_ci_snapshot(change, &train.tip, &train.cars),
+                || started.elapsed().as_secs(),
+                || std::thread::sleep(std::time::Duration::from_secs(TRAIN_CI_POLL_SECS)),
+            );
         }
 
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(600);
