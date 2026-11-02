@@ -1,0 +1,35 @@
+id: 01a19dc0-23db-7260-862b-c41443114195
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-325
+agreed_id: STORY-2327
+title: 'Review PR-3268: [AI:claude] fix(session): re-validate other-build mail activation; check origin''s real branch tips (BUG-2411 BUG-2415)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a19d90`) for branch `bug-2411-work`.
+
+  - PR: <https://github.com/joemooney/aida/pull/3268>
+  - Branch: `bug-2411-work` → `main`
+
+  ## Covers
+
+  - BUG-2411
+  - BUG-2415
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 3268` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-02T19:32:57.435957747Z
+modified_at: 2026-11-02T19:32:57.435957747Z
+req_type: Story
+filed_at:
+  code_sha: c4cba2dd2cd0b61216bd9c3377149e43a52382ed
+  branch: main
+  dirty: true
+  aida_version: 0.16.0
+  aida_build_sha: 6a3f67671a9
+  vendor: claude
+  session: ee0bf351-6b17-486f-a38e-cfbb1343c426
