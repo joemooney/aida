@@ -729,6 +729,31 @@ pub fn nearest_claude_in_chain<'a>(
         .map(|(pid, _, _)| pid)
 }
 
+/// The nearest live Codex CLI process in the ancestor chain of `start`
+/// (inclusive), or `None` when no ancestor is a codex process. `aida advisor
+/// register` run from a Codex thread records it so the advisor's liveness
+/// check has a PID, as it does for Claude. trace:STORY-2255 | ai:claude
+pub fn nearest_codex_ancestor_pid(start: u32) -> Option<u32> {
+    let sys = System::new_with_specifics(
+        RefreshKind::new()
+            .with_processes(ProcessRefreshKind::new().with_cmd(sysinfo::UpdateKind::Always)),
+    );
+    let mut cur = sysinfo::Pid::from_u32(start);
+    let mut seen = std::collections::HashSet::new();
+    while seen.insert(cur) {
+        let proc = sys.process(cur)?;
+        if is_codex_process(proc.name(), proc.cmd()) {
+            return Some(cur.as_u32());
+        }
+        let parent = proc.parent()?;
+        if parent == sysinfo::Pid::from_u32(1) || parent == cur {
+            return None;
+        }
+        cur = parent;
+    }
+    None
+}
+
 /// Return the nearest AIDA process in `start`'s inclusive ancestor chain.
 /// Each PID is refreshed as it is visited, so this is not a consistent
 /// process-table snapshot. If an ancestor exits between refreshes, the walk

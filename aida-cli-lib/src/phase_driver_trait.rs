@@ -2963,11 +2963,15 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                 &request_path,
             )?
         } else {
-            let fork_plan = advisor::plan_fork(&self.project_root, &advisor_cfg);
-            let pass = match fork_plan {
-                Some(plan) => AdvisorPass::Fork(plan),
-                None => AdvisorPass::ColdBoot,
-            };
+            // STORY-2255: a Codex vendor forks the registered live Codex
+            // thread (`codex exec fork`) or cold-boots saying why.
+            // trace:STORY-2255 | ai:claude
+            let pass = crate::advisor_cmd_root::primary_advisor_pass(
+                session::resolve_headless_vendor(&self.project_root),
+                &self.project_root,
+                &advisor_cfg,
+                self.json,
+            );
             self.spawn_advisor_session(pass, &advisor_cfg, &response_path, &request_path)?
         };
 
