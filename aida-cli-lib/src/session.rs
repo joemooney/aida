@@ -1725,36 +1725,6 @@ pub(crate) fn compose_headless_command_forking(
     effort: Option<&str>,
     fork_thread: Option<&str>,
 ) -> Result<(String, Vec<String>)> {
-    compose_headless_lane_command(
-        vendor,
-        prompt,
-        session_id,
-        contained,
-        model,
-        effort,
-        fork_thread,
-        false,
-    )
-}
-
-/// [`compose_headless_command_forking`] for a lane that may be a plan lane.
-/// BUG-2394: `read_only` (a `--plan-only --no-human` pickup or the drain's
-/// `--plan-phase` prelude) puts a Codex `exec` under `--sandbox read-only`
-/// through [`codex_read_only_args`], the same helper the interactive plan
-/// lane uses, before any OS wrapper is added. Claude's headless posture is
-/// unchanged.
-// trace:BUG-2394 | ai:claude
-#[allow(clippy::too_many_arguments)]
-pub(crate) fn compose_headless_lane_command(
-    vendor: HeadlessVendor,
-    prompt: &str,
-    session_id: &str,
-    contained: bool,
-    model: Option<&str>,
-    effort: Option<&str>,
-    fork_thread: Option<&str>,
-    read_only: bool,
-) -> Result<(String, Vec<String>)> {
     anyhow::ensure!(
         fork_thread.is_none() || vendor == HeadlessVendor::Codex,
         "only a codex thread can be forked with `exec fork`, not {}",
@@ -1809,12 +1779,6 @@ pub(crate) fn compose_headless_lane_command(
     let args = match fork_thread {
         Some(thread) => codex_exec_fork_args(args, thread)?,
         None => args,
-    };
-    // trace:BUG-2394 | ai:claude
-    let args = if read_only && vendor == HeadlessVendor::Codex {
-        codex_read_only_args(args)
-    } else {
-        args
     };
     os_wrapped_program_and_args(&worktree, &resolve_agent_program(vendor.program()), args)
 }
@@ -1889,11 +1853,9 @@ pub(crate) fn compose_headless_command_for(
     model: Option<&str>,
     effort: Option<&str>,
     resume: bool,
-    read_only: bool,
 ) -> Result<(String, Vec<String>)> {
-    let (program, args) = compose_headless_lane_command(
-        vendor, prompt, session_id, contained, model, effort, None, read_only,
-    )?;
+    let (program, args) =
+        compose_headless_command(vendor, prompt, session_id, contained, model, effort)?;
     if !resume {
         return Ok((program, args));
     }
@@ -2462,23 +2424,25 @@ pub(crate) fn codex_plan_read_only(permission_mode: Option<&str>) -> bool {
     permission_mode == Some("plan")
 }
 
-/// BUG-2394: the MCP server names a Codex launch would load from its config
-/// files — `$CODEX_HOME/config.toml` (default `~/.codex/config.toml`) and,
-/// only when Codex trusts the project, the project's `.codex/config.toml`.
+/// BUG-2394: the MCP server names a Codex launch running in `launch_cwd` would
+/// load from its config files — `$CODEX_HOME/config.toml` (default
+/// `~/.codex/config.toml`) and, only when Codex trusts that directory, its
+/// `.codex/config.toml`. Codex resolves trust for the directory it runs in (the
+/// seat), not for the launcher's checkout.
 /// Codex ignores an untrusted project's config, and a `-c` override for a
 /// server it never loaded creates a transport-less entry that refuses to start,
 /// so such servers are not listed. Only the table names are read; no command,
 /// env or credential value leaves this function. Unreadable / malformed files
 /// contribute nothing (Codex itself refuses to start on a malformed config).
 // trace:BUG-2394 | ai:claude
-pub(crate) fn codex_configured_mcp_servers(project_root: &Path) -> Vec<String> {
+pub(crate) fn codex_configured_mcp_servers(launch_cwd: &Path) -> Vec<String> {
     let codex_home = std::env::var_os("CODEX_HOME")
         .filter(|v| !v.is_empty())
         .map(PathBuf::from)
         .or_else(|| crate::home_dir().map(|h| h.join(".codex")));
     let home_config = codex_home.and_then(|home| read_toml_table(&home.join("config.toml")));
-    let project_config = codex_project_trusted(home_config.as_ref(), project_root)
-        .then(|| read_toml_table(&project_root.join(".codex").join("config.toml")))
+    let project_config = codex_project_trusted(home_config.as_ref(), launch_cwd)
+        .then(|| read_toml_table(&launch_cwd.join(".codex").join("config.toml")))
         .flatten();
     let mut names = Vec::new();
     for table in [home_config.as_ref(), project_config.as_ref()]
@@ -2594,6 +2558,18 @@ pub(crate) fn codex_mcp_flags(
         }
     }
     Ok(args)
+}
+
+/// BUG-2394: the `[agents] mcp` surface configured for `project_root` and the
+/// `-c` overrides that enforce it on a Codex seat running in `launch_cwd`.
+// trace:BUG-2394 | ai:claude
+pub(crate) fn codex_mcp_launch_flags(
+    project_root: &Path,
+    launch_cwd: &Path,
+) -> Result<(AgentMcpSurface, Vec<String>)> {
+    let surface = crate::agent_config::load_codex_agents_mcp(project_root)?;
+    let flags = codex_mcp_flags(surface, &codex_configured_mcp_servers(launch_cwd))?;
+    Ok((surface, flags))
 }
 
 /// BUG-2394: the limit of [`codex_mcp_flags`], stated wherever the Codex MCP
@@ -5325,7 +5301,7 @@ pub(crate) fn build_exec_vendor_headless_command(
     grant_env: &str,
 ) -> Result<std::process::Command> {
     build_exec_vendor_headless_command_for(
-        vendor, prompt, session_id, contained, model, effort, seat, grant_env, false, false,
+        vendor, prompt, session_id, contained, model, effort, seat, grant_env, false,
     )
 }
 
@@ -5343,11 +5319,9 @@ fn build_exec_vendor_headless_command_for(
     seat: &str,
     grant_env: &str,
     resume: bool,
-    read_only: bool,
 ) -> Result<std::process::Command> {
     build_coordinator_headless_command_inner(
         vendor, prompt, session_id, contained, model, effort, seat, grant_env, resume, None, true,
-        read_only,
     )
 }
 
@@ -5382,7 +5356,6 @@ pub(crate) fn build_coordinator_headless_command(
         false,
         Some(mode),
         stream,
-        false,
     )?;
     command.env("AIDA_HEADLESS_VENDOR", vendor.as_str());
     Ok(command)
@@ -5412,7 +5385,6 @@ pub(crate) fn coordinator_headless_preview(
         contained,
         tuning.model.as_deref(),
         tuning.effort.as_deref(),
-        false,
         false,
     )?;
     adapt_coordinator_args(vendor, &mut args, Some(mode), contained, stream);
@@ -5543,14 +5515,12 @@ fn build_coordinator_headless_command_inner(
     resume: bool,
     mode: Option<&str>,
     stream: bool,
-    read_only: bool,
 ) -> Result<std::process::Command> {
     use std::process::Command;
     // trace:BUG-2172 | ai:codex
     let contained = aida_contained_env()? || contained;
-    let (program, mut args) = compose_headless_command_for(
-        vendor, prompt, session_id, contained, model, effort, resume, read_only,
-    )?;
+    let (program, mut args) =
+        compose_headless_command_for(vendor, prompt, session_id, contained, model, effort, resume)?;
     adapt_coordinator_args(vendor, &mut args, mode, contained, stream);
     // TASK-1169 / ADR-22: same bounded ceiling as the spawn path — the exec
     // path is the `--no-human` phase-1 implementer, which must not diverge.
@@ -5603,7 +5573,6 @@ pub(crate) fn exec_vendor_headless(
     seat: &str,
     child_grant: &crate::gate::seat_authority::HeadlessChildGrant,
     lane_tree: Option<(&Path, &str)>,
-    read_only: bool,
 ) -> Result<()> {
     let run_once = |prompt: &str, log: &Path, resume: bool, hold: Option<&dyn Fn() -> bool>| {
         run_vendor_headless_child(
@@ -5619,8 +5588,6 @@ pub(crate) fn exec_vendor_headless(
             &HeadlessChildHooks {
                 resume,
                 hold_reap: hold,
-                // trace:BUG-2394 | ai:claude
-                read_only,
                 ..HeadlessChildHooks::default()
             },
         )
@@ -5921,9 +5888,6 @@ pub(crate) struct HeadlessChildHooks<'a> {
     /// BUG-044: while true, a vendor still alive after its final result is
     /// left running rather than reaped (its own background build is going).
     pub(crate) hold_reap: Option<&'a dyn Fn() -> bool>,
-    /// BUG-2394: a plan lane (`--plan-only --no-human`, drain `--plan-phase`).
-    /// A Codex child runs under `--sandbox read-only`; Claude is unaffected.
-    pub(crate) read_only: bool,
 }
 
 /// BUG-044: `args` (a composed `--session-id <id>` launch) rewritten to
@@ -6035,7 +5999,6 @@ fn run_vendor_headless_child(
         seat,
         grant_env,
         hooks.resume,
-        hooks.read_only,
     )?;
     // trace:STORY-1662 | ai:claude
     if let Some(customize) = hooks.customize {

@@ -507,8 +507,6 @@ pub(crate) struct Launch<'a> {
     pub(crate) branch: &'a str,
     pub(crate) contained: bool,
     pub(crate) child_grant: &'a crate::gate::seat_authority::HeadlessChildGrant,
-    /// BUG-2394: a `--plan-only` pickup; a Codex child runs read-only.
-    pub(crate) read_only: bool,
 }
 
 /// The audit reason for a baseline child whose launcher presented no grant at
@@ -669,8 +667,6 @@ pub(crate) fn run(launch: Launch<'_>) -> Result<()> {
                     on_spawn: Some(&on_spawn),
                     resume,
                     hold_reap: Some(hold),
-                    // trace:BUG-2394 | ai:claude
-                    read_only: launch.read_only,
                 },
             )
         },

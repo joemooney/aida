@@ -233,75 +233,38 @@ fn headless_env() -> crate::test_env::EnvVarsGuard {
     ])
 }
 
-// `aida queue work X --plan-only --no-human --vendor codex`: the standalone
-// implementer and the drain lane both compose through
-// `compose_headless_command_for` with `read_only = plan_only`.
+// Ruling 2026-11-02 10:59: a headless Codex plan lane (`--plan-only
+// --no-human`, the drain's `--plan-phase`) must write
+// docs/plans/<date>-<slug>.md for `aida plan promote`, and Claude's headless
+// plan lane keeps its write posture, so the Codex one does too. Only the
+// interactive `--plan-only` lane is read-only.
 #[test]
-fn bug_2394_headless_no_human_plan_only_codex_exec_is_read_only() {
+fn bug_2394_headless_codex_plan_lane_keeps_write_posture() {
     let _env = headless_env();
-    let (_, args) = compose_headless_command_for(
-        HeadlessVendor::Codex,
-        "/aida-plan BUG-1",
-        "sid",
-        false,
-        Some("m"),
-        None,
-        false,
-        true,
-    )
-    .unwrap();
-    assert_eq!(
-        sandbox_values(&args),
-        vec!["read-only".to_string()],
-        "{args:?}"
-    );
-    assert!(
-        !args
-            .iter()
-            .any(|a| a == "--dangerously-bypass-approvals-and-sandbox"),
-        "{args:?}"
-    );
-    assert!(args.iter().any(|a| a == "exec"), "{args:?}");
-    assert!(args.windows(2).any(|w| w[0] == "--model" && w[1] == "m"));
-
-    // The ordinary (non-plan) headless lane keeps its historical posture.
-    let (_, write) = compose_headless_command_for(
-        HeadlessVendor::Codex,
-        "/aida-pickup BUG-1",
-        "sid",
-        false,
-        None,
-        None,
-        false,
-        false,
-    )
-    .unwrap();
-    assert!(sandbox_values(&write).is_empty(), "{write:?}");
-
-    // Claude's headless argv is unchanged by the flag.
-    let claude = |read_only| {
+    let compose = |prompt| {
         compose_headless_command_for(
-            HeadlessVendor::Claude,
-            "/aida-plan BUG-1",
+            HeadlessVendor::Codex,
+            prompt,
             "sid",
             false,
             None,
             None,
             false,
-            read_only,
         )
         .unwrap()
         .1
     };
-    assert_eq!(claude(true), claude(false));
-}
+    let plan = compose("/aida-plan BUG-1");
+    assert!(
+        !sandbox_values(&plan).iter().any(|v| v == "read-only"),
+        "{plan:?}"
+    );
+    assert_eq!(
+        sandbox_values(&plan),
+        sandbox_values(&compose("/aida-pickup BUG-1"))
+    );
 
-// The drain's `--plan-phase` prelude reaches the vendor through the
-// `exec_vendor_headless` hooks: the built child command carries the read-only
-// sandbox.
-#[test]
-fn bug_2394_drain_plan_phase_codex_child_command_is_read_only() {
-    let _env = headless_env();
+    // The drain's `--plan-phase` child is built the same way: no read-only.
     let cmd = build_exec_vendor_headless_command_for(
         HeadlessVendor::Codex,
         "/aida-plan BUG-1",
@@ -312,40 +275,16 @@ fn bug_2394_drain_plan_phase_codex_child_command_is_read_only() {
         "implementer",
         "",
         false,
-        true,
     )
     .unwrap();
     let args: Vec<String> = cmd
         .get_args()
         .map(|a| a.to_string_lossy().into_owned())
         .collect();
-    assert_eq!(
-        sandbox_values(&args),
-        vec!["read-only".to_string()],
+    assert!(
+        !sandbox_values(&args).iter().any(|v| v == "read-only"),
         "{args:?}"
     );
-    assert!(!args
-        .iter()
-        .any(|a| a == "--dangerously-bypass-approvals-and-sandbox"));
-}
-
-// Both headless plan paths in `handle_queue_work` pass `plan_only` (which is
-// `--plan-only || --plan-phase`) as the read-only flag.
-#[test]
-fn bug_2394_queue_work_headless_plan_paths_pass_plan_only() {
-    let queue =
-        std::fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("src/queue_cmd.rs"))
-            .unwrap();
-    let call = queue
-        .find("session::exec_vendor_headless(")
-        .expect("drain lane launch");
-    let args = &queue[call..call + queue[call..].find(");").unwrap()];
-    assert!(args.trim_end().ends_with("plan_only,"), "{args}");
-    let launch = queue
-        .find("crate::standalone_implementer::Launch {")
-        .expect("standalone launch");
-    let fields = &queue[launch..launch + queue[launch..].find("});").unwrap()];
-    assert!(fields.contains("read_only: plan_only"), "{fields}");
 }
 
 /// `[projects."<project>"] trust_level = "trusted"`, serialized by the TOML
@@ -447,4 +386,61 @@ fn bug_2394_codex_mcp_unset_means_aida_and_off_must_be_explicit() {
         crate::agent_config::load_codex_agents_mcp(project.path()).unwrap(),
         AgentMcpSurface::Off
     );
+}
+
+// Ruling 2026-11-02 10:59 item 4: Codex trusts the directory it runs in, so the
+// overrides are re-keyed on the seat once the launch plan names it. Here the
+// launcher's checkout is untrusted and the seat is trusted: the seat's
+// project-only server gains its override; the reverse drops it.
+#[test]
+fn bug_2394_codex_mcp_trust_is_keyed_on_the_seat_not_the_launcher_root() {
+    let (tmp, codex_home, seat) = codex_home_with(true);
+    let launcher_root = tmp.path().join("launcher");
+    std::fs::create_dir_all(launcher_root.join(".aida")).unwrap();
+    std::fs::write(
+        launcher_root.join(".aida/agents.toml"),
+        "[agents]\nmcp = \"off\"\n",
+    )
+    .unwrap();
+    let _env = crate::test_env::EnvVarsGuard::set(&[
+        ("CODEX_HOME", codex_home.to_str().unwrap()),
+        ("AIDA_HOME", tmp.path().join("aida-home").to_str().unwrap()),
+    ]);
+    let (_, at_root) = codex_mcp_launch_flags(&launcher_root, &launcher_root).unwrap();
+    let (_, at_seat) = codex_mcp_launch_flags(&launcher_root, &seat).unwrap();
+    assert_eq!(at_root, s(&["-c", "mcp_servers.aida.enabled=false"]));
+    assert_eq!(
+        at_seat,
+        s(&[
+            "-c",
+            "mcp_servers.aida.enabled=false",
+            "-c",
+            "mcp_servers.project_only.enabled=false",
+        ])
+    );
+
+    let config = |args: Vec<String>| crate::AgentLaunchConfig {
+        agent_type: "codex",
+        binary: "codex",
+        default_args: args,
+        prompt_style: crate::AgentPromptStyle::Positional,
+        contained: false,
+    };
+    let mut launch = config([s(&["--no-daemon"]), at_root.clone(), s(&["--x"])].concat());
+    crate::rescope_codex_mcp_flags(&mut launch, &launcher_root, &seat, true).unwrap();
+    assert_eq!(
+        launch.default_args,
+        [s(&["--no-daemon"]), at_seat.clone(), s(&["--x"])].concat()
+    );
+
+    // `--no-default-flags`: no overrides were applied, none are added.
+    let mut bare = config(s(&["--no-daemon"]));
+    crate::rescope_codex_mcp_flags(&mut bare, &launcher_root, &seat, false).unwrap();
+    assert_eq!(bare.default_args, s(&["--no-daemon"]));
+
+    // Claude launches are never touched.
+    let mut claude = config(at_root.clone());
+    claude.agent_type = "claude";
+    crate::rescope_codex_mcp_flags(&mut claude, &launcher_root, &seat, true).unwrap();
+    assert_eq!(claude.default_args, at_root);
 }

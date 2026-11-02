@@ -1838,6 +1838,42 @@ pub(crate) fn refuse_unallowlisted_contained_passthrough(
     Ok(())
 }
 
+/// BUG-2394: re-key a Codex launch's `[agents] mcp` overrides on the tree the
+/// seat runs in. [`apply_agent_default_flags`] runs before the seat exists, so
+/// it read Codex's project trust for the launcher's `project_root`; Codex
+/// trusts (and loads `.codex/config.toml` for) the directory it runs in. The
+/// overrides computed for `project_root` are swapped for those of `launch_cwd`
+/// when they differ. They are located by value, so a launch that skipped the
+/// config defaults (`--no-default-flags`) is left alone; `defaults_applied`
+/// covers the one case where the earlier set was empty.
+// trace:BUG-2394 | ai:claude
+pub(crate) fn rescope_codex_mcp_flags(
+    config: &mut AgentLaunchConfig,
+    project_root: &std::path::Path,
+    launch_cwd: &std::path::Path,
+    defaults_applied: bool,
+) -> Result<()> {
+    if config.agent_type != "codex" || launch_cwd == project_root {
+        return Ok(());
+    }
+    let (_, old) = session::codex_mcp_launch_flags(project_root, project_root)?;
+    let (_, new) = session::codex_mcp_launch_flags(project_root, launch_cwd)?;
+    if old == new {
+        return Ok(());
+    }
+    let args = &mut config.default_args;
+    if old.is_empty() {
+        if defaults_applied {
+            args.extend(new);
+        }
+        return Ok(());
+    }
+    if let Some(at) = args.windows(old.len()).position(|w| w == old.as_slice()) {
+        args.splice(at..at + old.len(), new);
+    }
+    Ok(())
+}
+
 /// BUG-2169 S2: point a contained claude launch's `--settings` at the tree
 /// the seat will run in. The posture is resolved before the session's tree
 /// exists, so [`tool_contained_flags`] scoped the write boundary to the
@@ -2814,6 +2850,8 @@ pub(crate) fn agent_new_with_config_wake(
     if rotate {
         resume.prompt_enabled = false;
     }
+    // trace:BUG-2394 | ai:claude
+    let codex_mcp_defaults = flag_options.use_config_defaults;
     apply_agent_default_flags(
         &mut config,
         &project_root,
@@ -2963,6 +3001,13 @@ pub(crate) fn agent_new_with_config_wake(
     )?;
     // trace:BUG-2169 | ai:claude
     rescope_contained_settings(&mut config, &plan.launch_cwd)?;
+    // trace:BUG-2394 | ai:claude
+    rescope_codex_mcp_flags(
+        &mut config,
+        &project_root,
+        &plan.launch_cwd,
+        codex_mcp_defaults,
+    )?;
     config.default_args.extend(agent_seed_session_args(
         config.agent_type,
         plan.native_session_id.as_deref(),

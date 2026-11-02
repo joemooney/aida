@@ -13520,8 +13520,6 @@ pub(crate) fn handle_queue_work(
                     branch: &lease.branch,
                     contained,
                     child_grant,
-                    // trace:BUG-2394 | ai:claude
-                    read_only: plan_only,
                 });
             }
         }
@@ -13667,10 +13665,6 @@ pub(crate) fn handle_queue_work(
                             "claude -p, {}",
                             claude_posture_display(permission_mode.as_deref(), contained)
                         ),
-                        // trace:BUG-2394 | ai:claude
-                        crate::session::HeadlessVendor::Codex if plan_only => {
-                            "codex exec, read-only sandbox".to_string()
-                        }
                         crate::session::HeadlessVendor::Codex => "codex exec".to_string(),
                         // trace:TASK-1048 | ai:claude
                         crate::session::HeadlessVendor::Agy => "agy -p".to_string(),
@@ -13739,11 +13733,6 @@ pub(crate) fn handle_queue_work(
                         // BUG-050: the lane's seat, for the resume safety net.
                         // trace:BUG-B6B1278890774EF993D2EBC327862470-050 | ai:claude
                         Some((&lease.worktree_path, &lease.branch)),
-                        // BUG-2394: `--plan-only --no-human` and the drain's
-                        // `--plan-phase` both arrive as `plan_only`; a Codex
-                        // plan lane runs under `--sandbox read-only`.
-                        // trace:BUG-2394 | ai:claude
-                        plan_only,
                     );
                 }
                 eprintln!(
