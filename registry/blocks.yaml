@@ -1111,3 +1111,11 @@ blocks:
   range_end: 2811
   next: 2758
   allocated_at: 2026-11-01T07:03:16.735531283Z
+- node_id: b6b1278890774ef993d2ebc327862470
+  owner: redacted@node.invalid
+  hostname: imac
+  type_prefix: STORY
+  range_start: 2319
+  range_end: 2418
+  next: 2319
+  allocated_at: 2026-11-02T03:06:15.182256759Z
