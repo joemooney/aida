@@ -23,7 +23,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T06:45:38.111981577Z
-modified_at: 2026-11-02T20:25:07.806350877Z
+modified_at: 2026-11-02T20:56:24.583545265Z
 req_type: Bug
 tags:
 - architecture
@@ -290,6 +290,12 @@ comments:
   created_at: 2026-11-02T20:24:54.625826558Z
   modified_at: 2026-11-02T20:24:54.625826558Z
   session_id: ee0bf351-6b17-486f-a38e-cfbb1343c426
+- id: 01a19e0c-8b07-7353-8440-9f48137e7321
+  author: joe
+  content: Commit 778a4750e22 references this requirement
+  created_at: 2026-11-02T20:56:24.583545265Z
+  modified_at: 2026-11-02T20:56:24.583545265Z
+  session_id: 8de47e3a-4371-4f30-9c33-fb0a28c6ecd5
 history:
 - id: 01a195db-6c30-7600-a068-211ab6c2eed8
   author: joe
