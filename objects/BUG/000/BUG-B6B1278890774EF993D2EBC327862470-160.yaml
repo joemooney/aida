@@ -18,12 +18,12 @@ description: |-
   1. `aida session resume` actually execs `codex resume <id>` (with resolved posture/containment) when resuming a Codex session.
   2. `aida queue work --resume` (interactive and headless), `standalone_implementer` background-wait resume, and `phase_driver_trait::resume_implementer_with_advisor_answer` support `HeadlessVendor::Codex` via `codex resume` / `codex exec resume` and `~/.codex/sessions` lookup.
   3. `aida role enter --resume` and `aida tui` (`Intent::Resume`, `TabVendor::Codex`) support resuming Codex sessions alongside Claude.
-status: NeedsAttention
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T06:45:38.111981577Z
-modified_at: 2026-11-02T01:00:55.959584877Z
+modified_at: 2026-11-02T01:00:59.039171578Z
 req_type: Bug
 tags:
 - architecture
@@ -111,6 +111,12 @@ comments:
   created_at: 2026-11-02T01:00:55.959584877Z
   modified_at: 2026-11-02T01:00:55.959584877Z
   session_id: 126bbd5a-a92f-452b-ab0b-2637a1db42c2
+- id: 01a199c6-191f-7762-9e1f-67e2099f8baf
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was punted on: design-fork: The advisor disposition requires a sketch and independent advisor signoff before any code, and says to sequence this after BUG-2385/BUG-2387 (both still in progress). The sketch is posted as a comment. The unresolved fork: headless Codex ignores AIDA''s pre-minted --session-id and creates its own thread id, so resume needs that id bound to the AIDA session. The options are parsing thread.started from the headless stream, scanning ~/.codex/sessions rollouts, or both. A recommended choice also adds vendor_session_id to the lease/session record, which is a data-model change.. No triage reason was given.'
+  created_at: 2026-11-02T01:00:59.039167369Z
+  modified_at: 2026-11-02T01:00:59.039167369Z
+  session_id: 126bbd5a-a92f-452b-ab0b-2637a1db42c2
 history:
 - id: 01a195db-6c30-7600-a068-211ab6c2eed8
   author: joe
@@ -145,6 +151,14 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a199c6-191f-7762-9e1f-67de7ae04a32
+  author: joe
+  timestamp: 2026-11-02T01:00:59.039138483Z
+  session_id: 126bbd5a-a92f-452b-ab0b-2637a1db42c2
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 execution_mode: drain
 filed_at:
   code_sha: 6dc7d4977ac5e47c42ddfb26597fe3ec5fb70b60
@@ -154,9 +168,3 @@ filed_at:
   aida_build_sha: 962ca07af25
   vendor: antigravity
   session: 01a194b1bcfb
-attention_reason:
-  category: design-fork
-  detail: 'The advisor disposition requires a sketch and independent advisor signoff before any code, and says to sequence this after BUG-2385/BUG-2387 (both still in progress). The sketch is posted as a comment. The unresolved fork: headless Codex ignores AIDA''s pre-minted --session-id and creates its own thread id, so resume needs that id bound to the AIDA session. The options are parsing thread.started from the headless stream, scanning ~/.codex/sessions rollouts, or both. A recommended choice also adds vendor_session_id to the lease/session record, which is a data-model change.'
-  lean: 'Treat the stream-parsed thread id as canonical and fall back to a rollout scan by cwd and start time, refusing when the match is ambiguous. Store it as vendor_session_id on the lease record. Split into three PRs: shared resume contract + session resume + containment, then headless/punt/bg, then role offer/TUI.'
-  raised_by: implementer
-  raised_at: 2026-11-02T00:44:01.936211592Z
