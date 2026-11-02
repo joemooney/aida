@@ -246,6 +246,105 @@ fn claude_sessions_from_agent_processes(procs: &[LiveAgentProcess]) -> Vec<LiveS
         .collect()
 }
 
+/// BUG-2382: the live claude **and** codex sessions, projected from the same
+/// memoized walk as [`probe_live_claude_sessions`]. A codex started by hand
+/// inside a session's clone is that session's agent, but the claude-only
+/// view never saw it, so `aida ps` called the session dead and salvageable.
+// trace:BUG-2382 | ai:claude
+pub fn probe_live_agent_sessions() -> Vec<LiveSession> {
+    agent_sessions_from_agent_processes(&probe_live_agent_processes())
+}
+
+/// BUG-2382: the claude rows (with the recent-jsonl lookup) followed by the
+/// codex rows (no claude transcript, so `jsonl` is `None`). Pure over the walk.
+// trace:BUG-2382 | ai:claude
+pub fn agent_sessions_from_agent_processes(procs: &[LiveAgentProcess]) -> Vec<LiveSession> {
+    let mut out = claude_sessions_from_agent_processes(procs);
+    out.extend(
+        procs
+            .iter()
+            .filter(|p| p.agent == AgentKind::Codex)
+            .map(|p| LiveSession {
+                pid: p.pid,
+                cwd: p.cwd.clone(),
+                jsonl: None,
+                stale_cwd: p.stale_cwd,
+            }),
+    );
+    out
+}
+
+/// BUG-2382: a live process whose cwd is inside a worktree, whatever binary
+/// it is. `agent` is set when it is a recognised coding-agent harness.
+// trace:BUG-2382 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CwdOccupant {
+    pub pid: u32,
+    /// The kernel's short process name (`/proc/<pid>/comm`).
+    pub name: String,
+    pub agent: Option<AgentKind>,
+}
+
+/// BUG-2382: find a live process (not in `exclude`) whose cwd is `dir` or
+/// below it. Prefers a coding-agent harness, then the lowest pid, so the
+/// answer is deterministic. A process whose cwd was unlinked is not counted.
+/// Linux only (`/proc`); `None` elsewhere, which keeps the caller's verdict.
+// trace:BUG-2382 | ai:claude
+pub fn live_process_with_cwd_in(
+    dir: &Path,
+    exclude: &std::collections::HashSet<u32>,
+) -> Option<CwdOccupant> {
+    if dir.as_os_str().is_empty() {
+        return None;
+    }
+    let dir = dir.canonicalize().unwrap_or_else(|_| dir.to_path_buf());
+    let entries = std::fs::read_dir("/proc").ok()?;
+    let mut best: Option<CwdOccupant> = None;
+    for entry in entries.flatten() {
+        let Some(pid) = entry
+            .file_name()
+            .to_str()
+            .and_then(|s| s.parse::<u32>().ok())
+        else {
+            continue;
+        };
+        if exclude.contains(&pid) {
+            continue;
+        }
+        let Ok(cwd) = std::fs::read_link(format!("/proc/{pid}/cwd")) else {
+            continue;
+        };
+        let (cwd, stale) = strip_deleted_suffix(&cwd);
+        if stale || !(cwd == dir || cwd.starts_with(&dir)) || !pid_is_alive(pid) {
+            continue;
+        }
+        let name = std::fs::read_to_string(format!("/proc/{pid}/comm"))
+            .map(|s| s.trim().to_string())
+            .unwrap_or_default();
+        let cmd: Vec<String> = std::fs::read(format!("/proc/{pid}/cmdline"))
+            .map(|raw| {
+                raw.split(|b| *b == 0)
+                    .filter(|a| !a.is_empty())
+                    .map(|a| String::from_utf8_lossy(a).into_owned())
+                    .collect()
+            })
+            .unwrap_or_default();
+        let candidate = CwdOccupant {
+            pid,
+            agent: harness_kind(&name, &cmd),
+            name,
+        };
+        let better = match &best {
+            None => true,
+            Some(b) => (candidate.agent.is_none(), candidate.pid) < (b.agent.is_none(), b.pid),
+        };
+        if better {
+            best = Some(candidate);
+        }
+    }
+    best
+}
+
 /// Which coding-agent binary a live process is. Only the agents whose
 /// transcripts `aida session conversations` lists are recognised; anything
 /// else is skipped by the walk.
