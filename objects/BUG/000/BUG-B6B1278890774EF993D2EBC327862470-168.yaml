@@ -21,7 +21,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T06:48:07.778727918Z
-modified_at: 2026-11-02T12:42:11.068153569Z
+modified_at: 2026-11-02T12:54:22.414466615Z
 req_type: Bug
 tags:
 - audit
@@ -127,6 +127,18 @@ comments:
   modified_at: 2026-11-02T12:39:17.673360076Z
   session_id: 01a19c213a98
   harness_version: 2.1.316 (Claude Code)
+- id: 01a19c53-39ce-7602-b778-8e74ba415b9a
+  author: joe
+  content: |-
+    ADVISOR REWORK BRIEF (2026-11-02 05:58 MST), PR #3254 round 1 CHANGES REQUESTED at 68e7eb32. This is the final round (two-round cap). Keep every existing fix.
+    1. BLOCKING AC3 regression, doctor_cmd.rs:3149. Today vendor="codex" with no [agents] enabled list counts Claude as inactive and hides the BUG-1700 folder-trust warning. This repo is exactly that config, and every reviewer lane still launches --vendor claude. Fixed means the Claude trust check is skipped ONLY when Claude is explicitly unusable: an [agents] enabled list that omits claude. Test: vendor=codex with no enabled list still emits the Claude folder-trust finding; enabled=["codex"] suppresses it.
+    2. BLOCKING AC1 headless gap, queue_cmd.rs:~11970. --plan-only --no-human and drain --plan-phase on Codex still run workspace-write. Fixed means both map to --sandbox read-only through the same codex_read_only_args helper the interactive path uses. Add argv tests for both, like bug_2394_queue_work_codex_preview_maps_plan_to_read_only.
+    3. BLOCKING AC2 default. Leaving [agents] mcp unset must NOT drop the aida MCP server from aida agent new codex. Ruling: unset means aida; only an explicit mcp = "off" disables it. For off/aida overrides, emit a disable override only for servers named in a config Codex actually loads, so no transport-less entry is created. Test the unset case.
+    ACCEPTED, no work: the Codex worktree-trust clause (Codex trusts projects through its own config, not Claude's trust file); the preflight_contained_reviewer gap (reviewer lanes are --vendor claude by standing order); a live write-refusal test (an argv-shape test is enough under LIGHT).
+    Gate: LIGHT, one targeted cargo test -p aida-cli-lib bug_2394 plus make check-ci-fast. Push to the PR branch; do not open a new PR.
+  created_at: 2026-11-02T12:54:22.414466615Z
+  modified_at: 2026-11-02T12:54:22.414466615Z
+  session_id: ee0bf351-6b17-486f-a38e-cfbb1343c426
 history:
 - id: 01a195dd-b979-7b63-b353-ebf808b482d9
   author: joe
