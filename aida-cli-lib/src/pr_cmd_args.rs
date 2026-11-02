@@ -12,10 +12,20 @@ use std::path::PathBuf;
 pub enum PrCommand {
     // Sequential post-merge worker, launched only after releasing the merge lease.
     // trace:BUG-2384 | ai:codex
+    /// Internal: the post-merge cleanup worker `aida pr ship` launches
     #[clap(hide = true)]
     PostShipCleanup {
+        /// PR whose EndLease outcome the worker records in the ship ledger.
+        // trace:BUG-2384 | ai:claude
+        #[clap(long)]
+        pr: Option<u64>,
+        /// Lease of the shipped branch to end before the sweep.
         #[clap(long)]
         lease: Option<String>,
+        /// Lock file of the ship's (already released) merge lease.
+        #[clap(long)]
+        merge_lock: Option<PathBuf>,
+        /// Also reap exited sessions and prune merged agent worktrees.
         #[clap(long)]
         sweep: bool,
     },

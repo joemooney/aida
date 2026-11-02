@@ -15136,6 +15136,40 @@ Options:
 
   -h, --help
           Print help (see a summary with '-h')
+===== aida pr post-ship-cleanup
+Internal: the post-merge cleanup worker `aida pr ship` launches
+
+Usage: aida pr post-ship-cleanup [OPTIONS]
+
+Options:
+      --pr <PR>
+          PR whose EndLease outcome the worker records in the ship ledger
+
+      --lease <LEASE>
+          Lease of the shipped branch to end before the sweep
+
+      --merge-lock <MERGE_LOCK>
+          Lock file of the ship's (already released) merge lease
+
+      --sweep
+          Also reap exited sessions and prune merged agent worktrees
+
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+  -h, --help
+          Print help (see a summary with '-h')
 ===== aida pr auto-queue-review
 File the reviewer story for the change (PR/MR) open on the current branch and queue it to the
 `reviewer` role. Idempotent: when a `Review PR-<n>:` / `Review MR-<n>:` story already exists for it,
@@ -44554,6 +44588,52 @@ Working on aida itself
       }
     ],
     "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "pr",
+      "post-ship-cleanup"
+    ],
+    "about": "Internal: the post-merge cleanup worker `aida pr ship` launches",
+    "flags": [
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "lease",
+        "takes_value": true,
+        "help": "Lease of the shipped branch to end before the sweep"
+      },
+      {
+        "name": "merge-lock",
+        "takes_value": true,
+        "help": "Lock file of the ship's (already released) merge lease"
+      },
+      {
+        "name": "pr",
+        "takes_value": true,
+        "help": "PR whose EndLease outcome the worker records in the ship ledger"
+      },
+      {
+        "name": "sweep",
+        "takes_value": false,
+        "help": "Also reap exited sessions and prune merged agent worktrees"
+      }
+    ],
+    "hidden": true
   },
   {
     "path": [

@@ -262,6 +262,13 @@ pub(crate) struct MergeLease {
 }
 
 impl MergeLease {
+    /// The lock file this lease holds; ship hands it to its cleanup worker so
+    /// the worker can record that the lease is gone before it starts.
+    // trace:BUG-2384 | ai:claude
+    pub(crate) fn path(&self) -> &Path {
+        &self.path
+    }
+
     // trace:TASK-1581 | ai:antigravity — the explicit `release(self)` had no
     // caller; `drop(lease)` is the same operation.
     fn do_release(&mut self) {
