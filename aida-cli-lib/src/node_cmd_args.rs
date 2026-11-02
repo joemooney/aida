@@ -176,6 +176,36 @@ pub enum NodeCommand {
         #[clap(long)]
         clear: bool,
     },
+
+    /// Manage the store's hubs: the writable git servers block claims are
+    /// ordered on. A store with more than one hub needs an enrolled root.
+    // trace:STORY-B6B1278890774EF993D2EBC327862470-170 | ai:claude
+    Hub {
+        #[clap(subcommand)]
+        cmd: NodeHubCommand,
+    },
+}
+
+/// `aida node hub` subcommands.
+// trace:STORY-B6B1278890774EF993D2EBC327862470-170 | ai:claude
+#[derive(Subcommand, Debug)]
+pub enum NodeHubCommand {
+    /// Register another writable hub and grant it ID pools. Run on the
+    /// allocation root (refused without one: `aida node enroll-root`).
+    /// Declares the hub under [store.hubs] in .aida/config.toml (commit and
+    /// push that), and grants the hub a pool per ID type in use, disjoint
+    /// from every ID issued so far, pushed to the root's hub. Clones of the
+    /// new hub set it as their upstream and claim blocks from its pools.
+    Add {
+        /// Hub name (letters, digits, `-`, `_`), e.g. `gitlab`.
+        name: String,
+        /// The hub's git URL (ssh, https or a local path).
+        #[clap(long)]
+        url: String,
+        /// IDs per type to grant the hub.
+        #[clap(long, default_value_t = 1000)]
+        size: u32,
+    },
 }
 
 /// `aida node alias` subcommands. There is no delete: a label can be retired

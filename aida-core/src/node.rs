@@ -951,10 +951,19 @@ impl BlockRegistry {
             return self.save(path);
         }
         let authority = authority::claim_authority(root)?;
-        anyhow::ensure!(
-            matches!(authority, authority::ClaimAuthority::HubCas { .. }),
-            "only the allocation root may claim blocks on this store; registry/blocks.yaml was not written"
-        );
+        // A delegated clone (STORY-170) appends only blocks that lie inside
+        // the pool the root granted its hub.
+        // trace:STORY-B6B1278890774EF993D2EBC327862470-170 | ai:claude
+        let grants = match &authority {
+            authority::ClaimAuthority::HubCas { .. } => None,
+            authority::ClaimAuthority::Delegated { hub, .. } => Some((
+                hub.clone(),
+                crate::allocation_lineage::PoolRegistry::load(root)?.pools,
+            )),
+            authority::ClaimAuthority::Rooted => anyhow::bail!(
+                "only the allocation root may claim blocks on this store; registry/blocks.yaml was not written"
+            ),
+        };
         #[cfg(unix)]
         crate::transport_policy::refuse_unsupported(path)?;
         let on_disk = Self::load(path)?;
@@ -970,10 +979,16 @@ impl BlockRegistry {
             .all(|b| {
                 b.node_id == node_id
                     && b.pool_id.as_deref() == authority.pool_id(&b.type_prefix).as_deref()
+                    && grants.as_ref().is_none_or(|(hub, pools)| {
+                        crate::allocation_lineage::hub_grant(pools, hub, &b.type_prefix)
+                            .is_some_and(|p| {
+                                p.range_start <= b.range_start && b.range_end <= p.range_end
+                            })
+                    })
             });
         anyhow::ensure!(
             kept && appended_ok,
-            "a single-hub claim may only append this node's own hub-stamped blocks; registry/blocks.yaml was not written"
+            "a single-hub or delegated claim may only append this node's own blocks, stamped with its hub's pool (and inside the pool the root granted that hub); registry/blocks.yaml was not written"
         );
         // A clone's first claim may be the store's first registry write.
         std::fs::create_dir_all(parent)?;

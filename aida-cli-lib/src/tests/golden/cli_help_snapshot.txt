@@ -5760,6 +5760,8 @@ Commands:
                directory. Run once, on the primary clone
   upstream     Show or declare this clone's upstream: the one git remote it claims ID blocks from. A
                store mirror is never an upstream, and the root has none
+  hub          Manage the store's hubs: the writable git servers block claims are ordered on. A
+               store with more than one hub needs an enrolled root
   help         Print this message or the help of the given subcommand(s)
 
 Options:
@@ -6387,6 +6389,75 @@ Arguments:
 Options:
       --clear
           Remove the declared upstream (this clone issues node-local IDs)
+
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida node hub
+Manage the store's hubs: the writable git servers block claims are ordered on. A store with more
+than one hub needs an enrolled root
+
+Usage: aida node hub [OPTIONS] <COMMAND>
+
+Commands:
+  add   Register another writable hub and grant it ID pools. Run on the allocation root (refused
+        without one: `aida node enroll-root`). Declares the hub under [store.hubs] in
+        .aida/config.toml (commit and push that), and grants the hub a pool per ID type in use,
+        disjoint from every ID issued so far, pushed to the root's hub. Clones of the new hub set it
+        as their upstream and claim blocks from its pools
+  help  Print this message or the help of the given subcommand(s)
+
+Options:
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida node hub add
+Register another writable hub and grant it ID pools. Run on the allocation root (refused without
+one: `aida node enroll-root`). Declares the hub under [store.hubs] in .aida/config.toml (commit and
+push that), and grants the hub a pool per ID type in use, disjoint from every ID issued so far,
+pushed to the root's hub. Clones of the new hub set it as their upstream and claim blocks from its
+pools
+
+Usage: aida node hub add [OPTIONS] --url <URL> <NAME>
+
+Arguments:
+  <NAME>
+          Hub name (letters, digits, `-`, `_`), e.g. `gitlab`
+
+Options:
+      --url <URL>
+          The hub's git URL (ssh, https or a local path)
+
+      --size <SIZE>
+          IDs per type to grant the hub
+          
+          [default: 1000]
 
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =

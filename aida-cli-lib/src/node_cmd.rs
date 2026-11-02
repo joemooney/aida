@@ -24,6 +24,10 @@ pub(crate) use node_cmd_args::*;
 #[path = "node_inventory.rs"]
 mod node_inventory;
 
+// trace:STORY-B6B1278890774EF993D2EBC327862470-170 | ai:claude
+#[path = "node_hub.rs"]
+mod node_hub;
+
 use crate::*;
 
 /// Handle `aida node` subcommands. Operates on the orphan-store worktree
@@ -558,6 +562,9 @@ pub(crate) fn handle_node_command(cmd: &NodeCommand, store_path: &std::path::Pat
         NodeCommand::Upstream { remote, clear } => {
             return handle_upstream(store_path, remote.as_deref(), *clear)
         }
+        NodeCommand::Hub {
+            cmd: NodeHubCommand::Add { name, url, size },
+        } => return node_hub::handle_hub_add(store_path, name, url, *size),
     }
 
     Ok(())

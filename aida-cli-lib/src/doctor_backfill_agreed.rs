@@ -490,6 +490,7 @@ fn load_plan(store_root: &Path) -> Result<(Vec<Requirement>, Plan)> {
     let counters = load_counters(store_root)?;
     let nodes = load_nodes(store_root)?;
     let mut floors = type_floors(&reqs, &blocks, &counters);
+    raise_for_granted_pools(store_root, &mut floors)?;
     let agreed = plan(&reqs, &registered_nodes(&nodes), &floors);
     for row in &agreed {
         if let Some((typ, n)) = agreed_parts(&row.agreed) {
@@ -554,9 +555,16 @@ pub(crate) fn refuse_claim_before_backfill(store_root: &Path) -> Result<()> {
         return Ok(());
     }
     // trace:STORY-B6B1278890774EF993D2EBC327862470-164 | ai:claude
+    // A delegated claim (STORY-170) is carved inside the pool the root
+    // granted its hub, which the backfill numbers above (see
+    // `raise_for_granted_pools`), so it cannot land on a backfilled number.
+    // trace:STORY-B6B1278890774EF993D2EBC327862470-170 | ai:claude
     if matches!(
         aida_core::allocation_authority::claim_authority(store_root),
-        Ok(aida_core::allocation_authority::ClaimAuthority::HubCas { .. })
+        Ok(
+            aida_core::allocation_authority::ClaimAuthority::HubCas { .. }
+                | aida_core::allocation_authority::ClaimAuthority::Delegated { .. }
+        )
     ) {
         return Ok(());
     }
@@ -585,11 +593,29 @@ pub(crate) fn hub_claim_floor(store_root: &Path, type_prefix: &str) -> Result<u3
     let reqs = aida_core::object_store::load_all_objects(&store_root.join("objects"))?;
     let blocks = load_blocks(store_root)?;
     let counters = load_counters(store_root)?;
-    let floor = type_floors(&reqs, &blocks, &counters)
+    let mut floors = type_floors(&reqs, &blocks, &counters);
+    raise_for_granted_pools(store_root, &mut floors)?;
+    let floor = floors
         .get(&type_prefix.to_ascii_uppercase())
         .copied()
         .unwrap_or(0);
     Ok(u32::try_from(floor).unwrap_or(u32::MAX))
+}
+
+/// Raise each type's floor above every range the root granted a hub (`aida
+/// node hub add`): such a range is spent by that hub's clones, so neither
+/// the backfill nor a claim placed above every block may number into it.
+/// Fails closed on an unreadable pool registry.
+// trace:STORY-B6B1278890774EF993D2EBC327862470-170 | ai:claude
+fn raise_for_granted_pools(store_root: &Path, floors: &mut BTreeMap<String, u64>) -> Result<()> {
+    let pools = aida_core::allocation_lineage::PoolRegistry::load(store_root)?;
+    for p in pools.pools.iter().filter(|p| p.parent_pool_id.is_some()) {
+        let e = floors
+            .entry(p.type_prefix.to_ascii_uppercase())
+            .or_insert(0);
+        *e = (*e).max(u64::from(p.range_end));
+    }
+    Ok(())
 }
 
 fn print_plan(plan: &Plan, reqs: &[Requirement]) {
