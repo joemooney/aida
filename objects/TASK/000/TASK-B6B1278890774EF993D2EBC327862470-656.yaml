@@ -11,7 +11,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T09:05:52.470755532Z
-modified_at: 2026-11-02T08:03:06.543452568Z
+modified_at: 2026-11-02T08:11:51.490961595Z
 req_type: Task
 tags:
 - architecture
@@ -130,6 +130,12 @@ comments:
   content: 'Advisor round-2 rework: narrowed required-live CI filter to task_2706_egress_ipc_live, leaving TASK-2705 tests in normal shard mode. Added named no-fallback capability refusal coverage (architecture, Landlock unavailable/ABI9, seccomp notification unavailable/size mismatch) and report-credit coverage preserving slice-A checks while slice B remains Refused/EgressLocalIpc and uncredited. Validation: all 9 containment::tests passed; cargo fmt --all -- --check passed; make check-ci-fast passed all 36 gates; git diff --check passed. Code changes left for advisor host proof and host commit as directed.'
   created_at: 2026-11-02T08:03:06.543452568Z
   modified_at: 2026-11-02T08:03:06.543452568Z
+- id: 01a19b50-9342-74c2-91fc-f98a3f6171fa
+  author: joe
+  content: 'ADVISOR LIVE PROOF round 2 (2026-11-02 01:12 MST): host AIDA_REQUIRE_BWRAP_LIVE=1 containment:: gave 9 passed, 0 failed on the rework diff. Host-committed and pushed.'
+  created_at: 2026-11-02T08:11:51.490961595Z
+  modified_at: 2026-11-02T08:11:51.490961595Z
+  session_id: 1f56bd1e-c059-4f73-b8df-e18b2170fdfc
 history:
 - id: 01a1965b-c73c-7f92-bea8-1e28e5f1ff36
   author: joe
