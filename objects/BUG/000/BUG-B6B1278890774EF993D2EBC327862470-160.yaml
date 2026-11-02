@@ -23,7 +23,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T06:45:38.111981577Z
-modified_at: 2026-11-02T08:49:50.023685354Z
+modified_at: 2026-11-02T09:12:54.710080965Z
 req_type: Bug
 tags:
 - architecture
@@ -256,6 +256,12 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-02T08:48:10.024839198Z
   modified_at: 2026-11-02T08:48:10.024839198Z
+  session_id: 1f56bd1e-c059-4f73-b8df-e18b2170fdfc
+- id: 01a19b88-78b6-7003-988b-ec21935acc0b
+  author: joe
+  content: 'ADVISOR HOST CHECK (2026-11-02 02:12 MST) at b0219ec: cargo test -p aida-cli-lib --lib headless_hint_tests bug_2386 bug_2393 gave 25 passed; cargo test -p aida-cli --test bug_1808_delegation_preflight gave 5 passed.'
+  created_at: 2026-11-02T09:12:54.710080965Z
+  modified_at: 2026-11-02T09:12:54.710080965Z
   session_id: 1f56bd1e-c059-4f73-b8df-e18b2170fdfc
 history:
 - id: 01a195db-6c30-7600-a068-211ab6c2eed8
