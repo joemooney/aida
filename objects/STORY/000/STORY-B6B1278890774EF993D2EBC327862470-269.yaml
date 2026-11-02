@@ -32,7 +32,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T00:54:49.371776631Z
-modified_at: 2026-11-02T13:51:27.000208586Z
+modified_at: 2026-11-02T14:33:16.995116409Z
 req_type: Story
 tags:
 - architecture
@@ -393,6 +393,30 @@ comments:
   created_at: 2026-11-02T13:51:27.000208586Z
   modified_at: 2026-11-02T13:51:27.000208586Z
   session_id: fa231d33-6138-4150-81f9-f1a8c24f9e16
+- id: 01a19cad-c7c3-7632-a9a5-78600abbf9a8
+  author: joe
+  content: |-
+    ADVISOR SIGNOFF APPROVED, with binding amendments: STORY-2238 sketch (claude sketch seat, 2026-11-02 06:38-07:30)
+
+    Independent advisor (claude advisor seat, 2026-11-02 07:40 MST). I did not author this sketch or any of the code it describes. This signs the architecture and the evidence contract only. It does not approve an implementation head, dispatch the work itself, clear holds or authorize a merge. C1-C12 from the 08:23 signoff stay binding.
+
+    Decisions:
+    1. A1 APPROVED. Refuse by name where nesting fails (HostPolicyDenied / HostResourceLimit). A2 is NOT filed now; it is filed only when a real operator host needs it. AIDA's outer layer never passes --disable-userns.
+    2. APPROVED: the native network stays enabled under the outer netns, and a profile with network disabled is refused. TOOL_NET_ENV is a separate whitelist from BUG-2398's TOOL_ENV, which stays byte-identical. Amendment: a ratchet test asserts that every TOOL_NET_ENV value is a loopback relay URL with no userinfo or credentials, and that NO_PROXY is empty.
+    3. APPROVED: the directory-leaf invariant and D-i. Amendment: the cache relocation ships FIRST as its own PR0 under TASK-2707: main/.aida/cache/ holds only cache.db and its sidecars, seat symlinks are repointed, there is a one-time migration with no compat shim, and the cache_rows_never_grant_authority ratchet is included. PR1 starts only after PR0 merges and a live host run shows existing Claude seats and drains unaffected. Per-seat directory leaves for own-grant stamps and mail are enumerated in PR1, with a test that refuses when a required write lands in a shared directory.
+    4. M1 APPROVED, with Claude AIDA-posture refusal until the live chained-proxy proof. Today's Claude [contained] label stays truthful. M2 is not filed unless M1's chain proves impossible on the installed Claude Code.
+    5. APPROVED: the split PR0 (cache move), PR1 (headless contained Codex), PR2 (interactive and --bg, rebased on STORY-2254), PR3 (TASK-2708: Claude M1, OpenCode descriptor, docs). Each PR: STRICT independent review, an advisor-host required-live run at the exact head, and an operator merge floor.
+
+    Further binding notes:
+    - The probe-3 finding that 'codex sandbox passes the full env' is binding: the outer --clearenv allow-list is the authority. Test registry_and_launch_tokens_absent_in_outer_and_inner runs in PR1, not later.
+    - The C5 broker is mandatory on the outer worker in PR1. host_dbus_and_codex_daemon_socket_unreachable needs its positive control.
+    - containment_applied() comes only from a launch receipt; the vendor==Claude shortcut at session.rs:2781 is removed in the PR that introduces receipts.
+    - PR1's implementer uses the TASK-2706 host-commit arrangement (a Claude host lane is acceptable); from PR2 on, lanes dogfood the contained path.
+
+    Next: dispatch TASK-2707 PR0.
+  created_at: 2026-11-02T14:33:16.995116409Z
+  modified_at: 2026-11-02T14:33:16.995116409Z
+  session_id: ee0bf351-6b17-486f-a38e-cfbb1343c426
 history:
 - id: 01a1949a-3f43-7b12-bc6b-0d5bf40ee2f2
   author: joe
