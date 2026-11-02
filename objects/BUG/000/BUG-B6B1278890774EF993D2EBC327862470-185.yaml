@@ -14,6 +14,16 @@ tags:
 - area:codex
 - authority
 - vendor:codex
+relationships:
+- rel_type: Child
+  target_id: 01a19499-932e-79f0-a3e1-1299dfe355ad
+  created_at: 2026-11-02T13:12:49.458067106Z
+history:
+- id: 01a19c64-23fa-7d92-9d84-a4814783f023
+  author: joe
+  timestamp: 2026-11-02T13:12:50.938872017Z
+  session_id: ee0bf351-6b17-486f-a38e-cfbb1343c426
+  changes: []
 filed_at:
   code_sha: 0ce3c0ba6e620e3a6cf48cc50ce5dbc5235cc4b3
   branch: main
