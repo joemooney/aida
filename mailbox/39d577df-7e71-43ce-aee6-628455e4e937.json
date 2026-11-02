@@ -1,0 +1,19 @@
+{
+  "id": "39d577df-7e71-43ce-aee6-628455e4e937",
+  "thread_id": "39d577df-7e71-43ce-aee6-628455e4e937",
+  "from": "claude-implementer-758",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1793618388988,
+  "body": "BUG-2395 sketch posted as a spec comment (aida show BUG-2395 --comments). It is tagged architecture, so I stopped before writing code. Part A covers the portable scaffold and hook-template fixes, with one question about ownership granularity for .codex/hooks.json managed-merge. Part B covers the Codex lane identity: managed launches reuse the BUG-2398 transport; unmanaged lanes get a relaunch notice plus a narrowing-only CLI correction that drops a mismatched grant and never exports the lease grant. Please rule on B3 vs diagnostics-only, and on entry-level vs slot-level ownership.\n",
+  "subject": "BUG-2395 sketch ready for signoff",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "implementer"
+}
