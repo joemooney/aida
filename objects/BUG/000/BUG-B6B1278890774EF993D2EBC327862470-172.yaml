@@ -21,7 +21,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T07:26:20.914223641Z
-modified_at: 2026-11-02T06:06:48.337754470Z
+modified_at: 2026-11-02T06:47:10.051597347Z
 req_type: Bug
 tags:
 - architecture
@@ -491,6 +491,13 @@ comments:
   created_at: 2026-11-02T06:06:48.337754470Z
   modified_at: 2026-11-02T06:06:48.337754470Z
   session_id: 1f56bd1e-c059-4f73-b8df-e18b2170fdfc
+- id: 01a19b03-09e3-7982-b15b-ace3fec9158f
+  author: joe
+  content: 'Rework (merge with main) pushed at d39ccc8db752701c3b67174c8865d939c3da6e3f on PR #3207 (same branch, normal push, no force). Merged origin/main (952552f, includes #3210/#3225/#3216/#3230) plus remote branch head 4107f3b. One conflict, in aida-cli-lib/src/tests/bug_1607_reviewer_vendor_tests.rs write_argv_capture_mock: kept both sides — the branch''s codex_probe_script wrapper and main''s NUL-separated argv capture, which matches read_captured_argv split_terminator(''\\0''). No new behaviour. Gate: make check-ci-fast passed twice (36 gates), on the first merge and on the final tree. The focused cargo test (bug_1607 module) did NOT finish locally: a cold aida-cli-lib test compile ran past the 10-minute tool limit twice, and background runs are not allowed in this headless seat. CI is the test evidence. PR now MERGEABLE; fresh independent strict review still required.'
+  created_at: 2026-11-02T06:47:10.051597347Z
+  modified_at: 2026-11-02T06:47:10.051597347Z
+  session_id: 01a19ae1acbb
+  harness_version: 2.1.316 (Claude Code)
 history:
 - id: 01a19600-c769-7cd0-ba08-8d93975e3e3b
   author: joe
