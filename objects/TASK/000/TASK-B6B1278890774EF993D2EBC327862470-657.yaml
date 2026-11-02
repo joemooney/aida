@@ -11,7 +11,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T09:06:06.223993645Z
-modified_at: 2026-11-02T20:26:14.665717533Z
+modified_at: 2026-11-02T21:07:24.703697836Z
 req_type: Task
 tags:
 - architecture
@@ -104,6 +104,12 @@ comments:
   created_at: 2026-11-02T20:12:19.536439532Z
   modified_at: 2026-11-02T20:12:19.536439532Z
   session_id: 2a0361be-44f4-4500-9f69-b6435c29346c
+- id: 01a19e16-9d9f-74a0-8500-3c7ce1ec1633
+  author: joe
+  content: 'ADVISOR (14:10): PR #3274 accidentally commits 44 build-artifact files under target-base/ (not tracked on main). Before review: remove target-base/ from the PR (git rm -r --cached target-base) and make sure target-base/ is ignored (add it to .gitignore if it is a new seat target dir, e.g. BUG-2383''s overlay base). Nothing else changes. Then a strict review.'
+  created_at: 2026-11-02T21:07:24.703697836Z
+  modified_at: 2026-11-02T21:07:24.703697836Z
+  session_id: ee0bf351-6b17-486f-a38e-cfbb1343c426
 history:
 - id: 01a1965c-1e90-7483-8313-1b32a588eaef
   author: joe
