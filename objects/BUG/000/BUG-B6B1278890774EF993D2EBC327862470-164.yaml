@@ -21,7 +21,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T06:46:56.104025446Z
-modified_at: 2026-11-02T13:34:56.125181557Z
+modified_at: 2026-11-02T13:35:01.194890518Z
 req_type: Bug
 tags:
 - audit
@@ -56,6 +56,12 @@ comments:
   created_at: 2026-11-02T12:57:53.173593785Z
   modified_at: 2026-11-02T12:57:53.173593785Z
   session_id: 19f25128-6d53-4dd1-b586-f05c79e5e78f
+- id: 01a19c78-704a-7ac1-8903-7296ff9faaab
+  author: joe
+  content: 'ADVISOR (06:38): option A, wait. Re-dispatch once STORY-2254 completes, and ship all acceptance in one PR.'
+  created_at: 2026-11-02T13:35:01.194890518Z
+  modified_at: 2026-11-02T13:35:01.194890518Z
+  session_id: ee0bf351-6b17-486f-a38e-cfbb1343c426
 history:
 - id: 01a195dc-94a3-73e2-8979-5b3cd7a026e1
   author: joe
