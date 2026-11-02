@@ -71,7 +71,7 @@ pub fn load(role: &str) -> Result<Vec<GlobalQueueEntry>> {
 // Only a final NotFound initializes a queue. In particular, an empty/null
 // YAML document must not silently turn a damaged queue into an empty one.
 // trace:BUG-1682 | ai:codex
-fn read_queue(path: &Path, role: &str) -> Result<Vec<GlobalQueueEntry>> {
+pub(crate) fn read_queue(path: &Path, role: &str) -> Result<Vec<GlobalQueueEntry>> {
     let context = || {
         format!(
             "Failed to read global queue for role {role} at {}",

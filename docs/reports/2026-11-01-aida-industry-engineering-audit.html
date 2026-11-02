@@ -1,0 +1,2995 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="paper">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AIDA Engineering Architecture & Delivery Audit — DORA, GitClear & LinearB Benchmark Report</title>
+  <style>
+    :root, [data-theme="paper"] {
+      --bg: #f4f1e9;
+      --bg-elevated: #fbf9f4;
+      --bg-panel: #eae5d9;
+      --bg-dark-card: #232a26;
+      --ink: #252a26;
+      --ink-secondary: #5a6057;
+      --ink-muted: #7a8076;
+      --line: #d5d0c3;
+      --line-strong: #252a26;
+      --accent: #ba3916;
+      --accent-bright: #ff7a45;
+      --accent-soft: rgba(186, 57, 22, 0.12);
+      --emerald: #1b6b4c;
+      --emerald-soft: rgba(27, 107, 76, 0.13);
+      --amber: #b4650c;
+      --amber-soft: rgba(180, 101, 12, 0.14);
+      --crimson: #a82020;
+      --crimson-soft: rgba(168, 32, 32, 0.13);
+      --blue: #235789;
+      --blue-soft: rgba(35, 87, 137, 0.13);
+      --shadow: 0 8px 28px rgba(37, 42, 38, 0.06);
+      --mono: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+      --sans: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      --serif: Georgia, "Times New Roman", Times, serif;
+    }
+
+    [data-theme="terminal"] {
+      --bg: #111513;
+      --bg-elevated: #181d1a;
+      --bg-panel: #1f2622;
+      --bg-dark-card: #0c0f0d;
+      --ink: #ece9e0;
+      --ink-secondary: #adb3aa;
+      --ink-muted: #7b8278;
+      --line: #2c3530;
+      --line-strong: #ece9e0;
+      --accent: #ff7849;
+      --accent-bright: #ff956e;
+      --accent-soft: rgba(255, 120, 73, 0.16);
+      --emerald: #3dd68c;
+      --emerald-soft: rgba(61, 214, 140, 0.15);
+      --amber: #f5a623;
+      --amber-soft: rgba(245, 166, 35, 0.16);
+      --crimson: #ff5c5c;
+      --crimson-soft: rgba(255, 92, 92, 0.16);
+      --blue: #58a6ff;
+      --blue-soft: rgba(88, 166, 255, 0.16);
+      --shadow: 0 10px 32px rgba(0, 0, 0, 0.4);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html {
+      scroll-behavior: smooth;
+      scroll-padding-top: 88px;
+    }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: var(--sans);
+      font-size: 15px;
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+      transition: background 0.25s ease, color 0.25s ease;
+    }
+
+    a {
+      color: inherit;
+      text-decoration: none;
+    }
+
+    .shell {
+      max-width: 1400px;
+      width: calc(100% - 64px);
+      margin: 0 auto;
+    }
+
+    /* Sticky Top Header */
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: var(--bg);
+      border-bottom: 1px solid var(--line);
+      backdrop-filter: blur(10px);
+    }
+
+    .topbar-inner {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 74px;
+      gap: 20px;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-weight: 750;
+      font-size: 22px;
+      letter-spacing: -0.8px;
+    }
+
+    .brand-mark {
+      display: grid;
+      place-items: center;
+      width: 32px;
+      height: 32px;
+      background: var(--accent);
+      color: #fff;
+      font-size: 22px;
+      line-height: 1;
+    }
+
+    .brand-sub {
+      font-family: var(--mono);
+      font-size: 10px;
+      letter-spacing: 1px;
+      color: var(--ink-secondary);
+      border-left: 1px solid var(--line);
+      padding-left: 12px;
+      font-weight: 500;
+    }
+
+    .nav-links {
+      display: flex;
+      align-items: center;
+      gap: 22px;
+      flex-wrap: wrap;
+    }
+
+    .nav-links a {
+      font-family: var(--mono);
+      font-size: 11px;
+      letter-spacing: 0.6px;
+      color: var(--ink-secondary);
+      text-transform: uppercase;
+      padding: 4px 0;
+      border-bottom: 2px solid transparent;
+      transition: color 0.15s, border-color 0.15s;
+    }
+
+    .nav-links a:hover {
+      color: var(--accent);
+      border-bottom-color: var(--accent);
+    }
+
+    .top-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .btn-ghost {
+      background: var(--bg-elevated);
+      color: var(--ink);
+      border: 1px solid var(--line);
+      padding: 7px 12px;
+      font-family: var(--mono);
+      font-size: 11px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.15s ease;
+    }
+
+    .btn-ghost:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
+    /* Hero Section */
+    .hero {
+      padding: 52px 0 40px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .eyebrow {
+      font-family: var(--mono);
+      font-size: 11px;
+      letter-spacing: 1.2px;
+      text-transform: uppercase;
+      color: var(--accent);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 16px;
+      font-weight: 600;
+    }
+
+    .pulse-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--accent);
+      display: inline-block;
+    }
+
+    .hero-grid {
+      display: grid;
+      grid-template-columns: 1.35fr 1fr;
+      gap: 44px;
+      align-items: start;
+    }
+
+    h1 {
+      font-family: var(--serif);
+      font-weight: 400;
+      font-size: clamp(38px, 4.4vw, 64px);
+      line-height: 1.05;
+      letter-spacing: -1.8px;
+      margin: 0 0 20px;
+    }
+
+    h1 span {
+      color: var(--accent);
+    }
+
+    .hero-lead {
+      font-size: 17px;
+      color: var(--ink-secondary);
+      line-height: 1.65;
+      margin: 0 0 24px;
+      max-width: 740px;
+    }
+
+    .meta-strip {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px 24px;
+      padding: 14px 18px;
+      background: var(--bg-panel);
+      border-left: 3px solid var(--accent);
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--ink-secondary);
+    }
+
+    .meta-strip strong {
+      color: var(--ink);
+    }
+
+    /* Executive Verdict Box */
+    .verdict-card {
+      background: var(--bg-dark-card);
+      color: #f4f1e9;
+      padding: 28px;
+      border: 1px solid var(--line);
+      box-shadow: var(--shadow);
+    }
+
+    .verdict-card .card-kicker {
+      font-family: var(--mono);
+      font-size: 10px;
+      letter-spacing: 1.2px;
+      color: #ff8658;
+      text-transform: uppercase;
+      margin-bottom: 10px;
+    }
+
+    .verdict-card h3 {
+      font-family: var(--serif);
+      font-size: 24px;
+      font-weight: 400;
+      margin: 0 0 14px;
+      line-height: 1.2;
+      color: #fff;
+    }
+
+    .verdict-card p {
+      font-size: 13.5px;
+      color: #c8ccc4;
+      line-height: 1.65;
+      margin: 0 0 16px;
+    }
+
+    .verdict-pills {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      border-top: 1px solid #39413c;
+      padding-top: 16px;
+    }
+
+    .v-pill {
+      background: rgba(255, 255, 255, 0.04);
+      padding: 10px 12px;
+      border-left: 2px solid #ff8658;
+    }
+
+    .v-pill.good {
+      border-left-color: #3dd68c;
+    }
+
+    .v-pill small {
+      display: block;
+      font-family: var(--mono);
+      font-size: 9px;
+      color: #9aa197;
+      text-transform: uppercase;
+      letter-spacing: 0.7px;
+    }
+
+    .v-pill strong {
+      font-family: var(--mono);
+      font-size: 14px;
+      color: #fff;
+    }
+
+    /* KPI Strip */
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(6, 1fr);
+      border: 1px solid var(--line);
+      border-top: 0;
+      background: var(--bg-elevated);
+      margin-bottom: 48px;
+    }
+
+    .kpi-cell {
+      padding: 22px 20px;
+      border-right: 1px solid var(--line);
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+
+    .kpi-cell:last-child {
+      border-right: 0;
+    }
+
+    .kpi-label {
+      font-family: var(--mono);
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      color: var(--ink-secondary);
+      margin-bottom: 8px;
+    }
+
+    .kpi-value {
+      font-family: var(--serif);
+      font-size: 34px;
+      line-height: 1.05;
+      letter-spacing: -1px;
+      margin-bottom: 8px;
+      color: var(--ink);
+    }
+
+    .kpi-foot {
+      font-family: var(--mono);
+      font-size: 10px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 2px 7px;
+      font-family: var(--mono);
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.4px;
+      text-transform: uppercase;
+      border-radius: 2px;
+    }
+
+    .badge-elite {
+      background: var(--emerald-soft);
+      color: var(--emerald);
+      border: 1px solid rgba(27, 107, 76, 0.3);
+    }
+
+    .badge-warn {
+      background: var(--amber-soft);
+      color: var(--amber);
+      border: 1px solid rgba(180, 101, 12, 0.3);
+    }
+
+    .badge-crit {
+      background: var(--crimson-soft);
+      color: var(--crimson);
+      border: 1px solid rgba(168, 32, 32, 0.3);
+    }
+
+    .badge-info {
+      background: var(--blue-soft);
+      color: var(--blue);
+      border: 1px solid rgba(35, 87, 137, 0.3);
+    }
+
+    /* Section Headers */
+    .report-section {
+      padding: 54px 0;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .section-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      gap: 24px;
+      margin-bottom: 32px;
+      flex-wrap: wrap;
+    }
+
+    .section-num {
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--accent);
+      letter-spacing: 1.2px;
+      text-transform: uppercase;
+      margin-bottom: 8px;
+      font-weight: 600;
+    }
+
+    h2 {
+      font-family: var(--serif);
+      font-weight: 400;
+      font-size: clamp(28px, 3.1vw, 44px);
+      letter-spacing: -1.2px;
+      line-height: 1.1;
+      margin: 0;
+    }
+
+    .section-desc {
+      max-width: 540px;
+      color: var(--ink-secondary);
+      font-size: 14px;
+      margin: 0;
+    }
+
+    /* Two-column and Three-column layouts */
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 28px;
+      margin-bottom: 28px;
+    }
+
+    .grid-12-8 {
+      display: grid;
+      grid-template-columns: 1.35fr 1fr;
+      gap: 28px;
+      margin-bottom: 28px;
+    }
+
+    .card {
+      background: var(--bg-elevated);
+      border: 1px solid var(--line);
+      padding: 26px;
+      box-shadow: var(--shadow);
+      position: relative;
+    }
+
+    .card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 16px;
+      margin-bottom: 18px;
+      padding-bottom: 14px;
+      border-bottom: 1px solid var(--line);
+      flex-wrap: wrap;
+    }
+
+    .card-title {
+      font-family: var(--serif);
+      font-size: 21px;
+      font-weight: 400;
+      margin: 0 0 4px;
+      letter-spacing: -0.4px;
+    }
+
+    .card-subtitle {
+      font-family: var(--mono);
+      font-size: 10.5px;
+      color: var(--ink-secondary);
+      margin: 0;
+    }
+
+    /* Interactive Tab Controls */
+    .tab-group {
+      display: inline-flex;
+      border: 1px solid var(--line);
+      background: var(--bg);
+    }
+
+    .tab-btn {
+      border: 0;
+      background: transparent;
+      color: var(--ink-secondary);
+      font-family: var(--mono);
+      font-size: 10.5px;
+      padding: 6px 12px;
+      cursor: pointer;
+      border-right: 1px solid var(--line);
+      transition: all 0.15s;
+    }
+
+    .tab-btn:last-child {
+      border-right: 0;
+    }
+
+    .tab-btn.active {
+      background: var(--accent);
+      color: #fff;
+      font-weight: 600;
+    }
+
+    /* Interactive Horizontal Bars & Charts */
+    .bar-list {
+      display: flex;
+      flex-direction: column;
+      gap: 11px;
+    }
+
+    .bar-row {
+      display: grid;
+      grid-template-columns: 230px 1fr 115px;
+      align-items: center;
+      gap: 12px;
+      font-size: 12.5px;
+      padding: 4px 6px;
+      border-radius: 3px;
+      transition: background 0.15s;
+    }
+
+    .bar-row:hover {
+      background: var(--bg-panel);
+    }
+
+    .bar-label {
+      font-family: var(--mono);
+      font-size: 11.5px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      color: var(--ink);
+    }
+
+    .bar-track {
+      height: 18px;
+      background: var(--bg-panel);
+      position: relative;
+      overflow: hidden;
+      border: 1px solid var(--line);
+    }
+
+    .bar-fill {
+      height: 100%;
+      background: var(--accent);
+      transition: width 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .bar-fill.emerald { background: var(--emerald); }
+    .bar-fill.amber { background: var(--amber); }
+    .bar-fill.crimson { background: var(--crimson); }
+    .bar-fill.blue { background: var(--blue); }
+
+    .bar-val {
+      font-family: var(--mono);
+      font-size: 11px;
+      text-align: right;
+      color: var(--ink-secondary);
+      white-space: nowrap;
+    }
+
+    /* Data Tables */
+    .table-wrap {
+      overflow-x: auto;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+
+    th, td {
+      padding: 11px 13px;
+      text-align: left;
+      border-bottom: 1px solid var(--line);
+    }
+
+    th {
+      font-family: var(--mono);
+      font-size: 10.5px;
+      text-transform: uppercase;
+      letter-spacing: 0.7px;
+      color: var(--ink-secondary);
+      background: var(--bg-panel);
+      cursor: pointer;
+      user-select: none;
+      white-space: nowrap;
+    }
+
+    th:hover {
+      color: var(--accent);
+    }
+
+    tr:hover td {
+      background: rgba(186, 57, 22, 0.04);
+    }
+
+    td.num, th.num {
+      text-align: right;
+      font-family: var(--mono);
+      font-size: 12px;
+    }
+
+    td.code-cell {
+      font-family: var(--mono);
+      font-size: 11.5px;
+    }
+
+    /* Callouts */
+    .callout {
+      padding: 18px 22px;
+      border-left: 4px solid var(--accent);
+      background: var(--bg-panel);
+      margin-top: 20px;
+      font-size: 13.5px;
+    }
+
+    .callout.strength {
+      border-left-color: var(--emerald);
+      background: var(--emerald-soft);
+    }
+
+    .callout.weakness {
+      border-left-color: var(--crimson);
+      background: var(--crimson-soft);
+    }
+
+    .callout-title {
+      font-family: var(--mono);
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      margin-bottom: 6px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    /* SVG Chart Containers */
+    .svg-chart-wrap {
+      width: 100%;
+      overflow-x: auto;
+      position: relative;
+    }
+
+    svg.chart-svg {
+      width: 100%;
+      height: auto;
+      display: block;
+      font-family: var(--mono);
+    }
+
+    /* Interactive Tooltip */
+    #chart-tooltip {
+      position: fixed;
+      pointer-events: none;
+      z-index: 999;
+      background: #191e1b;
+      color: #f4f1e9;
+      border: 1px solid #ff7849;
+      padding: 10px 14px;
+      font-family: var(--mono);
+      font-size: 11px;
+      line-height: 1.5;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+      opacity: 0;
+      transition: opacity 0.12s ease;
+      max-width: 320px;
+    }
+
+    /* Scale Spectrum Indicator */
+    .spectrum-bar {
+      display: grid;
+      grid-template-columns: 1fr 1.2fr 1.6fr 1fr;
+      border: 1px solid var(--line);
+      margin: 22px 0 12px;
+      background: var(--bg);
+    }
+
+    .spec-tier {
+      padding: 14px 16px;
+      border-right: 1px solid var(--line);
+      position: relative;
+    }
+
+    .spec-tier:last-child {
+      border-right: 0;
+    }
+
+    .spec-tier.active {
+      background: var(--accent-soft);
+      outline: 2px solid var(--accent);
+      z-index: 1;
+    }
+
+    .spec-tier small {
+      display: block;
+      font-family: var(--mono);
+      font-size: 10px;
+      color: var(--ink-secondary);
+      text-transform: uppercase;
+    }
+
+    .spec-tier strong {
+      font-family: var(--serif);
+      font-size: 18px;
+    }
+
+    /* Simulator Panel */
+    .sim-grid {
+      display: grid;
+      grid-template-columns: 1fr 1.15fr;
+      gap: 28px;
+      align-items: center;
+    }
+
+    .slider-group {
+      margin-bottom: 20px;
+    }
+
+    .slider-head {
+      display: flex;
+      justify-content: space-between;
+      font-family: var(--mono);
+      font-size: 12px;
+      margin-bottom: 6px;
+    }
+
+    input[type="range"] {
+      width: 100%;
+      accent-color: var(--accent);
+      cursor: pointer;
+    }
+
+    .sim-outputs {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+    }
+
+    .sim-box {
+      padding: 18px;
+      background: var(--bg);
+      border: 1px solid var(--line);
+    }
+
+    .sim-box small {
+      display: block;
+      font-family: var(--mono);
+      font-size: 10px;
+      color: var(--ink-secondary);
+      text-transform: uppercase;
+      margin-bottom: 6px;
+    }
+
+    .sim-box strong {
+      font-family: var(--serif);
+      font-size: 30px;
+      color: var(--emerald);
+    }
+
+    /* Action Plan Cards */
+    .action-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 24px;
+    }
+
+    .action-card {
+      background: var(--bg-elevated);
+      border: 1px solid var(--line);
+      border-top: 3px solid var(--accent);
+      padding: 26px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+
+    .action-num {
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--accent);
+      font-weight: 700;
+      letter-spacing: 1px;
+      margin-bottom: 8px;
+    }
+
+    .action-card h3 {
+      font-family: var(--serif);
+      font-size: 23px;
+      font-weight: 400;
+      margin: 0 0 12px;
+      letter-spacing: -0.4px;
+    }
+
+    .action-card p {
+      font-size: 13.5px;
+      color: var(--ink-secondary);
+      margin: 0 0 14px;
+    }
+
+    .action-card ul {
+      margin: 0 0 18px;
+      padding-left: 18px;
+      font-size: 13px;
+      color: var(--ink);
+    }
+
+    .action-card li {
+      margin-bottom: 6px;
+    }
+
+    .kpi-target {
+      padding-top: 14px;
+      border-top: 1px solid var(--line);
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--emerald);
+      font-weight: 600;
+    }
+
+    footer {
+      padding: 40px 0 90px;
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--ink-secondary);
+      display: flex;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+
+    /* Glossary Term Tooltips */
+    .term-tip {
+      border-bottom: 1.5px dashed var(--accent);
+      cursor: help;
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      transition: color 0.15s, background 0.15s;
+      padding: 0 2px;
+      border-radius: 2px;
+    }
+
+    .term-tip:hover, .term-tip:focus {
+      color: var(--accent);
+      background: var(--accent-soft);
+      outline: none;
+    }
+
+    .term-tip::after {
+      content: "?";
+      display: inline-grid;
+      place-items: center;
+      width: 13px;
+      height: 13px;
+      border-radius: 50%;
+      background: var(--accent-soft);
+      color: var(--accent);
+      border: 1px solid var(--accent);
+      font-family: var(--mono);
+      font-size: 8.5px;
+      font-weight: 700;
+      line-height: 1;
+      flex-shrink: 0;
+    }
+
+    .tip-kicker {
+      font-family: var(--mono);
+      font-size: 9px;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      color: #ff8658;
+      margin-bottom: 4px;
+      display: block;
+    }
+
+    .tip-title {
+      font-family: var(--serif);
+      font-size: 15px;
+      color: #fff;
+      margin-bottom: 6px;
+      display: block;
+      border-bottom: 1px solid #353d38;
+      padding-bottom: 5px;
+    }
+
+    .tip-body {
+      font-family: var(--sans);
+      font-size: 12px;
+      color: #d5d9d2;
+      line-height: 1.5;
+      display: block;
+      margin-bottom: 8px;
+    }
+
+    .tip-meta {
+      font-family: var(--mono);
+      font-size: 10px;
+      color: #8ce6b8;
+      background: rgba(61, 214, 140, 0.1);
+      padding: 5px 8px;
+      border-left: 2px solid #3dd68c;
+      display: block;
+    }
+
+    /* Card Zoom & Prev/Next Header Controls */
+    .card-tools {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+
+    .card-tool-btn {
+      border: 1px solid var(--line);
+      background: var(--bg);
+      color: var(--ink-secondary);
+      font-family: var(--mono);
+      font-size: 10px;
+      padding: 4px 8px;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .card-tool-btn:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
+    /* Zoomed Single Card / Graph Modal Mode */
+    .card.card-zoomed {
+      position: fixed !important;
+      inset: 28px !important;
+      z-index: 350 !important;
+      overflow-y: auto !important;
+      max-width: none !important;
+      margin: 0 !important;
+      padding: 36px 44px !important;
+      box-shadow: 0 24px 80px rgba(0, 0, 0, 0.65) !important;
+      border: 2px solid var(--accent) !important;
+    }
+
+    .card.card-zoomed svg.chart-svg {
+      max-height: 58vh;
+      width: auto;
+      margin: 0 auto;
+    }
+
+    #zoom-backdrop {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(12, 15, 13, 0.76);
+      backdrop-filter: blur(4px);
+      z-index: 340;
+    }
+
+    #zoom-backdrop.active {
+      display: block;
+    }
+
+    /* Presentation Deck Mode (Single Slide Step-Through) */
+    body.deck-mode .slide-section {
+      display: none;
+      animation: slideFade 0.25s ease;
+    }
+
+    body.deck-mode .slide-section.active-slide {
+      display: block;
+      min-height: calc(100vh - 170px);
+      padding-top: 32px;
+      padding-bottom: 100px;
+    }
+
+    @keyframes slideFade {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* Bird's-Eye Zoom-Out Overview Grid Mode */
+    body.overview-mode main.shell {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(410px, 1fr));
+      gap: 24px;
+      padding-top: 28px;
+      padding-bottom: 110px;
+      align-items: start;
+    }
+
+    body.overview-mode .slide-section {
+      display: block !important;
+      border: 2px solid var(--line);
+      background: var(--bg-elevated);
+      padding: 20px !important;
+      margin: 0 !important;
+      max-height: 430px;
+      overflow: hidden;
+      position: relative;
+      cursor: pointer;
+      transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+      box-shadow: var(--shadow);
+    }
+
+    body.overview-mode .slide-section > *:not(.slide-overview-badge) {
+      transform: scale(0.76);
+      transform-origin: top left;
+      width: 131.5%;
+      pointer-events: none;
+    }
+
+    body.overview-mode .slide-section::after {
+      content: "Click to Zoom In ⤢";
+      position: absolute;
+      right: 12px;
+      bottom: 12px;
+      background: var(--accent);
+      color: #fff;
+      font-family: var(--mono);
+      font-size: 10px;
+      padding: 4px 10px;
+      letter-spacing: 0.5px;
+      z-index: 5;
+    }
+
+    body.overview-mode .slide-section:hover {
+      transform: translateY(-4px);
+      border-color: var(--accent);
+    }
+
+    body.overview-mode .slide-section.active-slide {
+      border-color: var(--accent);
+      outline: 2px solid var(--accent);
+    }
+
+    body.overview-mode footer {
+      grid-column: 1 / -1;
+    }
+
+    /* Floating Presentation Controller Dock */
+    .pres-dock {
+      position: fixed;
+      bottom: 18px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 400;
+      background: var(--bg-dark-card);
+      color: #f4f1e9;
+      border: 1px solid #454d47;
+      box-shadow: 0 12px 36px rgba(0, 0, 0, 0.45);
+      padding: 8px 14px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      border-radius: 4px;
+      font-family: var(--mono);
+      font-size: 11px;
+    }
+
+    .pres-btn {
+      background: rgba(255, 255, 255, 0.08);
+      color: #f4f1e9;
+      border: 1px solid #4a524c;
+      padding: 6px 11px;
+      font-family: var(--mono);
+      font-size: 10.5px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      transition: all 0.15s;
+      white-space: nowrap;
+    }
+
+    .pres-btn:hover {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #fff;
+    }
+
+    .pres-btn.active {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #fff;
+      font-weight: 600;
+    }
+
+    .pres-dots {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .pres-dot {
+      width: 9px;
+      height: 9px;
+      border-radius: 50%;
+      background: #555e57;
+      border: 0;
+      padding: 0;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .pres-dot.active {
+      background: #ff7849;
+      transform: scale(1.3);
+    }
+
+    .pres-status {
+      min-width: 195px;
+      text-align: center;
+      color: #d5d9d2;
+      font-size: 10.5px;
+      white-space: nowrap;
+    }
+
+    @media (max-width: 1080px) {
+      .hero-grid, .grid-2, .grid-12-8, .sim-grid, .action-grid {
+        grid-template-columns: 1fr;
+      }
+      .kpi-grid {
+        grid-template-columns: repeat(3, 1fr);
+      }
+      .kpi-cell {
+        border-bottom: 1px solid var(--line);
+      }
+    }
+
+    @media (max-width: 680px) {
+      .shell {
+        width: calc(100% - 32px);
+      }
+      .kpi-grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+      .bar-row {
+        grid-template-columns: 140px 1fr 90px;
+      }
+      .spectrum-bar {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @media print {
+      .topbar, .tab-group, .sim-grid input {
+        display: none !important;
+      }
+      body {
+        background: #fff;
+        color: #000;
+      }
+      .card, .action-card {
+        box-shadow: none;
+        break-inside: avoid;
+      }
+    }
+  </style>
+</head>
+<body>
+
+<div id="chart-tooltip"></div>
+<div id="zoom-backdrop" onclick="closeCardZoom()"></div>
+
+<!-- Floating Presentation & Zoom Dock -->
+<div class="pres-dock" role="region" aria-label="Presentation and Zoom Controls">
+  <button class="pres-btn" type="button" onclick="stepSlide(-1)" title="Previous Section / Graph (Left Arrow)">◀ Prev</button>
+  <div class="pres-dots" id="pres-dots-container"></div>
+  <div class="pres-status" id="pres-status-label">01 / 06 · Executive Summary</div>
+  <button class="pres-btn" type="button" onclick="stepSlide(1)" title="Next Section / Graph (Right Arrow)">Next ▶</button>
+  <span style="color:#454d47;">|</span>
+  <button class="pres-btn" id="dock-deck-btn" type="button" onclick="toggleDeckMode()" title="Toggle Single-Slide Presentation Mode (D)">▣ Deck Mode</button>
+  <button class="pres-btn" id="dock-overview-btn" type="button" onclick="toggleOverviewMode()" title="Zoom Out to Bird's-Eye Overview Grid (Z)">⊞ Zoom Out</button>
+</div>
+
+<header class="topbar">
+  <div class="shell topbar-inner">
+    <a href="#top" class="brand">
+      <span class="brand-mark">✳</span>
+      <span>AIDA</span>
+      <span class="brand-sub">ENGINEERING AUDIT · NOV 2026</span>
+    </a>
+    <nav class="nav-links" aria-label="Report Sections">
+      <a href="#exec-summary" onclick="goToSlide(0)">01. Summary</a>
+      <a href="#scale-structure" onclick="goToSlide(1)">02. Scale &amp; CodeGraph</a>
+      <a href="#pr-velocity" onclick="goToSlide(2)">03. MR Velocity &amp; GitClear</a>
+      <a href="#dora-mapping" onclick="goToSlide(3)">04. DORA Benchmarks</a>
+      <a href="#linearb-analytics" onclick="goToSlide(4)">05. LinearB Analytics</a>
+      <a href="#action-plan" onclick="goToSlide(5)">06. Action Plan</a>
+    </nav>
+    <div class="top-actions">
+      <button class="btn-ghost" id="top-overview-btn" type="button" onclick="toggleOverviewMode()" title="Bird's-Eye Zoom Out Grid (Shortcut: Z)">
+        ⊞ Zoom Out
+      </button>
+      <button class="btn-ghost" id="top-deck-btn" type="button" onclick="toggleDeckMode()" title="Slide-by-Slide Presentation Deck Mode (Shortcut: D)">
+        ▣ Present
+      </button>
+      <button class="btn-ghost" id="theme-toggle" type="button" title="Toggle Editorial Paper / Dark Terminal Theme">
+        <span id="theme-icon">◐</span> <span id="theme-label">Terminal Mode</span>
+      </button>
+      <button class="btn-ghost" type="button" onclick="window.print()">⎙ Print / PDF</button>
+    </div>
+  </div>
+</header>
+
+<main id="top" class="shell">
+
+  <!-- HERO & EXECUTIVE SUMMARY -->
+  <section class="hero" id="exec-summary">
+    <div class="eyebrow">
+      <span class="pulse-dot"></span>
+      PRINCIPAL ARCHITECTURE &amp; DELIVERY ANALYTICS AUDIT · DORA + GITCLEAR + LINEARB
+    </div>
+    <div class="hero-grid">
+      <div>
+        <h1>High merge cadence.<br /><span>Monolithic friction.</span></h1>
+        <p class="hero-lead">
+          An empirical engineering audit of the <strong>AIDA (`v0.16.0`)</strong> codebase at pinned trunk commit
+          <code>6a3f67671a9</code>, synthesizing <strong>343.4 days</strong> of Git history (<strong>4,190 commits</strong>,
+          <strong>2,421 merged PRs</strong>), <code>tokei</code> static source census (<strong>988,122 net code LoC</strong>),
+          <code>codegraph</code> AST dependency topology (<strong>56,257 nodes</strong> / <strong>268,598 edges</strong>),
+          and a local, untracked snapshot of <strong>3,824 review-verdict files</strong> (not reproducible from the pinned commit).
+        </p>
+        <div class="meta-strip">
+          <div><strong>HEAD SHA:</strong> 6a3f67671a974703590efde5ae2a323f3f7471fa</div>
+          <div><strong>AUDIT WINDOW:</strong> 2025-11-23 → 2026-11-01</div>
+          <div><strong>FRAMEWORKS:</strong> DORA · GitClear · LinearB</div>
+        </div>
+      </div>
+
+      <aside class="verdict-card" aria-label="Executive Audit Diagnosis">
+        <div class="card-kicker">EXECUTIVE DIAGNOSIS</div>
+        <h3>High Trunk Integration Velocity Paired with Batch-Size &amp; Hub Coupling Friction</h3>
+        <p>
+          AIDA merges <strong>12.9–14.35 PRs/day</strong> onto <code>main</code> (peaking at <strong>833 PRs</strong> in June 2026), and
+          <code>aida review watch</code> is designed to dispatch a reviewer as soon as a branch is pushed (pickup latency is a design
+          claim; this audit did not measure it). However, <strong>78.3% of all Rust code</strong> resides in a single crate
+          (<code>aida-cli-lib</code>), and <strong>31.6% of PRs exceed 400 LoC</strong> (40.1% in the trailing 60 days), co-occurring with a
+          <strong>27.7% &lt;21-day file-touch churn proxy</strong> and a <strong>31.6% <code>BUG-</code>/<code>fix:</code> commit share</strong>.
+        </p>
+        <div class="verdict-pills">
+          <div class="v-pill good">
+            <small>CORE STRENGTH</small>
+            <strong>14.35 PRs/d (60d)</strong>
+          </div>
+          <div class="v-pill">
+            <small>PRIMARY BOTTLENECK</small>
+            <strong>31.6% PRs &gt;400 LoC</strong>
+          </div>
+          <div class="v-pill">
+            <small>REVIEW GATE</small>
+            <strong>Unreviewed Rate: Unmeasured</strong>
+          </div>
+          <div class="v-pill">
+            <small>MONOLITH CONCENTRATION</small>
+            <strong>78.3% LoC in 1 Crate</strong>
+          </div>
+        </div>
+      </aside>
+    </div>
+  </section>
+
+  <!-- 6-COLUMN KPI STRIP -->
+  <section class="kpi-grid" aria-label="Headline Engineering Metrics">
+    <div class="kpi-cell">
+      <div class="kpi-label">Net Codebase Scale</div>
+      <div class="kpi-value">988.1k</div>
+      <div class="kpi-foot"><span class="badge badge-info">Large Tier</span> 1.33M total lines</div>
+    </div>
+    <div class="kpi-cell">
+      <div class="kpi-label">MR Velocity (60d Avg)</div>
+      <div class="kpi-value">14.35/d</div>
+      <div class="kpi-foot"><span class="badge badge-elite">Repo Proxy</span> 430.5 PRs/mo</div>
+    </div>
+    <div class="kpi-cell">
+      <div class="kpi-label">PR Pickup Latency</div>
+      <div class="kpi-value">Unmeasured</div>
+      <div class="kpi-foot"><span class="badge badge-info">Design Claim</span> dispatch on push</div>
+    </div>
+    <div class="kpi-cell">
+      <div class="kpi-label">PRs Over 400 LoC</div>
+      <div class="kpi-value">31.6%</div>
+      <div class="kpi-foot"><span class="badge badge-warn">Batch Inflation</span> Illustrative target* &lt;15%</div>
+    </div>
+    <div class="kpi-cell">
+      <div class="kpi-label">&lt;21d Rework Churn</div>
+      <div class="kpi-value">27.7%</div>
+      <div class="kpi-foot"><span class="badge badge-crit">File Proxy</span> Illustrative target* &lt;8%</div>
+    </div>
+    <div class="kpi-cell">
+      <div class="kpi-label">Commit Revert Ratio</div>
+      <div class="kpi-value">0.10%</div>
+      <div class="kpi-foot"><span class="badge badge-info">Repo Proxy</span> 4 / 4,190 commits</div>
+    </div>
+  </section>
+
+  <!-- SECTION 1: EXECUTIVE SCORECARD & FILTERABLE BENCHMARK MATRIX -->
+  <section class="report-section">
+    <div class="section-head">
+      <div>
+        <div class="section-num">01 / EXECUTIVE BENCHMARK MATRIX</div>
+        <h2>Strengths vs. Structural Weaknesses</h2>
+      </div>
+      <div class="tab-group" role="tablist" aria-label="Filter Benchmark Matrix">
+        <button class="tab-btn active" onclick="filterScorecard('all', this)">All Dimensions (10)</button>
+        <button class="tab-btn" onclick="filterScorecard('strength', this)">Strengths (5)</button>
+        <button class="tab-btn" onclick="filterScorecard('weakness', this)">Weaknesses &amp; Risks (5)</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="table-wrap">
+        <table id="scorecard-table">
+          <thead>
+            <tr>
+              <th>Engineering Dimension</th>
+              <th>Source Tool</th>
+              <th class="num">AIDA Empirical Metric</th>
+              <th class="num">Industry Median</th>
+              <th class="num">Industry Elite Target</th>
+              <th>Classification &amp; Impact</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr data-kind="strength">
+              <td><strong>Trunk PR Merge Frequency</strong></td>
+              <td class="code-cell">git log main</td>
+              <td class="num"><strong>13.8 – 14.35 PRs/day</strong> (100.5/wk over 60d)</td>
+              <td class="num">1.5 – 2.5 PRs/day*</td>
+              <td class="num">4.0 – 6.0 PRs/day*</td>
+              <td><span class="badge badge-elite">High Merge Cadence</span> Repo integration proxy (*illustrative 8-dev reference)</td>
+            </tr>
+            <tr data-kind="strength">
+              <td><strong>PR Pickup Time (Wait for Reviewer)</strong></td>
+              <td class="code-cell">review watch</td>
+              <td class="num"><strong>Unmeasured</strong> (design claim)</td>
+              <td class="num">~13 hours*</td>
+              <td class="num">&lt; 1 hour*</td>
+              <td><span class="badge badge-info">Design Claim</span> <code>aida review watch</code> dispatches a reviewer on push by design; no pickup-latency data was collected</td>
+            </tr>
+            <tr data-kind="strength">
+              <td><strong>Unreviewed PR Merge Rate</strong></td>
+              <td class="code-cell">review-verdicts</td>
+              <td class="num"><strong>Unmeasured</strong> per merged PR</td>
+              <td class="num">15% – 30%*</td>
+              <td class="num">&lt; 2%*</td>
+              <td><span class="badge badge-info">Not Measured</span> <code>aida pr ship</code> requires a recorded verdict, but the local verdict-file snapshot (3,824 files / 2,959 targets) is untracked and was not joined to merged PRs</td>
+            </tr>
+            <tr data-kind="strength">
+              <td><strong>Dedicated Rust Test Density</strong></td>
+              <td class="code-cell">tokei</td>
+              <td class="num"><strong>27.9%</strong> (240,863 LoC / 641 files)</td>
+              <td class="num">12% – 18%*</td>
+              <td class="num">&gt; 25.0%*</td>
+              <td><span class="badge badge-elite">Architectural Strength</span> Dedicated Rust test files + 72 Python suites (*heuristic)</td>
+            </tr>
+            <tr data-kind="strength">
+              <td><strong>Trunk Commit Revert Ratio (Repo Proxy)</strong></td>
+              <td class="code-cell">git log main</td>
+              <td class="num"><strong>0.10% commit reverts</strong> (4 / 4,190)</td>
+              <td class="num">N/A (Deploy CFR: 15–30%*)</td>
+              <td class="num">Deploy CFR &lt; 5%*</td>
+              <td><span class="badge badge-info">Repo Proxy Only</span> Commit revert ratio (actual deployment CFR &amp; MTTR unknown)</td>
+            </tr>
+            <tr data-kind="weakness">
+              <td><strong>Crate Monolith Concentration</strong></td>
+              <td class="code-cell">tokei / Cargo</td>
+              <td class="num"><strong>78.3%</strong> in <code>aida-cli-lib</code> (675.6k LoC)</td>
+              <td class="num">35% – 50%*</td>
+              <td class="num">&lt; 25% per crate*</td>
+              <td><span class="badge badge-crit">Critical Weakness</span> Penalizes incremental compile/link (*architectural heuristic)</td>
+            </tr>
+            <tr data-kind="weakness">
+              <td><strong>Cross-File AST Hub Fan-In (<code>models.rs</code>)</strong></td>
+              <td class="code-cell">codegraph</td>
+              <td class="num"><strong>1,003 caller files</strong> (69.7% of Rust)</td>
+              <td class="num">15% – 25%*</td>
+              <td class="num">&lt; 15% of files*</td>
+              <td><span class="badge badge-crit">Critical Weakness</span> 10,402 cross-file edges; only 33 traits across 862.6k LoC</td>
+            </tr>
+            <tr data-kind="weakness">
+              <td><strong>Oversized PR Rate (&gt;400 LoC Diff)</strong></td>
+              <td class="code-cell">git shortstat</td>
+              <td class="num"><strong>31.6% of PRs</strong> (median 225 LoC)</td>
+              <td class="num">~26% of PRs*</td>
+              <td class="num">&lt; 15% of PRs*</td>
+              <td><span class="badge badge-warn">Batch-Size Weakness</span> 10.1% of PRs exceed 1,000 LoC; trailing 60 days 40.1% exceed 400 (SmartBear/Cisco 200–400 LoC guidance)</td>
+            </tr>
+            <tr data-kind="weakness">
+              <td><strong>LinearB &lt;21-Day Rework Churn (30d)</strong></td>
+              <td class="code-cell">git numstat</td>
+              <td class="num"><strong>27.7%</strong> (351,760 LoC file-window proxy)</td>
+              <td class="num">11% – 15%*</td>
+              <td class="num">&lt; 8%*</td>
+              <td><span class="badge badge-crit">High Churn Proxy</span> Co-occurs with 12 hub files touched 2–7x/day (file-level proxy)</td>
+            </tr>
+            <tr data-kind="weakness">
+              <td><strong>Forward-Fix (<code>BUG-</code> / <code>fix:</code>) Commit Ratio</strong></td>
+              <td class="code-cell">git log main</td>
+              <td class="num"><strong>31.6%</strong> (1,326 / 4,190 commits)</td>
+              <td class="num">18% – 25%*</td>
+              <td class="num">&lt; 15.0%*</td>
+              <td><span class="badge badge-info">Dual Signal</span> Combines healthy audit follow-up capture + post-merge bug fixes</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Methodology, Primary Sources & Measured vs. Proxy/Unknown Distinctions -->
+      <div style="margin-top: 18px; padding-top: 16px; border-top: 1px dashed var(--line-strong); font-size: 12.5px; color: var(--ink-secondary); line-height: 1.55;">
+        <div style="font-family:var(--mono); font-size:11px; font-weight:700; letter-spacing:0.06em; text-transform:uppercase; color:var(--accent); margin-bottom:8px;">
+          METHODOLOGY, PRIMARY BENCHMARK SOURCES &amp; MEASURED VS. PROXY / ASSUMED DISTINCTIONS
+        </div>
+        <div style="display:grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px;">
+          <div>
+            <strong style="color:var(--ink);">1. Pinned Repository Evidence &amp; Collection Commands:</strong><br/>
+            Evaluated against <code>main</code> at <code>6a3f67671a974703590efde5ae2a323f3f7471fa</code> (window <code>2025-11-23</code> → <code>2026-11-01</code>, 343.4 days):
+            <code>tokei --output json</code> (static line census); <code>sqlite3 .codegraph/codegraph.db</code> (56,257 AST nodes / 268,598 edges);
+            <code>git rev-list --count 6a3f67671a9</code> (4,190 commits, full history).
+            <strong>PR merges</strong> are first-parent commits whose subject ends in <code>(#N)</code>, read from
+            <code>git log --first-parent 6a3f67671a9 --format='@%cs %s' --shortstat</code>; PR size = insertions + deletions from that shortstat, with no files excluded.
+            Windows filter on committer date (<code>%cs</code> &ge; start date); median is the midpoint average and p90 the inclusive decile.
+            All history: 2,421 PRs. Since 2026-05-10 (175 d): 2,418 PRs, median 225, p90 1,008, mean 664.8, 31.6% &gt;400, 10.1% &gt;1,000.
+            Since 2026-09-02 (60 d): 861 PRs, median 290, p90 1,485, 40.1% &gt;400. Since 2026-10-02 (30 d): 387 PRs, median 325, p90 1,782, 44.7% &gt;400.
+            June 2026: 833 PRs, median 188, p90 625, 24.1% &gt;400.
+            Commit counts per window use the same committer-date filter on <code>git log 6a3f67671a9 --format=%cs</code>.
+            <strong>Reverts</strong> = subjects matching <code>^revert</code> (case-insensitive): 4 (7 subjects mention “revert” anywhere).
+            <strong>Fix share</strong> = subjects containing <code>BUG-</code> (1,163) plus subjects starting with <code>fix</code> and not containing <code>BUG-</code> (163); subjects such as <code>[AI:x] fix(...)</code> are not matched, so this undercounts fixes.
+            The 30-day churn and code-evolution figures come from <code>git log --numstat --since="30 days ago"</code> run on 2026-11-01 (795 commits).
+            The <code>.aida/review-verdicts/**/*.json</code> snapshot (3,824 files across 2,959 targets) is local, untracked state (no files tracked at the pinned commit): verdict counts, review rounds, and findings per verdict cannot be reproduced from the commit and are not evidence of signatures.
+          </div>
+          <div>
+            <strong style="color:var(--ink);">2. Primary External Reference Sources &amp; Caveats:</strong><br/>
+            • <strong>DORA Four Keys:</strong> <a href="https://dora.dev/guides/dora-metrics/" target="_blank" rel="noopener" style="color:var(--accent);">dora.dev/guides/dora-metrics/</a> (2023–2024 <em>Accelerate State of DevOps</em> production deployment &amp; incident definitions).<br/>
+            • <strong>LinearB / GitClear-style benchmark figures:</strong> pickup time, cycle-time phases, &lt;21d rework bands, unreviewed-merge rates, PR-size bucket distributions, and oversized-PR shares are <strong>not traced to a specific published report</strong> in this audit. Each is marked <code>*</code> and is an illustrative reference range only.<br/>
+            • <strong>Review size:</strong> SmartBear/Cisco Systems peer-review case study (Jason Cohen, <em>Best Kept Secrets of Peer Code Review</em>, 2006; 2,500 reviews) recommends reviewing no more than 200–400 LoC at a time.<br/>
+            • <strong>Proxies, Unknowns &amp; Hypotheses:</strong> Actual production deployment frequency, deployment CFR, and incident MTTR are <strong>Unknown</strong> (no deployment/incident dataset is linked in the repo). The 27.7% &lt;21d churn figure is a <em>file-level commit-window proxy</em> (files touched multiple times within 21d in <code>git log --numstat</code>), not line-by-line <code>git blame</code> survival. Figures marked <code>*</code> are illustrative: 8-developer squad scaling (~0.2–0.75 PRs/dev/day), architectural heuristics, or industry ranges without a cited report. PR pickup latency, CI settlement time, commit-to-merge time, and total cycle time are <strong>unmeasured</strong> in this audit; any values shown for them are labelled design claims or estimates. Target KPIs in the action plan are assumptions, not forecasts. Co-occurrence between &gt;400-LoC batches, hub files, and churn is an architectural hypothesis rather than proved causation.
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SECTION 2: CODEBASE SCALE & CODEGRAPH STRUCTURAL TOPOLOGY -->
+  <section class="report-section" id="scale-structure">
+    <div class="section-head">
+      <div>
+        <div class="section-num">02 / SCALE &amp; STRUCTURAL CLASSIFICATION (TOKEI + CODEGRAPH)</div>
+        <h2>Codebase Scale, Monolith Skew &amp; AST Coupling</h2>
+      </div>
+      <p class="section-desc">
+        Categorizing AIDA across industry repository scale tiers and inspecting crate boundaries, file-size tail risk,
+        and <code>codegraph</code> fan-in/fan-out dependency hubs.
+      </p>
+    </div>
+
+    <!-- Scale Spectrum -->
+    <div class="card" style="margin-bottom: 28px;">
+      <div class="card-header">
+        <div>
+          <h3 class="card-title">Industry Repository Scale Spectrum</h3>
+          <p class="card-subtitle">AIDA reached 988,122 net code LoC (1,328,482 total lines) in 343.4 calendar days (+2,877 net LoC/day)</p>
+        </div>
+        <span class="badge badge-info">Large-Scale System Tier (500k–2M+ LoC)</span>
+      </div>
+      <div class="spectrum-bar">
+        <div class="spec-tier">
+          <small>TIER 1 · SMALL</small>
+          <strong>&lt; 100k LoC</strong>
+          <div style="font-size:12px;color:var(--ink-secondary);margin-top:4px;">Microservices, single-purpose CLIs, libraries</div>
+        </div>
+        <div class="spec-tier">
+          <small>TIER 2 · MEDIUM</small>
+          <strong>100k – 500k LoC</strong>
+          <div style="font-size:12px;color:var(--ink-secondary);margin-top:4px;">Standard commercial SaaS applications</div>
+        </div>
+        <div class="spec-tier active">
+          <small style="color:var(--accent);font-weight:700;">▲ AIDA POSITION (988,122 CODE LOC)</small>
+          <strong>500k – 2M+ LoC (Large)</strong>
+          <div style="font-size:12px;color:var(--ink);margin-top:4px;"><strong>862,574 Rust LoC</strong> (1,440 files) + 125.5k multi-lang/docs</div>
+        </div>
+        <div class="spec-tier">
+          <small>TIER 4 · ULTRA-SCALE</small>
+          <strong>10M+ LoC</strong>
+          <div style="font-size:12px;color:var(--ink-secondary);margin-top:4px;">Enterprise multi-product monorepos</div>
+        </div>
+      </div>
+
+      <!-- 988.1k Net Code vs 1.33M Total Physical Lines Breakdown -->
+      <div style="margin-top: 18px; padding-top: 16px; border-top: 1px dashed var(--line-strong);">
+        <div style="display:flex; justify-content:space-between; align-items:baseline; flex-wrap:wrap; gap:8px; margin-bottom:10px;">
+          <div style="font-family:var(--mono); font-size:11px; font-weight:700; letter-spacing:0.06em; text-transform:uppercase; color:var(--accent);">
+            TOKEI LINE COMPOSITION: WHY 988.1K NET CODE LOC VS. 1.33M TOTAL PHYSICAL LINES?
+          </div>
+          <div style="font-family:var(--mono); font-size:11px; color:var(--ink-secondary);">
+            <code>1,328,482 Total Lines (wc -l) = 988,122 Net Code (74.4%) + 236,964 Comments/Docs (17.8%) + 103,396 Blanks (7.8%)</code>
+          </div>
+        </div>
+        <!-- Proportional Stacked Bar -->
+        <div style="display:flex; height:14px; border-radius:3px; overflow:hidden; border:1px solid var(--line-strong); margin-bottom:12px;">
+          <div style="width:64.93%; background:var(--emerald);" title="Net Rust Code: 862,574 LoC (64.9% of all physical lines)"></div>
+          <div style="width:9.45%; background:var(--blue);" title="Other Net Code (JSON/TS/Py/Sh/HTML/TOML): 125,548 LoC (9.5%)"></div>
+          <div style="width:17.84%; background:var(--amber);" title="Comments, Rustdoc & Markdown Prose Blocks: 236,964 lines (17.8%)"></div>
+          <div style="width:7.78%; background:var(--line-strong);" title="Blank Whitespace Lines: 103,396 lines (7.8%)"></div>
+        </div>
+        <div class="spectrum-bar" style="margin-top:0;">
+          <div class="spec-tier" style="padding:10px 12px;">
+            <small style="color:var(--emerald);font-weight:700;">■ NET CODE LOC (74.4%)</small>
+            <strong style="font-size:16px;">988,122 LoC</strong>
+            <div style="font-size:11.5px;color:var(--ink-secondary);margin-top:3px;">Executable source statements (<strong>862,574 Rust</strong> + 125,548 multi-lang). Used by DORA/GitClear.</div>
+          </div>
+          <div class="spec-tier" style="padding:10px 12px;">
+            <small style="color:var(--amber);font-weight:700;">■ COMMENTS &amp; DOCS (17.8%)</small>
+            <strong style="font-size:16px;">236,964 lines</strong>
+            <div style="font-size:11.5px;color:var(--ink-secondary);margin-top:3px;"><code>///</code> Rustdoc, <code>//</code> inline notes, <code>&lt;!-- trace:... --&gt;</code> tags (<strong>62,213 in Rust</strong>) &amp; Markdown prose.</div>
+          </div>
+          <div class="spec-tier" style="padding:10px 12px;">
+            <small style="color:var(--ink-secondary);font-weight:700;">■ BLANK LINES (7.8%)</small>
+            <strong style="font-size:16px;">103,396 lines</strong>
+            <div style="font-size:11.5px;color:var(--ink-secondary);margin-top:3px;">Vertical whitespace separating items and blocks (<strong>84,565 blank lines in Rust</strong>).</div>
+          </div>
+          <div class="spec-tier active" style="padding:10px 12px;">
+            <small style="color:var(--accent);font-weight:700;">∑ TOTAL PHYSICAL LINES (100%)</small>
+            <strong style="font-size:16px;">1,328,482 lines</strong>
+            <div style="font-size:11.5px;color:var(--ink);margin-top:3px;">Raw file line count across repo (<strong>1,009,352 physical lines in 1,440 Rust files</strong> alone).</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="grid-2">
+      <!-- Interactive Crate / Language Breakdown -->
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <h3 class="card-title">Workspace Crate &amp; Language Distribution</h3>
+            <p class="card-subtitle">78.3% of all Rust code is concentrated inside aida-cli-lib</p>
+          </div>
+          <div class="tab-group">
+            <button class="tab-btn active" onclick="renderScaleView('crates', this)">By Crate</button>
+            <button class="tab-btn" onclick="renderScaleView('langs', this)">By Language</button>
+            <button class="tab-btn" onclick="renderScaleView('composition', this)">988k vs 1.33M</button>
+            <button class="tab-btn" onclick="renderScaleView('megafiles', this)">Top 10 Mega-Files</button>
+          </div>
+        </div>
+        <div id="scale-bars-container" class="bar-list"></div>
+        <div class="callout weakness" id="scale-callout">
+          <div class="callout-title">⚠ Architectural Bottleneck: Crate Asymmetry</div>
+          <strong>675,558 Rust LoC (1,115 files)</strong> sit inside <code>aida-cli-lib</code> alone, while <code>aida-core</code> holds
+          120,437 LoC (177 files). Furthermore, <strong>213 Rust files (14.8%) exceed 1,000 LoC</strong> and <strong>15 mega-files exceed 5,000 LoC</strong>,
+          creating severe incremental compilation and context-window bottlenecks.
+        </div>
+      </div>
+
+      <!-- Interactive CodeGraph Coupling Explorer -->
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <h3 class="card-title">CodeGraph AST Coupling &amp; Hotspot Explorer</h3>
+            <p class="card-subtitle">56,257 AST Nodes · 268,598 Directed Edges · 488 Cargo.lock Packages</p>
+          </div>
+          <div class="tab-group">
+            <button class="tab-btn active" onclick="renderCodegraphView('fanin', this)">File Fan-In Hubs</button>
+            <button class="tab-btn" onclick="renderCodegraphView('fanout', this)">God-Dispatchers</button>
+            <button class="tab-btn" onclick="renderCodegraphView('churn30d', this)">30d Churn Hotspots</button>
+          </div>
+        </div>
+        <div id="codegraph-bars-container" class="bar-list"></div>
+        <div class="callout weakness" id="codegraph-callout">
+          <div class="callout-title">⚠ CodeGraph Topology Finding: Low Trait Abstraction</div>
+          Across 862.6k Rust LoC, CodeGraph indexes <strong>2,651 structs</strong> and <strong>31,703 functions</strong>, but only
+          <strong>33 traits</strong> (<code>165 implements</code> edges). Because subsystems are not decoupled behind narrow traits,
+          <code>aida-core/src/models.rs</code> is directly imported/called by <strong>1,003 distinct files (10,402 cross-file edges)</strong>.
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SECTION 3: PR / MR VELOCITY & GITCLEAR SIZING ANALYSIS -->
+  <section class="report-section" id="pr-velocity">
+    <div class="section-head">
+      <div>
+        <div class="section-num">03 / PULL REQUEST VELOCITY &amp; GITCLEAR SIZING ANALYSIS</div>
+        <h2>Trunk Merge Rate vs. Batch-Size Inflation</h2>
+      </div>
+      <p class="section-desc">
+        Evaluating AIDA's 2,421 PR/MR merges onto <code>main</code> against industry velocity tiers and illustrative industry reference ranges
+        and the SmartBear/Cisco review-size guidance.
+      </p>
+    </div>
+
+    <div class="grid-12-8">
+      <!-- Interactive Monthly Commit & PR Chart -->
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <h3 class="card-title">Monthly Commit &amp; PR/MR Merge Trajectory onto <code>main</code></h3>
+            <p class="card-subtitle">4,190 Total Commits · 2,421 Merged PRs (#1–#3201) · Hover bars for exact telemetry</p>
+          </div>
+          <div class="tab-group">
+            <button class="tab-btn active" onclick="renderVelocityChart('monthly', this)">Monthly History</button>
+            <button class="tab-btn" onclick="renderVelocityChart('windows', this)">Trailing Windows vs Industry</button>
+          </div>
+        </div>
+        <div class="svg-chart-wrap" id="velocity-svg-container"></div>
+        <div class="callout strength">
+          <div class="callout-title">✓ High Trunk Merge Cadence</div>
+          Since adopting PR-gated trunk integration on May 10, 2026 (175 days), AIDA has merged <strong>13.8 PRs/day</strong>
+          (<strong>96.7 PRs/week</strong>, <strong>414.5 PRs/month</strong>), with <strong>14.35 PRs/day</strong> over the trailing
+          60 days—roughly 3x the illustrative* Elite 8-engineer squad range and 7x the illustrative* median range
+          (*reference ranges, not measured cohorts).
+        </div>
+      </div>
+
+      <!-- Interactive GitClear PR Size Distribution & Bell Curve -->
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <h3 class="card-title">PR Diff Size vs. GitClear Review Ceiling</h3>
+            <p class="card-subtitle">31.6% of PRs since 2026-05-10 exceed 400 LoC (40.1% in the trailing 60 days)</p>
+          </div>
+          <div class="tab-group">
+            <button class="tab-btn active" onclick="renderSizingChart('bars', this)">Bucket Histogram</button>
+            <button class="tab-btn" onclick="renderSizingChart('bell', this)">Schematic Shift</button>
+          </div>
+        </div>
+        <div class="svg-chart-wrap" id="sizing-svg-container"></div>
+        <div class="callout weakness">
+          <div class="callout-title">⚠ SmartBear/Cisco Review-Size Guidance (&gt;400 LoC)</div>
+          The SmartBear/Cisco Systems case study (Cohen, 2006; 2,500 reviews) recommends reviewing no more than <strong>200–400 LoC</strong> at a time. Since 2026-05-10, AIDA's
+          median PR is <strong>225 LoC</strong> (mean <strong>664.8 LoC</strong>, p90 <strong>1,008 LoC</strong>), with <strong>10.1% of PRs exceeding 1,000 LoC</strong>.
+          PRs have grown recently: over the trailing 60 days the median is 290 LoC and p90 1,485 LoC.
+        </div>
+      </div>
+    </div>
+
+    <!-- Throughput Comparison Table -->
+    <div class="card">
+      <div class="card-header">
+        <div>
+          <h3 class="card-title">PR / MR Velocity &amp; Diff Size Percentile Breakdown</h3>
+          <p class="card-subtitle">Contrasting illustrative 8-developer human squad reference ranges (~0.2–0.75 PRs/dev/day) against measured AIDA repository windows (*industry rows are illustrative, not measured)</p>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Cohort / Time Window</th>
+              <th class="num">PRs / Day</th>
+              <th class="num">PRs / Week</th>
+              <th class="num">PRs / Month</th>
+              <th class="num">Commits / Day</th>
+              <th class="num">Median PR LoC</th>
+              <th class="num">p90 PR LoC</th>
+              <th class="num">Share &gt;400 LoC</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>Industry Median Squad (8 Swe)*</strong></td>
+              <td class="num">1.5 – 2.5</td>
+              <td class="num">10 – 18</td>
+              <td class="num">45 – 75</td>
+              <td class="num">3.0 – 6.0</td>
+              <td class="num">~165 LoC</td>
+              <td class="num">~650 LoC</td>
+              <td class="num">26.0%</td>
+            </tr>
+            <tr>
+              <td><strong>Industry Elite Squad (8 Swe)*</strong></td>
+              <td class="num">4.0 – 6.0</td>
+              <td class="num">28 – 42</td>
+              <td class="num">120 – 180</td>
+              <td class="num">8.0 – 15.0</td>
+              <td class="num">&lt; 110 LoC</td>
+              <td class="num">&lt; 380 LoC</td>
+              <td class="num">&lt; 15.0%</td>
+            </tr>
+            <tr>
+              <td><strong>AIDA 175-Day PR Era Average</strong></td>
+              <td class="num"><strong>13.8 / d</strong></td>
+              <td class="num"><strong>96.7 / wk</strong></td>
+              <td class="num"><strong>414.5 / mo</strong></td>
+              <td class="num">18.6 / d</td>
+              <td class="num">225 LoC</td>
+              <td class="num">1,008 LoC</td>
+              <td class="num"><span class="badge badge-warn">31.6%</span></td>
+            </tr>
+            <tr>
+              <td><strong>AIDA Trailing 60-Day Window</strong></td>
+              <td class="num"><strong>14.35 / d</strong></td>
+              <td class="num"><strong>100.5 / wk</strong></td>
+              <td class="num"><strong>430.5 / mo</strong></td>
+              <td class="num">24.5 / d</td>
+              <td class="num">290 LoC</td>
+              <td class="num">1,485 LoC</td>
+              <td class="num"><span class="badge badge-warn">40.1%</span></td>
+            </tr>
+            <tr>
+              <td><strong>AIDA Trailing 30-Day Window</strong></td>
+              <td class="num"><strong>12.9 / d</strong></td>
+              <td class="num"><strong>90.3 / wk</strong></td>
+              <td class="num"><strong>387.0 / mo</strong></td>
+              <td class="num">26.8 / d</td>
+              <td class="num">325 LoC</td>
+              <td class="num">1,782 LoC</td>
+              <td class="num"><span class="badge badge-warn">44.7%</span></td>
+            </tr>
+            <tr>
+              <td><strong>AIDA Peak Month (June 2026)</strong></td>
+              <td class="num"><strong>27.8 / d</strong></td>
+              <td class="num"><strong>194.4 / wk</strong></td>
+              <td class="num"><strong>833.0 / mo</strong></td>
+              <td class="num">30.6 / d</td>
+              <td class="num">188 LoC</td>
+              <td class="num">625 LoC</td>
+              <td class="num">24.1%</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- SECTION 4: DORA PERFORMANCE METRICS MAPPING -->
+  <section class="report-section" id="dora-mapping">
+    <div class="section-head">
+      <div>
+        <div class="section-num">04 / DORA STATE OF DEVOPS BENCHMARK MAPPING</div>
+        <h2>DORA Deployment Metrics vs. Measured Repository Proxies</h2>
+      </div>
+      <p class="section-desc">
+        Per <a href="https://dora.dev/guides/dora-metrics/" target="_blank" rel="noopener" style="color:var(--accent);">dora.dev/guides/dora-metrics/</a>, DORA's Four Keys measure production deployments and incidents. Because no production deployment or incident log is linked in this repository, actual deployment metrics are marked <strong>Unknown</strong> and separated from measured Git trunk proxies.
+      </p>
+    </div>
+
+    <div class="grid-2">
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <h3 class="card-title">DORA Four-Key Metrics Scorecard</h3>
+            <p class="card-subtitle">Primary definitions: <a href="https://dora.dev/guides/dora-metrics/" target="_blank" rel="noopener" style="color:var(--accent);">dora.dev/guides/dora-metrics/</a> · Production telemetry vs. repository proxies</p>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>DORA Metric (<a href="https://dora.dev/guides/dora-metrics/" target="_blank" rel="noopener" style="color:inherit;">dora.dev</a>)</th>
+                <th>DORA Elite Standard (Prod)</th>
+                <th>Actual Prod Metric</th>
+                <th>Measured Repository Proxy (<code>main</code>)</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>1. Deployment / Integration Frequency</strong></td>
+                <td>On-demand (multiple deploys/day)</td>
+                <td><strong>Unknown</strong> (no prod deploy log)</td>
+                <td><strong>12.9 – 14.35 PRs/day</strong> merged to <code>main</code> (24.5–26.8 commits/d over 60d / 30d; integration proxy)</td>
+                <td><span class="badge badge-info">REPO PROXY</span></td>
+              </tr>
+              <tr>
+                <td><strong>2. Change Lead Time</strong></td>
+                <td>&lt; 1 day (commit to prod)</td>
+                <td><strong>Unknown</strong> (no prod release log)</td>
+                <td><strong>Unmeasured</strong> (commit-to-merge and CI timestamps were not collected for this audit)</td>
+                <td><span class="badge badge-warn">UNKNOWN</span></td>
+              </tr>
+              <tr>
+                <td><strong>3a. Change Failure Rate (Hard Reverts)</strong></td>
+                <td>0% – 5% of prod deployments</td>
+                <td><strong>Unknown</strong> (no incident log)</td>
+                <td><strong>0.10% commit revert ratio</strong> (4 subjects matching <code>^revert</code> / 4,190 commits; not deployment CFR)</td>
+                <td><span class="badge badge-info">REPO PROXY</span></td>
+              </tr>
+              <tr>
+                <td><strong>3b. Effective Defect Rework (<code>fix:</code>/<code>BUG-</code>)</strong></td>
+                <td>N/A (commit-intent proxy)</td>
+                <td><strong>Unknown</strong> (not prod CFR)</td>
+                <td><strong>31.6%</strong> (1,326 / 4,190 commits: 1,163 <code>BUG-</code> + 163 starting with <code>fix</code> — audit follow-ups + fixes; matcher in methodology)</td>
+                <td><span class="badge badge-info">HYBRID PROXY</span></td>
+              </tr>
+              <tr>
+                <td><strong>4. Failed Deployment Recovery (MTTR)</strong></td>
+                <td>&lt; 1 hour prod restoration</td>
+                <td><strong>Unknown</strong> (no incident dataset)</td>
+                <td><strong>Unmeasured</strong> (remediated via forward-fix <code>BUG-</code> slices &amp; <code>doctor --heal</code>; no MTTR log)</td>
+                <td><span class="badge badge-warn">UNKNOWN</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <h3 class="card-title">Trunk Commit Intent Breakdown (N = 4,190 Commits)</h3>
+            <p class="card-subtitle">1,326 BUG-/fix commits combine proactive audit hardening with post-merge bug fixes</p>
+          </div>
+        </div>
+        <div class="bar-list" style="margin-top: 10px;">
+          <div class="bar-row">
+            <div class="bar-label">Fix / BUG- Follow-Up &amp; Rework</div>
+            <div class="bar-track"><div class="bar-fill amber" style="width: 63.2%;"></div></div>
+            <div class="bar-val">1,326 (31.6%)</div>
+          </div>
+          <div class="bar-row">
+            <div class="bar-label">TASK- Engineering / Infra</div>
+            <div class="bar-track"><div class="bar-fill amber" style="width: 60.0%;"></div></div>
+            <div class="bar-val">1,258 (30.0%)</div>
+          </div>
+          <div class="bar-row">
+            <div class="bar-label">Feat / STORY- Capabilities</div>
+            <div class="bar-track"><div class="bar-fill emerald" style="width: 42.2%;"></div></div>
+            <div class="bar-val">883 (21.1%)</div>
+          </div>
+          <div class="bar-row">
+            <div class="bar-label">Docs / Chore / Calibration</div>
+            <div class="bar-track"><div class="bar-fill blue" style="width: 34.2%;"></div></div>
+            <div class="bar-val">716 (17.1%)</div>
+          </div>
+          <div class="bar-row">
+            <div class="bar-label">Git Commit Reverts (Proxy)</div>
+            <div class="bar-track"><div class="bar-fill" style="width: 1.5%;"></div></div>
+            <div class="bar-val">4 (0.10%)</div>
+          </div>
+        </div>
+        <div class="callout strength" style="margin-top: 22px;">
+          <div class="callout-title">⚖ Disciplined Follow-Up Capture vs. Co-Occurring Rework</div>
+          Filing follow-up <code>BUG-XXXX</code> tickets is a <strong>deliberate governance practice</strong>: reviewers, <code>aida doctor</code>, and security audits capture newly discovered edge cases as tracked, bounded slices rather than bloating in-flight PRs or leaving silent tech debt. While &gt;400-LoC batches and shared hub files co-occur with the <strong>27.7% &lt;21-day file-touch churn proxy</strong>, causal attribution is an architectural hypothesis rather than proved causation (rapid iterative feature slicing on shared files also contributes).
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SECTION 5: LINEARB GIT ANALYTICS DEEP-DIVE -->
+  <section class="report-section" id="linearb-analytics">
+    <div class="section-head">
+      <div>
+        <div class="section-num">05 / LINEARB-STYLE GIT ANALYTICS DEEP-DIVE</div>
+        <h2>Cycle Time Phases, 21-Day Churn &amp; Review Depth</h2>
+      </div>
+      <p class="section-desc">
+        Applying LinearB's Git Analytics framework across Cycle Time sub-stages (Coding, Pickup, Review, Deploy),
+        30-day Code Investment (<code>1,270,201 LoC</code> touched), and a local, untracked <code>.aida/review-verdicts/</code> snapshot (<code>3,824</code> JSON files; not reproducible from the pinned commit).
+      </p>
+    </div>
+
+    <div class="grid-2">
+      <!-- Cycle Time Anatomy -->
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <h3 class="card-title">Anatomy of Cycle Time: AIDA vs. LinearB Tiers</h3>
+            <p class="card-subtitle">Schematic: human tiers are *illustrative; AIDA phase durations are unmeasured estimates</p>
+          </div>
+          <div class="tab-group">
+            <button class="tab-btn active" onclick="renderCycleView('phases', this)">Phase Breakdown</button>
+            <button class="tab-btn" onclick="renderCycleView('rounds', this)">Review Rounds (Local Snapshot)</button>
+          </div>
+        </div>
+        <div id="cycle-svg-container" class="svg-chart-wrap"></div>
+        <div class="callout strength" id="cycle-callout">
+          <div class="callout-title">◇ Design Claim: Automated Reviewer Pickup</div>
+          Human teams commonly see PRs wait hours for a reviewer (*illustrative; no specific benchmark report is cited).
+          AIDA's <code>aida review watch</code> is designed to dispatch a reviewer when a branch is pushed. This audit did not measure
+          pickup latency, so no reduction percentage is claimed.
+        </div>
+      </div>
+
+      <!-- LinearB Code Evolution: New Work vs <21d Rework vs >21d Refactor -->
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <h3 class="card-title">30-Day Code Evolution: New vs. Rework vs. Refactor</h3>
+            <p class="card-subtitle">795 Commits · +951,435 Insertions / -318,766 Deletions (1,270,201 LoC Touched)</p>
+          </div>
+        </div>
+        <div class="svg-chart-wrap" id="evolution-svg-container"></div>
+        <div class="callout weakness">
+          <div class="callout-title">⚠ 27.7% &lt;21-Day File-Touch Churn Proxy vs. 0.8% &gt;21-Day Touch Share</div>
+          In LinearB-style rework bands (*illustrative; no specific report is cited), <strong>&gt;15% &lt;21-day Rework</strong> is commonly flagged for attention (elite <strong>&lt;8%</strong>*). Measured via <code>git log --numstat</code> file-touch windows over the last 30 days, <code>lib.rs</code> (216 touches), <code>pr_cmd.rs</code> (82), <code>queue_cmd.rs</code> (73), and <code>cli.rs</code> (72) are modified <strong>2 to 7 times per day</strong>, placing 27.7% of touched lines in files modified again within &lt;21 days (reflecting both rework and rapid iterative feature additions to shared hubs).
+        </div>
+      </div>
+    </div>
+
+    <!-- Interactive Simulator (Illustrative What-If) -->
+    <div class="card" style="margin-top: 28px;">
+      <div class="card-header">
+        <div>
+          <h3 class="card-title">Illustrative Architecture &amp; Batch-Size What-If Explorer</h3>
+          <p class="card-subtitle">Illustrative linear scenario explorer anchored to current baselines — uses assumed heuristic weights with no empirical calibration or predictive/causal validity</p>
+        </div>
+        <span class="badge badge-warn">Illustrative What-If (Assumed Weights)</span>
+      </div>
+      <div class="sim-grid">
+        <div>
+          <div class="slider-group">
+            <div class="slider-head">
+              <span><strong>1. Share of PRs Exceeding 400 LoC</strong> (Current: 31.6% → Assumed Target: 12%)</span>
+              <strong id="sim-pr-label" style="color:var(--accent);">31.6%</strong>
+            </div>
+            <input type="range" id="sim-pr-slider" min="8" max="55" step="0.2" value="31.6" oninput="updateSimulator()" />
+          </div>
+          <div class="slider-group">
+            <div class="slider-head">
+              <span><strong>2. Rust LoC Concentrated in <code>aida-cli-lib</code></strong> (Current: 78.3% → Assumed Target: 15%)</span>
+              <strong id="sim-crate-label" style="color:var(--accent);">78.3%</strong>
+            </div>
+            <input type="range" id="sim-crate-slider" min="12" max="80" step="0.3" value="78.3" oninput="updateSimulator()" />
+          </div>
+          <div style="display:flex;gap:10px;margin-top:14px;flex-wrap:wrap;align-items:center;">
+            <button class="btn-ghost" type="button" onclick="setSimPreset(31.6, 78.3)">Reset to Measured Baseline</button>
+            <button class="btn-ghost" type="button" onclick="setSimPreset(14.0, 18.0)" style="border-color:var(--emerald);color:var(--emerald);">Apply Illustrative Target Scenario</button>
+          </div>
+          <div style="font-size:11.5px;color:var(--ink-secondary);margin-top:10px;">
+            <strong>Methodology Disclaimer:</strong> Slider weights (<code>10.5</code>, <code>8.8</code>, <code>11.2</code>, <code>6.4</code>, <code>11.5</code>, <code>4.2</code>) are illustrative heuristic assumptions anchored to repository baselines (<code>31.6%</code>, <code>78.3%</code>, <code>27.7%</code>, <code>31.6%</code>, <code>73.5%</code>; the 73.5% first-pass baseline comes from the untracked local verdict snapshot). They are not fitted regression parameters and do not establish causal or predictive outcomes. The shifted-capacity output is an assumption, not a forecast: it converts the illustrative BUG-/fix reduction into PRs at the 414.5 PRs/mo era cadence.
+          </div>
+        </div>
+        <div class="sim-outputs">
+          <div class="sim-box">
+            <small>ILLUSTRATIVE &lt;21D CHURN SCENARIO</small>
+            <strong id="sim-out-churn">27.7%</strong>
+            <div style="font-family:var(--mono);font-size:10.5px;color:var(--ink-secondary);margin-top:4px;" id="sim-out-churn-sub">Baseline: 27.7% (Assumed linear weight)</div>
+          </div>
+          <div class="sim-box">
+            <small>ILLUSTRATIVE BUG-/FIX SHARE</small>
+            <strong id="sim-out-bug">31.6%</strong>
+            <div style="font-family:var(--mono);font-size:10.5px;color:var(--ink-secondary);margin-top:4px;" id="sim-out-bug-sub">Baseline: 31.6% of main commits</div>
+          </div>
+          <div class="sim-box">
+            <small>ILLUSTRATIVE 1ST-PASS APPROVAL</small>
+            <strong id="sim-out-pass">73.5%</strong>
+            <div style="font-family:var(--mono);font-size:10.5px;color:var(--ink-secondary);margin-top:4px;" id="sim-out-pass-sub">Baseline: 73.5% (local snapshot)</div>
+          </div>
+          <div class="sim-box">
+            <small>ILLUSTRATIVE SHIFTED PR CAPACITY</small>
+            <strong id="sim-out-saved">+0 PRs/mo</strong>
+            <div style="font-family:var(--mono);font-size:10.5px;color:var(--ink-secondary);margin-top:4px;" id="sim-out-saved-sub">Assumption, not a forecast (414.5 PRs/mo)</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SECTION 6: ARCHITECTURAL RECOMMENDATIONS & ACTION PLAN -->
+  <section class="report-section" id="action-plan" style="border-bottom: 0;">
+    <div class="section-head">
+      <div>
+        <div class="section-num">06 / ARCHITECTURAL RECOMMENDATIONS &amp; EXECUTION ROADMAP</div>
+        <h2>Four High-Impact Engineering Interventions</h2>
+      </div>
+      <p class="section-desc">
+        Concrete steps to preserve AIDA's high trunk integration cadence while reducing monolithic crate coupling,
+        shrinking PR batch sizes below 400 LoC, and lowering post-merge rework.
+      </p>
+    </div>
+
+    <div class="action-grid">
+      <article class="action-card">
+        <div>
+          <div class="action-num">ACTION 01 · WORKSPACE DECOMPOSITION</div>
+          <h3>Split <code>aida-cli-lib</code> (675.6k LoC) into Bounded Domain Crates</h3>
+          <p>
+            <strong>78.3% of all Rust code</strong> (1,115 files) compiles inside a single library crate, and <code>lib.rs</code> was touched
+            <strong>216 times in the last 30 days</strong> (128,348 churn LoC).
+          </p>
+          <ul>
+            <li>Extract strict DAG crates: <code>aida-orchestrator</code> (drain/queue/leases), <code>aida-forge</code> (PR ship/review watch), <code>aida-mailbox</code>, <code>aida-doctor</code>, and <code>aida-mcp-server</code>.</li>
+            <li>Relocate the <strong>240,863 LoC of dedicated Rust test files</strong> into domain-scoped integration targets so subcommand edits do not relink the entire workspace.</li>
+          </ul>
+        </div>
+        <div class="kpi-target">TARGET KPI: Reduce aida-cli-lib from 78.3% → &lt;15% of Rust LoC; reduce incremental test link time (assumed benefit; not yet measured).</div>
+      </article>
+
+      <article class="action-card">
+        <div>
+          <div class="action-num">ACTION 02 · HUB &amp; MEGA-FILE DECOUPLING</div>
+          <h3>Shatter the 15 Mega-Files (&gt;5k LoC) &amp; Decouple <code>models.rs</code></h3>
+          <p>
+            <code>aida-core/src/models.rs</code> has a cross-file fan-in of <strong>1,003 files (69.7% of all Rust files)</strong>, while
+            <code>handle_queue_command</code> has a call fan-out of <strong>790 outbound calls</strong>.
+          </p>
+          <ul>
+            <li>Partition <code>models.rs</code> (7,159 LoC) into narrow domain submodules (<code>models::spec</code>, <code>models::queue</code>, <code>models::verdict</code>, <code>models::regen</code>) and introduce narrow trait interfaces (expanding beyond the current 33 traits).</li>
+            <li>Enforce a CI file-size ratchet capping any single <code>.rs</code> file at <strong>2,500 LoC</strong> (ratcheting to 1,500 LoC) and function call fan-out at <strong>&lt;100 edges</strong>.</li>
+          </ul>
+        </div>
+        <div class="kpi-target">TARGET KPI: Eliminate all 15 files &gt;5,000 LoC; cut models.rs direct file fan-in from 69.7% → &lt;25%.</div>
+      </article>
+
+      <article class="action-card">
+        <div>
+          <div class="action-num">ACTION 03 · SMALL-BATCH PR RATCHET</div>
+          <h3>Enforce a &lt;400 Production-LoC Budget at Decomposition &amp; Ship</h3>
+          <p>
+            <strong>31.6% of merged PRs</strong> since 2026-05-10 exceed the 400-LoC review threshold (40.1% in the trailing 60 days; 10.1% exceed 1,000 LoC),
+            increasing reviewer context load and co-occurring with multi-round review cycles.
+          </p>
+          <ul>
+            <li>Separate <strong>Production Rust LoC</strong> from <strong>Test &amp; Doc LoC</strong> in <code>aida pr ship</code> and <code>aida review watch</code> so test thoroughness is never penalized.</li>
+            <li>Cap net production code changes per PR at <strong>≤300 LoC</strong> (advisor split gate at 400 production LoC or &gt;8 production files) during <code>/aida-decompose</code> and queue pickup.</li>
+          </ul>
+        </div>
+        <div class="kpi-target">TARGET KPI: Shift PRs &gt;400 LoC from 31.6% → &lt;15% (illustrative target*); reduce median PR diff from 225 LoC → &lt;180 LoC.</div>
+      </article>
+
+      <article class="action-card">
+        <div>
+          <div class="action-num">ACTION 04 · PRE-MERGE BLAST-RADIUS GATING</div>
+          <h3>Wire CodeGraph Impact &amp; Snapshot Isolation into Pre-Review Gates</h3>
+          <p>
+            <code>cli_help_snapshot.txt</code> alone generated <strong>59,912 LoC of churn across 74 commits</strong> in 30 days. A hypothesis, not yet classified or measured, is that state-machine seams account for a large share of the <strong>1,163 <code>BUG-</code> commits</strong>.
+          </p>
+          <ul>
+            <li>Shard monolithic golden help snapshots by subcommand so CLI flag additions do not conflict across concurrent worktrees.</li>
+            <li>Run automated <code>codegraph impact</code> checks on symbols with <code>fan_in &gt; 100</code> or <code>fan_out &gt; 100</code> prior to reviewer dispatch.</li>
+          </ul>
+        </div>
+        <div class="kpi-target">TARGET KPI: Reduce &lt;21-day Rework Churn from 27.7% → &lt;10% and BUG-/fix commit ratio from 31.6% → &lt;15%.</div>
+      </article>
+    </div>
+  </section>
+
+  <footer>
+    <div>AIDA ENGINEERING ARCHITECTURE &amp; DELIVERY AUDIT · PINNED COMMIT <code>6a3f67671a974703590efde5ae2a323f3f7471fa</code></div>
+    <div>GENERATED 2026-11-01 · SOURCES: GIT LOG · TOKEI · CODEGRAPH SQLITE · DORA · GITCLEAR · LINEARB</div>
+  </footer>
+
+</main>
+
+<script>
+  // Tooltip helper
+  const tooltip = document.getElementById('chart-tooltip');
+  function showTip(evt, html) {
+    tooltip.innerHTML = html;
+    tooltip.style.opacity = '1';
+    moveTip(evt);
+  }
+  function moveTip(evt) {
+    const x = Math.min(window.innerWidth - 340, evt.clientX + 16);
+    const y = Math.min(window.innerHeight - 120, evt.clientY + 16);
+    tooltip.style.left = x + 'px';
+    tooltip.style.top = y + 'px';
+  }
+  function hideTip() {
+    tooltip.style.opacity = '0';
+  }
+
+  // Theme Toggle
+  const themeBtn = document.getElementById('theme-toggle');
+  themeBtn.addEventListener('click', () => {
+    const html = document.documentElement;
+    const next = html.getAttribute('data-theme') === 'paper' ? 'terminal' : 'paper';
+    html.setAttribute('data-theme', next);
+    document.getElementById('theme-label').textContent = next === 'paper' ? 'Terminal Mode' : 'Editorial Paper';
+  });
+
+  // 1. Scorecard Filter
+  function filterScorecard(kind, btn) {
+    btn.parentElement.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    document.querySelectorAll('#scorecard-table tbody tr').forEach(row => {
+      if (kind === 'all' || row.getAttribute('data-kind') === kind) {
+        row.style.display = '';
+      } else {
+        row.style.display = 'none';
+      }
+    });
+  }
+
+  // 2. Scale & Structure Bars
+  const scaleDatasets = {
+    crates: {
+      max: 675558,
+      callout: `<div class="callout-title">⚠ Architectural Bottleneck: Crate Asymmetry</div>
+        <strong>675,558 Rust LoC (1,115 files — 78.3%)</strong> sit inside <code>aida-cli-lib</code> alone, while <code>aida-core</code> holds
+        120,437 LoC (177 files). Splitting <code>aida-cli-lib</code> into domain crates is the #1 compile-time and modularity lever.`,
+      items: [
+        { label: 'aida-cli-lib (1,115 files)', val: 675558, text: '675,558 LoC (78.3%)', cls: 'crimson' },
+        { label: '↳ Prod / Mixed Rust (799 files)', val: 621711, text: '621,711 LoC (72.1%)', cls: 'amber' },
+        { label: '↳ Dedicated Test Rust (641 files)', val: 240863, text: '240,863 LoC (27.9%)', cls: 'emerald' },
+        { label: 'aida-core (177 files)', val: 120437, text: '120,437 LoC (14.0%)', cls: 'blue' },
+        { label: 'docs/ Markdown & Guides', val: 64370, text: '64,370 LoC (155.6k lines)', cls: 'blue' },
+        { label: 'aida-cli binary (99 files)', val: 33582, text: '33,582 LoC (3.9%)', cls: 'emerald' },
+        { label: 'aida-tui (33 files)', val: 20069, text: '20,069 LoC (2.3%)', cls: 'emerald' },
+        { label: 'scripts/ + tests/ (Py/Sh)', val: 26962, text: '26,962 LoC (181 files)', cls: 'emerald' },
+        { label: 'aida-server (13 files)', val: 12569, text: '12,569 LoC (1.5%)', cls: 'emerald' }
+      ]
+    },
+    langs: {
+      max: 862574,
+      callout: `<div class="callout-title">✓ High-Assurance Rust Core</div>
+        Rust accounts for <strong>87.29% of all code (862,574 LoC across 1,440 files)</strong>, backed by 47.5k LoC of JSON schemas/fixtures,
+        19.1k LoC of TypeScript/TSX/JS web surfaces, and 17.6k LoC of Python CLI integration tests.`,
+      items: [
+        { label: 'Rust (1,440 files)', val: 862574, text: '862,574 LoC (87.3%)', cls: 'emerald' },
+        { label: 'Markdown / Docs (docs/)', val: 64370, text: '64,370 LoC (155.6k lines)', cls: 'blue' },
+        { label: 'JSON (31 files)', val: 47453, text: '47,453 LoC (4.8%)', cls: 'amber' },
+        { label: 'TSX / TypeScript / JS (157 files)', val: 19087, text: '19,087 LoC (1.9%)', cls: 'blue' },
+        { label: 'Python (72 test/build files)', val: 17567, text: '17,567 LoC (1.8%)', cls: 'emerald' },
+        { label: 'Shell / BASH (112 files)', val: 14947, text: '14,947 LoC (1.5%)', cls: 'amber' },
+        { label: 'HTML / CSS / SVG (57 files)', val: 16599, text: '16,599 LoC (1.7%)', cls: 'blue' },
+        { label: 'TOML / YAML / SQL / Proto', val: 9754, text: '9,754 LoC (1.0%)', cls: 'emerald' }
+      ]
+    },
+    composition: {
+      max: 1328482,
+      callout: `<div class="callout-title">✓ Why Industry Benchmarks Use 988.1k Net Code LoC (vs. 1.33M Physical Lines)</div>
+        Static analyzers (<code>tokei</code>, <code>cloc</code>) strip out <strong>236,964 comment/docstring lines (17.8%)</strong> and
+        <strong>103,396 blank lines (7.8%)</strong> so thorough documentation and formatting never inflate scale benchmarks. Inside Rust alone,
+        <code>1,009,352</code> physical lines break down into <code>862,574</code> net code + <code>62,213</code> comments + <code>84,565</code> blanks.`,
+      items: [
+        { label: 'Total Physical Lines (All Files)', val: 1328482, text: '1,328,482 lines (100%)', cls: 'blue' },
+        { label: '↳ Rust Total Physical Lines', val: 1009352, text: '1,009,352 lines (76.0%)', cls: 'blue' },
+        { label: 'Net Code LoC (All Languages)', val: 988122, text: '988,122 LoC (74.4%)', cls: 'emerald' },
+        { label: '↳ Net Rust Code LoC (1,440 files)', val: 862574, text: '862,574 LoC (64.9%)', cls: 'emerald' },
+        { label: '  • Rust Production / Mixed (799)', val: 621711, text: '621,711 LoC (72.1% of Rs)', cls: 'amber' },
+        { label: '  • Rust Dedicated Tests (641)', val: 240863, text: '240,863 LoC (27.9% of Rs)', cls: 'emerald' },
+        { label: 'Comments & Docstrings (All Files)', val: 236964, text: '236,964 lines (17.8%)', cls: 'amber' },
+        { label: '↳ Rust Comments (///, //, trace)', val: 62213, text: '62,213 lines (6.2% of Rs)', cls: 'amber' },
+        { label: 'Blank Whitespace Lines (All Files)', val: 103396, text: '103,396 lines (7.8%)', cls: 'blue' }
+      ]
+    },
+    megafiles: {
+      max: 13500,
+      callout: `<div class="callout-title">⚠ Mega-File Tail Risk (15 Files &gt; 5,000 LoC)</div>
+        While the median Rust file is <strong>286 LoC</strong>, the top 10 files range from <strong>6,270 to 12,946 net code LoC</strong>
+        (up to 16,707 total lines in <code>queue_cmd.rs</code>), acting as merge-conflict magnets across concurrent agent worktrees.`,
+      items: [
+        { label: 'aida-cli-lib/src/queue_cmd.rs', val: 12946, text: '12,946 LoC (16.7k lines)', cls: 'crimson' },
+        { label: 'aida-cli-lib/src/doctor_cmd.rs', val: 12636, text: '12,636 LoC (15.0k lines)', cls: 'crimson' },
+        { label: 'aida-cli-lib/src/mcp.rs', val: 12118, text: '12,118 LoC (14.6k lines)', cls: 'crimson' },
+        { label: 'aida-cli-lib/src/auto_complete.rs', val: 10666, text: '10,666 LoC (12.5k lines)', cls: 'crimson' },
+        { label: 'aida-cli-lib/src/session.rs', val: 8531, text: '8,531 LoC (10.0k lines)', cls: 'amber' },
+        { label: 'aida-cli-lib/src/pr_cmd.rs', val: 7472, text: '7,472 LoC (8.9k lines)', cls: 'amber' },
+        { label: 'aida-core/src/models.rs', val: 7159, text: '7,159 LoC (8.3k lines)', cls: 'amber' },
+        { label: 'aida-cli-lib/src/requirements_cli.rs', val: 6893, text: '6,893 LoC (9.4k lines)', cls: 'amber' },
+        { label: 'aida-core/src/db/cache.rs', val: 6335, text: '6,335 LoC (7.8k lines)', cls: 'amber' },
+        { label: 'aida-core/src/git_ops.rs', val: 5345, text: '5,345 LoC (11.6k lines)', cls: 'amber' }
+      ]
+    }
+  };
+
+  function renderScaleView(key, btn) {
+    if (btn) {
+      btn.parentElement.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+    }
+    const ds = scaleDatasets[key];
+    const container = document.getElementById('scale-bars-container');
+    container.innerHTML = ds.items.map(item => {
+      const pct = Math.max(1.5, (item.val / ds.max) * 100).toFixed(1);
+      return `<div class="bar-row">
+        <div class="bar-label" title="${item.label}">${item.label}</div>
+        <div class="bar-track"><div class="bar-fill ${item.cls}" style="width:${pct}%"></div></div>
+        <div class="bar-val">${item.text}</div>
+      </div>`;
+    }).join('');
+    const calloutEl = document.getElementById('scale-callout');
+    calloutEl.className = (key === 'langs' || key === 'composition') ? 'callout strength' : 'callout weakness';
+    calloutEl.innerHTML = ds.callout;
+  }
+
+  // 3. CodeGraph Explorer
+  const cgDatasets = {
+    fanin: {
+      max: 1003,
+      callout: `<div class="callout-title">⚠ CodeGraph Topology Finding: 69.7% Global Coupling to models.rs</div>
+        <code>aida-core/src/models.rs</code> is directly imported or referenced by <strong>1,003 distinct files (10,402 cross-file edges)</strong>.
+        Any struct change in <code>models.rs</code> invalidates incremental compilation across nearly the entire repository.`,
+      items: [
+        { label: 'aida-core/src/models.rs', val: 1003, text: '1,003 files (10.4k edges)', cls: 'crimson' },
+        { label: 'aida-cli-lib/src/db_cmd_args.rs', val: 873, text: '873 files (7.4k edges)', cls: 'crimson' },
+        { label: 'aida-cli-lib/src/toon.rs', val: 841, text: '841 files (5.9k edges)', cls: 'amber' },
+        { label: 'aida-cli-lib/src/history.rs', val: 826, text: '826 files (2.0k edges)', cls: 'amber' },
+        { label: 'aida-tui/src/tab.rs', val: 778, text: '778 files (6.2k edges)', cls: 'amber' },
+        { label: 'aida-core/src/store_locate.rs', val: 776, text: '776 files (4.1k edges)', cls: 'amber' },
+        { label: 'aida-cli-lib/src/auto_complete.rs', val: 689, text: '689 files (9.9k edges)', cls: 'amber' },
+        { label: 'aida-cli-lib/src/calibration.rs', val: 597, text: '597 files (2.7k edges)', cls: 'blue' },
+        { label: 'aida-cli-lib/src/command_registry.rs', val: 545, text: '545 files (2.3k edges)', cls: 'blue' }
+      ]
+    },
+    fanout: {
+      max: 790,
+      callout: `<div class="callout-title">⚠ Function Call Fan-Out ("God-Dispatchers")</div>
+        <code>handle_queue_command</code> in <code>queue_cmd.rs</code> issues <strong>790 outbound call edges</strong> from a single function body,
+        and <code>pr_ship_with_method_and_dispatch_ctx</code> issues <strong>304 outbound calls</strong>—well above the recommended &lt;50 ceiling.`,
+      items: [
+        { label: 'handle_queue_command (queue_cmd.rs)', val: 790, text: '790 outbound calls', cls: 'crimson' },
+        { label: 'pr_ship_with_method... (pr_cmd.rs)', val: 304, text: '304 outbound calls', cls: 'crimson' },
+        { label: 'handle_queue_work (queue_cmd.rs)', val: 300, text: '300 outbound calls', cls: 'crimson' },
+        { label: 'preview (scaffolding/mod.rs)', val: 270, text: '270 outbound calls', cls: 'amber' },
+        { label: 'run_list (requirements_cli.rs)', val: 229, text: '229 outbound calls', cls: 'amber' },
+        { label: 'handle_db_reconcile_status (db_reconcile)', val: 211, text: '211 outbound calls', cls: 'amber' },
+        { label: 'run_show (requirements_cli.rs)', val: 201, text: '201 outbound calls', cls: 'amber' },
+        { label: 'session_start_with_receipt (session_start)', val: 187, text: '187 outbound calls', cls: 'blue' },
+        { label: 'handle_merge_hold (merge_hold_cmd.rs)', val: 180, text: '180 outbound calls', cls: 'blue' }
+      ]
+    },
+    churn30d: {
+      max: 216,
+      callout: `<div class="callout-title">⚠ 30-Day Hotspot Ledger (Why &lt;21d Churn is 27.7%)</div>
+        In the last 30 days (795 commits), <code>aida-cli-lib/src/lib.rs</code> was modified <strong>216 times (7.2x/day, 128.3k LoC churn)</strong>,
+        and <code>cli_help_snapshot.txt</code> was modified <strong>74 times (59.9k LoC churn)</strong>.`,
+      items: [
+        { label: 'aida-cli-lib/src/lib.rs', val: 216, text: '216 touches (128.3k LoC)', cls: 'crimson' },
+        { label: 'aida-cli-lib/src/pr_cmd.rs', val: 82, text: '82 touches (10.3k LoC)', cls: 'crimson' },
+        { label: 'OVERVIEW.md', val: 77, text: '77 touches (1.1k LoC)', cls: 'amber' },
+        { label: 'golden/cli_help_snapshot.txt', val: 74, text: '74 touches (59.9k LoC)', cls: 'crimson' },
+        { label: 'aida-cli-lib/src/queue_cmd.rs', val: 73, text: '73 touches (4.9k LoC)', cls: 'amber' },
+        { label: 'aida-cli-lib/src/cli.rs', val: 72, text: '72 touches (17.4k LoC)', cls: 'amber' },
+        { label: 'AGENTS.md', val: 68, text: '68 touches (510 LoC)', cls: 'blue' },
+        { label: 'aida-cli-lib/src/lib_part1.rs', val: 62, text: '62 touches (39.3k LoC)', cls: 'amber' },
+        { label: 'aida-cli-lib/src/session.rs', val: 59, text: '59 touches (6.1k LoC)', cls: 'amber' }
+      ]
+    }
+  };
+
+  function renderCodegraphView(key, btn) {
+    if (btn) {
+      btn.parentElement.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+    }
+    const ds = cgDatasets[key];
+    const container = document.getElementById('codegraph-bars-container');
+    container.innerHTML = ds.items.map(item => {
+      const pct = Math.max(2, (item.val / ds.max) * 100).toFixed(1);
+      return `<div class="bar-row">
+        <div class="bar-label" title="${item.label}">${item.label}</div>
+        <div class="bar-track"><div class="bar-fill ${item.cls}" style="width:${pct}%"></div></div>
+        <div class="bar-val">${item.text}</div>
+      </div>`;
+    }).join('');
+    document.getElementById('codegraph-callout').innerHTML = ds.callout;
+  }
+
+  // 4. Interactive SVG Chart: Monthly Commit & PR Velocity
+  const monthlyData = [
+    // git log 6a3f67671a9 by committer month (%cs); PRs = first-parent "(#N)" subjects. Nov 2026 (11 commits / 9 PRs, partial) omitted.
+    { m: '25-11', c: 208, pr: 0 },
+    { m: '25-12', c: 332, pr: 0 },
+    { m: '26-01', c: 22,  pr: 0 },
+    { m: '26-02', c: 130, pr: 0 },
+    { m: '26-03', c: 77,  pr: 0 },
+    { m: '26-05', c: 660, pr: 405 },
+    { m: '26-06', c: 919, pr: 833 },
+    { m: '26-07', c: 345, pr: 295 },
+    { m: '26-08', c: 28,  pr: 25 },
+    { m: '26-09', c: 643, pr: 453 },
+    { m: '26-10', c: 815, pr: 401 }
+  ];
+
+  function renderVelocityChart(mode, btn) {
+    if (btn) {
+      btn.parentElement.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+    }
+    const wrap = document.getElementById('velocity-svg-container');
+    if (mode === 'monthly') {
+      const W = 680, H = 290, padL = 48, padR = 20, padT = 28, padB = 42;
+      const plotW = W - padL - padR, plotH = H - padT - padB;
+      const maxVal = 950;
+      let bars = '';
+      const step = plotW / monthlyData.length;
+      monthlyData.forEach((d, i) => {
+        const x = padL + i * step + 8;
+        const bw = step - 18;
+        const hC = (d.c / maxVal) * plotH;
+        const yC = padT + plotH - hC;
+        const hP = (d.pr / maxVal) * plotH;
+        const yP = padT + plotH - hP;
+        const tip = `<strong>20${d.m}</strong><br/>Total Main Commits: <strong>${d.c}</strong><br/>Merged PRs/MRs: <strong>${d.pr}</strong><br/>Daily PR Rate: <strong>${(d.pr/30).toFixed(1)}/day</strong>`;
+        bars += `
+          <g onmousemove="showTip(event, '${tip}')" onmouseleave="hideTip()" style="cursor:pointer">
+            <rect x="${x}" y="${yC}" width="${bw}" height="${hC}" fill="#8c9288" opacity="0.38" rx="2" />
+            <rect x="${x}" y="${yP}" width="${bw}" height="${hP}" fill="var(--accent)" rx="2" />
+            <text x="${x + bw/2}" y="${yC - 6}" text-anchor="middle" font-size="9.5" fill="var(--ink-secondary)">${d.c}</text>
+            <text x="${x + bw/2}" y="${H - 16}" text-anchor="middle" font-size="10" fill="var(--ink)">${d.m}</text>
+          </g>`;
+      });
+      // Industry Elite Monthly Reference line (150 PRs/mo)
+      const yElite = padT + plotH - (150 / maxVal) * plotH;
+      wrap.innerHTML = `
+        <svg class="chart-svg" viewBox="0 0 ${W} ${H}">
+          <line x1="${padL}" y1="${padT + plotH}" x2="${W - padR}" y2="${padT + plotH}" stroke="var(--line-strong)" stroke-width="1" />
+          <line x1="${padL}" y1="${yElite}" x2="${W - padR}" y2="${yElite}" stroke="var(--emerald)" stroke-dasharray="4 4" stroke-width="1.5" />
+          <text x="${W - padR - 4}" y="${yElite - 5}" text-anchor="end" font-size="9.5" fill="var(--emerald)">Illustrative* Elite 8-Swe Squad (~150 PRs/mo)</text>
+          <rect x="${padL + 8}" y="6" width="10" height="10" fill="var(--accent)" />
+          <text x="${padL + 23}" y="15" font-size="10" fill="var(--ink)">Merged PRs/MRs (2,421)</text>
+          <rect x="${padL + 165}" y="6" width="10" height="10" fill="#8c9288" opacity="0.5" />
+          <text x="${padL + 180}" y="15" font-size="10" fill="var(--ink)">Total Main Commits (4,190)</text>
+          ${bars}
+        </svg>`;
+    } else {
+      const cohorts = [
+        { name: 'Industry Median* (8 Swe)', prDay: 2.0, cDay: 4.5, col: '#8c9288' },
+        { name: 'Industry Elite* (8 Swe)',  prDay: 5.0, cDay: 11.5, col: 'var(--emerald)' },
+        { name: 'AIDA 90-Day Avg',         prDay: 9.9, cDay: 16.6, col: 'var(--blue)' },
+        { name: 'AIDA 30-Day Avg',         prDay: 12.9, cDay: 26.8, col: 'var(--accent)' },
+        { name: 'AIDA 60-Day Avg',         prDay: 14.35, cDay: 24.5, col: 'var(--accent)' },
+        { name: 'AIDA 7-Day Avg',          prDay: 14.6, cDay: 28.0, col: 'var(--accent)' },
+        { name: 'AIDA Peak Month (26-06)', prDay: 27.8, cDay: 30.6, col: 'var(--crimson)' }
+      ];
+      const W = 680, H = 290, padL = 175, padR = 65, padT = 24, padB = 26;
+      const plotW = W - padL - padR, plotH = H - padT - padB;
+      const maxV = 32;
+      const rowH = plotH / cohorts.length;
+      let rows = '';
+      cohorts.forEach((c, i) => {
+        const y = padT + i * rowH + 6;
+        const wP = (c.prDay / maxV) * plotW;
+        const wC = (c.cDay / maxV) * plotW;
+        rows += `
+          <g>
+            <text x="${padL - 10}" y="${y + 13}" text-anchor="end" font-size="10.5" fill="var(--ink)">${c.name}</text>
+            <rect x="${padL}" y="${y}" width="${wC}" height="18" fill="#8c9288" opacity="0.28" rx="2" />
+            <rect x="${padL}" y="${y}" width="${wP}" height="18" fill="${c.col}" rx="2" />
+            <text x="${padL + Math.max(wP, wC) + 6}" y="${y + 13}" font-size="10" fill="var(--ink)">${c.prDay}/d PRs (${c.cDay}/d commits)</text>
+          </g>`;
+      });
+      wrap.innerHTML = `<svg class="chart-svg" viewBox="0 0 ${W} ${H}">${rows}</svg>`;
+    }
+  }
+
+  // 5. Interactive SVG Chart: GitClear PR Size Distribution & Bell Curve
+  function renderSizingChart(mode, btn) {
+    if (btn) {
+      btn.parentElement.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+    }
+    const wrap = document.getElementById('sizing-svg-container');
+    if (mode === 'bars') {
+      const buckets = [
+        // AIDA: measured, 2,418 PRs since 2026-05-10. Industry / elite: *illustrative, not from a cited report.
+        { b: 'Small (≤100 LoC)',     aida: 25.0, gitclear: 38.0, elite: 52.0 },
+        { b: 'Medium (101-400 LoC)', aida: 43.3, gitclear: 36.0, elite: 35.0 },
+        { b: 'Large (401-1000 LoC)', aida: 21.5, gitclear: 16.0, elite: 9.0 },
+        { b: 'X-Large (>1000 LoC)',  aida: 10.1, gitclear: 10.0, elite: 4.0 }
+      ];
+      const W = 520, H = 290, padL = 42, padR = 16, padT = 32, padB = 46;
+      const plotW = W - padL - padR, plotH = H - padT - padB;
+      const maxP = 60;
+      const groupW = plotW / buckets.length;
+      let svgBars = '';
+      buckets.forEach((d, i) => {
+        const gx = padL + i * groupW + 10;
+        const bw = (groupW - 26) / 3;
+        const vals = [
+          { v: d.aida, col: 'var(--accent)', name: 'AIDA PRs' },
+          { v: d.gitclear, col: '#8c9288', name: 'Industry* (illustrative)' },
+          { v: d.elite, col: 'var(--emerald)', name: 'Elite* (illustrative)' }
+        ];
+        vals.forEach((item, j) => {
+          const h = (item.v / maxP) * plotH;
+          const x = gx + j * (bw + 2);
+          const y = padT + plotH - h;
+          const tip = `<strong>${d.b}</strong><br/>${item.name}: <strong>${item.v}%</strong>`;
+          svgBars += `
+            <g onmousemove="showTip(event, '${tip}')" onmouseleave="hideTip()" style="cursor:pointer">
+              <rect x="${x}" y="${y}" width="${bw}" height="${h}" fill="${item.col}" rx="2" />
+              <text x="${x + bw/2}" y="${y - 4}" text-anchor="middle" font-size="8.5" fill="var(--ink-secondary)">${item.v}%</text>
+            </g>`;
+        });
+        svgBars += `<text x="${gx + (groupW-26)/2}" y="${H - 18}" text-anchor="middle" font-size="9.5" fill="var(--ink)">${d.b}</text>`;
+      });
+      // Divider between <=400 and >400
+      const divX = padL + 2 * groupW;
+      wrap.innerHTML = `
+        <svg class="chart-svg" viewBox="0 0 ${W} ${H}">
+          <line x1="${padL}" y1="${padT + plotH}" x2="${W - padR}" y2="${padT + plotH}" stroke="var(--line-strong)" />
+          <line x1="${divX}" y1="${padT}" x2="${divX}" y2="${padT + plotH}" stroke="var(--crimson)" stroke-dasharray="4 4" stroke-width="1.5" />
+          <text x="${divX + 6}" y="${padT + 10}" font-size="9" fill="var(--crimson)">400-LoC Guidance → (AIDA: 31.6%)</text>
+          <rect x="${padL}" y="6" width="9" height="9" fill="var(--accent)" /><text x="${padL+13}" y="14" font-size="9.5" fill="var(--ink)">AIDA PRs</text>
+          <rect x="${padL+85}" y="6" width="9" height="9" fill="#8c9288" /><text x="${padL+98}" y="14" font-size="9.5" fill="var(--ink)">Industry*</text>
+          <rect x="${padL+205}" y="6" width="9" height="9" fill="var(--emerald)" /><text x="${padL+218}" y="14" font-size="9.5" fill="var(--ink)">Elite*</text>
+          ${svgBars}
+          <text x="${padL}" y="${H - 3}" font-size="8.5" fill="var(--ink-secondary)">* Illustrative reference distributions, not from a cited report.</text>
+        </svg>`;
+    } else {
+      const W = 520, H = 290;
+      wrap.innerHTML = `
+        <svg class="chart-svg" viewBox="0 0 ${W} ${H}">
+          <line x1="40" y1="240" x2="495" y2="240" stroke="var(--line-strong)" />
+          <!-- Elite Bell Curve peaking around 80-180 LoC -->
+          <path d="M 45 240 C 85 235, 115 65, 175 65 C 235 65, 275 215, 360 238 L 490 240" fill="var(--emerald-soft)" stroke="var(--emerald)" stroke-width="2.5" />
+          <!-- AIDA Shifted Bell Curve peaking around 400-1000 LoC -->
+          <path d="M 55 240 C 130 235, 225 90, 315 90 C 395 90, 445 190, 495 232" fill="var(--accent-soft)" stroke="var(--accent)" stroke-width="2.5" />
+          <!-- 400 LoC Threshold Line -->
+          <line x1="275" y1="30" x2="275" y2="240" stroke="var(--crimson)" stroke-dasharray="5 4" stroke-width="1.5" />
+          <text x="275" y="22" text-anchor="middle" font-size="9.5" fill="var(--crimson)" font-weight="700">SmartBear/Cisco 400-LoC Guidance</text>
+          <text x="175" y="52" text-anchor="middle" font-size="10" fill="var(--emerald)">Illustrative* Elite (~120 LoC)</text>
+          <text x="345" y="76" text-anchor="middle" font-size="10" fill="var(--accent)">AIDA (Median 225 / Mean 665 LoC; schematic)</text>
+          <text x="65" y="258" font-size="9.5" fill="var(--ink-secondary)">25 LoC</text>
+          <text x="175" y="258" text-anchor="middle" font-size="9.5" fill="var(--ink-secondary)">120 LoC</text>
+          <text x="275" y="258" text-anchor="middle" font-size="9.5" fill="var(--ink)">400 LoC</text>
+          <text x="385" y="258" text-anchor="middle" font-size="9.5" fill="var(--ink-secondary)">1,000 LoC</text>
+          <text x="475" y="258" text-anchor="end" font-size="9.5" fill="var(--ink-secondary)">3,500+ LoC</text>
+        </svg>`;
+    }
+  }
+
+  // 6. LinearB Cycle Time & Review Rounds
+  function renderCycleView(mode, btn) {
+    if (btn) {
+      btn.parentElement.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+    }
+    const wrap = document.getElementById('cycle-svg-container');
+    if (mode === 'phases') {
+      const W = 580, H = 260;
+      wrap.innerHTML = `
+        <svg class="chart-svg" viewBox="0 0 ${W} ${H}">
+          <text x="12" y="26" font-size="10.5" fill="var(--ink)" font-weight="600">1. Illustrative* Human Median Squad (~108 Hours Total Cycle Time)</text>
+          <rect x="12" y="34" width="145" height="26" fill="#58a6ff" rx="2" />
+          <text x="84" y="51" text-anchor="middle" font-size="9.5" fill="#fff">Coding: 28h</text>
+          <rect x="159" y="34" width="190" height="26" fill="var(--crimson)" rx="2" />
+          <text x="254" y="51" text-anchor="middle" font-size="9.5" fill="#fff">PR Pickup Wait: 36h</text>
+          <rect x="351" y="34" width="140" height="26" fill="var(--amber)" rx="2" />
+          <text x="421" y="51" text-anchor="middle" font-size="9.5" fill="#fff">Review: 28h</text>
+          <rect x="493" y="34" width="75" height="26" fill="#8c9288" rx="2" />
+          <text x="530" y="51" text-anchor="middle" font-size="9.5" fill="#fff">Deploy: 16h</text>
+
+          <text x="12" y="96" font-size="10.5" fill="var(--ink)" font-weight="600">2. Illustrative* Elite Human Squad (&lt;26 Hours Total Cycle Time)</text>
+          <rect x="12" y="104" width="110" height="26" fill="#58a6ff" rx="2" />
+          <text x="67" y="121" text-anchor="middle" font-size="9.5" fill="#fff">Coding: &lt;2.5h</text>
+          <rect x="124" y="104" width="68" height="26" fill="var(--amber)" rx="2" />
+          <text x="158" y="121" text-anchor="middle" font-size="9.5" fill="#fff">Pickup: &lt;1h</text>
+          <rect x="194" y="104" width="120" height="26" fill="var(--emerald)" rx="2" />
+          <text x="254" y="121" text-anchor="middle" font-size="9.5" fill="#fff">Review: &lt;3.0h</text>
+          <rect x="316" y="104" width="68" height="26" fill="#8c9288" rx="2" />
+          <text x="350" y="121" text-anchor="middle" font-size="9.5" fill="#fff">Deploy: &lt;1h</text>
+
+          <text x="12" y="166" font-size="10.5" fill="var(--accent)" font-weight="700">3. AIDA Agentic Pipeline (Unmeasured Estimate: ~45 to 130 Minutes)</text>
+          <rect x="12" y="174" width="115" height="28" fill="var(--emerald)" rx="2" />
+          <text x="69" y="192" text-anchor="middle" font-size="9.5" fill="#fff">Coding: 15-45m</text>
+          <rect x="129" y="174" width="56" height="28" fill="var(--accent)" rx="2" />
+          <text x="157" y="192" text-anchor="middle" font-size="9" fill="#fff">Pickup &lt;2m</text>
+          <rect x="187" y="174" width="175" height="28" fill="var(--amber)" rx="2" />
+          <text x="274" y="192" text-anchor="middle" font-size="9.5" fill="#fff">Review: 8m (1-pass) / 65m (rework)</text>
+          <rect x="364" y="174" width="95" height="28" fill="var(--blue)" rx="2" />
+          <text x="411" y="192" text-anchor="middle" font-size="9.5" fill="#fff">Ship/CI: est.</text>
+
+          <text x="12" y="232" font-size="9.5" fill="var(--ink-secondary)">• AIDA phase durations are unmeasured estimates (no timestamps collected); human rows are *illustrative, not from a cited report.</text>
+          <text x="12" y="248" font-size="9.5" fill="var(--ink-secondary)">• Local untracked verdict snapshot: 2.86 mean findings/verdict across 3,824 files (not reproducible from the pinned commit).</text>
+        </svg>`;
+    } else {
+      const W = 580, H = 260;
+      wrap.innerHTML = `
+        <svg class="chart-svg" viewBox="0 0 ${W} ${H}">
+          <text x="12" y="22" font-size="10.5" fill="var(--ink)" font-weight="600">Local Untracked Verdict Snapshot (3,824 Files / 2,959 Targets; Not Reproducible)</text>
+          <text x="12" y="55" font-size="10" fill="var(--ink)">1 Round (First-Pass Approval — All Targets)</text>
+          <rect x="255" y="42" width="235" height="18" fill="var(--emerald)" rx="2" />
+          <text x="498" y="55" font-size="10" fill="var(--ink)">73.5% (2,174)</text>
+
+          <text x="12" y="88" font-size="10" fill="var(--ink)">2+ Rounds (All Targets Requiring Rework)</text>
+          <rect x="255" y="75" width="85" height="18" fill="var(--amber)" rx="2" />
+          <text x="348" y="88" font-size="10" fill="var(--ink)">26.5% (785)</text>
+
+          <text x="12" y="128" font-size="10" fill="var(--ink)">Archived Multi-Round Directories (N=1,167):</text>
+          <text x="24" y="152" font-size="9.5" fill="var(--ink-secondary)">• 1 Round: 55.7% (650) | 2 Rounds: 26.1% (305) | 3 Rounds: 10.2% (119) | 4–14 Rounds: 8.0% (93)</text>
+
+          <text x="12" y="188" font-size="10" fill="var(--ink)" font-weight="600">All 3,824 Recorded Verdict Outcomes:</text>
+          <rect x="12" y="198" width="380" height="22" fill="var(--emerald)" rx="2" />
+          <rect x="394" y="198" width="118" height="22" fill="var(--crimson)" rx="2" />
+          <text x="200" y="213" text-anchor="middle" font-size="10" fill="#fff">Approved Verdicts: 2,916 (76.3%)</text>
+          <text x="453" y="213" text-anchor="middle" font-size="9.5" fill="#fff">Reject: 907 (23.7%)</text>
+          <text x="12" y="242" font-size="9.5" fill="var(--ink-secondary)">Review depth in snapshot: median 3.0 findings/verdict (mean 2.86, max 19).</text>
+        </svg>`;
+    }
+  }
+
+  // 7. LinearB Code Evolution Chart
+  function renderEvolutionChart() {
+    const wrap = document.getElementById('evolution-svg-container');
+    const W = 580, H = 260;
+    wrap.innerHTML = `
+      <svg class="chart-svg" viewBox="0 0 ${W} ${H}">
+        <text x="12" y="24" font-size="10.5" fill="var(--ink)" font-weight="600">AIDA Trailing 30 Days (1,270,201 Total LoC Touched across 795 Commits)</text>
+        <rect x="12" y="34" width="390" height="34" fill="var(--blue)" rx="2" />
+        <rect x="404" y="34" width="151" height="34" fill="var(--crimson)" rx="2" />
+        <rect x="557" y="34" width="8" height="34" fill="var(--emerald)" rx="1" />
+        <text x="207" y="55" text-anchor="middle" font-size="10.5" fill="#fff">New Work: 71.6% (908,876 LoC)</text>
+        <text x="479" y="55" text-anchor="middle" font-size="10" fill="#fff">Rework &lt;21d: 27.7%</text>
+
+        <text x="12" y="104" font-size="10.5" fill="var(--ink)" font-weight="600">Illustrative* Elite Allocation (Not From a Cited Report)</text>
+        <rect x="12" y="114" width="354" height="34" fill="var(--blue)" rx="2" />
+        <rect x="368" y="114" width="44" height="34" fill="var(--amber)" rx="2" />
+        <rect x="414" y="114" width="151" height="34" fill="var(--emerald)" rx="2" />
+        <text x="189" y="135" text-anchor="middle" font-size="10.5" fill="#fff">New Work: ~65.0%</text>
+        <text x="390" y="135" text-anchor="middle" font-size="9" fill="#fff">&lt;8%</text>
+        <text x="489" y="135" text-anchor="middle" font-size="10" fill="#fff">Legacy Refactor (&gt;21d): 20–27%</text>
+
+        <g transform="translate(12, 172)">
+          <rect x="0" y="0" width="11" height="11" fill="var(--blue)" /><text x="16" y="10" font-size="10" fill="var(--ink)">New Work (Net Expansion: 908.9k LoC)</text>
+          <rect x="235" y="0" width="11" height="11" fill="var(--crimson)" /><text x="251" y="10" font-size="10" fill="var(--ink)">Rework (&lt;21d Churn: 351.8k LoC — 27.7%)</text>
+          <rect x="0" y="22" width="11" height="11" fill="var(--emerald)" /><text x="16" y="32" font-size="10" fill="var(--ink)">Legacy Refactor (&gt;21d Stable Code: 9.6k LoC — only 0.8% in AIDA vs 20%+ target)</text>
+        </g>
+      </svg>`;
+  }
+
+  // 8. Illustrative What-If Scenario Explorer (Assumed Heuristic Weights)
+  function updateSimulator() {
+    const prOver400 = parseFloat(document.getElementById('sim-pr-slider').value);
+    const crateShare = parseFloat(document.getElementById('sim-crate-slider').value);
+
+    document.getElementById('sim-pr-label').textContent = prOver400.toFixed(1) + '%';
+    document.getElementById('sim-crate-label').textContent = crateShare.toFixed(1) + '%';
+
+    // Illustrative linear what-if formula using assumed weights anchored at measured baselines (no fitted calibration or causal/predictive validity)
+    const prDelta = (31.6 - prOver400) / 19.6;       // 0 at baseline, ~1 at assumed target
+    const crateDelta = (78.3 - crateShare) / 63.3;   // 0 at baseline, ~1 at assumed target
+
+    const projChurn = Math.max(5.5, 27.7 - (prDelta * 10.5 + crateDelta * 8.8));
+    const projBug = Math.max(10.5, 31.6 - (prDelta * 11.2 + crateDelta * 6.4));
+    const projPass = Math.min(92.0, 73.5 + (prDelta * 11.5 + crateDelta * 4.2));
+    const reclaimedPRs = Math.max(0, Math.round(((31.6 - projBug) / 100) * 414.5));
+
+    document.getElementById('sim-out-churn').textContent = projChurn.toFixed(1) + '%';
+    document.getElementById('sim-out-churn-sub').textContent =
+      projChurn < 8.5 ? 'Illustrative <8.5% band (assumed weights)' : (projChurn < 15 ? 'Illustrative <15% band (assumed weights)' : 'Baseline >15% band (assumed weights)');
+
+    document.getElementById('sim-out-bug').textContent = projBug.toFixed(1) + '%';
+    document.getElementById('sim-out-bug-sub').textContent = `Illustrative ${(31.6 - projBug).toFixed(1)}% delta vs 31.6% baseline`;
+
+    document.getElementById('sim-out-pass').textContent = projPass.toFixed(1) + '%';
+    document.getElementById('sim-out-pass-sub').textContent = `Illustrative multi-round share: ${(100 - projPass).toFixed(1)}%`;
+
+    document.getElementById('sim-out-saved').textContent = '+' + reclaimedPRs + ' PRs/mo';
+  }
+
+  function setSimPreset(prVal, crateVal) {
+    document.getElementById('sim-pr-slider').value = prVal;
+    document.getElementById('sim-crate-slider').value = crateVal;
+    updateSimulator();
+  }
+
+  // Initialize all views on load
+  renderScaleView('crates');
+  renderCodegraphView('fanin');
+  renderVelocityChart('monthly');
+  renderSizingChart('bars');
+  renderCycleView('phases');
+  renderEvolutionChart();
+  updateSimulator();
+
+  // =========================================================================
+  // 9. ENGINEERING ANALYTICS GLOSSARY TOOLTIPS
+  // =========================================================================
+  const GLOSSARY_TERMS = {
+    "Net Codebase Scale": {
+      kicker: "TOKEI STATIC SOURCE METRIC (988.1K CODE VS 1.33M TOTAL)",
+      title: "Net Codebase Scale: 988,122 Code LoC vs. 1,328,482 Total Lines",
+      body: "1,328,482 Total Physical Lines = 988,122 Net Code LoC (74.4%, executable statements) + 236,964 Comments/Docstrings (17.8%) + 103,396 Blank Lines (7.8%). In Rust alone (1,440 files): 1,009,352 physical lines = 862,574 net code (621,711 prod + 240,863 test) + 62,213 comments + 84,565 blanks.",
+      meta: "Industry Benchmarks (DORA/GitClear) use Net Code LoC (988.1k) so comments & whitespace do not inflate scale."
+    },
+    "MR Velocity (60d Avg)": {
+      kicker: "GIT TRUNK THROUGHPUT METRIC",
+      title: "Merge Request / PR Velocity (14.35 PRs/Day, 60d)",
+      body: "Rate at which reviewed Pull/Merge Requests land onto the default branch (main). Measures team delivery cadence and integration throughput.",
+      meta: "Illustrative* Elite 8-Swe Squad: 4–6 PRs/day · AIDA: 13.8–14.35 PRs/day (Peak: 27.8/day, June 2026)"
+    },
+    "PR Pickup Latency": {
+      kicker: "LINEARB CYCLE TIME PHASE 2",
+      title: "PR Pickup Latency (Unmeasured in AIDA)",
+      body: "The idle 'wait time' from when a Pull Request is opened/updated until a reviewer begins inspecting it. In human teams, Pickup Time is often a large share of cycle time.",
+      meta: "Illustrative* median ~13 hrs · elite <1 hr · AIDA: design claim (dispatch on push), not measured"
+    },
+    "PRs Over 400 LoC": {
+      kicker: "GITCLEAR & SMARTBEAR REVIEW CEILING",
+      title: "Oversized Batch Rate: PRs Exceeding 400 LoC (31.6%)",
+      body: "Percentage of merged PRs whose diff (insertions + deletions) exceeds 400 lines. The SmartBear/Cisco case study (Cohen, 2006) recommends reviewing no more than 200–400 LoC at a time.",
+      meta: "Illustrative* median ~26% >400 LoC · elite <15% · AIDA: 31.6% since 2026-05-10 (10.1% >1,000 LoC; 40.1% >400 in trailing 60d)"
+    },
+    "<21d Rework Churn": {
+      kicker: "LINEARB CODE EVOLUTION METRIC",
+      title: "<21-Day Code Rework / Churn Rate (27.7%)",
+      body: "Percentage of touched lines that modify or delete code written within the previous 21 days. High <21-day churn signals post-merge bug remediation, shifting specs, or concurrent collisions on shared monolith files.",
+      meta: "Illustrative* elite <8% · needs focus >15% · AIDA 30d file-touch proxy: 27.7% (351,760 LoC)"
+    },
+    "Commit Revert Ratio": {
+      kicker: "REPOSITORY COMMIT REVERT PROXY (NOT DEPLOYMENT CFR)",
+      title: "Trunk Commit Revert Ratio (0.10% — 4 / 4,190 Commits)",
+      body: "Percentage of commits on main that explicitly revert a prior git commit (subjects matching ^revert: 4 / 4,190). This is a repository commit-revert proxy, not DORA Deployment Change Failure Rate (which requires production deployment/incident logs, currently unmeasured/unknown).",
+      meta: "Repo Commit Reverts: 0.10% (4/4,190) · Actual Prod Deployment CFR: Unknown"
+    },
+    "Trunk PR Merge Frequency": {
+      kicker: "REPOSITORY INTEGRATION PROXY",
+      title: "Trunk PR Merge Frequency (Repository Integration Proxy)",
+      body: "Daily and weekly rate of Pull Requests merged onto main (13.8/day over 175d; 14.35/day over 60d). Measures repository trunk integration cadence; actual production deployment frequency is unmeasured/unknown.",
+      meta: "AIDA 175d Era: 2,418 PRs merged (13.8/day · 96.7/week · 414.5/month)"
+    },
+    "PR Pickup Time (Wait for Reviewer)": {
+      kicker: "LINEARB CYCLE TIME BOTTLENECK",
+      title: "PR Pickup Time (Wait for Reviewer)",
+      body: "Time elapsed between PR creation and the start of independent code review. AIDA's 'aida review watch' daemon is designed to spawn a reviewer on branch push; pickup latency was not measured for this audit.",
+      meta: "Illustrative* industry range (no cited report): median ~13h, elite <1h"
+    },
+    "Unreviewed PR Merge Rate": {
+      kicker: "LINEARB GOVERNANCE HYGIENE",
+      title: "Unreviewed PR Merge Rate (Unmeasured)",
+      body: "Share of PRs merged into main without an independent peer review. AIDA's 'pr ship' and merge-hold gate require a recorded reviewer verdict, but this audit did not join verdicts to merged PRs, so the rate is unmeasured.",
+      meta: "Local untracked snapshot: 3,824 verdict files across 2,959 targets (not reproducible from the pinned commit)"
+    },
+    "Dedicated Rust Test Density": {
+      kicker: "STATIC TEST INVESTMENT",
+      title: "Dedicated Rust Test Density (27.9%)",
+      body: "Proportion of total Rust source code located in dedicated test modules and suites (240,863 LoC across 641 Rust test files, plus 72 Python CLI integration test suites).",
+      meta: "Production/Mixed Rust: 621,711 LoC (799 files) · Dedicated Tests: 240,863 LoC"
+    },
+    "Trunk Commit Revert Ratio (Repo Proxy)": {
+      kicker: "REPOSITORY PROXY VS. DORA CFR/MTTR",
+      title: "Trunk Commit Revert Ratio (0.10% Repo Proxy; Prod CFR/MTTR Unknown)",
+      body: "Counts commits on main whose subject starts with 'Revert' (4 / 4,190 = 0.10%). Per dora.dev/guides/dora-metrics/, actual Change Failure Rate and Failed Deployment Recovery Time require production deployment and incident telemetry, which are unmeasured (Unknown) in this repository.",
+      meta: "Repo Commit Reverts: 0.10% · Prod Deployment CFR & Incident MTTR: Unknown"
+    },
+    "Crate Monolith Concentration": {
+      kicker: "CARGO WORKSPACE TOPOLOGY",
+      title: "Crate Monolith Concentration (78.3% in aida-cli-lib)",
+      body: "Measures how evenly code is partitioned across workspace crates. Having 675,558 LoC (1,115 files) inside 'aida-cli-lib' forces massive relinking and broadens blast radius on every edit.",
+      meta: "Architectural Target Heuristic: <25% of workspace LoC · Current aida-cli-lib: 78.3%"
+    },
+    "Cross-File AST Hub Fan-In (models.rs)": {
+      kicker: "CODEGRAPH AST DEPENDENCY METRIC",
+      title: "Cross-File AST Hub Fan-In (1,003 Caller Files)",
+      body: "Number of distinct source files that import, call, or reference symbols defined in a target file. 'aida-core/src/models.rs' is depended upon by 69.7% of all Rust files (10,402 cross-file edges).",
+      meta: "CodeGraph DB: 56,257 AST nodes · 268,598 edges · Only 33 traits across 862.6k LoC"
+    },
+    "Oversized PR Rate (>400 LoC Diff)": {
+      kicker: "SMARTBEAR/CISCO & GITCLEAR BATCH-SIZE METRIC",
+      title: "Oversized PR Rate (>400 LoC Diff)",
+      body: "Share of merged pull requests exceeding 400 changed lines (insertions + deletions). The SmartBear/Cisco Systems case study (Cohen, 2006) recommends reviewing no more than 200–400 LoC at a time.",
+      meta: "AIDA PRs since 2026-05-10: 31.6% >400 LoC · median 225 · p90 1,008"
+    },
+    "LinearB <21-Day Rework Churn (30d)": {
+      kicker: "FILE-LEVEL <21D COMMIT-WINDOW PROXY",
+      title: "<21-Day File-Touch Churn Proxy (27.7%)",
+      body: "Computed from git log --numstat over 30 days as the share of touched lines in files modified multiple times within 21 days (co-occurring with lib.rs touched 216x/30d). This is a file-level commit-window proxy rather than line-by-line git blame survival.",
+      meta: "30d Total Touched: 1,270,201 LoC (+951.4k / -318.8k) across 795 commits"
+    },
+    "Forward-Fix (BUG- / fix:) Commit Ratio": {
+      kicker: "DUAL SIGNAL: FOLLOW-UP HYGIENE + REWORK",
+      title: "Forward-Fix (BUG- / fix:) Commit Ratio (31.6%)",
+      body: "Combines two distinct behaviors: (1) Disciplined Follow-Up Capture (Good) — reviewers and audits filing bounded BUG-XXXX specs for newly discovered edge cases instead of bloating in-flight PRs or ignoring tech debt; and (2) Post-merge bug fixes.",
+      meta: "1,326 fix/BUG commits (1,163 explicit BUG-) out of 4,190 commits on main"
+    },
+    "1. Deployment / Integration Frequency": {
+      kicker: "DORA KEY METRIC #1 (dora.dev/guides/dora-metrics/)",
+      title: "DORA Deployment Frequency (Prod Unknown · Repo Proxy 14.35 PRs/d)",
+      body: "DORA defines Deployment Frequency as how often an organization successfully releases to production. Actual production deployment frequency is Unknown (no deployment log in repo); the measured repository proxy is trunk PR merge rate (12.9–14.35 PRs/day onto main).",
+      meta: "Prod Deployment Frequency: Unknown · Repo Integration Proxy: 12.9–14.35 PRs/day"
+    },
+    "2. Change Lead Time": {
+      kicker: "DORA KEY METRIC #2 (dora.dev/guides/dora-metrics/)",
+      title: "DORA Lead Time for Changes (Prod Unknown · Repo Proxy Unmeasured)",
+      body: "DORA defines Lead Time for Changes as the time from code committed to code running in production. Actual commit-to-production time is Unknown; the repository proxy would be commit-to-merge time, which was not collected for this audit.",
+      meta: "Prod Lead Time: Unknown · Repo Commit-to-Merge Proxy: Unmeasured"
+    },
+    "3a. Change Failure Rate (Hard Reverts)": {
+      kicker: "DORA KEY METRIC #3A (dora.dev/guides/dora-metrics/)",
+      title: "DORA Change Failure Rate (Prod Unknown · Repo Revert Proxy 0.10%)",
+      body: "DORA defines CFR as the percentage of production deployments causing degraded service or requiring remediation. Actual deployment CFR is Unknown; the repository proxy is the git commit revert ratio on main (4 / 4,190 = 0.10%).",
+      meta: "Prod Deployment CFR: Unknown · Repo Git Revert Ratio: 0.10% (4 / 4,190 commits)"
+    },
+    "3b. Effective Defect Rework (fix:/BUG-)": {
+      kicker: "REPOSITORY COMMIT-INTENT PROXY",
+      title: "Scoped Follow-Up Capture & Defect Commit Share (31.6%)",
+      body: "Repository commit-intent share of fix:/BUG- commits (1,326 / 4,190). Not a DORA deployment failure rate: combines proactive audit/review follow-up capture (BUG-XXXX tickets filed to keep PRs bounded) with post-merge bug fixes.",
+      meta: "1,163 explicit BUG- commits + 163 fix: commits · Actual Prod CFR: Unknown"
+    },
+    "4. Failed Deployment Recovery (MTTR)": {
+      kicker: "DORA KEY METRIC #4 (dora.dev/guides/dora-metrics/)",
+      title: "DORA Failed Deployment Recovery Time (Unknown — No Incident Dataset)",
+      body: "DORA defines Failed Deployment Recovery Time (formerly MTTR) as the time to restore service after a production deployment failure. Because no production incident or recovery dataset exists in the repository, this metric is Unknown.",
+      meta: "Prod Recovery Time: Unknown · Repo defects use forward-fix BUG- PRs & doctor --heal"
+    },
+    "CodeGraph AST Coupling & Hotspot Explorer": {
+      kicker: "CODEGRAPH SQLITE AST INDEX",
+      title: "CodeGraph AST Coupling & Hotspot Analysis",
+      body: "Measures static symbol dependencies across 56,257 AST nodes and 268,598 directed edges. Identifies 'Fan-In Hubs' (files imported by hundreds of callers) and 'God-Dispatchers' (functions calling hundreds of callees).",
+      meta: "Source: .codegraph/codegraph.db · 1,697 indexed files"
+    },
+    "PR Diff Size vs. GitClear Review Ceiling": {
+      kicker: "SMARTBEAR/CISCO REVIEW-SIZE GUIDANCE",
+      title: "SmartBear/Cisco 200–400 LoC Review Guidance",
+      body: "The SmartBear/Cisco Systems case study (Cohen, 2006; 2,500 reviews) recommends reviewing no more than 200–400 LoC at a time. Industry bucket distributions in the chart are *illustrative, not from a cited report.",
+      meta: "AIDA since 2026-05-10: median 225 LoC · mean 664.8 · 31.6% >400 LoC"
+    },
+    "Anatomy of Cycle Time: AIDA vs. LinearB Tiers": {
+      kicker: "LINEARB-STYLE CYCLE TIME PHASES",
+      title: "LinearB Four-Stage Cycle Time Decomposition",
+      body: "Breaks delivery lead time into: (1) Coding Time, (2) PR Pickup Time (wait for reviewer), (3) Review Time, and (4) Ship/CI Time. AIDA phase durations shown are unmeasured estimates; pickup reflects the review watch design, not a measurement.",
+      meta: "Illustrative* elite total: <26 hrs · AIDA: unmeasured estimate ~45–130 mins"
+    },
+    "30-Day Code Evolution: New vs. Rework vs. Refactor": {
+      kicker: "LINEARB CODE INVESTMENT PROFILE (FILE-WINDOW PROXY)",
+      title: "New Work vs. <21d File-Touch Churn Proxy vs. >21d Touch Share",
+      body: "Computed from git log --numstat over the trailing 30 days (795 commits, 1,270,201 LoC touched): net expansion (71.6%), lines in files modified multiple times within <21 days (27.7% file-level proxy), and files stable >21 days (0.8%).",
+      meta: "Illustrative* reference: ~65% New · <8% Rework (<21d) · 20–27% Refactor (>21d)"
+    },
+    "DORA Four-Key Metrics Scorecard": {
+      kicker: "DORA RESEARCH (dora.dev/guides/dora-metrics/)",
+      title: "DORA State of DevOps Four-Key Metrics vs. Repository Proxies",
+      body: "DORA's Four Keys (Deployment Frequency, Lead Time for Changes, Change Failure Rate, Failed Deployment Recovery Time) measure production deployments and incidents. Because no production deployment/incident dataset is linked in this repo, production DORA metrics are marked Unknown and paired with measured Git trunk proxies.",
+      meta: "Primary Definitions: https://dora.dev/guides/dora-metrics/"
+    },
+    "Illustrative Architecture & Batch-Size What-If Explorer": {
+      kicker: "ILLUSTRATIVE WHAT-IF SCENARIO MODEL (ASSUMED WEIGHTS)",
+      title: "Illustrative Scenario Explorer (Not Empirically Calibrated)",
+      body: "Interactive linear formula anchored to measured repository baselines (31.6% PRs >400 LoC, 78.3% crate share) using assumed heuristic weights for directional exploration only. Carries no fitted regression calibration or causal/predictive validity.",
+      meta: "Assumed weights: 10.5, 8.8, 11.2, 6.4, 11.5, 4.2 · Illustrative only"
+    }
+  };
+
+  function bindGlossaryTooltips() {
+    // Decorate KPI labels, Table strong labels, and Card Titles that match GLOSSARY_TERMS
+    document.querySelectorAll('.kpi-label, td strong, .card-title').forEach(el => {
+      const text = el.textContent.trim();
+      if (GLOSSARY_TERMS[text] && !el.classList.contains('term-tip')) {
+        el.classList.add('term-tip');
+        el.setAttribute('tabindex', '0');
+        const info = GLOSSARY_TERMS[text];
+        const html = `
+          <span class="tip-kicker">${info.kicker}</span>
+          <span class="tip-title">${info.title}</span>
+          <span class="tip-body">${info.body}</span>
+          <span class="tip-meta">${info.meta}</span>
+        `;
+        el.addEventListener('mousemove', (e) => showTip(e, html));
+        el.addEventListener('mouseleave', hideTip);
+        el.addEventListener('focus', (e) => {
+          const rect = el.getBoundingClientRect();
+          showTip({ clientX: rect.left, clientY: rect.bottom }, html);
+        });
+        el.addEventListener('blur', hideTip);
+      }
+    });
+  }
+
+  // =========================================================================
+  // 10. PRESENTATION DECK MODE, OVERVIEW ZOOM-OUT & CARD ZOOM CYCLING
+  // =========================================================================
+  const slideSections = [
+    { id: 'exec-summary', title: '01 · Executive Summary & KPIs' },
+    { id: 'scale-structure', title: '02 · Scale & CodeGraph Topology' },
+    { id: 'pr-velocity', title: '03 · MR Velocity & GitClear Sizing' },
+    { id: 'dora-mapping', title: '04 · DORA Performance Mapping' },
+    { id: 'linearb-analytics', title: '05 · LinearB Git Analytics' },
+    { id: 'action-plan', title: '06 · Architectural Action Plan' }
+  ];
+
+  let currentSlideIdx = 0;
+  let isDeckMode = false;
+  let isOverviewMode = false;
+  let zoomedCardIdx = -1;
+  let allCards = [];
+
+  function initPresentationSystem() {
+    // Group hero + kpi-grid + first report-section into slide 0 wrapper, and mark all report sections
+    const mainEl = document.querySelector('main.shell');
+    const heroEl = document.getElementById('exec-summary');
+    const kpiEl = document.querySelector('.kpi-grid');
+    const firstMatrixSec = document.querySelectorAll('.report-section')[0];
+
+    const slide0Wrap = document.createElement('div');
+    slide0Wrap.className = 'slide-section active-slide';
+    slide0Wrap.id = 'slide-wrap-0';
+    mainEl.insertBefore(slide0Wrap, heroEl);
+    slide0Wrap.appendChild(heroEl);
+    slide0Wrap.appendChild(kpiEl);
+    slide0Wrap.appendChild(firstMatrixSec);
+
+    const remainingSecs = Array.from(mainEl.querySelectorAll(':scope > .report-section'));
+    remainingSecs.forEach((sec, idx) => {
+      sec.classList.add('slide-section');
+      sec.dataset.slideIndex = idx + 1;
+    });
+    slide0Wrap.dataset.slideIndex = 0;
+
+    // Click handler when in overview mode: clicking a slide zooms right into it
+    document.querySelectorAll('.slide-section').forEach((sec, idx) => {
+      sec.addEventListener('click', (e) => {
+        if (document.body.classList.contains('overview-mode')) {
+          e.stopPropagation();
+          isOverviewMode = false;
+          document.body.classList.remove('overview-mode');
+          syncModeButtons();
+          goToSlide(idx);
+        }
+      });
+    });
+
+    // Build slide dots in floating dock
+    const dotsContainer = document.getElementById('pres-dots-container');
+    dotsContainer.innerHTML = slideSections.map((s, idx) =>
+      `<button class="pres-dot ${idx === 0 ? 'active' : ''}" type="button" title="${s.title}" onclick="goToSlide(${idx})"></button>`
+    ).join('');
+
+    // Add Per-Card Zoom & Prev/Next controls to every .card with a .card-header
+    allCards = Array.from(document.querySelectorAll('.card'));
+    allCards.forEach((card, cIdx) => {
+      const header = card.querySelector('.card-header');
+      if (header) {
+        const toolWrap = document.createElement('div');
+        toolWrap.className = 'card-tools';
+        toolWrap.innerHTML = `
+          <button class="card-tool-btn" type="button" onclick="stepCardZoom(${cIdx}, -1)" title="Previous Graph / Card">◀</button>
+          <button class="card-tool-btn" type="button" onclick="stepCardZoom(${cIdx}, 1)" title="Next Graph / Card">▶</button>
+          <button class="card-tool-btn zoom-toggle-btn" type="button" onclick="toggleCardZoom(${cIdx})" title="Zoom / Spotlight This Graph">⤢ Zoom</button>
+        `;
+        header.appendChild(toolWrap);
+      }
+    });
+
+    // Keyboard shortcuts: Left/Right arrows, Z for Zoom-out Overview, D for Deck Mode, Esc to close zoom
+    window.addEventListener('keydown', (e) => {
+      if (['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName)) return;
+      if (e.key === 'Escape') {
+        if (zoomedCardIdx !== -1) closeCardZoom();
+        else if (isOverviewMode) toggleOverviewMode();
+        else if (isDeckMode) toggleDeckMode();
+      } else if (e.key === 'ArrowRight') {
+        if (zoomedCardIdx !== -1) stepCardZoom(zoomedCardIdx, 1);
+        else stepSlide(1);
+      } else if (e.key === 'ArrowLeft') {
+        if (zoomedCardIdx !== -1) stepCardZoom(zoomedCardIdx, -1);
+        else stepSlide(-1);
+      } else if (e.key === 'z' || e.key === 'Z') {
+        toggleOverviewMode();
+      } else if (e.key === 'd' || e.key === 'D') {
+        toggleDeckMode();
+      }
+    });
+
+    // Track scroll position in normal scroll mode to update active slide indicator
+    window.addEventListener('scroll', () => {
+      if (isDeckMode || isOverviewMode || zoomedCardIdx !== -1) return;
+      const secs = document.querySelectorAll('.slide-section');
+      let bestIdx = 0;
+      secs.forEach((sec, idx) => {
+        const rect = sec.getBoundingClientRect();
+        if (rect.top <= 220) bestIdx = idx;
+      });
+      if (bestIdx !== currentSlideIdx) {
+        currentSlideIdx = bestIdx;
+        updateSlideIndicator();
+      }
+    }, { passive: true });
+  }
+
+  function updateSlideIndicator() {
+    const secs = document.querySelectorAll('.slide-section');
+    secs.forEach((sec, idx) => {
+      sec.classList.toggle('active-slide', idx === currentSlideIdx);
+    });
+    document.querySelectorAll('.pres-dot').forEach((dot, idx) => {
+      dot.classList.toggle('active', idx === currentSlideIdx);
+    });
+    const label = document.getElementById('pres-status-label');
+    if (label && slideSections[currentSlideIdx]) {
+      label.textContent = `${String(currentSlideIdx + 1).padStart(2, '0')} / 0${slideSections.length} · ${slideSections[currentSlideIdx].title.split('·')[1].trim()}`;
+    }
+  }
+
+  function goToSlide(idx) {
+    closeCardZoom();
+    currentSlideIdx = (idx + slideSections.length) % slideSections.length;
+    updateSlideIndicator();
+    const secs = document.querySelectorAll('.slide-section');
+    if (isDeckMode) {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } else if (secs[currentSlideIdx]) {
+      secs[currentSlideIdx].scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }
+
+  function stepSlide(delta) {
+    if (zoomedCardIdx !== -1) {
+      stepCardZoom(zoomedCardIdx, delta);
+      return;
+    }
+    if (isOverviewMode) {
+      isOverviewMode = false;
+      document.body.classList.remove('overview-mode');
+      syncModeButtons();
+    }
+    goToSlide(currentSlideIdx + delta);
+  }
+
+  function toggleDeckMode() {
+    closeCardZoom();
+    isDeckMode = !isDeckMode;
+    if (isDeckMode) {
+      isOverviewMode = false;
+      document.body.classList.remove('overview-mode');
+    }
+    document.body.classList.toggle('deck-mode', isDeckMode);
+    syncModeButtons();
+    updateSlideIndicator();
+    if (isDeckMode) window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  function toggleOverviewMode() {
+    closeCardZoom();
+    isOverviewMode = !isOverviewMode;
+    if (isOverviewMode) {
+      isDeckMode = false;
+      document.body.classList.remove('deck-mode');
+    }
+    document.body.classList.toggle('overview-mode', isOverviewMode);
+    syncModeButtons();
+    updateSlideIndicator();
+    if (isOverviewMode) window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  function syncModeButtons() {
+    document.getElementById('dock-deck-btn')?.classList.toggle('active', isDeckMode);
+    document.getElementById('top-deck-btn')?.classList.toggle('active', isDeckMode);
+    document.getElementById('dock-overview-btn')?.classList.toggle('active', isOverviewMode);
+    document.getElementById('top-overview-btn')?.classList.toggle('active', isOverviewMode);
+  }
+
+  function toggleCardZoom(cIdx) {
+    if (zoomedCardIdx === cIdx) {
+      closeCardZoom();
+      return;
+    }
+    closeCardZoom();
+    zoomedCardIdx = cIdx;
+    const card = allCards[cIdx];
+    if (!card) return;
+    card.classList.add('card-zoomed');
+    const btn = card.querySelector('.zoom-toggle-btn');
+    if (btn) btn.textContent = '✕ Close Zoom';
+    document.getElementById('zoom-backdrop').classList.add('active');
+  }
+
+  function closeCardZoom() {
+    if (zoomedCardIdx !== -1 && allCards[zoomedCardIdx]) {
+      allCards[zoomedCardIdx].classList.remove('card-zoomed');
+      const btn = allCards[zoomedCardIdx].querySelector('.zoom-toggle-btn');
+      if (btn) btn.textContent = '⤢ Zoom';
+    }
+    zoomedCardIdx = -1;
+    document.getElementById('zoom-backdrop').classList.remove('active');
+  }
+
+  function stepCardZoom(fromIdx, delta) {
+    const nextIdx = (fromIdx + delta + allCards.length) % allCards.length;
+    if (zoomedCardIdx !== -1) {
+      toggleCardZoom(nextIdx);
+    } else {
+      allCards[nextIdx]?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      allCards[nextIdx]?.animate(
+        [{ outline: '2px solid var(--accent)' }, { outline: '2px solid transparent' }],
+        { duration: 900 }
+      );
+    }
+  }
+
+  bindGlossaryTooltips();
+  initPresentationSystem();
+</script>
+<!-- trace:TASK-2709 | ai:antigravity -->
+</body>
+</html>

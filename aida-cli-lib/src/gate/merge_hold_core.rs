@@ -1407,7 +1407,19 @@ pub(crate) fn enforce_corpus_gate_before_merge(
     base_branch: Option<&str>,
     head: impl FnOnce() -> Option<String>,
 ) -> anyhow::Result<()> {
-    match corpus_gate_decision(project_root, pr, spec_hints, base_branch, head, true)? {
+    let decision = corpus_gate_decision(project_root, pr, spec_hints, base_branch, head, true)?;
+    enforce_corpus_decision(project_root, pr, decision)
+}
+
+// trace:BUG-b6b1278890774ef993d2ebc327862470-179 | ai:codex
+/// Shared enforcement after evidence coverage has been evaluated: the train
+/// keeps the same refusal and hold mirrors as every ordinary merge.
+pub(crate) fn enforce_corpus_decision(
+    project_root: &Path,
+    pr: u64,
+    decision: CorpusMergeGate,
+) -> anyhow::Result<()> {
+    match decision {
         CorpusMergeGate::Clear => Ok(()),
         CorpusMergeGate::Refuse { message, arm } => {
             if let Some(arm) = arm.filter(|_| pr > 0) {
