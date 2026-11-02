@@ -195,6 +195,86 @@ JUNIT = """<?xml version="1.0" encoding="UTF-8"?>
 """
 
 
+class UntouchedToleranceTest(unittest.TestCase):
+    """BUG-2414: an untouched test near the limit must not fail a PR.
+
+    PR #3226 and train #3252 failed only the budget step on tests neither
+    touched (11.0 s and 10.0 s against the 10 s unbudgeted limit).
+    trace:BUG-2414 | ai:claude
+    """
+
+    UNRELATED = "aida-cli::bug_046_padded_id_cli edit_comment_and_link_write_the_stored_object_under_any_padding"
+    OWN = "aida-cli-lib own::tests::my_new_slow_test"
+
+    def rows(self, **secs):
+        return [tt.Binary(k, 1, 0, 0, s) for k, s in secs.items()]
+
+    def test_observed_failure_untouched_near_limit_warns_not_fails(self):
+        rows = [tt.Binary(self.UNRELATED, 1, 0, 0, 11.0)]
+        # The old gate (no change set) fails it: the reproduction.
+        v, _ = tt.check(rows, tt.Budget(10, {}))
+        self.assertEqual(len(v), 1)
+        v, notes = tt.check(rows, tt.Budget(10, {}), touched=set())
+        self.assertEqual(v, [])
+        self.assertTrue(notes[0].startswith("untouched test over its limit"), notes)
+
+    def test_touched_test_is_held_hard_and_untouched_beyond_tolerance_fails(self):
+        rows = [tt.Binary(self.OWN, 1, 0, 0, 10.5), tt.Binary(self.UNRELATED, 1, 0, 0, 16.3)]
+        v, _ = tt.check(rows, tt.Budget(10, {}), touched={self.OWN})
+        self.assertEqual(len(v), 2)
+        self.assertIn("my_new_slow_test: 10.5s with no budget entry", v[0])
+        self.assertIn("over the 15s tolerance", v[1])
+        # A budgeted untouched test gets the same tolerance over its entry.
+        b = tt.Budget(10, {self.UNRELATED: 20})
+        self.assertEqual(tt.check([tt.Binary(self.UNRELATED, 1, 0, 0, 25.0)], b, touched=set())[0], [])
+        self.assertEqual(len(tt.check([tt.Binary(self.UNRELATED, 1, 0, 0, 31.0)], b, touched=set())[0]), 1)
+
+    def test_touched_test_overlapping_a_tolerated_untouched_one_is_still_a_stall(self):
+        # Review repro: touched A at 10.5 s and untouched B at 11.0 s with
+        # overlapping JUnit spans. The base gate reports both as runner-stall
+        # notes and exits 0; the tolerated B must still count for stall
+        # detection, so A keeps its TASK-1988 exemption.
+        def row(key, start, secs):
+            return tt.Binary(key, 1, 0, 0, secs, f"2026-11-02T13:00:{start:02d}.000+00:00")
+        rows = [row(self.OWN, 0, 10.5), row(self.UNRELATED, 2, 11.0)]
+        base_v, base_notes = tt.check(rows, tt.Budget(10, {}))
+        self.assertEqual(base_v, [])
+        self.assertEqual(sum(n.startswith("runner stall") for n in base_notes), 2)
+        v, notes = tt.check(rows, tt.Budget(10, {}), touched={self.OWN})
+        self.assertEqual(v, [])
+        self.assertEqual(sum(n.startswith("runner stall") for n in notes), 2, notes)
+        # Not overlapping: A is a lone touched regression, B stays tolerated.
+        rows = [row(self.OWN, 0, 10.5), row(self.UNRELATED, 30, 11.0)]
+        v, notes = tt.check(rows, tt.Budget(10, {}), touched={self.OWN})
+        self.assertEqual(len(v), 1)
+        self.assertIn("my_new_slow_test", v[0])
+        self.assertTrue(any(n.startswith("untouched test over its limit") for n in notes), notes)
+
+    def test_touched_means_defined_in_a_changed_rust_file(self):
+        with tempfile.TemporaryDirectory() as d:
+            p = pathlib.Path(d)
+            (p / "own.rs").write_text("#[test]\nfn my_new_slow_test() {}\n")
+            (p / "notes.md").write_text("fn edit_comment_and_link_write_the_stored_object_under_any_padding\n")
+            rows = self.rows(**{self.OWN: 1.0, self.UNRELATED: 1.0, "doctests:aida_core": 1.0})
+            got = tt.touched_tests(rows, ["own.rs", "notes.md", "deleted.rs"], root=str(p))
+        self.assertEqual(got, {self.OWN, "doctests:aida_core"})
+
+    def test_main_with_changed_files_and_committed_factor(self):
+        self.assertEqual(tt.load_budget(str(REPO / "scripts/test-time-budget.toml")).untouched_factor, 1.5)
+        with tempfile.TemporaryDirectory() as d:
+            p = pathlib.Path(d)
+            (p / "junit.xml").write_text(JUNIT)  # slow_one: 12.5 s, unbudgeted
+            (p / "log").write_text("nothing\n")
+            (p / "budget.toml").write_text("default_limit = 10\n")
+            (p / "changed").write_text("unrelated.rs\n")
+            args = [str(p / "log"), "--junit", str(p / "junit.xml"), "--budget", str(p / "budget.toml")]
+            self.assertEqual(tt.main(args), 1)
+            self.assertEqual(tt.main(args + ["--changed-files", str(p / "changed")]), 0)
+            (p / "budget.toml").write_text("default_limit = 10\nuntouched_factor = 0.5\n")
+            self.assertEqual(tt.main(args), 2)
+
+
+
 class JunitTest(unittest.TestCase):
     """trace:TASK-1988 | ai:claude"""
 

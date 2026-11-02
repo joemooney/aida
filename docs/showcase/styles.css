@@ -10,3 +10,19 @@
 
 /* trace:TASK-B6B1278890774EF993D2EBC327862470-110 | ai:codex */
 @media(max-width:760px){html{scroll-padding-top:180px}.nav{height:auto;min-height:72px;flex-wrap:wrap;padding-top:12px;padding-bottom:12px}.nav nav{display:flex;order:3;width:100%;gap:10px 16px;flex-wrap:wrap}.nav .nav-cta{margin-left:auto}}
+
+/* trace:TASK-2709 | ai:antigravity */
+.brand-symbol{background:#232a26;border:1px solid #3c443e;border-radius:5px;overflow:hidden;padding:3px;width:40px;height:40px}
+.brand-symbol img{width:100%;height:100%;object-fit:contain;display:block}
+.statement-layout{display:grid;grid-template-columns:220px 1fr;gap:48px;align-items:start}
+.statement-layout .statement-body{margin-left:0;max-width:none}
+.statement-emblem{display:flex;flex-direction:column;align-items:center;gap:12px;padding:22px 18px;background:#ece8de;border:1px solid var(--line);text-align:center}
+.statement-emblem img{width:136px;height:auto;display:block}
+.statement-emblem .mono{font-size:8.5px;color:var(--muted);letter-spacing:1.2px}
+.factory-head{display:flex;justify-content:space-between;align-items:flex-end;gap:36px;flex-wrap:wrap}
+.factory-emblem{margin:0;padding:12px 14px 10px;background:#07090e;border:1px solid #3c433e;display:flex;flex-direction:column;align-items:center;gap:8px;box-shadow:0 10px 26px rgba(0,0,0,.32)}
+.factory-emblem img{width:168px;height:auto;display:block}
+.factory-emblem figcaption{font-size:8px;color:#9da59b;letter-spacing:1.2px}
+.footer-brand-group{display:flex;align-items:center;gap:18px}
+.footer-arch-logo{width:64px;height:auto;display:block;padding:6px 8px;background:#ece8de;border:1px solid var(--line)}
+@media(max-width:960px){.statement-layout{grid-template-columns:1fr;gap:28px}.statement-emblem{flex-direction:row;justify-content:flex-start;padding:14px 18px;gap:18px}.statement-emblem img{width:84px}}

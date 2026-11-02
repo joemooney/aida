@@ -60,6 +60,16 @@ pub fn handler_names() -> Vec<String> {
     names
 }
 
+/// The raw (header-less) body of the Codex handler `name`, exactly as the
+/// scaffold preview compares and wraps it. Both Codex handler writers derive
+/// their content from this, so `aida init` and `aida scaffold apply` agree.
+// trace:BUG-2395 | ai:claude
+pub(crate) fn handler_raw_body(name: &str) -> Option<String> {
+    crate::templates::EMBEDDED_TEMPLATES
+        .get(format!("hooks/{name}").as_str())
+        .map(|body| body.trim_end().to_string())
+}
+
 /// What a scaffold pass did.
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct CodexHooksOutcome {
@@ -85,8 +95,7 @@ pub fn scaffold_codex_hooks(
 
     // Handlers first, so the wiring never points at a script that is not there.
     for name in handler_names() {
-        let Some(body) = crate::templates::EMBEDDED_TEMPLATES.get(&format!("hooks/{name}") as &str)
-        else {
+        let Some(raw) = handler_raw_body(&name) else {
             continue;
         };
         let dest = dir.join(&name);
@@ -94,7 +103,12 @@ pub fn scaffold_codex_hooks(
             out.skipped_existing.push(name);
             continue;
         }
-        std::fs::write(&dest, format!("{}\n", body.trim_end()))?;
+        // One canonical on-disk form for both writers: the header-wrapped
+        // body `aida scaffold apply` writes, so a fresh `aida init` is not
+        // reported as drift by `aida scaffold status`.
+        // trace:BUG-2395 | ai:claude
+        let rel = Path::new(HOOKS_DIR_REL).join(&name);
+        std::fs::write(&dest, super::wrap_with_aida_header(&rel, &raw))?;
         set_executable(&dest);
         out.written.push(name);
     }
@@ -111,6 +125,17 @@ pub fn scaffold_codex_hooks(
         out.written.push(HOOKS_JSON_REL.to_string());
     }
     Ok(out)
+}
+
+/// True when the project already carries AIDA's Codex hook wiring: a
+/// `.codex/hooks.json` that references a `/.codex/hooks/` handler. This is
+/// the opt-in that brings the Codex files into `aida scaffold status / diff /
+/// apply / upgrade`. A Claude-only repo, or a `.codex/hooks.json` that never
+/// pointed at AIDA's handlers, is left alone.
+// trace:BUG-2395 | ai:claude
+pub fn codex_hooks_wired(project_root: &Path) -> bool {
+    std::fs::read_to_string(project_root.join(HOOKS_JSON_REL))
+        .is_ok_and(|raw| raw.contains("/.codex/hooks/"))
 }
 
 /// Where the Antigravity wiring lives, relative to the project root.
@@ -855,5 +880,164 @@ mod tests {
                 );
             }
         }
+    }
+}
+
+/// BUG-2395: the shared hook scripts must work unchanged under Codex. These
+/// run the embedded masters against fixture repos and a fake HOME only.
+// trace:BUG-2395 | ai:claude
+#[cfg(all(test, unix))]
+mod bug_2395_vendor_neutral_hooks {
+    use std::path::Path;
+    use std::process::{Command, Stdio};
+
+    fn write_hook(dir: &Path, name: &str) -> std::path::PathBuf {
+        let body = crate::templates::EMBEDDED_TEMPLATES
+            .get(format!("hooks/{name}").as_str())
+            .copied()
+            .expect("embedded hook");
+        let path = dir.join(name);
+        std::fs::write(&path, body).unwrap();
+        path
+    }
+
+    fn git(repo: &Path, args: &[&str]) {
+        let ok = Command::new("git")
+            .args(args)
+            .current_dir(repo)
+            .env("GIT_CONFIG_GLOBAL", "/dev/null")
+            .env("GIT_CONFIG_NOSYSTEM", "1")
+            .status()
+            .unwrap()
+            .success();
+        assert!(ok, "git {args:?}");
+    }
+
+    /// Runs `aida-commit-msg` with `staged` (path, body) files staged and
+    /// returns its combined output.
+    fn commit_msg_output(staged: &[(&str, &str)]) -> String {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let repo = tmp.path().join("repo");
+        std::fs::create_dir_all(&repo).unwrap();
+        git(&repo, &["init", "-q", "-b", "main"]);
+        for (rel, body) in staged {
+            let p = repo.join(rel);
+            std::fs::create_dir_all(p.parent().unwrap()).unwrap();
+            std::fs::write(&p, body).unwrap();
+            git(&repo, &["add", rel]);
+        }
+        let hook = write_hook(tmp.path(), "aida-commit-msg");
+        let msg = tmp.path().join("MSG");
+        std::fs::write(&msg, "chore(scaffold): refresh hooks\n").unwrap();
+        let out = Command::new("bash")
+            .arg(&hook)
+            .arg(&msg)
+            .current_dir(&repo)
+            .env("HOME", tmp.path())
+            .env("GIT_CONFIG_GLOBAL", "/dev/null")
+            .env_remove("AIDA_RELEASE")
+            .env_remove("AIDA_COMMIT_STRICT")
+            .output()
+            .unwrap();
+        format!(
+            "{}{}",
+            String::from_utf8_lossy(&out.stdout),
+            String::from_utf8_lossy(&out.stderr)
+        )
+    }
+
+    #[test]
+    fn commit_msg_ignores_foreign_traces_in_codex_and_agents_mirrors() {
+        let traced = "#!/bin/bash\n# trace:TASK-9999 | ai:claude\n";
+        let mirrors = commit_msg_output(&[
+            (".codex/hooks/aida-x.sh", traced),
+            (".agents/hooks/aida-y.sh", traced),
+        ]);
+        assert!(
+            !mirrors.contains("TASK-9999") && !mirrors.contains("AI-traced"),
+            "scaffold mirrors must not trigger trace warnings: {mirrors}"
+        );
+        let source = commit_msg_output(&[("src/x.sh", traced)]);
+        assert!(
+            source.contains("AI-traced"),
+            "control: a source file still warns: {source}"
+        );
+    }
+
+    /// Runs `aida-capture-prompt.sh` with `payload` on stdin and returns stdout.
+    fn capture_prompt(home: &Path, payload: &str, envs: &[(&str, &str)]) -> String {
+        let hook = write_hook(home, "aida-capture-prompt.sh");
+        let mut cmd = Command::new("bash");
+        cmd.arg(&hook)
+            .current_dir(home)
+            .env("HOME", home)
+            .env_remove("CODEX_PROJECT_DIR")
+            .env_remove("CLAUDE_PROJECT_DIR")
+            .env_remove("AIDA_SESSION_PROJECT")
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped());
+        for (k, v) in envs {
+            cmd.env(k, v);
+        }
+        let mut child = cmd.spawn().unwrap();
+        use std::io::Write;
+        child
+            .stdin
+            .take()
+            .unwrap()
+            .write_all(payload.as_bytes())
+            .unwrap();
+        String::from_utf8_lossy(&child.wait_with_output().unwrap().stdout).into_owned()
+    }
+
+    #[test]
+    fn capture_prompt_counts_codex_skill_and_speaks_both_vendors() {
+        if Command::new("jq").arg("--version").output().is_err() {
+            eprintln!("skipping: jq not installed");
+            return;
+        }
+        let tmp = tempfile::TempDir::new().unwrap();
+        let home = tmp.path();
+        let transcript = home.join("t.jsonl");
+        let payload = format!(
+            r#"{{"session_id":"s1","transcript_path":"{}"}}"#,
+            transcript.display()
+        );
+
+        std::fs::write(&transcript, "{\"text\":\"this is worth noting\"}\n").unwrap();
+        let fired = capture_prompt(home, &payload, &[]);
+        assert!(fired.contains("/aida-capture"), "{fired}");
+        assert!(
+            fired.contains("$aida-capture"),
+            "Codex wording missing: {fired}"
+        );
+
+        std::fs::write(
+            &transcript,
+            "{\"text\":\"this is worth noting\"}\n{\"text\":\"ran $aida-capture\"}\n",
+        )
+        .unwrap();
+        assert!(
+            capture_prompt(home, &payload, &[]).is_empty(),
+            "$aida-capture counts as filing activity"
+        );
+
+        // A Codex payload without transcript_path never reads ~/.claude.
+        let project = home.join("proj");
+        std::fs::create_dir_all(&project).unwrap();
+        let encoded = project.display().to_string().replace('/', "-");
+        let claude_dir = home.join(".claude/projects").join(encoded);
+        std::fs::create_dir_all(&claude_dir).unwrap();
+        std::fs::write(claude_dir.join("s2.jsonl"), "{\"text\":\"worth noting\"}\n").unwrap();
+        let project_str = project.display().to_string();
+        let no_path = r#"{"session_id":"s2"}"#;
+        assert!(
+            !capture_prompt(home, no_path, &[("CLAUDE_PROJECT_DIR", &project_str)]).is_empty(),
+            "control: Claude falls back to its transcript layout"
+        );
+        assert!(
+            capture_prompt(home, no_path, &[("CODEX_PROJECT_DIR", &project_str)]).is_empty(),
+            "Codex must not fall back to the Claude transcript layout"
+        );
     }
 }

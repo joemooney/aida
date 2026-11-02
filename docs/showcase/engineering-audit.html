@@ -4,6 +4,9 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>AIDA Engineering Architecture & Delivery Audit — DORA, GitClear & LinearB Benchmark Report</title>
+  <link rel="icon" type="image/png" href="assets/aida-icon.png" />
+  <link rel="icon" href="assets/favicon.ico" sizes="any" />
+  <link rel="apple-touch-icon" href="assets/aida-icon.png" />
   <style>
     :root, [data-theme="paper"] {
       --bg: #f4f1e9;
@@ -84,9 +87,48 @@
       font-weight: 750; font-size: 22px; letter-spacing: -0.8px;
     }
     .brand-mark {
-      display: grid; place-items: center; width: 32px; height: 32px;
-      background: var(--accent); color: #fff; font-size: 22px; line-height: 1;
+      display: grid; place-items: center; width: 34px; height: 34px;
+      background: #232a26; border: 1px solid #3c443e; border-radius: 4px;
+      padding: 3px; overflow: hidden;
     }
+    .brand-mark img {
+      width: 100%; height: 100%; object-fit: contain; display: block;
+    }
+    .hero-brand-bar {
+      display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+      margin-bottom: 18px;
+    }
+    .brand-badge-light {
+      display: inline-flex; align-items: center; gap: 12px;
+      padding: 8px 14px; background: #f6f4ef; border: 1px solid var(--line);
+      border-radius: 3px; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+    }
+    .brand-badge-light img { height: 42px; width: auto; display: block; }
+    .brand-badge-dark {
+      display: inline-flex; align-items: center; gap: 10px;
+      padding: 6px 12px; background: #07090e; border: 1px solid #39413c;
+      border-radius: 3px;
+    }
+    .brand-badge-dark img { height: 44px; width: auto; display: block; }
+    .verdict-head-row {
+      display: flex; align-items: flex-start; justify-content: space-between;
+      gap: 16px; margin-bottom: 10px;
+    }
+    .verdict-orbital-logo {
+      width: 78px; height: auto; border: 1px solid #39413c;
+      border-radius: 3px; background: #07090e; flex-shrink: 0; display: block;
+    }
+    .footer-brand-strip {
+      display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+    }
+    .footer-logo-chip {
+      display: inline-flex; align-items: center; padding: 5px 10px;
+      background: #f6f4ef; border: 1px solid var(--line); border-radius: 3px;
+    }
+    .footer-logo-chip.dark {
+      background: #07090e; border-color: #39413c;
+    }
+    .footer-logo-chip img { height: 34px; width: auto; display: block; }
     .brand-sub {
       font-family: var(--mono); font-size: 10px; letter-spacing: 1px;
       color: var(--ink-secondary); border-left: 1px solid var(--line);
@@ -281,7 +323,7 @@
 <header class="topbar">
   <div class="shell topbar-inner">
     <a href="index.html" class="brand" title="Back to AIDA Showcase">
-      <span class="brand-mark">✳</span>
+      <span class="brand-mark"><img src="assets/aida-icon-64.png" width="26" height="26" alt="AIDA Arch Icon" /></span>
       <span>AIDA</span>
       <span class="brand-sub">ENGINEERING AUDIT · NOV 2026</span>
     </a>
@@ -335,13 +377,18 @@
       </div>
 
       <aside class="verdict-card" aria-label="Executive Audit Diagnosis">
-        <div class="card-kicker">EXECUTIVE DIAGNOSIS</div>
-        <h3>High Trunk Integration Velocity Paired with Batch-Size &amp; Hub Coupling Friction</h3>
+        <div class="verdict-head-row">
+          <div>
+            <div class="card-kicker">EXECUTIVE DIAGNOSIS</div>
+            <h3 style="margin-bottom:0;">High Trunk Integration Velocity Paired with Batch-Size &amp; Hub Coupling Friction</h3>
+          </div>
+          <img class="verdict-orbital-logo" src="assets/aida-logo-orbital.jpg" width="78" height="61" alt="AIDA orbital emblem" />
+        </div>
         <p>
           AIDA merges <strong>12.9–14.35 PRs/day</strong> onto <code>main</code> (peaking at <strong>833 PRs</strong> in June 2026), and
           <code>aida review watch</code> is designed to dispatch a reviewer as soon as a branch is pushed (pickup latency is a design
           claim; this audit did not measure it). However, <strong>78.3% of all Rust code</strong> resides in a single crate
-          (<code>aida-cli-lib</code>), and <strong>31.6% of PRs exceed 400 LoC</strong> (40.1% in the trailing 60 days), co-occurring with a
+          (<code>aida-cli-lib</code>), and <strong>31.6% of PRs exceed 400 LoC</strong> (40.0% in the trailing 60 days), co-occurring with a
           <strong>27.7% &lt;21-day file-touch churn proxy</strong> and a <strong>31.6% <code>BUG-</code>/<code>fix:</code> commit share</strong>.
         </p>
         <div class="verdict-pills">
@@ -490,7 +537,7 @@
               <td class="num"><strong>31.6% of PRs</strong> (median 225 LoC)</td>
               <td class="num">~26% of PRs*</td>
               <td class="num">&lt; 15% of PRs*</td>
-              <td><span class="badge badge-warn">Batch-Size Weakness</span> 10.1% of PRs exceed 1,000 LoC; trailing 60 days 40.1% exceed 400 (SmartBear/Cisco 200–400 LoC guidance)</td>
+              <td><span class="badge badge-warn">Batch-Size Weakness</span> 10.1% of PRs exceed 1,000 LoC; trailing 60 days 40.0% exceed 400 (SmartBear/Cisco 200–400 LoC guidance)</td>
             </tr>
             <tr data-kind="weakness">
               <td><strong>LinearB &lt;21-Day Rework Churn (30d)</strong></td>
@@ -526,9 +573,10 @@
             <strong>PR merges</strong> are first-parent commits whose subject ends in <code>(#N)</code>, read from
             <code>git log --first-parent 6a3f67671a9 --format='@%cs %s' --shortstat</code>; PR size = insertions + deletions from that shortstat, with no files excluded.
             Windows filter on committer date (<code>%cs</code> &ge; start date); median is the midpoint average and p90 the inclusive decile.
-            All history: 2,421 PRs. Since 2026-05-10 (175 d): 2,418 PRs, median 225, p90 1,008, mean 664.8, 31.6% &gt;400, 10.1% &gt;1,000.
-            Since 2026-09-02 (60 d): 861 PRs, median 290, p90 1,485, 40.1% &gt;400. Since 2026-10-02 (30 d): 387 PRs, median 325, p90 1,782, 44.7% &gt;400.
-            June 2026: 833 PRs, median 188, p90 625, 24.1% &gt;400.
+            All history: 2,421 PRs. Since 2026-05-10 (175 d): 2,418 PRs, median 225, p90 1,010, mean 589.9, 31.6% &gt;400, 10.1% &gt;1,000.
+            Since 2026-09-02 (60 d): 861 PRs, median 290, p90 1,483, 40.0% &gt;400. Since 2026-10-02 (30 d): 387 PRs, median 325, p90 1,791, 44.7% &gt;400.
+            June 2026: 833 PRs, median 188, p90 625, 24.2% &gt;400.
+            <strong>PR-size density chart</strong>: Gaussian kernel density estimate of log<sub>10</sub>(max(size, 1)) over the 2,418 PRs since 2026-05-10 (the 6 zero-line PRs map to 0), bandwidth h = 0.0990 log<sub>10</sub> units from Silverman’s rule of thumb (0.9 · min(sd, IQR/1.34) · n<sup>−1/5</sup>), evaluated at 46 even points from 10 to 5,012 LoC with no boundary correction (mass outside that range is not drawn), and scaled so the peak density sits at the top of the plot. Every figure in this note and every curve point and marker on the chart is printed by <code>python3 scripts/showcase-pr-size.py --svg</code>, run from the repository root.
             Commit counts per window use the same committer-date filter on <code>git log 6a3f67671a9 --format=%cs</code>.
             <strong>Reverts</strong> = subjects matching <code>^revert</code> (case-insensitive): 4 (7 subjects mention “revert” anywhere).
             <strong>Fix share</strong> = subjects containing <code>BUG-</code> (1,163) plus subjects starting with <code>fix</code> and not containing <code>BUG-</code> (163); subjects such as <code>[AI:x] fix(...)</code> are not matched, so this undercounts fixes.
@@ -723,19 +771,19 @@
         <div class="card-header">
           <div>
             <h3 class="card-title">PR Diff Size vs. GitClear Review Ceiling</h3>
-            <p class="card-subtitle">31.6% of PRs since 2026-05-10 exceed 400 LoC (40.1% in the trailing 60 days)</p>
+            <p class="card-subtitle">31.6% of PRs since 2026-05-10 exceed 400 LoC (40.0% in the trailing 60 days)</p>
           </div>
           <div class="tab-group">
             <button class="tab-btn active" onclick="renderSizingChart('bars', this)">Bucket Histogram</button>
-            <button class="tab-btn" onclick="renderSizingChart('bell', this)">Schematic Shift</button>
+            <button class="tab-btn" onclick="renderSizingChart('bell', this)">Log-Scale Density</button>
           </div>
         </div>
         <div class="svg-chart-wrap" id="sizing-svg-container"></div>
         <div class="callout weakness">
           <div class="callout-title">⚠ SmartBear/Cisco Review-Size Guidance (&gt;400 LoC)</div>
           The SmartBear/Cisco Systems case study (Cohen, 2006; 2,500 reviews) recommends reviewing no more than <strong>200–400 LoC</strong> at a time. Since 2026-05-10, AIDA's
-          median PR is <strong>225 LoC</strong> (mean <strong>664.8 LoC</strong>, p90 <strong>1,008 LoC</strong>), with <strong>10.1% of PRs exceeding 1,000 LoC</strong>.
-          PRs have grown recently: over the trailing 60 days the median is 290 LoC and p90 1,485 LoC.
+          median PR is <strong>225 LoC</strong> (mean <strong>589.9 LoC</strong>, p90 <strong>1,010 LoC</strong>), with <strong>10.1% of PRs exceeding 1,000 LoC</strong>.
+          PRs have grown recently: over the trailing 60 days the median is 290 LoC and p90 1,483 LoC.
         </div>
       </div>
     </div>
@@ -790,7 +838,7 @@
               <td class="num"><strong>414.5 / mo</strong></td>
               <td class="num">18.6 / d</td>
               <td class="num">225 LoC</td>
-              <td class="num">1,008 LoC</td>
+              <td class="num">1,010 LoC</td>
               <td class="num"><span class="badge badge-warn">31.6%</span></td>
             </tr>
             <tr>
@@ -800,8 +848,8 @@
               <td class="num"><strong>430.5 / mo</strong></td>
               <td class="num">24.5 / d</td>
               <td class="num">290 LoC</td>
-              <td class="num">1,485 LoC</td>
-              <td class="num"><span class="badge badge-warn">40.1%</span></td>
+              <td class="num">1,483 LoC</td>
+              <td class="num"><span class="badge badge-warn">40.0%</span></td>
             </tr>
             <tr>
               <td><strong>AIDA Trailing 30-Day Window</strong></td>
@@ -810,7 +858,7 @@
               <td class="num"><strong>387.0 / mo</strong></td>
               <td class="num">26.8 / d</td>
               <td class="num">325 LoC</td>
-              <td class="num">1,782 LoC</td>
+              <td class="num">1,791 LoC</td>
               <td class="num"><span class="badge badge-warn">44.7%</span></td>
             </tr>
             <tr>
@@ -821,7 +869,7 @@
               <td class="num">30.6 / d</td>
               <td class="num">188 LoC</td>
               <td class="num">625 LoC</td>
-              <td class="num">24.1%</td>
+              <td class="num">24.2%</td>
             </tr>
           </tbody>
         </table>
@@ -1104,7 +1152,7 @@
           <div class="action-num">ACTION 03 · SMALL-BATCH PR RATCHET</div>
           <h3>Enforce a &lt;400 Production-LoC Budget at Decomposition &amp; Ship</h3>
           <p>
-            <strong>31.6% of merged PRs</strong> since 2026-05-10 exceed the 400-LoC review threshold (40.1% in the trailing 60 days; 10.1% exceed 1,000 LoC),
+            <strong>31.6% of merged PRs</strong> since 2026-05-10 exceed the 400-LoC review threshold (40.0% in the trailing 60 days; 10.1% exceed 1,000 LoC),
             increasing reviewer context load and co-occurring with multi-round review cycles.
           </p>
           <ul>
@@ -1133,7 +1181,12 @@
   </section>
 
   <footer>
-    <div>AIDA ENGINEERING ARCHITECTURE &amp; DELIVERY AUDIT · PINNED COMMIT <code>6a3f67671a974703590efde5ae2a323f3f7471fa</code></div>
+    <div class="footer-brand-strip">
+      <span class="footer-logo-chip"><img src="assets/aida-logo-arch.png" width="54" height="53" alt="AIDA arch logo" loading="lazy" /></span>
+      <span class="footer-logo-chip"><img src="assets/aida-logo-geometric.png" width="48" height="55" alt="AIDA geometric logo" loading="lazy" /></span>
+      <span class="footer-logo-chip dark"><img src="assets/aida-logo-orbital.jpg" width="68" height="53" alt="AIDA orbital logo" loading="lazy" /></span>
+      <span>AIDA ENGINEERING ARCHITECTURE &amp; DELIVERY AUDIT · PINNED COMMIT <code>6a3f67671a974703590efde5ae2a323f3f7471fa</code></span>
+    </div>
     <div><a href="index.html" style="color:var(--accent);text-decoration:none;">← Back to AIDA Showcase</a> · <a href="metrics.html" style="color:var(--ink-secondary);text-decoration:none;">Metrics Guide</a> · <a href="executive-brief.html" style="color:var(--ink-secondary);text-decoration:none;">Executive Brief</a> · <a href="library.html" style="color:var(--ink-secondary);text-decoration:none;">Library</a></div>
   </footer>
 
@@ -1488,24 +1541,56 @@
           <text x="${padL}" y="${H - 3}" font-size="8.5" fill="var(--ink-secondary)">* Illustrative reference distributions, not from a cited report.</text>
         </svg>`;
     } else {
-      const W = 520, H = 290;
+      const W = 520, H = 295;
+      // Gaussian KDE of log10(max(LoC,1)) across 2,418 PRs since 2026-05-10, Silverman bandwidth h = 0.0990, on log10([10, 5012]) -> x in [45, 490], peak y = 90, y_base = 236.
+      // Generated by: python3 scripts/showcase-pr-size.py --svg
+      const ptsLeft = "45.0,236 45.0,219.2 54.9,216.7 64.8,215.2 74.7,214.4 84.6,213.4 94.4,212.1 104.3,210.6 114.2,208.6 124.1,205.1 134.0,199.8 143.9,193.1 153.8,185.6 163.7,177.5 173.6,169.5 183.4,161.7 193.3,152.0 203.2,138.0 213.1,121.5 223.0,108.3 232.9,101.5 242.8,98.3 252.7,95.1 262.6,91.7 272.4,90.0 282.3,90.9 292.2,93.5 302.1,96.7 309.0,99.6 309.0,236";
+      const ptsRight = "309.0,236 309.0,99.6 312.0,100.9 321.9,107.4 331.8,117.1 341.7,128.9 351.6,140.7 361.4,151.5 371.3,162.1 381.2,173.1 391.1,184.1 401.0,194.3 410.9,202.6 420.8,208.4 430.7,212.0 440.6,215.2 450.4,219.0 460.3,222.9 470.2,226.5 480.1,229.3 490.0,231.1 490.0,236";
+      const ptsLine = "45.0,219.2 54.9,216.7 64.8,215.2 74.7,214.4 84.6,213.4 94.4,212.1 104.3,210.6 114.2,208.6 124.1,205.1 134.0,199.8 143.9,193.1 153.8,185.6 163.7,177.5 173.6,169.5 183.4,161.7 193.3,152.0 203.2,138.0 213.1,121.5 223.0,108.3 232.9,101.5 242.8,98.3 252.7,95.1 262.6,91.7 272.4,90.0 282.3,90.9 292.2,93.5 302.1,96.7 312.0,100.9 321.9,107.4 331.8,117.1 341.7,128.9 351.6,140.7 361.4,151.5 371.3,162.1 381.2,173.1 391.1,184.1 401.0,194.3 410.9,202.6 420.8,208.4 430.7,212.0 440.6,215.2 450.4,219.0 460.3,222.9 470.2,226.5 480.1,229.3 490.0,231.1";
       wrap.innerHTML = `
         <svg class="chart-svg" viewBox="0 0 ${W} ${H}">
-          <line x1="40" y1="240" x2="495" y2="240" stroke="var(--line-strong)" />
-          <!-- Elite Bell Curve peaking around 80-180 LoC -->
-          <path d="M 45 240 C 85 235, 115 65, 175 65 C 235 65, 275 215, 360 238 L 490 240" fill="var(--emerald-soft)" stroke="var(--emerald)" stroke-width="2.5" />
-          <!-- AIDA Shifted Bell Curve peaking around 400-1000 LoC -->
-          <path d="M 55 240 C 130 235, 225 90, 315 90 C 395 90, 445 190, 495 232" fill="var(--accent-soft)" stroke="var(--accent)" stroke-width="2.5" />
-          <!-- 400 LoC Threshold Line -->
-          <line x1="275" y1="30" x2="275" y2="240" stroke="var(--crimson)" stroke-dasharray="5 4" stroke-width="1.5" />
-          <text x="275" y="22" text-anchor="middle" font-size="9.5" fill="var(--crimson)" font-weight="700">SmartBear/Cisco 400-LoC Guidance</text>
-          <text x="175" y="52" text-anchor="middle" font-size="10" fill="var(--emerald)">Illustrative* Elite (~120 LoC)</text>
-          <text x="345" y="76" text-anchor="middle" font-size="10" fill="var(--accent)">AIDA (Median 225 / Mean 665 LoC; schematic)</text>
-          <text x="65" y="258" font-size="9.5" fill="var(--ink-secondary)">25 LoC</text>
-          <text x="175" y="258" text-anchor="middle" font-size="9.5" fill="var(--ink-secondary)">120 LoC</text>
-          <text x="275" y="258" text-anchor="middle" font-size="9.5" fill="var(--ink)">400 LoC</text>
-          <text x="385" y="258" text-anchor="middle" font-size="9.5" fill="var(--ink-secondary)">1,000 LoC</text>
-          <text x="475" y="258" text-anchor="end" font-size="9.5" fill="var(--ink-secondary)">3,500+ LoC</text>
+          <!-- Illustrative Elite reference curve centered around ~120 LoC (x=223) on log10 scale -->
+          <path d="M 45 236 C 95 234, 155 68, 215 68 C 265 68, 298 205, 355 235 L 490 236" fill="none" stroke="var(--emerald)" stroke-width="1.8" stroke-dasharray="3 3" opacity="0.85" />
+          <text x="178" y="60" text-anchor="middle" font-size="9" fill="var(--emerald)">Illustrative* Elite (~120 LoC)</text>
+
+          <!-- AIDA Empirical Log10(LoC) Density: Left 68.4% (<=400 LoC) vs Right 31.6% (>400 LoC) -->
+          <polygon points="${ptsLeft}" fill="var(--blue-soft)" />
+          <polygon points="${ptsRight}" fill="var(--crimson-soft)" />
+          <polyline points="${ptsLine}" fill="none" stroke="var(--accent)" stroke-width="2.5" />
+
+          <!-- Share callouts inside the two regions -->
+          <text x="218" y="182" text-anchor="middle" font-size="9.5" fill="var(--blue)" font-weight="700">68.4% ≤ 400 LoC</text>
+          <text x="362" y="196" text-anchor="middle" font-size="9.5" fill="var(--crimson)" font-weight="700">31.6% &gt; 400 LoC</text>
+
+          <!-- AIDA Median (p50 = 225 LoC) at x = 267.9 (LEFT of 400 LoC) -->
+          <line x1="268" y1="74" x2="268" y2="236" stroke="var(--blue)" stroke-width="1.8" />
+          <circle cx="268" cy="91" r="3.5" fill="var(--blue)" />
+          <text x="264" y="70" text-anchor="end" font-size="9.5" fill="var(--blue)" font-weight="700">Median: 225 LoC (p50)</text>
+
+          <!-- SmartBear/Cisco 400-LoC Guidance at x = 309.0 -->
+          <line x1="309" y1="28" x2="309" y2="236" stroke="var(--crimson)" stroke-dasharray="5 4" stroke-width="1.8" />
+          <text x="309" y="20" text-anchor="middle" font-size="9.5" fill="var(--crimson)" font-weight="700">400-LoC Review Guidance (p68.4)</text>
+
+          <!-- AIDA Mean (589.9 LoC) at x = 336.8 (pulled right by heavy tail) -->
+          <line x1="337" y1="108" x2="337" y2="236" stroke="var(--amber)" stroke-dasharray="2 2" stroke-width="1.6" />
+          <circle cx="337" cy="123" r="3.5" fill="var(--amber)" />
+          <text x="343" y="114" text-anchor="start" font-size="9" fill="var(--amber)" font-weight="700">Mean: 590 LoC (tail-skewed)</text>
+
+          <!-- AIDA p90 (1,010 LoC) at x = 375.4 -->
+          <line x1="375" y1="145" x2="375" y2="236" stroke="var(--ink-muted)" stroke-dasharray="2 3" stroke-width="1.2" />
+          <text x="380" y="149" text-anchor="start" font-size="8.5" fill="var(--ink-secondary)">p90: 1,010 LoC (10.1% &gt;1k)</text>
+
+          <!-- Baseline & Log10 Axis Labels -->
+          <line x1="40" y1="236" x2="495" y2="236" stroke="var(--line-strong)" />
+          <text x="45" y="253" text-anchor="middle" font-size="9" fill="var(--ink-secondary)">10</text>
+          <text x="111" y="253" text-anchor="middle" font-size="9" fill="var(--ink-secondary)">25</text>
+          <text x="210" y="253" text-anchor="middle" font-size="9" fill="var(--ink-secondary)">100</text>
+          <text x="268" y="253" text-anchor="middle" font-size="9" fill="var(--blue)" font-weight="700">225</text>
+          <text x="309" y="253" text-anchor="middle" font-size="9" fill="var(--crimson)" font-weight="700">400</text>
+          <text x="337" y="265" text-anchor="middle" font-size="8.5" fill="var(--amber)">590 (Mean)</text>
+          <text x="375" y="253" text-anchor="middle" font-size="9" fill="var(--ink-secondary)">1k</text>
+          <text x="464" y="253" text-anchor="middle" font-size="9" fill="var(--ink-secondary)">3.5k+</text>
+          <text x="268" y="284" text-anchor="middle" font-size="8.5" fill="var(--ink-secondary)">Gaussian KDE of log₁₀(LoC) across 2,418 AIDA PRs: median 225 LoC sits left of 400 LoC; heavy &gt;1k tail pulls mean to 590 LoC.</text>
         </svg>`;
     }
   }
@@ -1680,7 +1765,7 @@
       kicker: "GITCLEAR & SMARTBEAR REVIEW CEILING",
       title: "Oversized Batch Rate: PRs Exceeding 400 LoC (31.6%)",
       body: "Percentage of merged PRs whose diff (insertions + deletions) exceeds 400 lines. The SmartBear/Cisco case study (Cohen, 2006) recommends reviewing no more than 200–400 LoC at a time.",
-      meta: "Illustrative* median ~26% >400 LoC · elite <15% · AIDA: 31.6% since 2026-05-10 (10.1% >1,000 LoC; 40.1% >400 in trailing 60d)"
+      meta: "Illustrative* median ~26% >400 LoC · elite <15% · AIDA: 31.6% since 2026-05-10 (10.1% >1,000 LoC; 40.0% >400 in trailing 60d)"
     },
     "<21d Rework Churn": {
       kicker: "LINEARB CODE EVOLUTION METRIC",
@@ -1740,7 +1825,7 @@
       kicker: "SMARTBEAR/CISCO & GITCLEAR BATCH-SIZE METRIC",
       title: "Oversized PR Rate (>400 LoC Diff)",
       body: "Share of merged pull requests exceeding 400 changed lines (insertions + deletions). The SmartBear/Cisco Systems case study (Cohen, 2006) recommends reviewing no more than 200–400 LoC at a time.",
-      meta: "AIDA PRs since 2026-05-10: 31.6% >400 LoC · median 225 · p90 1,008"
+      meta: "AIDA PRs since 2026-05-10: 31.6% >400 LoC · median 225 · p90 1,010"
     },
     "LinearB <21-Day Rework Churn (30d)": {
       kicker: "FILE-LEVEL <21D COMMIT-WINDOW PROXY",
@@ -1794,7 +1879,7 @@
       kicker: "SMARTBEAR/CISCO REVIEW-SIZE GUIDANCE",
       title: "SmartBear/Cisco 200–400 LoC Review Guidance",
       body: "The SmartBear/Cisco Systems case study (Cohen, 2006; 2,500 reviews) recommends reviewing no more than 200–400 LoC at a time. Industry bucket distributions in the chart are *illustrative, not from a cited report.",
-      meta: "AIDA since 2026-05-10: median 225 LoC · mean 664.8 · 31.6% >400 LoC"
+      meta: "AIDA since 2026-05-10: median 225 LoC · mean 589.9 · 31.6% >400 LoC"
     },
     "Anatomy of Cycle Time: AIDA vs. LinearB Tiers": {
       kicker: "LINEARB-STYLE CYCLE TIME PHASES",
