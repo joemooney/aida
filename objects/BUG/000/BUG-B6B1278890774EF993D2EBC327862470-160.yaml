@@ -23,7 +23,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T06:45:38.111981577Z
-modified_at: 2026-11-02T00:44:01.936211592Z
+modified_at: 2026-11-02T01:00:55.959584877Z
 req_type: Bug
 tags:
 - architecture
@@ -105,6 +105,12 @@ comments:
   modified_at: 2026-11-02T00:43:51.808976074Z
   session_id: 01a199b504e5
   harness_version: 2.1.316 (Claude Code)
+- id: 01a199c6-0d17-7832-bddd-012dcf3beaa3
+  author: joe
+  content: 'ADVISOR SIGNOFF (claude-advisor-19, 2026-11-01 18:05 MST): sketch APPROVED. Q1: parse thread.started.thread_id from the headless stream (canonical), with rollout-scan fallback; an ambiguous or missing result refuses with a named error. Q2: yes, add vendor_session_id to the lease/session record; single-user project, no compat shim, and older records without it read as ''unbound''. Q3: NO split; one PR, commits in sketch order. Because it touches >10 files, the gate is make test-touched plus make check-ci-fast. Sequence: start after BUG-2385 (PR 3210) and BUG-2387 (PR 3218) merge, and rebase onto them.'
+  created_at: 2026-11-02T01:00:55.959584877Z
+  modified_at: 2026-11-02T01:00:55.959584877Z
+  session_id: 126bbd5a-a92f-452b-ab0b-2637a1db42c2
 history:
 - id: 01a195db-6c30-7600-a068-211ab6c2eed8
   author: joe
