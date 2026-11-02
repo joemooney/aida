@@ -148,7 +148,12 @@ pub(crate) fn find_rollout(root: &Path, id: &str) -> Option<CodexRollout> {
 /// 4. otherwise the `scope`'s lease decides: its stamped `vendor_session_id`,
 ///    else the one rollout started in its tree since it began.
 ///
-/// An id none of these place refuses by name; it is never assumed Claude.
+/// 5. nothing names the id: it resumes on the configured vendor
+///    ([`crate::session::resolve_headless_vendor`], Claude by default), so a
+///    session no transcript has named yet still resumes as before.
+///
+/// Only a conflict refuses by name: the configured vendor is Codex, which
+/// resumes by its own thread id, and nothing binds one to this id.
 // trace:BUG-2386 | ai:claude
 pub(crate) fn recorded_resume(
     project_root: &Path,
@@ -195,6 +200,13 @@ pub(crate) fn recorded_resume(
             Err(e) => last_err = Some((lease.id.clone(), e)),
         }
     }
+    // 5. Nothing identifies the vendor: the configured one resumes it. Only
+    // Codex conflicts (it needs a thread id nothing above bound).
+    // trace:BUG-2386 | ai:claude
+    let configured = crate::session::resolve_headless_vendor(project_root);
+    if configured != HeadlessVendor::Codex {
+        return Ok((configured, id.to_string()));
+    }
     match last_err {
         Some((lease, e)) => Err(e.context(format!(
             "cannot tell which agent recorded session `{id}`: no Claude transcript names it, \
@@ -202,7 +214,8 @@ pub(crate) fn recorded_resume(
         ))),
         None => anyhow::bail!(
             "cannot tell which agent recorded session `{id}`: no Claude transcript, Codex \
-             rollout or headless log names it, and no session lease holds this scope. Run \
+             rollout or headless log names it, no session lease for this scope binds a Codex \
+             thread, and the configured agent (Codex) resumes only by thread id. Run \
              `aida session list` to see resumable ids, or start a fresh run."
         ),
     }

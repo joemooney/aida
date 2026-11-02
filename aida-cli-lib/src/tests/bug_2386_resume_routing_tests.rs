@@ -155,9 +155,10 @@ fn recorded_resume_places_rollout_log_transcript_and_lease_ids_and_refuses_the_r
         return;
     }
     let fx = fixture();
-    let _env = EnvVarsGuard::apply(&[
+    let env = EnvVarsGuard::apply(&[
         ("AIDA_CODEX_SESSIONS_DIR", fx.sessions.to_str()),
         ("HOME", fx.home.to_str()),
+        ("AIDA_HEADLESS_VENDOR", Some("claude")),
     ]);
     // 1. A Codex thread id (it has a rollout) resumes on Codex as itself.
     write_rollout(
@@ -203,16 +204,30 @@ fn recorded_resume_places_rollout_log_transcript_and_lease_ids_and_refuses_the_r
         recorded_resume(&fx.project, "aida-no-log", Some("BUG-1")).unwrap(),
         (HeadlessVendor::Codex, "019a-stamped".to_string())
     );
-    // 5. Nothing places the id: a named refusal, not a Claude default.
-    let err =
-        recorded_resume(&fx.project, "unknown-id", None).expect_err("an unplaceable id refuses");
+    // 5. Nothing places the id: it resumes on the configured vendor (Claude
+    // by default), so resume does not regress for an id no transcript names.
+    assert_eq!(
+        recorded_resume(&fx.project, "unknown-id", None).unwrap(),
+        (HeadlessVendor::Claude, "unknown-id".to_string())
+    );
+    assert_eq!(
+        recorded_resume(&fx.project, "unknown-id", Some("BUG-other")).unwrap(),
+        (HeadlessVendor::Claude, "unknown-id".to_string())
+    );
+    drop(env);
+    // 6. A conflict refuses by name: Codex is configured but nothing binds a
+    // thread to the id.
+    let _env = EnvVarsGuard::apply(&[
+        ("AIDA_CODEX_SESSIONS_DIR", fx.sessions.to_str()),
+        ("HOME", fx.home.to_str()),
+        ("AIDA_HEADLESS_VENDOR", Some("codex")),
+    ]);
+    let err = recorded_resume(&fx.project, "unknown-id", Some("BUG-other"))
+        .expect_err("configured Codex with no bound thread refuses");
     assert!(
         format!("{err:#}").contains("cannot tell which agent recorded session `unknown-id`"),
         "{err:#}"
     );
-    let err = recorded_resume(&fx.project, "unknown-id", Some("BUG-other"))
-        .expect_err("a scope with no lease refuses too");
-    assert!(format!("{err:#}").contains("no session lease"), "{err:#}");
 }
 
 // ── the rollout fallback is time-bounded ───────────────────────────────────
