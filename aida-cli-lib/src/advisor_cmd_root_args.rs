@@ -13,10 +13,12 @@ use std::path::PathBuf;
 // trace:TASK-487 | ai:claude
 #[derive(Subcommand, Debug)]
 pub enum AdvisorCommand {
-    /// Record the current Claude session as the live advisor — writes
+    /// Record the current Claude or Codex session as the live advisor — writes
     /// `~/.aida/advisor.toml`. With no `--uuid`, reads `CLAUDE_CODE_SESSION_ID`
-    /// from the environment (Claude Code sets it on every session). Pass
-    /// `--uuid <id>` to register a specific session id.
+    /// (Claude Code sets it on every session), else `CODEX_THREAD_ID` (a Codex
+    /// thread, which `advisor watch` forks with `codex exec fork`). Pass
+    /// `--uuid <id>` to register a specific Claude session id.
+    // trace:STORY-2255 | ai:claude
     Register {
         /// Claude session UUID. Defaults to `$CLAUDE_CODE_SESSION_ID`.
         #[clap(long, value_name = "UUID")]

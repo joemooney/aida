@@ -246,6 +246,71 @@ pub struct AdvisorRegistration {
     // trace:TASK-1750 | ai:claude
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub claude_pid_start: Option<String>,
+    /// The vendor of the live session. `None` (every pre-existing
+    /// registration) means Claude, whose `uuid` names a JSONL; `"codex"`
+    /// means `uuid` is a Codex thread id that `codex exec fork` can fork.
+    // trace:STORY-2255 | ai:claude
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub vendor: Option<String>,
+}
+
+impl AdvisorRegistration {
+    /// Whether this registration names a Codex thread rather than a Claude
+    /// session. trace:STORY-2255 | ai:claude
+    pub fn is_codex(&self) -> bool {
+        self.vendor
+            .as_deref()
+            .is_some_and(|v| v.trim().eq_ignore_ascii_case("codex"))
+    }
+}
+
+/// How a Codex advisor tick runs: fork the registered live thread, or
+/// cold-boot with the reason the fork is unavailable (never silently).
+// trace:STORY-2255 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum CodexForkDecision {
+    /// `codex exec fork <thread> <prompt>`.
+    Fork { thread: String },
+    /// Fresh `codex exec`, with a one-line reason for the operator.
+    ColdBoot(String),
+}
+
+/// Pure decision for a Codex tick. `registration` is the live-advisor record
+/// (if any) and `exec_fork_supported` is whether the installed codex has
+/// `exec fork`.
+// trace:STORY-2255 | ai:claude
+pub fn plan_codex_fork(
+    config: &AdvisorConfig,
+    registration: Option<&AdvisorRegistration>,
+    exec_fork_supported: bool,
+) -> CodexForkDecision {
+    if matches!(config.fork_mode, ForkMode::Never) {
+        return CodexForkDecision::ColdBoot("`[advisor] fork_mode = \"never\"`".to_string());
+    }
+    let Some(reg) = registration else {
+        return CodexForkDecision::ColdBoot(
+            "no live advisor is registered; run `aida advisor register` in the live Codex session"
+                .to_string(),
+        );
+    };
+    if !reg.is_codex() {
+        return CodexForkDecision::ColdBoot(
+            "the registered live advisor is a Claude session, which Codex cannot fork".to_string(),
+        );
+    }
+    let thread = reg.uuid.trim();
+    if thread.is_empty() {
+        return CodexForkDecision::ColdBoot("the registered Codex thread id is empty".to_string());
+    }
+    if !exec_fork_supported {
+        return CodexForkDecision::ColdBoot(
+            "the installed codex has no `exec fork` subcommand (codex-cli 0.166 or later has it)"
+                .to_string(),
+        );
+    }
+    CodexForkDecision::Fork {
+        thread: thread.to_string(),
+    }
 }
 
 /// Path to the per-user registration file (`~/.aida/advisor.toml`).
@@ -728,6 +793,7 @@ max_source_size_mb = 50
             registered_at: "2026-05-21T00:00:00Z".to_string(),
             claude_pid: None,
             claude_pid_start: None,
+            vendor: None,
         };
 
         with_home(home.path(), || {
@@ -754,6 +820,7 @@ max_source_size_mb = 50
             registered_at: "2026-05-21T00:00:00Z".to_string(),
             claude_pid: None,
             claude_pid_start: None,
+            vendor: None,
         };
 
         with_home(home.path(), || {
@@ -794,6 +861,7 @@ max_source_size_mb = 50
             registered_at: "2026-05-21T00:00:00Z".to_string(),
             claude_pid: None,
             claude_pid_start: None,
+            vendor: None,
         };
 
         with_home(home.path(), || {
@@ -834,6 +902,7 @@ max_source_size_mb = 50
             registered_at: "2026-05-21T00:00:00Z".to_string(),
             claude_pid: None,
             claude_pid_start: None,
+            vendor: None,
         };
 
         with_home(home.path(), || {
@@ -878,6 +947,7 @@ max_source_size_mb = 50
             registered_at: "2026-05-21T00:00:00Z".to_string(),
             claude_pid: None,
             claude_pid_start: None,
+            vendor: None,
         };
 
         with_home(home.path(), || {
@@ -907,6 +977,7 @@ max_source_size_mb = 50
             registered_at: "2026-05-21T17:30:00Z".to_string(),
             claude_pid: Some(12345),
             claude_pid_start: None,
+            vendor: None,
         };
 
         with_home(home.path(), || {

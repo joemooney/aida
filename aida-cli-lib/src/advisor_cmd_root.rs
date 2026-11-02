@@ -202,15 +202,23 @@ pub(crate) fn handle_advisor_register(
     uuid: Option<&str>,
     project_slug: Option<&str>,
 ) -> Result<()> {
-    let uuid = uuid
-        .map(|s| s.to_string())
-        .or_else(|| std::env::var("CLAUDE_CODE_SESSION_ID").ok())
-        .ok_or_else(|| {
-            anyhow::anyhow!(
-                "no session UUID — pass `--uuid <id>` or run from a Claude session that \
-                 exports CLAUDE_CODE_SESSION_ID"
-            )
-        })?;
+    // A Codex session exports CODEX_THREAD_ID instead of a Claude session
+    // id; registering it lets `advisor watch` fork it with `codex exec fork`.
+    // trace:STORY-2255 | ai:claude
+    let (uuid, vendor) = resolve_register_identity(
+        uuid,
+        nonempty_env("CLAUDE_CODE_SESSION_ID"),
+        nonempty_env("CODEX_THREAD_ID"),
+    )
+    .ok_or_else(|| {
+        anyhow::anyhow!(
+            "no session id — pass `--uuid <id>`, or run from a Claude session (which exports \
+             CLAUDE_CODE_SESSION_ID) or a Codex session (which exports CODEX_THREAD_ID)"
+        )
+    })?;
+    if vendor.is_some() {
+        return register_codex_thread(&uuid);
+    }
 
     let cwd = std::env::current_dir().context("cannot read current directory")?;
     let project_slug = project_slug
@@ -244,6 +252,7 @@ pub(crate) fn handle_advisor_register(
         claude_pid,
         // trace:TASK-1750 | ai:claude
         claude_pid_start: claude_pid.and_then(process_probe::process_start_identity),
+        vendor: None,
     };
     advisor::write_registration(&reg)?;
 
@@ -257,6 +266,58 @@ pub(crate) fn handle_advisor_register(
         println!("  claude pid:    (none detected — liveness will use JSONL mtime)");
     }
     println!("\nThe `--no-human=both` orchestrator will now fork this session for advisor punts.");
+    println!("Run `aida advisor unregister` to revert to cold-boot.");
+    Ok(())
+}
+
+fn nonempty_env(key: &str) -> Option<String> {
+    std::env::var(key)
+        .ok()
+        .map(|v| v.trim().to_string())
+        .filter(|v| !v.is_empty())
+}
+
+/// Which session `aida advisor register` records: an explicit `--uuid` or
+/// the Claude session id register as Claude (unchanged); otherwise the Codex
+/// thread id registers as Codex. Returns `(id, vendor)`, `vendor` `None` for
+/// Claude.
+// trace:STORY-2255 | ai:claude
+pub(crate) fn resolve_register_identity(
+    explicit: Option<&str>,
+    claude_session: Option<String>,
+    codex_thread: Option<String>,
+) -> Option<(String, Option<String>)> {
+    if let Some(id) = explicit {
+        return Some((id.to_string(), None));
+    }
+    if let Some(id) = claude_session {
+        return Some((id, None));
+    }
+    codex_thread.map(|id| (id, Some("codex".to_string())))
+}
+
+/// Register the current Codex thread as the live advisor. Codex keeps its
+/// own session store, so there is no Claude project slug or PID to record.
+// trace:STORY-2255 | ai:claude
+fn register_codex_thread(thread: &str) -> Result<()> {
+    let cwd = std::env::current_dir().context("cannot read current directory")?;
+    let reg = advisor::AdvisorRegistration {
+        uuid: thread.to_string(),
+        project_slug: String::new(),
+        project_root: cwd.to_string_lossy().to_string(),
+        registered_at: chrono::Utc::now().to_rfc3339(),
+        claude_pid: None,
+        claude_pid_start: None,
+        vendor: Some("codex".to_string()),
+    };
+    advisor::write_registration(&reg)?;
+    println!("Registered live Codex advisor session.");
+    println!("  thread:        {thread}");
+    println!("  project root:  {}", cwd.display());
+    println!(
+        "\n`AIDA_HEADLESS_VENDOR=codex aida advisor watch` will now fork this thread with \
+         `codex exec fork`."
+    );
     println!("Run `aida advisor unregister` to revert to cold-boot.");
     Ok(())
 }
@@ -287,6 +348,8 @@ pub(crate) fn handle_advisor_registration_status(json: bool) -> Result<()> {
                 };
                 serde_json::json!({
                     "registered": true,
+                    // trace:STORY-2255 | ai:claude
+                    "vendor": if r.is_codex() { "codex" } else { "claude" },
                     "uuid": r.uuid,
                     "project_slug": r.project_slug,
                     "project_root": r.project_root,
@@ -316,6 +379,17 @@ pub(crate) fn handle_advisor_registration_status(json: bool) -> Result<()> {
     }
 
     match reg {
+        // trace:STORY-2255 | ai:claude
+        Some(r) if r.is_codex() => {
+            println!("Advisor registration (Codex)");
+            println!("  thread:        {}", r.uuid);
+            println!("  project root:  {}", r.project_root);
+            println!("  registered at: {}", r.registered_at);
+            println!(
+                "  fork:          `AIDA_HEADLESS_VENDOR=codex aida advisor watch` runs `codex exec fork {}`",
+                r.uuid
+            );
+        }
         Some(r) => {
             println!("Advisor registration");
             println!("  uuid:          {}", r.uuid);

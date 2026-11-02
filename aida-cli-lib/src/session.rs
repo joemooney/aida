@@ -1516,6 +1516,29 @@ pub(crate) fn compose_headless_command(
     model: Option<&str>,
     effort: Option<&str>,
 ) -> Result<(String, Vec<String>)> {
+    compose_headless_command_forking(vendor, prompt, session_id, contained, model, effort, None)
+}
+
+/// [`compose_headless_command`], optionally forking the Codex thread
+/// `fork_thread` (`codex exec fork <thread> <prompt>`) instead of a fresh
+/// `codex exec`. The fork reuses the exact posture the fresh launch would
+/// get, so a contained fork carries the same flags and no bypass flag.
+/// `Some` on a non-Codex vendor is an error.
+// trace:STORY-2255 | ai:claude
+pub(crate) fn compose_headless_command_forking(
+    vendor: HeadlessVendor,
+    prompt: &str,
+    session_id: &str,
+    contained: bool,
+    model: Option<&str>,
+    effort: Option<&str>,
+    fork_thread: Option<&str>,
+) -> Result<(String, Vec<String>)> {
+    anyhow::ensure!(
+        fork_thread.is_none() || vendor == HeadlessVendor::Codex,
+        "only a codex thread can be forked with `exec fork`, not {}",
+        vendor.as_str()
+    );
     // trace:BUG-2172 | ai:codex
     let contained = aida_contained_env()? || contained;
     // BUG-2144: fail closed before composing anything. Every headless launch
@@ -1554,18 +1577,55 @@ pub(crate) fn compose_headless_command(
     } else {
         std::borrow::Cow::Borrowed(prompt)
     };
-    os_wrapped_program_and_args(
-        &worktree,
-        &resolve_agent_program(vendor.program()),
-        headless_vendor_args(
-            vendor,
-            &effective_prompt,
-            session_id,
-            contained,
-            model,
-            effort,
-        )?,
-    )
+    let args = headless_vendor_args(
+        vendor,
+        &effective_prompt,
+        session_id,
+        contained,
+        model,
+        effort,
+    )?;
+    let args = match fork_thread {
+        Some(thread) => codex_exec_fork_args(args, thread)?,
+        None => args,
+    };
+    os_wrapped_program_and_args(&worktree, &resolve_agent_program(vendor.program()), args)
+}
+
+/// Rewrite a fresh `codex [posture] exec [opts] PROMPT` argv into
+/// `codex [posture] exec fork [opts] THREAD PROMPT`. Only the subcommand and
+/// the positional change; every posture flag is kept as built. The prompt is
+/// the final element of every Codex headless argv.
+// trace:STORY-2255 | ai:claude
+pub(crate) fn codex_exec_fork_args(mut args: Vec<String>, thread: &str) -> Result<Vec<String>> {
+    let thread = thread.trim();
+    anyhow::ensure!(!thread.is_empty(), "cannot fork an empty codex thread id");
+    let exec = args
+        .iter()
+        .position(|a| a == "exec")
+        .context("codex argv has no `exec` subcommand to fork")?;
+    anyhow::ensure!(
+        args.len() > exec + 1,
+        "codex argv has no prompt after `exec`"
+    );
+    args.insert(exec + 1, "fork".to_string());
+    let prompt_at = args.len() - 1;
+    args.insert(prompt_at, thread.to_string());
+    Ok(args)
+}
+
+/// Whether the installed codex has `exec fork` (codex-cli 0.166+). Probes
+/// `codex exec fork --help`; any spawn failure or non-zero exit is "no".
+// trace:STORY-2255 | ai:claude
+pub(crate) fn codex_supports_exec_fork() -> bool {
+    std::process::Command::new(resolve_agent_program(HeadlessVendor::Codex.program()))
+        .args(["exec", "fork", "--help"])
+        .stdin(std::process::Stdio::null())
+        .output()
+        .map(|out| {
+            out.status.success() && String::from_utf8_lossy(&out.stdout).contains("SESSION_ID")
+        })
+        .unwrap_or(false)
 }
 
 /// BUG-044: [`compose_headless_command`], with `resume` rewriting the
@@ -1650,6 +1710,49 @@ pub(crate) fn spawn_vendor_headless_with_seat_granted(
     tee_opts: &crate::headless_tee::TeeOptions,
     contained: bool,
 ) -> Result<(std::process::ExitStatus, String)> {
+    spawn_vendor_headless_forking(
+        vendor, seat, prompt, session_id, log_path, tee_opts, contained, None,
+    )
+}
+
+/// Fork the live Codex thread `thread` headless (`codex exec fork <thread>
+/// <prompt>`) under `seat`, with every guard of a fresh headless launch:
+/// containment refusal, posture, grant, env. The live thread is only read;
+/// Codex writes the fork as a new session.
+// trace:STORY-2255 | ai:claude
+pub(crate) fn spawn_codex_headless_fork(
+    seat: aida_core::agents_config::AgentSeat,
+    prompt: &str,
+    thread: &str,
+    session_id: &str,
+    log_path: &Path,
+    tee_opts: &crate::headless_tee::TeeOptions,
+    contained: bool,
+) -> Result<std::process::ExitStatus> {
+    spawn_vendor_headless_forking(
+        HeadlessVendor::Codex,
+        seat,
+        prompt,
+        session_id,
+        log_path,
+        tee_opts,
+        contained,
+        Some(thread),
+    )
+    .map(|(status, _)| status)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn spawn_vendor_headless_forking(
+    vendor: HeadlessVendor,
+    seat: aida_core::agents_config::AgentSeat,
+    prompt: &str,
+    session_id: &str,
+    log_path: &Path,
+    tee_opts: &crate::headless_tee::TeeOptions,
+    contained: bool,
+    fork_thread: Option<&str>,
+) -> Result<(std::process::ExitStatus, String)> {
     use std::process::{Command, Stdio};
     // trace:BUG-2172 | ai:codex
     let contained = aida_contained_env()? || contained;
@@ -1684,13 +1787,14 @@ pub(crate) fn spawn_vendor_headless_with_seat_granted(
     // every headless phase behaves identically whoever launched it.
     // trace:TASK-1169 | ai:claude
     let (ceiling_key, ceiling_value) = crate::bg_wait_ceiling_env(Some(&headless_worktree_root()));
-    let (program, args) = compose_headless_command(
+    let (program, args) = compose_headless_command_forking(
         vendor,
         prompt,
         session_id,
         contained,
         tuning.model.as_deref(),
         tuning.effort.as_deref(),
+        fork_thread,
     )?;
     // trace:BUG-b6b1278890774ef993d2ebc327862470-045 | ai:claude
     let child_grant = crate::gate::seat_authority::issue_launch_child(

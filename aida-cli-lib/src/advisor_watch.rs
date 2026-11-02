@@ -193,6 +193,18 @@ fn short_uuid(uuid: &str) -> &str {
 
 fn preview_fork(project_root: &Path, config: &AdvisorConfig) {
     let vendor = session::resolve_headless_vendor(project_root);
+    // trace:STORY-2255 | ai:claude
+    if vendor == HeadlessVendor::Codex {
+        match codex_decision(config) {
+            advisor::CodexForkDecision::Fork { thread } => println!(
+                "  · [dry-run] would fork live Codex thread {thread} (`codex exec fork`) and run the garden+triage pass"
+            ),
+            advisor::CodexForkDecision::ColdBoot(why) => println!(
+                "  · [dry-run] would cold-boot a `codex` advisor ({why}) and run the garden+triage pass"
+            ),
+        }
+        return;
+    }
     if vendor != HeadlessVendor::Claude {
         println!(
             "  · [dry-run] would cold-boot a `{}` advisor and run the garden+triage pass",
@@ -214,8 +226,20 @@ fn preview_fork(project_root: &Path, config: &AdvisorConfig) {
 
 fn fork_and_run(project_root: &Path, config: &AdvisorConfig, prompt: &str) -> Result<()> {
     let vendor = session::resolve_headless_vendor(project_root);
+    // trace:STORY-2255 | ai:claude
+    if vendor == HeadlessVendor::Codex {
+        return match codex_decision(config) {
+            advisor::CodexForkDecision::Fork { thread } => {
+                codex_fork_and_run(project_root, &thread, prompt)
+            }
+            advisor::CodexForkDecision::ColdBoot(why) => {
+                cold_boot_and_run(project_root, vendor, prompt, &why)
+            }
+        };
+    }
     if vendor != HeadlessVendor::Claude {
-        return cold_boot_and_run(project_root, vendor, prompt);
+        let why = format!("`{}` has no fork-from-live transport", vendor.as_str());
+        return cold_boot_and_run(project_root, vendor, prompt, &why);
     }
     let Some(plan) = advisor::plan_fork(project_root, config) else {
         println!("  · no live advisor session to fork — skipping this pass");
@@ -251,14 +275,63 @@ fn fork_and_run(project_root: &Path, config: &AdvisorConfig, prompt: &str) -> Re
     Ok(())
 }
 
-/// Codex has no portable transcript-copy/resume contract equivalent to
-/// Claude's JSONL fork. Keep the advisor seat available by running the tick as
-/// a vendor-native cold boot, rooted in the same project substrate.
-// trace:TASK-1279 | ai:codex
-fn cold_boot_and_run(project_root: &Path, vendor: HeadlessVendor, prompt: &str) -> Result<()> {
+/// The Codex fork decision for this tick: the registered live advisor plus
+/// a probe of the installed codex for `exec fork`. The probe runs only when a
+/// Codex thread is registered. trace:STORY-2255 | ai:claude
+fn codex_decision(config: &AdvisorConfig) -> advisor::CodexForkDecision {
+    let registration = advisor::read_registration();
+    let probe = registration.as_ref().is_some_and(|r| r.is_codex())
+        && !matches!(config.fork_mode, advisor::ForkMode::Never);
+    advisor::plan_codex_fork(
+        config,
+        registration.as_ref(),
+        probe && session::codex_supports_exec_fork(),
+    )
+}
+
+/// Fork the live Codex thread with `codex exec fork <thread> <prompt>`.
+/// Codex writes the fork as a new session; the live thread's rollout is only
+/// read, never copied or appended to by AIDA. trace:STORY-2255 | ai:claude
+fn codex_fork_and_run(project_root: &Path, thread: &str, prompt: &str) -> Result<()> {
     let run_id = uuid::Uuid::new_v4().to_string();
+    println!("  · forking live Codex thread {thread} (`codex exec fork`) — running garden+triage headless…");
+    let log_path = project_root
+        .join(".aida")
+        .join("advisor-watch")
+        .join(format!("{run_id}.log"));
+    let tee = crate::headless_tee::TeeOptions::from_env_and_flag(false).with_label("advisor-watch");
+    let status = session::spawn_codex_headless_fork(
+        aida_core::agents_config::AgentSeat::Advisor,
+        prompt,
+        thread,
+        &run_id,
+        &log_path,
+        &tee,
+        false,
+    )?;
+    if !status.success() {
+        eprintln!(
+            "  · advisor-watch pass exited with {} (see {})",
+            status,
+            log_path.display()
+        );
+    }
+    Ok(())
+}
+
+/// A vendor-native cold boot of the advisor tick, rooted in the same project
+/// substrate: the fallback when the live session cannot be forked.
+// trace:TASK-1279 | ai:codex
+fn cold_boot_and_run(
+    project_root: &Path,
+    vendor: HeadlessVendor,
+    prompt: &str,
+    why: &str,
+) -> Result<()> {
+    let run_id = uuid::Uuid::new_v4().to_string();
+    // One line naming why the tick cannot fork. trace:STORY-2255 | ai:claude
     println!(
-        "  · `{}` has no fork-from-live transport — cold-booting the advisor tick…",
+        "  · cold-booting a `{}` advisor tick ({why})…",
         vendor.as_str()
     );
     let log_path = project_root
@@ -284,6 +357,10 @@ fn cold_boot_and_run(project_root: &Path, vendor: HeadlessVendor, prompt: &str) 
     }
     Ok(())
 }
+
+#[cfg(test)]
+#[path = "tests/story_2255_codex_fork_tests.rs"]
+mod story_2255_codex_fork_tests;
 
 #[cfg(test)]
 mod tests {
@@ -321,7 +398,7 @@ mod tests {
                 ("AIDA_TEST_CAPTURE", Some(capture.to_str().unwrap())),
             ],
         );
-        cold_boot_and_run(&project, HeadlessVendor::Claude, "prompt").unwrap();
+        cold_boot_and_run(&project, HeadlessVendor::Claude, "prompt", "test").unwrap();
         let captured = std::fs::read_to_string(&capture).unwrap();
         assert_eq!(captured.lines().next(), Some("1"));
         assert!(captured.lines().any(|l| l == "--settings"));
@@ -329,9 +406,201 @@ mod tests {
         assert!(!captured.contains("bypassPermissions"));
         // The same real call site must refuse an unsupported vendor before spawn.
         std::fs::remove_file(&capture).unwrap();
-        let error = cold_boot_and_run(&project, HeadlessVendor::Codex, "prompt").unwrap_err();
+        let error =
+            cold_boot_and_run(&project, HeadlessVendor::Codex, "prompt", "test").unwrap_err();
         assert!(error.to_string().contains("cannot run a contained session"));
         assert!(!capture.exists());
+    }
+
+    /// A project, a fake codex that answers the `exec fork --help` probe
+    /// (when `fork_capable`) and records its argv, a test HOME holding the
+    /// registration, and a fixture Codex session dir with the live rollout.
+    // trace:STORY-2255 | ai:claude
+    struct CodexFixture {
+        _tmp: tempfile::TempDir,
+        project: std::path::PathBuf,
+        home: std::path::PathBuf,
+        fake: std::path::PathBuf,
+        capture: std::path::PathBuf,
+        rollout: std::path::PathBuf,
+    }
+
+    const THREAD: &str = "019e1111-2222-7333-8444-555566667777";
+
+    fn codex_fixture(fork_capable: bool) -> CodexFixture {
+        let tmp = tempfile::tempdir().unwrap();
+        let project = tmp.path().join("project");
+        std::fs::create_dir_all(project.join(".aida-store")).unwrap();
+        std::fs::create_dir_all(project.join(".aida")).unwrap();
+        std::fs::write(
+            project.join(".aida/config.toml"),
+            "store_path = \".aida-store\"\n",
+        )
+        .unwrap();
+        let home = tmp.path().join("home");
+        let rollout_dir = home.join(".codex/sessions/2026/11/01");
+        std::fs::create_dir_all(&rollout_dir).unwrap();
+        let rollout = rollout_dir.join(format!("rollout-2026-11-01T00-00-00-{THREAD}.jsonl"));
+        std::fs::write(
+            &rollout,
+            "{\"type\":\"session_meta\"}\n{\"type\":\"response_item\",\"text\":\"live context\"}\n",
+        )
+        .unwrap();
+        let fake = tmp.path().join("fake-codex");
+        let capture = tmp.path().join("capture");
+        let help = if fork_capable {
+            "echo 'Usage: codex exec fork [OPTIONS] <SESSION_ID> [PROMPT]'; exit 0"
+        } else {
+            "echo 'error: unrecognized subcommand fork' >&2; exit 2"
+        };
+        crate::test_exec::write_executable(
+            &fake,
+            &format!(
+                "#!/bin/sh\nif [ \"$1\" = exec ] && [ \"$2\" = fork ] && [ \"$3\" = --help ]; then {help}; fi\nprintf '%s\\n' \"$@\" > \"$AIDA_TEST_CAPTURE\"\n"
+            ),
+        );
+        CodexFixture {
+            _tmp: tmp,
+            project,
+            home,
+            fake,
+            capture,
+            rollout,
+        }
+    }
+
+    fn register_codex(home: &Path) {
+        std::fs::create_dir_all(home.join(".aida")).unwrap();
+        let reg = advisor::AdvisorRegistration {
+            uuid: THREAD.to_string(),
+            project_slug: String::new(),
+            project_root: home.display().to_string(),
+            registered_at: "2026-11-01T00:00:00Z".to_string(),
+            claude_pid: None,
+            claude_pid_start: None,
+            vendor: Some("codex".to_string()),
+        };
+        std::fs::write(
+            home.join(".aida/advisor.toml"),
+            toml::to_string_pretty(&reg).unwrap(),
+        )
+        .unwrap();
+    }
+
+    fn run_codex_tick(fx: &CodexFixture) -> Vec<String> {
+        let _ambient = crate::test_env::AmbientGuard::hermetic_with_seat_and(
+            &fx.project,
+            "advisor",
+            &["advisor"],
+            &[
+                ("AIDA_AGENT_CMD", Some(fx.fake.to_str().unwrap())),
+                ("AIDA_OS_WRAP", Some("0")),
+                ("AIDA_CONTAINED", None),
+                ("AIDA_HEADLESS_VENDOR", Some("codex")),
+                ("AIDA_TEST_HOME", Some(fx.home.to_str().unwrap())),
+                ("CODEX_HOME", Some(fx.home.join(".codex").to_str().unwrap())),
+                ("AIDA_TEST_CAPTURE", Some(fx.capture.to_str().unwrap())),
+            ],
+        );
+        fork_and_run(&fx.project, &AdvisorConfig::default(), "garden prompt").unwrap();
+        std::fs::read_to_string(&fx.capture)
+            .unwrap()
+            .lines()
+            .map(str::to_string)
+            .collect()
+    }
+
+    // AC1 + AC3: a registered Codex thread is forked with `codex exec fork
+    // <thread> <prompt>`, and the live rollout is byte-identical afterwards.
+    // trace:STORY-2255 | ai:claude
+    #[test]
+    fn codex_tick_forks_the_registered_thread_without_touching_it() {
+        let fx = codex_fixture(true);
+        register_codex(&fx.home);
+        let before = std::fs::read(&fx.rollout).unwrap();
+        let argv = run_codex_tick(&fx);
+        let exec = argv.iter().position(|a| a == "exec").expect("exec");
+        assert_eq!(argv[exec + 1], "fork", "{argv:?}");
+        let n = argv.len();
+        assert_eq!(argv[n - 2], THREAD, "{argv:?}");
+        assert!(argv[n - 1].contains("garden prompt"), "{argv:?}");
+        assert!(argv.iter().any(|a| a == "--json"), "{argv:?}");
+        assert_eq!(std::fs::read(&fx.rollout).unwrap(), before);
+        let entries: Vec<_> = std::fs::read_dir(fx.rollout.parent().unwrap())
+            .unwrap()
+            .collect();
+        assert_eq!(entries.len(), 1, "AIDA must not copy the live rollout");
+    }
+
+    // AC2: unknown thread, or a codex without `exec fork`, cold-boots.
+    // trace:STORY-2255 | ai:claude
+    #[test]
+    fn codex_tick_cold_boots_without_a_thread_or_exec_fork() {
+        let unregistered = codex_fixture(true);
+        let argv = run_codex_tick(&unregistered);
+        assert_eq!(argv.first().map(String::as_str), Some("exec"));
+        assert!(!argv.iter().any(|a| a == "fork" || a == THREAD), "{argv:?}");
+
+        let old_codex = codex_fixture(false);
+        register_codex(&old_codex.home);
+        let argv = run_codex_tick(&old_codex);
+        assert!(!argv.iter().any(|a| a == "fork" || a == THREAD), "{argv:?}");
+    }
+
+    // AC2: every cold-boot reason is named, and a Claude registration never
+    // reaches `codex exec fork`. trace:STORY-2255 | ai:claude
+    #[test]
+    fn plan_codex_fork_names_every_fallback_reason() {
+        use advisor::CodexForkDecision::{ColdBoot, Fork};
+        let cfg = AdvisorConfig::default();
+        let mut reg = advisor::AdvisorRegistration {
+            uuid: THREAD.to_string(),
+            project_slug: String::new(),
+            project_root: String::new(),
+            registered_at: String::new(),
+            claude_pid: None,
+            claude_pid_start: None,
+            vendor: Some("codex".to_string()),
+        };
+        assert_eq!(
+            advisor::plan_codex_fork(&cfg, Some(&reg), true),
+            Fork {
+                thread: THREAD.to_string()
+            }
+        );
+        let reason = |d| match d {
+            ColdBoot(why) => why,
+            Fork { .. } => panic!("expected cold boot"),
+        };
+        assert!(
+            reason(advisor::plan_codex_fork(&cfg, None, true)).contains("aida advisor register")
+        );
+        assert!(reason(advisor::plan_codex_fork(&cfg, Some(&reg), false)).contains("exec fork"));
+        let never = AdvisorConfig {
+            fork_mode: advisor::ForkMode::Never,
+            ..AdvisorConfig::default()
+        };
+        assert!(reason(advisor::plan_codex_fork(&never, Some(&reg), true)).contains("never"));
+        reg.uuid = "  ".to_string();
+        assert!(reason(advisor::plan_codex_fork(&cfg, Some(&reg), true)).contains("empty"));
+        reg.uuid = THREAD.to_string();
+        reg.vendor = None;
+        assert!(reason(advisor::plan_codex_fork(&cfg, Some(&reg), true)).contains("Claude"));
+    }
+
+    // AC6: a registration written before the vendor field reads as Claude,
+    // and Claude still plans the JSONL copy-then-resume fork.
+    // trace:STORY-2255 | ai:claude
+    #[test]
+    fn legacy_registration_stays_a_claude_fork() {
+        let legacy: advisor::AdvisorRegistration = toml::from_str(
+            "uuid = \"u\"\nproject_slug = \"-p\"\nproject_root = \"/p\"\nregistered_at = \"t\"\n",
+        )
+        .unwrap();
+        assert!(!legacy.is_codex());
+        assert_eq!(legacy.vendor, None);
+        let written = toml::to_string_pretty(&legacy).unwrap();
+        assert!(!written.contains("vendor"), "{written}");
     }
 
     // The five existing decision cases, ported to the slice-3 signature with no

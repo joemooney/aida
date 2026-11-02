@@ -2423,9 +2423,11 @@ the queue, close delivered epics). Subcommands manage the live-advisor registrat
 Usage: aida advisor [OPTIONS] [COMMAND]
 
 Commands:
-  register    Record the current Claude session as the live advisor — writes `~/.aida/advisor.toml`.
-              With no `--uuid`, reads `CLAUDE_CODE_SESSION_ID` from the environment (Claude Code
-              sets it on every session). Pass `--uuid <id>` to register a specific session id
+  register    Record the current Claude or Codex session as the live advisor — writes
+              `~/.aida/advisor.toml`. With no `--uuid`, reads `CLAUDE_CODE_SESSION_ID` (Claude Code
+              sets it on every session), else `CODEX_THREAD_ID` (a Codex thread, which `advisor
+              watch` forks with `codex exec fork`). Pass `--uuid <id>` to register a specific Claude
+              session id
   unregister  Clear the registration. Idempotent — succeeds even when nothing is registered
   watch       Presence-gated fork-from-live watch loop: while `away`, fork the live advisor only
               when `aida awaiting` is non-empty and run a garden + mailbox-triage + escalate pass
@@ -2468,9 +2470,10 @@ Options:
   -h, --help
           Print help (see a summary with '-h')
 ===== aida advisor register
-Record the current Claude session as the live advisor — writes `~/.aida/advisor.toml`. With no
-`--uuid`, reads `CLAUDE_CODE_SESSION_ID` from the environment (Claude Code sets it on every
-session). Pass `--uuid <id>` to register a specific session id
+Record the current Claude or Codex session as the live advisor — writes `~/.aida/advisor.toml`. With
+no `--uuid`, reads `CLAUDE_CODE_SESSION_ID` (Claude Code sets it on every session), else
+`CODEX_THREAD_ID` (a Codex thread, which `advisor watch` forks with `codex exec fork`). Pass `--uuid
+<id>` to register a specific Claude session id
 
 Usage: aida advisor register [OPTIONS]
 
@@ -31747,7 +31750,7 @@ Working on aida itself
       "advisor",
       "register"
     ],
-    "about": "Record the current Claude session as the live advisor — writes `~/.aida/advisor.toml`. With no `--uuid`, reads `CLAUDE_CODE_SESSION_ID` from the environment (Claude Code sets it on every session). Pass `--uuid <id>` to register a specific session id",
+    "about": "Record the current Claude or Codex session as the live advisor — writes `~/.aida/advisor.toml`. With no `--uuid`, reads `CLAUDE_CODE_SESSION_ID` (Claude Code sets it on every session), else `CODEX_THREAD_ID` (a Codex thread, which `advisor watch` forks with `codex exec fork`). Pass `--uuid <id>` to register a specific Claude session id",
     "flags": [
       {
         "name": "canonical-ids",
