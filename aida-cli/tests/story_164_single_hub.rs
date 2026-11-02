@@ -2,7 +2,9 @@
 //! hub and no enrolled root, any clone that reaches the hub claims blocks by
 //! CAS push and mints agreed IDs; a claim not on the hub's ref is never
 //! spendable; a second hub without a root refuses claims (held blocks keep
-//! dispensing); enroll-root promotes the implicit pools without renumbering.
+//! dispensing); enroll-root promotes the implicit pools without renumbering;
+//! `aida node hub add` grants a second hub a disjoint pool its clones claim
+//! from (STORY-170).
 //! Every clone files its binding spec first, as a real clone does, so no
 //! test hides the agreed-ID backfill gate. Temporary repositories and local
 //! bare repositories only.
@@ -125,18 +127,18 @@ impl World {
     /// A clone of the hub with a store worktree, bound by filing its first
     /// spec (which has no agreed ID), as every real clone is.
     fn clone(&self, name: &str) -> Clone {
+        self.clone_of(name, &self.hub)
+    }
+
+    /// [`World::clone`] of the bare repository `hub`.
+    fn clone_of(&self, name: &str, hub: &Path) -> Clone {
         let root = self.dir.path().join(name);
         let home = self.dir.path().join(format!("{name}-home"));
         fs::create_dir_all(&home).unwrap();
         run_git(
             self.dir.path(),
             &home,
-            &[
-                "clone",
-                "-q",
-                self.hub.to_str().unwrap(),
-                root.to_str().unwrap(),
-            ],
+            &["clone", "-q", hub.to_str().unwrap(), root.to_str().unwrap()],
         );
         let store = root.join(".aida-store");
         run_git(
@@ -180,13 +182,18 @@ impl World {
     }
 
     fn hub_blocks(&self) -> Vec<aida_core::AgreedIdBlock> {
+        self.blocks_on(&self.hub)
+    }
+
+    /// The block claims on bare repository `hub`'s store branch.
+    fn blocks_on(&self, hub: &Path) -> Vec<aida_core::AgreedIdBlock> {
         let out = command(
             self.dir.path(),
             self.dir.path(),
             true,
             &[
                 "--git-dir",
-                self.hub.to_str().unwrap(),
+                hub.to_str().unwrap(),
                 "show",
                 "aida-store:registry/blocks.yaml",
             ],
@@ -735,4 +742,303 @@ fn node_show_reports_a_remote_that_is_both_mirror_and_hub() {
         shown.contains("a remote cannot be both a mirror and a hub"),
         "{shown}"
     );
+}
+
+// STORY-170: `aida node hub add` refuses on a store with no enrolled root,
+// names `aida node enroll-root`, and writes neither the hub declaration nor
+// a pool.
+// trace:STORY-B6B1278890774EF993D2EBC327862470-170 | ai:claude
+#[test]
+fn hub_add_without_an_enrolled_root_refuses() {
+    let w = World::new();
+    let a = w.clone("a");
+    let before = fs::read_to_string(a.root.join(".aida/config.toml")).unwrap();
+    let err = a.refused(&[
+        "node",
+        "hub",
+        "add",
+        "h2",
+        "--url",
+        "https://git.h2.invalid/aida.git",
+    ]);
+    assert!(err.contains("aida node enroll-root"), "{err}");
+    let bad_name = a.refused(&[
+        "node",
+        "hub",
+        "add",
+        "h 2",
+        "--url",
+        "https://git.h2.invalid/aida.git",
+    ]);
+    assert!(bad_name.contains("is not a valid hub name"), "{bad_name}");
+    assert_eq!(
+        fs::read_to_string(a.root.join(".aida/config.toml")).unwrap(),
+        before
+    );
+    assert!(!a.store.join("registry/pools.yaml").exists());
+}
+
+// STORY-170: on the enrolled root, `aida node hub add` declares the hub and
+// grants it a BUG pool disjoint from every pre-grant block, pushed by CAS to
+// the root's hub; the root's own next claim starts above the grant. The
+// store reaches the new hub by push, and a clone of the new hub, with that
+// hub as its upstream, claims a block inside the pool (pushed to the new
+// hub only) and mints an agreed ID from it.
+// trace:STORY-B6B1278890774EF993D2EBC327862470-170 | ai:claude
+#[test]
+fn hub_add_grants_a_disjoint_pool_a_clone_of_the_new_hub_claims_from() {
+    let w = World::new();
+    let a = w.clone("a");
+    a.ok(&["db", "block", "claim", "--type", "BUG", "--size", "10"]);
+    a.ok(&["db", "block", "claim", "--type", "STORY", "--size", "10"]);
+    let out = a.add("before the grant", "bug");
+    assert!(out.status.success(), "{}", said(&out));
+    a.ok(&["node", "enroll-root"]);
+    let pre_grant = w.hub_blocks();
+    assert!(!pre_grant.is_empty());
+
+    let h2 = w.dir.path().join("h2.git");
+    a.git(
+        w.dir.path(),
+        &["init", "-q", "--bare", "-b", "main", h2.to_str().unwrap()],
+    );
+    let added = a.ok(&[
+        "node",
+        "hub",
+        "add",
+        "h2",
+        "--url",
+        h2.to_str().unwrap(),
+        "--size",
+        "100",
+    ]);
+    // One pool per type in use.
+    assert!(added.contains("Granted hub `h2` BUG"), "{added}");
+    assert!(added.contains("Granted hub `h2` STORY"), "{added}");
+    let config = fs::read_to_string(a.root.join(".aida/config.toml")).unwrap();
+    assert!(config.contains("h2 = "), "{config}");
+    assert!(config.contains("hub = "), "{config}");
+
+    // The grant is on the root's hub itself (read from the bare
+    // repository), carved above every earlier block.
+    let pools_on_hub = a.git(
+        w.dir.path(),
+        &[
+            "--git-dir",
+            w.hub.to_str().unwrap(),
+            "show",
+            "aida-store:registry/pools.yaml",
+        ],
+    );
+    let copy = w.dir.path().join("hub-pools");
+    fs::create_dir_all(copy.join("registry")).unwrap();
+    fs::write(copy.join("registry/pools.yaml"), &pools_on_hub).unwrap();
+    let pools = aida_core::allocation_lineage::PoolRegistry::load(&copy).unwrap();
+    let grant = pools
+        .pools
+        .iter()
+        .find(|p| p.pool_id == "hub:h2:BUG")
+        .unwrap_or_else(|| panic!("no h2 grant: {pools_on_hub}"));
+    assert_eq!(grant.parent_pool_id.as_deref(), Some("hub:hub:BUG"));
+    assert_eq!(grant.range_end - grant.range_start + 1, 100);
+    for b in pre_grant.iter().filter(|b| b.type_prefix == "BUG") {
+        assert!(
+            b.range_end < grant.range_start || b.range_start > grant.range_end,
+            "{b:?} overlaps {grant:?}"
+        );
+    }
+    assert!(
+        pools
+            .pools
+            .iter()
+            .any(|p| p.pool_id == "hub:h2:STORY"
+                && p.parent_pool_id.as_deref() == Some("hub:hub:STORY")),
+        "no h2 STORY grant: {pools_on_hub}"
+    );
+    // Re-running is idempotent: no second grant.
+    let again = a.ok(&["node", "hub", "add", "h2", "--url", h2.to_str().unwrap()]);
+    assert!(again.contains("already holds a pool"), "{again}");
+    assert!(!again.contains("Granted hub"), "{again}");
+    // A declared hub keeps its URLs, and one URL names one hub; neither
+    // refusal touches the config.
+    let declared = fs::read_to_string(a.root.join(".aida/config.toml")).unwrap();
+    let moved = a.refused(&[
+        "node",
+        "hub",
+        "add",
+        "h2",
+        "--url",
+        "https://git.elsewhere.invalid/aida.git",
+    ]);
+    assert!(moved.contains("a hub keeps its URLs"), "{moved}");
+    let taken = a.refused(&["node", "hub", "add", "h3", "--url", h2.to_str().unwrap()]);
+    assert!(taken.contains("is already declared as hub `h2`"), "{taken}");
+    assert_eq!(
+        fs::read_to_string(a.root.join(".aida/config.toml")).unwrap(),
+        declared
+    );
+
+    // The rooted store's agreed-ID backfill (the root's own claims follow
+    // it) and the root's next claim both number above the grant.
+    a.ok(&["doctor", "--fix", "agreed-ids", "--yes"]);
+    a.ok(&["db", "block", "claim", "--type", "BUG", "--size", "10"]);
+    let root_next = bug_blocks(&a.blocks(), &a.node())
+        .into_iter()
+        .map(|(start, _)| start)
+        .max()
+        .unwrap();
+    assert!(root_next > grant.range_end, "{root_next} vs {grant:?}");
+    for b in a.blocks().iter().filter(|b| b.type_prefix == "BUG") {
+        assert!(
+            b.range_end < grant.range_start || b.range_start > grant.range_end,
+            "{b:?} overlaps {grant:?}"
+        );
+    }
+    // A type that comes into use later is granted on a re-run, alone.
+    a.ok(&["db", "block", "claim", "--type", "TASK", "--size", "10"]);
+    let topped = a.ok(&["node", "hub", "add", "h2", "--url", h2.to_str().unwrap()]);
+    assert!(topped.contains("Granted hub `h2` TASK"), "{topped}");
+    assert!(!topped.contains("Granted hub `h2` BUG"), "{topped}");
+    assert!(!topped.contains("Granted hub `h2` STORY"), "{topped}");
+
+    // Publish the declaration, then bring code and store to the new hub.
+    a.git(&a.root, &["commit", "-qam", "declare hub h2"]);
+    a.git(&a.root, &["push", "-q", "origin", "HEAD:main"]);
+    a.git(&a.root, &["remote", "add", "h2", h2.to_str().unwrap()]);
+    a.git(&a.root, &["push", "-q", "h2", "main", "aida-store"]);
+
+    let c = w.clone_of("c", &h2);
+    let shown = c.ok(&["node", "show"]);
+    assert!(shown.contains("multi-hub (root node"), "{shown}");
+    // Only the root grants pools: a clone of the rooted store refuses and
+    // declares nothing.
+    let c_config = fs::read_to_string(c.root.join(".aida/config.toml")).unwrap();
+    let not_root = c.refused(&[
+        "node",
+        "hub",
+        "add",
+        "h3",
+        "--url",
+        "https://git.h3.invalid/aida.git",
+    ]);
+    assert!(not_root.contains("only the allocation root"), "{not_root}");
+    assert_eq!(
+        fs::read_to_string(c.root.join(".aida/config.toml")).unwrap(),
+        c_config
+    );
+    c.ok(&["node", "upstream", "origin"]);
+    let claimed = c.ok(&["db", "block", "claim", "--type", "BUG", "--size", "10"]);
+    assert!(claimed.contains("Claimed BUG-"), "{claimed}");
+    let mine = bug_blocks(&w.blocks_on(&h2), &c.node());
+    assert_eq!(mine.len(), 1, "{:?}", w.blocks_on(&h2));
+    assert!(
+        grant.range_start <= mine[0].0 && mine[0].1 <= grant.range_end,
+        "{mine:?} outside {grant:?}"
+    );
+    assert!(
+        bug_blocks(&w.hub_blocks(), &c.node()).is_empty(),
+        "the h2 claim is ordered on h2, not on the root's hub"
+    );
+    // A type the root granted h2 no pool for (a custom prefix: the backfill
+    // above put every built-in type in use, so each got a grant) is
+    // refused, writing no block.
+    let blocks_before = c.blocks().len();
+    let no_pool = c.refused(&["db", "block", "claim", "--type", "ZED", "--size", "10"]);
+    assert!(
+        no_pool.contains("has granted hub `h2` no ZED pool"),
+        "{no_pool}"
+    );
+    assert_eq!(c.blocks().len(), blocks_before);
+
+    // A claim larger than what is left of the pool takes only the rest of
+    // the pool, never IDs beyond it; once the pool is spent, a further
+    // claim is refused.
+    c.ok(&["db", "block", "claim", "--type", "BUG", "--size", "200"]);
+    let held = bug_blocks(&c.blocks(), &c.node());
+    assert_eq!(held.len(), 2, "{held:?}");
+    assert!(
+        held.iter()
+            .all(|&(s, e)| grant.range_start <= s && e <= grant.range_end),
+        "{held:?} outside {grant:?}"
+    );
+    assert_eq!(held.iter().map(|&(_, e)| e).max(), Some(grant.range_end));
+    let exhausted = c.refused(&["db", "block", "claim", "--type", "BUG", "--size", "10"]);
+    assert!(exhausted.contains("is exhausted"), "{exhausted}");
+    assert_eq!(bug_blocks(&c.blocks(), &c.node()).len(), 2);
+
+    // The registry write itself refuses a delegated block outside the grant,
+    // even one stamped with the hub's pool id.
+    let blocks_path = c.store.join("registry/blocks.yaml");
+    let on_disk = fs::read_to_string(&blocks_path).unwrap();
+    let mut forged = aida_core::BlockRegistry::load(&blocks_path).unwrap();
+    let mut outside = forged
+        .blocks
+        .iter()
+        .find(|b| b.node_id == c.node() && b.type_prefix == "BUG")
+        .cloned()
+        .unwrap();
+    outside.range_start = grant.range_end + 1;
+    outside.range_end = grant.range_end + 10;
+    outside.next = outside.range_start;
+    forged.blocks.push(outside);
+    let err = forged
+        .save_claimed(&blocks_path, &c.node())
+        .expect_err("a block outside the grant must not be written")
+        .to_string();
+    assert!(err.contains("inside the pool the root granted"), "{err}");
+    assert_eq!(fs::read_to_string(&blocks_path).unwrap(), on_disk);
+    let out = c.add("minted on h2", "bug");
+    assert!(out.status.success(), "{}", said(&out));
+    let agreed = c.by_title("minted on h2").agreed_id.expect("agreed id");
+    let n: u32 = agreed.trim_start_matches("BUG-").parse().unwrap();
+    assert!(
+        grant.range_start <= n && n <= grant.range_end,
+        "{agreed} outside {grant:?}: {}",
+        said(&out)
+    );
+}
+
+// STORY-170: a non-root clone of a rooted store claims only through a hub
+// the root granted a pool to. An upstream that reaches a declared hub with
+// no grant refuses, naming `aida node hub add`; an upstream that reaches no
+// declared hub refuses too. Neither writes a block.
+// trace:STORY-B6B1278890774EF993D2EBC327862470-170 | ai:claude
+#[test]
+fn a_delegated_claim_needs_an_upstream_reaching_a_granted_hub() {
+    let w = World::new();
+    let a = w.clone("a");
+    a.ok(&["db", "block", "claim", "--type", "BUG", "--size", "10"]);
+    a.ok(&["node", "enroll-root"]);
+    let b = w.clone("b");
+    b.pull_store();
+    assert!(b.store.join("registry/root.yaml").exists());
+
+    // `origin` reaches the root's own hub, which holds no granted pool.
+    b.ok(&["node", "upstream", "origin"]);
+    let ungranted = b.refused(&["db", "block", "claim", "--type", "BUG", "--size", "10"]);
+    assert!(
+        ungranted.contains("has granted that hub no ID pool"),
+        "{ungranted}"
+    );
+    assert!(ungranted.contains("aida node hub add hub"), "{ungranted}");
+    assert!(bug_blocks(&b.blocks(), &b.node()).is_empty());
+
+    // A remote that is no declared hub.
+    let elsewhere = w.dir.path().join("elsewhere.git");
+    b.git(
+        w.dir.path(),
+        &["init", "-q", "--bare", elsewhere.to_str().unwrap()],
+    );
+    b.git(
+        &b.root,
+        &["remote", "add", "elsewhere", elsewhere.to_str().unwrap()],
+    );
+    b.ok(&["node", "upstream", "elsewhere"]);
+    let undeclared = b.refused(&["db", "block", "claim", "--type", "BUG", "--size", "10"]);
+    assert!(
+        undeclared.contains("reaches no hub declared under [store.hubs]"),
+        "{undeclared}"
+    );
+    assert!(bug_blocks(&b.blocks(), &b.node()).is_empty());
+    assert!(bug_blocks(&w.hub_blocks(), &b.node()).is_empty());
 }

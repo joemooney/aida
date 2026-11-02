@@ -290,8 +290,44 @@ implicit `hub:` pool in use becomes a real root pool with the same id, so every
 existing block and agreed ID stays valid and nothing is renumbered. A promoted
 pool is homed on the hub, not on a remote name: every clone's existing block in
 it stays spendable through whichever of its remotes reaches that hub, whatever
-the remote is called. Granting a
-pool to the new hub is not available yet.
+the remote is called. Then add the second hub with `aida node hub add`
+(next section).
+
+#### Adding a second hub: `aida node hub add`
+
+<!-- trace:STORY-B6B1278890774EF993D2EBC327862470-170 | ai:claude -->
+
+Order: enroll the root first, then add the hub. On the root clone:
+
+```bash
+aida node hub add gitlab --url git@gitlab.example.com:team/project.git [--size 1000]
+```
+
+- It refuses on a store with no enrolled root and names `aida node
+  enroll-root`. It also refuses on any clone other than the root.
+- It declares the hub under `[store.hubs]` in `.aida/config.toml`. Commit that
+  and push it to the default branch on every hub: a hub counts only once its
+  declaration is there.
+- The root grants the new hub one pool per ID type in use, `--size` IDs each
+  (1000 by default). Each pool is `hub:<name>:<TYPE>`, a child of the root's
+  pool for the type, homed on the new hub. It is carved from the root pool's
+  free space above every number already issued for the type (every spec, block,
+  counter and earlier grant), so no ID issued before the grant can appear in it.
+  The grant goes into `registry/pools.yaml` and is pushed by compare-and-swap
+  to the root's own hub, which orders it against that hub's claims.
+- After a grant, the root's own claims and the agreed-ID backfill number above
+  every granted pool.
+- Re-running it is safe: a hub keeps its URLs and gets no second pool for a
+  type. Adding the hub the root itself pushes to (its `origin`) only declares
+  it.
+
+The grant reaches the new hub by an ordinary store push or a bundle. On each
+clone of the new hub, run `aida node upstream <remote>`, naming the remote that
+reaches the new hub, then `aida db block claim --type <TYPE>`. The claim is
+carved from the hub's pool and pushed to that hub only. `aida add` then mints
+agreed IDs from it, and later refills claim from the same pool. When the pool
+runs out, claims are refused; growing a hub's pool is not available yet. A clone whose
+upstream reaches a hub with no grant is told to ask the root for one.
 
 ### Clone-local allocation authority
 
