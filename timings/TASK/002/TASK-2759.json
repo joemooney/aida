@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "spec": "TASK-2759",
+  "publishes": [
+    {
+      "at": "2026-11-02T16:23:24.002899629Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-02T13:26:24.050383137Z",
+      "spec": "TASK-2759",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-11-02T16:22:58.057074264Z",
+      "spec": "TASK-2759",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 3264
+      }
+    },
+    {
+      "ts": "2026-11-02T16:23:23.757932257Z",
+      "spec": "TASK-2759",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "15c0fa4d6051d6ba558fdb9fec01901e2fd27c4f",
+        "pr": 3264,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
