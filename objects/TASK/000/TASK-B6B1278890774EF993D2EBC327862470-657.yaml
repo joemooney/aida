@@ -6,12 +6,12 @@ description: |-
   Acceptance: (1) Integrate A/B and BUG2398 into actual interactive/headless implementer/reviewer Codex and STORY2254 background, AIDA-applied reporting only with wrapper evidence. (2) Installed native workspace layer/private daemon lifecycle composes with own delegated keyring/context/companion semantics; host daemon cannot execute outside wrapper, valid reviewer attests and ungranted/wrong-seat fails authority. (3) Own git/index/refs, store/cache and required own-grant stamps work, protected hooks/config/unrelated metadata stay immutable. Credential leaves only; P3 exact refresh storage and signed C7 choice must be resolved before credential code, no silent API-key-only replacement for ChatGPT. (4) Actual model-free plus authenticated host evidence covers these paths and all earlier write/egress/FD/IPC negatives; no socket failure waived. Layers: launch/grants/auth, storage/git boundary, background supervisor, diagnostics and live tests. Signed sliceC.
 
   All signed STORY2238 sketch C1-C12 and BUG2398 B1-B4 apply. Linux only, fakeHOME/synthetic tests, no global user settings or schedules. No partial backend may report AIDA containment applied or launch ordinary agents until all required protections are ready; named refusal, no fallback. STRICT independent review, operator merge floor. LIGHT one targeted test plus fast gates; shared infra or >10files adds touched-test/compile, fullsuiteCI only. Longcargo background, no slotbypass. Parent all7AC remain open until final installed-tool evidence; no slice alone completes parent.
-status: InProgress
+status: Done
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T09:06:06.223993645Z
-modified_at: 2026-11-02T21:59:45.849577921Z
+modified_at: 2026-11-02T22:31:21.328416113Z
 req_type: Task
 tags:
 - architecture
@@ -150,6 +150,11 @@ comments:
   created_at: 2026-11-02T21:59:30.850770226Z
   modified_at: 2026-11-02T21:59:30.850770226Z
   session_id: ee0bf351-6b17-486f-a38e-cfbb1343c426
+- id: 01a19e63-7806-7ac2-b646-fd5ad855e14c
+  author: aida-auto-bump
+  content: '[aida:closure-held] Code merged to the default branch (commit fcb4d8d), but completion is held at Done: unresolved BlockedBy STORY-2254 (InProgress). BlockedBy gates completion as well as pickup; it releases once every blocker is Completed, Rejected or Superseded (an epic by its child rollup, an ADR once accepted). The next `aida pull` completes it once nothing holds it; to replay by hand, run `aida db reconcile-status --spec TASK-2707 --since fcb4d8d^`. If the blockers form a cycle, or you decide to ship regardless, a human runs `aida edit TASK-2707 --status completed`. (merge sha: fcb4d8d38edd14e96d4ce94998f68770fdfa8080)'
+  created_at: 2026-11-02T22:31:21.350423942Z
+  modified_at: 2026-11-02T22:31:21.350423942Z
 history:
 - id: 01a1965c-1e90-7483-8313-1b32a588eaef
   author: joe
@@ -266,6 +271,13 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a19e63-7806-7ac2-b646-fd47e0ae20ed
+  author: aida-auto-bump
+  timestamp: 2026-11-02T22:31:21.350417495Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 filed_at:
   code_sha: 4ce0af750fcb68d4adf57496e4e002aefd8ace77
   branch: main
