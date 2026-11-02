@@ -1,0 +1,34 @@
+id: 01a19a14-d2b9-79c1-b701-41263cb369cd
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-300
+agreed_id: STORY-2293
+title: 'Review PR-3226: [AI:claude] feat(ids): aida node hub add registers a second hub under the enrolled root and grants it a pool per type (STORY-2210)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `story-b6b1278890774ef993d2ebc327862470-170`.
+
+  - PR: <https://github.com/joemooney/aida/pull/3226>
+  - Branch: `story-b6b1278890774ef993d2ebc327862470-170` → `main`
+
+  ## Covers
+
+  - STORY-2210
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 3226` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-02T02:26:58.361149626Z
+modified_at: 2026-11-02T02:26:58.361149626Z
+req_type: Story
+filed_at:
+  code_sha: c067486e71c1e17737eeeb31a078ce98cce11b1d
+  branch: main
+  dirty: true
+  aida_version: 0.16.0
+  aida_build_sha: 6a3f67671a9
+  vendor: claude
+  session: 126bbd5a-a92f-452b-ab0b-2637a1db42c2
