@@ -960,11 +960,13 @@ pub(crate) fn run_tick(
     // Each unowned spec carries its dispatch epoch, so a dead fixer's spec
     // is routed again. trace:TASK-1915 | ai:claude
     let mut epochs: BTreeMap<String, u32> = BTreeMap::new();
+    // trace:BUG-2396 | ai:claude
+    let vendor = crate::vendor_hints::hint_vendor(inp.project_root);
     decisions.extend(inp.unowned_specs.iter().map(|s| {
         let mut s = s.clone();
         s.epoch = per.dispatch_epoch(&s, now);
         epochs.insert(s.id.to_ascii_uppercase(), s.epoch);
-        plan_unowned_spec(&s)
+        plan_unowned_spec(&s, vendor)
     }));
     // trace:TASK-1955 | ai:claude (TASK-2080) (TASK-1694)
     per.prune(inp.store_readable().then_some(&epochs), reaped.as_ref());
@@ -1981,10 +1983,12 @@ pub(crate) fn handle_fleet(action: &crate::cli::FleetAction) -> Result<()> {
                     .iter()
                     .map(|pr| plan_held_pr(pr, &protected)),
             );
+            // trace:BUG-2396 | ai:claude
+            let vendor = crate::vendor_hints::hint_vendor(&root);
             decisions.extend(
                 collect_unowned_specs(&root, &reqs)
                     .iter()
-                    .map(plan_unowned_spec),
+                    .map(|s| plan_unowned_spec(s, vendor)),
             );
             if *json {
                 let preview = preview_json(&decisions, &ctx);

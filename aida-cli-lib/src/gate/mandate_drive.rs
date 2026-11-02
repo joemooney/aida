@@ -1204,7 +1204,11 @@ impl UnownedSpec {
 /// no open PR) is a dispatch for the advisor; an unknown PR state is
 /// skipped once with the reason.
 // trace:STORY-1700 | ai:claude
-pub(crate) fn plan_unowned_spec(s: &UnownedSpec) -> LaneDecision {
+// trace:BUG-2396 | ai:claude — the dispatch command follows `vendor`.
+pub(crate) fn plan_unowned_spec(
+    s: &UnownedSpec,
+    vendor: crate::session::HeadlessVendor,
+) -> LaneDecision {
     let lane = format!("spec:{}", s.id);
     if s.owned() {
         return LaneDecision::None;
@@ -1227,8 +1231,8 @@ pub(crate) fn plan_unowned_spec(s: &UnownedSpec) -> LaneDecision {
         route: Route::Advisor,
         head,
         command: format!(
-            "aida agent new claude --spec {} --bg (a separate session, never an in-session subagent)",
-            s.id
+            "{} (a separate session, never an in-session subagent)",
+            crate::vendor_hints::agent_new_cmd(vendor, &format!("--spec {}", s.id), true)
         ),
         detail: format!(
             "{} is approved and unowned: no live claim, no branch, no open PR ({})",

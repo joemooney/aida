@@ -16541,10 +16541,8 @@ Options:
           Which vendor renders the rubric judgment (claude or codex). The judge PROMPT is identical
           for both — only the executing model changes — so a codex judge over a claude-vs-codex run
           is no longer the same model grading itself, removing the self-evaluation caveat. Defaults
-          to claude (unchanged behaviour). Set AIDA_COMPETE_JUDGE to override the judge binary. Only
-          applies with --judge
-          
-          [default: claude]
+          to the project's `[agents] vendor`, else claude. A codex judge runs in a read-only
+          sandbox. Set AIDA_COMPETE_JUDGE to override the judge binary. Only applies with --judge
 
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
@@ -46008,7 +46006,7 @@ Working on aida itself
       {
         "name": "judge-vendor",
         "takes_value": true,
-        "help": "Which vendor renders the rubric judgment (claude or codex). The judge PROMPT is identical for both — only the executing model changes — so a codex judge over a claude-vs-codex run is no longer the same model grading itself, removing the self-evaluation caveat. Defaults to claude (unchanged behaviour). Set AIDA_COMPETE_JUDGE to override the judge binary. Only applies with --judge"
+        "help": "Which vendor renders the rubric judgment (claude or codex). The judge PROMPT is identical for both — only the executing model changes — so a codex judge over a claude-vs-codex run is no longer the same model grading itself, removing the self-evaluation caveat. Defaults to the project's `[agents] vendor`, else claude. A codex judge runs in a read-only sandbox. Set AIDA_COMPETE_JUDGE to override the judge binary. Only applies with --judge"
       },
       {
         "name": "vendors",

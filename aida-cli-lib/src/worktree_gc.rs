@@ -3342,6 +3342,32 @@ pub(crate) fn worktree_exit_from_outside(
     Ok(())
 }
 
+/// The `Next:` lines `aida worktree add|enter` prints. Pure, so the vendor
+/// rendering is testable.
+// trace:BUG-2396 | ai:claude
+pub(crate) fn worktree_next_lines(
+    command: &str,
+    arg: &str,
+    out: &WorktreeOutcome,
+    shell_payload_evaled: bool,
+    vendor: crate::session::HeadlessVendor,
+) -> Vec<String> {
+    let start = || crate::vendor_hints::start_then_skill(vendor, "aida-implement", &out.focus);
+    let cd = || format!("eval \"$(aida worktree enter {})\"    # cd in", arg);
+    match (command, out.lease_id.as_deref(), shell_payload_evaled) {
+        ("enter", Some(_), true) => vec![start()],
+        ("enter", Some(_), false) => vec![cd(), start()],
+        ("add", Some(_), _) => vec![format!(
+            "aida worktree enter {}    # cd in, then {}",
+            arg,
+            crate::vendor_hints::skill_ref(vendor, "aida-implement", &out.focus)
+        )],
+        ("enter", None, true) => vec!["work in this shell; the cd already happened".to_string()],
+        ("enter", None, false) => vec![cd()],
+        _ => vec![format!("aida worktree enter {}    # cd in", arg)],
+    }
+}
+
 // trace:TASK-1156 | ai:codex
 pub(crate) fn print_worktree_next(
     command: &str,
@@ -3351,48 +3377,12 @@ pub(crate) fn print_worktree_next(
 ) {
     eprintln!();
     eprintln!("Next:");
-    match (command, out.lease_id.as_deref(), shell_payload_evaled) {
-        ("enter", Some(_), true) => {
-            eprintln!(
-                "  {}",
-                format!("claude    # then /aida-implement {}", out.focus).cyan()
-            );
-        }
-        ("enter", Some(_), false) => {
-            eprintln!(
-                "  {}",
-                format!("eval \"$(aida worktree enter {})\"    # cd in", arg).cyan()
-            );
-            eprintln!(
-                "  {}",
-                format!("claude    # then /aida-implement {}", out.focus).cyan()
-            );
-        }
-        ("add", Some(_), _) => {
-            eprintln!(
-                "  {}",
-                format!(
-                    "aida worktree enter {}    # cd in, then /aida-implement {}",
-                    arg, out.focus
-                )
-                .cyan()
-            );
-        }
-        ("enter", None, true) => {
-            eprintln!("  {}", "work in this shell; the cd already happened".cyan());
-        }
-        ("enter", None, false) => {
-            eprintln!(
-                "  {}",
-                format!("eval \"$(aida worktree enter {})\"    # cd in", arg).cyan()
-            );
-        }
-        _ => {
-            eprintln!(
-                "  {}",
-                format!("aida worktree enter {}    # cd in", arg).cyan()
-            );
-        }
+    // trace:BUG-2396 | ai:claude — the agent line follows `[agents] vendor`.
+    // The main checkout carries the gitignored `.aida/agents.toml` knob.
+    let root = find_main_worktree_root().unwrap_or_else(|_| out.path.clone());
+    let vendor = crate::vendor_hints::hint_vendor(&root);
+    for line in worktree_next_lines(command, arg, out, shell_payload_evaled, vendor) {
+        eprintln!("  {}", line.cyan());
     }
     // Never suggest a raw `source` of the worktree's session-env file: a
     // branch can commit it. Run enter through the eval so the filtered
@@ -3717,3 +3707,44 @@ pub(crate) static WORKTREE: crate::command_registry::CommandReg =
         },
         run: crate::command_registry::Handler::Early(run_worktree),
     };
+
+#[cfg(test)]
+mod bug2396_worktree_next_tests {
+    use super::*;
+    use crate::session::HeadlessVendor;
+
+    fn outcome() -> WorktreeOutcome {
+        WorktreeOutcome {
+            path: std::path::PathBuf::from("wt"),
+            branch: "bug-1".to_string(),
+            focus: "BUG-1".to_string(),
+            created: true,
+            lease_id: Some("lease".to_string()),
+            has_session_env: false,
+        }
+    }
+
+    // trace:BUG-2396 | ai:claude
+    #[test]
+    fn worktree_next_renders_codex_launch_and_skill() {
+        let out = outcome();
+        let enter = worktree_next_lines("enter", "BUG-1", &out, false, HeadlessVendor::Codex);
+        assert_eq!(enter[1], "codex    # then $aida-implement BUG-1");
+        assert!(enter
+            .iter()
+            .all(|l| !l.contains("claude") && !l.contains("/aida-")));
+        let add = worktree_next_lines("add", "BUG-1", &out, false, HeadlessVendor::Codex);
+        assert_eq!(
+            add,
+            vec!["aida worktree enter BUG-1    # cd in, then $aida-implement BUG-1"]
+        );
+    }
+
+    // trace:BUG-2396 | ai:claude
+    #[test]
+    fn worktree_next_keeps_claude_output() {
+        let out = outcome();
+        let enter = worktree_next_lines("enter", "BUG-1", &out, true, HeadlessVendor::Claude);
+        assert_eq!(enter, vec!["claude    # then /aida-implement BUG-1"]);
+    }
+}
