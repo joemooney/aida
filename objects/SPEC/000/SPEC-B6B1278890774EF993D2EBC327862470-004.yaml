@@ -3,12 +3,12 @@ spec_id: SPEC-b6b1278890774ef993d2ebc327862470-004
 agreed_id: TASK-2720
 title: BUG-2389 native implementer cannot stage or publish its implementation
 description: 'Native workspace-write sandbox gives this checkout a read-only .git. git add aida-cli-lib/src/plan_intent.rs failed: Unable to create .git/index.lock: Read-only file system. Shared .aida/cache.db is also a symlink outside writable roots, so CLI findings/mutations refuse; MCP spec updates work. This repeats TASK-2712/TASK-2714/TASK-2718. Implementation and validation continue locally, but commit/push/PR cannot complete without a sanctioned host publication path. Do not mark this spec Done based solely on local modifications.'
-status: Draft
+status: Superseded
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-01T21:33:13.942897406Z
-modified_at: 2026-11-02T02:31:25.751232880Z
+modified_at: 2026-11-02T02:31:38.623338247Z
 req_type: Task
 tags:
 - from-implementer:BUG-2389
@@ -26,6 +26,14 @@ history:
   author: joe
   timestamp: 2026-11-01T22:44:58.916493618Z
   changes: []
+- id: 01a19a19-197f-7a91-a316-d680f8ce9055
+  author: joe
+  timestamp: 2026-11-02T02:31:38.623330743Z
+  session_id: 126bbd5a-a92f-452b-ab0b-2637a1db42c2
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   aida_version: 0.16.0
   aida_build_sha: 6a3f67671a9
