@@ -1,5 +1,6 @@
 id: 01a19cef-46e9-7bb2-b64b-2b0c59075158
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-706
+agreed_id: TASK-2768
 title: 'Non-blocking (minor): innermost_agent_vendor''s depth comparison (advisor_cmd_ro…'
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on TASK-2754, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
@@ -36,6 +37,11 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Rejected
+- id: 01a19d12-5939-7213-bc00-6f6da1fb170a
+  author: joe
+  timestamp: 2026-11-02T16:23:07.833712130Z
+  session_id: ee0bf351-6b17-486f-a38e-cfbb1343c426
+  changes: []
 filed_at:
   code_sha: 6fafff141a37de5cd8d6dc06261deb83590f55b1
   branch: main

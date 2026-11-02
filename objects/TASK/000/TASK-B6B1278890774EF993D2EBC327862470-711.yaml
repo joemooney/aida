@@ -1,5 +1,6 @@
 id: 01a19cef-9909-74e2-90fe-63bc0ea26670
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-711
+agreed_id: TASK-2770
 title: 'Non-blocking (minor): codex_rollout_path still walks the whole sessions tree on…'
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on TASK-2755, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
@@ -20,6 +21,12 @@ tags:
 - finding-hash:e3e5836f
 - from-review:PR-3262
 - kind:carried-forward
+history:
+- id: 01a19d12-5978-7102-a629-3260164c8e5f
+  author: joe
+  timestamp: 2026-11-02T16:23:07.896796887Z
+  session_id: ee0bf351-6b17-486f-a38e-cfbb1343c426
+  changes: []
 filed_at:
   code_sha: 6fafff141a37de5cd8d6dc06261deb83590f55b1
   branch: main
