@@ -1,0 +1,30 @@
+id: 01a199da-37f4-7641-b14c-9f0f196f24b2
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-671
+title: 'Non-blocking (minor): pr_lookup.rs:478 continuation_extends_id uses aida_core::…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on BUG-2400, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  Non-blocking (minor): pr_lookup.rs:478 continuation_extends_id uses aida_core::id_identity::DEFAULT_MINT_WIDTH (3) rather than the project's configured [ids] seq_width/node_seq_width. A project that configures a width below 3 mints IDs like BUG-1-42, and branch bug-1-42 would then associate with BUG-1. That over-associates, which errs toward blocking, and only affects non-default config.
+
+  PR: #3208
+  Reviewed sha: d27abc68113bf6dec62765fda612d1efc72e70f8
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-02T01:22:57.652318700Z
+modified_at: 2026-11-02T01:22:57.652318700Z
+req_type: Task
+tags:
+- carried-from:BUG-2400
+- finding-hash:40b82f23
+- from-review:PR-3208
+- kind:carried-forward
+filed_at:
+  code_sha: c067486e71c1e17737eeeb31a078ce98cce11b1d
+  branch: main
+  dirty: true
+  aida_version: 0.16.0
+  aida_build_sha: 6a3f67671a9
+  vendor: claude
+  session: 126bbd5a-a92f-452b-ab0b-2637a1db42c2
