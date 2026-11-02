@@ -17,12 +17,12 @@ description: |-
   ──────────
   1. All headless spawn and resume call sites resolve project/user containment via `session::drain_contained(project_root)?` (which combines `AIDA_CONTAINED`, `[agents] contained`, and `[contained] enable`) rather than passing `false` or checking only `aida_contained_env()?`.
   2. Unit tests verify that setting `contained = true` in `agents.toml` without `AIDA_CONTAINED` in the environment enforces containment on `advisor watch`, `questions`, `dryrun`, `intent`, `burndown`, `intake`, `compete`, and `session resume`.
-status: InProgress
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T06:47:54.074794793Z
-modified_at: 2026-11-02T06:05:57.328303854Z
+modified_at: 2026-11-02T07:06:29.364644686Z
 req_type: Bug
 tags:
 - audit
@@ -153,6 +153,21 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a19b14-ba6d-7c03-9d3c-6b6da39d94ca
+  author: aida-auto-bump
+  timestamp: 2026-11-02T07:06:29.357725421Z
+  session_id: 1f56bd1e-c059-4f73-b8df-e18b2170fdfc
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a19b14-ba74-70e3-bb94-c86bede59dfc
+  timestamp: 2026-11-02T07:06:29.364639492Z
+  agent: aida
+  commit_sha: e03b1c60407b1c78ab39d81e3764edb0f5d22903
+  summary: Every inventoried headless caller (analysis helper for questions research/dryrun --ai/intent, questions remedy+clarify, advisor watch fork+cold boot, reconstitute, burndown, intake, compete preflight/arms/judge/dry-run, session resume) now resolves session::drain_contained (env OR agents.toml/config.toml; a malformed knob refuses). Behavioural env-unset tests plus a source ratchet; all CI lanes green at head. The only red check is merge-hold-gate, the expected supervised-spec hold (human/advisor clear).
+  review_verdict: approved
 execution_mode: drain
 filed_at:
   code_sha: 6dc7d4977ac5e47c42ddfb26597fe3ec5fb70b60
@@ -166,3 +181,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-11-02T02:51:32.993982223Z
   implemented_by: joe
+  completed_at: 2026-11-02T07:06:29.357717643Z
+  completion_sha: e03b1c60407b1c78ab39d81e3764edb0f5d22903
