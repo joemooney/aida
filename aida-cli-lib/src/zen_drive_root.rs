@@ -385,10 +385,7 @@ pub(crate) fn run_do_drive(
                 launch.program,
                 prompt_note.dimmed()
             );
-            let status = std::process::Command::new(launch.program)
-                .arg(&launch.prompt)
-                .current_dir(&out.path)
-                .env("AIDA_SESSION_ROLE", "implementer")
+            let status = guided_launch_command(&launch, &out.path)?
                 .status_retrying_etxtbsy()
                 .map_err(|e| {
                     anyhow::anyhow!(
@@ -620,6 +617,30 @@ pub(crate) fn run_zen_gate_json(storage: &Storage, spec: Option<&str>) -> Result
     }
     println!("{}", serde_json::to_string(&verdict)?);
     Ok(())
+}
+
+/// BUG-2416: the guided session's child Command. The implementer seat is a
+/// baseline seat, so its grant decision is an explicit EMPTY selector (never
+/// the launcher's own grant), exactly as the dispatch implementer lane does.
+/// A Codex child is then finalized through `codex_tool_env::prepare_launch`,
+/// which carries the seat into Codex tool shells and refuses a launch whose
+/// grant decision is missing or conflicts with the baseline.
+// trace:BUG-2416 | ai:claude
+pub(crate) fn guided_launch_command(
+    launch: &session::GuidedSessionLaunch,
+    worktree: &std::path::Path,
+) -> Result<std::process::Command> {
+    let mut cmd = std::process::Command::new(launch.program);
+    cmd.arg(&launch.prompt)
+        .current_dir(worktree)
+        .env(crate::gate::seat_authority::GRANT_ENV, "")
+        .env(crate::gate::seat_authority::GRANT_FILE_ENV, "")
+        .env("AIDA_SESSION_ROLE", "implementer");
+    if launch.program == "codex" {
+        crate::codex_tool_env::prepare_launch(&mut cmd)
+            .context("guided Codex launch refused by seat transport")?;
+    }
+    Ok(cmd)
 }
 
 /// TASK-1116: apply a drive command's `--vendor`/`--agent` value as the

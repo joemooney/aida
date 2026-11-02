@@ -288,8 +288,9 @@ fn identity_differs(recorded: Option<&str>, local: Option<&str>) -> bool {
     recorded.is_some_and(|recorded| Some(recorded) != local)
 }
 
+/// This boot's id (`/proc/sys/kernel/random/boot_id`), `None` off Linux.
 // trace:TASK-1526 | ai:codex
-pub(super) fn local_boot_id() -> Option<String> {
+pub fn local_boot_id() -> Option<String> {
     #[cfg(target_os = "linux")]
     {
         std::fs::read_to_string("/proc/sys/kernel/random/boot_id")
@@ -302,8 +303,9 @@ pub(super) fn local_boot_id() -> Option<String> {
     }
 }
 
+/// This process's PID namespace inode, `None` off Linux.
 // trace:TASK-1526 | ai:codex
-pub(super) fn local_pid_ns() -> Option<String> {
+pub fn local_pid_ns() -> Option<String> {
     #[cfg(target_os = "linux")]
     {
         use std::os::unix::fs::MetadataExt;

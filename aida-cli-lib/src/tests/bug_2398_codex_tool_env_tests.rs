@@ -517,6 +517,8 @@ const LAUNCH_INVENTORY: &[(&str, usize, Finalization)] = &[
     // Claude-only builders/resumes plus the shared seat-env helper; every
     // Codex spawn in this file (incl. the coordinator spawn) finalizes.
     ("session.rs", 12, Finalization::PrepareLaunch(5)),
+    // trace:BUG-2416 | ai:claude — the guided `aida do` session.
+    ("zen_drive_root.rs", 1, Finalization::PrepareLaunch(1)),
 ];
 
 /// Child-launch markers in whitespace-normalized source: a grant selector
@@ -1606,14 +1608,7 @@ const ROLE_LAUNCH_SITES: &[(&str, usize, RoleRoute)] = &[
     ),
     ("phase_driver.rs", 2, RoleRoute::LaunchInventory),
     ("session.rs", 6, RoleRoute::LaunchInventory),
-    (
-        "zen_drive_root.rs",
-        1,
-        RoleRoute::KnownGap(
-            "guided `codex` launch sets the implementer role without prepare_launch; \
-             reported on BUG-2395 as a follow-up (new grant decision = separate spec)",
-        ),
-    ),
+    ("zen_drive_root.rs", 1, RoleRoute::LaunchInventory),
 ];
 
 // trace:BUG-2395 | ai:claude
@@ -1725,5 +1720,64 @@ fn bug_2395_hook_under_prepared_codex_launch_sees_seat_role() {
         stdout.contains("AIDA active role: implementer") && stdout.contains("Lane fixture purpose"),
         "hook did not see the prepared seat role: {stdout}{}",
         String::from_utf8_lossy(&out.stderr)
+    );
+}
+
+/// BUG-2416: the guided `aida do` Codex launch makes an explicit baseline
+/// grant decision and takes its argv and env from `prepare_launch`; the
+/// Claude launch never enters the Codex adapter.
+// trace:BUG-2416 | ai:claude
+#[test]
+fn bug_2416_guided_codex_launch_is_finalized_by_prepare_launch() {
+    let tmp = tempfile::TempDir::new().unwrap();
+    let launch = crate::session::GuidedSessionLaunch {
+        program: "codex",
+        prompt: "guided prompt".into(),
+    };
+    let cmd = crate::zen_drive_root::guided_launch_command(&launch, tmp.path()).unwrap();
+
+    let mut expected = Command::new("codex");
+    expected
+        .arg("guided prompt")
+        .current_dir(tmp.path())
+        .env(GRANT_ENV, "")
+        .env(crate::gate::seat_authority::GRANT_FILE_ENV, "")
+        .env("AIDA_SESSION_ROLE", "implementer");
+    prepare_launch(&mut expected).unwrap();
+    let args = |c: &Command| c.get_args().map(|a| a.to_owned()).collect::<Vec<_>>();
+    let envs = |c: &Command| {
+        c.get_envs()
+            .map(|(k, v)| (k.to_owned(), v.map(|v| v.to_owned())))
+            .collect::<std::collections::BTreeMap<_, _>>()
+    };
+    assert_eq!(
+        args(&cmd),
+        args(&expected),
+        "argv comes from prepare_launch"
+    );
+    assert_eq!(envs(&cmd), envs(&expected), "env comes from prepare_launch");
+    assert!(
+        cmd.get_args().any(|a| a.to_string_lossy()
+            == "shell_environment_policy.set.AIDA_SESSION_ROLE=\"implementer\""),
+        "tool shells get the implementer seat: {:?}",
+        args(&cmd)
+    );
+    assert_eq!(
+        cmd.get_envs()
+            .find(|(k, _)| *k == GRANT_ENV)
+            .map(|(_, v)| v),
+        Some(Some(std::ffi::OsStr::new(""))),
+        "explicit empty baseline, never the launcher's grant"
+    );
+    assert_eq!(args(&cmd).last().unwrap(), "guided prompt");
+
+    let claude = crate::session::GuidedSessionLaunch {
+        program: "claude",
+        prompt: "/aida-guided-implement TASK-9".into(),
+    };
+    let cmd = crate::zen_drive_root::guided_launch_command(&claude, tmp.path()).unwrap();
+    assert_eq!(
+        args(&cmd),
+        vec![std::ffi::OsString::from("/aida-guided-implement TASK-9")]
     );
 }
