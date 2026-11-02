@@ -21,7 +21,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T06:48:07.778727918Z
-modified_at: 2026-11-02T11:58:27.365618082Z
+modified_at: 2026-11-02T11:58:28.584480931Z
 req_type: Bug
 tags:
 - audit
@@ -95,6 +95,25 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: AC1 interactive plan read-only and AC2 agent-new MCP wiring are sound, but the AC3 doctor gate treats [agents] vendor=codex (no enabled list) as ''Claude inactive'' and silences the Claude folder-trust check in this very repo, where Claude is still enabled and every reviewer lane launches --vendor claude; lib test shards (first-ever execution of the new tests) were still pending at review time.. No triage reason was given.'
   created_at: 2026-11-02T11:58:27.365616713Z
   modified_at: 2026-11-02T11:58:27.365616713Z
+  session_id: 1f56bd1e-c059-4f73-b8df-e18b2170fdfc
+- id: 01a19c20-0c64-7d41-8032-314d9db51559
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2394):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 68e7eb32b0ff
+    Recorded: 2026-11-02T11:56:06.623684990+00:00
+    Findings:
+    1. MAJOR (AC3 regression) aida-cli-lib/src/doctor_cmd.rs:3149-3158 claude_launch_active: with no [agents] enabled list it returns false whenever [agents] vendor resolves to non-claude. Default vendor is not 'enabled': with no enabled list every vendor is enabled, and AIDA itself (.aida/config.toml [agents] vendor="codex", no enabled list) launches Claude for every reviewer (aida queue work PR-N --role reviewer --vendor claude) and claude --bg seats. After this PR aida doctor silently drops the BUG-1700 worktree-folder-trust finding here, reintroducing the folder-trust modal stall it guards. Fix: gate only on an explicit enabled list excluding claude (None => active), or additionally require no Claude usage evidence; add a test for (None, Some("codex")) => active and a scan_agent_worktree_trust-level test with a codex-default fixture.
+    2. MINOR (AC1, proxy 'every plan path') Headless plan lanes on Codex remain write-capable: queue_cmd.rs:11970 passes plan_only && !no_human, so aida queue work X --plan-only --no-human --vendor codex and the drain --plan-phase prelude resolve no 'plan' mode and codex exec runs with the ordinary workspace-write posture. Either apply codex_read_only_args to the headless codex exec argv when plan_only/plan_phase, or file and link a follow-up spec and state the limit in the launch output.
+    3. MINOR (AC1 evidence) No test proves the refusal path (an actual write refused under the read-only argv); only argv shape is asserted. Implementer reports codex sandbox cannot run in their bwrap. Add an #[ignore]-free gated test that runs when codex is on PATH and userns is available (skip otherwise with an explicit message), or record operator-run evidence on the spec.
+    4. MINOR (AC2) session.rs codex_mcp_flags emits -c mcp_servers.<n>.enabled=false (or aida.enabled=true) for servers read from the project .codex/config.toml. Codex only loads project config for trusted projects; when it does not (untrusted worktree/seat clone, or an older codex), the override creates a server entry with no transport, which the implementer observed codex rejects ('invalid transport'), so the launch fails to start. Since [agents] mcp defaults to Off (session.rs:3975), this applies to every default aida agent new codex. Only emit overrides for project-file servers when codex will load that file, or also emit them only for  servers, and add a test covering a project-only server.
+    5. MINOR (AC2 behavior change, needs explicit note) Because AgentMcpSurface defaults to Off, every aida agent new codex on a machine with no [agents] mcp setting (including this one) now disables the aida MCP server that Codex lanes previously had (operator comment 0 shows Codex lanes using AIDA MCP for queue completion). Parity with Claude is intended, but call it out in the PR/CHANGELOG and the launch note, or confirm with the operator that off is the desired Codex default.
+    6. MINOR (AC3 second clause, follow-ups not filed) 'support Codex worktree trust if applicable' and the description's queue_cmd preflight_contained_reviewer Claude-only gap were deferred, and the implementer could not file the follow-ups (comment 3). File them as specs linked to BUG-2394 before merge so the deferrals are tracked.
+    7. INFO (CI) At 68e7eb32 the lib-0/lib-1/gates CI shards were still pending when reviewed; the new module bug_2394_codex_posture_tests.rs has never executed (implementer ran no local cargo). Re-review must cite green lib shards at the rework head.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-02T11:58:28.452280243Z
+  modified_at: 2026-11-02T11:58:28.452280243Z
   session_id: 1f56bd1e-c059-4f73-b8df-e18b2170fdfc
 history:
 - id: 01a195dd-b979-7b63-b353-ebf808b482d9
