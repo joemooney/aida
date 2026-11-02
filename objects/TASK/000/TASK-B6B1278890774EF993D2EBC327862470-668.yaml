@@ -1,5 +1,6 @@
 id: 01a199b2-14a6-7232-acc3-29c0749bf73c
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-668
+agreed_id: TASK-2727
 title: 'Non-blocking (minor, behavior note): burndown and intake coordinators now go th…'
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on BUG-2389, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
@@ -20,6 +21,11 @@ tags:
 - finding-hash:a7d53e0f
 - from-review:PR-3217
 - kind:carried-forward
+history:
+- id: 01a199c4-b7bc-78e1-b871-4ab8ee3307c0
+  author: joe
+  timestamp: 2026-11-02T00:59:28.572333179Z
+  changes: []
 filed_at:
   code_sha: 45ea66ee465ff361b60de9329c2994d53ec3325f
   branch: main
