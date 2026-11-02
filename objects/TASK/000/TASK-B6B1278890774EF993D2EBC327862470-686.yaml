@@ -12,13 +12,20 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-02T08:38:03.142029554Z
-modified_at: 2026-11-02T08:38:03.142029554Z
+modified_at: 2026-11-02T09:08:08.819949580Z
 req_type: Task
 tags:
 - carried-from:TASK-2706
 - finding-hash:e4b465d0
 - from-review:TASK-2706
 - kind:carried-forward
+comments:
+- id: 01a19b84-1bf3-7d63-b021-184194c42e46
+  author: joe
+  content: 'ADVISOR RULING (2026-11-02 02:08 MST): bundled into TASK-2707 (same containment files, next slice).'
+  created_at: 2026-11-02T09:08:08.819949580Z
+  modified_at: 2026-11-02T09:08:08.819949580Z
+  session_id: 1f56bd1e-c059-4f73-b8df-e18b2170fdfc
 history:
 - id: 01a19b82-4899-7e21-94cf-cfd1b3bbcdfb
   author: joe
