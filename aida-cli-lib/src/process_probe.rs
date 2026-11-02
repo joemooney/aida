@@ -14,7 +14,8 @@
 // mirroring an unused item here just trips the unused-import lint.
 // trace:BUG-677 | ai:claude
 pub use aida_core::liveness::{
-    encode_cwd_for_projects, nearest_aida_ancestor_pid, nearest_claude_ancestor_pid, pid_is_alive,
+    encode_cwd_for_projects, live_process_with_cwd_in, nearest_aida_ancestor_pid,
+    nearest_claude_ancestor_pid, pid_is_alive, probe_live_agent_sessions,
     probe_live_claude_sessions, process_identity_is_alive, process_start_identity,
-    walk_ancestor_pids, LiveSession,
+    walk_ancestor_pids, CwdOccupant, LiveSession,
 };
