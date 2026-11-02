@@ -620,46 +620,46 @@ mod task_101_base_behind_tests;
 #[path = "tests/task_99_behind_origin_tests.rs"]
 mod task_99_behind_origin_tests;
 
-/// Best-effort `aida rel add <from> <to> --type implements` (and the
-/// matching reverse `implemented-by` so `aida show <spec>` surfaces the
-/// review story). Custom relation types don't have an `inverse()` mapping
-/// in core, so `--bidirectional` is a no-op for them — we add both
-/// directions manually instead. Logs and continues on failure.
+/// `aida rel add <from> <to> --type implements` plus the matching reverse
+/// `implemented-by` so `aida show <spec>` surfaces the review story. Custom
+/// relation types don't have an `inverse()` mapping in core, so
+/// `--bidirectional` is a no-op for them — we add both directions manually
+/// instead. Both directions are attempted; the first failure is returned so
+/// the caller never claims a handoff for an unlinked story.
 /// trace:STORY-66 | ai:claude
-pub(crate) fn aida_subcmd_rel_add_implements(project_root: &std::path::Path, from: &str, to: &str) {
-    aida_subcmd_rel_add(project_root, from, to, "implements");
-    aida_subcmd_rel_add(project_root, to, from, "implemented-by");
+// trace:BUG-2404 | ai:claude
+pub(crate) fn aida_subcmd_rel_add_implements(
+    project_root: &std::path::Path,
+    from: &str,
+    to: &str,
+) -> anyhow::Result<()> {
+    let forward = aida_subcmd_rel_add(project_root, from, to, "implements");
+    let reverse = aida_subcmd_rel_add(project_root, to, from, "implemented-by");
+    forward.and(reverse)
 }
 
+/// `aida rel add <from> <to> --type <rel_type>`; `Err` names the failed link.
+// trace:BUG-2404 | ai:claude
 pub(crate) fn aida_subcmd_rel_add(
     project_root: &std::path::Path,
     from: &str,
     to: &str,
     rel_type: &str,
-) {
+) -> anyhow::Result<()> {
     let aida = aida_exe_path();
-    match std::process::Command::new(&aida)
+    let out = std::process::Command::new(&aida)
         .current_dir(project_root)
         // Share the parent's fail-fast lock deadline. trace:BUG-HOME-041 | ai:claude
         .envs(aida_core::io_pressure::fail_fast_deadline_env())
         .args(["rel", "add", from, to, "--type", rel_type])
         .output_retrying_etxtbsy()
-    {
-        Ok(o) if o.status.success() => {}
-        Ok(o) => eprintln!(
-            "{} auto-queue: `rel add {} {} --type {}` failed: {}",
-            "Warning:".yellow().bold(),
-            from,
-            to,
-            rel_type,
-            String::from_utf8_lossy(&o.stderr).trim()
-        ),
-        Err(e) => eprintln!(
-            "{} auto-queue: could not invoke `aida rel add`: {}",
-            "Warning:".yellow().bold(),
-            e
-        ),
-    }
+        .map_err(|e| anyhow::anyhow!("could not invoke `aida rel add`: {e}"))?;
+    anyhow::ensure!(
+        out.status.success(),
+        "`aida rel add {from} {to} --type {rel_type}` failed: {}",
+        String::from_utf8_lossy(&out.stderr).trim()
+    );
+    Ok(())
 }
 
 /// `aida queue add <id> --for reviewer --no-scope --note <...>`.
@@ -1016,6 +1016,10 @@ pub(crate) fn review_coverage_from_commits(messages: &[String]) -> ReviewCoverag
 #[path = "tests/bug_2208_refs_only_review_tests.rs"]
 mod bug_2208_refs_only_review_tests;
 
+#[cfg(test)]
+#[path = "tests/bug_2404_add_output_identity_tests.rs"]
+mod bug_2404_add_output_identity_tests;
+
 /// The links an already-filed review story is missing: `(spec, "implements")`
 /// for each delivered spec and `(spec, "covers")` for each Refs-only slice
 /// that the story does not already point at. A run interrupted after `aida
@@ -1278,12 +1282,22 @@ pub(crate) fn try_auto_queue_pr_review_unbumped(
             // links: repair them rather than treating the story as complete.
             // trace:BUG-HOME-041 | ai:claude
             let repaired = missing_review_story_links(&store, existing, &spec_ids, &slice_refs);
-            for (spec, rel_type) in &repaired {
+            // BUG-2404: an unrepaired link is not a handoff — leave the story
+            // unqueued so the next retry repairs it again. trace:BUG-2404 | ai:claude
+            if let Err(err) = repaired.iter().try_for_each(|(spec, rel_type)| {
                 if *rel_type == "implements" {
-                    aida_subcmd_rel_add_implements(project_root, &existing_id, spec);
+                    aida_subcmd_rel_add_implements(project_root, &existing_id, spec)
                 } else {
-                    aida_subcmd_rel_add(project_root, &existing_id, spec, rel_type);
+                    aida_subcmd_rel_add(project_root, &existing_id, spec, rel_type)
                 }
+            }) {
+                return AutoQueueOutcome::skipped_needs_attention(format!(
+                    "auto-queue: canonical review story {existing_id} exists for {} but repairing its links failed: {err}; the unqueued story remains a durable retry signal",
+                    format_review_label(review_forge, pr.number)
+                ))
+                .with_pr(pr.number)
+                .with_specs(spec_ids)
+                .with_review_spec(existing_id);
             }
             let note = format!(
                 "auto-queue retry reused canonical review story; covers {} spec{}",
@@ -1394,25 +1408,42 @@ pub(crate) fn try_auto_queue_pr_review_unbumped(
         pr.title
     );
     let new_id = match aida_subcmd_add_review_story(project_root, &title, &desc) {
-        Some(id) => id,
-        None => {
+        Ok(id) => id,
+        // trace:BUG-2404 | ai:claude
+        Err(reason) => {
             return AutoQueueOutcome::skipped_needs_attention(format!(
-                "auto-queue: `aida add` failed for {noun}-{} (see warning above)",
+                "auto-queue: review story for {noun}-{} not confirmed: {reason}",
                 pr.number
-            ));
+            ))
+            .with_pr(pr.number)
+            .with_specs(spec_ids);
         }
     };
 
-    for id in &spec_ids {
-        aida_subcmd_rel_add_implements(project_root, &new_id, id);
-    }
     // BUG-2208: `covers`, never `implements`, so the slice links the story
     // to its spec without completing it. Nothing reads `covers` back: `queue
     // work PR-N` finds this story by its `Review PR-N` title, then resolves
     // the spec from the PR's trailers through `resolve_pr_to_spec`.
     // trace:TASK-1955 | ai:claude (BUG-2208, TASK-2255)
-    for id in &slice_refs {
-        aida_subcmd_rel_add(project_root, &new_id, id, "covers");
+    // BUG-2404: a failed link is not a handoff. The filed story stays
+    // unqueued; the next retry finds it by title, repairs the missing links
+    // and queues it — never a second `aida add`. trace:BUG-2404 | ai:claude
+    let linked = spec_ids
+        .iter()
+        .try_for_each(|id| aida_subcmd_rel_add_implements(project_root, &new_id, id))
+        .and_then(|()| {
+            slice_refs
+                .iter()
+                .try_for_each(|id| aida_subcmd_rel_add(project_root, &new_id, id, "covers"))
+        });
+    if let Err(err) = linked {
+        return AutoQueueOutcome::skipped_needs_attention(format!(
+            "auto-queue: filed {new_id} for {noun}-{} but linking it failed: {err}; the unqueued story remains a durable retry signal",
+            pr.number
+        ))
+        .with_pr(pr.number)
+        .with_specs(spec_ids)
+        .with_review_spec(new_id);
     }
 
     let origin_short = match origin {
