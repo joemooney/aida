@@ -1013,7 +1013,7 @@ blocks:
   type_prefix: BUG
   range_start: 2378
   range_end: 2477
-  next: 2410
+  next: 2411
   allocated_at: 2026-10-31T22:53:56.205120639Z
 - node_id: b6b1278890774ef993d2ebc327862470
   owner: aida-backfill-agreed-ids
@@ -1125,5 +1125,5 @@ blocks:
   type_prefix: TASK
   range_start: 2812
   range_end: 2911
-  next: 2828
+  next: 2829
   allocated_at: 2026-11-02T07:30:23.802341486Z
