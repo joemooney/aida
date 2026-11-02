@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T10:12:04.230556201Z
-modified_at: 2026-11-02T12:37:13.032835278Z
+modified_at: 2026-11-02T12:37:14.165637836Z
 req_type: Bug
 tags:
 - alias
@@ -209,6 +209,25 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Round 2 adds sound cross-label selection (review_alias.rs, strict ledger/checked.rs) and the finding-4 drain-stamp fix, but the advisor ruling requires the full BUG-2403 scope in this PR and the implementer''s own round-2 note lists unfinished signed amendments (1, 6) and required tests (3a-c); lib/gates CI still pending at 02a4d48.. No triage reason was given.'
   created_at: 2026-11-02T12:37:13.032831728Z
   modified_at: 2026-11-02T12:37:13.032831728Z
+  session_id: 1f56bd1e-c059-4f73-b8df-e18b2170fdfc
+- id: 01a19c43-88b0-7cf1-b209-c13b699cfc55
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2403):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 02a4d48ebe80
+    Recorded: 2026-11-02T12:05:18.411230915+00:00
+    Findings:
+    1. 1. BLOCKING scope (amendment 1): identity proof is not snapshot-bound. review_alias::labels_for (used by review_verdict_show_body via load_store_for_lookup) calls RequirementsStore::get_requirement_unambiguous, which resolves through node_alias's process-global map. The signoff says this is NOT sufficient: use mappings from the same committed canonical snapshot (registry/node_aliases.toml, registry/retired_ids.toml), and refuse cross-alias positive selection on a dirty/changed snapshot. The implementer's round-2 comment confirms this is not done. Other callers pass [display_id, spec_id] read off one requirement object, which is acceptable; the resolve-a-bare-key path is the gap. Add the snapshot-bound resolution plus a 'snapshot mapping changed despite clean objects' test.
+    2. 2. BLOCKING scope (amendment 6): completeness discovery is missing. checked::spec_verdict_events treats an absent by-spec index as no events, and store.rs::write_events appends before index_spec and only warns on failure. So index lag or index failure can hide a newer refusal on a label, and across() then selects the older approval on the other label. The signoff requires bounded checked discovery of the relevant change ledgers, or an existing completeness proof, before positive selection, with refusal when completeness cannot be proved. Add that plus a 'stale/missing index after append' test.
+    3. 3. BLOCKING fail-open caller (amendment 3): queue_cmd.rs:17189 cheap_outstanding_refusal_candidate calls read_recorded_verdict_any, and on None falls back to primary_root. AliasSelection::fail_closed returns None for Unsafe/Ambiguous when no READABLE candidate is a refusal, and that is exactly the case where the refused evidence holds the newer refusal (see the two_label_fixture tests, which assert None). Unsafe evidence therefore reads as no outstanding refusal and triggers the fallback the signoff forbids. Only evaluate_review_verdict_gate was changed to refuse on unavailable. Route this caller (and audit review_gates.rs:477 actionability and queue_cmd.rs:4978 display) through select_verdict so unavailable is distinct from absent. Do not fall back to primary_root unless the selection is Absent.
+    4. 4. BLOCKING required evidence still missing from round 1 (implementer confirms these are not done): (a) bug_2403_record_pr_handshake_keeps_origin_release_receipt still does not run a lawful non-sensitive Rework auto-release through rework_hold_release to prove the carried receipt passes all existing gates. This also leaves Required behavior 2's hold matrix untested (wrong head, invalid grant, unrelated spec refuse; lawful fresh evidence accepts). (b) There is no GitLab MR repeat of the record --pr handshake. (c) There is no concurrent-origin-replacement test proving the handshake uses the in-memory verdict_obj. Add these to bug_2403_same_origin_receipt_tests.rs.
+    5. 5. Required evidence (amendment 8 and signoff test list) not added: BUG-2398's bug_2398_actual_recorder_artifacts_require_durable_independent_authority is not exercised through the remapped (friendly+native) selectors. There are no race tests for a new refusal or remap between selection and release, no linked archive/current-file case through the selector, and the hold/RetainedHistory path is not rerouted through the proved selection (implementer note: 'hold release (PR-keyed) not rerouted'). Either reroute and test, or have the advisor explicitly rule these out of scope on the spec.
+    6. 6. CI not green at 02a4d48: cli-1 passed, but lib-0, lib-1, gates, contracts, rest and cli-0 were still pending at review time. Cargo was denied in the implementer seat, so the new bug_2403_alias_selection_tests (FIFO, hard-link and symlink cases) and the reworked BUG-814 tests have never been seen to compile or pass. Re-review needs a green run at the pushed head. merge-hold-gate failing is the expected supervised hold, not a code defect.
+    7. 7. Minor (docs/PR hygiene): the PR title and body still describe slice 1 only, with 'Alias selection ... remain open' and 'Not in this PR (deviation: needs a follow-up spec)'. The advisor ruling of 2026-11-02 requires the full scope in this PR. Update the title and body to reflect the actual scope and list the remaining gaps honestly. Also: in review_alias::candidate, a non-refused legacy-file read error (read_verdict_body(..).ok()) is silently treated as absent instead of Unsafe; make it fail closed like the ledger path.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-02T12:37:14.032095567Z
+  modified_at: 2026-11-02T12:37:14.032095567Z
   session_id: 1f56bd1e-c059-4f73-b8df-e18b2170fdfc
 history:
 - id: 01a196a4-b6bb-7730-a79a-e4a546bf516d
