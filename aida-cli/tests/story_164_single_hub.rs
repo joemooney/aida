@@ -762,6 +762,15 @@ fn hub_add_without_an_enrolled_root_refuses() {
         "https://git.h2.invalid/aida.git",
     ]);
     assert!(err.contains("aida node enroll-root"), "{err}");
+    let bad_name = a.refused(&[
+        "node",
+        "hub",
+        "add",
+        "h 2",
+        "--url",
+        "https://git.h2.invalid/aida.git",
+    ]);
+    assert!(bad_name.contains("is not a valid hub name"), "{bad_name}");
     assert_eq!(
         fs::read_to_string(a.root.join(".aida/config.toml")).unwrap(),
         before
@@ -810,10 +819,16 @@ fn hub_add_grants_a_disjoint_pool_a_clone_of_the_new_hub_claims_from() {
     assert!(config.contains("h2 = "), "{config}");
     assert!(config.contains("hub = "), "{config}");
 
-    // The grant is on the root's hub, carved above every earlier block.
+    // The grant is on the root's hub itself (read from the bare
+    // repository), carved above every earlier block.
     let pools_on_hub = a.git(
-        &a.store,
-        &["show", "refs/remotes/origin/aida-store:registry/pools.yaml"],
+        w.dir.path(),
+        &[
+            "--git-dir",
+            w.hub.to_str().unwrap(),
+            "show",
+            "aida-store:registry/pools.yaml",
+        ],
     );
     let copy = w.dir.path().join("hub-pools");
     fs::create_dir_all(copy.join("registry")).unwrap();
@@ -844,6 +859,24 @@ fn hub_add_grants_a_disjoint_pool_a_clone_of_the_new_hub_claims_from() {
     let again = a.ok(&["node", "hub", "add", "h2", "--url", h2.to_str().unwrap()]);
     assert!(again.contains("already holds a pool"), "{again}");
     assert!(!again.contains("Granted hub"), "{again}");
+    // A declared hub keeps its URLs, and one URL names one hub; neither
+    // refusal touches the config.
+    let declared = fs::read_to_string(a.root.join(".aida/config.toml")).unwrap();
+    let moved = a.refused(&[
+        "node",
+        "hub",
+        "add",
+        "h2",
+        "--url",
+        "https://git.elsewhere.invalid/aida.git",
+    ]);
+    assert!(moved.contains("a hub keeps its URLs"), "{moved}");
+    let taken = a.refused(&["node", "hub", "add", "h3", "--url", h2.to_str().unwrap()]);
+    assert!(taken.contains("is already declared as hub `h2`"), "{taken}");
+    assert_eq!(
+        fs::read_to_string(a.root.join(".aida/config.toml")).unwrap(),
+        declared
+    );
 
     // The rooted store's agreed-ID backfill (the root's own claims follow
     // it) and the root's next claim both number above the grant.
@@ -906,6 +939,16 @@ fn hub_add_grants_a_disjoint_pool_a_clone_of_the_new_hub_claims_from() {
         bug_blocks(&w.hub_blocks(), &c.node()).is_empty(),
         "the h2 claim is ordered on h2, not on the root's hub"
     );
+    // A type the root granted h2 no pool for (a custom prefix: the backfill
+    // above put every built-in type in use, so each got a grant) is
+    // refused, writing no block.
+    let blocks_before = c.blocks().len();
+    let no_pool = c.refused(&["db", "block", "claim", "--type", "ZED", "--size", "10"]);
+    assert!(
+        no_pool.contains("has granted hub `h2` no ZED pool"),
+        "{no_pool}"
+    );
+    assert_eq!(c.blocks().len(), blocks_before);
 
     // A claim larger than what is left of the pool takes only the rest of
     // the pool, never IDs beyond it; once the pool is spent, a further

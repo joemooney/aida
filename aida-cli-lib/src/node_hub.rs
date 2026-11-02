@@ -73,8 +73,15 @@ pub(crate) fn handle_hub_add(store_path: &Path, name: &str, url: &str, size: u32
     } else {
         grant(store_path, &hubs, &root, name, root_hub.as_deref(), size)?
     };
+    // The grant is pushed before the declaration is written; a failed write
+    // leaves a grant with no declaration, which a re-run completes (the
+    // grant is idempotent).
     if !already {
-        declare(store_path, name, url)?;
+        declare(store_path, name, url).with_context(|| {
+            format!(
+                "hub `{name}`'s ID pools are granted, but declaring it in .aida/config.toml failed; fix the config and re-run `aida node hub add {name} --url {url}` to complete it"
+            )
+        })?;
     }
 
     for p in &granted {
