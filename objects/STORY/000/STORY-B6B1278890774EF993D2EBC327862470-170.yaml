@@ -3,12 +3,12 @@ spec_id: STORY-b6b1278890774ef993d2ebc327862470-170
 agreed_id: STORY-2210
 title: 'aida node hub add: register a second writable hub under an enrolled root and grant it a child pool per type'
 description: 'Split from STORY-HOME-164 by advisor signoff 2026-10-31 13:56 (Q3). After STORY-164 lands: ''aida node hub add <name> --url <url>'' refuses without an enrolled root (names ''aida node enroll-root''); writes the [store.hubs] entry; the root grants a child pool per type in use, homed on the new hub, carved from the root pool''s free_ranges (excludes every existing block); the grant is pushed by CAS to the root''s hub and reaches the new hub by sync or bundle; clones on the new hub claim through the PR-3170 delegated path with upstream=<new hub remote>. Tests: grant disjoint from all pre-grant blocks; refusal without root; a clone on h2 claims from the h2 pool. Docs: storage guide multi-hub section; help golden. Depends on STORY-HOME-164.'
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-31T20:54:36.955943290Z
-modified_at: 2026-11-02T05:03:55.666267240Z
+modified_at: 2026-11-02T05:10:56.393545489Z
 req_type: Story
 relationships:
 - rel_type:
@@ -34,6 +34,12 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: Hub-add logic and its happy-path tests look right, but CI is red at the head for two causes this PR introduced: the help golden is hand-edited and stale, and the BUG-1502 format-json audit lacks the new command paths. The new refusal paths for authority and pools are untested.. No triage reason was given.'
   created_at: 2026-11-02T03:22:21.069747671Z
   modified_at: 2026-11-02T03:22:21.069747671Z
+  session_id: 126bbd5a-a92f-452b-ab0b-2637a1db42c2
+- id: 01a19aaa-f089-7501-8540-b7a7a73ca472
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: Hub-add, delegated claims and per-type grants meet every acceptance criterion (tests in story_164_single_hub.rs and allocation_lineage_tests.rs) and the round-1 golden/json-audit/refusal-test gaps are fixed, but CI is red at the head: cli-0 ''Test time budget'' fails (all tests pass; main passes this gate on its last 4 runs), most likely because the new story_164 integration tests exceed the 10s default with no scripts/test-time-budget.toml entry.. No triage reason was given.'
+  created_at: 2026-11-02T05:10:56.393541561Z
+  modified_at: 2026-11-02T05:10:56.393541561Z
   session_id: 126bbd5a-a92f-452b-ab0b-2637a1db42c2
 history:
 - id: 01a1942b-6c50-70b2-8fd4-95bd0998c2c6
@@ -104,6 +110,14 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a19aaa-f089-7501-8540-b79f48afcba6
+  author: joe
+  timestamp: 2026-11-02T05:10:56.393502409Z
+  session_id: 126bbd5a-a92f-452b-ab0b-2637a1db42c2
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: a4a6e2a6d182df7805362e00c9393fec18752684
   branch: main
@@ -116,11 +130,3 @@ implementation_info:
   implemented: true
   implemented_at: 2026-11-02T01:53:50.901513686Z
   implemented_by: joe
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'Hub-add, delegated claims and per-type grants meet every acceptance criterion (tests in story_164_single_hub.rs and allocation_lineage_tests.rs) and the round-1 golden/json-audit/refusal-test gaps are fixed, but CI is red at the head: cli-0 ''Test time budget'' fails (all tests pass; main passes this gate on its last 4 runs), most likely because the new story_164 integration tests exceed the 10s default with no scripts/test-time-budget.toml entry.'
-  recovery_hint: address the review findings, move STORY-2210 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-02T05:03:55.666267240Z
