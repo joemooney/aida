@@ -670,8 +670,10 @@ pub(crate) fn build_contained_resume_command(
     // resumed uncontained. trace:BUG-2386 | ai:claude
     if target.agent == "codex" {
         require_vendor_containment(HeadlessVendor::Codex, true, "resumed codex session")?;
-        let mut cmd = build_codex_resume_command(&target.id, false, None)?;
-        cmd.current_dir(codex_resume_cwd(target).unwrap_or_else(|| launcher_cwd.to_path_buf()));
+        let mut cmd = codex_session_resume_command(target, true)?;
+        if cmd.get_current_dir().is_none() {
+            cmd.current_dir(launcher_cwd);
+        }
         return Ok(cmd);
     }
     if target.agent != "claude" {
@@ -2315,14 +2317,17 @@ pub fn exec_codex_session(
 /// request (the parent's `AIDA_CONTAINED` or the `[agents] contained` knob)
 /// takes Codex's native sandbox or is refused, never run uncontained;
 /// otherwise `bypass` maps to Codex's bypass flag. `grant_id` binds the
-/// child's seat grant.
+/// child's seat grant. `contained` is the caller's own request (e.g.
+/// `queue work --sandbox`), OR-ed with the parent env and the knob so a
+/// flag-only request is never dropped.
 // trace:BUG-2386 | ai:claude
 pub(crate) fn build_codex_resume_command(
     thread_id: &str,
     bypass: bool,
     grant_id: Option<&str>,
+    contained: bool,
 ) -> Result<std::process::Command> {
-    let requested = drain_contained(&headless_worktree_root())?;
+    let requested = contained || drain_contained(&headless_worktree_root())?;
     require_vendor_containment(HeadlessVendor::Codex, requested, "resumed codex session")?;
     let posture = containment_posture(HeadlessVendor::Codex, requested)?;
     let native = posture == ContainmentPosture::Native;
@@ -2348,8 +2353,13 @@ pub(crate) fn build_codex_resume_command(
 
 /// BUG-2386: replace this process with [`build_codex_resume_command`].
 // trace:BUG-2386 | ai:claude
-pub fn exec_codex_resume(thread_id: &str, bypass: bool, grant_id: Option<&str>) -> Result<()> {
-    let mut cmd = build_codex_resume_command(thread_id, bypass, grant_id)?;
+pub fn exec_codex_resume(
+    thread_id: &str,
+    bypass: bool,
+    grant_id: Option<&str>,
+    contained: bool,
+) -> Result<()> {
+    let mut cmd = build_codex_resume_command(thread_id, bypass, grant_id, contained)?;
     #[cfg(unix)]
     {
         use std::os::unix::process::CommandExt;
@@ -6553,8 +6563,10 @@ fn claude_entries_for_cwd(cwd: &Path) -> Result<Vec<SessionLogEntry>> {
 }
 
 fn codex_entries() -> Result<Vec<SessionLogEntry>> {
-    let home = crate::home_dir().context("HOME not set; cannot locate Codex sessions")?;
-    let root = home.join(".codex").join("sessions");
+    // BUG-2386: the same root resume classification reads, so the pickers
+    // never list an id `recorded_resume` cannot place. trace:BUG-2386 | ai:claude
+    let root = crate::vendor_activity::codex_sessions_root()
+        .context("HOME not set; cannot locate Codex sessions")?;
     if !root.is_dir() {
         return Ok(Vec::new());
     }
@@ -7739,13 +7751,7 @@ fn exec_resume_command(
         // BUG-2386: exec `codex resume <id>` rather than printing it. The
         // resume is native (no bypass): a resume never widens the posture a
         // fresh `aida session new` would need consent for.
-        "codex" => {
-            let mut cmd = build_codex_resume_command(&target.id, false, None)?;
-            if let Some(cwd) = codex_resume_cwd(target) {
-                cmd.current_dir(cwd);
-            }
-            exec_or_spawn_claude(&mut cmd)
-        }
+        "codex" => exec_or_spawn_claude(&mut codex_session_resume_command(target, contained)?),
         _ => {
             let (program, args) = resume_command_for(target);
             anyhow::bail!(
@@ -7755,6 +7761,22 @@ fn exec_resume_command(
             )
         }
     }
+}
+
+/// BUG-2386: the `codex resume <id>` an `aida session resume` of a Codex
+/// session runs (exec'd, never printed): native posture (no bypass — a
+/// resume never widens what a fresh launch would need consent for), the
+/// caller's containment request honoured, in the session's own tree.
+// trace:BUG-2386 | ai:claude
+pub(crate) fn codex_session_resume_command(
+    target: &ResumeTarget,
+    contained: bool,
+) -> Result<std::process::Command> {
+    let mut cmd = build_codex_resume_command(&target.id, false, None, contained)?;
+    if let Some(cwd) = codex_resume_cwd(target) {
+        cmd.current_dir(cwd);
+    }
+    Ok(cmd)
 }
 
 /// BUG-2386: where a Codex session resumes: the tree of the lease that minted

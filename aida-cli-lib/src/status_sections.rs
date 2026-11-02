@@ -3288,3 +3288,8 @@ mod bug_2148_liveness_kill_signal_tests;
 #[cfg(test)]
 #[path = "tests/task_2631_containment_tests.rs"]
 mod task_2631_containment_tests;
+
+// trace:BUG-2386 | ai:claude
+#[cfg(test)]
+#[path = "tests/bug_2386_resume_routing_tests.rs"]
+mod bug_2386_resume_routing_tests;

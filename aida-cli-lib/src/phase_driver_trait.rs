@@ -3250,9 +3250,7 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         // BUG-2386: resume on the vendor that recorded the session (a Codex
         // drain resumes its thread), not a hardcoded `claude -p --resume`.
         // trace:BUG-2386 | ai:claude
-        let vendor = self
-            .implementer_vendor
-            .unwrap_or_else(|| session::resolve_headless_vendor(&self.project_root));
+        let vendor = punt_resume_vendor(self.implementer_vendor, &self.project_root);
         let status = session::resolve_headless_resume_id(
             vendor,
             &self.project_root,
@@ -3990,6 +3988,18 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
             }
         }
     }
+}
+
+/// BUG-2386: the vendor a punt (advisor-answer) resume continues on: the one
+/// the implementer actually ran on this drive, else the configured headless
+/// vendor. A Codex-run implementer resumes on Codex even when the project's
+/// default is Claude.
+// trace:BUG-2386 | ai:claude
+pub(crate) fn punt_resume_vendor(
+    implementer_vendor: Option<session::HeadlessVendor>,
+    project_root: &std::path::Path,
+) -> session::HeadlessVendor {
+    implementer_vendor.unwrap_or_else(|| session::resolve_headless_vendor(project_root))
 }
 
 // trace:BUG-2124 | ai:antigravity

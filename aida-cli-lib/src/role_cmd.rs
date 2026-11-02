@@ -556,14 +556,17 @@ fn pick_recent_session_for_role(
 }
 
 /// BUG-2386: the eval line that resumes a picked role session on the vendor
-/// that recorded it: `claude --resume '<id>'` or `codex resume '<id>'`. A
-/// vendor with no resume command (agy) offers nothing.
+/// that recorded it: `claude --resume '<id>'`, or for Codex `aida session
+/// resume '<id>'`, which resolves the seat's posture and containment (and
+/// refuses under a contained parent that has not opted Codex in) instead of
+/// running bare `codex resume` on Codex's default posture. A vendor with no
+/// resume command (agy) offers nothing.
 // trace:BUG-2386 | ai:claude
 pub(crate) fn role_resume_shell_line(agent: &str, id: &str) -> Option<String> {
     let id = sh_single_quote(id);
     match agent {
         "claude" => Some(format!("claude --resume '{id}'")),
-        "codex" => Some(format!("codex resume '{id}'")),
+        "codex" => Some(format!("aida session resume '{id}'")),
         _ => None,
     }
 }
@@ -1521,7 +1524,8 @@ mod tests {
         );
         assert_eq!(
             super::role_resume_shell_line("codex", "019a-thread").as_deref(),
-            Some("codex resume '019a-thread'")
+            Some("aida session resume '019a-thread'"),
+            "a Codex resume goes through the posture/containment-resolving verb"
         );
         assert_eq!(super::role_resume_shell_line("antigravity", "x"), None);
     }

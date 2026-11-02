@@ -139,26 +139,95 @@ pub(crate) fn find_rollout(root: &Path, id: &str) -> Option<CodexRollout> {
 }
 
 /// How an id handed to a resume verb is resumed: the vendor that recorded
-/// it and the id that vendor takes. A Codex thread id (it has a rollout) is
-/// Codex's own; an AIDA session id whose headless log started a Codex thread
-/// resumes that thread; anything else is a Claude session id.
+/// it and the id that vendor takes, in this order:
+///
+/// 1. a Codex thread id (it has a rollout) is Codex's own;
+/// 2. an AIDA session id whose headless log started a Codex thread resumes
+///    that thread;
+/// 3. an id Claude recorded a transcript for is a Claude session;
+/// 4. otherwise the `scope`'s lease decides: its stamped `vendor_session_id`,
+///    else the one rollout started in its tree since it began.
+///
+/// An id none of these place refuses by name; it is never assumed Claude.
+// trace:BUG-2386 | ai:claude
 pub(crate) fn recorded_resume(
     project_root: &Path,
     id: &str,
-) -> (crate::session::HeadlessVendor, String) {
+    scope: Option<&str>,
+) -> Result<(crate::session::HeadlessVendor, String)> {
     use crate::session::HeadlessVendor;
     let rollout =
         crate::vendor_activity::codex_sessions_root().and_then(|root| find_rollout(&root, id));
     if rollout.is_some() {
-        return (HeadlessVendor::Codex, id.to_string());
+        return Ok((HeadlessVendor::Codex, id.to_string()));
     }
     if let Some(thread) = headless_logs_for(project_root, id)
         .iter()
         .find_map(|log| thread_id_from_log(log))
     {
-        return (HeadlessVendor::Codex, thread);
+        return Ok((HeadlessVendor::Codex, thread));
     }
-    (HeadlessVendor::Claude, id.to_string())
+    if claude_transcript_exists(id) {
+        return Ok((HeadlessVendor::Claude, id.to_string()));
+    }
+    // The scope's leases, newest first: the first that binds a thread (its
+    // stamp, else its one rollout since it began) answers. A lease minted for
+    // this very resume binds nothing and is passed over.
+    let mut leases: Vec<crate::leases::SessionLease> = scope
+        .map(|scope| {
+            crate::leases::list_leases(project_root)
+                .into_iter()
+                .filter(|l| l.scope.eq_ignore_ascii_case(scope))
+                .collect()
+        })
+        .unwrap_or_default();
+    leases.sort_by_key(|l| std::cmp::Reverse(l.started_at));
+    let mut last_err = None;
+    for lease in &leases {
+        match resolve_thread_id(&ThreadLookup {
+            project_root,
+            session_id: id,
+            lease_id: Some(&lease.id),
+            worktree: &lease.worktree_path,
+            since: None,
+        }) {
+            Ok(thread) => return Ok((HeadlessVendor::Codex, thread)),
+            Err(e) => last_err = Some((lease.id.clone(), e)),
+        }
+    }
+    match last_err {
+        Some((lease, e)) => Err(e.context(format!(
+            "cannot tell which agent recorded session `{id}`: no Claude transcript names it, \
+             and no session lease for this scope binds a Codex thread (last tried {lease})"
+        ))),
+        None => anyhow::bail!(
+            "cannot tell which agent recorded session `{id}`: no Claude transcript, Codex \
+             rollout or headless log names it, and no session lease holds this scope. Run \
+             `aida session list` to see resumable ids, or start a fresh run."
+        ),
+    }
+}
+
+/// Whether Claude recorded a transcript for session `id`
+/// (`~/.claude/projects/<project>/<id>.jsonl`, the tree the session pickers
+/// scan).
+pub(crate) fn claude_transcript_exists(id: &str) -> bool {
+    if !valid_thread_id(id) {
+        return false;
+    }
+    let Some(home) = crate::home_dir() else {
+        return false;
+    };
+    claude_transcript_exists_in(&home.join(".claude").join("projects"), id)
+}
+
+fn claude_transcript_exists_in(projects: &Path, id: &str) -> bool {
+    let name = format!("{id}.jsonl");
+    std::fs::read_dir(projects)
+        .into_iter()
+        .flatten()
+        .flatten()
+        .any(|dir| dir.path().join(&name).is_file())
 }
 
 /// The one thread started in `cwd` at or after `since`. Zero or several
@@ -231,9 +300,49 @@ pub(crate) fn resolve_thread_id(lookup: &ThreadLookup<'_>) -> Result<String> {
     {
         return Ok(id);
     }
+    // The fallback is only "the one rollout started since this run's
+    // launch": a reused lane path holds older rollouts from a previous run,
+    // so an unbounded scan would resume the wrong thread. Bound it by the
+    // caller's launch time, else the lease's start, else the first headless
+    // log's birth; with none of them, refuse. trace:BUG-2386 | ai:claude
+    let since = lookup
+        .since
+        .or_else(|| {
+            lookup
+                .lease_id
+                .and_then(|lease| lease_started_at(lookup.project_root, lease))
+        })
+        .or_else(|| {
+            headless_logs_for(lookup.project_root, lookup.session_id)
+                .first()
+                .and_then(|log| std::fs::metadata(log).ok()?.created().ok())
+        })
+        .with_context(|| {
+            format!(
+                "no Codex thread is bound to this session: its lease and headless log carry no \
+                 thread id, and its launch time is unknown, so no rollout in {} can be tied to \
+                 it. Start a fresh run instead of resuming.",
+                lookup.worktree.display()
+            )
+        })?;
     let root = crate::vendor_activity::codex_sessions_root()
         .context("HOME not set; cannot locate Codex sessions")?;
-    unique_rollout_in(&list_rollouts(&root), lookup.worktree, lookup.since)
+    unique_rollout_in(&list_rollouts(&root), lookup.worktree, Some(since))
+}
+
+/// When `lease_id` started, from its `started_at` key.
+pub(crate) fn lease_started_at(project_root: &Path, lease_id: &str) -> Option<SystemTime> {
+    let body = std::fs::read_to_string(lease_path(project_root, lease_id)).ok()?;
+    let doc = body.parse::<toml_edit::DocumentMut>().ok()?;
+    let raw = doc.get("started_at")?;
+    let text = raw.as_str().map(str::to_string).or_else(|| {
+        raw.as_value()
+            .and_then(|v| v.as_datetime())
+            .map(|d| d.to_string())
+    })?;
+    chrono::DateTime::parse_from_rfc3339(text.trim())
+        .ok()
+        .map(|t| SystemTime::from(t.with_timezone(&chrono::Utc)))
 }
 
 /// The headless logs a run with AIDA session `session_id` wrote, first run
