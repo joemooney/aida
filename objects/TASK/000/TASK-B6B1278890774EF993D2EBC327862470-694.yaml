@@ -13,13 +13,20 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-02T09:06:39.970297536Z
-modified_at: 2026-11-02T09:06:39.970297536Z
+modified_at: 2026-11-02T09:20:18.866212305Z
 req_type: Task
 tags:
 - carried-from:BUG-B6B1278890774EF993D2EBC327862470-178
 - finding-hash:a754da4b
 - from-review:PR-3214
 - kind:carried-forward
+comments:
+- id: 01a19b8f-3fb2-75a3-8d4f-c16b52588abd
+  author: joe
+  content: 'ADVISOR RULING (2026-11-02 02:22 MST): accepted as-is, no change. Reason: CI lib-0, lib-1 and gates at the exact head are the execution evidence the LIGHT gate defers to.'
+  created_at: 2026-11-02T09:20:18.866212305Z
+  modified_at: 2026-11-02T09:20:18.866212305Z
+  session_id: 1f56bd1e-c059-4f73-b8df-e18b2170fdfc
 filed_at:
   code_sha: f7892bcf9b28cd9659cd5461cbb35a64c744ecd0
   branch: main
