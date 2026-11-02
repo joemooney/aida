@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-29T18:09:03.242873761Z
-modified_at: 2026-07-21T04:30:14.890201524Z
+modified_at: 2026-11-02T22:35:07.103148964Z
 req_type: Task
 tags:
 - drain
@@ -16,6 +16,13 @@ tags:
 - needs-keyboard
 - spike-70
 - supervised
+comments:
+- id: 01a19e66-e9df-7d92-8918-db831d3df844
+  author: joe
+  content: 'ADVISOR REGROUP (2026-11-02 15:40): closing. Overtaken: single-branch drain (SPIKE-70) is superseded by the merge train.'
+  created_at: 2026-11-02T22:35:07.103148964Z
+  modified_at: 2026-11-02T22:35:07.103148964Z
+  session_id: ee0bf351-6b17-486f-a38e-cfbb1343c426
 deferred: true
 deferred_at: 2026-07-21T04:30:14.890201524Z
 deferred_until: single-branch drain (SPIKE-70) is prioritized — coupled to the drain-machinery cluster
