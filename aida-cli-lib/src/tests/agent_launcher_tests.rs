@@ -4856,3 +4856,41 @@ fn codex_derisk_agent_argv_expands_workflow_after_context_preamble() {
     );
     assert_eq!(args, vec![guided.prompt]);
 }
+
+// Every `aida agent` subcommand, hidden ones included, passes through the
+// bare-agent rewrite: `aida agent wake arm <agent>` (the manual-arm command
+// mail-wake failures print) was turned into `agent new wake` and exited 2.
+// trace:STORY-2256 | ai:claude
+#[test]
+fn story_2256_every_agent_subcommand_passes_the_default_new_rewrite() {
+    let mut command = crate::command_registry::built_command();
+    command.build();
+    let agent = command.find_subcommand("agent").unwrap();
+    for sub in agent.get_subcommands() {
+        let mut names = vec![sub.get_name().to_string()];
+        names.extend(sub.get_all_aliases().map(str::to_owned));
+        for name in names {
+            let args: Vec<String> = ["aida", "agent", &name]
+                .into_iter()
+                .map(str::to_owned)
+                .collect();
+            assert_eq!(
+                crate::rewrite_agent_default_new(&args),
+                args,
+                "`aida agent {name}` must not be rewritten to `agent new`"
+            );
+        }
+    }
+    let args: Vec<String> = ["aida", "agent", "wake", "arm", "codex-agent-05"]
+        .into_iter()
+        .map(str::to_owned)
+        .collect();
+    let cli =
+        crate::command_registry::try_parse_from(crate::rewrite_agent_default_new(&args)).unwrap();
+    assert!(matches!(
+        &cli.command
+            .registered::<crate::agent_launch::AgentArgs>()
+            .inner,
+        AgentCommand::Wake { .. }
+    ));
+}
