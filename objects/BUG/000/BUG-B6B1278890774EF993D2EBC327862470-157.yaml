@@ -19,7 +19,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T02:25:46.947809262Z
-modified_at: 2026-11-02T13:34:31.349562712Z
+modified_at: 2026-11-02T18:31:55.630329830Z
 req_type: Bug
 tags:
 - area:agents
@@ -450,6 +450,12 @@ comments:
   created_at: 2026-11-02T13:34:31.349562712Z
   modified_at: 2026-11-02T13:34:31.349562712Z
   session_id: ee0bf351-6b17-486f-a38e-cfbb1343c426
+- id: 01a19d88-43ee-7033-9b4a-d93339e0e0b9
+  author: joe
+  content: 'FIXER PROGRESS (2026-11-02 11:00 MST): pushed 1c616592096 to PR #3192 (gates fix 553e2ed). Implements fork 1A (heartbeat, with test (a) covering it) and fork 2A (unshare -Urm + overlayfs generation snapshot, GC, cold fallback, live inode test in the bug_2383_bwrap_ gate), plus signoff (c): the real Codex boundary fixture passes uncontained and in native workspace-write (own PID namespace). Host-run: targeted lane_job/seat_target/codex_tool_env tests 54/54 and check-ci-fast 36/36. The host probe is in the PR body. CI at the new head is pending. Not merged; the hold stays.'
+  created_at: 2026-11-02T18:31:55.630329830Z
+  modified_at: 2026-11-02T18:31:55.630329830Z
+  session_id: 89067a16-6c04-4703-a481-34dba3d8a9cd
 history:
 - id: 01a19525-88eb-79e3-aab8-8d511ad2f605
   author: aida-session-start
