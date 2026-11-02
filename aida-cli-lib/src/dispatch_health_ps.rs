@@ -987,7 +987,12 @@ pub(crate) fn next_command_hint_with_untracked(
     } else {
         match spec {
             Some(id) => format!("aida queue work {id}"),
-            None => format!("aida agent new claude --cwd {wt}"),
+            // trace:BUG-2396 | ai:claude — the worktree's `[agents] vendor`.
+            None => crate::vendor_hints::agent_new_cmd(
+                crate::vendor_hints::hint_vendor(worktree_path),
+                &format!("--cwd {wt}"),
+                false,
+            ),
         }
     };
 
@@ -1436,6 +1441,31 @@ mod tests {
         // report; the hint is a plain commit, not an invocation of
         // `preserve_dirty_worktree`.
         assert!(!hint.contains("preserve_dirty_worktree"), "{hint}");
+    }
+
+    // trace:BUG-2396 | ai:claude
+    #[test]
+    fn salvageable_hint_rebriefs_with_the_worktrees_codex_vendor() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(dir.path().join(".aida")).unwrap();
+        std::fs::write(
+            dir.path().join(".aida/config.toml"),
+            "[agents]\nvendor = \"codex\"\n",
+        )
+        .unwrap();
+        let hint = next_command_hint_with_untracked(
+            DispatchState::Salvageable,
+            dir.path(),
+            "harness-worktree",
+            None,
+            None,
+            false,
+            false,
+        )
+        .unwrap();
+        let expected = format!("aida agent new codex --cwd {}", dir.path().display());
+        assert!(hint.contains(&expected), "{hint}");
+        assert!(!hint.contains("agent new claude"), "{hint}");
     }
 
     #[test]

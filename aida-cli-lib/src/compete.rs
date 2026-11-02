@@ -523,7 +523,9 @@ impl JudgeVendor {
 /// (parallels the vendor-binary override patterns), else the vendor default.
 ///
 /// - claude: `claude -p --permission-mode bypassPermissions <prompt>`
-/// - codex:  `codex exec --dangerously-bypass-approvals-and-sandbox <prompt>`
+/// - codex:  `codex exec --sandbox read-only <prompt>` — the judge only reads
+///   the diffs in its prompt, so it never gets a writable or unsandboxed
+///   child (BUG-2396).
 ///
 /// Pure + unit-tested; the I/O (spawn, stdin-redirect, parse) is the caller's.
 /// `binary_override` is the resolved `AIDA_COMPETE_JUDGE` value (or `None`).
@@ -543,13 +545,22 @@ pub fn judge_command(
             "--permission-mode".to_string(),
             "bypassPermissions".to_string(),
         ],
+        // trace:BUG-2396 | ai:claude — a read-only judge.
         JudgeVendor::Codex => vec![
             "exec".to_string(),
-            "--dangerously-bypass-approvals-and-sandbox".to_string(),
+            "--sandbox".to_string(),
+            "read-only".to_string(),
         ],
     };
     args.push(prompt.to_string());
     (binary, args)
+}
+
+/// The judge vendor when `--judge-vendor` is not given: the configured
+/// `[agents] vendor` when it names a judge vendor, else Claude.
+// trace:BUG-2396 | ai:claude
+pub fn default_judge_vendor(configured: Option<&str>) -> JudgeVendor {
+    configured.and_then(JudgeVendor::parse).unwrap_or_default()
 }
 
 /// Build the rubric-judge prompt: the spec context + each candidate's diff, with
@@ -1285,19 +1296,31 @@ mod tests {
     }
 
     #[test]
-    fn judge_command_codex_uses_exec_bypass_and_needs_stdin_closed() {
+    // trace:BUG-2396 | ai:claude
+    fn judge_command_codex_is_read_only_and_needs_stdin_closed() {
         let (bin, args) = judge_command(JudgeVendor::Codex, None, "JUDGE PROMPT");
         assert_eq!(bin, "codex");
         assert_eq!(
             args,
             vec![
                 "exec".to_string(),
-                "--dangerously-bypass-approvals-and-sandbox".to_string(),
+                "--sandbox".to_string(),
+                "read-only".to_string(),
                 "JUDGE PROMPT".to_string(),
             ]
         );
+        assert!(!args.iter().any(|a| a.contains("dangerously")));
         // codex exec reads stdin → must be closed in a non-interactive run.
         assert!(JudgeVendor::Codex.needs_stdin_closed());
+    }
+
+    // trace:BUG-2396 | ai:claude
+    #[test]
+    fn default_judge_vendor_follows_agents_vendor() {
+        assert_eq!(default_judge_vendor(Some("codex")), JudgeVendor::Codex);
+        assert_eq!(default_judge_vendor(Some("claude")), JudgeVendor::Claude);
+        assert_eq!(default_judge_vendor(Some("agy")), JudgeVendor::Claude);
+        assert_eq!(default_judge_vendor(None), JudgeVendor::Claude);
     }
 
     #[test]

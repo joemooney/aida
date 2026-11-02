@@ -5,6 +5,9 @@
 # reading nextest's JUnit reports (STORY-1853 AC4):
 # - a test over default_limit seconds with no entry fails the build;
 # - a test over its entry fails the build;
+# - except a test the change did not touch (its function is not in a changed
+#   file), which fails only over its limit x untouched_factor and is a CI
+#   warning below that: give it an entry when the warning shows (BUG-2414);
 # - except over-budget tests whose runs overlap each other: a runner stall,
 #   reported as a CI warning (test-timings.py `stalled`).
 # Keys are `<nextest binary id> <test name>` (doctests: `doctests:<crate>`),
@@ -23,6 +26,8 @@
 # trace:TASK-1988 | ai:claude
 
 default_limit = 10
+# Tolerance for tests the change did not touch; trace:BUG-2414 | ai:claude
+untouched_factor = 1.5
 
 [budget]
 "aida-cli-lib contained_boundary::store_tests::bug_1985_host_status_guard" = 180  # max 108.6s, median 99.4s over 7 runs; x2 is 220, capped at the 180 s nextest kill
@@ -47,6 +52,8 @@ default_limit = 10
 "aida-cli::story_164_single_hub hub_add_grants_a_disjoint_pool_a_clone_of_the_new_hub_claims_from" = 60  # ~40 aida/git subprocesses across a root, two hubs and a clone; 26.0s locally (debug, run alone), x2 rounded up plus one step for shard load (CI timings artifact not reachable from the implementer sandbox); trace:STORY-B6B1278890774EF993D2EBC327862470-170 | ai:claude
 "aida-cli::story_164_single_hub a_delegated_claim_needs_an_upstream_reaching_a_granted_hub" = 20  # two bound clones + enroll-root, 9.4s locally (debug), x2 rounded; trace:STORY-B6B1278890774EF993D2EBC327862470-170 | ai:claude
 "aida-cli::story_164_single_hub hub_add_without_an_enrolled_root_refuses" = 15  # one bound clone, 3.7s locally (debug); the 15 s floor; trace:STORY-B6B1278890774EF993D2EBC327862470-170 | ai:claude
+"aida-cli::story_164_single_hub single_hub_clones_claim_by_cas_and_mint_without_a_root" = 20  # 10.0s on train #3252 cli-0, x2; trace:BUG-2414 | ai:claude
+"aida-cli::bug_046_padded_id_cli edit_comment_and_link_write_the_stored_object_under_any_padding" = 25  # 11.0s on PR #3226 cli-0, x2 rounded up to 5 s; trace:BUG-2414 | ai:claude
 "aida-cli::story_1843_c2_session_end_retention a_refused_session_end_ends_nothing_and_a_retry_ends_it" = 30  # two session ends + start, 10.1s locally (agent profile), x3 for CI debug/shard load; trace:STORY-1843 | ai:claude
 "aida-cli::story_1644_list_sort_cap list_sort_and_agent_cap_follow_story_1644" = 40  # max 17.9s, median 13.5s over 7 runs
 "aida-cli-lib task_1507_history_cache_tests::task_1507_interleaved_merge_every_cut_matches_walk_exactly" = 35  # max 17.5s, median 14.5s over 7 runs

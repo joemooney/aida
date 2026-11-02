@@ -1907,6 +1907,19 @@ pub(crate) fn session_start_with_receipt(
         )
         .map(|_| SessionStartReceipt::existing(None));
     }
+    // The codex launcher would otherwise reach the interactive role picker
+    // only after the worktree and lease exist, and a cancel there would orphan
+    // both. Resolve the child's role now, before any setup, from the same
+    // resolution as the recorded session role, and refuse an undelegated child
+    // seat here, with nothing to undo, instead of after the claim.
+    // trace:TASK-2742 | ai:claude
+    let codex_child_role = if launch_vendor.as_deref() == Some("codex") {
+        let role = session::start_launch_child_role(launch_role.as_deref(), owns);
+        crate::agent_launch::preflight_agent_new_delegation(&project_root, Some(&role))?;
+        Some(role)
+    } else {
+        None
+    };
     // BUG-2169: decide the tree kind before any claim or lease is written, so
     // a malformed knob refuses with nothing to undo.
     // trace:BUG-2169 | ai:claude
@@ -3497,7 +3510,8 @@ pub(crate) fn session_start_with_receipt(
             Some(owns.to_string()),
             launch_title,
             launch_permission_mode,
-            launch_role,
+            // trace:TASK-2742 | ai:claude
+            codex_child_role.or(launch_role),
             derived_name,
             launch_contained,
             launch_set_title,
