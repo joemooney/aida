@@ -1,0 +1,23 @@
+id: 01a19c5c-2496-7992-9d7e-2bd831428dfc
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-701
+agreed_id: TASK-2835
+title: 'Showcase: integrate the AIDA brand logos, architecture icon and favicons, with a reproducible PR-size chart'
+description: 'Owns the brand and favicon work in PR #3235 (branch agy2/showcase-logos). It was attributed to TASK-2709, but that spec is completed and its scope is audit publication. Acceptance: (1) build.py --check is clean and the showcase unittests pass. (2) The published pages have no broken relative links and no external runtime dependencies. (3) Every number shown on the PR-size chart (mean marker, methodology mean) reproduces from the documented git shortstat method; the methodology note names the density estimator (KDE kernel and bandwidth) and gives the exact command.'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-02T13:04:06.806646695Z
+modified_at: 2026-11-02T13:04:06.806646695Z
+req_type: Task
+tags:
+- docs
+- showcase
+filed_at:
+  code_sha: 0ce3c0ba6e620e3a6cf48cc50ce5dbc5235cc4b3
+  branch: main
+  dirty: true
+  aida_version: 0.16.0
+  aida_build_sha: 6a3f67671a9
+  vendor: claude
+  session: ee0bf351-6b17-486f-a38e-cfbb1343c426
