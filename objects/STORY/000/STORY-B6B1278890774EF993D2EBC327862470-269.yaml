@@ -27,12 +27,12 @@ description: |
 
   ## Out of scope
   macOS or other OS backends (operator, 2026-10-31: Linux only for now).
-status: InProgress
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T00:54:49.371776631Z
-modified_at: 2026-11-01T09:16:13.823617268Z
+modified_at: 2026-11-02T13:37:15.717592592Z
 req_type: Story
 tags:
 - architecture
@@ -281,6 +281,14 @@ history:
   author: joe
   timestamp: 2026-11-01T09:15:55.561515652Z
   changes: []
+- id: 01a19c7a-7dc5-7ed1-98aa-1acf5a2d57ab
+  author: joe
+  timestamp: 2026-11-02T13:37:15.717589919Z
+  session_id: ee0bf351-6b17-486f-a38e-cfbb1343c426
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Approved
 filed_at:
   code_sha: 43d9f95803036ec22350e5a210d8c1cae20b9fe5
   branch: main
