@@ -552,6 +552,9 @@ enum TrainCiReadiness {
     Missing(Vec<String>),
     Pending(Vec<String>),
     Red(String),
+    /// Terminal and not a red train: no rerun or bisection can turn it green
+    /// (a required check the train PR's CI skipped). trace:BUG-2401 | ai:claude
+    Refused(String),
     Green,
 }
 
@@ -606,7 +609,26 @@ fn train_ci_readiness(
     if rows.is_empty() {
         return TrainCiReadiness::Missing(vec!["CI checks".into()]);
     }
-    // Required contexts must pass; skipped/unknown required rows are not green.
+    // A skipped required check is settled and never green (GitHub would count
+    // it satisfied; the train lands only on a passing one): refuse at once
+    // rather than burning the CI ceiling. trace:BUG-2401 | ai:claude
+    let skipped: Vec<_> = rows
+        .iter()
+        .filter(|row| {
+            is_required(&row.name)
+                && row.bucket == "skipping"
+                && !(tolerate_hold && same(&row.name, crate::ci_gate::HOLD_GATE_CHECK))
+        })
+        .map(|r| r.name.as_str())
+        .collect();
+    if !skipped.is_empty() {
+        return TrainCiReadiness::Refused(format!(
+            "required checks were skipped: {}; a train lands only when every required \
+             check passes",
+            skipped.join(", ")
+        ));
+    }
+    // Required contexts must pass; unknown required rows are not green.
     let pending: Vec<_> = rows
         .iter()
         .filter(|row| {
@@ -659,6 +681,10 @@ fn wait_train_ci(
         let waiting = match state {
             TrainCiReadiness::Green => return Ok(CiVerdict::Green),
             TrainCiReadiness::Red(why) => return Ok(CiVerdict::Red(why)),
+            // trace:BUG-2401 | ai:claude
+            TrainCiReadiness::Refused(why) => {
+                anyhow::bail!("train PR #{pr} CI refused: {why}")
+            }
             waiting => waiting,
         };
         println!("  train PR #{pr} CI waiting: {waiting:?}");
@@ -823,6 +849,21 @@ fn net_output(
         build,
     )
     .with_context(|| format!("could not run `{label}`"))
+}
+
+/// One required-check policy read (`gh api <endpoint>`) through the retry
+/// runner, like every other train network step.
+// trace:BUG-2401 trace:BUG-2219 | ai:claude
+fn train_policy_read(repo: &Path, endpoint: &str) -> Result<std::process::Output> {
+    let gh =
+        crate::kernel::resolve_gh_binary().ok_or_else(|| anyhow::anyhow!("gh is unavailable"))?;
+    net_output(repo, &format!("gh api {endpoint}"), || {
+        let mut cmd = std::process::Command::new(&gh);
+        cmd.current_dir(repo)
+            .args(["api", endpoint])
+            .stdin(std::process::Stdio::null());
+        cmd
+    })
 }
 
 /// `gh` in the project root, returning its stdout.
@@ -1669,9 +1710,30 @@ impl LiveTrainForge<'_> {
         tip: &str,
         cars: &[Car],
     ) -> Result<TrainCiReadiness> {
+        self.train_ci_snapshot_at(change, tip, cars, None)
+    }
+
+    /// The base's fresh required-check policy (protection + effective rules).
+    // trace:BUG-2401 | ai:claude
+    fn train_policy(&self, base: &str) -> Result<Vec<String>> {
+        crate::status_prs::train_required_status_checks(base, |endpoint| {
+            train_policy_read(&self.project_root, endpoint)
+        })
+    }
+
+    /// A snapshot judged against `policy` when given (the CI wait reads the
+    /// policy once, not on every poll), else against a fresh policy read.
+    // trace:BUG-2401 | ai:claude
+    fn train_ci_snapshot_at(
+        &mut self,
+        change: &crate::forge::ChangeRef,
+        tip: &str,
+        cars: &[Car],
+        policy: Option<&[String]>,
+    ) -> Result<TrainCiReadiness> {
         let root = self.project_root.clone();
         let kind = self.forge.kind();
-        self.train_ci_snapshot_with(change, tip, cars, |pr| {
+        self.train_ci_snapshot_with(change, tip, cars, policy, |pr| {
             crate::merge_hold::fetch_pinned_change(&root, kind, pr).map_err(|e| e.to_string())
         })
     }
@@ -1684,6 +1746,7 @@ impl LiveTrainForge<'_> {
         change: &crate::forge::ChangeRef,
         tip: &str,
         cars: &[Car],
+        policy: Option<&[String]>,
         labels: impl FnMut(u64) -> std::result::Result<Option<crate::merge_hold::PinnedChange>, String>,
     ) -> Result<TrainCiReadiness> {
         self.dispatch_check()?;
@@ -1711,8 +1774,14 @@ impl LiveTrainForge<'_> {
             Ok(())
         };
         assert_head()?;
-        let required =
-            crate::status_prs::train_required_status_checks(&self.project_root, &change.base)?;
+        let fresh;
+        let required = match policy {
+            Some(policy) => policy,
+            None => {
+                fresh = self.train_policy(&change.base)?;
+                fresh.as_slice()
+            }
+        };
         let rows = self.forge.check_rows(change)?;
         // A forge that reports no CI at all refuses at once, as before; it
         // never waits out the registration bound. trace:BUG-2401 | ai:claude
@@ -1733,7 +1802,7 @@ impl LiveTrainForge<'_> {
         // Green (BUG-2214's tolerance, decided once the others settle).
         // trace:BUG-2401 | ai:claude
         let admitted = hold_release_admitted(&rows, cars, labels);
-        let state = train_ci_readiness(&rows, &required, &cfg, admitted);
+        let state = train_ci_readiness(&rows, required, &cfg, admitted);
         assert_head()?;
         self.dispatch_check()?;
         Ok(state)
@@ -1830,10 +1899,21 @@ impl TrainForge for LiveTrainForge<'_> {
         if self.forge.kind() == crate::forge::ForgeKind::GitHub {
             let started = std::time::Instant::now();
             let settle_limit = crate::ci_idle_timeout::ci_absolute_ceiling_secs(&self.project_root);
+            // Policy is read once per wait (retried on transients); the merge
+            // step's final recheck reads it fresh under the lease.
+            // trace:BUG-2401 | ai:claude
+            let policy = self.train_policy(&change.base)?;
             return wait_train_ci(
                 change.id,
                 settle_limit,
-                || self.train_ci_snapshot(change, &train.tip, &train.cars),
+                || {
+                    self.train_ci_snapshot_at(
+                        change,
+                        &train.tip,
+                        &train.cars,
+                        Some(policy.as_slice()),
+                    )
+                },
                 || started.elapsed().as_secs(),
                 || std::thread::sleep(std::time::Duration::from_secs(TRAIN_CI_POLL_SECS)),
             );

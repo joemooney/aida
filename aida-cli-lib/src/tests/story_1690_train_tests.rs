@@ -2170,7 +2170,8 @@ fn bug_2219_exhausted_retries_return_the_final_failure() {
 #[test]
 fn bug_2219_train_network_helpers_route_through_the_retry_runner() {
     let src = include_str!("../pr_train.rs");
-    for name in ["fn gh_stdout(", "fn origin_git("] {
+    // trace:BUG-2401 | ai:claude — the required-check policy reads too.
+    for name in ["fn gh_stdout(", "fn origin_git(", "fn train_policy_read("] {
         let start = src.find(name).expect(name);
         let body = &src[start..start + 700];
         assert!(body.contains("net_output("), "{name} must retry transients");
@@ -2232,12 +2233,21 @@ fn train_required_aggregate_registration_and_precedence() {
         workflow: "CI".into(),
         run_id: None,
     });
-    for bucket in ["pending", "skipping", "unknown"] {
+    for bucket in ["pending", "unknown"] {
         rows.last_mut().unwrap().bucket = bucket.into();
         assert!(matches!(
             train_ci_readiness(&rows, &required, &cfg, true),
             TrainCiReadiness::Pending(_)
         ));
+    }
+    // A skipped required check is a terminal refusal naming it, never a wait
+    // until the CI ceiling. trace:BUG-2401 | ai:claude
+    rows.last_mut().unwrap().bucket = "skipping".into();
+    match train_ci_readiness(&rows, &required, &cfg, true) {
+        TrainCiReadiness::Refused(why) => {
+            assert!(why.contains("skipped: Build (ubuntu-latest)"), "{why}")
+        }
+        other => panic!("a skipped required check must refuse, got {other:?}"),
     }
     rows.last_mut().unwrap().bucket = "fail".into();
     assert!(matches!(
@@ -2278,6 +2288,12 @@ fn train_required_ci_live_ports_refuse_stale_and_final_missing() {
     }
     let root = tempfile::tempdir().unwrap();
     let dir = root.path();
+    // Fast transient retries for the policy-read case (BUG-2219 runner).
+    write(
+        dir,
+        ".aida/config.toml",
+        "[orchestrator]\nretry_max_attempts = 3\nretry_base_delay_ms = 1\n",
+    );
     let gh = dir.join("gh");
     crate::test_exec::write_executable(
         &gh,
@@ -2286,7 +2302,10 @@ case "$*" in
   'pr view '*)
     if [ -f moving ] && [ -f viewed ]; then cat moved.json; else cat head.json; fi
     touch viewed ;;
-  'api repos/{owner}/{repo}/branches/release%2Fnext/protection') if [ -f unavailable ]; then echo 'HTTP 403' >&2; exit 1; fi; cat protection.json ;;
+  'api repos/{owner}/{repo}/branches/release%2Fnext/protection')
+    if [ -f flaky ]; then rm flaky; echo 'error connecting to api.github.com' >&2; exit 1; fi
+    if [ -f unprotected ]; then echo '{"message":"Branch not protected"}'; echo 'gh: Branch not protected (HTTP 404)' >&2; exit 1; fi
+    if [ -f unavailable ]; then echo 'HTTP 403' >&2; exit 1; fi; cat protection.json ;;
   'api repos/{owner}/{repo}/rules/branches/release%2Fnext?per_page=100&page='*)
     p=${2##*page=}
     if [ -f "rules-$p.json" ]; then cat "rules-$p.json"; elif [ "$p" = 1 ]; then cat rules.json; else echo '[]'; fi ;;
@@ -2450,6 +2469,41 @@ esac
         host.train_ci_snapshot(&change, &tip, &[]).unwrap(),
         TrainCiReadiness::Green
     );
+    // GitHub omits `required_status_checks` on a protected branch with no
+    // status-check requirement: absent reads as nothing required, like null;
+    // a present but malformed section still refuses. trace:BUG-2401 | ai:claude
+    write(
+        dir,
+        "protection.json",
+        r#"{"url":"fixture","enforce_admins":{"enabled":true}}"#,
+    );
+    assert_eq!(
+        host.train_ci_snapshot(&change, &tip, &[]).unwrap(),
+        TrainCiReadiness::Green
+    );
+    write(
+        dir,
+        "protection.json",
+        r#"{"required_status_checks":{"contexts":"Build"}}"#,
+    );
+    assert!(host.train_ci_snapshot(&change, &tip, &[]).is_err());
+    // The 'Branch not protected' 404 is a positive "nothing required" (rules
+    // still apply); every other protection failure stays unknown above.
+    write(dir, "unprotected", "");
+    assert_eq!(
+        host.train_ci_snapshot(&change, &tip, &[]).unwrap(),
+        TrainCiReadiness::Green
+    );
+    std::fs::remove_file(dir.join("unprotected")).unwrap();
+    // One transient policy-read failure is retried (BUG-2219) and the CI
+    // wait carries on to green instead of stopping the run.
+    write(dir, "protection.json", r#"{"required_status_checks":null}"#);
+    write(dir, "flaky", "");
+    assert!(matches!(
+        host.wait_ci(&change, &train).unwrap(),
+        CiVerdict::Green
+    ));
+    assert!(!dir.join("flaky").exists(), "the transient failure was hit");
     std::fs::remove_file(dir.join("viewed")).unwrap();
     write(dir, "moving", "");
     assert!(host
@@ -2548,6 +2602,20 @@ fn bug2401_wait_loop_bounds_registration_only_after_lanes_settle() {
         run(vec![TrainCiReadiness::Red("x".into())], 0).unwrap(),
         CiVerdict::Red(_)
     ));
+    // A refusal stops on the first poll with its reason, well inside the ceiling.
+    // trace:BUG-2401 | ai:claude
+    let err = run(
+        vec![TrainCiReadiness::Refused(
+            "required checks were skipped: X".into(),
+        )],
+        3600,
+    )
+    .unwrap_err()
+    .to_string();
+    assert!(
+        err.contains("refused: required checks were skipped: X"),
+        "{err}"
+    );
 }
 
 /// Composed live snapshot + wait loop with a mandate-admitted held member:
@@ -2646,7 +2714,7 @@ esac
         wait_train_ci(
             change.id,
             0,
-            || host.train_ci_snapshot_with(&change, &tip, cars, held_labels),
+            || host.train_ci_snapshot_with(&change, &tip, cars, None, held_labels),
             || u64::from(polls.get()) * 400,
             || {
                 polls.set(polls.get() + 1);

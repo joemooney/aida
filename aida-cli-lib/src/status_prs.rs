@@ -995,23 +995,19 @@ pub(crate) const TRAIN_RULE_PAGE_LIMIT: usize = 10;
 /// Fresh, base-specific protection and effective ruleset evidence for a train.
 /// Unlike observed `gh pr checks --required` rows, this includes contexts that
 /// have not registered yet. Unreadable or unsupported policy refuses readiness.
+/// `read` performs one `gh api <endpoint>` call; the train passes its
+/// transient-retry runner (BUG-2219) so a single network blip never stops a
+/// readiness wait.
 // trace:BUG-2401 | ai:codex
 pub(crate) fn train_required_status_checks(
-    root: &std::path::Path,
     base: &str,
+    mut read: impl FnMut(&str) -> anyhow::Result<std::process::Output>,
 ) -> anyhow::Result<Vec<String>> {
-    let gh = resolve_gh_binary().ok_or_else(|| anyhow::anyhow!("gh is unavailable"))?;
     let branch = base
         .replace('%', "%25")
         .replace('/', "%2F")
         .replace('#', "%23")
         .replace('?', "%3F");
-    let read = |endpoint: &str| -> anyhow::Result<std::process::Output> {
-        let mut cmd = std::process::Command::new(&gh);
-        cmd.current_dir(root).args(["api", endpoint]);
-        command_output_with_timeout(cmd, FORGE_CLI_CALL_TIMEOUT)
-            .ok_or_else(|| anyhow::anyhow!("required-check policy read timed out: {endpoint}"))
-    };
     let protection = read(&format!(
         "repos/{{owner}}/{{repo}}/branches/{branch}/protection"
     ))?;
@@ -1060,12 +1056,17 @@ pub(crate) fn train_required_status_checks(
 // trace:BUG-2401 | ai:codex
 fn train_protection_contexts(value: &serde_json::Value) -> anyhow::Result<Vec<String>> {
     anyhow::ensure!(value.is_object(), "invalid branch protection");
-    let block = value
+    // GitHub omits the section on a protected branch with no status-check
+    // requirement (as `required_status_checks_uncached` reads it,
+    // `.required_status_checks.contexts // []`): absent and null both mean
+    // nothing is required. A present but malformed section still refuses.
+    // trace:BUG-2401 | ai:claude
+    let Some(block) = value
         .get("required_status_checks")
-        .ok_or_else(|| anyhow::anyhow!("missing required_status_checks policy"))?;
-    if block.is_null() {
+        .filter(|block| !block.is_null())
+    else {
         return Ok(Vec::new());
-    }
+    };
     let contexts = block
         .get("contexts")
         .and_then(|v| v.as_array())
