@@ -50,6 +50,8 @@ routing_cases! {
     codex_session_start: "codex", "start";
     codex_session_start_unnamed: "codex", "start-unnamed";
     codex_session_start_bad_name_refused: "codex", "bad-name";
+    codex_session_start_env_role: "codex", "start-env-role";
+    codex_session_start_undelegated_refused: "codex", "undelegated";
     codex_agent_new_bare: "codex", "bare";
     codex_agent_new_role: "codex", "role";
     codex_agent_new_spec: "codex", "spec";
@@ -146,6 +148,11 @@ fn wrapper_launches_configured_vendor(vendor: &str, surface: &str) {
                 &["implementer"],
             );
             env.set_key(crate::gate::seat_authority::GRANT_ENV, &parent);
+            // TASK-2742: the launcher's own role names a seat the grant does
+            // not delegate; the child still takes the session's scope role.
+            if surface == "start-env-role" {
+                env.set_key("AIDA_SESSION_ROLE", "integrator");
+            }
             let argv = tmp.path().join("argv");
             let context = tmp.path().join("context");
             let actual_vendor = if surface == "explicit" {
@@ -191,7 +198,7 @@ fn wrapper_launches_configured_vendor(vendor: &str, surface: &str) {
                 ],
                 // The ordinary start: no --name, so the derived display name
                 // ("impl@BUG-2385") must not become the codex agent handle.
-                "start-unnamed" => vec![
+                "start-unnamed" | "start-env-role" => vec![
                     "aida",
                     "session",
                     "start",
@@ -200,6 +207,18 @@ fn wrapper_launches_configured_vendor(vendor: &str, surface: &str) {
                     "--launch",
                     "--title",
                     "fixture",
+                    "--no-title",
+                    "--no-pool",
+                ],
+                "undelegated" => vec![
+                    "aida",
+                    "session",
+                    "start",
+                    "--owns",
+                    "BUG-2385",
+                    "--launch",
+                    "--role",
+                    "integrator",
                     "--no-title",
                     "--no-pool",
                 ],
@@ -246,6 +265,17 @@ fn wrapper_launches_configured_vendor(vendor: &str, surface: &str) {
                 std::env::set_current_dir(&original_cwd).unwrap();
                 return;
             }
+            if surface == "undelegated" {
+                // TASK-2742: refused in preflight, nothing to undo.
+                let error = format!("{:#}", dispatch(&args).unwrap_err());
+                assert!(error.contains("integrator"), "{error}");
+                assert!(crate::list_leases(&root).is_empty());
+                assert!(!root.join(".aida/sessions").exists());
+                assert!(!argv.exists());
+                assert!(!tmp.path().join("seats").exists());
+                std::env::set_current_dir(&original_cwd).unwrap();
+                return;
+            }
             dispatch(&args).unwrap_or_else(|e| panic!("{vendor}/{surface}: {e:#}"));
             let args = std::fs::read_to_string(&argv)
                 .unwrap_or_else(|e| panic!("{vendor}/{surface}: no actual child argv: {e}"));
@@ -253,7 +283,10 @@ fn wrapper_launches_configured_vendor(vendor: &str, surface: &str) {
             let fields: Vec<_> = context.lines().collect();
             if actual_vendor == "codex" {
                 assert_eq!(fields[0], "codex");
-                assert_eq!(fields[1], "implementer");
+                // TASK-2742: the child runs the role the lease records, never
+                // the launcher's AIDA_SESSION_ROLE.
+                // trace:TASK-2742 | ai:claude
+                assert_eq!(fields[1], "implementer", "{vendor}/{surface}");
                 assert!(!fields[5].is_empty());
                 assert_ne!(fields[5], parent, "child must hold its own grant");
                 assert!(!args.contains("dangerously-bypass"));
@@ -289,8 +322,10 @@ fn wrapper_launches_configured_vendor(vendor: &str, surface: &str) {
                     fields[6]
                 );
             }
-            if matches!(surface, "start" | "start-unnamed" | "spec" | "bypass-start")
-                && actual_vendor == "codex"
+            if matches!(
+                surface,
+                "start" | "start-unnamed" | "start-env-role" | "spec" | "bypass-start"
+            ) && actual_vendor == "codex"
             {
                 assert_eq!(fields[2], "BUG-2385");
                 assert_eq!(crate::list_leases(&root).len(), 1);
@@ -457,4 +492,39 @@ fn trusted_native_and_parent_refusals_precede_session_setup() {
     assert!(error.contains("contained"), "{error}");
     assert!(!root.join(".aida/sessions").exists());
     std::env::set_current_dir(&original_cwd).unwrap();
+}
+
+/// The codex start --launch role is always concrete, so the launcher's
+/// `resolve_child_role` returns it without opening the picker — no picker
+/// cancel can run after the worktree and lease exist. It matches the role the
+/// session records: the flag, else the scope default; never the launcher's
+/// `AIDA_SESSION_ROLE`.
+// trace:TASK-2742 | ai:claude
+#[test]
+fn codex_start_launch_role_never_reaches_the_picker() {
+    let _env = crate::test_env::EnvVarsGuard::apply(&[("AIDA_SESSION_ROLE", Some("integrator"))]);
+    assert_eq!(
+        session::start_launch_child_role(None, "BUG-2385"),
+        "implementer"
+    );
+    assert_eq!(
+        session::start_launch_child_role(Some("  "), "BUG-2385"),
+        "implementer"
+    );
+    assert_eq!(
+        session::start_launch_child_role(None, "PR-42"),
+        "reviewer",
+        "a review scope records reviewer"
+    );
+    assert_eq!(
+        session::start_launch_child_role(Some("architect"), "PR-42"),
+        "architect"
+    );
+    // A concrete role short-circuits the picker even on a TTY.
+    let tmp = tempfile::tempdir().unwrap();
+    let role = session::start_launch_child_role(None, "BUG-2385");
+    assert_eq!(
+        crate::resolve_child_role(tmp.path(), Some(role), "codex").unwrap(),
+        Some("implementer".to_string())
+    );
 }

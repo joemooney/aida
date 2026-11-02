@@ -1254,6 +1254,7 @@ pub(crate) fn probes() -> Probes {
             spent_24h: 1_000_000_000,
             last_run_at: Some(now() - Duration::minutes(5)),
             last_verdict: Some("ok".to_string()),
+            codex_available: true,
         }),
         vendor: "claude".to_string(),
         vendor_error: None,

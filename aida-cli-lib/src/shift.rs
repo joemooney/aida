@@ -1271,7 +1271,12 @@ fn budget_evidence_verdict(cfg: &ShiftConfig, p: &Probes, now: DateTime<Utc>) ->
         _ => {}
     }
     let vendor = p.vendor.to_ascii_lowercase();
-    if !COVERED_VENDORS.contains(&vendor.as_str()) {
+    // Codex spend is measured only when the last run could read its sessions
+    // tree; an `unavailable` codex-sessions source is not coverage.
+    // trace:TASK-2731 | ai:claude
+    let covered =
+        COVERED_VENDORS.contains(&vendor.as_str()) && (vendor != "codex" || b.codex_available);
+    if !covered {
         if cfg.allow_uncovered_vendors.contains(&vendor) {
             return verdict(
                 "budget-evidence",
