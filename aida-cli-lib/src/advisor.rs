@@ -395,8 +395,11 @@ pub fn codex_thread_is_alive(reg: &AdvisorRegistration) -> bool {
 
 /// The rollout Codex keeps for `thread`
 /// (`$CODEX_HOME/sessions/YYYY/MM/DD/rollout-<ts>-<thread>.jsonl`, with
-/// `CODEX_HOME` defaulting to `~/.codex`).
+/// `CODEX_HOME` defaulting to `~/.codex`). The date tree is searched
+/// newest-first and the walk stops at the first match, so a recent thread
+/// is found without reading the whole session history.
 // trace:STORY-2255 | ai:claude
+// trace:TASK-2755 | ai:claude
 fn codex_rollout_path(thread: &str) -> Option<PathBuf> {
     if thread.is_empty() {
         return None;
@@ -405,16 +408,26 @@ fn codex_rollout_path(thread: &str) -> Option<PathBuf> {
         .filter(|v| !v.is_empty())
         .map(PathBuf::from)
         .or_else(|| advisor_home_dir().map(|h| h.join(".codex")))?;
+    find_rollout_newest_first(&codex_home.join("sessions"), thread)
+}
+
+/// The newest-first search behind [`codex_rollout_path`], rooted at a
+/// `sessions` directory.
+// trace:TASK-2755 | ai:claude
+pub(crate) fn find_rollout_newest_first(sessions: &Path, thread: &str) -> Option<PathBuf> {
     let suffix = format!("-{thread}.jsonl");
-    let mut dirs = vec![codex_home.join("sessions")];
+    // Depth-first stack: each directory's children are pushed oldest-first,
+    // so the newest (lexically greatest YYYY / MM / DD) is popped first.
+    let mut dirs = vec![sessions.to_path_buf()];
     while let Some(dir) = dirs.pop() {
         let Ok(read) = std::fs::read_dir(&dir) else {
             continue;
         };
+        let mut subdirs = Vec::new();
         for entry in read.flatten() {
             let path = entry.path();
             if path.is_dir() {
-                dirs.push(path);
+                subdirs.push(path);
             } else if path
                 .file_name()
                 .and_then(|n| n.to_str())
@@ -423,6 +436,8 @@ fn codex_rollout_path(thread: &str) -> Option<PathBuf> {
                 return Some(path);
             }
         }
+        subdirs.sort();
+        dirs.extend(subdirs);
     }
     None
 }
