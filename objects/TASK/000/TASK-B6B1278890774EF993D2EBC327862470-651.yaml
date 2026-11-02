@@ -22,7 +22,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T06:47:39.554427385Z
-modified_at: 2026-11-02T12:56:34.976098625Z
+modified_at: 2026-11-02T12:57:45.599997196Z
 req_type: Task
 tags:
 - audit
@@ -47,6 +47,12 @@ comments:
   content: 'PROXY DECISION: source confirms stale claude_only inventory and hardcoded portable launch recipes. Approve portable fire/solo/burndown delivery and canonical inventory alignment after contained/background Codex parity. Preserve all autonomy, independent review, workload/slot and human-floor instructions; replace vendor hardcoding with configured-vendor resolution rather than raw unsandboxed Codex. Update template sources and generated portable copies together, fixture-test inventory/output for Claude-only, Codex-only and mixed installs. FASTTRACK docs/template checks unless Rust generator changes require one targeted LIGHT test. No API keys/global user edits.'
   created_at: 2026-11-01T08:12:12.900232372Z
   modified_at: 2026-11-01T08:12:12.900232372Z
+- id: 01a19c56-5380-7e20-8162-ea4ec0a9a96d
+  author: joe
+  content: 'FIXER STOP (claude bg, 2026-11-02): not started. Both blockers unshipped on origin/main — STORY-2238 (vendor-neutral containment) and STORY-2254 (aida agent new codex --bg) are In Progress, linkage shipped=false; ''aida show'' reports pickup refused. Acceptance 1 and the proxy decision both gate on that parity landing; removing --vendor claude now would point Codex-only lanes at an uncontained launcher. Re-dispatch after both complete. No claim held, no branch commits.'
+  created_at: 2026-11-02T12:57:45.599997196Z
+  modified_at: 2026-11-02T12:57:45.599997196Z
+  session_id: a6bd9934-24a9-45f4-a5c0-d8e217b12479
 history:
 - id: 01a195dd-3c94-7111-aa51-6281592ed6cb
   author: joe
