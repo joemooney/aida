@@ -30,6 +30,7 @@ enum ProbeStage {
     Capability,
     TrustedPolicy,
     FilesystemSupervisor,
+    EgressLocalIpc,
     Complete,
 }
 
@@ -114,7 +115,7 @@ pub(crate) struct ProbeReport {
     // is accepted as authority for these fields.
     aida_containment_applied: bool,
     ordinary_launch_supported: bool,
-    remaining_protections: [&'static str; 4],
+    remaining_protections: Vec<&'static str>,
     checks: Vec<String>,
 }
 
@@ -139,7 +140,7 @@ pub(crate) fn probe(root: &Path, vendor: &str) -> ProbeReport {
         },
         aida_containment_applied: false,
         ordinary_launch_supported: false,
-        remaining_protections: [
+        remaining_protections: vec![
             "egress_and_local_ipc",
             "delegated_grant",
             "native_composition",
@@ -215,11 +216,22 @@ pub(crate) fn probe(root: &Path, vendor: &str) -> ProbeReport {
         Ok(supervisor::TracerOutcome::Passed(checks)) => {
             debug_assert_eq!(report.isolation.state, IsolationState::Available);
             report.checks = checks;
-            report.status = ProbeStatus::Ready;
-            report.stage = ProbeStage::Complete;
-            report.cause =
-                "fixed filesystem/supervisor tracer passed; full backend remains unsupported"
-                    .into();
+            // trace:TASK-2706 | ai:codex — a filesystem pass alone cannot
+            // report the extended tracer ready. Preserve actual A coverage
+            // on a B refusal; never credit unfinished protections.
+            report.stage = ProbeStage::EgressLocalIpc;
+            match supervisor::run_egress_probe("normal") {
+                Ok(checks) => {
+                    report.checks.extend(checks);
+                    report
+                        .remaining_protections
+                        .retain(|p| *p != "egress_and_local_ipc");
+                    report.status = ProbeStatus::Ready;
+                    report.stage = ProbeStage::Complete;
+                    report.cause = "fixed filesystem/supervisor/egress/IPC tracer passed; full backend remains unsupported".into();
+                }
+                Err(error) => report.cause = format!("{error:#}"),
+            }
         }
         Err(error) => {
             report.cause = format!("{error:#}");

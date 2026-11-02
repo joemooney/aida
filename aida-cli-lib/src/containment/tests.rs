@@ -2,6 +2,83 @@
 // trace:TASK-2705 | ai:codex
 use super::*;
 
+/// Deliberately no skip/optional-live branch: this slice's regression requires
+/// the real kernel path. Unsupported userns/seccomp/Landlock hosts must refuse,
+/// and cannot produce successful acceptance evidence.
+// trace:TASK-2706 | ai:codex
+#[test]
+fn task_2706_egress_ipc_live() {
+    let checks = supervisor::run_egress_probe("normal").expect("required-live slice-B tracer");
+    for name in [
+        "allowed_fixture_via_typed_proxy",
+        "private_pathname_ipc_allowed",
+        "direct_tcp_denied",
+        "direct_ipv6_denied",
+        "udp_dns_quic_denied",
+        "unix_sendto_denied",
+        "unix_dgram_socketpair_denied",
+        "io_uring_denied",
+        "x32_socket_bypass_denied",
+        "host_dbus_denied",
+        "host_ssh_agent_denied",
+        "host_codex_daemon_denied",
+        "host_abstract_socket_denied",
+        "host_socket_rename_into_runtime_denied",
+        "host_socket_link_into_runtime_denied",
+        "private_endpoint_symlink_denied",
+        "mutable_sockaddr_and_rename_races_confined",
+        "target_fd_swap_confined",
+        "host_port_protocol_bypass_denied",
+        "tunnel_reconnect_denied",
+        "proxy_policy_negative_controls",
+        "ambient_proxy_scrubbed",
+        "inherited_host_socket_absent",
+        "egress_namespace_init_reaped",
+    ] {
+        assert!(
+            checks.iter().any(|c| c == name),
+            "missing {name}: {checks:?}"
+        );
+    }
+    for fault in [
+        "proxy_before",
+        "proxy_after",
+        "broker_before",
+        "broker_after",
+        "timeout",
+    ] {
+        let error = supervisor::run_egress_probe(fault).unwrap_err();
+        let text = format!("{error:#}");
+        assert!(
+            text.contains("owned egress wrapper and namespace init reaped"),
+            "{fault}: {text}"
+        );
+        assert!(
+            text.contains(if fault == "timeout" {
+                "synthetic lane deadline"
+            } else {
+                fault
+            }),
+            "{text}"
+        );
+    }
+    let error = supervisor::run_egress_probe("supervisor_timeout").unwrap_err();
+    let text = format!("{error:#}");
+    assert!(
+        text.contains(
+            "fixed egress helper timeout; owned egress wrapper and namespace init reaped"
+        ),
+        "{text}"
+    );
+    // trace:TASK-2735 | ai:codex — exercise the preflight's own timeout,
+    // rather than only the later full lane's teardown.
+    let error = supervisor::preflight_timeout_fixture().unwrap_err();
+    assert!(
+        format!("{error:#}").contains("preflight timeout; wrapper and namespace init reaped"),
+        "{error:#}"
+    );
+}
+
 #[cfg(test)]
 #[test]
 fn task_2705_closed_containment_tracer() {
@@ -267,6 +344,13 @@ fn task_2705_trusted_snapshot_cannot_execute_stored_shell() {
     assert_ready_or_isolation_unavailable(&other, required);
     if other.status == ProbeStatus::Ready {
         assert!(other.checks.iter().any(|c| c == "write_workspace"));
+        assert!(other
+            .checks
+            .iter()
+            .any(|c| c == "allowed_fixture_via_typed_proxy"));
+        assert!(!other
+            .remaining_protections
+            .contains(&"egress_and_local_ipc"));
     }
     // Production selector is deliberately still refused for partial AIDA Codex.
     // This snapshot is native and retains its existing successful selection.

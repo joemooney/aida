@@ -110,6 +110,12 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y protobuf-compiler libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev libxkbcommon-dev libssl-dev libgtk-3-dev bubblewrap ripgrep
+          # The mandatory synthetic containment tracer runs in the lib shard,
+          # too. Apply the existing live-gate userns preparation before any
+          # test lane; it must exercise namespaces rather than skip/refuse on
+          # Ubuntu's default AppArmor userns restriction.
+          # trace:TASK-2706 | ai:codex
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
 
       # The shell-wrapper tests run every case under bash AND zsh when zsh is
       # on PATH (`wrapper_shells()`); without it the zsh leg silently skips.
@@ -302,8 +308,8 @@ jobs:
           sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
           log="$RUNNER_TEMP/live-bwrap.log"
           set -o pipefail
-          AIDA_REQUIRE_BWRAP_LIVE=1 cargo test -p aida-cli-lib --lib -- --nocapture \
-            bwrap_write_confinement_live_or_fail_closed bug_2169_bwrap_ task_2053_bwrap_ bug_2224_bwrap_ 2>&1 | tee "$log"
+          AIDA_REQUIRE_BWRAP_LIVE=1 AIDA_REQUIRE_CODEX_CONTAINMENT_LIVE=1 cargo test -p aida-cli-lib --lib -- --nocapture \
+            bwrap_write_confinement_live_or_fail_closed bug_2169_bwrap_ task_2053_bwrap_ bug_2224_bwrap_ containment::tests 2>&1 | tee "$log"
           AIDA_REQUIRE_BWRAP_LIVE=1 cargo test -p aida-cli --test bug_1934_bwrap_presenter -- --nocapture \
             bug_1934_bwrap_ 2>&1 | tee -a "$log"
           expected=$(grep -rhoE 'fn (bug_2169|task_2053|bug_2224|bug_1934)_bwrap_[a-z0-9_]+' aida-cli-lib/src aida-cli/tests/bug_1934_bwrap_presenter.rs | sort -u | wc -l)
@@ -312,6 +318,9 @@ jobs:
           grep -n 'SKIP (' "$log" || true
           if grep -q 'SKIP (bwrap unavailable)' "$log"; then echo "::error::a live bwrap test skipped under the gate"; exit 1; fi
           if [ "$ran" -ne "$expected" ]; then echo "::error::only $ran of $expected live bwrap tests ran ok"; exit 1; fi
+          # trace:TASK-2706 | ai:codex — a typo/zero-match filter cannot count
+          # as egress/IPC acceptance. This regression has no skip arm.
+          grep -q 'containment::tests::task_2706_egress_ipc_live \.\.\. ok$' "$log"
 
       # MCP stdio compatibility suite — black-box tests against `aida mcp-serve`.
       # Runs the FULL roundtrip: descriptors + CLI->MCP read direction
