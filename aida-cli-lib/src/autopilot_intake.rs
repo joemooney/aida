@@ -921,14 +921,30 @@ pub(crate) fn handle_intake_command(
 
     // Seed the cold-boot prompt with the live advisor's context file when present,
     // so the headless advisor doesn't re-derive priorities from scratch. trace:STORY-626
+    // `intake_skill_prompt` already inlines the skill body for every vendor.
     let prompt = intake::seeded_assess_prompt(&project_root, apply);
+    // Resolved once: the preview, the messages and the launch all use this
+    // vendor. trace:BUG-2389 | ai:codex ai:claude
+    let vendor = session::resolve_headless_vendor(&project_root);
     let contained = session::aida_contained_env()?;
-    let mode_str = crate::session::resolve_headless_claude_posture(permission_mode, contained)?;
+    session::require_vendor_containment(vendor, contained, "headless coordinator")?;
+    let mode_str = session::coordinator_permission_mode(vendor, permission_mode, contained)?;
     let mode = &mode_str;
 
     if dry_run {
         println!("\n{} dry run — not launching. Would run:", "·".dimmed());
-        println!("  claude -p {:?} --permission-mode {}", prompt, mode.cyan());
+        let (program, args) = session::coordinator_headless_preview(
+            vendor,
+            &prompt,
+            mode,
+            aida_core::agents_config::AgentSeat::Advisor,
+            contained,
+            false,
+        )?;
+        println!("  {program} {args:?}");
+        if vendor == session::HeadlessVendor::Claude {
+            println!("  {} permission mode: {}", "→".dimmed(), mode.cyan());
+        }
         println!(
             "  {} AIDA_INTAKE_CANDIDATES={}",
             "env".dimmed(),
@@ -937,7 +953,7 @@ pub(crate) fn handle_intake_command(
         return Ok(());
     }
 
-    if !contained && permission_mode.is_none() {
+    if vendor == session::HeadlessVendor::Claude && !contained && permission_mode.is_none() {
         println!(
             "  {} launching headless `claude -p` with {} permissions (override: --permission-mode <mode>)",
             crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
@@ -968,15 +984,17 @@ pub(crate) fn handle_intake_command(
     // env-passed payload). trace:STORY-560
     // Prepare before issuing authority: a filesystem refusal leaves no grant.
     // trace:BUG-2218 TASK-2328 | ai:codex
-    if contained {
+    if session::containment_applied(vendor, contained) {
         crate::session::prepare_contained_mailbox_for_launch(&project_root)?;
     }
-    let child_grant =
-        crate::gate::seat_authority::issue_child(&project_root, "advisor", &current_user_id(None))?;
+    // The builder reserves the child's handle; it is released unless the
+    // child actually spawns. trace:BUG-2389 | ai:claude
+    let handle_guard = session::child_reservation_guard();
     let mut command = build_autopilot_intake_command(
+        vendor,
         &prompt,
         mode,
-        &child_grant.id,
+        "",
         apply,
         &eligible,
         &trivial_proposals,
@@ -987,12 +1005,17 @@ pub(crate) fn handle_intake_command(
         contained,
     )?;
 
-    let status_code = command.status().map_err(|e| {
-        anyhow::anyhow!(
-            "failed to launch `claude -p` ({e}) — the headless intake pass needs the Claude Code \
-             CLI on PATH. Install it, or run `/aida-backlog-groom` interactively instead."
-        )
-    });
+    let child_grant =
+        crate::gate::seat_authority::issue_child(&project_root, "advisor", &current_user_id(None))?;
+    command.env(crate::gate::seat_authority::GRANT_ENV, &child_grant.id);
+
+    let status_code = session::coordinator_status_with_handle_guard(&mut command, handle_guard)
+        .map_err(|e| {
+            anyhow::anyhow!(
+                "failed to launch {} headless intake pass: {e}",
+                vendor.program()
+            )
+        });
     // trace:BUG-2170 | ai:antigravity
     crate::session::revoke_headless_child_grant(&child_grant.id);
     let status_code = status_code?;
@@ -1008,6 +1031,7 @@ pub(crate) fn handle_intake_command(
 // trace:BUG-2124 trace:BUG-2171 trace:BUG-2170 | ai:antigravity
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn build_autopilot_intake_command(
+    vendor: session::HeadlessVendor,
     prompt: &str,
     mode: &str,
     child_grant_id: &str,
@@ -1020,15 +1044,16 @@ pub(crate) fn build_autopilot_intake_command(
     max_approvals: Option<usize>,
     contained: bool,
 ) -> Result<std::process::Command> {
-    let mut command = std::process::Command::new("claude");
-    command
-        .arg("-p")
-        .arg(prompt)
-        .arg("--permission-mode")
-        .arg(mode);
-    // BUG-050: the intake pass is headless: no Monitor, no background tasks.
-    // trace:BUG-B6B1278890774EF993D2EBC327862470-050 | ai:claude
-    command.args(crate::session::headless_claude_posture_for(contained)?);
+    // trace:BUG-2389 | ai:codex
+    let mut command = session::build_coordinator_headless_command(
+        vendor,
+        prompt,
+        mode,
+        aida_core::agents_config::AgentSeat::Advisor,
+        child_grant_id,
+        contained,
+        false,
+    )?;
     command
         // trace:BUG-B6B1278890774EF993D2EBC327862470-050 | ai:claude
         .env(crate::session::DISABLE_BACKGROUND_TASKS_ENV, "1")
@@ -1051,11 +1076,6 @@ pub(crate) fn build_autopilot_intake_command(
         command.env("AIDA_INTAKE_MAX_APPROVALS", n.to_string());
     }
     crate::session::scrub_launcher_session_env(&mut command);
-    if contained {
-        command.env("AIDA_CONTAINED", "1");
-    } else {
-        command.env_remove("AIDA_CONTAINED");
-    }
     Ok(command)
 }
 
