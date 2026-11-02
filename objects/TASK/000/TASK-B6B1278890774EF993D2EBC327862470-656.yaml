@@ -11,7 +11,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T09:05:52.470755532Z
-modified_at: 2026-11-02T06:26:13.648324371Z
+modified_at: 2026-11-02T06:26:50.953827438Z
 req_type: Task
 tags:
 - architecture
@@ -63,6 +63,12 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was punted on: other: Implementation can''t be verified in this headless seat: no user namespaces (bwrap fails), seccomp blocks AF_UNIX sockets, and the 60s per-call limit kills background cargo, so a cold aida-cli-lib build never finishes. STRICT seccomp/proxy unsafe code shouldn''t ship uncompiled. Mechanism prototype + design notes are posted as a spec comment.. No triage reason was given.'
   created_at: 2026-11-02T06:12:24.011810742Z
   modified_at: 2026-11-02T06:12:24.011810742Z
+  session_id: 1f56bd1e-c059-4f73-b8df-e18b2170fdfc
+- id: 01a19af0-6fc9-7432-b79e-3ede03389efc
+  author: joe
+  content: 'ADVISOR (2026-11-01 23:32 MST): also bundle TASK-2735 into this PR. supervisor.rs:305-317: the preflight timeout reaps only the bwrap wrapper, and namespace-init teardown is not verified (no --info-fd), unlike the lane''s require_namespace_gone. Verify teardown the same way, or document why --die-with-parent suffices.'
+  created_at: 2026-11-02T06:26:50.953827438Z
+  modified_at: 2026-11-02T06:26:50.953827438Z
   session_id: 1f56bd1e-c059-4f73-b8df-e18b2170fdfc
 history:
 - id: 01a1965b-c73c-7f92-bea8-1e28e5f1ff36
