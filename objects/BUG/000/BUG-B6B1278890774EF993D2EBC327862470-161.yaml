@@ -16,12 +16,12 @@ description: |-
   1. Interactive Codex launches (`codex_session_args` / `exec_codex_session`, interactive reviewer, `aida derisk`, `aida human review --guided`) expand `/aida-*` prompts via `codex_inline_prompt` (or `$aida-*` skill syntax) instead of passing unexpanded `/aida-*` slash literals.
   2. `--no-launch` / `--dry-run` hints (`queue_cmd.rs:10987-10992`) render vendor-appropriate skill syntax for Codex.
   3. Unit tests cover interactive Codex argv construction for pickup, review, and derisk.
-status: InProgress
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T06:45:59.471168135Z
-modified_at: 2026-11-02T00:07:03.704152659Z
+modified_at: 2026-11-02T02:43:52.380550655Z
 req_type: Bug
 tags:
 - audit
@@ -114,6 +114,21 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a19a24-4bb7-7703-9d45-492d636652f5
+  author: aida-auto-bump
+  timestamp: 2026-11-02T02:43:52.375289904Z
+  session_id: 126bbd5a-a92f-452b-ab0b-2637a1db42c2
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a19a24-4bbc-7c31-a7c6-467e826b5026
+  timestamp: 2026-11-02T02:43:52.380547686Z
+  agent: implementer
+  commit_sha: ccf5830b2f4899a2a241eb5763856611989b3185
+  summary: 'All 3 BUG-2387 acceptance criteria met: codex_interactive_prompt expands the invocation line for codex_session_args (queue/exec/reviewer/hints) and agent_initial_prompt_args (derisk); Claude and guided review unchanged; unit tests cover pickup/plan/guided-implement/review/derisk argv and dry-run hints. CI run 41370553792 green at head (cli-0 time-budget step flaked, passed on rerun).'
+  review_verdict: approved
 execution_mode: drain
 filed_at:
   code_sha: 6dc7d4977ac5e47c42ddfb26597fe3ec5fb70b60
@@ -123,3 +138,7 @@ filed_at:
   aida_build_sha: 962ca07af25
   vendor: antigravity
   session: 01a194b1bcfb
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-02T02:43:52.375284867Z
+  completion_sha: ccf5830b2f4899a2a241eb5763856611989b3185
