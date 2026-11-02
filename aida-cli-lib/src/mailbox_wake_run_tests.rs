@@ -564,6 +564,7 @@ fn bug_2397_install_failures_and_runtime_status_use_stub_manager() {
 // `codex`): its SessionStart hook's row arms, mail to its handle queues
 // exactly one notification, and ending the session retires the row.
 // trace:STORY-2256 | ai:claude
+// trace:STORY-b6b1278890774ef993d2ebc327862470-279.ac0721fb | ai:claude
 #[test]
 fn story_2256_hand_started_codex_session_arms_wakes_once_and_retires() {
     let r = mail_repo();
