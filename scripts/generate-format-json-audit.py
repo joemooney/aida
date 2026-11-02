@@ -17,6 +17,8 @@ from pathlib import Path
 
 
 VERIFIED = {
+    # trace:TASK-2705 | ai:codex
+    "aida config permissions probe": "config permissions probe --vendor unregistered-audit-fixture (structured refusal; nonzero exit)",
     # trace:TASK-2347 | ai:codex
     "aida mailbox wake-snapshot": "mailbox wake-snapshot --recipient advisor",
     "aida fasttrack status": "fasttrack status",

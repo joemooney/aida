@@ -439,6 +439,12 @@ context, `CLAUDE.md` for the broad repository guide, and
 context, and `docs/agents/session-communication.md` for Claude/Codex/
 Antigravity session communication semantics.
 
+The closed filesystem/supervisor tracer lives in `aida-cli-lib/src/containment/`
+and is exposed by `aida config permissions probe --vendor <name>`. A passing
+synthetic probe never enables a vendor or grants applied-containment credit.
+See OVERVIEW.md and docs/cli/07-project-setup.md for its boundary.
+<!-- trace:TASK-2705 | ai:codex -->
+
 ## Child launch containment
 
 Headless and interactive reviewer/resume launches strictly inherit

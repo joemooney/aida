@@ -1275,3 +1275,12 @@ allowlist includes `api.openai.com` for API-key use and `chatgpt.com` plus
 inspection of installed codex-cli 0.166.0. Native sandbox egress remains Codex's
 own policy; the AIDA allowlist does not configure it.
 <!-- trace:TASK-2631 | ai:codex -->
+
+The closed `config permissions probe --vendor <name>` tracer is implemented in
+`aida-cli-lib/src/containment/`: shipped typed capabilities, a pinned trusted
+policy snapshot, descriptor-pinned synthetic filesystem mounts and an owned
+bounded supervisor. Its successful report credits only the fixed diagnostic;
+it cannot launch arbitrary programs or issue an applied-containment receipt.
+The production vendor selectors remain unchanged until the full boundary is
+ready. See [the tracer contract](docs/cli/07-project-setup.md#model-free-containment-tracer).
+<!-- trace:TASK-2705 | ai:codex -->

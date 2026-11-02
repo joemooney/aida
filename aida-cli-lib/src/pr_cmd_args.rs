@@ -10,6 +10,25 @@ use std::path::PathBuf;
 // trace:STORY-90 trace:TASK-2251 | ai:claude
 #[derive(Subcommand, Debug)]
 pub enum PrCommand {
+    // Sequential post-merge worker, launched only after releasing the merge lease.
+    // trace:BUG-2384 | ai:codex
+    /// Internal: the post-merge cleanup worker `aida pr ship` launches
+    #[clap(hide = true)]
+    PostShipCleanup {
+        /// PR whose EndLease outcome the worker records in the ship ledger.
+        // trace:BUG-2384 | ai:claude
+        #[clap(long)]
+        pr: Option<u64>,
+        /// Lease of the shipped branch to end before the sweep.
+        #[clap(long)]
+        lease: Option<String>,
+        /// Lock file of the ship's (already released) merge lease.
+        #[clap(long)]
+        merge_lock: Option<PathBuf>,
+        /// Also reap exited sessions and prune merged agent worktrees.
+        #[clap(long)]
+        sweep: bool,
+    },
     /// File the reviewer story for the change (PR/MR) open on the current
     /// branch and queue it to the `reviewer` role. Idempotent: when a
     /// `Review PR-<n>:` / `Review MR-<n>:` story already exists for it, reuses
