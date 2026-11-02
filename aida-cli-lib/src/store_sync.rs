@@ -96,8 +96,35 @@ pub(crate) fn detect_distributed_store() -> Option<std::path::PathBuf> {
     if let Some(store) = aida_store_override() {
         return Some(store);
     }
-    let cwd = std::env::current_dir().ok()?;
-    detect_distributed_store_from(&cwd)
+    detect_distributed_store_from(&store_discovery_start()?)
+}
+
+/// Where [`detect_distributed_store`] starts its walk. Production: the
+/// process cwd.
+// trace:BUG-2381 | ai:claude
+#[cfg(not(test))]
+fn store_discovery_start() -> Option<std::path::PathBuf> {
+    std::env::current_dir().ok()
+}
+
+/// BUG-2381: a test never discovers the operator's live store from the
+/// process cwd. libtest starts in the crate directory; in a seat clone or a
+/// linked worktree that checkout's `.aida-store` is the LIVE store, so a
+/// fixture `session_start` (or any in-process command) took the shared store
+/// write lock of the operator's main checkout. A test that pinned a hermetic
+/// project root (`test_env::AmbientGuard`) walks from that root, exactly as
+/// `find_project_root` does (BUG-1618); an unpinned one walks from its cwd
+/// unless that is this workspace's own checkout, which maps to the hermetic
+/// checkout with no store (see `contained_cwd_seam::hermetic_unless_fixture`).
+// trace:BUG-2381 | ai:claude
+#[cfg(test)]
+pub(crate) fn store_discovery_start() -> Option<std::path::PathBuf> {
+    if let Some(root) = crate::test_ambient::project_root() {
+        return Some(root);
+    }
+    std::env::current_dir()
+        .ok()
+        .map(crate::session::contained_cwd_seam::hermetic_unless_fixture)
 }
 
 /// Run `command` against a resolved git-canonical store directory. The MCP
@@ -699,6 +726,11 @@ mod bug_559_clone_recovery_tests;
 #[cfg(test)]
 #[path = "tests/bug_1969_allocation_push_tests.rs"]
 mod bug_1969_allocation_push_tests;
+
+// trace:BUG-2381 | ai:claude
+#[cfg(test)]
+#[path = "tests/bug_2381_hermetic_test_store_tests.rs"]
+mod bug_2381_hermetic_test_store_tests;
 
 /// Walk-up resolver split out from `detect_distributed_store` so the search
 /// path is testable without changing process cwd. Returns the absolute store

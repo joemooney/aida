@@ -182,6 +182,8 @@ mod autoprogress;
 mod do_dispatch;
 mod doc_cmd;
 mod docs;
+// trace:STORY-2220 | ai:claude
+mod docs_sweep;
 // trace:STORY-B6B1278890774EF993D2EBC327862470-105 | ai:claude
 mod doctor_backfill_agreed;
 mod doctor_cmd;
@@ -570,6 +572,8 @@ mod reviewer_summary;
 mod review_classes;
 // trace:STORY-1889 | ai:claude — verdict rendering, outside the gate.
 mod review_verdict_display;
+// trace:BUG-B6B1278890774EF993D2EBC327862470-057 | ai:claude — what a rework pickup prompt leads with.
+mod rework_direction;
 mod role_cmd;
 mod rules_cmd;
 mod rules_sync;

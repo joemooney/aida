@@ -68,6 +68,9 @@
 //!
 //! trace:STORY-266 | ai:claude
 
+// The advisor's standing goal. trace:STORY-2243 | ai:claude
+#[cfg(feature = "native")]
+pub mod advisor_goal;
 pub mod agents_config;
 pub mod ai;
 pub mod alias;
@@ -91,6 +94,9 @@ pub mod allocation_conflicts;
 // trace:STORY-B6B1278890774EF993D2EBC327862470-095 | ai:claude
 #[cfg(feature = "native")]
 pub mod allocation_lineage;
+// trace:STORY-B6B1278890774EF993D2EBC327862470-164 | ai:claude
+#[cfg(feature = "native")]
+pub mod store_hubs;
 // trace:BUG-2017 | ai:codex
 pub mod conflict;
 #[cfg(all(unix, feature = "native"))]

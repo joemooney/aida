@@ -1,6 +1,7 @@
 """Behavioral checks for read-only generated publication verification."""
 # trace:TASK-B6B1278890774EF993D2EBC327862470-111 | ai:codex
 import json
+import posixpath
 from pathlib import Path
 import shutil
 import subprocess
@@ -126,6 +127,82 @@ class ShowcaseBuildTests(unittest.TestCase):
                 before = self.snapshot()
                 self.build(expected=1)
                 self.assertEqual(before, self.snapshot())
+
+    # trace:STORY-2219 | ai:claude
+    def add_glossary(self, directory='aida-core/templates/.aida/discipline'):
+        folder = self.root / directory
+        folder.mkdir(parents=True, exist_ok=True)
+        (folder / 'product-glossary.md').write_text(
+            '# Product glossary\n\nIntro.\n\n## Terms\n\n'
+            '### Merge hold\n\nA stop on a pull request. See [the guide](../../../../docs/guide.md#fixture-guide) and [hub](#hub).\n\n'
+            '### Hub\n\nA Git server.\n\n'
+            '## How to add a term\n\nAdd a heading.\n')
+        source = posixpath.relpath(str(folder / 'product-glossary.md'), str(self.root / 'docs'))
+        self.manifest['pages'].append({'source': source, 'output': 'glossary.html', 'label': 'Glossary', 'category': 'human', 'glossary': True})
+        self.save_manifest()
+        self.git('add', '.')
+
+    def records(self):
+        script = (self.site / 'search-data.js').read_text()
+        return json.loads(script.split('window.AIDA_DOCS = ', 1)[1].removesuffix(';\n'))
+
+    def test_glossary_renders_term_anchors_search_records_and_library_cards(self):
+        self.add_glossary()
+        self.source.write_text('# Fixture guide\n\nA [merge hold](../aida-core/templates/.aida/discipline/product-glossary.md#merge-hold) stops a merge.\n')
+        self.git('add', '.')
+        self.build()
+        page = (self.site / 'glossary.html').read_text()
+        for anchor in ('merge-hold', 'hub'):
+            self.assertIn(f'<h3 id="{anchor}">', page)
+        # Links resolve from the template master, not from docs/.
+        self.assertIn('<a href="guide.html#fixture-guide">the guide</a>', page)
+        self.assertIn('<a href="#hub">hub</a>', page)
+        # A guide links the glossary source to its published anchor.
+        self.assertIn('<a href="glossary.html#merge-hold">merge hold</a>', (self.site / 'guide.html').read_text())
+        terms = [r for r in self.records() if r.get('kind') == 'term']
+        self.assertEqual([(t['title'], t['url']) for t in terms], [('Merge hold', 'glossary.html#merge-hold'), ('Hub', 'glossary.html#hub')])
+        self.assertEqual(terms[0]['text'], 'A stop on a pull request. See the guide and hub.')
+        self.assertNotIn('Add a heading', ' '.join(t['text'] for t in terms))
+        library = (self.site / 'library.html').read_text()
+        self.assertIn('<a href="glossary.html">Product glossary</a>', library)
+        self.assertIn('data-url="glossary.html#hub" data-category="human" data-term hidden', library)
+        self.git('add', '.')
+        self.build('--check')
+
+    def test_glossary_source_outside_the_discipline_pack_is_refused(self):
+        self.add_glossary('elsewhere')
+        before = self.snapshot()
+        self.assertIn('glossary source must be in', self.build(expected=1).stderr)
+        self.assertEqual(before, self.snapshot())
+
+    def test_non_glossary_source_outside_docs_is_refused(self):
+        self.add_glossary()
+        self.manifest['pages'][-1].pop('glossary')
+        self.save_manifest()
+        before = self.snapshot()
+        self.build(expected=1)
+        self.assertEqual(before, self.snapshot())
+
+    @unittest.skipUnless(shutil.which('node'), 'Node is needed for the DOM fixture')
+    def test_term_cards_show_only_for_a_search(self):
+        script = r'''
+const fs = require('node:fs');
+const vm = require('node:vm');
+const assert = require('node:assert/strict');
+const entries = [{url: 'guide.html', category: 'human', text: 'guide about review'}, {url: 'glossary.html#hub', category: 'human', kind: 'term', text: 'A Git server for review'}];
+const cards = entries.map(entry => ({dataset: entry.kind ? {url: entry.url, term: ''} : {url: entry.url}, querySelector: () => ({textContent: ''})}));
+const nodes = Object.fromEntries(['library-search', 'query', 'category', 'search-status', 'search-empty'].map(id => [id, {value: '', addEventListener() {}}]));
+nodes.category.value = 'all';
+const context = {window: {AIDA_DOCS: entries}, document: {getElementById: id => nodes[id], querySelectorAll: () => cards}, setTimeout};
+vm.createContext(context);
+vm.runInContext(fs.readFileSync(process.argv[1], 'utf8'), context);
+assert.equal(cards[0].hidden, false);
+assert.equal(cards[1].hidden, true);
+nodes.query.value = 'review'; vm.runInContext('filterGuides()', context);
+assert.equal(cards[1].hidden, false);
+assert.equal(nodes['search-status'].textContent, '2 matching results.');
+'''
+        subprocess.run(['node', '-e', script, str(REPO / 'docs/showcase/library.js')], check=True, capture_output=True)
 
     @unittest.skipUnless(shutil.which('node'), 'Node is needed for the DOM fixture')
     def test_unicode_excerpt_and_literal_query(self):
