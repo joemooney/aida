@@ -1019,7 +1019,13 @@ fn bug2187_interactive_reviewer_gets_identity_without_headless_appendix() {
     });
     result.expect("the interactive reviewer must carry its recording identity");
     let argv = std::fs::read_to_string(&argv).unwrap();
-    assert!(argv.contains("/aida-review --pr 59"), "{argv}");
+    // BUG-2387: interactive Codex does not expand custom slash commands, so
+    // the reviewer argv carries the rendered review workflow (verdict-file
+    // handshake included) with the PR number, not a raw `/aida-review`.
+    // trace:BUG-2387 | ai:claude
+    assert!(!argv.lines().any(|l| l == "/aida-review --pr 59"), "{argv}");
+    assert!(argv.contains(".aida/review-verdicts/"), "{argv}");
+    assert!(argv.contains("59"), "{argv}");
     assert!(!argv.contains("If recording the verdict fails"), "{argv}");
 }
 

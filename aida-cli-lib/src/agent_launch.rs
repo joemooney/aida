@@ -3657,6 +3657,14 @@ pub(crate) fn agent_initial_prompt_args(
     let Some(prompt) = prompt else {
         return Vec::new();
     };
+    // De-risk launches carry an invocation after the launch-context preamble.
+    // Keep previews and real launches on the same Codex renderer.
+    // trace:BUG-2387 | ai:codex
+    let prompt = if config.agent_type == "codex" {
+        session::codex_interactive_prompt(&prompt)
+    } else {
+        prompt
+    };
     match config.prompt_style {
         AgentPromptStyle::Positional => vec![prompt],
         AgentPromptStyle::Flag(flag) => vec![flag.to_string(), prompt],
@@ -6741,6 +6749,14 @@ fn run_agent_generation(
         .stderr(std::process::Stdio::inherit());
     // trace:STORY-1843 | ai:claude
     crate::agent_handle::apply_launch_env(&mut command, &plan.project_root, &plan.name);
+    // The child's SessionStart hook may write its row before this launcher
+    // stamps it: it reads the launch's decision from here, and a value
+    // inherited from a parent session never stands in for it.
+    // trace:STORY-2256 | ai:claude
+    match mail_wake {
+        Some(state) => command.env(crate::mail_wake::LAUNCH_WAKE_ENV, state.as_str()),
+        None => command.env_remove(crate::mail_wake::LAUNCH_WAKE_ENV),
+    };
     apply_harness_version(
         &mut command,
         harness_version_probe_program_and_args(binary, config, plan, true)?,

@@ -4808,3 +4808,89 @@ fn task_117_agent_list_and_aliases_keep_their_flags_and_avoid_launch_rewrite() {
     let list = agent.find_subcommand("list").unwrap();
     assert!(list.get_visible_aliases().any(|alias| alias == "ls"));
 }
+
+// trace:BUG-2387 | ai:codex
+#[test]
+fn codex_derisk_agent_argv_expands_workflow_after_context_preamble() {
+    let tmp = TempDir::new().unwrap();
+    let plan =
+        prepare_agent_launch_dry(tmp.path(), Some("advisor".into()), None, "codex", None).unwrap();
+    let launch = derisk_launch_request("BUG-2387");
+    let options = AgentPromptOptions::new(Some(launch.prompt.clone()), false);
+    for vendor in ["codex", "claude"] {
+        let config = AgentLaunchConfig {
+            agent_type: vendor,
+            binary: vendor,
+            default_args: Vec::new(),
+            prompt_style: AgentPromptStyle::Positional,
+            contained: false,
+        };
+        let args = agent_initial_prompt_args(&config, &plan, &options);
+        assert_eq!(args.len(), 1);
+        let body = &args[0];
+        if vendor == "claude" {
+            assert_eq!(body, &launch.prompt);
+        } else {
+            assert!(body.starts_with("Read your AIDA launch context first:"));
+            assert!(body.contains("cat \"$AIDA_AGENT_CONTEXT_FILE\""));
+            assert!(body.contains("# De-risk a Supervised Spec"));
+            assert!(body.contains("decision risk"));
+            assert!(body.contains("Codex prompt arguments: `BUG-2387`"));
+            assert!(!body.lines().any(|line| line.starts_with("/aida-")));
+            assert!(body.ends_with("Do not implement the spec."));
+            assert!(render_agent_show_prompt(&options, &args).contains(body));
+        }
+    }
+    let guided = guided_review_launch_request("BUG-2387");
+    let config = AgentLaunchConfig {
+        agent_type: "codex",
+        binary: "codex",
+        default_args: Vec::new(),
+        prompt_style: AgentPromptStyle::Positional,
+        contained: false,
+    };
+    let args = agent_initial_prompt_args(
+        &config,
+        &plan,
+        &AgentPromptOptions::new(Some(guided.prompt.clone()), false),
+    );
+    assert_eq!(args, vec![guided.prompt]);
+}
+
+// Every `aida agent` subcommand, hidden ones included, passes through the
+// bare-agent rewrite: `aida agent wake arm <agent>` (the manual-arm command
+// mail-wake failures print) was turned into `agent new wake` and exited 2.
+// trace:STORY-2256 | ai:claude
+#[test]
+fn story_2256_every_agent_subcommand_passes_the_default_new_rewrite() {
+    let mut command = crate::command_registry::built_command();
+    command.build();
+    let agent = command.find_subcommand("agent").unwrap();
+    for sub in agent.get_subcommands() {
+        let mut names = vec![sub.get_name().to_string()];
+        names.extend(sub.get_all_aliases().map(str::to_owned));
+        for name in names {
+            let args: Vec<String> = ["aida", "agent", &name]
+                .into_iter()
+                .map(str::to_owned)
+                .collect();
+            assert_eq!(
+                crate::rewrite_agent_default_new(&args),
+                args,
+                "`aida agent {name}` must not be rewritten to `agent new`"
+            );
+        }
+    }
+    let args: Vec<String> = ["aida", "agent", "wake", "arm", "codex-agent-05"]
+        .into_iter()
+        .map(str::to_owned)
+        .collect();
+    let cli =
+        crate::command_registry::try_parse_from(crate::rewrite_agent_default_new(&args)).unwrap();
+    assert!(matches!(
+        &cli.command
+            .registered::<crate::agent_launch::AgentArgs>()
+            .inner,
+        AgentCommand::Wake { .. }
+    ));
+}
