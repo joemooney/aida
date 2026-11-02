@@ -509,7 +509,12 @@ const LAUNCH_INVENTORY: &[(&str, usize, Finalization)] = &[
     ("questions.rs", 2, Finalization::CoordinatorSpawn),
     // Claude-only builders/resumes plus the shared seat-env helper; every
     // Codex spawn in this file (incl. the coordinator spawn) finalizes.
-    ("session.rs", 12, Finalization::PrepareLaunch(5)),
+    // BUG-2386 adds two Codex resume sites, both finalized: the interactive
+    // `build_codex_resume_command` (finalized by `finalize_codex_resume`, which
+    // `aida session resume`, `queue work --resume` and the reviewer resume
+    // call last) and the headless `spawn_vendor_headless_resume_granted`
+    // (punt/bg resume), which finalizes before stdio and revokes on refusal.
+    ("session.rs", 14, Finalization::PrepareLaunch(7)),
 ];
 
 /// Child-launch markers in whitespace-normalized source: a grant selector

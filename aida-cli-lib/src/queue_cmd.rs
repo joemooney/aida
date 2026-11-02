@@ -14082,6 +14082,11 @@ pub(crate) fn run_standalone_reviewer(
                     )?;
                     cmd.current_dir(worktree)
                         .env("AIDA_SESSION_ROLE", "reviewer");
+                    // trace:BUG-2386 | ai:claude
+                    if let Err(error) = session::finalize_codex_resume(&mut cmd, project_root) {
+                        session::revoke_headless_child_grant(&grant.id);
+                        return Err(error);
+                    }
                     eprintln!(
                         "{} {}",
                         crate::glyph(crate::glyphs::Glyph::FlowActive)

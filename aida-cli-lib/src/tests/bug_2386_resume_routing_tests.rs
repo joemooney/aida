@@ -407,6 +407,30 @@ fn session_resume_codex_arm_builds_a_codex_resume_command() {
         !args.iter().any(|a| a.contains("dangerously-bypass")),
         "native: {args:?}"
     );
+    // A resumed Codex child is finalized through codex_tool_env::prepare_launch
+    // like a fresh one: an explicit (here baseline) grant decision and its
+    // public metadata reach the child's tool shells.
+    // trace:BUG-2386 | ai:claude
+    for expected in [
+        "shell_environment_policy.set.AIDA_SESSION_GRANT=\"\"",
+        "shell_environment_policy.set.AIDA_AGENT_TYPE=\"codex\"",
+    ] {
+        assert!(
+            args.windows(2).any(|w| w[0] == "-c" && w[1] == expected),
+            "{expected}: {args:?}"
+        );
+    }
+    assert!(
+        args.iter()
+            .any(|a| a.starts_with("shell_environment_policy.set.AIDA_USER=")),
+        "{args:?}"
+    );
+    assert!(
+        cmd.get_envs()
+            .any(|(k, v)| k == crate::gate::seat_authority::GRANT_ENV
+                && v == Some(std::ffi::OsStr::new(""))),
+        "explicit baseline grant decision on the child"
+    );
     // A flag-shaped id is refused, never passed as a positional.
     let bad = ResumeTarget {
         id: "--last".to_string(),
@@ -448,6 +472,10 @@ fn headless_resume_refuses_agy_by_name() {
 #[cfg(unix)]
 #[test]
 fn headless_codex_resume_gets_grant_role_native_posture_and_no_aida_contained() {
+    // The fake answers the BUG-2398 seat preflight through the real CLI.
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
     let tmp = tempfile::tempdir().unwrap();
     let root = std::fs::canonicalize(tmp.path()).unwrap().join("lane");
     std::fs::create_dir_all(&root).unwrap();
@@ -455,9 +483,11 @@ fn headless_codex_resume_gets_grant_role_native_posture_and_no_aida_contained() 
     let fake = tmp.path().join("fake-codex");
     crate::test_exec::write_executable(
         &fake,
-        "#!/bin/sh\nprintf '%s\\n' \"posture=$AIDA_CONTAINMENT_POSTURE\" \
-         \"contained=${AIDA_CONTAINED-unset}\" \"role=$AIDA_SESSION_ROLE\" \
-         \"grant=$AIDA_SESSION_GRANT\" \"$@\"\n",
+        crate::test_exec::codex_probe_script(
+            "#!/bin/sh\nprintf '%s\\n' \"posture=$AIDA_CONTAINMENT_POSTURE\" \
+             \"contained=${AIDA_CONTAINED-unset}\" \"role=$AIDA_SESSION_ROLE\" \
+             \"grant=$AIDA_SESSION_GRANT\" \"$@\"\n",
+        ),
     );
     // A contained parent: the Codex child resumes under its native sandbox.
     let _ambient = crate::test_env::AmbientGuard::hermetic_with_seat_and(
@@ -503,6 +533,17 @@ fn headless_codex_resume_gets_grant_role_native_posture_and_no_aida_contained() 
     assert!(out.contains("exec\nresume\n"), "{out}");
     assert!(out.contains("\n019a-thread\n"), "{out}");
     assert!(!out.contains("dangerously-bypass"), "{out}");
+    // BUG-2398 finalization: the child's tool shells receive its seat.
+    assert!(
+        out.contains(&format!(
+            "shell_environment_policy.set.AIDA_SESSION_GRANT=\"{grant}\"\n"
+        )),
+        "{out}"
+    );
+    assert!(
+        out.contains("shell_environment_policy.set.AIDA_SESSION_ROLE=\"implementer\"\n"),
+        "{out}"
+    );
 }
 
 // ── punt resume vendor ──────────────────────────────────────────────────────
