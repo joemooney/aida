@@ -1622,6 +1622,41 @@ pub(crate) fn build_verdict_object(
     Ok(obj)
 }
 
+/// BUG-2403: the record-time `release_grant` receipt `overlay` may carry over
+/// from `origin`, the already-built, trusted record of the SAME act of review
+/// (`aida review record`'s own object, or the drain stamp's base record).
+/// `Some` only when `origin` holds a receipt and both records name the same
+/// full reviewed head, recorder, recording time, verdict and recorder
+/// attestation, all present, and the receipt names that recorder. A changed
+/// head, a different recorder or any missing value yields `None`: the receipt
+/// is never filled, re-stamped or carried to a new review.
+// trace:BUG-2403 | ai:claude
+pub(crate) fn same_origin_receipt(
+    origin: &JsonObj,
+    overlay: &JsonObj,
+) -> Option<serde_json::Value> {
+    let receipt = origin.get("release_grant").filter(|g| g.is_object())?;
+    let same =
+        |k: &str| origin.get(k).is_some_and(|v| !v.is_null()) && origin.get(k) == overlay.get(k);
+    let full_head = origin
+        .get("reviewed_sha")
+        .and_then(|v| v.as_str())
+        .is_some_and(|s| s.len() == 40 && crate::gate::kernel_deps::is_hex_sha(s));
+    let bound = [
+        "reviewed_sha",
+        "recorded_by",
+        "recorded_at",
+        "verdict",
+        ATTESTATION_KEY,
+    ]
+    .iter()
+    .all(|k| same(*k));
+    let recorder = receipt
+        .get("recorded_by")
+        .is_some_and(|r| Some(r) == overlay.get("recorded_by"));
+    (full_head && bound && recorder).then(|| receipt.clone())
+}
+
 /// Record a verdict at an explicitly anchored artifact path. The orchestrator
 /// uses this for `PR-N.json`; sharing this boundary with spec-keyed records is
 /// what prevents the authoritative handshake from silently clobbering another
@@ -3221,3 +3256,7 @@ pub(crate) fn evaluate_review_verdict_gate(
 #[cfg(test)]
 #[path = "tests/review_verdict_tests.rs"]
 mod review_verdict_tests;
+
+#[cfg(test)]
+#[path = "tests/bug_2403_same_origin_receipt_tests.rs"]
+mod bug_2403_same_origin_receipt_tests;

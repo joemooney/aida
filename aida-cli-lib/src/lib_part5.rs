@@ -3423,8 +3423,14 @@ pub(crate) fn handle_review_record_at(
         // when the caller supplied an abbreviation.
         // trace:BUG-1466 | ai:codex
         // trace:BUG-1516 | ai:codex
-        let recorded = crate::gate::review_verdict::read_recorded_verdict(&project_root, spec)
+        // BUG-2403: the handshake is the SAME act of review as the record
+        // this handler just wrote, so its provenance comes from that exact
+        // in-memory object, never from a re-read a concurrent reviewer could
+        // have replaced. The read-back stays as the existence check.
+        // trace:BUG-2403 | ai:claude
+        crate::gate::review_verdict::read_recorded_verdict(&project_root, spec)
             .ok_or_else(|| anyhow::anyhow!("the verdict was written but could not be read back"))?;
+        let origin_field = |k: &str| verdict_obj.get(k).and_then(|v| v.as_str());
         // BUG-1571: build the full handshake object (base fields + the
         // orchestrator's `mode`/`recorded_at` overlay) in memory and commit
         // it with exactly ONE durable, verified write. The previous code
@@ -3440,11 +3446,11 @@ pub(crate) fn handle_review_record_at(
             &project_root,
             &handshake,
             Some(kind.label()),
-            recorded.reviewed_sha.as_deref(),
-            recorded.reviewed_branch.as_deref(),
+            origin_field("reviewed_sha"),
+            origin_field("reviewed_branch"),
             summary,
             findings,
-            recorded.recorded_by.as_deref().unwrap_or(&recorded_by),
+            origin_field("recorded_by").unwrap_or(&recorded_by),
         )
         .with_context(|| format!("could not prepare {}", handshake.display()))?;
         // trace:STORY-1417 | ai:claude
@@ -3461,11 +3467,21 @@ pub(crate) fn handle_review_record_at(
             "mode".to_string(),
             serde_json::Value::String("orchestrator-phase-3".to_string()),
         );
-        if let Some(recorded_at) = recorded.recorded_at.as_deref() {
+        if let Some(recorded_at) = origin_field("recorded_at") {
             handshake_obj.insert(
                 "recorded_at".to_string(),
                 serde_json::Value::String(recorded_at.to_string()),
             );
+        }
+        // BUG-2403: carry the origin's record-time receipt, stamped once
+        // above after the authority check — never re-stamped here under later
+        // ambient authority, and never filled when the origin has none. The
+        // builder's clearing for a new review stays as it is.
+        // trace:BUG-2403 | ai:claude
+        if let Some(receipt) =
+            crate::gate::review_verdict::same_origin_receipt(&verdict_obj, &handshake_obj)
+        {
+            handshake_obj.insert("release_grant".to_string(), receipt);
         }
         // BUG-2201 / TASK-2040: a contained reviewer cannot write the
         // launcher's anchor in the primary checkout. Its launcher collects

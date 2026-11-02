@@ -192,7 +192,76 @@ fn verdict_events(root: &Path, key: &str) -> Vec<GateEvent> {
 // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
 pub(crate) fn newest_verdict_event(start: &Path, key: &str) -> Option<GateEvent> {
     let root = store_root(start).ok()?;
-    verdict_events(&root, key).pop()
+    let mut events = verdict_events(&root, key);
+    let newest = events.pop()?;
+    // BUG-2403: a retained receipt-less phase-3 overlay answers with the
+    // ordinary record it duplicates, when that pairing is proved.
+    // trace:BUG-2403 | ai:claude
+    Some(match events.last() {
+        Some(origin) if proved_phase3_origin(origin, &newest) => origin.clone(),
+        _ => newest,
+    })
+}
+
+/// The `mode` the `--pr` handshake overlay of `aida review record` carries.
+pub(crate) const PHASE3_MODE: &str = "orchestrator-phase-3";
+
+/// Record fields a phase-3 overlay may differ from its origin in: the
+/// coordination `mode`, the receipt older writers dropped, and the retained
+/// round-history representation (every event stays readable through
+/// [`verdict_records`]). Every other field must be present-or-absent alike
+/// and equal.
+const OVERLAY_ONLY_FIELDS: &[&str] = &["mode", "release_grant", "rounds", "unarchived_rounds"];
+
+/// Fields whose presence is part of the proof: missing values are not equal.
+const REQUIRED_FIELDS: &[&str] = &[
+    "verdict",
+    "reviewed_sha",
+    "recorded_by",
+    "recorded_at",
+    crate::gate::review_verdict::ATTESTATION_KEY,
+];
+
+/// BUG-2403 (signoff amendment 5): `overlay` is a receipt-less phase-3
+/// handshake that duplicates `origin`, the verdict event immediately before it
+/// in the reader's candidate order (so no distinct review or refusal sits in
+/// between), and `origin` is the ordinary receipt-bearing record of the same
+/// act of review: same change, same spec label, same envelope head, and every
+/// review-semantic field present and equal. Anything unproved — a missing
+/// field, an unknown difference, a PRESENT receipt on the overlay, a
+/// different recorder or time — is not a pairing, and the overlay keeps its
+/// own (protective) standing. Preferring the origin grants nothing: its own
+/// receipt still has to pass every authority check downstream.
+// trace:BUG-2403 | ai:claude
+pub(crate) fn proved_phase3_origin(origin: &GateEvent, overlay: &GateEvent) -> bool {
+    let (Some(o), Some(v)) = (origin.verdict_record(), overlay.verdict_record()) else {
+        return false;
+    };
+    let is_phase3 = |r: &JsonObj| r.get("mode").and_then(|m| m.as_str()) == Some(PHASE3_MODE);
+    let envelope = origin.change == overlay.change
+        && origin.seq < overlay.seq
+        && origin.spec.is_some()
+        && origin.spec == overlay.spec
+        && origin.head.is_some()
+        && origin.head == overlay.head;
+    if !envelope
+        || !is_phase3(v)
+        || is_phase3(o)
+        || v.contains_key("release_grant")
+        || !o.get("release_grant").is_some_and(|g| g.is_object())
+    {
+        return false;
+    }
+    if !REQUIRED_FIELDS
+        .iter()
+        .all(|k| o.get(*k).is_some_and(|x| !x.is_null()) && o.get(*k) == v.get(*k))
+    {
+        return false;
+    }
+    o.keys()
+        .chain(v.keys())
+        .filter(|k| !OVERLAY_ONLY_FIELDS.contains(&k.as_str()))
+        .all(|k| o.get(k) == v.get(k))
 }
 
 /// Every verdict record the ledger holds for `key`, oldest first: the round

@@ -196,6 +196,11 @@ pub(crate) fn stamp_pr_review_verdict(
     // round at the sha and nothing re-reads or rewrites the verdict by path.
     // trace:TASK-1951 trace:TASK-1668 | ai:claude
     let path = crate::gate::review_verdict::verdict_path(project_root, &format!("PR-{pr}"));
+    // BUG-2403: the record this stamp builds on, as the gates weigh it.
+    // trace:BUG-2403 | ai:claude
+    let origin = crate::gate::review_verdict::current_verdict_body_at(&path)
+        .and_then(|b| serde_json::from_str::<serde_json::Value>(&b).ok())
+        .and_then(|v| v.as_object().cloned());
     let mut object = crate::gate::review_verdict::build_verdict_object(
         project_root,
         &path,
@@ -206,6 +211,7 @@ pub(crate) fn stamp_pr_review_verdict(
         &[],
         "aida drain reviewer",
     )?;
+    keep_origin_receipt(origin.as_ref(), &mut object);
     if let Some(sha) = ci_terminal_sha {
         object.insert(
             "ci_terminal_sha".into(),
@@ -217,6 +223,39 @@ pub(crate) fn stamp_pr_review_verdict(
     }
     crate::gate::review_verdict::write_verdict_object(&path, &object)?;
     Ok(path)
+}
+
+/// BUG-2403 (signoff amendment 4): a provenance-only drain stamp at the SAME
+/// reviewed head is not a new act of review. When the record it builds on is
+/// a receipt-bearing review, keep that review's recorder, recording time and
+/// receipt ([`crate::gate::review_verdict::same_origin_receipt`]) instead of
+/// relabelling it to the drain and dropping the receipt. A moved head, an
+/// abbreviated or missing head, or a record without a receipt keeps the
+/// builder's provenance unchanged: nothing is filled.
+// trace:BUG-2403 | ai:claude
+fn keep_origin_receipt(
+    origin: Option<&crate::gate::review_verdict::JsonObj>,
+    object: &mut crate::gate::review_verdict::JsonObj,
+) {
+    let Some(origin) = origin.filter(|o| o.get("release_grant").is_some()) else {
+        return;
+    };
+    if origin.get("reviewed_sha").is_none()
+        || origin.get("reviewed_sha") != object.get("reviewed_sha")
+    {
+        return;
+    }
+    let mut candidate = object.clone();
+    for key in ["recorded_by", "recorded_at"] {
+        match origin.get(key) {
+            Some(v) => candidate.insert(key.to_string(), v.clone()),
+            None => return,
+        };
+    }
+    if let Some(receipt) = crate::gate::review_verdict::same_origin_receipt(origin, &candidate) {
+        candidate.insert("release_grant".to_string(), receipt);
+        *object = candidate;
+    }
 }
 
 #[cfg(test)]
