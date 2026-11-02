@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-183
 agreed_id: BUG-2414
 title: The 10s unbudgeted test-time gate fails CI on unrelated tests at about 10.0s under runner load, ejecting train members
 description: 'Observed 2026-11-01/02: PR #3226 cli-0 (bug_046_padded_id_cli edit_comment... 11.0s), train #3252 cli-0 (story_164_single_hub single_hub_clones_claim_by_cas... 10.0s), #3192 lib-0 (own test 16.3s, real). All tests passed; only the budget step failed. Two ejections or reruns cost about 40 min. Expected: the budget gate flags only tests the PR touched or added, or uses a tolerance or median over runs for untouched tests; untouched tests near the limit get budget entries.'
-status: InProgress
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-02T12:46:32.235262603Z
-modified_at: 2026-11-02T14:07:15.271582637Z
+modified_at: 2026-11-02T14:22:41.382786105Z
 req_type: Bug
 tags:
 - area:ci
@@ -95,6 +95,21 @@ history:
   timestamp: 2026-11-02T14:07:32.749939424Z
   session_id: ee0bf351-6b17-486f-a38e-cfbb1343c426
   changes: []
+- id: 01a19ca4-14c0-7b30-a917-5103eaf978d2
+  author: aida-auto-bump
+  timestamp: 2026-11-02T14:22:41.344444114Z
+  session_id: ee0bf351-6b17-486f-a38e-cfbb1343c426
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a19ca4-14e6-71f1-8ed3-8b54eb47ad1a
+  timestamp: 2026-11-02T14:22:41.382773869Z
+  agent: aida
+  commit_sha: 8f4358891601ffc4cc64c634415ec769fc9e560b
+  summary: 'Round 2 PASS: check() sends every over-limit row (tolerated untouched rows included) to stalled() before classifying; the exact review repro is a regression test that fails on f036535 and passes now; untouched tests get the limit x1.5 tolerance, touched/doctest/per-binary rows stay strict, strict fallback when no parent; CI step prints changed-file count; two budget entries added; PR CI green on all 7 lanes + Build at 5701e575 (merge-hold-gate is the supervised hold, not a code defect).'
+  review_verdict: approved
 execution_mode: drain
 filed_at:
   code_sha: 5b21d041d218b3030c4878b5cabb862da086026e
@@ -104,3 +119,7 @@ filed_at:
   aida_build_sha: 6a3f67671a9
   vendor: claude
   session: 1f56bd1e-c059-4f73-b8df-e18b2170fdfc
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-02T14:22:41.344436525Z
+  completion_sha: 8f4358891601ffc4cc64c634415ec769fc9e560b
