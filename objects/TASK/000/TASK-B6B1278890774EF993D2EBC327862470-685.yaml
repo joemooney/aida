@@ -13,13 +13,20 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-02T05:30:26.696275433Z
-modified_at: 2026-11-02T05:30:26.696275433Z
+modified_at: 2026-11-02T06:25:57.639050927Z
 req_type: Task
 tags:
 - carried-from:BUG-2404
 - finding-hash:d1253314
 - from-review:PR-3230
 - kind:carried-forward
+comments:
+- id: 01a19aef-9f87-7393-8af6-c6f6f9ed24fe
+  author: joe
+  content: 'ADVISOR RULING (2026-11-01 23:30 MST, ruled once per the 2026-10-28 operator order): accepted as-is, no change. Reason: message-only change on an error path, reviewed; no logic to regress.'
+  created_at: 2026-11-02T06:25:57.639050927Z
+  modified_at: 2026-11-02T06:25:57.639050927Z
+  session_id: 1f56bd1e-c059-4f73-b8df-e18b2170fdfc
 filed_at:
   code_sha: 952552f2b786703862676a2bfc233082a538f09f
   branch: main
