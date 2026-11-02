@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-183
 agreed_id: BUG-2414
 title: The 10s unbudgeted test-time gate fails CI on unrelated tests at about 10.0s under runner load, ejecting train members
 description: 'Observed 2026-11-01/02: PR #3226 cli-0 (bug_046_padded_id_cli edit_comment... 11.0s), train #3252 cli-0 (story_164_single_hub single_hub_clones_claim_by_cas... 10.0s), #3192 lib-0 (own test 16.3s, real). All tests passed; only the budget step failed. Two ejections or reruns cost about 40 min. Expected: the budget gate flags only tests the PR touched or added, or uses a tolerance or median over runs for untouched tests; untouched tests near the limit get budget entries.'
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-02T12:46:32.235262603Z
-modified_at: 2026-11-02T13:36:16.783261365Z
+modified_at: 2026-11-02T13:40:10.500508619Z
 req_type: Bug
 tags:
 - area:ci
@@ -49,6 +49,15 @@ history:
   timestamp: 2026-11-02T13:36:18.342048699Z
   session_id: ee0bf351-6b17-486f-a38e-cfbb1343c426
   changes: []
+- id: 01a19c7d-2884-71f1-9928-820cc0ee2fc8
+  author: aida-orchestrator
+  timestamp: 2026-11-02T13:40:10.500532905Z
+  session_id: 01a19c7bf148
+  harness_version: 2.1.316 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 5b21d041d218b3030c4878b5cabb862da086026e
   branch: main
@@ -57,3 +66,11 @@ filed_at:
   aida_build_sha: 6a3f67671a9
   vendor: claude
   session: 1f56bd1e-c059-4f73-b8df-e18b2170fdfc
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: Touched/untouched tolerance meets BUG-2414 and CI is green, but tolerated untouched rows are dropped from stall detection, so a touched test that overlaps them loses its TASK-1988 runner-stall exemption and fails a gate it passed before.
+  recovery_hint: address the review findings, move BUG-2414 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-11-02T13:40:10.500508619Z
