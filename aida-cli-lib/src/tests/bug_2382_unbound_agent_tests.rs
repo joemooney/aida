@@ -100,6 +100,7 @@ fn codex_process(pid: u32, cwd: &Path) -> LiveAgentProcess {
     }
 }
 
+// trace:BUG-B6B1278890774EF993D2EBC327862470-156.aca5e6f9 | ai:claude
 #[test]
 fn bug_2382_codex_processes_are_live_sessions() {
     let cwd = PathBuf::from("seat-clone");
@@ -110,6 +111,8 @@ fn bug_2382_codex_processes_are_live_sessions() {
     assert!(live[0].jsonl.is_none(), "codex has no claude transcript");
 }
 
+// trace:BUG-B6B1278890774EF993D2EBC327862470-156.aca5e6f9 | ai:claude
+// trace:BUG-B6B1278890774EF993D2EBC327862470-156.Tests | ai:claude
 #[cfg(unix)]
 #[test]
 fn bug_2382_exited_creator_plus_live_codex_in_clone_reads_live() {
@@ -134,6 +137,8 @@ fn bug_2382_exited_creator_plus_live_codex_in_clone_reads_live() {
     assert!(!hint.contains("dead process"), "{hint}");
 }
 
+// trace:BUG-B6B1278890774EF993D2EBC327862470-156.acaeb553 | ai:claude
+// trace:BUG-B6B1278890774EF993D2EBC327862470-156.Tests | ai:claude
 #[test]
 fn bug_2382_no_agent_in_clone_keeps_salvageable_output() {
     let tmp = tempfile::tempdir().unwrap();
@@ -152,6 +157,7 @@ fn bug_2382_no_agent_in_clone_keeps_salvageable_output() {
     assert_eq!(d.hint, before);
 }
 
+// trace:BUG-B6B1278890774EF993D2EBC327862470-156.acaeb553 | ai:claude
 #[test]
 fn bug_2382_unbound_process_in_clone_withholds_salvage_and_names_pid() {
     let tmp = tempfile::tempdir().unwrap();
@@ -211,6 +217,7 @@ fn bug_2382_unbound_non_agent_process_says_process_not_agent() {
     assert!(hint.contains("pid 31 (bash)"), "{hint}");
 }
 
+// trace:BUG-B6B1278890774EF993D2EBC327862470-156.acaeb553 | ai:claude
 #[test]
 fn bug_2382_spec_with_unbound_occupant_is_not_listed_orphaned() {
     let tmp = tempfile::tempdir().unwrap();
@@ -250,6 +257,7 @@ fn bug_2382_spec_with_unbound_occupant_is_not_listed_orphaned() {
     assert!(orphans.is_empty(), "an occupied spec is not orphaned");
 }
 
+// trace:BUG-B6B1278890774EF993D2EBC327862470-156.aca5e6f9 | ai:claude
 #[cfg(target_os = "linux")]
 #[test]
 fn bug_2382_cwd_scan_finds_any_process_in_the_clone() {
