@@ -1,0 +1,27 @@
+id: 01a19a5b-28d8-7f03-a361-770a9ba4e333
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-676
+title: 'NON-BLOCKING cosmetic supervisor.rs:263-279 vs 364-390: synthetic_layout() dupl…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-2705, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  NON-BLOCKING cosmetic supervisor.rs:263-279 vs 364-390: synthetic_layout() duplicates the dir/protected-path setup run_probe_inner repeats inline; start the lane from synthetic_layout() and add controls.
+  Reviewed sha: 94367e74ed9e9af0c2242dfc9799de38e2b4e1b1
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-02T03:43:47.928825831Z
+modified_at: 2026-11-02T03:43:47.928825831Z
+req_type: Task
+tags:
+- carried-from:TASK-2705
+- finding-hash:a13e1af3
+- from-review:TASK-2705
+- kind:carried-forward
+filed_at:
+  code_sha: 9a2168d8563579456bf669bb816ebdf5ff3aa355
+  branch: main
+  dirty: true
+  aida_version: 0.16.0
+  aida_build_sha: 6a3f67671a9
+  vendor: claude
