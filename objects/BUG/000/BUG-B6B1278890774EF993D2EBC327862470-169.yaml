@@ -23,7 +23,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T06:48:25.173889038Z
-modified_at: 2026-11-02T13:10:06.481885750Z
+modified_at: 2026-11-02T13:11:29.953408451Z
 req_type: Bug
 tags:
 - architecture
@@ -156,6 +156,17 @@ comments:
   modified_at: 2026-11-02T11:51:22.715343914Z
   session_id: 01a19c0013fe
   harness_version: 2.1.316 (Claude Code)
+- id: 01a19c62-e7a1-7021-be30-759ec0b14d4e
+  author: joe
+  content: |-
+    ADVISOR REWORK BRIEF (06:13 MST), PR #3256 round 1 at df73a5a. Final round.
+    1. BLOCKING, fresh-init drift. scaffold_codex_hooks (aida-core/src/scaffolding/codex_hooks.rs:97) writes header-less handlers, while preview and status (scaffolding/mod.rs:2724-2763, via create_artifact) expect header-wrapped ones. So every 'aida init --agent codex' immediately reports .codex/hooks/aida-* as modified. Fixed means: scaffold_codex_hooks writes through wrap_with_aida_header, one canonical form for both writers. Add a test where scaffold_codex_hooks output followed by Scaffolder::preview has no .codex/ entry in modified_files and status is_current; keep the existing stale-handler test.
+    2. BUNDLE (cosmetic): aida-core/templates/hooks/aida-advisor-code-guard.sh:133 has the trace tag spliced mid-sentence; move it to its own comment line, then make sync-templates.
+    ACCEPTED here: the zen_drive_root ROLE_LAUNCH_SITES KnownGap is tracked separately as an EPIC-612 draft.
+    Gate: LIGHT, cargo test --profile agent -p aida-core codex_hooks (plus the bug_2395 filter) and make check-ci-fast. Push to the PR branch.
+  created_at: 2026-11-02T13:11:29.953408451Z
+  modified_at: 2026-11-02T13:11:29.953408451Z
+  session_id: ee0bf351-6b17-486f-a38e-cfbb1343c426
 history:
 - id: 01a195dd-f3fe-78f1-905f-d5b9c92b6293
   author: joe
