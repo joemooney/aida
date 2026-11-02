@@ -1,0 +1,30 @@
+id: 01a19a77-ef33-74b0-9d51-8c4b0ceace6b
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-678
+title: 'MINOR (non-blocking): attended (TTY) ships run the cleanup worker in the foregr…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on BUG-2384, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  MINOR (non-blocking): attended (TTY) ships run the cleanup worker in the foreground with no wall-clock bound (only the per-clone 10s probe cap + per-clone progress line), so a 25-clone operator-terminal ship can in the worst case block the terminal ~250s; no test asserts an attended-path time bound. Merge lease is no longer held, so other ships are unaffected. Consider a follow-up if attended ships still feel slow.
+
+  PR: #3216
+  Reviewed sha: 70cfb506f81d85cc1efea03e5eb0559933b28936
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-02T04:15:13.715678125Z
+modified_at: 2026-11-02T04:15:13.715678125Z
+req_type: Task
+tags:
+- carried-from:BUG-2384
+- finding-hash:1027a83b
+- from-review:PR-3216
+- kind:carried-forward
+filed_at:
+  code_sha: 20c834e8cdcc74f199d9ddff7126cba61b08c3c3
+  branch: main
+  dirty: true
+  aida_version: 0.16.0
+  aida_build_sha: 6a3f67671a9
+  vendor: claude
+  session: 126bbd5a-a92f-452b-ab0b-2637a1db42c2
