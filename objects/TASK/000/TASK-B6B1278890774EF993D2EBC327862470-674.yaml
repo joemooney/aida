@@ -12,7 +12,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-02T03:43:39.805406873Z
-modified_at: 2026-11-02T06:28:49.715959246Z
+modified_at: 2026-11-02T06:32:09.171577700Z
 req_type: Task
 tags:
 - carried-from:TASK-2705
@@ -35,6 +35,13 @@ comments:
   created_at: 2026-11-02T06:26:48.666293309Z
   modified_at: 2026-11-02T06:26:48.666293309Z
   session_id: 1f56bd1e-c059-4f73-b8df-e18b2170fdfc
+- id: 01a19af5-4ad3-77f1-ac51-a07fbbbed16b
+  author: joe
+  content: 'Implementer (claude): edits in worktree aida-seat-...-674 are uncommitted: config_cmd_args.rs probe --vendor/--json doc comments + task-2705-rework.md stale EPERM/EACCES/ENOSPC sentence replaced. Blocked: session permission mode denied cargo test, git commit. Help golden NOT regenerated. Remaining: AIDA_UPDATE_SNAPSHOTS=1 cargo test --profile agent -p aida-cli-lib help_surface_matches_golden_snapshot; make check-ci-fast; commit; PR.'
+  created_at: 2026-11-02T06:32:09.171577700Z
+  modified_at: 2026-11-02T06:32:09.171577700Z
+  session_id: 01a19af1f4b5
+  harness_version: 2.1.316 (Claude Code)
 history:
 - id: 01a19a77-7afb-76e3-981c-0f0504e273e9
   author: joe
