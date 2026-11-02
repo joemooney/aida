@@ -3,7 +3,8 @@
 //! start` pid and the live-session probe saw claude processes only.
 //! (1) a codex session in the clone makes the row live and not salvageable;
 //! (2) any other live process in the clone turns the salvage recipe into an
-//!     "unbound agent in clone" note naming the pid;
+//!     "unbound agent in clone" note naming the pid ("unbound process" for a
+//!     non-agent process), and the spec is not also listed as orphaned;
 //! (3) with nothing running the salvageable output is unchanged.
 //
 // trace:BUG-2382 | ai:claude
@@ -101,7 +102,7 @@ fn codex_process(pid: u32, cwd: &Path) -> LiveAgentProcess {
 
 #[test]
 fn bug_2382_codex_processes_are_live_sessions() {
-    let cwd = PathBuf::from("/tmp/aida-seat-clone");
+    let cwd = PathBuf::from("seat-clone");
     let live = agent_sessions_from_agent_processes(&[codex_process(4242, &cwd)]);
     assert_eq!(live.len(), 1, "a codex process is a live agent session");
     assert_eq!(live[0].pid, 4242);
@@ -190,6 +191,63 @@ fn bug_2382_unbound_occupant_leaves_other_states_alone() {
     apply_unbound_occupant(&mut d, Path::new("/x"), Some(&occ));
     assert_eq!(d.state, DispatchState::Stalled);
     assert_eq!(d.hint.as_deref(), Some("stalled"));
+}
+
+#[test]
+fn bug_2382_unbound_non_agent_process_says_process_not_agent() {
+    let tmp = tempfile::tempdir().unwrap();
+    let mut rows = rows_for(&[hand_started_lease(tmp.path().to_path_buf())], &[]);
+    let mut d = rows.remove(0).dispatch.unwrap();
+    let occ = CwdOccupant {
+        pid: 31,
+        name: "bash".into(),
+        agent: None,
+    };
+    apply_unbound_occupant(&mut d, tmp.path(), Some(&occ));
+    assert_eq!(d.state, DispatchState::Unknown);
+    let hint = d.hint.as_deref().unwrap();
+    assert!(hint.contains("unbound process in clone"), "{hint}");
+    assert!(!hint.contains("unbound agent"), "{hint}");
+    assert!(hint.contains("pid 31 (bash)"), "{hint}");
+}
+
+#[test]
+fn bug_2382_spec_with_unbound_occupant_is_not_listed_orphaned() {
+    let tmp = tempfile::tempdir().unwrap();
+    let specs = [RunningWorkSpec {
+        disp: "TASK-2631".into(),
+        agreed_id: None,
+        spec_id: Some("TASK-2631".into()),
+        title: "t".into(),
+        in_progress: true,
+        orphan_excluded_type: false,
+    }];
+    let (_, mut orphans) = build_running_work(
+        &specs,
+        &[hand_started_lease(tmp.path().to_path_buf())],
+        &[],
+        chrono::Utc::now(),
+        |_| WorktreeGitProbe::default(),
+        |_| None,
+        |_| None,
+        |_| None,
+        |_| None,
+        |_| MailIdentityStatus::Unknown,
+        |_, _| SeatActivity::Unknown,
+    );
+    assert_eq!(
+        orphans.len(),
+        1,
+        "precondition: the stale lease is orphaned"
+    );
+    assert!(orphans[0].stale_lease);
+
+    // No occupant: the orphan stays.
+    ps_prune_orphans_with_occupant(&mut orphans, &[]);
+    assert_eq!(orphans.len(), 1);
+    // An occupied row (scope matched case-insensitively) drops it.
+    ps_prune_orphans_with_occupant(&mut orphans, &["task-2631".to_string()]);
+    assert!(orphans.is_empty(), "an occupied spec is not orphaned");
 }
 
 #[cfg(target_os = "linux")]
