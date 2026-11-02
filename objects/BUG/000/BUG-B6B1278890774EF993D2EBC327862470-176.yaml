@@ -10,12 +10,12 @@ description: |
   2. Regression fixtures record oldfriendly verdict, newer canonical/phase3 verdict atchangedhead; friendly/canonical reads agree. Cover approve→requestchanges and refusal→approve, reworkfindings + recurrenceguard, holdstillrefuseswronghead/invalidgrant/unrelatedspec and accepts only lawfulfreshidentityevidence. Both GitHub PR and GitLab MR handshakes mustretain existingmappingcontracts.
   3. Repair only supported resolution/projection, never direct JSON/ledgerediting, forgedattestation or manualbypass. Existing security/hold/authority and bounded nonsymlink handle reads stayintact. No globalrole/grantsandboxchange.
   4. Sensitivegate code: SKETCHONLY first, independentadvisorsignoff beforeimplementation. Avoid concurrentgate/review_verdict overlap with activeBUG2398; diagnose/read now, codeafter. Independentfreshreview andnormalgates. LIGHTtargetedfilter+fast, >10/sharedinfraadditionalgates, nofullsuite/slotbypass.
-status: NeedsAttention
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T10:12:04.230556201Z
-modified_at: 2026-11-02T11:45:28.715673740Z
+modified_at: 2026-11-02T11:45:32.588188398Z
 req_type: Bug
 tags:
 - alias
@@ -170,6 +170,12 @@ comments:
   created_at: 2026-11-02T11:45:28.715673740Z
   modified_at: 2026-11-02T11:45:28.715673740Z
   session_id: 1f56bd1e-c059-4f73-b8df-e18b2170fdfc
+- id: 01a19c14-35ac-7f32-972b-0bd607d8f3f3
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Slice-1 code (signoff amendments 4+5) looks correct, but the (BUG-2403) trailer would merge-complete the whole bug while spec Required behavior 1-2 / amendments 1-3,6-8 (alias selection, rework findings, recurrence, checked reader) are unfixed; CI not yet green and slice coverage gaps remain.. No triage reason was given.'
+  created_at: 2026-11-02T11:45:32.588182947Z
+  modified_at: 2026-11-02T11:45:32.588182947Z
+  session_id: 1f56bd1e-c059-4f73-b8df-e18b2170fdfc
 history:
 - id: 01a196a4-b6bb-7730-a79a-e4a546bf516d
   author: joe
@@ -200,6 +206,14 @@ history:
   - field_name: status
     old_value: Done
     new_value: NeedsAttention
+- id: 01a19c14-35ac-7f32-972b-0bc2c8278b16
+  author: joe
+  timestamp: 2026-11-02T11:45:32.588173230Z
+  session_id: 1f56bd1e-c059-4f73-b8df-e18b2170fdfc
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: 6fefb63280c352be0194c2cfadf54a085eb55471
   branch: main
@@ -211,11 +225,3 @@ implementation_info:
   implemented: true
   implemented_at: 2026-11-02T11:36:14.525442720Z
   implemented_by: joe
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: Slice-1 code (signoff amendments 4+5) looks correct, but the (BUG-2403) trailer would merge-complete the whole bug while spec Required behavior 1-2 / amendments 1-3,6-8 (alias selection, rework findings, recurrence, checked reader) are unfixed; CI not yet green and slice coverage gaps remain.
-  recovery_hint: address the review findings, move BUG-2403 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-02T11:43:16.360584186Z
