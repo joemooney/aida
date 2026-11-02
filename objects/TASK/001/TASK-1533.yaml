@@ -3,12 +3,12 @@ spec_id: TASK-1533
 agreed_id: TASK-1533
 title: Bind this repo's guard route jobs to their own guard once the installed aida supports CronJobFailed:<job>
 description: 'Follow-up from BUG-1655. The fix lands the CronJobFailed:<job> binding and the scaffold template, but this repo''s .aida/config.toml keeps the plain form so the live tick keeps working with the currently installed binary (an older binary rejects the bound form at config load). Acceptance: 1. After BUG-1655 merges, rebuild and install aida (make install or equivalent) and confirm ''aida schedule status'' loads. 2. Then change the five route jobs in .aida/config.toml (performance, hub-drift, stranded-branches, disk-headroom, watchdog) to on = ["CronJobFailed:<guard>"]. 3. Verify with ''aida schedule status'' and one forced guard failure in a fixture or dry run that only its route becomes due.'
-status: NeedsAttention
+status: Rejected
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T20:47:36.637006946Z
-modified_at: 2026-11-02T22:35:14.573769335Z
+modified_at: 2026-11-02T22:35:15.656004431Z
 req_type: Task
 relationships:
 - rel_type: BlockedBy
@@ -78,6 +78,12 @@ comments:
   created_at: 2026-11-02T22:34:57.349667975Z
   modified_at: 2026-11-02T22:34:57.349667975Z
   session_id: ee0bf351-6b17-486f-a38e-cfbb1343c426
+- id: 01a19e67-0b48-7212-a80e-dda271493e17
+  author: joe
+  content: Returned from NeedsAttention to Rejected via `aida edit --status`. No triage reason was given.
+  created_at: 2026-11-02T22:35:15.656000697Z
+  modified_at: 2026-11-02T22:35:15.656000697Z
+  session_id: ee0bf351-6b17-486f-a38e-cfbb1343c426
 history:
 - id: 01a0e269-1067-7852-9759-65daff96d2f7
   author: aida-session-start
@@ -98,3 +104,11 @@ history:
   timestamp: 2026-11-02T22:35:14.650033833Z
   session_id: ee0bf351-6b17-486f-a38e-cfbb1343c426
   changes: []
+- id: 01a19e67-0b47-7802-810a-5c9e9876ff86
+  author: joe
+  timestamp: 2026-11-02T22:35:15.655998343Z
+  session_id: ee0bf351-6b17-486f-a38e-cfbb1343c426
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Rejected
