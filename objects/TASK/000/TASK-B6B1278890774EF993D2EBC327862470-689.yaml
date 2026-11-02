@@ -7,12 +7,12 @@ description: |-
 
   NON-BLOCKING cosmetic (carried from round 1 #5) supervisor.rs run_egress_probe accepts test-only fault selectors in production code; gate them behind cfg(test), as preflight_timeout_fixture is. Also, ci.yml:325 'grep -q ...task_2706_egress_ipc_live ... ok$' fails without an ::error:: line; add one.
   Reviewed sha: e5846fc839b0b6dccbaefecdbfd7cc3e1fc2ebf2
-status: Draft
+status: Superseded
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-02T08:38:09.713904520Z
-modified_at: 2026-11-02T09:08:21.012215299Z
+modified_at: 2026-11-02T09:08:23.367241877Z
 req_type: Task
 tags:
 - carried-from:TASK-2706
@@ -32,6 +32,14 @@ history:
   timestamp: 2026-11-02T09:06:09.195872035Z
   session_id: 1f56bd1e-c059-4f73-b8df-e18b2170fdfc
   changes: []
+- id: 01a19b84-54c7-7fb3-a3c6-efd2695b998e
+  author: joe
+  timestamp: 2026-11-02T09:08:23.367239210Z
+  session_id: 1f56bd1e-c059-4f73-b8df-e18b2170fdfc
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: 10f5a8651300808d3177617f5d3444019650725b
   branch: main
