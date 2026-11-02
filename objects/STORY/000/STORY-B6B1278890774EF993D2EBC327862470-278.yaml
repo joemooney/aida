@@ -16,12 +16,12 @@ description: |-
 
   ## Notes
   TASK-1308 (deferred) stays the dogfood-wave proof; this story removes the technical gap it cites.
-status: InProgress
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T04:45:50.173634412Z
-modified_at: 2026-11-02T08:20:47.179207486Z
+modified_at: 2026-11-02T09:44:57.300934407Z
 req_type: Story
 tags:
 - fork
@@ -236,6 +236,21 @@ history:
   timestamp: 2026-11-02T08:20:47.260421181Z
   session_id: 1f56bd1e-c059-4f73-b8df-e18b2170fdfc
   changes: []
+- id: 01a19ba5-cecf-79c3-bc5e-13e1c2e31dc6
+  author: aida-auto-bump
+  timestamp: 2026-11-02T09:44:57.295824084Z
+  session_id: 1f56bd1e-c059-4f73-b8df-e18b2170fdfc
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a19ba5-ced4-7830-99e4-f8f3f74d96d9
+  timestamp: 2026-11-02T09:44:57.300931500Z
+  agent: aida
+  commit_sha: 8ab45ba1c8731a979e678fdf3c041459e7434c46
+  summary: 'Round-3 blocker fixed: codex_fork_and_run resolves session::drain_contained(project_root)? (advisor_watch.rs:310) so configured containment refuses the Codex watch fork, proven by codex_fork_honours_configured_containment_without_the_env; BUG-2393 ratchet clear. AC1 verified (codex_tick_forks_the_registered_thread_without_touching_it, punt_tier_forks_the_registered_codex_thread); AC2 verified (codex_tick_cold_boots_without_a_thread_or_exec_fork, codex_tick_cold_boots_for_another_project_or_a_stale_thread, plan_codex_fork_names_every_fallback_reason, exec_fork_probe_is_bounded); AC3 verified (fixture rollout byte-identity); AC4 verified (contained_fork_uses_the_native_posture_without_bypass + configured-containment test); AC5 verified (seat-parity rows 14/18, stale wording removed); AC6 verified (legacy_registration_stays_a_claude_fork, Claude branch unchanged). CI at head: all 7 lanes green (run 41408954645); merge-hold-gate red only for the expected supervised hold.'
+  review_verdict: approved
 execution_mode: drain
 filed_at:
   code_sha: a83e05d785df667dfa986cf3eb310a3f0637b602
@@ -248,3 +263,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-11-02T02:12:19.628129981Z
   implemented_by: joe
+  completed_at: 2026-11-02T09:44:57.295818202Z
+  completion_sha: 8ab45ba1c8731a979e678fdf3c041459e7434c46
