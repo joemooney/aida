@@ -15136,6 +15136,40 @@ Options:
 
   -h, --help
           Print help (see a summary with '-h')
+===== aida pr post-ship-cleanup
+Internal: the post-merge cleanup worker `aida pr ship` launches
+
+Usage: aida pr post-ship-cleanup [OPTIONS]
+
+Options:
+      --pr <PR>
+          PR whose EndLease outcome the worker records in the ship ledger
+
+      --lease <LEASE>
+          Lease of the shipped branch to end before the sweep
+
+      --merge-lock <MERGE_LOCK>
+          Lock file of the ship's (already released) merge lease
+
+      --sweep
+          Also reap exited sessions and prune merged agent worktrees
+
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+  -h, --help
+          Print help (see a summary with '-h')
 ===== aida pr auto-queue-review
 File the reviewer story for the change (PR/MR) open on the current branch and queue it to the
 `reviewer` role. Idempotent: when a `Review PR-<n>:` / `Review MR-<n>:` story already exists for it,
@@ -16591,6 +16625,12 @@ Commands:
   help         Print this message or the help of the given subcommand(s)
 
 Options:
+      --role <ROLE>
+          Role for a launch using the configured default vendor
+
+      --spec <SPEC>
+          Spec for a launch using the configured default vendor
+
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
           compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
@@ -19159,13 +19199,44 @@ Inspect the effective launch permission posture for managed agents
 Usage: aida config permissions [OPTIONS] <COMMAND>
 
 Commands:
-  show  Show the resolved per-agent posture and diagnostics. Read-only
-  set   Apply a named agent permission posture to local or user config files. `bypass` must be
-        confirmed by a person at an interactive terminal; it is refused when stdin or stdout is not
-        a terminal
-  help  Print this message or the help of the given subcommand(s)
+  probe  Run the fixed, model-free filesystem/supervisor containment tracer. This does not enable
+         vendor launches or change permission policy
+  show   Show the resolved per-agent posture and diagnostics. Read-only
+  set    Apply a named agent permission posture to local or user config files. `bypass` must be
+         confirmed by a person at an interactive terminal; it is refused when stdin or stdout is not
+         a terminal
+  help   Print this message or the help of the given subcommand(s)
 
 Options:
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida config permissions probe
+Run the fixed, model-free filesystem/supervisor containment tracer. This does not enable vendor
+launches or change permission policy
+
+Usage: aida config permissions probe [OPTIONS] --vendor <VENDOR>
+
+Options:
+      --vendor <VENDOR>
+          
+
+      --json
+          
+
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
           compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
@@ -44559,6 +44630,52 @@ Working on aida itself
     "path": [
       "aida",
       "pr",
+      "post-ship-cleanup"
+    ],
+    "about": "Internal: the post-merge cleanup worker `aida pr ship` launches",
+    "flags": [
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "lease",
+        "takes_value": true,
+        "help": "Lease of the shipped branch to end before the sweep"
+      },
+      {
+        "name": "merge-lock",
+        "takes_value": true,
+        "help": "Lock file of the ship's (already released) merge lease"
+      },
+      {
+        "name": "pr",
+        "takes_value": true,
+        "help": "PR whose EndLease outcome the worker records in the ship ledger"
+      },
+      {
+        "name": "sweep",
+        "takes_value": false,
+        "help": "Also reap exited sessions and prune merged agent worktrees"
+      }
+    ],
+    "hidden": true
+  },
+  {
+    "path": [
+      "aida",
+      "pr",
       "auto-queue-review"
     ],
     "about": "File the reviewer story for the change (PR/MR) open on the current branch and queue it to the `reviewer` role. Idempotent: when a `Review PR-<n>:` / `Review MR-<n>:` story already exists for it, reuses that story, queues it again, and adds any links an interrupted run left out. Detects the change through the configured Forge — GitHub via `gh` (looks up the branch's open PR), GitLab via `glab` (looks up the branch's open MR) — so that provider's CLI must be on PATH and authenticated",
@@ -45948,6 +46065,16 @@ Working on aida itself
         "name": "help",
         "takes_value": false,
         "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "role",
+        "takes_value": true,
+        "help": "Role for a launch using the configured default vendor"
+      },
+      {
+        "name": "spec",
+        "takes_value": true,
+        "help": "Spec for a launch using the configured default vendor"
       }
     ],
     "hidden": false
@@ -48706,6 +48833,43 @@ Working on aida itself
         "name": "help",
         "takes_value": false,
         "help": "Print help (see more with '--help')"
+      }
+    ],
+    "hidden": true
+  },
+  {
+    "path": [
+      "aida",
+      "config",
+      "permissions",
+      "probe"
+    ],
+    "about": "Run the fixed, model-free filesystem/supervisor containment tracer. This does not enable vendor launches or change permission policy",
+    "flags": [
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "json",
+        "takes_value": false,
+        "help": ""
+      },
+      {
+        "name": "vendor",
+        "takes_value": true,
+        "help": ""
       }
     ],
     "hidden": true
