@@ -32,7 +32,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T00:54:49.371776631Z
-modified_at: 2026-11-02T13:37:39.725334634Z
+modified_at: 2026-11-02T13:51:27.000208586Z
 req_type: Story
 tags:
 - architecture
@@ -237,6 +237,162 @@ comments:
   content: Decomposed signed A-D vertical slices as TASK2705/2706/2707/2708. A is the operator-visible fixed model-free filesystem/supervisor diagnostic tracer, B adds enforced egress/IPC tracer, C integrates actual Codex own-grant/auth/git/store/cache/bg, D migrates Claude and proves all7 parent ACs. All remain required, no carve-out or deferral; closure:pending prevents accidental parent completion by a slice. A/B may start under existing independent signed sketch; C additionally waits2398/2254 and P3 choice. HostABI8 selects approved C5 broker path. Positive nested keyring probe additionally exited0 with uid1000,pid2,keyring_visible=true,keyring_readable=true, errno0; it proves visibility only, not own-seat authorization.
   created_at: 2026-11-01T09:16:13.823617268Z
   modified_at: 2026-11-01T09:16:13.823617268Z
+- id: 01a19c87-7b18-7883-8864-58dc3ee8e966
+  author: joe
+  content: |
+    SKETCH (awaiting independent signoff): STORY-2238
+
+    Author: claude sketch seat, 2026-11-02 06:38-07:30 MST. No production code, no commits, no launches of a model. Read in full: CLAUDE.md, .aida/discipline/README.md, every STORY-2238 comment (19:25 disposition, 07:26 live evidence, the 08:14 sketch, the 08:23 signoff with C1-C12, P1/P2 records, the 09:16 decomposition), TASK-2705/2706/2707/2708 with comments, and BUG-2383's 06:36 ruling.
+
+    SCOPE OF THIS SKETCH. The 08:23 signoff (C1-C12) stays binding and is not reopened here. Slices A (TASK-2705, PR #3205) and B (TASK-2706, PR #3242) have shipped a closed, model-free tracer: aida-cli-lib/src/containment/{mod,filesystem,supervisor}.rs, vendors.toml and egress_probe.py, with the seccomp-notify connect broker (C5 option b, because this host has Landlock ABI 8). No ordinary launch uses it yet, and containment_applied() (session.rs:2781) is still "vendor == Claude && contained". This sketch answers (a)-(d) for the remaining backend (TASK-2707/2708), using real probes of the real Codex tool sandbox nested inside an AIDA-style outer bwrap, as the 07:26 note requires. It also records two new constraints the probes found: a DIRECTORY-LEAF INVARIANT, and the native network layer MUST stay ON. These change the TASK-2707 storage plan.
+
+    === HOST PROBE EVIDENCE (run on the host, outside every agent sandbox; synthetic HOME/CODEX_HOME at mode 0700; synthetic session-keyring key; no auth, no model, no global config; the scratch fixture has since been removed) ===
+
+    Host facts:
+      uname -r                                     7.0.0-42-generic (Ubuntu 24.04.5 LTS)
+      bwrap --version                              bubblewrap 0.9.0  (no --overlay; see BUG-2383 06:36)
+      unshare --version                            util-linux 2.39.3
+      codex --version                              codex-cli 0.166.0
+      kernel.unprivileged_userns_clone             1
+      user.max_user_namespaces                     266656
+      kernel.apparmor_restrict_unprivileged_userns 0   (host override; Ubuntu's default is 1)
+      kernel.yama.ptrace_scope                     1
+      dev.tty.legacy_tiocsti                       0   (C4 preflight passes here)
+      landlock_create_ruleset(VERSION)             8   (no pathname Unix-connect right; C5 broker branch stands)
+      /etc/apparmor.d bwrap-related                lxc-usernsexec, unprivileged_userns (no bwrap-userns-restrict, unlike the CI runner)
+      keyctl(1)                                    NOT installed; probes use raw keyctl/add_key syscalls via ctypes
+      Codex ships its OWN bwrap: codex-resources/bwrap ("bubblewrap built for Codex"), static, with --overlay/--tmp-overlay/--disable-userns. Codex's inner layer uses that binary, not /usr/bin/bwrap.
+
+    Probe 1, Codex native profile alone (codex sandbox -P aida, generated [permissions.aida.filesystem] TOML: "/"=read, seat=write, seat/.git=write, seat/.git/hooks=read, seat/.git/config=read, seat/.aida=read, store=write, cache dir=write; [permissions.aida.network] enabled=true):
+      seat_write: ALLOWED   git_commit: ALLOWED   hooks_write: denied   gitconfig_write: denied
+      aida_config_write: denied   aida_new_file: denied   cache_sqlite_via_symlink: ALLOWED
+      store_write: ALLOWED   outside_write: denied   home_codex_write: denied
+      => The installed native layer CAN express the private-clone carve-out (TASK-2712 / 07:26 refusal). The 07:26 failure was a missing grant, not a missing capability.
+
+    Probe 2, native file-leaf grant (seat .aida/cache.db -> cache/cache.db, or a plain file path):
+      bwrap: Can't mkdir parents for .../flat/f.db/.git: Not a directory
+      panicked at linux-sandbox/src/linux_run_main.rs:881:21: failed to inspect synthetic bubblewrap mount target .../f.db/.aws: Not a directory (os error 20)
+      => Codex treats every writable entry as a directory root and injects protected children (.git, .aws, ...) into it. FILE LEAVES ARE IMPOSSIBLE in the native layer.
+
+    Probe 3, FULL COMPOSITION: python sets up a new anonymous session keyring and add_key("user","aida-probe"), then execs the outer bwrap with --unshare-all --die-with-parent --new-session --cap-drop ALL --ro-bind / / --dev --proc --tmpfs /tmp, an RO-empty mount over ~/.codex, rw binds of the seat/store/cache/private home dirs only, RO overmounts of .aida/config.toml, .git/hooks and .git/config, --clearenv, synthetic AIDA_SESSION_GRANT / AIDA_ROLE_INSTANCE=companion / AIDA_AGENT_REGISTRY_TOKEN. A loopback listener in the outer netns stands in for the B relay. Then codex sandbox -P <profile> -C seat -- <checks>:
+      inner profile aida (network enabled):
+        seat_write ALLOWED | git_commit ALLOWED | hooks/gitconfig/aida_config/aida_new_file denied
+        cache_sqlite_via_symlink ALLOWED | store_write ALLOWED | outside_write denied | home_codex_write denied
+        keyring_read: synthetic-grant-key        (outer layer AND inner Codex layer)
+        pid inside outer: 3 ; inside codex: 17-19 ; uid 1000
+        env AIDA_SESSION_GRANT 'synthetic-selector' | AIDA_ROLE_INSTANCE 'companion' | AIDA_AGENT_REGISTRY_TOKEN 'must-not-leak' | AIDA_CONTAINED None
+        loopback_proxy 127.0.0.1:18080: CONNECTED PROXY-OK
+        direct 1.1.1.1:443: Network is unreachable | direct [2606:4700:4700::1111]:443: Network is unreachable | dns: failed
+        unix /run/user/1000/bus: CONNECTED        <- host D-Bus reachable through RO binds (C5 is real, not theoretical)
+        codex_exit=0
+      inner profile aidanonet (network enabled=false):
+        filesystem results identical; keyring readable
+        socket(AF_INET): PermissionError [Errno 1] Operation not permitted  -> the AIDA proxy is UNREACHABLE
+        unix /run/user/1000/bus: refused [Errno 1]
+      => With the native network off, Codex's seccomp blocks AF_INET, which kills AC3's allowed-host case. The native layer must keep network enabled; the outer netns enforces egress.
+
+    Probe 4, "which layer gives way" (simulate a host that denies nested userns: outer --unshare-user --disable-userns):
+      inner aida profile:                       bwrap: Creating new namespace failed: nesting depth or /proc/sys/user/max_*_namespaces exceeded (ENOSPC); codex_exit=1
+      + features.use_legacy_landlock=true:      panicked at linux-sandbox/src/linux_run_main.rs:385:9: filesystem-restricted execution requires bubblewrap to isolate app-server sockets; codex_exit=101
+      inner :danger-full-access (native layer OFF), outer only:
+        seat_write ALLOWED | git_commit ALLOWED | hooks/gitconfig/aida_config denied | aida_new_file ALLOWED (!)
+        cache ALLOWED | store ALLOWED | outside denied | home_codex_write ALLOWED (private home, by design)
+        keyring_read OK | proxy CONNECTED | direct unreachable | unix /run/user/1000/bus: CONNECTED
+      => Codex fails CLOSED when it cannot nest (good, no silent downgrade). Without the native layer, the outer layer still holds writes, egress and keyring, but it loses the native "absent protected name" denial (a new .aida/new file is created) and the per-command re-confinement.
+
+    Probe 5, raw namespaces and the BUG-2383 precedent:
+      unshare -Urn: links = lo only; connect 1.1.1.1:443 -> [Errno 101] Network is unreachable
+      unshare -Urm + kernel overlayfs (lower/upper/work):  overlay-ok; lower unchanged ("low"); copy-up in upper ("f")
+      bwrap --unshare-all ... -- unshare -Urm mount -t overlay ...:   nested-overlay-ok
+      C12 locked mounts: bwrap --ro-bind seat/.aida ... -- unshare -Urm: umount -> "not mounted" (locked); mount -o remount,rw -> permission denied; mount -o remount,bind,rw -> permission denied; touch -> Read-only file system
+
+    Probe 6, uid mapping (C10): inside the bwrap namespace /proc/self/uid_map reads "1000 0 1" (relative to bwrap's parent namespace); the HOST view of the same pid reads "1000 1000 1". => The identity check must be done host-side by the supervisor, reading /proc/<pid>/uid_map for the pinned worker (and the composed chain). An in-namespace self-read cannot judge identity.
+
+    Probe 7, Claude's own sandbox (read from this session's sandboxed Bash; credential values redacted): netns = lo only; uid_map 1000 1000 1; session keyring present (KEYCTL_GET_KEYRING_ID ok); HTTP(S)_PROXY -> 127.0.0.1:3128 and ALL/FTP -> socks5h localhost:1080, both carrying per-session proxy credentials, bridged to the host over a Unix socket; GIT_SSH_COMMAND tunnels ssh through the same proxy. Structurally this is the same design as AIDA's slice-B tracer.
+
+    === (a) NESTED USER NAMESPACES FOR codex-linux-sandbox INSIDE AIDA's bwrap ===
+    Answer: YES on this host, proven against the real installed tool sandbox (probe 3), including private-clone git commit, store/cache writes, the keyring read and the loopback proxy, under --unshare-all --cap-drop ALL --new-session. Where nesting is denied (the GitHub Ubuntu 26.04 runner's bwrap-userns-restrict / unpriv_bwrap 'audit deny capability', or user.max_user_namespaces/AppArmor restrict=1), Codex refuses on its own (probe 4). So "which layer gives way" is AIDA's choice, never Codex's silent one.
+    Options:
+      A1 Keep both layers; refuse the AIDA posture by name where nesting fails (typed IsolationReason::HostPolicyDenied / HostResourceLimit, already shipped in containment/mod.rs). Cost: no AIDA-contained Codex on restrict=1 hosts or the CI runner; CI keeps attesting nested cases only by advisor-host live proof (the TASK-2705/2706 precedent).
+      A2 Trusted-policy opt-in [contained] native_layer = "omit" (default "require"): run Codex with its native layer off (:danger-full-access equivalent) inside the full outer boundary. Cost (measured, probe 4): loses native absent-name denial, per-command re-confinement, and Codex's own app-server socket isolation. The outer layer must then compensate with an RO PARENT view of .aida/ and agent settings dirs (not file overmounts) and a mandatory private CODEX_HOME (C6). Needs its own signed amendment (08:14 sketch section 6).
+      A3 Use Codex's vendored bwrap (has overlay) as AIDA's outer layer. REJECTED: it puts a vendor binary in AIDA's trust root, and AC7 vendor neutrality breaks.
+      A4 Setuid bwrap or privileged helper. REJECTED (no host permission changes; standing no-elevation rulings).
+    RECOMMENDATION: A1 now. Record A2 as a filed follow-up only if an operator host needs it; it is not part of this story. The AIDA outer layer never passes --disable-userns (C12) and keeps the outer as the authority; the native layer is defense in depth whose effective rights are the intersection. AIDA's outer layer needs no overlay (bwrap 0.9.0 is fine); if PR1 needs a copy-on-write view (e.g. a per-seat CARGO_HOME), it reuses BUG-2383's ruled unshare -Urm + kernel overlayfs mechanism (probe 5 shows it also works nested inside the outer bwrap), never a second mechanism.
+
+    === (b) EGRESS DESIGN AND HOW allowed_hosts REACHES IT ===
+    Options:
+      B1 (signed, shipped as tracer in B) Outer --unshare-net, loopback only. A host-owned per-run proxy holds the only external route, reached through an inherited typed channel into an in-netns loopback relay; HTTP(S)_PROXY/ALL_PROXY point at the relay. Probe 3: the relay is reachable from Codex tool shells, while direct v4/v6/DNS is unreachable.
+      B2 Delegate to vendor proxies (Codex [permissions.*.network] allowed_domains/proxy_url; Claude sandbox allowedDomains). REJECTED as the boundary: it is per-vendor (AC7) and leaves the vendor harness itself unconfined. It may stay a narrowing inner filter only.
+      B3 veth + nftables/slirp4netns/pasta. REJECTED: needs CAP_NET_ADMIN on the host side or extra binaries, and a routable interface is a bypass surface.
+    RECOMMENDATION: B1, with three additions from the probes:
+      - The native network layer MUST be "enabled" (probe 3: enabled=false blocks AF_INET, so the relay is unreachable and AC3's positive case fails). The vendor descriptor gains native_network = "enabled_under_outer_netns" as data, and a profile with network disabled is refused, not silently used.
+      - Proxy env reaches Codex TOOL SHELLS only through the BUG-2398 adapter mechanism (-c shell_environment_policy.set.HTTP_PROXY=...), as a SECOND, separate whitelist (TOOL_NET_ENV: HTTP_PROXY, HTTPS_PROXY, ALL_PROXY, lower-case twins, NO_PROXY=""). BUG-2398's grant whitelist (codex_tool_env.rs TOOL_ENV) stays exactly as shipped (C1). Values point only at the in-netns relay and carry no credentials. A tool that ignores proxy env just fails closed (no route).
+      - allowed_hosts path: trusted default-branch config ([contained] allowed_hosts, read at the pinned SHA by the existing trusted_config path, as the tracer already does) -> immutable EgressPolicy in the host supervisor at launch -> the host proxy checks every CONNECT/absolute-URI host:port, resolves on the host side, and pins checked addresses (rules already signed in the 08:14 sketch section 4). The lane never sees or edits the list; branch edits can only narrow it. Model/auth hosts (api.openai.com, chatgpt.com, auth.openai.com; api.anthropic.com for Claude) are ordinary trusted-policy entries. The vendor descriptor may LIST a vendor's required hosts so doctor can say "allowed_hosts lacks a host codex needs to authenticate", but it never adds them.
+      - Unix sockets: probe 3 shows host D-Bus CONNECTED from inside both layers, so the shipped C5 broker (seccomp user-notify, ABI 8) is mandatory in the real launcher, installed on the OUTER worker before the vendor execs. Codex's own seccomp composes underneath it.
+
+    === (c) KEYRING INHERITANCE ACROSS THE bwrap BOUNDARY ===
+    Evidence: a key added to a fresh session keyring on the host is READABLE (KEYCTL_SEARCH plus KEYCTL_READ, not just visible) in the outer bwrap (user+pid+net+ipc+uts+cgroup namespaces, cap-drop ALL) and again inside the Codex tool sandbox (probe 3), with host-view uid identity 1000->1000 (probe 6). Claude's sandbox also keeps the session keyring (probe 7). Neither vendor calls KEYCTL_JOIN_SESSION_KEYRING on its tool children.
+    Options:
+      C-i Inherit the session keyring (signed C10, no new mechanism). Proven.
+      C-ii Pass the key over a typed FD into the sandbox. REJECTED (a new authority transport; BUG-2398 forbids pre_exec authority).
+      C-iii Mint a per-sandbox grant inside. REJECTED (the child cannot mint authority).
+    RECOMMENDATION: C-i, with binding details:
+      - The launcher installs the CHILD grant key in a NEW anonymous session keyring created for the lane (join, add_key, then exec bwrap), so the lane's session keyring holds only the child key, never the parent's (probe 3 used exactly this sequence). Test: lane_session_keyring_holds_only_child_key.
+      - The identity check is HOST-SIDE (/proc/<worker>/uid_map == "1000 1000 1"); an in-namespace read cannot judge it (probe 6). Refuse on non-identity.
+      - The AIDA_AGENT_REGISTRY_TOKEN / AIDA_HANDLE_LAUNCH_TOKEN leak is real if the launcher sets them: probe 3 shows codex sandbox passes the full env through. So B3 must be enforced at the OUTER --clearenv/--setenv list (the supervisor builds the env from an allow-list), not only in the tool-shell adapter. Test: registry_and_launch_tokens_absent_in_outer_and_inner.
+      - Grants still need writable own-grant stamp/notice leaves. Under the directory-leaf invariant below, each must be a per-seat DIRECTORY that holds nothing else.
+
+    === NEW CONSTRAINT: DIRECTORY-LEAF INVARIANT (changes TASK-2707's storage plan) ===
+    Because the inner layer must also permit every write (intersection), and Codex can grant only directories (probe 2), every path a contained lane writes must sit in a dedicated directory that holds ONLY what that lane may write. Today the shared cache is main/.aida/cache.db plus 4 sidecars (CACHE_SANDBOX_SIDECARS, aida-core/src/db/cache.rs:892), sitting directly in main/.aida/, a 72-entry directory with agents/, sessions/, advisor state, mail and pgdata. That directory can never be granted (signed: never bind all main/.aida). Options:
+      D-i Relocate the cache into main/.aida/cache/ (cache.db + -wal/-shm/.refresh.lock/.refresh-request.lock and nothing else), and repoint seat symlinks. One-time move, no compat shim (operator ruling: single user, surgery OK). Contained lanes get that directory rw in both layers; SQLite can create and delete sidecars normally.
+      D-ii A per-lane private cache rebuilt from the store. Strongest isolation (a lane cannot poison the shared index), but it costs a rebuild per launch, and cross-lane freshness lags until store commit plus refresh.
+      D-iii Outer-only file binds with the inner layer unable to write the cache. Fails the 07:26 requirement; rejected.
+    RECOMMENDATION: D-i, plus a ratchet that the cache is never consulted for authority (grants, roles and review records read the store/grant records only). Test: cache_rows_never_grant_authority. The same rule applies to own-grant stamps and mail leaves: a per-seat directory each, enumerated in the PR, and refuse if a required write lands in a shared directory.
+
+    === (d) CLAUDE: MIGRATION VERSUS PROVEN EQUIVALENCE (AC6) ===
+    Signed C12 chose migration. The probes refine HOW:
+      M1 Same outer wrapper; Claude's own sandbox nested inside (signed default). Filesystem, keyring and locked mounts compose (probes 3/5/7). The open item is egress chaining: Claude's sandbox runs its own host-side proxy inside the Claude process, which under AIDA lives in AIDA's netns with no route. It must forward to AIDA's relay. Recommended mechanism: AIDA generates Claude's sandbox network settings so Claude's sandbox uses AIDA's in-netns relay as its proxy (custom proxy ports), in the same generated settings AIDA already writes. If the installed Claude Code cannot chain, the fallback is M2.
+      M2 Same outer wrapper; Claude's sandbox OFF inside (outer-only, like A2). Cost: Claude loses its per-command layer. It needs the same signed amendment as A2.
+      E  Prove today's Claude-assembled containment equivalent. REJECTED: a separate code path, two contracts, and AC7 regresses.
+    RECOMMENDATION: M1. Until a live Claude lane proves the chained proxy (allowed host reached, denied host refused, both through Claude's sandbox inside AIDA's netns), Claude AIDA-posture paths REFUSE by name (C12), and today's Claude [contained] keeps its current, truthful label (not "aida"). Claude --bg: only the supervised direct worker counts as AIDA-applied (signed section 7).
+
+    === THREAT MODEL (attacker = model output and anything it executes inside the lane, same uid; out of scope: kernel 0-days, a malicious operator, hosted remote tools) ===
+    T1 Write escape (host files, main .git, other seats, store .git, agent settings, hooks that later run host-side). Controls: outer RO root plus exact rw dirs, protected RO overmounts LAST, locked mounts (probe 5), native intersection, private seat clone, hardened host-side git (C8). Residual: none known on this host.
+    T2 Absent-name creation (planting .aida/new, .claude/settings.local.json). Controls: native layer denies (probe 3). Outer layer alone does NOT (probe 4), so the outer gets RO parent views for these directories in PR1, no longer dependent on the native layer.
+    T3 Egress bypass (direct IP, v6, DNS, UDP/QUIC, raw, ssh). Controls: netns lo only (probes 3/5), proxy-only route. Residual: allowed hosts can themselves relay (documented, host-granular).
+    T4 Host-service sockets (D-Bus, ssh/gpg agents, docker, sccache, the host Codex daemon). Probe 3: D-Bus is reachable through RO binds. Controls: C5 broker on the outer worker plus RO-empty over ~/.codex plus a private CODEX_HOME/XDG_RUNTIME_DIR (C6).
+    T5 Authority theft/forgery (parent grant, registry/launch tokens, /proc environ of host pids). Controls: --unshare-pid (host pids invisible), outer --clearenv allow-list, a new session keyring holding only the child key, host-side identity check (probe 6). Residual: ADR-66 same-uid replay (documented).
+    T6 Downgrade (silent fallback to native/none, or a branch widening hosts/roots). Controls: pinned trusted policy, typed refusal, Codex fails closed itself (probe 4), and containment_applied derived from a launch receipt, not from vendor==Claude.
+    T7 Shared-cache poisoning that host-side code later trusts. Controls: the D-i ratchet "cache is never authority".
+    T8 Supervisor/lifecycle (PID reuse, orphaned daemon, proxy death). Controls: shipped supervisor (pidfd/namespace identity, die-with-parent, require_namespace_gone), with lane daemons inside the pidns.
+    T9 TTY injection: C4 preflight (legacy_tiocsti=0 here).
+
+    === TESTS THAT PROVE EACH ACCEPTANCE CRITERION ===
+    Model-free tests go in containment::tests (required-live on the advisor host via AIDA_REQUIRE_BWRAP_LIVE=1 AIDA_REQUIRE_CODEX_CONTAINMENT_LIVE=1; on the CI runner, the nested cases assert the typed HostPolicyDenied, per the TASK-2705 ruling). Live tests use an isolated disposable project and a purpose-issued test auth.
+    AC1 launch surfaces: every_codex_launch_path_routes_through_contained_launch (a ratchet: no Command::new(codex) outside containment::launch under posture=aida); posture_report_applied_only_with_receipt; native_optin_stays_native; live: story2238_live_codex_interactive, _bg_worker_receipt, _headless_implementer, _headless_reviewer.
+    AC2 writes: composed_codex_git_commit_private_clone; composed_store_yaml_write; composed_cache_sqlite_write_relocated_dir; composed_outside_write_denied; composed_protected_modify_and_absent_create_denied (outer-only AND composed); native_profile_rejects_file_leaf (pins probe 2, so a vendor change is noticed); nested_userns_cannot_unmount_protected (C12); planted_hook_and_filter_never_run_host_side (C8).
+    AC3 network: composed_codex_tool_reaches_allowed_host_via_relay; composed_disallowed_host_refused; direct_v4_v6_dns_unreachable; native_network_disabled_profile_refused (pins probe 3b); tool_shell_proxy_env_via_adapter_only; host_dbus_and_codex_daemon_socket_unreachable (positive control: CONNECTED without the broker, matching probe 3); live: codex_api_key and chatgpt auth reach their hosts only through allowed_hosts.
+    AC4 grants: lane_session_keyring_holds_only_child_key; composed_tool_shell_reads_child_key; host_side_uid_identity_check_refuses_nonidentity; companion_marker_survives_composed_tool_shell (C1); registry_and_launch_tokens_absent_in_outer_and_inner; live: granted reviewer records a verdict, ungranted/wrong-seat refused.
+    AC5 fail closed: nested_userns_denied_refuses_named (simulated with outer --disable-userns, as in probe 4); bwrap_missing_refuses; broker_unavailable_refuses; no_model_exec_before_readiness.
+    AC6 Claude: claude_composed_same_fs_keyring_contract; claude_aida_posture_refuses_until_chain_proven; live: live_claude_chained_proxy_allowed_and_denied.
+    AC7 data: opencode_descriptor_no_native_layer_launches_without_new_code; unknown_or_unpinned_vendor_version_refuses; descriptor_cannot_add_hosts.
+    Kept regression suites: TASK-2705/2706 containment::tests, BUG-2144/2146, BUG-2151/2157/2158/2166/2169, BUG-2398, TASK-2631.
+
+    === SLICE PLAN (3 PRs; A and B are already merged; maps onto the approved TASK-2707/2708) ===
+    PR1 (TASK-2707 part 1): "contained Codex, headless foreground". Cache relocation into main/.aida/cache/ (D-i) with a one-time migration and the authority ratchet; per-seat directory leaves for own-grant stamps and mail; the generated native profile (directory leaves only, .git carve-out, network enabled) from the same ResolvedWriteBoundary as the outer mounts; the outer allow-list env and a new session keyring holding the child key; the tool-shell proxy-env adapter. Wire aida queue work --vendor codex (implementer and reviewer, headless) through containment launch; containment_applied comes from the receipt. Tests: AC2, AC3 model-free, AC4 model-free, AC5. Live: one headless implementer commit plus a store edit, and one reviewer verdict.
+    PR2 (TASK-2707 part 2): interactive aida agent new codex and --bg through the shipped supervisor (direct exec, rebased on STORY-2254 if it has merged; otherwise the supervisor's own detached strategy); P3 credential refresh resolved by inotify on the private state root, then the signed C7 choice; doctor/config permission-posture/statusline report "aida (applied)"; lift refuse_uncontainable_agent_tool for codex only when the receipt says applied. Live: interactive plus bg, both auth modes.
+    PR3 (TASK-2708): Claude migration via M1 (generated chained proxy settings), with refusal until the live chain proof; the OpenCode no-native descriptor test (AC7); docs/cli/07-project-setup.md, docs/agents/claude-bubblewrap-sandbox.md and the trust page, describing one contract; final all-7-AC installed evidence on the parent.
+    Each PR: STRICT independent review, operator merge floor, LIGHT local gate (one targeted cargo test -p aida-cli-lib containment:: plus make check-ci-fast), and an advisor-host required-live run at the exact head. Note for routing: a native Codex seat cannot git commit in its own worktree today (the 07:26 issue this story fixes), so PR1's implementer still needs the TASK-2706 host-commit arrangement. From PR2 on, lanes can dogfood the contained path.
+
+    === DECISIONS REQUESTED FROM THE SIGNING ADVISOR ===
+    1. Accept A1 (refuse where nesting fails); A2 is a filed follow-up only.
+    2. Accept the native-network-enabled rule and the separate TOOL_NET_ENV adapter whitelist.
+    3. Accept the directory-leaf invariant and the cache relocation D-i (an aida-core storage move) inside TASK-2707 PR1.
+    4. Accept the M1 chained-proxy route for Claude, with refusal until the live proof.
+    5. Accept the 3-PR split of TASK-2707/2708 above.
+  created_at: 2026-11-02T13:51:27.000208586Z
+  modified_at: 2026-11-02T13:51:27.000208586Z
+  session_id: fa231d33-6138-4150-81f9-f1a8c24f9e16
 history:
 - id: 01a1949a-3f43-7b12-bc6b-0d5bf40ee2f2
   author: joe
