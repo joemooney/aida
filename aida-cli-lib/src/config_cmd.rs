@@ -1017,6 +1017,27 @@ struct CodexConfigPosture {
 // trace:STORY-1127 | ai:codex
 pub(crate) fn handle_config_permissions_command(cmd: &ConfigPermissionsCommand) -> Result<()> {
     match cmd {
+        // trace:TASK-2705 | ai:codex
+        ConfigPermissionsCommand::Probe { vendor, json } => {
+            let project_root = main_worktree_root_from(&find_project_root()?);
+            let report = crate::containment::probe(&project_root, vendor);
+            let structured = *json || output_format_is_json() || aida_agent_output_truthy();
+            if structured {
+                println!("{}", serde_json::to_string_pretty(&report)?);
+            } else {
+                println!("{}: {:?}: {}", vendor, report.status, report.cause);
+                println!("Shared backend vendor launch: unsupported; probe AIDA containment applied: false");
+            }
+            if report.status != crate::containment::ProbeStatus::Ready {
+                // The report already contains the refusal cause. Preserve the
+                // nonzero exit without appending an agent-mode TOON error to JSON.
+                // trace:TASK-2705 | ai:codex
+                if structured {
+                    return Err(crate::TypedPayloadEmitted.into());
+                }
+                anyhow::bail!("containment probe did not pass: {}", report.cause);
+            }
+        }
         ConfigPermissionsCommand::Show { json } => {
             let project_root = main_worktree_root_from(&find_project_root()?);
             let report = permission_posture_report(&project_root);
@@ -5701,6 +5722,13 @@ fn run_config(
 ) -> anyhow::Result<crate::command_registry::Flow> {
     use crate::*;
     let args = <ConfigArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    // The closed diagnostic needs no requirement-store/cache write access.
+    // trace:TASK-2705 | ai:codex
+    if let ConfigCommand::Permissions(command @ ConfigPermissionsCommand::Probe { .. }) =
+        &args.inner
+    {
+        return crate::command_registry::returned(handle_config_permissions_command(command));
+    }
     // Clone-local configuration must not open or mutate the requirement store.
     // trace:STORY-1742 | ai:codex
     if let ConfigCommand::Transport(command) = &args.inner {
@@ -5819,7 +5847,17 @@ fn config_cli_policy(matches: &clap::ArgMatches) -> crate::command_registry::Cmd
     let args = <ConfigArgs as clap::FromArgMatches>::from_arg_matches(matches).ok();
     let inner = args.as_ref().map(|args| &args.inner);
     crate::command_registry::CmdPolicy {
-        stakeholder: SA::Configuration,
+        // trace:TASK-2705 | ai:codex — only the closed probe is read-only.
+        stakeholder: if matches!(
+            inner,
+            Some(ConfigCommand::Permissions(
+                ConfigPermissionsCommand::Probe { .. }
+            ))
+        ) {
+            SA::Read
+        } else {
+            SA::Configuration
+        },
         per_write_auto_push: matches!(
             inner,
             Some(
