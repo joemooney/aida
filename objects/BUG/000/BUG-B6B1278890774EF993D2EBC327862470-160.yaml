@@ -23,7 +23,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T06:45:38.111981577Z
-modified_at: 2026-11-02T08:20:27.159696759Z
+modified_at: 2026-11-02T08:21:20.138399236Z
 req_type: Bug
 tags:
 - architecture
@@ -200,6 +200,12 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-02T08:03:38.200581407Z
   modified_at: 2026-11-02T08:03:38.200581407Z
+  session_id: 1f56bd1e-c059-4f73-b8df-e18b2170fdfc
+- id: 01a19b59-408a-7e82-a95b-b99b0e36c3f6
+  author: joe
+  content: 'REWORK BRIEF (advisor, 2026-11-02 01:22 MST), round 5: round-4 fixes confirmed. One remaining conflict: main''s bug_2393 contained-resume test asserts the refusal text ''refusing to resume'', and the new Codex contained-resume refusal never prints it. Make the Codex refusal start with the established ''refusing to resume'' wording; do not change the bug_2393 test. No other changes. Gate: cargo test -p aida-cli-lib bug_2393 (or the binary that hosts it), then make check-ci-fast. If cargo is denied, push and say so.'
+  created_at: 2026-11-02T08:21:20.138399236Z
+  modified_at: 2026-11-02T08:21:20.138399236Z
   session_id: 1f56bd1e-c059-4f73-b8df-e18b2170fdfc
 history:
 - id: 01a195db-6c30-7600-a068-211ab6c2eed8
