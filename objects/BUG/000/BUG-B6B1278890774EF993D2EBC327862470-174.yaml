@@ -19,7 +19,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T09:27:24.546816181Z
-modified_at: 2026-11-02T03:25:52.579451457Z
+modified_at: 2026-11-02T03:47:51.272193386Z
 req_type: Bug
 tags:
 - ci
@@ -74,6 +74,13 @@ comments:
   created_at: 2026-11-02T03:22:16.245398424Z
   modified_at: 2026-11-02T03:22:16.245398424Z
   session_id: 126bbd5a-a92f-452b-ab0b-2637a1db42c2
+- id: 01a19a5e-df68-7353-9365-0e6996a6a3b6
+  author: joe
+  content: 'Round 2 (27242f2b74c, PR #3206): findings 1-3 fixed. (1) An absent aggregate behind running lanes is Pending; the 600s registration bound starts once every observed row has settled (wait_train_ci, tested with a fake clock past 600s). (2) Hold admission (hold_release_admitted) is decided from live member labels while lanes run; Green still needs every other row green. A composed live-snapshot + wait test covers held member, lanes pending, hold-gate fail, then green, plus an unadmitted hold that is red on the first poll. (3) One comparator, ci_gate::check_name_eq. (4) Partly disputed: on GitHub checks_registered never returns NoCi, so the old GitHub path also waited 600s. Immediate NoCi refusal is kept for forges that report it, and the timeout message uses the old wording. lib-0 bug2406 failures: the fixture gh lacked the protection/rules reads, now added. cli-0 bug_2378 (node show) is outside this diff and passed on main at the merge base, so likely flaky. Not verified locally: a bounded 60s tool call cannot compile aida-cli-lib here, so CI is the first compile and test run. AC ac037b99 (live sanctioned recovery of the #3202 train) needs an operator-run live train; not done here.'
+  created_at: 2026-11-02T03:47:51.272193386Z
+  modified_at: 2026-11-02T03:47:51.272193386Z
+  session_id: 01a19a4aba1b
+  harness_version: 2.1.316 (Claude Code)
 history:
 - id: 01a19681-5be8-7f43-92cc-a5b427eacd3f
   author: aida-session-start
