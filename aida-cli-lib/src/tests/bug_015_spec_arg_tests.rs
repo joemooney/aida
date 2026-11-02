@@ -353,6 +353,7 @@ fn every_routed_spec_argument_parses_to_the_canonical_id() {
                         | AgentNewCommand::Codex { spec, .. }
                         | AgentNewCommand::Antigravity { spec, .. },
                     ),
+                ..
             } => assert_eq!(spec.as_deref(), want_opt, "{args:?}"),
             other => panic!("{other:?}"),
         }
