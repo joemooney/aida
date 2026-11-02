@@ -4002,6 +4002,11 @@ mod bug_1680_salvage_main_tests;
 #[path = "tests/bug_1941_ps_tests.rs"]
 mod bug_1941_ps_tests;
 
+// trace:BUG-2382 | ai:claude
+#[cfg(test)]
+#[path = "tests/bug_2382_unbound_agent_tests.rs"]
+mod bug_2382_unbound_agent_tests;
+
 // The three `aida ps` reporting defects: landed work advertised as stalled,
 // guessed fan-out ownership, and fan-out rows wearing the parent's role.
 // trace:BUG-1681 | ai:claude

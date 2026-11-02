@@ -815,6 +815,41 @@ pub(crate) fn ps_live_in_worktree<'a>(
         .min_by_key(|s| (s.cwd != worktree, s.pid))
 }
 
+/// BUG-2382: a `salvageable` reading with a live process in the worktree is
+/// not a dead session. The row becomes `unknown` and the hint names the
+/// unbound process instead of a salvage-commit recipe. No occupant, or any
+/// other state, leaves the dispatch unchanged. Pure.
+// trace:BUG-2382 | ai:claude
+pub(crate) fn apply_unbound_occupant(
+    dispatch: &mut PsDispatch,
+    worktree: &std::path::Path,
+    occupant: Option<&process_probe::CwdOccupant>,
+) {
+    let Some(occ) = occupant else {
+        return;
+    };
+    if dispatch.state != dispatch_health_ps::DispatchState::Salvageable {
+        return;
+    }
+    let what = match occ.agent {
+        Some(kind) => format!("{} agent", kind.label()),
+        None => "process".to_string(),
+    };
+    let name = if occ.name.is_empty() {
+        String::new()
+    } else {
+        format!(" ({})", occ.name)
+    };
+    dispatch.state = dispatch_health_ps::DispatchState::Unknown;
+    dispatch.hint = Some(format!(
+        "unbound agent in clone — {what} pid {pid}{name} has its cwd in {wt} but the lease does \
+         not record it; it may still be writing here, so do not salvage-commit or re-dispatch \
+         — check it with `ps -o pid,etime,args -p {pid}`",
+        pid = occ.pid,
+        wt = worktree.display(),
+    ));
+}
+
 /// BUG-1941: the note a row carries when its dispatch reads `moving` while no
 /// running process backs the row (no pid shown) — fresh files or a fresh
 /// commit in the worktree. Without it the human view showed only "dormant"
@@ -1950,7 +1985,9 @@ pub(crate) fn gather_running_work(project_root: &std::path::Path) -> (Vec<PsRow>
     // `probe_live_claude_sessions`'s OnceLock — BUG-613). The row + orphan
     // passes look each session up in this in-memory slice; they never re-probe
     // per lease. trace:TASK-1072 | ai:claude
-    let live = process_probe::probe_live_claude_sessions();
+    // BUG-2382: claude AND codex — a codex started by hand in a session's
+    // clone is that session's agent. trace:BUG-2382 | ai:claude
+    let live = process_probe::probe_live_agent_sessions();
     let leases = list_leases(project_root);
     let manifests = session_manifest::list_all(project_root);
     let manifest_roles: std::collections::HashMap<String, String> = manifests
@@ -2036,6 +2073,20 @@ pub(crate) fn gather_running_work(project_root: &std::path::Path) -> (Vec<PsRow>
         probe_mail_identity,
         seat_activity_probe,
     );
+    // BUG-2382: a salvage recipe only when nothing is running in the tree. Any
+    // live process with its cwd there (not this inspector) may still be the
+    // agent, unbound to the lease. trace:BUG-2382 | ai:claude
+    for row in &mut rows {
+        let Some(dispatch) = row.dispatch.as_mut() else {
+            continue;
+        };
+        if dispatch.state != dispatch_health_ps::DispatchState::Salvageable {
+            continue;
+        }
+        let occupant =
+            process_probe::live_process_with_cwd_in(&row.lease.worktree_path, inspector_pids());
+        apply_unbound_occupant(dispatch, &row.lease.worktree_path, occupant.as_ref());
+    }
     // TASK-163: a dead phase child does not make its lease stale while the
     // drain orchestrator owns that spec. Overlay the authoritative drain PID
     // and suppress the contradictory orphan row.
