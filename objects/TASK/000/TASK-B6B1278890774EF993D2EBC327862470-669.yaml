@@ -1,0 +1,30 @@
+id: 01a199b2-1fa5-7e31-a208-33194cd87967
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-669
+title: 'Non-blocking (cosmetic): the quiet burndown path prepares the contained mailbox…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on BUG-2389, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  Non-blocking (cosmetic): the quiet burndown path prepares the contained mailbox twice: handle_burndown_run, then build_coordinator_headless_command_inner. The clarify dry-run prints the plan argv without os_wrapped_program_and_args, so with OS wrap on the preview differs from the launched program.
+
+  PR: #3217
+  Reviewed sha: ef37f551834f1ca46d36a76b4d0ea9344d3e99c9
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-02T00:39:09.989854434Z
+modified_at: 2026-11-02T00:39:09.989854434Z
+req_type: Task
+tags:
+- carried-from:BUG-2389
+- finding-hash:bb845095
+- from-review:PR-3217
+- kind:carried-forward
+filed_at:
+  code_sha: 45ea66ee465ff361b60de9329c2994d53ec3325f
+  branch: main
+  dirty: true
+  aida_version: 0.16.0
+  aida_build_sha: 6a3f67671a9
+  vendor: claude
+  session: 126bbd5a-a92f-452b-ab0b-2637a1db42c2
