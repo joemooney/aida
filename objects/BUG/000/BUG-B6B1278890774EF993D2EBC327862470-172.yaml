@@ -21,7 +21,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T07:26:20.914223641Z
-modified_at: 2026-11-02T11:11:23.588587032Z
+modified_at: 2026-11-02T11:13:48.000294707Z
 req_type: Bug
 tags:
 - architecture
@@ -603,6 +603,12 @@ comments:
   content: '[aida:closure-held] Code merged to the default branch (commit 2b9eaa5), but completion is held at Done: the spec''s own declared closure criteria are unmet: "tag `closure:pending` is set". Whoever owns those criteria (the spec''s owner or the advisor) resolves them by checking the box in the spec''s Closure section, or removing the tag, via `aida edit BUG-2398 --description ...` / `aida edit BUG-2398 --remove-tag closure:pending`. The next `aida pull` completes it once nothing holds it; to replay by hand, run `aida db reconcile-status --spec BUG-2398 --since 2b9eaa5^`. If the blockers form a cycle, or you decide to ship regardless, a human runs `aida edit BUG-2398 --status completed`. (merge sha: 2b9eaa5c3210f8343c475e9993c55cbadb9083d5)'
   created_at: 2026-11-02T11:11:23.971351193Z
   modified_at: 2026-11-02T11:11:23.971351193Z
+- id: 01a19bf7-25e0-7f61-b865-af456ad179a6
+  author: joe
+  content: 'ADVISOR CLOSURE (2026-11-02 04:14 MST): the closure conditions are met. Independent design signoff on the scope amendment is recorded earlier on this spec, and the strict implementation review PASSED at 5e7e44e with CI fully green (run 41432447803). Shipped supervised via the operator terminal as PR #3207 (merged). Removing closure:pending.'
+  created_at: 2026-11-02T11:13:48.000294707Z
+  modified_at: 2026-11-02T11:13:48.000294707Z
+  session_id: 1f56bd1e-c059-4f73-b8df-e18b2170fdfc
 history:
 - id: 01a19600-c769-7cd0-ba08-8d93975e3e3b
   author: joe
