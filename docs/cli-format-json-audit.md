@@ -526,6 +526,7 @@ hermetic audit. `JSON not honoured` means unsupported and explicitly rejected.
 | `aida config glyph unset` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida config glyph reset` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida config permissions` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
+| `aida config permissions probe` | JSON honoured | config permissions probe --vendor unregistered-audit-fixture (structured refusal; nonzero exit) |
 | `aida config permissions show` | COULD NOT VERIFY | Dedicated --json exists; needs command-specific state or external service |
 | `aida config permissions set` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida config menu` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |

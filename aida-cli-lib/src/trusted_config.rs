@@ -105,9 +105,15 @@ pub fn read_trusted_config_toml(project_root: &Path) -> Option<String> {
 /// boundary: only a local default branch ref is read, never the worktree copy.
 // trace:TASK-1545 | ai:codex
 pub fn read_trusted_config_toml_local(project_root: &Path) -> Option<String> {
-    let branch_ref = local_default_branch_ref(project_root)?;
-    let sha = rev_parse_commit(project_root, &branch_ref)?;
+    let sha = local_trusted_default_branch_sha(project_root)?;
     read_config_at_sha(project_root, &sha)
+}
+
+/// Pin local trusted policy evidence without invoking a forge or credentials.
+// trace:TASK-2705 | ai:codex
+pub(crate) fn local_trusted_default_branch_sha(project_root: &Path) -> Option<String> {
+    let branch_ref = local_default_branch_ref(project_root)?;
+    rev_parse_commit(project_root, &branch_ref)
 }
 
 fn local_default_branch_ref(project_root: &Path) -> Option<String> {
@@ -131,7 +137,8 @@ fn local_default_branch_ref(project_root: &Path) -> Option<String> {
 
 /// `git show <sha>:.aida/config.toml`. `None` on any non-zero exit (file
 /// absent at that commit) or spawn failure.
-fn read_config_at_sha(project_root: &Path, sha: &str) -> Option<String> {
+// trace:TASK-2705 | ai:codex — shared pinned policy snapshot for the closed tracer.
+pub(crate) fn read_config_at_sha(project_root: &Path, sha: &str) -> Option<String> {
     let spec = format!("{sha}:{CONFIG_RELPATH}");
     let out = Command::new("git")
         .arg("-C")
