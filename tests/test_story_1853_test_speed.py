@@ -229,6 +229,27 @@ class UntouchedToleranceTest(unittest.TestCase):
         self.assertEqual(tt.check([tt.Binary(self.UNRELATED, 1, 0, 0, 25.0)], b, touched=set())[0], [])
         self.assertEqual(len(tt.check([tt.Binary(self.UNRELATED, 1, 0, 0, 31.0)], b, touched=set())[0]), 1)
 
+    def test_touched_test_overlapping_a_tolerated_untouched_one_is_still_a_stall(self):
+        # Review repro: touched A at 10.5 s and untouched B at 11.0 s with
+        # overlapping JUnit spans. The base gate reports both as runner-stall
+        # notes and exits 0; the tolerated B must still count for stall
+        # detection, so A keeps its TASK-1988 exemption.
+        def row(key, start, secs):
+            return tt.Binary(key, 1, 0, 0, secs, f"2026-11-02T13:00:{start:02d}.000+00:00")
+        rows = [row(self.OWN, 0, 10.5), row(self.UNRELATED, 2, 11.0)]
+        base_v, base_notes = tt.check(rows, tt.Budget(10, {}))
+        self.assertEqual(base_v, [])
+        self.assertEqual(sum(n.startswith("runner stall") for n in base_notes), 2)
+        v, notes = tt.check(rows, tt.Budget(10, {}), touched={self.OWN})
+        self.assertEqual(v, [])
+        self.assertEqual(sum(n.startswith("runner stall") for n in notes), 2, notes)
+        # Not overlapping: A is a lone touched regression, B stays tolerated.
+        rows = [row(self.OWN, 0, 10.5), row(self.UNRELATED, 30, 11.0)]
+        v, notes = tt.check(rows, tt.Budget(10, {}), touched={self.OWN})
+        self.assertEqual(len(v), 1)
+        self.assertIn("my_new_slow_test", v[0])
+        self.assertTrue(any(n.startswith("untouched test over its limit") for n in notes), notes)
+
     def test_touched_means_defined_in_a_changed_rust_file(self):
         with tempfile.TemporaryDirectory() as d:
             p = pathlib.Path(d)

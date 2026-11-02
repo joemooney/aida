@@ -257,7 +257,10 @@ def check(rows: list[Binary], budget: Budget,
     over its limit but within limit x untouched_factor is a note, not a
     violation. trace:BUG-2414 | ai:claude
     """
-    found: list[tuple[Binary, str]] = []
+    # Every over-limit row, tolerated untouched ones included, goes to
+    # stalled() first: a touched test overlapping a tolerated one is still a
+    # runner stall (TASK-1988). Only then is each classified.
+    found: list[tuple[Binary, float, str]] = []
     notes: list[str] = []
     seen = set()
     for r in rows:
@@ -273,6 +276,13 @@ def check(rows: list[Binary], budget: Budget,
         else:
             message = (f"{r.key}: {r.seconds:.1f}s is over its budget of {allowed:g}s. "
                        "Find what slowed it down; raise the entry only with a reason in the PR.")
+        found.append((r, limit, message))
+    stall = stalled([r for r, _, _ in found])
+    violations: list[str] = []
+    for r, limit, message in found:
+        if r.key in stall:
+            notes.append(f"runner stall (overlaps another over-budget test, not failing): {message}")
+            continue
         if touched is not None and r.key not in touched:
             tolerance = limit * budget.untouched_factor
             if r.seconds <= tolerance:
@@ -280,11 +290,7 @@ def check(rows: list[Binary], budget: Budget,
                              f"(not failing): {message}")
                 continue
             message += f" The PR did not touch it, but it is over the {tolerance:g}s tolerance too."
-        found.append((r, message))
-    stall = stalled([r for r, _ in found])
-    violations = [message for r, message in found if r.key not in stall]
-    notes += [f"runner stall (overlaps another over-budget test, not failing): {message}"
-              for r, message in found if r.key in stall]
+        violations.append(message)
     # The aida-cli-lib unit binary runs split across lib-0 and lib-1, so the
     # other half's entries never run in a lane; only other binaries get notes.
     ran = {binary_of(key) for key in seen} - {"aida-cli-lib"}
