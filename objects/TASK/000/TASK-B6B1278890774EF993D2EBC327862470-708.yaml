@@ -13,13 +13,20 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-02T15:44:58.086079423Z
-modified_at: 2026-11-02T15:44:58.086079423Z
+modified_at: 2026-11-02T15:57:35.985066819Z
 req_type: Task
 tags:
 - carried-from:TASK-2754
 - finding-hash:e3e5836f
 - from-review:PR-3262
 - kind:carried-forward
+comments:
+- id: 01a19cfa-f971-7a10-8e17-11b5650b5b13
+  author: joe
+  content: 'ADVISOR RULING (2026-11-02 08:50 MST, ruling-once): ACCEPTED, no work. It only walks when the rollout is absent (pruned or foreign CODEX_HOME), once per tick, and stops at the first match after TASK-2755. The cost is bounded.'
+  created_at: 2026-11-02T15:57:35.985066819Z
+  modified_at: 2026-11-02T15:57:35.985066819Z
+  session_id: ee0bf351-6b17-486f-a38e-cfbb1343c426
 filed_at:
   code_sha: 6fafff141a37de5cd8d6dc06261deb83590f55b1
   branch: main
