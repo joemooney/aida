@@ -30,6 +30,7 @@
 use super::*;
 use std::path::{Path, PathBuf};
 
+// TASK-2707: the cache and its sidecars live in their own directory.
 const CACHE_FILES: [&str; 5] = [
     "cache.db",
     "cache.db-wal",
@@ -37,6 +38,10 @@ const CACHE_FILES: [&str; 5] = [
     "cache.db.refresh.lock",
     "cache.db.refresh-request.lock",
 ];
+
+fn cache_dir(main: &Path) -> PathBuf {
+    aida_core::db::cache_dir_in(&main.join(".aida"))
+}
 
 /// `<tmp>/main` holding an attached-store-shaped `.aida-store` and a cache
 /// with its sidecars, plus the rest of a checkout the session must not write.
@@ -56,8 +61,9 @@ fn main_fixture() -> (tempfile::TempDir, PathBuf) {
         ),
     )
     .unwrap();
+    std::fs::create_dir_all(cache_dir(&main)).unwrap();
     for name in CACHE_FILES {
-        std::fs::write(main.join(".aida").join(name), b"").unwrap();
+        std::fs::write(cache_dir(&main).join(name), b"").unwrap();
     }
     std::fs::write(main.join(".aida/config.toml"), b"").unwrap();
     (tmp, main)
@@ -119,7 +125,7 @@ fn bound_covers(entries: &[String], target: &Path) -> bool {
     })
 }
 
-// UNIT: the entries are exactly the store directory and the cache files.
+// UNIT: the entries are exactly the store directory and the cache directory.
 #[test]
 fn settings_allow_write_is_exactly_store_and_cache() {
     let (_tmp, main) = main_fixture();
@@ -127,10 +133,10 @@ fn settings_allow_write_is_exactly_store_and_cache() {
     std::fs::create_dir_all(&worktree).unwrap();
     let settings = settings_with_store(&worktree, &main);
 
-    let mut expected = vec![format!("/{}", main.join(".aida-store").display())];
-    for name in CACHE_FILES {
-        expected.push(format!("/{}", main.join(".aida").join(name).display()));
-    }
+    let expected = vec![
+        format!("/{}", main.join(".aida-store").display()),
+        format!("/{}", cache_dir(&main).display()),
+    ];
     assert_eq!(allow_write(&settings), expected);
     assert_eq!(
         deny_write(&settings),
@@ -176,9 +182,10 @@ fn sandbox_boundary_harness_allows_store_and_cache_denies_rest_of_main() {
     for allowed in [
         main.join(".aida-store/objects/BUG-1.yaml"),
         main.join(".aida-store/.aida/store-write.lock"),
-        main.join(".aida/cache.db"),
-        main.join(".aida/cache.db-wal"),
-        main.join(".aida/cache.db-shm"),
+        cache_dir(&main).join("cache.db"),
+        cache_dir(&main).join("cache.db-wal"),
+        cache_dir(&main).join("cache.db-shm"),
+        cache_dir(&main).join("cache.db.lock-info"),
     ] {
         assert!(
             sandbox_may_write(&settings, &allowed),
@@ -189,8 +196,10 @@ fn sandbox_boundary_harness_allows_store_and_cache_denies_rest_of_main() {
     for denied in [
         main.join(".aida-store/.git"),
         main.join(".aida/config.toml"),
-        main.join(".aida/cache.db.bak"),
+        main.join(".aida/cache.db"),
+        main.join(".aida/cache.db-wal"),
         main.join(".aida/agents.toml"),
+        main.join(".aida/cache/worktree-verdicts.json"),
         main.join(".git/config"),
         main.join("src/lib.rs"),
         main.clone(),
@@ -212,12 +221,12 @@ fn symlinked_main_lists_both_spellings_of_the_same_files() {
     let link = main.parent().unwrap().join("main-link");
     std::os::unix::fs::symlink(&main, &link).unwrap();
     let paths = contained_store_write_paths(&link);
-    assert_eq!(paths.len(), 2 * (1 + CACHE_FILES.len()));
+    assert_eq!(paths.len(), 2 * 2);
     for path in &paths {
         let base_ok = path.starts_with(link.join(".aida-store"))
             || path.starts_with(main.join(".aida-store"))
-            || path.parent() == Some(link.join(".aida").as_path())
-            || path.parent() == Some(main.join(".aida").as_path());
+            || *path == cache_dir(&link)
+            || *path == cache_dir(&main);
         assert!(base_ok, "{}", path.display());
     }
     let denied = contained_store_deny_write_paths(&paths);
@@ -341,10 +350,10 @@ fn bug_1929_linked_worktree_grants_its_own_main_only() {
     );
 
     let (json, settings) = launch_settings(&[worktree.clone()]);
-    let mut expected = vec![format!("/{}", main.join(".aida-store").display())];
-    for name in CACHE_FILES {
-        expected.push(format!("/{}", main.join(".aida").join(name).display()));
-    }
+    let mut expected = vec![
+        format!("/{}", main.join(".aida-store").display()),
+        format!("/{}", cache_dir(&main).display()),
+    ];
     // trace:BUG-2218 | ai:codex
     expected.push(format!("/{}", main.join(".aida/mailbox").display()));
     // The deputy's submit side only, never `.aida/deputy` itself.
@@ -371,20 +380,21 @@ fn bug_1929_linked_worktree_grants_its_own_main_only() {
     );
 }
 
-// DOCTOR: no gap when everything is in place; one per missing sidecar, store
-// elsewhere, or cache elsewhere.
+// DOCTOR: no gap when everything is in place; one for a missing cache
+// directory, store elsewhere, or cache elsewhere.
 #[test]
 fn store_boundary_gaps_name_each_exclusion() {
     let (_tmp, main) = main_fixture();
     let store = main.join(".aida-store");
-    let cache = main.join(".aida/cache.db");
+    let cache = cache_dir(&main).join("cache.db");
     assert!(contained_store_boundary_gaps(&main, Some(&store), &cache).is_empty());
 
-    std::fs::remove_file(main.join(".aida/cache.db-wal")).unwrap();
+    let parked = main.join(".aida/parked-cache-db");
+    std::fs::rename(cache_dir(&main), &parked).unwrap();
     let gaps = contained_store_boundary_gaps(&main, Some(&store), &cache);
     assert_eq!(gaps.len(), 1, "{gaps:?}");
-    assert!(gaps[0].contains("cache.db-wal"), "{gaps:?}");
-    std::fs::write(main.join(".aida/cache.db-wal"), b"").unwrap();
+    assert!(gaps[0].contains("does not exist"), "{gaps:?}");
+    std::fs::rename(&parked, cache_dir(&main)).unwrap();
 
     let elsewhere = main.parent().unwrap().join("other-store");
     std::fs::create_dir_all(&elsewhere).unwrap();
@@ -478,7 +488,7 @@ fn real_claude_contained_session_claims_and_comments() {
     // CLI would need advisor and dispatch authority this fixture has no grant
     // for.
     let store = main.join(".aida-store");
-    let cache = main.join(".aida/cache.db");
+    let cache = aida_core::db::project_cache_path(&main);
     {
         let backend = crate::test_env::home_fixture_cached_backend(&store, &cache).unwrap();
         let mut queued = None;
@@ -518,7 +528,7 @@ fn real_claude_contained_session_claims_and_comments() {
             worktree.to_str().unwrap(),
         ],
     );
-    aida_core::db::prime_cache_sidecars(&cache);
+    aida_core::db::ensure_project_cache_dir(&main);
     let store_head_before = run(&store, "git", &["rev-parse", "HEAD"]);
     let read = |p: &Path| std::fs::read(p).unwrap_or_else(|e| panic!("{}: {e}", p.display()));
     let unchanged = [

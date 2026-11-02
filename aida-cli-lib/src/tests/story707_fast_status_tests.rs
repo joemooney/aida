@@ -135,7 +135,8 @@ fn fast_status_counts_from_cache_absent_is_zeroed() {
 fn collect_fast_status_snapshot_works_without_a_loadable_store() {
     let dir = tempfile::tempdir().unwrap();
     std::fs::create_dir_all(dir.path().join(".aida")).unwrap();
-    let cache_path = dir.path().join(".aida/cache.db");
+    let cache_path = aida_core::db::project_cache_path(&dir.path());
+    std::fs::create_dir_all(cache_path.parent().unwrap()).unwrap();
     let conn = rusqlite::Connection::open(&cache_path).unwrap();
     conn.execute_batch(
         "CREATE TABLE requirements_cache (

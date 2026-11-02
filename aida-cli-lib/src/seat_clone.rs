@@ -1514,7 +1514,8 @@ pub(crate) fn describe_status_entry(line: &str) -> String {
 
 /// Whether a probe `git status` entry is the session's runtime state or
 /// build/cache output rather than work: the `.aida-store` link to the
-/// primary's store, `.aida/cache.db*`, `.aida/agents`, and `target/`. Only
+/// primary's store, `.aida/cache-db` (and legacy `.aida/cache.db*`),
+/// `.aida/agents`, and `target/`. Only
 /// untracked entries qualify; `.aida-store` only while it is a symlink (read
 /// with metadata only; nothing in the clone is opened).
 // trace:BUG-B6B1278890774EF993D2EBC327862470-051 | ai:claude
@@ -1527,7 +1528,10 @@ pub(crate) fn is_runtime_noise_entry(clone: &Path, line: &str) -> bool {
         return std::fs::symlink_metadata(clone.join(path))
             .is_ok_and(|meta| meta.file_type().is_symlink());
     }
+    // trace:TASK-2707 | ai:claude
     path.starts_with(".aida/cache.db")
+        || path == ".aida/cache-db"
+        || path.starts_with(".aida/cache-db/")
         || path == ".aida/agents"
         || path.starts_with(".aida/agents/")
         || path == "target"

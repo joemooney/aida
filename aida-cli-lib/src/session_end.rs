@@ -2376,9 +2376,9 @@ pub(crate) fn dirty_entries_ignoring_runtime_links(
         };
         let path = path.trim_end_matches('/');
         let known = path == ".aida-store"
-            || path.strip_prefix(".aida/").is_some_and(|rest| {
-                crate::worktree_gc::WORKTREE_AIDA_RUNTIME_LINKS.contains(&rest)
-            });
+            || path
+                .strip_prefix(".aida/")
+                .is_some_and(|rest| crate::worktree_gc::is_worktree_aida_runtime_link_name(rest));
         known && worktree.join(path).is_symlink()
     };
     // BUG-1988: with `.aida/` not gitignored and nothing tracked under it,

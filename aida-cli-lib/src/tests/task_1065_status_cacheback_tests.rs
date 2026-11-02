@@ -4,7 +4,7 @@ use aida_core::{DecisionChoice, DecisionRequest, Requirement, RequirementStatus,
 
 fn backend_in(dir: &std::path::Path) -> aida_core::CachedGitBackend {
     let store_root = dir.join("store");
-    let cache_path = dir.join(".aida").join("cache.db");
+    let cache_path = aida_core::db::project_cache_path(&dir);
     std::fs::create_dir_all(&store_root).unwrap();
     crate::test_env::home_fixture_cached_backend(&store_root, &cache_path).unwrap()
 }

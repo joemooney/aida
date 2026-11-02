@@ -1085,6 +1085,14 @@ pub(crate) fn link_worktree_runtime_state(
     let worktree_aida = worktree_path.join(".aida");
     if parent_aida.exists() {
         std::fs::create_dir_all(&worktree_aida)?;
+        // TASK-2707: the parent's cache lives in its own `.aida/cache-db/`
+        // directory, linked as one directory. Move the parent out of the legacy
+        // layout and create that directory first so the link below is never
+        // skipped (a skipped link would give this worktree a private cache),
+        // then retire any legacy per-file links a reused worktree still holds.
+        // trace:TASK-2707 | ai:claude
+        aida_core::db::ensure_project_cache_dir(project_root);
+        aida_core::db::migrate_legacy_cache_layout(&worktree_aida);
         // BUG-1988: one list for link, strip and the dirty-gate filter, so
         // they cannot drift apart again. trace:BUG-1988 | ai:claude
         for runtime in WORKTREE_AIDA_RUNTIME_LINKS {
@@ -1114,15 +1122,30 @@ pub(crate) fn link_worktree_runtime_state(
 // BUG-1988: `agents` was linked at session start but missing here, so the
 // strip left it behind and the dirty gate counted it as work.
 // trace:BUG-52 trace:BUG-1986 trace:BUG-1988 | ai:claude
+// TASK-2707: the cache is one directory link, `cache-db`, not three file links.
+// trace:TASK-2707 | ai:claude
 pub(crate) const WORKTREE_AIDA_RUNTIME_LINKS: &[&str] = &[
     "sessions",
     "agents",
     "roles",
-    "cache.db",
-    "cache.db-shm",
-    "cache.db-wal",
+    aida_core::db::CACHE_DIR_NAME,
     "pgdata",
 ];
+
+/// Per-file cache links an older binary placed in a worktree's `.aida/`
+/// (before TASK-2707). Never created any more; still stripped before removal
+/// and still read as runtime state (not work) by the dirty gate.
+// trace:TASK-2707 | ai:claude
+pub(crate) const WORKTREE_AIDA_LEGACY_RUNTIME_LINKS: &[&str] =
+    &["cache.db", "cache.db-shm", "cache.db-wal"];
+
+/// Every name [`unlink_worktree_aida_runtime`] strips: the current links plus
+/// the legacy cache links.
+// trace:TASK-2707 | ai:claude
+pub(crate) fn is_worktree_aida_runtime_link_name(name: &str) -> bool {
+    WORKTREE_AIDA_RUNTIME_LINKS.contains(&name)
+        || WORKTREE_AIDA_LEGACY_RUNTIME_LINKS.contains(&name)
+}
 
 /// Strip the runtime symlinks `link_worktree_runtime_state` created inside a
 /// worktree's `.aida/` (BUG-52), so `git worktree remove` doesn't count them
@@ -1134,7 +1157,10 @@ pub(crate) fn unlink_worktree_aida_runtime(aida_dir: &std::path::Path) {
     // it is still distinguishable from the shared sidecar.
     // trace:BUG-1644 | ai:claude
     retire_stray_worktree_lock_info(aida_dir);
-    for runtime in WORKTREE_AIDA_RUNTIME_LINKS {
+    for runtime in WORKTREE_AIDA_RUNTIME_LINKS
+        .iter()
+        .chain(WORKTREE_AIDA_LEGACY_RUNTIME_LINKS)
+    {
         let p = aida_dir.join(runtime);
         if p.is_symlink() {
             let _ = std::fs::remove_file(&p);
@@ -1142,15 +1168,21 @@ pub(crate) fn unlink_worktree_aida_runtime(aida_dir: &std::path::Path) {
     }
 }
 
-/// Remove a per-worktree `cache.db.lock-info` that a pre-BUG-1644 binary left
-/// beside the worktree's SYMLINKED `cache.db`, but only when its recorded owner
-/// is provably dead (the TASK-1484 compare-and-delete). A live owner's file is
-/// left for `aida doctor` to report. No-op when `cache.db` is not a symlink:
-/// the sidecar there IS the shared one.
+/// Remove a per-worktree `cache.db.lock-info` that an older binary left at the
+/// top of the worktree's `.aida/` (beside its legacy SYMLINKED `cache.db`), but
+/// only when its recorded owner is provably dead (the TASK-1484
+/// compare-and-delete). A live owner's file is left for `aida doctor` to
+/// report.
 // trace:BUG-1644 | ai:claude
 pub(crate) fn retire_stray_worktree_lock_info(worktree_aida: &std::path::Path) {
-    if let Some(stray) = aida_core::stray_cache_lock_info_path(&worktree_aida.join("cache.db")) {
-        let _ = aida_core::reclaim_dead_lock_info(&stray);
+    // TASK-2707: checked from the cache-directory path (a stray left at the
+    // top of `.aida/`) and from a legacy `cache.db` link not yet migrated.
+    // trace:TASK-2707 | ai:claude
+    let current = aida_core::db::cache_dir_in(worktree_aida).join(aida_core::db::CACHE_FILE_NAME);
+    for cache in [current, worktree_aida.join("cache.db")] {
+        if let Some(stray) = aida_core::stray_cache_lock_info_path(&cache) {
+            let _ = aida_core::reclaim_dead_lock_info(&stray);
+        }
     }
 }
 

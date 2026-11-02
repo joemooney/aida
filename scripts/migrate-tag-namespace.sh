@@ -62,7 +62,7 @@ session-start     aida:session:start
 EOF
 )
 
-CACHE="${AIDA_CACHE_PATH:-.aida/cache.db}"
+CACHE="${AIDA_CACHE_PATH:-.aida/cache-db/cache.db}"
 if [[ ! -f "$CACHE" ]]; then
   echo "error: cache not found at $CACHE — run \`aida cache rebuild\` first" >&2
   exit 1

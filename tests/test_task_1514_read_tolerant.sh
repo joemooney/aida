@@ -30,7 +30,7 @@ git -C .aida-store commit --allow-empty -m "Foreign writer" > /dev/null
 
 # Take the lock
 mkfifo flock_in flock_out
-python3 -c "import fcntl,sys; f=open(sys.argv[1],'w'); fcntl.flock(f,fcntl.LOCK_EX); print('ready',flush=True); sys.stdin.readline()" .aida/cache.db.refresh.lock < flock_in > flock_out &
+python3 -c "import fcntl,sys; f=open(sys.argv[1],'w'); fcntl.flock(f,fcntl.LOCK_EX); print('ready',flush=True); sys.stdin.readline()" .aida/cache-db/cache.db.refresh.lock < flock_in > flock_out &
 PY_PID=$!
 exec 3> flock_in
 read -r line < flock_out

@@ -509,7 +509,7 @@ fn awaiting_mail(
     std::fs::create_dir_all(&backend_store).unwrap();
     let backend = crate::test_env::home_fixture_cached_backend(
         &backend_store,
-        &root.join(".aida").join("cache.db"),
+        &aida_core::db::project_cache_path(&root),
     )
     .unwrap();
     let ctx = crate::UserStatusContext {

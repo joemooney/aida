@@ -541,9 +541,11 @@ fn doc_coverage_since_refuses_option_like_values() {
     let store_root = dir.path().join("store");
     std::fs::create_dir_all(&store_root).unwrap();
     aida_core::git_ops::init(&store_root).unwrap();
-    let backend =
-        aida_core::CachedGitBackend::open(&store_root, &dir.path().join(".aida").join("cache.db"))
-            .unwrap();
+    let backend = aida_core::CachedGitBackend::open(
+        &store_root,
+        &aida_core::db::project_cache_path(&dir.path()),
+    )
+    .unwrap();
     let sink = tempfile::TempDir::new().unwrap();
     for (raw, _) in option_like_values(sink.path()) {
         let cmd = crate::cli::DocCommand::Coverage {
