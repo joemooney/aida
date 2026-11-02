@@ -17,12 +17,12 @@ description: |-
   1. Once TASK-2631 / STORY-2238 and STORY-2254 land, remove `--vendor claude` and `aida agent new claude --bg` hardcoding from `skills-portable/aida-orchestrate.md`, `skills/aida-orchestrate.md`, `skills/aida-review.md`, `skills/aida-burndown.md`, `skills/aida-solo.md`, and `skills/aida-fire.md` (and their `commands/` counterparts) so `[agents] vendor` governs.
   2. Ship `aida-burndown`, `aida-solo`, and `aida-fire` to `.agents/skills/` (either by removing them from `[[claude_only]]` in `skill-inventory.toml` or providing `skills-portable/` bodies) and align `codex_prompts.rs:33-57` with `skill-inventory.toml`.
   3. Refresh `.agents/skills/` in this repository and update `docs/agents/seat-parity.md:49-53, 85-93`.
-status: Approved
+status: InProgress
 priority: High
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T06:47:39.554427385Z
-modified_at: 2026-11-01T08:12:24.383663087Z
+modified_at: 2026-11-02T12:56:34.976098625Z
 req_type: Task
 tags:
 - audit
@@ -68,6 +68,14 @@ history:
   author: joe
   timestamp: 2026-11-01T08:12:25.979058093Z
   changes: []
+- id: 01a19c55-3fa0-7192-a484-92fb68f1a462
+  author: aida-session-start
+  timestamp: 2026-11-02T12:56:34.976094078Z
+  session_id: ee0bf351-6b17-486f-a38e-cfbb1343c426
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 6dc7d4977ac5e47c42ddfb26597fe3ec5fb70b60
   branch: main
