@@ -19,7 +19,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T02:25:46.947809262Z
-modified_at: 2026-11-02T11:50:53.728607824Z
+modified_at: 2026-11-02T11:55:14.117222888Z
 req_type: Bug
 tags:
 - area:agents
@@ -288,6 +288,116 @@ comments:
   created_at: 2026-11-02T11:49:56.864178Z
   modified_at: 2026-11-02T11:49:56.864178Z
   session_id: 1f56bd1e-c059-4f73-b8df-e18b2170fdfc
+- id: 01a19c1d-1545-7e93-88e7-96e95fe87427
+  author: joe
+  content: |
+    ## SKETCH (implementer, 2026-11-02): Codex inherit=core lane-job transport and AC2 warm target on ext4
+
+    Per the 2026-11-02 04:52 advisor brief and the 2026-11-01 10:33 verified-blocker ruling. No code this round, and every existing fix in PR #3192 stays. Independent signoff is needed before implementation.
+
+    ### 1. Codex native core-tool transport
+
+    **Problem** (verified at d003fb32e79):
+    - `LaneJobs::apply_env` (lane_job.rs:579) sets only `AIDA_LANE_JOBS_INBOX` and `AIDA_LANE_JOBS_RESULTS`.
+    - `seat_dirs()` (lane_job.rs:1037) reads only those two variables.
+    - Codex `inherit=core` drops both, and BUG-2398's `TOOL_ENV` (codex_tool_env.rs:8) deliberately does not carry them.
+
+    So a Codex tool shell never finds the runner, and every Codex lane reports `untested=true`. That fails safe, but AC1 is not met.
+
+    **Key observation:** no new env key is needed. The two paths can be derived:
+    - The inbox is `<seat>/.aida/lane-jobs`, where `<seat>` is the git toplevel of the cwd.
+    - The results dir is `results_dir(<main>, <lease id>)`.
+    - `<main>` is `AIDA_PROJECT_ROOT` and `<lease id>` is `AIDA_SESSION_ID` (set by `apply_agent_lease_identity`, agent_launch.rs:4171). Both are already on the BUG-2398 whitelist.
+
+    What is missing is an authoritative, typed record saying "this lease has a live runner".
+
+    **Selector: exactly one, already whitelisted.** It is the lease id in `AIDA_SESSION_ID`, scoped by `AIDA_PROJECT_ROOT`. Explicitly excluded:
+    - No new `TOOL_ENV` key.
+    - No socket path. AF_UNIX connect under Codex seccomp is not something to depend on, and the file protocol already works under workspace-write.
+    - No paths in env.
+
+    The lease id is a name, not a capability.
+
+    **Typed own-context lease channel:**
+
+    1. **Host writes the record.** When `lane_job::offer` starts a `Runner`, the launcher stamps a typed field on the lane's lease (`.aida/sessions/<id>.toml`) through the typed lease rewrite: `lane_jobs = { protocol = 1, runner_pid, runner_started_at }`. It clears the field when the runner stops (lane end, SIGTERM drain stop, or reap). No paths are stored; both sides recompute them.
+    2. **Seat resolves it.** `seat_dirs()` runs the same steps for every vendor:
+       - a. Both variables must be non-empty, the root absolute, and the id lease-shaped (no `/`, `..` or NUL).
+       - b. Open the lease toml without following symlinks, component by component as the inbox open does, and parse it as a typed `Lease`.
+       - c. Own-context check: the canonical `lease.worktree_path` must equal the canonical git toplevel of the cwd.
+       - d. `protocol == 1`, and `runner_pid` is alive with a start time matching `runner_started_at`, which rules out pid reuse.
+       - e. inbox = `<toplevel>/.aida/lane-jobs`, results = `results_dir(root, id)`.
+
+       Any failure bails with the existing "no lane job runner ... untested=true" message. There is never a direct or unconfined cargo fallback.
+    3. **`apply_env` is retired** (or kept as test-only input). Claude and Codex lanes then share one code path, so vendor neutrality lives in the code rather than only in the prompt.
+    4. **Submission, result and tally are unchanged.** The job file goes into the seat inbox, which is writable under Codex workspace-write. `.out`, `.rc`, the tally and `jobs.log` are read from the host results dir, which both sandboxes can read.
+
+    **Threat model:**
+    - **No bearer tokens.** The lease id and project root are public selectors that BUG-2398 already exports and already digests. The grant UUID stays a selector.
+    - **No inherit-all.** Codex keeps `inherit=core` and the unchanged whitelist.
+    - **No argv grants.** `aida lane job run -- cargo ...` carries only allow-listed cargo argv. The cleared-env, bwrap-only, offline, read-only CARGO_HOME and fail-closed rulings are all unchanged.
+    - **No unconfined fallback.** A resolution failure or a runner refusal yields `untested=true`. Cargo never runs in the tool shell.
+    - **Forged selector.** It fails the own-context check unless the shell's cwd is inside that seat. A shell that is inside the seat can already write its inbox, and the runner still runs only allow-listed cargo in bwrap in that seat. Nothing is gained.
+    - **Forged record or results.** Invariant, with a test: neither `<main>/.aida/sessions/` nor `<main>/.aida/lane-jobs/` may sit inside any seat-writable root (the Claude seat allowOnly list, or the Codex workspace-write roots, which are the seat cwd plus tmp). Neither does today. A forged "runner present" record would at most make the job time out to `untested=true`. Tallies are computed on the host.
+    - **Exposure.** The lease toml was already readable. It holds a grant selector and paths, not secrets. A guard test will assert that no lease field holds a credential.
+
+    **Proof (09:32 ruling), with evidence reported separately:**
+    - **Real Codex boundary fixture.**
+      - Build the production Codex child via the real launcher.
+      - Call `prepare_launch`.
+      - Run it through the same `codex sandbox` conversion the BUG-2398 preflight uses (`sandbox_args`, codex_tool_env.rs:167), with `inherit=core`.
+      - Inside, run `aida lane job run -- cargo test ...` against a fixture cargo with a live host Runner, and assert submission, `.rc`, the tally and `untested=false`.
+      - Negatives: no `lane_jobs` field gives `untested`; a cwd outside the seat is refused; a forged id is refused.
+
+      This needs no model call. When codex or userns is missing, the fixture reports SKIP, never pass.
+    - **Labels, kept distinct:**
+      - host-witnessed runner evidence (the codex sandbox fixture, naming the host)
+      - CI evidence (resolution, lease-channel and writable-root invariant tests)
+      - direct native async cargo: none, because all cargo goes through the runner
+    - The `/bin/sh` drain fixture (bug_2383_lane_job_tests.rs:1017) gets relabelled as launcher-wiring only.
+
+    ### 2. AC2 warm target on ext4 (no reflink)
+
+    **Pick:** a read-only primary snapshot as the lower layer, plus a per-lane overlay upper, mounted only inside the lane-job bwrap.
+
+    **Rejected:**
+    - `cp -al` as the seat target: withdrawn in round 2 because seat writes would land on primary inodes.
+    - sccache: the cache must be job-writable, so a seat could poison what the host consumes. The daemon would escape or outlive the job sandbox, and proc-macro and bin crates are not cached anyway.
+
+    **Host facts:** the target dir is ext4, bwrap is 0.9.0 (`--overlay-src` / `--overlay` need 0.8.0 or later), and the kernel supports unprivileged userns overlayfs.
+
+    **Mechanism:**
+    1. **Generation snapshot.** On a lane's first job, the runner creates or reuses `<main>/target/lane-base/agent-<gen>/`. While holding `<main>/target/agent/.cargo-lock` (`LOCK_WAIT` 120s, same as today's seed), it:
+       - hardlinks `deps/` and `build/`;
+       - really copies `.fingerprint/`, which is small and which cargo rewrites in place via `fs::write`;
+       - skips `incremental/`.
+
+       `gen` = the newest fingerprint mtime plus the toolchain hash. A generation is GC'd once no live lease references it.
+    2. **Per-lane overlay.** `<main>/target/worktrees/<seat>/overlay/{upper,work}` persists, so the second job is warm. The generation is pinned for the lane's lifetime, and an upper built on another generation is discarded.
+    3. **Mount.** The lane-job bwrap profile adds `--overlay-src <lane-base/agent-gen> --overlay <upper> <work> <seat_target>/agent`. The lower layer is read-only, and every write, in place or not, copies up. So no seat-writable file shares an inode with `target/agent` (the round-2 invariant restated). `lane-base/` is never in a seat writable root.
+    4. **Fallback.** If the overlay is unavailable, the seat builds cold as today. The output names the path taken: `seed: overlay gen=...`, `seed: reflink`, or `seed: cold (<reason>)`. Reflink stays first where the filesystem supports it.
+
+    **cargo-lock:**
+    - The seat's `.cargo-lock` copies up into its own upper, so the seat never contends with the primary.
+    - The primary's lock is held only during the snapshot (seconds of I/O), never during a job build.
+    - A primary rebuild either creates new inodes or rewrites copied fingerprints, so the pinned view survives.
+    - Residual risk: an in-place primary rewrite of a hardlinked `deps/` file could make the seat's build inconsistent. That affects the seat only, never the primary. A post-job size and mtime check against the generation record flags it as `seed: overlay-stale` in the lane result.
+
+    **Slot:** the snapshot runs outside the cargo slot (lock plus I/O only). Jobs run under the slot limiter as now. The slot rw binds are unchanged; the upper and work dirs are added.
+
+    **Tests:**
+    - Real bwrap, skipped without userns: no upper file shares `st_dev` or `st_ino` with `target/agent`, and a write through the merged view leaves the lower unchanged.
+    - On a fixture primary on a non-reflink filesystem, the first job shows a pre-built dep as `Fresh`.
+    - The snapshot holds the primary lock.
+    - With the overlay unavailable, the job builds cold and states why.
+
+    ### Scope ask
+
+    Approve (1), the lease-channel transport with no new whitelist key, and (2), the overlay over a hardlinked pinned generation, or name the fork you want instead. On signoff I implement both in PR #3192: same PR, no follow-up chain. The lib-1 failure at d003fb3 (`bug_775 concurrent_sibling_publication...`) is outside this diff and needs a re-run. The merge hold stays.
+  created_at: 2026-11-02T11:55:14.117222888Z
+  modified_at: 2026-11-02T11:55:14.117222888Z
+  session_id: 01a19c19176d
+  harness_version: 2.1.316 (Claude Code)
 history:
 - id: 01a19525-88eb-79e3-aab8-8d511ad2f605
   author: aida-session-start

@@ -23,7 +23,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T06:48:25.173889038Z
-modified_at: 2026-11-02T11:24:53.530158815Z
+modified_at: 2026-11-02T11:51:22.715343914Z
 req_type: Bug
 tags:
 - architecture
@@ -147,6 +147,13 @@ comments:
     - None. B2 diagnostics and B3 CLI correction are out of scope under the verify-only ruling.
   created_at: 2026-11-02T11:24:53.530158815Z
   modified_at: 2026-11-02T11:24:53.530158815Z
+  session_id: 01a19c0013fe
+  harness_version: 2.1.316 (Claude Code)
+- id: 01a19c19-8d5b-7470-9860-4c41e8ba879e
+  author: joe
+  content: 'IMPLEMENTER FINDING (bug-spotted, minor), to file as a separate spec. Neither CLI `aida add` (read-only store ID allocation) nor the MCP finding tool was available in this sandbox. `aida-cli-lib/src/zen_drive_root.rs` (~line 388, guided arm) spawns `launch.program`, which is `codex` for a Codex guided launch (session.rs GuidedLaunch). It sets `AIDA_SESSION_ROLE=implementer` in the spec worktree but never finalizes through `codex_tool_env::prepare_launch` and makes no explicit grant decision. Codex tool shells therefore lose the lane role, and the operator''s inherited grant reaches the lane. The BUG-2398 LAUNCH_INVENTORY did not catch it because it keys on grant selectors. The new BUG-2395 ROLE_LAUNCH_SITES ratchet records it as RoleRoute::KnownGap. Fix: set an empty-baseline grant decision and call prepare_launch before spawn on the Codex arm, then move the entry to LaunchInventory.'
+  created_at: 2026-11-02T11:51:22.715343914Z
+  modified_at: 2026-11-02T11:51:22.715343914Z
   session_id: 01a19c0013fe
   harness_version: 2.1.316 (Claude Code)
 history:
