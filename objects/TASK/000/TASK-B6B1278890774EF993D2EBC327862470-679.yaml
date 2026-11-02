@@ -1,5 +1,6 @@
 id: 01a19a77-fa2c-7511-893a-d152e5b10668
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-679
+agreed_id: TASK-2738
 title: 'COSMETIC (non-blocking): run_ship_cleanup_command maps a try_wait() I/O error t…'
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on BUG-2384, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
@@ -20,6 +21,12 @@ tags:
 - finding-hash:44a9210e
 - from-review:PR-3216
 - kind:carried-forward
+history:
+- id: 01a19aa1-addc-7a90-aa66-cf7128251fce
+  author: joe
+  timestamp: 2026-11-02T05:00:49.500453433Z
+  session_id: 126bbd5a-a92f-452b-ab0b-2637a1db42c2
+  changes: []
 filed_at:
   code_sha: 20c834e8cdcc74f199d9ddff7126cba61b08c3c3
   branch: main
