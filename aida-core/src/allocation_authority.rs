@@ -369,6 +369,12 @@ pub enum ClaimAuthority {
     /// hub, which this clone reaches as `remote`. Claims are ordered by CAS
     /// push to that remote and stamped with the hub's pool id.
     HubCas { remote: String, hub: String },
+    /// Rooted store, non-root clone: the root granted hub `hub` a child
+    /// pool per type (`aida node hub add`), and this clone's declared
+    /// upstream `remote` reaches that hub. Claims are carved inside the
+    /// hub's pool and ordered by CAS push to that remote.
+    // trace:STORY-B6B1278890774EF993D2EBC327862470-170 | ai:claude
+    Delegated { remote: String, hub: String },
 }
 
 impl ClaimAuthority {
@@ -376,7 +382,7 @@ impl ClaimAuthority {
     pub fn remote(&self) -> &str {
         match self {
             Self::Rooted => "origin",
-            Self::HubCas { remote, .. } => remote,
+            Self::HubCas { remote, .. } | Self::Delegated { remote, .. } => remote,
         }
     }
 
@@ -384,7 +390,9 @@ impl ClaimAuthority {
     pub fn pool_id(&self, type_prefix: &str) -> Option<String> {
         match self {
             Self::Rooted => None,
-            Self::HubCas { hub, .. } => Some(crate::store_hubs::hub_pool_id(hub, type_prefix)),
+            Self::HubCas { hub, .. } | Self::Delegated { hub, .. } => {
+                Some(crate::store_hubs::hub_pool_id(hub, type_prefix))
+            }
         }
     }
 }
@@ -433,6 +441,12 @@ pub fn store_mode(root: &Path) -> Result<StoreMode> {
 pub fn claim_authority(root: &Path) -> Result<ClaimAuthority> {
     match store_mode(root)? {
         StoreMode::Rooted { .. } => {
+            let mode = resolve(root)?;
+            if !mode.authoritative {
+                if let Some(upstream) = mode.upstream.as_deref() {
+                    return delegated_authority(root, upstream);
+                }
+            }
             require_global(root)?;
             Ok(ClaimAuthority::Rooted)
         }
@@ -464,6 +478,54 @@ pub fn claim_authority(root: &Path) -> Result<ClaimAuthority> {
             "this store declares more than one hub ({}) and has no allocation root, so nothing orders their block claims; {MULTI_HUB_NEEDS_ROOT}. Blocks already held keep dispensing",
             hubs.join(", ")
         ),
+    }
+}
+
+/// A non-root clone of a rooted store claims through its declared upstream
+/// only when that remote reaches a declared hub the root granted a pool to.
+// trace:STORY-B6B1278890774EF993D2EBC327862470-170 | ai:claude
+fn delegated_authority(root: &Path, upstream: &str) -> Result<ClaimAuthority> {
+    let hubs = crate::store_hubs::committed(root)?;
+    let pools = crate::allocation_lineage::PoolRegistry::load(root)?;
+    let reached: Vec<&crate::store_hubs::Hub> = hubs
+        .hubs
+        .iter()
+        .filter(|h| crate::store_hubs::reach_problem(root, h, upstream).is_none())
+        .collect();
+    let granted = reached.iter().find(|h| {
+        pools.pools.iter().any(|p| {
+            p.parent_pool_id.is_some()
+                && crate::allocation_lineage::promoted_hub(p) == Some(h.name.as_str())
+        })
+    });
+    match (granted, reached.first()) {
+        (Some(hub), _) => Ok(ClaimAuthority::Delegated {
+            remote: upstream.to_string(),
+            hub: hub.name.clone(),
+        }),
+        (None, Some(hub)) => bail!(
+            "this clone's upstream `{upstream}` reaches hub `{}`, but the allocation root has granted that hub no ID pool yet; on the root clone run `aida node hub add {} --url <url>`, then pull the store",
+            hub.name,
+            hub.name
+        ),
+        (None, None) => bail!(
+            "this clone's upstream `{upstream}` reaches no hub declared under [store.hubs] on the shared default branch, so it may allocate only node-local IDs; the root grants ID pools per hub with `aida node hub add`"
+        ),
+    }
+}
+
+/// Whether this clone may claim a `type_prefix` block now: it has claim
+/// authority, and a delegated clone's hub holds a pool of that type.
+// trace:STORY-B6B1278890774EF993D2EBC327862470-170 | ai:claude
+pub fn can_claim_type(root: &Path, type_prefix: &str) -> bool {
+    match claim_authority(root) {
+        Ok(ClaimAuthority::Delegated { hub, .. }) => {
+            crate::allocation_lineage::PoolRegistry::load(root).is_ok_and(|pools| {
+                crate::allocation_lineage::hub_grant(&pools.pools, &hub, type_prefix).is_some()
+            })
+        }
+        Ok(_) => true,
+        Err(_) => false,
     }
 }
 
