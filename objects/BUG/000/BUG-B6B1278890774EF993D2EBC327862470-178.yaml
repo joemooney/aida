@@ -11,7 +11,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T16:42:07.593722571Z
-modified_at: 2026-11-02T06:54:45.187133340Z
+modified_at: 2026-11-02T06:54:46.209718933Z
 req_type: Bug
 tags:
 - doctor
@@ -89,6 +89,24 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Round-3 fix worked: lib-1 is now green and the design and test coverage match the advisor ruling. But CI (lib-0) ''Run tests'' fails at head 5adc7cd (run 41400843860, job 125132115493) and at 81382bb (run 41398598718). Main is green at 952552f, the main commit this head merges, so a red required lane blocks approval.. No triage reason was given.'
   created_at: 2026-11-02T06:54:45.187131796Z
   modified_at: 2026-11-02T06:54:45.187131796Z
+  session_id: 1f56bd1e-c059-4f73-b8df-e18b2170fdfc
+- id: 01a19b09-ff3c-7512-9f0e-02200b77e4ba
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-b6b1278890774ef993d2ebc327862470-178):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 5adc7cd54914
+    Recorded: 2026-11-02T06:49:00.671598887+00:00
+    Findings:
+    1. BLOCKER CI: CI (lib-0) 'Run tests' fails at head 5adc7cd (run 41400843860, job 125132115493) and at 81382bb (run 41398598718, job 125125262525); lib-1, cli-0/1, rest, gates and contracts are green. The last 8 main runs are all green, including 952552f, which this head merges. The reviewer could not name the failing test because the sandbox denies the job-log/artifact hosts. Source reading found no caller outside mail_backlog whose behaviour changes: the own-reader logical_snapshot path is untouched apart from the additive inspection_unknown_ids and a pure extra reconcile. lib-0 has also failed on other PR branches (-160, -167), so it may be a flake, but that is unproven. Fetch 'gh run view 41400843860 --job 125132115493 --log-failed'. Then either fix the failing test or code, or show it is unrelated with a passing re-run at the head. Get every required lane green at the exact head.
+    2. PROCESS: the ruling's local gate (one focused_bug2405 cargo test plus focused core story1843_d1_) has still never run successfully. Round 3 also skipped it. lib-1 passing at 81382bb and 5adc7cd is the only execution evidence for the focused tests. Name the evidence on the spec before re-requesting review.
+    3. MINOR (carried over, unaddressed) aida-cli-lib/src/mail_backlog.rs:200 evaluate() and :487 route_backlog() are now #[cfg(test)]-only, and the old mail_backlog::tests still exercise this retired path, not inspect_backlog. Port them to inspect_backlog/scan_and_route or delete them.
+    4. MINOR (carried over) aida-core/src/mailbox_logical.rs inspect_mail and mail_backlog.rs inspect_backlog: each live reader triggers a full snapshot_for_policy with its own ReadLimits budget, so cost is O(readers x mailbox size), and a reader whose snapshot runs out of budget is reported unknown. Share one inventory pass across subjects, or document the scaling.
+    5. COSMETIC (carried over) aida-core/src/mailbox_logical.rs inspect_mail hard-codes subject_line(m, 80), which duplicates mail_backlog::SUBJECT_MAX. Pass the limit in or share the constant.
+    6. COSMETIC (carried over) docs/cli/03-work-autonomy.md:415-438: the new unindented paragraph, plus a double blank line, sits between the '- **substrate**' bullet and its indented '  **Runaway-seat watchdog**' continuation, which orphans the watchdog paragraph. Indent the new text into the bullet, or move it after the list.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-02T06:54:46.076606822Z
+  modified_at: 2026-11-02T06:54:46.076606822Z
   session_id: 1f56bd1e-c059-4f73-b8df-e18b2170fdfc
 history:
 - id: 01a198c4-4a0e-78f2-a498-045eec94c002
