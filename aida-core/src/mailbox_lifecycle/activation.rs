@@ -266,12 +266,65 @@ pub fn record(project_root: &Path) -> super::Result<ActivationReport> {
 /// Lifecycle lock when `report.would_record`, else leave the anchor as is.
 pub(crate) fn record_at(
     anchor: &Path,
+    report: ActivationReport,
+    now: &str,
+) -> super::Result<ActivationReport> {
+    record_named(anchor, report, super::source_build(), now)
+}
+
+/// BUG-2411 (advisor ruling C): after `aida dev build` promotes, re-record an
+/// existing activation for the promoted build, so a rebuild does not strand
+/// every mail-bearing checkout until an operator re-records by hand. The scan
+/// is the one [`record`] runs, but judged against `promoted_exe` (the new live
+/// binary) instead of this process, and the record names `promoted_source`
+/// (the identity the promoted binary reports for itself). Nothing is written
+/// unless every writer host runs the promoted build and the scan is complete;
+/// the promoting process itself is the only exception, since it is the
+/// recorder, writes no mail, and exits next. `Ok(None)`: this checkout has no
+/// mail anchor or no activation was ever recorded, so there is nothing to
+/// re-record.
+// trace:BUG-2411 | ai:claude
+pub fn rerecord_for_promoted_build(
+    project_root: &Path,
+    promoted_exe: &Path,
+    promoted_source: &str,
+) -> super::Result<Option<ActivationReport>> {
+    let Some(source) = super::resolve_source(project_root)? else {
+        return Ok(None);
+    };
+    if super::activation_state(&source.anchor)? == super::ActivationState::Absent {
+        return Ok(None);
+    }
+    let meta = std::fs::metadata(promoted_exe)?;
+    let me = BuildIdentity {
+        exe_id: (meta.dev(), meta.ino()),
+        digest: None,
+    };
+    let proc = Path::new("/proc");
+    let (mut processes, incomplete) = scan_proc(proc, std::process::id());
+    let me = fill_digests(proc, &mut processes, me, promoted_exe);
+    let mut report = classify(&processes, Some(&me), std::process::id(), incomplete, false);
+    report.this_build = Some(promoted_source.to_string());
+    let source_build = Some(promoted_source).filter(|s| !s.trim().is_empty());
+    record_named(
+        &source.anchor,
+        report,
+        source_build,
+        &chrono::Utc::now().to_rfc3339(),
+    )
+    .map(Some)
+}
+
+/// Write the record naming `source_build` when `report.would_record`.
+fn record_named(
+    anchor: &Path,
     mut report: ActivationReport,
+    source_build: Option<&str>,
     now: &str,
 ) -> super::Result<ActivationReport> {
     report.dry_run = false;
     // A build that cannot name its source records nothing it would honour.
-    let Some(source_build) = super::source_build() else {
+    let Some(source_build) = source_build else {
         report.would_record = false;
         return Ok(report);
     };
