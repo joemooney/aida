@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T10:12:04.230556201Z
-modified_at: 2026-11-02T17:48:20.605454345Z
+modified_at: 2026-11-02T19:20:10.230773630Z
 req_type: Bug
 tags:
 - alias
@@ -244,6 +244,12 @@ comments:
   created_at: 2026-11-02T16:22:37.589290870Z
   modified_at: 2026-11-02T16:22:37.589290870Z
   session_id: f3d7b8d5-952d-41f2-876a-c5ac09da1661
+- id: 01a19db4-6ef6-7901-a0b3-7106b9ed01c5
+  author: joe
+  content: 'ADVISOR RULING (12:20, ruling-once) on the round-3 non-blocking items: ACCEPTED for this PR. The snapshot-load budget (amendment 7), the global discovery blast radius and the unrerouted merge-hold status readers belong to regroup target ''one gate ledger keyed by canonical ID'' (see the advisor handoff), not to per-PR follow-ups. The stale PR body and the PRIN-5 doc are cosmetic.'
+  created_at: 2026-11-02T19:20:10.230773630Z
+  modified_at: 2026-11-02T19:20:10.230773630Z
+  session_id: ee0bf351-6b17-486f-a38e-cfbb1343c426
 history:
 - id: 01a196a4-b6bb-7730-a79a-e4a546bf516d
   author: joe
