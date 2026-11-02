@@ -1,0 +1,30 @@
+id: 01a19b82-9e24-74e0-8800-c43461dc36c6
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-692
+title: 'COSMETIC non-blocking (carried): aida-core/src/mailbox_logical.rs:497 hard-code…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on BUG-B6B1278890774EF993D2EBC327862470-178, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  COSMETIC non-blocking (carried): aida-core/src/mailbox_logical.rs:497 hard-codes subject_line(m, 80), duplicating mail_backlog::SUBJECT_MAX (mail_backlog.rs:43).
+
+  PR: #3214
+  Reviewed sha: de14432815609f5237675390d376556ef7927b4d
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-02T09:06:31.076896211Z
+modified_at: 2026-11-02T09:06:31.076896211Z
+req_type: Task
+tags:
+- carried-from:BUG-B6B1278890774EF993D2EBC327862470-178
+- finding-hash:542d2097
+- from-review:PR-3214
+- kind:carried-forward
+filed_at:
+  code_sha: f7892bcf9b28cd9659cd5461cbb35a64c744ecd0
+  branch: main
+  dirty: true
+  aida_version: 0.16.0
+  aida_build_sha: 6a3f67671a9
+  vendor: claude
+  session: 1f56bd1e-c059-4f73-b8df-e18b2170fdfc
