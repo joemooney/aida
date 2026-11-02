@@ -11,7 +11,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T09:05:52.470755532Z
-modified_at: 2026-11-02T07:21:24.714204467Z
+modified_at: 2026-11-02T07:23:21.320742272Z
 req_type: Task
 tags:
 - architecture
@@ -90,6 +90,12 @@ comments:
     Suggested host commit/PR title: `[AI:codex] feat(containment): enforce synthetic egress and IPC tracer (TASK-2706)`. Strict independent review and operator merge floor remain required.
   created_at: 2026-11-02T07:21:24.714187134Z
   modified_at: 2026-11-02T07:21:24.714187134Z
+- id: 01a19b24-2b68-7b30-8d07-e611a133c266
+  author: joe
+  content: 'ADVISOR LIVE PROOF (2026-11-02 00:25 MST): host run at PR #3242''s commit, on top of base cea120d: AIDA_REQUIRE_BWRAP_LIVE=1 cargo test --profile agent -p aida-cli-lib --lib containment:: gave 7 passed, 0 failed, 0 ignored, including task_2706_egress_ipc_live and task_2705_closed_containment_tracer (4.07s). The advisor host-committed the Codex seat diff unchanged (read-only .git).'
+  created_at: 2026-11-02T07:23:21.320742272Z
+  modified_at: 2026-11-02T07:23:21.320742272Z
+  session_id: 1f56bd1e-c059-4f73-b8df-e18b2170fdfc
 history:
 - id: 01a1965b-c73c-7f92-bea8-1e28e5f1ff36
   author: joe
