@@ -12,13 +12,20 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-02T11:14:29.860484316Z
-modified_at: 2026-11-02T11:14:29.860484316Z
+modified_at: 2026-11-02T12:57:52.974425911Z
 req_type: Task
 tags:
 - carried-from:BUG-2398
 - finding-hash:b2f46db1
 - from-review:BUG-2398
 - kind:carried-forward
+comments:
+- id: 01a19c56-704e-7b43-a06c-56e1f7e53484
+  author: joe
+  content: 'ADVISOR RULING (2026-11-02 06:05 MST, per the 10-28 ruling-once order): ACCEPTED, no work. Cosmetic. The fixtures run in an isolated child process, so the cwd dependency cannot leak. Not worth a PR.'
+  created_at: 2026-11-02T12:57:52.974425911Z
+  modified_at: 2026-11-02T12:57:52.974425911Z
+  session_id: ee0bf351-6b17-486f-a38e-cfbb1343c426
 history:
 - id: 01a19c29-cff1-7831-9bfa-fef7bf3df394
   author: joe
