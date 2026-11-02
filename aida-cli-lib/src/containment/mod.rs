@@ -34,7 +34,10 @@ enum ProbeStage {
 }
 
 /// Whether the host lets the fixed lane build its nested isolation layer.
-/// `Unknown` until the filesystem/supervisor stage runs. trace:TASK-2705 | ai:claude
+/// `Unknown` until the nested user-namespace preflight completes (an earlier
+/// refusal, or a preflight that itself fails, leaves it unknown). `Available`
+/// once the preflight passes, even if the full lane later fails or times out:
+/// that failure is the tracer's, reported in `cause`. trace:TASK-2705 | ai:claude
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub(crate) enum IsolationState {
@@ -43,10 +46,16 @@ pub(crate) enum IsolationState {
     Unavailable,
 }
 
+/// Typed host property behind `IsolationState::Unavailable`. Only nested
+/// `unshare(CLONE_NEWUSER)` failures are classified; anything else is an
+/// ordinary refusal.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub(crate) enum IsolationReason {
+    /// EPERM/EACCES: host policy (e.g. AppArmor `unpriv_bwrap`) denies it.
     HostPolicyDenied,
+    /// ENOSPC: the host's user-namespace limit is exhausted.
+    HostResourceLimit,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -177,24 +186,34 @@ pub(crate) fn probe(root: &Path, vendor: &str) -> ProbeReport {
             .transpose()?;
         report.configured_posture = posture;
         report.stage = ProbeStage::FilesystemSupervisor;
-        supervisor::run_probe()
+        let isolation = &mut report.isolation;
+        supervisor::run_probe(|| isolation.state = IsolationState::Available)
     };
     match run() {
-        Ok(supervisor::TracerOutcome::HostPolicyDenied { phase, errno }) => {
+        Ok(supervisor::TracerOutcome::IsolationUnavailable {
+            reason,
+            phase,
+            errno,
+        }) => {
             // Typed host property, not a tracer failure and never a pass.
+            let what = match reason {
+                IsolationReason::HostPolicyDenied => "host policy denied nested user namespace",
+                IsolationReason::HostResourceLimit => {
+                    "host resource limit: user namespace limit exhausted"
+                }
+            };
             report.cause = format!(
-                "isolation unavailable: host policy denied nested user namespace \
-                 (phase {phase}, errno {errno}); no fallback"
+                "isolation unavailable: {what} (phase {phase}, errno {errno}); no fallback"
             );
             report.isolation = Isolation {
                 state: IsolationState::Unavailable,
-                reason: Some(IsolationReason::HostPolicyDenied),
+                reason: Some(reason),
                 phase: Some(phase),
                 errno: Some(errno),
             };
         }
         Ok(supervisor::TracerOutcome::Passed(checks)) => {
-            report.isolation.state = IsolationState::Available;
+            debug_assert_eq!(report.isolation.state, IsolationState::Available);
             report.checks = checks;
             report.status = ProbeStatus::Ready;
             report.stage = ProbeStage::Complete;

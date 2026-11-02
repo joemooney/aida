@@ -52,6 +52,15 @@ a typed refusal and the full lane does not run. The refusal carries
 the failing phase and errno. It has no checks, no pass and no containment
 credit. The two tests that need nested user namespaces assert this typed result
 when the host denies them, and the full isolation path when it allows them.
+Round 4 narrowed the classification to the measured case. Only a nested
+`unshare` returning EPERM/EACCES is `host_policy_denied`. ENOSPC there is a
+distinct `host_resource_limit`. Nested mount or unmount failures are ordinary
+refusals. With `AIDA_REQUIRE_BWRAP_LIVE=1` or
+`AIDA_REQUIRE_CODEX_CONTAINMENT_LIVE=1`, an unavailable host now fails both
+tests, so a required-live run can only pass by running the full lane.
+`isolation.state` becomes `available` as soon as the preflight passes, so a
+later lane failure no longer reports `unknown`. The preflight and the lane
+share one spawn/supervise helper.
 The temporary CI profile-inventory, prerequisite and artifact steps were
 investigation scaffolding and have been removed. Nothing elevates privilege or
 changes host policy.

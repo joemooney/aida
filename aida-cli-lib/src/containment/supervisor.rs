@@ -1,12 +1,13 @@
 //! Host owns one bwrap process and its namespace init until teardown finishes.
 //! No detached receipt, vendor daemon or authority transport is exposed here.
 // trace:TASK-2705 | ai:codex
+use super::IsolationReason;
 use anyhow::{Context, Result};
 use std::io::Read;
 use std::os::fd::{AsRawFd, FromRawFd};
 use std::os::unix::fs::PermissionsExt;
 use std::os::unix::process::CommandExt;
-use std::process::{Child, Command, Stdio};
+use std::process::{Child, Command, ExitStatus, Stdio};
 use std::time::{Duration, Instant};
 
 const DEADLINE: Duration = Duration::from_secs(12);
@@ -201,14 +202,18 @@ if os.sys.argv[5] == 'timeout': time.sleep(30)
 "#;
 
 /// Typed tracer outcome. A host that confines bwrap so a nested user namespace
-/// cannot gain capabilities (e.g. Ubuntu's AppArmor `unpriv_bwrap` child
-/// profile, `audit deny capability`) is a host property, not a tracer defect:
-/// it is reported as isolation unavailable, never as a pass.
+/// cannot be created (e.g. Ubuntu's AppArmor `unpriv_bwrap` child profile,
+/// `audit deny capability`) is a host property, not a tracer defect: it is
+/// reported as isolation unavailable with its own typed reason, never a pass.
 // trace:TASK-2705 | ai:claude
 #[derive(Debug)]
 pub(super) enum TracerOutcome {
     Passed(Vec<String>),
-    HostPolicyDenied { phase: String, errno: i32 },
+    IsolationUnavailable {
+        reason: IsolationReason,
+        phase: String,
+        errno: i32,
+    },
 }
 
 /// Fixed nested-userns capability probe, run inside the same bwrap boundary
@@ -225,13 +230,16 @@ report('mount_positive', libc.mount(b'tmpfs', b'/tmp/nested-preflight', b'tmpfs'
 report('unmount_positive', libc.umount2(b'/tmp/nested-preflight', 2))
 "#;
 
-pub(super) fn run_probe() -> Result<TracerOutcome> {
-    run_probe_inner(false)
+/// Host prerequisites, nested-userns preflight, then the full lane.
+/// `on_available` fires once the preflight proved nested userns usable, so a
+/// caller can record that before the lane's own outcome is known.
+pub(super) fn run_probe(on_available: impl FnOnce()) -> Result<TracerOutcome> {
+    run_probe_inner(false, on_available)
 }
 
 #[cfg(test)]
 pub(super) fn timeout_probe() -> Result<TracerOutcome> {
-    run_probe_inner(true)
+    run_probe_inner(true, || {})
 }
 
 fn host_prerequisites() -> Result<()> {
@@ -270,93 +278,71 @@ fn synthetic_layout() -> Result<tempfile::TempDir> {
     Ok(root)
 }
 
+/// Map one failed preflight phase to a typed host property, or `None` when it
+/// is an ordinary failure. Only the measured case is a policy denial:
+/// `unshare(CLONE_NEWUSER)` returning EPERM/EACCES. ENOSPC there is an
+/// exhausted user-namespace limit, a distinct reason. A nested mount/unmount
+/// failure after a successful unshare is never classified as a host
+/// property: it could be a boundary regression. trace:TASK-2705 | ai:claude
+pub(super) fn classify_preflight_failure(phase: &str, errno: i32) -> Option<IsolationReason> {
+    match (phase, errno) {
+        ("unshare", libc::EPERM | libc::EACCES) => Some(IsolationReason::HostPolicyDenied),
+        ("unshare", libc::ENOSPC) => Some(IsolationReason::HostResourceLimit),
+        _ => None,
+    }
+}
+
 /// Probe nested-userns capability ONCE, before the full lane. `Ok(None)` means
-/// available; `Ok(Some(..))` is a typed host-policy denial (EPERM/EACCES/ENOSPC
-/// at a named phase). Outer bwrap failure stays an error with its own cause.
-fn nested_userns_preflight() -> Result<Option<(String, i32)>> {
+/// available; `Ok(Some(..))` is a typed host property (see
+/// `classify_preflight_failure`). Every other failure stays an error.
+fn nested_userns_preflight() -> Result<Option<TracerOutcome>> {
     let root = synthetic_layout()?;
     let boundary = super::filesystem::Boundary::synthetic(root.path())?;
     let mut cmd = Command::new("/usr/bin/bwrap");
     boundary.append_to(&mut cmd);
     cmd.args(["--", "/usr/bin/python3", "-I", "-S", "-c", NESTED_PREFLIGHT])
-        .env_clear()
-        .stdin(Stdio::null());
-    let fds = boundary.fds();
-    unsafe {
-        cmd.pre_exec(move || {
-            if libc::syscall(libc::SYS_close_range, 3u32, u32::MAX, 4u32) != 0 {
-                return Err(std::io::Error::last_os_error());
-            }
-            for fd in &fds {
-                if libc::fcntl(*fd, libc::F_SETFD, 0) < 0 {
-                    return Err(std::io::Error::last_os_error());
-                }
-            }
-            Ok(())
-        });
-    }
-    let mut run = OwnedRun {
-        child: cmd
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .spawn()
-            .context("nested user namespace preflight unavailable")?,
-        reaped: false,
+        .env_clear();
+    let finished = match run_owned(
+        cmd,
+        boundary.fds(),
+        None,
+        DEADLINE,
+        "nested user namespace preflight unavailable",
+        |_| {},
+    )? {
+        Ended::Exited(finished) => finished,
+        Ended::TimedOut => {
+            anyhow::bail!("nested user namespace preflight timeout; wrapper reaped")
+        }
     };
-    let mut stdout = run.child.stdout.take().unwrap();
-    let mut stderr = run.child.stderr.take().unwrap();
-    for fd in [stdout.as_raw_fd(), stderr.as_raw_fd()] {
-        unsafe {
-            anyhow::ensure!(
-                libc::fcntl(fd, libc::F_SETFL, libc::O_NONBLOCK) == 0,
-                "nonblocking preflight channel unavailable"
-            );
-        }
-    }
-    let (mut output, mut error) = (Vec::new(), Vec::new());
-    let (mut out_eof, mut err_eof, mut status) = (false, false, None);
-    let deadline = Instant::now() + DEADLINE;
-    while !(out_eof && err_eof && status.is_some()) {
-        if !out_eof {
-            out_eof = read_available(&mut stdout, &mut output)?;
-        }
-        if !err_eof {
-            err_eof = read_available(&mut stderr, &mut error)?;
-        }
-        if status.is_none() {
-            status = run.child.try_wait()?;
-            run.reaped = status.is_some();
-        }
-        if Instant::now() >= deadline {
-            run.stop_and_reap()?;
-            anyhow::bail!("nested user namespace preflight timeout; wrapper reaped");
-        }
-        std::thread::sleep(Duration::from_millis(10));
-    }
     anyhow::ensure!(
-        status.unwrap().success(),
+        finished.status.success(),
         "fixed probe refused (bwrap/userns/filesystem): {}",
-        String::from_utf8_lossy(&error)
+        String::from_utf8_lossy(&finished.stderr)
     );
     #[derive(serde::Deserialize)]
     struct Phase {
         phase: String,
         errno: i32,
     }
-    let phases = String::from_utf8_lossy(&output)
+    let phases = String::from_utf8_lossy(&finished.stdout)
         .lines()
         .map(serde_json::from_str::<Phase>)
         .collect::<std::result::Result<Vec<_>, _>>()
         .context("invalid nested user namespace preflight channel")?;
     match phases.iter().find(|p| p.errno != 0) {
-        Some(p) if [libc::EPERM, libc::EACCES, libc::ENOSPC].contains(&p.errno) => {
-            Ok(Some((p.phase.clone(), p.errno)))
-        }
-        Some(p) => anyhow::bail!(
-            "nested user namespace preflight failed at {} (errno {})",
-            p.phase,
-            p.errno
-        ),
+        Some(p) => match classify_preflight_failure(&p.phase, p.errno) {
+            Some(reason) => Ok(Some(TracerOutcome::IsolationUnavailable {
+                reason,
+                phase: p.phase.clone(),
+                errno: p.errno,
+            })),
+            None => anyhow::bail!(
+                "nested user namespace preflight failed at {} (errno {})",
+                p.phase,
+                p.errno
+            ),
+        },
         None => {
             anyhow::ensure!(
                 phases.len() == 3,
@@ -368,12 +354,13 @@ fn nested_userns_preflight() -> Result<Option<(String, i32)>> {
 }
 
 // The boolean selects only a fixed stalled test lane, never executable input.
-fn run_probe_inner(timeout_fixture: bool) -> Result<TracerOutcome> {
+fn run_probe_inner(timeout_fixture: bool, on_available: impl FnOnce()) -> Result<TracerOutcome> {
     host_prerequisites()?;
-    // trace:TASK-2705 | ai:claude — typed host-policy result, never a pass.
-    if let Some((phase, errno)) = nested_userns_preflight()? {
-        return Ok(TracerOutcome::HostPolicyDenied { phase, errno });
+    // trace:TASK-2705 | ai:claude — typed host result, never a pass.
+    if let Some(unavailable) = nested_userns_preflight()? {
+        return Ok(unavailable);
     }
+    on_available();
     let root = tempfile::Builder::new()
         .prefix("aida-containment-probe-")
         .tempdir()?;
@@ -465,11 +452,7 @@ fn run_probe_inner(timeout_fixture: bool) -> Result<TracerOutcome> {
                 .collect::<std::io::Result<std::collections::BTreeMap<_, _>>>()?,
         )?)
         .arg(host_file.as_raw_fd().to_string())
-        .arg(host_directory.as_raw_fd().to_string())
-        .env_clear()
-        .stdin(Stdio::null())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped());
+        .arg(host_directory.as_raw_fd().to_string());
     // Typed readiness channel reports the actual namespace-init host PID.
     let mut pipe = [-1; 2];
     unsafe {
@@ -478,19 +461,18 @@ fn run_probe_inner(timeout_fixture: bool) -> Result<TracerOutcome> {
             "probe readiness pipe unavailable"
         );
     }
-    let mut info = unsafe { std::fs::File::from_raw_fd(pipe[0]) };
+    let info = unsafe { std::fs::File::from_raw_fd(pipe[0]) };
     let info_writer = unsafe { std::fs::File::from_raw_fd(pipe[1]) };
     // Insert before the fixed command (all bwrap options must precede --).
-    let mut cmd = {
+    let cmd = {
         let args = cmd.get_args().map(|a| a.to_os_string()).collect::<Vec<_>>();
         let mut result = Command::new("/usr/bin/bwrap");
         result
             .args(["--info-fd", &info_writer.as_raw_fd().to_string()])
             .args(args)
-            .env_clear()
-            .stdin(Stdio::null())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped());
+            .env_clear();
+        // Synthetic authority values set after the clear: the lane proves
+        // none is forwarded.
         #[cfg(test)]
         result
             .env(
@@ -503,60 +485,22 @@ fn run_probe_inner(timeout_fixture: bool) -> Result<TracerOutcome> {
     };
     let mut fds = boundary.fds();
     fds.push(info_writer.as_raw_fd());
-    unsafe {
-        cmd.pre_exec(move || {
-            // Only async-signal-safe syscalls after fork. No authority/keyring
-            // logic. Refuse rather than inherit unknown descriptors.
-            if libc::syscall(libc::SYS_close_range, 3u32, u32::MAX, 4u32) != 0 {
-                return Err(std::io::Error::last_os_error());
-            }
-            for fd in &fds {
-                if libc::fcntl(*fd, libc::F_SETFD, 0) < 0 {
-                    return Err(std::io::Error::last_os_error());
-                }
-            }
-            Ok(())
-        });
-    }
-    let mut run = OwnedRun {
-        child: cmd.spawn().context(
-            "fixed probe exec/FD hygiene unavailable (close_range and typed descriptors required)",
-        )?,
-        reaped: false,
-    };
-    drop(info_writer);
-    let mut stdout = run.child.stdout.take().unwrap();
-    let mut stderr = run.child.stderr.take().unwrap();
-    for fd in [stdout.as_raw_fd(), stderr.as_raw_fd(), info.as_raw_fd()] {
-        unsafe {
-            anyhow::ensure!(
-                libc::fcntl(fd, libc::F_SETFL, libc::O_NONBLOCK) == 0,
-                "nonblocking probe channel unavailable"
-            );
-        }
-    }
-    let (mut output, mut error, mut readiness) = (Vec::new(), Vec::new(), Vec::new());
-    let (mut out_eof, mut err_eof, mut info_eof) = (false, false, false);
-    let mut status = None;
     let mut namespace = None;
-    let deadline = Instant::now()
-        + if timeout_fixture {
+    let ended = run_owned(
+        cmd,
+        fds,
+        Some((info, info_writer)),
+        if timeout_fixture {
             Duration::from_secs(2)
         } else {
             DEADLINE
-        };
-    loop {
-        if !out_eof {
-            out_eof = read_available(&mut stdout, &mut output)?;
-        }
-        if !err_eof {
-            err_eof = read_available(&mut stderr, &mut error)?;
-        }
-        if !info_eof {
-            info_eof = read_available(&mut info, &mut readiness)?;
-        }
-        if namespace.is_none() {
-            if let Ok(value) = serde_json::from_slice::<serde_json::Value>(&readiness) {
+        },
+        "fixed probe exec/FD hygiene unavailable (close_range and typed descriptors required)",
+        |readiness| {
+            if namespace.is_some() {
+                return;
+            }
+            if let Ok(value) = serde_json::from_slice::<serde_json::Value>(readiness) {
                 if let Some(pid) = value.get("child-pid").and_then(|p| p.as_u64()) {
                     let path = format!("/proc/{pid}/ns/pid");
                     if let Ok(identity) = std::fs::read_link(&path) {
@@ -564,18 +508,11 @@ fn run_probe_inner(timeout_fixture: bool) -> Result<TracerOutcome> {
                     }
                 }
             }
-        }
-        if status.is_none() {
-            status = run.child.try_wait()?;
-            if status.is_some() {
-                run.reaped = true;
-            }
-        }
-        if status.is_some() && out_eof && err_eof && info_eof {
-            break;
-        }
-        if Instant::now() >= deadline {
-            run.stop_and_reap()?;
+        },
+    )?;
+    let finished = match ended {
+        Ended::Exited(finished) => finished,
+        Ended::TimedOut => {
             let (path, identity) =
                 namespace.context("timeout without namespace readiness; wrapper reaped")?;
             require_namespace_gone(&path, &identity)?;
@@ -583,16 +520,14 @@ fn run_probe_inner(timeout_fixture: bool) -> Result<TracerOutcome> {
                 "fixed probe timeout: owned wrapper and namespace init reaped; no fallback"
             );
         }
-        std::thread::sleep(Duration::from_millis(10));
-    }
-    let status = status.unwrap();
+    };
     anyhow::ensure!(
-        status.success(),
+        finished.status.success(),
         "fixed probe refused (bwrap/userns/filesystem): {}",
-        String::from_utf8_lossy(&error)
+        String::from_utf8_lossy(&finished.stderr)
     );
-    let mut checks: Vec<String> =
-        serde_json::from_slice(&output).context("invalid fixed probe readiness channel")?;
+    let mut checks: Vec<String> = serde_json::from_slice(&finished.stdout)
+        .context("invalid fixed probe readiness channel")?;
     for dir in ["workspace", "store", "cache", "state"] {
         anyhow::ensure!(
             std::fs::read_to_string(root.path().join(dir).join("allowed"))? == "synthetic-write",
@@ -616,6 +551,105 @@ fn run_probe_inner(timeout_fixture: bool) -> Result<TracerOutcome> {
     checks.push("namespace_init_reaped".into());
     drop((leaked, peer, host_file, host_directory));
     Ok(TracerOutcome::Passed(checks))
+}
+
+struct Finished {
+    status: ExitStatus,
+    stdout: Vec<u8>,
+    stderr: Vec<u8>,
+}
+
+enum Ended {
+    Exited(Finished),
+    /// Deadline passed; the owned wrapper has already been killed and reaped.
+    TimedOut,
+}
+
+/// Shared spawn/supervise path for every fixed bwrap command (the caller has
+/// already cleared its environment): close every descriptor except the typed
+/// `fds` at exec, own the child, and drain stdout/stderr (plus the optional
+/// `--info-fd` reader) without blocking until it exits or `deadline` passes.
+/// `on_info` sees the readiness bytes each tick while the child may still be
+/// alive. trace:TASK-2705 | ai:claude
+fn run_owned(
+    mut cmd: Command,
+    fds: Vec<std::os::fd::RawFd>,
+    info: Option<(std::fs::File, std::fs::File)>,
+    deadline: Duration,
+    spawn_context: &'static str,
+    mut on_info: impl FnMut(&[u8]),
+) -> Result<Ended> {
+    cmd.stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    unsafe {
+        cmd.pre_exec(move || {
+            // Only async-signal-safe syscalls after fork. No authority/keyring
+            // logic. Refuse rather than inherit unknown descriptors.
+            if libc::syscall(libc::SYS_close_range, 3u32, u32::MAX, 4u32) != 0 {
+                return Err(std::io::Error::last_os_error());
+            }
+            for fd in &fds {
+                if libc::fcntl(*fd, libc::F_SETFD, 0) < 0 {
+                    return Err(std::io::Error::last_os_error());
+                }
+            }
+            Ok(())
+        });
+    }
+    let mut run = OwnedRun {
+        child: cmd.spawn().context(spawn_context)?,
+        reaped: false,
+    };
+    // The child holds its own writer copy; ours must close for EOF.
+    let mut info = info.map(|(reader, writer)| {
+        drop(writer);
+        reader
+    });
+    let mut stdout = run.child.stdout.take().unwrap();
+    let mut stderr = run.child.stderr.take().unwrap();
+    let mut channels = vec![stdout.as_raw_fd(), stderr.as_raw_fd()];
+    channels.extend(info.as_ref().map(|i| i.as_raw_fd()));
+    for fd in channels {
+        unsafe {
+            anyhow::ensure!(
+                libc::fcntl(fd, libc::F_SETFL, libc::O_NONBLOCK) == 0,
+                "nonblocking probe channel unavailable"
+            );
+        }
+    }
+    let (mut output, mut error, mut readiness) = (Vec::new(), Vec::new(), Vec::new());
+    let (mut out_eof, mut err_eof, mut info_eof) = (false, false, info.is_none());
+    let mut status = None;
+    let deadline = Instant::now() + deadline;
+    loop {
+        if !out_eof {
+            out_eof = read_available(&mut stdout, &mut output)?;
+        }
+        if !err_eof {
+            err_eof = read_available(&mut stderr, &mut error)?;
+        }
+        if let (false, Some(reader)) = (info_eof, info.as_mut()) {
+            info_eof = read_available(reader, &mut readiness)?;
+        }
+        on_info(&readiness);
+        if status.is_none() {
+            status = run.child.try_wait()?;
+            run.reaped = status.is_some();
+        }
+        if let (Some(status), true, true, true) = (status, out_eof, err_eof, info_eof) {
+            return Ok(Ended::Exited(Finished {
+                status,
+                stdout: output,
+                stderr: error,
+            }));
+        }
+        if Instant::now() >= deadline {
+            run.stop_and_reap()?;
+            return Ok(Ended::TimedOut);
+        }
+        std::thread::sleep(Duration::from_millis(10));
+    }
 }
 
 fn read_available(reader: &mut impl Read, bytes: &mut Vec<u8>) -> Result<bool> {

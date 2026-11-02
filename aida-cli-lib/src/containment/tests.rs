@@ -27,26 +27,53 @@ fn task_2705_closed_containment_tracer() {
     // Required-live runs never turn missing prerequisites into a pass/skip.
     let required = std::env::var("AIDA_REQUIRE_BWRAP_LIVE").as_deref() == Ok("1")
         || std::env::var("AIDA_REQUIRE_CODEX_CONTAINMENT_LIVE").as_deref() == Ok("1");
-    match supervisor::run_probe() {
-        // Host confines nested userns: assert the typed result, never a pass.
+    // Only nested unshare(CLONE_NEWUSER) failures are host properties; a
+    // nested mount/unmount failure is an ordinary (possibly boundary) failure.
+    // trace:TASK-2705 | ai:claude
+    use supervisor::classify_preflight_failure as classify;
+    assert_eq!(
+        classify("unshare", libc::EPERM),
+        Some(IsolationReason::HostPolicyDenied)
+    );
+    assert_eq!(
+        classify("unshare", libc::EACCES),
+        Some(IsolationReason::HostPolicyDenied)
+    );
+    assert_eq!(
+        classify("unshare", libc::ENOSPC),
+        Some(IsolationReason::HostResourceLimit)
+    );
+    assert_eq!(classify("unshare", libc::EINVAL), None);
+    for phase in ["mount_positive", "unmount_positive"] {
+        for errno in [libc::EPERM, libc::EACCES, libc::ENOSPC] {
+            assert_eq!(classify(phase, errno), None, "{phase} {errno}");
+        }
+    }
+
+    match supervisor::run_probe(|| {}) {
+        // Host lacks nested userns: assert the typed result, never a pass.
+        // Required-live runs must prove the full lane, so they fail here.
         // trace:TASK-2705 | ai:claude
-        Ok(supervisor::TracerOutcome::HostPolicyDenied { phase, errno }) => {
-            assert!(
-                [libc::EPERM, libc::EACCES, libc::ENOSPC].contains(&errno),
-                "{phase} {errno}"
-            );
-            assert!(
-                ["unshare", "mount_positive", "unmount_positive"].contains(&phase.as_str()),
-                "{phase}"
-            );
+        Ok(supervisor::TracerOutcome::IsolationUnavailable {
+            reason,
+            phase,
+            errno,
+        }) => {
+            assert_eq!(phase, "unshare");
+            assert_eq!(classify(&phase, errno), Some(reason), "{phase} {errno}");
             // The stalled lane hits the same up-front probe, never a pass.
             assert!(matches!(
                 supervisor::timeout_probe(),
-                Ok(supervisor::TracerOutcome::HostPolicyDenied { .. })
+                Ok(supervisor::TracerOutcome::IsolationUnavailable { .. })
             ));
+            assert!(
+                !required,
+                "required-live containment tracer: isolation unavailable \
+                 ({reason:?}, phase={phase}, errno={errno}); the full lane did not run"
+            );
             eprintln!(
-                "HOST-POLICY-DENIED live containment tracer (typed result asserted, \
-                 not acceptance evidence): phase={phase} errno={errno}"
+                "ISOLATION-UNAVAILABLE live containment tracer (typed result asserted, \
+                 not acceptance evidence): {reason:?} phase={phase} errno={errno}"
             );
         }
         Ok(supervisor::TracerOutcome::Passed(checks)) => {
@@ -162,30 +189,35 @@ fn task_2705_policy_and_partial_backend_remain_closed() {
 }
 
 /// Full isolation path when the host allows it; otherwise the typed
-/// `isolation=unavailable reason=host_policy_denied` refusal with phase and
-/// errno, closed with no checks or credit. Never a silent pass.
+/// `isolation=unavailable` refusal (`host_policy_denied` or
+/// `host_resource_limit`) with phase and errno, closed with no checks or
+/// credit. Never a silent pass, and never a pass at all when `required`.
 // trace:TASK-2705 | ai:claude
 #[cfg(test)]
-fn assert_ready_or_host_policy_denied(report: &ProbeReport, required: bool) {
+fn assert_ready_or_isolation_unavailable(report: &ProbeReport, required: bool) {
     match report.isolation.state {
         IsolationState::Unavailable => {
             assert_eq!(report.status, ProbeStatus::Refused, "{}", report.cause);
-            assert_eq!(
-                report.isolation.reason,
-                Some(IsolationReason::HostPolicyDenied)
-            );
-            assert!(report.isolation.phase.is_some());
+            let reason = report.isolation.reason.expect("typed reason");
+            assert_eq!(report.isolation.phase.as_deref(), Some("unshare"));
             assert!(report.isolation.errno.is_some_and(|e| e != 0));
-            assert!(
-                report.cause.contains("host policy denied"),
-                "{}",
-                report.cause
-            );
+            let (text, wire) = match reason {
+                IsolationReason::HostPolicyDenied => ("host policy denied", "host_policy_denied"),
+                IsolationReason::HostResourceLimit => {
+                    ("host resource limit", "host_resource_limit")
+                }
+            };
+            assert!(report.cause.contains(text), "{}", report.cause);
             assert!(report.checks.is_empty());
             assert!(!report.aida_containment_applied);
             let json = serde_json::to_value(report).unwrap();
             assert_eq!(json["isolation"]["state"], "unavailable");
-            assert_eq!(json["isolation"]["reason"], "host_policy_denied");
+            assert_eq!(json["isolation"]["reason"], wire);
+            assert!(
+                !required,
+                "required-live probe: isolation unavailable, full lane not run: {}",
+                report.cause
+            );
         }
         IsolationState::Available => {
             assert_eq!(report.status, ProbeStatus::Ready, "{}", report.cause);
@@ -224,7 +256,7 @@ fn task_2705_trusted_snapshot_cannot_execute_stored_shell() {
     let required = std::env::var("AIDA_REQUIRE_BWRAP_LIVE").as_deref() == Ok("1")
         || std::env::var("AIDA_REQUIRE_CODEX_CONTAINMENT_LIVE").as_deref() == Ok("1");
     // Any host-policy denial must be the typed report, whether or not required.
-    assert_ready_or_host_policy_denied(&report, required);
+    assert_ready_or_isolation_unavailable(&report, required);
     let other = probe(root.path(), "opencode");
     assert!(matches!(
         other.capability.as_ref().unwrap().native,
@@ -232,7 +264,7 @@ fn task_2705_trusted_snapshot_cannot_execute_stored_shell() {
     ));
     assert!(!other.ordinary_launch_supported);
     assert!(!other.aida_containment_applied);
-    assert_ready_or_host_policy_denied(&other, required);
+    assert_ready_or_isolation_unavailable(&other, required);
     if other.status == ProbeStatus::Ready {
         assert!(other.checks.iter().any(|c| c == "write_workspace"));
     }

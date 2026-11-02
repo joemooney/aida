@@ -686,7 +686,27 @@ wrapper, and verifies namespace-init teardown after a lingering descendant.
 Interactive launch is not exposed; its future shared preflight requires
 `dev.tty.legacy_tiocsti=0`.
 
-Required-live validation (a missing backend is a failure, never evidence):
+The JSON report also carries an `isolation` object describing whether the host
+lets the lane build its nested user-namespace layer. Before the full lane, the
+probe makes one fixed check inside the same boundary: a nested
+`unshare(CLONE_NEWUSER)`, then a tmpfs mount and unmount.
+
+| Field | Values |
+|---|---|
+| `state` | `unknown` (the check did not finish, e.g. an earlier refusal or missing bubblewrap), `available` (the check passed; a later lane failure or timeout is reported in `cause`), `unavailable` |
+| `reason` | `host_policy_denied` (nested `unshare` returned EPERM/EACCES, e.g. Ubuntu's AppArmor `bwrap-userns-restrict` profile) or `host_resource_limit` (nested `unshare` returned ENOSPC, user-namespace limit exhausted); `null` otherwise |
+| `phase` | the failing step (`unshare`) when unavailable, else `null` |
+| `errno` | the kernel error number when unavailable, else `null` |
+
+An `unavailable` host is a refusal: `status` is `refused`, the command exits
+nonzero, `cause` names the reason, and no checks run and no credit is given.
+AIDA never falls back to a weaker boundary or raises privilege. Only nested
+`unshare` failures are classified this way. A failure of the nested mount or
+unmount after `unshare` succeeds is an ordinary refusal, because it could be a
+boundary regression rather than a host property.
+
+Required-live validation (a missing backend or an `unavailable` host is a
+failure, never evidence; unflagged runs assert the typed refusal instead):
 
 ```sh
 AIDA_REQUIRE_BWRAP_LIVE=1 AIDA_REQUIRE_CODEX_CONTAINMENT_LIVE=1 \
