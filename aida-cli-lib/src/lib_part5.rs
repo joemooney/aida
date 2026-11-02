@@ -2351,6 +2351,18 @@ pub(crate) fn drive_root_or_project_root() -> Result<std::path::PathBuf> {
     find_project_root()
 }
 
+/// BUG-2403: test seam run between `aida review record`'s spec write and its
+/// `--pr` handshake build (see `handle_review_record_at`).
+// trace:BUG-2403 | ai:claude
+#[cfg(test)]
+pub(crate) type AfterSpecRecordHook = Box<dyn Fn(&std::path::Path, &str)>;
+
+#[cfg(test)]
+thread_local! {
+    pub(crate) static AFTER_SPEC_RECORD_HOOK: std::cell::RefCell<Option<AfterSpecRecordHook>> =
+        const { std::cell::RefCell::new(None) };
+}
+
 // BUG-912: phase-3 reviewers may run inside the review worktree while the
 // orchestrator polls an explicit verdict-file anchor in the parent project.
 // The PR handshake must honor that exact file when present; otherwise prefer
@@ -3414,6 +3426,15 @@ pub(crate) fn handle_review_record_at(
     // the orchestrator-visible anchor. The verdict string is the tolerant-parse
     // canonical label so `auto_complete::Verdict::parse` accepts it byte-for-byte.
     if let Some(n) = pr {
+        // BUG-2403 (review finding 4c): a test may replace the spec record
+        // here, as a concurrent reviewer could, to prove the handshake is
+        // built from this handler's own object. trace:BUG-2403 | ai:claude
+        #[cfg(test)]
+        AFTER_SPEC_RECORD_HOOK.with(|hook| {
+            if let Some(hook) = hook.borrow().as_ref() {
+                hook(&project_root, spec);
+            }
+        });
         let handshake = review_pr_handshake_path(&project_root, n);
         // trace:BUG-1743 | ai:claude
         #[cfg(test)]
@@ -3424,8 +3445,14 @@ pub(crate) fn handle_review_record_at(
         // when the caller supplied an abbreviation.
         // trace:BUG-1466 | ai:codex
         // trace:BUG-1516 | ai:codex
-        let recorded = crate::gate::review_verdict::read_recorded_verdict(&project_root, spec)
+        // BUG-2403: the handshake is the SAME act of review as the record
+        // this handler just wrote, so its provenance comes from that exact
+        // in-memory object, never from a re-read a concurrent reviewer could
+        // have replaced. The read-back stays as the existence check.
+        // trace:BUG-2403 | ai:claude
+        crate::gate::review_verdict::read_recorded_verdict(&project_root, spec)
             .ok_or_else(|| anyhow::anyhow!("the verdict was written but could not be read back"))?;
+        let origin_field = |k: &str| verdict_obj.get(k).and_then(|v| v.as_str());
         // BUG-1571: build the full handshake object (base fields + the
         // orchestrator's `mode`/`recorded_at` overlay) in memory and commit
         // it with exactly ONE durable, verified write. The previous code
@@ -3441,11 +3468,11 @@ pub(crate) fn handle_review_record_at(
             &project_root,
             &handshake,
             Some(kind.label()),
-            recorded.reviewed_sha.as_deref(),
-            recorded.reviewed_branch.as_deref(),
+            origin_field("reviewed_sha"),
+            origin_field("reviewed_branch"),
             summary,
             findings,
-            recorded.recorded_by.as_deref().unwrap_or(&recorded_by),
+            origin_field("recorded_by").unwrap_or(&recorded_by),
         )
         .with_context(|| format!("could not prepare {}", handshake.display()))?;
         // trace:STORY-1417 | ai:claude
@@ -3462,11 +3489,21 @@ pub(crate) fn handle_review_record_at(
             "mode".to_string(),
             serde_json::Value::String("orchestrator-phase-3".to_string()),
         );
-        if let Some(recorded_at) = recorded.recorded_at.as_deref() {
+        if let Some(recorded_at) = origin_field("recorded_at") {
             handshake_obj.insert(
                 "recorded_at".to_string(),
                 serde_json::Value::String(recorded_at.to_string()),
             );
+        }
+        // BUG-2403: carry the origin's record-time receipt, stamped once
+        // above after the authority check — never re-stamped here under later
+        // ambient authority, and never filled when the origin has none. The
+        // builder's clearing for a new review stays as it is.
+        // trace:BUG-2403 | ai:claude
+        if let Some(receipt) =
+            crate::gate::review_verdict::same_origin_receipt(&verdict_obj, &handshake_obj)
+        {
+            handshake_obj.insert("release_grant".to_string(), receipt);
         }
         // BUG-2201 / TASK-2040: a contained reviewer cannot write the
         // launcher's anchor in the primary checkout. Its launcher collects
@@ -4166,7 +4203,48 @@ pub(crate) fn review_verdict_show_body(
     serde_json::Value,
     crate::gate::review_verdict::VerdictSource,
 )> {
-    let current = crate::gate::review_verdict::current_verdict(project_root, key)?;
+    // BUG-2403: a spec key reads every label of the ONE requirement it
+    // resolves to (native, friendly, node-label and retired forms), proved
+    // against one clean committed store snapshot, so `review verdict STORY-N`
+    // and `review verdict <native>` answer with the same, newest record. A key
+    // whose identity cannot be proved (dirty or moving store, ambiguity)
+    // bridges nothing: it is read under its literal label only, and says so.
+    // trace:BUG-2403 | ai:claude
+    let labels = match crate::gate::review_alias::snapshot_labels(project_root, key) {
+        Ok(labels) if !labels.is_empty() => labels,
+        Ok(_) => vec![key.to_string()],
+        Err(e) => {
+            eprintln!(
+                "warning: {} is read under its literal label only; its other labels cannot be proved: {e}",
+                key.to_ascii_uppercase()
+            );
+            vec![key.to_string()]
+        }
+    };
+    let current = match labels.as_slice() {
+        [_, _, ..] => {
+            let ids: Vec<&str> = labels.iter().map(String::as_str).collect();
+            match crate::gate::review_alias::select_verdict(project_root, &ids) {
+                crate::gate::review_alias::AliasSelection::Selected(s) => {
+                    crate::gate::review_verdict::CurrentVerdict {
+                        body: s.body,
+                        source: s.source,
+                        written_at: s.order_time.map(std::time::SystemTime::from),
+                    }
+                }
+                crate::gate::review_alias::AliasSelection::Absent => return None,
+                unavailable => {
+                    eprintln!(
+                        "warning: {}'s review verdict cannot be selected: {}",
+                        key.to_ascii_uppercase(),
+                        unavailable.unavailable_reason().unwrap_or_default()
+                    );
+                    return None;
+                }
+            }
+        }
+        _ => crate::gate::review_verdict::current_verdict(project_root, key)?,
+    };
     let v = crate::gate::review_verdict::parse_recorded_verdict(&current.body)?;
     let actionability = crate::gate::review_verdict::review_actionability(
         project_root,
