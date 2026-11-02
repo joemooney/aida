@@ -1663,13 +1663,16 @@ pub(crate) fn strip_ansi_color(s: &str) -> String {
 }
 
 /// Self-invoke `aida add` for a Story-typed review requirement and parse the
-/// resulting spec id out of stdout. Returns None on any failure.
-/// trace:STORY-66 | ai:claude
+/// resulting spec id out of stdout. `Err` carries a one-line reason: either
+/// the child failed, or it succeeded but its output named no single exact
+/// spec ID (then the story exists and the next retry reuses it by title —
+/// never guess an ID, never file a second story). trace:STORY-66 | ai:claude
+// trace:BUG-2404 | ai:claude
 pub(crate) fn aida_subcmd_add_review_story(
     project_root: &std::path::Path,
     title: &str,
     description: &str,
-) -> Option<String> {
+) -> std::result::Result<String, String> {
     let aida = aida_exe_path();
     let out = std::process::Command::new(&aida)
         .current_dir(project_root)
@@ -1687,45 +1690,78 @@ pub(crate) fn aida_subcmd_add_review_story(
             title,
             "--description",
             description,
+            // Print node-local IDs canonically, not as the node's friendly
+            // label. trace:BUG-2404 | ai:claude
+            "--canonical-ids",
         ])
         .output_retrying_etxtbsy()
-        .ok()?;
+        .map_err(|err| format!("could not invoke `aida add`: {err}"))?;
     if !out.status.success() {
-        eprintln!(
-            "{} auto-queue review story: `aida add` failed: {}",
-            "Warning:".yellow().bold(),
+        return Err(format!(
+            "`aida add` failed: {}",
             String::from_utf8_lossy(&out.stderr).trim()
-        );
-        return None;
+        ));
     }
     let stdout = String::from_utf8_lossy(&out.stdout);
-    parse_spec_id_from_add_output(&stdout)
+    parse_spec_id_from_add_output(&stdout).ok_or_else(|| {
+        format!(
+            "`aida add` succeeded but its output named no single exact spec ID ({}); refusing to guess — the next retry reuses the filed story",
+            strip_ansi_color(stdout.trim()).replace('\n', " | ")
+        )
+    })
 }
 
 /// Parse the spec id printed by `aida add`. The git-canonical path prints
-/// `Added: STORY-N - <title>` (one line); the legacy YAML/SQLite path
-/// prints a standalone `ID: STORY-N` line. Accept either so this hook keeps
-/// working across backends. trace:STORY-66 | ai:claude
+/// `Added: <ID> - <title>`, where `<ID>` is one ID or the agreed ID with the
+/// stored node-local ID in parentheses (`STORY-2272 (STORY-HOME-288)`); the
+/// legacy YAML/SQLite path prints a standalone `ID: STORY-N` line. Accept
+/// either so this hook keeps working across backends. trace:STORY-66 | ai:claude
+///
+/// Strict (BUG-2404): only whole `Added:` / `ID:` lines count, each ID token
+/// must be exactly one ID-shaped word, and the result is the stored `spec_id`
+/// (the parenthesized local ID when present). A malformed recognized line, no
+/// recognized line, or lines naming different IDs return `None` — the caller
+/// refuses rather than guessing. Other lines (UUIDs, hints, diagnostics) are
+/// never read. // trace:BUG-2404 | ai:claude
 pub(crate) fn parse_spec_id_from_add_output(stdout: &str) -> Option<String> {
-    for line in stdout.lines() {
-        let cleaned = strip_ansi_color(line);
-        let candidate = cleaned
-            .strip_prefix("Added: ")
-            .map(|rest| rest.split(" - ").next().unwrap_or("").trim().to_string())
-            .or_else(|| {
-                cleaned
-                    .strip_prefix("ID: ")
-                    .map(|rest| rest.trim().to_string())
-            });
-        if let Some(c) = candidate {
-            if !c.is_empty() {
-                // `Added:` prints the display form; callers act on the
-                // canonical id. trace:BUG-B6B1278890774EF993D2EBC327862470-015 | ai:claude
-                return Some(crate::spec_arg::canonical(&c));
+    fn exact_id(token: &str) -> Option<String> {
+        let token = token.trim();
+        (!token.is_empty()
+            && !token.chars().any(char::is_whitespace)
+            && aida_core::id_identity::IdKey::parse(token).is_some())
+        .then(|| token.to_string())
+    }
+    fn added_id(rest: &str) -> Option<String> {
+        // The ID part never contains ` - `; the title may.
+        let id_part = rest.split_once(" - ").map_or(rest, |(id, _)| id).trim();
+        match id_part.split_once(" (") {
+            Some((agreed, local)) => {
+                exact_id(agreed)?;
+                exact_id(local.strip_suffix(')')?)
             }
+            None => exact_id(id_part),
         }
     }
-    None
+    let mut found: Option<String> = None;
+    for line in stdout.lines() {
+        let cleaned = strip_ansi_color(line);
+        let candidate = if let Some(rest) = cleaned.strip_prefix("Added: ") {
+            added_id(rest)?
+        } else if let Some(rest) = cleaned.strip_prefix("ID: ") {
+            exact_id(rest)?
+        } else {
+            continue;
+        };
+        // `Added:` may print a display form; callers act on the canonical
+        // id. trace:BUG-B6B1278890774EF993D2EBC327862470-015 | ai:claude
+        let canonical = crate::spec_arg::canonical(&candidate);
+        match &found {
+            Some(prev) if !aida_core::id_identity::same_id(prev, &canonical) => return None,
+            Some(_) => {}
+            None => found = Some(canonical),
+        }
+    }
+    found
 }
 
 /// Extract a trailing `(#N)` PR-number suffix from a commit subject (the
