@@ -696,8 +696,18 @@ fn find_aida_header_line(content: &str) -> Option<&str> {
         }
     }
 
+    // A shell script keeps its `#!` shebang on line 1 and the writer puts the
+    // header right after it (`wrap_with_aida_header`), so read it there too.
+    // Without this every shebang handler reads as NoHeader drift.
+    // trace:BUG-2395 | ai:claude
+    let mut lines = content.lines();
+    let first = lines.next();
+    if first.is_some_and(|line| line.starts_with("#!")) {
+        return lines.next();
+    }
+
     // No frontmatter - header should be on the first line
-    content.lines().next()
+    first
 }
 
 /// Parse an existing file to determine its status relative to expected content
@@ -2732,10 +2742,10 @@ aida show <SPEC-ID>
             let mut codex_files: Vec<(PathBuf, String, String)> = codex_hooks::handler_names()
                 .into_iter()
                 .filter_map(|name| {
-                    let body = embedded.get(format!("hooks/{name}").as_str())?;
+                    let body = codex_hooks::handler_raw_body(&name)?;
                     Some((
                         PathBuf::from(codex_hooks::HOOKS_DIR_REL).join(&name),
-                        body.trim_end().to_string(),
+                        body,
                         format!("Codex hook handler {name}"),
                     ))
                 })
@@ -3904,6 +3914,57 @@ mod tests {
             use std::os::unix::fs::PermissionsExt;
             let mode = fs::metadata(&stale).unwrap().permissions().mode();
             assert_eq!(mode & 0o777, 0o755);
+        }
+    }
+
+    /// BUG-2395 (review round 1): `aida init --agent codex` writes the Codex
+    /// handlers through `scaffold_codex_hooks`, and the scaffold preview then
+    /// owns them. The two writers must agree on one on-disk form, or every
+    /// fresh Codex init reports `.codex/hooks/aida-*` as modified.
+    // trace:BUG-2395 | ai:claude
+    #[test]
+    fn bug_2395_fresh_codex_init_is_not_scaffold_drift() {
+        let store = create_test_store();
+        let temp_dir = TempDir::new().unwrap();
+        let root = temp_dir.path();
+        codex_hooks::scaffold_codex_hooks(root, false).unwrap();
+
+        let preview =
+            Scaffolder::new(root.to_path_buf(), ScaffoldConfig::default()).preview(&store);
+        let codex: Vec<&ScaffoldArtifact> = preview
+            .artifacts
+            .iter()
+            .filter(|a| a.path.starts_with(".codex"))
+            .collect();
+        assert_eq!(
+            codex.len(),
+            codex_hooks::handler_names().len() + 1,
+            "every handler plus the wiring is a scaffold artifact"
+        );
+        let drift: Vec<&PathBuf> = preview
+            .modified_files
+            .iter()
+            .chain(preview.upgradeable_files.iter())
+            .filter(|p| p.starts_with(".codex"))
+            .collect();
+        assert!(
+            drift.is_empty(),
+            "fresh Codex init reported as drift: {drift:?}"
+        );
+        for artifact in codex {
+            assert_eq!(
+                artifact.file_status,
+                FileStatus::Unmodified,
+                "{} is not current after a fresh init",
+                artifact.path.display()
+            );
+            // The same comparison `aida scaffold status` makes.
+            let on_disk = fs::read_to_string(root.join(&artifact.path)).unwrap();
+            assert!(
+                generated_text_matches(&on_disk, &artifact.content),
+                "{} differs from the scaffold's expected content",
+                artifact.path.display()
+            );
         }
     }
 

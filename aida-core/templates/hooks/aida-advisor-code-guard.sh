@@ -129,11 +129,11 @@ esac
 # repository, so they stay guarded. The repository is the project's
 # (AIDA_SESSION_PROJECT, CLAUDE_PROJECT_DIR, or CODEX_PROJECT_DIR) and the
 # cwd's: a session that cd'd into another checkout still guards both. Every
-# project anchor git cannot list keeps the guard in force.
-# trace:BUG-2395 | ai:claude When the answer cannot be determined (git
-# missing, neither in a repository, the target's directory does not exist,
-# or the target is itself a symlink) the guard applies as before rather
-# than failing open.
+# project anchor git cannot list keeps the guard in force. When the answer
+# cannot be determined (git missing, neither in a repository, the target's
+# directory does not exist, or the target is itself a symlink) the guard
+# applies as before rather than failing open.
+# trace:BUG-2395 | ai:claude
 __aida_guard_target_outside_repo() {
     local target="$1" parent canon_parent root canon_root roots="" anchor kind listed
     case "$target" in

@@ -60,6 +60,16 @@ pub fn handler_names() -> Vec<String> {
     names
 }
 
+/// The raw (header-less) body of the Codex handler `name`, exactly as the
+/// scaffold preview compares and wraps it. Both Codex handler writers derive
+/// their content from this, so `aida init` and `aida scaffold apply` agree.
+// trace:BUG-2395 | ai:claude
+pub(crate) fn handler_raw_body(name: &str) -> Option<String> {
+    crate::templates::EMBEDDED_TEMPLATES
+        .get(format!("hooks/{name}").as_str())
+        .map(|body| body.trim_end().to_string())
+}
+
 /// What a scaffold pass did.
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct CodexHooksOutcome {
@@ -85,8 +95,7 @@ pub fn scaffold_codex_hooks(
 
     // Handlers first, so the wiring never points at a script that is not there.
     for name in handler_names() {
-        let Some(body) = crate::templates::EMBEDDED_TEMPLATES.get(&format!("hooks/{name}") as &str)
-        else {
+        let Some(raw) = handler_raw_body(&name) else {
             continue;
         };
         let dest = dir.join(&name);
@@ -94,7 +103,12 @@ pub fn scaffold_codex_hooks(
             out.skipped_existing.push(name);
             continue;
         }
-        std::fs::write(&dest, format!("{}\n", body.trim_end()))?;
+        // One canonical on-disk form for both writers: the header-wrapped
+        // body `aida scaffold apply` writes, so a fresh `aida init` is not
+        // reported as drift by `aida scaffold status`.
+        // trace:BUG-2395 | ai:claude
+        let rel = Path::new(HOOKS_DIR_REL).join(&name);
+        std::fs::write(&dest, super::wrap_with_aida_header(&rel, &raw))?;
         set_executable(&dest);
         out.written.push(name);
     }
