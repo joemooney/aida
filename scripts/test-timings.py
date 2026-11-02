@@ -27,8 +27,20 @@ removed) is a note; entries for binaries that did not run (another lane's, or
 the other aida-cli-lib half's) are not mentioned. Over-budget tests whose JUnit
 time spans overlap each other are a runner stall: a CI warning, not a failure.
 
+With `--changed-files FILE` (one repo-relative path per line: the PR's diff
+against its base) the limits are hard only for tests the PR touched: a test
+whose function is defined in a changed `.rs` file (an added, renamed or edited
+test, or one in an edited module). A test the PR did not touch is held to its
+limit times the budget's `untouched_factor` (default 1.5); between the limit
+and that it is a CI warning asking for a budget entry, not a failure, because
+runner load alone takes a near-limit test over (BUG-2414: 10.0 s and 11.0 s
+on unrelated tests ejected train members). Doctest and per-binary rows are
+always touched. Without `--changed-files` every row is touched (the old,
+strict gate). trace:BUG-2414 | ai:claude
+
 Usage:
-  scripts/test-timings.py LOG [--junit XML...] [--step NAME] [--budget FILE] [--json OUT] [--summary OUT] [--top N]
+  scripts/test-timings.py LOG [--junit XML...] [--step NAME] [--budget FILE]
+      [--changed-files FILE] [--json OUT] [--summary OUT] [--top N]
 
 `LOG` may be a raw step log or a `gh run view --log` download (the
 job/step/timestamp prefixes and ANSI colors are stripped; pass `--step 'Run
@@ -46,6 +58,7 @@ from __future__ import annotations
 import argparse
 import datetime
 import json
+import os
 import re
 import sys
 import tomllib
@@ -159,6 +172,8 @@ def binary_of(key: str) -> str:
 class Budget:
     default_limit: float
     entries: dict[str, float]
+    # Tolerance for a test the PR did not touch (BUG-2414). trace:BUG-2414 | ai:claude
+    untouched_factor: float = 1.5
 
 
 def load_budget(path: str) -> Budget:
@@ -166,7 +181,44 @@ def load_budget(path: str) -> Budget:
         table = tomllib.load(fh)
     limit = float(table.get("default_limit", 10))
     entries = {str(k): float(v) for k, v in table.get("budget", {}).items()}
-    return Budget(limit, entries)
+    factor = float(table.get("untouched_factor", 1.5))
+    if factor < 1:
+        raise ValueError(f"{path}: untouched_factor {factor:g} is below 1")
+    return Budget(limit, entries, factor)
+
+
+def test_fn(key: str) -> str | None:
+    """The test function name of a per-test (JUnit) key, else None.
+
+    `aida-cli::journey slow_one` -> `slow_one`; `aida-cli-lib cli::tests::fast`
+    -> `fast`. Doctest and per-binary log keys have no space and name no test.
+    """
+    if " " not in key or key.startswith("doctests:"):
+        return None
+    return key.split(" ", 1)[1].rsplit("::", 1)[-1]
+
+
+def touched_tests(rows: list[Binary], changed: list[str], root: str = ".") -> set[str]:
+    """Keys of the rows the PR touched, given its changed files.
+
+    A per-test row is touched when its function is defined (`fn <name>`) in a
+    changed `.rs` file that still exists; doctest and per-binary rows, which
+    name no single test, always are. Being touched is the strict side, so a
+    test name shared by two files only ever makes the gate stricter.
+    trace:BUG-2414 | ai:claude
+    """
+    sources = []
+    for rel in changed:
+        if rel.endswith(".rs"):
+            try:
+                with open(os.path.join(root, rel), encoding="utf-8", errors="replace") as fh:
+                    sources.append(fh.read())
+            except OSError:  # deleted or renamed away by the PR
+                pass
+    defined: set[str] = set()
+    for text in sources:
+        defined.update(re.findall(r"\bfn\s+([A-Za-z_][A-Za-z0-9_]*)", text))
+    return {r.key for r in rows if (name := test_fn(r.key)) is None or name in defined}
 
 
 def span(row: Binary):
@@ -197,30 +249,48 @@ def stalled(over: list[Binary]) -> set[str]:
     return keys
 
 
-def check(rows: list[Binary], budget: Budget) -> tuple[list[str], list[str]]:
-    """(violations, notes) for the rows against the budget."""
-    found: list[tuple[Binary, str]] = []
+def check(rows: list[Binary], budget: Budget,
+          touched: set[str] | None = None) -> tuple[list[str], list[str]]:
+    """(violations, notes) for the rows against the budget.
+
+    `touched` is the keys the PR touched (None: every row). An untouched row
+    over its limit but within limit x untouched_factor is a note, not a
+    violation. trace:BUG-2414 | ai:claude
+    """
+    # Every over-limit row, tolerated untouched ones included, goes to
+    # stalled() first: a touched test overlapping a tolerated one is still a
+    # runner stall (TASK-1988). Only then is each classified.
+    found: list[tuple[Binary, float, str]] = []
     notes: list[str] = []
     seen = set()
     for r in rows:
         seen.add(r.key)
         allowed = budget.entries.get(r.key)
+        limit = budget.default_limit if allowed is None else allowed
+        if r.seconds <= limit:
+            continue
         if allowed is None:
-            if r.seconds > budget.default_limit:
-                found.append((r,
-                    f"{r.key}: {r.seconds:.1f}s with no budget entry (limit {budget.default_limit:g}s "
-                    "for an unbudgeted test). Make it faster, or add it to scripts/test-time-budget.toml "
-                    "with the measured time plus headroom and say why in the PR."
-                ))
-        elif r.seconds > allowed:
-            found.append((r,
-                f"{r.key}: {r.seconds:.1f}s is over its budget of {allowed:g}s. "
-                "Find what slowed it down; raise the entry only with a reason in the PR."
-            ))
-    stall = stalled([r for r, _ in found])
-    violations = [message for r, message in found if r.key not in stall]
-    notes += [f"runner stall (overlaps another over-budget test, not failing): {message}"
-              for r, message in found if r.key in stall]
+            message = (f"{r.key}: {r.seconds:.1f}s with no budget entry (limit {budget.default_limit:g}s "
+                       "for an unbudgeted test). Make it faster, or add it to scripts/test-time-budget.toml "
+                       "with the measured time plus headroom and say why in the PR.")
+        else:
+            message = (f"{r.key}: {r.seconds:.1f}s is over its budget of {allowed:g}s. "
+                       "Find what slowed it down; raise the entry only with a reason in the PR.")
+        found.append((r, limit, message))
+    stall = stalled([r for r, _, _ in found])
+    violations: list[str] = []
+    for r, limit, message in found:
+        if r.key in stall:
+            notes.append(f"runner stall (overlaps another over-budget test, not failing): {message}")
+            continue
+        if touched is not None and r.key not in touched:
+            tolerance = limit * budget.untouched_factor
+            if r.seconds <= tolerance:
+                notes.append(f"untouched test over its limit, within the {tolerance:g}s tolerance "
+                             f"(not failing): {message}")
+                continue
+            message += f" The PR did not touch it, but it is over the {tolerance:g}s tolerance too."
+        violations.append(message)
     # The aida-cli-lib unit binary runs split across lib-0 and lib-1, so the
     # other half's entries never run in a lane; only other binaries get notes.
     ran = {binary_of(key) for key in seen} - {"aida-cli-lib"}
@@ -255,6 +325,9 @@ def main(argv: list[str]) -> int:
                     help="nextest JUnit reports: one row per test; the log then adds only its doctest rows")
     ap.add_argument("--step", help="with a `gh run view --log` download: read only this step (e.g. 'Run tests')")
     ap.add_argument("--budget", help="budget TOML; fail on a violation")
+    ap.add_argument("--changed-files", metavar="FILE",
+                    help="the PR's changed paths, one per line: limits are hard only for tests it touched; "
+                         "others get the budget's untouched_factor tolerance")
     ap.add_argument("--json", help="write the rows as JSON here")
     ap.add_argument("--summary", help="append a Markdown table here")
     ap.add_argument("--top", type=int, default=25, help="rows in the printed and Markdown tables")
@@ -270,6 +343,10 @@ def main(argv: list[str]) -> int:
                 except FileNotFoundError:
                     print(f"test-timings: note: {path}: no such report", file=sys.stderr)
         budget = load_budget(a.budget) if a.budget else None
+        changed = None
+        if a.changed_files:
+            with open(a.changed_files, encoding="utf-8") as fh:
+                changed = [line.strip() for line in fh if line.strip()]
     except (OSError, tomllib.TOMLDecodeError, ET.ParseError, ValueError) as e:
         print(f"test-timings: {e}", file=sys.stderr)
         return 2
@@ -289,10 +366,13 @@ def main(argv: list[str]) -> int:
             fh.write(summary_markdown(rows, budget, a.top))
     if budget is None:
         return 0
-    violations, notes = check(rows, budget)
+    touched = None if changed is None else touched_tests(rows, changed)
+    violations, notes = check(rows, budget, touched)
     for n in notes:
-        # A stall shows as a CI warning annotation, so it is seen, not buried.
-        print(f"{'::warning::' if n.startswith('runner stall') else ''}test-timings: note: {n}")
+        # A stall or a tolerated untouched test shows as a CI warning
+        # annotation, so it is seen, not buried.
+        warn = n.startswith(("runner stall", "untouched test"))
+        print(f"{'::warning::' if warn else ''}test-timings: note: {n}")
     for v in violations:
         print(f"test-timings: BUDGET: {v}", file=sys.stderr)
     return 1 if violations else 0

@@ -2523,9 +2523,18 @@ pub(crate) fn session_start_with_receipt(
         // Gracefully skipped when gh/glab isn't installed.
         // trace:TASK-76 | ai:claude
         if let Some(source_branch) = query_pr_source_branch(forge, n, &project_root) {
-            let conflicting = review_branch_conflicts(&project_root, &source_branch);
-            if !conflicting.is_empty() {
-                let l = &conflicting[0];
+            // STORY-2315: a previous reviewer's lease on the local `pr-N`
+            // branch blocks the checkout too, and every blocking lease is
+            // handled, not only the first. trace:STORY-2315 | ai:claude
+            let conflicting = crate::pr_lease_takeover::merge_review_conflicts(
+                review_branch_conflicts(&project_root, &source_branch),
+                if branch_name != source_branch {
+                    review_branch_conflicts(&project_root, &branch_name)
+                } else {
+                    Vec::new()
+                },
+            );
+            for l in &conflicting {
                 // BUG-1205: there is nobody to answer the prompt under a
                 // headless drain (or any non-TTY caller). Decide from the
                 // substrate: a lease whose owning process is gone is ended
@@ -2569,16 +2578,39 @@ pub(crate) fn session_start_with_receipt(
                         );
                     }
                     LeaseConflictDecision::AutoEnd => {
+                        // trace:STORY-2315 | ai:claude
                         eprintln!(
-                            "{} PR-{}'s source branch `{}` is held by lease {} whose session has exited — ending it so the review can check out the branch",
+                            "{} lease {} on `{}` blocks PR-{}'s review and its session has exited — ending it so the review can check out the branch",
                             crate::glyph(crate::glyphs::Glyph::Info).cyan(),
-                            n,
-                            source_branch,
-                            l.id
+                            l.id,
+                            l.branch,
+                            n
                         );
+                        // STORY-2315: a dead lease whose seat is clean and
+                        // whose HEAD is already in the PR loses nothing to
+                        // `--force`; plain `session end` refused it. The
+                        // verdict-to-action mapping is shared with `queue
+                        // work --steal` (pr_lease_takeover::end_action).
+                        // trace:STORY-2315 | ai:claude
+                        let force = match crate::pr_lease_takeover::plan_lease_end(
+                            &project_root,
+                            l,
+                            Some(&source_branch),
+                        ) {
+                            crate::pr_lease_takeover::LeaseEndAction::ForceEnd => true,
+                            crate::pr_lease_takeover::LeaseEndAction::Bail(message) => {
+                                anyhow::bail!("{}", message)
+                            }
+                            crate::pr_lease_takeover::LeaseEndAction::PlainEnd => false,
+                        };
+                        let mut end_args =
+                            vec!["session", "end", l.id.as_str(), "--yes", "--skip-ci"];
+                        if force {
+                            end_args.push("--force");
+                        }
                         let ended = std::process::Command::new(crate::aida_exe_path())
                             .current_dir(&project_root)
-                            .args(["session", "end", &l.id, "--yes", "--skip-ci"])
+                            .args(&end_args)
                             .stdin(std::process::Stdio::null())
                             .status_retrying_etxtbsy()
                             .map(|st| st.success())
@@ -2587,17 +2619,17 @@ pub(crate) fn session_start_with_receipt(
                             anyhow::bail!(
                                 "could not end dead lease {} holding `{}` — run `aida session end {}` to see why; add `--force` to discard uncommitted changes or `--include-in-use` to override a live process, then retry", // trace:BUG-1986 | ai:claude
                                 l.id,
-                                source_branch,
+                                l.branch, // trace:STORY-2315 | ai:claude
                                 l.id
                             );
                         }
                     }
                     LeaseConflictDecision::Refuse => {
                         anyhow::bail!(
-                            "PR-{}'s source branch `{}` is held by LIVE lease {} ({}, worktree {}) and there is no terminal to choose an action — end that session or wait for it, then retry",
+                            "PR-{}'s review is blocked by LIVE lease {} on `{}` ({}, worktree {}) and there is no terminal to choose an action — end that session or wait for it, then retry", // trace:STORY-2315 | ai:claude
                             n,
-                            source_branch,
                             l.id,
+                            l.branch,
                             l.role.as_deref().unwrap_or("(unset)"),
                             l.worktree_path.display()
                         );
@@ -2607,11 +2639,11 @@ pub(crate) fn session_start_with_receipt(
                 if decision == LeaseConflictDecision::Prompt {
                     eprintln!();
                     eprintln!(
-                        "{} PR-{}'s source branch `{}` is held by lease {}",
+                        "{} PR-{}'s review is blocked by lease {} on `{}`", // trace:STORY-2315 | ai:claude
                         crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold(),
                         n,
-                        source_branch.yellow(),
-                        l.id.yellow()
+                        l.id.yellow(),
+                        l.branch.yellow()
                     );
                     eprintln!("    role:     {}", l.role.as_deref().unwrap_or("(unset)"));
                     eprintln!("    worktree: {}", l.worktree_path.display());

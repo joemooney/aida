@@ -31,6 +31,8 @@ pub(crate) mod operator_hold;
 pub(crate) mod orchestrator_leaves;
 pub(crate) mod pr_ship_batch;
 pub(crate) mod relay_launch;
+// trace:BUG-2403 | ai:claude — one verdict selection across a requirement's labels.
+pub(crate) mod review_alias;
 pub(crate) mod review_author;
 pub(crate) mod review_authority;
 // trace:BUG-2398 | ai:codex

@@ -1198,13 +1198,17 @@ fn choose_current(
     ledger.or_else(|| file_body.map(from_file))
 }
 
-/// Read the recorded verdict trying several id forms (agreed id, spec id) —
-/// whichever file exists first wins. Callers hold both forms and the verdict
-/// may have been filed under either.
+/// Read the recorded verdict of ONE requirement known by several labels (its
+/// agreed id and its spec id), which callers read off the same requirement.
+///
+/// BUG-2403: this used to take the first label that answered, so a stale
+/// friendly-label record overrode a later canonical one. Every label's
+/// current record is now compared ([`crate::gate::review_alias`]) and the
+/// newest answers. Ambiguous or refused evidence yields only a blocking
+/// candidate, never an approval (fail closed for every `Option` caller).
+// trace:BUG-2403 | ai:claude
 pub fn read_recorded_verdict_any(project_root: &Path, ids: &[&str]) -> Option<RecordedVerdict> {
-    ids.iter()
-        .filter(|id| !id.trim().is_empty() && **id != "???")
-        .find_map(|id| read_recorded_verdict(project_root, id))
+    crate::gate::review_alias::select_verdict(project_root, ids).fail_closed()
 }
 
 /// Write (or update) the verdict record for `spec`, preserving any fields the
@@ -1622,6 +1626,41 @@ pub(crate) fn build_verdict_object(
     Ok(obj)
 }
 
+/// BUG-2403: the record-time `release_grant` receipt `overlay` may carry over
+/// from `origin`, the already-built, trusted record of the SAME act of review
+/// (`aida review record`'s own object, or the drain stamp's base record).
+/// `Some` only when `origin` holds a receipt and both records name the same
+/// full reviewed head, recorder, recording time, verdict and recorder
+/// attestation, all present, and the receipt names that recorder. A changed
+/// head, a different recorder or any missing value yields `None`: the receipt
+/// is never filled, re-stamped or carried to a new review.
+// trace:BUG-2403 | ai:claude
+pub(crate) fn same_origin_receipt(
+    origin: &JsonObj,
+    overlay: &JsonObj,
+) -> Option<serde_json::Value> {
+    let receipt = origin.get("release_grant").filter(|g| g.is_object())?;
+    let same =
+        |k: &str| origin.get(k).is_some_and(|v| !v.is_null()) && origin.get(k) == overlay.get(k);
+    let full_head = origin
+        .get("reviewed_sha")
+        .and_then(|v| v.as_str())
+        .is_some_and(|s| s.len() == 40 && crate::gate::kernel_deps::is_hex_sha(s));
+    let bound = [
+        "reviewed_sha",
+        "recorded_by",
+        "recorded_at",
+        "verdict",
+        ATTESTATION_KEY,
+    ]
+    .iter()
+    .all(|k| same(*k));
+    let recorder = receipt
+        .get("recorded_by")
+        .is_some_and(|r| Some(r) == overlay.get("recorded_by"));
+    (full_head && bound && recorder).then(|| receipt.clone())
+}
+
 /// Record a verdict at an explicitly anchored artifact path. The orchestrator
 /// uses this for `PR-N.json`; sharing this boundary with spec-keyed records is
 /// what prevents the authoritative handshake from silently clobbering another
@@ -1920,6 +1959,26 @@ pub fn verdict_file_for_sha(project_root: &Path, key: &str, sha: &str) -> Option
 // trace:TASK-1801 trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
 pub(crate) fn verdict_file_refused(path: &Path) -> bool {
     read_verdict_body(path).is_err() && std::fs::symlink_metadata(path).is_ok()
+}
+
+/// BUG-2403: the legacy verdict file at `path`, read for a cross-label
+/// selection through the same anchored handle as every other reader: `Ok(None)`
+/// only when nothing exists at `path`; the body and that handle's mtime when
+/// it is readable; `Err` when something exists but is refused (linked,
+/// non-regular) or cannot be read — never silently absent, so a refused file
+/// can never hide a newer refusal behind another label's older approval.
+// trace:BUG-2403 | ai:claude
+pub(crate) fn checked_verdict_file(
+    path: &Path,
+) -> Result<Option<(String, Option<std::time::SystemTime>)>, String> {
+    match read_verdict_file(path) {
+        Ok((body, meta)) => Ok(Some((body, meta.modified().ok()))),
+        Err(_) if std::fs::symlink_metadata(path).is_err() => Ok(None),
+        Err(e) => Err(format!(
+            "the verdict file {} exists but was refused ({e})",
+            path.display()
+        )),
+    }
 }
 
 /// TASK-2137: for a refused verdict file (see [`verdict_file_refused`]),
@@ -3189,13 +3248,29 @@ pub(crate) fn evaluate_review_verdict_gate(
     // sha itself resolves either way because worktrees share the object
     // store. trace:BUG-775 | ai:claude
     let primary_root = crate::main_worktree_root_from(project_root);
-    let verdict = read_recorded_verdict_any(project_root, &[display_id, spec_id]).or_else(|| {
-        (primary_root != project_root)
-            .then(|| read_recorded_verdict_any(&primary_root, &[display_id, spec_id]))
-            .flatten()
-    });
-    let Some(verdict) = verdict else {
-        return (VerdictGate::Proceed, None);
+    // BUG-2403: one selection across both labels; evidence that cannot be
+    // selected (ambiguous or refused) and carries no refusal stops the gate
+    // instead of reading as "no verdict".
+    // trace:BUG-2403 | ai:claude
+    let select =
+        |root: &Path| crate::gate::review_alias::select_verdict(root, &[display_id, spec_id]);
+    let mut selection = select(project_root);
+    if matches!(selection, crate::gate::review_alias::AliasSelection::Absent)
+        && primary_root != project_root
+    {
+        selection = select(&primary_root);
+    }
+    let unavailable = selection.unavailable_reason().map(str::to_string);
+    let Some(verdict) = selection.fail_closed() else {
+        return match unavailable {
+            Some(reason) => (
+                VerdictGate::Refuse(vec![format!(
+                    "{display_id}'s review verdict cannot be selected: {reason}"
+                )]),
+                None,
+            ),
+            None => (VerdictGate::Proceed, None),
+        };
     };
     // BUG-1466 / BUG-1538: this used to return early here for every verdict
     // that does not block_done() — which includes APPROVED, the consequential
@@ -3221,3 +3296,7 @@ pub(crate) fn evaluate_review_verdict_gate(
 #[cfg(test)]
 #[path = "tests/review_verdict_tests.rs"]
 mod review_verdict_tests;
+
+#[cfg(test)]
+#[path = "tests/bug_2403_same_origin_receipt_tests.rs"]
+mod bug_2403_same_origin_receipt_tests;

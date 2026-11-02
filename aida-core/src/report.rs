@@ -1021,7 +1021,9 @@ fn managed_merge_matches(path: &Path, actual: &str, expected: &str) -> bool {
         return crate::scaffolding::generated_text_matches(actual, expected);
     }
     slots.iter().all(|slot| {
-        crate::scaffolding::slot_value_matches(
+        // trace:BUG-2395 | ai:claude
+        crate::scaffolding::managed_slot_matches(
+            path,
             slot,
             actual_v.pointer(slot),
             expected_v.pointer(slot),

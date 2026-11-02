@@ -4,7 +4,7 @@
 // trace:STORY-1689 | ai:claude
 
 use super::*;
-use crate::dev_build::{PromotionMeta, PROMOTED_FILE};
+use crate::dev_build::{PromotionMeta, RetentionRerecord, PROMOTED_FILE};
 use crate::forge::CommitCi;
 use std::fs;
 
@@ -653,6 +653,9 @@ impl BuildSteps for FakeBuild {
     }
     fn restart_mcp(&mut self, _layout: &DevLayout) -> Result<()> {
         Ok(())
+    }
+    fn rerecord_retention(&mut self, _layout: &DevLayout) -> RetentionRerecord {
+        RetentionRerecord::NothingRecorded
     }
     fn confirm(&mut self, _prompt: &str) -> bool {
         false
