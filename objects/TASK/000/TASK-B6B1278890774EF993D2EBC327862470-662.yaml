@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T20:06:03.816039190Z
-modified_at: 2026-11-01T22:45:05.889850773Z
+modified_at: 2026-11-02T13:02:30.254060173Z
 req_type: Task
 relationships:
 - rel_type:
@@ -95,6 +95,12 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Completed
+- id: 01a19c5a-b3d9-7721-889c-f01a437f5303
+  author: joe
+  timestamp: 2026-11-02T13:02:32.409925702Z
+  session_id: 01a19c56fbf6
+  harness_version: 2.1.316 (Claude Code)
+  changes: []
 processing_record:
 - id: 01a19949-b0e1-7510-a8b1-f827883bc18f
   timestamp: 2026-11-01T22:45:05.889847035Z
@@ -116,3 +122,11 @@ implementation_info:
   implemented: false
   completed_at: 2026-11-01T22:45:05.883864461Z
   completion_sha: 4e8e63b03ff3c32f3799af8829e1ef9e2f28fc1f
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'AC1 verified (build.py --check clean, 21 showcase build/publish unittests pass, published site has no broken relative links or external runtime deps, PR CI green at f9a1473). AC2 partial: the new ''exact'' mean marker (665 LoC) and the methodology mean 664.8 do not reproduce from the stated shortstat method (589.9), and the KDE estimator is undocumented. Brand-logo/favicon work across ~20 pages is attributed to completed TASK-2709 whose scope is audit publication.'
+  recovery_hint: address the review findings, move TASK-2709 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-11-02T13:02:30.254060173Z
