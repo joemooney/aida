@@ -12823,41 +12823,31 @@ pub(crate) fn handle_queue_work(
             // STORY-2315: a finished lane's dead lease whose seat is clean and
             // whose HEAD is already in the PR loses nothing to `--force`, so
             // --steal ends it itself instead of stopping on plain `session
-            // end`'s refusal. A dirty seat or one with commits the PR lacks
-            // refuses with that reason; a live or unprovable lease, or one with
-            // no PR head on origin, keeps the plain end below.
+            // end`'s refusal. The verdict-to-action mapping is shared with the
+            // review launch (pr_lease_takeover::end_action).
             // trace:STORY-2315 | ai:claude
-            let force_end = match crate::pr_lease_takeover::pr_branch_for_lease(
+            let pr_branch = crate::pr_lease_takeover::pr_branch_for_lease(
                 &project_root_for_conflict,
                 &conflict,
+            );
+            let force_end = match crate::pr_lease_takeover::plan_lease_end(
+                &project_root_for_conflict,
+                &conflict,
+                pr_branch.as_deref(),
             ) {
-                Some(pr_branch) => match crate::pr_lease_takeover::check_pr_lease(
-                    &project_root_for_conflict,
-                    &conflict,
-                    &pr_branch,
-                ) {
-                    crate::pr_lease_takeover::PrLeaseCheck::SafeToForceEnd => {
-                        eprintln!(
-                            "  {} lease {}'s session has exited and its seat is clean and already in the PR on `{}` — ending it",
-                            crate::glyph(crate::glyphs::Glyph::Info).cyan(),
-                            &conflict.id[..conflict.id.len().min(8)],
-                            pr_branch
-                        );
-                        true
-                    }
-                    crate::pr_lease_takeover::PrLeaseCheck::Refuse(reason) => {
-                        anyhow::bail!(
-                            "--steal could not end lease {}: {}",
-                            conflict_id,
-                            crate::pr_lease_takeover::refusal_message(
-                                &conflict, &pr_branch, &reason
-                            )
-                        );
-                    }
-                    crate::pr_lease_takeover::PrLeaseCheck::Live
-                    | crate::pr_lease_takeover::PrLeaseCheck::NotProvable(_) => false,
-                },
-                None => false,
+                crate::pr_lease_takeover::LeaseEndAction::ForceEnd => {
+                    eprintln!(
+                        "  {} lease {}'s session has exited and its seat on `{}` is clean and already in the PR — ending it",
+                        crate::glyph(crate::glyphs::Glyph::Info).cyan(),
+                        &conflict.id[..conflict.id.len().min(8)],
+                        conflict.branch
+                    );
+                    true
+                }
+                crate::pr_lease_takeover::LeaseEndAction::Bail(message) => {
+                    anyhow::bail!("--steal could not end lease {}: {}", conflict_id, message);
+                }
+                crate::pr_lease_takeover::LeaseEndAction::PlainEnd => false,
             };
             session_end(
                 Some(&conflict.id),

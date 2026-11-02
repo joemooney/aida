@@ -15,8 +15,12 @@
 //! When all three hold, nothing in the seat is lost by `session end --force`,
 //! and the caller ends the lease itself. A dirty seat, or a seat with commits
 //! the PR lacks, refuses with that reason. A lease whose death cannot be
-//! proven, or whose PR head cannot be read, is not judged here: the caller
-//! keeps its previous behavior (plain `session end`, whose own guards apply).
+//! proven, whose seat cannot be read, or whose PR head cannot be read, is not
+//! judged here: the caller keeps its previous behavior (plain `session end`,
+//! whose own guards apply).
+//!
+//! Both relaunch paths turn the verdict into an action through the one
+//! mapping [`end_action`], so they cannot drift apart.
 //!
 //! `session end` itself is not changed: this module only decides whether its
 //! callers pass `--force`.
@@ -52,7 +56,8 @@ pub(crate) enum SeatReading {
         unpushed: Vec<String>,
         head: Option<String>,
     },
-    /// The seat could not be read: kept, fail closed.
+    /// The seat could not be read: not judged here, so plain `session end`
+    /// (whose own guards read the seat again) decides.
     Unreadable(String),
 }
 
@@ -93,7 +98,7 @@ pub(crate) fn classify(
     let (dirty, unpushed, head) = match seat {
         SeatReading::Missing => return PrLeaseCheck::SafeToForceEnd,
         SeatReading::Unreadable(why) => {
-            return PrLeaseCheck::Refuse(format!("its seat could not be read ({why})"))
+            return PrLeaseCheck::NotProvable(format!("its seat could not be read ({why})"))
         }
         SeatReading::Read {
             dirty,
@@ -157,17 +162,84 @@ pub(crate) fn check_pr_lease(main: &Path, lease: &SessionLease, pr_branch: &str)
     })
 }
 
-/// The one-line refusal a relaunch bails with.
+/// How a relaunch ends one lease blocking the PR.
+// trace:STORY-2315 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum LeaseEndAction {
+    /// `session end --force`: the seat holds nothing the PR lacks.
+    ForceEnd,
+    /// Plain `session end`, whose own guards (dirty tree, live process)
+    /// decide, as before STORY-2315.
+    PlainEnd,
+    /// Stop the relaunch with this message: ending the lease could lose work.
+    Bail(String),
+}
+
+/// The one verdict-to-action mapping both relaunch paths (`queue work
+/// --steal` and the review launch) use. Only a provable risk to work bails;
+/// a live or unjudged lease keeps the plain end and its guards.
+// trace:STORY-2315 | ai:claude
+pub(crate) fn end_action(
+    lease: &SessionLease,
+    pr_branch: &str,
+    check: &PrLeaseCheck,
+) -> LeaseEndAction {
+    match check {
+        PrLeaseCheck::SafeToForceEnd => LeaseEndAction::ForceEnd,
+        PrLeaseCheck::Refuse(reason) => {
+            LeaseEndAction::Bail(refusal_message(lease, pr_branch, reason))
+        }
+        PrLeaseCheck::Live | PrLeaseCheck::NotProvable(_) => LeaseEndAction::PlainEnd,
+    }
+}
+
+/// Read and decide for one lease. `pr_branch` is `None` when the PR a
+/// reviewer's `pr-N` lease reviews cannot be named: the plain end applies.
+// trace:STORY-2315 | ai:claude
+pub(crate) fn plan_lease_end(
+    main: &Path,
+    lease: &SessionLease,
+    pr_branch: Option<&str>,
+) -> LeaseEndAction {
+    match pr_branch {
+        Some(pr_branch) => end_action(lease, pr_branch, &check_pr_lease(main, lease, pr_branch)),
+        None => LeaseEndAction::PlainEnd,
+    }
+}
+
+/// Every lease blocking a review launch: those on the PR's source branch,
+/// then a previous reviewer's on the local review branch (`pr-N`), each once.
+// trace:STORY-2315 | ai:claude
+pub(crate) fn merge_review_conflicts(
+    mut on_source: Vec<SessionLease>,
+    on_review_branch: Vec<SessionLease>,
+) -> Vec<SessionLease> {
+    for l in on_review_branch {
+        if !on_source.iter().any(|c| c.id == l.id) {
+            on_source.push(l);
+        }
+    }
+    on_source
+}
+
+/// The one-line refusal a relaunch bails with. It names the lease's own
+/// branch (a reviewer's `pr-N`, say) and the PR branch it was judged against.
 // trace:STORY-2315 | ai:claude
 pub(crate) fn refusal_message(lease: &SessionLease, pr_branch: &str, reason: &str) -> String {
+    let judged = if lease.branch == pr_branch {
+        String::new()
+    } else {
+        format!(" (PR branch `{pr_branch}`)")
+    };
     format!(
-        "lease {} ({}, seat {}) holds PR branch `{}` and its session has exited, but it was not \
+        "lease {} ({}, seat {}) holds branch `{}`{} and its session has exited, but it was not \
          ended automatically: {}. Commit and push the work to the PR, or discard it with \
          `aida session end {} --force`, then retry",
         lease.id,
         lease.role.as_deref().unwrap_or("(unset)"),
         lease.worktree_path.display(),
-        pr_branch,
+        lease.branch,
+        judged,
         reason,
         lease.id,
     )
@@ -290,9 +362,7 @@ pub(crate) fn pr_head_on_origin(main: &Path, pr_branch: &str) -> Option<String> 
 /// (a clone's unpushed work) reads `false`.
 // trace:STORY-2315 | ai:claude
 pub(crate) fn is_ancestor(main: &Path, seat_head: &str, pr_head: &str) -> bool {
-    std::process::Command::new("git")
-        .arg("-C")
-        .arg(main)
+    aida_core::git_ops::host_git_command(main)
         .args(["merge-base", "--is-ancestor", seat_head, pr_head])
         .stdin(std::process::Stdio::null())
         .stdout(std::process::Stdio::null())
@@ -301,10 +371,10 @@ pub(crate) fn is_ancestor(main: &Path, seat_head: &str, pr_head: &str) -> bool {
         .is_ok_and(|s| s.success())
 }
 
+/// Host git through the hardened builder, which refuses a seat clone.
+// trace:STORY-2315 | ai:claude
 fn git_stdout(dir: &Path, args: &[&str]) -> Option<String> {
-    let out = std::process::Command::new("git")
-        .arg("-C")
-        .arg(dir)
+    let out = aida_core::git_ops::host_git_command(dir)
         .args(args)
         .stdin(std::process::Stdio::null())
         .stderr(std::process::Stdio::null())

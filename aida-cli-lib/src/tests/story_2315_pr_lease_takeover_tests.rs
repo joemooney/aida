@@ -106,7 +106,9 @@ fn clone_with_unpushed_commits_refuses() {
 }
 
 #[test]
-fn unreadable_seat_refuses() {
+fn unreadable_seat_is_not_judged() {
+    // The spec refuses only dirty seats, commits the PR lacks, or a live
+    // process: an unreadable seat keeps plain `session end`'s own guards.
     assert!(matches!(
         classify(
             OwnerLiveness::Dead,
@@ -114,7 +116,7 @@ fn unreadable_seat_refuses() {
             Some("a"),
             never
         ),
-        PrLeaseCheck::Refuse(_)
+        PrLeaseCheck::NotProvable(_)
     ));
 }
 
@@ -325,6 +327,107 @@ fn branch_never_pushed_is_not_judged() {
     ));
 }
 
+// ── the one verdict-to-action mapping both relaunch paths use ───────────────
+
+#[test]
+fn end_action_maps_every_verdict() {
+    let lease = seat_lease(Path::new("/nonexistent/seat"));
+    assert_eq!(
+        end_action(&lease, "feat", &PrLeaseCheck::SafeToForceEnd),
+        LeaseEndAction::ForceEnd
+    );
+    assert_eq!(
+        end_action(&lease, "feat", &PrLeaseCheck::Live),
+        LeaseEndAction::PlainEnd
+    );
+    assert_eq!(
+        end_action(&lease, "feat", &PrLeaseCheck::NotProvable("x".into())),
+        LeaseEndAction::PlainEnd
+    );
+    match end_action(
+        &lease,
+        "feat",
+        &PrLeaseCheck::Refuse("its seat is dirty".into()),
+    ) {
+        LeaseEndAction::Bail(msg) => {
+            assert!(msg.contains("its seat is dirty"), "{msg}");
+            assert!(msg.contains("lease-story-2315"), "{msg}");
+        }
+        other => panic!("expected a bail, got {other:?}"),
+    }
+}
+
+#[test]
+fn no_nameable_pr_branch_keeps_the_plain_end() {
+    let lease = seat_lease(Path::new("/nonexistent/seat"));
+    assert_eq!(
+        plan_lease_end(Path::new("/nonexistent/main"), &lease, None),
+        LeaseEndAction::PlainEnd
+    );
+}
+
+fn lease_on(id: &str, branch: &str) -> crate::SessionLease {
+    let mut l = seat_lease(Path::new("/nonexistent/seat"));
+    l.id = id.into();
+    l.branch = branch.into();
+    l
+}
+
+#[test]
+fn review_launch_collects_every_blocking_lease_and_the_previous_reviewers() {
+    let merged = merge_review_conflicts(
+        vec![lease_on("impl-a", "feat"), lease_on("impl-b", "feat")],
+        vec![lease_on("rev-old", "pr-42"), lease_on("impl-a", "feat")],
+    );
+    let ids: Vec<&str> = merged.iter().map(|l| l.id.as_str()).collect();
+    assert_eq!(ids, ["impl-a", "impl-b", "rev-old"]);
+}
+
+#[test]
+fn every_collected_lease_gets_its_own_action() {
+    // Not only conflicts[0]: each lease is judged, and the reviewer's pr-N
+    // lease is judged against the PR's source branch.
+    let merged = merge_review_conflicts(
+        vec![lease_on("impl-a", "feat"), lease_on("impl-b", "feat")],
+        vec![lease_on("rev-old", "pr-42")],
+    );
+    let verdicts = |l: &crate::SessionLease| match l.id.as_str() {
+        "impl-a" => PrLeaseCheck::SafeToForceEnd,
+        "impl-b" => PrLeaseCheck::NotProvable("no pid".into()),
+        _ => PrLeaseCheck::Refuse("its seat has commits the PR lacks: abc".into()),
+    };
+    let actions: Vec<LeaseEndAction> = merged
+        .iter()
+        .map(|l| end_action(l, "feat", &verdicts(l)))
+        .collect();
+    assert_eq!(actions[0], LeaseEndAction::ForceEnd);
+    assert_eq!(actions[1], LeaseEndAction::PlainEnd);
+    match &actions[2] {
+        LeaseEndAction::Bail(msg) => {
+            assert!(msg.contains("rev-old"), "{msg}");
+            assert!(msg.contains("`pr-42`"), "{msg}");
+            assert!(msg.contains("PR branch `feat`"), "{msg}");
+        }
+        other => panic!("expected a bail, got {other:?}"),
+    }
+}
+
+/// The reported failure: a lane shipped its PR and exited, leaving a dead
+/// lease on a clean seat at the PR head. Both relaunch paths used to run a
+/// plain `session end` on it, which stopped on "could not end dead lease …
+/// add --force". Through the shared mapping that lease is now force-ended.
+#[test]
+fn regression_dead_clean_in_pr_lease_is_force_ended_not_could_not_end() {
+    let fx = shipped_lane();
+    let lease = seat_lease(&fx.seat);
+    let action = end_action(&lease, "feat", &check_dead(&fx));
+    assert_eq!(
+        action,
+        LeaseEndAction::ForceEnd,
+        "a plain end here is what produced 'could not end dead lease … add --force'"
+    );
+}
+
 #[test]
 fn refusal_message_names_the_lease_and_the_way_out() {
     let lease = seat_lease(Path::new("/nonexistent/seat"));
@@ -333,6 +436,16 @@ fn refusal_message_names_the_lease_and_the_way_out() {
     assert!(msg.contains("`feat`"), "{msg}");
     assert!(
         msg.contains("aida session end lease-story-2315 --force"),
+        "{msg}"
+    );
+}
+
+#[test]
+fn refusal_message_names_a_reviewers_own_branch() {
+    let lease = lease_on("rev-old", "pr-42");
+    let msg = refusal_message(&lease, "feat", "dirty");
+    assert!(
+        msg.contains("holds branch `pr-42` (PR branch `feat`)"),
         "{msg}"
     );
 }

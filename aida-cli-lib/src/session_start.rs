@@ -2506,14 +2506,14 @@ pub(crate) fn session_start_with_receipt(
             // STORY-2315: a previous reviewer's lease on the local `pr-N`
             // branch blocks the checkout too, and every blocking lease is
             // handled, not only the first. trace:STORY-2315 | ai:claude
-            let mut conflicting = review_branch_conflicts(&project_root, &source_branch);
-            if branch_name != source_branch {
-                for l in review_branch_conflicts(&project_root, &branch_name) {
-                    if !conflicting.iter().any(|c| c.id == l.id) {
-                        conflicting.push(l);
-                    }
-                }
-            }
+            let conflicting = crate::pr_lease_takeover::merge_review_conflicts(
+                review_branch_conflicts(&project_root, &source_branch),
+                if branch_name != source_branch {
+                    review_branch_conflicts(&project_root, &branch_name)
+                } else {
+                    Vec::new()
+                },
+            );
             for l in &conflicting {
                 // BUG-1205: there is nobody to answer the prompt under a
                 // headless drain (or any non-TTY caller). Decide from the
@@ -2558,45 +2558,30 @@ pub(crate) fn session_start_with_receipt(
                         );
                     }
                     LeaseConflictDecision::AutoEnd => {
+                        // trace:STORY-2315 | ai:claude
                         eprintln!(
-                            "{} PR-{}'s source branch `{}` is held by lease {} whose session has exited — ending it so the review can check out the branch",
+                            "{} lease {} on `{}` blocks PR-{}'s review and its session has exited — ending it so the review can check out the branch",
                             crate::glyph(crate::glyphs::Glyph::Info).cyan(),
-                            n,
-                            source_branch,
-                            l.id
+                            l.id,
+                            l.branch,
+                            n
                         );
                         // STORY-2315: a dead lease whose seat is clean and
                         // whose HEAD is already in the PR loses nothing to
-                        // `--force`; plain `session end` refused it, so pass
-                        // `--force` then. A dirty seat or one with commits the
-                        // PR lacks refuses with that reason; an unprovable
-                        // lease keeps the plain end.
+                        // `--force`; plain `session end` refused it. The
+                        // verdict-to-action mapping is shared with `queue
+                        // work --steal` (pr_lease_takeover::end_action).
                         // trace:STORY-2315 | ai:claude
-                        let force = match crate::pr_lease_takeover::check_pr_lease(
+                        let force = match crate::pr_lease_takeover::plan_lease_end(
                             &project_root,
                             l,
-                            &source_branch,
+                            Some(&source_branch),
                         ) {
-                            crate::pr_lease_takeover::PrLeaseCheck::SafeToForceEnd => true,
-                            crate::pr_lease_takeover::PrLeaseCheck::Refuse(reason) => {
-                                anyhow::bail!(
-                                    "{}",
-                                    crate::pr_lease_takeover::refusal_message(
-                                        l,
-                                        &source_branch,
-                                        &reason
-                                    )
-                                );
+                            crate::pr_lease_takeover::LeaseEndAction::ForceEnd => true,
+                            crate::pr_lease_takeover::LeaseEndAction::Bail(message) => {
+                                anyhow::bail!("{}", message)
                             }
-                            crate::pr_lease_takeover::PrLeaseCheck::Live => anyhow::bail!(
-                                "PR-{}'s source branch `{}` is held by lease {} ({}, worktree {}), whose process is still running — end that session or wait for it, then retry",
-                                n,
-                                source_branch,
-                                l.id,
-                                l.role.as_deref().unwrap_or("(unset)"),
-                                l.worktree_path.display()
-                            ),
-                            crate::pr_lease_takeover::PrLeaseCheck::NotProvable(_) => false,
+                            crate::pr_lease_takeover::LeaseEndAction::PlainEnd => false,
                         };
                         let mut end_args =
                             vec!["session", "end", l.id.as_str(), "--yes", "--skip-ci"];
@@ -2614,17 +2599,17 @@ pub(crate) fn session_start_with_receipt(
                             anyhow::bail!(
                                 "could not end dead lease {} holding `{}` — run `aida session end {}` to see why; add `--force` to discard uncommitted changes or `--include-in-use` to override a live process, then retry", // trace:BUG-1986 | ai:claude
                                 l.id,
-                                source_branch,
+                                l.branch, // trace:STORY-2315 | ai:claude
                                 l.id
                             );
                         }
                     }
                     LeaseConflictDecision::Refuse => {
                         anyhow::bail!(
-                            "PR-{}'s source branch `{}` is held by LIVE lease {} ({}, worktree {}) and there is no terminal to choose an action — end that session or wait for it, then retry",
+                            "PR-{}'s review is blocked by LIVE lease {} on `{}` ({}, worktree {}) and there is no terminal to choose an action — end that session or wait for it, then retry", // trace:STORY-2315 | ai:claude
                             n,
-                            source_branch,
                             l.id,
+                            l.branch,
                             l.role.as_deref().unwrap_or("(unset)"),
                             l.worktree_path.display()
                         );
@@ -2634,11 +2619,11 @@ pub(crate) fn session_start_with_receipt(
                 if decision == LeaseConflictDecision::Prompt {
                     eprintln!();
                     eprintln!(
-                        "{} PR-{}'s source branch `{}` is held by lease {}",
+                        "{} PR-{}'s review is blocked by lease {} on `{}`", // trace:STORY-2315 | ai:claude
                         crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold(),
                         n,
-                        source_branch.yellow(),
-                        l.id.yellow()
+                        l.id.yellow(),
+                        l.branch.yellow()
                     );
                     eprintln!("    role:     {}", l.role.as_deref().unwrap_or("(unset)"));
                     eprintln!("    worktree: {}", l.worktree_path.display());
