@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-02T12:46:10.624688951Z
-modified_at: 2026-11-02T14:10:21.147419372Z
+modified_at: 2026-11-02T18:36:50.557792157Z
 req_type: Bug
 tags:
 - area:mailbox
@@ -20,6 +20,12 @@ comments:
   content: 'ADVISOR TRIAGE (2026-11-02 06:08 MST): APPROVED. The ''Expected'' clause is the acceptance criterion; add a regression test that reproduces the observed failure.'
   created_at: 2026-11-02T12:59:54.493546873Z
   modified_at: 2026-11-02T12:59:54.493546873Z
+  session_id: ee0bf351-6b17-486f-a38e-cfbb1343c426
+- id: 01a19d8c-c3fd-7db0-9f38-1fc4c1016269
+  author: joe
+  content: 'ADVISOR RULING (11:38 MST) on the 09:22 fork: B+C. The QC1 retention gate stays strict; A (content-equivalence excuse) is REJECTED, because it would admit an unadmitted other-build writer. C: when ''aida dev build'' promotes, it re-records the mail-retention activation automatically, but only when the fresh /proc scan passes (no other-build writers); otherwise it prints the operator command. Implement C in PR #3268 with a test (scan passes -> re-recorded; scan finds an other-build writer -> not re-recorded, command printed). B (operator re-record) remains the documented fallback.'
+  created_at: 2026-11-02T18:36:50.557792157Z
+  modified_at: 2026-11-02T18:36:50.557792157Z
   session_id: ee0bf351-6b17-486f-a38e-cfbb1343c426
 history:
 - id: 01a19c58-5622-76b0-9701-ff84b515889c
