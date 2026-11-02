@@ -3,12 +3,12 @@ spec_id: STORY-b6b1278890774ef993d2ebc327862470-313
 agreed_id: STORY-2315
 title: Lane relaunch ends a finished lane's dead lease itself when the seat is clean and its HEAD is already in the PR
 description: 'Pain 2026-11-01/02: nearly every rework or review requeue failed with ''could not end dead lease <id> ... add --force''. The advisor wrote freelease.sh: for each lease on the PR branch (or pr-N), skip live pids; require a clean seat and seat HEAD an ancestor of the PR head; then aida session end --force --yes. Acceptance: aida queue work --steal (and rev/rework launches) applies exactly this safe check and ends such leases automatically, refusing only when the seat is dirty, has commits the PR lacks, or a process is live. Candidate for the regroup R1 (session lifecycle: lease passes to the PR on open).'
-status: Approved
+status: InProgress
 priority: Medium
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-02T12:46:46.980613333Z
-modified_at: 2026-11-02T13:00:26.993047190Z
+modified_at: 2026-11-02T14:24:16.302286535Z
 req_type: Story
 tags:
 - area:lanes
@@ -31,6 +31,14 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a19ca5-87ae-7e90-b325-1294e39aeda7
+  author: aida-session-start
+  timestamp: 2026-11-02T14:24:16.302284166Z
+  session_id: ee0bf351-6b17-486f-a38e-cfbb1343c426
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 5b21d041d218b3030c4878b5cabb862da086026e
   branch: main
