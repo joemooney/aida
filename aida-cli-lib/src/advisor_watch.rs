@@ -305,6 +305,9 @@ fn codex_fork_and_run(
         .join("advisor-watch")
         .join(format!("{run_id}.log"));
     let tee = crate::headless_tee::TeeOptions::from_env_and_flag(false).with_label("advisor-watch");
+    // Configured containment (agents.toml / [contained]) applies even with
+    // AIDA_CONTAINED unset. trace:BUG-2393 | ai:claude
+    let contained = session::drain_contained(project_root)?;
     let status = session::spawn_codex_headless_fork(
         aida_core::agents_config::AgentSeat::Advisor,
         prompt,
@@ -312,7 +315,7 @@ fn codex_fork_and_run(
         &run_id,
         &log_path,
         &tee,
-        false,
+        contained,
     )?;
     if !status.success() {
         eprintln!(
@@ -672,6 +675,34 @@ mod tests {
             .unwrap()
             .collect();
         assert_eq!(entries.len(), 1, "AIDA must not copy the live rollout");
+    }
+
+    // BUG-2393 on the Codex fork path: with `[agents] contained = true` and
+    // AIDA_CONTAINED unset (a cron/systemd tick), the watch fork launches
+    // contained — Codex cannot run contained, so it is refused before the
+    // fake codex ever runs the fork. trace:BUG-2393,STORY-2255 | ai:claude
+    #[test]
+    fn codex_fork_honours_configured_containment_without_the_env() {
+        let fx = codex_fixture(true);
+        register_codex(&fx);
+        std::fs::write(
+            fx.project.join(".aida/agents.toml"),
+            "[agents]\ncontained = true\n",
+        )
+        .unwrap();
+        let _ambient = codex_env(&fx);
+        let error = fork_and_run_to(
+            &mut std::io::sink(),
+            &fx.project,
+            &AdvisorConfig::default(),
+            "garden prompt",
+        )
+        .unwrap_err();
+        assert!(
+            format!("{error:#}").contains("cannot run a contained session"),
+            "{error:#}"
+        );
+        assert!(!fx.capture.exists(), "the codex fork must not be spawned");
     }
 
     fn assert_not_forked(argv: &[String]) {
