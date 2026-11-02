@@ -18,12 +18,12 @@ description: |-
   1. `aida session resume` actually execs `codex resume <id>` (with resolved posture/containment) when resuming a Codex session.
   2. `aida queue work --resume` (interactive and headless), `standalone_implementer` background-wait resume, and `phase_driver_trait::resume_implementer_with_advisor_answer` support `HeadlessVendor::Codex` via `codex resume` / `codex exec resume` and `~/.codex/sessions` lookup.
   3. `aida role enter --resume` and `aida tui` (`Intent::Resume`, `TabVendor::Codex`) support resuming Codex sessions alongside Claude.
-status: InProgress
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T06:45:38.111981577Z
-modified_at: 2026-11-02T20:56:24.583545265Z
+modified_at: 2026-11-02T21:06:23.993681241Z
 req_type: Bug
 tags:
 - architecture
@@ -547,6 +547,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a19e15-b079-7e20-a887-6718069bf57e
+  author: joe
+  timestamp: 2026-11-02T21:06:23.993679306Z
+  session_id: ee0bf351-6b17-486f-a38e-cfbb1343c426
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Approved
 execution_mode: drain
 filed_at:
   code_sha: 6dc7d4977ac5e47c42ddfb26597fe3ec5fb70b60
