@@ -10,12 +10,12 @@ description: |
   2. Regression fixtures record oldfriendly verdict, newer canonical/phase3 verdict atchangedhead; friendly/canonical reads agree. Cover approve→requestchanges and refusal→approve, reworkfindings + recurrenceguard, holdstillrefuseswronghead/invalidgrant/unrelatedspec and accepts only lawfulfreshidentityevidence. Both GitHub PR and GitLab MR handshakes mustretain existingmappingcontracts.
   3. Repair only supported resolution/projection, never direct JSON/ledgerediting, forgedattestation or manualbypass. Existing security/hold/authority and bounded nonsymlink handle reads stayintact. No globalrole/grantsandboxchange.
   4. Sensitivegate code: SKETCHONLY first, independentadvisorsignoff beforeimplementation. Avoid concurrentgate/review_verdict overlap with activeBUG2398; diagnose/read now, codeafter. Independentfreshreview andnormalgates. LIGHTtargetedfilter+fast, >10/sharedinfraadditionalgates, nofullsuite/slotbypass.
-status: InProgress
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T10:12:04.230556201Z
-modified_at: 2026-11-02T19:20:10.230773630Z
+modified_at: 2026-11-02T19:27:27.157122384Z
 req_type: Bug
 tags:
 - alias
@@ -357,6 +357,20 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a19dbb-19af-7153-b16a-efa76a01e87e
+  author: aida-auto-bump
+  timestamp: 2026-11-02T19:27:27.151334236Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a19dbb-19b5-7220-97db-0dfa0f85ba00
+  timestamp: 2026-11-02T19:27:27.157118025Z
+  agent: aida
+  commit_sha: c4cba2dd2cd0b61216bd9c3377149e43a52382ed
+  summary: 'Round 3: full BUG-2403 scope implemented — cross-label selection (review_alias.rs, Absent/Selected/Ambiguous/Unsafe), snapshot-bound identity, strict bounded ledger discovery (checked.rs), rework/queue-done/hold-release rerouted, same-origin phase-3 and drain-stamp receipts; refusal paths tested; CI green at head. Non-blocking follow-ups: snapshot-load budget (amendment 7), global discovery blast radius, stale PR body, unrerouted merge-hold status readers, stale PRIN-5 doc.'
+  review_verdict: approved
 filed_at:
   code_sha: 6fefb63280c352be0194c2cfadf54a085eb55471
   branch: main
@@ -368,3 +382,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-11-02T11:36:14.525442720Z
   implemented_by: joe
+  completed_at: 2026-11-02T19:27:27.151328556Z
+  completion_sha: c4cba2dd2cd0b61216bd9c3377149e43a52382ed
