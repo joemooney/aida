@@ -16591,6 +16591,12 @@ Commands:
   help         Print this message or the help of the given subcommand(s)
 
 Options:
+      --role <ROLE>
+          Role for a launch using the configured default vendor
+
+      --spec <SPEC>
+          Spec for a launch using the configured default vendor
+
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
           compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
@@ -45948,6 +45954,16 @@ Working on aida itself
         "name": "help",
         "takes_value": false,
         "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "role",
+        "takes_value": true,
+        "help": "Role for a launch using the configured default vendor"
+      },
+      {
+        "name": "spec",
+        "takes_value": true,
+        "help": "Spec for a launch using the configured default vendor"
       }
     ],
     "hidden": false

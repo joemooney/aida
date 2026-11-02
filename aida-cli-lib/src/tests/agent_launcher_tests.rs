@@ -78,6 +78,7 @@ fn parses_agent_new_claude_flags() {
                         extra_flags,
                         ..
                     }),
+                ..
             },
     } = cli.command.registered::<crate::agent_launch::AgentArgs>()
     else {
@@ -273,6 +274,7 @@ fn parses_agent_new_codex_flags() {
                         extra_flags,
                         ..
                     }),
+                ..
             },
     } = cli.command.registered::<crate::agent_launch::AgentArgs>()
     else {
@@ -300,6 +302,7 @@ fn parses_agent_new_noexec_aliases() {
         inner:
             AgentCommand::New {
                 command: Some(AgentNewCommand::Claude { noexec, .. }),
+                ..
             },
     } = cli.command.registered::<crate::agent_launch::AgentArgs>()
     else {
@@ -319,6 +322,7 @@ fn parses_agent_new_noexec_aliases() {
         inner:
             AgentCommand::New {
                 command: Some(AgentNewCommand::Antigravity { noexec, .. }),
+                ..
             },
     } = cli.command.registered::<crate::agent_launch::AgentArgs>()
     else {
@@ -406,6 +410,7 @@ fn parses_agent_new_no_exec_and_show_prompt_flags() {
             inner:
                 AgentCommand::New {
                     command: Some(AgentNewCommand::Claude { noexec, .. }),
+                    ..
                 },
         } = cli.command.registered::<crate::agent_launch::AgentArgs>()
         else {
@@ -421,6 +426,7 @@ fn parses_agent_new_no_exec_and_show_prompt_flags() {
         inner:
             AgentCommand::New {
                 command: Some(AgentNewCommand::Codex { show_prompt, .. }),
+                ..
             },
     } = cli.command.registered::<crate::agent_launch::AgentArgs>()
     else {
@@ -557,7 +563,7 @@ fn parses_agent_new_verbose_flag_for_every_vendor() {
             crate::command_registry::try_parse_from(["aida", "agent", "new", vendor, "--verbose"])
                 .unwrap();
         let crate::agent_launch::AgentArgs {
-            inner: AgentCommand::New { command },
+            inner: AgentCommand::New { command, .. },
         } = cli.command.registered::<crate::agent_launch::AgentArgs>()
         else {
             panic!("expected agent new command");
@@ -942,6 +948,7 @@ fn parses_agent_new_antigravity_flags() {
                         extra_flags,
                         ..
                     }),
+                ..
             },
     } = cli.command.registered::<crate::agent_launch::AgentArgs>()
     else {
@@ -2050,6 +2057,7 @@ fn parses_agent_new_context_flags() {
                         show_context,
                         ..
                     }),
+                ..
             },
     } = cli.command.registered::<crate::agent_launch::AgentArgs>()
     else {
@@ -2087,6 +2095,7 @@ fn parses_agent_new_resume_and_duplicate_flags() {
                         no_duplicate_check,
                         ..
                     }),
+                ..
             },
     } = cli.command.registered::<crate::agent_launch::AgentArgs>()
     else {
@@ -2376,7 +2385,7 @@ fn parses_agent_list_roles_flags() {
 fn parses_bare_agent_new_as_optional_subcommand() {
     let cli = crate::command_registry::try_parse_from(["aida", "agent", "new"]).unwrap();
     let crate::agent_launch::AgentArgs {
-        inner: AgentCommand::New { command },
+        inner: AgentCommand::New { command, .. },
     } = cli.command.registered::<crate::agent_launch::AgentArgs>()
     else {
         panic!("expected agent new command");
@@ -2486,6 +2495,7 @@ fn picked_type_matches_explicit_subcommand_defaults() {
     let crate::agent_launch::AgentArgs {
         inner: AgentCommand::New {
             command: Some(explicit),
+            ..
         },
     } = cli.command.registered::<crate::agent_launch::AgentArgs>()
     else {
@@ -3368,6 +3378,7 @@ fn agent_new_parses_prompt_file_and_rejects_conflicting_prompt_sources() {
         inner:
             AgentCommand::New {
                 command: Some(AgentNewCommand::Codex { prompt_file, .. }),
+                ..
             },
     } = cli.command.registered::<crate::agent_launch::AgentArgs>()
     else {
@@ -3893,6 +3904,7 @@ fn allow_duplicate_keeps_the_duplicate_check_on_unlike_no_duplicate_check() {
                             no_duplicate_check,
                             ..
                         }),
+                    ..
                 },
         } = cli.command.registered::<crate::agent_launch::AgentArgs>()
         else {
