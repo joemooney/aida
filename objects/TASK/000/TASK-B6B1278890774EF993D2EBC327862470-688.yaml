@@ -1,5 +1,6 @@
 id: 01a19b68-9f77-7393-aa15-04f80594e49b
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-688
+agreed_id: TASK-2745
 title: 'NON-BLOCKING minor (carried from round 1 #4) ci.yml:118: the apparmor_restrict_…'
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on TASK-2706, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
@@ -18,6 +19,12 @@ tags:
 - finding-hash:4193eed2
 - from-review:TASK-2706
 - kind:carried-forward
+history:
+- id: 01a19b82-485e-7bf1-8e7d-618031f4a225
+  author: joe
+  timestamp: 2026-11-02T09:06:09.118232095Z
+  session_id: 1f56bd1e-c059-4f73-b8df-e18b2170fdfc
+  changes: []
 filed_at:
   code_sha: 10f5a8651300808d3177617f5d3444019650725b
   branch: main

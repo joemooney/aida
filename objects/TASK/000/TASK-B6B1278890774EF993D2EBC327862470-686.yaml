@@ -1,5 +1,6 @@
 id: 01a19b68-8e86-7273-93fc-2609f24a62ef
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-686
+agreed_id: TASK-2746
 title: 'NON-BLOCKING minor egress_probe.py:345-350 (mutable_sockaddr race): the pointer…'
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on TASK-2706, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
@@ -18,6 +19,12 @@ tags:
 - finding-hash:e4b465d0
 - from-review:TASK-2706
 - kind:carried-forward
+history:
+- id: 01a19b82-4899-7e21-94cf-cfd1b3bbcdfb
+  author: joe
+  timestamp: 2026-11-02T09:06:09.177068640Z
+  session_id: 1f56bd1e-c059-4f73-b8df-e18b2170fdfc
+  changes: []
 filed_at:
   code_sha: 10f5a8651300808d3177617f5d3444019650725b
   branch: main
