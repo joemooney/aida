@@ -17,12 +17,12 @@ description: |-
   1. `runaway_seats.rs` scans `~/.codex/sessions` filtered by project/worktree `cwd` (matching `usage.rs` / `vendor_activity.rs`) and evaluates the same window token/byte/line thresholds for Codex sessions.
   2. `shift.rs:100` includes `"codex"` in `COVERED_VENDORS` once `runaway-seats` covers Codex, so `aida shift tick` runs on `[agents] vendor = "codex"` without requiring `allow_uncovered_vendors`.
   3. Update `docs/autonomous-drain.md:1613-1615` to reflect Codex watchdog coverage, and add unit tests with synthetic `~/.codex/sessions` JSONL fixtures.
-status: InProgress
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T06:47:10.885136620Z
-modified_at: 2026-11-02T00:02:26.712195116Z
+modified_at: 2026-11-02T02:43:54.362152234Z
 req_type: Bug
 tags:
 - audit
@@ -1466,6 +1466,21 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a19a24-5376-7802-886c-17d49bfc910f
+  author: aida-auto-bump
+  timestamp: 2026-11-02T02:43:54.358599101Z
+  session_id: 126bbd5a-a92f-452b-ab0b-2637a1db42c2
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a19a24-537a-7271-9ffe-277c353c92bc
+  timestamp: 2026-11-02T02:43:54.362150295Z
+  agent: aida
+  commit_sha: 1451c90f17a78a2826aa6422bb9ac48fdef19765
+  summary: 'All 3 ACs met at 99766ca: runaway-seats scans ~/.codex/sessions scoped by session_meta cwd to project/worktree/clone roots and feeds the same wake/token/repeat/idle/compaction rules (incl. headless codex exec via task_started); COVERED_VENDORS gains codex; docs updated; fixture tests added; prior-round findings all fixed; PR CI green (only merge-hold-gate pending this review).'
+  review_verdict: approved
 execution_mode: drain
 filed_at:
   code_sha: 6dc7d4977ac5e47c42ddfb26597fe3ec5fb70b60
@@ -1475,3 +1490,7 @@ filed_at:
   aida_build_sha: 962ca07af25
   vendor: antigravity
   session: 01a194b1bcfb
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-02T02:43:54.358594164Z
+  completion_sha: 1451c90f17a78a2826aa6422bb9ac48fdef19765
