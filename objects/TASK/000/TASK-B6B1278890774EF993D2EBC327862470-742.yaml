@@ -12,13 +12,20 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-03T16:46:07.718635378Z
-modified_at: 2026-11-03T16:46:07.718635378Z
+modified_at: 2026-11-03T18:18:18.522024819Z
 req_type: Task
 tags:
 - carried-from:BUG-2419
 - finding-hash:77bd5a95
 - from-review:BUG-2419
 - kind:carried-forward
+comments:
+- id: 01a1a2a2-281a-7533-9757-e0a61dd25390
+  author: joe
+  content: 'ADVISOR RULING (2026-11-03): accepted. By design: in-flight pre-BUG-2419 leases fall back to lease/session tokens and the authorship ledger, and that population has drained.'
+  created_at: 2026-11-03T18:18:18.522024819Z
+  modified_at: 2026-11-03T18:18:18.522024819Z
+  session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
 history:
 - id: 01a1a26b-7013-7012-97bc-dd2525148f11
   author: joe
