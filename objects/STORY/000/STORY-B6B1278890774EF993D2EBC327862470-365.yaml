@@ -1,0 +1,34 @@
+id: 01a1a384-dccd-7071-9d10-62ab1060b127
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-365
+agreed_id: STORY-2392
+title: 'Review PR-3318: [AI:claude] fix(ship): --from-seat accepts (Refs SPEC-ID) trailers for partial-slice seat commits (BUG-2431)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a1a35f`) for branch `bug-b6b1278890774ef993d2ebc327862470-200`.
+
+  - PR: <https://github.com/joemooney/aida/pull/3318>
+  - Branch: `bug-b6b1278890774ef993d2ebc327862470-200` → `main`
+
+  ## Covers
+
+  - BUG-2431
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 3318` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-03T22:25:55.917431857Z
+modified_at: 2026-11-03T22:25:55.917431857Z
+req_type: Story
+filed_at:
+  code_sha: 34c0d8e417354cfaa83c676aac28200ebfb525b6
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 34c0d8e4173
+  vendor: claude
+  session: 04f971d5-7365-46ed-b777-d4ff41d730ed
