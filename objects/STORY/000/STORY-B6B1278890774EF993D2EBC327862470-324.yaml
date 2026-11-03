@@ -8,13 +8,257 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-02T19:20:59.253007269Z
-modified_at: 2026-11-03T00:33:01.398511166Z
+modified_at: 2026-11-03T00:42:33.142545847Z
 req_type: Story
 tags:
 - architecture
 - needs-sketch
 - regroup
 - security
+comments:
+- id: 01a19edb-9536-7152-af5d-cedac4c16cf8
+  author: joe
+  content: |
+    SKETCH (awaiting independent signoff): STORY-2326
+
+    Author: claude sketch seat (no grant), 2026-11-02. This is a proposal only. It is not design approval, implementation approval, or permission to launch, merge or clear a hold. No code was changed, nothing was committed, and no queue, lease, grant or config was mutated. Source read at 2d4c8cf5397. Paths are under aida-cli-lib/src unless they say otherwise; line numbers are at that SHA.
+
+    ## 0. Lineage, and what has changed since TASK-1749
+    - TASK-1749's codex sketch (2026-10-20 03:44Z) was APPROVED as direction with two conditions (05:07Z). C1: no env_clear allowlist before the last slice, and then only behind a per-vendor compatibility matrix. C2: a token-aware scanner guard in the existing ratchet style, with no new parser dependency, plus mutant fixtures. This sketch inherits that approved direction and both conditions. It proposes STORY-2326 supersede TASK-1749.
+    - The deferral trigger has fired. STORY-1853, STORY-1690 and TASK-1945 are all completed, and TASK-1752 (one grant reader) is completed.
+    - New since then:
+      - BUG-2398 (merged) added `codex_tool_env::prepare_launch` (codex_tool_env.rs:87), a Codex-only finalizer.
+      - BUG-2386 and BUG-2416 were more single-site Codex routing fixes. Each was the same class: one path missed.
+      - BUG-2383 / PR #3192 (open, signed) adds a host-side lane job runner. It already has a cleared-env allowlist, bwrap-only jobs and an overlay seed.
+      - TASK-2772 (today): host `claude --bg` lanes cannot write the cargo slot dir or reach sccache.
+      This story has to absorb all of these, not run beside them.
+
+    ## 1. Current data flow and failure modes
+    There is no launch object. Every site builds a `std::process::Command` itself and then decides seat, grant, containment, identity, program and resources inline.
+
+    Spawn sites at 2d4c8cf5397 (production code, enclosing fn):
+    - Literal vendor constructors:
+      - session.rs:720 `build_contained_resume_command` (claude)
+      - session.rs:2623 `build_codex_session_command` and :2669 `exec_codex_session`
+      - doctor_cmd.rs:2013 `installed_codex_version`
+      - init_cmd.rs:738 `run_antigravity_mcp_add`, and :1901/1908/1915 codex mcp list/add
+    - Dynamic vendor constructors (`Command::new(program)` after `resolve_agent_program`, session.rs:5249):
+      - session.rs:1398 `build_claude_exec_command`, :1509 `build_run_claude_session_command`, :1849 `codex_exec_fork_support_within`, :2047 `spawn_vendor_headless_forking`, :2751 `build_codex_resume_command`, :2954 `build_advisor_interactive_command`, :3011 `spawn_reviewer_launch_plan_granted`, :5755 `build_coordinator_headless_command_inner`, :6804 `spawn_claude_headless_resume_granted`, :6929 `spawn_vendor_headless_resume_granted`, :8402 `build_claude_resume_exec_command`
+      - agent_launch.rs:6185 `build_agent_new_bg_command`, :6864 `run_agent_generation`, :6071 (harness version probe)
+      - dispatch.rs:2548 `build_implementer_launch_command`
+      - compete_cmd.rs:1112 `build_compete_arm_command`
+      - phase_driver.rs:2435 `build_phase_driver_advisor_command`
+      - phase_driver_trait.rs:4027 `build_phase_driver_ci_fix_command` (program at :3751)
+      - autopilot_intake.rs:1037 `build_autopilot_intake_command`
+      - questions.rs:1553 `questions_clarify`
+      - queue_cmd.rs:12531 (exec in `handle_queue_work`)
+      - claude_agents.rs:56 `list_agents`
+      - aida-core/src/ai/client.rs:246 `send_cli_request`
+    - AIDA control children that hand-set a seat on an `aida` child:
+      - orchestrator_leases.rs:1559 (`gate.role`)
+      - zen_drive_root.rs:638
+      - phase_driver.rs:1372
+      - aida-tui/src/redesign/mod.rs, 12 sites from :1526 to :2160, each `.env("AIDA_SESSION_ROLE", "advisor"|"reviewer")`
+
+    Writers of protected env: 16 production `.env("AIDA_SESSION_ROLE", ...)` sites in aida-cli-lib (12 more in aida-tui) and 34 `AIDA_CONTAINED` set/remove sites. Two of them are process-global `set_var` calls on the parent: session.rs:3760 `set_contained_env_for_children` (called from queue_cmd.rs:11333), and queue_cmd.rs:13126 `std::env::set_var("AIDA_SESSION_ROLE", &role)`. Child grants are issued at eight call sites through two helpers: `issue_launch_child` at session.rs:2041/3005/6798/6923 and queue_cmd.rs:14173/14224, and `issue_child` at autopilot_intake.rs:1011 and questions.rs:1627.
+
+    Failure modes:
+    - L1, a fix lands in some paths and misses others. That is the shape of BUG-2006 (contained missing on 6 paths), BUG-2144 (codex/agy silently uncontained), BUG-2386 (resume paths skipped the Codex vendor path) and BUG-2416 (aida-do Codex skipped `prepare_launch`). `prepare_launch` is opt-in per site, and nothing stops a new Codex site from skipping it.
+    - L2, fail-open defaults at the site.
+      - agent_launch.rs:6286 `is_contained_launch` returns `false` (uncontained) for an unparseable vendor.
+      - dispatch.rs:2548 launches `codex exec --full-auto` and `agy` with no posture resolution and no `prepare_launch`.
+      - A missing branch reads as "not contained" everywhere.
+    - L3, parent mutation as a channel. The two `set_var` sites change the launcher's own environment so that later children inherit it. `CONTAINED_ENV_APPLIED` (session.rs:3740-3800) exists only to remember what the parent "really" had. Any child spawned in between gets the mutated value, whether it was meant for it or not.
+    - L4, an inherit-all environment with a denylist scrub. Children inherit the launcher's whole environment, and `scrub_launcher_session_env` (session.rs:6098) removes three keys. Anything not on that list leaks: other AIDA_* lease, handle and purpose keys, GH_TOKEN, and test overrides. BUG-2007 (Codex got the advisor role) and TASK-1758 (daemon-attached sessions inherit the daemon's role and grant) are this mode.
+    - L5, a test hook as a production program override. `resolve_agent_program` (session.rs:5249) swaps the vendor binary for any non-empty `AIDA_AGENT_CMD`, contained or not. Any process that can set the env can choose what "claude" means for a contained child.
+    - L6, the authority root conflated with cwd. Child grants are issued against whatever root the site has. TASK-1333: reconstitute.rs:928 `set_current_dir` to a scratch dir, then the grant is issued against that empty root and refused, before any vendor exec.
+    - L7, resources scattered, and none declared for host lanes. What a lane may write for builds is computed in five places:
+      - `seat_clone::seat_build_env` (seat_clone.rs:893: `RUSTC_WRAPPER=""`, `CARGO_TARGET_DIR`)
+      - the bwrap rw list (session.rs ~5140-5196: CARGO_HOME, ~/.npm, ~/.claude)
+      - `contained_settings_json_with_boundary` allowWrite (session.rs:4797, contained_boundary.rs:405)
+      - codex `--add-dir <slot dir>`, which exists only as documentation (repository guide :723-750)
+      - the BUG-2383 lane-job runner's own allowlist
+      The cargo slot dir is resolved only in doctor_cmd.rs:2492. An uncontained host `claude --bg` lane gets no AIDA settings at all, so the user's global Claude sandbox applies, and it lists neither the slot dir nor sccache. That is TASK-2772: `make check-ci-fast` queues forever, or sccache fails with EPERM.
+    - L8, `--bg` env never reaches the session. `claude --bg` hands off to Claude's daemon (agent_launch.rs:6264 comment, BUG-2169), so the session's environment is the daemon's. Any env discipline on the dispatcher's Command shapes only the hand-off. Today this is patched after the fact by the STORY-1662 lane_env SessionStart correction (lane_env.rs:1-15), which says plainly that it is not an authority boundary.
+    - L9, posture that depends on ambient vendor config. TASK-158 recorded `~/.codex/config.toml` and `~/.aida/agents.toml` default_flags drifting to full access. Any site that relies on the vendor's ambient config, or on `default_flags` carrying posture flags, inherits that drift silently.
+
+    ## 2. Proposed design
+    New module `launch/` in aida-cli-lib, plus one pure policy module in aida-core. Core never depends on cli-lib, which is the signed TASK-1749 constraint.
+
+    ### 2.1 aida-core/src/launch_policy.rs (pure data, no I/O)
+    - `enum LaunchVendor { Claude, Codex, Agy }`. Parsing is closed. An unknown name is `Err`, never a default.
+    - `enum LaunchKind { Fresh, Resume, Exec, Background, Query, Control }`.
+      - `Query` is a vendor probe such as version, agents list or MCP list. It has no seat and no grant, and it cannot become a session.
+      - `Control` is an `aida` child that continues this process's own seat.
+    - `struct EnvPolicy`, compiled from `launch_policy.toml` (include_str, deny_unknown_fields, the same shape as containment/vendors.toml).
+      - `common`: PATH, HOME, USER, LOGNAME, SHELL, TERM, COLORTERM, LANG, LC_*, TZ, TMPDIR, the XDG_* dirs, and the proxy and CA variables (HTTP(S)_PROXY, NO_PROXY, ALL_PROXY and lower-case forms, SSL_CERT_FILE, SSL_CERT_DIR, NODE_EXTRA_CA_CERTS, REQUESTS_CA_BUNDLE, CARGO_HTTP_CAINFO).
+      - `build`: CARGO_HOME, RUSTUP_HOME, RUSTUP_TOOLCHAIN, AIDA_CARGO_TIMEOUT, AIDA_CARGO_SLOTS, CARGO_TERM_COLOR.
+      - Per-vendor `credentials` and `config`, by exact name:
+        - claude: ANTHROPIC_API_KEY, ANTHROPIC_BASE_URL, CLAUDE_CONFIG_DIR, plus the Bedrock/Vertex keys as a named set
+        - codex: OPENAI_API_KEY, OPENAI_BASE_URL, CODEX_HOME
+        - agy: GEMINI_API_KEY, GOOGLE_API_KEY, GOOGLE_APPLICATION_CREDENTIALS
+      - No prefix wildcards except `LC_*`. Operator additions come only from the trusted default-branch config (`[launch.env] pass = [...]`, read through config-trust), never from the worktree.
+    - `fn child_env(vendor, kind, ambient: impl Fn(&str)->Option<OsString>) -> Vec<(String, OsString)>`. It returns the allowed ambient keys only. Every `AIDA_*` key is excluded here; the context adds back exactly the ones it owns. `Query` gets `common` plus that vendor's credentials only.
+
+    ### 2.2 launch/context.rs: LaunchRequest, then LaunchContext
+    - `LaunchRequest` is untrusted intent: vendor, kind, requested seat, spec, cwd, contained requested, model/effort, resume id, stdio needs and an argv tail.
+    - `LaunchContext::resolve(req, host: &HostFacts) -> Result<LaunchContext, LaunchRefusal>` runs ONCE, after read-only preflight and before any lease, log, worktree or grant effect. Its fields are private, and nothing else can construct one:
+      - `authority_root`: the canonical main checkout. Grants, roster, config-trust and store resolve here. It is kept separate from `cwd`, which closes L6.
+      - `cwd`: canonical. It must lie inside `resources.write_roots` when the posture is not None.
+      - `seat: SeatDecision`, one of:
+        - `Baseline(seat)`
+        - `Delegated(ChildGrantHandle)`, from one `seat_authority::issue_launch_child` call, which replaces the eight call sites
+        - `Inherit` (Control only: forward this process's own validated seat and grant handle)
+        - `None` (Query)
+        The decision is never built from a role string.
+      - `posture: ContainmentPosture` (Aida / Native / None, from the existing `containment_posture_in`, session.rs:3154). It is monotonic: if `process_contained()` holds, a request that resolves weaker is refused, not downgraded.
+      - `vendor: VendorProfile`: program, harness version and the posture argv. The argv is computed here, never taken from `default_flags`; a `default_flags` entry that sets a posture flag is a refusal, which closes L9. Codex finalization (`prepare_launch`) becomes a private step of the Codex profile, so it is impossible to skip.
+      - `identity`: lease id, handle, AIDA_USER/AGENT_NAME/TYPE, session scope.
+      - `resources: SandboxResources` (2.3).
+      - `env: Vec<(String, OsString)>`: `child_env(...)` plus the AIDA keys the context owns (role, grant selector or explicit empty, containment and posture, project root, session id, scope, handle, context file, headless marker).
+    - `LaunchRefusal` is a typed enum with a plain-language message. Every unknown input maps to a refusal variant: unknown vendor, unknown posture value, contained parent with a weaker request, cwd outside the write roots, `AIDA_AGENT_CMD` under a contained parent, an unresolvable authority root, or a posture flag in default_flags.
+
+    ### 2.3 launch/resources.rs: SandboxResources, declared once, rendered per backend
+    ```
+    struct SandboxResources {
+      write_roots: Vec<PathBuf>,        // worktree + gitdir rules (contained_boundary as today)
+      store_paths: Vec<PathBuf>,        // contained_store_write_paths as today
+      deny: Vec<PathBuf>,               // main .git etc. as today
+      cargo: CargoResources { target_dir: PathBuf, slot_dir: Option<PathBuf>, sccache: Sccache::Off },
+      network: NetworkPolicy,           // allowed_hosts / managed_domains_only as today
+    }
+    ```
+    - `target_dir` is the seat clone's recorded dir (seat_clone.rs:877), or the worktree's own target.
+    - `slot_dir` is the one resolver moved from doctor_cmd.rs:2492. `XDG_RUNTIME_DIR` is in `common`, so the wrapper and the declaration agree on `${XDG_RUNTIME_DIR}/cargo-slots-<uid>`. If it does not resolve, it is `None`, and the lane reports that cargo slots are unavailable rather than having a broader root granted.
+    - `sccache` is always `Off` (`RUSTC_WRAPPER=""`). That keeps advisor ruling O2 (a compile cache a seat can write poisons every seat and the host) and the BUG-2383 rejection of a shared sccache. TASK-2772's "or degrade to no-sccache" option is the one taken.
+    - Renderers, one per backend, all taking `&SandboxResources`:
+      - (a) Claude `--settings` JSON. It replaces the inline assembly in `contained_settings_json_with_boundary`. It adds `allowWrite` for the target dir and slot dir, plus `env: {RUSTC_WRAPPER: "", CARGO_TARGET_DIR}`.
+      - (b) bwrap `--bind`/`--setenv`, replacing the hand list at session.rs ~5140.
+      - (c) Codex workspace-write roots (`--add-dir` / `-c sandbox_workspace_write.writable_roots`).
+      - (d) The BUG-2383 lane-job runner's bwrap profile, which consumes the same `CargoResources` instead of its own list.
+    - Host uncontained Claude lanes (TASK-2772) get renderer (a) too. `spawn_agent` passes a generated `--settings` that adds only the declared build resources and that env block. It adds no permission allow rules, no bypass and no network. Because Claude settings travel with the session, this reaches `--bg` sessions, where command env does not (L8).
+
+    ### 2.4 launch/spawn.rs: the only constructors
+    - `fn spawn_agent(ctx: &LaunchContext, life: Lifecycle) -> Result<AgentChild>`, with `Lifecycle = Exec | Spawn{stdio} | Background | Capture{timeout, bound}`.
+      - It builds `Command::new(ctx.vendor.program)` and calls `env_clear()` (after the allowlist slice, 2.5), then `envs(ctx.env)`, `current_dir(ctx.cwd)`, the posture argv, the resource renderer and the request argv tail.
+      - It runs the vendor finalizer (Codex `prepare_launch`) last.
+      - It never calls `set_var`. Hooks (`HeadlessChildHooks`, session.rs:6111) keep their contract.
+    - `fn control_child(ctx: &LaunchContext, aida_argv) -> Command` is for `aida` self-children. It forwards the seat as `Inherit`, never a literal role. The aida-tui sites need it without cli-lib, so the env half lives in `aida_core::launch_policy::control_env(own_seat, own_grant_selector)`. The TUI then forwards the operator's own validated seat instead of hard-coding "advisor".
+    - `fn query_vendor(vendor, argv, timeout) -> Result<Output>` is for version, agents and MCP probes, with no seat. aida-core ai/client.rs:246 uses the core `child_env(.., Query, ..)` plus its own Command. That is the single ledgered core site.
+    - `aida launch explain [--vendor V] [--kind K] [--format json]` is a pure preview. It runs no probes and allocates nothing. It prints the resolved posture, seat decision, resources, the env KEYS passed and the ambient keys dropped (never values), and any refusal. This is both the operator's migration check and the debugging surface.
+
+    ### 2.5 Where state lives
+    - No new persistent state. LaunchContext is in-memory and per-invocation.
+    - The only durable trace is what exists today: the lease, the grant keyring and the launch log. The log gains one line per launch: kind, vendor, posture, a resource digest and a sorted env-key digest (keys only).
+    - STORY-2325 (the ownership and liveness record) can later read that line. This story does not depend on it.
+
+    ## 3. Migration (single user; surgery, no shims)
+    1. Code surgery, done in the slices below:
+       - Delete `set_contained_env_for_children`, `CONTAINED_ENV_APPLIED` and `apply_queue_work_contained_env` (queue_cmd.rs:11332). `process_contained()` then reads the inherited env only.
+       - Delete the queue_cmd.rs:13126 `set_var`. The SessionStart hook reads the child's env, which spawn_agent sets.
+       - Delete `scrub_launcher_session_env` and `apply_headless_child_seat_env`. Their effect is the default under the allowlist.
+       - Delete dispatch.rs `build_implementer_launch_command`, or rebuild it on spawn_agent (Q5).
+       - Make `resolve_agent_program` private to launch/.
+       - Rename agent_launch's existing `AgentLaunchContext` (the registry context file) to `AgentRegistryContext`, so there are not two "launch contexts".
+    2. Host config, operator-run once: `aida doctor` gains a launch check. It names any `~/.aida/agents.toml` `default_flags` entry that sets a posture flag (bypass, sandbox or permission-mode) and gives the exact line to delete. Launches refuse until the line is removed. There is no automatic rewrite of the operator's file and no compatibility mode.
+    3. Env cutover, per vendor, satisfying TASK-1749 C1. Before each vendor's allowlist PR merges, the operator runs `aida launch explain --vendor V --kind {fresh,background,exec}` on this host. Its dropped-keys report is posted on this spec. Any key a real launch needs is added to `launch_policy.toml` (or to trusted `[launch.env] pass`) in that PR. Rollback is `aida dev rollback`.
+    4. Tests and fixtures that set `AIDA_AGENT_CMD` keep working uncontained. Under a contained parent it refuses. The full removal of the production read belongs to regroup target 4 (HostEnv/Tools), which this does not block.
+
+    ## 4. Specs this retires, and what is only evidence
+    Retired, closed by these PRs:
+    - TASK-1749: superseded by STORY-2326. Its signed sketch and conditions are carried over.
+    - TASK-2772: closed by PR-C, when declared cargo resources render into host Claude lane settings.
+    - TASK-1758: retired if the signer takes Q2. Background sessions resolve their seat only from the lane lease (lane_env), and a daemon-inherited role or grant with no lane fix falls to baseline.
+    - TASK-1788: retired if the signer takes Q3 (refuse a cross-root resume under containment). Q3 is operator-held, so it needs the operator's word.
+
+    The class behind BUG-2006, BUG-2007, BUG-2144, BUG-2386 and BUG-2416 (all completed) closes: no new site can skip posture, finalization or scrubbing, because no other constructor exists.
+
+    Evidence, not retired:
+    - TASK-1333: the root/cwd split (L6) removes its launch refusal. Its other deferral conditions (a supplied reconstitution vendor/credential profile) still govern, and reconstitute's `set_current_dir` is replaced only when a slice touches that path. Recommendation: un-defer it after PR-B, as a small consumer.
+    - STORY-1486: `SandboxResources` is the vehicle for the declared Git policy it describes. The scaffold profile itself and enforcement stay its own work.
+    - BUG-1669: spawn_agent becomes the single chokepoint where the "advisory-grade slice" (dispatch-authority check plus admission log) could later go. It is not delivered here, and its broker/VM gate (TASK-1580) is untouched.
+    - TASK-158: AIDA launches become immune to ambient posture drift, because argv carries the posture and posture flags in default_flags refuse. The ~/.codex drift observation stays deferred on its own trigger.
+    - TASK-1774 (`--unshare-pid`): becomes one declared field on the bwrap renderer. Not done here.
+    - STORY-1678 (regen harness isolation): would consume `EnvPolicy` and `SandboxResources`. Not done here.
+
+    ## 5. Threat model: no authority loosening; fail closed on unknown
+    - Authority comes only from seat_authority. `SeatDecision` is built from a validated handle or a baseline seat, and a role or name string never yields a grant. The 12 TUI "advisor" literals and orchestrator_leases' `gate.role` stop minting seats by string. Grants are still revalidated at every authority-bearing boundary, so the context caches no verdict.
+    - Containment is monotonic. A contained parent cannot produce an uncontained, native or unknown-posture child. Unknown vendor, posture value, kind or authority root each refuse before any effect. agent_launch.rs:6286's fail-open is removed.
+    - The environment is closed. Only listed keys pass. Every AIDA_* key is set by the context or absent. Credentials pass per vendor by exact name: Codex never receives ANTHROPIC_API_KEY, and Query children receive no seat. GH_TOKEN, SSH_AUTH_SOCK and other forge credentials do not pass by default (Q4).
+    - Resource additions are the only widening, and they are bounded and declared:
+      - The seat's own target dir, which is already writable for contained seat clones.
+      - The cargo slot lock dir. It holds flock files; the worst a lane can do is hold slots, which it can do today with any uncontained process.
+      - No sccache socket, no CARGO_HOME write for contained lanes beyond today's bwrap list, and no network change.
+      The signer should treat the host-lane `allowWrite` addition as the one explicit widening in this story.
+    - `AIDA_AGENT_CMD` cannot redirect a contained child's program.
+    - `--bg` is described honestly. Env discipline governs only the hand-off. The session's tool env comes from the settings `env` block and the lane_env correction, and its authority still comes from grants. This story claims nothing stronger.
+    - Preview (`aida launch explain`) has no effects and never prints values.
+    - Unchanged:
+      - reviewer attestation and independence
+      - hold clearance (human TTY)
+      - `bg_seat_refusal` (agent_launch.rs:6249)
+      - the contained `.git` denies (BUG-1982/2012)
+      - os_wrap refusing `--bg` (BUG-2169)
+      - BUG-1669's same-user concession (ADR-66)
+
+    ## 6. Test plan
+    - Pure tests (no fs, no spawn):
+      - `LaunchContext::resolve` table over vendor × kind × posture × parent-contained × seat request × cwd placement, including every `LaunchRefusal` variant.
+      - `child_env` table: a sentinel ambient env that holds every AIDA_* key, GH_TOKEN, a foreign vendor's credential, `AIDA_AGENT_CMD` and a random key. Only allowlisted keys survive, per vendor and kind.
+    - Property test (proptest): for any ambient env and any request, a contained parent never yields posture None or Native-from-Aida. The child env's AIDA_* set equals exactly the context-owned set. No value of a non-allowlisted key appears in the child.
+    - Renderer agreement: one `SandboxResources` renders to Claude JSON, bwrap args, Codex roots and the lane-job profile. Every declared path appears in each renderer and no undeclared write root appears in any. Golden tests on the existing contained settings stay byte-identical except for the intended additions.
+    - Runtime fake vendors (the existing fake-program fixtures, extended). For fresh, resume, exec, background, reviewer, compete arm, intake, questions, phase advisor and CI fix, each across claude, codex and agy:
+      - The child's actual argv, cwd and full env are recorded. The fixture asserts the protected keys and asserts that a seeded parent env never leaks.
+      - A refused launch leaves no lease, log, worktree or grant artifact.
+      - A Codex child always shows `prepare_launch`'s overrides.
+    - TASK-2772 fixture: a host Claude lane's generated settings allow the slot dir and target dir and set `RUSTC_WRAPPER=""`. A real-bwrap test (skipped without userns) shows `flock` on the slot dir succeeding inside the rendered profile.
+    - Ratchet (C2 style; a line and token scanner like task_1750_liveness_primitive_guard_tests.rs, with no syn). In production source of every crate outside `launch/` and `aida-core/src/launch_policy.rs`, it flags:
+      - (i) `Command::new` with a vendor literal (claude/codex/antigravity/agy/gemini)
+      - (ii) `Command::new` over `resolve_agent_program`, a `.program()` value, or a `HeadlessVendor` value
+      - (iii) `.env`/`.env_remove`/`set_var`/`remove_var` naming AIDA_SESSION_ROLE, AIDA_CONTAINED, AIDA_CONTAINMENT_POSTURE or `GRANT_ENV`
+      - (iv) bypass literals (`--dangerously-bypass-approvals-and-sandbox`, `bypassPermissions`, `--full-auto`) outside the vendor profiles
+      The exception ledger is exact (file + fn + purpose), it may only shrink (a count assertion), and it is empty after PR-D. Mutant fixtures (direct, aliased `use std::process::Command as C`, dynamic program, and an env setter in a new module) must fail the scanner. Shell launches in scripts/ and templates/ are a separate, listed inventory; the ablation scripts are operator tools.
+    - Gate: LIGHT. One targeted cargo filter per PR (`launch::` plus the touched site's tests) and `make check-ci-fast`.
+
+    ## 7. Slice plan (4 PRs, by risk and vendor; contained paths first, per TASK-1749)
+    - PR-A, core types and Claude contained paths. No env_clear yet.
+      - Adds `aida_core::launch_policy`, `launch/{context,resources,spawn}.rs` and `aida launch explain`.
+      - Converts the Claude contained paths: contained resume (session.rs:675), exec (:1373), run session (:1485), headless forking (:1987), reviewer plans (:2982, :2859), coordinator headless (:5727), headless resume (:6760, :8381), and agent-new foreground and background (agent_launch.rs:6173, :6836).
+      - Deletes `set_contained_env_for_children` and the queue_cmd.rs:13126 `set_var`, after threading the context through pickup.
+      - Under C1, A only scrubs: every AIDA_* key and `AIDA_AGENT_CMD`-under-containment are removed, and ambient vendor env passes through.
+      - The ratchet lands with a ledger that lists every unconverted site.
+      - STRICT review.
+    - PR-B, Codex and Agy, plus the remaining agent sites.
+      - Codex session, exec, resume and finalize (session.rs:2616-2859), the vendor resume (:6859), compete arms, phase advisor and CI fix, autopilot intake, questions, dispatch.rs (Q5), and queue_cmd exec. Codex `prepare_launch` moves inside the profile.
+      - The eight grant-issuing call sites collapse into one `issue_launch_child` in resolve.
+      - Control children (orchestrator_leases, zen_drive_root, phase_driver auto-punt, aida-tui) move to `control_child` / `control_env`.
+      - The ledger shrinks.
+      - STRICT review.
+    - PR-C, declared resources (closes TASK-2772).
+      - Renderers (a)-(d). The bwrap list, contained settings, Codex roots and BUG-2383's runner profile all read `SandboxResources`.
+      - Host Claude lanes get the generated `--settings`.
+      - The `aida doctor` default_flags check, and the doctor slot-dir resolver moves to launch/.
+      - The real-bwrap slot test.
+      - This PR rebases onto PR #3192 if #3192 has merged; otherwise it waits for it. It does not edit lane_job.rs while #3192 is open.
+    - PR-D, env_clear allowlist per vendor (C1), queries and the core client; the ledger goes to zero.
+      - Turns on `env_clear()` plus `child_env` for Claude, then Codex, then Agy. Each vendor change is gated on that vendor's `aida launch explain` dropped-keys report being posted on this spec.
+      - Migrates `query_vendor` (doctor, init, claude_agents) and core ai/client.
+      - Deletes `scrub_launcher_session_env` and `apply_headless_child_seat_env`.
+      - The ledger assertion reaches zero.
+      - STRICT review.
+    - Trailers: A, B and C use `(Refs STORY-2326)`, C also carries `(TASK-2772)`, and D carries `(STORY-2326 TASK-1749)`.
+
+    ## 8. Open questions for the signer
+    - Q1. Accept STORY-2326 as superseding TASK-1749, inheriting its signoff and C1/C2? I recommend yes. And is C1's "scrub first, allowlist last" ordering still what you want, given STORY-2326 names the allowlist as the goal? I recommend keeping it: PR-D is the allowlist, gated per vendor.
+    - Q2 (TASK-1758). For Background sessions, resolve the seat only from the lane lease. A daemon-inherited role or grant without a lane fix falls to baseline. I recommend yes: it fails closed, and lane_env already computes the fix.
+    - Q3 (TASK-1788, operator-held). Should a contained parent refuse `session resume` when the session's root is outside its own write roots? I recommend refusing: it is monotonic and fails closed. This needs the operator's ruling.
+    - Q4. Forge credentials (GH_TOKEN/GITHUB_TOKEN, SSH_AUTH_SOCK) for agent children. Are they absent by default, with lanes pushing through `aida ship`/`aida pr`, which run host-side? Or are they on the Claude/Codex allowlist? I recommend absent. PR-D's dropped-keys report will show whether any lane path still pushes directly.
+    - Q5. dispatch.rs `build_implementer_launch_command` (Codex `--full-auto` and agy, with no posture resolution). Delete it in PR-B if `aida dispatch` has no live caller, or route it through spawn_agent? I recommend routing it, since dispatch.rs:2767 still calls it.
+    - Q6. Is the host-lane `allowWrite` for the cargo slot dir and the seat target dir acceptable as the one declared widening? And is sccache Off for every lane, including uncontained host lanes, acceptable at the cost of build time? I recommend yes to both. A shared sccache is a cross-seat cache-poisoning channel (ruling O2).
+    - Q7. Should PR-A first prove, with one real host probe recorded in its PR body, that `claude --bg --settings <file>` applies the settings `env` and `sandbox` blocks to the daemon-run session? If it does not, PR-C falls back to the lane_env correction for env, and to the project `.claude/settings.local.json` written at lane creation for sandbox roots. I recommend yes; it is cheap, and PR-C's design depends on it.
+  created_at: 2026-11-03T00:42:33.142545847Z
+  modified_at: 2026-11-03T00:42:33.142545847Z
+  session_id: 06875d70-911b-4054-b85a-65e7207379ab
 history:
 - id: 01a19ed2-a170-7d52-94f3-7c4ff46f38c4
   author: joe
