@@ -32,7 +32,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T00:54:49.371776631Z
-modified_at: 2026-11-03T02:21:21.763441139Z
+modified_at: 2026-11-03T02:25:20.786517989Z
 req_type: Story
 tags:
 - architecture
@@ -423,6 +423,31 @@ comments:
   created_at: 2026-11-03T02:21:01.938247432Z
   modified_at: 2026-11-03T02:21:01.938247432Z
   session_id: 125337a4-7dd3-483b-9c56-3665173938ae
+- id: 01a19f39-b192-75b2-9635-edb3d9f5aa47
+  author: joe
+  content: |
+    IMPLEMENTER FORK, TASK-2707 PR1 (headless contained Codex). Claude host lane, 2026-11-02 19:4x MST. I stopped before writing any code. Nothing is edited or committed in /home/joe/ai/aida-task2707-pr1. The lease on STORY-2238 is still held.
+
+    FORK 1 (blocking): the C5 broker filter versus Codex's AF_INET route to the relay.
+    - The shipped broker (egress_probe.py install_filter) denies socket(AF_INET/AF_INET6) outright. It traps every connect() as USER_NOTIF and serves only one pinned AF_UNIX endpoint.
+    - TASK-2706's own record (comment, item "AF_INET connect inside the lane cannot be brokered") says the host cannot setns into the lane netns and CONTINUE has an fd-swap race. It ends: "Slice C's in-netns loopback HTTP relay therefore needs a design decision."
+    - Neither signoff (01:23 C1-C12, 07:40) makes that decision. Codex's harness and its tool shells need an AF_INET loopback connect to the relay that HTTP(S)_PROXY points at (probe 3; native network must stay enabled, signed decision 2). So "broker mandatory on the outer worker" and "Codex reaches the relay" cannot both hold with the filter as shipped.
+    Options:
+      F-a: Broker inet connects through the relay. Allow socket(AF_INET/6, STREAM). Trapped connect: the broker reads the sockaddr once. AF_UNIX keeps today's pinned private-endpoint logic. AF_INET to exactly 127.0.0.1:<relay port> gets a socket already connected to the relay, created by the in-netns relay helper (it runs outside the filter), passed over the typed channel, and installed with ADDFD SETFD. O_NONBLOCK/CLOEXEC are copied from the target slot (pidfd_getfd/fdinfo, as TASK-2706 suggested), and the broker answers val=0. Every other inet destination is refused. No CONTINUE. Cost: socket options and bind() set before connect are lost on the replaced socket (reqwest/hyper set nodelay after connect, so this is fine); more broker code.
+      F-b: No inet brokering. Deny socket(AF_UNIX, any) and DGRAM socketpair; allow STREAM socketpair. Allow connect() with no trap, because the only sockets that can exist are inet sockets confined by the lo-only netns. This is CONTINUE-free with no TOCTOU, and much simpler. Cost: no pathname/abstract Unix IPC inside the lane at all. Codex's private app-server daemon socket (C6) and any tool needing Unix sockets break. Needs a model-free probe that headless `codex exec` runs with AF_UNIX denied. It replaces the signed "broker performs connect" mechanism, so it needs your amendment.
+      F-c: Approve the family check and then CONTINUE. REJECTED: the sockaddr can be swapped to /run/user/1000/bus after the check.
+    RECOMMENDATION: F-a. It keeps the signed broker as the C5 mechanism, keeps C6's private daemon IPC working, and keeps the host_dbus_and_codex_daemon_socket_unreachable positive control meaningful.
+
+    FORK 2: credentials for PR1's headless live run. The signed slice plan puts P3/C7 in PR2, and TASK-2707 says "P3 ... must be resolved before credential code, no silent API-key-only replacement for ChatGPT". But PR1's live evidence (an implementer commit plus store edit, and a reviewer verdict) needs an authenticated Codex.
+      G-i (recommended): PR1 supports only C7(iii). The API key travels only as the vendor's env var through the outer --clearenv allow-list. A ChatGPT auth.json refuses by name ("contained ChatGPT auth waits for P3, PR2"). That is a named refusal, not a silent replacement. Live PR1 evidence then needs an operator-issued test API key.
+      G-ii: Run P3 now (inotify on a synthetic private state root) and land the C7 choice in PR1, which widens PR1.
+
+    FORK 3 (minor, confirm): the in-sandbox shim that installs the filter, sends the listener, waits for ready and then execs codex, plus the in-netns relay, needs an interpreter inside the lane. The TASK-2706 precedent is embedded fixed /usr/bin/python3 -I -S -c code. Recommend reusing it (python3 becomes a named, refused-if-missing prerequisite of the Codex AIDA posture). The alternative is bind-mounting the aida binary RO into the lane with hidden shim subcommands.
+
+    Please rule on F and G (and confirm 3). I will resume PR1 on your reply.
+  created_at: 2026-11-03T02:25:20.786517989Z
+  modified_at: 2026-11-03T02:25:20.786517989Z
+  session_id: 2092209f-ad2f-4d8e-b349-3530849c83b3
 history:
 - id: 01a1949a-3f43-7b12-bc6b-0d5bf40ee2f2
   author: joe
