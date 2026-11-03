@@ -86,15 +86,19 @@ fn process_kind_class(kind: &str) -> &str {
 /// and pid, and the start identities when both sides recorded one — so a
 /// recycled pid of a long-dead process is not mistaken for it, while a legacy
 /// record without a start identity keeps the historical pid-only match.
+/// Process tokens taken in different pid namespaces never match, and two
+/// namespaced tokens need equal, non-empty starts (BUG-2419): see
+/// `qualify_with_pid_ns` and `unqualified_process_tokens_match`.
 pub(crate) fn tokens_match(a: &str, b: &str) -> bool {
     tokens_match_with(a, b, aida_core::liveness::process_identity_matches_strict)
 }
 
 // trace:BUG-2130 | ai:agy
+// trace:BUG-2419 | ai:claude
 pub(crate) fn tokens_match_with(
     a: &str,
     b: &str,
-    mut strict_match: impl FnMut(u32, &str) -> bool,
+    strict_match: impl FnMut(u32, &str) -> bool,
 ) -> bool {
     let (Some((ka, va)), Some((kb, vb))) = (a.split_once(':'), b.split_once(':')) else {
         return false;
@@ -103,21 +107,198 @@ pub(crate) fn tokens_match_with(
         return false;
     }
     match (va.split_once('@'), vb.split_once('@')) {
-        (Some((pa, sa)), Some((pb, sb))) => {
-            !pa.is_empty()
-                && pa == pb
-                && (sa.is_empty()
-                    || sb.is_empty()
-                    || sa == sb
-                    || starts_in_different_schemes(sa, sb)
-                    || pa
-                        .parse::<u32>()
-                        .ok()
-                        .is_some_and(|pid| strict_match(pid, sa) && strict_match(pid, sb)))
-        }
+        (Some((pa, sa)), Some((pb, sb))) => match (split_pid_ns(sa), split_pid_ns(sb)) {
+            // BUG-2419: both taken inside a non-host pid namespace — the same
+            // process only within ONE namespace. No liveness probe and no
+            // mixed-scheme leniency: neither means anything across namespaces.
+            // Both starts must be present: a namespace inode is reused once
+            // the namespace is torn down, so an empty start (pid + inode
+            // alone) could name a process in a later, unrelated sandbox.
+            // trace:BUG-2419 | ai:claude
+            (Some((na, ra)), Some((nb, rb))) => {
+                !pa.is_empty() && pa == pb && na == nb && !ra.trim().is_empty() && ra == rb
+            }
+            // One namespaced, one not: taken in different pid namespaces, so
+            // equal pids name different processes.
+            (Some(_), None) | (None, Some(_)) => false,
+            (None, None) => unqualified_process_tokens_match(pa, sa, pb, sb, strict_match),
+        },
         (None, None) => va == vb,
         _ => false,
     }
+}
+
+/// Inode of the initial (host) pid namespace: the kernel reserves it
+/// (`PROC_PID_INIT_INO`); every other pid namespace gets another inode.
+const INITIAL_PID_NAMESPACE_INODE: &str = "4026531836";
+
+/// Prefix of a namespaced start identity: `pidns-<inode>/<start>`.
+const PID_NS_PREFIX: &str = "pidns-";
+
+/// BUG-2419: split a process token's start part into the pid namespace it was
+/// taken in and the start identity proper. `None` for an unqualified start
+/// (the host namespace, a non-Linux host, or a record from before BUG-2419).
+// trace:BUG-2419 | ai:claude
+fn split_pid_ns(start: &str) -> Option<(&str, &str)> {
+    start
+        .strip_prefix(PID_NS_PREFIX)?
+        .split_once('/')
+        .filter(|(ns, _)| !ns.is_empty())
+}
+
+/// BUG-2419: a process token's start part as `(namespace, start)`:
+/// `(None, start)` for an unqualified start, `(Some(ns), start)` for
+/// `pidns-<ns>/<start>`; `None` for a malformed namespaced start.
+// trace:BUG-2419 | ai:claude
+pub(crate) fn parse_pid_ns_start(start: &str) -> Option<(Option<&str>, &str)> {
+    if start.starts_with(PID_NS_PREFIX) {
+        split_pid_ns(start).map(|(ns, s)| (Some(ns), s))
+    } else {
+        Some((None, start))
+    }
+}
+
+/// BUG-2419: qualify a process token (`proc` / `shell` / `sid`) with the pid
+/// namespace it was taken in, when that is not the host's (`ns` = `Some`).
+/// Inside a pid namespace (a bubblewrap sandbox gives every sandboxed command
+/// one) a pid names a process only there: every sandbox's first process is
+/// pid 2. Other tokens, and every token when `ns` is `None`, pass unchanged.
+// trace:BUG-2419 | ai:claude
+pub(crate) fn qualify_with_pid_ns(token: String, ns: Option<&str>) -> String {
+    let Some(ns) = ns.map(str::trim).filter(|n| !n.is_empty()) else {
+        return token;
+    };
+    let Some((kind, value)) = token.split_once(':') else {
+        return token;
+    };
+    if !matches!(kind, "proc" | "shell" | "sid") {
+        return token;
+    }
+    match value.split_once('@') {
+        Some((pid, start)) if split_pid_ns(start).is_none() => {
+            format!("{kind}:{pid}@{PID_NS_PREFIX}{ns}/{start}")
+        }
+        _ => token,
+    }
+}
+
+#[cfg(test)]
+thread_local! {
+    static TEST_PID_NS: std::cell::RefCell<Option<String>> =
+        const { std::cell::RefCell::new(None) };
+}
+
+/// Run `f` as if this thread's process ran in pid namespace `ns` (tests only;
+/// `None` = the host namespace, the default under test).
+#[cfg(test)]
+pub(crate) fn with_pid_namespace<R>(ns: Option<&str>, f: impl FnOnce() -> R) -> R {
+    struct Reset(Option<String>);
+    impl Drop for Reset {
+        fn drop(&mut self) {
+            let prev = self.0.take();
+            TEST_PID_NS.with(|n| *n.borrow_mut() = prev);
+        }
+    }
+    let prev = TEST_PID_NS.with(|n| n.replace(ns.map(str::to_string)));
+    let _reset = Reset(prev);
+    f()
+}
+
+/// BUG-2419: this process's pid namespace inode, the host's included — the
+/// origin a lease records beside each pid it writes. Off Linux there are no
+/// pid namespaces, so the host's inode stands in; `None` only when Linux
+/// `/proc` cannot say. Under `cfg(test)` only what a test set with
+/// [`with_pid_namespace`] (default: the host): a test run inside a sandbox
+/// must not change the tokens its fixtures expect.
+// trace:BUG-2419 | ai:claude
+pub(crate) fn origin_pid_ns() -> Option<String> {
+    #[cfg(test)]
+    {
+        TEST_PID_NS
+            .with(|n| n.borrow().clone())
+            .or_else(|| Some(INITIAL_PID_NAMESPACE_INODE.to_string()))
+    }
+    #[cfg(not(test))]
+    {
+        static NS: std::sync::OnceLock<Option<String>> = std::sync::OnceLock::new();
+        NS.get_or_init(|| {
+            if cfg!(target_os = "linux") {
+                aida_core::local_pid_ns().map(|ino| ino.trim().to_string())
+            } else {
+                Some(INITIAL_PID_NAMESPACE_INODE.to_string())
+            }
+        })
+        .clone()
+    }
+}
+
+/// BUG-2419: this process's pid namespace inode when it is NOT the host's.
+// trace:BUG-2419 | ai:claude
+pub(crate) fn non_host_pid_ns() -> Option<String> {
+    origin_pid_ns().filter(|ino| ino.trim() != INITIAL_PID_NAMESPACE_INODE)
+}
+
+/// BUG-2419: the origin pid namespace a lease records beside `pid` — this
+/// writer's own, since the pid was read here. `None` when there is no pid.
+// trace:BUG-2419 | ai:claude
+pub(crate) fn recorded_pid_ns(pid: Option<u32>) -> Option<String> {
+    pid.and_then(|_| origin_pid_ns())
+}
+
+/// BUG-2419: a lease's recorded process as an authorship token, qualified
+/// with the namespace the lease recorded it in (`origin`) — never the
+/// reader's. An unknown origin (a lease from before BUG-2419) yields no token:
+/// relabelling its pid as the reader's namespace could match an unrelated
+/// process that holds the same pid there.
+// trace:BUG-2419 | ai:claude
+pub(crate) fn lease_process_token(
+    kind: &str,
+    pid: u32,
+    start: Option<&str>,
+    origin: Option<&str>,
+) -> Option<String> {
+    let origin = origin.map(str::trim).filter(|n| !n.is_empty())?;
+    let ns = (origin != INITIAL_PID_NAMESPACE_INODE).then_some(origin);
+    Some(qualify_with_pid_ns(process_token(kind, pid, start), ns))
+}
+
+/// A process token for authorship identity — [`process_token`] qualified with
+/// this process's pid namespace when it is not the host's.
+// trace:BUG-2419 | ai:claude
+pub(crate) fn author_process_token(kind: &str, pid: u32, start: Option<&str>) -> String {
+    qualify_with_pid_ns(
+        process_token(kind, pid, start),
+        non_host_pid_ns().as_deref(),
+    )
+}
+
+/// The pre-BUG-2419 rule for two unqualified process tokens with equal pids,
+/// minus pids 0-2. An unqualified pid 1 or 2 never names an author: on a
+/// Linux host they are init and `kthreadd`, and inside a pid namespace (a
+/// token recorded before BUG-2419 qualified them) they are that namespace's
+/// init and its first process, which every sandboxed command reuses — so a
+/// pid-2 recorder in one sandbox "matched" a pid-2 claimer in another.
+// trace:BUG-2419 | ai:claude
+fn unqualified_process_tokens_match(
+    pa: &str,
+    sa: &str,
+    pb: &str,
+    sb: &str,
+    mut strict_match: impl FnMut(u32, &str) -> bool,
+) -> bool {
+    if pa.parse::<u32>().is_ok_and(|pid| pid <= 2) {
+        return false;
+    }
+    !pa.is_empty()
+        && pa == pb
+        && (sa.is_empty()
+            || sb.is_empty()
+            || sa == sb
+            || starts_in_different_schemes(sa, sb)
+            || pa
+                .parse::<u32>()
+                .ok()
+                .is_some_and(|pid| strict_match(pid, sa) && strict_match(pid, sb)))
 }
 
 /// TASK-2049: one start identity recorded in the legacy rfc3339 form (a
@@ -183,14 +364,21 @@ pub(crate) fn binding_tokens_match(a: &str, b: &str) -> bool {
     if let (Some(x), Some(y)) = (a.strip_prefix("key:"), b.strip_prefix("key:")) {
         return x.len() == 64 && x.bytes().all(|c| c.is_ascii_hexdigit()) && x == y;
     }
-    fn process_part(token: &str) -> Option<(&str, &str)> {
+    // BUG-2419: compared as parsed `(pid, namespace, start)`: equal pids
+    // and starts in different pid namespaces (or one qualified, one not)
+    // are different processes. A namespaced start binds only by its
+    // underlying kernel start — `pidns-<inode>/` alone is a pid plus a
+    // reusable inode — and a malformed namespaced start is refused outright.
+    // trace:BUG-2419 | ai:claude
+    fn process_part(token: &str) -> Option<(&str, Option<&str>, &str)> {
         let (kind, value) = token.split_once(':')?;
         if !matches!(kind, "proc" | "shell" | "sid") {
             return None;
         }
         let (pid, start) = value.split_once('@')?;
+        let (ns, start) = parse_pid_ns_start(start)?;
         (!pid.is_empty() && pid != "0" && pid != "1" && !start.trim().is_empty())
-            .then_some((pid, start))
+            .then_some((pid, ns, start))
     }
     matches!((process_part(a), process_part(b)), (Some(x), Some(y)) if x == y)
 }
@@ -294,6 +482,24 @@ pub(crate) struct ProcEntry {
 impl ProcEntry {
     fn token(&self, kind: &str) -> String {
         process_token(kind, self.pid, self.start.as_deref())
+    }
+
+    /// [`Self::token`] for authorship and grant-presenter identity:
+    /// qualified with this process's pid namespace when it is not the
+    /// host's (BUG-2419).
+    // trace:BUG-2419 | ai:claude
+    fn author_token(&self, kind: &str) -> String {
+        author_process_token(kind, self.pid, self.start.as_deref())
+    }
+
+    /// [`Self::author_token`] for a grant presenter, or `None` when this
+    /// process has no start identity inside a pid namespace: a qualified
+    /// token without a kernel start is a pid plus a reusable inode, never a
+    /// binding (BUG-2419).
+    // trace:BUG-2419 | ai:claude
+    fn presenter_token(&self, kind: &str) -> Option<String> {
+        let unknown_start = self.start.as_deref().is_none_or(|s| s.trim().is_empty());
+        (!(unknown_start && non_host_pid_ns().is_some())).then(|| self.author_token(kind))
     }
 }
 
@@ -405,16 +611,16 @@ impl IdentitySource {
                 continue;
             }
             if i == 1 {
-                push_unique(&mut out, p.token("shell"));
+                push_unique(&mut out, p.author_token("shell"));
             }
-            push_unique(&mut out, p.token("proc"));
+            push_unique(&mut out, p.author_token("proc"));
             if Some(p.pid) == root {
                 break;
             }
         }
         if root.is_none() {
             if let Some(leader) = self.session_leader.as_ref().filter(|l| l.pid > 1) {
-                push_unique(&mut out, leader.token("sid"));
+                push_unique(&mut out, leader.author_token("sid"));
             }
         }
         out
@@ -426,13 +632,21 @@ impl IdentitySource {
     /// the shell a grant was entered in sits above the harness it launched.
     /// Session ids and leases are left out: they are as copyable as the grant.
     // trace:BUG-1934 | ai:claude
+    // BUG-2419: qualified with this process's pid namespace when it is not
+    // the host's, so two sandboxes whose pid 2 started in the same jiffy do
+    // not present the same `proc:2@linux-starttime:N`.
+    // trace:BUG-2419 | ai:claude
     pub(crate) fn presenter_tokens(&self) -> Vec<String> {
         let mut out = Vec::new();
         for p in self.chain.iter().filter(|p| p.pid > 1) {
-            push_unique(&mut out, p.token("proc"));
+            if let Some(token) = p.presenter_token("proc") {
+                push_unique(&mut out, token);
+            }
         }
         if let Some(leader) = self.session_leader.as_ref().filter(|l| l.pid > 1) {
-            push_unique(&mut out, leader.token("sid"));
+            if let Some(token) = leader.presenter_token("sid") {
+                push_unique(&mut out, token);
+            }
         }
         out
     }
@@ -444,7 +658,7 @@ impl IdentitySource {
         self.chain
             .first()
             .filter(|p| p.pid > 1)
-            .map(|me| vec![me.token("proc")])
+            .map(|me| vec![me.author_token("proc")])
             .unwrap_or_default()
     }
 
@@ -458,16 +672,16 @@ impl IdentitySource {
     pub(crate) fn claimer_tokens(&self) -> Vec<String> {
         let mut out = self.session_tokens();
         if let Some(me) = self.chain.first().filter(|p| p.pid > 1) {
-            push_unique(&mut out, me.token("proc"));
+            push_unique(&mut out, me.author_token("proc"));
         }
         if let Some(shell) = self.chain.get(1).filter(|p| p.pid > 1) {
-            push_unique(&mut out, shell.token("shell"));
+            push_unique(&mut out, shell.author_token("shell"));
         }
         match self.agent_root() {
-            Some(root) => push_unique(&mut out, root.token("proc")),
+            Some(root) => push_unique(&mut out, root.author_token("proc")),
             None => {
                 if let Some(leader) = self.session_leader.as_ref().filter(|l| l.pid > 1) {
-                    push_unique(&mut out, leader.token("sid"));
+                    push_unique(&mut out, leader.author_token("sid"));
                 }
             }
         }
@@ -528,20 +742,29 @@ pub(crate) fn live_session_leader() -> Option<ProcEntry> {
 
 /// The identity tokens a lease binds: its id, the shell that created it, its
 /// hosted agent process, and the agent conversation its manifest recorded.
+///
+/// BUG-2419: each process token is qualified with the pid namespace the lease
+/// recorded it in (`creator_pid_ns` / `active_pid_ns`), never the reader's:
+/// a same-sandbox self-approval still matches, a lease from another
+/// namespace never matches by equal pid and start, and a lease with no
+/// recorded origin contributes no process token at all.
+// trace:BUG-2419 | ai:claude
 pub(crate) fn lease_tokens(lease: &SessionLease, manifest_session: Option<&str>) -> Vec<String> {
     let mut out = vec![format!("lease:{}", lease.id)];
     if let Some(pid) = lease.creator_pid {
-        out.push(process_token(
+        out.extend(lease_process_token(
             "shell",
             pid,
             lease.creator_pid_start_time.as_deref(),
+            lease.creator_pid_ns.as_deref(),
         ));
     }
     if let Some(pid) = lease.active_pid {
-        out.push(process_token(
+        out.extend(lease_process_token(
             "proc",
             pid,
             lease.active_pid_start_time.as_deref(),
+            lease.active_pid_ns.as_deref(),
         ));
     }
     if let Some(id) = manifest_session.map(str::trim).filter(|s| !s.is_empty()) {
@@ -769,7 +992,7 @@ pub(crate) fn record_launched_worker(project_root: &Path, lease_id: &str, pid: u
     record_lease_identity(
         project_root,
         lease_id,
-        &[process_token("proc", pid, start.as_deref())],
+        &[author_process_token("proc", pid, start.as_deref())],
     );
 }
 
@@ -1253,3 +1476,7 @@ mod bug_1918_review_authority_tests;
 #[cfg(test)]
 #[path = "tests/bug_2199_refs_authorship_tests.rs"]
 mod bug_2199_refs_authorship_tests;
+
+#[cfg(test)]
+#[path = "tests/bug_2419_pid_namespace_identity_tests.rs"]
+mod bug_2419_pid_namespace_identity_tests;

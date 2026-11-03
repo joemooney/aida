@@ -3198,6 +3198,9 @@ pub(crate) fn session_start_with_receipt(
         creator_pid_start_time,
         active_pid,
         active_pid_start_time,
+        // trace:BUG-2419 | ai:claude
+        creator_pid_ns: crate::gate::review_authority::recorded_pid_ns(creator_pid),
+        active_pid_ns: crate::gate::review_authority::recorded_pid_ns(active_pid),
         cargo_target_dir: recorded_target_dir,
         // STORY-58: record the parent project root so `aida session list`
         // run from inside the new worktree can also walk the parent's

@@ -856,6 +856,9 @@ pub(crate) fn acquire_review_lease_with_mode(
         creator_pid_start_time: process_probe::process_start_identity(std::process::id()),
         active_pid: None,
         active_pid_start_time: None,
+        // trace:BUG-2419 | ai:claude
+        creator_pid_ns: crate::gate::review_authority::recorded_pid_ns(Some(std::process::id())),
+        active_pid_ns: None,
         cargo_target_dir: None,
         parent_project_root: None,
         pr_head_sha: None,
@@ -3371,6 +3374,9 @@ pub(crate) fn handle_review_record_at(
         if let Some(pr) = pr {
             // STORY-1697: say what the approval released, or why the hold
             // stays armed. No hold at all is not news. trace:STORY-1697 | ai:claude
+            // Friendly covered-spec labels need the node-alias map, installed
+            // outside gate/. trace:BUG-2422 | ai:claude
+            crate::spec_arg::ensure_alias_map();
             match crate::gate::rework_hold_release::auto_release(&project_root, pr) {
                 Ok(crate::gate::rework_hold_release::Outcome::NoHold) => {}
                 Ok(outcome) => println!("  {}", outcome.line(pr)),
