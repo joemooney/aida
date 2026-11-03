@@ -599,7 +599,10 @@ fn bug_home_038_from_seat_trailer_check_runs_before_push() {
     let err = crate::ship_from_seat::run_from(&fx.main, opts(&clone, false, true), &deps)
         .unwrap_err()
         .to_string();
-    assert!(err.contains("carries a `(SPEC-ID)` trailer"), "{err}");
+    assert!(
+        err.contains("carries a `(SPEC-ID)` or `(Refs SPEC-ID)` trailer"),
+        "{err}"
+    );
     assert!(!ref_exists(&fx.origin, "refs/heads/bare"));
     assert_eq!(import_refs(&fx.main), "", "the refused import kept its ref");
 
@@ -616,6 +619,59 @@ fn bug_home_038_from_seat_trailer_check_runs_before_push() {
         crate::trace::SpecResolution::Live
     })
     .unwrap();
+}
+
+/// BUG-2431: a seat commit whose only spec reference is `(Refs SPEC-ID)` —
+/// a partial slice of a multi-PR spec — is published under the named spec,
+/// its PR titled with the `Refs` subject (which merge-time completion skips),
+/// and a dead `Refs` ID is still refused.
+// trace:BUG-2431 | ai:claude
+#[test]
+fn bug_2431_from_seat_accepts_refs_only_trailer() {
+    let fx = fixture();
+    let (clone, tip) = seat_with_commit(
+        &fx,
+        "slice",
+        "c0ffee03800d",
+        "seat-slice",
+        "feat: step one of the spec (Refs BUG-1)",
+    );
+    let forge = crate::forge::fake::RecordingForge {
+        opens_as: Some(78),
+        ..crate::forge::fake::RecordingForge::new()
+    };
+    let deps = crate::ship_from_seat::Deps {
+        bundle: &test_bundle,
+        forge: &|_| Box::new(forge.clone()) as Box<dyn crate::forge::Forge>,
+        after_open: &|_, _| {},
+    };
+    crate::ship_from_seat::run_from(&fx.main, opts(&clone, false, false), &deps).unwrap();
+    assert_eq!(
+        git_ok(&fx.origin, &["rev-parse", "refs/heads/seat-slice"]),
+        tip
+    );
+    let opened = forge.opened.lock().unwrap().clone();
+    assert_eq!(opened.len(), 1);
+    assert_eq!(opened[0].title, "feat: step one of the spec (Refs BUG-1)");
+    assert!(
+        crate::pr_ship::extract_trailing_spec_ids_from_subject(&opened[0].title).is_empty(),
+        "a Refs-only PR title must not name a spec for completion"
+    );
+
+    let base = git_ok(&fx.main, &["rev-parse", "origin/main"]);
+    let range = format!("{base}..HEAD");
+    let ids = crate::ship_from_seat::seat_trailer_check(&clone, &range, |_| {
+        crate::trace::SpecResolution::Live
+    })
+    .unwrap();
+    assert_eq!(ids, vec!["BUG-1".to_string()]);
+    crate::ship_from_seat::explicit_spec_check("bug-1", &ids).unwrap();
+    let err = crate::ship_from_seat::seat_trailer_check(&clone, &range, |_| {
+        crate::trace::SpecResolution::Missing
+    })
+    .unwrap_err()
+    .to_string();
+    assert!(err.contains("BUG-1"), "{err}");
 }
 
 /// Write `reference` at `oid` in `repo` with a reflog entry dated `at`
