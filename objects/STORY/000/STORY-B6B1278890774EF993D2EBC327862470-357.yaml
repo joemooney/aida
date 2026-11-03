@@ -1,0 +1,34 @@
+id: 01a1a373-a5cf-7071-8720-4cc86cd372a8
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-357
+agreed_id: STORY-2384
+title: 'Review PR-3309: [AI:claude] fix(dispatch): take/impl default to the configured vendor and launch Codex lanes detached (BUG-2390)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a1a2d2`) for branch `bug-b6b1278890774ef993d2ebc327862470-164`.
+
+  - PR: <https://github.com/joemooney/aida/pull/3309>
+  - Branch: `bug-b6b1278890774ef993d2ebc327862470-164` → `main`
+
+  ## Covers
+
+  - BUG-2390
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 3309` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-03T22:07:07.727384996Z
+modified_at: 2026-11-03T22:07:07.727384996Z
+req_type: Story
+filed_at:
+  code_sha: 34c0d8e417354cfaa83c676aac28200ebfb525b6
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 34c0d8e4173
+  vendor: claude
+  session: 04f971d5-7365-46ed-b777-d4ff41d730ed
