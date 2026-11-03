@@ -21,7 +21,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T06:46:56.104025446Z
-modified_at: 2026-11-03T23:06:06.140857973Z
+modified_at: 2026-11-03T23:06:07.273023289Z
 req_type: Bug
 tags:
 - audit
@@ -118,6 +118,24 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: CI red at head on 3 shards (BUG-2398 spawn ratchet, golden help snapshot, contracts). AC2 is only partly met: a Codex take/impl from the grantless cron dispatch tick cannot get a child grant. AC1 and the occupancy fix look correct. AC1=verified by bug_2390_take_and_impl_default_to_the_configured_vendor; AC2=partial (serve path verified with a fake aida, tick path unverified and likely refused); AC3=tests present but CI red. No triage reason was given.'
   created_at: 2026-11-03T23:06:06.140856594Z
   modified_at: 2026-11-03T23:06:06.140856594Z
+  session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
+- id: 01a1a3a9-a7ad-7541-b8a1-9cb1eb8cd0a6
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2390):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: a648795c339c
+    Recorded: 2026-11-03T22:45:54.263483646+00:00
+    Findings:
+    1. CI lib-1 bug_2398_final_spawn_boundary_ratchet fails (bug_2398_codex_tool_env_tests.rs:726). The PR removed crate::codex_tool_env::prepare_launch from launch_implementer_lane, but LAUNCH_INVENTORY still lists ("dispatch.rs", 1, Finalization::PrepareLaunch(1)) at bug_2398_codex_tool_env_tests.rs:513, and dispatch.rs still has its GRANT_ENV launch marker at dispatch.rs:2587. Audit the site and update the inventory: Codex now finalizes inside agent_codex_background.rs, so dispatch.rs becomes NotACodexLaunch with a reason. Check the RoleRoute entry at line 1610 too.
+    2. CI lib-0 help_surface_matches_golden_snapshot fails. The golden file was hand-edited: the --branch/--base help block was added, but the catalog JSON section of cli_help_snapshot.txt (the 'agent new codex' flag list near line 46990) has no 'base' row (before 'bg') and no 'branch' row (between 'bg' and 'bypass-sandbox'). Regenerate with AIDA_UPDATE_SNAPSHOTS=1 and commit the result.
+    3. CI contracts shard failed at a648795c339c. The reviewer could not read the job log (log download blocked in the reviewer sandbox). Identify the failing step and either fix it or show it is unrelated to this PR with a green re-run.
+    4. AC2 gap on the dispatch tick path. Per the dispatch.rs module doc, the cron/schedule 'dispatch tick' runs exactly take and impl, and holds no advisor seat grant (the Claude lane blanks GRANT_ENV at dispatch.rs:2587). run_codex_lane now runs 'aida agent new codex --bg', which mints the worker's child grant through seat_authority::issue_detached_launch_child, and that requires a parent seat grant that delegates implementer. So from tick, every Codex take/impl will be refused. Since AC1 routes vendor-less take/impl to Codex in a codex-configured project, all of that project's tick lanes go there. The tests only use a fake aida, so this path is untested. Either refuse Codex take/impl under tick with a clear 'run under aida dispatch serve' outcome (like review/flow/train), or prove the tick path works, and add a test for whichever you choose.
+    5. minor: for take, if the spec already has a lease, prepare_agent_launch_attempt_on_branch re-enters it as it is and ignores --branch/--base (agent_launch.rs doc on LaneBranch). Yet run_codex_lane reports 'accepted detached Codex take ... on branch <pr-branch>' even when that worktree is on a different branch. Either check the re-entered lease's branch and refuse on a mismatch, or report the branch the lane actually got.
+    6. cosmetic: with CODEX_LANE_WORKTREE substituted, the take/impl prompt's first line reads 'You are already in your worktree (the directory you start in: this lane's own session worktree) (branch X, ...)': two back-to-back parentheticals. Reword the constant or the template line.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-03T23:06:07.149662874Z
+  modified_at: 2026-11-03T23:06:07.149662874Z
   session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
 history:
 - id: 01a195dc-94a3-73e2-8979-5b3cd7a026e1
