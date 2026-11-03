@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-199
 agreed_id: BUG-2430
 title: Rework briefs omit the review findings when the verdict is keyed PR-N instead of the spec ID, so rework lanes work from stale rulings
 description: '2026-11-03 10:30: PR-3291 (STORY-2325 PR-B) and PR-3288 (STORY-2326 PR-A) got CHANGES REQUESTED verdicts that were recorded under the key PR-N (gate-ledger PR-3291.jsonl#2, 7 findings; PR-3288, 10 findings). ''aida review verdict STORY-2325'' reports none. ''aida queue work STORY-2325 --role implementer --no-human --force-claim'' then built a brief holding only an older ADVISOR RULING comment, with no ''ITEMS STILL OPEN'' block, and the lanes started work on round-1 instructions. STORY-2338 (verdict keyed by the spec) got its findings. Expected: the brief resolves the latest verdict through the gate ledger for the spec''s open PR (PR-N key or spec key, whichever is newer at the PR head), and refuses to launch a rework when a request-changes verdict exists but cannot be read. Workaround: post the findings as an ADVISOR RULING comment before relaunching.'
-status: InProgress
+status: Done
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-03T17:38:07.427036611Z
-modified_at: 2026-11-03T21:39:53.601117938Z
+modified_at: 2026-11-03T21:50:28.197457216Z
 req_type: Bug
 history:
 - id: 01a1a27d-9cb5-7453-8f23-8b1eec9a4e6a
@@ -32,6 +32,15 @@ history:
   session_id: 01a1a35a50f3
   harness_version: 2.1.317 (Claude Code)
   changes: []
+- id: 01a1a364-920e-7b40-9ad0-20c2faaab57d
+  author: joe
+  timestamp: 2026-11-03T21:50:39.630171213Z
+  session_id: 01a1a35a50f3
+  harness_version: 2.1.317 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 filed_at:
   code_sha: d32d909128fa7dec11860bf2092baaccd1040034
   branch: main
@@ -40,3 +49,7 @@ filed_at:
   aida_build_sha: 493f3ae1c52
   vendor: claude
   session: 04f971d5-7365-46ed-b777-d4ff41d730ed
+implementation_info:
+  implemented: true
+  implemented_at: 2026-11-03T21:50:28.197457216Z
+  implemented_by: joe
