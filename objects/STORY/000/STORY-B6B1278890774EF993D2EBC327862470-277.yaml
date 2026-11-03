@@ -15,12 +15,12 @@ description: |
   3. Every headless spawn applies `headless_wait_envs` (the task1169 guardrails pass unchanged).
   4. Under `[agents] contained` it uses the posture TASK-2631 resolves (native for codex, or AIDA's sandbox once STORY-2238 lands). It never launches uncontained silently.
   5. Recover the code from PR-3188's history (commit 2bb95a7, agent_codex_background.rs) as a starting point.
-status: InProgress
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T04:28:44.095278434Z
-modified_at: 2026-11-03T08:18:36.914451436Z
+modified_at: 2026-11-03T17:40:34.684826258Z
 req_type: Story
 tags:
 - architecture
@@ -491,6 +491,20 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1a27f-9cf7-71c0-831c-cf4ec7cfcaac
+  author: aida-auto-bump
+  timestamp: 2026-11-03T17:40:34.679315135Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1a27f-9cfc-7c23-8027-f3471941d269
+  timestamp: 2026-11-03T17:40:34.684823648Z
+  agent: aida
+  commit_sha: fc08dfd16d424a30f87ef943aedc6261295928d2
+  summary: 'Delta since approved 0a3e894 is only the main merge c0ff84f (BUG-2419/BUG-2422); the PR-own diff vs merge-base is byte-identical apart from hunk offsets. All 5 ACs verified: aida criteria traces every criterion to tests; live aida ps evidence at 4fe4681; no bind_grant_to_pid outside seat_authority; headless_wait_envs at agent_codex_background.rs:1046,1089; native posture is enforced and a contained parent is refused. CI is green on every lane at c0ff84f. One new minor from the semantic merge with BUG-2419 fails closed and does not block; it is recorded as a finding.'
+  review_verdict: approved
 filed_at:
   code_sha: a83e05d785df667dfa986cf3eb310a3f0637b602
   branch: main
@@ -499,3 +513,7 @@ filed_at:
   aida_build_sha: c7170b43665
   vendor: claude
   session: 77a7a933-9a3f-4243-9a44-892bcedf206c
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-03T17:40:34.679309687Z
+  completion_sha: fc08dfd16d424a30f87ef943aedc6261295928d2
