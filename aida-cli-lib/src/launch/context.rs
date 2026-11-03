@@ -1,0 +1,173 @@
+//! [`LaunchRequest`] (untrusted intent) resolved once into a
+//! [`LaunchContext`] (what will run). Resolution reads the parent's
+//! containment and checks the caller-supplied argv; it has no effects, so a
+//! refused launch leaves no lease, log, worktree or grant behind.
+// trace:STORY-2326 | ai:claude
+
+use std::path::{Path, PathBuf};
+
+use aida_core::launch_policy::{LaunchKind, LaunchVendor, PostureFlag};
+
+use crate::session::ContainmentPosture;
+
+/// What a launch site asks for. In slice A the site still composes the
+/// vendor argv (posture included) itself; `tail` is the caller-supplied part
+/// (a prompt, `default_flags`) that may not carry posture.
+#[derive(Debug, Clone)]
+pub(crate) struct LaunchRequest {
+    pub(crate) vendor: LaunchVendor,
+    pub(crate) kind: LaunchKind,
+    /// The program, already resolved (and OS-wrapped when contained).
+    pub(crate) program: std::ffi::OsString,
+    /// The vendor profile argv the site composed, posture flags included.
+    pub(crate) args: Vec<String>,
+    /// Caller-supplied argv appended after `args`; refused if it sets posture.
+    pub(crate) tail: Vec<String>,
+    pub(crate) posture: ContainmentPosture,
+    /// The child's working directory, and the AIDA boundary's root.
+    pub(crate) cwd: PathBuf,
+    /// Whether the site sets the child's working directory itself
+    /// (`Command::current_dir`). Sites that inherit this process's cwd say no.
+    pub(crate) set_cwd: bool,
+}
+
+/// Why a launch was refused, before any effect.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum LaunchRefusal {
+    /// The caller-supplied argv sets the sandbox or permission posture.
+    PostureFlag(PostureFlag),
+    /// This process runs contained and the child would not.
+    WeakerThanParent {
+        vendor: LaunchVendor,
+        posture: ContainmentPosture,
+    },
+    /// `AIDA_CONTAINED` holds a value that is neither on nor off.
+    MalformedParentContainment(String),
+    /// An `aida` control child or a vendor query cannot be built here.
+    UnsupportedKind(LaunchKind),
+}
+
+impl std::fmt::Display for LaunchRefusal {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::PostureFlag(flag) => write!(f, "{flag}"),
+            Self::WeakerThanParent { vendor, posture } => write!(
+                f,
+                "[contained] this session is contained, so it cannot launch a {} session that \
+                 would run {}; refusing to launch it",
+                vendor.as_str(),
+                posture.label()
+            ),
+            Self::MalformedParentContainment(detail) => write!(f, "{detail}"),
+            Self::UnsupportedKind(kind) => write!(
+                f,
+                "a {} launch is not an agent session; it has its own constructor",
+                kind.as_str()
+            ),
+        }
+    }
+}
+
+impl std::error::Error for LaunchRefusal {}
+
+/// A resolved launch. Fields are private: only [`LaunchContext::resolve`]
+/// builds one, so every launch passed the same checks.
+#[derive(Debug, Clone)]
+pub(crate) struct LaunchContext {
+    vendor: LaunchVendor,
+    kind: LaunchKind,
+    program: std::ffi::OsString,
+    argv: Vec<String>,
+    posture: ContainmentPosture,
+    cwd: PathBuf,
+    set_cwd: bool,
+    parent_contained: bool,
+}
+
+impl LaunchContext {
+    /// Resolve `req` against this process's own containment.
+    pub(crate) fn resolve(req: LaunchRequest) -> Result<Self, LaunchRefusal> {
+        // A malformed value refuses here; the answer is this process's own
+        // inherited containment, never the export it made for its children.
+        if let Err(err) = crate::session::aida_contained_env() {
+            return Err(LaunchRefusal::MalformedParentContainment(format!(
+                "{err:#}"
+            )));
+        }
+        Self::resolve_under(req, crate::session::process_contained())
+    }
+
+    /// [`Self::resolve`] with the parent's containment given (pure).
+    pub(crate) fn resolve_under(
+        req: LaunchRequest,
+        parent_contained: bool,
+    ) -> Result<Self, LaunchRefusal> {
+        if matches!(req.kind, LaunchKind::Query | LaunchKind::Control) {
+            return Err(LaunchRefusal::UnsupportedKind(req.kind));
+        }
+        aida_core::launch_policy::refuse_posture_flags(&req.tail)
+            .map_err(LaunchRefusal::PostureFlag)?;
+        // Containment is monotonic: a contained parent never yields an
+        // uncontained child. A Native (Codex, TASK-2631 opt-in) child keeps
+        // today's rule until the Codex slice moves it onto the AIDA boundary.
+        if parent_contained && req.posture == ContainmentPosture::None {
+            return Err(LaunchRefusal::WeakerThanParent {
+                vendor: req.vendor,
+                posture: req.posture,
+            });
+        }
+        let mut argv = req.args;
+        argv.extend(req.tail);
+        Ok(Self {
+            vendor: req.vendor,
+            kind: req.kind,
+            program: req.program,
+            argv,
+            posture: req.posture,
+            cwd: req.cwd,
+            set_cwd: req.set_cwd,
+            parent_contained,
+        })
+    }
+
+    pub(crate) fn vendor(&self) -> LaunchVendor {
+        self.vendor
+    }
+
+    pub(crate) fn kind(&self) -> LaunchKind {
+        self.kind
+    }
+
+    pub(crate) fn program(&self) -> &std::ffi::OsStr {
+        &self.program
+    }
+
+    pub(crate) fn argv(&self) -> &[String] {
+        &self.argv
+    }
+
+    pub(crate) fn posture(&self) -> ContainmentPosture {
+        self.posture
+    }
+
+    pub(crate) fn cwd(&self) -> &Path {
+        &self.cwd
+    }
+
+    pub(crate) fn sets_cwd(&self) -> bool {
+        self.set_cwd
+    }
+
+    pub(crate) fn parent_contained(&self) -> bool {
+        self.parent_contained
+    }
+}
+
+/// The [`LaunchVendor`] of a headless vendor (the two enums agree by name).
+pub(crate) fn launch_vendor(vendor: crate::session::HeadlessVendor) -> LaunchVendor {
+    match vendor {
+        crate::session::HeadlessVendor::Claude => LaunchVendor::Claude,
+        crate::session::HeadlessVendor::Codex => LaunchVendor::Codex,
+        crate::session::HeadlessVendor::Agy => LaunchVendor::Agy,
+    }
+}

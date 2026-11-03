@@ -492,7 +492,8 @@ enum Finalization {
 /// launches would have been caught.
 // trace:BUG-b6b1278890774ef993d2ebc327862470-172.ac022c22 | ai:claude
 const LAUNCH_INVENTORY: &[(&str, usize, Finalization)] = &[
-    ("agent_launch.rs", 3, Finalization::PrepareLaunch(2)),
+    // STORY-2326: the fg/bg seat writes moved into launch::assign_seat.
+    ("agent_launch.rs", 2, Finalization::PrepareLaunch(2)),
     ("autopilot_intake.rs", 3, Finalization::CoordinatorSpawn),
     ("burndown_run.rs", 4, Finalization::CoordinatorSpawn),
     ("compete_cmd.rs", 1, Finalization::PrepareLaunch(1)),
@@ -504,6 +505,15 @@ const LAUNCH_INVENTORY: &[(&str, usize, Finalization)] = &[
         ),
     ),
     ("dispatch.rs", 1, Finalization::PrepareLaunch(1)),
+    // trace:STORY-2326 | ai:claude — the one seat writer; its Codex callers
+    // finalize at their own (inventoried) sites.
+    (
+        "launch/spawn.rs",
+        3,
+        Finalization::NotACodexLaunch(
+            "launch::assign_seat, the seat writer every converted site calls",
+        ),
+    ),
     ("phase_driver.rs", 1, Finalization::PrepareLaunch(1)),
     ("phase_driver_trait.rs", 1, Finalization::PrepareLaunch(1)),
     ("questions.rs", 2, Finalization::CoordinatorSpawn),
@@ -514,7 +524,9 @@ const LAUNCH_INVENTORY: &[(&str, usize, Finalization)] = &[
     // `aida session resume`, `queue work --resume` and the reviewer resume
     // call last) and the headless `spawn_vendor_headless_resume_granted`
     // (punt/bg resume), which finalizes before stdio and revokes on refusal.
-    ("session.rs", 14, Finalization::PrepareLaunch(7)),
+    // STORY-2326: exec, headless forking, reviewer, advisor and coordinator
+    // seat writes moved into launch::assign_seat. trace:STORY-2326 | ai:claude
+    ("session.rs", 9, Finalization::PrepareLaunch(7)),
     // trace:BUG-2416 | ai:claude — the guided `aida do` session.
     ("zen_drive_root.rs", 1, Finalization::PrepareLaunch(1)),
 ];
@@ -1596,7 +1608,6 @@ enum RoleRoute {
 /// here until it is audited for Codex finalization and recorded.
 // trace:BUG-2395 | ai:claude
 const ROLE_LAUNCH_SITES: &[(&str, usize, RoleRoute)] = &[
-    ("agent_launch.rs", 2, RoleRoute::LaunchInventory),
     ("autopilot_intake.rs", 1, RoleRoute::LaunchInventory),
     ("dispatch.rs", 1, RoleRoute::LaunchInventory),
     (
@@ -1609,7 +1620,9 @@ const ROLE_LAUNCH_SITES: &[(&str, usize, RoleRoute)] = &[
     // from the delegated grant) and `spawn_vendor_headless_resume_granted`
     // (punt/bg resume); both finalize through `prepare_launch`.
     // trace:BUG-2386 | ai:claude
-    ("session.rs", 8, RoleRoute::LaunchInventory),
+    // STORY-2326: the headless forking and reviewer writes moved into
+    // launch::assign_seat. trace:STORY-2326 | ai:claude
+    ("session.rs", 6, RoleRoute::LaunchInventory),
     ("zen_drive_root.rs", 1, RoleRoute::LaunchInventory),
 ];
 

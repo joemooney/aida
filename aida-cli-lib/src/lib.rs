@@ -146,6 +146,8 @@ mod knowledge_list;
 // trace:BUG-1944 | ai:claude — live-work evidence + start-of-work status bump.
 // trace:STORY-1662 | ai:claude
 mod lane_env;
+// One agent launcher. trace:STORY-2326 | ai:claude
+mod launch;
 mod leases;
 mod live_work;
 pub(crate) use live_work::try_auto_queue_pr_review;
