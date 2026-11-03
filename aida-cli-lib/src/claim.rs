@@ -216,6 +216,7 @@ pub(crate) fn handle_claim(spec: &str, worktree: Option<&str>) -> Result<()> {
         driver: aida_core::driver_registry::driver_from_env(), // trace:STORY-1653 | ai:claude
         child_grant_id: None,
         vendor_session_id: None,
+        lane_jobs: None,
     };
 
     std::fs::create_dir_all(leases_dir(&project_root))?;
@@ -223,7 +224,18 @@ pub(crate) fn handle_claim(spec: &str, worktree: Option<&str>) -> Result<()> {
     // trace:STORY-1429 | ai:claude
     let path = lease_path(&project_root, &id);
     let bytes = toml::to_string_pretty(&lease)?;
-    aida_core::write_atomic(&path, &bytes)?;
+    // STORY-2254: a scope a detached launch attempt holds is not claimed; the
+    // check and the lease write share the admission lock.
+    // trace:STORY-2254 | ai:claude
+    crate::agent_launch::codex_bg_receipt::with_scope_entry(
+        &project_root,
+        role.as_deref()
+            .unwrap_or_else(|| crate::agent_launch::agent_new_scope_role(&scope)),
+        &scope,
+        || aida_core::write_atomic(&path, &bytes).map_err(Into::into),
+    )?;
+    // Dual-write: the lease stays authoritative. // trace:STORY-2325 | ai:claude
+    crate::ownership::dual::lease_written(&project_root, &lease);
     // trace:BUG-2215 | ai:codex
     finish_claim_write(
         &path,
@@ -290,7 +302,11 @@ pub(crate) fn handle_unclaim(spec: &str) -> Result<()> {
     for l in &mine {
         let path = lease_path(&project_root, &l.id);
         match std::fs::remove_file(&path) {
-            Ok(()) => removed += 1,
+            Ok(()) => {
+                removed += 1;
+                // trace:STORY-2325 | ai:claude
+                crate::ownership::dual::lease_released(&project_root, &l.id, "unclaimed");
+            }
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
             Err(e) => return Err(e).with_context(|| format!("removing {}", path.display())),
         }

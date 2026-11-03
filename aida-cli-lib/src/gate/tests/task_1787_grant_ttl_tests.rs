@@ -574,6 +574,7 @@ fn test_session_show_displays_grant_ttl() {
         // trace:BUG-2165 | ai:codex
         child_grant_id: None,
         vendor_session_id: None,
+        lane_jobs: None,
     };
     let leases_dir = aida_dir.join("leases");
     fs::create_dir_all(&leases_dir).unwrap();
