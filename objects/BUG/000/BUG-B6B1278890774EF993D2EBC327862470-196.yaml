@@ -11,8 +11,29 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-03T15:56:31.278734245Z
-modified_at: 2026-11-03T16:28:37.503740012Z
+modified_at: 2026-11-03T16:32:37.810209532Z
 req_type: Bug
+comments:
+- id: 01a1a241-67b2-74f3-be5b-f6b98c996fc3
+  author: joe
+  content: |-
+    ## Implementer approach
+
+    ### Acceptance criteria as tests
+    - **Unit (1):** `ship_interactive_tty()` (used by `pr ship` and by the train's `interactive_tty`) now delegates to `role_authority::has_integrity_floor_authority()` — the exact function `merge-hold clear` uses — so stdout plays no part. A test pins that the body calls it.
+    - **Unit (2):** with the test ambient pinning stdin=terminal, stdout=pipe, and the deputy floor authorized (no job env, then a live bound marker), `tty_consents(ship_interactive_tty(), named=true)` is true.
+    - **Unit (3):** with stdin not a terminal (stdout a terminal), it is false.
+
+    ### Expected files
+    - `aida-cli-lib/src/pr_cmd.rs`
+    - `aida-cli-lib/src/deputy/tests.rs` (reuses its spool/marker helpers)
+
+    ### Ambiguities / conflicts as questions
+    - None. Note: a deputy job on a terminal WITHOUT a live marker is now refused by ship/train too (parity tightening, same as merge-hold clear).
+  created_at: 2026-11-03T16:32:37.810209532Z
+  modified_at: 2026-11-03T16:32:37.810209532Z
+  session_id: 01a1a240ce6a
+  harness_version: 2.1.317 (Claude Code)
 history:
 - id: 01a1a23d-bcff-7cc3-8f2f-887fdeaeb312
   author: aida-session-start
@@ -22,6 +43,12 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1a240-fd4a-7b23-a098-9826eb0c9329
+  author: joe
+  timestamp: 2026-11-03T16:32:10.570140770Z
+  session_id: 01a1a240ce6a
+  harness_version: 2.1.317 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 493f3ae1c526c7ab19f208112d426aecbf33c8b5
   branch: main
