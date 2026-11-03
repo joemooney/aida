@@ -1,8 +1,8 @@
 job: fleet-heartbeat
-last_run: 2026-11-01T20:14:24.444720560Z
+last_run: 2026-11-03T16:01:38.388489893Z
 last_by:
   seat: advisor
-  vendor: codex
+  session: f5eddefe-032d-4760-94ba-3a318cf3d1d1
+  vendor: claude
 result: done
-due_since: 2026-11-01T21:22:18.626750679Z
-due_reason: every 1h
+note: 'Advisor sweep 08:58 MST: ps, PRs and lanes checked; 5 Claude rework/fix lanes active; 3 PRs training via the deputy.'
