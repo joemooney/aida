@@ -25,12 +25,157 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-03T03:42:51.559496187Z
-modified_at: 2026-11-03T03:43:28.408516024Z
+modified_at: 2026-11-03T03:49:09.773844582Z
 req_type: Story
 tags:
 - area:deputy
 - needs-sketch
 - security
+comments:
+- id: 01a19f86-6e0d-7d42-8f39-95778eeff4f0
+  author: joe
+  content: |
+    ## SKETCH v1 — `aida deputy shell` (the script deputy)
+
+    Read for this sketch: `deputy_cmd.rs`, `deputy_cmd_args.rs`, `deputy/{mod,worker,hooks,policy}.rs`, `gate/seat_authority.rs` (grant records, binding, `grant_check_for`, `held_grants`), `gate/kernel_deps.rs` (deputy job floor), `contained_boundary.rs` (deputy incoming bind), `status_awaiting.rs` (`deputy_failed`), the interim `~/bin/aida-deputy-shell`, and the repository guide's "Adding or changing a CLI command".
+
+    ### 0. Position relative to the command deputy
+
+    The command deputy already accepts script jobs (`submit -f/--script` with `--allow-scripts`). Those scripts run with no terminal, and `kernel_deps.rs:137` documents that a script job can `env -u AIDA_DEPUTY_JOB` around the floor. So two half-overlapping script paths exist today. This sketch makes the split exact:
+
+    - **Command deputy (`aida deputy`)**: single argv jobs, allow-list, per-prefix TTY policy, N workers, no terminal by default. Safe to leave running.
+    - **Script deputy (`aida deputy shell`)**: whole bash scripts, ONE job at a time, in the operator's terminal with a real TTY, holding the operator's delegated grant. Every job counts as the operator at the keyboard. (Q2 proposes removing `--allow-scripts` from the command deputy.)
+
+    The script deputy reuses the command deputy's primitives (private-dir and atomic-write helpers, `open_pty`, `HumanTerminal::refusal`, `mandate_probe_with`, `grant_check`/`grant_check_for`, `mail_result`). It does NOT reuse its spool, `JobRecord` or worker loop. Those are built around argv, TTY policy and parallel workers, and folding a second job kind into them would widen an authority surface that is already hard to review.
+
+    ### 1. Module layout and registration
+
+    - **No new top-level command and no `REGISTRY` line.** `deputy` is already registered (`deputy_cmd.rs::DEPUTY`). `shell` becomes a variant of `DeputyCommand`: `Shell(DeputyShellArgs)` in `deputy_cmd_args.rs`. `run_deputy` forwards it to `deputy_shell_cmd::run(args)`. The legacy `Command` enum is untouched, so the ratchet stays green.
+    - New `aida-cli-lib/src/deputy_shell_cmd.rs` (handler, output, the refusal sentences) and `deputy_shell_cmd_args.rs` (clap types: `DeputyShellArgs { command: DeputyShellCommand }` with `Run, Submit, List, Status, Log, Wait, Cancel, Pause, Resume, Ack`).
+    - New `aida-cli-lib/src/deputy_shell/`:
+      - `mod.rs`: queue paths, the record types, state transitions, `audit.jsonl`, retention, `unacked_failed_jobs`.
+      - `attribution.rs`: the submit-side capture and the claim-side verdict (§3). Pure core + injected probes, so it can be tested.
+      - `runner.rs` (`#[cfg(unix)]`): the loop, TTY/grant checks, grant refresh, the pty relay and transcript, timeout and cancel.
+      - `tests.rs`.
+    - The `aida deputy --help` and `aida deputy shell --help` doc comments each open with the same one-paragraph "two kinds, when to use which" text (§7). The golden `cli_help_snapshot.txt` is regenerated and reviewed.
+    - Trace: `// trace:STORY-2338 | ai:claude`. Internal IDs stay out of help and stderr.
+
+    ### 2. Queue location, permissions, record schema
+
+    **Root:** `$AIDA_HOME/deputy-shell/<name>/`, using `kernel::aida_home_dir()`. The root is not per-project, because operator scripts cross projects. Every directory is 0700. `check_private_dir` runs at every scan: it refuses a symlink, a foreign owner, or any group/other bit, and the runner then stops claiming instead of repairing. The umask is 077. No path under `/tmp` is read or written, and nothing named `aida_runme*` is looked at.
+
+    ```
+    deputy-shell/<name>/
+      incoming/<id>.job        submit writes it (tmp + rename, O_EXCL, 0600); the only place a submitter writes
+      incoming/<id>.cancel     cancel request
+      jobs/<id>/job.json       the submitted record, moved here at claim, then immutable
+      jobs/<id>/script.sh      the exact script bytes (sha256 of this file == job.sha256)
+      jobs/<id>/state.json     mutable: state, timestamps, rc, reason, attribution verdict
+      jobs/<id>/transcript.log full pty output, raw bytes
+      acks/<id>                failed job acknowledged
+      audit.jsonl              append-only (O_APPEND, one write per line, fsync)
+      runner.json + runner.lock  live runner: pid@start, tty, boot_id, grant prefix, seats (flock)
+      paused                   claim nothing while present
+    ```
+
+    **job.json** (`#[serde(deny_unknown_fields)]`; an unknown field is refused at claim, not dropped, the same rule as `hooks::unknown_fields`):
+    `schema: 1, id (uuid v7), deputy (name), created_at, script (text), sha256 (hex of the script bytes, not of the serde JSON, so `sha256sum script.sh` checks it), source (submitted file path, informational), timeout_secs, spec?, submitter {session_id, seat, subject, principal, grant_id, presenter_token, pid, pid_start, project_root, cwd, host {hostname, boot_id}, mail_to}`.
+    The full `grant_id` is stored at rest in a 0700 file. That is acceptable because a grant only authorizes a process its `binding` names (BUG-1934). Display and audit use only the 8-character prefix.
+
+    **state.json:** `state ∈ {queued, running, done, cancelled}`, `queued_at, claimed_at, started_at, finished_at, rc, reason ∈ {ok, exit, timeout, cancelled, orphaned, refused:<code>}`, `runner {pid, grant_prefix}`, `attribution {verdict, checks[]}`, `transcript_bytes`. A failure is `done` with `rc ≠ 0`. A refusal is `done` with rc 126 and `reason=refused:<code>`, and the script never runs. rc conventions match the command deputy: 124 timeout, 126 refused, 130 cancelled or orphaned.
+
+    **audit.jsonl:** one line per event `{at, deputy, event, job?, actor, sha256?, rc?, reason?}`. Events: `queued, cancel-requested, claimed, refused, started, finished, cancelled, orphaned, acked, pruned, runner-start, runner-stop, role-refreshed, role-refresh-failed, paused, resumed`. `actor` is the grant prefix + seat, or `operator-tty`. Retention never truncates this file (§5).
+
+    ### 3. Submitter attribution
+
+    **Submit side** (`aida deputy shell submit --file F`). Refusal happens here first, not just at the runner:
+    1. Refuse a caller already inside a script job (`AIDA_DEPUTY_SHELL_JOB` set), so a job cannot queue its own successor.
+    2. `grant_check(main)` must be `Valid`. This is the existing presenter check (proc/sid ancestry or the `key:` keyring token), so `grant_verified` is a check that was actually made, not a claim. With no valid grant, submit refuses: "submit needs a live session with a seat grant; run it from a session started with `aida role enter`".
+    3. The seat must be in the runner's submitter allow-list (Q3; default `advisor`). Submit reads it from `runner.json` when a runner is live and otherwise from config. The runner enforces it again at claim.
+    4. Record the submitter block from the validated grant record, not from free text. That covers `session_id`, `seat`, `subject`, `principal`, `grant_id`, and the binding token that matched (`presenter_token`, e.g. `proc:<pid>@<start>`). It also records `pid`/`pid_start`, `host.boot_id` (`/proc/sys/kernel/random/boot_id`) and `hostname`. `AIDA_AGENT_NAME`/`USER` are NOT used.
+
+    **Claim side.** The runner revalidates before the script is written to `jobs/`. If any check fails, the job is refused with a named code:
+    - `refused:unattributed`: the record has no `grant_id` or no `presenter_token`.
+    - `refused:foreign-host`: `boot_id` or `hostname` differs from the runner's.
+    - `refused:grant`: `grant_check_for(project_root, grant_id, "deputy shell")` is not `Valid`. That is the same verdict STORY-1687 uses to revalidate a recorded reviewer, so it covers missing, expired, revoked, a roster ceiling, and an unbound record.
+    - `refused:not-live`: the grant has no live holder (`HeldGrant::live_holder()` over its `proc:/sid:` tokens, read in the runner's host pid namespace). The recorded `presenter_token` must also still be one of the grant's binding tokens. For a key-only grant (a sandboxed submitter, no host pid), liveness falls back to the session's lease heartbeat for `session_id` being fresh. See Q5.
+    - `refused:seat`: the seat is not in the submitter allow-list.
+    - `refused:schema`: an unknown field, `schema` ≠ 1, a sha256 mismatch, or an id collision.
+
+    **Threat model, stated plainly.** This closes the hole the spec names: another uid, or any process able to write `/tmp`, injecting a script. It also refuses stale and unattributed jobs, and records who asked in a form an auditor can check against the grant store. It does NOT stop a same-uid, uncontained process from forging a record that names a live session's grant (grant records are readable by the user). Such a process can already edit the operator's shell rc, so a file spool cannot do better. Kernel-attested attribution (a unix socket with `SO_PEERCRED`, then checking the peer pid's ancestry against the grant binding) is possible, but it requires a live runner at submit time and a sandbox socket rule. I propose it as a follow-up slice (Q6), not this one.
+
+    **Containment.** `deputy-shell/*/incoming` is never added to `contained_boundary` write paths. A contained lane cannot submit, and it cannot reach the operator's terminal by any route. Only an uncontained session whose sandbox names that one directory can submit, which in practice is the advisor seat in the primary checkout. Its Claude Code sandbox write allowlist gains exactly `~/.aida/deputy-shell/*/incoming`. That is the operator's settings edit, not a repo change (Q4).
+
+    ### 4. Runner: TTY and grant checks, subshell isolation
+
+    **Start** (`aida deputy shell run [--name N]`). The refusals are those of the command deputy's start path, reused through `HumanTerminal::refusal(true)`:
+    - refused inside a deputy job of either kind (`AIDA_DEPUTY_JOB` or `AIDA_DEPUTY_SHELL_JOB`), under an agent (`AIDA_AGENT_TYPE`) or headless;
+    - stdin, stdout and stderr must all be a terminal;
+    - the call must go through the `aida()` shell function (`AIDA_DEPUTY_VIA_WRAPPER=1`), so the runner inherits that shell's grant;
+    - `grant_check` must be `Valid`, with a seat in the runner-seat set (Q3: `advisor`);
+    - the flock on `runner.lock` must be free (one runner per name).
+
+    The banner prints the grant (seat, principal, expiry), queue path, submitter seats, refresh interval, retention, mandate tie, and the sentence "every job runs as you, at this terminal". `runner-start` is audited.
+
+    **Grant refresh (time-based).** Between jobs only, never mid-job, the runner checks the time. When `now − last_refresh ≥ --refresh` (default 12h), or the grant has less than 1h left, it re-mints. The re-mint calls the same in-process function `aida role enter <seat> --no-resume --delegate-seat …` uses. The seat and delegate list are fixed at start (`--delegate-seat`, default advisor+implementer+reviewer+integrator as in the interim script). The human-terminal check is evaluated again at that moment. The new grant id goes into the runner's environment for subsequent jobs, and the old grant is left to expire. On success: `role-refreshed` (old and new prefixes). On failure: `role-refresh-failed`. The runner then stops claiming, prints why, and exits once the grant has expired. It never runs a job under an expired grant. Mandate: reuse `mandate_probe_with`, so the runner stops claiming when the mandate active at start ends unless `--keep-after-mandate` is given (Q7).
+
+    **Claim and run** (strictly serial). The oldest `incoming/*.job` by uuid-v7 order is moved to `jobs/<id>/` with a no-replace rename. Next come the attribution verdict and the `paused` and cancel checks. Then the script is printed to the terminal with its id, the submitter prefix and seat, and its sha256. The job then runs as:
+
+    - a child process `bash --noprofile --norc jobs/<id>/script.sh`: a file argument, never `-c`, never sourced into the loop. An `exit`, `cd`, `set -e`, `trap` or `ulimit` in the script affects only that child.
+    - cwd = `$HOME`, the same as the interim script; the script does its own `cd`.
+    - environment = the runner's (the operator's shell environment plus the current grant) plus `AIDA_DEPUTY_SHELL_JOB=<id>` and `AIDA_DEPUTY_SHELL_NAME=<name>`. `AIDA_DEPUTY_JOB` is deliberately NOT set, so the gate floor treats the job as the operator at the terminal. That is this deputy's whole purpose, and it is the authority fork in Q1. `AIDA_DEPUTY_VIA_WRAPPER` is stripped.
+    - its own session and process group on a fresh pty (`worker::open_pty`). The pty slave is the job's controlling terminal and its fds 0, 1 and 2, so `isatty` holds everywhere and `< /dev/tty` works. The runner relays real terminal ↔ pty master, with the real terminal in raw mode for the job's duration and restored afterwards (also on signals), and forwards SIGWINCH. It tees every master byte to `transcript.log`. This replaces `DEPUTY_NO_TEE`: the job gets a terminal and the transcript is complete at the same time.
+    - Ctrl-C during a job is passed to the job through the pty. Ctrl-C while idle stops the runner (`runner-stop`).
+    - timeout: `job.timeout_secs` (submit `--timeout`, default 2h; the interim script had none). The runner sends SIGTERM to the job's process group, then SIGKILL after 10s, and records rc 124.
+    - a crash or restart recovers a `running` job with no live runner as `done`, rc 130, `orphaned`. The runner never re-runs it.
+
+    When the job finishes: `state.json` → `done` with rc and reason, then `finished` is audited. The submitter is mailed through `mail_result` (with the body adapted to say "script"), and the terminal prints a one-line footer.
+
+    **Other verbs.** `submit [--name] --file F [--timeout] [--spec] [--wait]`. `list [--name] [--state] [--limit]`, which also prints whether the runner is live (`runner.json` pid@start alive). `status <id>`. `log <id> [--follow]`. `wait <id> [--timeout]` (exits with the job's rc; when only the wait times out it exits 75 with "still queued/running", which is not a job failure). `cancel <id>`: a queued job becomes `cancelled` at claim; a running one has its process group killed, rc 130, `cancelled`. Cancel is allowed for the job's own submitter session or at the operator's TTY. `pause` (anyone; it only removes authority) and `resume` (human TTY only). `ack <id>… | --all`.
+
+    ### 5. Retention
+
+    At runner start, then hourly while idle, the runner prunes every `jobs/<id>/` whose `finished_at` is older than `--keep-days` / config `[deputy_shell] keep_days` (default 30). Queued and running jobs are never pruned. An unacknowledged failure is pruned on the same clock; awaiting has had 30 days to show it. Each prune appends `pruned {job, sha256, rc, finished_at}` to `audit.jsonl`, so the decision trail outlives the transcript. `audit.jsonl` itself is never truncated. It grows at about 200 B per event, and a rotation rule can come later if it ever matters. `acks/<id>` is pruned with its job.
+
+    ### 6. `aida awaiting` integration
+
+    `deputy::FailedJob` gains `kind: DeputyKind { Command, Script }`. `deputy_shell::unacked_failed_jobs(project_root, session)` returns `done` jobs with `rc ≠ 0` (refusals included, cancellations excluded) and no `acks/<id>`. It scopes like the command deputy: a session sees the jobs its `session_id` submitted, and the operator's shell (no session) sees all. It also filters to jobs whose `submitter.project_root` is the current main checkout, so a failure from another project does not appear here. `status_awaiting.rs` concatenates both sources into `deputy_failed` (file reads only, so it stays cheap on the per-turn notice path). The awaiting renderer labels each row "command job" or "script job" and prints the matching ack: `aida deputy ack <id>` or `aida deputy shell ack <id>`.
+
+    ### 7. Docs and the advisor habit (the same PR)
+
+    - New `docs/deputies.md`, "Deputies: command vs script": why there are two, when to use each, the authority each carries, the queue and audit files, and the threat model of §3. It is linked from `docs/authority-and-seats.md`, the product glossary entry, and the advisor standing-orders deputy line.
+    - The standing-orders deputy line (currently "write /tmp/aida_runme2.sh …") becomes `aida deputy shell submit --name 2 --file F --wait` plus the doc link. This is edited through `aida session handoff --seat advisor`.
+    - `~/bin/aida-deputy-shell` and `~/bin/deputy.sh` are retired by the operator after merge. There is no shim, and nothing reads `/tmp/aida_runme*`. The memory note `operator-runner-loops` needs the same update; it lives outside the repo.
+
+    ### 8. Test plan, per acceptance item
+
+    Everything is hermetic: a temporary `AIDA_HOME`/`HOME` (the BUG-1642 test-home guard), an injected clock, grant probes and a refresh minter, and the runner driven in-process with `max_jobs` plus one binary-under-pty test.
+
+    1. **Queue location/permissions**: the path is `$AIDA_HOME/deputy-shell/<name>`. Directories are created 0700. A scan refuses a symlinked, 0755 or foreign-owned directory and claims nothing. **No /tmp**: a source-scan test asserts that `deputy_shell/` and `deputy_shell_cmd*.rs` contain no `/tmp` and no `aida_runme`. A behavioural test plants a uniquely named `/tmp/aida_runme<rand>.sh` with a marker side effect, runs the runner for N rounds, and asserts the marker is absent and the file untouched.
+    2. **Record**: submit then run `printf hi; exit 0`. `job.json` has every field and the submitter fields equal the injected grant record. `sha256` equals sha256 of `script.sh`. queued ≤ started ≤ finished. rc is 0, and `transcript.log` contains `hi`. The audit sequence is exactly `runner-start, queued, claimed, started, finished, runner-stop`. **Retention**: with the clock advanced 31 days, the job is pruned, a 29-day-old job is kept, `pruned` is audited, and `audit.jsonl` is unchanged above that line. **Role refresh**: with the clock past `--refresh` between jobs, the minter is called once and `role-refreshed` is audited; the job running at the crossing is not interrupted; a failing minter means no further claims and `role-refresh-failed`.
+    3. **rc and states**: `exit 7` makes `submit --wait` exit 7 and `wait <id>` exit 7. Status reads `queued` (no runner), `running` (a script blocked on a fifo), `done`, and `cancelled` (cancel while queued, and cancel while running → rc 130).
+    4. **Authority**: a table test. A job with no grant, an unknown grant id, an expired, revoked or dead-holder grant, a foreign boot_id, a disallowed seat, an unknown field, or a sha mismatch is each `refused:<code>` with rc 126, and the script's marker file is never created. Submit itself refuses without a valid grant and from inside a script job. **Subshell**: job A = `cd /; exit 3`, job B = `pwd; echo $AIDA_DEPUTY_SHELL_JOB`. A has rc 3, the runner is still alive, B prints `$HOME` and its own id. **Runner TTY**: the `HumanTerminal` refusal table extended with the shell-job env; the runner refuses on pipes and without the wrapper or a grant.
+    5. **Awaiting**: one failed script job and one failed command job both appear in the awaiting report with their kind. Session scoping and project scoping hold. `aida deputy shell ack` removes only the script row.
+    6. **Under a pty**: one integration test spawns the built binary `aida deputy shell run --name t` on a pty (the `open_pty` helper) with a fixture grant, submits `test -t 0 && test -t 1 && test -t 2 && echo TTY-OK`, and asserts rc 0 and `TTY-OK` in both the relayed output and `transcript.log`.
+    7. **Docs**: the golden help snapshot covers the two help paragraphs, and a test asserts both help texts contain the shared "two kinds" paragraph. The doc-intent gate covers `docs/deputies.md` and the standing-orders link.
+
+    Local gate per the light-gate rule: one targeted `cargo test -p aida-cli-lib deputy_shell` run, then `make check-ci-fast`.
+
+    ### 9. Forks: numbered questions with my recommendation
+
+    1. **Authority of a script job.** A script job runs without `AIDA_DEPUTY_JOB`, so every human-TTY gate (merge-hold clear, ship of a supervised spec, `role enter`) passes as if the operator typed the command. This is what the interim script does and why it exists. **Recommend: yes, and say so in the banner, the help and the docs.** The controls are attribution, a seat allow-list, serial execution with the script shown on screen, and the audit. The alternative is to set a shell-job marker the floor honours, which would make the deputy useless for its stated purpose.
+    2. **Remove `--allow-scripts` / `submit -f|--script` from the command deputy in this PR.** **Recommend: yes.** It is a single-user project with no compat shim. That leaves one way to run a script, makes the two help paragraphs true, and closes the `env -u AIDA_DEPUTY_JOB` caveat at `kernel_deps.rs:137`. If the PR gets too large, it can become a follow-up TASK filed at sketch approval.
+    3. **Who may submit, and which seat the runner needs.** **Recommend: submitters `advisor` only by default (`--allow-seat` repeatable at `run` to widen it), and the runner requires an `advisor` grant.** Implementer, reviewer and integrator lanes keep the command deputy.
+    4. **Queue root.** The spec says the AIDA home. **Recommend `$AIDA_HOME/deputy-shell/<name>/`** with only `incoming/` writable by the advisor's sandbox (operator settings edit), never in `contained_boundary`. The alternative is the main checkout `.aida/deputy-shell/`: it needs no settings edit, but it is per-project and every primary-checkout session could write it.
+    5. **Liveness for a key-only (sandboxed) submitter.** **Recommend: a fresh session-lease heartbeat for `session_id` (≤ 10 min) when the grant has no live `proc:/sid:` holder in the host namespace.** Without this, a sandboxed advisor could never submit. A stricter alternative refuses every key-only grant.
+    6. **Kernel-attested submit (`SO_PEERCRED` socket) now or later.** **Recommend later, as a filed follow-up.** This slice states the same-uid residual plainly (§3).
+    7. **Naming.** (a) `aida deputy shell` (operator-proposed): **recommend keeping it**. (b) The deputy name as `--name N` (default `default`, matching the command deputy) or as a positional `<name>` like the interim script: **recommend `--name`** for one convention across both deputies. The advisor habit becomes `--name 2`. (c) Mandate tie: **recommend the command deputy's rule** (stop claiming when the start-time mandate ends; `--keep-after-mandate` overrides).
+    8. **Job timeout default.** **Recommend 2h** (dev builds and live acceptance runs are long). The interim script had none, and the command deputy uses 30m.
+
+    Implementation waits for advisor signoff on this sketch and answers to 1–4 and 7(b). The rest take the recommended default unless overruled.
+  created_at: 2026-11-03T03:49:09.773844582Z
+  modified_at: 2026-11-03T03:49:09.773844582Z
+  session_id: e4255f32-cbf1-4c47-a93c-2fa33a2715e3
 history:
 - id: 01a19f81-3898-7250-96f4-65372d1968ea
   author: aida-session-start
