@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-201
 agreed_id: BUG-2432
 title: 'make check-ci-fast fails inside implementer lanes (umask 0077): the Codex mail-wake Python fixture asserts file mode 0640 and gets 0600'
 description: '2026-11-03: the STORY-2338 lane reported that make check-ci-fast passes only with umask 022. Under the lane''s 0077 umask, the Python Codex mail-wake fixture fails a file-mode check (0600 vs 0640) unrelated to the diff. Every lane''s LIGHT gate is therefore red or needs a manual umask. Expected: the fixture sets its own umask or chmods explicitly, and the check is umask-independent.'
-status: Approved
+status: InProgress
 priority: Medium
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-03T18:55:37.410294831Z
-modified_at: 2026-11-03T18:55:56.842949030Z
+modified_at: 2026-11-03T21:46:42.096655356Z
 req_type: Bug
 history:
 - id: 01a1a2c4-9daa-7881-a584-36af1e9bd1b3
@@ -19,6 +19,13 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a1a360-f230-7b33-84f9-03eab462dfb6
+  author: aida-session-start
+  timestamp: 2026-11-03T21:46:42.096652151Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: da17908306fcefc7fc1e8bcf334e2d507c72cf1a
   branch: main
