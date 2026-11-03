@@ -23,7 +23,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-31T19:23:12.694681525Z
-modified_at: 2026-11-03T02:42:27.887807136Z
+modified_at: 2026-11-03T02:43:14.722997587Z
 req_type: Spike
 tags:
 - air-gap
@@ -51,6 +51,492 @@ comments:
     Full analysis + citations: `/tmp/claude-1000/-home-joe-ai-aida/125337a4-7dd3-483b-9c56-3665173938ae/scratchpad/research/2026-11-03-spike-708-research.md`
   created_at: 2026-11-03T02:42:27.887807136Z
   modified_at: 2026-11-03T02:42:27.887807136Z
+  session_id: 125337a4-7dd3-483b-9c56-3665173938ae
+- id: 01a19f4a-14a3-7592-905d-ee33bae6f9da
+  author: joe
+  content: |-
+    RESEARCH DELIVERABLE (full text; the scratchpad artifact is ephemeral):
+
+    # Bundle grants work with bounded allocation gaps
+
+    A root pool grant **can cross an air gap in a Git bundle and fund agreed IDs on an inside hub**. The tested inside clones made fresh claims against their own hub; they did not need to contact the outside server. A real two-clone collision was rejected and retried into disjoint ranges. Returning the inside store by bundle worked both for ordinary pull and for structural reconciliation with divergent outside claims; deliberately overlapping incoming claims were refused. Two qualifications prevent an unconditional success verdict: the final ID of every delegated block fails object-save admission, and the general, synthetic nested-pool path has weaker acceptance evidence than the supported hub-grant path. Recursive root→inside→team delegation is not exposed by the current grant command. I recommend bounded hardening and regression coverage for the demonstrated direct root→inside workflow, with recursive delegation left as an explicit separate decision.
+
+    ## Scope and provenance
+
+    This report answers SPIKE-708's five questions using two local bare repositories standing in for outside and inside hubs. Researchers ran AIDA 0.16.0, built 2026-11-02 19:30:05 -07:00, SHA `553f7d5984c`, against source commit `553f7d5984c6083a9f2b47cfa358ce57c438843b`; the depth researcher recorded Git 2.43.0. All experimental writes used `/tmp` fixtures with temporary HOME/XDG directories; no production HOME enrollment, project implementation, specification changes, comments, merges, or decisions were applied. The report and JSON sidecar are the requested artifacts; “findings comments” and follow-up requirements below are drafts for human review.
+
+    **Provenance:** “probe-verified” means executed and observed by a delegated researcher, with exact retained scripts and logs linked below. The report writer synthesized those records and did not independently rerun the probes. “Source inference” identifies conclusions from source inspection. Recommendation and proposed acceptance criteria are analysis, not tested behavior. The three complete research records are [grant/claim/race/exhaustion notes](research_notes/Pool%20grants%20across%20air%20gaps/grant_probes.md), [return and overlap notes](research_notes/Pool%20grants%20across%20air%20gaps/return_probes.md), and [depth and primary-source notes](research_notes/Pool%20grants%20across%20air%20gaps/lineage_sources.md).
+
+    Git explicitly supports bundles for offline object/ref transfer and fetching, but bundles are read-only transport targets. `git bundle verify` checks format and prerequisite connectivity; it does not establish AIDA allocation authority. A bare fetch likewise transfers history without running AIDA's allocation-conflict preflight. Keep the distinction between **carrying a grant**, **ordering a new claim**, and **admitting an object using that claim**. ([Git bundle](https://git-scm.com/docs/git-bundle#_description), [bundle verification](https://git-scm.com/docs/git-bundle#_options), [Git fetch](https://git-scm.com/docs/git-fetch#_description))
+
+    ## Questions 1–3: grants and races work; the final slot fails
+
+    ### Q1 findings comment draft — the bundle grant is usable
+
+    **Probe-verified:** the outside root declared the inside hub and granted it a four-ID pool per type. A full bundle carried `main` and `aida-store` into the inside bare repo. Two inside clones used that repo as `origin` and declared it as their allocation upstream. An inside claim succeeded, and a non-final allocated element minted agreed `TASK-103`, backed by a native node-local `spec_id`. The supported grant did not fail an outside-reachability check. ([bootstrap log](/tmp/spike708-grant/bootstrap.log), [continuation log](/tmp/spike708-grant/continue.log), [claim log](/tmp/spike708-grant/claim.log), [mint/race log](/tmp/spike708-grant/race.log))
+
+    The existing warning about a block merely appearing in an imported store does not rule out this workflow: a **pool grant** crossed the gap, followed by a **fresh inside-hub-accepted block claim**. For recognized hub-format pools, spendability checks the identical block on the reachable declared hub. This is consistent with current storage docs, which explicitly describe bundle delivery of grants. ([spendability source](https://github.com/joemooney/aida/blob/553f7d5984c6083a9f2b47cfa358ce57c438843b/aida-core/src/allocation_lineage.rs#L904-L952), [storage docs](https://github.com/joemooney/aida/blob/553f7d5984c6083a9f2b47cfa358ce57c438843b/docs/cli/10-storage.md#L324))
+
+    **Exception, probe-verified:** c1 claimed the one-element `BUG-103..103` block, then `aida add` refused: `new or changed global display IDs refuse on a non-authoritative clone; nothing was written`. A two-element block distinguished this from a general bundle failure: `TASK-103` persisted, but its final `TASK-104` did not. The final attempted allocation advanced the block's `next` to 105 while no object with the attempted title appeared. ([claim output](/tmp/spike708-grant/claim.log), [exhaustion output](/tmp/spike708-grant/exhaust.log))
+
+    **Source inference corroborated by those controls:** save admission asks whether the ID was dispensed from a delegated block after `next` has advanced. That helper calls future spendability, whose exhausted-block check now rejects the block. Thus the last already-dispensed element loses admission. ([admission](https://github.com/joemooney/aida/blob/553f7d5984c6083a9f2b47cfa358ce57c438843b/aida-core/src/allocation_authority.rs#L747-L763), [exhausted-block check](https://github.com/joemooney/aida/blob/553f7d5984c6083a9f2b47cfa358ce57c438843b/aida-core/src/allocation_lineage.rs#L898-L900))
+
+    The exact transfer and claim commands were:
+
+    ```bash
+    # In the isolated root after enrollment/backfill and an initial BUG claim:
+    aida node hub add outside --url /tmp/spike708-grant/outside.git
+    aida node hub add inside --url /tmp/spike708-grant/inside.git --size 4
+    git add .aida/config.toml
+    git commit -m 'declare both hubs'
+    git push origin main aida-store
+    git bundle create ../grant.bundle main aida-store
+    git --git-dir=../inside.git fetch ../grant.bundle refs/heads/main:refs/heads/main refs/heads/aida-store:refs/heads/aida-store
+    # In c1, cloned from inside.git and initialized:
+    git restore .aida/config.toml
+    aida node upstream origin
+    aida db block claim --type BUG --size 1
+    aida add --type bug --title 'inside bundle minted' --status draft
+    ```
+
+    The [corrected fresh-bootstrap script](research_notes/Pool%20grants%20across%20air%20gaps/grant-reproduce.sh) contains enrollment, temporary environment, and both bare repos. Fresh init's 16 scaffold specs required `aida doctor --fix agreed-ids --yes` before rooted claims; the initial refusal and continuation are preserved rather than treated as a bundle defect. Init regenerated working config, so probes restored the committed hub configuration before claiming. Exact executed histories are reproduced in the command appendix.
+
+    ### Q2 findings comment draft — the inside hub orders concurrent claims
+
+    **Probe-verified:** two inside clones raced from a shared initial store. c1 received `TASK-101..102`. c2 printed `Push rejected (concurrent claim), retrying (1/3)...`, refreshed, and received `TASK-103..104`. This tests the requested ordering and retry against the inside bare hub, with no outside connection. It is one observed collision, not a high-contention stress guarantee. ([race script](/tmp/spike708-grant/race.sh), [c1 log](/tmp/spike708-grant/race-c1.log), [c2 log](/tmp/spike708-grant/race-c2.log))
+
+    ```bash
+    source /tmp/spike708-grant/env.sh
+    for c in c1 c2; do
+      (cd /tmp/spike708-grant/$c
+       git restore .aida/config.toml
+       aida db block claim --type TASK --size 2) > /tmp/spike708-grant/race-$c.log 2>&1 &
+    done
+    wait
+    cat /tmp/spike708-grant/race-c1.log /tmp/spike708-grant/race-c2.log
+    ```
+
+    Source inspection matches the outcome: a rejected push rolls back the matching local claim, then the next attempt refreshes and recomputes under the relevant locks, with three retry attempts. Git fast-forward rules supply same-ref ordering; disjoint root grants remain necessary across separate hubs. No Q2-specific gap was observed. ([claim retry source](https://github.com/joemooney/aida/blob/553f7d5984c6083a9f2b47cfa358ce57c438843b/aida-cli-lib/src/db_block.rs#L360-L453), [Git push fast forwards](https://git-scm.com/docs/git-push#_note_about_fast_forwards))
+
+    ### Q3 findings comment draft — exhausted adds fall back after one failed final-slot add
+
+    **Probe-verified:** after claims consumed the inside TASK pool's 101–104 range, an explicit additional claim refused with `hub \`inside\`'s TASK pool (101-104) is exhausted; the allocation root grants hubs their pools`. The clone still had block elements at that point: pool exhaustion and block exhaustion are different states. Following the final-slot save failure described under Q1, the next add succeeded with a node-local ID and printed `Issuing a node-local ID: this clone's TASK block is exhausted and no new block has been claimed.` A further add also succeeded; the notice was not repeated. Local objects could be pushed to the inside store. ([race output](/tmp/spike708-grant/race.log), [exhaustion output](/tmp/spike708-grant/exhaust.log), [claim refusal source](https://github.com/joemooney/aida/blob/553f7d5984c6083a9f2b47cfa358ce57c438843b/aida-cli-lib/src/db_block.rs#L302-L317))
+
+    ```bash
+    source /tmp/spike708-grant/env.sh
+    cd /tmp/spike708-grant/c2
+    aida db block claim --type TASK --size 1
+    # The earlier race script's first TASK add persisted TASK-103.
+    aida add --type task --title 'last inside agreed id' --status draft
+    aida add --type task --title 'inside exhausted local fallback' --status draft
+    aida add --type task --title 'inside exhausted still works' --status draft
+    aida db block status
+    git -C .aida-store push origin aida-store
+    ```
+
+    The qualified answer is therefore **fallback works, but “nothing blocked” fails once at each block's final ID**. The fallback reason accurately describes the clone's block, without claiming knowledge of pool exhaustion. Fix the shared Q1/Q3 final-slot defect rather than filing duplicate bugs. Replenishing an exhausted pool remains a separate optional product extension.
+
+    ## Question 4: returned claims combine; new overlaps refuse
+
+    ### Q4 findings comment draft — bundle return preserves the conflict gate
+
+    **Probe-verified:** the inside hub produced `/tmp/spike708-return.bundle`; the outside root independently claimed `BUG-107..108`. The returned store carried inside `BUG-103..104` plus TASK claims. `aida remote reconcile --execute --yes` combined the divergent histories into commit `7a6a21f729bfaf8a53218bebc4f6e79281b958c3`, reporting `auto-unioned block registry: 20 block(s), ranges disjoint`. Only `origin` was a push hub; the bundle remote `arrival` was skipped for publication. No return sync command needed the inside server's URL. ([full return log](/tmp/spike708-return-2.log), [merged claims](/tmp/spike708-return-clean-blocks.yaml))
+
+    ```bash
+    source /tmp/spike708-grant/env.sh
+    cd /tmp/spike708-grant
+    git --git-dir=inside.git bundle create /tmp/spike708-return.bundle aida-store
+    cd root
+    # This claim was executed before the final retained return script:
+    aida db block claim --type BUG --size 2
+    git -C .aida-store push origin aida-store
+    # First setup used remote add; subsequent runs used set-url:
+    git remote add arrival /tmp/spike708-return.bundle
+    aida remote push-hubs origin
+    aida db sync --push -m 'probe commit pending dispenser state'
+    aida remote reconcile --execute --yes
+    ```
+
+    A separate clone initialized from the original grant bundle also consumed the clean returned bundle through ordinary `aida db sync --pull`, reaching exactly `3f9e5165fd3dff9a83b82de67bf8f4f73eeb85c4`, the returned inside tip. Reconcile covered divergent structural union; this separate test covered ordinary bundle-backed pull. ([direct-pull script](/tmp/spike708-db-clean.sh), [output](/tmp/spike708-db-clean.log))
+
+    ```bash
+    source /tmp/spike708-grant/env.sh
+    cd /tmp/spike708-grant
+    git clone --branch main grant.bundle db-clean
+    cd db-clean
+    aida init --footprint minimal --no-skills --no-hooks --no-post-hooks --no-roles --no-agent-config --no-schedule
+    git remote set-url origin /tmp/spike708-return.bundle
+    aida db sync --pull
+    git -C .aida-store rev-parse HEAD
+    git ls-remote /tmp/spike708-return.bundle refs/heads/aida-store
+    ```
+
+    **Adversarial control, probe-verified:** a deliberately fabricated second claimant for `BUG-103..104` under `hub:inside:BUG` was committed into another returned bundle. Reconcile exited 1 with `allocation claims check refused this store sync: 1 conflict(s), status complete`. Before/after comparisons confirmed unchanged local store HEAD, store worktree status, and outside hub store ref. A separate WORK clone with the overlap bundle as `origin` got the same conflict refusal through `aida db sync --pull`. Exact YAML injection, commands, and `cmp` assertions are in [return probe script](/tmp/spike708-return.sh) and the appendix. ([output](/tmp/spike708-return-2.log))
+
+    Source inspection places allocation-tip preflight before reconcile merging and ordinary pull/rebase. The collector considers incoming tips and merge bases; this experiment proves refusal of a newly introduced overlap, not every historical conflict already shared at a merge base. Keep that gate unchanged for bundle transport. ([reconcile preflight](/home/joe/ai/aida/aida-cli-lib/src/remote_create.rs:2808), [pull preflight](/home/joe/ai/aida/aida-core/src/git_ops.rs:1936), [conflict collector](/home/joe/ai/aida/aida-core/src/allocation_conflicts.rs:740))
+
+    A lower-priority usability gap appeared before the successful reconcile: the root claim left `?? registry/blocks.lock`, so reconcile initially refused a dirty store. A normal `aida db sync --push` committed pending fixture content and allowed progress; no lock was unlinked. This needs investigation of sidecar placement/ignore policy, not weakening dirty-store or lock protection. ([initial refusal](/tmp/spike708-return.log), [successful continuation](/tmp/spike708-return-2.log))
+
+    ## Question 5: structural depth exceeds supported delegation authority
+
+    ### Q5 findings comment draft — full structure, immediate-home authority
+
+    **Source inference, probe-corroborated:** lineage traversal walks parents with cycle detection, and invariant checks cover unknown parents, type agreement, containment, sibling disjointness, cycles, and the ultimate root holder. Spendability checks the **immediate pool's home** against the clone's upstream, rather than verifying acceptance at each ancestor home. Recognized `hub:<name>:<TYPE>` pools additionally require an identical block claim on the reached declared hub. Generic pool IDs use a weaker immediate-remote comparison. ([invariants](/home/joe/ai/aida/aida-core/src/allocation_lineage.rs:488), [lineage walk](/home/joe/ai/aida/aida-core/src/allocation_lineage.rs:603), [authority checks](/home/joe/ai/aida/aida-core/src/allocation_lineage.rs:904), [generic fallback](/home/joe/ai/aida/aida-core/src/allocation_lineage.rs:954))
+
+    **Probe-verified synthetic control:** two bare hubs were seeded by bundle. A team clone inside had a WORK identity and upstream `origin`. The researcher manually constructed a structurally nested generic tree: root BUG 1–10000 → inside BUG 1000–2000 → team BUG 1100–1200, with a current-node block 1100–1109. Both ancestor homes were `unreachable-ancestor/aida-store`; the immediate team home was `origin/aida-store`. The claim was committed locally and never pushed to either hub. `aida node show` called it spendable and `aida add` minted `BUG-1100`. Changing only the immediate home to `wrong/aida-store` made the block unspendable with `WrongUpstream`, and add fell back to a local ID. ([full setup](/tmp/spike708-depth/probe2.py), [continuation including exact YAML](/tmp/spike708-depth/continue.py), [results](/tmp/spike708-depth/continue.log))
+
+    This is a **manually injected generic-record probe**, not a supported nested-grant workflow or a demonstrated bypass of the normal hub-format claim check. It establishes that the blanket “imported claims are never spendable” statement is too broad for all accepted record forms. It does not establish outsider access, grant authenticity, or an exploit through normal hub grant commands.
+
+    ```bash
+    python3 /tmp/spike708-depth/probe2.py > /tmp/spike708-depth/probe2.log 2>&1
+    python3 /tmp/spike708-depth/continue.py > /tmp/spike708-depth/continue.log 2>&1
+    ```
+
+    The first historical script completed two-hub bundle setup and upstream declaration, then failed reading an obsolete node-binding path. The continuation read `.git/aida-work-node.toml` and ran all depth assertions. Preserve both rather than presenting the setup error as product behavior. The decisive CLI commands inside that fixture were:
+
+    ```bash
+    aida node acquire
+    aida add --type story --title bind --description probe
+    aida node upstream origin
+    # continue.py writes and commits the exact synthetic tree/block YAML locally.
+    aida node show
+    aida add --type bug --title 'unverified ancestor and local claim' --description probe
+    aida show BUG-1100 --format json
+    # continue.py changes only the immediate home to wrong/aida-store.
+    aida node show
+    aida add --type bug --title 'wrong immediate home' --description probe
+    aida node hub add team --url /tmp/spike708-depth2/inside.git
+    ```
+
+    The final command refused because only allocation root `outside-root` can grant pools. Current `node hub add` selects root pools as parents; an inside nonroot cannot create the proposed team child pool. Thus a valid structural three-level representation is broader than the supported delegation API. ([root-only gate](/home/joe/ai/aida/aida-cli-lib/src/node_hub.rs:33), [root parent selection](/home/joe/ai/aida/aida-cli-lib/src/node_hub.rs:147), [claim path](/home/joe/ai/aida/aida-core/src/allocation_authority.rs:487))
+
+    A real three-level check would need explicit delegation authority and immutable grant identity at each edge, a parent-home-ordered child grant, stable authority identities independent of clone-local remote nicknames, and accepted leaf-block evidence on its own home. At the air gap, ancestor acceptance must be carried as committed evidence or rooted in an explicit trust anchor; requiring live outside access defeats the use case. Imported snapshots must retain containment/disjointness checks and reject unknown or conflicting evidence, with replay, replenishment, and exhaustion behavior defined. This is proposed design work, not an existing guarantee. Three logical pools can share two physical hubs; depth alone does not require a third server.
+
+    ## Draft follow-ups and the decision to retain
+
+    The following are **unfiled drafts**, with no assigned IDs or status changes. They cover the observed failures, the missing recursive capability, and the missing end-to-end regression protection.
+
+    | Draft | Evidence and proposed acceptance |
+    |---|---|
+    | **BUG: Final delegated ID fails save after dispensing** | Q1/Q3 show size-one failure and final-of-size-two failure, with `next` advanced and no object saved. Recognize an already-dispensed final ID independently of future block spendability. Verify size-one and final-of-size-two writes, preserve wrong-node/wrong-home/absent-hub-claim refusals, and prevent silent loss on failed saves. |
+    | **BUG: Generic pools accept local-only unaccepted claims** | Q5's injected generic tree mints without the claim on origin. Require exact accepted claim evidence on its authority ref, or refuse unsupported generic spend paths. Decide legacy compatibility explicitly; cover absent/wrong claim, wrong home, supported hub grant, and offline-carried accepted grant. Scope this to the generic fallback. |
+    | **BUG: Block claim leaves a sidecar that blocks reconcile** | Q4 observed untracked `registry/blocks.lock` after a root claim and dirty-store refusal. Investigate placement/ignore policy; ensure clean claim→reconcile remains ready without unlinking permanent sidecars or reducing lock safety. Lower priority pending confirmation of intended sidecar policy. |
+    | **STORY: Regress the bundle grant round trip** | Two bare hubs, bundle-only in/out, two inside clones with observed collision, divergent outside claim, disjoint union, overlap refusal with unchanged refs/HEAD/status, ordinary clean bundle pull, and final-slot/exhaustion coverage. This adds durable coverage to the supported direct workflow. |
+    | **STORY: Define recursive delegation with offline acceptance** | Optional direction: let accepted pool holders grant contained child pools with parent-home ordering and verifiable carried ancestor acceptance, while leaf claims remain home-ordered. Cover root→inside→team, wrong ancestor, replay/stale evidence, overlap, exhaustion, and wrong leaf home without a live outside dependency. |
+    | **STORY: Replenish an exhausted inside pool by bundle** | Optional operational extension: append non-overlapping root-approved grant epochs/ranges, bundle them inward, and let existing clones claim more space without renumbering. Preserve earlier claims and reject overlapping/replayed grants. Existing local fallback makes this a product choice, not a blocker to continued authoring. |
+
+    The strategic question is whether to establish a bounded direct root→inside workflow first, invest now in arbitrary recursive pool delegation, or defer agreed-ID operation inside gaps. These are alternatives for human selection; the sidecar encodes deterministic routing tokens only, and none has been applied.
+
+    | Option | Consequence and trade-off |
+    |---|---|
+    | **Bounded hardening first — recommended** | Repair the final-slot and generic-path gaps, clarify the supported boundary, and add the two-hub round-trip regression. Keep direct root grants and local fallback as the documented operating model; defer recursive grants and replenishment design. This addresses demonstrated failures with the smallest authority-model expansion. |
+    | **Build recursive offline delegation now** | Design parent-home-accepted subgrants and portable ancestor evidence, then support root→inside→team and replenishment. It addresses greater organizational autonomy at the cost of new trust, compatibility, replay, and merge semantics. The current probes are insufficient to approve that design. |
+    | **Defer inside agreed-ID support** | Use node-local IDs inside until a later complete authority design. This minimizes near-term allocation work but gives up a direct bundle workflow that already passed most probes and leaves the existing final-slot defect relevant to other delegated users. |
+
+    **Recommendation:** choose bounded hardening first. The gap is not that bundles prevent authority from crossing the boundary: root grants already survive transport, and new inside claims are serialized on the inside hub. The material direct-path defect is at final-ID object admission. Broader recursive semantics deserve a separate reviewed design because their evidence must survive an offline boundary rather than depend on a live ancestor server. Preserve AIDA's return overlap gate and the distinction between trusted transport, accepted grants, and accepted claims.
+
+    ## Exact execution appendix
+
+    These are retained experimental scripts, including expected nonzero commands and setup continuations. They are historical records; rerunning them against the existing fixtures can encounter existing refs/directories or consumed ranges. For a fresh reproduction, use a fresh `/tmp` root and adjust its literal paths consistently. The corrected bootstrap is supplied separately; return notes explain its `remote add` first-run versus `set-url` continuation, and the already-completed root claim. No command below should be run against a production store.
+
+    ### Corrected grant bootstrap
+
+    Source: [grant-reproduce.sh](/tmp/claude-1000/-home-joe-ai-aida/125337a4-7dd3-483b-9c56-3665173938ae/scratchpad/research/research_notes/Pool grants across air gaps/grant-reproduce.sh).
+
+    ```bash
+    #!/bin/bash
+    set -euxo pipefail
+    export HOME=/tmp/spike708-grant/home XDG_CONFIG_HOME=/tmp/spike708-grant/home/config XDG_CACHE_HOME=/tmp/spike708-grant/home/cache
+    mkdir -p "$HOME"
+    unset AIDA_PROJECT_ROOT AIDA_SESSION_GRANT AIDA_HEADLESS AIDA_AGENT_TYPE AIDA_AGENT_NAME AIDA_SESSION_ROLE AIDA_CONTAINMENT_POSTURE CODEX_SESSION_ID CODEX_THREAD_ID
+    export GIT_CONFIG_NOSYSTEM=1 GIT_AUTHOR_NAME=Probe GIT_AUTHOR_EMAIL=probe@example.invalid GIT_COMMITTER_NAME=Probe GIT_COMMITTER_EMAIL=probe@example.invalid
+    export PATH=/home/joe/.local/bin:$PATH
+    cd /tmp/spike708-grant
+    git init --bare outside.git
+    git init --bare inside.git
+    git init -b main root
+    cd root
+    git commit --allow-empty -m initial
+    git remote add origin /tmp/spike708-grant/outside.git
+    git push -u origin main
+    git --git-dir=../outside.git symbolic-ref HEAD refs/heads/main
+    aida init --footprint minimal --no-skills --no-hooks --no-post-hooks --no-roles --no-agent-config --no-schedule
+    git push origin main aida-store
+    aida node enroll-root
+    aida doctor --fix agreed-ids --yes
+    aida db block claim --type BUG --size 2
+    aida node hub add outside --url /tmp/spike708-grant/outside.git
+    aida node hub add inside --url /tmp/spike708-grant/inside.git --size 4
+    git add .aida/config.toml
+    git commit -m 'declare both hubs'
+    git push origin main aida-store
+    git bundle create ../grant.bundle main aida-store
+    git --git-dir=../inside.git fetch ../grant.bundle refs/heads/main:refs/heads/main refs/heads/aida-store:refs/heads/aida-store
+    git --git-dir=../inside.git symbolic-ref HEAD refs/heads/main
+    cd ..
+    for clone in c1 c2; do
+     git clone inside.git "$clone"
+     cd "$clone"
+     aida init --footprint minimal --no-skills --no-hooks --no-post-hooks --no-roles --no-agent-config --no-schedule
+     aida node upstream origin
+     cd ..
+    done
+
+    ```
+
+    ### Q1 actual claim script
+
+    Source: [claim.sh](/tmp/spike708-grant/claim.sh).
+
+    ```bash
+    #!/bin/bash
+    set -euxo pipefail
+    source /tmp/spike708-grant/env.sh
+    cd /tmp/spike708-grant/c1
+    # Init regenerates working config; restore committed hub policy.
+    git restore .aida/config.toml
+    aida db block claim --type BUG --size 1
+    aida add --type bug --title 'inside bundle minted' --status draft
+    aida db block status
+
+    ```
+
+    ### Q2 actual race and first mint script
+
+    Source: [race.sh](/tmp/spike708-grant/race.sh).
+
+    ```bash
+    #!/bin/bash
+    set -uxo pipefail
+    source /tmp/spike708-grant/env.sh
+    for c in c1 c2; do (cd /tmp/spike708-grant/$c; git restore .aida/config.toml; aida db block claim --type TASK --size 2) > /tmp/spike708-grant/race-$c.log 2>&1 & done
+    wait
+    cat /tmp/spike708-grant/race-c1.log /tmp/spike708-grant/race-c2.log
+    cd /tmp/spike708-grant/c2
+    aida db block claim --type TASK --size 1
+    aida add --type task --title 'exhausted inside fallback' --status draft
+    aida db block status
+
+    ```
+
+    ### Q3 final-slot and fallback script
+
+    Source: [exhaust.sh](/tmp/spike708-grant/exhaust.sh).
+
+    ```bash
+    #!/bin/bash
+    set -uxo pipefail
+    source /tmp/spike708-grant/env.sh
+    cd /tmp/spike708-grant/c2
+    aida add --type task --title 'last inside agreed id' --status draft
+    aida add --type task --title 'inside exhausted local fallback' --status draft
+    aida add --type task --title 'inside exhausted still works' --status draft
+    aida db block status
+    git -C .aida-store status --short
+    git -C .aida-store push origin aida-store
+
+    ```
+
+    ### Q4 actual return and overlap script
+
+    Source: [spike708-return.sh](/tmp/spike708-return.sh).
+
+    ```bash
+    #!/bin/bash
+    set -euxo pipefail
+    source /tmp/spike708-grant/env.sh
+    cd /tmp/spike708-grant
+    git --git-dir=inside.git bundle create /tmp/spike708-return.bundle aida-store
+    cd root
+    true # root already claimed BUG107..108
+    git -C .aida-store push origin aida-store
+    git remote set-url arrival /tmp/spike708-return.bundle
+    aida remote push-hubs origin
+    aida db sync --push -m "probe commit pending dispenser state"
+    aida remote reconcile --execute --yes
+    cp .aida-store/registry/blocks.yaml /tmp/spike708-return-clean-blocks.yaml
+    git --git-dir=../outside.git rev-parse aida-store > /tmp/spike708-return-outside-clean-sha
+    # Standalone inside clone receives the snapshot of clean reconciled claims before deliberate corruption.
+    cd ..
+    git clone --branch aida-store outside.git overlap-store
+    python3 - <<'PY'
+    from pathlib import Path
+    p=Path('overlap-store/registry/blocks.yaml')
+    s=p.read_text()
+    # Append a second claimant whose range overlaps inside BUG pool's 103-104 block.
+    s += '''- node_id: deliberate-overlap-probe
+      owner: probe
+      hostname: probe
+      type_prefix: BUG
+      range_start: 103
+      range_end: 104
+      next: 103
+      allocated_at: 2026-11-03T00:00:00Z
+      pool_id: hub:inside:BUG
+    '''
+    p.write_text(s)
+    PY
+    git -C overlap-store add registry/blocks.yaml
+    git -C overlap-store commit -m 'probe deliberately overlapping inside claim'
+    git -C overlap-store bundle create /tmp/spike708-overlap.bundle aida-store
+    cd root
+    git remote set-url arrival /tmp/spike708-overlap.bundle
+    git -C .aida-store rev-parse HEAD > /tmp/spike708-before-refusal-head
+    git -C .aida-store status --porcelain > /tmp/spike708-before-refusal-status
+    set +e
+    aida remote reconcile --execute --yes
+    rc=$?
+    set -e
+    echo "REFUSAL_EXIT=$rc"
+    test "$rc" != 0
+    git -C .aida-store rev-parse HEAD > /tmp/spike708-after-refusal-head
+    git -C .aida-store status --porcelain > /tmp/spike708-after-refusal-status
+    git --git-dir=../outside.git rev-parse aida-store > /tmp/spike708-return-outside-after-sha
+    cmp /tmp/spike708-before-refusal-head /tmp/spike708-after-refusal-head
+    cmp /tmp/spike708-before-refusal-status /tmp/spike708-after-refusal-status
+    cmp /tmp/spike708-return-outside-clean-sha /tmp/spike708-return-outside-after-sha
+    # Test ordinary db sync --pull from bundle with a separate WORK clone of outside.
+    cd ..
+    git clone outside.git bundle-pull
+    cd bundle-pull
+    aida init --footprint minimal --no-skills --no-hooks --no-post-hooks --no-roles --no-agent-config --no-schedule
+    git remote set-url origin /tmp/spike708-overlap.bundle
+    set +e
+    aida db sync --pull
+    rc=$?
+    set -e
+    echo "BUNDLE_PULL_REFUSAL_EXIT=$rc"
+    test "$rc" != 0
+
+    ```
+
+    ### Q4 clean ordinary pull script
+
+    Source: [spike708-db-clean.sh](/tmp/spike708-db-clean.sh).
+
+    ```bash
+    #!/bin/bash
+    set -euxo pipefail
+    source /tmp/spike708-grant/env.sh
+    cd /tmp/spike708-grant
+    git clone --branch main grant.bundle db-clean
+    cd db-clean
+    aida init --footprint minimal --no-skills --no-hooks --no-post-hooks --no-roles --no-agent-config --no-schedule
+    git remote set-url origin /tmp/spike708-return.bundle
+    aida db sync --pull
+    git -C .aida-store rev-parse HEAD
+    git ls-remote /tmp/spike708-return.bundle refs/heads/aida-store
+
+    ```
+
+    ### Q5 exact two-hub depth setup
+
+    Source: [probe2.py](/tmp/spike708-depth/probe2.py).
+
+    ```python
+    import os, pathlib, subprocess, json
+    p=pathlib.Path('/tmp/spike708-depth2'); p.mkdir(exist_ok=True); home=p/'home'; home.mkdir(exist_ok=True)
+    env={k:v for k,v in os.environ.items() if not k.startswith(('AIDA_','GIT_','CODEX_','CLAUDE_'))}; env.update(HOME=str(home),XDG_CONFIG_HOME=str(home/'config'),XDG_CACHE_HOME=str(home/'cache'),XDG_STATE_HOME=str(home/'state'),GIT_CONFIG_NOSYSTEM='1',GIT_CONFIG_GLOBAL=str(home/'gitconfig'),GIT_AUTHOR_NAME='Probe',GIT_AUTHOR_EMAIL='probe@example.invalid',GIT_COMMITTER_NAME='Probe',GIT_COMMITTER_EMAIL='probe@example.invalid',AIDA_TELEMETRY='0')
+    def run(cwd,*args,ok=True):
+     print('+',json.dumps({'cwd':str(cwd),'argv':args}),flush=True); r=subprocess.run(args,cwd=cwd,env=env,text=True,stdout=subprocess.PIPE,stderr=subprocess.STDOUT);print(r.stdout,flush=True);print('EXIT',r.returncode,flush=True)
+     if ok: assert r.returncode==0
+     return r.stdout
+    for hub in ['outside.git','inside.git']:run(p,'git','init','--bare','-b','main',str(p/hub))
+    seed=p/'seed';seed.mkdir();run(seed,'git','init','-b','main');(seed/'.aida').mkdir();(seed/'.aida/config.toml').write_text(f"[store]\nmode='distributed'\nstore_path='.aida-store'\n[store.hubs]\noutside='{p}/outside.git'\ninside='{p}/inside.git'\n");(seed/'.gitignore').write_text('.aida-store/\n');run(seed,'git','add','.');run(seed,'git','commit','-m','project');run(seed,'git','checkout','--orphan','aida-store');run(seed,'git','rm','-rf','.');run(seed,'git','commit','--allow-empty','-m','store');run(seed,'git','remote','add','origin',str(p/'outside.git'));run(seed,'git','push','origin','main','aida-store');run(seed,'git','bundle','create',str(p/'in.bundle'),'main','aida-store');run(p,'git','--git-dir='+str(p/'inside.git'),'fetch',str(p/'in.bundle'),'refs/heads/main:refs/heads/main','refs/heads/aida-store:refs/heads/aida-store');run(p,'git','clone',str(p/'inside.git'),'team');c=p/'team';run(c,'git','worktree','add','.aida-store','aida-store');run(c,'aida','node','acquire');run(c,'aida','add','--type','story','--title','bind','--description','probe');run(c,'aida','node','upstream','origin');s=c/'.aida-store'; node=__import__('tomllib').loads((s/'.aida/node.toml').read_text())['node_id'];reg=s/'registry';reg.mkdir(exist_ok=True)
+    (reg/'root.yaml').write_text('holder_node: outside-root\nepoch: 1\n')
+    def pools(ancestor_home):
+     return f'''pools:
+    - pool_id: root-bug
+      type_prefix: BUG
+      range_start: 1
+      range_end: 10000
+      holder_node: outside-root
+      home_ref: {ancestor_home}
+    - pool_id: inside-bug
+      type_prefix: BUG
+      range_start: 1000
+      range_end: 2000
+      parent_pool_id: root-bug
+      holder_node: inside-holder
+      home_ref: {ancestor_home}
+    - pool_id: team-bug
+      type_prefix: BUG
+      range_start: 1100
+      range_end: 1200
+      parent_pool_id: inside-bug
+      holder_node: team-holder
+      home_ref: origin/aida-store
+    '''
+    (reg/'pools.yaml').write_text(pools('unreachable-ancestor/aida-store'));(reg/'blocks.yaml').write_text(f'''blocks:
+    - node_id: {node}
+      owner: Probe
+      hostname: ''
+      type_prefix: BUG
+      range_start: 1100
+      range_end: 1109
+      next: 1100
+      allocated_at: 2026-11-03T00:00:00Z
+      pool_id: team-bug
+    ''');run(s,'git','add','registry');run(s,'git','commit','-m','synthetic nested pool and unpushed block');run(c,'aida','node','show');run(c,'aida','add','--type','bug','--title','unverified ancestor and local claim','--description','probe');run(c,'aida','show','BUG-1100','--format','json',ok=False)
+    # wrong immediate parent must refuse spend; keep structurally valid ancestors
+    (reg/'pools.yaml').write_text(pools('outside/aida-store').replace('home_ref: origin/aida-store','home_ref: wrong/aida-store'));run(s,'git','add','registry');run(s,'git','commit','-m','wrong immediate home');run(c,'aida','node','show');run(c,'aida','add','--type','bug','--title','wrong immediate home','--description','probe');run(c,'aida','node','hub','add','team','--url',str(p/'inside.git'),ok=False)
+
+    ```
+
+    ### Q5 exact depth assertion continuation
+
+    Source: [continue.py](/tmp/spike708-depth/continue.py).
+
+    ```python
+    import os, pathlib, subprocess, json
+    p=pathlib.Path('/tmp/spike708-depth2'); p.mkdir(exist_ok=True); home=p/'home'; home.mkdir(exist_ok=True)
+    env={k:v for k,v in os.environ.items() if not k.startswith(('AIDA_','GIT_','CODEX_','CLAUDE_'))}; env.update(HOME=str(home),XDG_CONFIG_HOME=str(home/'config'),XDG_CACHE_HOME=str(home/'cache'),XDG_STATE_HOME=str(home/'state'),GIT_CONFIG_NOSYSTEM='1',GIT_CONFIG_GLOBAL=str(home/'gitconfig'),GIT_AUTHOR_NAME='Probe',GIT_AUTHOR_EMAIL='probe@example.invalid',GIT_COMMITTER_NAME='Probe',GIT_COMMITTER_EMAIL='probe@example.invalid',AIDA_TELEMETRY='0')
+    def run(cwd,*args,ok=True):
+     print('+',json.dumps({'cwd':str(cwd),'argv':args}),flush=True); r=subprocess.run(args,cwd=cwd,env=env,text=True,stdout=subprocess.PIPE,stderr=subprocess.STDOUT);print(r.stdout,flush=True);print('EXIT',r.returncode,flush=True)
+     if ok: assert r.returncode==0
+     return r.stdout
+    c=p/'team';s=c/'.aida-store';node=__import__('tomllib').loads((c/'.git/aida-work-node.toml').read_text())['node_id'];reg=s/'registry';reg.mkdir(exist_ok=True)
+    (reg/'root.yaml').write_text('holder_node: outside-root\nepoch: 1\n')
+    def pools(ancestor_home):
+     return f'''pools:
+    - pool_id: root-bug
+      type_prefix: BUG
+      range_start: 1
+      range_end: 10000
+      holder_node: outside-root
+      home_ref: {ancestor_home}
+    - pool_id: inside-bug
+      type_prefix: BUG
+      range_start: 1000
+      range_end: 2000
+      parent_pool_id: root-bug
+      holder_node: inside-holder
+      home_ref: {ancestor_home}
+    - pool_id: team-bug
+      type_prefix: BUG
+      range_start: 1100
+      range_end: 1200
+      parent_pool_id: inside-bug
+      holder_node: team-holder
+      home_ref: origin/aida-store
+    '''
+    (reg/'pools.yaml').write_text(pools('unreachable-ancestor/aida-store'));(reg/'blocks.yaml').write_text(f'''blocks:
+    - node_id: {node}
+      owner: Probe
+      hostname: ''
+      type_prefix: BUG
+      range_start: 1100
+      range_end: 1109
+      next: 1100
+      allocated_at: 2026-11-03T00:00:00Z
+      pool_id: team-bug
+    ''');run(s,'git','add','registry');run(s,'git','commit','-m','synthetic nested pool and unpushed block');run(c,'aida','node','show');run(c,'aida','add','--type','bug','--title','unverified ancestor and local claim','--description','probe');run(c,'aida','show','BUG-1100','--format','json',ok=False)
+    # wrong immediate parent must refuse spend; keep structurally valid ancestors
+    (reg/'pools.yaml').write_text(pools('outside/aida-store').replace('home_ref: origin/aida-store','home_ref: wrong/aida-store'));run(s,'git','add','registry');run(s,'git','commit','-m','wrong immediate home');run(c,'aida','node','show');run(c,'aida','add','--type','bug','--title','wrong immediate home','--description','probe');run(c,'aida','node','hub','add','team','--url',str(p/'inside.git'),ok=False)
+
+    ```
+  created_at: 2026-11-03T02:43:14.722997587Z
+  modified_at: 2026-11-03T02:43:14.722997587Z
   session_id: 125337a4-7dd3-483b-9c56-3665173938ae
 history:
 - id: 01a1939d-5b6e-77e1-a48f-f78d777d0267
