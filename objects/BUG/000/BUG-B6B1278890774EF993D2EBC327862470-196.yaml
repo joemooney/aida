@@ -11,7 +11,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-03T15:56:31.278734245Z
-modified_at: 2026-11-03T19:38:48.663650172Z
+modified_at: 2026-11-03T19:38:49.725102054Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -56,6 +56,20 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Fix is correct and AC 1-3 are covered by the new deputy test, but CI lib-1 is red because of this PR: story_1698 pr_ship_consults_the_mandate_at_every_hold_gate_and_before_the_merge fails at story_1698_mandate_tests.rs:598. No triage reason was given.'
   created_at: 2026-11-03T19:38:48.663648924Z
   modified_at: 2026-11-03T19:38:48.663648924Z
+  session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
+- id: 01a1a2eb-df77-7c23-99d7-b5be6eee835c
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2427):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: a2b504db255e
+    Recorded: 2026-11-03T18:42:21.283849105+00:00
+    Findings:
+    1. CI regression from this PR: ship_interactive_tty() (pr_cmd.rs:2115) sits between ship_preflight_gates() (pr_cmd.rs:1986) and pr_ship_handler() (pr_cmd.rs:2120). The new body calls crate::gate::role_authority::has_integrity_floor_authority(), so the source slice that gate/tests/story_1698_mandate_tests.rs:594-601 takes as 'the preflight' now contains 'has_integrity_floor_authority()', and the assertion 'the preflight takes the hold authority the handler decided' fails (CI lib-1, job 126086391652). The Build (ubuntu-latest) failure is the aggregator reporting that. Fix: move ship_interactive_tty() out of the region between ship_preflight_gates and pr_ship_handler (for example, after pr_ship_handler or into gate::role_authority), or end the test's preflight slice at the preflight fn's own closing brace. Do not weaken the assertion.
+    2. AC (1) wiring is not pinned by a test. The implementer's plan said 'a test pins that the body calls it', but the new test only checks ship_interactive_tty() == has_integrity_floor_authority() under two ambient states, and it checks the train only through tty_consents(ship_interactive_tty(), ...), not through the train's real interactive_tty() (pr_train.rs:1286). Add a source-pin (or an equivalent check) that pr_train's interactive_tty and pr_ship_handler's interactive_tty both go through the shared function, so a later reintroduction of a stdout check fails a test.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-03T19:38:49.591097599Z
+  modified_at: 2026-11-03T19:38:49.591097599Z
   session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
 history:
 - id: 01a1a23d-bcff-7cc3-8f2f-887fdeaeb312
