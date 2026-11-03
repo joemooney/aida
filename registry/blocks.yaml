@@ -1125,5 +1125,13 @@ blocks:
   type_prefix: TASK
   range_start: 2812
   range_end: 2911
-  next: 2892
+  next: 2894
   allocated_at: 2026-11-02T07:30:23.802341486Z
+- node_id: b6b1278890774ef993d2ebc327862470
+  owner: redacted@node.invalid
+  hostname: imac
+  type_prefix: TASK
+  range_start: 2912
+  range_end: 3011
+  next: 2912
+  allocated_at: 2026-11-03T07:03:15.683681811Z
