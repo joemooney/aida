@@ -28,7 +28,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-01T06:49:40.328147102Z
-modified_at: 2026-11-03T18:18:37.442366906Z
+modified_at: 2026-11-03T18:18:50.047364376Z
 req_type: Task
 tags:
 - audit
@@ -62,6 +62,10 @@ relationships:
 - rel_type: Supersedes
   target_id: 01a1a29c-2f3b-7da1-9742-5956f34db69c
   created_at: 2026-11-03T18:18:37.442361146Z
+  created_by: joe
+- rel_type: Supersedes
+  target_id: 01a1a29c-38d4-79a3-9abf-94efe3ffc277
+  created_at: 2026-11-03T18:18:50.047355003Z
   created_by: joe
 comments:
 - id: 01a1962b-04f1-7eb3-a68f-84ddee33f75b
@@ -166,6 +170,11 @@ history:
 - id: 01a1a2a2-7724-7973-809e-45b93e3fd8dc
   author: joe
   timestamp: 2026-11-03T18:18:38.756337654Z
+  session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
+  changes: []
+- id: 01a1a2a2-a882-79c0-be3d-4efd866099fa
+  author: joe
+  timestamp: 2026-11-03T18:18:51.394175220Z
   session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
   changes: []
 filed_at:
