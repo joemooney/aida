@@ -3,17 +3,26 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-186
 agreed_id: BUG-2417
 title: 'merge_lock holder liveness ignores PID namespaces: a sandboxed train''s merge lease reads as dead, so the BUG-2412 live-lease guard can close a live train PR'
 description: 'From the STORY-2325 signoff (A5). merge_lock::Holder records no pid_ns or boot; stale_reason checks only the host before calling the lenient holder_alive, so a holder in a foreign PID namespace (every sandboxed Bash call) reads as absent, which reads as dead. live_trains filters merge leases through merge_lock::live_status, so the BUG-2412 ''a live merge lease protects this train PR'' guard rests on a namespace-blind check. Expected: record pid_ns and boot on Holder (reuse the cache_lock helpers); a foreign or unrecorded holder is TTL-only (never judged dead by pid). Regression test: a holder from a foreign pidns is not judged dead before its TTL.'
-status: Approved
+status: InProgress
 priority: Medium
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-03T00:46:11.465609525Z
-modified_at: 2026-11-03T00:46:11.465609525Z
+modified_at: 2026-11-03T00:46:38.795214253Z
 req_type: Bug
 tags:
 - liveness
 - regroup
 - train
+history:
+- id: 01a19edf-54cb-7ac2-8525-bbf2e528b40f
+  author: aida-session-start
+  timestamp: 2026-11-03T00:46:38.795213117Z
+  session_id: ee0bf351-6b17-486f-a38e-cfbb1343c426
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 1737d4e5f91bd2ddb7f15579e259c0a47652f80f
   branch: main
