@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-02T19:20:59.253007269Z
-modified_at: 2026-11-03T20:54:43.657589708Z
+modified_at: 2026-11-03T21:06:37.518150900Z
 req_type: Story
 tags:
 - architecture
@@ -381,6 +381,13 @@ comments:
   created_at: 2026-11-03T20:48:52.225657761Z
   modified_at: 2026-11-03T20:48:52.225657761Z
   session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
+- id: 01a1a33c-414e-7591-9568-94cacc9285b9
+  author: joe
+  content: 'Round-5 rework pushed to PR #3288 at 0ff32132. Rulings 2-5 done: both inventories (BUG-2398 LAUNCH_INVENTORY, BUG-2395 ROLE_LAUNCH_SITES) now count launch::spawn_agent/assign_seat callers, and the role scan counts .env(ROLE_ENV) too (counts checked against the source with a Python replica of the scanner). NON_VENDOR_WORDS became exact NON_VENDOR_SPELLINGS, with mutants. A MalformedParentContainment case was added. The Codex -c approval_policy, quoted sandbox_mode key and --profile / -c profile spellings are refused, with tests. RULING 1 NOT DONE, and nothing was compiled: this implementer seat could not run cargo test (permission denied after the first call; a 55s cap cannot compile aida-core tests) or make check-ci-fast (~90s against a 60s cap), and could not read the CI lib-1 log (the results-receiver.actions.githubusercontent.com host is denied). Hypothesis, unverified: lib-1 took ~5.5 min longer than the other shards, which fits two tests killed at nextest''s 180s hang guard. Both tests (aida_posture_spawn_routes_through_single_boundary_fn, golden_headless_and_lane_claude_paths_are_unchanged) run the contained forking/reviewer spawns only when keyring_usable(), which is true on CI and false locally. Next step: read the lib-1 log for job 126148863139, or run those two tests on a host with a session keyring.'
+  created_at: 2026-11-03T21:06:37.518150900Z
+  modified_at: 2026-11-03T21:06:37.518150900Z
+  session_id: 01a1a331583c
+  harness_version: 2.1.317 (Claude Code)
 history:
 - id: 01a19ed2-a170-7d52-94f3-7c4ff46f38c4
   author: joe
