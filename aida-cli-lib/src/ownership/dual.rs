@@ -336,9 +336,8 @@ pub(crate) struct HandoffFacts {
 // trace:STORY-2325 | ai:claude
 pub(crate) fn verify_seat_at_pr_head(seat: &Path, branch: &str) -> Result<String, String> {
     let git = |args: &[&str]| -> Result<String, String> {
-        let out = std::process::Command::new("git")
-            .arg("-C")
-            .arg(seat)
+        // BUG-1985/BUG-1929: tree-walking git goes through the hardened host builder.
+        let out = aida_core::git_ops::host_git_command(seat)
             .args(args)
             .env("LC_ALL", "C")
             .output()

@@ -490,9 +490,8 @@ fn open_prs(main: &Path) -> std::result::Result<BTreeMap<String, OpenPr>, String
 }
 
 fn git_out(dir: &Path, args: &[&str]) -> Option<String> {
-    let out = std::process::Command::new("git")
-        .arg("-C")
-        .arg(dir)
+    // BUG-1985/BUG-1929: tree-walking git goes through the hardened host builder.
+    let out = aida_core::git_ops::host_git_command(dir)
         .args(args)
         .env("LC_ALL", "C")
         .output()
@@ -502,11 +501,16 @@ fn git_out(dir: &Path, args: &[&str]) -> Option<String> {
         .then(|| String::from_utf8_lossy(&out.stdout).trim().to_string())
 }
 
-/// What is at a lease's tree, read from the host. A seat clone is read like
-/// any tree here: the migration only reads, and runs from the host shell.
+/// What is at a lease's tree, read from the host. Any tree is read the
+/// same way except a seat clone: host git refuses to run there
+/// (BUG-2169), so it reads Unreadable (kept as salvage), never NotAGitTree.
 fn read_tree(path: &Path, branch: &str) -> TreeReading {
     if path.as_os_str().is_empty() || !path.exists() {
         return TreeReading::Missing;
+    }
+    // trace:STORY-2325 | ai:claude
+    if aida_core::seat_clone_detect::seat_clone_root(path).is_some() {
+        return TreeReading::Unreadable("a seat clone; host git does not run there".to_string());
     }
     if git_out(path, &["rev-parse", "--is-inside-work-tree"]).as_deref() != Some("true") {
         return TreeReading::NotAGitTree;
