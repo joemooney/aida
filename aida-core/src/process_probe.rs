@@ -211,6 +211,21 @@ impl ProbeSource {
         Ok(chain)
     }
 
+    /// The inode of the pid namespace `pid` runs in, read from its
+    /// `ns/pid` link (`pid:[<inode>]`). An ownership witness records it so a
+    /// later reader can tell whether it can probe that pid at all
+    /// (STORY-2325 A1).
+    // trace:STORY-2325 | ai:claude
+    pub fn pid_namespace(&self, pid: u32) -> Result<u64, String> {
+        let link = self.root()?.join(pid.to_string()).join("ns").join("pid");
+        let target = std::fs::read_link(&link)
+            .map_err(|e| format!("cannot read {}: {e}", link.display()))?;
+        target
+            .to_str()
+            .and_then(parse_pid_ns_link)
+            .ok_or_else(|| format!("malformed pid namespace link {}", link.display()))
+    }
+
     fn root(&self) -> Result<&Path, String> {
         match self {
             ProbeSource::Proc(root) => Ok(root),
@@ -229,6 +244,29 @@ pub fn unsupported_reason(os: &str) -> String {
     format!(
         "seat occupancy cannot verify process identity on {os}: no process start-time probe exists for this platform yet{follow_up}"
     )
+}
+
+/// Inode of the initial (host) pid namespace. The kernel reserves it
+/// (`PROC_PID_INIT_INO` in `include/linux/proc_ns.h`); every other pid
+/// namespace gets a dynamically allocated inode, which never equals it.
+// trace:BUG-1947 trace:STORY-2325 | ai:claude
+pub const INITIAL_PID_NAMESPACE_INODE: u64 = 0xEFFF_FFFC;
+
+/// Parse a `pid:[<inode>]` namespace link target.
+// trace:STORY-2325 | ai:claude
+pub fn parse_pid_ns_link(target: &str) -> Option<u64> {
+    target
+        .strip_prefix("pid:[")?
+        .strip_suffix(']')?
+        .parse()
+        .ok()
+}
+
+/// The boot id and start ticks inside a recorded `linux:<boot>:<ticks>`
+/// start identity; `None` when it is not one.
+// trace:STORY-2325 | ai:claude
+pub fn parse_start_identity(start: &str) -> Option<(&str, u64)> {
+    parse_start(start)
 }
 
 fn is_exited(state: char) -> bool {

@@ -4,6 +4,29 @@ Durable operator rulings for the advisor seat. They override anything in a
 handoff. Repo-local rulings go in `.aida/standing-orders/advisor.md` via
 `aida session handoff --seat advisor --standing-orders add "<text>"`.
 
+## Delivery contract (read first; any vendor)
+
+<!-- trace:TASK-2882 | ai:claude -->
+Your job is to turn authorized work into verified merges.
+
+- Order work by distance to main: ready-to-ship PRs first, then reviews,
+  then CI repairs, then new implementation.
+- Once the evidence settles the next action, take it. Investigate further
+  only when the result could change that action.
+- When an item is blocked, record the exact blocker on it and move to
+  independent work. One stuck item must never idle the queue.
+- Use your authority. Rule design forks, execution modes and non-blocking
+  findings promptly, each with a one-line reason on the spec. Never waive an
+  approval, authorship, CI or hold gate.
+- Start a review as soon as a head is pushed; CI gates the ship, not the
+  review.
+- Use the established deputies for host and TTY acts. Queued is not done:
+  check that the command finished and read its exit status.
+- Measure yourself by merges and by how long eligible PRs wait. Comments,
+  briefs and handoffs support delivery; they are not delivery.
+
+## Numbered orders
+
 1. Under a fire-mode mandate, ship approved green PRs yourself with the
    project's ship procedure. Never hand the operator a command you can run.
 2. The only operator-only acts are `aida merge-hold clear N` (needs a human
