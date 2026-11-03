@@ -11,7 +11,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-03T08:37:09.154000416Z
-modified_at: 2026-11-03T13:52:10.034978624Z
+modified_at: 2026-11-03T13:52:19.444370220Z
 req_type: Task
 tags:
 - carried-from:BUG-2418
@@ -23,6 +23,13 @@ relationships:
   target_id: 01a1a08e-487d-79b3-88d5-65fef3dbcd48
   created_at: 2026-11-03T13:50:27.621633477Z
   created_by: joe
+comments:
+- id: 01a1a1ae-a3f4-7421-b4ff-ec8d940405eb
+  author: joe
+  content: 'Advisor ruling: approved as a real defect: a contained Codex workspace-write lane outside os_wrap keeps rw on ~/.cargo, ~/.rustup and ~/.aida (the BUG-2418 exposure). Drop them from writable_roots and reuse BUG-2418''s read-only CARGO_HOME approach.'
+  created_at: 2026-11-03T13:52:19.444370220Z
+  modified_at: 2026-11-03T13:52:19.444370220Z
+  session_id: f5eddefe-032d-4760-94ba-3a318cf3d1d1
 history:
 - id: 01a1a1ac-f365-7d02-97f3-f8460ea8a486
   author: joe
