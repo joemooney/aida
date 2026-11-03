@@ -3,12 +3,12 @@ spec_id: STORY-b6b1278890774ef993d2ebc327862470-324
 agreed_id: STORY-2326
 title: 'One agent launcher: LaunchContext + spawn_agent with an env-clear allowlist and declared sandbox resources'
 description: 'Regroup target 3, 2026-11-02. Build the context once (seat, validated grant, containment posture, worktree, vendor). Every agent spawn goes through spawn_agent, which clears the environment and sets an allowlist; a ratchet forbids other spawn sites. The containment profile declares cargo slots, sccache and the target directory, so lanes can run the LIGHT gate. Slice by vendor; high risk. Evidence: TASK-1749, TASK-1758, TASK-1788, TASK-1333, STORY-1486, BUG-1669, TASK-2772. Sketch-first; advisor signoff required.'
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-02T19:20:59.253007269Z
-modified_at: 2026-11-03T16:41:19.454481004Z
+modified_at: 2026-11-03T17:25:06.158924870Z
 req_type: Story
 tags:
 - architecture
@@ -331,6 +331,12 @@ comments:
   created_at: 2026-11-03T15:01:17.642572492Z
   modified_at: 2026-11-03T15:01:17.642572492Z
   session_id: f5eddefe-032d-4760-94ba-3a318cf3d1d1
+- id: 01a1a271-71ee-7cd3-bb39-1975f9b4bc5c
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: PR-A core types, assign_seat, monotonic refusal and bg no-seat are sound and CI is green, but the ratchet misses the dominant dynamic-program spelling, amendment-8/9 coverage is incomplete, AIDA_AGENT_CMD under containment is unaddressed, and the F3/F4/F5 departures from signed PR-A text need an advisor ruling before merge. No triage reason was given.'
+  created_at: 2026-11-03T17:25:06.158923409Z
+  modified_at: 2026-11-03T17:25:06.158923409Z
+  session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
 history:
 - id: 01a19ed2-a170-7d52-94f3-7c4ff46f38c4
   author: joe
@@ -388,6 +394,14 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1a271-71ee-7cd3-bb39-196242d9219e
+  author: joe
+  timestamp: 2026-11-03T17:25:06.158900794Z
+  session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: 1b678fd5059046ff02bfb3b87c1f10d3162efda6
   branch: main
@@ -396,11 +410,3 @@ filed_at:
   aida_build_sha: 6a3f67671a9
   vendor: claude
   session: ee0bf351-6b17-486f-a38e-cfbb1343c426
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: PR-A core types, assign_seat, monotonic refusal and bg no-seat are sound and CI is green, but the ratchet misses the dominant dynamic-program spelling, amendment-8/9 coverage is incomplete, AIDA_AGENT_CMD under containment is unaddressed, and the F3/F4/F5 departures from signed PR-A text need an advisor ruling before merge
-  recovery_hint: address the review findings, move STORY-2326 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-03T16:41:19.454481004Z
