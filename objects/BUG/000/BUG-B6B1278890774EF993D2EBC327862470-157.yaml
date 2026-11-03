@@ -19,7 +19,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T02:25:46.947809262Z
-modified_at: 2026-11-03T15:27:16.650364496Z
+modified_at: 2026-11-03T15:35:23.440101547Z
 req_type: Bug
 tags:
 - area:agents
@@ -486,6 +486,12 @@ comments:
   created_at: 2026-11-03T07:18:55.309794091Z
   modified_at: 2026-11-03T07:18:55.309794091Z
   session_id: c58592f4-04ae-498b-9afd-87b0cc2bcde9
+- id: 01a1a20c-ffcc-7e70-94b4-9d4d2f8026ca
+  author: joe
+  content: 'Advisor ruling: PR #3192 round 9 (the merge-main head). (1) CI red: bug_2383_seat_target_overlay_tests.rs:1039 expects ''lane job: seed: '' but lane_job.rs:1294 now writes ''lane job: seat target <path>: seed: cold (...)''; update the assertion to match, like the sibling test at bug_2383_lane_job_tests.rs:301. (2) Add criterion trace tags to the three tests that cover the criteria, so aida criteria BUG-2383 shows them traced. LIGHT gate: ONE targeted cargo test -p <crate> <filter> plus make check-ci-fast; never cargo test --workspace, make check or make check-ci. Push to the existing PR branch, then stop.'
+  created_at: 2026-11-03T15:35:23.340177984Z
+  modified_at: 2026-11-03T15:35:23.340177984Z
+  session_id: f5eddefe-032d-4760-94ba-3a318cf3d1d1
 history:
 - id: 01a19525-88eb-79e3-aab8-8d511ad2f605
   author: aida-session-start
