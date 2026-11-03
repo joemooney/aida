@@ -1,0 +1,94 @@
+{
+  "schema_version": 1,
+  "spec": "TASK-2707",
+  "publishes": [
+    {
+      "at": "2026-11-03T17:46:49.836564947Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-02T14:34:20.711940555Z",
+      "spec": "TASK-2707",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-11-02T21:08:12.401264992Z",
+      "spec": "TASK-2707",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-11-02T21:24:11.429719729Z",
+      "spec": "TASK-2707",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-11-02T21:59:46.399574552Z",
+      "spec": "TASK-2707",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-11-02T22:30:50.138943924Z",
+      "spec": "TASK-2707",
+      "seat": "advisor",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-11-02T22:31:10.559429728Z",
+      "spec": "TASK-2707",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 3274
+      }
+    },
+    {
+      "ts": "2026-11-02T22:31:21.977831241Z",
+      "spec": "TASK-2707",
+      "seat": "advisor",
+      "kind": {
+        "event": "GateHeld",
+        "gate": "closure-hold",
+        "reason": "merged (fcb4d8d) but completion held at Done — blocked by STORY-2254 (InProgress)",
+        "actor": "joe"
+      }
+    },
+    {
+      "ts": "2026-11-03T17:46:49.635525340Z",
+      "spec": "TASK-2707",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "fcb4d8d38edd14e96d4ce94998f68770fdfa8080",
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
