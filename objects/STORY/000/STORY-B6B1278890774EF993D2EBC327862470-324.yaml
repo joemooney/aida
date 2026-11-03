@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-02T19:20:59.253007269Z
-modified_at: 2026-11-03T19:39:17.026636586Z
+modified_at: 2026-11-03T20:48:44.088382096Z
 req_type: Story
 tags:
 - architecture
@@ -360,6 +360,20 @@ comments:
   content: 'ADVISOR RULING (round 4, PR #3288 at be0a97d): the round-3 fixes are pushed and await review, but the PR conflicts with main. This round only: merge origin/main into the PR branch and resolve the conflicts so that the round-3 behavior is preserved. Make no other changes. LIGHT gate: one targeted cargo test -p aida-cli-lib --lib story_2326 plus make check-ci-fast. Push, then stop.'
   created_at: 2026-11-03T18:51:21.958671926Z
   modified_at: 2026-11-03T18:51:21.958671926Z
+  session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
+- id: 01a1a32b-e038-7312-9305-c90bb03cd663
+  author: joe
+  content: |-
+    ADVISOR RULING (2026-11-03 13:55, round 5, PR #3288 at 63813a5d): fix all findings.
+    Round-3 rulings 1,2,3,4,5,7(flags),8,9 are implemented and sound, but CI lib-1 is red at this head (main parent da179083 and prior head 6615dc76 both green), and moving seat writes behind assign_seat blinds the BUG-2395/2398 Codex-finalization inventories (amendment 8).
+    1. BLOCKER CI: 'CI (lib-1)' fails at 63813a5d (job 126148863139, exit 1 after 13m37s vs ~8m for other shards); 'Build (ubuntu-latest)' fails as its aggregate. origin/main at the merged parent da179083 is green and the previous PR head 6615dc76 was green, so the failure comes from be0a97dd or the merge resolution. The PR body says the contained forking/reviewer goldens, the two path-isolated tests and the aida-core flag-table test were never run locally. The reviewer sandbox could not fetch the j
+    2. MAJOR guard regression (amendment 8, Probe 5): bug_2395_every_role_launch_site_is_inventoried counts only the literal '.env("AIDA_SESSION_ROLE",'. This PR moves the role writes into launch::assign_seat, which writes ROLE_ENV, and drops agent_launch.rs (2) and session.rs (8->6) from ROLE_LAUNCH_SITES. LAUNCH_INVENTORY counts spawn.rs's 3 grant writes as NotACodexLaunch. Nothing (not BUG-2395, BUG-2398 or the STORY-2326 ratchet, which exempts launch/) counts the CALLERS of assign_seat/spawn_age
+    3. MINOR ratchet evasion (ruling 1): vendor_program_arg exempts any Command::new argument containing a word from NON_VENDOR_WORDS. The list includes broad words (exe, tmp, temp, fake, dev, shell, script, server, hook), so 'let claude_exe = resolve_agent_program("claude"); Command::new(&claude_exe)' or Command::new(&vendor_tmp) is not counted. story_2326_launch_ratchet_tests.rs:236-240. Narrow the exemption to exact spellings (current_exe(), aida_exe_path(), gh_bin, real_git, ...) and add a mutan
+    4. MINOR untested refusal (Probe 5 / sketch test plan 'every LaunchRefusal variant'): LaunchRefusal::MalformedParentContainment (launch/context.rs resolve) has no test anywhere. Add a case with AIDA_CONTAINED=maybe to resolve_refusal_table, asserting the refusal and no spawn.
+    5. MINOR flag table gaps (amendment 5; production wiring is PR-C): refuse_posture_flags misses Codex '-c approval_policy=never' (equivalent to the refused -a/--ask-for-approval), a quoted TOML key '-c "sandbox_mode"=danger-full-access' (it starts with a quote, so starts_with("sandbox") fails), and Codex '--profile <p>', which can select a profile that sets sandbox_mode. aida-core/src/launch_policy.rs posture_flag_at. Add these to the table and its test, or record them as PR-C items.
+    RULINGS: (1) Reproduce lib-1 locally with the targeted filters the PR body lists as never run (the contained forking/reviewer goldens, the two path-isolated tests, the aida-core flag-table test) and fix. (2) Make the BUG-2395/2398 inventories count the callers of launch::assign_seat/spawn_agent, so the role-write inventory cannot go blind. (3) Narrow NON_VENDOR_WORDS to exact spellings and add a mutant. (4) Add the MalformedParentContainment case. (5) Add the three Codex spellings (-c approval_policy=never, quoted '"sandbox_mode"' key, --profile) to the table and its test now. LIGHT gate: one targeted cargo test -p <crate> <filter> plus make check-ci-fast (with umask 022, BUG-2432). Push to the existing PR branch, then stop.
+  created_at: 2026-11-03T20:48:44.088382096Z
+  modified_at: 2026-11-03T20:48:44.088382096Z
   session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
 history:
 - id: 01a19ed2-a170-7d52-94f3-7c4ff46f38c4
