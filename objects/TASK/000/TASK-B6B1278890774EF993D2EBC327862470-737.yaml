@@ -8,7 +8,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-03T13:59:46.006367658Z
-modified_at: 2026-11-03T13:59:46.006367658Z
+modified_at: 2026-11-03T18:19:28.848802424Z
 req_type: Task
 tags:
 - aida:pr-train
@@ -17,6 +17,13 @@ tags:
 - linked:BUG-2214
 - linked:BUG-2423
 - severity:major
+comments:
+- id: 01a1a2a3-3ad0-7263-a4da-a0afa0156bdc
+  author: joe
+  content: 'ADVISOR RULING (2026-11-03): keep BUG-2214 signed Q2. Train readiness means CI-ready pending authorized release, and mandate-covered armed holds are admitted. Do not add a separate human named-PR train release path: an operator releases with ''aida merge-hold clear N'' (through the script deputy when away), then trains. BUG-2427 covers the TTY mismatch. No code change; closed.'
+  created_at: 2026-11-03T18:19:28.848802424Z
+  modified_at: 2026-11-03T18:19:28.848802424Z
+  session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
 history:
 - id: 01a1a1c0-5a95-7912-8955-d78c035159d3
   author: joe
