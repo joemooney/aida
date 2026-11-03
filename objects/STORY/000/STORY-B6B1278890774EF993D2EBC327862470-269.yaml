@@ -32,7 +32,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T00:54:49.371776631Z
-modified_at: 2026-11-03T02:45:19.771451712Z
+modified_at: 2026-11-03T03:12:10.923723343Z
 req_type: Story
 tags:
 - architecture
@@ -506,6 +506,18 @@ comments:
     - Standing guidance for this lane: decide NON-SECURITY implementation details yourself (naming, file layout, helper shape) and note them in the PR body. Stop with a FORK only for an authority, confinement or credential choice that the rulings do not settle.
   created_at: 2026-11-03T02:45:19.771451712Z
   modified_at: 2026-11-03T02:45:19.771451712Z
+  session_id: 125337a4-7dd3-483b-9c56-3665173938ae
+- id: 01a19f64-92ab-7da0-b8e6-f614a0ba6b62
+  author: joe
+  content: |-
+    ADVISOR RULING F-ENV (2026-11-02 20:14 MST), TASK-2707 PR1 credential transport. This amends the literal "outer --clearenv" wording of the 07:40 signoff for the contained Codex path only.
+    - APPROVED: the environment boundary is Rust Command::env_clear() plus the exact final child allow-list on the spawn of the host helper. The helper (python3 -I -S) and bwrap inherit that exact environment unchanged, and this path omits bwrap's own --clearenv. The API key travels only as OPENAI_API_KEY in that allow-listed env. It never appears in argv (no --setenv for the key), files, the lease, the store, receipts or logs.
+    - REJECTED: --setenv with the key (exposed in argv) and a key-over-fd side channel (a new transport).
+    - REQUIRED TESTS: (1) inside the lane, the set of environment variable NAMES equals exactly the allow-list (an exact-set assertion, not a subset check), with a positive control showing an ambient parent variable would otherwise appear; (2) /proc/<bwrap pid>/cmdline and the helper's cmdline do not contain the key value; (3) registry_and_launch_tokens_absent_in_outer_and_inner as already required.
+    - Receipt timing (your additional finding): agreed, it is implementation. The receipt is written only after seat_preflight completes and pins the attested shim/vendor pid (not bwrap's info pid). Test it before any applied credit or model execution.
+    - Continue from your partial F-H edits. Decide every non-security detail yourself.
+  created_at: 2026-11-03T03:12:10.923723343Z
+  modified_at: 2026-11-03T03:12:10.923723343Z
   session_id: 125337a4-7dd3-483b-9c56-3665173938ae
 history:
 - id: 01a1949a-3f43-7b12-bc6b-0d5bf40ee2f2
