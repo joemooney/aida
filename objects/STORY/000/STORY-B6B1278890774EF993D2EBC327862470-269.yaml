@@ -32,7 +32,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T00:54:49.371776631Z
-modified_at: 2026-11-03T02:25:20.786517989Z
+modified_at: 2026-11-03T02:25:52.861636416Z
 req_type: Story
 tags:
 - architecture
@@ -448,6 +448,28 @@ comments:
   created_at: 2026-11-03T02:25:20.786517989Z
   modified_at: 2026-11-03T02:25:20.786517989Z
   session_id: 2092209f-ad2f-4d8e-b349-3530849c83b3
+- id: 01a19f3a-2edd-7b43-82e4-1871ff95fe40
+  author: joe
+  content: |-
+    ADVISOR RULING, TASK-2707 PR1 forks (fresh advisor seat, 2026-11-02 19:30 MST). I did not author the STORY-2238 sketch or any PR1 code. This amends the 07:40 signoff; C1-C12 stay binding.
+
+    FORK 1: F-a APPROVED; F-b and F-c REJECTED.
+    - Allow socket(AF_INET/AF_INET6, SOCK_STREAM) only. DGRAM and RAW stay denied.
+    - On a trapped connect, the broker reads the sockaddr ONCE and never CONTINUEs. If the destination is exactly 127.0.0.1:<relay port> (or ::1 if the relay listens there), the in-netns relay helper, which runs outside the filter, creates a socket already connected to the relay. The broker installs it over the target fd with ADDFD+SETFD (the same fd number, so the original socket is closed), copies O_NONBLOCK/CLOEXEC from the target slot, and answers val=0. The broker refuses every other inet destination with ECONNREFUSED. AF_UNIX keeps today's pinned private-endpoint logic.
+    - Required tests, in PR1: (a) connect to the relay port succeeds and traffic reaches the relay; (b) connect to 127.0.0.1:<any other port> with a listener present is refused (positive control: the same connect outside the filter succeeds); (c) a sockaddr rewritten by a racing thread after the trap still cannot reach anything but the relay (the injected fd is the only connected socket); (d) host_dbus_and_codex_daemon_socket_unreachable keeps its positive control.
+    - Record in the PR body that socket options set before connect are lost on the replaced fd, as a known limitation.
+
+    FORK 2: G-i APPROVED.
+    - PR1 supports only C7(iii): the API key travels as the vendor's env var through the outer --clearenv allow-list and nowhere else. registry_and_launch_tokens_absent_in_outer_and_inner must also assert that the key is absent from the lease, the store, receipts and logs.
+    - A ChatGPT auth.json gets a NAMED refusal: "contained ChatGPT auth waits for P3 (PR2)". Never fall back silently.
+    - The live run needs an operator-provided API key. The advisor arranges it at review time. Do not block implementation on it: build and test hermetically, and mark the live-run evidence as pending in the PR body.
+
+    FORK 3: CONFIRMED. Reuse the TASK-2706 embedded fixed `/usr/bin/python3 -I -S -c` shim. python3 becomes a named prerequisite of the Codex AIDA posture: the launch is refused if it is missing, with one line naming it. Bind it read-only from that exact host path, never through PATH lookup.
+
+    Resume PR1 under the brief you were given.
+  created_at: 2026-11-03T02:25:52.861636416Z
+  modified_at: 2026-11-03T02:25:52.861636416Z
+  session_id: 125337a4-7dd3-483b-9c56-3665173938ae
 history:
 - id: 01a1949a-3f43-7b12-bc6b-0d5bf40ee2f2
   author: joe
