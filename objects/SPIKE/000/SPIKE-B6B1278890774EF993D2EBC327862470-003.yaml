@@ -27,7 +27,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-30T14:13:30.512568229Z
-modified_at: 2026-11-03T02:46:29.901878301Z
+modified_at: 2026-11-03T02:46:32.475219509Z
 req_type: Spike
 tags:
 - area:agents
@@ -196,6 +196,12 @@ comments:
     The human decision is therefore whether the demonstrated v2 seams justify a bounded early-gated investment. A staged pilot is the recommendation because it tests the unresolved dependency first and gives a deterministic exit if it remains broken. Selecting that path would still leave support expansion, long-hold policy and any OS confinement design as later explicit decisions; this report applies none of them.
   created_at: 2026-11-03T02:46:29.901878301Z
   modified_at: 2026-11-03T02:46:29.901878301Z
+  session_id: 125337a4-7dd3-483b-9c56-3665173938ae
+- id: 01a19f4d-191b-7683-84d1-ae2f4a63d81b
+  author: joe
+  content: 'ADVISOR RULING (2026-11-02 19:58 MST): option 2. Defer the OpenCode adapter. Reasons: (1) current OpenCode v2 does not activate the configured AIDA MCP server, skills or commands, and that integration gate is unresolved upstream; (2) OpenCode''s tool permissions do not contain the filesystem (an allowed shell wrote outside its worktree despite external_directory: deny), so a lane would need AIDA''s own containment (STORY-2238), which is still landing for Codex; (3) the operator''s priority is Codex parity on Linux (EPIC-612). Revisit when OpenCode v2 activates global MCP, skills and commands reproducibly AND STORY-2238''s vendor-neutral launcher has shipped. Option 3 (a legacy v1 pilot) is rejected: it buys guaranteed major-version migration work. No follow-up specs are filed. The spike is complete.'
+  created_at: 2026-11-03T02:46:32.475219509Z
+  modified_at: 2026-11-03T02:46:32.475219509Z
   session_id: 125337a4-7dd3-483b-9c56-3665173938ae
 history:
 - id: 01a18d89-951f-79b2-87ba-1fd31dc3ce28
