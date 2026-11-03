@@ -3,12 +3,12 @@ spec_id: STORY-b6b1278890774ef993d2ebc327862470-322
 agreed_id: STORY-2324
 title: Gate decides from one ledger keyed by canonical spec ID (effective gate state = f(head SHA, canonical IDs, ledger))
 description: 'Regroup target 1 (do first), 2026-11-02. Canonicalize spec IDs once where they enter the system. Effective gate state (verdict, hold, mode) is a pure function of the PR head SHA, the canonical ID set and the ledger. Superseded specs inherit the carrier''s mode. Merge-hold markers live in the primary store. Retires the BUG-2403/BUG-2413 bug class, STORY-1392, STORY-1684 and the BUG-2176 workaround. Evidence: BUG-2403, BUG-2413, STORY-1392, TASK-1574, TASK-1259. Sketch-first; advisor signoff required.'
-status: InProgress
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-02T19:20:32.021326811Z
-modified_at: 2026-11-03T20:22:23.675402139Z
+modified_at: 2026-11-03T21:47:16.915848942Z
 req_type: Story
 tags:
 - architecture
@@ -315,6 +315,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1a361-7aa5-7b81-902a-fb8153cf0119
+  author: joe
+  timestamp: 2026-11-03T21:47:17.029689992Z
+  session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Approved
 filed_at:
   code_sha: 1b678fd5059046ff02bfb3b87c1f10d3162efda6
   branch: main
