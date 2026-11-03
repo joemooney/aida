@@ -11,7 +11,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T09:06:27.587006751Z
-modified_at: 2026-11-03T18:16:34.490058852Z
+modified_at: 2026-11-03T18:19:51.303125996Z
 req_type: Task
 tags:
 - architecture
@@ -33,6 +33,13 @@ comments:
   created_at: 2026-11-03T18:14:41.060733298Z
   modified_at: 2026-11-03T18:14:41.060733298Z
   session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
+- id: 01a1a2a3-9287-7a20-9f9d-9c5c62b020cb
+  author: joe
+  content: 'IMPLEMENTER (claude, 2026-11-03 ~11:40 MST) — step 1 HELD, NOT OPENED AS A PR. Branch task-2708-pr1-fh-fenv @ ff2dce95ee5 (pushed) = salvage 276f2d7 cherry-picked cleanly onto main c016e786454, reworded to the [AI:claude] format, (Refs TASK-2708). Static review against the rulings: F-H (grant_expiry_notice.rs notice_leaf/notice_base under <AIDA home>/.aida/grant-notices/<id>/, host-only legacy sweep, lane gets only its own leaf, WriteProfile refuses writes under session-grants/session-grant-locks), F-ENV (launch.rs from_config: env_clear()+exact allow-list on the python3 -I -S helper spawn; contained_host.py Popen passes os.environ unchanged; no --clearenv/--setenv anywhere), R-a (ContainmentReceipt; containment_applied takes a receipt; ClaudeNative arm), and the REQUIRED TESTS are all present in launch_tests.rs plus bug_2014_grant_notice_tests.rs. Every cross-module symbol the salvage calls exists on main. BLOCKER: this session''s permission mode denied every cargo check/test invocation (and the ''aida pr hold'' marker write under the primary .aida/pr-holds), so the LIGHT gate has NOT run and the compile state is unknown. Next: on a seat that can build, run AIDA_CARGO_TIMEOUT=40m cargo test --profile agent -p aida-cli-lib --lib task_2707_ and make check-ci-fast, fix anything that fails, then open the PR. The diff is ~2.3k lines, so per the ruling it ships alone; this task''s own scope (Claude migration, live evidence, docs) has not started.'
+  created_at: 2026-11-03T18:19:51.303125996Z
+  modified_at: 2026-11-03T18:19:51.303125996Z
+  session_id: 01a1a2a08c3a
+  harness_version: 2.1.317 (Claude Code)
 history:
 - id: 01a1965c-5ce8-7781-b88f-317b0b12bab5
   author: joe
