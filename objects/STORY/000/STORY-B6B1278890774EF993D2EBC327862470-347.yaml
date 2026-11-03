@@ -11,7 +11,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-03T14:28:02.283438627Z
-modified_at: 2026-11-03T20:29:40.779271384Z
+modified_at: 2026-11-03T21:43:25.959168192Z
 req_type: Story
 comments:
 - id: 01a1a31a-6e2b-7a70-9aad-14191aa5905a
@@ -38,6 +38,18 @@ comments:
     - The scheduled child has a 120s kill budget, and a reap scan alone took >50s here. Should the command stop early instead of timing out? Resolved: it uses a soft deadline. Reclaim is deferred (exit 0, noted) when the budget is spent, so a timeout never routes as a finding.
   created_at: 2026-11-03T20:29:40.779271384Z
   modified_at: 2026-11-03T20:29:40.779271384Z
+  session_id: 01a1a316c58f
+  harness_version: 2.1.317 (Claude Code)
+- id: 01a1a35d-f407-7373-95da-b273806a3272
+  author: joe
+  content: |-
+    ## Implementer findings (could not be filed as draft TASKs: spec-ID allocation is read-only in this sandbox)
+
+    1. **design-choice (minor):** the disk guard's floor reclaim (`doctor_cmd.rs` `floor_reclaim`) uses plain `worktree reclaim --apply` rails: 60-minute min-age, no live lease, no open PR, no scratch. It does not use the hygiene job's 24h window, because a floor breach is urgent. It writes no disk-emergency ledger row, so the status block's "last automatic reclaim" still shows only the >=95% emergency tier. The routed finding carries the bytes freed instead. Decide whether floor reclaims should ledger too.
+    2. **bug-spotted (minor, unrelated):** `make check-ci-fast` fails "Codex mail wake fixtures" in a sandboxed seat. `tests/test_codex_mail_wake.py:491` and 2 more expect mode 0o640 but get 0o600, which looks like a dependence on the caller's umask.
+    3. **verification note:** the aida-cli-lib test binary could not compile within the 10-minute per-call limit here. New and changed tests are type-checked (`cargo check --tests`, clean), and CI runs them. The help golden was regenerated from the built binary; the diff is additive only and matches the snapshot format byte for byte. `aida session hygiene --dry-run` exceeded 58s here, like plain `session reap --dry-run`, so the 300s scheduler ceiling and the 180s soft budget matter.
+  created_at: 2026-11-03T21:43:25.959168192Z
+  modified_at: 2026-11-03T21:43:25.959168192Z
   session_id: 01a1a316c58f
   harness_version: 2.1.317 (Claude Code)
 history:
