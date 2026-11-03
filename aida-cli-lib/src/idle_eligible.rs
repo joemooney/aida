@@ -247,10 +247,20 @@ fn refresh(
         {
             None
         } else if kind == "ship-ready" {
-            (pr.ci_rollup.as_deref() == Some("pass")
-                && pr.mergeable.as_deref() == Some("MERGEABLE")
-                && pr.review_decision.as_deref() != Some("CHANGES_REQUESTED"))
-            .then_some(true)
+            // trace:TASK-2794 | ai:claude — only CONFLICTING is a known
+            // disqualification; GitHub reports UNKNOWN (or omits the field)
+            // while it recomputes after the base moves, which is evidence
+            // unknown and must not reset ship age.
+            if pr.ci_rollup.as_deref() != Some("pass")
+                || pr.review_decision.as_deref() == Some("CHANGES_REQUESTED")
+                || pr.mergeable.as_deref() == Some("CONFLICTING")
+            {
+                None
+            } else if pr.mergeable.as_deref() == Some("MERGEABLE") {
+                Some(true)
+            } else {
+                Some(false)
+            }
         } else {
             match evidence
                 .base_ref
@@ -744,5 +754,40 @@ mod tests {
         // The boundary is dropped once the head moves on.
         let moved = run(&after_review, review_at, snapshot("fedcba4321", "pass"));
         assert!(moved.invalidations.is_empty());
+    }
+    // trace:TASK-2794 | ai:claude — GitHub's transient UNKNOWN (recomputing
+    // after main moves) keeps ship age; only CONFLICTING disqualifies.
+    #[test]
+    fn idle_eligible_ship_unknown_mergeable_keeps_age_conflicting_resets() {
+        let t = setup();
+        let root = t.path();
+        let n = now();
+        verdict(root, "approved", "abcdef1234");
+        let run = |prev: &Cache, at, snap| refresh_with(root, snap, prev, at, Ancestry::Current);
+        let with_mergeable = |m: Option<&str>| {
+            let mut s = snapshot("abcdef1234", "pass");
+            s.by_branch.get_mut("topic").unwrap().mergeable = m.map(Into::into);
+            s
+        };
+        let eligible = run(&Cache::default(), n, with_mergeable(Some("MERGEABLE")));
+        let first_seen = eligible.observations[0].first_observed_at;
+        for m in [Some("UNKNOWN"), None] {
+            let recomputing = run(&eligible, n + Duration::minutes(5), with_mergeable(m));
+            assert!(recomputing.invalidations.is_empty(), "{m:?}");
+            assert_eq!(recomputing.observations[0].first_observed_at, first_seen);
+            let back = run(
+                &recomputing,
+                n + Duration::minutes(6),
+                with_mergeable(Some("MERGEABLE")),
+            );
+            assert_eq!(back.observations[0].first_observed_at, first_seen);
+        }
+        // Unknown with no prior observation starts nothing.
+        let fresh = run(&Cache::default(), n, with_mergeable(Some("UNKNOWN")));
+        assert!(fresh.observations.is_empty() && fresh.invalidations.is_empty());
+        let conflict_at = n + Duration::minutes(7);
+        let conflicting = run(&eligible, conflict_at, with_mergeable(Some("CONFLICTING")));
+        assert!(conflicting.observations.is_empty());
+        assert_eq!(conflicting.invalidations[0].invalidated_at, conflict_at);
     }
 }
