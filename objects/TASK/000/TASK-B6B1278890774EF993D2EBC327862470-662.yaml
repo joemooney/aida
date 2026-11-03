@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T20:06:03.816039190Z
-modified_at: 2026-11-02T13:02:30.254060173Z
+modified_at: 2026-11-03T07:55:40.990157297Z
 req_type: Task
 relationships:
 - rel_type:
@@ -101,6 +101,12 @@ history:
   session_id: 01a19c56fbf6
   harness_version: 2.1.316 (Claude Code)
   changes: []
+- id: 01a1a068-2543-7262-abe0-b2b26dd48588
+  author: joe
+  timestamp: 2026-11-03T07:55:42.275740620Z
+  session_id: 01a1a065a9c6
+  harness_version: 2.1.317 (Claude Code)
+  changes: []
 processing_record:
 - id: 01a19949-b0e1-7510-a8b1-f827883bc18f
   timestamp: 2026-11-01T22:45:05.889847035Z
@@ -126,7 +132,7 @@ failure_reason:
   phase: reviewer
   phase_index: 3
   kind: verdict:request-changes
-  detail: 'AC1 verified (build.py --check clean, 21 showcase build/publish unittests pass, published site has no broken relative links or external runtime deps, PR CI green at f9a1473). AC2 partial: the new ''exact'' mean marker (665 LoC) and the methodology mean 664.8 do not reproduce from the stated shortstat method (589.9), and the KDE estimator is undocumented. Brand-logo/favicon work across ~20 pages is attributed to completed TASK-2709 whose scope is audit publication.'
+  detail: 'CI green and links resolve, but the audit pages reverse TASK-2709 AC2 (unmeasured/proxy metrics relabelled as measured ELITE DORA results), features.html presents 9 nonexistent crates as the current 12-crate architecture, and new scope is attributed to two completed specs. AC: 2709-AC1 verified (CI gates green at head, relative-link scan clean); 2709-AC2 FAIL (finding 1); 2709-AC3 unverified (pending approval); 2835-AC1 verified by CI; 2835-AC2 verified (link scan, no runtime externals); 2835-AC3 not-applicable (PR-size chart numbers unchanged, colours only).'
   recovery_hint: address the review findings, move TASK-2709 back to In Progress, and clear the PR hold only after approval
   shelved_by: reviewer
-  shelved_at: 2026-11-02T13:02:30.254060173Z
+  shelved_at: 2026-11-03T07:55:40.990157297Z
