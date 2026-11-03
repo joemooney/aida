@@ -1,5 +1,6 @@
 id: 01a1a1b5-7456-7261-ab03-7d0e96532c3b
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-737
+agreed_id: TASK-2786
 title: Train hold follow-ups conflict with signed mandate admission and lack human named-PR release parity
 description: BUG-2423 comments request (1) rejecting armed member holds as not ready and (2) human terminal release parity with pr ship for explicitly named PRs. BUG-2214 signed Q2 intentionally admits mandate-covered armed holds and tolerates the train hold gate until lease-protected release. The current train Member.release records only mandate cover, so human named-PR release needs an explicit authority representation and matching recheck/re-arm tests. Decide whether readiness means CI-ready pending authorized release, or release before train admission, while preserving BUG-2214 mandate coverage and human integrity-floor checks. The BUG-2423 CI-registration patch does not change this policy.
 status: Draft
@@ -16,6 +17,12 @@ tags:
 - linked:BUG-2214
 - linked:BUG-2423
 - severity:major
+history:
+- id: 01a1a1c0-5a95-7912-8955-d78c035159d3
+  author: joe
+  timestamp: 2026-11-03T14:11:40.309432675Z
+  session_id: f5eddefe-032d-4760-94ba-3a318cf3d1d1
+  changes: []
 filed_at:
   aida_version: 0.16.0
   aida_build_sha: 6c587ee595c

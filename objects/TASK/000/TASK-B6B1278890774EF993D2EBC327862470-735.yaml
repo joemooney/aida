@@ -1,5 +1,6 @@
 id: 01a1a08e-779d-7662-b1de-4e077a0a887c
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-735
+agreed_id: TASK-2785
 title: 'non-blocking/minor (plausible): lanes now get rw on ~/.local/state/cargo-slots,…'
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on TASK-2772, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
@@ -35,6 +36,11 @@ history:
 - id: 01a1a1ad-6319-7180-9906-212f9612fa48
   author: joe
   timestamp: 2026-11-03T13:50:57.305048963Z
+  session_id: f5eddefe-032d-4760-94ba-3a318cf3d1d1
+  changes: []
+- id: 01a1a1c0-59a4-7b81-b7ad-640654f3c6df
+  author: joe
+  timestamp: 2026-11-03T14:11:40.068712176Z
   session_id: f5eddefe-032d-4760-94ba-3a318cf3d1d1
   changes: []
 filed_at:

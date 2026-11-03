@@ -1,5 +1,6 @@
 id: 01a1a08e-3cd0-7420-bb35-2097e0cb7d6a
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-732
+agreed_id: TASK-2787
 title: 'cosmetic: check-ci-gates.py sccache_fallback calls sccache_probe_bin(env) witho…'
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on BUG-2418, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
@@ -35,6 +36,11 @@ history:
 - id: 01a1a1ad-c428-7032-a5b2-5b50d040babe
   author: joe
   timestamp: 2026-11-03T13:51:22.152340172Z
+  session_id: f5eddefe-032d-4760-94ba-3a318cf3d1d1
+  changes: []
+- id: 01a1a1c0-5b0d-7313-9667-470acad57149
+  author: joe
+  timestamp: 2026-11-03T14:11:40.429820183Z
   session_id: f5eddefe-032d-4760-94ba-3a318cf3d1d1
   changes: []
 filed_at:

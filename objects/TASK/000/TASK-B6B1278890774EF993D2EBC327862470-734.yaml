@@ -1,5 +1,6 @@
 id: 01a1a08e-69aa-7952-96f3-909fcb0970bc
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-734
+agreed_id: TASK-2791
 title: 'non-blocking/minor: dev_build.rs:900 and check-ci-gates.py run_plan add ''CARGO_…'
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on TASK-2772, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
@@ -35,6 +36,11 @@ history:
 - id: 01a1a1ad-20cd-7d63-bbb0-0912469a07b9
   author: joe
   timestamp: 2026-11-03T13:50:40.333147492Z
+  session_id: f5eddefe-032d-4760-94ba-3a318cf3d1d1
+  changes: []
+- id: 01a1a1c0-5c05-7341-b761-9e50ca95ffd7
+  author: joe
+  timestamp: 2026-11-03T14:11:40.677412301Z
   session_id: f5eddefe-032d-4760-94ba-3a318cf3d1d1
   changes: []
 filed_at:

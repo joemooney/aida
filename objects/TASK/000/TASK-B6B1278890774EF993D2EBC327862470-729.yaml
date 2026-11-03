@@ -1,5 +1,6 @@
 id: 01a1a08e-17a2-7930-be9c-f9d4498b91c0
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-729
+agreed_id: TASK-2788
 title: 'non-blocking/minor: config_cmd.rs:1364 write_codex_posture(Contained) still set…'
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on BUG-2418, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
@@ -65,6 +66,11 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1a1c0-5bda-7162-b00f-745727c51334
+  author: joe
+  timestamp: 2026-11-03T14:11:40.634368879Z
+  session_id: f5eddefe-032d-4760-94ba-3a318cf3d1d1
+  changes: []
 filed_at:
   code_sha: 6c587ee595ce70f5fcc48480cfdddc8246cf158c
   branch: main
