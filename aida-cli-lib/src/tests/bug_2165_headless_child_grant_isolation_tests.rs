@@ -279,6 +279,7 @@ fn session_lease_preserves_child_grant_id_across_updates() {
         tree_kind: Default::default(),
         child_grant_id: Some("01948abc-def0-7000-8000-000000000001".into()),
         vendor_session_id: None,
+        lane_jobs: None,
     };
     std::fs::write(&lease_file, toml::to_string_pretty(&lease).unwrap()).unwrap();
 

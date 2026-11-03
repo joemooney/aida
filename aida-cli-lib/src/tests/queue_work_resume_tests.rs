@@ -254,6 +254,7 @@ fn update_lease_branch_rewrites_only_the_branch() {
         driver: None,
         child_grant_id: None,
         vendor_session_id: None,
+        lane_jobs: None,
     };
     std::fs::write(
         sessions.join("019eabcd-1234.toml"),
@@ -337,6 +338,7 @@ fn reconcile_orchestrated_branch_follows_a_pr_branch_swap() {
         driver: None,
         child_grant_id: None,
         vendor_session_id: None,
+        lane_jobs: None,
     };
     std::fs::write(
         sessions.join("019eaaaa-bbbb.toml"),

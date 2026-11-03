@@ -67,6 +67,7 @@ fn lease_at(
         driver: None,
         child_grant_id: None,
         vendor_session_id: None,
+        lane_jobs: None,
     }
 }
 

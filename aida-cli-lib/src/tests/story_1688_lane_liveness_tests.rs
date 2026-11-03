@@ -76,6 +76,7 @@ fn lease(id: &str, scope: &str, pid: &Pid, started_at: DateTime<Utc>) -> Session
         driver: None,
         child_grant_id: None,
         vendor_session_id: None,
+        lane_jobs: None,
     }
 }
 

@@ -55,7 +55,10 @@ pub(crate) fn clamp_claim_ttl_mins(requested_mins: u64) -> (u64, bool) {
     }
 }
 
-fn markers_dir(root: &Path) -> PathBuf {
+/// The review-in-progress marker directory under `root`; other readers
+/// (the ownership migration) take it from here.
+// trace:STORY-2325 | ai:claude
+pub(crate) fn markers_dir(root: &Path) -> PathBuf {
     root.join(".aida").join("review-in-progress")
 }
 

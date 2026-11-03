@@ -1546,6 +1546,8 @@ pub(crate) fn release_lease_files(project_root: &std::path::Path, lease_id: &str
     // trace:BUG-2139 | ai:claude
     crate::session::revoke_lease_child_grant(&lease_path(project_root, lease_id));
     let _ = std::fs::remove_file(lease_path(project_root, lease_id));
+    // trace:STORY-2325 | ai:claude
+    crate::ownership::dual::lease_released(project_root, lease_id, "lease reaped");
     let activity = session_activity_path(project_root, lease_id);
     if activity.exists() {
         let _ = std::fs::remove_file(&activity);

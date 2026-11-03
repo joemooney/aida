@@ -20,6 +20,7 @@ numbers are emitted by the generator only as non-authoritative navigation aids.
 | `cache::is_cache_schema_drift_error` |
 | `claude_log_indicates_api_outage` |
 | `compete::parse_gate_result` |
+| `forge::gh_pr_checks_json` |
 | `forge::gitlab_merge_response_is_retryable` |
 | `forge::gitlab_merge_response_is_stale_head` |
 | `forge::glab_stderr_is_transient` |

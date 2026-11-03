@@ -231,6 +231,39 @@ fn sandbox_args(child: &Command) -> Result<Vec<std::ffi::OsString>> {
     Ok(out)
 }
 
+/// BUG-2383 fixture (c): the seat preflight's own conversion of a finalized
+/// Codex child into `codex ... sandbox <its sandbox and config options> --
+/// argv`, so a test runs `argv` in the child's real tool shell (its
+/// `shell_environment_policy`, its sandbox profile) without a model call.
+// trace:BUG-2383 | ai:claude
+#[cfg(test)]
+pub(crate) fn tool_shell_command_for_test(
+    child: &Command,
+    argv: &[&std::ffi::OsStr],
+) -> Result<Command> {
+    let mut shell = Command::new(child.get_program());
+    if let Some(cwd) = child.get_current_dir() {
+        shell.current_dir(cwd);
+    }
+    for (k, v) in child.get_envs() {
+        match v {
+            Some(v) => {
+                shell.env(k, v);
+            }
+            None => {
+                shell.env_remove(k);
+            }
+        }
+    }
+    let original: Vec<_> = child.get_args().collect();
+    shell
+        .args(&original[..codex_argv_start(child)?])
+        .args(sandbox_args(child)?)
+        .arg("--")
+        .args(argv);
+    Ok(shell)
+}
+
 /// Baseline launches have no grant to validate. Still refuse later policy
 /// replacements that could unmask ambient authority or replace their explicit
 /// empty selector. Profiles remain below the exact-key CLI prefix precedence.

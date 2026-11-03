@@ -38,6 +38,7 @@ fn review_lease(id: &str, scope: &str, creator_pid: Option<u32>) -> SessionLease
         driver: None,
         child_grant_id: None,
         vendor_session_id: None,
+        lane_jobs: None,
     }
 }
 

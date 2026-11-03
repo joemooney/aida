@@ -121,6 +121,7 @@ fn test_lease(id: &str, scope: &str, worktree: std::path::PathBuf, pid: u32) -> 
         driver: None,
         child_grant_id: None,
         vendor_session_id: None,
+        lane_jobs: None,
     }
 }
 

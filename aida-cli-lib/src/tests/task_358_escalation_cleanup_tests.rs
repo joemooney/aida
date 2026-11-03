@@ -53,6 +53,7 @@ fn write_test_lease(
         driver: None,
         child_grant_id: None,
         vendor_session_id: None,
+        lane_jobs: None,
     };
     let path = sessions.join(format!("{id}.toml"));
     std::fs::write(&path, toml::to_string_pretty(&lease).unwrap()).unwrap();

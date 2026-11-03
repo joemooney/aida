@@ -230,6 +230,7 @@ fn record_author_lease(root: &Path) {
         driver: None,
         child_grant_id: None,
         vendor_session_id: None,
+        lane_jobs: None,
         interrupted_reason: None,
         ending_retained_at: None,
         ending_retained_reason: None,

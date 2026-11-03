@@ -1268,6 +1268,15 @@ A native child does not receive `AIDA_CONTAINED=1` or AIDA containment credit.
 Permission reports, doctor, launch output and statusline distinguish the posture;
 `AIDA_CONTAINMENT_POSTURE` stamps actual child posture for display only.
 
+The contained permission preset (`aida config permissions set contained`) writes
+`sandbox_workspace_write.writable_roots = []` for Codex. Reapplying it clears
+legacy write grants to `~/.cargo`, `~/.rustup` and `~/.aida` in project or user
+scope. Host toolchains, Cargo registry sources and global AIDA state receive no
+extra write grant. Like the read-only CARGO_HOME in BUG-2418's bwrap lanes, new
+dependencies must be fetched on the host: run `cargo fetch` outside the lane.
+Already-running Codex sessions need to be restarted to load the changed config.
+<!-- trace:TASK-b6b1278890774ef993d2ebc327862470-729 | ai:codex -->
+
 This repository keeps `[agents] vendor = "codex"` and explicitly opts into its
 native sandbox until vendor-neutral containment (STORY-2238). Its AIDA network
 allowlist includes `api.openai.com` for API-key use and `chatgpt.com` plus
