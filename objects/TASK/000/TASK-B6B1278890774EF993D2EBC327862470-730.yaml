@@ -1,0 +1,28 @@
+id: 01a1a08e-2285-7fa3-a6fe-112dc6516db5
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-730
+title: 'non-blocking/minor: dev_build.rs:900 and check-ci-gates.py run_plan add ''CARGO_…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on BUG-2418, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  non-blocking/minor: dev_build.rs:900 and check-ci-gates.py run_plan add 'CARGO_HOME is read-only here; new dependencies are fetched on the host' to EVERY failed cargo or gate run while CARGO_HOME is unwritable. Inside a lane that is always, so ordinary compile or test failures get a misleading fetch hint. Gate it on cargo output that shows a download or registry write (for example 'Read-only file system' or 'failed to download').
+  Reviewed sha: 1c54c4d85edd1496e1a9b1921c51fe19641ade42
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-03T08:37:11.941869541Z
+modified_at: 2026-11-03T08:37:11.941869541Z
+req_type: Task
+tags:
+- carried-from:BUG-2418
+- finding-hash:89cd310d
+- from-review:BUG-2418
+- kind:carried-forward
+filed_at:
+  code_sha: 6c587ee595ce70f5fcc48480cfdddc8246cf158c
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: db087637d57
+  vendor: claude
+  session: c58592f4-04ae-498b-9afd-87b0cc2bcde9
