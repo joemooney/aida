@@ -1,0 +1,35 @@
+id: 01a1a246-170e-7890-a647-8ee5e720ae40
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-351
+agreed_id: STORY-2355
+title: 'Review PR-3288: [AI:claude] refactor(launch): LaunchContext and spawn_agent for Claude contained paths (Refs STORY-2326)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a19fd0`) for branch `story-2326-work`.
+
+  - PR: <https://github.com/joemooney/aida/pull/3288>
+  - Branch: `story-2326-work` → `main`
+
+  ## Slice of (Refs only — not completed by this PR)
+
+  Commit subjects carry `(Refs SPEC-ID)`: this PR is one slice of a spec that a later PR completes. Review this slice against that spec's acceptance criteria.
+
+  - STORY-2326
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 3288` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-03T16:37:44.846260324Z
+modified_at: 2026-11-03T16:37:44.846260324Z
+req_type: Story
+filed_at:
+  code_sha: 493f3ae1c526c7ab19f208112d426aecbf33c8b5
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 493f3ae1c52
+  vendor: claude
