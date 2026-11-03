@@ -1,0 +1,23 @@
+id: 01a19f4a-556b-7443-9296-d308e96c9dac
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-189
+agreed_id: BUG-2420
+title: The final ID of a delegated block fails object-save admission after it was dispensed (next advances, nothing is saved)
+description: 'From SPIKE-708 Q1/Q3 (research on the spike, 2026-11-03). Probe: a size-one block, and the final ID of a size-two block, are dispensed (block ''next'' advances), and then the object save is refused by admission because the block is no longer spendable. The ID is burned and the object is not saved; the next add falls back to a node-local ID. Expected: admission recognizes an already-dispensed final ID independently of future block spendability. Acceptance: (1) size-one and final-of-size-two adds both persist under the delegated ID; (2) wrong-node, wrong-home and absent-hub-claim refusals still refuse; (3) a failed save never leaves ''next'' advanced without an object (no silent loss): roll back or retry the same ID. Source pointers: db_block.rs ~L302-317 (claim refusal).'
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-03T02:43:31.307915297Z
+modified_at: 2026-11-03T02:43:31.307915297Z
+req_type: Bug
+tags:
+- from:SPIKE-708
+- id-allocation
+filed_at:
+  code_sha: 553f7d5984c6083a9f2b47cfa358ce57c438843b
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 553f7d5984c
+  vendor: claude
+  session: 125337a4-7dd3-483b-9c56-3665173938ae
