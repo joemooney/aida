@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import argparse
 import contextlib
+from concurrent.futures import ThreadPoolExecutor
 import errno
 import os
 import re
@@ -445,14 +446,14 @@ def sccache_probe_bin(env: dict[str, str], cwd: Path | None = None) -> str | Non
     return shutil.which("sccache", path=env.get("PATH"))
 
 
-def sccache_fallback(env: dict[str, str], probe=None) -> dict[str, str]:
+def sccache_fallback(env: dict[str, str], probe=None, cwd: Path | None = None) -> dict[str, str]:
     """TASK-2772: ask sccache once, with a deadline, whether it can serve this
     process. When it is refused (a lane sandbox without its socket) or does not
     answer, build without it: RUSTC_WRAPPER= and one note. Never hangs."""
     if not sccache_wrapper_active(env) or env.get("AIDA_SCCACHE_DISABLE") == "1":
         return env
     if probe is None:
-        sccache_bin = sccache_probe_bin(env)
+        sccache_bin = sccache_probe_bin(env, cwd=cwd)  # trace:TASK-2790 | ai:codex
         if not sccache_bin:
             return env
 
@@ -463,6 +464,7 @@ def sccache_fallback(env: dict[str, str], probe=None) -> dict[str, str]:
                 done = subprocess.run(
                     [sccache_bin, env.get("RUSTC") or "rustc", "-vV"],
                     env=env,
+                    cwd=cwd,
                     stdin=subprocess.DEVNULL,
                     stdout=subprocess.DEVNULL,
                     stderr=subprocess.DEVNULL,
@@ -486,13 +488,13 @@ def without_sccache(env: dict[str, str]) -> dict[str, str]:
     return {**env, "RUSTC_WRAPPER": ""}
 
 
-def gate_env() -> dict[str, str]:
+def gate_env(root: Path | None = None) -> dict[str, str]:
     """TASK-2772: the gate runner's start path. Start (or restart) the sccache
     server under a deadline, then probe it once; a stuck or failed start skips
     the probe and falls back. Every step is bounded."""
     if not ensure_sccache_server():
         return without_sccache(dict(os.environ))
-    return sccache_fallback(dict(os.environ))
+    return sccache_fallback(dict(os.environ), cwd=root)
 
 
 # trace:BUG-2418 | ai:claude
@@ -514,10 +516,37 @@ def cargo_home_read_only_note(env: dict[str, str]) -> str | None:
         return CARGO_HOME_READ_ONLY_NOTE if err.errno == errno.EROFS else None
 
 
-def run_gate(root: Path, name: str, command: str, env: dict[str, str]) -> tuple[bool, float]:
+# trace:TASK-2790 | ai:codex
+CARGO_FETCH_ERRORS = (b"read-only file system", b"failed to download", b"failed to update registry")
+
+
+def run_gate(root: Path, name: str, command: str, env: dict[str, str]) -> tuple[bool, float, bool]:
     started = time.monotonic()
-    completed = subprocess.run([*CI_SHELL_ARGV, command], cwd=root, env=env)
-    return completed.returncode == 0, time.monotonic() - started
+    # Preserve both streams and retain only an overlap for split error markers.
+    def stream_diagnostics(source, sink):
+        fetch_error = False
+        tail = b""
+        while chunk := source.read1(8192):
+            try:
+                sink.buffer.write(chunk)
+                sink.buffer.flush()
+            except BrokenPipeError:
+                pass  # Drain the child even when the caller's sink went away.
+            evidence = tail + chunk.lower()
+            fetch_error |= any(marker in evidence for marker in CARGO_FETCH_ERRORS)
+            tail = evidence[-64:]
+        return fetch_error
+
+    with subprocess.Popen(
+        [*CI_SHELL_ARGV, command], cwd=root, env=env,
+        stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+    ) as child, ThreadPoolExecutor(max_workers=2) as readers:
+        stdout = readers.submit(stream_diagnostics, child.stdout, sys.stdout)
+        stderr = readers.submit(stream_diagnostics, child.stderr, sys.stderr)
+        passed = child.wait() == 0
+        # Read both results even if the first one already contains evidence.
+        fetch_error = any([stdout.result(), stderr.result()])
+    return passed, time.monotonic() - started, fetch_error
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -603,7 +632,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     with contextlib.ExitStack() as stack:
-        env = gate_env()  # trace:TASK-2772 | ai:claude
+        env = gate_env(root)  # trace:TASK-2772 | ai:claude
         if args.tier == "fast":
             env["PATH"] = aida_stub_dir(root, stack) + os.pathsep + env.get("PATH", "")
         return run_plan(root, args.tier, plan, tiers, env)
@@ -636,7 +665,7 @@ def run_plan(
             print(f"FAIL  {name}\n        {err}", file=sys.stderr)
             return 1
         print(f"RUN   {name}  [{tiers[name]}]", flush=True)
-        passed, seconds = run_gate(root, name, resolved, env)
+        passed, seconds, fetch_error = run_gate(root, name, resolved, env)
         if not passed:
             sccache_active = True
             wrapper_val = env.get("RUSTC_WRAPPER", os.environ.get("RUSTC_WRAPPER"))
@@ -651,7 +680,7 @@ def run_plan(
                         f"        hint: restart sccache with: sccache --stop-server; TMPDIR=/tmp sccache --start-server",
                         file=sys.stderr,
                     )
-            note = cargo_home_read_only_note(env)
+            note = cargo_home_read_only_note(env) if fetch_error else None
             if note:
                 print(f"check-ci-gates: CARGO_HOME is read-only here; {note}", file=sys.stderr)
             # Exit on the FIRST failure: CI's order is the cheapest order,

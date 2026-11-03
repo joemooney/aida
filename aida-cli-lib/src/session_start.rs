@@ -3087,6 +3087,19 @@ pub(crate) fn session_start_with_receipt(
                     isolated_target.display()
                 )
             })?;
+            // BUG-2383: a clone is not a linked worktree, so the host cargo
+            // wrapper never seeds its target; warm it here from the primary's
+            // with reflinks only (never a shared inode).
+            // trace:BUG-2383 | ai:claude
+            let seeded = crate::seat_target_seed::seed_seat_target(
+                target,
+                &isolated_target,
+                crate::seat_target_seed::LAUNCH_LOCK_WAIT,
+            );
+            eprintln!(
+                "  seat cargo target: {}",
+                crate::seat_target_seed::describe(&seeded)
+            );
         }
         write_session_env_file(&worktree_path, &isolated_target).with_context(|| {
             format!("writing session env shim under {}", worktree_path.display())
@@ -3251,6 +3264,7 @@ pub(crate) fn session_start_with_receipt(
         driver: aida_core::driver_registry::driver_from_env(), // trace:STORY-1653 | ai:claude
         child_grant_id: None,
         vendor_session_id: None,
+        lane_jobs: None,
     };
     let lease_file = lease_path(&project_root, &id);
     // STORY-1429: atomic, so a reader never sees a half-written lease.
@@ -3273,6 +3287,8 @@ pub(crate) fn session_start_with_receipt(
             || aida_core::write_atomic(&lease_file, &body).map_err(Into::into),
         )?;
     }
+    // Dual-write: the lease stays authoritative. // trace:STORY-2325 | ai:claude
+    crate::ownership::dual::lease_written(&project_root, &lease);
     if let Some(cleanup) = rollback.as_mut() {
         cleanup.lease_id = Some(id.clone());
     }

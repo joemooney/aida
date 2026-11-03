@@ -654,6 +654,9 @@ impl BuildSteps for FakeBuild {
     fn restart_mcp(&mut self, _layout: &DevLayout) -> Result<()> {
         Ok(())
     }
+    fn restart_mail_wake(&mut self, _out: &mut dyn std::io::Write) -> Result<()> {
+        Ok(())
+    }
     fn rerecord_retention(&mut self, _layout: &DevLayout) -> RetentionRerecord {
         RetentionRerecord::NothingRecorded
     }
