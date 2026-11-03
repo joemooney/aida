@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import argparse
 import contextlib
+import errno
 import os
 import re
 import shlex
@@ -349,25 +350,168 @@ def sccache_missing_tmpdir() -> str | None:
     return sccache_server_status()[1]
 
 
-def ensure_sccache_server() -> None:
-    """Ensure sccache is running with a stable TMPDIR, pre-starting or restarting if broken."""
+# trace:TASK-2772 | ai:claude
+SCCACHE_SERVER_TIMEOUT = 15.0
+
+
+def _sccache_server_cmd(cmd: list[str], env: dict[str, str] | None = None) -> bool:
+    """TASK-2772: one bounded sccache server command; False on a timeout or
+    failure to run, so a stuck sccache can never hold up the gate runner."""
+    try:
+        subprocess.run(
+            cmd,
+            env=env,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            timeout=SCCACHE_SERVER_TIMEOUT,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+    return True
+
+
+def ensure_sccache_server() -> bool:
+    """Ensure sccache is running with a stable TMPDIR, pre-starting or restarting if broken.
+
+    Returns False when a start or stop did not finish within
+    SCCACHE_SERVER_TIMEOUT (or could not run): the caller then builds without
+    sccache. True otherwise, including every opt-out. trace:TASK-2772 | ai:claude
+    """
     if "RUSTC_WRAPPER" in os.environ:
         wrapper = os.environ["RUSTC_WRAPPER"].strip()
         if not wrapper or "sccache" not in wrapper:
-            return
+            return True
     if os.environ.get("AIDA_SCCACHE_DISABLE") == "1":
-        return
+        return True
     sccache_bin = os.environ.get("AIDA_SCCACHE") or shutil.which("sccache")
     if not sccache_bin or not os.path.isfile(sccache_bin) or not os.access(sccache_bin, os.X_OK):
-        return
+        return True
     is_running, missing = sccache_server_status()
     stable_tmp = os.environ.get("AIDA_SCCACHE_TMPDIR", "/tmp")
     env = dict(os.environ, TMPDIR=stable_tmp)
     if missing:
-        subprocess.run([sccache_bin, "--stop-server"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        subprocess.run([sccache_bin, "--start-server"], env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    elif not is_running:
-        subprocess.run([sccache_bin, "--start-server"], env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        return _sccache_server_cmd([sccache_bin, "--stop-server"]) and _sccache_server_cmd(
+            [sccache_bin, "--start-server"], env
+        )
+    if not is_running:
+        return _sccache_server_cmd([sccache_bin, "--start-server"], env)
+    return True
+
+
+# trace:TASK-2772 | ai:claude
+SCCACHE_PROBE_TIMEOUT = 15.0
+
+
+def sccache_wrapper_active(env: dict[str, str]) -> bool:
+    """Whether cargo would run rustc through sccache: RUSTC_WRAPPER unset (the
+    cargo config may name it) or naming sccache."""
+    wrapper = env.get("RUSTC_WRAPPER")
+    if wrapper is None:
+        return True
+    wrapper = wrapper.strip()
+    return bool(wrapper) and "sccache" in wrapper
+
+
+def configured_rustc_wrapper(env: dict[str, str], cwd: Path | None = None) -> str | None:
+    """The `build.rustc-wrapper` cargo would use from its config files: the
+    nearest `.cargo/config.toml` up from `cwd`, then `$CARGO_HOME/config.toml`.
+    trace:TASK-2772 | ai:claude"""
+    start = (cwd or Path.cwd()).resolve()
+    cargo_home = Path(env.get("CARGO_HOME") or Path.home() / ".cargo")
+    configs = [d / ".cargo" / "config.toml" for d in (start, *start.parents)]
+    configs.append(cargo_home / "config.toml")
+    for config in configs:
+        try:
+            with open(config, "rb") as fh:
+                wrapper = tomllib.load(fh).get("build", {}).get("rustc-wrapper")
+        except (OSError, tomllib.TOMLDecodeError):
+            continue
+        if isinstance(wrapper, str) and wrapper.strip():
+            return wrapper.strip()
+    return None
+
+
+def sccache_probe_bin(env: dict[str, str], cwd: Path | None = None) -> str | None:
+    """The sccache binary cargo will actually run: AIDA_SCCACHE, else the
+    RUSTC_WRAPPER or configured `build.rustc-wrapper` naming sccache, else
+    PATH. Probing a different one (a PATH shim that degrades by itself) would
+    pass while cargo's own wrapper is refused. trace:TASK-2772 | ai:claude"""
+    if env.get("AIDA_SCCACHE"):
+        return env["AIDA_SCCACHE"]
+    wrapper = (env.get("RUSTC_WRAPPER") or "").strip() or configured_rustc_wrapper(env, cwd)
+    if wrapper and "sccache" in wrapper:
+        return shutil.which(wrapper, path=env.get("PATH")) or wrapper
+    return shutil.which("sccache", path=env.get("PATH"))
+
+
+def sccache_fallback(env: dict[str, str], probe=None) -> dict[str, str]:
+    """TASK-2772: ask sccache once, with a deadline, whether it can serve this
+    process. When it is refused (a lane sandbox without its socket) or does not
+    answer, build without it: RUSTC_WRAPPER= and one note. Never hangs."""
+    if not sccache_wrapper_active(env) or env.get("AIDA_SCCACHE_DISABLE") == "1":
+        return env
+    if probe is None:
+        sccache_bin = sccache_probe_bin(env)
+        if not sccache_bin:
+            return env
+
+        def probe() -> bool:
+            try:
+                # The call cargo itself makes first: `--show-stats` can
+                # succeed where a wrapped compile is refused (EPERM).
+                done = subprocess.run(
+                    [sccache_bin, env.get("RUSTC") or "rustc", "-vV"],
+                    env=env,
+                    stdin=subprocess.DEVNULL,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    timeout=SCCACHE_PROBE_TIMEOUT,
+                )
+            except (OSError, subprocess.TimeoutExpired):
+                return False
+            return done.returncode == 0
+
+    if probe():
+        return env
+    return without_sccache(env)
+
+
+def without_sccache(env: dict[str, str]) -> dict[str, str]:
+    """TASK-2772: the single fallback note, and RUSTC_WRAPPER=."""
+    print(
+        "check-ci-gates: sccache is unavailable here; building without it (RUSTC_WRAPPER=).",
+        file=sys.stderr,
+    )
+    return {**env, "RUSTC_WRAPPER": ""}
+
+
+def gate_env() -> dict[str, str]:
+    """TASK-2772: the gate runner's start path. Start (or restart) the sccache
+    server under a deadline, then probe it once; a stuck or failed start skips
+    the probe and falls back. Every step is bounded."""
+    if not ensure_sccache_server():
+        return without_sccache(dict(os.environ))
+    return sccache_fallback(dict(os.environ))
+
+
+# trace:BUG-2418 | ai:claude
+CARGO_HOME_READ_ONLY_NOTE = "new dependencies are fetched on the host: run cargo fetch outside the lane"
+
+
+def cargo_home_read_only_note(env: dict[str, str]) -> str | None:
+    """BUG-2418: the one-line note when CARGO_HOME exists but is not writable
+    (a contained lane binds it read-only, so cargo cannot fetch a new crate)."""
+    home = env.get("CARGO_HOME") or os.path.join(os.path.expanduser("~"), ".cargo")
+    if not os.path.isdir(home):
+        return None
+    try:
+        with tempfile.NamedTemporaryFile(dir=home, prefix=".aida-write-probe"):
+            return None
+    except PermissionError:
+        return CARGO_HOME_READ_ONLY_NOTE
+    except OSError as err:
+        return CARGO_HOME_READ_ONLY_NOTE if err.errno == errno.EROFS else None
 
 
 def run_gate(root: Path, name: str, command: str, env: dict[str, str]) -> tuple[bool, float]:
@@ -458,9 +602,8 @@ def main(argv: list[str] | None = None) -> int:
             )
         return 0
 
-    ensure_sccache_server()
     with contextlib.ExitStack() as stack:
-        env = dict(os.environ)
+        env = gate_env()  # trace:TASK-2772 | ai:claude
         if args.tier == "fast":
             env["PATH"] = aida_stub_dir(root, stack) + os.pathsep + env.get("PATH", "")
         return run_plan(root, args.tier, plan, tiers, env)
@@ -508,6 +651,9 @@ def run_plan(
                         f"        hint: restart sccache with: sccache --stop-server; TMPDIR=/tmp sccache --start-server",
                         file=sys.stderr,
                     )
+            note = cargo_home_read_only_note(env)
+            if note:
+                print(f"check-ci-gates: CARGO_HOME is read-only here; {note}", file=sys.stderr)
             # Exit on the FIRST failure: CI's order is the cheapest order,
             # and a second failure after the first is noise.
             origin = (
