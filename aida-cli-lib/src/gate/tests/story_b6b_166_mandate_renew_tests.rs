@@ -61,12 +61,25 @@ fn renew_with_no_mandate_points_at_start() {
 
 // trace:STORY-B6B1278890774EF993D2EBC327862470-166.acdac1e7 | ai:claude
 #[test]
-fn renew_refuses_an_expired_or_stopped_mandate() {
+fn renew_revives_expired_but_refuses_stopped_mandates() {
     let tmp = tempfile::tempdir().unwrap();
-    started(tmp.path());
+    // trace:STORY-2346 | ai:codex
+    let original = started(tmp.path());
     let late = t0() + Duration::hours(9);
-    let err = renew(tmp.path(), &human_ok, "joe", None, late).unwrap_err();
-    assert!(err.to_string().contains("aida mandate start"), "{err}");
+    let (revived, receipt) = renew(tmp.path(), &human_ok, "joe", None, late).unwrap();
+    assert_ne!(revived.id, original.id);
+    assert_eq!(revived.issued_at, late);
+    assert_eq!(revived.expires_at, late + Duration::hours(8));
+    assert_eq!(receipt.previous_expires_at, original.expires_at);
+    assert!(revived.renewals.is_empty());
+    assert_eq!(revived.scopes, original.scopes);
+    assert_eq!(revived.kind, original.kind);
+    assert_eq!(revived.reason, original.reason);
+    assert_eq!(revived.include_supervised, original.include_supervised);
+    let (records, warnings) = on_disk(tmp.path(), late);
+    assert!(warnings.is_empty(), "{warnings:?}");
+    assert!(records.contains(&original));
+    assert_eq!(state_at(&records, late), MandateState::Active(revived));
 
     let tmp = tempfile::tempdir().unwrap();
     started(tmp.path());
@@ -312,4 +325,137 @@ fn grants_naming_the_mandate_stay_valid_across_the_renewal() {
     assert_eq!(still.id, grant_mandate_id);
     assert!(still.covers(Scope::Dispatch));
     assert!(still.covers(Scope::ShipHeld));
+}
+
+// trace:STORY-2346 | ai:codex
+#[test]
+fn expiry_warning_crosses_at_one_hour_and_clears_on_renewal() {
+    let tmp = tempfile::tempdir().unwrap();
+    let m = started(tmp.path());
+    let state = MandateState::Active(m.clone());
+    let boundary = m.expires_at - Duration::hours(1);
+    assert!(crate::mandate::expiry_warning(&state, boundary - Duration::seconds(1)).is_none());
+    assert_eq!(
+        crate::mandate::expiry_warning(&state, boundary).unwrap(),
+        "MANDATE expires in 60m, run: aida mandate renew"
+    );
+    assert!(crate::mandate::status_line(&state, boundary, "ship")
+        .unwrap()
+        .contains("MANDATE expires in 60m"));
+    assert_eq!(
+        crate::mandate::statusline_segment(&state, boundary).unwrap(),
+        "MANDATE expires in 60m, run: aida mandate renew"
+    );
+    assert!(crate::mandate::expiry_warning(&state, m.expires_at).is_none());
+    let (renewed, _) = renew(tmp.path(), &human_ok, "joe", None, boundary).unwrap();
+    assert!(crate::mandate::expiry_warning(&MandateState::Active(renewed), boundary).is_none());
+}
+
+// trace:STORY-2346 | ai:codex
+#[test]
+fn expired_revival_requires_human_and_preserves_explicit_ttl() {
+    let tmp = tempfile::tempdir().unwrap();
+    let original = started(tmp.path());
+    let now = original.expires_at + Duration::hours(2);
+    assert!(renew(tmp.path(), &no_tty, "joe", None, now).is_err());
+    assert!(renew(tmp.path(), &human_ok, "other", None, now).is_err());
+    let (revived, _) = renew(
+        tmp.path(),
+        &human_ok,
+        "joe",
+        Some(Duration::minutes(90)),
+        now,
+    )
+    .unwrap();
+    assert_eq!(revived.expires_at, now + Duration::minutes(90));
+    assert_eq!(on_disk(tmp.path(), now).0.len(), 2);
+}
+
+// trace:STORY-2346 | ai:codex
+#[test]
+fn expiry_due_job_is_human_action_for_advisor_and_operator_only() {
+    let tmp = tempfile::tempdir().unwrap();
+    let m = started(tmp.path());
+    let at = m.expires_at - Duration::minutes(50);
+    let state = MandateState::Active(m.clone());
+    for seat in [None, Some("advisor"), Some("operator")] {
+        let job = crate::maintenance_schedule::mandate_renewal_job(&state, at, seat).unwrap();
+        assert!(
+            job.command.is_none(),
+            "renew must never be run as a scheduled command"
+        );
+        assert!(job.prompt.unwrap().contains("aida mandate renew"));
+    }
+    assert!(
+        crate::maintenance_schedule::mandate_renewal_job(&state, at, Some("implementer")).is_none()
+    );
+    assert!(crate::maintenance_schedule::mandate_renewal_job(
+        &state,
+        m.expires_at,
+        Some("advisor")
+    )
+    .is_none());
+    assert!(crate::maintenance_schedule::mandate_renewal_job(
+        &MandateState::Stopped(m),
+        at,
+        Some("advisor")
+    )
+    .is_none());
+}
+
+// trace:STORY-2346 | ai:codex
+#[test]
+fn expiry_mail_retries_failed_delivery_and_deduplicates_each_expiry() {
+    let tmp = tempfile::tempdir().unwrap();
+    let dir = tmp.path().join("mandates");
+    let root = tmp.path().join("project");
+    let registry = root.join(".aida-store/registry");
+    std::fs::create_dir_all(&registry).unwrap();
+    std::fs::write(registry.join("team.toml"), "[members]\njoe = ['advisor']\n").unwrap();
+    let m = started(&dir);
+    let state = MandateState::Active(m.clone());
+    let now = m.expires_at - Duration::minutes(50);
+    // Make writes fail. No delivery marker may be recorded.
+    std::fs::create_dir_all(root.join(".aida")).unwrap();
+    std::fs::write(root.join(".aida/mailbox"), "blocked").unwrap();
+    crate::mandate::notify_expiry(&dir, &root, &state, now);
+    assert!(!dir.join(".seen").exists());
+    std::fs::remove_file(root.join(".aida/mailbox")).unwrap();
+    crate::mandate::notify_expiry(&dir, &root, &state, now);
+    let messages = aida_core::mailbox::read_local_messages(&root).unwrap();
+    assert_eq!(messages.len(), 2, "{messages:?}");
+    assert!(messages
+        .iter()
+        .all(|message| message.timestamp == now.timestamp_millis()));
+    assert!(messages
+        .iter()
+        .any(|m| m.to == aida_core::mailbox::Recipient::Agent("joe".into())));
+    assert!(messages
+        .iter()
+        .any(|m| m.to == aida_core::mailbox::Recipient::Agent("advisor".into())));
+    crate::mandate::notify_expiry(&dir, &root, &state, now + Duration::minutes(1));
+    assert_eq!(
+        aida_core::mailbox::read_local_messages(&root).unwrap(),
+        messages
+    );
+    let (renewed, _) = renew(&dir, &human_ok, "joe", None, now).unwrap();
+    crate::mandate::notify_expiry(&dir, &root, &MandateState::Active(renewed.clone()), now);
+    assert_eq!(
+        aida_core::mailbox::read_local_messages(&root)
+            .unwrap()
+            .len(),
+        2
+    );
+    crate::mandate::notify_expiry(
+        &dir,
+        &root,
+        &MandateState::Active(renewed.clone()),
+        renewed.expires_at - Duration::minutes(50),
+    );
+    assert_eq!(
+        aida_core::mailbox::read_local_messages(&root)
+            .unwrap()
+            .len(),
+        4
+    );
 }

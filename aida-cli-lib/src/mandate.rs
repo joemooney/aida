@@ -519,6 +519,10 @@ pub(crate) fn emit_changed(project_root: &Path, mandate: &Mandate, active: bool)
 /// The statusline segment: `MANDATE 3h12m` while one is active.
 // trace:STORY-1698 | ai:claude
 pub(crate) fn statusline_segment(state: &MandateState, now: DateTime<Utc>) -> Option<String> {
+    // trace:STORY-2346 | ai:codex
+    if let Some(warning) = expiry_warning(state, now) {
+        return Some(warning);
+    }
     match state {
         MandateState::Active(m) if m.is_active_at(now) => Some(format!(
             "MANDATE {}",
@@ -570,7 +574,110 @@ pub(crate) fn status_line(state: &MandateState, now: DateTime<Utc>, gates: &str)
         parts.push(reason.clone());
     }
     parts.push(format!("gates: {gates}"));
+    // trace:STORY-2346 | ai:codex
+    if let Some(warning) = expiry_warning(state, now) {
+        parts.push(warning);
+    }
     Some(parts.join(" · "))
+}
+
+// trace:STORY-2346 | ai:codex
+pub(crate) fn expiry_warning(state: &MandateState, now: DateTime<Utc>) -> Option<String> {
+    let MandateState::Active(m) = state else {
+        return None;
+    };
+    let seconds = (m.expires_at - now).num_seconds();
+    (seconds > 0 && seconds <= 3600).then(|| {
+        format!(
+            "MANDATE expires in {}m, run: aida mandate renew",
+            (seconds + 59) / 60
+        )
+    })
+}
+
+/// Best-effort delivery, once per recipient and expiry. A failed delivery is
+/// retried at the next hook/status/due-jobs read. Stable message IDs deduplicate
+/// concurrent readers; the marker is written only after successful delivery.
+// trace:STORY-2346 | ai:codex
+pub(crate) fn notify_expiry(dir: &Path, root: &Path, state: &MandateState, now: DateTime<Utc>) {
+    let Some(body) = expiry_warning(state, now) else {
+        return;
+    };
+    let MandateState::Active(m) = state else {
+        return;
+    };
+    // Keep concurrent hook/status readers from resetting delivery sidecars.
+    // Contention defers without blocking the per-turn hook.
+    use fs2::FileExt;
+    use std::os::unix::fs::OpenOptionsExt;
+    let Ok(lock) = std::fs::OpenOptions::new()
+        .create(true)
+        .truncate(false)
+        .read(true)
+        .write(true)
+        .mode(0o600)
+        .custom_flags(libc::O_NOFOLLOW)
+        .open(dir.join("expiry-notice.lock"))
+    else {
+        return;
+    };
+    if lock.try_lock_exclusive().is_err() {
+        return;
+    }
+    let prefix = format!("mandate-expiry-{}-{}", m.id, m.expires_at.timestamp());
+    if (0..2).all(|i| dir.join(".seen").join(format!("{prefix}-{i}")).exists()) {
+        return;
+    }
+    let store = root.join(".aida-store");
+    let Ok(directory) = crate::mailbox_resolver::RecipientDirectory::load(root, &store) else {
+        return;
+    };
+    for (index, recipient) in [format!("person:{}", m.principal), "advisor".into()]
+        .iter()
+        .enumerate()
+    {
+        let id = format!("{prefix}-{index}");
+        let marker = dir.join(".seen").join(&id);
+        if marker.exists() {
+            continue;
+        }
+        let Ok(resolved) = directory.resolve_send(recipient, true) else {
+            continue;
+        };
+        let Ok((deliveries, _)) = crate::mailbox_resolver::delivery_sidecar(
+            &resolved,
+            &id,
+            now.timestamp_millis(),
+            false,
+        ) else {
+            continue;
+        };
+        let message = aida_core::mailbox::Message {
+            id: id.clone(),
+            thread_id: id,
+            from: "aida-mandate".into(),
+            to: aida_core::mailbox::Recipient::Agent(resolved.address),
+            // Delivery may happen after the threshold. Stamp the actual send
+            // so a newer inbox read watermark cannot hide this fresh notice.
+            timestamp: now.timestamp_millis(),
+            subject: Some("Mandate renewal due".into()),
+            body: body.clone(),
+            in_reply_to: None,
+            urgent: false,
+            intent: aida_core::mailbox::Intent::Request,
+            retracted: false,
+            deleted: false,
+            archived: false,
+            from_source: aida_core::mailbox::SenderSource::Explicit,
+            from_role: None,
+            relayed_from: None,
+        };
+        if crate::mailbox_store::write_message_with_deliveries(root, &message, deliveries.as_ref())
+            .is_ok()
+        {
+            let _ = write_private(&marker, b"delivered");
+        }
+    }
 }
 
 /// The [`status_line`] for the mandates in `dir` right now, with the human
@@ -583,6 +690,9 @@ pub(crate) fn current_status_line(
 ) -> Option<String> {
     let (valid, _) = load_valid(dir, &crate::current_user_id(None), now);
     let state = state_at(&valid, now);
+    if let Some(root) = audit_root {
+        notify_expiry(dir, root, &state, now);
+    }
     status_line(&state, now, &crate::mandate_gates::describe(audit_root))
 }
 
@@ -624,7 +734,7 @@ pub(crate) fn notice_line(
     }
     write_private(&marker, now.to_rfc3339().as_bytes()).ok()?;
     Some(format!(
-        "MANDATE {} {how}; the advisor seat no longer acts under it (a human starts a new one with `aida mandate start`)",
+        "MANDATE {} {how}; the advisor seat no longer acts under it (a human runs `aida mandate renew` after expiry, or `aida mandate start --ship-held` after a stop)",
         m.id
     ))
 }
@@ -821,8 +931,25 @@ pub(crate) fn handle_mandate(action: &crate::cli::MandateAction) -> Result<()> {
             let ttl = duration.as_deref().map(parse_renew_for).transpose()?;
             let (m, renewal) =
                 renew_as_human(&dir, &crate::current_user_id(None), ttl, Utc::now())?;
+            // trace:STORY-2346 | ai:codex
+            let revived = m.renewals.is_empty();
             if let Some(root) = &audit_root {
-                emit_renewed(root, &m, &renewal);
+                if revived {
+                    emit_changed(root, &m, true);
+                } else {
+                    emit_renewed(root, &m, &renewal);
+                }
+            }
+            if revived {
+                println!(
+                    "Revived mandate as {} ({}, supervised: {}); old mandate expired at {}; active until {}. Scope, flags, protected paths and human gates are unchanged.",
+                    m.id,
+                    m.effective_scopes().iter().map(|s| s.as_str()).collect::<Vec<_>>().join(", "),
+                    m.include_supervised,
+                    renewal.previous_expires_at.to_rfc3339(),
+                    m.expires_at.to_rfc3339()
+                );
+                return Ok(());
             }
             println!(
                 "Mandate {} renewed until {} (was {}); its scope, flags and reason are unchanged (renewal {}).",

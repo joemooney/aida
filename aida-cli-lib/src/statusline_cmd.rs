@@ -338,11 +338,14 @@ pub(crate) fn handle_statusline_command(
     // STORY-1698: an active fire-fighting mandate is loud on every seat's
     // statusline — the advisor is shipping held PRs until it lapses.
     // trace:STORY-1698 | ai:claude
-    if let Some(segment) = crate::mandate::statusline_segment(
-        &crate::gate::mandate::current_state(),
-        chrono::Utc::now(),
-    ) {
+    // trace:STORY-2346 | ai:codex
+    let mandate_state = crate::gate::mandate::current_state();
+    let mandate_now = chrono::Utc::now();
+    if let Some(segment) = crate::mandate::statusline_segment(&mandate_state, mandate_now) {
         parts.push(segment.red().bold().to_string());
+        if let Ok(dir) = crate::gate::mandate::mandate_dir() {
+            crate::mandate::notify_expiry(&dir, &project_root, &mandate_state, mandate_now);
+        }
     }
     // STORY-539: surface URGENT unread mailbox messages so an out-of-band
     // escalation/"stop" doesn't sit unseen. Only urgent-unread is loud — a

@@ -47,9 +47,9 @@ pub enum MandateAction {
         #[clap(long)]
         include_supervised: bool,
     },
-    /// Extend the active mandate in place, keeping its scope, flags and
-    /// reason, so nothing has to be retyped. Grants that name the mandate
-    /// stay valid. Human at an interactive terminal only.
+    /// Extend the active mandate in place, or revive the latest expired one
+    /// with a fresh ID. Keeps scope, flags and reason. Stopped mandates stay
+    /// stopped. Human at an interactive terminal only.
     // trace:STORY-B6B1278890774EF993D2EBC327862470-166 | ai:claude
     Renew {
         /// How long from now it lasts, e.g. `8h` or `90m` (default: the

@@ -346,8 +346,8 @@ fn renewal_problem(m: &Mandate) -> Option<String> {
         if r.renewed_at < since || r.previous_expires_at != expiry {
             return Some("its renewal lineage is out of order".into());
         }
-        // `extend` only renews an ACTIVE mandate, so a renewal at or after the
-        // expiry it extends cannot be genuine: it would resurrect an expired one.
+        // In-place renewal requires an ACTIVE mandate. Revival uses a fresh
+        // ID with empty lineage, so a late entry here cannot be genuine.
         if r.renewed_at >= r.previous_expires_at {
             return Some("its renewal lineage renews an already-expired mandate".into());
         }
@@ -595,7 +595,7 @@ pub(crate) fn renew(
     extend(dir, human, by, ttl, now)
 }
 
-/// Extend the ACTIVE mandate in place: same id, scopes, flags, principal and
+/// Extend the active mandate in place, or re-mint the latest expired one: same id, scopes, flags, principal and
 /// reason; the expiry becomes `now + ttl` (default: the original duration,
 /// at most [`MAX_TTL`]) and a [`Renewal`] is appended to its lineage. Same
 /// floor as [`mint`]. A stop racing this write still wins: its tombstone is
@@ -616,8 +616,13 @@ fn extend(
     if by.is_empty() {
         bail!("cannot renew a mandate: the human user identity is unknown");
     }
-    let MandateState::Active(mut m) = state_at(&load_valid(dir, by, now).0, now) else {
-        bail!("no mandate is active to renew; start one with `aida mandate start`");
+    // trace:STORY-2346 | ai:codex
+    let (mut m, revive) = match state_at(&load_valid(dir, by, now).0, now) {
+        MandateState::Active(m) => (m, false),
+        MandateState::Expired(m) => (m, true),
+        MandateState::None | MandateState::Stopped(_) => {
+            bail!("no renewable mandate; run: aida mandate start --ship-held");
+        }
     };
     let ttl = ttl.unwrap_or_else(|| m.original_ttl()).min(MAX_TTL);
     if ttl <= Duration::zero() {
@@ -630,7 +635,14 @@ fn extend(
         expires_at: now + ttl,
     };
     m.expires_at = renewal.expires_at;
-    m.renewals.push(renewal.clone());
+    if revive {
+        // A new identity leaves expired grants and the old audit record alone.
+        m.id = Uuid::new_v4().to_string();
+        m.issued_at = now;
+        m.renewals.clear();
+    } else {
+        m.renewals.push(renewal.clone());
+    }
     write_private(
         &dir.join(format!("{}.json", m.id)),
         &serde_json::to_vec_pretty(&m)?,

@@ -526,7 +526,19 @@ mandate in place, so you do not retype its flags. Its scope, flags, reason and
 id stay the same, and anything already acting under it (queued dispatches, the
 drive tick, a running `aida deputy`) keeps working. The new expiry is now plus the duration: by default
 the duration it was started with, at most `24h`. Like start and stop, it needs
-a human at an interactive terminal, and it refuses when no mandate is active.
+a human at an interactive terminal. If the latest mandate expired, renew
+re-mints its scope, flags and reason with a fresh ID and TTL, and prints when
+the old mandate expired. Old derived grants stay expired. Stopped mandates
+stay stopped. With no prior mandate, run `aida mandate start --ship-held`.
+Protected paths and human gates keep their existing policy.
+
+During the last 60 minutes, the status/hook banner shows
+`MANDATE expires in Nm, run: aida mandate renew`. A deduplicated mail notice
+is queued for the operator and advisor; failed deliveries retry on the next
+status, hook or due-job read. Advisor/operator due jobs surface the same
+human-terminal action. These checks run when those surfaces are read; there
+is no background timer.
+<!-- trace:STORY-2346 | ai:codex -->
 Each renewal is recorded on the mandate (who renewed it, the old and the new
 expiry) and in `.aida/events.jsonl`. `aida mandate status` shows the renewal
 count.
