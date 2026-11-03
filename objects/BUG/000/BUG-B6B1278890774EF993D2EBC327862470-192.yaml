@@ -13,7 +13,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-03T13:44:41.494240826Z
-modified_at: 2026-11-03T14:11:21.971702979Z
+modified_at: 2026-11-03T14:13:36.566096328Z
 req_type: Bug
 comments:
 - id: 01a1a1a7-d47b-72a3-bd8a-a629803e21d3
@@ -39,6 +39,12 @@ comments:
   content: 'Validation: cargo test -p aida-cli-lib pr_train::tests --lib --no-default-features passed all 85 tests, including four new BUG-2423 regressions. cargo fmt --all -- --check and git diff --check pass. A final rerun after the small driver notification cleanup was refused by the cargo disk guard (8.2 GiB free, hard floor 15 GiB); no override used. make check-ci-fast is still running its feature-disabled compile check. Policy fork is recorded with aida punt and finding TASK-b6b1278890774ef993d2ebc327862470-737; the requirement remains Needs Attention rather than being marked Done.'
   created_at: 2026-11-03T14:11:21.971702979Z
   modified_at: 2026-11-03T14:11:21.971702979Z
+  session_id: 01a1a1add7ce
+- id: 01a1a1c2-20b6-74f3-80e9-744bd00768f3
+  author: joe
+  content: 'Final handoff: commit 85c7014d279da44b8fa2f94909ba67eb0f032c9c pushed to origin/bug-b6b1278890774ef993d2ebc327862470-192; git ls-remote confirmed exact SHA. aida pr hold marker recorded; PR intentionally unopened pending the documented hold-policy ruling. make check-ci-fast compiled the final aida-cli --no-default-features successfully, then stopped at TUI seam guard because the disk guard refused another build (4.8 GiB free vs 15 GiB minimum). Earlier 85 train tests passed; final test rerun was also disk-blocked. Formatting and diff checks pass. Not marked Done: Needs Attention is intentional because the hold follow-ups remain unresolved. Observed pr-hold false push claim was filed separately; direct git push completed and was verified.'
+  created_at: 2026-11-03T14:13:36.566096328Z
+  modified_at: 2026-11-03T14:13:36.566096328Z
   session_id: 01a1a1add7ce
 history:
 - id: 01a1a1ad-dc71-7a52-af37-7ec00e0ddf62
