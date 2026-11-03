@@ -16,28 +16,71 @@ const LAUNCHER: &[&str] = &["aida-cli-lib/src/launch/", "aida-core/src/launch_po
 
 /// (file, markers, why it is not converted yet). Exact counts; the total
 /// may only fall (see [`CEILING`]).
+/// Entries marked "not a vendor child" are tools (gh, glab, the aida binary,
+/// a pane or terminal helper, process-group `pre_exec` setup) whose program
+/// spelling the scanner cannot tell from a vendor's; PR-C's fn-keyed ledger
+/// allowlists them by site. "Generic helper" entries take their program from
+/// their callers, which PR-C classifies.
 const LEDGER: &[(&str, usize, &str)] = &[
-    ("aida-cli-lib/src/agent_launch.rs", 5, "slice B: Codex grant/finalize writes; slice D: the harness version probe"),
+    ("aida-cli-lib/src/agent_launch.rs", 6, "slice B: Codex grant/finalize writes; slice D: the harness version probe"),
+    ("aida-cli-lib/src/agent_registry.rs", 2, "not a vendor child: terminal title restore and probe"),
     ("aida-cli-lib/src/autopilot_intake.rs", 3, "slice B: autopilot intake"),
     ("aida-cli-lib/src/claude_agents.rs", 1, "slice D: vendor query (agents list)"),
-    ("aida-cli-lib/src/compete_cmd.rs", 3, "slice B: compete arms"),
-    ("aida-cli-lib/src/containment/supervisor.rs", 1, "STORY-2238: the containment supervisor, a permitted constructor module"),
-    ("aida-cli-lib/src/dispatch.rs", 2, "slice B: dispatch implementer launch (Q5)"),
+    ("aida-cli-lib/src/codex_tool_env.rs", 2, "slice B: Codex finalize respawns the built child (get_program)"),
+    ("aida-cli-lib/src/compete_cmd.rs", 5, "slice B: compete arms and judge"),
+    ("aida-cli-lib/src/containment/supervisor.rs", 3, "STORY-2238: the containment supervisor, a permitted constructor module"),
+    ("aida-cli-lib/src/criteria_red_run.rs", 1, "generic helper: runs a criteria command"),
+    ("aida-cli-lib/src/deputy/worker.rs", 3, "generic helper: deputy job argv; pre_exec process group"),
+    ("aida-cli-lib/src/dev_build.rs", 2, "not a vendor child: the built aida binary smoke test"),
+    ("aida-cli-lib/src/dev_cmd.rs", 1, "not a vendor child: resolved dev tool"),
+    ("aida-cli-lib/src/dispatch.rs", 3, "slice B: dispatch implementer launch (Q5)"),
     ("aida-cli-lib/src/doctor_cmd.rs", 1, "slice D: vendor query (codex version)"),
-    ("aida-cli-lib/src/init_cmd.rs", 4, "slice D: vendor queries (MCP list/add)"),
+    ("aida-cli-lib/src/external_cmd.rs", 1, "not a vendor child: exec of an external aida-* subcommand"),
+    ("aida-cli-lib/src/forge.rs", 1, "not a vendor child: forge CLI (gh/glab)"),
+    ("aida-cli-lib/src/gate/rework_hold_release.rs", 1, "not a vendor child: forge CLI"),
+    ("aida-cli-lib/src/human.rs", 1, "not a vendor child: terminal send-keys"),
+    ("aida-cli-lib/src/implementer_preflight.rs", 2, "not a vendor child: version probe; pre_exec process group"),
+    ("aida-cli-lib/src/init_bootstrap.rs", 1, "generic helper: init runs git/forge tools"),
+    ("aida-cli-lib/src/init_cmd.rs", 6, "slice D: vendor queries (MCP list/add)"),
+    ("aida-cli-lib/src/kernel.rs", 2, "not a vendor child: gh binary probe"),
     ("aida-cli-lib/src/lane_env.rs", 1, "the in-process lane seat correction (Q2), not a spawn"),
+    ("aida-cli-lib/src/lib_part5.rs", 1, "slice D: vendor adapter command"),
+    ("aida-cli-lib/src/mail_wake.rs", 1, "not a vendor child: the mail-wake helper binary"),
+    ("aida-cli-lib/src/mailbox_wake_run.rs", 1, "slice B: Codex thread submit"),
+    ("aida-cli-lib/src/mandate_drive.rs", 1, "generic helper: scrubbed_command"),
+    ("aida-cli-lib/src/manual.rs", 1, "not a vendor child: pager"),
+    ("aida-cli-lib/src/mcp.rs", 1, "not a vendor child: exec of the aida MCP server"),
+    ("aida-cli-lib/src/merge_hold.rs", 3, "not a vendor child: forge CLI"),
     ("aida-cli-lib/src/orchestrator_leases.rs", 1, "slice B: control child"),
-    ("aida-cli-lib/src/phase_driver.rs", 5, "slice B: phase advisor and auto-punt control child"),
-    ("aida-cli-lib/src/phase_driver_trait.rs", 2, "slice B: CI-fix launch"),
+    ("aida-cli-lib/src/pane_host.rs", 1, "not a vendor child: pane host argv"),
+    ("aida-cli-lib/src/phase_driver.rs", 6, "slice B: phase advisor and auto-punt control child"),
+    ("aida-cli-lib/src/phase_driver_trait.rs", 3, "slice B: CI-fix launch"),
+    ("aida-cli-lib/src/pr_cmd.rs", 1, "not a vendor child: pre_exec process group"),
     ("aida-cli-lib/src/questions.rs", 1, "slice B: questions clarify"),
     ("aida-cli-lib/src/queue_cmd.rs", 1, "slice A2/B: the process-wide AIDA_SESSION_ROLE export (resume and Codex exec still read it)"),
-    ("aida-cli-lib/src/session.rs", 41, "slice A2: the three Claude resume paths; slice B: Codex session/exec/resume and the vendor resume; the shared seat-env helper; the contained export (its aida control children convert in slice B)"),
-    ("aida-cli-lib/src/zen_drive_root.rs", 2, "slice B: control child"),
+    ("aida-cli-lib/src/regen/score.rs", 2, "not a vendor child: scoring sandbox (argv, pre_exec)"),
+    ("aida-cli-lib/src/relay_mail.rs", 1, "not a vendor child: pre_exec process group"),
+    ("aida-cli-lib/src/remote_create.rs", 1, "not a vendor child: forge CLI"),
+    ("aida-cli-lib/src/review_watch.rs", 1, "not a vendor child: the watch command"),
+    ("aida-cli-lib/src/review_watch_forge.rs", 4, "not a vendor child: forge CLI"),
+    ("aida-cli-lib/src/session.rs", 49, "slice A2: the three Claude resume paths; slice B: Codex session/exec/resume and the vendor resume; the shared seat-env helper; the contained export (its aida control children convert in slice B); the interactive exec of a built launch"),
+    ("aida-cli-lib/src/session_start.rs", 2, "not a vendor child: forge CLI"),
+    ("aida-cli-lib/src/shift.rs", 2, "generic helper: shift command; pre_exec process group"),
+    ("aida-cli-lib/src/test_exec.rs", 1, "test-support helper compiled into the crate"),
+    ("aida-cli-lib/src/transport_scan.rs", 1, "not a vendor child: pre_exec process group"),
+    ("aida-cli-lib/src/upgrade_cmd.rs", 1, "not a vendor child: upgrade installer"),
+    ("aida-cli-lib/src/zen_drive_root.rs", 3, "slice B: control child"),
+    ("aida-core/src/ai/client.rs", 1, "slice D: the AI client's vendor CLI request"),
+    ("aida-core/src/db/refresh_worker.rs", 1, "not a vendor child: pre_exec process group"),
+    ("aida-tui/src/actions.rs", 1, "generic helper: TUI action argv"),
+    ("aida-tui/src/dispatch.rs", 1, "generic helper: TUI run_child"),
     ("aida-tui/src/redesign/mod.rs", 12, "slice B: control_env"),
 ];
 
 /// The slice-A total. A later slice lowers it; it is zero after slice D.
-const CEILING: usize = 86;
+/// (Advisor ruling 1/2 widened the scanner to every dynamic program and
+/// `exec`/`pre_exec`; the sites were already there.)
+const CEILING: usize = 156;
 
 fn rust_files(dir: &Path, out: &mut Vec<PathBuf>) {
     let Ok(entries) = std::fs::read_dir(dir) else {
@@ -153,6 +196,51 @@ fn call_args(rest: &str) -> &str {
     rest
 }
 
+/// Identifier words that name a non-vendor program (the aida binary, git,
+/// gh, a hook or shell). A `Command::new` whose program is not a string
+/// literal is a launch marker unless one of its words is here; a vendor
+/// program (`program`, `agent_bin`, a resolver call) never is.
+const NON_VENDOR_WORDS: &[&str] = &[
+    "aida", "exe", "gh", "git", "glab", "sccache", "hook", "shell", "script", "fake", "tmp",
+    "temp", "server", "dev", "cargo", "bwrap", "editor", "pager",
+];
+
+/// Whether a `Command::new` argument names the program of a vendor child.
+/// A string literal is one only when it is a vendor name; anything else is
+/// one unless it is spelled from [`NON_VENDOR_WORDS`] (`exe`, `gh_bin`,
+/// `crate::aida_exe_path()`). Vendor resolvers always count, so
+/// `let program = resolve_agent_program(..); Command::new(program)` and a
+/// program passed in as a parameter are both seen.
+fn vendor_program_arg(arg: &str) -> bool {
+    let arg = arg.trim_start_matches('&');
+    if arg.starts_with('"') {
+        return VENDORS.iter().any(|v| arg == format!("\"{v}\""));
+    }
+    if [
+        "resolve_agent_program",
+        ".program()",
+        "plan.program",
+        "resolve_vendor_bin",
+    ]
+    .iter()
+    .any(|m| arg.contains(m))
+    {
+        return true;
+    }
+    !arg.split(|c: char| !c.is_ascii_alphanumeric())
+        .any(|word| NON_VENDOR_WORDS.contains(&word.to_ascii_lowercase().as_str()))
+}
+
+/// Calls of `name(` in `normalized` that start an identifier (so
+/// `Command::new(` does not match inside `GitCommand::new(`).
+fn calls<'a>(normalized: &'a str, name: &'a str) -> impl Iterator<Item = &'a str> + 'a {
+    normalized.match_indices(name).filter_map(move |(at, _)| {
+        let before = normalized[..at].chars().next_back();
+        let starts = !before.is_some_and(|c| c.is_alphanumeric() || c == '_');
+        starts.then(|| &normalized[at + name.len()..])
+    })
+}
+
 /// Launch markers in whitespace-normalized production source.
 fn markers(source: &str) -> usize {
     let normalized: String = production(source).split_whitespace().collect();
@@ -169,19 +257,22 @@ fn markers(source: &str) -> usize {
     }
     let mut n = 0;
     for ctor in &ctors {
-        for call in normalized.split(&format!("{ctor}::new(")).skip(1) {
-            let arg = call_args(call);
-            let literal = VENDORS
-                .iter()
-                .any(|v| arg == format!("\"{v}\"") || arg == format!("&\"{v}\""));
-            let dynamic = arg.contains("resolve_agent_program")
-                || arg.contains(".program()")
-                || arg.contains("plan.program");
-            if literal || dynamic {
-                n += 1;
-            }
-        }
+        let new = format!("{ctor}::new(");
+        n += calls(&normalized, &new)
+            .filter(|call| vendor_program_arg(call_args(call)))
+            .count();
     }
+    // A process that becomes another program, or code run in the child
+    // before it does (`CommandExt::exec` / `pre_exec`, method or path form).
+    n += [
+        ".exec()",
+        "CommandExt::exec(",
+        ".pre_exec(",
+        "CommandExt::pre_exec(",
+    ]
+    .iter()
+    .map(|form| normalized.matches(form).count())
+    .sum::<usize>();
     for writer in [".env(", ".env_remove(", "set_var(", "remove_var("] {
         n += normalized
             .split(writer)
@@ -263,6 +354,17 @@ fn scanner_catches_every_mutant_spelling() {
         "fn f() { std::env::remove_var(\"AIDA_CONTAINED\"); }", // allow-raw-env-write: scanner fixture string, not a write
         "fn f(c: &mut Command) { c.envs([(\"AIDA_CONTAINMENT_POSTURE\", \"none\")]); }",
         "fn f(c: &mut Command) { c.env(aida_core::launch_policy::ROLE_ENV, r); }",
+        // The two-line variable form and a program passed in as a parameter.
+        "fn f() { let program = resolve_agent_program(\"claude\");\n let c = Command::new(program); }",
+        "fn f() { let (program, args) = os_wrapped_program_and_args(r, p, a)?; Command::new(&program); }",
+        "fn f(agent_bin: &Path) { Command::new(agent_bin); }",
+        "fn f(launch: L) { tokio::process::Command::new(launch.program); }",
+        "fn f() { let c = Command::new(vendor_bin()); }",
+        // A process becoming the vendor, and child-side code before it does.
+        "fn f(mut c: Command) { use std::os::unix::process::CommandExt; c.exec(); }",
+        "fn f(mut c: Command) { std::os::unix::process::CommandExt::exec(&mut c); }",
+        "fn f(c: &mut Command) { unsafe { c.pre_exec(|| Ok(())); } }",
+        "fn f(c: &mut Command) { unsafe { CommandExt::pre_exec(c, || Ok(())); } }",
     ];
     for src in mutants {
         assert!(markers(src) > 0, "scanner missed: {src}");
@@ -273,6 +375,9 @@ fn scanner_catches_every_mutant_spelling() {
         "fn f() {}\n#[cfg(test)]\nmod tests {\n fn t() { Command::new(\"claude\"); }\n}",
         "#[cfg(test)]\n#[path = \"x.rs\"]\nmod x;\nfn f() {}",
         "fn f(c: &mut Command) { c.env(\"AIDA_HEADLESS\", \"1\"); }",
+        "fn f() { Command::new(crate::aida_exe_path()); Command::new(&gh_bin); }",
+        "fn f() { Command::new(&real_git); Command::new(std::env::current_exe()?); }",
+        "fn f() { GitCommand::new(program); }",
     ];
     for src in clean {
         assert_eq!(markers(src), 0, "false positive: {src}");

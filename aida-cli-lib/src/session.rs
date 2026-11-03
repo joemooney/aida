@@ -1420,6 +1420,11 @@ fn interactive_claude_context(
     } else {
         ContainmentPosture::None
     };
+    // The process cwd, as the contained flags resolve it (tests pin it).
+    let cwd = match contained_session_cwd() {
+        Some(cwd) => cwd,
+        None => std::env::current_dir()?,
+    };
     Ok(crate::launch::LaunchContext::resolve(
         crate::launch::LaunchRequest {
             vendor: aida_core::launch_policy::LaunchVendor::Claude,
@@ -1428,7 +1433,7 @@ fn interactive_claude_context(
             args,
             tail: Vec::new(),
             posture,
-            cwd: std::env::current_dir()?,
+            cwd,
             set_cwd: false,
         },
     )?)

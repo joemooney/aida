@@ -5,7 +5,7 @@
 // trace:STORY-2326 | ai:claude
 
 use std::collections::BTreeMap;
-use std::ffi::{OsStr, OsString};
+use std::ffi::OsStr;
 
 use aida_core::launch_policy::{
     LaunchKind, LaunchVendor, OWNED_KEYS, ROLE_INSTANCE_ENV, VENDOR_PROCESS_ONLY_KEYS,
@@ -337,65 +337,350 @@ fn registry_and_launch_tokens_absent_in_tool_shell() {
     }
 }
 
-/// F2 ruling (S-i): every Aida-posture spawn of a converted path reaches the
-/// one private boundary fn, which STORY-2238 PR3 replaces with
-/// `containment::launch`.
+/// Advisor ruling 5: a contained parent carrying the `AIDA_AGENT_CMD`
+/// program override is refused, and an Aida-posture child never inherits it.
 #[test]
-fn aida_posture_spawn_routes_through_single_boundary_fn() {
+fn agent_cmd_override_never_crosses_the_boundary() {
+    let aida = || request(ContainmentPosture::Aida, LaunchKind::Fresh, &[]);
+    let err = LaunchContext::resolve_with(aida(), true, true).unwrap_err();
+    assert_eq!(err, LaunchRefusal::AgentCmdUnderContainment);
+    let msg = err.to_string();
+    assert!(
+        msg.contains("AIDA_AGENT_CMD") && msg.contains("contained"),
+        "{msg}"
+    );
+    assert!(!msg.contains("STORY-"), "{msg}");
+    // The seam stays open for an uncontained parent, contained child or not.
+    LaunchContext::resolve_with(aida(), false, true).unwrap();
+    LaunchContext::resolve_with(
+        request(ContainmentPosture::None, LaunchKind::Fresh, &[]),
+        false,
+        true,
+    )
+    .unwrap();
+    LaunchContext::resolve_with(aida(), true, false).unwrap();
+
+    let tmp = tempfile::tempdir().unwrap();
+    let mut req = aida();
+    req.cwd = tmp.path().to_path_buf();
+    let cmd = spawn_agent(&LaunchContext::resolve_with(req, false, true).unwrap()).unwrap();
+    let env: BTreeMap<_, _> = cmd.get_envs().collect();
+    assert_eq!(env.get(OsStr::new("AIDA_AGENT_CMD")), Some(&None));
+    let none = LaunchContext::resolve_under(
+        request(ContainmentPosture::None, LaunchKind::Fresh, &[]),
+        false,
+    )
+    .unwrap();
+    let cmd = spawn_agent(&none).unwrap();
+    assert!(cmd.get_envs().all(|(k, _)| k != "AIDA_AGENT_CMD"));
+}
+
+/// The seat and containment env a capture fake records, then its argv.
+const CAPTURED_KEYS: &[&str] = &[
+    "AIDA_SESSION_ROLE",
+    "AIDA_SESSION_GRANT",
+    "AIDA_SESSION_PURPOSE",
+    "AIDA_CONTAINED",
+    "AIDA_CONTAINMENT_POSTURE",
+    "AIDA_STANDALONE_IMPLEMENTER",
+    "AIDA_HEADLESS_LANE",
+    "AIDA_AGENT_CMD",
+];
+
+/// A project with a store, and a fake agent that writes the
+/// [`CAPTURED_KEYS`] and its argv to `capture`.
+struct Launch {
+    tmp: tempfile::TempDir,
+    project: std::path::PathBuf,
+    fake: String,
+    capture: std::path::PathBuf,
+}
+
+fn launch_fixture() -> Launch {
+    let tmp = tempfile::tempdir().unwrap();
+    let project = tmp.path().join("project");
+    std::fs::create_dir_all(project.join(".aida-store")).unwrap();
+    std::fs::create_dir_all(project.join(".aida")).unwrap();
+    std::fs::write(
+        project.join(".aida/config.toml"),
+        "store_path = \".aida-store\"\n",
+    )
+    .unwrap();
+    let fake = tmp.path().join("fake-agent");
+    let capture = tmp.path().join("capture");
+    let mut body = String::from("#!/bin/sh\n{\n");
+    for key in CAPTURED_KEYS {
+        body.push_str(&format!(
+            "if [ \"${{{key}+set}}\" = set ]; then printf '%s=%s\\n' {key} \"${key}\"; \
+             else printf '%s\\n' '{key} unset'; fi\n"
+        ));
+    }
+    body.push_str("printf -- '--\\n'\nfor a in \"$@\"; do printf '%s\\n' \"$a\"; done\n");
+    body.push_str("} > \"$AIDA_TEST_CAPTURE\"\n");
+    crate::test_exec::write_executable(&fake, body);
+    Launch {
+        project,
+        fake: fake.to_string_lossy().into_owned(),
+        capture,
+        tmp,
+    }
+}
+
+impl Launch {
+    fn ambient(&self) -> crate::test_env::AmbientGuard {
+        crate::test_env::AmbientGuard::hermetic_with_seat_and(
+            &self.project,
+            "advisor",
+            &["advisor", "implementer", "reviewer"],
+            &[
+                ("AIDA_AGENT_CMD", Some(self.fake.as_str())),
+                ("AIDA_OS_WRAP", Some("0")),
+                ("AIDA_HEADLESS_VENDOR", None),
+                ("AIDA_CONTAINED", None),
+                ("AIDA_STANDALONE_IMPLEMENTER", None),
+                ("AIDA_HEADLESS_LANE", None),
+                ("AIDA_TEE_HEADLESS", Some("0")),
+                // The launcher's own purpose never reaches a child.
+                ("AIDA_SESSION_PURPOSE", Some("launcher purpose")),
+                ("AIDA_TEST_CAPTURE", Some(self.capture.to_str().unwrap())),
+            ],
+        )
+    }
+
+    /// Replace the per-run parts of a value: the fake's path, the fixture
+    /// root, a generated session id.
+    fn mask(&self, value: &str) -> String {
+        let root = self.tmp.path().to_string_lossy().into_owned();
+        let value = value.replace(&self.fake, "<agent>").replace(&root, "<tmp>");
+        if uuid::Uuid::parse_str(&value).is_ok() {
+            return "<uuid>".to_string();
+        }
+        value
+    }
+
+    /// What the fake recorded: env lines (a minted grant masked) and argv.
+    fn captured(&self) -> (Vec<String>, Vec<String>) {
+        let raw = std::fs::read_to_string(&self.capture).expect("the fake agent ran");
+        let _ = std::fs::remove_file(&self.capture);
+        let (env, args) = raw.split_once("--\n").unwrap();
+        let env = env
+            .lines()
+            .map(|line| match line.split_once('=') {
+                Some(("AIDA_SESSION_GRANT", g)) if !g.is_empty() => {
+                    "AIDA_SESSION_GRANT=<grant>".to_string()
+                }
+                _ => self.mask(line),
+            })
+            .collect();
+        (env, args.lines().map(|a| self.mask(a)).collect())
+    }
+
+    /// A built command's program and argv, masked like [`Self::captured`].
+    fn argv_of(&self, cmd: &std::process::Command) -> Vec<String> {
+        std::iter::once(cmd.get_program())
+            .chain(cmd.get_args())
+            .map(|a| self.mask(&a.to_string_lossy()))
+            .collect()
+    }
+}
+
+fn lines(items: &[&str]) -> Vec<String> {
+    items.iter().map(|s| s.to_string()).collect()
+}
+
+/// The owned keys a launch decides (the forwarded handle token is per-run).
+fn decided_ops(cmd: &std::process::Command) -> BTreeMap<String, Option<String>> {
+    let mut ops = owned_ops(cmd);
+    ops.retain(|k, _| aida_core::launch_policy::decided_keys().any(|d| d == k));
+    ops
+}
+
+/// Run `f`, returning how many times it reached the boundary fn.
+fn boundary_calls<T>(f: impl FnOnce() -> T) -> (T, usize) {
     let calls = || AIDA_BOUNDARY_CALLS.with(|c| c.get());
     let before = calls();
-    let exec = crate::session::build_claude_exec_command(
-        None,
-        None,
-        Some("p"),
-        Some("sid"),
-        true,
-        None,
-        None,
-    )
-    .unwrap();
-    assert_eq!(calls(), before + 1, "contained exec");
-    let run = crate::session::build_run_claude_session_command(
-        None,
-        None,
-        Some("p"),
-        Some("sid"),
-        true,
-        None,
-    )
-    .unwrap();
-    assert_eq!(calls(), before + 2, "contained run session");
-    // Uncontained launches never reach it.
-    crate::session::build_claude_exec_command(
-        None,
-        None,
-        Some("p"),
-        Some("sid"),
-        false,
-        None,
-        None,
-    )
-    .unwrap();
-    crate::session::build_run_claude_session_command(
-        None,
-        None,
-        Some("p"),
-        Some("sid"),
-        false,
-        None,
-    )
-    .unwrap();
-    assert_eq!(
-        calls(),
-        before + 2,
-        "uncontained launches skip the boundary"
-    );
-    for cmd in [&exec, &run] {
-        let env: BTreeMap<_, _> = cmd.get_envs().collect();
-        assert_eq!(
-            env.get(OsStr::new("AIDA_CONTAINED")),
-            Some(&Some(OsStr::new("1")))
-        );
+    let out = f();
+    (out, calls() - before)
+}
+
+fn agent_new_config(contained: bool) -> crate::agent_launch::AgentLaunchConfig {
+    crate::agent_launch::AgentLaunchConfig {
+        agent_type: "claude",
+        binary: "claude",
+        default_args: Vec::new(),
+        prompt_style: crate::agent_launch::AgentPromptStyle::Positional,
+        contained,
+    }
+}
+
+fn agent_new_plan(project: &std::path::Path) -> crate::agent_launch::AgentLaunchPlan {
+    crate::agent_launch::AgentLaunchPlan {
+        project_root: project.to_path_buf(),
+        launch_cwd: project.to_path_buf(),
+        role: None,
+        role_instance: crate::role::RoleInstanceKind::Driver,
+        current_spec: None,
+        name: "lane-2326".to_string(),
+        lease_id: None,
+        native_session_id: None,
+        resumed_from: None,
+    }
+}
+
+/// Pin a contained interactive session's cwd to a fresh git root, so its
+/// write boundary never depends on the tree the tests run in.
+fn pinned_git_cwd() -> (
+    tempfile::TempDir,
+    crate::session::contained_cwd_seam::CwdGuard,
+) {
+    let tmp = tempfile::tempdir().unwrap();
+    std::fs::create_dir(tmp.path().join(".git")).unwrap();
+    let guard = crate::session::contained_cwd_seam::pin(tmp.path());
+    (tmp, guard)
+}
+
+/// Whether this host can hold a contained child's grant key in a session
+/// keyring. Inside another agent's sandbox it cannot, and a contained
+/// child's grant is refused before the spawn; those cases then skip.
+fn keyring_usable() -> bool {
+    let usable = crate::gate::seat_authority::preflight_sandboxed_child_key("implementer").is_ok();
+    if !usable {
+        eprintln!("SKIP contained spawns: the session keyring is unavailable here");
+    }
+    usable
+}
+
+fn no_tee() -> crate::headless_tee::TeeOptions {
+    crate::headless_tee::TeeOptions {
+        enabled: false,
+        label: None,
+    }
+}
+
+/// F2 ruling (S-i): every Aida-posture spawn of a converted path reaches the
+/// one private boundary fn, which STORY-2238 PR3 replaces with
+/// `containment::launch`; an uncontained one never does.
+#[test]
+fn aida_posture_spawn_routes_through_single_boundary_fn() {
+    let exec = |c| {
+        crate::session::build_claude_exec_command(None, None, Some("p"), Some("sid"), c, None, None)
+            .unwrap()
+    };
+    let run = |c| {
+        crate::session::build_run_claude_session_command(
+            None,
+            None,
+            Some("p"),
+            Some("sid"),
+            c,
+            None,
+        )
+        .unwrap()
+    };
+    {
+        // Released before the ambient guard below takes the same env lock
+        // (and the pinned cwd before the seat grant is looked up).
+        let (_git, _cwd) = pinned_git_cwd();
+        let _env = crate::test_env::EnvVarsGuard::apply(&[
+            ("AIDA_OS_WRAP", Some("0")),
+            ("AIDA_CONTAINED", None),
+            ("AIDA_AGENT_CMD", None),
+        ]);
+        for c in [true, false] {
+            let want = usize::from(c);
+            let (exec, n) = boundary_calls(|| exec(c));
+            assert_eq!(n, want, "exec contained={c}");
+            let (run, n) = boundary_calls(|| run(c));
+            assert_eq!(n, want, "run session contained={c}");
+            for cmd in [&exec, &run] {
+                let env: BTreeMap<_, _> = cmd.get_envs().collect();
+                let marker = c.then_some(OsStr::new("1"));
+                assert_eq!(env.get(OsStr::new("AIDA_CONTAINED")), Some(&marker));
+            }
+        }
+    }
+
+    let fx = launch_fixture();
+    let _ambient = fx.ambient();
+    let claude = crate::session::HeadlessVendor::Claude;
+    let log = fx.project.join(".aida/headless.log");
+    let fake = std::path::Path::new(&fx.fake);
+    let keyring = keyring_usable();
+    for c in [true, false] {
+        let want = usize::from(c);
+        // These two mint a contained child grant, which needs the keyring.
+        if !c || keyring {
+            let (out, n) = boundary_calls(|| {
+                crate::session::spawn_vendor_headless_with_seat_granted(
+                    claude,
+                    aida_core::agents_config::AgentSeat::Implementer,
+                    "go",
+                    "sid-fork",
+                    &log,
+                    &no_tee(),
+                    c,
+                )
+            });
+            out.unwrap();
+            assert_eq!(n, want, "headless forking contained={c}");
+
+            let plan = crate::session::interactive_reviewer_launch_plan(
+                claude, None, None, "review", "sid-r", c,
+            )
+            .unwrap();
+            let (out, n) = boundary_calls(|| {
+                crate::session::spawn_reviewer_launch_plan_granted(&plan, &fx.project)
+            });
+            out.unwrap();
+            assert_eq!(n, want, "reviewer plan contained={c}");
+        }
+
+        let (out, n) = boundary_calls(|| {
+            crate::session::build_advisor_interactive_command(claude, "advise", "g-adv", c)
+        });
+        out.unwrap();
+        assert_eq!(n, want, "advisor interactive contained={c}");
+
+        let (out, n) = boundary_calls(|| {
+            crate::session::build_exec_vendor_headless_command(
+                claude,
+                "coord",
+                "sid-c",
+                c,
+                None,
+                None,
+                "implementer",
+                "g-c",
+            )
+        });
+        out.unwrap();
+        assert_eq!(n, want, "coordinator headless contained={c}");
+
+        let config = agent_new_config(c);
+        let plan = agent_new_plan(&fx.project);
+        let (out, n) = boundary_calls(|| {
+            crate::agent_launch::build_agent_new_bg_command(fake, &config, &plan, &[], None)
+        });
+        out.unwrap();
+        assert_eq!(n, want, "agent new --bg contained={c}");
+
+        let (out, n) = boundary_calls(|| {
+            crate::agent_launch::run_agent_generation(
+                fake,
+                &config,
+                &plan,
+                None,
+                &["work".to_string()],
+                None,
+                false,
+                false,
+                None,
+                None,
+                || {},
+            )
+        });
+        assert!(out.unwrap().status.success());
+        assert_eq!(n, want, "agent new foreground contained={c}");
     }
 }
 
@@ -403,6 +688,12 @@ fn aida_posture_spawn_routes_through_single_boundary_fn() {
 /// ops and argv equal the pre-STORY-2326 builders' exactly.
 #[test]
 fn golden_interactive_claude_paths_are_unchanged() {
+    let _env = crate::test_env::EnvVarsGuard::apply(&[
+        ("AIDA_OS_WRAP", Some("0")),
+        ("AIDA_CONTAINED", None),
+        ("AIDA_AGENT_CMD", None),
+    ]);
+    let (_git, _cwd) = pinned_git_cwd();
     let contained = ops(&[
         ("AIDA_CONTAINED", Some("1")),
         ("AIDA_CONTAINMENT_POSTURE", Some("aida")),
@@ -441,21 +732,292 @@ fn golden_interactive_claude_paths_are_unchanged() {
     assert_eq!(owned_ops(&exec(true, Some("g-9"))), granted);
     assert_eq!(owned_ops(&run(true)), contained);
     assert_eq!(owned_ops(&run(false)), uncontained);
+    // The argv recorded from the pre-STORY-2326 builders (os_wrap off; the
+    // generated settings JSON masked), not recomputed through their helpers.
+    let session = ["--name", "n", "--session-id", "sid", "p"];
+    let mut contained_argv = lines(&["--setting-sources", "project", "--settings", "<settings>"]);
+    contained_argv.extend(lines(&session));
     for c in [true, false] {
-        let (program, args) = crate::session::interactive_claude_program_and_args(
-            c,
-            crate::session::claude_session_args(None, Some("n"), Some("p"), Some("sid"), c, None)
-                .unwrap(),
-        )
-        .unwrap();
         for cmd in [exec(c, None), run(c)] {
-            assert_eq!(cmd.get_program(), OsString::from(&program).as_os_str());
-            let got: Vec<String> = cmd
-                .get_args()
-                .map(|a| a.to_string_lossy().into_owned())
-                .collect();
-            assert_eq!(got, args);
+            assert_eq!(cmd.get_program(), OsStr::new("claude"));
+            let got = mask_settings(
+                cmd.get_args()
+                    .map(|a| a.to_string_lossy().into_owned())
+                    .collect(),
+            );
+            let want = if c {
+                contained_argv.clone()
+            } else {
+                lines(&session)
+            };
+            assert_eq!(got, want, "contained={c}");
             assert_eq!(cmd.get_current_dir(), None);
         }
+    }
+}
+
+/// Replace the generated settings JSON after `--settings` (it embeds the
+/// per-run write roots) with `<settings>`.
+fn mask_settings(mut args: Vec<String>) -> Vec<String> {
+    if let Some(at) = args.iter().position(|a| a == "--settings") {
+        if let Some(json) = args.get_mut(at + 1) {
+            assert!(json.starts_with('{'), "inline settings JSON: {json}");
+            *json = "<settings>".to_string();
+        }
+    }
+    args
+}
+
+/// Amendment 9 goldens for the remaining converted Claude paths: the seat
+/// and containment env each child actually receives, and its argv, recorded
+/// from the pre-STORY-2326 builders. The argv composers are untouched by the
+/// conversion; only where each child's env is decided moved.
+#[test]
+fn golden_headless_and_lane_claude_paths_are_unchanged() {
+    let fx = launch_fixture();
+    let _ambient = fx.ambient();
+    let claude = crate::session::HeadlessVendor::Claude;
+    let log = fx.project.join(".aida/headless.log");
+    let posture = |c: bool| {
+        if c {
+            lines(&["AIDA_CONTAINED=1", "AIDA_CONTAINMENT_POSTURE=aida"])
+        } else {
+            lines(&["AIDA_CONTAINED unset", "AIDA_CONTAINMENT_POSTURE=none"])
+        }
+    };
+    // Ruling 5: the program override never reaches a contained child.
+    let agent_cmd = |c: bool| {
+        if c {
+            "AIDA_AGENT_CMD unset".to_string()
+        } else {
+            "AIDA_AGENT_CMD=<agent>".to_string()
+        }
+    };
+    let child_env = |role: &str, c: bool| {
+        let mut env = vec![
+            format!("AIDA_SESSION_ROLE={role}"),
+            "AIDA_SESSION_GRANT=<grant>".to_string(),
+            "AIDA_SESSION_PURPOSE unset".to_string(),
+        ];
+        env.extend(posture(c));
+        env.extend(lines(&[
+            "AIDA_STANDALONE_IMPLEMENTER unset",
+            "AIDA_HEADLESS_LANE unset",
+        ]));
+        env.push(agent_cmd(c));
+        env
+    };
+    let child_ops = |role: &str, grant: &str, c: bool| {
+        let mut want = ops(&[
+            ("AIDA_SESSION_ROLE", Some(role)),
+            ("AIDA_SESSION_GRANT", Some(grant)),
+            ("AIDA_SESSION_PURPOSE", None),
+            ("AIDA_STANDALONE_IMPLEMENTER", None),
+            ("AIDA_HEADLESS_LANE", None),
+        ]);
+        want.extend(if c {
+            ops(&[
+                ("AIDA_CONTAINED", Some("1")),
+                ("AIDA_CONTAINMENT_POSTURE", Some("aida")),
+            ])
+        } else {
+            ops(&[
+                ("AIDA_CONTAINED", None),
+                ("AIDA_CONTAINMENT_POSTURE", Some("none")),
+            ])
+        });
+        want
+    };
+
+    let keyring = keyring_usable();
+    let mut miss = Mismatches::default();
+    for c in [true, false] {
+        // These two mint a contained child grant, which needs the keyring.
+        if !c || keyring {
+            // spawn_vendor_headless_forking: a fresh headless phase.
+            crate::session::spawn_vendor_headless_with_seat_granted(
+                claude,
+                aida_core::agents_config::AgentSeat::Implementer,
+                "go",
+                "sid-fork",
+                &log,
+                &no_tee(),
+                c,
+            )
+            .unwrap();
+            let (env, args) = fx.captured();
+            assert_eq!(env, child_env("implementer", c), "forking contained={c}");
+            miss.check("forking", c, mask_settings(args), golden::headless_fork(c));
+
+            // spawn_reviewer_launch_plan_granted.
+            let plan = crate::session::interactive_reviewer_launch_plan(
+                claude, None, None, "review", "sid-r", c,
+            )
+            .unwrap();
+            crate::session::spawn_reviewer_launch_plan_granted(&plan, &fx.project).unwrap();
+            let (env, args) = fx.captured();
+            assert_eq!(env, child_env("reviewer", c), "reviewer contained={c}");
+            miss.check("reviewer", c, mask_settings(args), golden::reviewer(c));
+        }
+
+        // build_advisor_interactive_command.
+        let cmd = crate::session::build_advisor_interactive_command(claude, "advise", "g-adv", c)
+            .unwrap();
+        assert_eq!(
+            decided_ops(&cmd),
+            child_ops("advisor", "g-adv", c),
+            "advisor contained={c}"
+        );
+        miss.check(
+            "advisor",
+            c,
+            mask_settings(fx.argv_of(&cmd)),
+            golden::advisor(c),
+        );
+
+        // build_coordinator_headless_command_inner, via the exec phase.
+        let cmd = crate::session::build_exec_vendor_headless_command(
+            claude,
+            "coord",
+            "sid-c",
+            c,
+            None,
+            None,
+            "implementer",
+            "g-c",
+        )
+        .unwrap();
+        assert_eq!(
+            decided_ops(&cmd),
+            child_ops("implementer", "g-c", c),
+            "coordinator contained={c}"
+        );
+        miss.check(
+            "coordinator",
+            c,
+            mask_settings(fx.argv_of(&cmd)),
+            golden::coordinator(c),
+        );
+
+        // run_agent_generation (`aida agent new` foreground) without a role:
+        // the seat keys are removed, and so (the listed change) is the
+        // launcher's purpose.
+        let config = agent_new_config(c);
+        let plan = agent_new_plan(&fx.project);
+        let exit = crate::agent_launch::run_agent_generation(
+            std::path::Path::new(&fx.fake),
+            &config,
+            &plan,
+            None,
+            &["work".to_string()],
+            None,
+            false,
+            false,
+            None,
+            None,
+            || {},
+        )
+        .unwrap();
+        assert!(exit.status.success());
+        let (env, args) = fx.captured();
+        let mut lane = lines(&[
+            "AIDA_SESSION_ROLE unset",
+            "AIDA_SESSION_GRANT unset",
+            "AIDA_SESSION_PURPOSE unset",
+        ]);
+        lane.extend(posture(c));
+        lane.extend(lines(&[
+            "AIDA_STANDALONE_IMPLEMENTER unset",
+            "AIDA_HEADLESS_LANE unset",
+        ]));
+        lane.push(agent_cmd(c));
+        assert_eq!(env, lane, "agent new contained={c}");
+        miss.check("agent new", c, mask_settings(args), golden::agent_new_fg(c));
+    }
+    assert!(
+        miss.0.is_empty(),
+        "argv goldens differ:\n{}",
+        miss.0.join("\n")
+    );
+}
+
+/// Every argv golden that differs, reported together.
+#[derive(Default)]
+struct Mismatches(Vec<String>);
+
+impl Mismatches {
+    fn check(&mut self, path: &str, contained: bool, got: Vec<String>, want: Vec<String>) {
+        if got != want {
+            self.0.push(format!(
+                "{path} contained={contained}: got {got:?}, want {want:?}"
+            ));
+        }
+    }
+}
+
+/// The argv each path recorded before the conversion (masked: `<agent>` the
+/// fake vendor, `<tmp>` the fixture root, `<uuid>` a generated session id,
+/// `<settings>` the generated settings JSON).
+mod golden {
+    use super::lines;
+
+    /// The headless `-p` argv: contained runs `dontAsk` under the project's
+    /// settings sources, uncontained runs `bypassPermissions`.
+    fn headless(contained: bool, session: &str, prompt: &str) -> Vec<String> {
+        let mut argv = lines(&["-p", "--permission-mode"]);
+        argv.extend(if contained {
+            lines(&["dontAsk", "--setting-sources", "project"])
+        } else {
+            lines(&["bypassPermissions"])
+        });
+        argv.extend(lines(&[
+            "--settings",
+            "<settings>",
+            "--disallowed-tools",
+            "AskUserQuestion",
+            "Monitor",
+            "--output-format",
+            "stream-json",
+            "--verbose",
+            "--session-id",
+            session,
+            prompt,
+        ]));
+        argv
+    }
+
+    /// The interactive reviewer-plan argv (no name, no permission mode).
+    fn interactive(contained: bool, session: &str, prompt: &str) -> Vec<String> {
+        let mut argv = if contained {
+            lines(&["--setting-sources", "project", "--settings", "<settings>"])
+        } else {
+            Vec::new()
+        };
+        argv.extend(lines(&["--session-id", session, prompt]));
+        argv
+    }
+
+    pub(super) fn headless_fork(contained: bool) -> Vec<String> {
+        headless(contained, "sid-fork", "go")
+    }
+
+    pub(super) fn reviewer(contained: bool) -> Vec<String> {
+        interactive(contained, "sid-r", "review")
+    }
+
+    pub(super) fn advisor(contained: bool) -> Vec<String> {
+        let mut argv = lines(&["<agent>"]);
+        argv.extend(interactive(contained, "<uuid>", "advise"));
+        argv
+    }
+
+    pub(super) fn coordinator(contained: bool) -> Vec<String> {
+        let mut argv = lines(&["<agent>"]);
+        argv.extend(headless(contained, "sid-c", "coord"));
+        argv
+    }
+
+    pub(super) fn agent_new_fg(_contained: bool) -> Vec<String> {
+        lines(&["work"])
     }
 }

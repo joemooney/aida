@@ -12,8 +12,8 @@
 use std::process::Command;
 
 use aida_core::launch_policy::{
-    LaunchKind, CONTAINED_ENV, GRANT_ENV, LANE_MARKER_ENV, POSTURE_ENV, PURPOSE_ENV, ROLE_ENV,
-    STANDALONE_MARKER_ENV,
+    LaunchKind, AGENT_CMD_ENV, CONTAINED_ENV, GRANT_ENV, LANE_MARKER_ENV, POSTURE_ENV, PURPOSE_ENV,
+    ROLE_ENV, STANDALONE_MARKER_ENV,
 };
 use anyhow::Result;
 
@@ -54,6 +54,9 @@ fn aida_boundary(ctx: &LaunchContext, cmd: &mut Command) -> Result<()> {
     cmd.env(CONTAINED_ENV, "1");
     // trace:TASK-2631 | ai:codex — do not inherit a native parent's display marker.
     cmd.env(POSTURE_ENV, "aida");
+    // The program override never crosses the boundary: a contained child
+    // that carries one refuses its own launches (`LaunchRefusal`).
+    cmd.env_remove(AGENT_CMD_ENV);
     Ok(())
 }
 

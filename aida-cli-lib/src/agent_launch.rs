@@ -6645,7 +6645,7 @@ fn run_tracked_agent_after_spawn(
 /// handoff it loads at SessionStart (generation 2 on).
 // trace:STORY-B6B1278890774EF993D2EBC327862470-101 | ai:claude
 #[derive(Debug, Clone, Copy)]
-struct RotationEnv<'a> {
+pub(crate) struct RotationEnv<'a> {
     generation: u64,
     seat: &'a str,
     /// The handoff file the supervisor matched, and its log stamp.
@@ -6851,15 +6851,15 @@ fn run_rotating_agent(
 /// One generation's exit: its status, and the native session id its row
 /// recorded by then (a Codex thread the SessionStart hook bound).
 // trace:STORY-B6B1278890774EF993D2EBC327862470-150 | ai:claude
-struct GenerationExit {
-    status: std::process::ExitStatus,
+pub(crate) struct GenerationExit {
+    pub(crate) status: std::process::ExitStatus,
     native_session_id: Option<String>,
 }
 
 /// Spawn one child, wait for it, and clean up its registry row.
 // trace:BUG-2188 | ai:codex
 #[allow(clippy::too_many_arguments)]
-fn run_agent_generation(
+pub(crate) fn run_agent_generation(
     binary: &std::path::Path,
     config: &AgentLaunchConfig,
     plan: &AgentLaunchPlan,

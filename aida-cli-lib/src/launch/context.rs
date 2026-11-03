@@ -45,6 +45,10 @@ pub(crate) enum LaunchRefusal {
     MalformedParentContainment(String),
     /// An `aida` control child or a vendor query cannot be built here.
     UnsupportedKind(LaunchKind),
+    /// This process runs contained and carries the `AIDA_AGENT_CMD` program
+    /// override. A contained launch strips it from its child, so it can only
+    /// have been set inside the boundary, where it would swap the vendor.
+    AgentCmdUnderContainment,
 }
 
 impl std::fmt::Display for LaunchRefusal {
@@ -64,6 +68,11 @@ impl std::fmt::Display for LaunchRefusal {
                 "a {} launch is not an agent session; it has its own constructor",
                 kind.as_str()
             ),
+            Self::AgentCmdUnderContainment => write!(
+                f,
+                "[contained] this session is contained, so `AIDA_AGENT_CMD` cannot replace the \
+                 agent program; unset it and launch again"
+            ),
         }
     }
 }
@@ -71,7 +80,7 @@ impl std::fmt::Display for LaunchRefusal {
 impl std::error::Error for LaunchRefusal {}
 
 /// A resolved launch. Fields are private: only [`LaunchContext::resolve`]
-/// builds one, so every launch passed the same checks.
+/// builds one in production, so every launch passed the same checks.
 #[derive(Debug, Clone)]
 pub(crate) struct LaunchContext {
     vendor: LaunchVendor,
@@ -94,13 +103,28 @@ impl LaunchContext {
                 "{err:#}"
             )));
         }
-        Self::resolve_under(req, crate::session::process_contained())
+        let agent_cmd = std::env::var_os(aida_core::launch_policy::AGENT_CMD_ENV)
+            .is_some_and(|cmd| !cmd.to_string_lossy().trim().is_empty());
+        Self::resolve_with(req, crate::session::process_contained(), agent_cmd)
     }
 
-    /// [`Self::resolve`] with the parent's containment given (pure).
+    /// [`Self::resolve`] with the parent's containment given and no program
+    /// override. Tests only: production always resolves against this process.
+    #[cfg(test)]
     pub(crate) fn resolve_under(
         req: LaunchRequest,
         parent_contained: bool,
+    ) -> Result<Self, LaunchRefusal> {
+        Self::resolve_with(req, parent_contained, false)
+    }
+
+    /// The pure resolution: `parent_contained` is this process's own
+    /// containment and `agent_cmd` whether it carries an `AIDA_AGENT_CMD`
+    /// override.
+    pub(super) fn resolve_with(
+        req: LaunchRequest,
+        parent_contained: bool,
+        agent_cmd: bool,
     ) -> Result<Self, LaunchRefusal> {
         if matches!(req.kind, LaunchKind::Query | LaunchKind::Control) {
             return Err(LaunchRefusal::UnsupportedKind(req.kind));
@@ -115,6 +139,12 @@ impl LaunchContext {
                 vendor: req.vendor,
                 posture: req.posture,
             });
+        }
+        // The override is a test seam for uncontained launches. A contained
+        // child never inherits it (`spawn::aida_boundary` removes it), so a contained parent
+        // that carries one set it inside the boundary.
+        if parent_contained && agent_cmd {
+            return Err(LaunchRefusal::AgentCmdUnderContainment);
         }
         let mut argv = req.args;
         argv.extend(req.tail);

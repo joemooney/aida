@@ -189,9 +189,20 @@ impl std::error::Error for PostureFlag {}
 fn posture_flag_at(args: &[String], at: usize) -> Option<String> {
     let arg = args[at].as_str();
     let name = arg.split_once('=').map_or(arg, |(name, _)| name);
+    // Claude: --settings, --permission-mode, --add-dir, --dangerously-*.
+    // Codex: --sandbox/-s, --ask-for-approval/-a, --full-auto, --yolo and
+    // --dangerously-bypass-approvals-and-sandbox.
     let named = matches!(
         name,
-        "--settings" | "--permission-mode" | "--sandbox" | "--add-dir" | "--full-auto"
+        "--settings"
+            | "--permission-mode"
+            | "--sandbox"
+            | "-s"
+            | "--ask-for-approval"
+            | "-a"
+            | "--add-dir"
+            | "--full-auto"
+            | "--yolo"
     ) || name.starts_with("--dangerously-");
     if named {
         return Some(arg.to_string());
@@ -306,6 +317,12 @@ mod tests {
             &["--sandbox", "danger-full-access"],
             &["--add-dir", "/"],
             &["--full-auto"],
+            &["--yolo"],
+            &["-s", "danger-full-access"],
+            &["-s=workspace-write"],
+            &["--ask-for-approval", "never"],
+            &["--ask-for-approval=never"],
+            &["-a", "never"],
             &["-c", "sandbox_mode=danger-full-access"],
             &["-c", "sandbox_workspace_write.writable_roots=[\"/\"]"],
             &["--config", "sandbox_mode=x"],
@@ -324,6 +341,8 @@ mod tests {
             &["fix the --settings parser"],
             &["--", "--settings", "is only a prompt here"],
             &["-p", "prompt"],
+            &["-m", "gpt-5"],
+            &["--search"],
         ];
         for args in allowed {
             assert!(refuse_posture_flags(&argv(args)).is_ok(), "{args:?}");
