@@ -61,7 +61,7 @@ pub(super) fn lease(id: &str, scope: &str, worktree: PathBuf) -> SessionLease {
     }
 }
 
-fn write_lease(root: &Path, l: &SessionLease) {
+pub(super) fn write_lease(root: &Path, l: &SessionLease) {
     let path = crate::lease_path(root, &l.id);
     std::fs::create_dir_all(path.parent().unwrap()).unwrap();
     std::fs::write(path, toml::to_string_pretty(l).unwrap()).unwrap();
