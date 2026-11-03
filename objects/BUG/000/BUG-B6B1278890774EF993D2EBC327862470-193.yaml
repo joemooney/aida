@@ -11,7 +11,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-03T13:49:30.195676116Z
-modified_at: 2026-11-03T14:04:46.999760340Z
+modified_at: 2026-11-03T14:13:01.384329528Z
 req_type: Bug
 comments:
 - id: 01a1a1b3-25d2-7b13-bb06-f3c50afaf135
@@ -24,6 +24,11 @@ comments:
   content: 'Publication blocker: native workspace-write sandbox refuses staging with `fatal: Unable to create ''<worktree>/.git/index.lock'': Read-only file system` (07:03 MST, 2026-11-03). Same sanctioned-publication-path issue already tracked by TASK-2712/TASK-2714/TASK-2721. No bypass attempted. Patch is preserved in the working tree and /tmp/BUG-2424.patch; PR description prepared at /tmp/bug2424-pr-body.md. Tests still compiling. Leave BUG-2424 In Progress until a permitted commit/push/PR handoff completes.'
   created_at: 2026-11-03T14:04:46.999752706Z
   modified_at: 2026-11-03T14:04:46.999752706Z
+- id: 01a1a1c1-9748-7353-84a9-db1760328e9d
+  author: mcp
+  content: 'Implementation and validation complete locally. `cargo test -p aida-cli-lib --lib bug_2411 --no-default-features` passed 3 tests. Using that compiled test executable, dev_build::dev_build_tests passed 79 tests, mailbox_wake_run::tests passed 18, and mailbox_cmd::service_hint_tests passed 1 (98 unique targeted tests). New unavailable-manager, per-unit restart failure, enabled-state filtering, promotion order, rollback, and cgroup-hint coverage all pass. `cargo fmt --all -- --check` and `git diff --check` pass. No host service restarts performed. Publication remains blocked: .git/index.lock is read-only under native workspace-write; tracked as TASK-2712 with recurrence recorded there. Final patch /tmp/BUG-2424.patch and ready PR description /tmp/bug2424-pr-body.md; seven changed files remain in assigned worktree. No commit, push, PR, queue-done, review record or ship performed. Keeping In Progress because required publication handoff is incomplete.'
+  created_at: 2026-11-03T14:13:01.384321551Z
+  modified_at: 2026-11-03T14:13:01.384321551Z
 history:
 - id: 01a1a1ad-cb23-70d0-8689-8418a67dbdf6
   author: aida-session-start
