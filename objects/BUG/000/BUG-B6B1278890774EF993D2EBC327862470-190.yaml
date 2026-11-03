@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-03T02:44:06.802259757Z
-modified_at: 2026-11-03T03:57:54.009059047Z
+modified_at: 2026-11-03T05:30:58.640025681Z
 req_type: Bug
 tags:
 - from:SPIKE-708
@@ -42,6 +42,10 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a19fe3-a56f-7fa0-995b-cd6f4e38b1c8
+  author: joe
+  timestamp: 2026-11-03T05:30:58.799610301Z
+  changes: []
 filed_at:
   code_sha: 553f7d5984c6083a9f2b47cfa358ce57c438843b
   branch: main
@@ -54,7 +58,7 @@ failure_reason:
   phase: reviewer
   phase_index: 3
   kind: verdict:request-changes
-  detail: 'RequestChanges: the lineage and authority fix is sound, but CI cli-1 is red; the story_105 CLI delegated-block fixture lacks the now-required home-ref claim. Two minor AC3 gaps: the release wiring is untested, and an ID burned by a concurrent dispense is not reported.'
+  detail: 'Request Changes: failed-save recovery can burn an ID, and generic home-ref reads accept Git revision expressions.'
   recovery_hint: address the review findings, move BUG-2421 back to In Progress, and clear the PR hold only after approval
   shelved_by: reviewer
-  shelved_at: 2026-11-03T03:57:54.009059047Z
+  shelved_at: 2026-11-03T05:30:58.640025681Z
