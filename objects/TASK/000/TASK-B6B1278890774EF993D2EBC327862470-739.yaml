@@ -14,13 +14,20 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-03T14:12:44.272564934Z
-modified_at: 2026-11-03T14:12:44.272564934Z
+modified_at: 2026-11-03T18:18:13.700664709Z
 req_type: Task
 tags:
 - carried-from:STORY-2336
 - finding-hash:cf98f1df
 - from-review:PR-3284
 - kind:carried-forward
+comments:
+- id: 01a1a2a2-1544-7b41-96ca-a90486a175e1
+  author: joe
+  content: 'ADVISOR RULING (2026-11-03): accepted as-is. A held PR stays out of ship-ready, consistent with the ''hold armed'' disqualifier ruling and the docs. The deputy clears holds whose condition is met, so the signal does not need to model that.'
+  created_at: 2026-11-03T18:18:13.700664709Z
+  modified_at: 2026-11-03T18:18:13.700664709Z
+  session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
 history:
 - id: 01a1a24d-66de-7ec0-8aa9-6cc53d111776
   author: joe
