@@ -649,6 +649,58 @@ fn ship_and_train_tty_consent_ignores_stdout_like_merge_hold_clear() {
     crate::test_ambient::replace(previous);
 }
 
+/// BUG-2427: both callers reach the terminal decision through the shared
+/// helper, so a reintroduced stdout check in `pr ship` or a local terminal
+/// check in the helper or the train fails here.
+// trace:BUG-2427 | ai:claude
+#[test]
+fn ship_and_train_tty_decisions_go_through_the_shared_helper() {
+    fn body_after<'a>(src: &'a str, sig: &str) -> &'a str {
+        let rest = src
+            .split(sig)
+            .nth(1)
+            .unwrap_or_else(|| panic!("{sig} not found"));
+        // The body ends at the next column-0 closing brace.
+        &rest[..rest.find("\n}\n").unwrap_or(rest.len())]
+    }
+    let pr_cmd = include_str!("../pr_cmd.rs");
+    let helper = body_after(pr_cmd, "pub(crate) fn ship_interactive_tty() -> bool {");
+    assert!(
+        helper.contains("crate::gate::role_authority::has_integrity_floor_authority()"),
+        "ship_interactive_tty delegates to the merge-hold clear decision"
+    );
+    assert!(
+        !helper.contains("is_terminal"),
+        "ship_interactive_tty adds no terminal check of its own"
+    );
+    // `pr_ship_handler` forwards to this body, where the supervised-merge
+    // gate reads its terminal decision.
+    let handler = body_after(pr_cmd, "pub(crate) fn pr_ship_with_method_and_dispatch_ctx(");
+    assert!(
+        handler.contains("let interactive_tty = ship_interactive_tty();"),
+        "pr ship decides its terminal through the shared helper"
+    );
+    assert!(
+        !handler.contains("is_terminal(&std::io::stdout"),
+        "pr ship makes no stdout terminal check of its own"
+    );
+
+    let pr_train = include_str!("../pr_train.rs");
+    let train = pr_train
+        .split("fn interactive_tty(&self) -> bool {")
+        .nth(1)
+        .and_then(|b| b.split("\n    }\n").next())
+        .expect("the train's interactive_tty impl");
+    assert!(
+        train.contains("crate::pr_cmd::ship_interactive_tty()"),
+        "the train decides its terminal through the shared helper"
+    );
+    assert!(
+        !train.contains("is_terminal"),
+        "the train makes no terminal check of its own"
+    );
+}
+
 // ── start-path refusals ─────────────────────────────────────────────────────
 
 #[test]
