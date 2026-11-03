@@ -1,0 +1,27 @@
+id: 01a1a2ba-65eb-76b3-94a5-a7fa6e3d89b8
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-749
+title: 'non-blocking/minor: run_checked and run_gate now wait for pipe EOF rather than …'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-2790, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  non-blocking/minor: run_checked and run_gate now wait for pipe EOF rather than child exit, so a future caller whose child backgrounds a process that inherits stderr (none today: cargo with RUSTC_WRAPPER= and restart-mcp-servers.sh only kill) would hang. The Rust 'if fetch_error' branch in run_checked has no direct test; only stream_cargo_diagnostics is unit-tested.
+  Reviewed sha: 830142d58d10db713961b42585a9604ff10a654d
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-03T18:44:47.211820462Z
+modified_at: 2026-11-03T18:44:47.211820462Z
+req_type: Task
+tags:
+- carried-from:TASK-2790
+- finding-hash:f9f5b210
+- from-review:TASK-2790
+- kind:carried-forward
+filed_at:
+  code_sha: da17908306fcefc7fc1e8bcf334e2d507c72cf1a
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: c016e786454
+  vendor: claude
