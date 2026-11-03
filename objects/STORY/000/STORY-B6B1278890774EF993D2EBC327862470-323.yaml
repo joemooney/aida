@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-02T19:20:50.092491662Z
-modified_at: 2026-11-03T17:27:16.176955556Z
+modified_at: 2026-11-03T17:32:07.057213216Z
 req_type: Story
 tags:
 - architecture
@@ -259,6 +259,21 @@ comments:
   created_at: 2026-11-03T15:00:48.862238876Z
   modified_at: 2026-11-03T15:00:48.862238876Z
   session_id: f5eddefe-032d-4760-94ba-3a318cf3d1d1
+- id: 01a1a277-de11-79d3-b503-9c5fbb838a43
+  author: joe
+  content: |-
+    ADVISOR RULING (round 3, PR #3291 at 34031ff4): fix every finding below; this replaces earlier rulings on this PR.
+    1. CI lib-1: migrate.rs:658 adds a 7th "review-in-progress" literal, which fails gate::ledger::tests::legacy_gate_paths_do_not_gain_new_references (baseline 6). Read the directory through the existing review-marker module path or constant; do not raise the baseline.
+    2. CI lib-0: migrate.rs:678-685 is_ancestor builds raw std::process::Command::new("git") in a file that reads lease worktree_path, which fails task_2143_no_new_raw_git_where_a_lease_tree_is_read. Use aida_core::git_ops::host_git_command(main), as git_out already does.
+    3. Review-lease dual-write is wrong. acquire_review_lease_with_mode (lib_part5.rs:861) always writes pr_head_sha None, so key_for_lease (dual.rs:152) never yields WorkKey::Review. A PR-N review lease acquires Change{N} as Leased and overwrites the InPr record the handoff wrote. A spec-scoped review lease replaces the implementer as the Spec holder. ReviewLeaseGuard::drop (lib_part5.rs:663) removes the lease file without calling dual::lease_released, so the record names the ended reviewer session forever. aida own show --compare then reports 'never released' Unexplained rows, which blocks the A6 zero-unexplained gate for PR-C. Record reviews as Review/Reviewing with the PR head (or skip them), release on guard drop, and add a test.
+    4. Contained-seat guard missing (A1/A6 and the 2026-11-03 ruling: a contained seat must never write .aida/ownership/). dual::store_for (dual.rs:247) relies on the sandbox denying the write. From a contained seat clone, main_worktree_root_opt resolves the clone's own .git, so the writes land in the clone's .aida/ownership/. Refuse explicitly when contained, as gate::ledger::contained() does for the gate ledger, and add a test that a contained process writes nothing.
+    5. Q2 was signed 'yes': detach the seat HEAD at ship time under the ownership lock. dual.rs:371-374 and the commit message defer the detach as 'option (a) of the fork posted on STORY-2325', but STORY-2325 has no such fork or ruling (its comments are the sketch, the signoff and the CI ruling). Get the deferral ruled and recorded on the spec, or implement the detach.
+    6. store.rs:208-231 update_all commits records and journal lines one by one. An I/O error after the first write half-applies a multi-key handoff or migration, and a journal append failure leaves a written record unjournaled. That contradicts the doc and commit claim 'refuse rather than half-apply'. Stage all writes or narrow the claim to expectation failures.
+    7. Minor: ops::ride (ops.rs:125) moves rider Change records to Training, but nothing moves them out. train_lease_released closes only the Train key, so riders stay Training after the train merges or is abandoned. Also, migrate::plan's duplicate handling (migrate.rs:321-331, 359-374) keeps the first lease in list order, so a dead Unknown lease can be recorded over a Live one for the same key. Prefer the Live plan.
+    RULINGS: (5) The seat-HEAD detach is deferred to PR-C. This PR is Refs-only and PR-C completes STORY-2325. Remove the reference to an unrecorded fork; the dual.rs comment cites this ruling. (6) Narrow the doc and commit claim to 'refuses on expectation failures'. Document that an I/O error mid-batch can leave a partial write, which the journal replay reconciles; staged writes move to PR-C. (7) Fix both: release rider Change records when the train lease is released, and make migrate::plan prefer a Live lease over Unknown for the same key. (1)-(4) are blockers. LIGHT gate: one targeted cargo test -p aida-cli-lib <filter> plus make check-ci-fast. Push to the existing PR branch, then stop.
+  created_at: 2026-11-03T17:32:07.057213216Z
+  modified_at: 2026-11-03T17:32:07.057213216Z
+  session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
 history:
 - id: 01a19ed2-508b-7401-9865-70193fa0d0af
   author: joe
