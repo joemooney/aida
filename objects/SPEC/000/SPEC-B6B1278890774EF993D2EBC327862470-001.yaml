@@ -20,7 +20,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-01T07:26:01.071265913Z
-modified_at: 2026-11-03T18:19:26.137251639Z
+modified_at: 2026-11-03T18:22:31.288324537Z
 req_type: Task
 tags:
 - architecture
@@ -675,6 +675,18 @@ comments:
   content: 'Recurrence during BUG-2424 standalone native Codex pickup on 2026-11-03: code edits in assigned seat are writable, but git add refuses <seat>/.git/index.lock with Read-only file system. CLI aida edit separately refused the shared main-checkout cache path; own-scope MCP claim/update/comment succeeded. Source changes and /tmp/BUG-2424.patch preserved. No sandbox bypass or alternate publishing checkout attempted; commit/push/PR remain unavailable.'
   created_at: 2026-11-03T14:09:28.645279510Z
   modified_at: 2026-11-03T14:09:28.645279510Z
+- id: 01a1a2a6-0378-70c1-ad26-0730e32bb02b
+  author: joe
+  content: |-
+    ADVISOR RULING (2026-11-03 11:25, independent advisor signoff): REJECT-AND-NARROW. The host publication/MAC service (advisor16/18 sketch, advisor19 conditional approval) is withdrawn; implement none of it. Basis: every Codex launch on main is native workspace-write (agent_launch.rs:2037-2051 tool_contained_flags; session.rs:3596-3657). Codex 0.166 permissions.rs:860, :2502-2508 and :1063-1087 (metadata_write_denial) let an explicit writable root at or under a protected .git lift the default read-only .git rule. Claude contained lanes already commit in a private seat clone and publish through ship --from-seat (seat_clone.rs:2165-2184, host bundle in AIDA's sandbox with hooks off). The cache is already a directory grant (cache_location.rs:4-12). Sketch corrections: CACHE_SANDBOX_SIDECARS does not exist (it is LEGACY_CACHE_ENTRIES); ship --from-seat builds the bundle host-side, not in the seat; the spawn inventory misses agent_codex_background.rs.
+    N1. Native Codex implementer and reviewer launches compute the SAME write set Claude contained lanes receive: contained_store_write_paths including .aida/cache-db, the mailbox, the deputy inbox, the seat cargo target, and the gate-ledger paths needed for review verdicts and merge-hold recording. Pass each as --add-dir. Add <seat-clone>/.git ONLY when the tree is a host-recorded private seat clone. Never grant the main .git, the common gitdir or a linked-worktree gitdir; a native Codex implementer in a non-clone tree refuses publication with a named error. Use one helper shared by every Codex spawn path, including agent_codex_background.rs.
+    N2. Publication reuses aida ship --from-seat unchanged. No new git, credential or forge code; the BUG-2169/TASK-2053 refusal of host git in a clone stays.
+    N3. Pre-code gate: one model-free 'codex sandbox' fixture with a disposable clone. It must prove that a commit in the seat succeeds, that writes to the main or common .git and to .aida/sessions fail, and that a cache write lands. Record the result here. If Codex re-protects .git at runtime, fall back to the supervisor committing after the child exits via the existing run_sandboxed (hooks off), then N2. There is still no in-session channel.
+    N4. Tests: a ratchet that every Codex spawn path gets the shared write set; native seat commit then ship --from-seat end-to-end against a fake remote and forge; a hook planted in the seat never runs on the host. LIGHT gate.
+    N5. TASK-2792 is already superseded into this. The reviewer-ledger evidence (11-02) is covered by N1.
+  created_at: 2026-11-03T18:22:31.288324537Z
+  modified_at: 2026-11-03T18:22:31.288324537Z
+  session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
 history:
 - id: 01a1960f-6ca8-7313-8a94-63b0b98a4e44
   author: joe
