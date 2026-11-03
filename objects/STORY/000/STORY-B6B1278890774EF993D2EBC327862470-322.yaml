@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-02T19:20:32.021326811Z
-modified_at: 2026-11-03T01:34:16.159238183Z
+modified_at: 2026-11-03T01:35:26.544020299Z
 req_type: Story
 tags:
 - architecture
@@ -196,6 +196,18 @@ comments:
   created_at: 2026-11-03T01:29:28.048752432Z
   modified_at: 2026-11-03T01:29:28.048752432Z
   session_id: 9c3d3338-dacf-43cb-a86e-e079dd52a59b
+- id: 01a19f0c-0150-79f0-96fa-9846844d0f93
+  author: joe
+  content: |-
+    ADVISOR REWORK BRIEF (18:37), PR #3279 (PR-A) round 1. Fix all four in this PR, then a strict delta review.
+    1. MAJOR (no loosening): an open refusal on PR-N.jsonl whose label resolves to no member (unknown, foreign or ambiguous) must BLOCK, as today (project.rs:160-165). It is never dropped into foreign_labels. Replace the test that locks the loosening in with one asserting Refused.
+    2. Resolver: a label literally claimed by A but mapped (retired or node) to B is Ambiguous, an Err, per sketch section 2/8. Replace a_literal_claim_outranks_a_retired_mapping accordingly.
+    3. --compare fidelity: today_answer must model today's gate exactly: apply carry_over_for_refusal (approval.rs:113/371), and rank an open refusal above a stale approval as ship does. Add a fixture per case.
+    4. The PR body's expected-diff list adds the dropped legacy .aida/merge-holds marker branch and the legacy review-verdicts/* files (hold and verdict column diffs).
+    Gate: LIGHT, cargo test -p aida-cli-lib gate:: plus make check-ci-fast, outside the sandbox with RUSTC_WRAPPER=. Push to the PR branch.
+  created_at: 2026-11-03T01:35:26.544020299Z
+  modified_at: 2026-11-03T01:35:26.544020299Z
+  session_id: ee0bf351-6b17-486f-a38e-cfbb1343c426
 history:
 - id: 01a19ec9-2f7e-7e41-b3a1-1cb5a299a222
   author: joe
