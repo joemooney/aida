@@ -6511,11 +6511,12 @@ pub(crate) fn stamp_lease_active_pid_at(
     // BUG-1918: the spawned worker — not the launcher that claimed — works
     // this lease; record its process as one of the lease's authors so the
     // ledger outlives the lease.
-    // trace:BUG-1918 | ai:claude
+    // A pid read inside a sandbox's pid namespace is qualified with it.
+    // trace:BUG-1918 trace:BUG-2419 | ai:claude
     crate::gate::review_authority::record_lease_identity(
         project_root,
         lease_id,
-        &[crate::gate::review_authority::process_token(
+        &[crate::gate::review_authority::author_process_token(
             "proc",
             pid,
             start_time.as_deref(),
