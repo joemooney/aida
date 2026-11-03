@@ -93,3 +93,67 @@ fn an_open_refusal_outranks_an_approval_at_head() {
 fn no_candidate_is_absent() {
     assert_eq!(today_verdict(&[], HEAD, no_carry), "absent");
 }
+
+// Round-2 residue (A2 instrument): an implementer-seat approval is today's
+// authority refusal, its own category, not `stale`; draft-only compares as
+// a set, not by emptiness.
+// trace:STORY-2324 | ai:claude
+
+#[test]
+fn an_implementer_seat_approval_is_unauthorized_not_stale() {
+    let mut r = JsonObj::new();
+    r.insert("verdict".into(), "approved".into());
+    r.insert("reviewed_sha".into(), HEAD.into());
+    r.insert("recorded_at".into(), "2026-11-02T10:00:00+00:00".into());
+    r.insert("recorded_by".into(), "claude implementer seat".into());
+    let approval = rv::parse_ledger_record(&r).expect("fixture parses");
+    assert_eq!(today_verdict(&[approval], HEAD, no_carry), "unauthorized");
+}
+
+fn state_with_draft_only(draft_only: &[&str]) -> GateState {
+    GateState {
+        head: HEAD.into(),
+        members: Vec::new(),
+        change_verdict: Verdict::Absent,
+        verdict: Verdict::Absent,
+        hold: Hold::None,
+        mode: Mode::Drain,
+        draft_only: draft_only.iter().map(|s| s.to_string()).collect(),
+        foreign_labels: Vec::new(),
+        foreign_verdict: Verdict::Absent,
+        decision: Decision::Refused {
+            refusals: Vec::new(),
+        },
+    }
+}
+
+fn today_with_draft_only(draft_only: &[&str]) -> Today {
+    Today {
+        verdict: "absent".into(),
+        hold_open: false,
+        supervised: Vec::new(),
+        draft_only: draft_only.iter().map(|s| s.to_string()).collect(),
+    }
+}
+
+fn draft_only_differs(today: &[&str], canonical: &[&str]) -> bool {
+    compare(
+        &today_with_draft_only(today),
+        &state_with_draft_only(canonical),
+    )
+    .iter()
+    .find(|c| c.column == "draft-only")
+    .expect("draft-only column")
+    .differs
+}
+
+#[test]
+fn draft_only_compares_the_member_set_not_its_emptiness() {
+    assert!(draft_only_differs(&["STORY-1"], &["STORY-2"]));
+    assert!(draft_only_differs(&["STORY-1"], &["STORY-1", "STORY-2"]));
+    assert!(!draft_only_differs(
+        &["story-1", "STORY-2"],
+        &["STORY-2", "STORY-1"]
+    ));
+    assert!(!draft_only_differs(&[], &[]));
+}

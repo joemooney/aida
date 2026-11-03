@@ -61,6 +61,17 @@ fn join_pairs(pairs: &[(String, String)]) -> String {
         .join(", ")
 }
 
+/// Whether two requirement-ID lists name the same set (order and ID case
+/// ignored), so a draft-only member swapped for another is a diff.
+fn same_ids(a: &[String], b: &[String]) -> bool {
+    let set = |ids: &[String]| {
+        ids.iter()
+            .map(|id| id.trim().to_ascii_uppercase())
+            .collect::<std::collections::BTreeSet<_>>()
+    };
+    set(a) == set(b)
+}
+
 fn join(ids: &[String]) -> String {
     if ids.is_empty() {
         "none".into()
@@ -114,7 +125,7 @@ pub(crate) fn compare(today: &Today, state: &GateState) -> Vec<Column> {
             "draft-only",
             join(&today.draft_only),
             join(&state.draft_only),
-            today.draft_only.is_empty() != state.draft_only.is_empty(),
+            !same_ids(&today.draft_only, &state.draft_only),
         ),
     ]
 }
@@ -147,6 +158,11 @@ pub(crate) fn today_verdict(
         return "changes-requested";
     }
     match ship::approval_head_refusal(candidates, Some(head)) {
+        // An implementer-seat approval is refused by today's authority
+        // check, not by its head: its own category, never `stale`. The
+        // canonical state leaves authority to the later stage, so this
+        // column shows as an expected diff.
+        Some(ship::ApprovalHeadRefusal::Unauthorized { .. }) => "unauthorized",
         Some(refusal) => match carry(&refusal) {
             Some(true) => "approved",
             Some(false) | None => "stale",
