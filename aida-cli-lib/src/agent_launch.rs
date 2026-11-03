@@ -2009,6 +2009,15 @@ pub(crate) fn rescope_contained_settings(
     config: &mut AgentLaunchConfig,
     tree: &std::path::Path,
 ) -> Result<()> {
+    // TASK-2712: a native Codex launch's `--add-dir` write set follows the
+    // lane's tree the same way.
+    // trace:TASK-2712 | ai:claude
+    if config.agent_type == "codex" {
+        return crate::codex_native_sandbox::rescope_codex_native_flags(
+            &mut config.default_args,
+            tree,
+        );
+    }
     if config.agent_type != "claude" || !is_contained_launch(config) {
         return Ok(());
     }
@@ -2042,12 +2051,11 @@ pub(crate) fn tool_contained_flags(agent_type: &str) -> Result<Vec<String>> {
             flags
         }
         // trace:STORY-1124 | ai:codex
-        "codex" => vec![
-            "--sandbox".to_string(),
-            "workspace-write".to_string(),
-            "--ask-for-approval".to_string(),
-            "never".to_string(),
-        ],
+        // TASK-2712: the posture plus the shared write set (`--add-dir`),
+        // resolved from this process's tree; `rescope_contained_settings`
+        // re-derives it once the lane's tree is known.
+        // trace:TASK-2712 | ai:claude
+        "codex" => crate::codex_native_sandbox::codex_native_sandbox_flags()?,
         _ => Vec::new(),
     })
 }
@@ -3121,7 +3129,7 @@ pub(crate) fn agent_new_with_config_wake(
         name,
         cwd,
         // trace:BUG-2169 | ai:claude
-        is_contained_launch(&config),
+        launch_wants_seat_clone(&config),
     )?;
     // trace:BUG-2169 | ai:claude
     rescope_contained_settings(&mut config, &plan.launch_cwd)?;
@@ -3441,7 +3449,7 @@ pub(crate) fn agent_new_bg_dispatch(
         name,
         cwd,
         // trace:BUG-2169 | ai:claude
-        is_contained_launch(&config),
+        launch_wants_seat_clone(&config),
     )?;
     // trace:BUG-2169 | ai:claude
     rescope_contained_settings(&mut config, &plan.launch_cwd)?;
@@ -6406,6 +6414,16 @@ pub(crate) fn refuse_bg_under_os_wrap(
 
 // trace:BUG-2006 | ai:antigravity
 // trace:BUG-2124 | ai:antigravity
+/// TASK-2712: whether this launch's lane is a private seat clone: a contained
+/// launch (BUG-2169), or a native Codex launch, which can commit only in a
+/// clone the host recorded (Codex keeps every other `.git` read-only).
+// trace:TASK-2712 | ai:claude
+pub(crate) fn launch_wants_seat_clone(config: &AgentLaunchConfig) -> bool {
+    is_contained_launch(config)
+        || (config.agent_type == "codex"
+            && crate::codex_native_sandbox::carries_native_posture(&config.default_args))
+}
+
 pub(crate) fn is_contained_launch(config: &AgentLaunchConfig) -> bool {
     let vendor = match session::HeadlessVendor::parse(config.agent_type) {
         Some(v) => v,

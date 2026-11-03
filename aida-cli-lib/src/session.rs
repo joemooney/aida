@@ -2437,8 +2437,14 @@ pub(crate) fn codex_read_only_args(args: Vec<String>) -> Vec<String> {
         if arg == "--dangerously-bypass-approvals-and-sandbox" || arg.starts_with("--sandbox=") {
             continue;
         }
-        if arg == "--sandbox" || arg == "-s" {
+        // TASK-2712: a plan lane writes nothing, so the native write set's
+        // `--add-dir` grants go with the workspace-write posture.
+        // trace:TASK-2712 | ai:claude
+        if arg == "--sandbox" || arg == "-s" || arg == "--add-dir" {
             iter.next();
+            continue;
+        }
+        if arg.starts_with("--add-dir=") {
             continue;
         }
         out.push(arg);
@@ -2667,7 +2673,10 @@ pub fn exec_codex_session(
     let posture = containment_posture(HeadlessVendor::Codex, requested)?;
     let mut cmd = if posture == ContainmentPosture::Native {
         let mut cmd = std::process::Command::new("codex");
-        let mut args = crate::tool_contained_flags("codex")?;
+        // TASK-2712: the write set of the lane's own tree.
+        // trace:TASK-2712 | ai:claude
+        let mut args =
+            crate::codex_native_sandbox::codex_native_sandbox_flags_in(&headless_worktree_root())?;
         args.extend(codex_session_args(initial_prompt, false, model));
         // trace:BUG-2394 | ai:claude — a plan lane narrows the native sandbox.
         if read_only {
@@ -3653,7 +3662,12 @@ pub(crate) fn headless_vendor_args_contained_in(
             containment_posture_in(dir, vendor.as_str(), true)?;
             let mut args = codex_headless_args_with_model_and_effort(prompt, model, effort);
             args.retain(|arg| arg != "--dangerously-bypass-approvals-and-sandbox");
-            args.splice(0..0, crate::tool_contained_flags("codex")?);
+            // TASK-2712: the write set of the child's own tree.
+            // trace:TASK-2712 | ai:claude
+            args.splice(
+                0..0,
+                crate::codex_native_sandbox::codex_native_sandbox_flags_in(dir)?,
+            );
             Ok(args)
         }
         _ => headless_vendor_args(vendor, prompt, session_id, false, model, effort),
@@ -4330,25 +4344,15 @@ pub(crate) fn aida_mcp_server_config_json() -> String {
     .to_string()
 }
 
-/// The contained launch settings for `write_roots`. Errors (the launch is
-/// refused) when the main git directory's deny cannot be expressed exactly as
-/// a sandbox and tool rule (BUG-1982): Claude Code's own sandbox would leave
-/// it writable to a linked-worktree session, so a launch without that deny
-/// fails open.
-// trace:BUG-1982 | ai:claude
-pub(crate) fn claude_contained_settings_json(write_roots: &[PathBuf]) -> Result<String> {
-    // Egress allowlist is strictly opt-in via `[contained] allowed_hosts`. When
-    // the project root or config can't be resolved we fall back to an empty
-    // allowlist — i.e. the pre-STORY-605 behavior. trace:STORY-605 | ai:claude
-    let root = crate::find_project_root().ok();
-    let allowed_hosts = root
-        .as_ref()
-        .map(|r| contained_allowed_hosts(r))
-        .unwrap_or_default();
-    let managed_only = root
-        .as_ref()
-        .map(|r| contained_managed_domains_only(r))
-        .unwrap_or(false);
+/// The paths a contained lane on `write_roots` writes beyond the roots
+/// themselves, and the paths it must never write. Claude renders them into its
+/// `--settings`; native Codex passes the grants as `--add-dir`
+/// ([`crate::codex_native_sandbox`]), so both vendors get ONE write set.
+/// Errors refuse the launch: the main git directory's deny cannot be
+/// expressed exactly (BUG-1982), or the tree's `.git` points somewhere the
+/// host does not vouch for (BUG-2016).
+// trace:TASK-2712 | ai:claude
+pub(crate) fn contained_write_set(write_roots: &[PathBuf]) -> Result<ContainedWriteSet> {
     // trace:BUG-1928 | ai:claude
     // BUG-1929: the main checkout's store and cache, so the session's `aida`
     // writes (claim, comment, queue done) land. Priming first makes the
@@ -4448,6 +4452,52 @@ pub(crate) fn claude_contained_settings_json(write_roots: &[PathBuf]) -> Result<
             }
         }
     }
+    Ok(ContainedWriteSet {
+        grant_paths: store_paths,
+        deny_paths: extra_deny,
+        clone,
+    })
+}
+
+/// [`contained_write_set`]'s result.
+// trace:TASK-2712 | ai:claude
+#[derive(Debug, Clone, Default)]
+pub(crate) struct ContainedWriteSet {
+    /// Store, cache, mailbox, deputy inbox, and the build slots or the seat
+    /// clone's own cargo target.
+    pub(crate) grant_paths: Vec<PathBuf>,
+    /// Every spelling of the main git directory and, for a seat clone, main's
+    /// `.aida/sessions`.
+    pub(crate) deny_paths: Vec<PathBuf>,
+    /// The host-recorded seat clone the first write root is, if any.
+    pub(crate) clone: Option<crate::seat_clone::HostRecordedClone>,
+}
+
+/// The contained launch settings for `write_roots`. Errors (the launch is
+/// refused) when the main git directory's deny cannot be expressed exactly as
+/// a sandbox and tool rule (BUG-1982): Claude Code's own sandbox would leave
+/// it writable to a linked-worktree session, so a launch without that deny
+/// fails open.
+// trace:BUG-1982 | ai:claude
+pub(crate) fn claude_contained_settings_json(write_roots: &[PathBuf]) -> Result<String> {
+    // Egress allowlist is strictly opt-in via `[contained] allowed_hosts`. When
+    // the project root or config can't be resolved we fall back to an empty
+    // allowlist — i.e. the pre-STORY-605 behavior. trace:STORY-605 | ai:claude
+    let root = crate::find_project_root().ok();
+    let allowed_hosts = root
+        .as_ref()
+        .map(|r| contained_allowed_hosts(r))
+        .unwrap_or_default();
+    let managed_only = root
+        .as_ref()
+        .map(|r| contained_managed_domains_only(r))
+        .unwrap_or(false);
+    // trace:TASK-2712 | ai:claude
+    let ContainedWriteSet {
+        grant_paths: store_paths,
+        deny_paths: extra_deny,
+        clone,
+    } = contained_write_set(write_roots)?;
     let json = contained_settings_json_with_boundary(
         &allowed_hosts,
         managed_only,

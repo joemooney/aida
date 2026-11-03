@@ -648,8 +648,14 @@ pub(crate) fn agent_new_codex_bg(mut req: CodexBgRequest) -> Result<()> {
         // This invocation's own lease write is not refused by its own,
         // already admitted, attempt.
         let _own = receipt::OwnAttemptScope::enter(&attempt);
-        prepare_agent_launch_attempt(&project_root, role, spec, "codex", name, cwd_ref, false)?
+        // TASK-2712: a native Codex lane commits only in a seat clone.
+        // trace:TASK-2712 | ai:claude
+        prepare_agent_launch_attempt(&project_root, role, spec, "codex", name, cwd_ref, true)?
     };
+    // TASK-2712: the shared write set, scoped to the lane's own tree.
+    // trace:TASK-2712 | ai:claude
+    crate::agent_launch::rescope_contained_settings(&mut config, &plan.launch_cwd)?;
+    refuse_posture_overrides(&config.default_args)?;
     let mut setup_receipt = setup_receipt;
     if let Some(setup) = setup_receipt.as_mut() {
         let (dir, root, attempt, me) = (

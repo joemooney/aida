@@ -1300,13 +1300,21 @@ fn bug_2131_contained_launch_refuses_on_old_git() {
 fn tool_contained_flags_for_codex_are_sandboxed_and_prompt_free() {
     let flags = tool_contained_flags("codex").unwrap();
     assert_eq!(
-        flags,
-        vec![
+        &flags[..4],
+        &[
             "--sandbox",
             "workspace-write",
             "--ask-for-approval",
             "never"
         ]
+    );
+    // TASK-2712: anything after the posture is the shared write set.
+    // trace:TASK-2712 | ai:claude
+    assert!(
+        flags[4..]
+            .chunks(2)
+            .all(|pair| pair[0] == "--add-dir" && pair.len() == 2),
+        "{flags:?}"
     );
     assert!(!flags
         .iter()
