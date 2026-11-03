@@ -260,6 +260,8 @@ Commands:
   pr            Pull-request side-effects. Today: `auto-queue-review` files the reviewer story right
                 after a change opens, so the trigger lives where context is freshest. `aida session
                 end` keeps the same logic as an idempotent backup for changes opened without it
+  own           Ownership records: one per piece of work (a spec, a pull request, a review, a merge
+                train), naming who holds it and the evidence that the holder is still running
   zen           One-shot AUTONOMOUS implement + ship from a spec OR a one-line thought. Pass an
                 approved spec id to drive it; pass free text to draft a spec from the thought, file
                 it, and drive that — thought to (gated) merged in one line. Auto-queues the spec,
@@ -423,6 +425,7 @@ Commands:
   skill         Stock and local skill tooling
   alias         Discover built-in shortcuts and manage user-defined aliases
   deputy        Run jobs other sessions submit, under the grant held by your terminal
+  lane          Run cargo builds and tests through the launcher of a headless lane
   adoption      Adopt AIDA without product-branch files: shared settings and guidance live in
                 `adoption/` on the aida-store branch and are projected into this worktree's
                 git-ignored `.aida/`
@@ -6986,8 +6989,9 @@ Commands:
           independent approval and green CI. Start and stop require a human at an interactive
           terminal; a same-uid process that forges files in the AIDA home is outside the threat
           model (the same as session grants)
-  renew   Extend the active mandate in place, keeping its scope, flags and reason, so nothing has to
-          be retyped. Grants that name the mandate stay valid. Human at an interactive terminal only
+  renew   Extend the active mandate in place, or revive the latest expired one with a fresh ID.
+          Keeps scope, flags and reason. Stopped mandates stay stopped. Human at an interactive
+          terminal only
   stop    End the active mandate now. Human at an interactive terminal only
   status  Show the current mandate, if any
   help    Print this message or the help of the given subcommand(s)
@@ -7061,8 +7065,8 @@ Options:
   -h, --help
           Print help (see a summary with '-h')
 ===== aida mandate renew
-Extend the active mandate in place, keeping its scope, flags and reason, so nothing has to be
-retyped. Grants that name the mandate stay valid. Human at an interactive terminal only
+Extend the active mandate in place, or revive the latest expired one with a fresh ID. Keeps scope,
+flags and reason. Stopped mandates stay stopped. Human at an interactive terminal only
 
 Usage: aida mandate renew [OPTIONS]
 
@@ -9066,6 +9070,9 @@ Commands:
                            SessionStart hook, which appends the lines to $CLAUDE_ENV_FILE. Exits
                            non-zero, printing nothing, when the lease cannot be turned into safe
                            lines
+  codex-bg-supervise       The detached Codex launch supervisor. Started only by `aida agent new
+                           codex --bg` with its private control channel
+  codex-bg-barrier         The detached Codex exec barrier (becomes the worker)
   help                     Print this message or the help of the given subcommand(s)
 
 Options:
@@ -9223,6 +9230,54 @@ Options:
       --cwd <PATH>
           The session directory to resolve the lane for (default: cwd)
 
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida internal codex-bg-supervise
+The detached Codex launch supervisor. Started only by `aida agent new codex --bg` with its private
+control channel
+
+Usage: aida internal codex-bg-supervise [OPTIONS] --attempt <ATTEMPT>
+
+Options:
+      --attempt <ATTEMPT>
+          
+
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida internal codex-bg-barrier
+The detached Codex exec barrier (becomes the worker)
+
+Usage: aida internal codex-bg-barrier [OPTIONS]
+
+Options:
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
           compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
@@ -15750,6 +15805,104 @@ Options:
 
   -h, --help
           Print help (see a summary with '-h')
+===== aida own
+Ownership records: one per piece of work (a spec, a pull request, a review, a merge train), naming
+who holds it and the evidence that the holder is still running
+
+Usage: aida own [OPTIONS] <COMMAND>
+
+Commands:
+  show     Show the ownership records: who holds each piece of work, the phase it is in, and whether
+           its holder is still running. Read-only
+  migrate  One-time rewrite of the existing session, review and train records into ownership
+           records. Only adds records; never changes, archives or deletes an existing record,
+           worktree or branch
+  help     Print this message or the help of the given subcommand(s)
+
+Options:
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida own show
+Show the ownership records: who holds each piece of work, the phase it is in, and whether its holder
+is still running. Read-only
+
+Usage: aida own show [OPTIONS] [KEY]
+
+Arguments:
+  [KEY]
+          Only records whose key contains this text (for example `PR-12`)
+
+Options:
+      --compare
+          Also compare every session lease with its record: today's liveness reading beside the
+          record's, and count where they differ
+
+      --json
+          Emit JSON
+
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida own migrate
+One-time rewrite of the existing session, review and train records into ownership records. Only adds
+records; never changes, archives or deletes an existing record, worktree or branch
+
+Usage: aida own migrate [OPTIONS]
+
+Options:
+      --dry-run
+          Plan and report; write nothing
+
+      --execute
+          Write the records. Needs an interactive terminal in the host shell, outside any sandbox,
+          with no drain running
+
+      --json
+          Emit JSON
+
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+  -h, --help
+          Print help (see a summary with '-h')
 ===== aida zen
 One-shot AUTONOMOUS implement + ship from a spec OR a one-line thought. Pass an approved spec id to
 drive it; pass free text to draft a spec from the thought, file it, and drive that — thought to
@@ -16669,6 +16822,11 @@ Commands:
   resume           Clear an agent's paused state back to available
   describe         Edit an active agent's human-readable description
   stop             Stop an active agent process by name
+  launch-status    Show a detached launch attempt (`aida agent new codex --bg`): its phase, owner,
+                   worker, lease, log and exit. Read-only
+  recover-launch   Reconcile one detached launch attempt whose processes are gone: end its registry
+                   row, revoke its own child grant and release its scope reservation. Never starts,
+                   resumes or stops anything, and keeps the worktree, branch and lease
   list-roles       List the supported agent roles in the taxonomy
   help             Print this message or the help of the given subcommand(s)
 
@@ -16884,7 +17042,12 @@ Options:
 ===== aida agent new codex
 Spawn Codex CLI with project-correct cwd/env and registry tracking
 
-Usage: aida agent new codex [OPTIONS]
+Usage: aida agent new codex [OPTIONS] [SPEC]
+
+Arguments:
+  [SPEC]
+          SPEC-ID to work, as a positional (only with `--bg`). Must match `--spec` when both are
+          given
 
 Options:
       --role <ROLE>
@@ -17015,6 +17178,14 @@ Options:
           thread id, or, before the thread is known, was written after the launch under this handle.
           `aida session handoff --write --final`, or an exit without a fresh handoff, ends it for
           real. Default: `[agents.codex] rotate` in agents.toml, else off
+
+      --bg
+          Launch a detached Codex implementer or reviewer for SPEC: a fresh `codex exec` worker
+          under its own lease and child grant, in the trusted native sandbox (`[agents] contained`
+          plus `[contained.vendors] codex = "native"`), supervised by AIDA after this command
+          returns. Prints the attempt id; it reports "accepted" when the worker started, not when
+          the work completed. Inspect with `aida agent launch-status <ATTEMPT>`. Needs a seat grant
+          that delegates the role; never offers an inline grant
 
   -h, --help
           Print help (see a summary with '-h')
@@ -17396,6 +17567,65 @@ Arguments:
           Name of the agent to stop
 
 Options:
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida agent launch-status
+Show a detached launch attempt (`aida agent new codex --bg`): its phase, owner, worker, lease, log
+and exit. Read-only
+
+Usage: aida agent launch-status [OPTIONS] <ATTEMPT-UUID>
+
+Arguments:
+  <ATTEMPT-UUID>
+          The attempt id the launch printed
+
+Options:
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida agent recover-launch
+Reconcile one detached launch attempt whose processes are gone: end its registry row, revoke its own
+child grant and release its scope reservation. Never starts, resumes or stops anything, and keeps
+the worktree, branch and lease
+
+Usage: aida agent recover-launch [OPTIONS] <ATTEMPT-UUID>
+
+Arguments:
+  <ATTEMPT-UUID>
+          The attempt id the launch printed
+
+Options:
+      --retire-unknown
+          The attempt's receipt is unreadable: once nothing runs for it, move the receipt out of
+          admission (kept as evidence) so it no longer holds a scope
+
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
           compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
@@ -29431,6 +29661,131 @@ Options:
 
   -h, --help
           Print help (see a summary with '-h')
+===== aida lane
+Run cargo builds and tests through the launcher of a headless lane
+
+Usage: aida lane [OPTIONS] <COMMAND>
+
+Commands:
+  job   Hand cargo runs to the lane's launcher, outside the tool-call time limit
+  help  Print this message or the help of the given subcommand(s)
+
+Options:
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida lane job
+Hand cargo runs to the lane's launcher, outside the tool-call time limit
+
+Usage: aida lane job [OPTIONS] <COMMAND>
+
+Commands:
+  run   Hand one cargo run to the launcher and wait up to --wait seconds
+  wait  Keep waiting for a job `aida lane job run` started
+  help  Print this message or the help of the given subcommand(s)
+
+Options:
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida lane job run
+Hand one cargo run to the launcher and wait up to --wait seconds
+
+Usage: aida lane job run [OPTIONS] -- <CARGO_ARGV>...
+
+Arguments:
+  <CARGO_ARGV>...
+          The cargo command, after `--`: `cargo test|check|build --profile agent ...`
+
+Options:
+      --wait <WAIT>
+          Seconds to wait before returning, at most 55
+          
+          [default: 50]
+
+      --tail <TAIL>
+          Lines of output to print when the run ends
+          
+          [default: 120]
+
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida lane job wait
+Keep waiting for a job `aida lane job run` started
+
+Usage: aida lane job wait [OPTIONS] <ID>
+
+Arguments:
+  <ID>
+          The job id `aida lane job run` printed
+
+Options:
+      --wait <WAIT>
+          Seconds to wait before returning, at most 55
+          
+          [default: 50]
+
+      --tail <TAIL>
+          Lines of output to print when the run ends
+          
+          [default: 120]
+
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+  -h, --help
+          Print help (see a summary with '-h')
 ===== aida adoption
 Adopt AIDA without product-branch files: shared settings and guidance live in `adoption/` on the
 aida-store branch and are projected into this worktree's git-ignored `.aida/`
@@ -37039,7 +37394,7 @@ Working on aida itself
       "mandate",
       "renew"
     ],
-    "about": "Extend the active mandate in place, keeping its scope, flags and reason, so nothing has to be retyped. Grants that name the mandate stay valid. Human at an interactive terminal only",
+    "about": "Extend the active mandate in place, or revive the latest expired one with a fresh ID. Keeps scope, flags and reason. Stopped mandates stay stopped. Human at an interactive terminal only",
     "flags": [
       {
         "name": "canonical-ids",
@@ -39197,6 +39552,63 @@ Working on aida itself
         "name": "cwd",
         "takes_value": true,
         "help": "The session directory to resolve the lane for (default: cwd)"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      }
+    ],
+    "hidden": true
+  },
+  {
+    "path": [
+      "aida",
+      "internal",
+      "codex-bg-supervise"
+    ],
+    "about": "The detached Codex launch supervisor. Started only by `aida agent new codex --bg` with its private control channel",
+    "flags": [
+      {
+        "name": "attempt",
+        "takes_value": true,
+        "help": ""
+      },
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      }
+    ],
+    "hidden": true
+  },
+  {
+    "path": [
+      "aida",
+      "internal",
+      "codex-bg-barrier"
+    ],
+    "about": "The detached Codex exec barrier (becomes the worker)",
+    "flags": [
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
       },
       {
         "name": "format",
@@ -45703,6 +46115,108 @@ Working on aida itself
   {
     "path": [
       "aida",
+      "own"
+    ],
+    "about": "Ownership records: one per piece of work (a spec, a pull request, a review, a merge train), naming who holds it and the evidence that the holder is still running",
+    "flags": [
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "own",
+      "show"
+    ],
+    "about": "Show the ownership records: who holds each piece of work, the phase it is in, and whether its holder is still running. Read-only",
+    "flags": [
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "compare",
+        "takes_value": false,
+        "help": "Also compare every session lease with its record: today's liveness reading beside the record's, and count where they differ"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "json",
+        "takes_value": false,
+        "help": "Emit JSON"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "own",
+      "migrate"
+    ],
+    "about": "One-time rewrite of the existing session, review and train records into ownership records. Only adds records; never changes, archives or deletes an existing record, worktree or branch",
+    "flags": [
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "dry-run",
+        "takes_value": false,
+        "help": "Plan and report; write nothing"
+      },
+      {
+        "name": "execute",
+        "takes_value": false,
+        "help": "Write the records. Needs an interactive terminal in the host shell, outside any sandbox, with no drain running"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "json",
+        "takes_value": false,
+        "help": "Emit JSON"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
       "zen"
     ],
     "about": "One-shot AUTONOMOUS implement + ship from a spec OR a one-line thought. Pass an approved spec id to drive it; pass free text to draft a spec from the thought, file it, and drive that — thought to (gated) merged in one line. Auto-queues the spec, then drives it through the SAME `--auto-complete` orchestrator `aida burndown` uses (implement → CI → review → merge → pull). FULLY HEADLESS by default — kick one off and walk away; an INDEPENDENT reviewer always runs before the auto-merge. Drives are SERIALIZED per repo: a global drain lock allows one drive at a time, so a second `aida zen` while one is live is refused. To drive several specs at once, use the `aida burndown` fan-out — one orchestrator over worktree-isolated implementer subagents. Use `--supervised` to drive the implementer yourself. The auto-implement counterpart to `aida ship` (which finishes a HUMAN-implemented spec). With no argument, prints help",
@@ -46860,6 +47374,11 @@ Working on aida itself
         "help": "Skip the live-duplicate confirmation prompt while still checking for duplicates"
       },
       {
+        "name": "bg",
+        "takes_value": false,
+        "help": "Launch a detached Codex implementer or reviewer for SPEC: a fresh `codex exec` worker under its own lease and child grant, in the trusted native sandbox (`[agents] contained` plus `[contained.vendors] codex = \"native\"`), supervised by AIDA after this command returns. Prints the attempt id; it reports \"accepted\" when the worker started, not when the work completed. Inspect with `aida agent launch-status <ATTEMPT>`. Needs a seat grant that delegates the role; never offers an inline grant"
+      },
+      {
         "name": "bypass-sandbox",
         "takes_value": false,
         "help": "Pass Codex's unsafe autonomous-mode flag"
@@ -47454,6 +47973,63 @@ Working on aida itself
         "name": "help",
         "takes_value": false,
         "help": "Print help (see more with '--help')"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "agent",
+      "launch-status"
+    ],
+    "about": "Show a detached launch attempt (`aida agent new codex --bg`): its phase, owner, worker, lease, log and exit. Read-only",
+    "flags": [
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "agent",
+      "recover-launch"
+    ],
+    "about": "Reconcile one detached launch attempt whose processes are gone: end its registry row, revoke its own child grant and release its scope reservation. Never starts, resumes or stops anything, and keeps the worktree, branch and lease",
+    "flags": [
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "retire-unknown",
+        "takes_value": false,
+        "help": "The attempt's receipt is unreadable: once nothing runs for it, move the receipt out of admission (kept as evidence) so it no longer holds a scope"
       }
     ],
     "hidden": false
@@ -59584,6 +60160,131 @@ Working on aida itself
         "name": "name",
         "takes_value": true,
         "help": "Which script deputy"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "lane"
+    ],
+    "about": "Run cargo builds and tests through the launcher of a headless lane",
+    "flags": [
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "lane",
+      "job"
+    ],
+    "about": "Hand cargo runs to the lane's launcher, outside the tool-call time limit",
+    "flags": [
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "lane",
+      "job",
+      "run"
+    ],
+    "about": "Hand one cargo run to the launcher and wait up to --wait seconds",
+    "flags": [
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "tail",
+        "takes_value": true,
+        "help": "Lines of output to print when the run ends"
+      },
+      {
+        "name": "wait",
+        "takes_value": true,
+        "help": "Seconds to wait before returning, at most 55"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "lane",
+      "job",
+      "wait"
+    ],
+    "about": "Keep waiting for a job `aida lane job run` started",
+    "flags": [
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "tail",
+        "takes_value": true,
+        "help": "Lines of output to print when the run ends"
+      },
+      {
+        "name": "wait",
+        "takes_value": true,
+        "help": "Seconds to wait before returning, at most 55"
       }
     ],
     "hidden": false

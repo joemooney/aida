@@ -658,11 +658,18 @@ pub(crate) fn requirement_is_deferred(req: &aida_core::Requirement) -> bool {
 #[derive(Debug)]
 pub(crate) struct ReviewLeaseGuard {
     pub(crate) path: std::path::PathBuf,
+    /// The project the lease was written in and its id, so the drop also
+    /// releases whatever ownership record names this review session.
+    // trace:STORY-2325 | ai:claude
+    pub(crate) project_root: std::path::PathBuf,
+    pub(crate) lease_id: String,
 }
 
 impl Drop for ReviewLeaseGuard {
     fn drop(&mut self) {
         let _ = std::fs::remove_file(&self.path);
+        // Dual-write: the review ended. // trace:STORY-2325 | ai:claude
+        crate::ownership::dual::lease_released(&self.project_root, &self.lease_id, "review ended");
     }
 }
 
@@ -856,6 +863,9 @@ pub(crate) fn acquire_review_lease_with_mode(
         creator_pid_start_time: process_probe::process_start_identity(std::process::id()),
         active_pid: None,
         active_pid_start_time: None,
+        // trace:BUG-2419 | ai:claude
+        creator_pid_ns: crate::gate::review_authority::recorded_pid_ns(Some(std::process::id())),
+        active_pid_ns: None,
         cargo_target_dir: None,
         parent_project_root: None,
         pr_head_sha: None,
@@ -875,13 +885,20 @@ pub(crate) fn acquire_review_lease_with_mode(
         driver: None,
         child_grant_id: None,
         vendor_session_id: None,
+        lane_jobs: None,
     };
     std::fs::create_dir_all(leases_dir(project_root))?;
     let path = lease_path(project_root, &id);
     // STORY-1429: atomic, so a reader never sees a half-written lease.
     // trace:STORY-1429 | ai:claude
     aida_core::write_atomic(&path, toml::to_string_pretty(&lease)?)?;
-    Ok(ReviewLeaseGuard { path })
+    // Dual-write: the lease stays authoritative. // trace:STORY-2325 | ai:claude
+    crate::ownership::dual::lease_written(project_root, &lease);
+    Ok(ReviewLeaseGuard {
+        path,
+        project_root: project_root.to_path_buf(),
+        lease_id: id,
+    })
 }
 
 /// BUG-539: a spec already in a terminal/merged state has no live review
@@ -3370,6 +3387,9 @@ pub(crate) fn handle_review_record_at(
         if let Some(pr) = pr {
             // STORY-1697: say what the approval released, or why the hold
             // stays armed. No hold at all is not news. trace:STORY-1697 | ai:claude
+            // Friendly covered-spec labels need the node-alias map, installed
+            // outside gate/. trace:BUG-2422 | ai:claude
+            crate::spec_arg::ensure_alias_map();
             match crate::gate::rework_hold_release::auto_release(&project_root, pr) {
                 Ok(crate::gate::rework_hold_release::Outcome::NoHold) => {}
                 Ok(outcome) => println!("  {}", outcome.line(pr)),

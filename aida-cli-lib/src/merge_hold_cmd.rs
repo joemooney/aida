@@ -326,6 +326,9 @@ pub(crate) fn handle_merge_hold(action: &crate::cli::MergeHoldAction) -> Result<
                     .collect()
             });
             let mut refused = false;
+            // Friendly covered-spec labels resolve through the node-alias map;
+            // install it here, outside gate/. trace:BUG-2422 | ai:claude
+            crate::spec_arg::ensure_alias_map();
             for pr in prs {
                 match crate::gate::rework_hold_release::auto_release(&root, pr) {
                     Ok(outcome) => println!("{}", outcome.line(pr)),

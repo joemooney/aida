@@ -1185,6 +1185,8 @@ fn reviewer_worktree_cleanup_preserves_merge_hold_and_refuses_live_occupant() {
         creator_pid_start_time: my_start.clone(),
         active_pid: Some(my_pid),
         active_pid_start_time: my_start,
+        creator_pid_ns: crate::gate::review_authority::recorded_pid_ns(Some(my_pid)),
+        active_pid_ns: crate::gate::review_authority::recorded_pid_ns(Some(my_pid)),
         cargo_target_dir: None,
         parent_project_root: Some(f.root.clone()),
         pr_head_sha: None,
@@ -1204,6 +1206,7 @@ fn reviewer_worktree_cleanup_preserves_merge_hold_and_refuses_live_occupant() {
         driver: None,
         child_grant_id: None,
         vendor_session_id: None,
+        lane_jobs: None,
     };
     let lease_dir = crate::leases::leases_dir(&f.root);
     std::fs::create_dir_all(&lease_dir).unwrap();

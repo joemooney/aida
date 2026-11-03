@@ -256,6 +256,8 @@ fn session_lease_preserves_child_grant_id_across_updates() {
         creator_pid_start_time: None,
         active_pid: None,
         active_pid_start_time: None,
+        creator_pid_ns: crate::gate::review_authority::recorded_pid_ns(Some(4242)),
+        active_pid_ns: crate::gate::review_authority::origin_pid_ns(),
         cargo_target_dir: None,
         parent_project_root: None,
         pr_head_sha: None,
@@ -276,6 +278,7 @@ fn session_lease_preserves_child_grant_id_across_updates() {
         tree_kind: Default::default(),
         child_grant_id: Some("01948abc-def0-7000-8000-000000000001".into()),
         vendor_session_id: None,
+        lane_jobs: None,
     };
     std::fs::write(&lease_file, toml::to_string_pretty(&lease).unwrap()).unwrap();
 

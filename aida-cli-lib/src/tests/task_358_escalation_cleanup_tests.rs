@@ -27,6 +27,8 @@ fn write_test_lease(
         creator_pid_start_time: None,
         active_pid: None,
         active_pid_start_time: None,
+        creator_pid_ns: crate::gate::review_authority::origin_pid_ns(),
+        active_pid_ns: crate::gate::review_authority::origin_pid_ns(),
         cargo_target_dir: None,
         parent_project_root: None,
         pr_head_sha: None,
@@ -50,6 +52,7 @@ fn write_test_lease(
         driver: None,
         child_grant_id: None,
         vendor_session_id: None,
+        lane_jobs: None,
     };
     let path = sessions.join(format!("{id}.toml"));
     std::fs::write(&path, toml::to_string_pretty(&lease).unwrap()).unwrap();

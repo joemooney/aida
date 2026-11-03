@@ -493,6 +493,13 @@ enum Finalization {
 // trace:BUG-b6b1278890774ef993d2ebc327862470-172.ac022c22 | ai:claude
 const LAUNCH_INVENTORY: &[(&str, usize, Finalization)] = &[
     ("agent_launch.rs", 3, Finalization::PrepareLaunch(2)),
+    // STORY-2254: the detached Codex worker (one grant assignment, one
+    // finalization, after its own grant/headless/identity assignments).
+    (
+        "agent_codex_background.rs",
+        1,
+        Finalization::PrepareLaunch(1),
+    ),
     ("autopilot_intake.rs", 3, Finalization::CoordinatorSpawn),
     ("burndown_run.rs", 4, Finalization::CoordinatorSpawn),
     ("compete_cmd.rs", 1, Finalization::PrepareLaunch(1)),
@@ -1607,6 +1614,8 @@ enum RoleRoute {
 // trace:BUG-2395 | ai:claude
 const ROLE_LAUNCH_SITES: &[(&str, usize, RoleRoute)] = &[
     ("agent_launch.rs", 2, RoleRoute::LaunchInventory),
+    // STORY-2254: the detached Codex worker finalizes via prepare_launch.
+    ("agent_codex_background.rs", 1, RoleRoute::LaunchInventory),
     ("autopilot_intake.rs", 1, RoleRoute::LaunchInventory),
     ("dispatch.rs", 1, RoleRoute::LaunchInventory),
     (

@@ -20,7 +20,7 @@ const HEAD: &str = "1aca4e3e9251aaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 const AUTHOR_SESSION_ID: &str = "cb4777a7-0000-4000-8000-000000000001";
 const OPERATOR: &str = "aida review record (operator)";
 
-fn lease(id: &str, scope: &str, worktree: PathBuf) -> SessionLease {
+pub(super) fn lease(id: &str, scope: &str, worktree: PathBuf) -> SessionLease {
     SessionLease {
         tree_kind: Default::default(),
         id: id.to_string(),
@@ -36,6 +36,8 @@ fn lease(id: &str, scope: &str, worktree: PathBuf) -> SessionLease {
         creator_pid_start_time: Some("t0".into()),
         active_pid: None,
         active_pid_start_time: None,
+        creator_pid_ns: crate::gate::review_authority::recorded_pid_ns(Some(4242)),
+        active_pid_ns: crate::gate::review_authority::origin_pid_ns(),
         cargo_target_dir: None,
         parent_project_root: None,
         pr_head_sha: None,
@@ -52,6 +54,7 @@ fn lease(id: &str, scope: &str, worktree: PathBuf) -> SessionLease {
         driver: None,
         child_grant_id: None,
         vendor_session_id: None,
+        lane_jobs: None,
         interrupted_reason: None,
         ending_retained_at: None,
         ending_retained_reason: None,

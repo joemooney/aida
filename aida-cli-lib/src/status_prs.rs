@@ -3412,6 +3412,8 @@ mod story_1043_unshipped_work_tests {
             creator_pid_start_time: None,
             active_pid: Some(std::process::id()),
             active_pid_start_time: process_probe::process_start_identity(std::process::id()),
+            creator_pid_ns: None,
+            active_pid_ns: crate::gate::review_authority::recorded_pid_ns(Some(std::process::id())),
             cargo_target_dir: None,
             parent_project_root: Some(root.to_path_buf()),
             pr_head_sha: None,
@@ -3431,6 +3433,7 @@ mod story_1043_unshipped_work_tests {
             driver: None,
             child_grant_id: None,
             vendor_session_id: None,
+            lane_jobs: None,
         };
         std::fs::create_dir_all(leases_dir(root)).unwrap();
         std::fs::write(

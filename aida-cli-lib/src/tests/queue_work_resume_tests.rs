@@ -232,6 +232,8 @@ fn update_lease_branch_rewrites_only_the_branch() {
         creator_pid_start_time: None,
         active_pid: None,
         active_pid_start_time: None,
+        creator_pid_ns: crate::gate::review_authority::recorded_pid_ns(Some(4242)),
+        active_pid_ns: crate::gate::review_authority::origin_pid_ns(),
         cargo_target_dir: None,
         parent_project_root: None,
         pr_head_sha: None,
@@ -251,6 +253,7 @@ fn update_lease_branch_rewrites_only_the_branch() {
         driver: None,
         child_grant_id: None,
         vendor_session_id: None,
+        lane_jobs: None,
     };
     std::fs::write(
         sessions.join("019eabcd-1234.toml"),
@@ -312,6 +315,8 @@ fn reconcile_orchestrated_branch_follows_a_pr_branch_swap() {
         creator_pid_start_time: None,
         active_pid: None,
         active_pid_start_time: None,
+        creator_pid_ns: crate::gate::review_authority::origin_pid_ns(),
+        active_pid_ns: crate::gate::review_authority::origin_pid_ns(),
         cargo_target_dir: None,
         parent_project_root: None,
         pr_head_sha: None,
@@ -331,6 +336,7 @@ fn reconcile_orchestrated_branch_follows_a_pr_branch_swap() {
         driver: None,
         child_grant_id: None,
         vendor_session_id: None,
+        lane_jobs: None,
     };
     std::fs::write(
         sessions.join("019eaaaa-bbbb.toml"),

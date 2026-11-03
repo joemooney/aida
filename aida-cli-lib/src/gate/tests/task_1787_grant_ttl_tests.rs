@@ -552,6 +552,8 @@ fn test_session_show_displays_grant_ttl() {
         creator_pid_start_time: None,
         active_pid: None,
         active_pid_start_time: None,
+        creator_pid_ns: crate::gate::review_authority::origin_pid_ns(),
+        active_pid_ns: crate::gate::review_authority::origin_pid_ns(),
         cargo_target_dir: None,
         parent_project_root: None,
         pr_head_sha: None,
@@ -572,6 +574,7 @@ fn test_session_show_displays_grant_ttl() {
         // trace:BUG-2165 | ai:codex
         child_grant_id: None,
         vendor_session_id: None,
+        lane_jobs: None,
     };
     let leases_dir = aida_dir.join("leases");
     fs::create_dir_all(&leases_dir).unwrap();

@@ -61,6 +61,19 @@ pub(crate) struct SessionLease {
     // trace:TASK-1284 | ai:codex
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) active_pid_start_time: Option<String>,
+    /// BUG-2419: pid namespace inode `creator_pid` was read in (the writer's
+    /// own, host included). A pid names a process only within its namespace,
+    /// so authorship compares it only with identities from that namespace.
+    /// `None` (a lease written before BUG-2419) is an unknown origin: its
+    /// pid never matches any recorder.
+    // trace:BUG-2419 | ai:claude
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) creator_pid_ns: Option<String>,
+    /// BUG-2419: pid namespace inode `active_pid` was read in; see
+    /// `creator_pid_ns`.
+    // trace:BUG-2419 | ai:claude
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) active_pid_ns: Option<String>,
     /// Parent project's `target/` dir, captured so the session shell can
     /// share its cargo build cache with the parent worktree (avoids a full
     /// rebuild on first `cargo build` inside the session). `None` when the
@@ -228,6 +241,12 @@ pub(crate) struct SessionLease {
     // trace:BUG-2386 | ai:claude
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) vendor_session_id: Option<String>,
+    /// BUG-2383: the lane job runner serving this lease, stamped by the host
+    /// while it runs. Kept on the typed struct so a lease rewriter
+    /// (`update_lease_branch`, ...) does not drop it.
+    // trace:BUG-2383 | ai:claude
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) lane_jobs: Option<crate::lane_job::RunnerRecord>,
 }
 
 pub(crate) fn leases_dir(project_root: &std::path::Path) -> std::path::PathBuf {
@@ -338,6 +357,9 @@ pub(crate) fn session_harness_worktree_register(
         // liveness as unknown rather than dead. trace:BUG-752 | ai:claude
         active_pid,
         active_pid_start_time: active_pid.and_then(process_probe::process_start_identity),
+        creator_pid_ns: None,
+        // trace:BUG-2419 | ai:claude
+        active_pid_ns: crate::gate::review_authority::recorded_pid_ns(active_pid),
         cargo_target_dir: None,
         parent_project_root: Some(
             project_root
@@ -361,6 +383,7 @@ pub(crate) fn session_harness_worktree_register(
         driver: aida_core::driver_registry::driver_from_env(), // trace:STORY-1653 | ai:claude
         child_grant_id: None,
         vendor_session_id: None,
+        lane_jobs: None,
     };
 
     std::fs::create_dir_all(leases_dir(&project_root))?;
@@ -495,6 +518,16 @@ pub(crate) fn adopt_spec_lease_for_subagent(
             "active_pid".to_string(),
             toml::Value::Integer(i64::from(pid)),
         );
+        // BUG-2419: the pid was read in this process's pid namespace.
+        // trace:BUG-2419 | ai:claude
+        match crate::gate::review_authority::origin_pid_ns() {
+            Some(ns) => {
+                table.insert("active_pid_ns".to_string(), toml::Value::String(ns));
+            }
+            None => {
+                table.remove("active_pid_ns");
+            }
+        }
         match process_probe::process_start_identity(pid) {
             Some(start) => {
                 table.insert(
@@ -3113,6 +3146,12 @@ pub(crate) fn force_cleanup_lease(project_root: &std::path::Path, lease: &Sessio
         // trace:BUG-2139 | ai:claude
         crate::session::revoke_lease_child_grant(&lease_path(project_root, &lease.id));
         let _ = std::fs::remove_file(lease_path(project_root, &lease.id));
+        // trace:STORY-2325 | ai:claude
+        crate::ownership::dual::lease_released(
+            project_root,
+            &lease.id,
+            "advisory lease cleaned up",
+        );
         let activity = session_activity_path(project_root, &lease.id);
         if activity.exists() {
             let _ = std::fs::remove_file(&activity);
@@ -3325,6 +3364,8 @@ pub(crate) fn force_cleanup_lease(project_root: &std::path::Path, lease: &Sessio
     match std::fs::remove_file(lease_target) {
         Ok(_) | Err(_) => {}
     }
+    // trace:STORY-2325 | ai:claude
+    crate::ownership::dual::lease_released(project_root, &lease.id, "lease cleaned up");
 
     // Companion files — quiet on missing.
     let manifest_target = session_manifest::manifest_path(project_root, &lease.id);
@@ -4638,6 +4679,10 @@ pub(crate) fn remove_session_lease_record_only(
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => true,
         Err(_) => false,
     };
+    if removed {
+        // trace:STORY-2325 | ai:claude
+        crate::ownership::dual::lease_released(project_root, lease_id, "lease record removed");
+    }
     let manifest = session_manifest::manifest_path(project_root, lease_id);
     if manifest.exists() {
         let _ = std::fs::remove_file(manifest);

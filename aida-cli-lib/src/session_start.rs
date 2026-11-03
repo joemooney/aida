@@ -1342,6 +1342,18 @@ impl SessionStartReceipt {
         }
         self.cleanup = None;
     }
+    /// STORY-2254: make this receipt's rollback conditional on a durable
+    /// ownership record. Its destructive Drop runs only while `still_owner`
+    /// confirms this invocation still owns the setup, so a crash or early
+    /// return after ownership moved to a detached supervisor (but before
+    /// [`Self::disarm`]) never deletes the supervisor's worktree, lease or
+    /// claim.
+    // trace:STORY-2254 | ai:claude
+    pub(crate) fn require_owner(&mut self, still_owner: impl Fn() -> bool + 'static) {
+        if let Some(cleanup) = self.cleanup.as_mut() {
+            cleanup.owner_check = Some(Box::new(still_owner));
+        }
+    }
 }
 // trace:BUG-2188 | ai:codex
 pub(crate) struct SessionStartCleanup {
@@ -1359,6 +1371,9 @@ pub(crate) struct SessionStartCleanup {
     // trace:BUG-2188 TASK-2326 | ai:codex
     claim_write: Option<crate::claim::ClaimStatusChange>,
     armed: bool,
+    /// STORY-2254: the ownership boundary checked before destructive action.
+    // trace:STORY-2254 | ai:claude
+    owner_check: Option<Box<dyn Fn() -> bool>>,
 }
 impl SessionStartCleanup {
     fn new(root: &std::path::Path, scope: &str) -> Self {
@@ -1375,6 +1390,7 @@ impl SessionStartCleanup {
             lease_id: None,
             claim_write: None,
             armed: true,
+            owner_check: None,
         }
     }
     fn own_tree(&mut self, path: &std::path::Path, branch: Option<String>) {
@@ -1523,7 +1539,11 @@ impl SessionStartCleanup {
 }
 impl Drop for SessionStartCleanup {
     fn drop(&mut self) {
-        if !self.armed || !self.release_tree() {
+        // trace:STORY-2254 | ai:claude
+        if !self.armed || self.owner_check.as_ref().is_some_and(|still| !still()) {
+            return;
+        }
+        if !self.release_tree() {
             return;
         }
         if let Some(id) = &self.lease_id {
@@ -3067,6 +3087,19 @@ pub(crate) fn session_start_with_receipt(
                     isolated_target.display()
                 )
             })?;
+            // BUG-2383: a clone is not a linked worktree, so the host cargo
+            // wrapper never seeds its target; warm it here from the primary's
+            // with reflinks only (never a shared inode).
+            // trace:BUG-2383 | ai:claude
+            let seeded = crate::seat_target_seed::seed_seat_target(
+                target,
+                &isolated_target,
+                crate::seat_target_seed::LAUNCH_LOCK_WAIT,
+            );
+            eprintln!(
+                "  seat cargo target: {}",
+                crate::seat_target_seed::describe(&seeded)
+            );
         }
         write_session_env_file(&worktree_path, &isolated_target).with_context(|| {
             format!("writing session env shim under {}", worktree_path.display())
@@ -3185,6 +3218,9 @@ pub(crate) fn session_start_with_receipt(
         creator_pid_start_time,
         active_pid,
         active_pid_start_time,
+        // trace:BUG-2419 | ai:claude
+        creator_pid_ns: crate::gate::review_authority::recorded_pid_ns(creator_pid),
+        active_pid_ns: crate::gate::review_authority::recorded_pid_ns(active_pid),
         cargo_target_dir: recorded_target_dir,
         // STORY-58: record the parent project root so `aida session list`
         // run from inside the new worktree can also walk the parent's
@@ -3228,13 +3264,31 @@ pub(crate) fn session_start_with_receipt(
         driver: aida_core::driver_registry::driver_from_env(), // trace:STORY-1653 | ai:claude
         child_grant_id: None,
         vendor_session_id: None,
+        lane_jobs: None,
     };
     let lease_file = lease_path(&project_root, &id);
     // STORY-1429: atomic, so a reader never sees a half-written lease.
     // trace:STORY-1429 | ai:claude
     // trace:BUG-2169 | ai:claude
     crate::seat_clone::failpoint::check_before_lease()?;
-    aida_core::write_atomic(&lease_file, toml::to_string_pretty(&lease)?)?;
+    // STORY-2254: session start --owns, queue work (drain and burndown
+    // launches) and agent new all write their lease here; a scope a detached
+    // launch attempt holds (active, pending or unknown) is refused, checked
+    // inside the admission lock together with the write.
+    // trace:STORY-2254 | ai:claude
+    {
+        let body = toml::to_string_pretty(&lease)?;
+        crate::agent_launch::codex_bg_receipt::with_scope_entry(
+            &project_root,
+            inherited_role
+                .as_deref()
+                .unwrap_or_else(|| crate::agent_launch::agent_new_scope_role(owns)),
+            owns,
+            || aida_core::write_atomic(&lease_file, &body).map_err(Into::into),
+        )?;
+    }
+    // Dual-write: the lease stays authoritative. // trace:STORY-2325 | ai:claude
+    crate::ownership::dual::lease_written(&project_root, &lease);
     if let Some(cleanup) = rollback.as_mut() {
         cleanup.lease_id = Some(id.clone());
     }

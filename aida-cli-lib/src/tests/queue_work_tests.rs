@@ -892,6 +892,8 @@ fn implementer_lease(scope: &str) -> SessionLease {
         creator_pid_start_time: None,
         active_pid: None,
         active_pid_start_time: None,
+        creator_pid_ns: crate::gate::review_authority::origin_pid_ns(),
+        active_pid_ns: crate::gate::review_authority::origin_pid_ns(),
         cargo_target_dir: None,
         parent_project_root: None,
         pr_head_sha: None,
@@ -911,6 +913,7 @@ fn implementer_lease(scope: &str) -> SessionLease {
         driver: None,
         child_grant_id: None,
         vendor_session_id: None,
+        lane_jobs: None,
     }
 }
 
@@ -1761,6 +1764,8 @@ fn lease_for(id: &str, scope: &str, age_secs: i64) -> SessionLease {
         creator_pid_start_time: None,
         active_pid: None,
         active_pid_start_time: None,
+        creator_pid_ns: crate::gate::review_authority::origin_pid_ns(),
+        active_pid_ns: crate::gate::review_authority::origin_pid_ns(),
         cargo_target_dir: None,
         parent_project_root: None,
         pr_head_sha: None,
@@ -1780,6 +1785,7 @@ fn lease_for(id: &str, scope: &str, age_secs: i64) -> SessionLease {
         driver: None,
         child_grant_id: None,
         vendor_session_id: None,
+        lane_jobs: None,
     }
 }
 

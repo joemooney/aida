@@ -18,6 +18,8 @@ fn lease(scope: &str, id: &str) -> SessionLease {
         creator_pid_start_time: None,
         active_pid: None,
         active_pid_start_time: None,
+        creator_pid_ns: crate::gate::review_authority::origin_pid_ns(),
+        active_pid_ns: crate::gate::review_authority::origin_pid_ns(),
         cargo_target_dir: None,
         parent_project_root: None,
         pr_head_sha: None,
@@ -37,6 +39,7 @@ fn lease(scope: &str, id: &str) -> SessionLease {
         driver: None,
         child_grant_id: None,
         vendor_session_id: None,
+        lane_jobs: None,
     }
 }
 
@@ -438,6 +441,8 @@ fn worktree_occupant_finds_only_live_same_worktree_lease() {
             creator_pid_start_time: None,
             active_pid: None,
             active_pid_start_time: None,
+            creator_pid_ns: crate::gate::review_authority::recorded_pid_ns(Some(pid)),
+            active_pid_ns: crate::gate::review_authority::origin_pid_ns(),
             cargo_target_dir: None,
             parent_project_root: None,
             pr_head_sha: None,
@@ -457,6 +462,7 @@ fn worktree_occupant_finds_only_live_same_worktree_lease() {
             driver: None,
             child_grant_id: None,
             vendor_session_id: None,
+            lane_jobs: None,
         }
     }
     let leases = vec![

@@ -410,6 +410,9 @@ pub(crate) trait BuildSteps {
     fn version_sha(&mut self, aida: &Path) -> Option<String>;
     /// Restart MCP servers still running a replaced binary.
     fn restart_mcp(&mut self, layout: &DevLayout) -> Result<()>;
+    /// Restart enabled mail-wake services after replacing the live pair.
+    // trace:BUG-2424 | ai:codex
+    fn restart_mail_wake(&mut self, out: &mut dyn Write) -> Result<()>;
     /// After a promote, re-record an existing mail-retention activation for
     /// the new live build, only when a fresh scan shows every mail writer
     /// running it.
@@ -655,6 +658,7 @@ pub(crate) fn run_dev_build(
                      request, or restart your MCP client"
                 )?;
             }
+            restart_mail_wake_report(steps, out)?;
             // Ruling C: carry the retention activation over to the new build
             // only when a fresh scan admits it; otherwise name the command.
             // trace:BUG-2411 | ai:claude
@@ -871,10 +875,51 @@ pub(crate) fn ensure_sccache_server() -> Result<()> {
     Ok(())
 }
 
+// Stream diagnostics without retaining an entire build log. Keep an overlap so
+// error markers split between reads still count. Cargo emits these on stderr.
+// trace:TASK-2790 | ai:codex
+fn stream_cargo_diagnostics(mut input: impl Read, mut output: impl Write) -> std::io::Result<bool> {
+    let mut chunk = [0_u8; 8192];
+    let mut tail = Vec::new();
+    let mut fetch_error = false;
+    loop {
+        let count = input.read(&mut chunk)?;
+        if count == 0 {
+            return Ok(fetch_error);
+        }
+        // Keep draining even when the caller's output sink has gone away.
+        let _ = output.write_all(&chunk[..count]);
+        let _ = output.flush();
+        tail.extend(chunk[..count].iter().map(u8::to_ascii_lowercase));
+        fetch_error |= [
+            "read-only file system",
+            "failed to download",
+            "failed to update registry",
+        ]
+        .iter()
+        .any(|marker| {
+            tail.windows(marker.len())
+                .any(|part| part == marker.as_bytes())
+        });
+        if tail.len() > 64 {
+            tail.drain(..tail.len() - 64);
+        }
+    }
+}
+
 fn run_checked(cmd: &mut Command, what: &str) -> Result<()> {
-    let status = cmd
-        .status()
+    let mut child = cmd
+        .stderr(Stdio::piped())
+        .spawn()
         .with_context(|| format!("could not run {what}"))?;
+    let stderr = child.stderr.take().expect("piped stderr");
+    let diagnostics =
+        std::thread::spawn(move || stream_cargo_diagnostics(stderr, std::io::stderr()));
+    let status = child.wait();
+    let fetch_error = diagnostics
+        .join()
+        .map_err(|_| anyhow!("diagnostic reader panicked"))??;
+    let status = status.with_context(|| format!("could not wait for {what}"))?;
     if !status.success() {
         let sccache_active = match std::env::var("RUSTC_WRAPPER") {
             Ok(ref w) => {
@@ -893,14 +938,14 @@ fn run_checked(cmd: &mut Command, what: &str) -> Result<()> {
                 );
             }
         }
-        // BUG-2418: inside a contained lane CARGO_HOME is read-only, so a
-        // build that needs a crate not yet downloaded fails there. Say so in
-        // one line instead of leaving cargo's raw read-only-filesystem error.
-        // trace:BUG-2418 | ai:claude
-        if let Some(note) = crate::session::cargo_home_dir()
-            .and_then(|home| crate::session::cargo_home_read_only_note(&home))
-        {
-            bail!("{what} exited with {status}\nCARGO_HOME is read-only here; {note}");
+        // A read-only home alone does not explain ordinary compile/test failures.
+        // trace:TASK-2790 | ai:codex
+        if fetch_error {
+            if let Some(note) = crate::session::cargo_home_dir()
+                .and_then(|home| crate::session::cargo_home_read_only_note(&home))
+            {
+                bail!("{what} exited with {status}\nCARGO_HOME is read-only here; {note}");
+            }
         }
         bail!("{what} exited with {status}");
     }
@@ -1721,6 +1766,10 @@ impl BuildSteps for RealSteps {
         )
     }
 
+    fn restart_mail_wake(&mut self, out: &mut dyn Write) -> Result<()> {
+        crate::mailbox_wake_run::restart_enabled_services(out)
+    }
+
     fn rerecord_retention(&mut self, layout: &DevLayout) -> RetentionRerecord {
         rerecord_retention_real(layout).unwrap_or_else(|e| RetentionRerecord::NotRecorded {
             why: format!("{e:#}"),
@@ -1809,6 +1858,7 @@ pub(crate) fn run_dev_rollback(
              (or their `aida mcp-serve` processes) to pick up the restored build"
         )?;
     }
+    restart_mail_wake_report(steps, out)?;
     Ok(())
 }
 
@@ -1984,6 +2034,14 @@ pub(crate) fn print_live_status() {
             }
         }
     }
+}
+
+// trace:BUG-2424 | ai:codex
+fn restart_mail_wake_report(steps: &mut dyn BuildSteps, out: &mut dyn Write) -> Result<()> {
+    if let Err(error) = steps.restart_mail_wake(out) {
+        writeln!(out, "warning: live binaries were swapped, but mail-wake service discovery failed ({error:#}); inspect `systemctl --user list-unit-files 'aida-mail-wake-*.service'` and restart enabled units")?;
+    }
+    Ok(())
 }
 
 #[cfg(test)]
