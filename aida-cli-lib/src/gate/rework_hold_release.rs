@@ -889,23 +889,24 @@ fn auto_release_with(
         // Display/origin IDs can collide across distinct canonical requirements.
         // Refuse ambiguity at eligibility and at both release-time rechecks.
         // trace:STORY-1687 | ai:codex
+        // Resolve exactly as `aida show` does — canonical, agreed and
+        // node-local friendly label (`STORY-HOME-332`) — keeping the
+        // exactly-one strictness. trace:BUG-2422 | ai:claude
+        crate::spec_arg::ensure_alias_map();
         let specs: Vec<_> = ids
             .iter()
             .map(|id| {
-                let matches: Vec<_> = store.requirements.iter().filter(|r| {
-                    r.spec_id
-                        .as_deref()
-                        .is_some_and(|s| s.eq_ignore_ascii_case(id))
-                        || r.agreed_id
-                            .as_deref()
-                            .is_some_and(|s| s.eq_ignore_ascii_case(id))
-                }).collect();
-                ensure!(
-                    matches.len() == 1,
-                    "covered spec is missing or ambiguous: {id} resolves to {} requirements; exactly one required; human clear required",
-                    matches.len()
-                );
-                Ok(Some(matches[0]))
+                let found = match store.resolve_unambiguous_index(id) {
+                    Ok(Some(i)) => Ok(&store.requirements[i]),
+                    Ok(None) => Err(0),
+                    Err(ambiguous) => Err(ambiguous.candidates.len()),
+                };
+                match found {
+                    Ok(req) => Ok(Some(req)),
+                    Err(count) => bail!(
+                        "covered spec is missing or ambiguous: {id} resolves to {count} requirements; exactly one required; human clear required"
+                    ),
+                }
             })
             .collect::<Result<_>>()?;
         let att = body
