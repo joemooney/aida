@@ -54,9 +54,17 @@ fn a_generation_id_follows_the_fingerprints_and_the_toolchain() {
     std::fs::write(target.join(".rustc_info.json"), "{\"rustc\":\"1.91\"}").unwrap();
     let other_toolchain = generation_id(&target, "agent").unwrap();
     assert_ne!(other_toolchain, first);
-    let later = std::time::SystemTime::now() + Duration::from_secs(120);
-    filetime_set(&target.join("agent/.fingerprint/dep-1"), later);
-    assert_ne!(generation_id(&target, "agent").unwrap(), other_toolchain);
+    // Review r7, F1: the id follows the content, not mtime seconds. A
+    // fingerprint rewritten with new content, and a same-size artifact
+    // rewritten within the same second, each give a new id.
+    std::fs::write(target.join("agent/.fingerprint/dep-1/lib-dep"), "f2\n").unwrap();
+    let new_fingerprint = generation_id(&target, "agent").unwrap();
+    assert_ne!(new_fingerprint, other_toolchain);
+    let rlib = target.join("agent/deps/libdep-1.rlib");
+    let at = std::fs::metadata(&rlib).unwrap().modified().unwrap();
+    std::fs::write(&rlib, "primary rlab\n").unwrap();
+    filetime_set(&rlib, at + Duration::from_nanos(1));
+    assert_ne!(generation_id(&target, "agent").unwrap(), new_fingerprint);
     std::fs::remove_dir_all(target.join("agent/.fingerprint")).unwrap();
     assert!(generation_id(&target, "agent").is_none());
 }
@@ -136,9 +144,9 @@ fn generations_no_live_lease_pins_are_collected() {
             id: id.into(),
             dir: target.join(LANE_BASE).join(id),
         };
-        std::fs::create_dir_all(generation.dir.join("deps")).unwrap();
+        std::fs::create_dir_all(generation.dir.join(PINS)).unwrap();
         for lease in leases {
-            pin(&generation, lease).unwrap();
+            std::fs::write(generation.dir.join(PINS).join(lease), "").unwrap();
         }
         generation
     };
@@ -298,7 +306,9 @@ fn a_racing_gc_never_removes_a_generation_between_snapshot_and_pin() {
     std::fs::remove_dir_all(generation.dir.join("deps")).unwrap();
     assert!(!complete(&generation.dir));
     let rebuilt = snapshot(&target, "agent", "lease-c", Duration::from_secs(5)).unwrap();
-    assert_eq!(rebuilt, generation);
+    // Review r7, F1: under the next slot, the incomplete one left alone.
+    assert_eq!(rebuilt.id, format!("{}-r1", generation.id));
+    assert!(generation.dir.join(".pins/lease-b").is_file());
     assert!(complete(&rebuilt.dir));
     assert!(rebuilt.dir.join("deps/libdep-1.rlib").is_file());
     assert!(rebuilt.dir.join(".pins/lease-c").is_file());
@@ -325,12 +335,74 @@ fn a_generation_missing_an_rlib_is_rebuilt_not_reused() {
     std::fs::remove_file(generation.dir.join("deps/libdep-1.rlib")).unwrap();
     assert!(!complete(&generation.dir));
     let rebuilt = snapshot(&target, "agent", "lease-d", Duration::from_secs(5)).unwrap();
-    assert_eq!(rebuilt, generation);
+    assert_eq!(rebuilt.id, format!("{}-r1", generation.id));
+    assert!(
+        generation.dir.is_dir(),
+        "an incomplete generation is never removed by a snapshot"
+    );
     assert!(complete(&rebuilt.dir));
     assert!(rebuilt.dir.join("deps/libdep-1.rlib").is_file());
     // A manifest that does not parse is not reused either.
     std::fs::write(rebuilt.dir.join(MANIFEST), "not json").unwrap();
     assert!(!complete(&rebuilt.dir));
+}
+
+// Review r7, F1 (data loss): a primary rebuild that rewrites an artifact
+// in place and a fingerprint never replaces a generation a live lane pins.
+// The next lane gets a fresh generation id, the first lane's pin survives,
+// and a collection with only the first lane live keeps its generation.
+// trace:BUG-2383 | ai:claude
+#[test]
+fn a_rebuild_never_replaces_a_generation_a_live_lane_pins() {
+    let tmp = tempfile::tempdir().unwrap();
+    let main = tmp.path();
+    let target = primary(main);
+    let sessions = main.join(".aida/sessions");
+    std::fs::create_dir_all(&sessions).unwrap();
+    std::fs::write(sessions.join("lease-a.toml"), "id = \"lease-a\"\n").unwrap();
+    let wait = Duration::from_secs(5);
+    let a = snapshot(&target, "agent", "lease-a", wait).unwrap();
+    let a_inodes = inodes(&a.dir);
+    // The primary rebuilds: the hardlinked artifact is rewritten in place
+    // (so generation a's copy changes too) and the fingerprint is rewritten,
+    // all within the same second.
+    let agent = target.join("agent");
+    std::fs::write(agent.join("deps/libdep-1.rlib"), "rebuilt rlib\n").unwrap();
+    std::fs::write(agent.join(".fingerprint/dep-1/lib-dep"), "fq\n").unwrap();
+    std::fs::write(sessions.join("lease-b.toml"), "id = \"lease-b\"\n").unwrap();
+    let b = snapshot(&target, "agent", "lease-b", wait).unwrap();
+    assert_ne!(b.id, a.id, "changed content got a fresh generation");
+    assert_ne!(b.dir, a.dir);
+    assert!(
+        a.dir.join(".pins/lease-a").is_file(),
+        "lease-a's pin survives"
+    );
+    assert!(b.dir.join(".pins/lease-b").is_file());
+    assert_eq!(inodes(&a.dir), a_inodes, "generation a was not replaced");
+    assert_eq!(
+        std::fs::read_to_string(b.dir.join(".fingerprint/dep-1/lib-dep")).unwrap(),
+        "fq\n"
+    );
+    // Only lease-a is live: its generation stays, b goes.
+    std::fs::remove_file(sessions.join("lease-b.toml")).unwrap();
+    let removed = gc(&target, main, None, wait);
+    assert_eq!(removed, vec![b.dir.clone()]);
+    assert!(a.dir.is_dir() && a.dir.join(".pins/lease-a").is_file());
+    // Same-id collision: even when a generation under the current id exists
+    // but is incomplete, a snapshot takes a new slot and leaves it alone.
+    std::fs::write(sessions.join("lease-c.toml"), "id = \"lease-c\"\n").unwrap();
+    let c = snapshot(&target, "agent", "lease-c", wait).unwrap();
+    std::fs::remove_file(c.dir.join("deps/libdep-1.rlib")).unwrap();
+    let c_again = snapshot(&target, "agent", "lease-a", wait).unwrap();
+    assert_eq!(c_again.id, format!("{}-r1", c.id));
+    assert!(c.dir.join(".pins/lease-c").is_file());
+    // lease-a moved to the new generation: its old pin is dropped, so a
+    // collection may now remove generation a, never c (lease-c is live).
+    assert!(!a.dir.join(".pins/lease-a").exists());
+    assert!(c_again.dir.join(".pins/lease-a").is_file());
+    let removed = gc(&target, main, Some(&c_again.dir), wait);
+    assert_eq!(removed, vec![a.dir.clone()]);
+    assert!(c.dir.is_dir());
 }
 
 #[test]
@@ -790,6 +862,205 @@ fn bug_2383_bwrap_overlay_first_job_sees_a_prebuilt_dependency_as_fresh() {
         cargo_reports_fresh(&output, "fixture-dep"),
         "the pre-built dependency was not Fresh:\n{output}"
     );
+}
+
+/// The fixture crate a lane job tests for real (review r7, F2): no
+/// dependencies, one passing and one failing unit test.
+const FIXTURE_CRATE_TOML: &str = "[package]\nname = \"bug-2383-lane-fixture\"\n\
+    version = \"0.1.0\"\nedition = \"2021\"\n\n[lib]\npath = \"src/lib.rs\"\n\n\
+    [profile.agent]\ninherits = \"dev\"\n\n[workspace]\n";
+const FIXTURE_CRATE_LIB: &str = "pub fn answer() -> u32 { 42 }\n\n\
+    #[cfg(test)]\nmod tests {\n    \
+    #[test]\n    fn lane_fixture_passes() { assert_eq!(super::answer(), 42); }\n    \
+    #[test]\n    fn lane_fixture_fails() { assert_eq!(super::answer(), 41, \"fixture failure\"); }\n}\n";
+
+// Review r7, F2 / AC1 (acd61bb0) and AC4: a headless lane runs
+// `AIDA_CARGO_TIMEOUT=900 cargo test --profile agent -p <crate> --lib --
+// <filter>` with REAL cargo against a real fixture crate, through the
+// published runner and the real lane-job bubblewrap sandbox, submitted and
+// polled through the `aida lane job run|wait` code path. The passing filter
+// exits 0 with libtest's own `ok` result, the failing one exits 101 with its
+// `FAILED` result, both take a cargo slot through the limiter on the job's
+// PATH, and the tally counts two executed test runs, so the result line
+// carries no `untested=true`. trace:BUG-2383 | ai:claude
+#[test]
+fn bug_2383_bwrap_real_cargo_test_job_reports_pass_and_fail_through_the_cli() {
+    let Some(cargo) = std::env::var_os("CARGO").map(PathBuf::from) else {
+        return skip_live("no CARGO in the test environment");
+    };
+    if !bwrap_runs() {
+        return skip_live("bwrap unavailable");
+    }
+    let base = live_base();
+    let root = base.path();
+    let lease = "lease-real";
+    let seat = root.join("seat");
+    std::fs::create_dir_all(seat.join("src")).unwrap();
+    std::fs::write(seat.join("Cargo.toml"), FIXTURE_CRATE_TOML).unwrap();
+    std::fs::write(seat.join("src/lib.rs"), FIXTURE_CRATE_LIB).unwrap();
+    std::fs::create_dir_all(seat.join(".git")).unwrap();
+    std::fs::create_dir_all(seat.join(".aida")).unwrap();
+    std::fs::write(
+        seat.join(".aida/config.toml"),
+        "[contained]\nos_wrap = true\n",
+    )
+    .unwrap();
+    // The slot limiter: the `cargo` on the job's PATH records the slot it
+    // takes in the sandbox-writable slot directory, then runs real cargo.
+    // SAFETY: getuid has no preconditions and cannot fail.
+    let uid = unsafe { libc::getuid() };
+    let runtime = root.join("run");
+    let slots = runtime.join(format!("cargo-slots-{uid}"));
+    std::fs::create_dir_all(&slots).unwrap();
+    let bin = root.join("bin");
+    std::fs::create_dir_all(&bin).unwrap();
+    let limiter = bin.join("cargo");
+    crate::test_exec::write_executable(
+        &limiter,
+        &format!(
+            "#!/bin/sh\necho \"slot taken: $*\" >> \"$XDG_RUNTIME_DIR/cargo-slots-{uid}/slots.log\" || exit 97\n\
+             exec '{}' \"$@\"\n",
+            cargo.display()
+        ),
+    );
+    let mut host_env = crate::lane_job::scrub_host_env(
+        std::env::vars_os()
+            .filter_map(|(k, v)| Some((k.into_string().ok()?, v.into_string().ok()?))),
+    );
+    let path = format!(
+        "{}:{}",
+        bin.display(),
+        std::env::var("PATH").unwrap_or_default()
+    );
+    host_env
+        .retain(|(k, _)| !matches!(k.as_str(), "PATH" | "XDG_RUNTIME_DIR" | "CARGO_TERM_COLOR"));
+    host_env.push(("PATH".into(), path));
+    host_env.push(("XDG_RUNTIME_DIR".into(), runtime.display().to_string()));
+    host_env.push(("CARGO_TERM_COLOR".into(), "never".into()));
+    let seat_target = root.join("target/worktrees/seat");
+    let lane = crate::lane_job::LaneJobs {
+        inbox: seat.join(crate::lane_job::INBOX_RELATIVE),
+        results: crate::lane_job::results_dir(root, lease),
+        seat: seat.clone(),
+        lease_id: lease.into(),
+        build_env: vec![
+            ("CARGO_TARGET_DIR".into(), seat_target.display().to_string()),
+            ("RUSTC_WRAPPER".into(), String::new()),
+        ],
+        host_env,
+        program: "cargo".into(),
+        sandbox: crate::lane_job::Sandbox::Bwrap,
+    };
+    lane.prepare().unwrap();
+    let runner = crate::lane_job::Runner::start(lane.clone());
+    // `aida lane job run` returns at once (wait 0) with exit 75, then
+    // `aida lane job wait <id>` polls until the job finishes.
+    let through_cli = |filter: &str| -> (i32, String, String) {
+        let mut job = crate::lane_cmd::job_from(
+            [
+                "cargo",
+                "test",
+                "--profile",
+                "agent",
+                "-p",
+                "bug-2383-lane-fixture",
+                "--lib",
+                "--",
+                filter,
+            ]
+            .map(String::from)
+            .to_vec(),
+            |k| (k == "AIDA_CARGO_TIMEOUT").then(|| "900".to_string()),
+        );
+        assert_eq!(crate::lane_job::validate(&job), Ok(()));
+        job.env.retain(|k, _| k == "AIDA_CARGO_TIMEOUT");
+        let mut printed = Vec::new();
+        let mut rc =
+            crate::lane_cmd::submit_and_wait(&lane.inbox, &lane.results, &job, 0, 40, &mut printed)
+                .unwrap();
+        assert_eq!(
+            rc,
+            crate::lane_job::STILL_RUNNING_EXIT,
+            "run returns before the job ends"
+        );
+        let text = String::from_utf8_lossy(&printed).into_owned();
+        let id = text
+            .split_whitespace()
+            .nth(2)
+            .filter(|id| crate::lane_job::valid_id(id))
+            .unwrap_or_else(|| panic!("no job id in {text}"))
+            .to_string();
+        assert!(text.contains("(timeout 900s)"), "{text}");
+        for _ in 0..24 {
+            if rc != crate::lane_job::STILL_RUNNING_EXIT {
+                break;
+            }
+            rc = crate::lane_cmd::wait_in(&lane.inbox, &lane.results, &id, 50, 40, &mut printed)
+                .unwrap();
+        }
+        let printed = String::from_utf8_lossy(&printed).into_owned();
+        let output = std::fs::read_to_string(crate::lane_job::out_path(&lane.results, &id))
+            .unwrap_or_default();
+        eprintln!("---- lane job {filter} (host-witnessed) ----\n{output}---- end ----");
+        (rc, output, printed)
+    };
+    let (pass_rc, pass_out, pass_cli) = through_cli("lane_fixture_passes");
+    let (fail_rc, fail_out, fail_cli) = through_cli("lane_fixture_fails");
+    let tally = runner.stop();
+    assert!(!pass_out.contains("lane job refused"), "{pass_out}");
+    assert_eq!(pass_rc, 0, "{pass_out}");
+    assert!(pass_out.contains("running 1 test"), "{pass_out}");
+    assert!(
+        pass_out.contains("test tests::lane_fixture_passes ... ok"),
+        "{pass_out}"
+    );
+    assert!(
+        pass_out.contains("test result: ok. 1 passed; 0 failed"),
+        "{pass_out}"
+    );
+    assert!(pass_cli.contains("finished: exit 0"), "{pass_cli}");
+    assert_eq!(fail_rc, 101, "{fail_out}");
+    assert!(
+        fail_out.contains("test tests::lane_fixture_fails ... FAILED"),
+        "{fail_out}"
+    );
+    assert!(fail_out.contains("fixture failure"), "{fail_out}");
+    assert!(
+        fail_out.contains("test result: FAILED. 0 passed; 1 failed"),
+        "{fail_out}"
+    );
+    assert!(fail_cli.contains("finished: exit 101"), "{fail_cli}");
+    // Both ran inside the real sandbox, through the limiter on PATH.
+    let ran_with = format!("cargo is {}, run inside bubblewrap", limiter.display());
+    for out in [&pass_out, &fail_out] {
+        assert!(out.contains("lane job: seed: "), "{out}");
+        assert!(out.contains(&ran_with), "{out}");
+    }
+    let slot_log = std::fs::read_to_string(slots.join("slots.log")).unwrap();
+    for filter in ["lane_fixture_passes", "lane_fixture_fails"] {
+        let line =
+            format!("slot taken: test --profile agent -p bug-2383-lane-fixture --lib -- {filter}");
+        assert!(slot_log.contains(&line), "{slot_log}");
+    }
+    let log = std::fs::read_to_string(lane.results.join("jobs.log")).unwrap();
+    assert_eq!(log.matches("(timeout 900s; ").count(), 2, "{log}");
+    assert!(
+        log.contains(" exited rc=0 ") && log.contains(" exited rc=101 "),
+        "{log}"
+    );
+    // The tally: two completed, executed test runs; the result line says
+    // nothing about untested.
+    use std::sync::atomic::Ordering;
+    assert_eq!(tally.completed.load(Ordering::Relaxed), 2);
+    assert_eq!(tally.tested.load(Ordering::Relaxed), 2);
+    assert_eq!(tally.incomplete.load(Ordering::Relaxed), 0);
+    assert!(!tally.untested());
+    let line = crate::standalone_implementer::with_untested(
+        "result: pr=1".into(),
+        &crate::standalone_implementer::Outcome::PrOpened { pr: 1, head: None },
+        tally.untested(),
+    );
+    assert_eq!(line, "result: pr=1");
 }
 
 /// `text` without ANSI CSI escape sequences (`ESC [ ... final-byte`).

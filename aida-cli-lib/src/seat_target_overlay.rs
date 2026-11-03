@@ -76,30 +76,81 @@ pub(crate) struct LaneOverlay {
     pub(crate) dest: PathBuf,
 }
 
-/// A short stable hash of `bytes` (FNV-1a, 64 bit), for generation ids.
-fn fnv(bytes: &[u8]) -> u64 {
-    bytes.iter().fold(0xcbf2_9ce4_8422_2325, |h, b| {
-        (h ^ u64::from(*b)).wrapping_mul(0x0100_0000_01b3)
-    })
+/// FNV-1a (64 bit), fed incrementally, for generation ids.
+struct Fnv(u64);
+
+impl Fnv {
+    fn new() -> Self {
+        Self(0xcbf2_9ce4_8422_2325)
+    }
+    fn feed(&mut self, bytes: &[u8]) {
+        for b in bytes {
+            self.0 = (self.0 ^ u64::from(*b)).wrapping_mul(0x0100_0000_01b3);
+        }
+        // A field separator, so ("ab", "c") and ("a", "bc") differ.
+        self.0 = (self.0 ^ 0xff).wrapping_mul(0x0100_0000_01b3);
+    }
 }
 
-/// The generation id of `<main_target>/<profile>`: the newest fingerprint
-/// mtime and a hash of the toolchain cargo recorded in
-/// `<main_target>/.rustc_info.json`. `None` when the profile has no
-/// fingerprints (nothing to warm from).
+/// A file's modification time in nanoseconds since the epoch: a rebuild
+/// that rewrites a file within the same second still changes it.
+fn mtime_ns(m: &std::fs::Metadata) -> i64 {
+    use std::os::unix::fs::MetadataExt;
+    m.mtime()
+        .saturating_mul(1_000_000_000)
+        .saturating_add(m.mtime_nsec())
+}
+
+/// Fingerprint files at most this large are hashed by content.
+const HASHED_FINGERPRINT_BYTES: u64 = 64 * 1024;
+
+/// The generation id of `<main_target>/<profile>`, derived from what a
+/// snapshot would hold (BUG-2383 review r7, F1): the toolchain cargo
+/// recorded in `<main_target>/.rustc_info.json`, every fingerprint file's
+/// name, size, nanosecond mtime and (small ones) content, and the
+/// [`deps_manifest`] of `deps/`. A rebuild that rewrites a fingerprint or an
+/// artifact, even in place within one second, yields a new id, so it never
+/// lands on a generation a live lane still uses. `None` when the profile
+/// has no fingerprints (nothing to warm from).
+// trace:BUG-2383 | ai:claude
 pub(crate) fn generation_id(main_target: &Path, profile: &str) -> Option<String> {
-    let fingerprints = main_target.join(profile).join(".fingerprint");
-    let newest = std::fs::read_dir(&fingerprints)
+    let src = main_target.join(profile);
+    let mut units: Vec<_> = std::fs::read_dir(src.join(".fingerprint"))
         .ok()?
         .flatten()
-        .filter_map(|e| e.metadata().ok()?.modified().ok())
-        .max()?;
-    let secs = newest
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_secs())
-        .unwrap_or(0);
-    let toolchain = std::fs::read(main_target.join(".rustc_info.json")).unwrap_or_default();
-    Some(format!("{profile}-{secs}-{:08x}", fnv(&toolchain) as u32))
+        .collect();
+    if units.is_empty() {
+        return None;
+    }
+    units.sort_by_key(|e| e.file_name());
+    let mut h = Fnv::new();
+    h.feed(&std::fs::read(main_target.join(".rustc_info.json")).unwrap_or_default());
+    for unit in units {
+        h.feed(unit.file_name().as_encoded_bytes());
+        let mut files: Vec<_> = std::fs::read_dir(unit.path())
+            .into_iter()
+            .flatten()
+            .flatten()
+            .collect();
+        files.sort_by_key(|e| e.file_name());
+        for file in files {
+            let Ok(m) = std::fs::symlink_metadata(file.path()) else {
+                continue;
+            };
+            h.feed(file.file_name().as_encoded_bytes());
+            h.feed(&m.len().to_le_bytes());
+            h.feed(&mtime_ns(&m).to_le_bytes());
+            if m.is_file() && m.len() <= HASHED_FINGERPRINT_BYTES {
+                h.feed(&std::fs::read(file.path()).unwrap_or_default());
+            }
+        }
+    }
+    for (name, len, mtime) in deps_manifest(&src.join("deps")) {
+        h.feed(name.as_bytes());
+        h.feed(&len.to_le_bytes());
+        h.feed(&mtime.to_le_bytes());
+    }
+    Some(format!("{profile}-{:016x}", h.0))
 }
 
 /// Take an exclusive lock on `file` within `wait`.
@@ -149,9 +200,8 @@ fn cp(from: &Path, to: &Path, link: bool) -> Result<(), String> {
     ))
 }
 
-/// The (name, size, mtime seconds) of every file in `deps`, sorted.
+/// The (name, size, mtime nanoseconds) of every file in `deps`, sorted.
 fn deps_manifest(deps: &Path) -> Vec<(String, u64, i64)> {
-    use std::os::unix::fs::MetadataExt;
     let mut out: Vec<(String, u64, i64)> = std::fs::read_dir(deps)
         .into_iter()
         .flatten()
@@ -162,7 +212,7 @@ fn deps_manifest(deps: &Path) -> Vec<(String, u64, i64)> {
                 (
                     e.file_name().to_string_lossy().into_owned(),
                     m.len(),
-                    m.mtime(),
+                    mtime_ns(&m),
                 )
             })
         })
@@ -189,12 +239,53 @@ fn complete(dir: &Path) -> bool {
             .is_some_and(|recorded| recorded == deps_manifest(&dir.join("deps")))
 }
 
+/// How many directories one generation id may take (`<id>`, `<id>-r1`, ...)
+/// before a snapshot gives up: each extra one is an incomplete generation a
+/// live lane still pins.
+const MAX_SLOTS: usize = 16;
+
+/// The directory names generation `id` may live under, in order.
+fn slots<'a>(base: &'a Path, id: &str) -> impl Iterator<Item = (String, PathBuf)> + 'a {
+    let id = id.to_string();
+    (0..MAX_SLOTS).map(move |n| {
+        let name = if n == 0 {
+            id.clone()
+        } else {
+            format!("{id}-r{n}")
+        };
+        let dir = base.join(&name);
+        (name, dir)
+    })
+}
+
+/// A [`complete`] generation for `id` that already exists, if any. An
+/// incomplete one is skipped, never touched.
+fn reusable(base: &Path, id: &str) -> Option<Generation> {
+    for (name, dir) in slots(base, id) {
+        if std::fs::symlink_metadata(&dir).is_err() {
+            return None;
+        }
+        if complete(&dir) {
+            return Some(Generation { id: name, dir });
+        }
+    }
+    None
+}
+
 /// Create (or reuse) the generation snapshot of `<main_target>/<profile>`
 /// under the primary's build lock, and pin it for `lease_id`, all under the
 /// lane-base lock (strict review, P2): a concurrent [`gc`] waits for that
-/// lock, so it always sees the pin. An existing generation is reused only
-/// when it is [`complete`]; otherwise it is rebuilt. `Err` is the reason,
-/// worded for the job output.
+/// lock, so it always sees the pin.
+///
+/// An existing generation is never replaced or removed here (review r7,
+/// F1): its id is derived from its content ([`generation_id`]), so changed
+/// content gets a new id, and an existing generation under the same id that
+/// is not [`complete`] (the primary rewrote one of its hardlinked files, or
+/// a collection stopped half-way) may still be a live lane's lower layer, so
+/// the new snapshot takes the next free `<id>-r<n>` instead. Only [`gc`]
+/// removes a generation, once no live lease pins it. The lease's pins on
+/// other generations are dropped: its lane moves to this one. `Err` is the
+/// reason, worded for the job output.
 // trace:BUG-2383 | ai:claude
 pub(crate) fn snapshot(
     main_target: &Path,
@@ -209,30 +300,40 @@ pub(crate) fn snapshot(
     if !src.is_dir() {
         return Err(format!("{} does not exist", src.display()));
     }
-    let id = generation_id(main_target, profile)
-        .ok_or_else(|| format!("{} has no fingerprints", src.display()))?;
+    let no_fingerprints = || format!("{} has no fingerprints", src.display());
     let base = main_target.join(LANE_BASE);
     std::fs::create_dir_all(&base).map_err(|e| format!("create {}: {e}", base.display()))?;
-    let dir = base.join(&id);
     let base_lock =
         open_lock(&base.join(".lock")).map_err(|e| format!("open the lane-base lock: {e}"))?;
     if !lock_within(&base_lock, lock_wait) {
         return Err("another generation snapshot is still running".into());
     }
-    let generation = Generation { id, dir };
-    if complete(&generation.dir) {
-        pin(&generation, lease_id)?;
+    let id = generation_id(main_target, profile).ok_or_else(no_fingerprints)?;
+    if let Some(generation) = reusable(&base, &id) {
+        pin(&base, &generation, lease_id)?;
         return Ok(generation);
-    }
-    if std::fs::symlink_metadata(&generation.dir).is_ok() {
-        remove_any(&generation.dir)
-            .map_err(|e| format!("remove the incomplete {}: {e}", generation.dir.display()))?;
     }
     let build_lock = open_lock(&src.join(".cargo-lock"))
         .map_err(|e| format!("open the primary's build lock: {e}"))?;
     if !lock_within(&build_lock, lock_wait) {
         return Err("the primary's build is still running".into());
     }
+    // Under the build lock the primary holds still: this id names exactly
+    // what is copied.
+    let id = generation_id(main_target, profile).ok_or_else(no_fingerprints)?;
+    if let Some(generation) = reusable(&base, &id) {
+        drop(build_lock);
+        pin(&base, &generation, lease_id)?;
+        return Ok(generation);
+    }
+    let Some((name, dir)) =
+        slots(&base, &id).find(|(_, dir)| std::fs::symlink_metadata(dir).is_err())
+    else {
+        return Err(format!(
+            "{MAX_SLOTS} incomplete generations of {id} are still pinned"
+        ));
+    };
+    let generation = Generation { id: name, dir };
     let tmp = base.join(format!(".{}.tmp-{}", generation.id, std::process::id()));
     let _ = std::fs::remove_dir_all(&tmp);
     let built = (|| {
@@ -256,12 +357,14 @@ pub(crate) fn snapshot(
         std::fs::create_dir_all(tmp.join(PINS)).map_err(|e| format!("pins: {e}"))
     })();
     drop(build_lock);
+    // `rename` onto a path that appeared meanwhile fails rather than
+    // replacing it; only this process creates slots under the base lock.
     match built.and_then(|()| {
         std::fs::rename(&tmp, &generation.dir)
             .map_err(|e| format!("move the snapshot into place: {e}"))
     }) {
         Ok(()) => {
-            pin(&generation, lease_id)?;
+            pin(&base, &generation, lease_id)?;
             Ok(generation)
         }
         Err(why) => {
@@ -280,12 +383,22 @@ fn remove_any(path: &Path) -> std::io::Result<()> {
     }
 }
 
-/// Pin `generation` for `lease_id`. Called by [`snapshot`] under the
-/// lane-base lock.
-fn pin(generation: &Generation, lease_id: &str) -> Result<(), String> {
+/// Pin `generation` for `lease_id` and drop the lease's pins on every
+/// other generation under `base`: a lane uses one lower layer at a time
+/// ([`prepare_lane`] discards an upper built on another one). Called by
+/// [`snapshot`] under the lane-base lock.
+// trace:BUG-2383 | ai:claude
+fn pin(base: &Path, generation: &Generation, lease_id: &str) -> Result<(), String> {
     let pins = generation.dir.join(PINS);
     std::fs::create_dir_all(&pins).map_err(|e| format!("pins: {e}"))?;
-    std::fs::write(pins.join(lease_id), b"").map_err(|e| format!("pin: {e}"))
+    std::fs::write(pins.join(lease_id), b"").map_err(|e| format!("pin: {e}"))?;
+    for entry in std::fs::read_dir(base).into_iter().flatten().flatten() {
+        let dir = entry.path();
+        if dir != generation.dir && !entry.file_name().to_string_lossy().starts_with('.') {
+            let _ = std::fs::remove_file(dir.join(PINS).join(lease_id));
+        }
+    }
+    Ok(())
 }
 
 /// Under the lane-base lock (waiting at most `lock_wait`, else collecting

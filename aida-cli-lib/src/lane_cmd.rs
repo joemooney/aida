@@ -56,12 +56,34 @@ fn run_job(argv: Vec<String>, wait: u64, tail: usize) -> Result<i32> {
         anyhow::bail!("refused: {why}");
     }
     let (inbox, results) = lane_job::seat_dirs()?;
+    submit_and_wait(
+        &inbox,
+        &results,
+        &job,
+        wait,
+        tail,
+        &mut std::io::stdout().lock(),
+    )
+}
+
+/// `aida lane job run` once the seat's runner directories are known: submit
+/// `job`, say so, and wait for it as [`wait_in`] does. Split out so a test
+/// drives the exact CLI path against a fixture lane.
+// trace:BUG-2383 | ai:claude
+pub(crate) fn submit_and_wait(
+    inbox: &std::path::Path,
+    results: &std::path::Path,
+    job: &JobRequest,
+    wait: u64,
+    tail: usize,
+    out: &mut dyn std::io::Write,
+) -> Result<i32> {
     let id = lane_job::new_id();
-    lane_job::submit(&inbox, &id, &job)?;
+    lane_job::submit(inbox, &id, job)?;
     // The runner knows whether the seat target is seeded; the seat does not.
     // trace:BUG-2383 | ai:claude
     let timeout = if job.env.contains_key("AIDA_CARGO_TIMEOUT") {
-        format!("timeout {}s", lane_job::timeout_for(&job, false).as_secs())
+        format!("timeout {}s", lane_job::timeout_for(job, false).as_secs())
     } else {
         format!(
             "timeout {}s on a seeded target, {}s on a cold one",
@@ -69,11 +91,12 @@ fn run_job(argv: Vec<String>, wait: u64, tail: usize) -> Result<i32> {
             lane_job::MAX_TIMEOUT_SECS
         )
     };
-    println!(
+    writeln!(
+        out,
         "lane job {id} submitted: {} ({timeout})",
         job.argv.join(" ")
-    );
-    finish_wait(&inbox, &results, &id, wait, tail)
+    )?;
+    wait_in(inbox, results, &id, wait, tail, out)
 }
 
 fn wait_job(id: &str, wait: u64, tail: usize) -> Result<i32> {
@@ -81,16 +104,30 @@ fn wait_job(id: &str, wait: u64, tail: usize) -> Result<i32> {
         anyhow::bail!("`{id}` is not a lane job id");
     }
     let (inbox, results) = lane_job::seat_dirs()?;
-    finish_wait(&inbox, &results, id, wait, tail)
+    wait_in(
+        &inbox,
+        &results,
+        id,
+        wait,
+        tail,
+        &mut std::io::stdout().lock(),
+    )
 }
 
-fn finish_wait(
+/// `aida lane job wait <id>` once the seat's runner directories are known:
+/// wait up to `wait` seconds, then print the output tail and return cargo's
+/// exit code, or say how to continue and return
+/// [`lane_job::STILL_RUNNING_EXIT`].
+// trace:BUG-2383 | ai:claude
+pub(crate) fn wait_in(
     inbox: &std::path::Path,
     results: &std::path::Path,
     id: &str,
     wait: u64,
     tail: usize,
+    out: &mut dyn std::io::Write,
 ) -> Result<i32> {
+    let mut progress_err = None;
     let waited = lane_job::wait_for(
         inbox,
         results,
@@ -98,26 +135,34 @@ fn finish_wait(
         Duration::from_secs(wait),
         PROGRESS_EVERY,
         |elapsed, taken| {
-            println!(
+            if let Err(e) = writeln!(
+                out,
                 "lane job {id}: {} ({}s)",
                 if taken { "running" } else { "queued" },
                 elapsed.as_secs()
-            );
+            ) {
+                progress_err.get_or_insert(e);
+            }
         },
     );
-    let out = lane_job::out_path(results, id);
+    if let Some(e) = progress_err {
+        return Err(e.into());
+    }
+    let path = lane_job::out_path(results, id);
     match waited {
         Waited::Done(rc) => {
-            let text = std::fs::read_to_string(&out).unwrap_or_default();
-            println!("{}", lane_job::tail(&text, tail));
-            println!(
+            let text = std::fs::read_to_string(&path).unwrap_or_default();
+            writeln!(out, "{}", lane_job::tail(&text, tail))?;
+            writeln!(
+                out,
                 "lane job {id} finished: exit {rc} (full output: {})",
-                out.display()
-            );
+                path.display()
+            )?;
             Ok(rc)
         }
         Waited::Running { taken } => {
-            println!(
+            writeln!(
+                out,
                 "lane job {id} is still {}; continue with `aida lane job wait {id}` \
                  (output so far: {})",
                 if taken {
@@ -125,8 +170,8 @@ fn finish_wait(
                 } else {
                     "queued (the launcher has not started it yet)"
                 },
-                out.display()
-            );
+                path.display()
+            )?;
             Ok(lane_job::STILL_RUNNING_EXIT)
         }
     }
