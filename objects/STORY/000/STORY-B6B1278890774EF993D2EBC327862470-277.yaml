@@ -20,7 +20,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T04:28:44.095278434Z
-modified_at: 2026-11-03T05:03:31.442622787Z
+modified_at: 2026-11-03T07:21:32.138824493Z
 req_type: Story
 tags:
 - architecture
@@ -313,6 +313,12 @@ comments:
   created_at: 2026-11-02T23:31:31.513414960Z
   modified_at: 2026-11-02T23:31:31.513414960Z
   session_id: ee0bf351-6b17-486f-a38e-cfbb1343c426
+- id: 01a1a048-dcea-72d2-a34a-c593b8811100
+  author: joe
+  content: 'LIVE AC1 EVIDENCE: MET at PR-3273 head 4fe46815da5 (advisor, run 6, 2026-11-03 00:18 MST; log /tmp/aida-ac1f-3273.log, deputy-shell 3 job 20261103T001738-09c327). ''aida agent new codex --role implementer --bg TASK-2881'' was accepted as attempt 37806a90 with its own lease 01a1a0459fee. ''aida ps'' running showed ''01a1a0459fee,TASK-2881,implementer,3756987,live,moving,agent:01a1a045'' at 15s, 60s and 150s. launch-status was accepted-running with supervisor pid 3756978 and worker pid 3756987 live throughout. Runs 4 and 5 were refused by stale probe state (the run-3 lease, then TASK-2881 stuck InProgress), not by the PR. Remaining before merge: an independent review of 4fe4681 (queued on the watcher), green CI at that head, then the operator merge floor (aida merge-hold clear 3273 && aida pr ship 3273).'
+  created_at: 2026-11-03T07:21:32.138824493Z
+  modified_at: 2026-11-03T07:21:32.138824493Z
+  session_id: c58592f4-04ae-498b-9afd-87b0cc2bcde9
 history:
 - id: 01a1955e-16e5-7240-960f-01af4eb41bfe
   author: joe
