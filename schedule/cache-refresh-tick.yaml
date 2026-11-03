@@ -1,5 +1,5 @@
 job: cache-refresh-tick
-last_run: 2026-11-03T05:35:09.946813008Z
+last_run: 2026-11-03T06:00:00.123667963Z
 last_by:
   seat: substrate
   vendor: tick
