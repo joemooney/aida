@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-03T14:12:42.376405847Z
-modified_at: 2026-11-03T23:06:11.165317558Z
+modified_at: 2026-11-03T23:06:12.267952909Z
 req_type: Task
 tags:
 - aida:pr-hold
@@ -39,6 +39,21 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Push+verify logic meets TASK-2793, but the 3 new raw Command::new("git") builders in pr_cmd.rs bypass host_git_command''s seat-clone refusal and fail the TASK-2143 ratchet (CI lib-0 red, Build aggregator red).. No triage reason was given.'
   created_at: 2026-11-03T23:06:11.165316407Z
   modified_at: 2026-11-03T23:06:11.165316407Z
+  session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
+- id: 01a1a3a9-bb31-72f1-8bb8-c1adde9584f2
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (TASK-2793):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 982b6bbfe0cb
+    Recorded: 2026-11-03T22:47:27.526199507+00:00
+    Findings:
+    1. aida-cli-lib/src/pr_cmd.rs:202,214,239 (push_and_verify_held_branch): the rev-parse, push and ls-remote calls use raw std::process::Command::new("git") against the lease worktree (cwd), which can be a seat clone. That bypasses aida_core::git_ops::host_git_command's BUG-2169 refusal/contained-seat path (host git would run seat-written config and hooks such as pre-push). Build all three with aida_core::git_ops::host_git_command(repo), keeping .remote_credentials(...) on push and ls-remote.
+    2. CI red at 982b6bbf: seat_clone::clone_git_ratchet_tests::task_2143_no_new_raw_git_where_a_lease_tree_is_read panics (task_2143_clone_git_ratchet_tests.rs:400) because pr_cmd.rs now has 50 raw git builders vs the allowlisted 47. Fix by switching to host_git_command (count goes back to 47). Do not raise the allowlist. Build (ubuntu-latest) fails only on its 'Require every CI lane' aggregator step, so it clears once lib-0 is green.
+    3. Test gap (minor): no test covers the branch where origin has the ref at a different sha with a clean push exit ((Some(tip), None) arm), nor a rejected non-fast-forward push. Add one for the non-ff case so the 'not held' refusal path is pinned beyond the unreachable-remote case.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-03T23:06:12.145048939Z
+  modified_at: 2026-11-03T23:06:12.145048939Z
   session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
 history:
 - id: 01a1a24d-6697-7512-a824-7ebe52cf584b
