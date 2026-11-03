@@ -8,7 +8,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-02T17:09:05.305497820Z
-modified_at: 2026-11-03T02:22:26.201399350Z
+modified_at: 2026-11-03T02:57:28.190452448Z
 req_type: Task
 tags:
 - from-advisor:general
@@ -19,6 +19,12 @@ comments:
   content: 'ADVISOR TRIAGE (2026-11-02 19:25 MST): approved and bundled with BUG-2418 in one lane. RULING: the generated lane sandbox settings ALLOW the cargo slot dirs ($XDG_RUNTIME_DIR/cargo-slots-<uid> and ~/.local/state/cargo-slots, the same pair as lane_job.rs sandbox_rw_paths) and the sccache socket/dir, read-write, so the LIGHT gate runs inside the sandbox. If sccache is still refused, the gate wrapper detects it once and falls back to RUSTC_WRAPPER= with a one-line note; it never hangs. The slot dir must never be CARGO_HOME (BUG-2418 makes that read-only). The ''stopped lane leaves a process tree'' part is out of scope: STORY-2325 (one liveness record) owns it.'
   created_at: 2026-11-03T02:22:24.899439495Z
   modified_at: 2026-11-03T02:22:24.899439495Z
+  session_id: 125337a4-7dd3-483b-9c56-3665173938ae
+- id: 01a19f57-1a7e-7780-b373-91b15ec18de5
+  author: joe
+  content: 'ADVISOR CORRECTION (2026-11-02 20:00 MST), TASK-2772. My 19:25 ruling granting lanes read-write on the shared sccache dir is WITHDRAWN. A contained lane writing the shared sccache can plant a poisoned artifact that the host and other seats later reuse: the same class as BUG-2418, and exactly what BUG-2169 ruling O2 forbids. Final ruling: NO sandbox grant for sccache anywhere (seat clones or other lanes). Non-seat lanes get ONLY the cargo-slot dir pair. The gate wrapper detects that sccache is unusable (a refused socket or dir) once and falls back to RUSTC_WRAPPER= with a one-line note. Seat clones stay on O2 unchanged. The lane''s reading of O2 is correct; keep it.'
+  created_at: 2026-11-03T02:57:28.190452448Z
+  modified_at: 2026-11-03T02:57:28.190452448Z
   session_id: 125337a4-7dd3-483b-9c56-3665173938ae
 history:
 - id: 01a19d56-7263-7a81-8e07-d3c0a007091a
