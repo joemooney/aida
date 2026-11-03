@@ -6,12 +6,12 @@ description: |-
   Observed 2026-11-03: 'aida mailbox retention activate' refused because pid 3175634, '/home/joe/.local/share/aida/live/aida mailbox wake-run', was running a replaced binary. That process is the systemd user unit aida-mail-wake-<hash>.service; it was started at 23:15 and outlived the promote of 6c587ee595c. The operator could not tell from the dry-run output what the process was or how to restart it.
 
   Acceptance: (1) 'aida dev build' promote (and 'aida dev rollback') restarts every enabled aida-mail-wake-*.service user unit after swapping the live pair, and reports each restart. (2) When the retention dry run lists a mail writer running a replaced binary, it names the owning systemd unit if there is one and prints 'systemctl --user restart <unit>'.
-status: InProgress
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-03T13:49:30.195676116Z
-modified_at: 2026-11-03T19:06:49.558333832Z
+modified_at: 2026-11-03T21:12:28.065752828Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -123,6 +123,20 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1a341-9a9a-7013-be9b-3df8ef982bcc
+  author: aida-auto-bump
+  timestamp: 2026-11-03T21:12:28.058830702Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1a341-9aa1-7682-8e96-01d92a1f6fdc
+  timestamp: 2026-11-03T21:12:28.065748886Z
+  agent: aida
+  commit_sha: 34c0d8e417354cfaa83c676aac28200ebfb525b6
+  summary: 'Round 3 (merge of origin/main): PR delta is identical to the approved b1a0d843 delta except one blank-line shift in the conflicted dev_build_tests.rs. AC1 (promote/rollback restart every enabled aida-mail-wake unit, report each, isolate failures; discovery has no glob and treats a silent empty nonzero listing as zero units) verified by dev_build_tests (successful_build_promotes..., bug_2411 ordering, build_only, rollback_respects..., mail_wake_discovery_failure...) and mailbox_wake_run_tests (restart_enabled..., restart_mail_wake_empty_and_unavailable_manager). AC2 (dry run names the owning unit; restart command only for aida-mail-wake-*, quoted when escaped) verified by mailbox_cmd service_hint_tests. All 8 CI checks green at the head. Cosmetic, non-blocking: the discovery-failure warning at dev_build.rs:2042 still tells the operator to run list-unit-files with the ''aida-mail-wake-*.service'' glob, and the Unverified-only gate at mailbox_cmd.rs:1191 has no test.'
+  review_verdict: approved
 filed_at:
   code_sha: 6c587ee595ce70f5fcc48480cfdddc8246cf158c
   branch: main
@@ -131,3 +145,7 @@ filed_at:
   aida_build_sha: 6c587ee595c
   vendor: claude
   session: f5eddefe-032d-4760-94ba-3a318cf3d1d1
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-03T21:12:28.058824571Z
+  completion_sha: 34c0d8e417354cfaa83c676aac28200ebfb525b6
