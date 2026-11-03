@@ -22,6 +22,7 @@ fn change(id: u64, head: u64) -> forge::Change {
         gitlab: false,
         overlap: Some(false),
         behind: Some(0),
+        head_branch: None,
     }
 }
 fn until(what: &str, done: impl Fn() -> bool) {

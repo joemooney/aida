@@ -540,7 +540,20 @@ A stale base with overlapping changed paths receives a local mailbox request to
 merge the change's base branch, named in the notice; a stale non-overlapping head remains reviewable. The
 recipient is the exact forge author login/username, with no inferred mapping to
 an agent seat. Read that identity's mailbox with `aida mailbox inbox <login>`.
-The watcher never updates a branch.
+
+<!-- trace:BUG-2426 | ai:claude -->
+A notified stale head is not left waiting forever. On a later pass, if no live
+session lease holds the change's branch (its author lane has exited), the
+watcher runs `gh pr update-branch` once for that head, and the merged head is
+reviewed when discovery reports it. This is the only branch write the watcher
+makes. While the author's session is live, or the branch is unknown, the
+watcher leaves the merge to the author. When the forge refuses the update
+(conflicts), or it cannot run (GitLab merge requests), the watcher routes the
+change to the advisor's mailbox once, with a subject such as "PR-N behind
+main with overlap; update-branch conflicts". `aida awaiting` lists every change the
+watcher is parking, with its reason and since when (`review_watch_skipped` in
+`--json`). Changes that are only waiting for a reviewer slot, or that are under
+review or already reviewed, are not listed.
 
 Version-1 atomic state lives under the main worktree's `.aida/review-watch/`.
 Permanent admission and per-change lock files coordinate watcher instances.
@@ -572,7 +585,8 @@ holder's change, head and token. A missing/corrupt/unsafe state file refuses
 reinitialization; inspect the state, dispatcher logs in `review-watch/logs/`,
 and `aida session leases --all` before operator recovery. Do not delete lock
 files or clear ambiguous receipts while a reviewer may still be running.
-Changes that are skipped leave no state, and state for changes no longer open
+Changes skipped only while under review, already reviewed, or waiting for
+capacity leave no state, and state for changes no longer open
 and non-draft is pruned on each complete discovery pass unless an attempt is
 still live. Observed blocking review identities are kept per change in
 `review-watch/history/`, which pruning never removes, so a draft toggle or a

@@ -25,6 +25,7 @@ fn change(behind: u64, overlap: bool) -> forge::Change {
         gitlab: false,
         overlap: Some(overlap),
         behind: Some(behind),
+        head_branch: None,
     }
 }
 
