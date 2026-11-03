@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-02T19:20:59.253007269Z
-modified_at: 2026-11-03T05:09:41.721327332Z
+modified_at: 2026-11-03T05:11:42.142179223Z
 req_type: Story
 tags:
 - architecture
@@ -301,6 +301,24 @@ comments:
   created_at: 2026-11-03T00:47:03.994801119Z
   modified_at: 2026-11-03T00:47:03.994801119Z
   session_id: ee0bf351-6b17-486f-a38e-cfbb1343c426
+- id: 01a19fd1-ff3e-7f73-a4a2-d33e5a07af7c
+  author: joe
+  content: |-
+    FORK (PR-A implementer, claude host lane, 2026-11-02 22:2x MST). I stopped before writing any code. Branch story-2326-work is rebased on origin/main cfee54e5aab and has no changes. The signed text leaves two forks open for PR-A as written:
+
+    F1, Q3 vs the PR-A scope. The signoff says 'Q3: OPERATOR RULING REQUIRED before any resume-path PR.' PR-A's listed paths include three resume paths: contained resume (session.rs:675 build_contained_resume_command), headless resume (:6760 spawn_claude_headless_resume_granted) and :8381 build_claude_resume_exec_command. TASK-1788 is still deferred, with no ruling and no comments.
+      R-i (recommended): take the three resume paths out of PR-A. They stay as exact entries in the ratchet ledger, and a small PR-A2 converts them after the operator rules. PR-A goes ahead now with the other paths: exec, run session, headless forking, reviewer plans, coordinator headless, and agent-new fg/bg.
+      R-ii: the operator rules on Q3 now (the advisor recommends refuse). PR-A then keeps the resume paths and adds the cross-root refusal with a table test.
+      R-iii: convert the resume paths behaviour-preserving, with amendment-9 goldens and no new refusal. I do NOT recommend this, because it reads as the 'resume-path PR' the ruling gates.
+
+    F2, amendment 1 vs Claude's Aida posture. Amendment 1 says 'Under posture Aida, spawn_agent delegates to containment::launch, its supervisor and its receipts.' Every Claude contained path in PR-A is posture Aida (vendor_containment_posture: Claude + aida => Aida). containment::launch does not exist on main: containment/ has only filesystem, supervisor and probe. STORY-2238's own plan moves Claude onto it only in PR3 (TASK-2708 'Claude M1'), and that is after 2238 PR1, which is in flight now. Amendment 1 gates PR-B on 2238 PR1 but says nothing about PR-A's Aida-posture Claude paths.
+      S-i (recommended): in PR-A, spawn_agent's Aida branch keeps today's Claude-native boundary (the generated --settings plus the Claude bwrap), byte-identical under the amendment-9 goldens. It does this through ONE private fn, launch::spawn::aida_boundary(ctx), which 2238 PR3 replaces with containment::launch. PR-A adds aida_posture_spawn_routes_through_single_boundary_fn, which asserts that every Aida-posture spawn reaches that fn. The named test aida_posture_spawn_routes_through_containment_launch lands when that fn delegates in 2238 PR3.
+      S-ii: PR-A waits for 2238 PR1 and builds containment::launch's Claude descriptor itself. That widens PR-A into 2238 PR3 (Claude M1), which has its own STRICT and live gates.
+
+    Please rule on F1 and F2. I will resume PR-A on the reply. No lease, queue or config was changed.
+  created_at: 2026-11-03T05:11:42.142179223Z
+  modified_at: 2026-11-03T05:11:42.142179223Z
+  session_id: 983cbf3c-4800-401e-a431-e37f40e94083
 history:
 - id: 01a19ed2-a170-7d52-94f3-7c4ff46f38c4
   author: joe
