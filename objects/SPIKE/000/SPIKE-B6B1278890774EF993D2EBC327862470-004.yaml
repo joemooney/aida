@@ -27,7 +27,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-31T19:23:12.694681525Z
-modified_at: 2026-11-03T02:43:42.670928842Z
+modified_at: 2026-11-03T02:44:35.622257351Z
 req_type: Spike
 tags:
 - air-gap
@@ -542,6 +542,12 @@ comments:
     ```
   created_at: 2026-11-03T02:43:14.722997587Z
   modified_at: 2026-11-03T02:43:14.722997587Z
+  session_id: 125337a4-7dd3-483b-9c56-3665173938ae
+- id: 01a19f4b-50a6-7f12-b887-c9880bbdbeec
+  author: joe
+  content: 'ADVISOR RULING (2026-11-02 19:50 MST): option 1, bounded hardening first. The direct root-to-inside bundle workflow is the supported model. Recursive offline delegation and pool replenishment are NOT pursued: local fallback covers exhaustion, and recursion would need a separate authority design that no current user needs (single-user repo). Filed: BUG-2420 (final-slot save loss), BUG-2421 (generic pool accepts unaccepted claims), STORY-2331 (two-hub bundle regression test, with the blocks.lock sidecar check folded in). The spike is complete.'
+  created_at: 2026-11-03T02:44:35.622257351Z
+  modified_at: 2026-11-03T02:44:35.622257351Z
   session_id: 125337a4-7dd3-483b-9c56-3665173938ae
 history:
 - id: 01a1939d-5b6e-77e1-a48f-f78d777d0267
