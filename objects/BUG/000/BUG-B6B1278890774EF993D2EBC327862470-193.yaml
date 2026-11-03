@@ -6,13 +6,22 @@ description: |-
   Observed 2026-11-03: 'aida mailbox retention activate' refused because pid 3175634, '/home/joe/.local/share/aida/live/aida mailbox wake-run', was running a replaced binary. That process is the systemd user unit aida-mail-wake-<hash>.service; it was started at 23:15 and outlived the promote of 6c587ee595c. The operator could not tell from the dry-run output what the process was or how to restart it.
 
   Acceptance: (1) 'aida dev build' promote (and 'aida dev rollback') restarts every enabled aida-mail-wake-*.service user unit after swapping the live pair, and reports each restart. (2) When the retention dry run lists a mail writer running a replaced binary, it names the owning systemd unit if there is one and prints 'systemctl --user restart <unit>'.
-status: Approved
+status: InProgress
 priority: Medium
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-03T13:49:30.195676116Z
-modified_at: 2026-11-03T13:49:30.195676116Z
+modified_at: 2026-11-03T13:51:23.939262970Z
 req_type: Bug
+history:
+- id: 01a1a1ad-cb23-70d0-8689-8418a67dbdf6
+  author: aida-session-start
+  timestamp: 2026-11-03T13:51:23.939261006Z
+  session_id: f5eddefe-032d-4760-94ba-3a318cf3d1d1
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 6c587ee595ce70f5fcc48480cfdddc8246cf158c
   branch: main
