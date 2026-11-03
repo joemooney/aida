@@ -17,7 +17,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-03T13:41:47.751489803Z
-modified_at: 2026-11-03T14:01:47.541989813Z
+modified_at: 2026-11-03T14:24:01.373882639Z
 req_type: Story
 comments:
 - id: 01a1a1b7-4f15-71e0-ae14-26ace9d9567d
@@ -25,6 +25,11 @@ comments:
   content: 'Implementation is in the assigned worktree: expired renewal re-mints a fresh ID preserving settings; active renew remains in place; expiry banner/mail/due-job coverage is under validation. Environment blocker: `git add` fails creating `.git/index.lock` with `Read-only file system`, so this session cannot commit/push/open the requested PR. CLI spec writes also refuse the symlinked main-worktree cache; the connected AIDA tool successfully preserved In Progress. Will retain patch and validation evidence; do not mark Done without a committed branch.'
   created_at: 2026-11-03T14:01:47.541968521Z
   modified_at: 2026-11-03T14:01:47.541968521Z
+- id: 01a1a1cb-a95d-7830-94eb-1e9836fa6abc
+  author: mcp
+  content: 'Local implementation and validation finished in /home/joe/ai/aida-worktrees/aida-seat-aida-story-b6b1278890774ef993d2ebc327862470-342. Expired renewals re-mint fresh IDs with preserved settings and original/default or explicit TTL; active renewal remains in place; stopped records stay stopped. Compact statusline and hook banner warn in the last 60m, with deduplicated operator/advisor mail and advisor/operator due items. Notice timestamps reflect actual delivery so inbox watermarks cannot hide delayed delivery. Updated CLI help golden and docs/cli/04-git-lifecycle.md. Validation: final `cargo test -p aida-cli-lib --lib story_b6b_166_mandate_renew_tests -- --test-threads=1` passed all 15; help_surface_matches_golden_snapshot passed; cargo fmt --all -- --check and git diff --check passed. Broader `mandate` filter: 357 passed, 1 ignored, one re-exec error because a concurrent rebuild replaced the running binary; reran pr_train::verified::bug2406::bug2406_held_member_released_under_mandate_lands against the stable final binary and it passed. Complete patch preserved at /tmp/STORY-2346.patch. BLOCKED publication: .git is explicitly read-only and `git add` fails creating .git/index.lock (Read-only file system). No commit, push, PR, review record or ship attempted after that refusal; leaving In Progress and queued, not Done. Draft finding filed for native launch grants. Suggested commit after handoff: [AI:codex] feat(mandate): revive expired grants and warn before expiry (STORY-2346). Reminders are triggered by status/hook/due-job reads, without a new background timer.'
+  created_at: 2026-11-03T14:24:01.373873914Z
+  modified_at: 2026-11-03T14:24:01.373873914Z
 history:
 - id: 01a1a1ae-1569-7562-bd46-8229e0a4ee0e
   author: aida-session-start
