@@ -1040,6 +1040,76 @@ fn append_authorship(project_root: &Path, lease: &SessionLease, extra: Vec<Strin
     append_authorship_as(project_root, lease, extra, true, None);
 }
 
+/// STORY-2254: record a detached worker (`pid` with REQUIRED start `start`)
+/// as an author of lease `lease_id`, strictly: a missing or non-work lease,
+/// or a ledger append that does not persist, is an error rather than the
+/// warning [`record_launched_worker`] gives. The ledger is re-read to confirm
+/// the record landed.
+// trace:STORY-2254 | ai:claude
+pub(crate) fn record_detached_worker_strict(
+    project_root: &Path,
+    lease_id: &str,
+    pid: u32,
+    start: &str,
+) -> anyhow::Result<()> {
+    anyhow::ensure!(!start.is_empty(), "worker start identity is required");
+    let main = crate::main_worktree_root_from(project_root);
+    let lease = crate::list_leases(project_root)
+        .into_iter()
+        .chain(crate::list_leases(&main))
+        .find(|l| l.id == lease_id)
+        .ok_or_else(|| {
+            anyhow::anyhow!("lease {lease_id} is not visible; cannot record its worker")
+        })?;
+    anyhow::ensure!(
+        is_work_lease(&lease),
+        "lease {lease_id} is not a work lease; cannot record its worker"
+    );
+    let token = process_token("proc", pid, Some(start));
+    let record = authorship_record(project_root, &lease, vec![token.clone()], false, None);
+    let path = ledger_path(project_root);
+    append_record(&path, &record).map_err(|e| {
+        anyhow::anyhow!(
+            "could not record the worker of {} in {}: {e}",
+            record.scope,
+            path.display()
+        )
+    })?;
+    anyhow::ensure!(
+        load_ledger(project_root)
+            .iter()
+            .any(|r| r.lease_id == lease_id && r.tokens.contains(&token)),
+        "the worker authorship record for lease {lease_id} did not persist"
+    );
+    Ok(())
+}
+
+fn authorship_record(
+    project_root: &Path,
+    lease: &SessionLease,
+    extra: Vec<String>,
+    with_creator_shell: bool,
+    launch: Option<LaunchAuthority>,
+) -> AuthorshipRecord {
+    let mut tokens = lease_tokens(lease, manifest_session_id(project_root, lease).as_deref());
+    if !with_creator_shell {
+        tokens.retain(|t| !t.starts_with("shell:"));
+    }
+    // A worker launched for the lease carries its id as `AIDA_SESSION_ID`.
+    push_unique(&mut tokens, format!("session:{}", lease.id));
+    for t in extra {
+        push_unique(&mut tokens, t);
+    }
+    AuthorshipRecord {
+        scope: lease.scope.trim().to_string(),
+        lease_id: lease.id.clone(),
+        branch: lease.branch.clone(),
+        tokens,
+        recorded_at: chrono::Utc::now().to_rfc3339(),
+        launch,
+    }
+}
+
 /// `with_creator_shell`: whether the lease's creating shell is part of the
 /// author's identity — not on a launch path, where it is the launcher's.
 fn append_authorship_as(
@@ -1054,23 +1124,7 @@ fn append_authorship_as(
     if !is_work_lease(lease) {
         return;
     }
-    let mut tokens = lease_tokens(lease, manifest_session_id(project_root, lease).as_deref());
-    if !with_creator_shell {
-        tokens.retain(|t| !t.starts_with("shell:"));
-    }
-    // A worker launched for the lease carries its id as `AIDA_SESSION_ID`.
-    push_unique(&mut tokens, format!("session:{}", lease.id));
-    for t in extra {
-        push_unique(&mut tokens, t);
-    }
-    let record = AuthorshipRecord {
-        scope: lease.scope.trim().to_string(),
-        lease_id: lease.id.clone(),
-        branch: lease.branch.clone(),
-        tokens,
-        recorded_at: chrono::Utc::now().to_rfc3339(),
-        launch,
-    };
+    let record = authorship_record(project_root, lease, extra, with_creator_shell, launch);
     let path = ledger_path(project_root);
     if let Err(e) = append_record(&path, &record) {
         let message = format!(
