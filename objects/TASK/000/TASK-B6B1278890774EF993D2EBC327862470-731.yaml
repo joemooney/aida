@@ -12,7 +12,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-03T08:37:14.756047804Z
-modified_at: 2026-11-03T14:33:05.882672787Z
+modified_at: 2026-11-03T16:48:35.007032907Z
 req_type: Task
 tags:
 - carried-from:BUG-2418
@@ -36,6 +36,12 @@ comments:
   content: 'Confirmed the vulnerable writer is outside joemooney/aida: ~/.local/bin/cargo resolves to /home/joe/ai/aida-host/bin/cargo. Working in isolated /tmp/aida-host-task-2784 (no live-host edits). Both shell start/finish redirects and cargo-progress appends need the same no-follow open. Created host tracking task TASK-4866E9428B5C426CA01FF8DF3FDD6CD6-001; will hand off a joemooney/aida-host PR with planted-symlink regressions.'
   created_at: 2026-11-03T14:33:05.882644792Z
   modified_at: 2026-11-03T14:33:05.882644792Z
+- id: 01a1a250-02bf-7ea1-8505-378e4ea361f9
+  author: joe
+  content: 'Fixed by aida-host PR #21 (squash-merged 2026-11-03 09:47, advisor-reviewed at d92fa722e5: O_NOFOLLOW|O_NONBLOCK + S_ISREG append shared by start/finish/progress writers; 4 new tests plus existing wrapper suites pass).'
+  created_at: 2026-11-03T16:48:35.007032907Z
+  modified_at: 2026-11-03T16:48:35.007032907Z
+  session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
 history:
 - id: 01a1a1ad-6bb2-7210-82d6-bfc9dd45c1cb
   author: joe
