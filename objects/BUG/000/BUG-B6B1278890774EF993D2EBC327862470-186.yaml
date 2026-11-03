@@ -8,12 +8,19 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-03T00:46:11.465609525Z
-modified_at: 2026-11-03T00:46:38.795214253Z
+modified_at: 2026-11-03T01:26:24.004402926Z
 req_type: Bug
 tags:
 - liveness
 - regroup
 - train
+comments:
+- id: 01a19f03-ba04-7a13-8f13-20fe87fda44e
+  author: joe
+  content: 'Fix up as PR #3278 (head 9ea04acd442), awaiting independent review.'
+  created_at: 2026-11-03T01:26:24.004402926Z
+  modified_at: 2026-11-03T01:26:24.004402926Z
+  session_id: 939ceec7-5dd6-4beb-a6e2-6f8b4803b9c0
 history:
 - id: 01a19edf-54cb-7ac2-8525-bbf2e528b40f
   author: aida-session-start
