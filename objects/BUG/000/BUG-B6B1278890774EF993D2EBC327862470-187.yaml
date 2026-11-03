@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-187
 agreed_id: BUG-2418
 title: Lane sandbox binds CARGO_HOME read-write, so a lane can modify registry sources the host later compiles
 description: 'From the STORY-2326 signoff (amendment 7, C2 precedent). The existing lane bwrap profile binds CARGO_HOME read-write. Registry sources under CARGO_HOME are compiled by the host later, so a contained lane could plant code that runs host-side. Expected: CARGO_HOME read-only in lanes (or a per-lane CARGO_HOME overlay), with a test that a lane write to the registry sources is refused.'
-status: InProgress
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-03T00:47:05.661792425Z
-modified_at: 2026-11-03T06:36:04.962427152Z
+modified_at: 2026-11-03T08:36:56.340938939Z
 req_type: Bug
 tags:
 - regroup
@@ -71,6 +71,21 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1a08d-e57d-76c0-9b88-c2a50c923f30
+  author: aida-auto-bump
+  timestamp: 2026-11-03T08:36:56.317852270Z
+  session_id: c58592f4-04ae-498b-9afd-87b0cc2bcde9
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1a08d-e594-74b2-84c3-113269d3361c
+  timestamp: 2026-11-03T08:36:56.340934537Z
+  agent: aida
+  commit_sha: 6c587ee595ce70f5fcc48480cfdddc8246cf158c
+  summary: All BUG-2418 and TASK-2772 criteria are met. CARGO_HOME is out of the rw roots and bound --ro-bind-try after the rw binds; the live bwrap test refuses writes to bin/x and registry/src; the read-only note is mapped in dev_build and the gate runner. Lanes get only the slot pair (alias-resolved, never inside CARGO_HOME), with no sccache grant and none for seat clones. The sccache start and probe are bounded and fall back to RUSTC_WRAPPER= with one note. CI is green at 1c54c4d.
+  review_verdict: approved
 filed_at:
   code_sha: 2d4c8cf53970af435900579e4e627d8f4a44d716
   branch: main
@@ -79,3 +94,7 @@ filed_at:
   aida_build_sha: 6a3f67671a9
   vendor: claude
   session: ee0bf351-6b17-486f-a38e-cfbb1343c426
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-03T08:36:56.317845332Z
+  completion_sha: 6c587ee595ce70f5fcc48480cfdddc8246cf158c
