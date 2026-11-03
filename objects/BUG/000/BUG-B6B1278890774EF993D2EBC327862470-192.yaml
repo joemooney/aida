@@ -13,8 +13,15 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-03T13:44:41.494240826Z
-modified_at: 2026-11-03T13:44:41.494240826Z
+modified_at: 2026-11-03T13:44:53.115121812Z
 req_type: Bug
+comments:
+- id: 01a1a1a7-d47b-72a3-bd8a-a629803e21d3
+  author: joe
+  content: 'Second defect in the same run: the train gate printed ''✓ ready'' for #3284 and #3283 although both still carried an active aida:merge-hold (label present; ''aida merge-hold list'' shows the hold armed, with its release condition met but not yet cleared). CI''s merge-hold-gate on train PR #3290 then failed with ''Train member #3284 has an active aida:merge-hold''. The local gate must apply the same hold rule as CI: a met-but-uncleared hold is not ready.'
+  created_at: 2026-11-03T13:44:53.115121812Z
+  modified_at: 2026-11-03T13:44:53.115121812Z
+  session_id: f5eddefe-032d-4760-94ba-3a318cf3d1d1
 filed_at:
   code_sha: 6c587ee595ce70f5fcc48480cfdddc8246cf158c
   branch: main
