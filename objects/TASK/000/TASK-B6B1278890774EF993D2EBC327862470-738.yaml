@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-738
 agreed_id: TASK-2793
 title: aida pr hold reports branch pushed without performing or verifying a push
 description: During BUG-2423 implementation, aida pr hold exited 0 saying the branch was pushed, but git ls-remote --heads origin <branch> returned no matching ref. A direct git push -u origin <branch> then created the branch. Source pr_cmd.rs::pr_hold_handler only writes HoldSignal and prints the pushed claim; it performs no push or remote verification. Standalone headless launches can therefore advertise a held branch that is not recoverable from the forge. Either perform/verify the push or clearly require pushing beforehand and stop claiming remote success. The current BUG-2423 branch was pushed directly and its remote is being verified.
-status: Done
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-03T14:12:42.376405847Z
-modified_at: 2026-11-03T22:15:16.340446348Z
+modified_at: 2026-11-03T22:47:27.623714972Z
 req_type: Task
 tags:
 - aida:pr-hold
@@ -62,6 +62,15 @@ history:
   timestamp: 2026-11-03T22:15:17.488836054Z
   session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
   changes: []
+- id: 01a1a398-9287-7882-8c21-7fffcb5480b2
+  author: aida-orchestrator
+  timestamp: 2026-11-03T22:47:27.623732821Z
+  session_id: 01a1a397d52e
+  harness_version: 2.1.317 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: NeedsAttention
 filed_at:
   aida_version: 0.16.0
   aida_build_sha: 6c587ee595c
@@ -71,3 +80,11 @@ implementation_info:
   implemented: true
   implemented_at: 2026-11-03T21:19:14.881876664Z
   implemented_by: joe
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: Push+verify logic meets TASK-2793, but the 3 new raw Command::new("git") builders in pr_cmd.rs bypass host_git_command's seat-clone refusal and fail the TASK-2143 ratchet (CI lib-0 red, Build aggregator red).
+  recovery_hint: address the review findings, move TASK-2793 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-11-03T22:47:27.623714972Z
