@@ -20,12 +20,12 @@ description: |
 
   ## Expected
   A reviewer lane's own lease never counts as an author of the PR it reviews. An operator-authored PR with no implementer lease is approvable by an independent reviewer lane. Identity tokens taken inside a pid namespace are not compared across namespaces.
-status: Approved
+status: InProgress
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-03T02:31:19.103221790Z
-modified_at: 2026-11-03T07:18:34.547104808Z
+modified_at: 2026-11-03T07:18:48.013357241Z
 req_type: Bug
 tags:
 - area:gate
@@ -142,6 +142,14 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
+- id: 01a1a046-5bcd-7b62-adaf-cab32cdc37ad
+  author: aida-session-start
+  timestamp: 2026-11-03T07:18:48.013356311Z
+  session_id: c58592f4-04ae-498b-9afd-87b0cc2bcde9
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 553f7d5984c6083a9f2b47cfa358ce57c438843b
   branch: main
