@@ -6,12 +6,12 @@ description: |-
   2026-11-03: through aida-deputy-shell run 2, 'aida merge-hold clear 3289' succeeded, but 'aida pr train 3280' was refused three times with 'its merge needs a human at a terminal'. The cause is two different human checks. merge-hold clear uses role_authority::has_integrity_floor_authority() (stdin is a terminal AND deputy_job_floor_authorized). pr ship/train use pr_cmd::ship_interactive_tty() (stdin AND stdout are terminals, pr_cmd.rs:2108). The script deputy tees each job's stdout into its audited transcript, so stdout is never a terminal. Workaround in use: the job script sends that one command's stdout to /dev/tty, which loses the transcript.
 
   Acceptance: (1) pr ship and pr train decide 'human at a terminal' with the same function as merge-hold clear, so stdout plays no part. (2) A test: stdin is a terminal and stdout a pipe, with the deputy floor authorized; train treats the named PR as human-consented. (3) A test: with stdin not a terminal, it still refuses.
-status: InProgress
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-03T15:56:31.278734245Z
-modified_at: 2026-11-03T19:57:18.802000630Z
+modified_at: 2026-11-03T22:59:20.887306128Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -124,6 +124,20 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1a3a3-74b3-7651-bdae-58174c3a1ea7
+  author: aida-auto-bump
+  timestamp: 2026-11-03T22:59:20.883536296Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1a3a3-74b7-7290-beb7-18f275903c1f
+  timestamp: 2026-11-03T22:59:20.887304060Z
+  agent: aida
+  commit_sha: 02cfbd2251510ab7d0bd5e3df150ce2d1e8ef27d
+  summary: 'AC1: ship_interactive_tty (pr_cmd.rs:1998) delegates to has_integrity_floor_authority, the merge-hold clear function, and the train''s interactive_tty (pr_train.rs:1359) uses it; source-pinned by ship_and_train_tty_decisions_go_through_the_shared_helper. AC2/AC3: ship_and_train_tty_consent_ignores_stdout_like_merge_hold_clear (deputy/tests.rs). Round-1 findings fixed: helper moved above ship_preflight_gates, story_1698 assertion unchanged. CI green at head, mergeState CLEAN.'
+  review_verdict: approved
 filed_at:
   code_sha: 493f3ae1c526c7ab19f208112d426aecbf33c8b5
   branch: main
@@ -136,3 +150,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-11-03T17:27:53.199576825Z
   implemented_by: joe
+  completed_at: 2026-11-03T22:59:20.883531243Z
+  completion_sha: 02cfbd2251510ab7d0bd5e3df150ce2d1e8ef27d
