@@ -3467,6 +3467,18 @@ fn command_table() -> &'static [(&'static [&'static str], ScheduledCommand)] {
                 hook_allowed: true,
             },
         ),
+        // STORY-2351: the hourly hygiene pass (reap + agent gc + idle-cache
+        // reclaim). Deletes caches and walks every lease, so never on the
+        // per-turn hook path.
+        // trace:STORY-2351 | ai:claude
+        (
+            &["session hygiene"],
+            ScheduledCommand {
+                display: "session hygiene",
+                args: &["session", "hygiene"],
+                hook_allowed: false,
+            },
+        ),
         (
             &["queue gc"],
             ScheduledCommand {
@@ -3819,6 +3831,24 @@ const TIMEOUT_EXIT_PREFIX: &str = "exit 124: timed out:";
 // trace:TASK-1535 | ai:codex
 const SPAWN_FAILED_EXIT_PREFIX: &str = "exit 124: could not be spawned:";
 
+/// STORY-2351: `session hygiene` reaps, gcs and reclaims in one child, and a
+/// reap scan alone can take most of [`SCHEDULED_COMMAND_TIMEOUT`] on a busy
+/// host. It gets a longer ceiling; its own soft budget
+/// ([`crate::session_hygiene::SOFT_BUDGET`]) defers the reclaim well before
+/// this kill, so a slow run reports instead of routing a timeout.
+// trace:STORY-2351 | ai:claude
+pub(crate) const HYGIENE_COMMAND_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(300);
+
+/// The kill ceiling for one scheduled child.
+// trace:STORY-2351 | ai:claude
+fn command_timeout(command: &ScheduledCommand) -> std::time::Duration {
+    if command.display == "session hygiene" {
+        HYGIENE_COMMAND_TIMEOUT
+    } else {
+        SCHEDULED_COMMAND_TIMEOUT
+    }
+}
+
 fn run_aida_command(project_root: &Path, command: &ScheduledCommand) -> Result<TaskOutcome> {
     let mut cmd = ProcessCommand::new(crate::aida_exe_path());
     cmd.args(command.args);
@@ -3826,7 +3856,7 @@ fn run_aida_command(project_root: &Path, command: &ScheduledCommand) -> Result<T
         cmd,
         command.display,
         project_root,
-        SCHEDULED_COMMAND_TIMEOUT,
+        command_timeout(command),
     ))
 }
 
@@ -4686,6 +4716,57 @@ mod tests {
             !cmd.hook_allowed,
             "a per-turn hook tick must never be able to launch a drain"
         );
+    }
+
+    // STORY-2351: the hourly hygiene pass is a substrate job, off the
+    // per-turn hook path, with a longer kill ceiling than its soft budget.
+    // trace:STORY-2351 | ai:claude
+    #[test]
+    fn story_2351_session_hygiene_is_scheduled_off_the_hook_path() {
+        let cmd = parse_scheduled_command("session  hygiene").unwrap();
+        assert_eq!(cmd.args, &["session", "hygiene"]);
+        assert!(
+            !cmd.hook_allowed,
+            "a per-turn hook must never delete caches"
+        );
+        assert_eq!(command_timeout(&cmd), HYGIENE_COMMAND_TIMEOUT);
+        assert!(
+            HYGIENE_COMMAND_TIMEOUT > crate::session_hygiene::SOFT_BUDGET,
+            "the soft budget must defer the reclaim before the scheduler kills the run"
+        );
+        let reap = parse_scheduled_command("session reap").unwrap();
+        assert_eq!(command_timeout(&reap), SCHEDULED_COMMAND_TIMEOUT);
+    }
+
+    // STORY-2351: this repo registers the hygiene pass hourly and routes its
+    // must-keep failures (only those) to the advisor.
+    // trace:STORY-2351 | ai:claude
+    #[test]
+    fn story_2351_project_config_registers_hourly_hygiene_and_its_route() {
+        let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../.aida/config.toml");
+        let text = std::fs::read_to_string(&path).unwrap();
+        let value: toml::Value = toml::from_str(&text).unwrap();
+        let jobs = value["schedule"]["jobs"].as_array().unwrap();
+        let job = |name: &str| {
+            jobs.iter()
+                .find(|j| j["name"].as_str() == Some(name))
+                .unwrap_or_else(|| panic!("{name} missing from .aida/config.toml"))
+        };
+        let hygiene = job("session-hygiene");
+        assert_eq!(hygiene["command"].as_str(), Some("session hygiene"));
+        assert_eq!(hygiene["every"].as_str(), Some("1h"));
+        assert_eq!(hygiene["enabled"].as_bool(), Some(true));
+        parse_scheduled_command(hygiene["command"].as_str().unwrap()).unwrap();
+        let route = job("session-hygiene-route");
+        assert_eq!(
+            route["on"].as_array().unwrap(),
+            &vec![toml::Value::from("CronJobFailed:session-hygiene")]
+        );
+        assert_eq!(
+            route["seats"].as_array().unwrap(),
+            &vec![toml::Value::from("advisor")]
+        );
+        assert_eq!(route["enabled"].as_bool(), Some(true));
     }
 
     #[test]

@@ -267,7 +267,34 @@ enabled = true
 name = "disk-headroom-guard-route"
 seats = ["advisor"]
 on = ["CronJobFailed:disk-headroom-guard"]
-prompt = "Free disk space dropped below the configured floor. Reclaim stale worktree build caches with `aida worktree reclaim` (dry run by default; `--apply` deletes), remove finished worktrees with `aida session reap`, or raise [doctor.disk_headroom] min_free_gib deliberately. Note `cargo clean` is NOT the reclaim for this: inside a worktree it clears the shared CARGO_TARGET_DIR, which points at the main checkout, so it deletes the live cache and leaves the stale ones."
+prompt = "Free disk space is still below the configured floor after the guard ran `aida worktree reclaim --apply` itself (the routed evidence says how much it freed). Do not just repeat that reclaim: remove finished worktrees with `aida session reap`, or raise [doctor.disk_headroom] min_free_gib deliberately. Note `cargo clean` is NOT the reclaim for this: inside a worktree it clears the shared CARGO_TARGET_DIR, which points at the main checkout, so it deletes the live cache and leaves the stale ones."
+enabled = true
+
+# STORY-2351: the hourly hygiene pass. On 2026-11-03 `aida ps` showed ~51
+# stale, 9 orphaned and 28 salvageable rows and the disk hit 99% with 305.7
+# GiB reclaimable, because session reap, agent gc and worktree reclaim waited
+# for an advisor sweep. `aida session hygiene` runs all three with every
+# safety rail on: it reaps only finished + merged + exited sessions, gcs only
+# provably dead agent rows (a foreign pid namespace reads unknown, never
+# dead), and deletes only worktree caches idle 24h+ with no live lease and no
+# open PR. It never touches uncommitted work.
+#
+# It is silent when clean: it exits non-zero only when it KEPT something a
+# seat must act on (salvageable work untouched 24h+, a reap refused because
+# mail retention is not activated, or a failed step). Its last stderr line
+# names each item and the act needed, and that line is what the route carries.
+# trace:STORY-2351 | ai:claude
+[[schedule.jobs]]
+name = "session-hygiene"
+command = "session hygiene"
+every = "1h"
+enabled = true
+
+[[schedule.jobs]]
+name = "session-hygiene-route"
+seats = ["advisor"]
+on = ["CronJobFailed:session-hygiene"]
+prompt = "The hourly hygiene pass kept something it must not touch on its own. The routed trip evidence names each item and the act it needs: salvage or discard uncommitted work in a dead session's worktree, activate mail retention so a finished session can be reaped, or rerun a failed step by hand. Never force-reap or delete a dirty worktree to clear it."
 enabled = true
 
 # Monthly read-only check after the merged-worktree backlog slowed pr ship.

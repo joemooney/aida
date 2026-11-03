@@ -239,6 +239,7 @@ fn story_1916_manual_light_check_makes_no_gh_call_and_no_cache_walk() {
         false,
         || panic!("a manual check must not run the emergency tier"),
         || disk_headroom_light_report_with(tmp.path(), |_| Some(0), None),
+        || panic!("a manual check must not reclaim"),
         |_, _| panic!("a manual check must not run the reclaim scan (gh, cache walk)"),
     );
     assert_eq!(report.findings.len(), 1, "{:?}", report.findings);
@@ -263,6 +264,7 @@ fn story_1916_substrate_run_scans_and_marks_a_stuck_floor() {
         true,
         || ran.set(true),
         || disk_headroom_light_report_with(tmp.path(), |_| Some(0), None),
+        || 0,
         |_, _| {
             scans.set(scans.get() + 1);
             (GIB, Vec::new())
@@ -323,6 +325,7 @@ fn story_1916_toon_report_carries_the_disk_status() {
         false,
         || {},
         || disk_headroom_light_report_with(tmp.path(), |_| Some(100 * GIB), None),
+        || panic!("no floor breach, nothing to reclaim"),
         |_, _| (0, Vec::new()),
     );
     let toon = render_doctor_report_toon(&report);
@@ -334,4 +337,69 @@ fn story_1916_toon_report_carries_the_disk_status() {
     ] {
         assert!(toon.contains(want), "missing {want}: {toon}");
     }
+}
+
+/// STORY-2351 AC4: a substrate run below the floor reclaims BEFORE it
+/// routes. A breach the reclaim fixes leaves no finding (nothing routes);
+/// one it does not fix routes saying what the guard already freed.
+// trace:STORY-2351 | ai:claude
+#[test]
+fn story_2351_guard_reclaims_before_routing_a_floor_breach() {
+    let tmp = project_with_unloadable_store(60);
+    let cfg = crate::read_project_config_value(tmp.path());
+    let free = std::cell::Cell::new(0u64);
+    let reclaims = std::cell::Cell::new(0);
+    let report = disk_headroom_light_report_finish(
+        tmp.path(),
+        cfg.as_ref(),
+        true,
+        || {},
+        || disk_headroom_light_report_with(tmp.path(), |_| Some(free.get()), None),
+        || {
+            reclaims.set(reclaims.get() + 1);
+            free.set(100 * GIB);
+            40 * GIB
+        },
+        // The stuck scan probes the host's real filesystems; it has no
+        // finding left to annotate here.
+        |_, _| (0, Vec::new()),
+    );
+    assert_eq!(reclaims.get(), 1);
+    assert!(report.findings.is_empty(), "{:?}", report.findings);
+
+    let still = disk_headroom_light_report_finish(
+        tmp.path(),
+        cfg.as_ref(),
+        true,
+        || {},
+        || disk_headroom_light_report_with(tmp.path(), |_| Some(GIB), None),
+        || 3 * GIB,
+        |_, _| (0, Vec::new()),
+    );
+    assert_eq!(still.findings.len(), 1, "{:?}", still.findings);
+    assert!(
+        still.findings[0]
+            .summary
+            .contains("the guard already ran `aida worktree reclaim --apply` and freed 3.0 GiB"),
+        "{}",
+        still.findings[0].summary
+    );
+}
+
+/// A manual (non-scheduled) check never reclaims, even below the floor.
+// trace:STORY-2351 | ai:claude
+#[test]
+fn story_2351_manual_check_never_reclaims() {
+    let tmp = project_with_unloadable_store(60);
+    let cfg = crate::read_project_config_value(tmp.path());
+    let report = disk_headroom_light_report_finish(
+        tmp.path(),
+        cfg.as_ref(),
+        false,
+        || {},
+        || disk_headroom_light_report_with(tmp.path(), |_| Some(GIB), None),
+        || panic!("a manual check must not reclaim"),
+        |_, _| panic!("a manual check must not scan"),
+    );
+    assert_eq!(report.findings.len(), 1);
 }
