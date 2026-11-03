@@ -13,7 +13,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-03T13:53:28.187901734Z
-modified_at: 2026-11-03T22:02:31.729196044Z
+modified_at: 2026-11-03T22:02:32.981001617Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -113,6 +113,20 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Round-4 rulings 1-2 land (manual Identity PartialEq excluding recorded_at + regression test; rollback break accepted). Ruling 3 fixed only lease_owner_gone: the ps/spec-liveness classifier still ages foreign leases from started_at, so a live heartbeating foreign-ns session >24h old is Stale and stale-hidden/orphaned (AC1). CI: cli/lib/contracts/rest green, gates still running at review time; merge-hold-gate is the supervised hold, not a PR defect.. No triage reason was given.'
   created_at: 2026-11-03T22:02:31.729193532Z
   modified_at: 2026-11-03T22:02:31.729193532Z
+  session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
+- id: 01a1a36f-7418-7003-b88a-5d0db2a3877f
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2425):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 63f537472861
+    Recorded: 2026-11-03T20:37:50.714752659+00:00
+    Findings:
+    1. [major/correctness, AC1] Heartbeat keying (round-4 ruling 3) is applied only in lease_owner_gone (leases.rs:5090). Both lease_state_for paths still age foreign-namespace leases from started_at: aida-cli-lib/src/leases.rs:1251-1256 (now.signed_duration_since(l.started_at)) and aida-core/src/liveness.rs:1737-1746 (age_hours from l.started_at into classify_foreign_lease_state). A live foreign-ns session started >24h ago (e.g. a long-running host advisor seen from a sandboxed aida ps) is therefore LeaseState::Stale: ps_integrate.rs:1643-1645 moves it to stale_hidden, spec_liveness's orphan pass marks its spec Stale, and role/driver_view/status_prs/worktree_pool_adopt treat it as not live, while lease_owner_gone for the same lease says unknown. That is the original BUG-2425 symptom for any session older than a day, and it contradicts the docs claim 'these sessions are neither stale-hidden nor orphaned'. Fix: feed classify_foreign_lease_state the hours since the lease heartbeat (crate::leases::lease_heartbeat in the CLI; in aida-core give SessionLeaseLite a heartbeat/mtime or compute it from the lease file), so ps, spec liveness and lease_owner_gone share one clock. Add a test: a foreign-ns lease with started_at 48h ago, an existing worktree and a fresh lease file is Unknown (not Stale) from lease_state_for in both crates and is not stale-hidden by ps.
+    2. [minor/docs] docs/cli/06-roles-sessions.md (BUG-2425 block): 'A session lease is stale once its worktree is gone or it is 24 hours old' describes the started_at clock that round 4 replaced. After the fix above, say it is stale once its worktree is gone or its lease file has gone unrefreshed for 24 hours.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-03T22:02:32.856178262Z
+  modified_at: 2026-11-03T22:02:32.856178262Z
   session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
 history:
 - id: 01a1a1d0-8859-7540-8fa6-1596c5def92a
