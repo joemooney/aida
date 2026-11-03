@@ -1,0 +1,20 @@
+id: 01a1a27d-5dc3-7832-b8b1-8734b89af303
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-199
+agreed_id: BUG-2430
+title: Rework briefs omit the review findings when the verdict is keyed PR-N instead of the spec ID, so rework lanes work from stale rulings
+description: '2026-11-03 10:30: PR-3291 (STORY-2325 PR-B) and PR-3288 (STORY-2326 PR-A) got CHANGES REQUESTED verdicts that were recorded under the key PR-N (gate-ledger PR-3291.jsonl#2, 7 findings; PR-3288, 10 findings). ''aida review verdict STORY-2325'' reports none. ''aida queue work STORY-2325 --role implementer --no-human --force-claim'' then built a brief holding only an older ADVISOR RULING comment, with no ''ITEMS STILL OPEN'' block, and the lanes started work on round-1 instructions. STORY-2338 (verdict keyed by the spec) got its findings. Expected: the brief resolves the latest verdict through the gate ledger for the spec''s open PR (PR-N key or spec key, whichever is newer at the PR head), and refuses to launch a rework when a request-changes verdict exists but cannot be read. Workaround: post the findings as an ADVISOR RULING comment before relaunching.'
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-03T17:38:07.427036611Z
+modified_at: 2026-11-03T17:38:07.427036611Z
+req_type: Bug
+filed_at:
+  code_sha: d32d909128fa7dec11860bf2092baaccd1040034
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 493f3ae1c52
+  vendor: claude
+  session: 04f971d5-7365-46ed-b777-d4ff41d730ed
