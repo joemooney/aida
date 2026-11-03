@@ -1285,6 +1285,28 @@ inspection of installed codex-cli 0.166.0. Native sandbox egress remains Codex's
 own policy; the AIDA allowlist does not configure it.
 <!-- trace:TASK-2631 | ai:codex -->
 
+### Detached Codex lanes
+
+`aida agent new codex --bg <SPEC>` runs a detached Codex implementer or reviewer
+as three processes. The launcher runs every ordinary preflight, reserves the
+scope in a private host receipt store (`~/.aida/launch-attempts/`, 0700/0600,
+evidence only, never authority), prepares the lease and worktree, and has the
+seat gate mint the worker's own child grant together with a one-use launch
+capability whose digest is the only trace on the grant record. A setsid
+supervisor (`aida internal codex-bg-supervise`) receives that capability once
+over a private inherited socket, proves it is the issuer's child, starts a gated
+exec barrier, and takes ownership of the attempt by a durable compare-update
+before anything runs. It then binds the grant through the gate (only to its own
+child with an exact start identity, once), stamps lease, authorship ledger and
+registry strictly, releases the barrier (which `execve`s Codex at the same PID
+under a supervisor-tied parent-death signal), corroborates the native executable,
+and owns wait, reap and exact-generation cleanup. The launcher's rollback guards
+check the same owner record before destroying anything. "Accepted" means the
+worker started, never that its work completed; an uncertain outcome is reported
+as UNKNOWN and never retried. The lane runs only in the trusted native posture,
+gets explicit environment only, and reports mail wake as unsupported.
+<!-- trace:STORY-2254 | ai:claude -->
+
 The closed `config permissions probe --vendor <name>` tracer is implemented in
 `aida-cli-lib/src/containment/`: shipped typed capabilities, a pinned trusted
 policy snapshot, descriptor-pinned synthetic filesystem mounts and an owned

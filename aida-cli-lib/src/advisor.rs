@@ -95,6 +95,8 @@ impl CalibrationMode {
 /// through to today's cold-boot path).
 #[derive(Debug, Clone)]
 pub struct AdvisorConfig {
+    // trace:STORY-2336 | ai:codex
+    pub eligible_idle_minutes: u64,
     pub fork_mode: ForkMode,
     pub allow_mtime_fallback: bool,
     pub keep_fork_jsonls: bool,
@@ -106,6 +108,7 @@ pub struct AdvisorConfig {
 impl Default for AdvisorConfig {
     fn default() -> Self {
         Self {
+            eligible_idle_minutes: 15,
             fork_mode: ForkMode::Auto,
             allow_mtime_fallback: false,
             keep_fork_jsonls: true,
@@ -145,6 +148,11 @@ impl AdvisorConfig {
 
 fn apply_key(cfg: &mut AdvisorConfig, key: &str, val: &str) {
     match key {
+        "eligible_idle_minutes" => {
+            if let Ok(n) = val.parse::<u64>() {
+                cfg.eligible_idle_minutes = n;
+            }
+        }
         "fork_mode" => {
             if let Some(m) = ForkMode::parse(val) {
                 cfg.fork_mode = m;

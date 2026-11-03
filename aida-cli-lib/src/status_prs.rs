@@ -815,6 +815,8 @@ pub(crate) fn probe_clone_seat_trees(
 /// trace:STORY-385 | ai:claude
 #[derive(Debug, Clone, Default)]
 pub(crate) struct OpenPrSnapshot {
+    // trace:STORY-2336 | ai:codex
+    pub(crate) eligibility: std::collections::HashMap<u64, crate::idle_eligible::ForgeEvidence>,
     pub(crate) by_branch: std::collections::HashMap<String, status_cleanup::OpenPrItem>,
 }
 
@@ -889,7 +891,7 @@ pub(crate) fn collect_open_prs_uncached(project_root: &std::path::Path) -> OpenP
         "--limit",
         "50",
         "--json",
-        "number,title,headRefName,headRefOid,statusCheckRollup,mergeable,reviewDecision,labels,createdAt",
+        "number,title,headRefName,headRefOid,statusCheckRollup,mergeable,reviewDecision,labels,createdAt,isDraft,baseRefName",
     ]);
     // trace:BUG-1288 | ai:claude — bounded like every other gh call this
     // machine-readable pipeline makes; see FORGE_CLI_CALL_TIMEOUT.
@@ -1552,6 +1554,7 @@ pub(crate) fn parse_open_pr_snapshot(
         Ok(v) => v,
         Err(_) => return OpenPrSnapshot::default(),
     };
+    let mut eligibility = std::collections::HashMap::new();
     let mut by_branch = std::collections::HashMap::new();
     for pr in parsed.as_array().cloned().unwrap_or_default() {
         let number = pr.get("number").and_then(|v| v.as_u64()).unwrap_or(0);
@@ -1602,10 +1605,11 @@ pub(crate) fn parse_open_pr_snapshot(
             .and_then(|v| v.as_str())
             .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
             .map(|dt| dt.with_timezone(&chrono::Utc));
+        eligibility.insert(number, crate::idle_eligible::ForgeEvidence::from_json(&pr));
         by_branch.insert(
             head_branch.clone(),
             status_cleanup::OpenPrItem {
-                is_draft: false,
+                is_draft: pr.get("isDraft").and_then(|v| v.as_bool()).unwrap_or(false),
                 number,
                 title,
                 head_branch,
@@ -1618,7 +1622,10 @@ pub(crate) fn parse_open_pr_snapshot(
             },
         );
     }
-    OpenPrSnapshot { by_branch }
+    OpenPrSnapshot {
+        by_branch,
+        eligibility,
+    }
 }
 
 /// Every branch that has ever been a PR head, across all states
@@ -3405,6 +3412,8 @@ mod story_1043_unshipped_work_tests {
             creator_pid_start_time: None,
             active_pid: Some(std::process::id()),
             active_pid_start_time: process_probe::process_start_identity(std::process::id()),
+            creator_pid_ns: None,
+            active_pid_ns: crate::gate::review_authority::recorded_pid_ns(Some(std::process::id())),
             cargo_target_dir: None,
             parent_project_root: Some(root.to_path_buf()),
             pr_head_sha: None,
