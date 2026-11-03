@@ -66,6 +66,11 @@ else
 fi
 
 expected="$tmp/expected-output"
+# No "Committed pending orphan changes before pull" line: `aida init` now
+# writes the store's tracked runtime/staging .gitignore, so the per-clone
+# runtime files the pull's store leg used to find pending (and commit onto
+# the orphan branch) are ignored and the store is clean at pull time.
+# trace:STORY-B6B1278890774EF993D2EBC327862470-329 | ai:claude
 cat >"$expected" <<'EXPECTED'
 Pulling code main ← origin
 From ../remote
@@ -73,7 +78,6 @@ From ../remote
 Already up to date.
   code pull complete
   Note: Already up to date — origin had no new commits.
-  Committed pending orphan changes before pull
 Pulling store aida-store ← origin
   store pull complete
   (no new commits)

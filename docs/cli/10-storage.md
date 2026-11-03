@@ -376,6 +376,12 @@ be topped up (replenishment); neither is available. A stale or forged block
 that appears only in carried-in history is still never spendable: the claim
 must be on the inside hub's own store ref.
 
+<!-- Proved by aida-cli/tests/story_164_single_hub.rs
+a_claim_only_in_an_imported_store_is_never_spendable (a hub-stamped claim
+merged in from a store that is not the hub is refused; add falls back to a
+node-local ID) and a_claim_not_on_the_hub_ref_is_never_spendable.
+trace:STORY-B6B1278890774EF993D2EBC327862470-329 | ai:claude -->
+
 ### Clone-local allocation authority
 
 <!-- trace:BUG-2017 | ai:codex -->
