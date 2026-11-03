@@ -262,6 +262,7 @@ fn run_through(lane: &LaneJobs, j: &JobRequest) -> (i32, String) {
     }
 }
 
+// trace:BUG-b6b1278890774ef993d2ebc327862470-157.Test | ai:claude
 #[cfg(unix)]
 #[test]
 fn fixture_lane_runs_a_filtered_test_through_the_runner_and_reports_pass_fail() {
@@ -882,6 +883,7 @@ fn an_inbox_symlink_is_never_followed() {
     assert!(lane.prepare().is_err());
 }
 
+// trace:BUG-b6b1278890774ef993d2ebc327862470-157.acd7d2a4 | ai:claude
 #[test]
 fn result_line_says_untested_when_no_job_completed() {
     use crate::standalone_implementer::{with_untested, Outcome};
@@ -908,6 +910,7 @@ fn result_line_says_untested_when_no_job_completed() {
     );
 }
 
+// trace:BUG-b6b1278890774ef993d2ebc327862470-157.acd7d2a4 | ai:claude
 #[test]
 fn implementer_prompt_names_the_sanctioned_path() {
     let contract = crate::standalone_implementer::LANE_JOB_CONTRACT;

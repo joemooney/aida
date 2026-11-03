@@ -1248,6 +1248,18 @@ fn run_one(
         return refuse(&format!("`{}` is not on the job's PATH", lane.program));
     };
     let args = job.argv[1..].to_vec();
+    // The sandbox binds the seat's cargo target with `--bind-try`, which
+    // skips an absent path: on a cold (unseeded) target cargo would then
+    // find it read-only and fail before compiling. The host creates it.
+    // trace:BUG-2383 | ai:claude
+    if let Some(target) = lane.target_dir() {
+        if let Err(e) = std::fs::create_dir_all(&target) {
+            return refuse(&format!(
+                "create the cargo target {}: {e}",
+                target.display()
+            ));
+        }
+    }
     let (program, args, how_wrapped) = match lane.sandbox {
         Sandbox::Bwrap => match crate::session::lane_job_wrapped_program_and_args(
             &lane.seat,

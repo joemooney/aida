@@ -725,6 +725,7 @@ fn bug_2383_bwrap_a_planted_upper_symlink_never_redirects_a_later_job() {
 // primary builds a tiny crate with one dependency; the seat runs `cargo
 // build -v` through the real lane job runner, bubblewrap and overlay.
 // trace:BUG-2383 | ai:claude
+// trace:BUG-b6b1278890774ef993d2ebc327862470-157.accf30b1 | ai:claude
 #[test]
 fn bug_2383_bwrap_overlay_first_job_sees_a_prebuilt_dependency_as_fresh() {
     let Some(cargo) = std::env::var_os("CARGO").map(PathBuf::from) else {
@@ -883,6 +884,8 @@ const FIXTURE_CRATE_LIB: &str = "pub fn answer() -> u32 { 42 }\n\n\
 // `FAILED` result, both take a cargo slot through the limiter on the job's
 // PATH, and the tally counts two executed test runs, so the result line
 // carries no `untested=true`. trace:BUG-2383 | ai:claude
+// trace:BUG-b6b1278890774ef993d2ebc327862470-157.acd61bb0 | ai:claude
+// trace:BUG-b6b1278890774ef993d2ebc327862470-157.Test | ai:claude
 #[test]
 fn bug_2383_bwrap_real_cargo_test_job_reports_pass_and_fail_through_the_cli() {
     let Some(cargo) = std::env::var_os("CARGO").map(PathBuf::from) else {
