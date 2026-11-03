@@ -2142,6 +2142,34 @@ fn bug_2425_foreign_pidns_lease_with_fresh_heartbeat_is_not_gone() {
     std::fs::write(&path, toml::to_string(&lease).unwrap()).unwrap();
     assert!(crate::leases::lease_heartbeat(&lease) > lease.started_at);
     assert_eq!(crate::leases::lease_owner_gone(&lease), None);
+    // Round 5: ps and spec liveness share that clock — the 48h-old,
+    // heartbeating lease is Unknown, never Stale / stale-hidden / orphaned.
+    let now = chrono::Utc::now();
+    assert_eq!(lease_state_for(&lease, &[], now), LeaseState::Unknown);
+    let specs = vec![RunningWorkSpec {
+        disp: "BUG-2425".into(),
+        agreed_id: Some("BUG-2425".into()),
+        spec_id: None,
+        title: "foreign session".into(),
+        in_progress: true,
+        orphan_excluded_type: false,
+    }];
+    let (rows, orphans) = build_running_work(
+        &specs,
+        std::slice::from_ref(&lease),
+        &[],
+        now,
+        |_| panic!("foreign rows must not be classified stalled or salvageable"),
+        |_| None,
+        |_| None,
+        |_| None,
+        |_| None,
+        |_| panic!("foreign PIDs must not be inspected for mail identity"),
+        |_, _| panic!("foreign PIDs must not be inspected for activity"),
+    );
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0].state, LeaseState::Unknown);
+    assert!(orphans.is_empty());
 }
 
 // trace:BUG-2425 | ai:codex

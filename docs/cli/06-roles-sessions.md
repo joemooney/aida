@@ -113,7 +113,8 @@ resolves records stamped in the host namespace. A foreign namespace only means
 the PID can't be checked. It is not evidence that the process exited, so every
 other signal still applies:
 - A claim whose heartbeat is older than its TTL is reclaimed.
-- A session lease is stale once its worktree is gone or it is 24 hours old,
+- A session lease is stale once its worktree is gone or its heartbeat is
+  older than 24 hours,
   so session reap, stale-lease recovery and worktree GC can then clear it.
 - A dormant lease is auto-released once its lease file is older than the
   stale-lease threshold.

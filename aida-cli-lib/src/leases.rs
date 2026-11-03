@@ -1238,7 +1238,8 @@ pub(crate) fn lease_state_for(
 ) -> LeaseState {
     // BUG-2425: pids recorded in another PID namespace are not probed; the
     // pid-free signals (a live claude in the worktree, a missing worktree,
-    // the 24h age backstop) still decide. trace:BUG-2425 | ai:claude
+    // the 24h backstop, aged from the lease heartbeat — the same clock as
+    // `lease_owner_gone`) still decide. trace:BUG-2425 | ai:claude
     if !aida_core::pid_observer::PidObserver::current().can_observe(l.pid_namespace) {
         let advisory = (l.review_verb || l.claim_verb) && l.worktree_path.as_os_str().is_empty();
         let has_live_claude = !advisory
@@ -1252,7 +1253,7 @@ pub(crate) fn lease_state_for(
             advisory,
             l.worktree_path.exists(),
             has_live_claude,
-            now.signed_duration_since(l.started_at).num_hours(),
+            now.signed_duration_since(lease_heartbeat(l)).num_hours(),
         );
     }
     // BUG-511 review leases AND TASK-957 claim leases are advisory locks when

@@ -1663,6 +1663,22 @@ pub struct SessionLeaseLite {
     // trace:STORY-1653 | ai:claude
     #[serde(default)]
     pub driver: Option<String>,
+    /// BUG-2425: the lease file's mtime, filled by [`read_session_leases`]
+    /// (heartbeats and lease rewrites bump it). Not part of the TOML.
+    // trace:BUG-2425 | ai:claude
+    #[serde(skip)]
+    pub file_mtime: Option<chrono::DateTime<chrono::Utc>>,
+}
+
+impl SessionLeaseLite {
+    /// The lease's last sign of life: the later of `started_at` and the lease
+    /// file's mtime. Mirrors `aida-cli::lease_heartbeat`, so the foreign
+    /// backstop runs on one clock in both crates.
+    // trace:BUG-2425 | ai:claude
+    pub fn heartbeat(&self) -> chrono::DateTime<chrono::Utc> {
+        self.file_mtime
+            .map_or(self.started_at, |m| m.max(self.started_at))
+    }
 }
 
 /// One work-item spec projected for the liveness pass — the display id, the two
@@ -1709,7 +1725,12 @@ pub fn read_session_leases(project_root: &Path) -> Vec<SessionLeaseLite> {
             continue;
         }
         if let Ok(content) = std::fs::read_to_string(&p) {
-            if let Ok(lease) = toml::from_str::<SessionLeaseLite>(&content) {
+            if let Ok(mut lease) = toml::from_str::<SessionLeaseLite>(&content) {
+                lease.file_mtime = entry
+                    .metadata()
+                    .ok()
+                    .and_then(|m| m.modified().ok())
+                    .map(chrono::DateTime::<chrono::Utc>::from);
                 out.push(lease);
             }
         }
@@ -1736,14 +1757,15 @@ pub fn lease_state_for(
         })
     };
     let age_hours = now.signed_duration_since(l.started_at).num_hours();
-    // trace:BUG-2425 | ai:claude
+    // A foreign lease ages from its heartbeat, not started_at, so a live
+    // long-running foreign session is not Stale. trace:BUG-2425 | ai:claude
     if !crate::pid_observer::PidObserver::current().can_observe(l.pid_namespace) {
         let advisory = l.review_verb || l.claim_verb;
         return classify_foreign_lease_state(
             advisory,
             worktree_exists,
             !advisory && has_live_claude(),
-            age_hours,
+            now.signed_duration_since(l.heartbeat()).num_hours(),
         );
     }
     if l.review_verb || l.claim_verb {
@@ -2765,6 +2787,7 @@ mod tests {
             claim_verb: false,
             authorized_by: None,
             driver: None,
+            file_mtime: None,
         }
     }
 
@@ -3295,6 +3318,22 @@ mod bug_2425_tests {
         assert_eq!(
             lease_state_for(&foreign_lease(ns, &gone, now), &[], now),
             LeaseState::Stale
+        );
+        // A fresh heartbeat keeps an old foreign lease Unknown, and the lease
+        // file mtime read_session_leases records is that heartbeat.
+        let mut beating = foreign_lease(ns, tmp.path(), now - chrono::Duration::hours(48));
+        assert_eq!(lease_state_for(&beating, &[], now), LeaseState::Stale);
+        beating.file_mtime = Some(now);
+        assert_eq!(lease_state_for(&beating, &[], now), LeaseState::Unknown);
+        let dir = leases_dir(tmp.path());
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("beating.toml"), toml::to_string(&beating).unwrap()).unwrap();
+        let read = read_session_leases(tmp.path());
+        assert_eq!(read.len(), 1);
+        assert!(read[0].heartbeat() > read[0].started_at);
+        assert_eq!(
+            lease_state_for(&read[0], &[], chrono::Utc::now()),
+            LeaseState::Unknown
         );
         assert!(foreign_lease_backstop_expired(old, now));
         assert!(!foreign_lease_backstop_expired(now, now));
