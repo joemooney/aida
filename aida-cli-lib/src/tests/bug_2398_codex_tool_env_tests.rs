@@ -492,8 +492,9 @@ enum Finalization {
 /// launches would have been caught.
 // trace:BUG-b6b1278890774ef993d2ebc327862470-172.ac022c22 | ai:claude
 const LAUNCH_INVENTORY: &[(&str, usize, Finalization)] = &[
-    // STORY-2326: the fg/bg seat writes moved into launch::assign_seat.
-    ("agent_launch.rs", 2, Finalization::PrepareLaunch(2)),
+    // STORY-2326: the fg/bg seat writes moved into launch::assign_seat; the
+    // 2 grant writes plus 5 launcher calls (2 spawn_agent, 3 assign_seat).
+    ("agent_launch.rs", 7, Finalization::PrepareLaunch(2)),
     // STORY-2254: the detached Codex worker (one grant assignment, one
     // finalization, after its own grant/headless/identity assignments).
     (
@@ -532,8 +533,10 @@ const LAUNCH_INVENTORY: &[(&str, usize, Finalization)] = &[
     // call last) and the headless `spawn_vendor_headless_resume_granted`
     // (punt/bg resume), which finalizes before stdio and revokes on refusal.
     // STORY-2326: exec, headless forking, reviewer, advisor and coordinator
-    // seat writes moved into launch::assign_seat. trace:STORY-2326 | ai:claude
-    ("session.rs", 9, Finalization::PrepareLaunch(7)),
+    // seat writes moved into launch::assign_seat: 9 grant/coordinator markers
+    // plus 12 launcher calls (6 spawn_agent, 6 assign_seat).
+    // trace:STORY-2326 | ai:claude
+    ("session.rs", 21, Finalization::PrepareLaunch(7)),
     // trace:BUG-2416 | ai:claude — the guided `aida do` session.
     ("zen_drive_root.rs", 1, Finalization::PrepareLaunch(1)),
 ];
@@ -631,11 +634,95 @@ fn grant_env_aliases(normalized: &str) -> Vec<String> {
     aliases
 }
 
+/// Calls of the STORY-2326 launcher in raw source. `spawn_agent` builds a
+/// child and `assign_seat` writes its role and grant inside
+/// `launch/spawn.rs`, so each caller is a launch site the `.env(..)` scans
+/// would miss once its writes moved behind the launcher (advisor ruling 2,
+/// round 5). A definition (`fn assign_seat(`) is not a call, a longer name
+/// (`exec_or_spawn_agent(`) is not either, and an import alias
+/// (`use ..assign_seat as NAME`) is followed.
+// trace:STORY-2326 | ai:claude
+fn launcher_calls(raw: &str) -> usize {
+    fn is_ident(c: char) -> bool {
+        c.is_alphanumeric() || c == '_'
+    }
+    let calls = |name: &str| {
+        raw.match_indices(name)
+            .filter(|(at, _)| {
+                let before = &raw[..*at];
+                let defines = before
+                    .trim_end()
+                    .strip_suffix("fn")
+                    .is_some_and(|b| !b.ends_with(is_ident));
+                !before.ends_with(is_ident)
+                    && raw[at + name.len()..].trim_start().starts_with('(')
+                    && !defines
+            })
+            .count()
+    };
+    ["assign_seat", "spawn_agent"]
+        .iter()
+        .map(|&name| {
+            let aliases: usize = raw
+                .split(&format!("{name} as "))
+                .skip(1)
+                .map(|rest| {
+                    rest.chars()
+                        .take_while(|c| is_ident(*c))
+                        .collect::<String>()
+                })
+                .filter(|alias| !alias.is_empty())
+                .map(|alias| calls(alias.as_str()))
+                .sum();
+            calls(name) + aliases
+        })
+        .sum()
+}
+
+/// The LAUNCH_INVENTORY count of the production source `src`.
+fn launch_sites(src: &str) -> usize {
+    launch_markers(&src.split_whitespace().collect::<String>()) + launcher_calls(src)
+}
+
 /// Whether the final ratchet would flag `src` as an unlisted launch site if
 /// it were the production file `rel`.
 fn flagged_as_unlisted(rel: &str, src: &str) -> bool {
-    let normalized = src.split_whitespace().collect::<String>();
-    launch_markers(&normalized) > 0 && !LAUNCH_INVENTORY.iter().any(|(f, ..)| *f == rel)
+    launch_sites(src) > 0 && !LAUNCH_INVENTORY.iter().any(|(f, ..)| *f == rel)
+}
+
+/// Advisor ruling 2 (round 5): a file that launches only through
+/// `launch::spawn_agent` / `launch::assign_seat` writes no selector itself,
+/// yet is a launch site in both inventories.
+// trace:STORY-2326 | ai:claude
+#[test]
+fn story_2326_inventories_count_launcher_callers() {
+    let seat = "fn launch(ctx: &LaunchContext, g: &str) -> Result<()> {\n\
+                let mut cmd = crate::launch::spawn_agent(ctx)?;\n\
+                crate::launch::assign_seat(&mut cmd, ctx.kind(),\n\
+                SeatDecision::Child { role: \"implementer\", grant: g })?; Ok(()) }";
+    assert_eq!(launcher_calls(seat), 2);
+    assert!(flagged_as_unlisted("fixture_launcher.rs", seat));
+    assert!(role_flagged_as_unlisted("fixture_launcher.rs", seat));
+    let aliased = "use crate::launch::{assign_seat as seat_of, spawn_agent as build};\n\
+                   fn launch(ctx: &LaunchContext) -> Result<()> {\n\
+                   let mut cmd = build (ctx)?;\n\
+                   seat_of(&mut cmd, ctx.kind(), NO_SEAT) }";
+    assert_eq!(launcher_calls(aliased), 2);
+    assert!(flagged_as_unlisted("fixture_aliased.rs", aliased));
+    assert!(role_flagged_as_unlisted("fixture_aliased.rs", aliased));
+    let returned = "fn build(ctx: &LaunchContext) -> Result<Command> { return spawn_agent(ctx); }";
+    assert_eq!(launcher_calls(returned), 1);
+    // A definition, a longer name and a doc link are not calls.
+    let clean = "/// Built by [`spawn_agent`].\n\
+                 pub(crate) fn spawn_agent(ctx: &LaunchContext) -> Result<Command> { todo!() }\n\
+                 fn assign_seat (cmd: &mut Command) {}\n\
+                 fn go(cmd: &mut Command) { exec_or_spawn_agent(cmd); my_assign_seat(cmd); }";
+    assert_eq!(launcher_calls(clean), 0);
+    assert!(!flagged_as_unlisted("fixture_clean_launcher.rs", clean));
+    assert!(!role_flagged_as_unlisted(
+        "fixture_clean_launcher.rs",
+        clean
+    ));
 }
 
 // One negative test per selector spelling the inventory scan must catch.
@@ -703,11 +790,10 @@ fn bug_2398_final_spawn_boundary_ratchet() {
     let src = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
     let mut files = Vec::new();
     production_sources(&src, &mut files);
-    let normalize = |text: &str| text.split_whitespace().collect::<String>();
     let mut found = std::collections::BTreeMap::new();
     for path in files {
         let text = std::fs::read_to_string(&path).unwrap();
-        let markers = launch_markers(&normalize(&text));
+        let markers = launch_sites(&text);
         if markers > 0 {
             let rel = path
                 .strip_prefix(&src)
@@ -1608,6 +1694,34 @@ enum RoleRoute {
     /// A Codex launch that does not finalize yet; the reason names the
     /// follow-up. Moving an entry out of here is the fix, not editing it.
     KnownGap(&'static str),
+    /// `launch::assign_seat`, the one seat writer: it launches nothing
+    /// itself, and every caller is counted at its own site.
+    // trace:STORY-2326 | ai:claude
+    SeatWriter,
+}
+
+/// The ROLE_LAUNCH_SITES count of the production source `src`: each child
+/// role write (`.env(` keyed by the literal or `ROLE_ENV`) plus each call of
+/// the launcher, which writes the role behind the caller's back.
+// trace:BUG-2395 STORY-2326 | ai:claude
+fn role_sites(src: &str) -> usize {
+    let normalized: String = src.split_whitespace().collect();
+    let writes = normalized
+        .split(".env(")
+        .skip(1)
+        .filter(|call| {
+            let key = call.split([',', ')']).next().unwrap_or_default();
+            let key = key.trim_start_matches('&');
+            key == "\"AIDA_SESSION_ROLE\"" || key == "ROLE_ENV" || key.ends_with("::ROLE_ENV")
+        })
+        .count();
+    writes + launcher_calls(src)
+}
+
+/// Whether the role ratchet would flag `src` as an unlisted role-launch site
+/// if it were the production file `rel`.
+fn role_flagged_as_unlisted(rel: &str, src: &str) -> bool {
+    role_sites(src) > 0 && !ROLE_LAUNCH_SITES.iter().any(|(f, ..)| *f == rel)
 }
 
 /// BUG-2395 (verify-only, advisor ruling): every production file that hands a
@@ -1617,8 +1731,13 @@ enum RoleRoute {
 const ROLE_LAUNCH_SITES: &[(&str, usize, RoleRoute)] = &[
     // STORY-2254: the detached Codex worker finalizes via prepare_launch.
     ("agent_codex_background.rs", 1, RoleRoute::LaunchInventory),
+    // STORY-2326: the fg/bg lane seats, through 2 spawn_agent and 3
+    // assign_seat calls. trace:STORY-2326 | ai:claude
+    ("agent_launch.rs", 5, RoleRoute::LaunchInventory),
     ("autopilot_intake.rs", 1, RoleRoute::LaunchInventory),
     ("dispatch.rs", 1, RoleRoute::LaunchInventory),
+    // The two `.env(ROLE_ENV, ..)` writes of assign_seat (Child, Lane).
+    ("launch/spawn.rs", 2, RoleRoute::SeatWriter),
     (
         "orchestrator_leases.rs",
         1,
@@ -1630,8 +1749,9 @@ const ROLE_LAUNCH_SITES: &[(&str, usize, RoleRoute)] = &[
     // (punt/bg resume); both finalize through `prepare_launch`.
     // trace:BUG-2386 | ai:claude
     // STORY-2326: the headless forking and reviewer writes moved into
-    // launch::assign_seat. trace:STORY-2326 | ai:claude
-    ("session.rs", 6, RoleRoute::LaunchInventory),
+    // launch::assign_seat; 6 literal writes plus 12 launcher calls (6
+    // spawn_agent, 6 assign_seat). trace:STORY-2326 | ai:claude
+    ("session.rs", 18, RoleRoute::LaunchInventory),
     ("zen_drive_root.rs", 1, RoleRoute::LaunchInventory),
 ];
 
@@ -1643,11 +1763,7 @@ fn bug_2395_every_role_launch_site_is_inventoried() {
     production_sources(&src, &mut files);
     let mut found = std::collections::BTreeMap::new();
     for path in files {
-        let normalized: String = std::fs::read_to_string(&path)
-            .unwrap()
-            .split_whitespace()
-            .collect();
-        let n = normalized.matches(".env(\"AIDA_SESSION_ROLE\",").count();
+        let n = role_sites(&std::fs::read_to_string(&path).unwrap());
         if n > 0 {
             let rel = path
                 .strip_prefix(&src)
@@ -1684,6 +1800,14 @@ fn bug_2395_every_role_launch_site_is_inventoried() {
                 "{rel} claims LAUNCH_INVENTORY finalization but is not finalized there"
             ),
             RoleRoute::AidaChild(why) | RoleRoute::KnownGap(why) => assert!(!why.is_empty()),
+            // The seat writer's callers are the launch sites: at least one
+            // other inventoried file must call the launcher.
+            RoleRoute::SeatWriter => assert!(
+                ROLE_LAUNCH_SITES.iter().any(|(f, _, r)| f != rel
+                    && matches!(r, RoleRoute::LaunchInventory)
+                    && LAUNCH_INVENTORY.iter().any(|(l, ..)| l == f)),
+                "{rel}: the seat writer's callers are not inventoried"
+            ),
         }
     }
 }

@@ -198,21 +198,60 @@ fn call_args(rest: &str) -> &str {
     rest
 }
 
-/// Identifier words that name a non-vendor program (the aida binary, git,
-/// gh, a hook or shell). A `Command::new` whose program is not a string
-/// literal is a launch marker unless one of its words is here; a vendor
-/// program (`program`, `agent_bin`, a resolver call) never is.
-const NON_VENDOR_WORDS: &[&str] = &[
-    "aida", "exe", "gh", "git", "glab", "sccache", "hook", "shell", "script", "fake", "tmp",
-    "temp", "server", "dev", "cargo", "bwrap", "editor", "pager",
+/// The exact spellings of a non-vendor program (the aida binary, git, gh,
+/// glab, a hook, script or shell) the production sources pass to
+/// `Command::new`. A non-literal program is a launch marker unless its
+/// spelling (a value, or a call's callee path, see [`program_spelling`]) is
+/// listed here verbatim; a word inside it never exempts it, so
+/// `claude_exe`, `vendor_tmp` or `codex_bin` count (advisor ruling 3, round
+/// 5). A new non-vendor spelling is added here deliberately.
+// trace:STORY-2326 | ai:claude
+const NON_VENDOR_SPELLINGS: &[&str] = &[
+    // Values.
+    "aida",
+    "aida_bin",
+    "bwrap",
+    "dev_bin",
+    "exe",
+    "fixture.gh",
+    "gh",
+    "gh_bin",
+    "glab",
+    "hook",
+    "plan.exe",
+    "real_git",
+    "sccache_bin",
+    "script",
+    "server_bin",
+    "shell",
+    // Callee paths.
+    "aida_exe_path",
+    "crate::aida_bin::current_executable_path",
+    "crate::aida_exe_path",
+    "crate::kernel::resolve_gh_binary_for_probe",
+    "crate::pr_cmd::pr_ship_post_merge_aida_exe",
+    "crate::resolve_aida_exe",
+    "glab_binary",
+    "pr_ship_post_merge_aida_exe",
+    "resolve_aida_exe",
+    "self.aida_exe",
+    "std::env::current_exe",
 ];
+
+/// The spelling of a `Command::new` argument: the argument itself, or for a
+/// call (`crate::aida_exe_path()`, `current_exe()?.with(..)`) its callee path,
+/// the text before the first `(`. A trailing `,` or `?` is dropped.
+fn program_spelling(arg: &str) -> &str {
+    let arg = arg.trim_start_matches('&').trim_end_matches([',', '?']);
+    arg.split_once('(').map_or(arg, |(callee, _)| callee)
+}
 
 /// Whether a `Command::new` argument names the program of a vendor child.
 /// A string literal is one only when it is a vendor name; anything else is
-/// one unless it is spelled from [`NON_VENDOR_WORDS`] (`exe`, `gh_bin`,
-/// `crate::aida_exe_path()`). Vendor resolvers always count, so
-/// `let program = resolve_agent_program(..); Command::new(program)` and a
-/// program passed in as a parameter are both seen.
+/// one unless its spelling is in [`NON_VENDOR_SPELLINGS`]. Vendor resolvers
+/// always count, so `let program = resolve_agent_program(..);
+/// Command::new(program)` and a program passed in as a parameter are both
+/// seen.
 fn vendor_program_arg(arg: &str) -> bool {
     let arg = arg.trim_start_matches('&');
     if arg.starts_with('"') {
@@ -229,8 +268,7 @@ fn vendor_program_arg(arg: &str) -> bool {
     {
         return true;
     }
-    !arg.split(|c: char| !c.is_ascii_alphanumeric())
-        .any(|word| NON_VENDOR_WORDS.contains(&word.to_ascii_lowercase().as_str()))
+    !NON_VENDOR_SPELLINGS.contains(&program_spelling(arg))
 }
 
 /// Calls of `name(` in `normalized` that start an identifier (so
@@ -362,6 +400,11 @@ fn scanner_catches_every_mutant_spelling() {
         "fn f(agent_bin: &Path) { Command::new(agent_bin); }",
         "fn f(launch: L) { tokio::process::Command::new(launch.program); }",
         "fn f() { let c = Command::new(vendor_bin()); }",
+        // Ruling 3 (round 5): a non-vendor word inside a name never exempts it.
+        "fn f() { let claude_exe = resolve_vendor(\"claude\");\n Command::new(&claude_exe); }",
+        "fn f(vendor_tmp: &Path) { Command::new(&vendor_tmp); }",
+        "fn f() { Command::new(fake_shell_codex); Command::new(dev_server_agent()); }",
+        "fn f() { Command::new(exe_of(\"claude\")); Command::new(&aida_exe.join(\"x\")); }",
         // A process becoming the vendor, and child-side code before it does.
         "fn f(mut c: Command) { use std::os::unix::process::CommandExt; c.exec(); }",
         "fn f(mut c: Command) { std::os::unix::process::CommandExt::exec(&mut c); }",

@@ -117,6 +117,34 @@ fn resolve_refusal_table() {
             (expected, got) => panic!("{label}: expected {expected:?}, got {got:?}"),
         }
     }
+
+    // Advisor ruling 4 (round 5): a parent whose own `AIDA_CONTAINED` is
+    // neither on nor off is refused by `resolve` before anything is spawned,
+    // for every posture the child asks for.
+    let _env = crate::test_env::EnvVarsGuard::apply(&[
+        ("AIDA_CONTAINED", Some("maybe")),
+        ("AIDA_AGENT_CMD", None),
+    ]);
+    for posture in [aida, none, native] {
+        let (got, calls) = boundary_calls(|| {
+            LaunchContext::resolve(request(posture, LaunchKind::Fresh, &[]))
+                .map(|ctx| spawn_agent(&ctx))
+        });
+        match got {
+            Err(LaunchRefusal::MalformedParentContainment(msg)) => {
+                assert!(
+                    msg.contains("AIDA_CONTAINED") && msg.contains("maybe"),
+                    "{posture:?}: {msg}"
+                );
+                assert!(!msg.contains("STORY-"), "{msg}");
+            }
+            other => panic!("{posture:?}: expected a malformed-containment refusal, got {other:?}"),
+        }
+        assert_eq!(
+            calls, 0,
+            "{posture:?}: a refused launch reached the boundary"
+        );
+    }
 }
 
 #[test]

@@ -190,8 +190,9 @@ fn posture_flag_at(args: &[String], at: usize) -> Option<String> {
     let arg = args[at].as_str();
     let name = arg.split_once('=').map_or(arg, |(name, _)| name);
     // Claude: --settings, --permission-mode, --add-dir, --dangerously-*.
-    // Codex: --sandbox/-s, --ask-for-approval/-a, --full-auto, --yolo and
-    // --dangerously-bypass-approvals-and-sandbox.
+    // Codex: --sandbox/-s, --ask-for-approval/-a, --full-auto, --yolo,
+    // --dangerously-bypass-approvals-and-sandbox, and --profile (a profile
+    // can set sandbox_mode and approval_policy). trace:STORY-2326 | ai:claude
     let named = matches!(
         name,
         "--settings"
@@ -203,11 +204,14 @@ fn posture_flag_at(args: &[String], at: usize) -> Option<String> {
             | "--add-dir"
             | "--full-auto"
             | "--yolo"
+            | "--profile"
     ) || name.starts_with("--dangerously-");
     if named {
         return Some(arg.to_string());
     }
-    // `-c sandbox…` / `--config sandbox…` and the joined `-csandbox…` spelling.
+    // `-c <key>=…` / `--config <key>=…` and the joined `-c<key>=…` spelling,
+    // where the (possibly quoted) TOML key sets the sandbox, the approval
+    // policy (`approval_policy=never` is `-a never`) or selects a profile.
     let config_value = match name {
         "-c" | "--config" => match arg.split_once('=') {
             Some((_, value)) => Some(value),
@@ -218,9 +222,17 @@ fn posture_flag_at(args: &[String], at: usize) -> Option<String> {
             .filter(|v| !v.is_empty() && !arg.starts_with("--")),
     };
     config_value
-        .filter(|value| value.trim_start().starts_with("sandbox"))
+        .filter(|value| {
+            let key = value.trim_start().trim_start_matches(['"', '\'']);
+            POSTURE_CONFIG_KEYS.iter().any(|k| key.starts_with(k))
+        })
         .map(|value| format!("{name} {value}"))
 }
+
+/// Codex config key prefixes that set posture: the sandbox (`sandbox_mode`,
+/// `sandbox_workspace_write.*`), the approval policy, and `profile` /
+/// `profiles.*` (a profile can set either).
+const POSTURE_CONFIG_KEYS: &[&str] = &["sandbox", "approval_policy", "profile"];
 
 /// Refuse caller-supplied argv (a request tail or `default_flags`) that
 /// carries a posture-bearing flag.
@@ -329,6 +341,16 @@ mod tests {
             &["--config=sandbox_mode=x"],
             &["-csandbox_mode=x"],
             &["--model", "opus", "--settings", "x"],
+            // Advisor ruling 5 (round 5): the approval policy as config, a
+            // quoted TOML key, and a profile (flag or config).
+            &["-c", "approval_policy=never"],
+            &["--config=approval_policy=\"never\""],
+            &["-c", "\"sandbox_mode\"=danger-full-access"],
+            &["-c", "'sandbox_mode'=danger-full-access"],
+            &["--profile", "yolo"],
+            &["--profile=yolo"],
+            &["-c", "profile=yolo"],
+            &["-c", "profiles.yolo.sandbox_mode=danger-full-access"],
         ];
         for args in refused {
             assert!(refuse_posture_flags(&argv(args)).is_err(), "{args:?}");
