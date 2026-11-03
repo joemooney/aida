@@ -161,14 +161,102 @@ fn sandboxed_claimer_and_recorder_compare_by_namespace() {
 }
 
 #[test]
-fn host_tokens_and_grant_presenter_tokens_stay_unqualified() {
+fn host_tokens_stay_unqualified_and_launched_workers_are_qualified() {
     let host = sandboxed("linux-starttime:9");
     assert!(host.recorder_tokens().iter().all(|t| !t.contains("pidns-")));
-    let presenter = with_pid_namespace(Some(NS_A), || host.presenter_tokens());
-    assert!(presenter.iter().all(|t| !t.contains("pidns-")));
+    assert!(host
+        .presenter_tokens()
+        .iter()
+        .all(|t| !t.contains("pidns-")));
     let worker = with_pid_namespace(Some(NS_A), || host.launched_worker_tokens());
     assert_eq!(
         worker,
         vec![format!("proc:7@pidns-{NS_A}/linux-starttime:9")]
     );
+}
+
+/// Rework item 3: a namespace inode is reused once its namespace is torn
+/// down, so a qualified token with an empty start (pid + inode alone) never
+/// matches — on either side, or both.
+#[test]
+fn qualified_tokens_with_an_empty_start_never_match() {
+    let q = |tok: &str| qualify_with_pid_ns(tok.into(), Some(NS_A));
+    let full = q("proc:2@linux-starttime:9");
+    let empty = q("proc:2@");
+    assert_eq!(empty, format!("proc:2@pidns-{NS_A}/"));
+    assert!(!tokens_match(&full, &empty));
+    assert!(!tokens_match(&empty, &full));
+    assert!(!tokens_match(&empty, &empty));
+    assert!(!tokens_match(&empty, &q("shell:2@")));
+    assert!(tokens_match(&full, &full));
+}
+
+/// Rework item 2: a live lease's creator and agent pids are qualified like
+/// the recorder tokens they meet, so a sandboxed author approving its own
+/// work from the same sandbox is still refused through the live-lease path
+/// of `author_sessions` — while the same lease seen from the host never
+/// matches the host's unqualified tokens.
+#[test]
+fn same_sandbox_self_approval_is_refused_through_the_live_lease_path() {
+    let mut l = super::bug_1918_review_authority_tests::lease(
+        "01a2b3c4d5e6",
+        "BUG-24190",
+        PathBuf::from("/w/bug-24190"),
+    );
+    l.creator_pid = Some(2);
+    l.creator_pid_start_time = Some("linux-starttime:9".into());
+    l.active_pid = Some(7);
+    l.active_pid_start_time = Some("linux-starttime:9".into());
+    let spec = vec!["BUG-24190".to_string()];
+
+    let (authors, recorder) = with_pid_namespace(Some(NS_A), || {
+        (
+            author_sessions(std::slice::from_ref(&l), &[], &spec, None, |_| None),
+            sandboxed("linux-starttime:9").recorder_tokens(),
+        )
+    });
+    assert_eq!(authors.len(), 1);
+    assert!(authors[0]
+        .tokens
+        .iter()
+        .filter(|t| t.starts_with("proc:") || t.starts_with("shell:"))
+        .all(|t| t.contains(&format!("@pidns-{NS_A}/"))));
+    // Only by process identity: no shared session or lease token.
+    assert!(recorder
+        .iter()
+        .all(|t| t.starts_with("proc:") || t.starts_with("shell:")));
+    assert!(
+        authors[0].matches(&recorder),
+        "a same-sandbox self-approval must still be refused"
+    );
+
+    let host_authors = author_sessions(std::slice::from_ref(&l), &[], &spec, None, |_| None);
+    let host_recorder = with_pid_namespace(Some(NS_A), || {
+        sandboxed("linux-starttime:9").recorder_tokens()
+    });
+    assert!(
+        !host_authors[0].matches(&host_recorder),
+        "unqualified lease pids never match a namespaced recorder"
+    );
+}
+
+/// Rework item 4: grant presenter/binding tokens taken inside a sandbox are
+/// qualified, so two sandboxes whose processes started in the same jiffy do
+/// not present each other's binding; within one sandbox they still bind.
+#[test]
+fn presenter_tokens_of_two_sandboxes_started_in_the_same_jiffy_do_not_bind() {
+    let src = sandboxed("linux-starttime:9");
+    let in_a = with_pid_namespace(Some(NS_A), || src.presenter_tokens());
+    let in_a_again = with_pid_namespace(Some(NS_A), || src.presenter_tokens());
+    let in_b = with_pid_namespace(Some(NS_B), || src.presenter_tokens());
+    assert!(in_a.iter().all(|t| t.contains(&format!("@pidns-{NS_A}/"))));
+    assert!(!binding_overlaps(&in_a, &in_b));
+    for (a, b) in in_a.iter().zip(&in_b) {
+        assert!(!binding_tokens_match(a, b), "{a} vs {b}");
+    }
+    assert!(binding_overlaps(&in_a, &in_a_again));
+    // Before the fix both sandboxes presented the same unqualified token.
+    let unqualified = src.presenter_tokens();
+    assert!(binding_tokens_match(&unqualified[0], &unqualified[0]));
+    assert!(!binding_overlaps(&in_a, &unqualified));
 }

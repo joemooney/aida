@@ -20,7 +20,7 @@ const HEAD: &str = "1aca4e3e9251aaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 const AUTHOR_SESSION_ID: &str = "cb4777a7-0000-4000-8000-000000000001";
 const OPERATOR: &str = "aida review record (operator)";
 
-fn lease(id: &str, scope: &str, worktree: PathBuf) -> SessionLease {
+pub(super) fn lease(id: &str, scope: &str, worktree: PathBuf) -> SessionLease {
     SessionLease {
         tree_kind: Default::default(),
         id: id.to_string(),
