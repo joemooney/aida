@@ -32,7 +32,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T00:54:49.371776631Z
-modified_at: 2026-11-03T02:39:22.816215929Z
+modified_at: 2026-11-03T02:45:19.771451712Z
 req_type: Story
 tags:
 - architecture
@@ -495,6 +495,17 @@ comments:
     GATE (LIGHT): AIDA_CARGO_TIMEOUT=40m cargo test --profile agent -p aida-cli-lib --lib task_2707_ plus make check-ci-fast. If .git is read-only in your sandbox, do NOT try to work around it: leave the diff in the worktree, write DONE plus your gate output to .aida-lane-report.md at the worktree root, and stop. The advisor host-commits it (the TASK-2706 arrangement). If a design choice is not settled by the rulings, write it as a FORK in that report and stop instead of guessing.
   created_at: 2026-11-03T02:39:22.816215929Z
   modified_at: 2026-11-03T02:39:22.816215929Z
+  session_id: 125337a4-7dd3-483b-9c56-3665173938ae
+- id: 01a19f4b-fd1b-75e0-b618-bfd3e85fb54a
+  author: joe
+  content: |-
+    ADVISOR RULING F-H (2026-11-02 19:52 MST), TASK-2707 PR1: F-H1 APPROVED, without migration.
+    - The informational expiry-notice ledger and its lock move to a persistent per-grant leaf directory `<AIDA home>/.aida/grant-notices/<grant-id>/` (notice.json, notice.lock), for ALL callers, contained and host. A contained lane's write profile gets ONLY its own grant's leaf directory. Canonical grant records (session-grants/<id>.json), revocation and session-grant-locks stay host-only and read-only in the lane.
+    - No compatibility shim and no migration (single-user repo, surgery OK): legacy `<id>.notice.{json,lock}` files in session-grants are ignored, and a one-time duplicate notice after the upgrade is ACCEPTED. Sweep the legacy notice files on the host side in the same change (a best-effort remove of `*.notice.json` / `*.notice.lock` from session-grants).
+    - Tests: a lane write profile contains the notice leaf and NOT session-grants; epoch/crossed dedup works within the new leaf; the directory-leaf refusal test covers a write aimed at session-grants.
+    - Standing guidance for this lane: decide NON-SECURITY implementation details yourself (naming, file layout, helper shape) and note them in the PR body. Stop with a FORK only for an authority, confinement or credential choice that the rulings do not settle.
+  created_at: 2026-11-03T02:45:19.771451712Z
+  modified_at: 2026-11-03T02:45:19.771451712Z
   session_id: 125337a4-7dd3-483b-9c56-3665173938ae
 history:
 - id: 01a1949a-3f43-7b12-bc6b-0d5bf40ee2f2
