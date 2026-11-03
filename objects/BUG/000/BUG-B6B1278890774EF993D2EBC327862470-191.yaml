@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-191
 agreed_id: BUG-2422
 title: merge-hold auto-release cannot resolve a node-local friendly spec ID (STORY-HOME-332 resolves to 0), so an approved PR still needs a human clear
 description: 'Observed 2026-11-03 00:50 MST on PR-3284 (STORY-2336), APPROVED at head a42ff79, CI green: aida merge-hold auto-release 3284 printed: held, covered spec is missing or ambiguous: STORY-HOME-332 resolves to 0 requirements; exactly one required; human clear required. aida show STORY-HOME-332 resolves to STORY-2336, so the auto-release covered-spec resolver does not use the same friendly-ID resolution as show. Expected: auto-release resolves local, friendly and origin IDs exactly as aida show does and releases an eligible recorded approval. Impact: every approved held PR whose hold names a friendly ID falls back to an operator TTY clear.'
-status: InProgress
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-03T07:48:32.750358555Z
-modified_at: 2026-11-03T09:48:32.206037037Z
+modified_at: 2026-11-03T17:18:43.628598158Z
 req_type: Bug
 tags:
 - area:gate
@@ -73,6 +73,20 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1a26b-9ba7-7db1-b422-958e03c8c8ce
+  author: aida-auto-bump
+  timestamp: 2026-11-03T17:18:43.623121672Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1a26b-9bac-7fa2-824d-bebaf0eced4d
+  timestamp: 2026-11-03T17:18:43.628594112Z
+  agent: aida
+  commit_sha: d32d909128fa7dec11860bf2092baaccd1040034
+  summary: Auto-release now resolves covered specs via RequirementsStore::resolve_unambiguous_index (literal-first + node-alias expansion, same order as aida show's backend resolver), keeping exactly-one strictness in the shared check closure used at eligibility and both release rechecks; both CLI entry points install the alias map. Regression test auto_release_resolves_a_friendly_spec_label_like_show covers HOME (released) and WORK (held, 0 matches); collision tests still refuse. All code CI jobs green at 67b6b4e; the only red check is merge-hold-gate, i.e. the hold this approval is meant to release.
+  review_verdict: approved
 filed_at:
   code_sha: db087637d57deb2025d925eb4ca59c7e298cb45f
   branch: main
@@ -81,3 +95,7 @@ filed_at:
   aida_build_sha: cfee54e5aab
   vendor: claude
   session: c58592f4-04ae-498b-9afd-87b0cc2bcde9
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-03T17:18:43.623116118Z
+  completion_sha: d32d909128fa7dec11860bf2092baaccd1040034
