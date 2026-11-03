@@ -80,7 +80,7 @@ fn bug2426_dead_author_stale_head_is_updated_then_reviewed_next_tick() {
     notify(temp.path(), &store, &stale);
     let updates = Cell::new(0);
     let dead = |_: &forge::Change| Some(false);
-    let forge_ok = |c: &forge::Change| {
+    let forge_ok = |c: &forge::Change| -> std::result::Result<(), update::UpdateFailure> {
         assert_eq!(c.id, 7);
         updates.set(updates.get() + 1);
         Ok(())
@@ -111,24 +111,167 @@ fn bug2426_dead_author_stale_head_is_updated_then_reviewed_next_tick() {
     assert!(entry.skipped.is_none(), "a dispatched head is not parked");
 }
 
+/// The advisor routings delivered so far (the author's stale-head notice,
+/// "merge `main` before review", is not one).
+fn advisor_mail(root: &Path) -> Vec<aida_core::mailbox::Message> {
+    aida_core::mailbox::read_local_messages(root)
+        .unwrap()
+        .into_iter()
+        .filter(|m| m.to == aida_core::mailbox::Recipient::Agent("advisor".into()))
+        .filter(|m| {
+            m.subject
+                .as_deref()
+                .is_some_and(|s| s.contains(" with overlap; "))
+        })
+        .collect()
+}
+
+fn never(_: &forge::Change) -> std::result::Result<(), update::UpdateFailure> {
+    panic!("this branch must not be updated")
+}
+
 // A live author owns the merge: the watcher does not touch the branch.
 #[test]
 fn bug2426_live_or_unknown_author_branch_is_not_updated() {
     let (temp, store) = fixture();
     let stale = change(1, true);
     notify(temp.path(), &store, &stale);
-    let never = |_: &forge::Change| -> std::result::Result<(), String> {
-        panic!("a live author's branch must not be updated")
-    };
     let Some(Action::Skip(reason)) = pass(temp.path(), &store, &stale, &|_| Some(true), &never)
     else {
         panic!("skip expected")
     };
     assert!(reason.contains("is live"), "{reason}");
-    let Some(Action::Skip(reason)) = pass(temp.path(), &store, &stale, &|_| None, &never) else {
+    assert!(advisor_mail(temp.path()).is_empty());
+}
+
+// AC2: when liveness cannot be judged (no branch reported), the branch is
+// not updated but the change is routed to the advisor, exactly once.
+#[test]
+fn bug2426_unknown_author_branch_routes_once_to_the_advisor() {
+    let (temp, store) = fixture();
+    let mut stale = change(1, true);
+    stale.head_branch = None;
+    notify(temp.path(), &store, &stale);
+    for _ in 0..2 {
+        let Some(Action::Skip(reason)) = pass(temp.path(), &store, &stale, &|_| None, &never)
+        else {
+            panic!("skip expected")
+        };
+        assert!(
+            reason.contains("cannot tell whether its author is live"),
+            "{reason}"
+        );
+        assert!(reason.contains("routed to the advisor"), "{reason}");
+    }
+    let routed = advisor_mail(temp.path());
+    assert_eq!(routed.len(), 1, "routed once: {routed:?}");
+    assert_eq!(
+        routed[0].subject.as_deref(),
+        Some("PR-7 behind `main` with overlap; the watcher cannot judge its author")
+    );
+}
+
+// AC2 robustness: a transient failure is retried once on a later pass; a
+// second failure is routed, and the mail says the cause may be transient.
+#[test]
+fn bug2426_transient_update_failure_is_retried_once_then_routed() {
+    let (temp, store) = fixture();
+    let stale = change(1, true);
+    notify(temp.path(), &store, &stale);
+    let calls = Cell::new(0);
+    let flaky = |_: &forge::Change| -> std::result::Result<(), update::UpdateFailure> {
+        calls.set(calls.get() + 1);
+        Err(update::UpdateFailure::transient(
+            "update-branch did not run or exceeded 60 seconds",
+        ))
+    };
+    let dead = |_: &forge::Change| Some(false);
+    let Some(Action::Skip(reason)) = pass(temp.path(), &store, &stale, &dead, &flaky) else {
         panic!("skip expected")
     };
-    assert!(reason.contains("branch is unknown"), "{reason}");
+    assert!(reason.contains("retried once on the next pass"), "{reason}");
+    assert!(advisor_mail(temp.path()).is_empty(), "not routed yet");
+    for _ in 0..2 {
+        let Some(Action::Skip(reason)) = pass(temp.path(), &store, &stale, &dead, &flaky) else {
+            panic!("skip expected")
+        };
+        assert!(reason.contains("routed to the advisor"), "{reason}");
+    }
+    assert_eq!(calls.get(), 2, "one attempt plus one retry");
+    let routed = advisor_mail(temp.path());
+    assert_eq!(routed.len(), 1, "{routed:?}");
+    assert!(
+        routed[0].body.contains("may be transient"),
+        "{}",
+        routed[0].body
+    );
+
+    // A retry that succeeds is an ordinary accepted update.
+    let (temp, store) = fixture();
+    notify(temp.path(), &store, &stale);
+    let first = Cell::new(true);
+    let once = |_: &forge::Change| -> std::result::Result<(), update::UpdateFailure> {
+        if first.replace(false) {
+            Err(update::UpdateFailure::transient(
+                "update-branch failed (exit 1): EOF",
+            ))
+        } else {
+            Ok(())
+        }
+    };
+    pass(temp.path(), &store, &stale, &dead, &once);
+    let Some(Action::Skip(reason)) = pass(temp.path(), &store, &stale, &dead, &once) else {
+        panic!("skip expected")
+    };
+    assert!(reason.starts_with(update::STALE_UPDATED), "{reason}");
+    assert!(advisor_mail(temp.path()).is_empty());
+}
+
+// Follow-up: an accepted update whose new head never appears is routed to
+// the advisor after the bounded wait, once.
+#[test]
+fn bug2426_accepted_update_without_new_head_routes_after_wait() {
+    let (temp, store) = fixture();
+    let stale = change(1, true);
+    notify(temp.path(), &store, &stale);
+    let dead = |_: &forge::Change| Some(false);
+    let ok = |_: &forge::Change| -> std::result::Result<(), update::UpdateFailure> { Ok(()) };
+    pass(temp.path(), &store, &stale, &dead, &ok);
+    // Within the wait: still parked, nobody mailed, no second update.
+    let Some(Action::Skip(reason)) = pass(temp.path(), &store, &stale, &dead, &never) else {
+        panic!("skip expected")
+    };
+    assert!(
+        reason.contains("reviewed once the forge reports it"),
+        "{reason}"
+    );
+    assert!(advisor_mail(temp.path()).is_empty());
+    store
+        .transaction(&stale.key(), |state| {
+            let update = state
+                .entries
+                .get_mut(&stale.key())
+                .unwrap()
+                .update
+                .as_mut()
+                .unwrap();
+            update.at -= chrono::Duration::minutes(update::UPDATE_WAIT_MINUTES + 1);
+            Ok(())
+        })
+        .unwrap();
+    for _ in 0..2 {
+        let Some(Action::Skip(reason)) = pass(temp.path(), &store, &stale, &dead, &never) else {
+            panic!("skip expected")
+        };
+        assert!(reason.contains("no new head after 30 minutes"), "{reason}");
+        assert!(reason.contains("routed to the advisor"), "{reason}");
+    }
+    let routed = advisor_mail(temp.path());
+    assert_eq!(routed.len(), 1, "{routed:?}");
+    assert_eq!(
+        routed[0].subject.as_deref(),
+        Some("PR-7 behind `main` with overlap; update-branch produced no new head")
+    );
 }
 
 // AC2 + AC3: a refused update routes the change to the advisor once, and
@@ -138,8 +281,10 @@ fn bug2426_conflicting_update_routes_to_the_advisor_and_is_listed() {
     let (temp, store) = fixture();
     let stale = change(1, true);
     notify(temp.path(), &store, &stale);
-    let conflicts = |_: &forge::Change| -> std::result::Result<(), String> {
-        Err("update-branch conflicts: merge conflict between base and head".into())
+    let conflicts = |_: &forge::Change| -> std::result::Result<(), update::UpdateFailure> {
+        Err(update::UpdateFailure::refused(
+            "update-branch conflicts: merge conflict between base and head",
+        ))
     };
     let dead = |_: &forge::Change| Some(false);
     for _ in 0..2 {

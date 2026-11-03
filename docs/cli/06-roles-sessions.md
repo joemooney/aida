@@ -547,11 +547,15 @@ A notified stale head is not left waiting forever. On a later pass, if no live
 session lease holds the change's branch (its author lane has exited), the
 watcher runs `gh pr update-branch` once for that head, and the merged head is
 reviewed when discovery reports it. This is the only branch write the watcher
-makes. While the author's session is live, or the branch is unknown, the
-watcher leaves the merge to the author. When the forge refuses the update
-(conflicts), or it cannot run (GitLab merge requests), the watcher routes the
-change to the advisor's mailbox once, with a subject such as "PR-N behind
-main with overlap; update-branch conflicts". `aida awaiting` lists every change the
+makes. While the author's session is live, the watcher leaves the merge to
+the author. A failure that may be transient (a timeout, or a non-conflict
+forge error) is retried once on a later pass. The watcher routes the change to
+the advisor's mailbox once, with a subject such as "PR-N behind main with
+overlap; update-branch conflicts", when the forge refuses the update
+(conflicts), the update cannot run (GitLab merge requests) or fails again on
+its retry, the forge did not report the branch so the author's liveness cannot
+be judged, or an accepted update produces no new head within 30 minutes.
+`aida awaiting` lists every change the
 watcher is parking, with its reason and since when (`review_watch_skipped` in
 `--json`). Changes that are only waiting for a reviewer slot, or that are under
 review or already reviewed, are not listed.

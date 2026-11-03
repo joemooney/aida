@@ -615,7 +615,7 @@ fn task1993_live_discovery_probes_both_forges_and_refuses_moving_or_unknown_head
             "https://github.com/owner/repo.git"
         };
         let row = if gitlab {
-            serde_json::json!({"iid":1,"state":"opened","draft":false,"sha":head,"target_branch":"main","author":{"username":"writer"}})
+            serde_json::json!({"iid":1,"state":"opened","draft":false,"sha":head,"source_branch":"feature","target_branch":"main","author":{"username":"writer"}})
         } else {
             serde_json::json!({"number":1,"state":"OPEN","isDraft":false,"headRefOid":head,"headRefName":"feature","baseRefName":"main","author":{"login":"writer"},"statusCheckRollup":[{"status":"IN_PROGRESS"}]})
         };
@@ -854,7 +854,8 @@ exit 3
             "a stale-head notice, then one advisor routing: {messages:?}"
         );
         assert!(messages.iter().all(|m| m.from == "review-watch"));
-        // GitLab has no update the watcher may run: routed straight away.
+        // GitLab has no update the watcher may run: the refusal is not
+        // transient, so the second pass routes it without a retry.
         let routed = if gitlab {
             "MR-1 behind `main` with overlap; the watcher could not update it"
         } else {
