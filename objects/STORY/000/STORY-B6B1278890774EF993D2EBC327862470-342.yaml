@@ -17,7 +17,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-03T13:41:47.751489803Z
-modified_at: 2026-11-03T15:21:53.167321491Z
+modified_at: 2026-11-03T15:34:52.586343499Z
 req_type: Story
 relationships:
 - rel_type:
@@ -36,6 +36,12 @@ comments:
   content: 'Local implementation and validation finished in /home/joe/ai/aida-worktrees/aida-seat-aida-story-b6b1278890774ef993d2ebc327862470-342. Expired renewals re-mint fresh IDs with preserved settings and original/default or explicit TTL; active renewal remains in place; stopped records stay stopped. Compact statusline and hook banner warn in the last 60m, with deduplicated operator/advisor mail and advisor/operator due items. Notice timestamps reflect actual delivery so inbox watermarks cannot hide delayed delivery. Updated CLI help golden and docs/cli/04-git-lifecycle.md. Validation: final `cargo test -p aida-cli-lib --lib story_b6b_166_mandate_renew_tests -- --test-threads=1` passed all 15; help_surface_matches_golden_snapshot passed; cargo fmt --all -- --check and git diff --check passed. Broader `mandate` filter: 357 passed, 1 ignored, one re-exec error because a concurrent rebuild replaced the running binary; reran pr_train::verified::bug2406::bug2406_held_member_released_under_mandate_lands against the stable final binary and it passed. Complete patch preserved at /tmp/STORY-2346.patch. BLOCKED publication: .git is explicitly read-only and `git add` fails creating .git/index.lock (Read-only file system). No commit, push, PR, review record or ship attempted after that refusal; leaving In Progress and queued, not Done. Draft finding filed for native launch grants. Suggested commit after handoff: [AI:codex] feat(mandate): revive expired grants and warn before expiry (STORY-2346). Reminders are triggered by status/hook/due-job reads, without a new background timer.'
   created_at: 2026-11-03T14:24:01.373873914Z
   modified_at: 2026-11-03T14:24:01.373873914Z
+- id: 01a1a20c-8745-7e51-95ea-4725d58b593d
+  author: joe
+  content: 'Advisor ruling: PR #3297 round 2: fix all 6 findings in one push (bundle the minor and cosmetic ones). (1) AC-level trace tags on the tests; (2) assert the exact AC3 start line; (3) capture the old mandate id before extend() overwrites m.id, print it in the revive output, and test the message; (4) the revive path emits MandateChanged with renewed_from: Some(old id); (5) fix the extend() doc comment; (6) cache the recipient-directory miss in notify_expiry so it does not reload on every statusline tick. LIGHT gate: ONE targeted cargo test -p <crate> <filter> plus make check-ci-fast; never cargo test --workspace, make check or make check-ci. Push to the existing PR branch, then stop.'
+  created_at: 2026-11-03T15:34:52.485404659Z
+  modified_at: 2026-11-03T15:34:52.485404659Z
+  session_id: f5eddefe-032d-4760-94ba-3a318cf3d1d1
 history:
 - id: 01a1a1ae-1569-7562-bd46-8229e0a4ee0e
   author: aida-session-start
