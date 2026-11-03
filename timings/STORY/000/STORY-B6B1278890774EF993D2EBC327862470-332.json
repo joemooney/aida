@@ -1,0 +1,88 @@
+{
+  "schema_version": 1,
+  "spec": "STORY-B6B1278890774EF993D2EBC327862470-332",
+  "publishes": [
+    {
+      "at": "2026-11-03T14:12:29.498456055Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-03T05:03:47.792704634Z",
+      "spec": "STORY-b6b1278890774ef993d2ebc327862470-332",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-11-03T05:08:29.634757671Z",
+      "spec": "STORY-b6b1278890774ef993d2ebc327862470-332",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "edit",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-03T05:08:29.635810682Z",
+      "spec": "STORY-b6b1278890774ef993d2ebc327862470-332",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Needs Attention",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-03T05:10:57.644652172Z",
+      "spec": "STORY-b6b1278890774ef993d2ebc327862470-332",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-11-03T06:16:10.030008087Z",
+      "spec": "STORY-b6b1278890774ef993d2ebc327862470-332",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "edit",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-03T06:16:10.131228573Z",
+      "spec": "STORY-b6b1278890774ef993d2ebc327862470-332",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Needs Attention",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-03T14:12:29.352502114Z",
+      "spec": "STORY-b6b1278890774ef993d2ebc327862470-332",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "e9ce855f294aebea6e18ff66df5c428cf3835c94",
+        "pr": 3284,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
