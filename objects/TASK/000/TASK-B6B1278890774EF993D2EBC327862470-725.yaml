@@ -12,13 +12,20 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-02T20:26:09.524491907Z
-modified_at: 2026-11-02T20:26:09.524491907Z
+modified_at: 2026-11-03T02:16:29.373359770Z
 req_type: Task
 tags:
 - carried-from:BUG-2394
 - finding-hash:688835ba
 - from-review:BUG-2394
 - kind:carried-forward
+comments:
+- id: 01a19f31-95bd-7b11-a0a1-284af293e7af
+  author: joe
+  content: 'Advisor ruling (10-28 rule-once): accepted, not fixed. The reverse direction falls out of the same keyed lookup the asserted direction tests; it was accepted as cosmetic at review.'
+  created_at: 2026-11-03T02:16:29.373359770Z
+  modified_at: 2026-11-03T02:16:29.373359770Z
+  session_id: 125337a4-7dd3-483b-9c56-3665173938ae
 history:
 - id: 01a19e05-b1da-7a10-b1bb-25bf05c60f45
   author: joe
