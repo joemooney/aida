@@ -60,6 +60,7 @@ mod backlog;
 mod brief;
 mod brief_cmd;
 mod burndown;
+mod idle_eligible;
 // trace:TASK-1500 | ai:codex
 mod burndown_run;
 mod bypass_confirm;

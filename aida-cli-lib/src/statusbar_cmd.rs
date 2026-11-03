@@ -110,6 +110,10 @@ pub(crate) fn you_channels(report: &awaiting_you::AwaitingReport) -> Vec<(usize,
         if n == 1 { singular } else { plural }.to_string()
     }
     let mut v: Vec<(usize, String)> = Vec::new();
+    // trace:STORY-2336 | ai:codex
+    if !report.idle_eligible.is_empty() {
+        v.push((report.idle_eligible.len(), "idle eligible".into()));
+    }
     let prs = report.mergeable_prs.len();
     if prs > 0 {
         v.push((prs, label(prs, "PR", "PRs")));
@@ -449,6 +453,7 @@ mod tests {
     #[test]
     fn you_channels_flattens_every_populated_channel_with_counts() {
         let report = AwaitingReport {
+            idle_eligible: Vec::new(),
             mergeable_prs: vec![MergeablePrItem {
                 number: 7,
                 title: "t".into(),
