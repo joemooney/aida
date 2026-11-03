@@ -1,0 +1,27 @@
+id: 01a1a303-19d6-7150-899f-5bd32cbd69ca
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-750
+title: '[minor, non-blocking] maintenance_schedule.rs:2120-2142 mandate_renewal_job is …'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on STORY-2346, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  [minor, non-blocking] maintenance_schedule.rs:2120-2142 mandate_renewal_job is synthetic (not in the registry); render_due_jobs_block tells seats to report each job with 'aida schedule done <job>', but done_as (maintenance_schedule.rs:1595) bails 'no scheduled job named mandate-renewal'. Either exempt it from that instruction or accept it in done_as.
+  Reviewed sha: 9d8dddad6598a23e7fb84965bb227da8d2d27125
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-03T20:04:11.862400344Z
+modified_at: 2026-11-03T20:04:11.862400344Z
+req_type: Task
+tags:
+- carried-from:STORY-2346
+- finding-hash:ab996a40
+- from-review:STORY-2346
+- kind:carried-forward
+filed_at:
+  code_sha: b8f4eaa715bee567834972cffbc3bed2cdb71dc6
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: da17908306f
+  vendor: claude
