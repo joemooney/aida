@@ -837,7 +837,13 @@ fn key_only_direct_grant_is_vouched_by_its_own_sessions_recorded_key() {
     let now = Utc::now();
 
     // The hook records the key it proved it holds; then the row vouches.
-    registry_row(root, "claude-1593772", "sid-adv", None, now - CDuration::minutes(2));
+    registry_row(
+        root,
+        "claude-1593772",
+        "sid-adv",
+        None,
+        now - CDuration::minutes(2),
+    );
     assert_eq!(
         attribution::session_heartbeat(root, "sid-adv", &direct),
         None,
@@ -849,10 +855,16 @@ fn key_only_direct_grant_is_vouched_by_its_own_sessions_recorded_key() {
     assert_eq!(attribution::session_heartbeat(root, "sid-x", &direct), None);
     // A row holding a key the grant does not carry never vouches.
     registry_row(root, "claude-77", "sid-other", Some(&other_key), now);
-    assert_eq!(attribution::session_heartbeat(root, "sid-other", &direct), None);
+    assert_eq!(
+        attribution::session_heartbeat(root, "sid-other", &direct),
+        None
+    );
     // Dropping the grant clears the key, and the row stops vouching.
     crate::agent_registry::record_grant_key(root, "claude-1593772", None);
-    assert_eq!(attribution::session_heartbeat(root, "sid-adv", &direct), None);
+    assert_eq!(
+        attribution::session_heartbeat(root, "sid-adv", &direct),
+        None
+    );
     crate::agent_registry::record_grant_key(root, "claude-1593772", Some(&key));
 
     // End to end through the verdict, no live process: the key-only
@@ -874,7 +886,10 @@ fn key_only_direct_grant_is_vouched_by_its_own_sessions_recorded_key() {
     };
     let ok = as_job(submitter(&direct, &key, root, "sid-adv"));
     let checks = attribution::verdict(&ok, &["advisor".into()], &p, now).unwrap();
-    assert!(checks.contains(&"session-heartbeat".to_string()), "{checks:?}");
+    assert!(
+        checks.contains(&"session-heartbeat".to_string()),
+        "{checks:?}"
+    );
     let borrowed = as_job(submitter(&direct, &key, root, "sid-other"));
     assert_eq!(
         attribution::verdict(&borrowed, &["advisor".into()], &p, now)
