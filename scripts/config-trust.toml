@@ -943,3 +943,14 @@ inspection = "policy"
 # trace:TASK-2631 | ai:codex
 [keys.trusted."contained.vendors"]
 "*" = "policy"
+
+# Private vendor-state config is generated, not a branch-local authority read.
+# Egress comes from the already-pinned trusted project snapshot.
+# trace:TASK-2707 | ai:codex
+[readers."aida-cli-lib/src/containment/launch.rs"]
+channels = ["other-file", "write", "trusted"]
+sites = 1
+
+[keys.trusted.contained]
+allowed_hosts = "policy"
+read_allowlist = "policy"

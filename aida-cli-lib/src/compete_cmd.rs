@@ -1139,7 +1139,7 @@ pub(crate) fn build_compete_arm_command(
     if vendor == "claude" {
         cmd.env(session::DISABLE_BACKGROUND_TASKS_ENV, "1");
     }
-    if headless_vendor.is_some_and(|v| session::containment_applied(v, contained)) {
+    if headless_vendor.is_some_and(|v| session::containment_applied(v, contained, None)) {
         cmd.env("AIDA_CONTAINED", "1");
     } else {
         cmd.env_remove("AIDA_CONTAINED");

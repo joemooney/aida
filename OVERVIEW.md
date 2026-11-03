@@ -1260,8 +1260,9 @@ and keeps its existing settings, sandbox and parent protections. Non-Claude
 vendors without a key still refuse. Branch-local opt-ins are ignored; this
 repository’s opt-in becomes trusted when merged into `origin/main`. Only Codex supports `"native"`: it receives
 `--sandbox workspace-write --ask-for-approval never`, including headless children,
-and is reported as **native sandbox, not AIDA-contained**. `"aida"` for Codex and
-`"native"` for Claude, agy or unknown tools refuse. Native policy overrides
+and is reported as **native sandbox, not AIDA-contained**. Trusted `"aida"` for
+Codex selects the foreground headless boundary described below. `"native"` for
+Claude, agy or unknown tools refuses. Native policy overrides
 conflicting per-tool posture defaults and refuses posture passthrough flags;
 an explicit operator launch-posture override retains its existing precedence.
 A native child does not receive `AIDA_CONTAINED=1` or AIDA containment credit.
@@ -1281,6 +1282,44 @@ The closed `config permissions probe --vendor <name>` tracer is implemented in
 policy snapshot, descriptor-pinned synthetic filesystem mounts and an owned
 bounded supervisor. Its successful report credits only the fixed diagnostic;
 it cannot launch arbitrary programs or issue an applied-containment receipt.
-The production vendor selectors remain unchanged until the full boundary is
-ready. See [the tracer contract](docs/cli/07-project-setup.md#model-free-containment-tracer).
+This diagnostic remains separate from ordinary launch receipts. See [the tracer contract](docs/cli/07-project-setup.md#model-free-containment-tracer).
 <!-- trace:TASK-2705 | ai:codex -->
+
+### Foreground headless Codex boundary
+
+Trusted `[contained.vendors] codex = "aida"` routes fresh headless implementer
+and reviewer phases through `containment/launch.rs`. `/usr/bin/python3 -I -S`
+and `/usr/bin/bwrap` are required. The host helper owns an isolated child-only
+session keyring, a private namespace tree, the CONNECT proxy, and the seccomp
+connect broker. Rust clears the helper environment and supplies an exact list;
+bubblewrap inherits it unchanged. Only `OPENAI_API_KEY` carries authentication.
+An existing Codex `auth.json` refuses by name until the ChatGPT-auth design lands.
+The launcher writes no credential files and forwards neither registry nor handle
+launch tokens. Tool shells cannot bind their own registry/handle records.
+
+Each launch has private Codex state. HOME retains the issuer's canonical AIDA
+home, read-only, so core-filtered tools resolve the same grant records without
+expanding the signed metadata whitelist. Explicit public Cargo/Rustup home and
+target paths retain toolchain selection, with compiler wrapping disabled. No
+shared compiler cache is writable. A generated directory-based native permission profile with networking enabled under the outer network namespace.
+Only the launch-owned loopback relay and pinned private Unix endpoints accept
+connects; all other internet connects refuse. The broker replaces the socket
+with an already connected descriptor, so options set before connect are lost.
+CONNECT authorizes hosts and ports, not tunneled content or downstream relays.
+The same-uid host replay residual from ADR-66 remains.
+
+The shim runs the requested-seat probe inside both layers before the host emits
+a receipt with the kernel-attested shim PID, start identity, namespaces, identity
+UID map, and pinned policy commit. Rust validates that receipt while exec is
+blocked, finishes host PID binding, then releases the vendor. Configured posture
+and receipt-shaped JSON confer no applied credit. The temporary `ClaudeNative`
+arm preserves existing Claude behavior until its separate migration. Interactive,
+background, resume/fork, Claude migration and OpenCode integration remain later
+slices. The authenticated operator run is still required for acceptance.
+
+Expiry-notice state now uses `~/.aida/grant-notices/<grant-id>/notice.{json,lock}`
+(or the configured AIDA home). A Codex lane gets only its own notice directory;
+canonical session grants and revocation locks remain host-only. Host notice calls
+best-effort remove legacy notice files without migrating them; one duplicate
+notice after upgrade is accepted.
+<!-- trace:TASK-2707 | ai:codex -->

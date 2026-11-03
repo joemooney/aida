@@ -986,7 +986,7 @@ pub(crate) fn handle_intake_command(
     // env-passed payload). trace:STORY-560
     // Prepare before issuing authority: a filesystem refusal leaves no grant.
     // trace:BUG-2218 TASK-2328 | ai:codex
-    if session::containment_applied(vendor, contained) {
+    if session::containment_applied(vendor, contained, None) {
         crate::session::prepare_contained_mailbox_for_launch(&project_root)?;
     }
     // The builder reserves the child's handle; it is released unless the

@@ -127,7 +127,11 @@ fn containment_policy_is_explicit_and_vendor_specific() {
         let posture = session::containment_posture_in(root.path(), vendor, true);
         if vendor == "codex" {
             assert_eq!(posture.unwrap(), ContainmentPosture::Native);
-            assert!(!session::containment_applied(HeadlessVendor::Codex, true));
+            assert!(!session::containment_applied(
+                HeadlessVendor::Codex,
+                true,
+                None
+            ));
         } else {
             let error = posture.unwrap_err().to_string();
             assert!(error.contains(vendor), "{error}");
@@ -140,7 +144,16 @@ fn containment_policy_is_explicit_and_vendor_specific() {
         assert!(error.to_string().contains("must be \"aida\" or \"native\""));
     }
     policy(root.path(), "codex = \"aida\"");
-    assert!(session::containment_posture_in(root.path(), "codex", true).is_err());
+    // trace:TASK-2707 | ai:codex — configured AIDA still grants no applied credit.
+    assert_eq!(
+        session::containment_posture_in(root.path(), "codex", true).unwrap(),
+        ContainmentPosture::Aida
+    );
+    assert!(!session::containment_applied(
+        HeadlessVendor::Codex,
+        true,
+        None
+    ));
     policy(root.path(), "claude = \"native\"");
     assert!(session::containment_posture_in(root.path(), "claude", true)
         .unwrap_err()
@@ -290,7 +303,11 @@ fn containment_codex_opt_in_preserves_claude_bytes() {
         session::headless_vendor_args(HeadlessVendor::Claude, "p", "sid", true, None, None)
             .unwrap()
     );
-    assert!(session::containment_applied(HeadlessVendor::Claude, true));
+    assert!(session::containment_applied(
+        HeadlessVendor::Claude,
+        true,
+        None
+    ));
     let mut launch = config("claude");
     crate::apply_agent_default_flags(
         &mut launch,
