@@ -1071,6 +1071,8 @@ pub(crate) fn agent_new_command_for_type(token: &str) -> Option<AgentNewCommand>
             rotate: false,
             bg: false,
             spec_positional: None,
+            branch: None,
+            base: None,
         }),
         "antigravity" => Some(AgentNewCommand::Antigravity {
             role: None,
@@ -1258,6 +1260,8 @@ pub(crate) fn dispatch_agent_new(cmd: &AgentNewCommand) -> Result<()> {
             grant_inline: _,
             bg: true,
             spec_positional,
+            branch,
+            base,
         } => {
             // trace:STORY-2254 | ai:claude
             let spec = match (spec.clone(), spec_positional.clone()) {
@@ -1290,6 +1294,8 @@ pub(crate) fn dispatch_agent_new(cmd: &AgentNewCommand) -> Result<()> {
                 name: name.clone(),
                 description: description.clone(),
                 no_mail_wake: *no_mail_wake,
+                branch: branch.clone(),
+                base: base.clone(),
             })
         }
         AgentNewCommand::Codex {
@@ -1321,6 +1327,8 @@ pub(crate) fn dispatch_agent_new(cmd: &AgentNewCommand) -> Result<()> {
             grant_inline: _,
             bg: false,
             spec_positional: _,
+            branch: _,
+            base: _,
         } => agent_new_codex_wake(
             role.clone(),
             spec.clone(),
@@ -4444,6 +4452,46 @@ fn prepare_agent_launch_attempt(
     AgentLaunchPlan,
     Option<crate::session_start::SessionStartReceipt>,
 )> {
+    prepare_agent_launch_attempt_on_branch(
+        project_root,
+        role,
+        spec,
+        agent_type,
+        custom_name,
+        explicit_cwd,
+        contained_seat,
+        LaneBranch::default(),
+    )
+}
+
+/// The branch a fresh spec lease's worktree is created on (`agent new codex
+/// --bg --branch/--base`). The default lets session setup derive the branch
+/// and fork it from the project's default branch.
+// trace:BUG-2390 | ai:claude
+#[derive(Debug, Clone, Default)]
+pub(crate) struct LaneBranch {
+    pub branch: Option<String>,
+    pub base: Option<String>,
+}
+
+/// [`prepare_agent_launch_attempt`] with an explicit lane branch/base for a
+/// freshly created lease. A lease that already owns the scope is re-entered
+/// as it is; its branch is not changed.
+// trace:BUG-2390 | ai:claude
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn prepare_agent_launch_attempt_on_branch(
+    project_root: &std::path::Path,
+    role: Option<String>,
+    spec: Option<String>,
+    agent_type: &str,
+    custom_name: Option<String>,
+    explicit_cwd: Option<&std::path::Path>,
+    contained_seat: bool,
+    lane_branch: LaneBranch,
+) -> Result<(
+    AgentLaunchPlan,
+    Option<crate::session_start::SessionStartReceipt>,
+)> {
     let mut guard = crate::agent_handle::LaunchReservationGuard::new(project_root);
     let prepared = prepare_agent_launch_attempt_inner(
         project_root,
@@ -4453,6 +4501,7 @@ fn prepare_agent_launch_attempt(
         custom_name,
         explicit_cwd,
         contained_seat,
+        &lane_branch,
     );
     if prepared.is_ok() {
         guard.disarm();
@@ -4461,6 +4510,7 @@ fn prepare_agent_launch_attempt(
 }
 
 // trace:BUG-2188 BUG-2168 | ai:codex
+#[allow(clippy::too_many_arguments)]
 fn prepare_agent_launch_attempt_inner(
     project_root: &std::path::Path,
     role: Option<String>,
@@ -4469,6 +4519,7 @@ fn prepare_agent_launch_attempt_inner(
     custom_name: Option<String>,
     explicit_cwd: Option<&std::path::Path>,
     contained_seat: bool,
+    lane_branch: &LaneBranch,
 ) -> Result<(
     AgentLaunchPlan,
     Option<crate::session_start::SessionStartReceipt>,
@@ -4609,8 +4660,9 @@ fn prepare_agent_launch_attempt_inner(
             let start_result = crate::gate::review_authority::as_launcher(|| {
                 crate::session_start::session_start_with_receipt(
                     &spec,
-                    /* branch */ None,
-                    /* base */ None,
+                    // trace:BUG-2390 | ai:claude
+                    lane_branch.branch.as_deref(),
+                    lane_branch.base.as_deref(),
                     /* reuse_branch */ false,
                     /* explicit_path */
                     requested_path.as_deref(),

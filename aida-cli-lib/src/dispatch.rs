@@ -174,6 +174,30 @@ pub(crate) fn freeze_brief(
     Ok((relpath, digest))
 }
 
+/// The vendor a `take`/`impl` lane runs: the request's `--vendor`, else the
+/// project's headless vendor (`[orchestrator] headless_vendor`, then
+/// `[agents] vendor`), the same resolution every other headless lane uses.
+// trace:BUG-2390 | ai:claude
+pub(crate) fn resolve_lane_vendor(
+    main_worktree: &Path,
+    explicit: Option<DispatchVendor>,
+) -> DispatchVendor {
+    explicit.unwrap_or_else(
+        || match crate::session::resolve_headless_vendor(main_worktree) {
+            crate::session::HeadlessVendor::Claude => DispatchVendor::Claude,
+            crate::session::HeadlessVendor::Codex => DispatchVendor::Codex,
+            crate::session::HeadlessVendor::Agy => DispatchVendor::Agy,
+        },
+    )
+}
+
+/// What a Codex lane's prompt says its worktree is: the detached launch
+/// creates that worktree itself, so its path is not known when the prompt
+/// is rendered.
+// trace:BUG-2390 | ai:claude
+pub(crate) const CODEX_LANE_WORKTREE: &str =
+    "(the directory you start in: this lane's own session worktree)";
+
 /// Render the `take` or `impl` prompt wrapper from the embedded template in
 /// `aida-core/templates/dispatch/`.
 // trace:STORY-1917 | ai:agy
@@ -196,7 +220,7 @@ pub(crate) fn render_lane_prompt(
             let tpl = aida_core::templates::TemplateLoader::with_project_root(main_worktree)
                 .load("dispatch/take-prompt.md")
                 .context("missing embedded template dispatch/take-prompt.md")?;
-            let vendor_str = vendor.unwrap_or(DispatchVendor::Claude).as_str();
+            let vendor_str = resolve_lane_vendor(main_worktree, *vendor).as_str();
             Ok(tpl
                 .replace("{{WORKTREE}}", &worktree.display().to_string())
                 .replace("{{MAIN_WORKTREE}}", &main_worktree.display().to_string())
@@ -216,7 +240,7 @@ pub(crate) fn render_lane_prompt(
             let tpl = aida_core::templates::TemplateLoader::with_project_root(main_worktree)
                 .load("dispatch/impl-prompt.md")
                 .context("missing embedded template dispatch/impl-prompt.md")?;
-            let vendor_str = vendor.unwrap_or(DispatchVendor::Claude).as_str();
+            let vendor_str = resolve_lane_vendor(main_worktree, *vendor).as_str();
             Ok(tpl
                 .replace("{{WORKTREE}}", &worktree.display().to_string())
                 .replace("{{MAIN_WORKTREE}}", &main_worktree.display().to_string())
@@ -1875,7 +1899,11 @@ pub(crate) fn check_live_worktree_or_branch_occupant(
     branch: Option<&str>,
     scope: Option<&str>,
 ) -> Option<String> {
-    let live_sessions = crate::process_probe::probe_live_claude_sessions();
+    // Claude AND Codex lanes occupy a worktree; the walk is memoized, and
+    // each row keeps its harness so the refusal names it.
+    // trace:BUG-2390 | ai:claude
+    let live_agents = aida_core::liveness::probe_live_agent_processes();
+    let live_sessions = crate::process_probe::probe_live_agent_sessions();
     let now = Utc::now();
     let main_canon = main_worktree
         .canonicalize()
@@ -2158,15 +2186,11 @@ pub(crate) fn check_live_worktree_or_branch_occupant(
         }
     }
     for (wt_display, wt_canon) in &probe_wts {
-        for sess in &live_sessions {
-            let sess_canon = sess.cwd.canonicalize().unwrap_or_else(|_| sess.cwd.clone());
-            if sess_canon == *wt_canon || sess_canon.starts_with(wt_canon) {
-                return Some(format!(
-                    "worktree {} is currently occupied by live claude process (pid {})",
-                    wt_display.display(),
-                    sess.pid
-                ));
-            }
+        if let Some((agent, pid)) = live_agent_in_worktree(&live_agents, wt_canon) {
+            return Some(format!(
+                "worktree {} is currently occupied by live {agent} process (pid {pid})",
+                wt_display.display()
+            ));
         }
         if let Some(pid) = find_live_proc_with_cwd_in(wt_canon) {
             return Some(format!(
@@ -2177,6 +2201,19 @@ pub(crate) fn check_live_worktree_or_branch_occupant(
     }
 
     None
+}
+
+/// The first live Claude or Codex process whose cwd is `wt_canon` or below
+/// it, as `(harness, pid)`. Pure over the process walk.
+// trace:BUG-2390 | ai:claude
+pub(crate) fn live_agent_in_worktree(
+    agents: &[aida_core::liveness::LiveAgentProcess],
+    wt_canon: &Path,
+) -> Option<(&'static str, u32)> {
+    agents.iter().find_map(|p| {
+        let canon = p.cwd.canonicalize().unwrap_or_else(|_| p.cwd.clone());
+        (canon == wt_canon || canon.starts_with(wt_canon)).then(|| (p.agent.label(), p.pid))
+    })
 }
 
 /// Prepare a dead reviewer worktree (`aida-pr-<pr>`) before launching a fresh
@@ -2447,24 +2484,8 @@ pub(crate) fn prepare_lane_worktree(
         std::fs::create_dir_all(parent)?;
     }
 
-    // Best-effort fetch of the base/branch from origin if `origin` remote is configured.
-    let has_origin = aida_core::git_ops::host_git_command(main_worktree)
-        .args(["remote", "get-url", "origin"])
-        .output()
-        .map(|o| o.status.success())
-        .unwrap_or(false);
-    if has_origin {
-        let fetch_out = aida_core::git_ops::host_remote_git_command(main_worktree, "origin")
-            .args(["fetch", "origin", fetch_ref])
-            .output()
-            .with_context(|| format!("failed to run git fetch origin {fetch_ref}"))?;
-        if !fetch_out.status.success() {
-            bail!(
-                "git fetch origin {fetch_ref} failed: {}",
-                String::from_utf8_lossy(&fetch_out.stderr).trim()
-            );
-        }
-    }
+    // Fetch the base/branch from origin if an `origin` remote is configured.
+    fetch_origin_ref(main_worktree, fetch_ref)?;
 
     let resolved_start = if git_ref_exists(main_worktree, start_ref) {
         start_ref.to_string()
@@ -2551,10 +2572,11 @@ pub(crate) fn build_implementer_launch_command(
         DispatchVendor::Claude => {
             cmd.args(["--bg", "-n", name, prompt_text]);
         }
+        // A Codex lane never runs a foreground `codex exec` here: it goes
+        // through the detached launch ([`build_codex_lane_command`]).
+        // trace:BUG-2390 | ai:claude
         DispatchVendor::Codex => {
-            cmd.args(["exec", "--full-auto", "-C"])
-                .arg(wt_path)
-                .arg(prompt_text);
+            unreachable!("Codex lanes launch through `aida agent new codex --bg`")
         }
         DispatchVendor::Agy => {
             cmd.args(["--prompt", prompt_text]);
@@ -2615,6 +2637,21 @@ fn run_take_verb(
     }
 
     let start_ref = format!("origin/{branch}");
+    let vendor = resolve_lane_vendor(main_worktree, vendor);
+    // trace:BUG-2390 | ai:claude — a Codex lane's own detached launch makes
+    // its lease and worktree on the PR branch; dispatch prepares none.
+    if vendor == DispatchVendor::Codex {
+        return run_codex_lane(
+            main_worktree,
+            req,
+            spec,
+            branch,
+            &start_ref,
+            Some(branch),
+            &brief_body,
+            now,
+        );
+    }
     if let Err(err) = prepare_lane_worktree(main_worktree, &wt_path, branch, branch, &start_ref) {
         return RunnerOutcome::Failed {
             summary: format!("takeover worktree setup failed for PR #{pr}: {err:#}"),
@@ -2647,7 +2684,7 @@ fn run_take_verb(
         spec,
         &prompt_text,
         &wt_name,
-        vendor.unwrap_or(DispatchVendor::Claude),
+        vendor,
     )
 }
 
@@ -2692,6 +2729,21 @@ fn run_impl_verb(
         }
     };
     let default_remote_ref = format!("origin/{default_branch}");
+    let vendor = resolve_lane_vendor(main_worktree, vendor);
+    // trace:BUG-2390 | ai:claude — a new named branch forked from the default
+    // branch, created by the Codex lane's own detached launch.
+    if vendor == DispatchVendor::Codex {
+        return run_codex_lane(
+            main_worktree,
+            req,
+            spec,
+            branch,
+            &default_remote_ref,
+            Some(&default_branch),
+            &brief_body,
+            now,
+        );
+    }
     if let Err(err) = prepare_lane_worktree(
         main_worktree,
         &wt_path,
@@ -2730,7 +2782,7 @@ fn run_impl_verb(
         spec,
         &prompt_text,
         name,
-        vendor.unwrap_or(DispatchVendor::Claude),
+        vendor,
     )
 }
 
@@ -2774,15 +2826,6 @@ fn launch_implementer_lane(
         vendor,
     );
 
-    if vendor == DispatchVendor::Codex {
-        // trace:BUG-2398 | ai:codex — explicit baseline reaches core-policy tools.
-        if let Err(error) = crate::codex_tool_env::prepare_launch(&mut cmd) {
-            return RunnerOutcome::Refused {
-                reason: format!("Codex seat transport: {error:#}"),
-            };
-        }
-    }
-
     match cmd.output() {
         Ok(out) => {
             let stdout = String::from_utf8_lossy(&out.stdout);
@@ -2817,6 +2860,211 @@ fn launch_implementer_lane(
         }
         Err(err) => RunnerOutcome::Failed {
             summary: format!("failed to spawn implementer launcher: {err:#}"),
+            exit_code: None,
+        },
+    }
+}
+
+/// Bound on `aida agent new codex --bg` reaching its spawn verdict: session
+/// setup, then the supervisor handshake (30s) and acceptance (90s). The model
+/// work runs detached afterwards and is never waited on.
+// trace:BUG-2390 | ai:claude
+const CODEX_LANE_ACCEPT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5 * 60);
+/// Bytes of launcher output kept for the dispatch log.
+const CODEX_LANE_OUTPUT_CAP: u64 = 1024 * 1024;
+
+fn codex_lane_accept_timeout() -> std::time::Duration {
+    #[cfg(test)]
+    if let Some(t) = TEST_REVIEW_TIMEOUT.with(|c| c.get()) {
+        return t;
+    }
+    CODEX_LANE_ACCEPT_TIMEOUT
+}
+
+/// The detached Codex launch for a `take`/`impl` lane (STORY-2254): `aida
+/// agent new codex --role implementer --bg --spec <SPEC> --branch <BRANCH>
+/// --base <BASE> --prompt-file <PROMPT>`, run from the main worktree. Its own
+/// session setup creates the lane's lease and worktree on BRANCH (an existing
+/// branch is checked out; a new one forks from BASE) and mints the worker's
+/// child grant from the seat grant this process holds. The dispatch worker
+/// token and session purpose are not passed on.
+// trace:BUG-2390 | ai:claude
+pub(crate) fn build_codex_lane_command(
+    aida_bin: &Path,
+    main_worktree: &Path,
+    spec: &str,
+    branch: &str,
+    base: &str,
+    prompt_file: &Path,
+) -> std::process::Command {
+    let mut cmd = std::process::Command::new(aida_bin);
+    cmd.current_dir(main_worktree)
+        .args([
+            "agent",
+            "new",
+            "codex",
+            "--role",
+            "implementer",
+            "--bg",
+            "--spec",
+            spec,
+            "--branch",
+            branch,
+            "--base",
+            base,
+            "--prompt-file",
+        ])
+        .arg(prompt_file)
+        .env_remove("AIDA_SESSION_PURPOSE")
+        .env_remove(DISPATCH_CLAIM_TOKEN_ENV)
+        .stdin(std::process::Stdio::null());
+    cmd
+}
+
+/// The attempt id from a detached launch's `accepted:` line (empty when the
+/// line names none), or `None` when the launcher printed no acceptance.
+// trace:BUG-2390 | ai:claude
+pub(crate) fn parse_codex_lane_acceptance(stdout: &str) -> Option<String> {
+    stdout.lines().find_map(|line| {
+        let rest = line.trim_start().strip_prefix("accepted:")?;
+        let attempt = rest
+            .split_once("(attempt ")
+            .and_then(|(_, tail)| tail.split(')').next())
+            .map(str::trim)
+            .unwrap_or_default();
+        Some(attempt.to_string())
+    })
+}
+
+/// `git fetch origin <git_ref>` when `origin` is configured.
+fn fetch_origin_ref(main_worktree: &Path, git_ref: &str) -> Result<()> {
+    let has_origin = aida_core::git_ops::host_git_command(main_worktree)
+        .args(["remote", "get-url", "origin"])
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false);
+    if !has_origin {
+        return Ok(());
+    }
+    let out = aida_core::git_ops::host_remote_git_command(main_worktree, "origin")
+        .args(["fetch", "origin", git_ref])
+        .output()
+        .with_context(|| format!("failed to run git fetch origin {git_ref}"))?;
+    if !out.status.success() {
+        bail!(
+            "git fetch origin {git_ref} failed: {}",
+            String::from_utf8_lossy(&out.stderr).trim()
+        );
+    }
+    Ok(())
+}
+
+/// Launch a `take`/`impl` lane on Codex through the detached STORY-2254
+/// lifecycle. The outcome is the spawn verdict (the launcher's `accepted:`
+/// line), never the model's result: `aida dispatch tick`/`serve` returns as
+/// soon as the worker is accepted.
+// trace:BUG-2390 | ai:claude
+#[allow(clippy::too_many_arguments)]
+fn run_codex_lane(
+    main_worktree: &Path,
+    req: &DispatchRequest,
+    spec: &str,
+    branch: &str,
+    base: &str,
+    fetch_ref: Option<&str>,
+    brief_body: &str,
+    now: DateTime<Utc>,
+) -> RunnerOutcome {
+    let action = req.action();
+    let label = format!("{} {}", action.verb_str(), action.subject_label());
+    if let Some(fetch_ref) = fetch_ref {
+        if let Err(err) = fetch_origin_ref(main_worktree, fetch_ref) {
+            return RunnerOutcome::Failed {
+                summary: format!("{label}: {err:#}"),
+                exit_code: None,
+            };
+        }
+    }
+    let prompt_text = match render_lane_prompt(
+        main_worktree,
+        Path::new(CODEX_LANE_WORKTREE),
+        &action,
+        brief_body,
+        now,
+    ) {
+        Ok(p) => p,
+        Err(err) => {
+            return RunnerOutcome::Failed {
+                summary: format!("failed to render {label} prompt: {err:#}"),
+                exit_code: None,
+            }
+        }
+    };
+    let prompt_path = briefs_dir(main_worktree).join(format!("{}.prompt.md", req.id()));
+    if let Err(err) = write_private_atomic(&prompt_path, prompt_text.as_bytes()) {
+        return RunnerOutcome::Failed {
+            summary: format!("failed to write rendered prompt: {err:#}"),
+            exit_code: None,
+        };
+    }
+    let aida_bin = match resolve_aida_bin() {
+        Ok(b) => b,
+        Err(err) => {
+            return RunnerOutcome::Failed {
+                summary: format!("cannot locate aida binary: {err:#}"),
+                exit_code: None,
+            }
+        }
+    };
+    let cmd = build_codex_lane_command(&aida_bin, main_worktree, spec, branch, base, &prompt_path);
+    let timeout = codex_lane_accept_timeout();
+    match crate::command_output_with_timeout_capped(cmd, timeout, CODEX_LANE_OUTPUT_CAP) {
+        crate::BoundedCommandOutput::Completed(out) => {
+            let stdout = String::from_utf8_lossy(&out.stdout);
+            let stderr = String::from_utf8_lossy(&out.stderr);
+            let _ = append_dispatch_log(main_worktree, &req.id(), &format!("{stdout}{stderr}"));
+            let code = out.status.code();
+            match parse_codex_lane_acceptance(&stdout) {
+                Some(attempt) if out.status.success() => RunnerOutcome::Done {
+                    summary: if attempt.is_empty() {
+                        format!("accepted detached Codex {label} on branch {branch}")
+                    } else {
+                        format!("accepted detached Codex {label} on branch {branch} (attempt {attempt})")
+                    },
+                    spawned_session: (!attempt.is_empty()).then_some(attempt),
+                    exit_code: code,
+                },
+                _ => RunnerOutcome::Failed {
+                    summary: format!(
+                        "detached Codex {label} was not accepted (exit {:?}): {}",
+                        code,
+                        stderr
+                            .lines()
+                            .rev()
+                            .find(|l| !l.trim().is_empty())
+                            .unwrap_or("no acceptance reported")
+                            .trim()
+                    ),
+                    exit_code: code,
+                },
+            }
+        }
+        crate::BoundedCommandOutput::TimedOut => {
+            let summary = format!(
+                "detached Codex {label} reported no spawn verdict within {}s; inspect `aida agent launch-status`",
+                timeout.as_secs()
+            );
+            let _ = append_dispatch_log(main_worktree, &req.id(), &format!("{summary}\n"));
+            RunnerOutcome::Failed {
+                summary,
+                exit_code: None,
+            }
+        }
+        crate::BoundedCommandOutput::SpawnFailed => RunnerOutcome::Failed {
+            summary: format!(
+                "failed to spawn `{} agent new codex --bg`",
+                aida_bin.display()
+            ),
             exit_code: None,
         },
     }
