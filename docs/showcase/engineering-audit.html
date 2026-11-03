@@ -372,7 +372,7 @@
         <div class="meta-strip">
           <div><strong>HEAD SHA:</strong> 6a3f67671a974703590efde5ae2a323f3f7471fa</div>
           <div><strong>AUDIT WINDOW:</strong> 2025-11-23 → 2026-11-01</div>
-          <div><strong>FRAMEWORKS:</strong> DORA · GitClear · LinearB</div>
+          <div><strong>FRAMEWORKS:</strong> <span class="framework-tip">DORA</span> · <span class="framework-tip">GitClear</span> · <span class="framework-tip">LinearB</span></div>
         </div>
       </div>
 
@@ -1902,12 +1902,30 @@
       title: "Illustrative Scenario Explorer (Not Empirically Calibrated)",
       body: "Interactive linear formula anchored to measured repository baselines (31.6% PRs >400 LoC, 78.3% crate share) using assumed heuristic weights for directional exploration only. Carries no fitted regression calibration or causal/predictive validity.",
       meta: "Assumed weights: 10.5, 8.8, 11.2, 6.4, 11.5, 4.2 · Illustrative only"
+    },
+    "DORA": {
+      kicker: "DEVOPS RESEARCH & ASSESSMENT (GOOGLE CLOUD / ACCELERATE)",
+      title: "DORA Four-Key Software Delivery & Stability Framework",
+      body: "Industry-standard empirical research program (Dr. Nicole Forsgren, Jez Humble, Gene Kim; Accelerate State of DevOps Reports) measuring delivery throughput (Deployment/Integration Frequency, Change Lead Time) against stability (Change Failure Rate, Failed Deployment Recovery Time).",
+      meta: "Used in Section 04 to benchmark AIDA's 14.35 PRs/day trunk cadence, 18.8m Verdict→Merge lead time & 0.10% revert stability."
+    },
+    "GitClear": {
+      kicker: "GITCLEAR & SMARTBEAR DIFF-QUALITY & CHURN ANALYTICS",
+      title: "GitClear Code Churn, Batch-Size & AI Code Quality Framework",
+      body: "GitClear's empirical research on millions of Git commits (alongside the SmartBear/Cisco peer-review study) evaluates PR batch-size reviewability (the 200–400 LoC cognitive review ceiling) and short-horizon code churn (<14d/<21d rework vs. durable net code).",
+      meta: "Used in Section 03 to audit AIDA's PR diff-size distribution (median 225 LoC, 31.6% >400 LoC) and reviewability tail risk."
+    },
+    "LinearB": {
+      kicker: "LINEARB ENGINEERING METRICS & CYCLE TIME TAXONOMY",
+      title: "LinearB Cycle-Time Sub-Stages & Code Investment Profile",
+      body: "Decomposes PR delivery into 4 sub-stages (Coding, Pickup Wait, Review Duration, Merge/Deploy) and categorizes engineering effort into New Work vs. <21-Day Rework Churn vs. >21-Day Legacy Refactoring.",
+      meta: "Used in Section 05 to evaluate AIDA's on-push reviewer dispatch, 74.5m rework cycle, and 27.7% 30-day file-touch churn."
     }
   };
 
   function bindGlossaryTooltips() {
-    // Decorate KPI labels, Table strong labels, and Card Titles that match GLOSSARY_TERMS
-    document.querySelectorAll('.kpi-label, td strong, .card-title').forEach(el => {
+    // Decorate KPI labels, Table strong labels, Card Titles, and Framework tags that match GLOSSARY_TERMS
+    document.querySelectorAll('.kpi-label, td strong, .card-title, .framework-tip').forEach(el => {
       const text = el.textContent.trim();
       if (GLOSSARY_TERMS[text] && !el.classList.contains('term-tip')) {
         el.classList.add('term-tip');
