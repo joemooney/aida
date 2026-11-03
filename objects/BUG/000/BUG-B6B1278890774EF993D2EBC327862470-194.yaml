@@ -1,0 +1,25 @@
+id: 01a1a1af-b07b-72d2-a48e-b4a368ef7ee6
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-194
+agreed_id: BUG-2425
+title: aida ps inside a sandbox (foreign pid namespace) silently reports host sessions as dead
+description: |-
+  Observed 2026-11-03 13:51Z, same machine, same moment: 'aida ps' inside the Claude Code bubblewrap sandbox (own pid namespace) reported running: 5, of which 1 was live. Outside the sandbox it reported running: 9, of which 5 were live. Nothing in the sandboxed output said that liveness could not be judged. An advisor reading it would rule live lanes dead and might reap or re-dispatch them. Plain ps showed the same blindness (a live systemd mail-wake pid looked absent).
+
+  The lease records carry pidns/boot (the BUG-2417/BUG-2419 identity work). The ps liveness judge should compare the reader's pid namespace with each lease's pidns.
+
+  Acceptance: (1) when they differ, the row's live column is 'unknown (foreign pidns)', not dead/stale, and the session is not moved to stale_hidden or orphaned on that basis. (2) A header line says 'liveness: partial, running in pid namespace X; N leases from host namespace Y cannot be probed; run outside the sandbox'. (3) The same rule applies to every reap/gc/orphan path that probes pids (aida agent gc, review watch stale release, session reap): a foreign pidns is never evidence of death. (4) A test with a fake lease that has a different pidns and a pid that does not exist in the test's namespace: ps shows unknown, and gc refuses to reap.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-03T13:53:28.187901734Z
+modified_at: 2026-11-03T13:53:28.187901734Z
+req_type: Bug
+filed_at:
+  code_sha: 6c587ee595ce70f5fcc48480cfdddc8246cf158c
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 6c587ee595c
+  vendor: claude
+  session: f5eddefe-032d-4760-94ba-3a318cf3d1d1
