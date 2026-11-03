@@ -881,6 +881,8 @@ pub(crate) fn acquire_review_lease_with_mode(
     // STORY-1429: atomic, so a reader never sees a half-written lease.
     // trace:STORY-1429 | ai:claude
     aida_core::write_atomic(&path, toml::to_string_pretty(&lease)?)?;
+    // Dual-write: the lease stays authoritative. // trace:STORY-2325 | ai:claude
+    crate::ownership::dual::lease_written(project_root, &lease);
     Ok(ReviewLeaseGuard { path })
 }
 

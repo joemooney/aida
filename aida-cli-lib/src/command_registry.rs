@@ -110,6 +110,7 @@ pub(crate) static REGISTRY: &[&CommandReg] = &[
     &crate::node_cmd::NODE,
     &crate::notify::NOTIFY,
     &crate::orchestrator_cmd::ORCHESTRATOR,
+    &crate::ownership_cmd::OWN,
     &crate::plan_cmd::PLAN,
     &crate::pr_cmd::PR,
     &crate::presence_cmd::PRESENCE,

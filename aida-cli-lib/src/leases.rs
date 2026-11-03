@@ -3113,6 +3113,12 @@ pub(crate) fn force_cleanup_lease(project_root: &std::path::Path, lease: &Sessio
         // trace:BUG-2139 | ai:claude
         crate::session::revoke_lease_child_grant(&lease_path(project_root, &lease.id));
         let _ = std::fs::remove_file(lease_path(project_root, &lease.id));
+        // trace:STORY-2325 | ai:claude
+        crate::ownership::dual::lease_released(
+            project_root,
+            &lease.id,
+            "advisory lease cleaned up",
+        );
         let activity = session_activity_path(project_root, &lease.id);
         if activity.exists() {
             let _ = std::fs::remove_file(&activity);
@@ -3325,6 +3331,8 @@ pub(crate) fn force_cleanup_lease(project_root: &std::path::Path, lease: &Sessio
     match std::fs::remove_file(lease_target) {
         Ok(_) | Err(_) => {}
     }
+    // trace:STORY-2325 | ai:claude
+    crate::ownership::dual::lease_released(project_root, &lease.id, "lease cleaned up");
 
     // Companion files — quiet on missing.
     let manifest_target = session_manifest::manifest_path(project_root, &lease.id);
@@ -4638,6 +4646,10 @@ pub(crate) fn remove_session_lease_record_only(
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => true,
         Err(_) => false,
     };
+    if removed {
+        // trace:STORY-2325 | ai:claude
+        crate::ownership::dual::lease_released(project_root, lease_id, "lease record removed");
+    }
     let manifest = session_manifest::manifest_path(project_root, lease_id);
     if manifest.exists() {
         let _ = std::fs::remove_file(manifest);

@@ -221,6 +221,8 @@ pub(crate) fn handle_claim(spec: &str, worktree: Option<&str>) -> Result<()> {
     let path = lease_path(&project_root, &id);
     let bytes = toml::to_string_pretty(&lease)?;
     aida_core::write_atomic(&path, &bytes)?;
+    // Dual-write: the lease stays authoritative. // trace:STORY-2325 | ai:claude
+    crate::ownership::dual::lease_written(&project_root, &lease);
     // trace:BUG-2215 | ai:codex
     finish_claim_write(
         &path,
@@ -287,7 +289,11 @@ pub(crate) fn handle_unclaim(spec: &str) -> Result<()> {
     for l in &mine {
         let path = lease_path(&project_root, &l.id);
         match std::fs::remove_file(&path) {
-            Ok(()) => removed += 1,
+            Ok(()) => {
+                removed += 1;
+                // trace:STORY-2325 | ai:claude
+                crate::ownership::dual::lease_released(&project_root, &l.id, "unclaimed");
+            }
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
             Err(e) => return Err(e).with_context(|| format!("removing {}", path.display())),
         }

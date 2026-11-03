@@ -3235,6 +3235,8 @@ pub(crate) fn session_start_with_receipt(
     // trace:BUG-2169 | ai:claude
     crate::seat_clone::failpoint::check_before_lease()?;
     aida_core::write_atomic(&lease_file, toml::to_string_pretty(&lease)?)?;
+    // Dual-write: the lease stays authoritative. // trace:STORY-2325 | ai:claude
+    crate::ownership::dual::lease_written(&project_root, &lease);
     if let Some(cleanup) = rollback.as_mut() {
         cleanup.lease_id = Some(id.clone());
     }
