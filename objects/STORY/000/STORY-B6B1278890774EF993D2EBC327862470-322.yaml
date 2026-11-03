@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-02T19:20:32.021326811Z
-modified_at: 2026-11-03T21:58:57.362078283Z
+modified_at: 2026-11-03T22:31:36.402494129Z
 req_type: Story
 tags:
 - architecture
@@ -233,6 +233,12 @@ comments:
   modified_at: 2026-11-03T20:22:23.675402139Z
   session_id: 01a1a312aaf3
   harness_version: 2.1.317 (Claude Code)
+- id: 01a1a38a-0ed2-7731-949a-2d1a8ef82fb3
+  author: joe
+  content: 'ADVISOR NOTE (15:35): live evidence for this story. Train #3321 for PR #3306 stopped with ''train source has a refusing review''. The approval at head 3d1d4673 is keyed PR-3306, but a stale round-1 RequestChanges keyed BUG-2427 (at a2b504db, superseded) was treated as live. The effective gate state must be keyed by the canonical spec plus the head SHA, and must ignore verdicts at superseded heads. Same root cause as BUG-2430.'
+  created_at: 2026-11-03T22:31:36.402494129Z
+  modified_at: 2026-11-03T22:31:36.402494129Z
+  session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
 history:
 - id: 01a19ec9-2f7e-7e41-b3a1-1cb5a299a222
   author: joe
