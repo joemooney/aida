@@ -675,7 +675,10 @@ fn ship_and_train_tty_decisions_go_through_the_shared_helper() {
     );
     // `pr_ship_handler` forwards to this body, where the supervised-merge
     // gate reads its terminal decision.
-    let handler = body_after(pr_cmd, "pub(crate) fn pr_ship_with_method_and_dispatch_ctx(");
+    let handler = body_after(
+        pr_cmd,
+        "pub(crate) fn pr_ship_with_method_and_dispatch_ctx(",
+    );
     assert!(
         handler.contains("let interactive_tty = ship_interactive_tty();"),
         "pr ship decides its terminal through the shared helper"
