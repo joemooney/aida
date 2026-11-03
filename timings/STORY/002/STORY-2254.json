@@ -1,0 +1,127 @@
+{
+  "schema_version": 1,
+  "spec": "STORY-2254",
+  "publishes": [
+    {
+      "at": "2026-11-03T17:40:39.467721026Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-01T08:23:02.030358279Z",
+      "spec": "STORY-2254",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-11-02T13:37:11.042964883Z",
+      "spec": "STORY-2254",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-11-02T20:46:11.010909099Z",
+      "spec": "STORY-2254",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-11-02T22:34:34.921794426Z",
+      "spec": "STORY-2254",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-11-02T23:31:45.318859636Z",
+      "spec": "STORY-2254",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-11-03T02:19:58.230216185Z",
+      "spec": "STORY-2254",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-11-03T05:03:32.420380912Z",
+      "spec": "STORY-2254",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-11-03T08:18:37.727010310Z",
+      "spec": "STORY-2254",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-11-03T17:39:46.366772750Z",
+      "spec": "STORY-2254",
+      "seat": "advisor",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-11-03T17:40:08.385837899Z",
+      "spec": "STORY-2254",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 3273
+      }
+    },
+    {
+      "ts": "2026-11-03T17:40:39.330570618Z",
+      "spec": "STORY-2254",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "fc08dfd16d424a30f87ef943aedc6261295928d2",
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
