@@ -11,7 +11,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-03T13:49:30.195676116Z
-modified_at: 2026-11-03T13:57:14.834258212Z
+modified_at: 2026-11-03T14:04:46.999760340Z
 req_type: Bug
 comments:
 - id: 01a1a1b3-25d2-7b13-bb06-f3c50afaf135
@@ -19,6 +19,11 @@ comments:
   content: 'Implementation in progress: promotion and rollback enumerate enabled/enabled-runtime aida-mail-wake services and restart/report each after the live pair swap, before promotion rechecks retention. Failed restarts retain explicit systemctl recovery commands and do not skip other units. Human retention dry runs identify unverified writers'' owning service from /proc/<pid>/cgroup and show the scoped restart command. Adding targeted regression coverage; no host services have been restarted during tests.'
   created_at: 2026-11-03T13:57:14.834246310Z
   modified_at: 2026-11-03T13:57:14.834246310Z
+- id: 01a1a1ba-0c17-7f40-a8f3-93574d300eff
+  author: mcp
+  content: 'Publication blocker: native workspace-write sandbox refuses staging with `fatal: Unable to create ''<worktree>/.git/index.lock'': Read-only file system` (07:03 MST, 2026-11-03). Same sanctioned-publication-path issue already tracked by TASK-2712/TASK-2714/TASK-2721. No bypass attempted. Patch is preserved in the working tree and /tmp/BUG-2424.patch; PR description prepared at /tmp/bug2424-pr-body.md. Tests still compiling. Leave BUG-2424 In Progress until a permitted commit/push/PR handoff completes.'
+  created_at: 2026-11-03T14:04:46.999752706Z
+  modified_at: 2026-11-03T14:04:46.999752706Z
 history:
 - id: 01a1a1ad-cb23-70d0-8689-8418a67dbdf6
   author: aida-session-start
