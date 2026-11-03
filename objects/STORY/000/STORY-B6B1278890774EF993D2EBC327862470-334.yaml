@@ -1,0 +1,41 @@
+id: 01a19f80-a8a7-7523-b153-61abf4d7b834
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-334
+agreed_id: STORY-2338
+title: 'Formalize the script deputy: ''aida deputy shell'' runs audited operator-terminal scripts beside the command deputy'
+description: |-
+  Operator request 2026-11-02 20:35 MST. Two deputy kinds exist and the difference must be obvious from the names:
+  - 'aida deputy' (the COMMAND deputy): single allow-listed aida commands, per-job policy, TTY only for allowed prefixes.
+  - the SCRIPT deputy, today ~/bin/deputy.sh, now ~/bin/aida-deputy-shell (the interim version written 2026-11-02): arbitrary shell scripts run in the operator's terminal with the operator's delegated advisor grant. It is used for multi-step operator acts: merge-hold clear plus ship, dev builds, live acceptance runs.
+
+  Problem with the legacy deputy.sh: it sources /tmp/aida_runme<N>.sh from world-writable /tmp (any local process can inject a script that runs as the operator, with their TTY and grant), keeps no per-job record (no id, no submitter, no rc or transcript), and gives the submitter no way to tell queued from started from finished.
+
+  Proposal (the sketch decides; naming is the operator's call, recommended 'aida deputy shell'): 'aida deputy shell run <name>' (operator terminal only; refuses without a human TTY and a seat grant), 'aida deputy shell submit <name> --file F [--wait]', 'list', 'status', 'log', 'wait', 'cancel', 'pause'. 'aida deputy --help' and 'aida deputy shell --help' each explain in one paragraph why the two kinds exist and when to use which.
+
+  Acceptance:
+  1. The queue lives in a 0700 directory under the AIDA home, never /tmp. The legacy /tmp path is NOT read: single user, no compat shim; the advisor's submission habit moves to 'submit' in the same PR.
+  2. Every job records: id, script text, sha256, the submitter identity resolved from the submitter's lease/grant (not free text), queued/started/finished timestamps, exit code and a full transcript. Records stay auditable after the job (retention: keep N days, default 30). An append-only audit.jsonl records every state change, plus runner start/stop and role refresh.
+  3. submit --wait returns the job's exit code; status distinguishes queued, running, done and cancelled.
+  4. Authority: the runner refuses a job whose submitter cannot be resolved to a live session with a valid grant on this host. Jobs run in a subshell, so an 'exit' or 'cd' cannot kill or move the loop. The grant refresh is time-based.
+  5. 'aida awaiting' lists failed script-deputy jobs alongside command-deputy failures, with an ack.
+  6. Hermetic tests for submit, run (under a pty), the rc propagation, refusing an unattributed job, and that no /tmp path is read.
+  7. Docs: one page, 'Deputies: command vs script', linked from the advisor standing orders' deputy line.
+  Architecture-sensitive (operator authority surface): sketch on this spec and advisor signoff before implementation.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-03T03:42:51.559496187Z
+modified_at: 2026-11-03T03:42:51.559496187Z
+req_type: Story
+tags:
+- area:deputy
+- needs-sketch
+- security
+filed_at:
+  code_sha: 553f7d5984c6083a9f2b47cfa358ce57c438843b
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 553f7d5984c
+  vendor: claude
+  session: 125337a4-7dd3-483b-9c56-3665173938ae
