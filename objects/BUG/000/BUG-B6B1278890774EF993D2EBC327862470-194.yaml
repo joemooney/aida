@@ -13,7 +13,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-03T13:53:28.187901734Z
-modified_at: 2026-11-03T18:48:30.669821324Z
+modified_at: 2026-11-03T19:38:39.278290503Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -61,6 +61,18 @@ comments:
   content: 'ADVISOR RULING (round 3, PR #3298 at 649c5e49): the round-2 findings were addressed at 649c5e49, which awaits review. This round only: merge origin/main into the PR branch and resolve the conflicts so that the round-2 behavior is preserved. Make no other changes. LIGHT gate: one targeted cargo test -p aida-core liveness plus make check-ci-fast. Push to the existing PR branch, then stop.'
   created_at: 2026-11-03T18:03:25.142416457Z
   modified_at: 2026-11-03T18:03:25.142416457Z
+  session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
+- id: 01a1a2eb-b72e-7be3-a51f-6e88b43ad8d8
+  author: joe
+  content: |-
+    ADVISOR RULING (2026-11-03 12:15, round 4, PR #3298 at e338ab8d): fix the blocker and rule the minors as below.
+    Foreign-pidns liveness design is sound (one PidObserver judge, TTL/age backstops, ps header, gc/reap/claim tests) but review_watch::Identity now carries recorded_at=Utc::now() inside a derived PartialEq, so every self-identity check fails: 14 review_watch tests red on CI lib-1 and review-watch dispatch broken in production.
+    1. [blocker/correctness, CI red from this PR] aida-cli-lib/src/review_watch.rs:118-147: Identity derives PartialEq/Eq and Identity::of now stamps recorded_at: Some(Utc::now()). Every identity comparison therefore fails because two reads of the same process differ in timestamp: record_worker (review_watch.rs:829 'review-watch receipt changed before queue work'), record_reviewer (:855 w == &me, where the dispatcher recorded the worker via Identity:
+    2. [minor/compat] review_watch.rs:121-129: skip_serializing_if on pid_namespace/recorded_at only helps legacy records; Identity::of always stamps both as Some, so every identity this binary writes still fails deny_unknown_fields after 'aida dev rollback'. Either accept the rollback break explicitly in the comment or drop the claim that state 'still parses after aida dev rollback'.
+    3. [minor/design] leases.rs lease_owner_gone / aida-core liveness.rs foreign_lease_backstop_expired: the foreign-namespace backstop ages session leases from started_at, not from a heartbeat/mtime, so a genuinely live foreign-namespace session older than 24h is judged gone (owner_gone=Some(true)) and becomes reap-eligible on its other gates. Consider keying the backstop on lease file mtime/heartbeat as auto_release_decision_for_lease already does.
+    RULINGS: (1) Implement PartialEq/Eq by hand on review_watch::Identity, comparing the identity fields (pid, start ticks, boot id, pid namespace) and excluding recorded_at. Add a test that two Identity::of reads of the same process compare equal. (2) Accept the rollback break explicitly (single user, surgery OK): fix the comment and drop the 'still parses after aida dev rollback' claim. (3) Key the foreign-namespace session-lease backstop on lease file mtime/heartbeat, as auto_release_decision_for_lease does, not on started_at, and add a test that a live foreign-ns lease older than 24h with a fresh heartbeat is not gone. LIGHT gate: one targeted cargo test -p <crate> <filter> plus make check-ci-fast (with umask 022, BUG-2432). Push to the existing PR branch, then stop.
+  created_at: 2026-11-03T19:38:39.278290503Z
+  modified_at: 2026-11-03T19:38:39.278290503Z
   session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
 history:
 - id: 01a1a1d0-8859-7540-8fa6-1596c5def92a
