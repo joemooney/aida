@@ -678,6 +678,13 @@ pub enum Unusable {
         type_prefix: String,
         hub: String,
     },
+    /// A generic-pool block whose identical claim is not on its pool's
+    /// home ref: never pushed there, or only present in an imported store.
+    // trace:BUG-2421 | ai:claude
+    NotAccepted {
+        type_prefix: String,
+        home_ref: String,
+    },
 }
 
 impl std::fmt::Display for Unusable {
@@ -699,6 +706,10 @@ impl std::fmt::Display for Unusable {
             Self::HubUnreached { type_prefix, hub } => write!(
                 f,
                 "this clone's {type_prefix} block is homed on hub `{hub}`, which none of this clone's git remotes reaches"
+            ),
+            Self::NotAccepted { type_prefix, home_ref } => write!(
+                f,
+                "this clone's {type_prefix} block claim is not on `{home_ref}` (its pool's home never accepted it); run `aida db sync` or claim a new block"
             ),
         }
     }
@@ -729,6 +740,22 @@ pub struct LineageView<'a> {
     /// name.
     // trace:STORY-B6B1278890774EF993D2EBC327862470-164 | ai:claude
     pub hub_remotes: &'a [HubReach],
+    /// The block claims each generic (non-hub) pool home ref records, as of
+    /// this clone's remote-tracking copy (`refs/remotes/<home_ref>`). A
+    /// generic-pool block is spendable only when its identical claim is on
+    /// its pool's home ref: a local-only claim, or one only present in an
+    /// imported store, was never accepted there.
+    // trace:BUG-2421 | ai:claude
+    pub home_claims: &'a [HomeClaims],
+}
+
+/// The claims a generic pool's `home_ref` records (this clone's
+/// remote-tracking copy of it).
+// trace:BUG-2421 | ai:claude
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct HomeClaims {
+    pub home_ref: String,
+    pub on_ref: Vec<AgreedIdBlock>,
 }
 
 /// A declared hub this clone reaches: the hub's name, the remote that
@@ -827,6 +854,7 @@ impl LineageView<'_> {
                         Unusable::Exhausted(_)
                             | Unusable::WrongUpstream { .. }
                             | Unusable::NotOnHub { .. }
+                            | Unusable::NotAccepted { .. }
                     ) {
                         reason = e;
                     }
@@ -853,6 +881,35 @@ impl LineageView<'_> {
 
     /// Whether this clone may dispense from `block` now, and if not, why.
     pub fn block_status(&self, block: &AgreedIdBlock) -> Result<(), Unusable> {
+        self.block_authority(block)?;
+        if block.is_exhausted() {
+            return Err(Unusable::Exhausted(block.type_prefix.to_ascii_uppercase()));
+        }
+        Ok(())
+    }
+
+    /// Index of this node's `type_prefix` block that already dispensed
+    /// `seq` (inside its range, below its `next`) and whose claim this clone
+    /// still holds authority for. Spendability of the block's *future* IDs
+    /// does not enter: the final ID of a block is dispensed exactly when the
+    /// block becomes exhausted, and must still be admitted.
+    // trace:BUG-2420 | ai:claude
+    pub fn dispensed_block(&self, type_prefix: &str, seq: u32) -> Option<usize> {
+        self.blocks.iter().position(|b| {
+            b.node_id == self.node
+                && b.type_prefix.eq_ignore_ascii_case(type_prefix)
+                && b.range_start <= seq
+                && seq <= b.range_end
+                && seq < b.next
+                && self.block_authority(b).is_ok()
+        })
+    }
+
+    /// Every check [`block_status`](Self::block_status) makes except
+    /// exhaustion: the claim is this node's, its lineage or hub claim
+    /// vouches for it, and the lineage records do not conflict.
+    // trace:BUG-2420 | ai:claude
+    fn block_authority(&self, block: &AgreedIdBlock) -> Result<(), Unusable> {
         let typ = block.type_prefix.to_ascii_uppercase();
         let hub = self.hub_of(block);
         // Stamped for a hub this clone does not reach (no remote whose every
@@ -895,17 +952,15 @@ impl LineageView<'_> {
         if !conflicts.is_empty() {
             return Err(Unusable::Conflict(conflicts.join("; ")));
         }
-        if block.is_exhausted() {
-            return Err(Unusable::Exhausted(typ));
-        }
         Ok(())
     }
 
     /// The block's pool chain must reach a root pool held by the store's
     /// root, and on a non-root node the block's immediate parent pool must
-    /// live on the declared upstream. Slice 1 checks only that immediate
-    /// parent's `home_ref`; the ancestors' `home_ref`s are not yet walked
-    /// against the upstream's own upstream chain.
+    /// live on the declared upstream, with the identical claim recorded on
+    /// that parent's `home_ref` (a hub-format pool: on its hub's store ref).
+    /// Only the immediate parent's home is checked; the ancestors'
+    /// `home_ref`s are not walked against the upstream's own upstream chain.
     fn block_lineage(&self, block: &AgreedIdBlock, typ: &str) -> Result<(), Unusable> {
         let no_lineage = || Unusable::NoLineage(typ.to_string());
         let pool_id = block.pool_id.as_deref().ok_or_else(no_lineage)?;
@@ -957,6 +1012,22 @@ impl LineageView<'_> {
                     type_prefix: typ.to_string(),
                     home_ref: parent.home_ref.clone(),
                     upstream: upstream.to_string(),
+                });
+            }
+            // The upstream's name alone vouches for nothing: the identical
+            // claim must be on the pool's home ref (accepted there, and
+            // carried here by fetch or by bundle). No legacy exemption.
+            // trace:BUG-2421 | ai:claude
+            let accepted = self
+                .home_claims
+                .iter()
+                .filter(|h| h.home_ref == parent.home_ref)
+                .flat_map(|h| &h.on_ref)
+                .any(|b| same_claim(b, block));
+            if !accepted {
+                return Err(Unusable::NotAccepted {
+                    type_prefix: typ.to_string(),
+                    home_ref: parent.home_ref.clone(),
                 });
             }
         }

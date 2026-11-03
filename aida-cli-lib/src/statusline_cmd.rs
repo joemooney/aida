@@ -483,6 +483,11 @@ pub(crate) fn handle_statusline_command(
         parts.push(marker.magenta().bold().to_string());
     }
     // trace:TASK-1734 | ai:codex
+    // trace:STORY-2336 | ai:codex — local cache only, no forge probe.
+    let idle = crate::idle_eligible::collect(&project_root, None, chrono::Utc::now()).len();
+    if idle > 0 {
+        parts.push(format!("idle eligible:{idle}"));
+    }
     if let Some(segment) = regeneration_statusline_segment(&project_root, chrono::Utc::now()) {
         parts.push(segment);
     }
