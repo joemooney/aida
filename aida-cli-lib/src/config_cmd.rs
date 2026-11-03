@@ -1361,7 +1361,11 @@ fn write_codex_posture(path: &std::path::Path, tier: ConfigPermissionTier) -> Re
             doc["approval_policy"] = value("never");
             let sandbox = ensure_root_table(&mut doc, "sandbox_workspace_write");
             sandbox["network_access"] = value(true);
-            sandbox["writable_roots"] = value(string_array(["~/.cargo", "~/.rustup", "~/.aida"]));
+            // trace:TASK-b6b1278890774ef993d2ebc327862470-729 | ai:codex
+            // Like BUG-2418's lane profile, keep host dependency/tool state
+            // read-only. Explicitly clear old grants, including in user scope;
+            // new dependencies must be fetched on the host outside the lane.
+            sandbox["writable_roots"] = value(Array::default());
         }
         ConfigPermissionTier::Native => {
             doc.remove("sandbox_mode");
@@ -4828,6 +4832,13 @@ mod bug_533_config_show_tests {
         );
         toml::from_str::<toml::Value>(&agents_once).unwrap();
         let parsed_codex: toml::Value = toml::from_str(&codex_once).unwrap();
+        // trace:TASK-b6b1278890774ef993d2ebc327862470-729 | ai:codex
+        assert_eq!(
+            parsed_codex["sandbox_workspace_write"]["writable_roots"]
+                .as_array()
+                .unwrap(),
+            &Vec::<toml::Value>::new()
+        );
         assert_eq!(
             parsed_codex.get("sandbox_mode").and_then(|v| v.as_str()),
             Some("workspace-write")
@@ -4843,6 +4854,54 @@ mod bug_533_config_show_tests {
         assert!(dir.path().join(".codex/config.toml.bak").exists());
         assert_eq!(first.edited_paths.len(), 2);
         assert_eq!(first.backup_paths.len(), 2);
+    }
+
+    // trace:TASK-b6b1278890774ef993d2ebc327862470-729 | ai:codex
+    #[test]
+    fn permissions_set_contained_clears_legacy_codex_home_write_grants_in_both_scopes() {
+        let dir = tempfile::tempdir().unwrap();
+        let home = tempfile::tempdir().unwrap();
+        let _home_guard = crate::test_env::EnvVarGuard::set("AIDA_HOME", home.path());
+        let legacy = "sandbox_mode = \"workspace-write\"\napproval_policy = \"never\"\n\
+                      model = \"gpt-5\"\n\
+                      [sandbox_workspace_write]\nnetwork_access = true\n\
+                      writable_roots = [\"~/.cargo\", \"~/.rustup\", \"~/.aida\"]\n\
+                      [mcp_servers.aida]\ncommand = \"aida\"\n";
+        for (scope, base) in [
+            (PermissionPostureScope::Local, dir.path()),
+            (PermissionPostureScope::User, home.path()),
+        ] {
+            let config = base.join(".codex/config.toml");
+            std::fs::create_dir_all(config.parent().unwrap()).unwrap();
+            std::fs::write(&config, legacy).unwrap();
+
+            apply_permission_posture(dir.path(), ConfigPermissionTier::Contained, scope).unwrap();
+
+            let body = std::fs::read_to_string(&config).unwrap();
+            let parsed: toml::Value = toml::from_str(&body).unwrap();
+            assert!(parsed["sandbox_workspace_write"]["writable_roots"]
+                .as_array()
+                .unwrap()
+                .is_empty());
+            assert_eq!(parsed["sandbox_mode"].as_str(), Some("workspace-write"));
+            assert_eq!(parsed["approval_policy"].as_str(), Some("never"));
+            assert_eq!(
+                parsed["sandbox_workspace_write"]["network_access"].as_bool(),
+                Some(true)
+            );
+            assert_eq!(parsed["model"].as_str(), Some("gpt-5"));
+            assert_eq!(
+                parsed["mcp_servers"]["aida"]["command"].as_str(),
+                Some("aida")
+            );
+            assert_eq!(
+                std::fs::read_to_string(backup_path(&config)).unwrap(),
+                legacy
+            );
+
+            apply_permission_posture(dir.path(), ConfigPermissionTier::Contained, scope).unwrap();
+            assert_eq!(std::fs::read_to_string(&config).unwrap(), body);
+        }
     }
 
     // trace:STORY-1128 | ai:codex

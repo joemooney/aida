@@ -6617,6 +6617,14 @@ pub(crate) fn stamp_lease_active_pid_at(
         if let Some(start_time) = &start_time {
             doc["active_pid_start_time"] = value(start_time.clone());
         }
+        // BUG-2419: the pid was read in this process's pid namespace.
+        // trace:BUG-2419 | ai:claude
+        match crate::gate::review_authority::origin_pid_ns() {
+            Some(ns) => doc["active_pid_ns"] = value(ns),
+            None => {
+                doc.remove("active_pid_ns");
+            }
+        }
         // STORY-1429: atomic, so a reader never sees a half-rewritten lease.
         // trace:STORY-1429 | ai:claude
         aida_core::write_atomic(&path, doc.to_string())
@@ -6625,17 +6633,88 @@ pub(crate) fn stamp_lease_active_pid_at(
     // BUG-1918: the spawned worker — not the launcher that claimed — works
     // this lease; record its process as one of the lease's authors so the
     // ledger outlives the lease.
-    // trace:BUG-1918 | ai:claude
+    // A pid read inside a sandbox's pid namespace is qualified with it.
+    // trace:BUG-1918 trace:BUG-2419 | ai:claude
     crate::gate::review_authority::record_lease_identity(
         project_root,
         lease_id,
-        &[crate::gate::review_authority::process_token(
+        &[crate::gate::review_authority::author_process_token(
             "proc",
             pid,
             start_time.as_deref(),
         )],
     );
     Ok(())
+}
+
+/// STORY-2254: stamp a detached worker onto its lease, strictly. Under the
+/// lease write lock: the lease must already carry `expected_grant` as its
+/// child grant (stamped by the launch that minted it), no OTHER live process
+/// may hold `active_pid`, and both `active_pid` and the REQUIRED
+/// `active_pid_start_time` are written together (never an old start beside a
+/// new pid). The persisted lease is re-read and verified before returning.
+/// Authorship is recorded separately (one resource lock at a time).
+// trace:STORY-2254 | ai:claude
+pub(crate) fn stamp_lease_detached_worker_at(
+    project_root: &Path,
+    lease_id: &str,
+    expected_grant: &str,
+    pid: u32,
+    start: &str,
+) -> Result<()> {
+    use toml_edit::{value, DocumentMut};
+    anyhow::ensure!(
+        !start.is_empty() && !expected_grant.is_empty(),
+        "detached worker lease stamp needs the worker start identity and its grant"
+    );
+    let path = project_root
+        .join(".aida")
+        .join("sessions")
+        .join(format!("{lease_id}.toml"));
+    with_lease_write_lock(project_root, || {
+        let body = std::fs::read_to_string(&path)
+            .with_context(|| format!("reading lease {}", path.display()))?;
+        let mut doc = body
+            .parse::<DocumentMut>()
+            .with_context(|| format!("parsing lease {}", path.display()))?;
+        anyhow::ensure!(
+            doc.get(LEASE_CHILD_GRANT_KEY).and_then(|v| v.as_str()) == Some(expected_grant),
+            "lease {lease_id} does not carry this launch's child grant; refusing to stamp its worker"
+        );
+        let current_pid = doc
+            .get("active_pid")
+            .and_then(|v| v.as_integer())
+            .and_then(|p| u32::try_from(p).ok());
+        let current_start = doc
+            .get("active_pid_start_time")
+            .and_then(|v| v.as_str())
+            .map(str::to_string);
+        if let (Some(other), Some(other_start)) = (current_pid, current_start.as_deref()) {
+            if (other, other_start) != (pid, start)
+                && crate::process_probe::process_start_identity(other).as_deref()
+                    == Some(other_start)
+            {
+                anyhow::bail!(
+                    "lease {lease_id} is held by live process {other}; refusing to stamp a second worker"
+                );
+            }
+        }
+        doc["active_pid"] = value(i64::from(pid));
+        doc["active_pid_start_time"] = value(start);
+        aida_core::write_atomic(&path, doc.to_string())
+            .with_context(|| format!("writing lease {}", path.display()))?;
+        let back: toml::Table = std::fs::read_to_string(&path)
+            .with_context(|| format!("re-reading lease {}", path.display()))?
+            .parse()
+            .with_context(|| format!("parsing lease {}", path.display()))?;
+        anyhow::ensure!(
+            back.get("active_pid").and_then(|v| v.as_integer()) == Some(i64::from(pid))
+                && back.get("active_pid_start_time").and_then(|v| v.as_str()) == Some(start)
+                && back.get(LEASE_CHILD_GRANT_KEY).and_then(|v| v.as_str()) == Some(expected_grant),
+            "lease {lease_id} did not persist the detached worker stamp"
+        );
+        Ok(())
+    })
 }
 
 /// STORY-306: build the argv (after the `claude` program name) for a headless

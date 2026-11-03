@@ -61,6 +61,19 @@ pub(crate) struct SessionLease {
     // trace:TASK-1284 | ai:codex
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) active_pid_start_time: Option<String>,
+    /// BUG-2419: pid namespace inode `creator_pid` was read in (the writer's
+    /// own, host included). A pid names a process only within its namespace,
+    /// so authorship compares it only with identities from that namespace.
+    /// `None` (a lease written before BUG-2419) is an unknown origin: its
+    /// pid never matches any recorder.
+    // trace:BUG-2419 | ai:claude
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) creator_pid_ns: Option<String>,
+    /// BUG-2419: pid namespace inode `active_pid` was read in; see
+    /// `creator_pid_ns`.
+    // trace:BUG-2419 | ai:claude
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) active_pid_ns: Option<String>,
     /// Parent project's `target/` dir, captured so the session shell can
     /// share its cargo build cache with the parent worktree (avoids a full
     /// rebuild on first `cargo build` inside the session). `None` when the
@@ -338,6 +351,9 @@ pub(crate) fn session_harness_worktree_register(
         // liveness as unknown rather than dead. trace:BUG-752 | ai:claude
         active_pid,
         active_pid_start_time: active_pid.and_then(process_probe::process_start_identity),
+        creator_pid_ns: None,
+        // trace:BUG-2419 | ai:claude
+        active_pid_ns: crate::gate::review_authority::recorded_pid_ns(active_pid),
         cargo_target_dir: None,
         parent_project_root: Some(
             project_root
@@ -495,6 +511,16 @@ pub(crate) fn adopt_spec_lease_for_subagent(
             "active_pid".to_string(),
             toml::Value::Integer(i64::from(pid)),
         );
+        // BUG-2419: the pid was read in this process's pid namespace.
+        // trace:BUG-2419 | ai:claude
+        match crate::gate::review_authority::origin_pid_ns() {
+            Some(ns) => {
+                table.insert("active_pid_ns".to_string(), toml::Value::String(ns));
+            }
+            None => {
+                table.remove("active_pid_ns");
+            }
+        }
         match process_probe::process_start_identity(pid) {
             Some(start) => {
                 table.insert(
