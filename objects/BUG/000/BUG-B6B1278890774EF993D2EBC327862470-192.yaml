@@ -1,0 +1,25 @@
+id: 01a1a1a7-a716-7af1-b840-8127ca63e0b8
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-192
+agreed_id: BUG-2423
+title: aida pr train ejects every member when it reads the train PR's checks before GitHub has registered them
+description: |-
+  Observed 2026-11-03 13:43Z: 'aida pr train 3284 3283' opened train PR #3290, then immediately ran 'gh pr checks 3290 --json'. It got 'no checks reported on the train/20261103-134333-1 branch', treated that as unreadable CI, ejected both members and closed #3290 (0 CI runs). Seconds later the checks were registered and pending.
+
+  Expected: a train PR with no checks yet is 'pending', not an error. Poll with a grace window (e.g. up to 3 minutes for the first check to appear) before ejecting. Only a genuine gh/API failure after retries should stop the train, and that should retry the same train rather than eject members.
+
+  Acceptance: (1) a unit test where the checks reader returns 'no checks reported' for the first N polls and then pending, then success: the train lands. (2) No checks after the grace window: the train stops with a clear 'CI never started' reason and leaves the train PR open for inspection.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-03T13:44:41.494240826Z
+modified_at: 2026-11-03T13:44:41.494240826Z
+req_type: Bug
+filed_at:
+  code_sha: 6c587ee595ce70f5fcc48480cfdddc8246cf158c
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 6c587ee595c
+  vendor: claude
+  session: f5eddefe-032d-4760-94ba-3a318cf3d1d1
