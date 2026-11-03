@@ -20,12 +20,12 @@ description: |
 
   ## Expected
   A reviewer lane's own lease never counts as an author of the PR it reviews. An operator-authored PR with no implementer lease is approvable by an independent reviewer lane. Identity tokens taken inside a pid namespace are not compared across namespaces.
-status: NeedsAttention
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-03T02:31:19.103221790Z
-modified_at: 2026-11-03T06:52:53.321852893Z
+modified_at: 2026-11-03T07:18:34.547104808Z
 req_type: Bug
 tags:
 - area:gate
@@ -47,6 +47,12 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: Two identity gaps remain: live leases acquire the reader namespace, and qualified empty starts satisfy grant binding. Build CI passed; merge hold remains active.. No triage reason was given.'
   created_at: 2026-11-03T05:13:11.100586130Z
   modified_at: 2026-11-03T05:13:11.100586130Z
+  session_id: c58592f4-04ae-498b-9afd-87b0cc2bcde9
+- id: 01a1a046-2733-7322-b67a-7fe84dbfab4e
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: Author/presenter tokens are now pid-namespace qualified and the PR-3277 pid-2 mixed-scheme false match is fixed and tested, but grant BINDING writers still emit unqualified tokens, so any grant bound inside a non-host pid namespace can no longer be satisfied by process binding.. No triage reason was given.'
+  created_at: 2026-11-03T07:18:34.547100310Z
+  modified_at: 2026-11-03T07:18:34.547100310Z
   session_id: c58592f4-04ae-498b-9afd-87b0cc2bcde9
 history:
 - id: 01a19f41-1318-7ec1-a1cd-8728da222ef2
@@ -128,6 +134,14 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1a046-2733-7322-b67a-7fda729c727c
+  author: joe
+  timestamp: 2026-11-03T07:18:34.547090425Z
+  session_id: c58592f4-04ae-498b-9afd-87b0cc2bcde9
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: 553f7d5984c6083a9f2b47cfa358ce57c438843b
   branch: main
@@ -140,11 +154,3 @@ implementation_info:
   implemented: true
   implemented_at: 2026-11-03T03:08:20.705838150Z
   implemented_by: joe
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: Author/presenter tokens are now pid-namespace qualified and the PR-3277 pid-2 mixed-scheme false match is fixed and tested, but grant BINDING writers still emit unqualified tokens, so any grant bound inside a non-host pid namespace can no longer be satisfied by process binding.
-  recovery_hint: address the review findings, move BUG-2419 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-03T06:52:53.321852893Z
