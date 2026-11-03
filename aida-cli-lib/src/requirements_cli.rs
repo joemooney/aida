@@ -3152,6 +3152,14 @@ fn run_add(
                     if aida_core::allocation_authority::resolve(store_path)?.authoritative {
                         pull_store_before_id_allocation(store_path, &project_dir)?;
                     }
+                    // The node and agreed ID a delegated block dispensed for
+                    // this add, so a refused save hands it back (BUG-2420).
+                    let mut delegated_spent: Option<(String, String)> = None;
+                    // The store write lock, held from the dispense through the
+                    // object's save and any hand-back, so no other writer can
+                    // dispense past an ID whose save then fails (BUG-2420).
+                    // trace:BUG-2420 | ai:claude
+                    let mut store_hold: Option<aida_core::db::StoreWriteHold> = None;
                     if id_policy.uses_blocks() {
                         let node_id = load_node_id(store_path);
                         let blocks_path = store_path.join("registry").join("blocks.yaml");
@@ -3233,6 +3241,11 @@ fn run_add(
                             // `git_ops::add(store_path, &["registry/blocks.yaml"])`
                             // runs under the store write lock.
                             // trace:TASK-1930 | ai:agy
+                            // BUG-2420: take (and keep) the store lock here, with
+                            // WORK admission entered before it, through the
+                            // object save below.
+                            // trace:BUG-2420 | ai:claude
+                            store_hold = Some(aida_core::db::hold_store_write(store_path)?);
                             aida_core::db::with_store_write_lock(store_path, || {
                                 aida_core::BlockRegistry::with_dispense_lock(&blocks_path, || {
                                     if let Ok(mut registry) =
@@ -3463,6 +3476,12 @@ fn run_add(
                                                             &["registry/blocks.yaml"],
                                                         );
                                                     }
+                                                    if delegated_idx.is_some() {
+                                                        delegated_spent = Some((
+                                                            node_id.clone(),
+                                                            agreed_id.clone(),
+                                                        ));
+                                                    }
                                                     req.agreed_id = Some(agreed_id.clone());
                                                     // An unbound (legacy single-node) store uses the
                                                     // agreed ID as the spec_id too. A bound clone keeps
@@ -3502,7 +3521,28 @@ fn run_add(
                     // faster end-to-end median at full scale). This also removes the
                     // redundant second `write_object` (GitBackend::add_requirement
                     // already writes it). trace:TASK-856 | ai:claude
-                    let added = backend.add_requirement(req.clone())?;
+                    // A save refused after a delegated block dispensed its ID
+                    // (admission, a full disk) returns the ID to the block, so
+                    // `next` never runs ahead of the objects it vouches for.
+                    // The store lock taken before the dispense is still held,
+                    // so no other add has dispensed past it and the hand-back
+                    // always lands; it is released once the save or the
+                    // hand-back is done.
+                    // trace:BUG-2420 | ai:claude
+                    let added = match backend.add_requirement(req.clone()) {
+                        Ok(added) => added,
+                        Err(e) => {
+                            if let Some((node, agreed_id)) = &delegated_spent {
+                                let released = aida_core::allocation_authority::release_undelivered(
+                                    store_path, node, agreed_id,
+                                );
+                                eprintln!("{}", undelivered_release_note(agreed_id, &released));
+                            }
+                            drop(store_hold);
+                            return Err(e);
+                        }
+                    };
+                    drop(store_hold);
 
                     {
                         let last = &added;
@@ -10040,9 +10080,34 @@ pub(crate) static SEARCH: crate::command_registry::CommandReg =
         run: crate::command_registry::Handler::Store(run_search),
     };
 
+/// The one line a refused delegated add prints about the agreed ID its
+/// block dispensed: returned to the block, burned (a concurrent add
+/// advanced `next` past it, so it can never be issued), or not returned
+/// because the release itself failed. Never silent.
+// trace:BUG-2420 | ai:claude
+pub(crate) fn undelivered_release_note(agreed_id: &str, released: &anyhow::Result<bool>) -> String {
+    match released {
+        Ok(true) => format!(
+            "{} {agreed_id} was returned to this clone's block; nothing was filed.",
+            "Note:".dimmed(),
+        ),
+        Ok(false) => format!(
+            "{} {agreed_id} is burned: another add advanced this clone's block past it, so it was not returned and will not be issued; nothing was filed.",
+            "Note:".dimmed(),
+        ),
+        Err(release) => format!(
+            "Warning: could not return {agreed_id} to this clone's block: {release:#}"
+        ),
+    }
+}
+
 #[cfg(test)]
 #[path = "tests/task_1981_add_tests.rs"]
 mod task_1981_add_tests;
+
+#[cfg(test)]
+#[path = "tests/bug_2420_release_note_tests.rs"]
+mod bug_2420_release_note_tests;
 
 #[cfg(test)]
 #[path = "tests/story_105_agreed_first_tests.rs"]

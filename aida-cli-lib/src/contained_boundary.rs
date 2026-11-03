@@ -142,6 +142,173 @@ pub(crate) fn contained_store_write_paths(main: &Path) -> Vec<PathBuf> {
     paths
 }
 
+/// TASK-2772: the build-coordination paths a lane's sandboxed Bash must write
+/// for the LIGHT gate: the cargo slot pair (`$XDG_RUNTIME_DIR/cargo-slots-<uid>`
+/// for the slot locks, `~/.local/state/cargo-slots` for the build log), and
+/// nothing else. The shared sccache cache is never granted (advisor ruling,
+/// BUG-2169 O2): a lane that wrote it could plant an artifact the host and
+/// other seats reuse; the gate runner falls back to `RUSTC_WRAPPER=` instead.
+/// Any path inside CARGO_HOME is dropped: BUG-2418 keeps CARGO_HOME read-only.
+/// Seat clones never get these (they build with no compiler wrapper).
+// trace:TASK-2772 | ai:claude
+pub(crate) fn lane_build_write_paths() -> Vec<PathBuf> {
+    let env_path = |key: &str| {
+        std::env::var_os(key)
+            .filter(|v| !v.is_empty())
+            .map(PathBuf::from)
+    };
+    let (paths, notes) = lane_build_write_grants_from(&LaneBuildEnv {
+        runtime_dir: env_path("XDG_RUNTIME_DIR"),
+        uid: current_uid(),
+        home: crate::home_dir(),
+        cargo_home: crate::session::cargo_home_dir(),
+    });
+    // One note per refused slot per process: the settings render and the
+    // os_wrap launch both ask for the grants.
+    // trace:BUG-2418 | ai:claude
+    static SAID: std::sync::Mutex<Vec<String>> = std::sync::Mutex::new(Vec::new());
+    let mut said = SAID.lock().unwrap_or_else(|p| p.into_inner());
+    for note in notes {
+        if !said.contains(&note) {
+            eprintln!("aida: {note}");
+            said.push(note);
+        }
+    }
+    paths
+}
+
+#[cfg(unix)]
+fn current_uid() -> Option<u32> {
+    // SAFETY: getuid never fails and has no preconditions.
+    Some(unsafe { libc::getuid() })
+}
+
+#[cfg(not(unix))]
+fn current_uid() -> Option<u32> {
+    None
+}
+
+/// The inputs [`lane_build_write_paths`] reads from the environment.
+// trace:TASK-2772 | ai:claude
+#[derive(Debug, Clone, Default)]
+pub(crate) struct LaneBuildEnv {
+    pub(crate) runtime_dir: Option<PathBuf>,
+    pub(crate) uid: Option<u32>,
+    pub(crate) home: Option<PathBuf>,
+    pub(crate) cargo_home: Option<PathBuf>,
+}
+
+/// Pure core of [`lane_build_write_paths`]. Relative paths are dropped (the
+/// sandbox needs absolute ones), as is the filesystem root. A refused slot is
+/// dropped silently here; [`lane_build_write_grants_from`] says why.
+// trace:TASK-2772 | ai:claude
+pub(crate) fn lane_build_write_paths_from(env: &LaneBuildEnv) -> Vec<PathBuf> {
+    lane_build_write_grants_from(env).0
+}
+
+/// [`lane_build_write_paths_from`] plus one note per refused slot.
+///
+/// BUG-2418: the CARGO_HOME check compares the paths the filesystem actually
+/// resolves, not their spellings: a CARGO_HOME (or a slot path) that is a
+/// symlink, or sits under one, would otherwise let a lexically distinct slot
+/// grant write the real CARGO_HOME. Each side resolves through
+/// [`resolve_through_existing`]; when either side cannot be resolved the slot
+/// is refused. The emitted path is the resolved one, so the grant names the
+/// directory the sandbox will really bind.
+// trace:TASK-2772 trace:BUG-2418 | ai:claude
+pub(crate) fn lane_build_write_grants_from(env: &LaneBuildEnv) -> (Vec<PathBuf>, Vec<String>) {
+    let mut candidates = Vec::new();
+    if let (Some(runtime), Some(uid)) = (&env.runtime_dir, env.uid) {
+        candidates.push(runtime.join(format!("cargo-slots-{uid}")));
+    }
+    if let Some(home) = &env.home {
+        candidates.push(home.join(".local").join("state").join("cargo-slots"));
+    }
+    let cargo_home = env.cargo_home.as_ref().map(|raw| {
+        let lexical = normalize_lexical(raw);
+        let resolved = resolve_through_existing(&lexical);
+        (lexical, resolved)
+    });
+    let mut paths: Vec<PathBuf> = Vec::new();
+    let mut notes = Vec::new();
+    for path in candidates {
+        let path = normalize_lexical(&path);
+        if !path.is_absolute() || path.parent().is_none() {
+            continue;
+        }
+        let Some(resolved) = resolve_through_existing(&path) else {
+            notes.push(format!(
+                "cargo slot {} not granted: its real location cannot be resolved",
+                path.display()
+            ));
+            continue;
+        };
+        let (lexical_home, resolved_home) = match &cargo_home {
+            Some((lexical, Some(resolved))) => (lexical, resolved),
+            Some((lexical, None)) => {
+                notes.push(format!(
+                    "cargo slot {} not granted: CARGO_HOME {} cannot be resolved",
+                    path.display(),
+                    lexical.display()
+                ));
+                continue;
+            }
+            None => {
+                notes.push(format!(
+                    "cargo slot {} not granted: CARGO_HOME is unknown",
+                    path.display()
+                ));
+                continue;
+            }
+        };
+        let overlaps = |a: &Path, b: &Path| a.starts_with(b) || b.starts_with(a);
+        if overlaps(&path, lexical_home) || overlaps(&resolved, resolved_home) {
+            continue;
+        }
+        if resolved.parent().is_none() {
+            continue;
+        }
+        if !paths.contains(&resolved) {
+            paths.push(resolved);
+        }
+    }
+    (paths, notes)
+}
+
+/// The real location of an absolute `path` that may not exist yet: the
+/// canonical form of its deepest existing ancestor with the missing
+/// components appended. `None` when the path is relative, holds `..`, or an
+/// existing ancestor cannot be canonicalized (a dangling symlink, a file in
+/// the middle, no permission): the caller then refuses rather than guess.
+// trace:BUG-2418 | ai:claude
+pub(crate) fn resolve_through_existing(path: &Path) -> Option<PathBuf> {
+    if !path.is_absolute()
+        || path
+            .components()
+            .any(|c| matches!(c, Component::ParentDir | Component::CurDir))
+    {
+        return None;
+    }
+    let mut missing = Vec::new();
+    let mut current = path;
+    loop {
+        match std::fs::symlink_metadata(current) {
+            Ok(_) => {
+                let mut base = std::fs::canonicalize(current).ok()?;
+                for component in missing.iter().rev() {
+                    base.push(component);
+                }
+                return Some(base);
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                missing.push(current.file_name()?.to_os_string());
+                current = current.parent()?;
+            }
+            Err(_) => return None,
+        }
+    }
+}
+
 /// The shared runtime mailbox alone; never grant the enclosing `.aida`
 /// directory (which contains grants, leases and other coordination authority).
 /// Refuse symlinked mailbox/state directories rather than binding their target.
@@ -720,3 +887,8 @@ mod baseline_tests;
 #[cfg(test)]
 #[path = "tests/task_1952_contained_launch_tests.rs"]
 mod task_1952_launch_tests;
+
+// trace:BUG-2418 TASK-2772 | ai:claude
+#[cfg(test)]
+#[path = "tests/bug_2418_task_2772_lane_cargo_tests.rs"]
+mod bug_2418_task_2772_lane_cargo_tests;
