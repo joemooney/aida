@@ -6,13 +6,21 @@ description: |-
   2026-11-03: aida ps had piled up about 51 stale, 9 orphaned and 28 salvageable rows. The disk reached 99% (11 GB free), which blocked every lane's cargo runs, and 305.7 GiB was reclaimable. Nothing runs session reap, agent gc or worktree reclaim on a schedule; they wait for an advisor sweep.
 
   Acceptance: (1) an hourly project-scope scheduled job runs 'aida session reap --yes' (finished + merged + exited only), 'aida agent gc', and 'aida worktree reclaim --apply' limited to caches idle more than 24h. (2) It never touches salvageable (uncommitted) trees, live leases or a foreign pidns. (3) Its summary routes to the advisor only when it hits something it must keep (for example retention not activated, or salvageable work older than 24h), naming the act needed. (4) The disk-headroom guard runs reclaim itself before routing to the advisor.
-status: Approved
+status: InProgress
 priority: Medium
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-03T14:28:02.283438627Z
-modified_at: 2026-11-03T14:28:02.283438627Z
+modified_at: 2026-11-03T20:25:42.538960101Z
 req_type: Story
+history:
+- id: 01a1a316-cb8a-7301-85a2-3b4f27c65f7a
+  author: aida-session-start
+  timestamp: 2026-11-03T20:25:42.538957644Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 493f3ae1c526c7ab19f208112d426aecbf33c8b5
   branch: main
