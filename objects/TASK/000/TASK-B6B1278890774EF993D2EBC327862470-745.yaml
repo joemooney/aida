@@ -1,0 +1,27 @@
+id: 01a1a29c-2f3b-7da1-9742-5956f34db69c
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-745
+title: 'non-blocking/cosmetic: docs/agents/codex-mcp-setup.md:200 still recommends writ…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-B6B1278890774EF993D2EBC327862470-729, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  non-blocking/cosmetic: docs/agents/codex-mcp-setup.md:200 still recommends writable_roots = ["~/.cargo", "~/.rustup", "~/.aida"] as the 'persistent equivalent' of the contained posture; update to [] with the host cargo fetch note.
+  Reviewed sha: efbb07dbdcec9339609006f18ae5577e8a329e3e
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-03T18:11:47.131420379Z
+modified_at: 2026-11-03T18:11:47.131420379Z
+req_type: Task
+tags:
+- carried-from:TASK-B6B1278890774EF993D2EBC327862470-729
+- finding-hash:4dd558b3
+- from-review:TASK-B6B1278890774EF993D2EBC327862470-729
+- kind:carried-forward
+filed_at:
+  code_sha: c016e786454b8d89e36474513cf42d4481398394
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: fc08dfd16d4
+  vendor: claude
