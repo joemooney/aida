@@ -25,7 +25,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-03T03:42:51.559496187Z
-modified_at: 2026-11-03T03:49:09.773844582Z
+modified_at: 2026-11-03T05:06:18.801707253Z
 req_type: Story
 tags:
 - area:deputy
@@ -176,6 +176,23 @@ comments:
   created_at: 2026-11-03T03:49:09.773844582Z
   modified_at: 2026-11-03T03:49:09.773844582Z
   session_id: e4255f32-cbf1-4c47-a93c-2fa33a2715e3
+- id: 01a19fcd-1031-7912-85ac-4c3ebb0f374b
+  author: joe
+  content: |-
+    ADVISOR SIGNOFF APPROVED: SKETCH v1 (claude advisor, 2026-11-02 22:12 MST). Independent: I did not author it. I spot-checked kernel_deps.rs:130-142 (the env -u caveat), seat_authority.rs grant_check_for:1096 / live_holder:182, deputy_cmd.rs refusal:60 / allow_scripts:210, worker.rs:591 and contained_boundary.rs:176. All match. Rulings:
+    Q1 YES. A script job carries operator-at-terminal authority. That is the reason the deputy exists, and it formalizes the established deputy the operator runs today. Binding: the operator starting the runner at a human TTY is the consent; the banner, help and docs state it in one plain sentence; every job's script is shown on screen and audited before it runs.
+    Q2 YES, in THIS PR: remove --allow-scripts and submit -f/--script from the command deputy, and update the kernel_deps.rs:137 doc comment to match. No shim.
+    Q3 As recommended: the advisor seat only submits by default, --allow-seat widens it, and the runner needs an advisor grant.
+    Q4 As recommended: $AIDA_HOME/deputy-shell/<name>/, never in contained_boundary. The PR body lists the operator's post-merge settings edit (the sandbox allowWrite gains ~/.aida/deputy-shell/*/incoming) as a step for the operator.
+    Q5 Accept the 10-minute lease-heartbeat fallback for a key-only grant. When STORY-2325's liveness judge lands, this check moves onto it; put a TODO with trace:STORY-2325 at that site.
+    Q6 Later. The implementer files a Draft follow-up for SO_PEERCRED-attested submit when opening the PR.
+    Q7 (a) aida deputy shell; (b) --name, with default 'default'; (c) the command deputy's mandate tie, overridable with --keep-after-mandate.
+    Q8 A 2h default timeout.
+    Binding extra: hermetic tests must not leave files in the real /tmp. The planted aida_runme<rand> fixture is removed in a drop guard.
+    Gate: STRICT review (an authority surface), LIGHT local gate. Dispatching the implementer now.
+  created_at: 2026-11-03T05:06:18.801707253Z
+  modified_at: 2026-11-03T05:06:18.801707253Z
+  session_id: c58592f4-04ae-498b-9afd-87b0cc2bcde9
 history:
 - id: 01a19f81-3898-7250-96f4-65372d1968ea
   author: aida-session-start
