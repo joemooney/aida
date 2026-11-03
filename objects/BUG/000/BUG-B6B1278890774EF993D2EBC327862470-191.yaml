@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-191
 agreed_id: BUG-2422
 title: merge-hold auto-release cannot resolve a node-local friendly spec ID (STORY-HOME-332 resolves to 0), so an approved PR still needs a human clear
 description: 'Observed 2026-11-03 00:50 MST on PR-3284 (STORY-2336), APPROVED at head a42ff79, CI green: aida merge-hold auto-release 3284 printed: held, covered spec is missing or ambiguous: STORY-HOME-332 resolves to 0 requirements; exactly one required; human clear required. aida show STORY-HOME-332 resolves to STORY-2336, so the auto-release covered-spec resolver does not use the same friendly-ID resolution as show. Expected: auto-release resolves local, friendly and origin IDs exactly as aida show does and releases an eligible recorded approval. Impact: every approved held PR whose hold names a friendly ID falls back to an operator TTY clear.'
-status: Approved
+status: InProgress
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-03T07:48:32.750358555Z
-modified_at: 2026-11-03T09:48:20.391735965Z
+modified_at: 2026-11-03T09:48:32.206037037Z
 req_type: Bug
 tags:
 - area:gate
@@ -65,6 +65,14 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
+- id: 01a1a0cf-724e-7eb3-8715-1334a9fcdcee
+  author: aida-session-start
+  timestamp: 2026-11-03T09:48:32.206032696Z
+  session_id: c58592f4-04ae-498b-9afd-87b0cc2bcde9
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: db087637d57deb2025d925eb4ca59c7e298cb45f
   branch: main
