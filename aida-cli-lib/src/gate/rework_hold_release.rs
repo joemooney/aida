@@ -891,8 +891,8 @@ fn auto_release_with(
         // trace:STORY-1687 | ai:codex
         // Resolve exactly as `aida show` does — canonical, agreed and
         // node-local friendly label (`STORY-HOME-332`) — keeping the
-        // exactly-one strictness. trace:BUG-2422 | ai:claude
-        crate::spec_arg::ensure_alias_map();
+        // exactly-one strictness. The caller (merge-hold / review-record CLI)
+        // installs the node-alias map first. trace:BUG-2422 | ai:claude
         let specs: Vec<_> = ids
             .iter()
             .map(|id| {
