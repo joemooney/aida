@@ -639,30 +639,93 @@ fn restart_enabled_mail_wake_services_reports_each_and_continues_after_failure()
     restart_enabled_services_with(&mut out, |args| {
         calls.push(args.join(" "));
         if args[0] == "list-unit-files" {
-            return Ok("aida-mail-wake-a.service enabled enabled\naida-mail-wake-b.service enabled-runtime -\naida-mail-wake-disabled.service disabled enabled\nunrelated.service enabled enabled\naida-mail-wake-a.service enabled enabled\naida-mail-wake-;bad.service enabled enabled\n".into());
+            return Ok(ok_run("aida-mail-wake-a.service enabled enabled\naida-mail-wake-b.service enabled-runtime -\naida-mail-wake-c.service enabled enabled\naida-mail-wake-disabled.service disabled enabled\nunrelated.service enabled enabled\naida-mail-wake-a.service enabled enabled\naida-mail-wake-;bad.service enabled enabled\n"));
         }
         if args[1] == "aida-mail-wake-a.service" {
             anyhow::bail!("manager refused");
         }
-        Ok(String::new())
+        if args[1] == "aida-mail-wake-c.service" {
+            return Ok(failed_run("Job for aida-mail-wake-c.service failed.\n"));
+        }
+        Ok(ok_run(""))
     }).unwrap();
+    assert_eq!(
+        calls[0], "list-unit-files --type=service --no-legend --no-pager",
+        "discovery passes no unit pattern"
+    );
     assert_eq!(
         &calls[1..],
         [
             "restart aida-mail-wake-a.service",
-            "restart aida-mail-wake-b.service"
+            "restart aida-mail-wake-b.service",
+            "restart aida-mail-wake-c.service"
         ]
     );
     let out = String::from_utf8(out).unwrap();
     assert!(out.contains("systemctl --user restart aida-mail-wake-a.service"));
     assert!(out.contains("Restarted mail-wake service: aida-mail-wake-b.service"));
+    assert!(out.contains("could not restart mail-wake service aida-mail-wake-c.service"));
+    assert!(out.contains("Job for aida-mail-wake-c.service failed."));
 }
 
+// trace:BUG-2424 | ai:claude
+fn ok_run(stdout: &str) -> SystemctlRun {
+    SystemctlRun {
+        success: true,
+        status: "exit status: 0".into(),
+        stdout: stdout.into(),
+        stderr: String::new(),
+    }
+}
+
+// trace:BUG-2424 | ai:claude
+fn failed_run(stderr: &str) -> SystemctlRun {
+    SystemctlRun {
+        success: false,
+        status: "exit status: 1".into(),
+        stdout: String::new(),
+        stderr: stderr.into(),
+    }
+}
+
+// What systemd 255 actually returns when nothing is listed: with no pattern
+// and no mail-wake unit, a zero exit whose listing holds only foreign units;
+// when a listing matches nothing, a nonzero exit with no output at all
+// (`--no-legend` suppresses "0 unit files listed."). Both mean zero units.
 // trace:BUG-2424 | ai:codex
+// trace:BUG-2424 | ai:claude
 #[test]
 fn restart_mail_wake_empty_and_unavailable_manager() {
     let mut out = Vec::new();
-    restart_enabled_services_with(&mut out, |_| Ok(String::new())).unwrap();
-    assert!(out.is_empty());
+    let mut restarts = 0;
+    restart_enabled_services_with(&mut out, |args| {
+        if args[0] == "restart" {
+            restarts += 1;
+        }
+        Ok(ok_run(
+            "dbus.service static -\nsyncthing.service enabled enabled\n",
+        ))
+    })
+    .unwrap();
+    for empty in ["", "0 unit files listed.\n"] {
+        restart_enabled_services_with(&mut out, |args| {
+            if args[0] == "restart" {
+                restarts += 1;
+            }
+            Ok(SystemctlRun {
+                stdout: empty.into(),
+                ..failed_run("")
+            })
+        })
+        .unwrap();
+    }
+    assert_eq!(restarts, 0);
+    assert!(out.is_empty(), "{}", String::from_utf8_lossy(&out));
+
+    let no_bus = restart_enabled_services_with(&mut out, |_| {
+        Ok(failed_run("Failed to connect to bus: No medium found\n"))
+    })
+    .unwrap_err();
+    assert!(format!("{no_bus:#}").contains("Failed to connect to bus"));
     assert!(restart_enabled_services_with(&mut out, |_| anyhow::bail!("no user manager")).is_err());
 }
