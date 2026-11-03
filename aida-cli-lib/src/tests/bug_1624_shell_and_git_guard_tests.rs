@@ -127,6 +127,7 @@ fn bug_1624_stacks_json_cascade_refuses_a_malformed_record() {
             driver: None,
             child_grant_id: None,
             vendor_session_id: None,
+            lane_jobs: None,
         };
         std::fs::write(
             dir.join(format!("{id}.toml")),

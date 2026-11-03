@@ -241,6 +241,12 @@ pub(crate) struct SessionLease {
     // trace:BUG-2386 | ai:claude
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) vendor_session_id: Option<String>,
+    /// BUG-2383: the lane job runner serving this lease, stamped by the host
+    /// while it runs. Kept on the typed struct so a lease rewriter
+    /// (`update_lease_branch`, ...) does not drop it.
+    // trace:BUG-2383 | ai:claude
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) lane_jobs: Option<crate::lane_job::RunnerRecord>,
 }
 
 pub(crate) fn leases_dir(project_root: &std::path::Path) -> std::path::PathBuf {
@@ -377,6 +383,7 @@ pub(crate) fn session_harness_worktree_register(
         driver: aida_core::driver_registry::driver_from_env(), // trace:STORY-1653 | ai:claude
         child_grant_id: None,
         vendor_session_id: None,
+        lane_jobs: None,
     };
 
     std::fs::create_dir_all(leases_dir(&project_root))?;

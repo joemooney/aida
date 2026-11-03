@@ -216,6 +216,7 @@ pub(crate) fn handle_claim(spec: &str, worktree: Option<&str>) -> Result<()> {
         driver: aida_core::driver_registry::driver_from_env(), // trace:STORY-1653 | ai:claude
         child_grant_id: None,
         vendor_session_id: None,
+        lane_jobs: None,
     };
 
     std::fs::create_dir_all(leases_dir(&project_root))?;
