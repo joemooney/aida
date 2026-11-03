@@ -13,7 +13,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-03T13:44:41.494240826Z
-modified_at: 2026-11-03T14:40:18.663769714Z
+modified_at: 2026-11-03T15:00:35.244426290Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -52,6 +52,12 @@ comments:
   created_at: 2026-11-03T14:13:36.566096328Z
   modified_at: 2026-11-03T14:13:36.566096328Z
   session_id: 01a1a1add7ce
+- id: 01a1a1ed-22d2-7042-80d0-7e93bb8672a4
+  author: joe
+  content: 'Advisor ruling: PR #3295 round 2. Fix all 3 findings in this push: (1) pr_train.rs:2511-2517 wraps only genuinely transient CI-read failures (gh/API error, unregistered checks) as TrainCiUnavailable; Refused (skipped required check), head/base/state changed, and the 600s missing-required-check timeout keep their previous eject-with-reason behaviour. (2) Add drive-level tests for the Refused and head/state-changed paths that show members are ejected with the reason. (3) forge.rs:3963-3972: delete the new prose classifier and reuse pr_ship::gh_pr_checks_output_is_unregistered / GH_NO_REGISTERED_CHECKS; any remaining classifier gets the // external-prose-classifier: marker. LIGHT gate: ONE targeted cargo test -p aida-cli-lib <filter> for the code you touched, plus make check-ci-fast; never cargo test --workspace, make check or make check-ci. Push to the existing PR branch (no new PR), then stop.'
+  created_at: 2026-11-03T15:00:35.154117790Z
+  modified_at: 2026-11-03T15:00:35.154117790Z
+  session_id: f5eddefe-032d-4760-94ba-3a318cf3d1d1
 history:
 - id: 01a1a1ad-dc71-7a52-af37-7ec00e0ddf62
   author: aida-session-start
