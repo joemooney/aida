@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-03T00:47:05.661792425Z
-modified_at: 2026-11-03T05:00:35.169104290Z
+modified_at: 2026-11-03T06:16:59.445633846Z
 req_type: Bug
 tags:
 - regroup
@@ -27,6 +27,12 @@ comments:
   created_at: 2026-11-03T02:22:20.394798996Z
   modified_at: 2026-11-03T02:22:20.394798996Z
   session_id: 125337a4-7dd3-483b-9c56-3665173938ae
+- id: 01a1a00d-c535-7a12-9fd8-1d8ac918ed12
+  author: joe
+  content: 'BLOCKER (advisor 23:20 MST): PR-3281''s first review cannot start. Removing the dead implementer worktree /home/joe/ai/aida-bug2418 is refused by mail retention: that mailbox holds 1 message, and retention activation was recorded by build 3a3b9b3 while the live build is cfee54e. Recording needs a human TTY, and one mail writer on the old binary is the operator''s ''aida deputy'' (pts/11). Operator: restart that deputy, then run ''aida mailbox retention activate''. The advisor then runs ''aida review watch --release PR-3281''. The fix head b779a12 is pushed.'
+  created_at: 2026-11-03T06:16:59.445633846Z
+  modified_at: 2026-11-03T06:16:59.445633846Z
+  session_id: c58592f4-04ae-498b-9afd-87b0cc2bcde9
 history:
 - id: 01a19f36-fd9d-7612-ad48-75a3494a7199
   author: joe
