@@ -8,11 +8,18 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-02T17:09:05.305497820Z
-modified_at: 2026-11-02T17:09:05.305497820Z
+modified_at: 2026-11-03T02:22:24.899439495Z
 req_type: Task
 tags:
 - from-advisor:general
 - kind:observation
+comments:
+- id: 01a19f37-0283-7f10-ad37-ed808e4ee010
+  author: joe
+  content: 'ADVISOR TRIAGE (2026-11-02 19:25 MST): approved and bundled with BUG-2418 in one lane. RULING: the generated lane sandbox settings ALLOW the cargo slot dirs ($XDG_RUNTIME_DIR/cargo-slots-<uid> and ~/.local/state/cargo-slots, the same pair as lane_job.rs sandbox_rw_paths) and the sccache socket/dir, read-write, so the LIGHT gate runs inside the sandbox. If sccache is still refused, the gate wrapper detects it once and falls back to RUSTC_WRAPPER= with a one-line note; it never hangs. The slot dir must never be CARGO_HOME (BUG-2418 makes that read-only). The ''stopped lane leaves a process tree'' part is out of scope: STORY-2325 (one liveness record) owns it.'
+  created_at: 2026-11-03T02:22:24.899439495Z
+  modified_at: 2026-11-03T02:22:24.899439495Z
+  session_id: 125337a4-7dd3-483b-9c56-3665173938ae
 history:
 - id: 01a19d56-7263-7a81-8e07-d3c0a007091a
   author: joe
