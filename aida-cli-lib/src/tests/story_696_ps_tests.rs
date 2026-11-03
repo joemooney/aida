@@ -2,6 +2,7 @@ use super::*;
 
 fn ps_lease(id: &str, scope: &str, worktree: std::path::PathBuf) -> SessionLease {
     SessionLease {
+        pid_namespace: crate::agent_registry::current_pid_namespace(),
         tree_kind: Default::default(),
         id: id.to_string(),
         scope: scope.to_string(),
@@ -2023,4 +2024,85 @@ mod bug_1553_seat_activity {
         assert_eq!(rows[0].state, LeaseState::Stale);
         assert_eq!(rows[0].activity, None);
     }
+}
+
+// trace:BUG-2425 | ai:codex
+#[test]
+fn bug_2425_foreign_pidns_is_unknown_and_cannot_be_reaped() {
+    let tmp = tempfile::tempdir().unwrap();
+    let mut lease = ps_lease("foreign", "BUG-2425", tmp.path().join("gone"));
+    lease.pid_namespace = Some(agent_registry::current_pid_namespace().unwrap() ^ 1);
+    lease.active_pid = Some(u32::MAX - 1);
+    lease.active_pid_start_time = Some("linux-starttime:1".into());
+    assert!(
+        lease_is_live(&[], chrono::Utc::now())(&lease),
+        "foreign leases must block automatic conflict release"
+    );
+    assert!(
+        requeue_lease_liveness(&lease, &std::cell::OnceCell::new(), chrono::Utc::now()).is_err()
+    );
+    let specs = vec![RunningWorkSpec {
+        disp: "BUG-2425".into(),
+        agreed_id: Some("BUG-2425".into()),
+        spec_id: None,
+        title: "foreign session".into(),
+        in_progress: true,
+        orphan_excluded_type: false,
+    }];
+    let (rows, orphans) = build_running_work(
+        &specs,
+        std::slice::from_ref(&lease),
+        &[],
+        chrono::Utc::now(),
+        |_| panic!("foreign rows must not be classified stalled or salvageable"),
+        |_| None,
+        |_| None,
+        |_| None,
+        |_| None,
+        |_| panic!("foreign PIDs must not be inspected for mail identity"),
+        |_, _| panic!("foreign PIDs must not be inspected for activity"),
+    );
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0].state.label(), "unknown (foreign pidns)");
+    let warning = ps_liveness_warning(&rows).unwrap();
+    assert!(warning.starts_with("partial, running in pid namespace "));
+    assert!(warning.contains("1 leases from host namespace"));
+    assert!(warning.contains(&lease.pid_namespace.unwrap().to_string()));
+    assert!(warning.ends_with("run outside the sandbox"));
+    assert_eq!(ps_liveness_warning(&[]), None);
+    assert_ne!(rows[0].state, LeaseState::Stale); // never stale_hidden
+    assert_eq!(rows[0].pid, None);
+    assert!(orphans.is_empty());
+    assert!(!session_reap::session_process_exited(
+        rows[0].state,
+        Some(true),
+        false
+    ));
+    assert_eq!(
+        lease_recorded_owner(&lease),
+        aida_core::liveness::RecordedLeaseOwner::NotProvablyDead
+    );
+    assert!(session_reap::reap_one(tmp.path(), &lease, None).starts_with("skipped — unknown"));
+    assert!(session_reap::reap_one_clone(tmp.path(), &lease, None).starts_with("skipped — unknown"));
+    assert_eq!(
+        aida_core::liveness::classify_stale_lease_recovery(rows[0].state, Some(true), false, 0),
+        aida_core::liveness::StaleLeaseRecovery::UnknownLiveness
+    );
+}
+
+// trace:BUG-2425 | ai:codex
+#[test]
+fn bug_2425_foreign_pid_collision_cannot_borrow_local_process() {
+    let mut lease = ps_lease("collision", "BUG-2425", std::path::PathBuf::from("."));
+    lease.pid_namespace = Some(agent_registry::current_pid_namespace().unwrap() ^ 1);
+    lease.active_pid = Some(std::process::id());
+    assert_eq!(
+        lease_state_for(&lease, &[], chrono::Utc::now()),
+        LeaseState::Unknown
+    );
+    lease.pid_namespace = agent_registry::current_pid_namespace();
+    assert_eq!(
+        lease_state_for(&lease, &[], chrono::Utc::now()),
+        LeaseState::Live
+    );
 }

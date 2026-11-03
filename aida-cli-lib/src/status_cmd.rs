@@ -139,6 +139,7 @@ pub(crate) fn handle_status_spec(spec: &str, idle_minutes: u64, json: bool) -> R
         // would misread an orphaned In-Progress flag as either "working" or
         // "abandoned", when it's neither — nothing was ever attached.
         let verdict_key = match verdict {
+            SpecLiveness::Unknown => "unknown (foreign pidns)",
             SpecLiveness::Live => "live",
             SpecLiveness::Stale => "stale",
             SpecLiveness::FlagOnly => "flag-only",
@@ -298,6 +299,9 @@ pub(crate) fn handle_status_spec(spec: &str, idle_minutes: u64, json: bool) -> R
                  spec-linked — so they correctly read flag-only)"
                     .dimmed()
             );
+        }
+        SpecLiveness::Unknown => {
+            println!("  unknown (foreign pidns) — run outside the sandbox");
         }
         SpecLiveness::NoSession => {
             println!(
@@ -1143,7 +1147,7 @@ fn count_live_and_stale_leases(project_root: &std::path::Path) -> (usize, usize)
     let mut stale_count = 0;
     for lease in &leases {
         match lease_state_for(lease, &live, now) {
-            LeaseState::Live | LeaseState::Dormant => live_count += 1,
+            LeaseState::Unknown | LeaseState::Live | LeaseState::Dormant => live_count += 1,
             LeaseState::Stale => stale_count += 1,
         }
     }

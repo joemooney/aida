@@ -97,6 +97,9 @@ const MAX_CAS_RETRIES: u32 = 5;
 /// trace:STORY-637 | ai:claude
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub(crate) struct Claim {
+    // trace:BUG-2425 | ai:codex
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pid_namespace: Option<u64>,
     // Invocation identity; old records remain readable but cannot authorize launch rollback.
     // trace:BUG-2188 | ai:codex
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -246,6 +249,12 @@ pub(crate) fn decide_claim(
     // (its pid is the ephemeral `session start` shell), so its death is
     // meaningless — only the TTL backstop governs it. trace:STORY-637
     let same_host = !holder.host.is_empty() && holder.host == our_host;
+    // trace:BUG-2425 | ai:codex
+    if same_host && !aida_core::liveness::pid_namespace_observable(holder.pid_namespace) {
+        return ClaimDecision::Refuse {
+            holder: Box::new(holder.clone()),
+        };
+    }
     if holder.process_backed && same_host && !is_alive(holder.pid, holder.pid_start_time.as_deref())
     {
         return ClaimDecision::Reclaim {
@@ -327,6 +336,14 @@ pub(crate) fn claim_staleness(
     is_alive: impl Fn(u32, Option<&str>) -> bool,
     session_live: impl Fn(&Claim) -> bool,
 ) -> Option<String> {
+    // A same-host namespace mismatch cannot become death through either
+    // a failed PID probe or the fallback heartbeat timeout.
+    // trace:BUG-2425 | ai:codex
+    if claim.host == our_host && !aida_core::liveness::pid_namespace_observable(claim.pid_namespace)
+    {
+        return None;
+    }
+
     // Clause 0 (BUG-1765) — a verified-live session outranks TTL age, exactly
     // as in `decide_claim`: a claim this clause spares is one `decide_claim`
     // would refuse to reclaim. trace:BUG-1765 | ai:claude
@@ -477,7 +494,9 @@ pub(crate) fn probe_session_liveness_with(
     };
     matches!(
         crate::lease_state_for(&lease, live_sessions, now),
-        aida_core::liveness::LeaseState::Live | aida_core::liveness::LeaseState::Dormant
+        aida_core::liveness::LeaseState::Unknown
+            | aida_core::liveness::LeaseState::Live
+            | aida_core::liveness::LeaseState::Dormant
     )
 }
 
@@ -675,6 +694,7 @@ fn build_claim(
 ) -> Claim {
     let now = Utc::now().to_rfc3339();
     Claim {
+        pid_namespace: crate::agent_registry::current_pid_namespace(),
         claim_id: Some(uuid::Uuid::new_v4().to_string()),
         scope: scope.to_string(),
         node_id: node_id_for_clone(store_root, clone_path),
@@ -793,6 +813,7 @@ pub(crate) fn acquire_claim_receipted(
                     .map(|c| c.claim_id.clone());
                 let adopted = adopted_id.is_some();
                 let mine = Claim {
+                    pid_namespace: crate::agent_registry::current_pid_namespace(),
                     claim_id: adopted_id.unwrap_or_else(|| ours.claim_id.clone()),
                     ..ours.clone()
                 };
@@ -1275,6 +1296,7 @@ fn build_lock_claim(
 ) -> Claim {
     let now = Utc::now().to_rfc3339();
     Claim {
+        pid_namespace: crate::agent_registry::current_pid_namespace(),
         claim_id: None,
         scope: kind.label().to_string(),
         node_id: node_id_for_clone(store_root, clone_path),
@@ -1501,6 +1523,7 @@ pub(crate) fn live_foreign_lock_claim(
 ) -> Option<Claim> {
     let holder = read_claim(&lock_claim_path(store_root, kind))?;
     let ours = Claim {
+        pid_namespace: crate::agent_registry::current_pid_namespace(),
         claim_id: None,
         scope: kind.label().to_string(),
         node_id: String::new(),
@@ -1668,6 +1691,7 @@ mod tests {
     /// faithfully tracks liveness, so the same-host pid probe is exact.
     fn claim(node_id: &str, host: &str, pid: u32, heartbeat_at: &str) -> Claim {
         Claim {
+            pid_namespace: crate::agent_registry::current_pid_namespace(),
             claim_id: None,
             scope: "FR-1".to_string(),
             node_id: node_id.to_string(),
@@ -1689,6 +1713,7 @@ mod tests {
     /// dead pid must NOT trigger reclaim — only the TTL backstop governs it.
     fn session_claim(node_id: &str, host: &str, pid: u32, heartbeat_at: &str) -> Claim {
         Claim {
+            pid_namespace: crate::agent_registry::current_pid_namespace(),
             process_backed: false,
             ..claim(node_id, host, pid, heartbeat_at)
         }
@@ -1696,6 +1721,7 @@ mod tests {
 
     fn ours(node_id: &str, host: &str) -> Claim {
         Claim {
+            pid_namespace: crate::agent_registry::current_pid_namespace(),
             claim_id: None,
             scope: "FR-1".to_string(),
             node_id: node_id.to_string(),
@@ -2053,6 +2079,7 @@ ttl_secs = 1800
     /// A foreign process-lock claim on `host`/`pid`, heartbeat now-ish.
     fn lock_claim(host: &str, pid: u32, heartbeat_at: &str) -> Claim {
         Claim {
+            pid_namespace: crate::agent_registry::current_pid_namespace(),
             claim_id: None,
             scope: "drain".to_string(),
             node_id: "2".to_string(),
@@ -2229,6 +2256,7 @@ ttl_secs = 1800
     /// recorded pid is the ephemeral `aida session start` shell.
     fn lease_claim(host: &str, pid: u32, heartbeat_at: &str) -> Claim {
         Claim {
+            pid_namespace: crate::agent_registry::current_pid_namespace(),
             claim_id: None,
             scope: "BUG-1817".to_string(),
             node_id: "4".to_string(),
@@ -2574,6 +2602,12 @@ ttl_secs = 1800
         // escaped correctly on every platform (a raw format! into a TOML
         // basic string would corrupt Windows backslashes).
         let mut lease = toml::map::Map::new();
+        // This fixture models a local, observable lease.
+        // trace:BUG-2425 | ai:codex
+        lease.insert(
+            "pid_namespace".into(),
+            toml::Value::Integer(crate::agent_registry::current_pid_namespace().unwrap() as i64),
+        );
         for (k, v) in [
             ("id", "feedbeef0001"),
             ("scope", "BUG-9999"),
@@ -3216,5 +3250,52 @@ mod bug2188_claim_rollback_tests {
         legacy.claim_id = None;
         std::fs::write(&path, toml::to_string(&legacy).unwrap()).unwrap();
         assert!(!delete_claim_receipt_locked(dir.path(), &legacy).unwrap());
+    }
+}
+
+#[cfg(test)]
+mod bug_2425_tests {
+    use super::*;
+
+    // trace:BUG-2425 | ai:codex
+    #[test]
+    fn foreign_namespace_claim_is_not_reclaimed_even_after_heartbeat_expires() {
+        let mut holder = build_claim(
+            Path::new("/absent/store"),
+            "BUG-2425",
+            Path::new("/holder"),
+            "test",
+            false,
+        );
+        holder.host = "test-host".into();
+        holder.pid_namespace = Some(crate::agent_registry::current_pid_namespace().unwrap() ^ 1);
+        holder.heartbeat_at = "2020-01-01T00:00:00Z".into();
+        let mut ours = holder.clone();
+        ours.clone_path = "/other-clone".into();
+        let now = Utc::now();
+        for process_backed in [false, true] {
+            holder.process_backed = process_backed;
+            assert_eq!(
+                claim_staleness(
+                    &holder,
+                    now,
+                    "test-host",
+                    |_, _| panic!("foreign pid probe"),
+                    |_| false
+                ),
+                None
+            );
+            assert!(matches!(
+                decide_claim(
+                    Some(&holder),
+                    &ours,
+                    now,
+                    "test-host",
+                    |_, _| panic!("foreign pid probe"),
+                    |_| false
+                ),
+                ClaimDecision::Refuse { .. }
+            ));
+        }
     }
 }

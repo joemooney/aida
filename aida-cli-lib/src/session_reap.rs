@@ -206,6 +206,10 @@ pub(crate) fn session_process_exited(
     owner_gone: Option<bool>,
     worktree_has_live_process: bool,
 ) -> bool {
+    // trace:BUG-2425 | ai:codex
+    if lease_state == LeaseState::Unknown {
+        return false;
+    }
     // BUG-1121: a Dormant normal worktree lease with no recorded pid is the
     // same no-live-process state `aida status <spec>` reports as safe to clear.
     // There is no pid to force-close, so reap may proceed once the worktree and
@@ -979,13 +983,7 @@ pub(crate) fn scan_reapable_with(
         // for it (an empty path would otherwise resolve against the cwd).
         let worktree_has_live_process =
             has_worktree && worktree_is_active(&lease.worktree_path, &active);
-        let owner_gone = aida_core::liveness::lease_owner_process_gone(
-            lease.active_pid,
-            lease.active_pid_start_time.as_deref(),
-            lease.creator_pid,
-            lease.creator_pid_start_time.as_deref(),
-            process_probe::process_identity_is_alive,
-        );
+        let owner_gone = crate::leases::lease_owner_gone(lease);
         let process_exited = session_process_exited(
             lease_state_for(lease, &live, now),
             owner_gone,
@@ -1137,6 +1135,10 @@ fn reap_one_with_clear_hooks(
     before_missing_worktree_clear: impl FnOnce(),
     after_final_registration_check: impl FnOnce(),
 ) -> String {
+    // trace:BUG-2425 | ai:codex
+    if !aida_core::liveness::pid_namespace_observable(lease.pid_namespace) {
+        return "skipped — unknown (foreign pidns); run outside the sandbox".into();
+    }
     let lease = &reap_view(lease, project_root);
     // trace:TASK-2053 | ai:claude
     if lease.tree_kind == crate::seat_clone::TreeKind::Clone {
@@ -1328,13 +1330,7 @@ fn scan_clone_lease(
     active: &std::collections::HashSet<std::path::PathBuf>,
     now: chrono::DateTime<chrono::Utc>,
 ) -> ReapRow {
-    let owner_gone = aida_core::liveness::lease_owner_process_gone(
-        lease.active_pid,
-        lease.active_pid_start_time.as_deref(),
-        lease.creator_pid,
-        lease.creator_pid_start_time.as_deref(),
-        process_probe::process_identity_is_alive,
-    );
+    let owner_gone = crate::leases::lease_owner_gone(lease);
     let process_exited = session_process_exited(
         lease_state_for(lease, live, now),
         owner_gone,
@@ -1413,6 +1409,10 @@ pub(crate) fn reap_one_clone(
     lease: &SessionLease,
     checked_tip: Option<&str>,
 ) -> String {
+    // trace:BUG-2425 | ai:codex
+    if !aida_core::liveness::pid_namespace_observable(lease.pid_namespace) {
+        return "skipped — unknown (foreign pidns); run outside the sandbox".into();
+    }
     let Some(tip) = checked_tip else {
         return "skipped — the scan recorded no HEAD for the seat clone".to_string();
     };

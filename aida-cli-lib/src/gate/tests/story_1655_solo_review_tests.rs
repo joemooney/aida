@@ -197,6 +197,7 @@ const AUTHOR_SESSION: &str = "cb4777a7-0000-4000-8000-000000016550";
 /// The solo human's own session claimed `SPEC` (an authoring lease).
 fn record_author_lease(root: &Path) {
     let lease = crate::SessionLease {
+        pid_namespace: crate::agent_registry::current_pid_namespace(),
         tree_kind: Default::default(),
         id: "aaaabbbb1655".into(),
         scope: SPEC.into(),

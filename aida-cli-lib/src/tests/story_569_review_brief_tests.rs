@@ -79,6 +79,7 @@ fn file_zen_review_brief_short_circuits() {
     let root = tmp.path();
 
     let lease = |scope: &str| SessionLease {
+        pid_namespace: crate::agent_registry::current_pid_namespace(),
         tree_kind: Default::default(),
         id: "zen001".into(),
         scope: scope.into(),

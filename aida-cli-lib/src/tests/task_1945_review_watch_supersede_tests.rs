@@ -594,6 +594,7 @@ fn test_signal_guard_refuses_foreign_processes() {
 #[test]
 fn start_order_compares_ticks_on_one_boot() {
     let anchor = Identity {
+        pid_namespace: crate::agent_registry::current_pid_namespace(),
         pid: 10,
         start: "linux-starttime:100".into(),
         boot: "boot-a".into(),
@@ -702,4 +703,24 @@ fn hold_cause_drops_an_exited_member() {
     assert!(held.contains(&format!("process {} ", stays.id())), "{held}");
     signal::test_signal(stays.id(), Signal::Kill);
     stays.wait().unwrap();
+}
+
+// trace:BUG-2425 | ai:codex
+#[test]
+fn bug_2425_foreign_watch_process_retains_capacity_and_refuses_signals() {
+    let identity = Identity {
+        pid_namespace: Some(crate::agent_registry::current_pid_namespace().unwrap() ^ 1),
+        pid: u32::MAX - 1,
+        start: "linux-starttime:1".into(),
+        boot: boot_id().unwrap(),
+    };
+    assert!(
+        identity.alive(),
+        "an invisible process must retain watch capacity"
+    );
+    for sig in [None, Some(signal::Signal::Term), Some(signal::Signal::Kill)] {
+        let holds = signal::signal_attempt(&[&identity], Some(1), Some(&identity), sig);
+        assert_eq!(holds.len(), 1);
+        assert!(holds[0].contains("foreign pidns"));
+    }
 }

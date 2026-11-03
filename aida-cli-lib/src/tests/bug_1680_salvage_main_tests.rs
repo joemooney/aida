@@ -29,6 +29,7 @@ fn run_git(dir: &Path, args: &[&str]) {
 
 fn mock_lease(id: &str, scope: &str, worktree: PathBuf) -> SessionLease {
     SessionLease {
+        pid_namespace: crate::agent_registry::current_pid_namespace(),
         tree_kind: Default::default(),
         id: id.to_string(),
         scope: scope.to_string(),

@@ -3,6 +3,7 @@ use aida_core::models::Relationship;
 
 fn lease_for(scope: &str) -> SessionLease {
     SessionLease {
+        pid_namespace: crate::agent_registry::current_pid_namespace(),
         tree_kind: Default::default(),
         id: "selflease0001".into(),
         scope: scope.to_string(),

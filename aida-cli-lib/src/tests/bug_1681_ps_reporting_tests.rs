@@ -25,6 +25,7 @@ const BUG_1740_WORKER_PID: u32 = 424_242;
 
 fn lease(id: &str, scope: &str, worktree: std::path::PathBuf) -> SessionLease {
     SessionLease {
+        pid_namespace: crate::agent_registry::current_pid_namespace(),
         tree_kind: Default::default(),
         id: id.to_string(),
         scope: scope.to_string(),

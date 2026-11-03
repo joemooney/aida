@@ -508,7 +508,7 @@ pub(crate) fn ps_orphan_verdict(
         return None;
     }
     match lease_state {
-        Some(LeaseState::Live) => None,
+        Some(LeaseState::Live | LeaseState::Unknown) => None,
         Some(_) => Some(true),
         None => Some(false),
     }
@@ -1070,6 +1070,7 @@ pub(crate) fn harness_lease_without_pid_signal(l: &SessionLease) -> bool {
 pub(crate) fn ps_pid_liveness(state: LeaseState, harness_without_pid_signal: bool) -> Option<bool> {
     match state {
         LeaseState::Live => Some(true),
+        LeaseState::Unknown => None,
         _ if harness_without_pid_signal => None,
         _ => Some(false),
     }
@@ -1603,7 +1604,7 @@ pub(crate) fn handle_integrate(opts: IntegrateCommandOpts) -> Result<()> {
                     "lease_role": row.lease_role,
                     "pid": row.pid,
                     "elapsed_secs": row.elapsed_secs,
-                    "live": matches!(row.state, LeaseState::Live),
+                    "live": if row.state == LeaseState::Unknown { None } else { Some(matches!(row.state, LeaseState::Live)) },
                     "liveness": row.state.label(),
                 })
             })
@@ -1843,7 +1844,7 @@ pub(crate) fn handle_integrate(opts: IntegrateCommandOpts) -> Result<()> {
             let live_label = format!("{} {}", row.state.glyph(), row.state.label());
             let live_col = match row.state {
                 LeaseState::Live => live_label.green(),
-                LeaseState::Dormant => live_label.cyan(),
+                LeaseState::Unknown | LeaseState::Dormant => live_label.cyan(),
                 LeaseState::Stale => live_label.yellow(),
             };
             println!(
@@ -2156,6 +2157,16 @@ pub(crate) fn gather_running_work(project_root: &std::path::Path) -> (Vec<PsRow>
     // whose own lease pid is gone keeps the row live (no stalled framing).
     // trace:STORY-1653 | ai:claude
     driver_view::overlay_running_work(project_root, &leases, &mut rows, &mut orphans, now);
+    // Preserve uncertainty through local activity/driver overlays.
+    // trace:BUG-2425 | ai:codex
+    for row in &mut rows {
+        if !aida_core::liveness::pid_namespace_observable(row.lease.pid_namespace) {
+            row.state = LeaseState::Unknown;
+            row.pid = None;
+            row.dispatch = None;
+            row.activity = None;
+        }
+    }
     (rows, orphans)
 }
 
@@ -2279,27 +2290,34 @@ pub(crate) fn build_running_work(
             let state = lease_state_for(l, live, now);
             // BUG-2197: a pid-less lease never borrows the inspector's pid.
             // trace:BUG-2197 | ai:claude
-            let attributable = attributable_live_sessions(l, live, inspector_pids());
+            let attributable = if state == LeaseState::Unknown {
+                Vec::new()
+            } else {
+                attributable_live_sessions(l, live, inspector_pids())
+            };
             // trace:BUG-1941 | ai:claude — deterministic pick among sessions
             // sharing the worktree.
             let live_in_worktree = ps_live_in_worktree(&attributable, &l.worktree_path);
             let pid = l
                 .active_pid
+                .filter(|_| state != LeaseState::Unknown)
                 .filter(|p| process_probe::pid_is_alive(*p))
                 .or_else(|| live_in_worktree.map(|s| s.pid))
                 // BUG-2206: only a creator still alive is this row's process;
                 // a dead one would read its stale transcript as `working`.
                 // trace:TASK-1955 | ai:claude (BUG-2206)
-                .or(if l.review_verb || l.claim_verb {
-                    l.creator_pid.filter(|p| {
-                        process_probe::process_identity_is_alive(
-                            *p,
-                            l.creator_pid_start_time.as_deref(),
-                        )
-                    })
-                } else {
-                    None
-                });
+                .or(
+                    if state != LeaseState::Unknown && (l.review_verb || l.claim_verb) {
+                        l.creator_pid.filter(|p| {
+                            process_probe::process_identity_is_alive(
+                                *p,
+                                l.creator_pid_start_time.as_deref(),
+                            )
+                        })
+                    } else {
+                        None
+                    },
+                );
             let live_by_pid = pid.and_then(|p| live.iter().find(|s| s.pid == p));
             let jsonl_role = live_by_pid
                 .or(live_in_worktree)
@@ -2359,7 +2377,7 @@ pub(crate) fn build_running_work(
             // A dead-worktree lease (removed dir) also has nothing to probe;
             // `dispatch_health_ps::probe_worktree` degrades to the zero
             // default in that case rather than erroring.
-            let dispatch = if l.review_verb || l.claim_verb {
+            let dispatch = if state == LeaseState::Unknown || l.review_verb || l.claim_verb {
                 None
             } else {
                 let probe = dispatch_probe(&l.worktree_path);
@@ -2533,7 +2551,7 @@ pub(crate) fn build_running_work(
         // the few non-live spec leases, never for every row.
         // trace:BUG-1656 | ai:claude
         let dirty_movement_fresh = lease
-            .filter(|_| !matches!(lease_state, Some(LeaseState::Live)))
+            .filter(|_| !matches!(lease_state, Some(LeaseState::Live | LeaseState::Unknown)))
             .filter(|l| !l.review_verb && !l.claim_verb)
             .map(|l| dispatch_probe(&l.worktree_path))
             .is_some_and(|p| {
@@ -2725,11 +2743,40 @@ pub(crate) fn ps_review_watch_ready_toon(ready: &[(String, String)]) -> String {
     crate::toon::table_raw("review_watch_ready", &["change", "readiness"], &rows)
 }
 
+// trace:BUG-2425 | ai:codex
+pub(crate) fn ps_liveness_warning(rows: &[PsRow]) -> Option<String> {
+    let mut foreign = std::collections::BTreeMap::<String, usize>::new();
+    for row in rows {
+        if row.state == LeaseState::Unknown {
+            *foreign
+                .entry(
+                    row.lease
+                        .pid_namespace
+                        .map(|n| n.to_string())
+                        .unwrap_or_else(|| "unstamped".into()),
+                )
+                .or_default() += 1;
+        }
+    }
+    (!foreign.is_empty()).then(|| format!(
+        "partial, running in pid namespace {}; {} leases from host namespace {} cannot be probed; run outside the sandbox",
+        agent_registry::current_pid_namespace().map(|n| n.to_string()).unwrap_or_else(|| "unknown".into()),
+        foreign.values().sum::<usize>(),
+        foreign.iter().map(|(ns, count)| format!("{ns} ({count})")).collect::<Vec<_>>().join(", ")
+    ))
+}
+
 pub(crate) fn handle_ps(json: bool, all: bool) -> Result<()> {
     let project_root =
         find_project_root().unwrap_or_else(|_| std::env::current_dir().unwrap_or_default());
 
     let (rows, orphans) = gather_running_work(&project_root);
+    let liveness_warning = ps_liveness_warning(&rows);
+    if !json {
+        if let Some(warning) = &liveness_warning {
+            println!("liveness: {warning}");
+        }
+    }
     // trace:TASK-1285 | ai:codex
     let live_wave = drain_lock::read_pid_live_lock(&project_root);
     // A review-watch slot held by a superseded review that cannot yet be
@@ -2786,7 +2833,7 @@ pub(crate) fn handle_ps(json: bool, all: bool) -> Result<()> {
                     "pid_started_at": row.pid_started_at.map(|t| t.to_rfc3339()),
                     "elapsed_secs": row.elapsed_secs,
                     "liveness": row.state.label(),
-                    "live": matches!(row.state, LeaseState::Live),
+                    "live": if row.state == LeaseState::Unknown { None } else { Some(matches!(row.state, LeaseState::Live)) },
                     // TASK-1090: dispatch-health — null for worktree-less
                     // advisory leases (no git state to classify).
                     "dispatch_state": row.dispatch.as_ref().map(|d| d.state.label()),
@@ -2879,6 +2926,7 @@ pub(crate) fn handle_ps(json: bool, all: bool) -> Result<()> {
                 "driven": driven,
                 // STORY-769: last-human-input oracle, null when never stamped.
                 "operator": operator,
+                "liveness_warning": liveness_warning,
                 // trace:TASK-1945 | ai:claude
                 "review_watch_held": ps_review_watch_held_json(&watch_held),
                 "review_watch_ready": ps_review_watch_ready_json(&watch_ready),
@@ -3254,7 +3302,7 @@ pub(crate) fn handle_ps(json: bool, all: bool) -> Result<()> {
                 }
                 _ => match row.state {
                     LeaseState::Live => live_label.green(),
-                    LeaseState::Dormant => live_label.cyan(),
+                    LeaseState::Unknown | LeaseState::Dormant => live_label.cyan(),
                     LeaseState::Stale => live_label.yellow(),
                 },
             };

@@ -4,6 +4,7 @@ fn write_lease(project_root: &std::path::Path, id: &str, scope: &str) {
     let dir = project_root.join(".aida").join("sessions");
     std::fs::create_dir_all(&dir).unwrap();
     let lease = SessionLease {
+        pid_namespace: crate::agent_registry::current_pid_namespace(),
         tree_kind: Default::default(),
         id: id.to_string(),
         scope: scope.to_string(),

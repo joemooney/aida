@@ -6614,6 +6614,12 @@ pub(crate) fn stamp_lease_active_pid_at(
             .parse::<DocumentMut>()
             .with_context(|| format!("parsing lease {}", path.display()))?;
         doc["active_pid"] = value(i64::from(pid));
+        // trace:BUG-2425 | ai:codex
+        if let Some(ns) = crate::agent_registry::current_pid_namespace() {
+            doc["pid_namespace"] = value(ns as i64);
+        } else {
+            doc.remove("pid_namespace");
+        }
         if let Some(start_time) = &start_time {
             doc["active_pid_start_time"] = value(start_time.clone());
         }

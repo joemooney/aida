@@ -199,6 +199,14 @@ pub(crate) fn in_flight_vendor_children(project_root: &Path, drain_pid: u32) -> 
         let Some(table) = value.as_table() else {
             continue;
         };
+        // trace:BUG-2425 | ai:codex
+        let namespace = table
+            .get("pid_namespace")
+            .and_then(|v| v.as_integer())
+            .and_then(|n| u64::try_from(n).ok());
+        if !aida_core::liveness::pid_namespace_observable(namespace) {
+            continue;
+        }
         let creator = table
             .get("creator_pid")
             .and_then(|v| v.as_integer())

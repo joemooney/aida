@@ -1356,6 +1356,9 @@ fn pid_is_alive_impl(pid: u32) -> bool {
 // trace:TASK-55 | ai:claude
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LeaseState {
+    /// The owner PID is outside this observer's namespace.
+    // trace:BUG-2425 | ai:codex
+    Unknown,
     /// Live claude found inside the worktree — actively working.
     Live,
     /// Worktree exists, no live claude inside, <24h old. Could be a
@@ -1372,6 +1375,7 @@ impl LeaseState {
     // trace:TASK-55 | ai:claude
     pub fn label(self) -> &'static str {
         match self {
+            LeaseState::Unknown => "unknown (foreign pidns)",
             LeaseState::Live => "live",
             LeaseState::Dormant => "dormant",
             LeaseState::Stale => "stale",
@@ -1408,6 +1412,9 @@ pub fn classify_lease_state(
 // trace:STORY-694 | ai:claude
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SpecLiveness {
+    /// The recorded process cannot be observed in this PID namespace.
+    // trace:BUG-2425 | ai:codex
+    Unknown,
     /// A spec-scoped lease exists and its holder process is alive (a live
     /// claude is in the worktree). The In-Progress flag is liveness-backed.
     Live,
@@ -1439,6 +1446,7 @@ pub enum SpecLiveness {
 // trace:STORY-694 | ai:claude
 pub fn classify_spec_liveness(lease_state: Option<LeaseState>, in_progress: bool) -> SpecLiveness {
     match lease_state {
+        Some(LeaseState::Unknown) => SpecLiveness::Unknown,
         Some(LeaseState::Live) => SpecLiveness::Live,
         Some(LeaseState::Dormant) | Some(LeaseState::Stale) => SpecLiveness::Stale,
         None if in_progress => SpecLiveness::FlagOnly,
@@ -1530,6 +1538,10 @@ pub fn classify_stale_lease_recovery(
     worktree_exists: bool,
     worktree_dirty_count: usize,
 ) -> StaleLeaseRecovery {
+    // trace:BUG-2425 | ai:codex
+    if lease_state == LeaseState::Unknown {
+        return StaleLeaseRecovery::UnknownLiveness;
+    }
     // Either liveness signal saying "alive" pins the lease as live. `aida ps`
     // showing ● live is sufficient on its own (a live claude in the worktree
     // with no recorded pid still means someone is working there).
@@ -1561,6 +1573,10 @@ pub fn classify_stale_lease_recovery(
 // trace:BUG-677 | ai:claude
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct SessionLeaseLite {
+    /// Namespace in which the recorded PIDs are meaningful.
+    // trace:BUG-2425 | ai:codex
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pid_namespace: Option<u64>,
     /// Raw scope string the user passed to `--owns` (matched against spec ids).
     pub scope: String,
     /// Worktree path (canonicalized at write time). Empty for advisory leases.
@@ -1661,6 +1677,19 @@ pub fn read_session_leases(project_root: &Path) -> Vec<SessionLeaseLite> {
     out
 }
 
+/// Whether recorded PIDs can be judged from this process. Unstamped legacy
+/// leases are observable only in the initial namespace. Failed probes retain.
+// trace:BUG-2425 | ai:codex
+pub fn pid_namespace_observable(recorded: Option<u64>) -> bool {
+    use std::os::unix::fs::MetadataExt;
+    let current = std::fs::metadata("/proc/self/ns/pid").ok().map(|m| m.ino());
+    match (recorded, current) {
+        (Some(a), Some(b)) => a == b,
+        (None, Some(crate::process_probe::INITIAL_PID_NAMESPACE_INODE)) => true,
+        _ => false,
+    }
+}
+
 /// The lease-state of one lease, given the ONE already-computed live-session
 /// slice and `now`. Mirrors `aida-cli::lease_state_for` exactly:
 ///   - a review/claim lease (worktree-less advisory lock) is Live iff its
@@ -1672,6 +1701,9 @@ pub fn lease_state_for(
     live_sessions: &[LiveSession],
     now: chrono::DateTime<chrono::Utc>,
 ) -> LeaseState {
+    if !pid_namespace_observable(l.pid_namespace) {
+        return LeaseState::Unknown;
+    }
     if l.review_verb || l.claim_verb {
         let alive = l
             .creator_pid
@@ -1745,6 +1777,7 @@ pub fn spec_verdicts(
         }
         match map.get(&key) {
             Some(SpecLiveness::Live) => {}
+            Some(SpecLiveness::Unknown) if state != SpecLiveness::Live => {}
             _ => {
                 map.insert(key, state);
             }
@@ -1755,11 +1788,7 @@ pub fn spec_verdicts(
     for l in leases {
         let state = lease_state_for(l, live, now);
         if let Some(spec) = specs.iter().find(|s| scope_matches_spec(&l.scope, s)) {
-            let verdict = if state == LeaseState::Live {
-                SpecLiveness::Live
-            } else {
-                SpecLiveness::Stale
-            };
+            let verdict = classify_spec_liveness(Some(state), false);
             upsert(&mut map, &spec.disp, verdict);
         }
     }
@@ -1774,14 +1803,16 @@ pub fn spec_verdicts(
             .filter(|l| scope_matches_spec(&l.scope, s))
             .map(|l| lease_state_for(l, live, now))
             // If several leases claim the spec, the strongest (Live) wins — the
-            // spec is genuinely being worked. Order: Live < Dormant < Stale in
-            // the enum, and Live is what we care about, so take the min.
+            // spec is genuinely being worked. Unknown outranks stale/dormant
+            // evidence, while an observed live session is strongest.
             .min_by_key(|st| match st {
+                LeaseState::Unknown => 1,
                 LeaseState::Live => 0,
-                LeaseState::Dormant => 1,
-                LeaseState::Stale => 2,
+                LeaseState::Dormant => 2,
+                LeaseState::Stale => 3,
             });
         match classify_spec_liveness(lease_state, true) {
+            SpecLiveness::Unknown => upsert(&mut map, &s.disp, SpecLiveness::Unknown),
             SpecLiveness::Live => upsert(&mut map, &s.disp, SpecLiveness::Live),
             // Stale lease OR flag-only (no lease) both surface as Stale on the
             // TUI glyph — parity with `parse_ps_json`, which maps every orphaned
@@ -2685,6 +2716,10 @@ mod tests {
 
     fn lease(scope: &str, worktree: &str) -> SessionLeaseLite {
         SessionLeaseLite {
+            pid_namespace: std::fs::metadata("/proc/self/ns/pid").ok().map(|m| {
+                use std::os::unix::fs::MetadataExt;
+                m.ino()
+            }),
             scope: scope.to_string(),
             worktree_path: PathBuf::from(worktree),
             started_at: chrono::Utc::now(),
@@ -3157,5 +3192,35 @@ started_at = "2026-01-01T00:00:00Z"
         let summary = tree.descendant_age_summary(1).unwrap();
         assert_eq!(summary.ages, vec![120]);
         assert_eq!(summary.unsampled, 1);
+    }
+}
+
+#[cfg(test)]
+mod bug_2425_tests {
+    use super::*;
+
+    // trace:BUG-2425 | ai:codex
+    #[test]
+    fn foreign_namespace_keeps_core_spec_verdict_unknown() {
+        use std::os::unix::fs::MetadataExt;
+        let ns = std::fs::metadata("/proc/self/ns/pid").unwrap().ino();
+        let lease: SessionLeaseLite = toml::from_str(&format!(
+            "scope = 'BUG-2425'\nstarted_at = '2026-01-01T00:00:00Z'\nactive_pid = 4294967294\nactive_pid_start_time = 'linux-starttime:1'\npid_namespace = {}\n", ns ^ 1
+        )).unwrap();
+        let spec = SpecLivenessInput {
+            disp: "BUG-2425".into(),
+            agreed_id: Some("BUG-2425".into()),
+            spec_id: None,
+            in_progress: true,
+            orphan_excluded: false,
+        };
+        let now = chrono::Utc::now();
+        assert_eq!(lease_state_for(&lease, &[], now), LeaseState::Unknown);
+        assert_eq!(
+            spec_verdicts(&[spec], &[lease], &[], now)["BUG-2425"],
+            SpecLiveness::Unknown
+        );
+        assert!(pid_namespace_observable(Some(ns)));
+        assert!(!pid_namespace_observable(Some(ns ^ 1)));
     }
 }

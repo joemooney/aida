@@ -1841,6 +1841,10 @@ pub(crate) fn live_lease_worktrees(
             if l.worktree_path.as_os_str().is_empty() {
                 return None;
             }
+            // trace:BUG-2425 | ai:codex
+            if !aida_core::liveness::pid_namespace_observable(l.pid_namespace) {
+                return Some(l.worktree_path.clone());
+            }
             let worktree_exists = l.worktree_path.exists();
             let live_in_worktree = live_sessions.iter().any(|s| {
                 !s.stale_cwd && (s.cwd == l.worktree_path || s.cwd.starts_with(&l.worktree_path))
@@ -1918,7 +1922,9 @@ pub(crate) fn lease_agent_view(
     let lease_state = lease_state_for(lease, live_sessions, ctx.now);
     let status = match lease_state {
         LeaseState::Stale => agent_registry::AgentStatus::Stale,
-        LeaseState::Live | LeaseState::Dormant => agent_registry::AgentStatus::Busy,
+        LeaseState::Unknown | LeaseState::Live | LeaseState::Dormant => {
+            agent_registry::AgentStatus::Busy
+        }
     };
 
     agent_registry::AgentRegistryView {

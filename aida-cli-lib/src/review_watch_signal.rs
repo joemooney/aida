@@ -100,6 +100,17 @@ pub(super) fn signal_attempt(
     anchor: Option<&Identity>,
     signal: Option<Signal>,
 ) -> Vec<String> {
+    // trace:BUG-2425 | ai:codex
+    if recorded
+        .iter()
+        .copied()
+        .chain(anchor)
+        .any(|p| !aida_core::liveness::pid_namespace_observable(p.pid_namespace))
+    {
+        return vec![
+            "unknown (foreign pidns); held without signalling; run outside the sandbox".into(),
+        ];
+    }
     #[cfg(target_os = "linux")]
     {
         imp::signal_attempt(recorded, pgid, anchor, signal)

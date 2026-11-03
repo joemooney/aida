@@ -530,6 +530,7 @@ mod tests {
 
     fn lease(id: &str, scope: &str, driver: Option<&str>, age_secs: i64) -> SessionLease {
         SessionLease {
+            pid_namespace: crate::agent_registry::current_pid_namespace(),
             tree_kind: Default::default(),
             id: id.to_string(),
             scope: scope.to_string(),

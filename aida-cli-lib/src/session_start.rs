@@ -3168,6 +3168,7 @@ pub(crate) fn session_start_with_receipt(
         };
 
     let lease = SessionLease {
+        pid_namespace: crate::agent_registry::current_pid_namespace(),
         id: id.clone(),
         scope: owns.to_string(),
         slug: slug.clone(),

@@ -113,6 +113,9 @@ fn bounded_diagnostic(text: &str) -> String {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 struct Identity {
+    // trace:BUG-2425 | ai:codex
+    #[serde(default)]
+    pid_namespace: Option<u64>,
     pid: u32,
     start: String,
     boot: String,
@@ -123,6 +126,7 @@ impl Identity {
     }
     fn of(pid: u32) -> Result<Self> {
         Ok(Self {
+            pid_namespace: crate::agent_registry::current_pid_namespace(),
             pid,
             start: aida_core::liveness::process_start_identity_exact(pid)
                 .context("cannot bind review launch to its kernel process identity")?,
@@ -132,6 +136,11 @@ impl Identity {
     /// The same kernel process is still running (not reused, not a zombie).
     // trace:TASK-1993 | ai:claude
     fn alive(&self) -> bool {
+        // An invisible process retains its reservation; absence here proves nothing.
+        // trace:BUG-2425 | ai:codex
+        if !aida_core::liveness::pid_namespace_observable(self.pid_namespace) {
+            return true;
+        }
         let zombie = std::fs::read_to_string(format!("/proc/{}/stat", self.pid))
             .ok()
             .and_then(|stat| {
