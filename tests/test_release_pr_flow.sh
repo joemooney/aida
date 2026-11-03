@@ -277,9 +277,14 @@ pass "failed checks leave main and tags untouched"
 info "Test 4: refuses to start while a live ship holds the main merge-lease"
 F4="$TEST_DIR/f4"; make_fixture "$F4"
 mkdir -p "$F4/work/.aida/merge-locks"
+# $3 overrides the recorded PID namespace (default: ours). trace:BUG-2417 | ai:claude
+our_pid_ns=$(readlink /proc/self/ns/pid 2>/dev/null) || our_pid_ns=
+our_pid_ns=${our_pid_ns#*\[}; our_pid_ns=${our_pid_ns%\]}
 write_lease() {
-    printf 'host=%s\npid=%s\npid_start=\npr=42\nnote=aida pr ship\nacquired_at=%s\nttl_secs=600\n' \
-        "$(uname -n)" "$1" "$2" > "$F4/work/.aida/merge-locks/main"
+    printf 'host=%s\npid=%s\npid_start=\npid_ns=%s\nboot=%s\npr=42\nnote=aida pr ship\nacquired_at=%s\nttl_secs=600\n' \
+        "$(uname -n)" "$1" "${3-$our_pid_ns}" \
+        "$(cat /proc/sys/kernel/random/boot_id 2>/dev/null | tr -d '[:space:]')" "$2" \
+        > "$F4/work/.aida/merge-locks/main"
 }
 write_lease "$$" "$(date +%s)"
 if out=$(run_release "$F4" patch --yes --skip-docs-check 2>&1); then
@@ -305,6 +310,18 @@ run_release "$F4" patch --dry-run >/dev/null 2>&1 || fail "dead-pid lease blocke
 write_lease "$$" "$(( $(date +%s) - 4000 ))"
 run_release "$F4" patch --dry-run >/dev/null 2>&1 || fail "expired lease blocked the release"
 pass "stale leases (dead pid, past TTL) are not treated as an in-flight ship"
+
+info "Test 4b1: a dead pid from another PID namespace is TTL-only (BUG-2417)"
+for ns in 1 ""; do
+    write_lease "$dead_pid" "$(date +%s)" "$ns"
+    if out=$(run_release "$F4" patch --yes --skip-docs-check 2>&1); then
+        fail "a fresh lease with pid_ns='$ns' was judged dead by pid"
+    fi
+    grep -q "merge-lease" <<<"$out" || fail "pid_ns='$ns': refusal does not name the merge-lease: $out"
+done
+write_lease "$dead_pid" "$(( $(date +%s) - 4000 ))" 1
+run_release "$F4" patch --dry-run >/dev/null 2>&1 || fail "expired foreign-namespace lease blocked the release"
+pass "a foreign or unrecorded namespace holder blocks until its TTL"
 
 info "Test 4b2: an empty, just-created lease blocks; an old empty one does not"
 # trace:TASK-1955 | ai:claude (TASK-1-421)
