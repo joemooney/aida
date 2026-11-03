@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-03T02:44:16.945490220Z
-modified_at: 2026-11-03T20:48:56.814112709Z
+modified_at: 2026-11-03T20:48:58.632264588Z
 req_type: Story
 tags:
 - from:SPIKE-708
@@ -42,6 +42,22 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: The code and test meet every STORY-2331 criterion on inspection, but CI is red at 97a4f0d (cli-1 Test time budget, contracts BUG-1796 byte fixture, Build aggregate) while main is green at the merge base da17908306, so this PR causes the failures. AC status: two bare hubs, bundle-only both ways: verified by story_2331_bundle_air_gap.rs:300-320 (outside hub renamed away for the inside phase). Two inside clones, observed collision, retry into disjoint ranges: verified by :326-346 (Push rejected + disjoint + in-pool asserts). Divergent outside claim: verified by :385-386. Disjoint union on return: verified by :408-420. Overlap refusal with refs/HEAD/status unchanged: verified by :424-466 (store HEAD, project HEAD, store status, hub ref). Ordinary clean bundle pull: verified by :468-500. Final slot and exhaustion: verified by :352-367 plus the PoolExhausted refill fix in db_block.rs:1397-1413. Root claim leaves no untracked blocks.lock (Q4): verified by :387-393 plus init_cmd.rs:4717-4723. Supported boundary documented: verified by docs/cli/10-storage.md:332-377. CI green: unverified (red).. No triage reason was given.'
   created_at: 2026-11-03T20:48:56.814111234Z
   modified_at: 2026-11-03T20:48:56.814111234Z
+  session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
+- id: 01a1a32c-1863-7712-97d0-09ce9c2571e7
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (STORY-2331):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 97a4f0d59800
+    Recorded: 2026-11-03T19:51:30.354562733+00:00
+    Findings:
+    1. CI cli-1 'Test time budget' failed. The new single test aida-cli::story_2331_bundle_air_gap a_pool_grant_round_trips_an_air_gap_by_git_bundle runs ~60+ aida/git subprocesses (three clones, two hubs, four bundles, two inits, reconcile twice), but scripts/test-time-budget.toml has no entry for it, so it is held to default_limit=10s. The comparable story_164_single_hub test needed 60s. Add a budget entry with a measured reason (per the file's header rule), or split or trim the test. Confirm from the test-timings-cli-1 artifact of run 126147829314.
+    2. CI contracts 'Run normal two-remote pull byte identical fixture' (tests/test_bug_1796_normal_two_remote_pull_byte_identical.sh) failed. Probable cause: init_cmd.rs:4722 now writes the store .gitignore (runtime + staging ignores) on distributed init, which changes the store's pending-change state at 'aida pull', so the legacy expected bytes (which include '  Committed pending orphan changes before pull') no longer match. Reproduce with the script, then either update the fixture's expected bytes with a stated reason (the old line may have been committing runtime files, which this PR intends to stop) or adjust the init change. Do not weaken the byte-for-byte check.
+    3. Build (ubuntu-latest) 'Require every CI lane' failed only as the aggregate of the two lane failures above; it clears once they are fixed. Re-run make check-ci-fast and the two named gates before pushing.
+    4. Minor/non-blocking: docs/cli/10-storage.md:374-377 asserts 'A stale or forged block that appears only in carried-in history is still never spendable: the claim must be on the inside hub's own store ref'. This PR's test does not exercise that claim (the forged-overlap case covers reconcile refusal, not spendability). Cite the existing test that proves it, add an assertion, or soften the prose.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-03T20:48:58.467516396Z
+  modified_at: 2026-11-03T20:48:58.467516396Z
   session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
 history:
 - id: 01a19f4b-61ed-7310-b584-0af8f83cd6a1
