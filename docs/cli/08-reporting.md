@@ -38,8 +38,11 @@ shows overdue PRs with state `ship` or `review`, an age labelled
 appear in `aida awaiting --format json`.
 
 A ship row requires an APPROVED verdict at the exact head, green CI, a
-mergeable PR, and no hold or active review. A review row requires a pushed,
-current head, no verdict at that head, and no active reviewer. Drafts and
+mergeable PR, and no hold or active review. A review row requires a pushed
+head that contains the base branch tip (the forge compare reports it zero
+commits behind), no verdict at that head, and no active reviewer. GitHub's
+merge state is not used for this; when ancestry cannot be read, no review
+observation starts. Drafts and
 armed holds are excluded. Holds remain excluded until cleared; this signal
 does not authorize hold release or bypass any ship gate.
 
@@ -53,8 +56,9 @@ eligible_idle_minutes = 15
 The default is 15 minutes. Observations are keyed by PR, head SHA and kind
 (`ship-ready` or `unreviewed-push`); a refresh resets them after a head change
 or disqualification. When every CI check supplies `completedAt`, ship age can
-start at the later of CI completion and verdict recording. Otherwise it starts
-at first observation. This is an observed lower-bound signal, not a history
+start at the later of CI completion, verdict recording and the last observed
+disqualification for that PR, head and kind, so clearing a hold or review
+restarts the age. Otherwise it starts at first observation. This is an observed lower-bound signal, not a history
 of eligibility transitions.
 
 `--notice`, `--no-ci`, the status line and statusbar read the cache without

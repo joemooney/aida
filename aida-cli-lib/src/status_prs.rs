@@ -891,7 +891,7 @@ pub(crate) fn collect_open_prs_uncached(project_root: &std::path::Path) -> OpenP
         "--limit",
         "50",
         "--json",
-        "number,title,headRefName,headRefOid,statusCheckRollup,mergeable,reviewDecision,labels,createdAt,isDraft,mergeStateStatus",
+        "number,title,headRefName,headRefOid,statusCheckRollup,mergeable,reviewDecision,labels,createdAt,isDraft,baseRefName",
     ]);
     // trace:BUG-1288 | ai:claude — bounded like every other gh call this
     // machine-readable pipeline makes; see FORGE_CLI_CALL_TIMEOUT.
