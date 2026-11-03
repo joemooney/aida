@@ -1178,6 +1178,9 @@ struct FakeForge {
     ci_unreadable: bool,
     // trace:BUG-2423 | ai:codex
     ci_states: Option<VecDeque<TrainCiReadiness>>,
+    /// A non-transient CI-wait error (e.g. head/state changed), once.
+    // trace:BUG-2423 | ai:claude
+    ci_error: Option<String>,
     // BUG-2214: the land step's hold releases.
     released: Vec<u64>,
     rearmed: Vec<u64>,
@@ -1235,7 +1238,11 @@ impl TrainForge for FakeForge {
     }
     fn wait_ci(&mut self, _change: &crate::forge::ChangeRef, _train: &Built) -> Result<CiVerdict> {
         if self.ci_unreadable {
-            anyhow::bail!("no CI registered within 600s");
+            return Err(TrainCiReadError(anyhow::anyhow!("no CI registered within 600s")).into());
+        }
+        // trace:BUG-2423 | ai:claude
+        if let Some(error) = self.ci_error.take() {
+            anyhow::bail!(error);
         }
         if let Some(states) = self.ci_states.as_mut() {
             let clock = std::cell::Cell::new(0);
@@ -3129,6 +3136,57 @@ fn bug2423_ci_never_started_retains_train_and_members() {
     assert!(f.merged.is_empty());
     assert!(f.retired.is_empty());
     assert_eq!(f.comments, [901]);
+}
+
+/// Drive two members through a train whose CI wait fails deterministically;
+/// the members must be ejected with `reason`, never paused as unreadable CI.
+// trace:BUG-2423 | ai:claude
+fn bug2423_assert_deterministic_ci_failure_ejects(mut f: FakeForge, reason: &str) {
+    let mut rails = ForgeRails::new(&mut f, "t".into());
+    let out = drive(&mut rails, fms(&[1, 2])).unwrap();
+    let error = out.error.clone().expect("the CI error is in the outcome");
+    assert!(error.contains(reason), "{error}");
+    assert!(!error.contains("could not be read"), "{error}");
+    assert!(out.landed.is_empty());
+    assert_eq!(out.ejected.len(), 2, "{:?}", out.ejected);
+    for e in &out.ejected {
+        assert!(e.reason.contains(reason), "{e:?}");
+        assert!(!e.reason.contains("could not be read"), "{e:?}");
+    }
+    assert_eq!(f.opened, 1, "no rerun or bisect");
+    assert_eq!(f.retired.len(), 1, "the train PR is retired, not left open");
+    assert_eq!(f.retired[0].0, 901);
+    assert!(f.merged.is_empty());
+}
+
+#[test]
+// trace:BUG-2423 | ai:claude
+fn bug2423_refused_ci_ejects_members_with_the_refusal_reason() {
+    let mut f = FakeForge::mains(&["m0"]);
+    f.ci_states = Some(VecDeque::from([TrainCiReadiness::Refused(
+        "required checks were skipped: Build".into(),
+    )]));
+    bug2423_assert_deterministic_ci_failure_ejects(f, "required checks were skipped: Build");
+}
+
+#[test]
+// trace:BUG-2423 | ai:claude
+fn bug2423_head_or_state_change_ejects_members_with_the_reason() {
+    let mut f = FakeForge::mains(&["m0"]);
+    f.ci_error = Some("train PR #901 head/base/state changed during CI readiness".into());
+    bug2423_assert_deterministic_ci_failure_ejects(f, "head/base/state changed");
+}
+
+#[test]
+// trace:BUG-2423 | ai:claude
+fn bug2423_missing_required_check_timeout_ejects_members() {
+    let mut f = FakeForge::mains(&["m0"]);
+    f.ci_states = Some(
+        std::iter::repeat_with(|| TrainCiReadiness::Missing(vec!["Build".into()]))
+            .take(100)
+            .collect(),
+    );
+    bug2423_assert_deterministic_ci_failure_ejects(f, "missing: Build");
 }
 
 #[test]

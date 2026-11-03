@@ -676,7 +676,10 @@ impl std::fmt::Display for TrainCiUnavailable {
 }
 impl std::error::Error for TrainCiUnavailable {}
 
-/// A failed row read can be retried without retrying an authority refusal.
+/// A genuinely transient CI read failure: a gh/API error, or checks that
+/// never registered. Only this marker may pause the train for a retry of the
+/// same members; refusals, head/state changes and the missing-required-check
+/// bound stay ordinary errors that eject with their reason.
 // trace:BUG-2423 | ai:codex
 #[derive(Debug)]
 struct TrainCiReadError(anyhow::Error);
@@ -748,10 +751,12 @@ fn wait_train_ci(
         // trace:BUG-2423 | ai:codex
         if waiting == TrainCiReadiness::Unregistered {
             let since = *unregistered_since.get_or_insert(now);
-            anyhow::ensure!(
-                now.saturating_sub(since) < TRAIN_CI_START_SECS,
-                "train PR #{pr}: CI never started within {TRAIN_CI_START_SECS}s; leaving the train PR open for inspection"
-            );
+            if now.saturating_sub(since) >= TRAIN_CI_START_SECS {
+                return Err(TrainCiReadError(anyhow::anyhow!(
+                    "train PR #{pr}: CI never started within {TRAIN_CI_START_SECS}s"
+                ))
+                .into());
+            }
         } else {
             unregistered_since = None;
         }
@@ -2002,8 +2007,12 @@ impl LiveTrainForge<'_> {
                     "--json",
                     "headRefOid,baseRefName,state",
                 ],
-            )?;
-            let value: serde_json::Value = serde_json::from_str(&body)?;
+            )
+            // A failed read is transient; a changed head/base/state is not.
+            // trace:BUG-2423 | ai:claude
+            .map_err(TrainCiReadError)?;
+            let value: serde_json::Value =
+                serde_json::from_str(&body).map_err(|e| TrainCiReadError(e.into()))?;
             anyhow::ensure!(
                 value["headRefOid"].as_str() == Some(tip)
                     && value["baseRefName"].as_str() == Some(change.base.as_str())
@@ -2158,19 +2167,28 @@ impl TrainForge for LiveTrainForge<'_> {
 
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(600);
         loop {
-            match self.forge.checks_registered(change)? {
+            // trace:BUG-2423 | ai:claude
+            match self
+                .forge
+                .checks_registered(change)
+                .map_err(TrainCiReadError)?
+            {
                 CheckRegistration::Registered => break,
                 CheckRegistration::NoCi => anyhow::bail!(
                     "the forge reports no CI for train PR #{}; a train lands only on a green CI",
                     change.id
                 ),
                 CheckRegistration::NotYet if std::time::Instant::now() >= deadline => {
-                    anyhow::bail!("no CI registered within 600s for train PR #{}", change.id)
+                    return Err(TrainCiReadError(anyhow::anyhow!(
+                        "no CI registered within 600s for train PR #{}",
+                        change.id
+                    ))
+                    .into());
                 }
                 CheckRegistration::NotYet => std::thread::sleep(std::time::Duration::from_secs(10)),
             }
         }
-        let ci_state = self.forge.watch_ci(change)?;
+        let ci_state = self.forge.watch_ci(change).map_err(TrainCiReadError)?;
         self.dispatch_check()?;
         Ok(match ci_state {
             CiState::Success => CiVerdict::Green,
@@ -2504,13 +2522,21 @@ impl Rails for ForgeRails<'_> {
         for (change, train) in changes.iter().zip(trains) {
             // A CI that cannot be read (none registered, an API error) is not
             // a red verdict: bisecting it would spend CI runs and eject every
-            // member as "red alone". It stops the run with the real reason.
-            // Authority revocation keeps its ordinary abort path. A CI read
-            // failure retains this train and leaves member eligibility alone.
-            // trace:BUG-2423 | ai:codex
+            // member as "red alone". Only a transient read failure
+            // (`TrainCiReadError`: gh/API error, checks never registered)
+            // pauses the run and retains this train. Authority revocation, a
+            // refusal (skipped required check), a changed head/base/state and
+            // the missing-required-check bound keep the ordinary abort path,
+            // which ejects the members with the real reason.
+            // trace:BUG-2423 | ai:claude
             let v = match self.ports.wait_ci(change, train) {
                 Ok(v) => v,
-                Err(e) if self.ports.dispatch_abort().is_some() => return Err(e),
+                Err(e)
+                    if self.ports.dispatch_abort().is_some()
+                        || e.downcast_ref::<TrainCiReadError>().is_none() =>
+                {
+                    return Err(e)
+                }
                 Err(e) => return Err(TrainCiUnavailable(format!(
                     "train PR #{}'s CI could not be read: {e:#}; train PR remains open; retry the same members",
                     change.id

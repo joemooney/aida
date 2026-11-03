@@ -272,6 +272,9 @@ the same train. If CI never starts or stays unreadable, the command exits
 non-zero and leaves the train PR open for inspection, with its members still
 eligible. Inspect the paused PR before retrying the same member list; a later
 train retires the abandoned train through the normal owner-liveness check.
+A required check that was skipped, a train PR whose head, base or state
+changed, and a required check still missing after 600 seconds are not read
+failures: the train PR is closed and its members are ejected with that reason.
 <!-- trace:BUG-2423 | ai:codex -->
 <!-- trace:STORY-1690 | ai:claude -->
 
