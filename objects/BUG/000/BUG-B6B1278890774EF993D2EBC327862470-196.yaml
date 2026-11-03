@@ -11,7 +11,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-03T15:56:31.278734245Z
-modified_at: 2026-11-03T18:42:22.444267089Z
+modified_at: 2026-11-03T19:38:37.799345885Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -40,6 +40,17 @@ comments:
   modified_at: 2026-11-03T16:32:37.810209532Z
   session_id: 01a1a240ce6a
   harness_version: 2.1.317 (Claude Code)
+- id: 01a1a2eb-b167-7a02-9f24-0010eb7ae0a3
+  author: joe
+  content: |-
+    ADVISOR RULING (2026-11-03 12:15, round 2, PR #3306 at a2b504db): fix both findings.
+    Fix is correct and AC 1-3 are covered by the new deputy test, but CI lib-1 is red because of this PR: story_1698 pr_ship_consults_the_mandate_at_every_hold_gate_and_before_the_merge fails at story_1698_mandate_tests.rs:598
+    1. CI regression from this PR: ship_interactive_tty() (pr_cmd.rs:2115) sits between ship_preflight_gates() (pr_cmd.rs:1986) and pr_ship_handler() (pr_cmd.rs:2120). The new body calls crate::gate::role_authority::has_integrity_floor_authority(), so the source slice that gate/tests/story_1698_mandate_tests.rs:594-601 takes as 'the preflight' now contains 'has_integrity_floor_authority()', and the assertion 'the preflight takes the hold authority th
+    2. AC (1) wiring is not pinned by a test. The implementer's plan said 'a test pins that the body calls it', but the new test only checks ship_interactive_tty() == has_integrity_floor_authority() under two ambient states, and it checks the train only through tty_consents(ship_interactive_tty(), ...), not through the train's real interactive_tty() (pr_train.rs:1286). Add a source-pin (or an equivalent check) that pr_train's interactive_tty and pr_s
+    RULINGS: (1) Move ship_interactive_tty() out of the source span between ship_preflight_gates() and pr_ship_handler(), for example after the handler or into the role_authority module. Do NOT weaken the story_1698 assertion. (2) Add a source pin that both pr_train's interactive_tty() and pr_ship's call the shared helper. LIGHT gate: one targeted cargo test -p <crate> <filter> plus make check-ci-fast (with umask 022, BUG-2432). Push to the existing PR branch, then stop.
+  created_at: 2026-11-03T19:38:37.799345885Z
+  modified_at: 2026-11-03T19:38:37.799345885Z
+  session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
 history:
 - id: 01a1a23d-bcff-7cc3-8f2f-887fdeaeb312
   author: aida-session-start
