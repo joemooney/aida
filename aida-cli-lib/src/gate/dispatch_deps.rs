@@ -331,6 +331,11 @@ pub(crate) const FACADE_EXTERNAL_LEAVES: &[(&str, &str)] = &[
         "aida_core::liveness::process_start_time",
         "process start time for fleet lanes; feeds authority",
     ),
+    // trace:STORY-2254 | ai:claude
+    (
+        "crate::agent_registry::parent_pid_of",
+        "read-only /proc parent probe: the detached-launch supervisor binds only its own child; feeds authority",
+    ),
     (
         "aida_core::store_locate::MissedStore",
         "store discovery miss for seat authority",
