@@ -485,18 +485,15 @@ fn no_verdict_refuses_and_an_unrecognized_word_never_approves() {
 }
 
 #[test]
-fn unbound_records_count_once_and_foreign_labels_are_ignored() {
+fn unbound_records_count_once() {
     let r = subject();
     let unbound = verdict_ev(1, Some("BUG-2403"), "approved", HEAD_A);
-    let mut v = view(vec![
-        unbound.clone(),
-        verdict_ev(2, Some("TASK-999"), "changes_requested", HEAD_A),
-    ]);
+    let mut v = view(vec![unbound.clone()]);
     v.unbound
         .insert(crate::gate::canon::SpecKey(r.id), vec![unbound]);
     let s = state(&[r.clone()], &["BUG-2403"], &v, HEAD_A);
     assert!(matches!(s.verdict, Verdict::Approved { seq: 1, .. }));
-    assert_eq!(s.foreign_labels, vec!["TASK-999".to_string()]);
+    assert!(matches!(s.decision, Decision::Mergeable { .. }));
 
     // An unbound refusal recorded after the change's approval still blocks.
     let mut lagged = view(vec![verdict_ev(3, Some("BUG-2403"), "approved", HEAD_A)]);
@@ -509,6 +506,64 @@ fn unbound_records_count_once_and_foreign_labels_are_ignored() {
         s.verdict,
         Verdict::ChangesRequested { seq: 9, .. }
     ));
+}
+
+#[test]
+fn an_open_refusal_under_a_label_naming_no_member_blocks() {
+    // Today's change-keyed read (project.rs verdict_events for PR-N) answers
+    // with the change's newest verdict whatever spec it names, so an open
+    // refusal under an unknown, foreign or ambiguous label blocks. Dropping
+    // it into foreign_labels would be a loosening.
+    for foreign in ["TASK-999", "bug-home-404"] {
+        let v = view(vec![
+            verdict_ev(1, Some("BUG-2403"), "approved", HEAD_A),
+            verdict_ev(2, Some(foreign), "changes_requested", HEAD_A),
+        ]);
+        let s = state(&[subject()], &["BUG-2403"], &v, HEAD_A);
+        assert_eq!(s.foreign_labels, vec![foreign.to_ascii_uppercase()]);
+        assert!(matches!(
+            s.foreign_verdict,
+            Verdict::ChangesRequested { seq: 2, .. }
+        ));
+        assert!(matches!(
+            s.verdict,
+            Verdict::ChangesRequested { seq: 2, .. }
+        ));
+        assert!(matches!(s.decision, Decision::Refused { .. }));
+        assert!(refusals(&s).contains(&Refusal::ChangesRequested));
+    }
+    // An unrecognized word under a foreign label never approves either.
+    let v = view(vec![
+        verdict_ev(1, Some("BUG-2403"), "approved", HEAD_A),
+        verdict_ev(2, Some("TASK-999"), "lgtm-ish", HEAD_A),
+    ]);
+    let s = state(&[subject()], &["BUG-2403"], &v, HEAD_A);
+    assert!(refusals(&s).contains(&Refusal::UnrecognizedVerdict));
+    // A foreign approval is not a member's approval and grants nothing.
+    let v = view(vec![verdict_ev(1, Some("TASK-999"), "approved", HEAD_A)]);
+    let s = state(&[subject()], &["BUG-2403"], &v, HEAD_A);
+    assert_eq!(s.foreign_verdict, Verdict::Absent);
+    assert_eq!(refusals(&s), vec![Refusal::NoApproval]);
+}
+
+#[test]
+fn an_open_refusal_under_an_ambiguous_label_blocks() {
+    let a = req("TASK-5", None, Some(ExecutionMode::Drain));
+    let b = req("TASK-6", None, Some(ExecutionMode::Drain));
+    let retired = format!(
+        "[[retired]]\nold = \"TASK-5\"\nnew = \"x\"\nuuid = \"{}\"\n",
+        b.id
+    );
+    let snap = Snapshot::from_parts("h", &[a.clone(), b.clone()], None, Some(&retired)).unwrap();
+    let set = snap.resolve(&["TASK-6"]);
+    let v = view(vec![
+        verdict_ev(1, Some("TASK-6"), "approved", HEAD_A),
+        verdict_ev(2, Some("TASK-5"), "rejected", HEAD_A),
+    ]);
+    let s = effective_gate_state(HEAD_A, &set, &v, &drain());
+    assert_eq!(s.foreign_labels, vec!["TASK-5".to_string()]);
+    assert!(matches!(s.decision, Decision::Refused { .. }));
+    assert!(refusals(&s).contains(&Refusal::ChangesRequested));
 }
 
 #[test]

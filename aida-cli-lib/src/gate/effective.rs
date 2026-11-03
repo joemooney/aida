@@ -169,6 +169,11 @@ pub(crate) struct GateState {
     pub draft_only: Vec<String>,
     /// Spec labels on this change's verdict events that name no member.
     pub foreign_labels: Vec<String>,
+    /// The most severe blocking answer (refusal, unrecognized word, unsafe)
+    /// among those labels' own sequences. Today's change-keyed read blocks on
+    /// such a refusal, so it is never dropped (no loosening): an open refusal
+    /// on this change's ledger blocks whatever spec it names.
+    pub foreign_verdict: Verdict,
     pub decision: Decision,
 }
 
@@ -363,7 +368,7 @@ pub(crate) fn effective_gate_state(
         .iter()
         .filter(|e| e.verdict_record().is_some())
         .collect();
-    let mut foreign: Vec<String> = Vec::new();
+    let mut foreign: BTreeMap<String, Vec<GateEvent>> = BTreeMap::new();
     let mut change_own: Vec<GateEvent> = Vec::new();
     let mut per_member: BTreeMap<SpecKey, Vec<GateEvent>> = BTreeMap::new();
     for e in &verdict_events {
@@ -374,16 +379,28 @@ pub(crate) fn effective_gate_state(
                     .entry(m.key)
                     .or_default()
                     .push(canonical_spelling(m, (*e).clone())),
-                None => {
-                    let up = label.to_ascii_uppercase();
-                    if !foreign.contains(&up) {
-                        foreign.push(up);
-                    }
-                }
+                None => foreign
+                    .entry(label.to_ascii_uppercase())
+                    .or_default()
+                    .push((*e).clone()),
             },
         }
     }
-    foreign.sort();
+    let foreign_labels: Vec<String> = foreign.keys().cloned().collect();
+    // trace:STORY-2324 | ai:claude
+    let foreign_answers: Vec<Verdict> = foreign
+        .into_values()
+        .map(|events| sequence_verdict(events, head, &view.change_events))
+        .filter(|v| {
+            matches!(
+                v,
+                Verdict::ChangesRequested { .. }
+                    | Verdict::Unrecognized { .. }
+                    | Verdict::Unsafe { .. }
+            )
+        })
+        .collect();
+    let foreign_verdict = aggregate(foreign_answers.iter());
 
     let mut members = Vec::new();
     for m in &set.members {
@@ -407,8 +424,11 @@ pub(crate) fn effective_gate_state(
         members.push((m, mode, sequence_verdict(events, head, &view.change_events)));
     }
     let change_verdict = sequence_verdict(change_own, head, &view.change_events);
-    let verdict =
-        aggregate(std::iter::once(&change_verdict).chain(members.iter().map(|(_, _, v)| v)));
+    let verdict = aggregate(
+        std::iter::once(&change_verdict)
+            .chain(std::iter::once(&foreign_verdict))
+            .chain(members.iter().map(|(_, _, v)| v)),
+    );
     let hold = fold_hold(&view.change_events);
     let supervised: Vec<(String, String)> = members
         .iter()
@@ -494,7 +514,8 @@ pub(crate) fn effective_gate_state(
         hold,
         mode,
         draft_only,
-        foreign_labels: foreign,
+        foreign_labels,
+        foreign_verdict,
         decision,
     }
 }

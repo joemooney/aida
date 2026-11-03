@@ -108,7 +108,7 @@ fn two_requirements_claiming_one_label_is_an_error_not_a_pick() {
 }
 
 #[test]
-fn a_literal_claim_outranks_a_retired_mapping() {
+fn a_literal_claim_and_a_retired_mapping_to_another_requirement_is_ambiguous() {
     let a = req("TASK-5", None);
     let b = req("TASK-6", None);
     let snap = Snapshot::from_parts(
@@ -118,6 +118,23 @@ fn a_literal_claim_outranks_a_retired_mapping() {
         Some(&retired("TASK-5", b.id)),
     )
     .unwrap();
+    assert!(
+        matches!(snap.resolve_one("TASK-5"), Resolution::Ambiguous(_)),
+        "a label A claims literally but the retired map gives B is an Err"
+    );
+    assert!(matches!(
+        snap.resolve_one("task-5"),
+        Resolution::Ambiguous(_)
+    ));
+    // Neither requirement owns the contested label.
+    assert!(!snap.spec(SpecKey(a.id)).unwrap().answers_to("TASK-5"));
+    assert!(!snap.spec(SpecKey(b.id)).unwrap().answers_to("TASK-5"));
+    let set = snap.resolve(&["TASK-5"]);
+    assert!(set.members.is_empty());
+    assert_eq!(set.ambiguous.len(), 1);
+    // A retired mapping back to the claimant itself is not a second claim.
+    let snap =
+        Snapshot::from_parts("h", &[a.clone()], None, Some(&retired("TASK-5", a.id))).unwrap();
     assert_eq!(hit(&snap, "TASK-5"), Some(SpecKey(a.id)));
 }
 

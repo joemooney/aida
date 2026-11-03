@@ -119,29 +119,62 @@ pub(crate) fn compare(today: &Today, state: &GateState) -> Vec<Column> {
     ]
 }
 
-/// Today's answer, read through the readers ship and the train use now.
-fn today_answer(
-    project_root: &std::path::Path,
-    main: &std::path::Path,
-    pr: u64,
-    ids: &[String],
+/// How today's TASK-1960 carry-over answered a head refusal: `None` when it
+/// does not apply (not a moved head), `Some(true)` carried over, `Some(false)`
+/// refused.
+pub(crate) type CarryAnswer = Option<bool>;
+
+/// Today's verdict column over the merge-gate candidates, exactly as the
+/// merge paths decide it: an open refusal among the candidates outranks a
+/// stale approval (ship refuses a refused PR whatever its approval covers),
+/// then the approval-covers-head gate with the carry-over applied
+/// (`approval.rs` `pr_ship_approval_gate` / `merge_path_approval_decision`
+/// via `carry_over_for_refusal`). Pure; `carry` is the carry-over read.
+// trace:STORY-2324 | ai:claude
+pub(crate) fn today_verdict(
+    candidates: &[crate::gate::review_verdict::RecordedVerdict],
     head: &str,
-) -> Today {
+    carry: impl FnOnce(&crate::gate::ship::ApprovalHeadRefusal) -> CarryAnswer,
+) -> &'static str {
     use crate::gate::ship;
-    let candidates =
-        ship::merge_gate_verdict_candidates(&[project_root, main], pr, ids, Some(head));
     let approved = candidates
         .iter()
         .any(|v| v.kind.approves() && !v.is_closed());
     let refused = candidates
         .iter()
         .any(|v| v.kind.blocks_done() && !v.is_closed());
-    let verdict = match ship::approval_head_refusal(&candidates, Some(head)) {
-        Some(_) => "stale",
-        None if refused => "changes-requested",
+    if refused {
+        return "changes-requested";
+    }
+    match ship::approval_head_refusal(candidates, Some(head)) {
+        Some(refusal) => match carry(&refusal) {
+            Some(true) => "approved",
+            Some(false) | None => "stale",
+        },
         None if approved => "approved",
         None => "absent",
-    };
+    }
+}
+
+/// Today's answer, read through the readers ship and the train use now.
+/// The carry-over is read through a read-only site: a stored ledger answer,
+/// else a proof that leaves no state behind.
+fn today_answer(
+    project_root: &std::path::Path,
+    main: &std::path::Path,
+    pr: u64,
+    ids: &[String],
+    head: &str,
+    base: &str,
+) -> Today {
+    use crate::gate::ship;
+    let candidates =
+        ship::merge_gate_verdict_candidates(&[project_root, main], pr, ids, Some(head));
+    let base = Some(base.trim()).filter(|b| !b.is_empty());
+    let site = crate::gate::review_carryover::CarryOverSite::read_only(main, base);
+    let verdict = today_verdict(&candidates, head, |refusal| {
+        crate::gate::review_carryover::carry_over_for_refusal(&site, pr, refusal).map(|r| r.is_ok())
+    });
     let records = crate::pr_cmd::ship_gate_spec_records_for_ids(main, ids.to_vec());
     let modes: Vec<(String, Option<aida_core::ExecutionMode>)> = records
         .iter()
@@ -244,8 +277,12 @@ pub(crate) fn render(
     }
     if !state.foreign_labels.is_empty() {
         out.push_str(&format!(
-            "Verdicts on this PR for other requirements (ignored): {}\n",
-            state.foreign_labels.join(", ")
+            "Verdicts on this PR for labels it does not ship: {} ({})\n",
+            state.foreign_labels.join(", "),
+            match &state.foreign_verdict {
+                Verdict::Absent => "none blocks".to_string(),
+                v => format!("blocks: {}", describe_verdict(v)),
+            }
         ));
     }
     out.push_str(&format!(
@@ -335,7 +372,7 @@ pub(crate) fn run_state(raw: &str, with_compare: bool, json: bool) -> Result<()>
         &effective::GatePolicy::default(),
     );
     let columns = with_compare.then(|| {
-        let today = today_answer(&project_root, &main, pr, &ids, &head);
+        let today = today_answer(&project_root, &main, pr, &ids, &head, &info.base_ref);
         (compare(&today, &state), today)
     });
     if json {
@@ -367,3 +404,7 @@ pub(crate) fn run_state(raw: &str, with_compare: bool, json: bool) -> Result<()>
     }
     Ok(())
 }
+
+#[cfg(test)]
+#[path = "tests/story_2324_gate_state_cmd_tests.rs"]
+mod tests;

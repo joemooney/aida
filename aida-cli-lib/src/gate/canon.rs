@@ -175,8 +175,8 @@ pub(crate) struct Snapshot {
     specs: BTreeMap<SpecKey, CanonicalSpec>,
     /// Literal native/friendly labels -> claimants.
     literal: BTreeMap<String, BTreeSet<SpecKey>>,
-    /// Node-label forms and retired IDs -> claimants. Consulted only when a
-    /// label has no literal claimant.
+    /// Node-label forms and retired IDs -> claimants. Unioned with the
+    /// literal claimants: a label two requirements claim is ambiguous.
     mapped: BTreeMap<String, BTreeSet<SpecKey>>,
 }
 
@@ -290,19 +290,24 @@ impl Snapshot {
         Ok(snap)
     }
 
-    /// One label: a literal native/friendly hit first, then the node-label
-    /// and retired-ID mappings. Exact, case-insensitive text only.
+    /// One label: its literal native/friendly claimants together with its
+    /// node-label and retired-ID claimants. Exact, case-insensitive text
+    /// only. A label literally claimed by one requirement but mapped to
+    /// another is ambiguous (STORY-2324 sketch sections 2 and 8): no claim
+    /// outranks another.
     // trace:STORY-2324 | ai:claude
     pub(crate) fn resolve_one(&self, label: &str) -> Resolution {
         let label = norm(label);
-        let hits = match self.literal.get(&label) {
-            Some(h) if !h.is_empty() => h,
-            _ => match self.mapped.get(&label) {
-                Some(h) if !h.is_empty() => h,
-                _ => return Resolution::Unknown,
-            },
-        };
+        let hits: BTreeSet<SpecKey> = self
+            .literal
+            .get(&label)
+            .into_iter()
+            .chain(self.mapped.get(&label))
+            .flatten()
+            .copied()
+            .collect();
         match hits.iter().collect::<Vec<_>>().as_slice() {
+            [] => Resolution::Unknown,
             [one] => Resolution::Hit(**one),
             many => Resolution::Ambiguous(format!("{label} names {} requirements", many.len())),
         }
