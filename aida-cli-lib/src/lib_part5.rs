@@ -3373,6 +3373,9 @@ pub(crate) fn handle_review_record_at(
         if let Some(pr) = pr {
             // STORY-1697: say what the approval released, or why the hold
             // stays armed. No hold at all is not news. trace:STORY-1697 | ai:claude
+            // Friendly covered-spec labels need the node-alias map, installed
+            // outside gate/. trace:BUG-2422 | ai:claude
+            crate::spec_arg::ensure_alias_map();
             match crate::gate::rework_hold_release::auto_release(&project_root, pr) {
                 Ok(crate::gate::rework_hold_release::Outcome::NoHold) => {}
                 Ok(outcome) => println!("  {}", outcome.line(pr)),
