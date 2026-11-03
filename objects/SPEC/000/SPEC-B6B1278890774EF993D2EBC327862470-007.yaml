@@ -3,12 +3,12 @@ spec_id: SPEC-b6b1278890774ef993d2ebc327862470-007
 agreed_id: TASK-2792
 title: Native Codex worktree launch mounts .git read-only and omits writable shared cache
 description: 'Standalone headless implementer for STORY-2346 on 2026-11-03 can edit assigned source worktree but cannot stage changes: git add fails `Unable to create ''<worktree>/.git/index.lock'': Read-only file system`. The session filesystem profile explicitly marks .git read-only and grants no shared main-checkout metadata. CLI `aida edit` also refuses the .aida/cache-db/cache.db symlink into /home/joe/ai/aida/.aida/cache-db as not writable; connected AIDA MCP updates succeed. This blocks the required commit/push/PR lifecycle. Preserve source edits and hand off with an appropriately configured native launch; do not work around the filesystem boundary or mark Done before a committed branch. Review native vendor launch grants for worktree Git metadata and the cache-only directory.'
-status: Draft
+status: Superseded
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-03T14:06:21.777399609Z
-modified_at: 2026-11-03T18:18:55.899380718Z
+modified_at: 2026-11-03T18:19:19.074684473Z
 req_type: Task
 tags:
 - from-implementer:STORY-2346
@@ -27,6 +27,14 @@ history:
   timestamp: 2026-11-03T14:11:41.392771768Z
   session_id: f5eddefe-032d-4760-94ba-3a318cf3d1d1
   changes: []
+- id: 01a1a2a3-14a2-7b32-9259-6e919ab90058
+  author: joe
+  timestamp: 2026-11-03T18:19:19.074680063Z
+  session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   aida_version: 0.16.0
   aida_build_sha: 6c587ee595c
