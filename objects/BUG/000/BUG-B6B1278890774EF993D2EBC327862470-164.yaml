@@ -16,12 +16,12 @@ description: |-
   1. When `--vendor` is omitted on `aida dispatch request take` or `impl`, `dispatch` resolves the project's configured `[agents] vendor` rather than hardcoding `DispatchVendor::Claude`.
   2. Launching a Codex implementer lane from `dispatch` detaches cleanly (integrating with STORY-2254) without blocking `dispatch tick` / `serve` to completion.
   3. Unit tests verify default vendor resolution and non-blocking launch behavior for `take` and `impl`.
-status: NeedsAttention
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T06:46:56.104025446Z
-modified_at: 2026-11-03T23:06:03.690312801Z
+modified_at: 2026-11-03T23:06:06.140857973Z
 req_type: Bug
 tags:
 - audit
@@ -113,6 +113,12 @@ comments:
   created_at: 2026-11-03T23:06:03.690312801Z
   modified_at: 2026-11-03T23:06:03.690312801Z
   session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
+- id: 01a1a3a9-a3bc-7fe1-81cc-e98cf0604841
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: CI red at head on 3 shards (BUG-2398 spawn ratchet, golden help snapshot, contracts). AC2 is only partly met: a Codex take/impl from the grantless cron dispatch tick cannot get a child grant. AC1 and the occupancy fix look correct. AC1=verified by bug_2390_take_and_impl_default_to_the_configured_vendor; AC2=partial (serve path verified with a fake aida, tick path unverified and likely refused); AC3=tests present but CI red. No triage reason was given.'
+  created_at: 2026-11-03T23:06:06.140856594Z
+  modified_at: 2026-11-03T23:06:06.140856594Z
+  session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
 history:
 - id: 01a195dc-94a3-73e2-8979-5b3cd7a026e1
   author: joe
@@ -191,6 +197,14 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1a3a9-a3bc-7fe1-81cc-e973cdd67389
+  author: joe
+  timestamp: 2026-11-03T23:06:06.140845937Z
+  session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: 6dc7d4977ac5e47c42ddfb26597fe3ec5fb70b60
   branch: main
@@ -199,11 +213,3 @@ filed_at:
   aida_build_sha: 962ca07af25
   vendor: antigravity
   session: 01a194b1bcfb
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'CI red at head on 3 shards (BUG-2398 spawn ratchet, golden help snapshot, contracts). AC2 is only partly met: a Codex take/impl from the grantless cron dispatch tick cannot get a child grant. AC1 and the occupancy fix look correct. AC1=verified by bug_2390_take_and_impl_default_to_the_configured_vendor; AC2=partial (serve path verified with a fake aida, tick path unverified and likely refused); AC3=tests present but CI red'
-  recovery_hint: address the review findings, move BUG-2390 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-03T22:45:54.700957370Z
