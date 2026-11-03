@@ -1,0 +1,82 @@
+{
+  "schema_version": 1,
+  "spec": "TASK-B6B1278890774EF993D2EBC327862470-729",
+  "publishes": [
+    {
+      "at": "2026-11-03T18:11:43.262600036Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-03T13:52:10.969116434Z",
+      "spec": "TASK-b6b1278890774ef993d2ebc327862470-729",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-03T13:55:47.187634457Z",
+      "spec": "TASK-b6b1278890774ef993d2ebc327862470-729",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-11-03T14:18:23.034258493Z",
+      "spec": "TASK-b6b1278890774ef993d2ebc327862470-729",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "edit",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "In Progress"
+      }
+    },
+    {
+      "ts": "2026-11-03T14:18:23.071525027Z",
+      "spec": "TASK-b6b1278890774ef993d2ebc327862470-729",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Needs Attention",
+        "after": "In Progress"
+      }
+    },
+    {
+      "ts": "2026-11-03T18:10:22.636966760Z",
+      "spec": "TASK-B6B1278890774EF993D2EBC327862470-729",
+      "seat": "advisor",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-11-03T18:11:02.037189858Z",
+      "spec": "TASK-B6B1278890774EF993D2EBC327862470-729",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 3294
+      }
+    },
+    {
+      "ts": "2026-11-03T18:11:43.087965765Z",
+      "spec": "TASK-B6B1278890774EF993D2EBC327862470-729",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "c016e786454b8d89e36474513cf42d4481398394",
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
