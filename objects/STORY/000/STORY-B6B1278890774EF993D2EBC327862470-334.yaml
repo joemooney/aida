@@ -25,7 +25,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-03T03:42:51.559496187Z
-modified_at: 2026-11-03T13:50:49.032474831Z
+modified_at: 2026-11-03T15:10:27.846241094Z
 req_type: Story
 tags:
 - area:deputy
@@ -199,6 +199,12 @@ comments:
   created_at: 2026-11-03T05:06:18.801707253Z
   modified_at: 2026-11-03T05:06:18.801707253Z
   session_id: c58592f4-04ae-498b-9afd-87b0cc2bcde9
+- id: 01a1a1f6-2d8e-72e2-9067-a8a9f1ac898f
+  author: joe
+  content: 'Advisor ruling: PR #3287 round 2 (STRICT). Fix all 12 findings from the round-1 verdict in this one push (read them with aida show STORY-2338 / the PR review): (a) CI red: add runner.rs:799 to LAUNCH_INVENTORY (bug_2398 ratchet); replace the grant env literal at deputy_shell/tests.rs:438 with the shared constant (task_1752); inventory the config.toml site at mod.rs:802 (bug_1723); add the new leaves to docs/cli-format-json-audit.md (bug_1502). (b) SECURITY: do NOT read [deputy_shell] submit_seats from tracked .aida/config.toml. Widening is only via --allow-seat at the operator''s terminal (Q3); add a test that a committed submit_seats is ignored. (c) Test the start-path refusals (no grant, non-advisor seat) and the real issue_runner_refresh. (d) Add per-AC trace comments so ''aida criteria STORY-2338'' shows all 7 traced. (e) AC7: link docs/deputies.md from the advisor standing orders'' deputy line in the template master, then make sync-templates. (f) AC1: move the advisor habit to submit in this PR (the standing-orders text). (g) The minor items: bind the heartbeat fallback to the grant; record state on a claim collision; SIGKILL before the reap in kill_group; use the canonical actor form in the ack audit. LIGHT gate: ONE targeted cargo test -p aida-cli-lib deputy_shell plus make check-ci-fast. Push to story-2338-sketch and stop.'
+  created_at: 2026-11-03T15:10:27.726160409Z
+  modified_at: 2026-11-03T15:10:27.726160409Z
+  session_id: f5eddefe-032d-4760-94ba-3a318cf3d1d1
 history:
 - id: 01a19f81-3898-7250-96f4-65372d1968ea
   author: aida-session-start
