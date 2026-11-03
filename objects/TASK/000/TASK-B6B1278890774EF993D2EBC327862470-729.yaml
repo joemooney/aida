@@ -11,7 +11,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-03T08:37:09.154000416Z
-modified_at: 2026-11-03T13:55:44.168282264Z
+modified_at: 2026-11-03T14:06:29.508088753Z
 req_type: Task
 tags:
 - carried-from:BUG-2418
@@ -30,6 +30,11 @@ comments:
   created_at: 2026-11-03T13:52:19.444370220Z
   modified_at: 2026-11-03T13:52:19.444370220Z
   session_id: f5eddefe-032d-4760-94ba-3a318cf3d1d1
+- id: 01a1a1bb-9c84-7792-9f97-e76fb6c3d924
+  author: mcp
+  content: 'Implemented advisor ruling in commit 34e47e7e61f on task-b6b1278890774ef993d2ebc327862470-729: contained Codex posture now writes writable_roots = [], clearing legacy ~/.cargo, ~/.rustup and ~/.aida grants. Added fresh-config and both-scope upgrade/idempotence/backup regression coverage; updated AGENTS.md and OVERVIEW.md with read-only home-state and host cargo fetch guidance. cargo fmt --all -- --check and git diff --check pass. Targeted cargo test --profile agent -p aida-cli-lib permissions_set_ --lib and make check-ci-fast could not run: Cargo wrapper refuses target filesystem at ~14.4 GiB free below its 15 GiB hard floor. aida ship --no-merge (including dry-run) refuses this native-sandbox private clone, directs host publication via aida ship --from-seat from the main checkout. No PR has been opened; commit retained in the assigned seat.'
+  created_at: 2026-11-03T14:06:29.508074628Z
+  modified_at: 2026-11-03T14:06:29.508074628Z
 history:
 - id: 01a1a1ac-f365-7d02-97f3-f8460ea8a486
   author: joe
