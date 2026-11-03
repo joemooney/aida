@@ -1,0 +1,30 @@
+id: 01a1a1c1-899e-7890-aede-8cdc2a705123
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-740
+title: '[P3 non-blocking] idle_eligible.rs:250-253: mergeable != MERGEABLE (incl. GitHu…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on STORY-2336, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  [P3 non-blocking] idle_eligible.rs:250-253: mergeable != MERGEABLE (incl. GitHub's transient UNKNOWN while recomputing after main moves) is treated as a known disqualification, recording an invalidation and resetting ship age; consider treating UNKNOWN as Some(false) (evidence unknown) instead.
+
+  PR: #3284
+  Reviewed sha: a42ff79c1ba5c1a5b27cefd3cf44b80f63cd7e7a
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-03T14:12:57.886227099Z
+modified_at: 2026-11-03T14:12:57.886227099Z
+req_type: Task
+tags:
+- carried-from:STORY-2336
+- finding-hash:2c03b227
+- from-review:PR-3284
+- kind:carried-forward
+filed_at:
+  code_sha: 493f3ae1c526c7ab19f208112d426aecbf33c8b5
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 6c587ee595c
+  vendor: claude
+  session: f5eddefe-032d-4760-94ba-3a318cf3d1d1
