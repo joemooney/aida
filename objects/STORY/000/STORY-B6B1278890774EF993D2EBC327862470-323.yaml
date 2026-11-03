@@ -8,12 +8,234 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-02T19:20:50.092491662Z
-modified_at: 2026-11-03T00:32:37.926209747Z
+modified_at: 2026-11-03T00:41:15.905128805Z
 req_type: Story
 tags:
 - architecture
 - needs-sketch
 - regroup
+comments:
+- id: 01a19eda-6781-7bd1-8410-81f09e335f3c
+  author: joe
+  content: |
+    SKETCH (awaiting independent signoff): STORY-2325
+
+    Author: claude sketch seat (no grant), 2026-11-02. This is a proposal only. It is not design approval, implementation approval, or permission to end, reclaim or force anything. No code was changed, nothing was committed, and no lease, lane, marker, mailbox or PR was mutated. Source read at 2d4c8cf5397. Live state read-only from ~/ai/aida/.aida. Line numbers: aida-cli-lib/src unless prefixed `core/` (= aida-core/src).
+
+    ## 0. Production state today (counted read-only)
+    - `.aida/sessions/*.toml`: 256 leases. 201 record no start identity for any pid, 180 are older than 7 days, 26 carry an `active_pid`, 5 `review_verb`, 11 `claim_verb`.
+    - `.aida/lanes/headless-*.json`: 362 lane records. `.aida/agents/`: 705 registry files. `.aida/review-in-progress/`: 1 marker. 155 `aida-*` sibling seat dirs.
+    - 201 leases have no start identity, so `pr_lease_takeover` reads them as `OwnerLiveness::Unknown`. That gives NotProvable, then PlainEnd, then the "could not end dead lease" bail. This is the STORY-2315 pain, and it is still reachable for most of the table.
+
+    ## 1. Current data flow and failure modes (file:line)
+    Ownership of one piece of work is written as up to six records, each with its own liveness rule:
+    - (R1) Spec/session lease: `leases.rs:13 SessionLease` (`creator_pid`/`active_pid` plus `*_start_time`, `branch`, `worktree_path`) in `.aida/sessions/<id>.toml` (`leases.rs:233`).
+    - (R2) Reviewer: a `pr-N` lease with `review_verb`, plus `gate/review_marker.rs:74 Marker` (pid, pid_start, ttl).
+    - (R3) Train: the `aida-train-owner:` line in the forge PR body (`pr_train.rs:1437-1505`), plus `merge_lock.rs:71 Holder` (pid, pid_start, ttl).
+    - (R4) Claim: a `claim_verb` lease (`claim.rs:446-480`), plus the cross-clone `coordination.rs:105-125 Claim` (pid, pid_start_time, heartbeat) in the store.
+    - (R5) Lane: `.aida/lanes/headless-<lease>.json` (`lane_liveness.rs:754/773/816`).
+    - (R6) Mailbox scope: no owner record. Retirement is gated by `core/mailbox_lifecycle/retire.rs:640-655` and leaves the lease `ending-retained` (`leases.rs:671`, `session_end.rs:1972`).
+
+    Failure modes:
+    - F1, seven liveness rules for one question:
+      - Lenient `core/liveness.rs:1026 process_identity_is_alive`: a missing start identity reads alive, and an absent pid reads dead. Used by `leases.rs:1196/1204`, `merge_lock.rs:135`, the `pr_train.rs` caller of `train_abandoned`, `lane_liveness.rs:981`, `claim.rs:464` and `agent_registry.rs:1917/2502`.
+      - `core/liveness.rs:1206 process_provably_dead` (BUG-2197/2206).
+      - `coordination.rs:386 strictly_alive`.
+      - The tri-state `core/process_probe.rs:40-131 Probe` (Alive/Dead/Unknown, boot id in the identity), used only by `seat_occupancy/mod.rs:385`.
+      - A cwd scan for "live claude in the worktree" plus a 24h age clock (`core/liveness.rs:1386 classify_lease_state`, `leases.rs:1213-1234`).
+      - TTL backstops: `merge_lock.rs:239-253`, `coordination.rs:215 decide_claim`, `review_marker.rs:89-91`.
+      - Pid-namespace and boot visibility, only in `core/db/cache_lock.rs:170-180`. `pr_train.rs:1523-1535` borrows it by building a fake `CacheLockInfo`.
+    - F2, pid-namespace blindness (found by reading, not reproduced):
+      - R1, R2, R3's merge lock, R4 and R5 record no pid namespace or boot id. The BUG-2412 r1 finding says each sandboxed Bash call gets a fresh pid namespace, and a pid probed from another namespace names an unrelated process or none.
+      - Through the lenient rule, an absent pid reads dead:
+        - `merge_lock.rs:240 stale_reason` reclaims a train's merge lease while its holder is still running.
+        - `lease_owner_process_gone` (`core/liveness.rs:1502`) returns `Some(true)`, which becomes `ReclaimableClean` and then `pr_lease_takeover.rs:279-287` ForceEnd of a live lease.
+      - The BUG-2412 safeguard ("never close a train PR a live merge lease names", `pr_train.rs:~1590`) rests on that same namespace-blind merge-lock rule. PR-A must turn this into a failing test before anything else.
+    - F3, ownership never passes to the PR:
+      - No code path in `ship_from_seat.rs`, `punt_done.rs` or `gate/ship.rs` writes the lease when the PR opens.
+      - The finished lane's lease keeps the branch checked out. Every rework or review relaunch has to end it: `queue_cmd.rs:12884-12907` (`--steal`) and `session_start.rs:2509-2600`.
+      - STORY-2315 added the "seat HEAD in PR" check as a takeover heuristic at relaunch time, when it should be a transition at ship time. It still needs Dead proof first (`pr_lease_takeover.rs:84-95`), which most leases cannot give (§0).
+    - F4, the train owner lives on the forge:
+      - BUG-2412 put liveness in a PR body, which is mutable by anyone with forge write and parsed leniently (`pr_train.rs:1487-1506`).
+      - `train_rider_refusal` (`pr_train.rs:1408`) joins forge rows and merge leases to decide who rides what (BUG-2220).
+    - F5, the mailbox scope is gated on build identity, not state:
+      - `retire.rs:640-655` refuses retirement of any mail-bearing tree (`retire.rs:1442 mailbox_holds_bytes`: any file, including delivered mail and receipts) unless `activation.json` names this exact source build (`core/mailbox_lifecycle/mod.rs:1528 activation_state`).
+      - BUG-2411 patched this with `activation.rs:219 fresh_scan_admits`, a fresh /proc scan. That scan is the real evidence; the recorded build id is now only a cache of it. Each dev rebuild invalidates the cache, and the lease then sits `ending-retained`.
+    - F6, claims do not exclude:
+      - `claim.rs:446-480` decides "held" from a creator pid OR `lease_state_for` == Live. The cross-clone `decide_claim` has a third rule.
+      - A launcher that never claims (an Agent-tool fixer) is invisible, which is BUG-2138.
+      - A resumed headless child (`session.rs:6760 spawn_claude_headless_resume_granted`) registers no lane, unlike `session.rs:6179 run_vendor_headless_child` (TASK-2021).
+    - F7, `aida ps` reconstructs ownership:
+      - Rows are per lease, with cwd attribution (`dispatch_health_ps.rs`, `ps_integrate.rs:1644`).
+      - Relay processes cannot be linked to their lease (STORY-1665).
+      - A plain non-git copy reads "salvageable" (`dispatch_health_ps.rs:1104`, BUG-2198).
+
+    ## 2. Proposed design: one record, one judge
+    Module: `core/ownership/` (types plus the pure judge) and `ownership_cmd.rs` (I/O).
+
+    ```rust
+    enum WorkKey { Spec(SpecKey), Change(ChangeId), Train(ChangeId), Review { change: ChangeId, head: Sha }, MailScope(MailAnchorKey) }
+    // SpecKey = STORY-2324's gate/canon.rs SpecKey(Uuid). ChangeId = {forge, n}.
+
+    struct Witness { kind: WitnessKind, recorded_at }
+    enum WitnessKind {
+      Process { host, id: ProcessIdentity /* core/process_probe.rs:26, pid + "linux:<boot>:<ticks>" */, pid_ns: Option<u64> },
+      Heartbeat { at, every: Duration },     // touched by the per-turn hook the seat already runs
+    }
+    struct Holder { seat, role, session: LeaseId, tree: Option<SeatTree { path, kind, branch }>, witnesses: Vec<Witness> }
+    enum Phase { Leased, InPr { change, handed_off_at, head: Sha }, Reviewing { head }, Training { train: ChangeId }, Closed { why } }
+    struct Ownership { key: WorkKey, generation: u64, holder: Option<Holder>, phase: Phase }
+    ```
+
+    The one function, pure (no fs, process, git or clock access; facts are injected):
+    `fn judge(rec: &Ownership, host: &HostFacts, tree: &TreeReading, pr_head: Option<&Sha>, now) -> Verdict`
+    - `HostFacts` holds the host, boot id, own pid namespace, and a `probe: Fn(&ProcessIdentity) -> Probe` closure. `TreeReading` is today's `pr_lease_takeover::SeatReading` (Missing / Read{dirty, unpushed, head} / Unreadable), plus a `NotAGitTree` state (BUG-2198).
+    - `Verdict.owner` is one of `Alive{witness}`, `Dead{proof}` or `Unknown{why}`:
+      - Process witness:
+        - Another host gives Unknown.
+        - A different boot gives Dead (the host rebooted).
+        - A different or unreadable pid namespace gives Unknown.
+        - Otherwise `Probe` decides: gone, a zombie, or a different start tick gives Dead.
+        - A missing start identity is Unknown, never Alive and never Dead.
+      - Heartbeat witness: past `3 × every` gives Dead, otherwise Alive.
+      - Several witnesses: Alive if any is Alive. Dead only if every witness is Dead. Otherwise Unknown.
+    - `Verdict.reclaim` is one of `Free`, `EndBySafeRule`, `Refuse(reason)` or `Keep(reason)`:
+      - Phase InPr or Closed gives Free. The work belongs to the PR; the old seat holds nothing that blocks.
+      - Leased + Dead, with the tree Missing, or clean with no unpushed commits and HEAD ⊆ `pr_head`, gives EndBySafeRule. This is today's `pr_lease_takeover::classify`, moved here.
+      - Leased + Dead with a dirty tree or commits the PR lacks gives Refuse. The tree is retained as salvage and never ended automatically.
+      - Leased + Alive or Unknown gives Keep.
+
+    State lives on the primary checkout, with the same stance as STORY-2324's gate ledger:
+    - `.aida/ownership/<kind>/<key>.json`, one record per work key.
+    - Every write takes `.aida/ownership/.lock` (`core/file_lock.rs`), CAS-checks `generation`, writes atomically (`core/fs_atomic.rs`), and appends to `.aida/ownership/journal.jsonl`.
+    - `SessionLease` keeps only seat facts (tree, branch, env, role) plus `ownership: WorkKey`. The pid fields move into witnesses.
+
+    Operations, in `ownership_cmd.rs` (the only writers):
+    - `acquire(key, holder)`: `Free` or `EndBySafeRule` acquires. EndBySafeRule first ends the old session through `session_end`'s guarded path, with no `--force`. Anything else refuses and names the holder and the verdict (BUG-2138's "told who holds it").
+    - `handoff_to_pr(spec, change)`: run by the owner itself inside `aida ship`, after the push.
+      - It verifies the seat is clean and HEAD == the PR head on origin.
+      - It writes `Change(n)` as `InPr` and the spec as `InPr`, ends its own lease, and detaches its own seat HEAD (`git switch --detach`) so the branch is free.
+      - Rework then acquires `Change(n)` on a fresh seat. F3 disappears instead of being worked around.
+    - `begin_review(change, head)` replaces R2. `begin_train(train, riders)` replaces the R3 body line and the rider join: a rider is refused while a live `Training` record names it, and the merge lock is held by the train's `Training` owner. `release(key)` is called by the owner. `operator_release(key)` requires a human TTY and is the only override.
+    - Readers call `judge` and nothing else:
+      - `lease_state_for`, `lease_owner_process_gone`, `classify_stale_lease_recovery`
+      - `pr_lease_takeover` (deleted)
+      - `train_abandoned`/`live_trains`, `merge_lock::stale_reason`
+      - `claim.rs` held-check, the local half of `coordination::decide_claim`
+      - `lane_liveness` facts, `seat_occupancy::holder_liveness`
+      - `aida ps`, and mail retention
+    - `aida own show [KEY] [--compare] [--format json]` prints the record, the verdict and its evidence.
+
+    Mail scope (F5): a tree's `MailScope` is held by the session that owns the tree. Retirement asks three things:
+    - (a) Is the scope's owner Dead or Closed under `judge`?
+    - (b) Is no write permit live? This is today's quiesce step, unchanged.
+    - (c) Does `fresh_scan_admits()` pass now, under the lifecycle lock and after the fence?
+
+    The recorded build id stops being an input. `activation.json` becomes display or audit only, or is deleted (Q3). The BUG-2411 ruling stands: there is still no content-equivalence excuse, and an unadmitted writer of any build still refuses through (c).
+
+    Out of scope: mutexes that are not work ownership (`cache_lock`, `store_lock`, `drain_lock`, `solo_lock`, `triage_lease`). They may adopt `Probe` plus the pid namespace later. The cross-machine `coordination` claim stays the store projection (Q6).
+
+    ## 3. Migration (single user; one-time rewrite, no compatibility shims)
+    `aida own migrate --dry-run | --execute`, operator-run once. It refuses under a live drain lock, from a contained seat, or from a non-TTY.
+    1. Read every R1-R5 record: 256 leases, 362 lane records, review markers, merge locks, open `train/*` PR owner lines, and this clone's coordination claims.
+    2. Classify each one:
+       - Its branch has an open PR whose origin head contains the seat HEAD, and the tree is clean: `InPr`. The seat HEAD is detached only if `core/worktree_holders.rs` finds no process holding the tree; otherwise this is noted and left.
+       - The spec is completed or the PR merged, and the tree is clean or missing: `Closed`, and the lease is archived.
+       - A recorded pid is visible and alive from the operator's host namespace: a witness built from `/proc/<pid>/ns/pid` plus the boot id.
+       - Dirty, unpushed or unreadable: kept `Leased` with an `Unknown` owner and listed as salvage.
+       - Not a git tree: listed for the operator to archive or delete (BUG-2198).
+    3. Verify: every input file is accounted for. No record becomes Alive without a live probe. No tree is deleted, and no branch, PR or mailbox is touched except the HEAD detach in step 2.
+    4. Archive v0 (`.aida/sessions` owner fields, `.aida/lanes`, markers) to `.aida/ownership.v0-<date>.tar.zst`. Rollback is to restore the tar plus `aida dev rollback`.
+
+    ## 4. Specs this retires
+    - These close their class, and the code they added is replaced or deleted:
+      - STORY-2315: `pr_lease_takeover.rs` becomes `judge.reclaim` plus the handoff.
+      - BUG-2412: the PR-body owner line goes, replaced by the `Training` record with a pid-namespace witness.
+      - BUG-2220: the rider gate reads the ownership record.
+      - BUG-2411: the build id is no longer a gate input.
+      - BUG-2327: build identity survives only inside the fresh scan.
+    - These deferred specs are closed by PR-C:
+      - TASK-2021: the resume path acquires with its child witness, and lane records are derived from witnesses.
+      - BUG-2198: the `NotAGitTree` reading.
+    - These are delivered in part:
+      - BUG-2138: acquire refuses a second live holder everywhere ownership is taken. An Agent-tool fixer that skips AIDA entirely is closed only by regroup target 3 (one launcher).
+      - STORY-1665: option (3), linking processes to leases, is the witness itself. Option (2), the per-process display, is PR-D.
+      - TASK-1595: unpushed seat commits are already computed by the reclaim reading. Detecting dangling reflog commits is not delivered.
+    - These are evidence, not retirements:
+      - TASK-1715 waits on a live owner's voluntary handoff. The design never preempts a live owner, so nothing changes until that owner releases.
+      - CR-7 (seat wake) and TASK-1511 (cold boot) can use `judge` as their liveness source, which answers TASK-1511 Q2. Their authority questions remain the operator's.
+
+    ## 5. Threat model: no authority loosening
+    - Only `Dead` with positive proof ever frees work. Anything that cannot be determined is `Unknown`, which keeps the work: another host, another pid namespace, a missing start identity, or an unreadable tree. This tightens F2, where an absent pid in a foreign namespace reads dead today.
+    - A heartbeat is the only death proof for an owner that cannot be probed. Its expiry frees work only through `EndBySafeRule`: a clean tree fully contained in the PR, or a missing tree. A dirty tree is never ended without a human (Q1).
+    - The handoff is self-performed by the current owner, and is verified against the forge's origin head. No other process can move work into `InPr`.
+    - `--force` disappears from every automated path. `operator_release` and `session end --force` require a human TTY (Q5).
+    - The ownership record grants no review, merge or hold authority. Review independence, receipts, grants and gate state (STORY-2324) are unchanged and read nothing new from it. The record is mutual exclusion and liveness only.
+    - The mail retention gate keeps the strict QC1 evidence (a fresh, complete scan, fenced, under the lifecycle lock) and only stops trusting a stale cached copy of it. An unknown executable or an incomplete scan still refuses.
+    - Records are written only under the ownership lock with a generation CAS. A lost race refuses and never overwrites.
+    - The migration never creates an Alive owner without a live probe, never ends a dirty or unpushed seat, and archives v0.
+
+    ## 6. Test plan
+    - Pure matrix tests on `judge`:
+      - Every witness kind × same/other host, same/other boot, same/foreign/unreadable pid namespace, present/missing start identity.
+      - Multiple witnesses.
+      - Every phase × every tree reading (including NotAGitTree) × `pr_head` present/absent/not-ancestor.
+    - Incident fixtures, each reproducing the original failure first:
+      - STORY-2315: a dead, clean, in-PR lease, with no `--force` anywhere.
+      - BUG-2412 r1: a foreign-pidns train owner is never closed.
+      - F2: a merge lease held from another pid namespace is not reclaimed. This is a new test against today's `merge_lock`, written first and expected red.
+      - BUG-2411: another build, with a fresh scan that passes or fails.
+      - BUG-2138: a second acquire is refused, naming the holder.
+      - TASK-2021: a resumed child leaves a witness.
+    - Property test (proptest): adding a witness never turns Alive or Unknown into Dead. `Refuse` is never followed by an end.
+    - Handoff tests: a clean, pushed seat goes to InPr and its HEAD is detached. A dirty or ahead seat refuses. A non-owner calling handoff refuses.
+    - Migration tests on a synthetic v0 tree:
+      - Every input is accounted for.
+      - The migration is idempotent.
+      - Dirty and unpushed seats stay Leased.
+      - It refuses under a drain lock or from a contained seat.
+      - Rollback restores v0.
+    - Agreement test: one fixture through `queue work --steal`, a review launch, the train rider gate, lane liveness, `aida ps` and mail retention yields the same verdict.
+    - Ratchets:
+      - No `process_identity_is_alive|process_provably_dead|pid_is_alive|classify_lease_state` call outside `core/ownership/`, `core/liveness.rs` and an explicit lock-module allowlist.
+      - No `aida-train-owner:` literal.
+      - No `--force` argument built in non-test code that spawns `session end`.
+    - Gate: LIGHT. One targeted cargo filter per PR, plus `make check-ci-fast`.
+
+    ## 7. Slice plan (3 PRs, one optional 4th)
+    - PR-A, types and pure judge, with no decision change. Merges after STORY-2324 PR-A, because it imports `SpecKey`.
+      - Adds `core/ownership/` (types, `judge`) and pid namespace capture on `ProcessIdentity`/`Probe`.
+      - Adds `aida own show --compare`, which prints judge's verdict next to today's readers for every live record. It is a diagnostic only.
+      - Tests: matrix, property and incident tests, plus the F2 red test.
+    - PR-B, writers, handoff and the one-time rewrite:
+      - acquire/handoff/review/train/release are wired into session start, queue work, the review launch, claim, `pr train`, the merge lock and `aida ship`.
+      - Adds `aida own migrate` and its tests. The operator runs `--dry-run`, then `--execute`, right after the dev build promotes.
+    - PR-C, cutover and deletion:
+      - Every reader in §2 goes through `judge`.
+      - Deletes:
+        - `pr_lease_takeover.rs`
+        - the train owner line and its parser
+        - the lenient-rule calls in ownership paths
+        - `classify_lease_state`'s cwd/24h matrix (cwd attribution stays display-only)
+        - the merge-lock TTL reclaim of visible live holders
+        - the R5 lane files (derived instead)
+        - the activation build-id branch in `retire.rs:640-655`
+      - The resume path acquires (TASK-2021).
+      - Adds the ratchets and the agreement test.
+    - PR-D, optional: `aida ps` per-process rows from witnesses (STORY-1665 (2)), a doctor stranded-seat surface (part of TASK-1595), and docs (OVERVIEW plus the repository guide's sessions section).
+
+    Trailers: A and B use `(Refs STORY-2325)`. C carries `(STORY-2325)`.
+
+    Open questions for the signer:
+    - (Q1) Should heartbeat expiry (3 × interval, written by the per-turn hook) count as death proof for owners that cannot be probed? It would apply only through EndBySafeRule. I recommend yes. Without it, a crashed sandboxed lane stays Unknown forever and needs a human to release it.
+    - (Q2) Should the handoff detach the seat HEAD at ship time (owner-performed) so the branch is freed by transition? I recommend yes.
+    - (Q3) Should the recorded activation's build id be dropped as a retention gate input, keeping the fresh fenced scan plus the scope owner Dead/Closed? I read this as consistent with the BUG-2411 B+C ruling (A stays rejected). Then delete `activation.json` or keep it as audit; I recommend keeping it as audit.
+    - (Q4) The merge lock: should a TTL-expired holder that is visible and alive be kept (today it is reclaimed)? A hung train would then need `operator_release`. I recommend yes.
+    - (Q5) After cutover, should `session end --force` and `operator_release` require a human TTY? This retires the advisor's freelease.sh pattern. I recommend yes.
+    - (Q6) Should cross-clone `coordination` claims in aida-store stay a projection, with only their local liveness moving to `judge`? I recommend yes. A cross-machine ownership merge is out of scope, like STORY-2324's Q2.
+  created_at: 2026-11-03T00:41:15.905128805Z
+  modified_at: 2026-11-03T00:41:15.905128805Z
+  session_id: 699a868a-0d3a-4cf8-a3c5-7e300e7f93ef
 history:
 - id: 01a19ed2-508b-7401-9865-70193fa0d0af
   author: joe
