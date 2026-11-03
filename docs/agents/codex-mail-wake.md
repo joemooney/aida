@@ -15,6 +15,8 @@ The script above wakes one advisor thread for advisor mail. To wake other Codex
 agents for their **own** mail, use the project's single mail-wake service. It
 runs `aida mailbox wake-run` and watches every agent that is armed for mail wake.
 
+A detached lane (`aida agent new codex --bg`) is the exception: its `codex exec` worker has no live thread the service can deliver to, so its row is marked `unsupported` (or `off` with `--no-mail-wake`) and it reads mail on its next turn. Nothing resumes, forks or re-launches a detached worker to deliver mail. <!-- trace:STORY-2254 | ai:claude -->
+
 `aida agent new codex` arms this for you. The launch marks the agent's registry
 row `pending`. The Codex thread id first reaches AIDA through the agent's own
 SessionStart hook, so once that hook records the exact thread it arms the row

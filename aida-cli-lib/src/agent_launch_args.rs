@@ -1029,6 +1029,33 @@ pub enum AgentCommand {
         name: String,
     },
 
+    /// Show a detached launch attempt (`aida agent new codex --bg`): its
+    /// phase, owner, worker, lease, log and exit. Read-only.
+    // trace:STORY-2254 | ai:claude
+    #[clap(name = "launch-status")]
+    LaunchStatus {
+        /// The attempt id the launch printed.
+        #[clap(value_name = "ATTEMPT-UUID")]
+        attempt: String,
+    },
+
+    /// Reconcile one detached launch attempt whose processes are gone:
+    /// end its registry row, revoke its own child grant and release its
+    /// scope reservation. Never starts, resumes or stops anything, and
+    /// keeps the worktree, branch and lease.
+    // trace:STORY-2254 | ai:claude
+    #[clap(name = "recover-launch")]
+    RecoverLaunch {
+        /// The attempt id the launch printed.
+        #[clap(value_name = "ATTEMPT-UUID")]
+        attempt: String,
+        /// The attempt's receipt is unreadable: once nothing runs for it,
+        /// move the receipt out of admission (kept as evidence) so it no
+        /// longer holds a scope.
+        #[clap(long)]
+        retire_unknown: bool,
+    },
+
     /// Arm or retire a session's mail wake (internal; `agent new` arms it).
     // trace:STORY-HOME-096 | ai:claude
     #[clap(hide = true)]
@@ -1403,6 +1430,25 @@ pub enum AgentNewCommand {
         // trace:STORY-B6B1278890774EF993D2EBC327862470-150 | ai:claude
         #[clap(long, conflicts_with_all = ["noexec", "show_context", "show_prompt"])]
         rotate: bool,
+
+        /// Launch a detached Codex implementer or reviewer for SPEC: a
+        /// fresh `codex exec` worker under its own lease and child grant,
+        /// in the trusted native sandbox (`[agents] contained` plus
+        /// `[contained.vendors] codex = "native"`), supervised by AIDA
+        /// after this command returns. Prints the attempt id; it reports
+        /// "accepted" when the worker started, not when the work completed.
+        /// Inspect with `aida agent launch-status <ATTEMPT>`. Needs a seat
+        /// grant that delegates the role; never offers an inline grant.
+        // trace:STORY-2254 | ai:claude
+        #[clap(long = "bg", conflicts_with_all = ["rotate", "resume", "no_prompt", "bypass_sandbox"])]
+        bg: bool,
+
+        /// SPEC-ID to work, as a positional (only with `--bg`). Must match
+        /// `--spec` when both are given.
+        // trace:STORY-2254 | ai:claude
+        #[clap(value_name = "SPEC", requires = "bg")]
+        #[clap(value_parser = crate::spec_arg::spec_id)]
+        spec_positional: Option<String>,
     },
 
     /// Spawn Antigravity CLI with project-correct cwd/env and registry tracking.

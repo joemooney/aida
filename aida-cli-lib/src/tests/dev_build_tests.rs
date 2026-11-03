@@ -2094,3 +2094,33 @@ fn mail_wake_discovery_failure_reports_swap_and_does_not_skip_retention_scan() {
     assert!(out.contains("user manager unavailable"));
     assert!(steps.called("rerecord_retention"));
 }
+
+// trace:TASK-2790 | ai:codex
+#[test]
+fn cargo_diagnostics_only_flag_fetch_failures_and_preserve_output() {
+    for (message, expected) in [
+        ("error[E0308]: mismatched types\n", false),
+        ("test assertion failed\n", false),
+        ("error: failed to download crate\n", true),
+        ("error: Read-only file system (os error 30)\n", true),
+        ("error: failed to update registry\n", true),
+    ] {
+        let mut output = Vec::new();
+        assert_eq!(
+            stream_cargo_diagnostics(message.as_bytes(), &mut output).unwrap(),
+            expected,
+            "{message}"
+        );
+        assert_eq!(output, message.as_bytes());
+    }
+}
+
+// trace:TASK-2790 | ai:codex
+#[test]
+fn cargo_diagnostics_detect_marker_split_across_reads() {
+    // The marker crosses the reader's 8192-byte chunk boundary.
+    let message = format!("{}FAILED TO DOWNLOAD crate\n", "x".repeat(8188));
+    let mut output = Vec::new();
+    assert!(stream_cargo_diagnostics(message.as_bytes(), &mut output).unwrap());
+    assert_eq!(output, message.as_bytes());
+}
