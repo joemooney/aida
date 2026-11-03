@@ -1,0 +1,34 @@
+id: 01a1a1cd-d09b-7af2-a3b4-c9cdae8549e0
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-344
+agreed_id: STORY-2348
+title: 'Review PR-3295: [AI:codex] fix(train): wait for CI registration and retain unreadable trains (BUG-2423)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `bug-b6b1278890774ef993d2ebc327862470-192`.
+
+  - PR: <https://github.com/joemooney/aida/pull/3295>
+  - Branch: `bug-b6b1278890774ef993d2ebc327862470-192` → `main`
+
+  ## Covers
+
+  - BUG-2423
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 3295` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-03T14:26:22.491395526Z
+modified_at: 2026-11-03T14:26:22.491395526Z
+req_type: Story
+filed_at:
+  code_sha: 493f3ae1c526c7ab19f208112d426aecbf33c8b5
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 6c587ee595c
+  vendor: claude
+  session: f5eddefe-032d-4760-94ba-3a318cf3d1d1
