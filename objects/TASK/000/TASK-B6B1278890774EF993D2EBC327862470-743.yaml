@@ -1,0 +1,27 @@
+id: 01a1a24d-cf00-74a3-9894-da8dfdad1381
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-743
+title: 'minor (non-blocking, pre-existing): held_grants_in (seat_authority.rs ~238) sti…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on BUG-2419, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  minor (non-blocking, pre-existing): held_grants_in (seat_authority.rs ~238) still probes an unqualified binding pid as alive from inside a non-host pid namespace; diagnostic-only, not an authority path.
+  Reviewed sha: 21ba1f4436fb1148802957b5e459d40edbdeebdc
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-03T16:46:10.688534837Z
+modified_at: 2026-11-03T16:46:10.688534837Z
+req_type: Task
+tags:
+- carried-from:BUG-2419
+- finding-hash:d13cd391
+- from-review:BUG-2419
+- kind:carried-forward
+filed_at:
+  code_sha: 1fc6b8bdc6dd4337e4d9d82e9740568bdf5d9830
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 493f3ae1c52
+  vendor: claude
