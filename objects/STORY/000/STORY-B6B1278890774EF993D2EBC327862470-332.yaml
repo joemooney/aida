@@ -3,16 +3,25 @@ spec_id: STORY-b6b1278890774ef993d2ebc327862470-332
 agreed_id: STORY-2336
 title: aida awaiting flags an eligible PR left idle (approved + green + no hold, or pushed with no review running) for more than N minutes
 description: 'Operator request 2026-11-02 20:26 MST. This makes the advisor delivery contract''s metric (eligible-PR waiting time) a due signal, not a reminder. Definitions: an eligible-to-ship PR has an APPROVED verdict at its exact head, green CI at that head, and no armed merge-hold (or the hold''s release condition is met and the active mandate covers it). An eligible-to-review PR has a head that is pushed and up to date with main, no review verdict at that head, and no reviewer session running on it. Acceptance: (1) ''aida awaiting'' shows an ''idle_eligible'' section, one row per PR, with its state (ship|review), idle minutes since the condition first held, and the ONE next command; (2) the threshold comes from config ([advisor] eligible_idle_minutes, default 20); (3) the status line / AIDA hook banner shows a count when any row exceeds the threshold; (4) hermetic tests for each state, including a PR that becomes eligible, is acted on (row disappears), and a held PR whose release condition is not met (never listed); (5) ''aida awaiting --format json'' carries the rows. No new daemon: compute from the gate ledger, CI status and the lease/reviewer records at read time.'
-status: Approved
+status: InProgress
 priority: Medium
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-03T03:27:01.757035796Z
-modified_at: 2026-11-03T03:27:01.757035796Z
+modified_at: 2026-11-03T05:03:47.192553295Z
 req_type: Story
 tags:
 - area:advisor
 - area:awaiting
+history:
+- id: 01a19fca-bff8-7861-962b-b70530102a36
+  author: aida-session-start
+  timestamp: 2026-11-03T05:03:47.192551005Z
+  session_id: c58592f4-04ae-498b-9afd-87b0cc2bcde9
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 553f7d5984c6083a9f2b47cfa358ce57c438843b
   branch: main
