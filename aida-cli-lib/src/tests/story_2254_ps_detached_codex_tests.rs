@@ -33,7 +33,7 @@ fn detached_codex_lease(id: &str, pool: &Path, worker: u32, worker_start: &str) 
 scope = "TASK-2881"
 slug = "task-2881"
 owner = "t@t"
-worktree_path = "{pool}"
+worktree_path = {pool}
 branch = "task-2881-2"
 started_at = "{started}"
 hostname = "test-host"
@@ -44,7 +44,7 @@ child_grant_id = "72f655dc-78e8-4320-933b-8c10f9366e73"
 active_pid = {worker}
 active_pid_start_time = "{worker_start}"
 "#,
-        pool = pool.display(),
+        pool = aida_core::toml_quote::toml_string(&pool.to_string_lossy()),
         started = chrono::Utc::now().to_rfc3339(),
     )
 }
