@@ -62,6 +62,7 @@ struct FakeSteps {
     fail_smoke: bool,
     confirm_answer: bool,
     fail_guard: bool,
+    fail_mail_wake: bool,
     /// What `aida` on PATH resolves to (None: not on PATH).
     path_aida: Option<PathBuf>,
     /// The `aida` path and its contents at each smoke test.
@@ -86,6 +87,7 @@ impl FakeSteps {
             fail_smoke: false,
             confirm_answer: false,
             fail_guard: false,
+            fail_mail_wake: false,
             path_aida: None,
             smoked: Vec::new(),
             on_build: None,
@@ -160,6 +162,17 @@ impl BuildSteps for FakeSteps {
     }
     fn restart_mcp(&mut self, _l: &DevLayout) -> Result<()> {
         self.calls.push("restart_mcp".into());
+        Ok(())
+    }
+    fn restart_mail_wake(&mut self, out: &mut dyn Write) -> Result<()> {
+        self.calls.push("restart_mail_wake".into());
+        if self.fail_mail_wake {
+            bail!("user manager unavailable");
+        }
+        writeln!(
+            out,
+            "Restarted mail-wake service: aida-mail-wake-test.service"
+        )?;
         Ok(())
     }
     fn rerecord_retention(&mut self, _l: &DevLayout) -> RetentionRerecord {
@@ -497,6 +510,9 @@ fn successful_build_promotes_keeps_prev_and_restarts_mcp() {
         assert_eq!(read(&f.layout.built(n)), format!("NEW-{n}"));
     }
     assert!(steps.guarded(&f.layout.live("aida")) && steps.called("restart_mcp"));
+    // trace:BUG-2424 | ai:codex
+    assert!(steps.called("restart_mail_wake"));
+    assert!(out.contains("Restarted mail-wake service:"));
     assert!(out.contains("Promoted"), "{out}");
     // No staging leftovers.
     let mut names: Vec<_> = fs::read_dir(&f.layout.live_dir)
@@ -521,7 +537,8 @@ fn bug_2411_promote_rerecords_retention_activation_when_the_scan_passes() {
     assert_eq!(r.unwrap(), BuildOutcome::Promoted);
     let at = |step: &str| steps.calls.iter().position(|c| c == step).unwrap();
     assert!(
-        at("restart_mcp") < at("rerecord_retention"),
+        at("restart_mcp") < at("restart_mail_wake")
+            && at("restart_mail_wake") < at("rerecord_retention"),
         "{:?}",
         steps.calls
     );
@@ -568,6 +585,7 @@ fn bug_2411_build_only_never_rerecords_retention_activation() {
     let (r, _out) = run(&f, &opts, &mut steps);
     assert!(matches!(r.unwrap(), BuildOutcome::BuiltOnly(_)));
     assert!(!steps.called("rerecord_retention"));
+    assert!(!steps.called("restart_mail_wake"));
 }
 
 #[test]
@@ -1191,6 +1209,7 @@ fn rollback_respects_the_live_wave_guard_unless_forced() {
     run_dev_rollback(&f.layout, false, true, &mut steps, &mut Vec::new()).unwrap();
     assert!(!steps.calls.iter().any(|c| c.starts_with("guard:")));
     assert!(steps.called("restart_mcp"));
+    assert!(steps.called("restart_mail_wake"));
     assert_eq!(read(&f.layout.live("aida")), "PREV-aida");
 }
 
@@ -2059,6 +2078,21 @@ fn rollback_pins_the_rolled_away_sha_against_the_autopromote_tick() {
         state.error.as_deref(),
         Some(crate::dev_autopromote::ROLLED_BACK_ERROR)
     );
+}
+
+// trace:BUG-2424 | ai:codex
+#[test]
+fn mail_wake_discovery_failure_reports_swap_and_does_not_skip_retention_scan() {
+    let f = fixture();
+    put_live(&f.layout, "OLD");
+    let mut steps = FakeSteps::new(clean_main());
+    steps.fail_mail_wake = true;
+    let (result, out) = run(&f, &DevBuildOptions::default(), &mut steps);
+    assert_eq!(result.unwrap(), BuildOutcome::Promoted);
+    assert_eq!(read(&f.layout.live("aida")), "NEW-aida");
+    assert!(out.contains("live binaries were swapped"));
+    assert!(out.contains("user manager unavailable"));
+    assert!(steps.called("rerecord_retention"));
 }
 
 // trace:TASK-2790 | ai:codex

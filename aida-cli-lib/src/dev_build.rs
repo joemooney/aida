@@ -410,6 +410,9 @@ pub(crate) trait BuildSteps {
     fn version_sha(&mut self, aida: &Path) -> Option<String>;
     /// Restart MCP servers still running a replaced binary.
     fn restart_mcp(&mut self, layout: &DevLayout) -> Result<()>;
+    /// Restart enabled mail-wake services after replacing the live pair.
+    // trace:BUG-2424 | ai:codex
+    fn restart_mail_wake(&mut self, out: &mut dyn Write) -> Result<()>;
     /// After a promote, re-record an existing mail-retention activation for
     /// the new live build, only when a fresh scan shows every mail writer
     /// running it.
@@ -655,6 +658,7 @@ pub(crate) fn run_dev_build(
                      request, or restart your MCP client"
                 )?;
             }
+            restart_mail_wake_report(steps, out)?;
             // Ruling C: carry the retention activation over to the new build
             // only when a fresh scan admits it; otherwise name the command.
             // trace:BUG-2411 | ai:claude
@@ -1762,6 +1766,10 @@ impl BuildSteps for RealSteps {
         )
     }
 
+    fn restart_mail_wake(&mut self, out: &mut dyn Write) -> Result<()> {
+        crate::mailbox_wake_run::restart_enabled_services(out)
+    }
+
     fn rerecord_retention(&mut self, layout: &DevLayout) -> RetentionRerecord {
         rerecord_retention_real(layout).unwrap_or_else(|e| RetentionRerecord::NotRecorded {
             why: format!("{e:#}"),
@@ -1850,6 +1858,7 @@ pub(crate) fn run_dev_rollback(
              (or their `aida mcp-serve` processes) to pick up the restored build"
         )?;
     }
+    restart_mail_wake_report(steps, out)?;
     Ok(())
 }
 
@@ -2025,6 +2034,14 @@ pub(crate) fn print_live_status() {
             }
         }
     }
+}
+
+// trace:BUG-2424 | ai:codex
+fn restart_mail_wake_report(steps: &mut dyn BuildSteps, out: &mut dyn Write) -> Result<()> {
+    if let Err(error) = steps.restart_mail_wake(out) {
+        writeln!(out, "warning: live binaries were swapped, but mail-wake service discovery failed ({error:#}); inspect `systemctl --user list-unit-files 'aida-mail-wake-*.service'` and restart enabled units")?;
+    }
+    Ok(())
 }
 
 #[cfg(test)]
