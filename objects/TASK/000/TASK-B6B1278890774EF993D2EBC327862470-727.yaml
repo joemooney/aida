@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-727
 agreed_id: TASK-2881
 title: 'Live probe for STORY-2254 AC1: a detached Codex lane binds its own grant and lease and shows in aida ps (no-op)'
 description: 'Operator live-run probe for PR #3273 (STORY-2254 ac0b1daf). The lane launched on this spec must make NO changes. Run exactly one shell command, ''sleep 90'', then reply ''PROBE DONE'' and exit. The advisor rejects this spec after the run and records the aida ps evidence on STORY-2254.'
-status: Approved
+status: InProgress
 priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-03T02:55:28.039090255Z
-modified_at: 2026-11-03T07:17:35.500669059Z
+modified_at: 2026-11-03T07:18:01.208720283Z
 req_type: Task
 tags:
 - mode:drain
@@ -54,6 +54,13 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Approved
+- id: 01a1a045-a4f8-71d1-ac73-8effda15a3cb
+  author: aida-session-start
+  timestamp: 2026-11-03T07:18:01.208716449Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 553f7d5984c6083a9f2b47cfa358ce57c438843b
   branch: main
