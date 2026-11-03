@@ -1,0 +1,39 @@
+id: 01a19f3f-293f-7051-831d-f80b688051c6
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-188
+agreed_id: BUG-2419
+title: aida pr ship refuses an independent reviewer's approval as self-approval on an operator-authored PR (PR-3277)
+description: |
+  ## What happened
+  PR-3277 (TASK-2877) is a one-line .codex/config.toml change authored by the operator at their terminal, with no implementer lane. An independent `aida queue work PR-3277 --role reviewer --no-human` lane (lease 01a19efaf0c9, grant 1552a676) recorded APPROVED at bddbdc7, and CI was green. Then `aida pr ship 3277`, from both the advisor and the operator's deputy TTY, refused with rc=23:
+
+    PR-3277's approval (recorded by `claude-reviewer (claude reviewer seat)`) came from the session that implemented it — an implementer cannot approve its own work.
+
+  (/tmp/aida-ship3277.log; gate/ship.rs:922 ApprovalAuthorityRefusal::AuthorSession.) The operator merged with `gh pr merge` on 2026-11-02 19:15, bypassing the gate.
+
+  ## Evidence
+  - Gate ledger .aida/gate-ledger/PR-3277.jsonl seq 2-3: actor seat=reviewer, identity [session:01a19efaf0c9, session:01a19efa-06c6-..., shell:2@linux-starttime:26079813, proc:2@linux-starttime:26079813, lease:01a19efaf0c9]. Note pid 2: the recorder ran inside a pid namespace (bwrap).
+  - The reviewer lease file has since been removed. The headless log is .aida/headless-logs/pr-3277-01a19efa-06c6-79b1-a26d-c353063e4180.jsonl.
+
+  ## Hypotheses (UNVERIFIED; the implementer confirms one with a failing test first)
+  1. author_sessions (gate/review_authority.rs ~L968) counts any `is_work_lease` whose branch equals the head branch. If the reviewer's lease recorded branch `chore/codex-workspace-write` instead of `pr-3277`, the reviewer matches itself as an author.
+  2. `shell:2@linux-starttime:N` / `proc:2@...` are pid-namespace-local tokens (the same class as BUG-2417), so an unrelated namespaced process with pid 2 and an equal starttime could overlap. Less likely, because the starttimes differ.
+
+  ## Expected
+  A reviewer lane's own lease never counts as an author of the PR it reviews. An operator-authored PR with no implementer lease is approvable by an independent reviewer lane. Identity tokens taken inside a pid namespace are not compared across namespaces.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-03T02:31:19.103221790Z
+modified_at: 2026-11-03T02:31:19.103221790Z
+req_type: Bug
+tags:
+- area:gate
+filed_at:
+  code_sha: 553f7d5984c6083a9f2b47cfa358ce57c438843b
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 3a3b9b34b6b
+  vendor: claude
+  session: 125337a4-7dd3-483b-9c56-3665173938ae
