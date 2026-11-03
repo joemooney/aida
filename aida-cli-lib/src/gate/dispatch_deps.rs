@@ -281,6 +281,11 @@ pub(crate) const FACADE_EXTERNAL_LEAVES: &[(&str, &str)] = &[
         "aida_core::RequirementType",
         "spec type vocabulary for the mandate exclusions",
     ),
+    // trace:STORY-2324 | ai:claude
+    (
+        "aida_core::RelationshipType::SupersededBy",
+        "the superseded-by edge the canonical spec set records",
+    ),
     ("aida_core::Storage", "legacy store for the operator hold"),
     (
         "aida_core::external_tool_output::GH_BRANCH_POLICY_MERGE_REFUSAL",

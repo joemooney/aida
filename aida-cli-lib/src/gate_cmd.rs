@@ -15,6 +15,10 @@ use colored::Colorize;
 pub(crate) mod gate_cmd_args;
 pub(crate) use gate_cmd_args::*;
 
+// trace:STORY-2324 | ai:claude
+#[path = "gate_state_cmd.rs"]
+mod gate_state_cmd;
+
 use aida_core::gates::{self, GateDef, GateVerdict};
 
 use crate::cli::GateCommand;
@@ -53,6 +57,11 @@ pub(crate) fn handle_gate_command(cmd: &GateCommand) -> Result<()> {
             println!("{}", gate.checklist);
             Ok(())
         }
+        GateCommand::State {
+            change,
+            compare,
+            json,
+        } => gate_state_cmd::run_state(change, *compare, *json),
         GateCommand::Run { name, spec, json } => {
             let gate = gates::resolve(std::slice::from_ref(name)).map_err(anyhow::Error::msg)?;
             let project_root = find_project_root()?;
