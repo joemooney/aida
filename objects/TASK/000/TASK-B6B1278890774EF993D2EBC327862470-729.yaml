@@ -11,13 +11,24 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-03T08:37:09.154000416Z
-modified_at: 2026-11-03T08:37:09.154000416Z
+modified_at: 2026-11-03T13:50:27.621637390Z
 req_type: Task
 tags:
 - carried-from:BUG-2418
 - finding-hash:e63aac0f
 - from-review:BUG-2418
 - kind:carried-forward
+relationships:
+- rel_type: Supersedes
+  target_id: 01a1a08e-487d-79b3-88d5-65fef3dbcd48
+  created_at: 2026-11-03T13:50:27.621633477Z
+  created_by: joe
+history:
+- id: 01a1a1ac-f365-7d02-97f3-f8460ea8a486
+  author: joe
+  timestamp: 2026-11-03T13:50:28.709588294Z
+  session_id: f5eddefe-032d-4760-94ba-3a318cf3d1d1
+  changes: []
 filed_at:
   code_sha: 6c587ee595ce70f5fcc48480cfdddc8246cf158c
   branch: main
