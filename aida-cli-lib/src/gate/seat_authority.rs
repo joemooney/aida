@@ -52,6 +52,15 @@ pub(crate) struct SeatGrant {
     // trace:STORY-2215 | ai:claude
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub origin: Option<String>,
+    /// STORY-2254: the SHA-256 of the one-use detached launch capability the
+    /// gate minted with this child grant ([`issue_detached_launch_child`]).
+    /// Cleared, under the record lock, by the one acceptance that binds the
+    /// grant to its worker ([`accept_detached_launch_child`]); a record
+    /// without it can never be accepted. The capability itself is never
+    /// written anywhere: only its digest.
+    // trace:STORY-2254 | ai:claude
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub launch_capability: Option<String>,
 }
 
 /// The [`SeatGrant::origin`] of a parent grant `aida agent new` mints inline.
@@ -1837,6 +1846,7 @@ fn mint_direct(
         revoked_at: None,
         binding,
         origin: origin.map(str::to_string),
+        launch_capability: None,
     };
     write_grant(&grant)?;
     Ok(grant)
@@ -2210,6 +2220,258 @@ pub(crate) fn issue_launch_child(
     issue_child_for(project_root, requested_seat, child_subject, contained)
 }
 
+/// STORY-2254: the one-use authority a detached Codex launch carries from the
+/// gate's issuance of its own child grant to the single acceptance that binds
+/// that grant to the actual worker process. Not `Clone`: it moves from the
+/// dispatcher, over the supervisor's private inherited control channel, into
+/// [`accept_detached_launch_child`], which consumes it. A journal, an
+/// environment selector, a known grant id or a copied receipt is never this
+/// capability: the grant record holds only its digest.
+// trace:STORY-2254 | ai:claude
+#[derive(Debug)]
+pub(crate) struct DetachedLaunchCapability {
+    inner: DetachedLaunchTransfer,
+    /// `proc:` token of the supervisor that received the capability from its
+    /// issuer (set only by [`DetachedLaunchCapability::receive`]).
+    supervisor: Option<String>,
+}
+
+/// The wire form of a [`DetachedLaunchCapability`], for the ONE transfer over
+/// a private inherited descriptor. Never written to a file, env or argv.
+// trace:STORY-2254 | ai:claude
+#[derive(Debug, Serialize, Deserialize)]
+pub(crate) struct DetachedLaunchTransfer {
+    grant_id: String,
+    parent_grant_id: String,
+    seat: String,
+    subject: String,
+    project_root: PathBuf,
+    attempt: String,
+    scope: String,
+    /// `proc:` token of the process that minted the grant (the dispatcher).
+    issuer: String,
+    nonce: String,
+}
+
+fn launch_capability_digest(nonce: &str) -> String {
+    use sha2::{Digest, Sha256};
+    format!("{:x}", Sha256::digest(nonce.as_bytes()))
+}
+
+impl DetachedLaunchCapability {
+    pub(crate) fn grant_id(&self) -> &str {
+        &self.inner.grant_id
+    }
+    pub(crate) fn attempt(&self) -> &str {
+        &self.inner.attempt
+    }
+    /// Hand the capability over for its one transfer. Consumes it.
+    pub(crate) fn into_transfer(self) -> DetachedLaunchTransfer {
+        self.inner
+    }
+    /// The supervisor's receipt of the transferred capability. Proves the
+    /// first lineage link: the process that sent it (this process's live
+    /// parent) is exactly the issuer the grant was minted under. A parent
+    /// that already exited (re-parented to init/a subreaper) cannot be
+    /// proven, so the launch aborts before any worker can run.
+    /// Test-only: the capability as an in-process supervisor holds it after
+    /// [`Self::receive`] (whose parent-link proof needs a real dispatcher →
+    /// supervisor process pair). Every acceptance check still applies.
+    #[cfg(test)]
+    pub(crate) fn received_in_process_for_test(transfer: DetachedLaunchTransfer) -> Self {
+        Self {
+            inner: transfer,
+            supervisor: own_process_token(),
+        }
+    }
+    pub(crate) fn receive(transfer: DetachedLaunchTransfer) -> Result<Self> {
+        #[cfg(unix)]
+        let parent = std::os::unix::process::parent_id();
+        #[cfg(not(unix))]
+        let parent = 0u32;
+        let parent_token = pid_binding_token(parent)
+            .context("detached launch: the issuing launcher's start identity could not be read")?;
+        anyhow::ensure!(
+            parent_token == transfer.issuer,
+            "detached launch: this supervisor's parent is not the launcher that issued the grant (it exited or the capability was replayed); no worker was started"
+        );
+        let me = own_process_token()
+            .context("detached launch: this supervisor's start identity could not be read")?;
+        Ok(Self {
+            inner: transfer,
+            supervisor: Some(me),
+        })
+    }
+}
+
+/// STORY-2254: mint the detached worker's OWN child grant and capture the
+/// one-use capability for it, in one gate-owned step. The parent is validated
+/// exactly as [`issue_launch_child`] validates it (delegation, roster,
+/// inline-parent rule) and the grant is minted by the same core: empty
+/// delegable seats, expiry bounded by the parent, keyring key installed
+/// before the worker exists. `require_key` makes a keyring failure a refusal:
+/// a native-sandboxed worker's tool shells can present the grant only by its
+/// key, even though native is not AIDA containment.
+// trace:STORY-2254 | ai:claude
+pub(crate) fn issue_detached_launch_child(
+    project_root: &Path,
+    requested_seat: &str,
+    child_subject: &str,
+    require_key: bool,
+    attempt: &str,
+    scope: &str,
+) -> Result<(SeatGrant, DetachedLaunchCapability)> {
+    let issuer = own_process_token().context(
+        "cannot issue a detached launch grant: this launcher's start identity could not be read",
+    )?;
+    let grant = issue_child_for(project_root, requested_seat, child_subject, require_key)?;
+    if require_key && !has_key_binding(&grant) {
+        let _ = revoke_by_id(&grant.id);
+        return Err(anyhow::Error::new(ChildGrantRefused(anyhow::anyhow!(
+            "cannot launch the detached `{requested_seat}` worker: its grant key could not be put in a session keyring, so its sandboxed tool shells could not present the grant"
+        ))));
+    }
+    let nonce = new_key_secret();
+    let digest = launch_capability_digest(&nonce);
+    let stamped = update_grant(
+        &grant.id,
+        |g| {
+            if g.launch_capability.as_deref() == Some(digest.as_str()) {
+                return false;
+            }
+            g.launch_capability = Some(digest.clone());
+            true
+        },
+        |g| g.launch_capability.as_deref() == Some(digest.as_str()),
+    );
+    let parent_grant_id = grant.parent_grant_id.clone().unwrap_or_default();
+    if let Err(error) = stamped.and_then(|_| {
+        anyhow::ensure!(!parent_grant_id.is_empty(), "child grant has no parent");
+        Ok(())
+    }) {
+        let _ = revoke_by_id(&grant.id);
+        return Err(error.context("cannot record the detached launch capability on its grant"));
+    }
+    let capability = DetachedLaunchCapability {
+        inner: DetachedLaunchTransfer {
+            grant_id: grant.id.clone(),
+            parent_grant_id,
+            seat: requested_seat.to_string(),
+            subject: child_subject.to_string(),
+            project_root: project_root.to_path_buf(),
+            attempt: attempt.to_string(),
+            scope: scope.to_string(),
+            issuer,
+            nonce,
+        },
+        supervisor: None,
+    };
+    let grant = read_grant(&grant.id)?;
+    Ok((grant, capability))
+}
+
+/// STORY-2254: the ONE sanctioned binding of a detached launch's own child
+/// grant to its actual worker. Consumes the capability. Refuses unless:
+/// the capability was received by this very process from its issuer
+/// ([`DetachedLaunchCapability::receive`]); the worker is this process's own
+/// child with exactly `worker_start` (no PID reuse); the grant is the one
+/// issued for this attempt, still carries its unconsumed capability digest
+/// and its issuer binding, is unrevoked and unexpired; and the parent grant
+/// is unrevoked, unexpired and its principal still holds the seat on the
+/// roster. The digest is cleared in the same locked write that adds the
+/// worker's binding, so a second acceptance is refused.
+// trace:STORY-2254 | ai:claude
+pub(crate) fn accept_detached_launch_child(
+    capability: DetachedLaunchCapability,
+    project_root: &Path,
+    worker_pid: u32,
+    worker_start: &str,
+) -> Result<()> {
+    let DetachedLaunchCapability { inner, supervisor } = capability;
+    let supervisor =
+        supervisor.context("detached launch capability was not received by a supervisor")?;
+    anyhow::ensure!(
+        own_process_token().as_deref() == Some(supervisor.as_str()),
+        "detached launch capability belongs to another supervisor process"
+    );
+    anyhow::ensure!(
+        inner.project_root == project_root,
+        "detached launch capability was issued for another project"
+    );
+    anyhow::ensure!(
+        worker_pid != std::process::id() && !worker_start.is_empty(),
+        "detached launch: refusing to bind the supervisor itself or a worker without start identity"
+    );
+    anyhow::ensure!(
+        crate::agent_registry::parent_pid_of(worker_pid) == Some(std::process::id()),
+        "detached launch: process {worker_pid} is not this supervisor's own child"
+    );
+    let token = pid_binding_token(worker_pid)
+        .context("detached launch: the worker's start identity could not be read")?;
+    anyhow::ensure!(
+        token
+            == crate::gate::review_authority::process_token("proc", worker_pid, Some(worker_start)),
+        "detached launch: process {worker_pid} is no longer the worker that was spawned (start identity changed)"
+    );
+    let now = Utc::now();
+    let parent = read_grant(&inner.parent_grant_id)
+        .context("detached launch: the parent grant is missing or unreadable")?;
+    anyhow::ensure!(
+        parent.revoked_at.is_none() && parent.expires_at > now,
+        "detached launch: the parent grant was revoked or expired"
+    );
+    roster_check(project_root, &parent.principal, &inner.seat).map_err(|refusal| {
+        anyhow::anyhow!(
+            "{}",
+            refusal.describe(&format!(
+                "detached `{}` worker seat is no longer allowed",
+                inner.seat
+            ))
+        )
+    })?;
+    let digest = launch_capability_digest(&inner.nonce);
+    let refusal = std::cell::RefCell::new(None::<String>);
+    let applied = update_grant(
+        &inner.grant_id,
+        |grant| {
+            let why = if grant.seat != inner.seat || grant.subject != inner.subject {
+                Some("its seat or subject changed")
+            } else if grant.parent_grant_id.as_deref() != Some(inner.parent_grant_id.as_str()) {
+                Some("it is not a child of the validated parent")
+            } else if grant.revoked_at.is_some() || grant.expires_at <= Utc::now() {
+                Some("it was revoked or expired")
+            } else if grant.launch_capability.as_deref() != Some(digest.as_str()) {
+                Some("it was already accepted or was not issued for this launch")
+            } else if !grant.binding.iter().any(|b| b == &inner.issuer) {
+                Some("it is not bound to its issuing launcher")
+            } else {
+                None
+            };
+            if let Some(why) = why {
+                *refusal.borrow_mut() = Some(why.to_string());
+                return false;
+            }
+            grant.launch_capability = None;
+            if !grant.binding.contains(&token) {
+                grant.binding.push(token.clone());
+            }
+            true
+        },
+        |grant| grant.launch_capability.is_none() && grant.binding.contains(&token),
+    )?;
+    if let Some(why) = refusal.into_inner() {
+        bail!(
+            "detached launch: refusing to bind grant {}: {why}",
+            inner.grant_id
+        );
+    }
+    anyhow::ensure!(
+        applied,
+        "detached launch: the worker binding was not applied"
+    );
+    Ok(())
+}
+
 /// Refuse a contained `seat` launch whose grant key this launcher could not
 /// put in a session keyring, BEFORE the launch spends anything (a review, or
 /// the reset of the prior round's verdict). Probes with a throwaway key that
@@ -2315,6 +2577,7 @@ pub(crate) fn issue_child_from(
         revoked_at: None,
         binding,
         origin: None,
+        launch_capability: None,
     };
     write_grant(&grant)?;
     Ok(grant)
@@ -2793,6 +3056,10 @@ mod task_1752_grant_env_guard_tests;
 mod bug_2200_roster_store_tests;
 
 // trace:BUG-1934 | ai:claude
+#[cfg(test)]
+#[path = "tests/story_2254_detached_launch_tests.rs"]
+mod story_2254_detached_launch_tests;
+
 #[cfg(test)]
 #[path = "tests/bug_1934_grant_binding_tests.rs"]
 mod bug_1934_grant_binding_tests;

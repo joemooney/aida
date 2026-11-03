@@ -45,6 +45,7 @@ impl Fixture {
             revoked_at: None,
             binding: Vec::new(),
             origin: None,
+            launch_capability: None,
         };
         let mut hold = mh::typed_hold(37, HoldReasonKind::Rework, "rework", Some(HEAD.into()));
         hold.verdict_ref = Some(mh::VerdictRef::new(
