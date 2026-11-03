@@ -11,7 +11,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-03T08:37:11.941869541Z
-modified_at: 2026-11-03T13:51:36.037512168Z
+modified_at: 2026-11-03T13:51:59.013446310Z
 req_type: Task
 tags:
 - carried-from:BUG-2418
@@ -27,6 +27,13 @@ relationships:
   target_id: 01a1a08e-3cd0-7420-bb35-2097e0cb7d6a
   created_at: 2026-11-03T13:51:36.037508271Z
   created_by: joe
+comments:
+- id: 01a1a1ae-5425-7452-abfc-2aee581a1d9e
+  author: joe
+  content: 'Advisor ruling: bundle TASK-HOME-732 (check-ci-gates.py sccache_fallback must pass the repo root as cwd to sccache_probe_bin, like run_plan) into this fix; one PR, same files.'
+  created_at: 2026-11-03T13:51:59.013446310Z
+  modified_at: 2026-11-03T13:51:59.013446310Z
+  session_id: f5eddefe-032d-4760-94ba-3a318cf3d1d1
 history:
 - id: 01a1a1ad-4bb9-7b12-b1ff-85f19c7d33f3
   author: joe
