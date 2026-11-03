@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-02T19:20:50.092491662Z
-modified_at: 2026-11-03T00:41:15.905128805Z
+modified_at: 2026-11-03T00:46:07.149891223Z
 req_type: Story
 tags:
 - architecture
@@ -236,6 +236,23 @@ comments:
   created_at: 2026-11-03T00:41:15.905128805Z
   modified_at: 2026-11-03T00:41:15.905128805Z
   session_id: 699a868a-0d3a-4cf8-a3c5-7e300e7f93ef
+- id: 01a19ede-d92d-7762-9aa2-62a1f368a840
+  author: joe
+  content: |-
+    ADVISOR SIGNOFF APPROVED, with binding amendments A1-A7 (claude advisor, 2026-11-02 17:47 MST). Independent: I did not author this sketch. The review was done by a fresh-context read-only reviewer (14 file:line claims spot-checked) and adopted by the advisor. This signs the architecture and evidence contract only.
+    A1. Witnesses are recorded from the host's view. A sandboxed CLI pid is never recorded; a write from a separate pid namespace records no process witness. Test it.
+    A2. Combination rule: a process witness that is Unknown (foreign pidns, other host, no start identity) ABSTAINS. The verdict is Dead only when at least one witness is Dead, none is Alive, and the rest abstain. An Alive process always wins. Matrix test (foreign pidns + stale heartbeat = Dead; live process + stale heartbeat = Alive).
+    A3. Heartbeats come from a background ticker, not only per-turn hooks. The expiry window is at least 3x the interval and longer than the longest tool timeout. Test: an idle interactive seat with a live process is never ended.
+    A4. Migration: 'alive' only with a matching start identity; a pid without a start identity is Unknown. --execute refuses from a non-host pidns. The --dry-run counts are posted here before --execute.
+    A5. The merge-lock namespace fix ships NOW as its own BUG (filed separately), not in PR-C.
+    A6. PR-B dual-writes; PR-C only after 'aida own show --compare' shows zero unexplained diffs (expected diffs listed). PR-B names how a contained seat writes .aida/ownership/ via the broker or permit path, never by widening the sandbox.
+    A7. Free never touches the tree: retirement still goes through EndBySafeRule or salvage.
+    Q1 yes (under A2/A3, via EndBySafeRule). Q2 yes (detach checks clean seat + HEAD==origin PR head under the ownership lock; refuse rather than half-apply). Q3 yes (the build id is not a gate input; activation.json stays as audit; a separate-pidns scan stays incomplete, so retirement refuses). Q4 yes, plus a doctor line for a stuck or unknown train lease. Q5 yes. Q6 yes.
+    Factual corrections: leases lack creator_pid/active_pid entirely; F6's acquire site must be named (claim.rs:446-480 is unclaim); review_marker Marker is at :75.
+    Slices A -> B -> C (D optional): STRICT review each, LIGHT gate, operator TTY for 'aida own migrate --execute'. Dispatch PR-A after STORY-2324 PR-A merges.
+  created_at: 2026-11-03T00:46:07.149891223Z
+  modified_at: 2026-11-03T00:46:07.149891223Z
+  session_id: ee0bf351-6b17-486f-a38e-cfbb1343c426
 history:
 - id: 01a19ed2-508b-7401-9865-70193fa0d0af
   author: joe
