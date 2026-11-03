@@ -82,21 +82,58 @@ pub(crate) fn codex_tool_env_overrides(child: &Command) -> Result<Vec<String>> {
     Ok(args)
 }
 
+/// The named refusal for a Codex launch surface that is not wired for the
+/// AIDA posture. Only the receipt-owning headless boundary
+/// (`containment::launch`) runs Codex under `codex = "aida"`.
+// trace:TASK-2708 | ai:claude
+pub(crate) const UNWIRED_AIDA_POSTURE: &str =
+    "Codex AIDA posture requires the receipt-owning headless launch boundary";
+
+/// Fail closed: every Codex child that reaches this finalizer is, by
+/// construction, NOT on the receipt-owning boundary (that path bypasses
+/// `prepare_launch`). Refuse it when either its own stamp says `aida` or the
+/// trusted default-branch policy of the project it launches into resolves
+/// Codex to the AIDA posture. The policy is re-derived here rather than
+/// trusted from the stamp, so a surface that stamps `native`/`none`, or never
+/// stamps at all, cannot launch Codex uncontained under `codex = "aida"`.
+// trace:TASK-2708 | ai:claude
+pub(crate) fn refuse_unwired_aida_posture(child: &Command) -> Result<()> {
+    let explicit = |key: &str| {
+        child
+            .get_envs()
+            .find(|(k, _)| *k == key)
+            .and_then(|(_, v)| v)
+            .map(std::path::PathBuf::from)
+    };
+    anyhow::ensure!(
+        explicit("AIDA_CONTAINMENT_POSTURE").as_deref() != Some(std::path::Path::new("aida")),
+        "{UNWIRED_AIDA_POSTURE}"
+    );
+    let root = explicit("AIDA_PROJECT_ROOT")
+        .or_else(|| child.get_current_dir().map(std::path::Path::to_path_buf));
+    // Tests without an explicit child root must not inherit this checkout's
+    // policy (mirrors the `session::containment_posture` test seam).
+    #[cfg(not(test))]
+    let root = root.or_else(|| crate::find_main_worktree_root().ok());
+    let Some(root) = root else {
+        return Ok(());
+    };
+    let trusted = crate::agent_config::load_contained_vendor(&root, "codex")
+        .ok()
+        .flatten();
+    anyhow::ensure!(
+        trusted.as_deref() != Some("aida"),
+        "{UNWIRED_AIDA_POSTURE}: the trusted policy sets [contained.vendors] codex = \"aida\" \
+         and this launch surface is not wired for it; refusing to launch Codex without AIDA \
+         containment"
+    );
+    Ok(())
+}
+
 /// Call once, after the child grant, identity and customization are final,
 /// immediately before spawn/exec. Other vendors never enter this adapter.
 pub(crate) fn prepare_launch(child: &mut Command) -> Result<()> {
-    // AIDA-posture children must enter the receipt-owning launch boundary.
-    // Unhandled interactive/background surfaces refuse until PR2.
-    // trace:TASK-2707 | ai:codex
-    anyhow::ensure!(
-        child
-            .get_envs()
-            .find(|(k, _)| *k == "AIDA_CONTAINMENT_POSTURE")
-            .and_then(|(_, v)| v)
-            .and_then(|v| v.to_str())
-            != Some("aida"),
-        "Codex AIDA posture requires the receipt-owning headless launch boundary"
-    );
+    refuse_unwired_aida_posture(child)?;
     // The child Command is the full source of truth for whitelisted metadata:
     // under Codex's default inherit="all", a key the launcher process has but
     // the child never assigned would otherwise leak into the tool shell and
@@ -473,6 +510,11 @@ fn bounded_status(
 #[cfg(test)]
 #[path = "tests/bug_2398_codex_tool_env_tests.rs"]
 mod tests;
+
+// trace:TASK-2708 | ai:claude
+#[cfg(test)]
+#[path = "tests/task_2708_codex_fail_closed_tests.rs"]
+mod task_2708_codex_fail_closed_tests;
 
 #[cfg(test)]
 pub(crate) fn tool_env_keys_for_test() -> &'static [&'static str] {

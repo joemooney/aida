@@ -126,14 +126,32 @@ pub(crate) fn notice_leaf(id: &str) -> Result<std::path::PathBuf> {
     Ok(notice_base()?.join(id))
 }
 
+/// Marker in the grant-notices base: the one-time legacy sweep has run.
+// trace:TASK-2708 | ai:claude
+const LEGACY_SWEPT_MARKER: &str = ".legacy-notices-swept-v1";
+
 /// Host-only surgery, no migration or compatibility reads. Never unlink the
 /// new permanent lock. A contained caller cannot write session-grants.
+/// ONE-TIME (TASK-2708 ruling 4): the hook runs per tool call, so after the
+/// first complete sweep a marker in the grant-notices base turns every later
+/// call into a single `stat`, never a readdir of session-grants.
+// trace:TASK-2708 | ai:claude
 fn sweep_legacy_notices() {
     if std::env::var_os("AIDA_CONTAINED").is_some() {
         return;
     }
-    if let Ok(dir) = crate::gate::seat_authority::grant_dir() {
-        if let Ok(entries) = std::fs::read_dir(dir) {
+    if let (Ok(grants), Ok(base)) = (crate::gate::seat_authority::grant_dir(), notice_base()) {
+        sweep_legacy_notices_once(&grants, &base);
+    }
+}
+
+pub(crate) fn sweep_legacy_notices_once(grants: &Path, base: &Path) {
+    let marker = base.join(LEGACY_SWEPT_MARKER);
+    if marker.exists() {
+        return;
+    }
+    match std::fs::read_dir(grants) {
+        Ok(entries) => {
             for entry in entries.flatten() {
                 let name = entry.file_name();
                 let name = name.to_string_lossy();
@@ -142,6 +160,12 @@ fn sweep_legacy_notices() {
                 }
             }
         }
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        // Unreadable now: retry on a later call rather than marking it done.
+        Err(_) => return,
+    }
+    if std::fs::create_dir_all(base).is_ok() {
+        let _ = std::fs::write(&marker, b"");
     }
 }
 

@@ -293,3 +293,34 @@ fn task_2707_notice_leaf_epoch_and_crossed_dedup() {
     assert!(dir.path().join(id).join("notice.lock").exists());
     assert!(!dir.path().join(format!("{id}.notice.json")).exists());
 }
+
+/// TASK-2708 ruling 4: the legacy sweep runs ONCE. After the first complete
+/// pass, a marker in the grant-notices base makes later hook calls skip the
+/// session-grants readdir, so a legacy file planted afterwards survives.
+// trace:TASK-2708 | ai:claude
+#[test]
+fn task_2708_legacy_notice_sweep_is_one_time_with_marker() {
+    let dir = tempfile::tempdir().unwrap();
+    let grants = dir.path().join("session-grants");
+    let base = dir.path().join("grant-notices");
+    std::fs::create_dir(&grants).unwrap();
+    let legacy = grants.join("11111111-1111-4111-8111-111111111111.notice.json");
+    let lock = grants.join("11111111-1111-4111-8111-111111111111.notice.lock");
+    let grant = grants.join("11111111-1111-4111-8111-111111111111.json");
+    for path in [&legacy, &lock, &grant] {
+        std::fs::write(path, b"{}").unwrap();
+    }
+    super::sweep_legacy_notices_once(&grants, &base);
+    assert!(!legacy.exists() && !lock.exists());
+    assert!(grant.exists(), "canonical grants are never swept");
+    assert!(base.join(super::LEGACY_SWEPT_MARKER).exists());
+    // Second call: marker present, no readdir, so a new legacy file survives.
+    std::fs::write(&legacy, b"{}").unwrap();
+    super::sweep_legacy_notices_once(&grants, &base);
+    assert!(legacy.exists());
+    // An unreadable grant dir is not marked done.
+    let fresh = dir.path().join("fresh-notices");
+    std::fs::write(dir.path().join("not-a-dir"), b"").unwrap();
+    super::sweep_legacy_notices_once(&dir.path().join("not-a-dir"), &fresh);
+    assert!(!fresh.join(super::LEGACY_SWEPT_MARKER).exists());
+}

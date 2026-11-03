@@ -327,6 +327,42 @@ fn refuse_chatgpt(home: &Path) -> Result<()> {
     );
     Ok(())
 }
+/// The host kernel prerequisites `contained_host.py::host_contained` checks
+/// first (x86_64 broker, Landlock ABI 1..=8, seccomp user notification),
+/// checked here BEFORE any lane state exists so an unsupported host gets the
+/// typed cause up front, and the live tests skip on exactly the same gate.
+// trace:TASK-2708 | ai:claude
+pub(crate) fn host_prerequisites() -> Result<()> {
+    anyhow::ensure!(
+        std::env::consts::ARCH == "x86_64",
+        "socket broker architecture unsupported"
+    );
+    // landlock_create_ruleset(NULL, 0, LANDLOCK_CREATE_RULESET_VERSION)
+    let abi =
+        unsafe { libc::syscall(444, 0 as libc::c_long, 0 as libc::c_long, 1 as libc::c_long) };
+    anyhow::ensure!(
+        abi > 0,
+        "Landlock capability unavailable; socket-policy selection refused"
+    );
+    anyhow::ensure!(
+        abi < 9,
+        "Landlock Unix-connect backend required on ABI>=9; broker not selected"
+    );
+    // seccomp(SECCOMP_GET_NOTIF_SIZES, 0, &sizes)
+    let mut sizes = [0u16; 3];
+    anyhow::ensure!(
+        unsafe {
+            libc::syscall(
+                317,
+                3 as libc::c_long,
+                0 as libc::c_long,
+                sizes.as_mut_ptr(),
+            )
+        } == 0,
+        "seccomp notification size probe unavailable"
+    );
+    Ok(())
+}
 fn pipe() -> Result<(File, File)> {
     let mut fds = [-1; 2];
     anyhow::ensure!(
@@ -361,6 +397,7 @@ impl PreparedLaunch {
             Path::new("/usr/bin/bwrap").is_file(),
             "contained launch requires /usr/bin/bwrap"
         );
+        host_prerequisites()?;
         let sha = crate::trusted_config::local_trusted_default_branch_sha(root)
             .context("trusted containment policy unavailable")?;
         let body = crate::trusted_config::read_config_at_sha(root, &sha)

@@ -1348,9 +1348,19 @@ arm preserves existing Claude behavior until its separate migration. Interactive
 background, resume/fork, Claude migration and OpenCode integration remain later
 slices. The authenticated operator run is still required for acceptance.
 
+Under `codex = "aida"` every other Codex surface fails closed. This covers
+interactive `aida agent new`, `--bg`, resume, coordinator, phase-driver
+advisor/CI-fix, compete, dispatch and `aida do`. They all finalize through
+`codex_tool_env::prepare_launch`, which re-reads the trusted policy for the
+child's project. It refuses by name ("Codex AIDA posture requires the
+receipt-owning headless launch boundary") whatever posture the surface stamped.
+A test-time inventory pins every Codex spawn path.
+<!-- trace:TASK-2708 | ai:claude -->
+
 Expiry-notice state now uses `~/.aida/grant-notices/<grant-id>/notice.{json,lock}`
 (or the configured AIDA home). A Codex lane gets only its own notice directory;
 canonical session grants and revocation locks remain host-only. Host notice calls
-best-effort remove legacy notice files without migrating them; one duplicate
-notice after upgrade is accepted.
+remove legacy notice files once, without migrating them. A marker in the
+grant-notices base then skips the session-grants scan on every later per-tool-call
+hook. One duplicate notice after upgrade is accepted.
 <!-- trace:TASK-2707 | ai:codex -->

@@ -36,10 +36,26 @@ fn task_2707_directory_leaf_refuses_session_grants() {
     assert!(!p.native().contains("session-grants"));
 }
 
+/// An operator/CI lane that must exercise the live boundary sets this; a
+/// skip is then a failure instead of a silent pass.
+// trace:TASK-2708 | ai:claude
+fn live_required() -> bool {
+    std::env::var("AIDA_REQUIRE_CODEX_CONTAINMENT_LIVE").as_deref() == Ok("1")
+}
+fn skip(reason: &str) -> bool {
+    assert!(!live_required(), "required-live contained launch: {reason}");
+    eprintln!("SKIP: {reason}");
+    false
+}
 fn live_available() -> bool {
     if !Path::new("/usr/bin/bwrap").exists() {
-        eprintln!("SKIP: /usr/bin/bwrap unavailable");
-        return false;
+        return skip("/usr/bin/bwrap unavailable");
+    }
+    // trace:TASK-2708 | ai:claude — the same kernel gate the helper applies
+    // (x86_64, Landlock ABI 1..=8, seccomp notification): CI enables
+    // bwrap+userns in every shard, so a newer kernel must skip, not fail.
+    if let Err(error) = host_prerequisites() {
+        return skip(&format!("{error:#}"));
     }
     let result = Command::new("/usr/bin/bwrap")
         .args(["--unshare-all", "--ro-bind", "/", "/", "--", "/bin/true"])
@@ -51,8 +67,7 @@ fn live_available() -> bool {
             err.contains("namespace") || err.contains("Operation not permitted"),
             "unexpected bwrap failure: {err}"
         );
-        eprintln!("SKIP: userns unavailable: {err}");
-        return false;
+        return skip(&format!("userns unavailable: {err}"));
     }
     true
 }
@@ -217,6 +232,8 @@ print('race confined')
 "#,
     );
 }
+// trace:TASK-2708 | ai:claude — /proc and namespaces: Linux-only evidence.
+#[cfg(target_os = "linux")]
 #[test]
 fn task_2707_registry_and_launch_tokens_absent_in_outer_and_inner() {
     if !live_available() {
@@ -274,11 +291,35 @@ print('exact env outer and inner')
             .map(str::to_owned)
         )
     );
-    std::fs::write(plan._state.path().join("lease"), "synthetic lease").unwrap();
-    std::fs::write(plan._state.path().join("store"), "synthetic store").unwrap();
-    let mut out = tempfile::tempfile().unwrap();
+    // trace:TASK-2708 | ai:claude — ruling 3: the PRODUCTION lease, lane
+    // registry and headless-log writers run on this contained path (as in
+    // `session::run_vendor_headless_child`), against a real lease in the
+    // production layout; nothing below is written by the test itself except
+    // the pre-existing lease the launcher would have claimed.
+    let root = plan._state.path().to_path_buf();
+    let lease_id = "task2707gi01";
+    std::fs::create_dir_all(crate::leases::leases_dir(&root)).unwrap();
+    std::fs::write(
+        crate::leases::lease_path(&root, lease_id),
+        "id = \"task2707gi01\"\nscope = \"TASK-2707\"\nslug = \"task-2707\"\n\
+         owner = \"codex\"\nworktree_path = \"/nonexistent/task2707\"\n\
+         branch = \"codex/task-2707\"\nstarted_at = \"2026-11-03T00:00:00Z\"\nhostname = \"h\"\n",
+    )
+    .unwrap();
+    let logs = root.join(".aida").join("headless-logs");
+    std::fs::create_dir_all(&logs).unwrap();
+    let log_path = logs.join("codex-task2707gi01.log");
+    let out = File::create(&log_path).unwrap();
     plan.command.stderr(out.try_clone().unwrap());
     let mut run = plan.spawn(out.try_clone().unwrap().into()).unwrap();
+    let worker = run.receipt().worker_pid();
+    crate::session::stamp_lease_active_pid_at(&root, lease_id, worker).unwrap();
+    crate::lane_liveness::register_headless_lane_for_child(
+        &log_path,
+        Some(lease_id),
+        "codex",
+        worker,
+    );
     let receipt_bytes = serde_json::to_vec(run.receipt()).unwrap();
     for secret in [
         "synthetic-only-key-2707",
@@ -303,22 +344,47 @@ print('exact env outer and inner')
         }
     }
     run.release().unwrap();
-    assert!(run.child.wait().unwrap().success());
-    // Scan every persistent fixture artifact, including synthetic lease/store
-    // and log sentinels; API credentials must never be persisted by the helper.
-    for entry in std::fs::read_dir(run._state.path()).unwrap() {
-        let entry = entry.unwrap();
-        if entry.file_type().unwrap().is_file() {
-            let b = std::fs::read(entry.path()).unwrap();
-            assert!(!b.windows(23).any(|w| w == b"synthetic-only-key-2707"));
+    let status = run.child.wait().unwrap();
+    assert!(status.success());
+    crate::lane_liveness::finish_headless_lane_for_child(&log_path, Some(lease_id), Some(status));
+    // Positive controls: each production writer really wrote its artifact.
+    let lease = std::fs::read_to_string(crate::leases::lease_path(&root, lease_id)).unwrap();
+    assert!(lease.contains(&format!("active_pid = {worker}")), "{lease}");
+    let lanes = root.join(".aida").join("lanes");
+    assert!(
+        lanes.join(format!("headless-{lease_id}.json")).exists(),
+        "lane registry record missing"
+    );
+    let log = std::fs::read_to_string(&log_path).unwrap();
+    assert!(log.contains("exact env outer and inner"), "{log}");
+    // Scan EVERY persisted file under the lane state (lease, lane registry,
+    // headless log, receipt, generated config) for the API key and tokens.
+    let mut pending = vec![root.clone()];
+    let mut scanned = 0;
+    while let Some(dir) = pending.pop() {
+        for entry in std::fs::read_dir(dir).unwrap() {
+            let entry = entry.unwrap();
+            let kind = entry.file_type().unwrap();
+            if kind.is_dir() {
+                pending.push(entry.path());
+            } else if kind.is_file() {
+                scanned += 1;
+                let b = std::fs::read(entry.path()).unwrap();
+                for secret in [
+                    "synthetic-only-key-2707",
+                    "handle-canary-2707",
+                    "registry-canary-2707",
+                ] {
+                    assert!(
+                        !b.windows(secret.len()).any(|w| w == secret.as_bytes()),
+                        "{secret} persisted in {}",
+                        entry.path().display()
+                    );
+                }
+            }
         }
     }
-    use std::io::{Seek, SeekFrom};
-    out.seek(SeekFrom::Start(0)).unwrap();
-    let mut log = String::new();
-    out.read_to_string(&mut log).unwrap();
-    assert!(log.contains("exact env outer and inner"));
-    assert!(!log.contains("synthetic-only-key-2707"));
+    assert!(scanned >= 4, "lease, lane record, log and receipt scanned");
 }
 #[test]
 fn task_2707_receipt_after_preflight_before_model_execution() {
@@ -384,8 +450,11 @@ fn task_2707_native_composition_companion_empty_grant_and_generated_profile() {
         .collect();
     env.insert("PATH".into(), std::env::var("PATH").unwrap());
     env.insert("CODEX_HOME".into(), home.to_string_lossy().into_owned());
-    let program = resolve_program(&Command::new("codex"), &env)
-        .expect("installed Codex required when userns/bwrap are available");
+    // trace:TASK-2708 | ai:claude — CI installs bwrap but not Codex.
+    let Ok(program) = resolve_program(&Command::new("codex"), &env) else {
+        skip("installed Codex unavailable for native composition");
+        return;
+    };
     let check = r#"
 import os,socket,errno,subprocess
 subprocess.run(['/usr/bin/git','add','tracked'],check=True)
@@ -459,6 +528,7 @@ fn task_2707_no_deserialized_receipt_grants_applied_credit() {
         Some(&receipt)
     ));
 }
+#[cfg(target_os = "linux")]
 #[test]
 fn task_2707_daemon_dies_with_supervisor_and_private_state_not_reused() {
     if !live_available() {
@@ -502,6 +572,7 @@ fn task_2707_hardlinked_writable_alias_refused() {
         .to_string()
         .contains("hard-linked writable alias"));
 }
+#[cfg(target_os = "linux")]
 #[test]
 fn task_2707_parent_leaked_socket_fd_absent_in_child() {
     use std::os::unix::net::UnixStream;

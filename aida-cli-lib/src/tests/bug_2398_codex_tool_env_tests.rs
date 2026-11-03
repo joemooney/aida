@@ -240,7 +240,8 @@ fn real_codex_roles(native: bool) {
         .env("AIDA_SESSION_SCOPE", "TASK-1")
         .env(
             "AIDA_CONTAINMENT_POSTURE",
-            if native { "native" } else { "aida" },
+            // trace:TASK-2708 | ai:claude — `aida` is refused at this finalizer.
+            if native { "native" } else { "none" },
         )
         .env("AIDA_SESSION_ID", "bug2398-independent-session")
         .env("AIDA_AGENT_TYPE", "codex")
@@ -1347,7 +1348,9 @@ fn bug_2398_real_codex_inherit_all_drops_unassigned_launcher_context() {
         .env("AIDA_SESSION_ROLE", "implementer")
         .env("AIDA_USER", "bug2398-child")
         .env("AIDA_PROJECT_ROOT", root)
-        .env("AIDA_CONTAINMENT_POSTURE", "aida")
+        // trace:TASK-2708 | ai:claude — an `aida` stamp is refused by name at
+        // this finalizer; the whitelisted key still carries a public value.
+        .env("AIDA_CONTAINMENT_POSTURE", "native")
         .env("AIDA_AGENT_TYPE", "codex");
     let aida_path = crate::test_exec::matching_aida_cli();
     let _aida_probe = crate::kernel::test_aida_exe::set(aida_path.clone());

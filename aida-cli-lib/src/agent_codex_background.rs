@@ -204,6 +204,12 @@ pub(crate) fn resolve_native_posture(
         "`--bg` needs a contained posture and `[agents] contained` is off; set `[agents] contained = true` (Codex then runs in its native sandbox, not AIDA-contained). Refusing to launch it uncontained"
     );
     let posture = session::containment_posture_in(project_root, "codex", true)?;
+    // trace:TASK-2708 | ai:claude — the detached lane is not wired for AIDA.
+    anyhow::ensure!(
+        posture != session::ContainmentPosture::Aida,
+        "{}",
+        crate::codex_tool_env::UNWIRED_AIDA_POSTURE
+    );
     anyhow::ensure!(
         posture == session::ContainmentPosture::Native,
         "`--bg` Codex requires the native sandbox posture; resolved {}",
