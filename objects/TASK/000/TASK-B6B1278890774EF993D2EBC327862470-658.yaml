@@ -11,7 +11,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-01T09:06:27.587006751Z
-modified_at: 2026-11-01T09:16:11.075880093Z
+modified_at: 2026-11-03T18:14:41.060733298Z
 req_type: Task
 tags:
 - architecture
@@ -26,6 +26,13 @@ relationships:
   target_id: 01a1965b-e10f-7bb0-bdaf-18ab8392312a
   created_at: 2026-11-01T09:16:11.075877085Z
   created_by: joe
+comments:
+- id: 01a1a29e-d6a4-7fc3-a4f8-93cd46efac6c
+  author: joe
+  content: 'ADVISOR RULING (2026-11-03 10:45, advisor): step 1 of this task ships the unshipped TASK-2707 PR1 work. TASK-2707 was closed by fcb4d8d, but the F-H ruling (per-grant notice leaf <AIDA home>/.aida/grant-notices/<grant-id>/) and the F-ENV ruling (env_clear plus an exact allow-list on the host-helper spawn, with no --clearenv on this path) never reached main. The lane''s partial edits are salvaged on branch task-2707-fh-salvage (276f2d7, base 553f7d5). Cherry-pick it onto a fresh branch from main, finish it against the F-H and F-ENV rulings on STORY-2238 (comments 2026-11-02 19:45 and 20:12), including their REQUIRED TESTS, then do this task''s own scope. If the combined change exceeds about 800 lines, ship step 1 as its own PR first (Refs TASK-2708). Decide every non-security detail yourself. Stop with a FORK only for an authority, confinement or credential choice the rulings do not settle. LIGHT gate: one targeted cargo test -p aida-cli-lib --lib <filter> plus make check-ci-fast.'
+  created_at: 2026-11-03T18:14:41.060733298Z
+  modified_at: 2026-11-03T18:14:41.060733298Z
+  session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
 history:
 - id: 01a1965c-5ce8-7781-b88f-317b0b12bab5
   author: joe
