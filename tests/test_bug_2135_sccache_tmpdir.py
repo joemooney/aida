@@ -8,6 +8,9 @@ clear restart hint on gate failure, and respect RUSTC_WRAPPER opt-outs.
 trace:BUG-2135 | ai:antigravity
 """
 
+import contextlib
+import io
+from unittest import mock
 import importlib.util
 import os
 import sys
@@ -337,6 +340,61 @@ class TestBug2418CargoHomeNote(unittest.TestCase):
             self.assertEqual(
                 note, "new dependencies are fetched on the host: run cargo fetch outside the lane"
             )
+
+
+# trace:TASK-2790 | ai:codex
+class TestTask2790FailureHints(unittest.TestCase):
+    def test_hint_requires_fetch_evidence_and_unwritable_home(self):
+        for message, read_only, expected in (
+            ("error[E0308]: mismatched types", True, False),
+            ("test assertion failed", True, False),
+            ("error: failed to download crate", True, True),
+            ("error: Read-only file system (os error 30)", True, True),
+            ("error: failed to update registry", True, True),
+            ("error: failed to download crate", False, False),
+        ):
+            for stream in (1, 2):
+                with self.subTest(message=message, read_only=read_only, stream=stream):
+                    stdout = io.TextIOWrapper(io.BytesIO(), write_through=True)
+                    stderr = io.TextIOWrapper(io.BytesIO(), write_through=True)
+                    note = check_ci.CARGO_HOME_READ_ONLY_NOTE if read_only else None
+                    with mock.patch.object(check_ci, "default_branch", return_value="main"), \
+                         mock.patch.object(check_ci, "cargo_home_read_only_note", return_value=note), \
+                         contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+                        result = check_ci.run_plan(
+                            REPO, "fast", [("fixture", f"echo '{message}' >&{stream}; exit 1")],
+                            {"fixture": "fast"}, {**os.environ, "RUSTC_WRAPPER": ""},
+                        )
+                    self.assertEqual(result, 1)
+                    self.assertIn(message.encode(), (stdout if stream == 1 else stderr).buffer.getvalue())
+                    self.assertEqual("CARGO_HOME is read-only here" in stderr.buffer.getvalue().decode(), expected)
+
+    def test_successful_gate_preserves_output_and_status(self):
+        stdout = io.TextIOWrapper(io.BytesIO(), write_through=True)
+        with contextlib.redirect_stdout(stdout):
+            passed, _, evidence = check_ci.run_gate(
+                REPO, "fixture", "echo 'failed to download'; exit 0", dict(os.environ)
+            )
+        self.assertTrue(passed)
+        self.assertTrue(evidence)
+        self.assertIn(b"failed to download", stdout.buffer.getvalue())
+
+    def test_start_path_uses_repo_config_from_an_unrelated_cwd(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td) / "repo"
+            (root / ".cargo").mkdir(parents=True)
+            wrapper = root / "refused-sccache"
+            wrapper.write_text("#!/bin/sh\nexit 2\n")
+            wrapper.chmod(0o755)
+            (root / ".cargo" / "config.toml").write_text(
+                f'[build]\nrustc-wrapper = "{wrapper}"\n'
+            )
+            # No sccache on PATH or in CARGO_HOME: only the supplied root has it.
+            env = {"CARGO_HOME": str(Path(td) / "empty"), "PATH": ""}
+            with mock.patch.dict(os.environ, env, clear=True), \
+                 mock.patch.object(check_ci, "ensure_sccache_server", return_value=True):
+                result = check_ci.gate_env(root)
+            self.assertEqual(result["RUSTC_WRAPPER"], "")
 
 
 if __name__ == "__main__":
