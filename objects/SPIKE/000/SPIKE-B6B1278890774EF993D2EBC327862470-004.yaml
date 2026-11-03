@@ -23,11 +23,12 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-31T19:23:12.694681525Z
-modified_at: 2026-10-31T20:19:38.986729363Z
+modified_at: 2026-11-03T02:42:27.887807136Z
 req_type: Spike
 tags:
 - air-gap
 - id-allocation
+- spike:deliverable-produced
 relationships:
 - rel_type: Supersedes
   target_id: 01a1936d-7960-7510-8d5f-dfe276da71b9
@@ -40,6 +41,17 @@ comments:
   created_at: 2026-10-31T20:19:38.986729363Z
   modified_at: 2026-10-31T20:19:38.986729363Z
   session_id: f5694f22-ff09-4e87-8934-e79adca4efba
+- id: 01a19f49-5daf-7ec3-a480-cc20a1f405b3
+  author: research-agent
+  content: |-
+    [research-lane] source-grounded analysis (agent: claude / deep-research).
+
+    A root pool grant carried by Git bundle was accepted on an inside bare hub, and inside clones claimed disjoint blocks through hub-ordered rejection/retry and minted agreed IDs. Clean return bundles combined divergent claims; deliberately overlapping claims were refused without changing the tested refs or store state. The final ID of a delegated block fails save admission after consuming its counter, while subsequent adds fall back locally. A synthetic generic nested-pool probe also showed weaker claim-acceptance checks than the supported hub-format path; recursive inside-to-team grants remain unsupported by the root-only CLI. The evidence supports bounded hardening of the direct workflow before any recursive authority expansion.
+
+    Full analysis + citations: `/tmp/claude-1000/-home-joe-ai-aida/125337a4-7dd3-483b-9c56-3665173938ae/scratchpad/research/2026-11-03-spike-708-research.md`
+  created_at: 2026-11-03T02:42:27.887807136Z
+  modified_at: 2026-11-03T02:42:27.887807136Z
+  session_id: 125337a4-7dd3-483b-9c56-3665173938ae
 history:
 - id: 01a1939d-5b6e-77e1-a48f-f78d777d0267
   author: joe
@@ -70,3 +82,18 @@ filed_at:
   aida_build_sha: 53817a25ee8
   vendor: claude
 human_only: true
+decision_request:
+  question: Should AIDA first harden and document direct root-to-inside bundle grants, invest now in recursive offline pool delegation, or defer inside agreed-ID support?
+  choices:
+  - label: Bounded hardening first
+    consequence: Repair final-slot admission and the generic claim-evidence gap, clarify direct root-to-hub scope, and add two-hub bundle regression coverage; defer recursive delegation and replenishment design.
+    resolution: tag:+spike708:bounded-hardening
+  - label: Recursive delegation now
+    consequence: Design and implement parent-home-accepted subgrants and portable ancestor evidence for root-to-inside-to-team delegation, including compatibility, replay, and replenishment semantics.
+    resolution: tag:+spike708:recursive-delegation
+  - label: Defer inside agreed IDs
+    consequence: Use node-local IDs inside the gap and postpone support claims for inside agreed-ID operation until a broader authority design is approved.
+    resolution: tag:+spike708:deferred
+  recommended: 0
+  rationale: The direct bundle workflow already works through grant import, inside-hub claim ordering, non-final minting, return union, and overlap refusal. Bounded repairs address observed failures without prematurely expanding the authority model. Recursive grants require a separate reviewed design for offline ancestor acceptance and stable authority identity.
+  asked_at: 2026-11-03T02:42:27.887807136Z
