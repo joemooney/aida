@@ -12,12 +12,12 @@ description: |-
   2. When an active mandate exists, renew behaves as today (extends it).
   3. With no prior mandate at all, renew errors with the exact 'aida mandate start ...' line to run.
   4. About 60 minutes before an active mandate expires, the operator gets a prompt: the status line/hook banner shows 'MANDATE expires in Nm, run: aida mandate renew', and a coordination/mail notice goes to the operator and the advisor seat. The advisor's due jobs surface the same item so the advisor can batch it to the operator early.
-status: InProgress
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-03T13:41:47.751489803Z
-modified_at: 2026-11-03T15:35:57.088396082Z
+modified_at: 2026-11-03T20:04:03.223050251Z
 req_type: Story
 relationships:
 - rel_type:
@@ -105,6 +105,20 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1a302-f80b-7b81-bd48-a7f13ca46c89
+  author: aida-auto-bump
+  timestamp: 2026-11-03T20:04:03.211051189Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1a302-f817-7773-a4ab-23d4e413ef10
+  timestamp: 2026-11-03T20:04:03.223045637Z
+  agent: aida
+  commit_sha: b8f4eaa715bee567834972cffbc3bed2cdb71dc6
+  summary: 'Round 2: all 6 round-1 findings fixed; AC1-AC4 each traced to tests (revive w/ same scope + fresh TTL + human-TTY + old id/expiry message; in-place extend; exact start line; 60m banner/statusline, deduped operator+advisor mail, advisor/operator due job). CI green at head except the policy merge-hold-gate. One non-blocking note: synthetic mandate-renewal due job is not ack-able via ''aida schedule done''.'
+  review_verdict: approved
 filed_at:
   code_sha: 6c587ee595ce70f5fcc48480cfdddc8246cf158c
   branch: main
@@ -113,3 +127,7 @@ filed_at:
   aida_build_sha: 6c587ee595c
   vendor: claude
   session: f5eddefe-032d-4760-94ba-3a318cf3d1d1
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-03T20:04:03.211043554Z
+  completion_sha: b8f4eaa715bee567834972cffbc3bed2cdb71dc6
