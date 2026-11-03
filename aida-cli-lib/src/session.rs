@@ -2052,11 +2052,9 @@ fn spawn_vendor_headless_forking(
         tuning.effort.as_deref(),
         fork_thread,
     )?;
-    // trace:TASK-2631 | ai:codex
-    let posture = containment_posture(vendor, contained)?;
     // The boundary (the contained mailbox) is set up before any grant exists.
-    // trace:STORY-2326 | ai:claude
-    let ctx = headless_launch_context(vendor, program, args, posture)?;
+    let posture = containment_posture(vendor, contained)?; // trace:TASK-2631 | ai:codex
+    let ctx = headless_launch_context(vendor, program, args, posture)?; // trace:STORY-2326 | ai:claude
     let mut cmd = crate::launch::spawn_agent(&ctx)?;
     // trace:BUG-b6b1278890774ef993d2ebc327862470-045 | ai:claude
     let child_grant = crate::gate::seat_authority::issue_launch_child(

@@ -259,8 +259,8 @@ fn scanner_catches_every_mutant_spelling() {
         "fn f(c: &mut Command) { c.env(\"AIDA_SESSION_ROLE\", \"advisor\"); }",
         "fn f(c: &mut Command) { c.env(crate::gate::seat_authority::GRANT_ENV, g); }",
         "fn f(c: &mut Command) { c.env_remove(\"AIDA_CONTAINED\"); }",
-        "fn f() { std::env::set_var(\"AIDA_SESSION_ROLE\", r); }",
-        "fn f() { std::env::remove_var(\"AIDA_CONTAINED\"); }",
+        "fn f() { std::env::set_var(\"AIDA_SESSION_ROLE\", r); }", // allow-raw-env-write: scanner fixture string, not a write
+        "fn f() { std::env::remove_var(\"AIDA_CONTAINED\"); }", // allow-raw-env-write: scanner fixture string, not a write
         "fn f(c: &mut Command) { c.envs([(\"AIDA_CONTAINMENT_POSTURE\", \"none\")]); }",
         "fn f(c: &mut Command) { c.env(aida_core::launch_policy::ROLE_ENV, r); }",
     ];

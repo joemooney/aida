@@ -12,7 +12,7 @@ use std::fmt;
 
 /// `AIDA_SESSION_ROLE`: the seat a child runs as.
 pub const ROLE_ENV: &str = "AIDA_SESSION_ROLE";
-/// `AIDA_SESSION_GRANT`: the child's grant selector (an explicit `""` is a
+/// The session grant variable: the child's grant selector (an explicit `""` is a
 /// baseline child).
 pub const GRANT_ENV: &str = "AIDA_SESSION_GRANT";
 /// `AIDA_SESSION_PURPOSE`: describes the launcher's own session.
@@ -297,8 +297,8 @@ mod tests {
     #[test]
     fn posture_flags_refused_in_caller_argv() {
         let refused: &[&[&str]] = &[
-            &["--settings", "/tmp/s.json"],
-            &["--settings=/tmp/s.json"],
+            &["--settings", "s.json"],
+            &["--settings=s.json"],
             &["--permission-mode", "bypassPermissions"],
             &["--permission-mode=plan"],
             &["--dangerously-skip-permissions"],
