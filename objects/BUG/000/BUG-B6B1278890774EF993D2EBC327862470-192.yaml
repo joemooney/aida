@@ -13,7 +13,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-03T13:44:41.494240826Z
-modified_at: 2026-11-03T14:00:53.858812391Z
+modified_at: 2026-11-03T14:11:21.971702979Z
 req_type: Bug
 comments:
 - id: 01a1a1a7-d47b-72a3-bd8a-a629803e21d3
@@ -33,6 +33,12 @@ comments:
   content: 'Implementation in progress: no-checks registration now waits up to 180s, failed row reads retry on the same train, and CI-unavailable stops retain the train PR and do not eject members. Follow-up hold comments require a policy ruling: BUG-2214 signed Q2 and wait-CI behavior explicitly admit mandate-covered armed holds until lease-protected release, whereas BUG-2423 comment 1 requests armed holds never be ready. Human named-PR release parity also extends the mandate-only train release path. Keeping these authority changes separate from the registration fix pending a recorded decision.'
   created_at: 2026-11-03T13:59:20.706499131Z
   modified_at: 2026-11-03T13:59:20.706499131Z
+  session_id: 01a1a1add7ce
+- id: 01a1a1c0-12f3-7ec1-bab7-0e76d861eb54
+  author: joe
+  content: 'Validation: cargo test -p aida-cli-lib pr_train::tests --lib --no-default-features passed all 85 tests, including four new BUG-2423 regressions. cargo fmt --all -- --check and git diff --check pass. A final rerun after the small driver notification cleanup was refused by the cargo disk guard (8.2 GiB free, hard floor 15 GiB); no override used. make check-ci-fast is still running its feature-disabled compile check. Policy fork is recorded with aida punt and finding TASK-b6b1278890774ef993d2ebc327862470-737; the requirement remains Needs Attention rather than being marked Done.'
+  created_at: 2026-11-03T14:11:21.971702979Z
+  modified_at: 2026-11-03T14:11:21.971702979Z
   session_id: 01a1a1add7ce
 history:
 - id: 01a1a1ad-dc71-7a52-af37-7ec00e0ddf62
