@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "spec": "TASK-2790",
+  "publishes": [
+    {
+      "at": "2026-11-03T18:44:37.859115272Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-03T18:43:44.789261175Z",
+      "spec": "TASK-2790",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 3299
+      }
+    },
+    {
+      "ts": "2026-11-03T18:44:37.639834649Z",
+      "spec": "TASK-2790",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "da17908306fcefc7fc1e8bcf334e2d507c72cf1a",
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
