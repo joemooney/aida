@@ -806,13 +806,49 @@ const SYSTEMCTL_TIMEOUT: Duration = Duration::from_secs(15);
 
 // trace:BUG-2397 | ai:codex
 fn systemctl(args: &[&str]) -> Result<String> {
-    // A file avoids blocking on a full stdout pipe while waiting for the child.
+    let run = systemctl_capture(args)?;
+    if !run.success {
+        bail!(
+            "systemctl --user {} failed ({}){}",
+            args.join(" "),
+            run.status,
+            stderr_suffix(&run.stderr)
+        );
+    }
+    Ok(run.stdout)
+}
+
+/// One finished `systemctl --user` call. `Err` is reserved for spawn,
+/// timeout and output-bound failures; a nonzero exit is data, so callers
+/// that know a "nothing matched" exit is benign can say so.
+// trace:BUG-2424 | ai:claude
+#[derive(Debug, Clone, Default)]
+pub(crate) struct SystemctlRun {
+    pub(crate) success: bool,
+    pub(crate) status: String,
+    pub(crate) stdout: String,
+    pub(crate) stderr: String,
+}
+
+fn stderr_suffix(stderr: &str) -> String {
+    match stderr.trim() {
+        "" => String::new(),
+        text => format!(": {}", text.lines().next().unwrap_or(text)),
+    }
+}
+
+// trace:BUG-2397 | ai:codex
+// trace:BUG-2424 | ai:claude
+fn systemctl_capture(args: &[&str]) -> Result<SystemctlRun> {
+    // Files avoid blocking on a full pipe while waiting for the child.
     let mut output = tempfile::tempfile().context("capturing systemctl output")?;
+    let mut errors = tempfile::tempfile().context("capturing systemctl errors")?;
     let mut child = std::process::Command::new("systemctl")
         .arg("--user")
         .args(args)
         .stdin(std::process::Stdio::null())
         .stdout(output.try_clone()?)
+        .stderr(errors.try_clone()?)
         .spawn()
         .with_context(|| format!("running systemctl --user {}", args.join(" ")))?;
     let deadline = std::time::Instant::now() + SYSTEMCTL_TIMEOUT;
@@ -827,17 +863,24 @@ fn systemctl(args: &[&str]) -> Result<String> {
         }
         std::thread::sleep(Duration::from_millis(50));
     };
-    if !status.success() {
-        bail!("systemctl --user {} failed ({status})", args.join(" "));
-    }
     use std::io::{Read, Seek, SeekFrom};
-    output.seek(SeekFrom::Start(0))?;
-    let mut text = String::new();
-    output.take(16_385).read_to_string(&mut text)?;
-    if text.len() > 16_384 {
-        bail!("systemctl output exceeded its bound");
-    }
-    Ok(text)
+    let read_bounded = |file: &mut std::fs::File| -> Result<String> {
+        file.seek(SeekFrom::Start(0))?;
+        let mut text = String::new();
+        file.take(16_385).read_to_string(&mut text)?;
+        if text.len() > 16_384 {
+            bail!("systemctl output exceeded its bound");
+        }
+        Ok(text)
+    };
+    let stdout = read_bounded(&mut output)?;
+    let stderr = read_bounded(&mut errors)?;
+    Ok(SystemctlRun {
+        success: status.success(),
+        status: status.to_string(),
+        stdout,
+        stderr,
+    })
 }
 
 /// Make sure `project`'s watcher unit is installed: a no-op when AIDA's
@@ -1016,6 +1059,84 @@ pub(crate) fn service(
             Ok(())
         }
     }
+}
+
+/// Refresh all enabled project watchers, including projects other than this cwd.
+// trace:BUG-2424 | ai:codex
+pub(crate) fn restart_enabled_services(out: &mut dyn std::io::Write) -> Result<()> {
+    restart_enabled_services_with(out, systemctl_capture)
+}
+
+// Each call has the existing systemctl deadline. A failed restart must not hide
+// the remaining units or claim that the already-completed swap was undone.
+// Discovery passes no unit pattern: systemd >= 248 exits nonzero when a
+// pattern matches nothing, which on a host with no mail-wake unit turned every
+// promote into a "discovery failed" warning. The mail_wake_unit() filter does
+// the selecting instead, and a silent nonzero "nothing listed" exit is zero
+// units, not an error.
+// trace:BUG-2424 | ai:codex
+// trace:BUG-2424 | ai:claude
+fn restart_enabled_services_with(
+    out: &mut dyn std::io::Write,
+    mut run: impl FnMut(&[&str]) -> Result<SystemctlRun>,
+) -> Result<()> {
+    const LIST: &[&str] = &[
+        "list-unit-files",
+        "--type=service",
+        "--no-legend",
+        "--no-pager",
+    ];
+    let listing = run(LIST)?;
+    if !listing.success {
+        let nothing_listed = listing.stderr.trim().is_empty()
+            && (listing.stdout.trim().is_empty()
+                || listing.stdout.trim().starts_with("0 unit files listed"));
+        if nothing_listed {
+            return Ok(());
+        }
+        bail!(
+            "systemctl --user {} failed ({}){}",
+            LIST.join(" "),
+            listing.status,
+            stderr_suffix(&listing.stderr)
+        );
+    }
+    let mut units = std::collections::BTreeSet::new();
+    for line in listing.stdout.lines() {
+        let mut fields = line.split_whitespace();
+        let (Some(name), Some(state)) = (fields.next(), fields.next()) else {
+            continue;
+        };
+        if matches!(state, "enabled" | "enabled-runtime") && mail_wake_unit(name) {
+            units.insert(name.to_string());
+        }
+    }
+    for unit in units {
+        let failure = match run(&["restart", &unit]) {
+            Ok(done) if done.success => None,
+            Ok(done) => Some(format!(
+                "systemctl --user restart {unit} failed ({}){}",
+                done.status,
+                stderr_suffix(&done.stderr)
+            )),
+            Err(error) => Some(format!("{error:#}")),
+        };
+        match failure {
+            None => writeln!(out, "Restarted mail-wake service: {unit}")?,
+            Some(error) => writeln!(out, "warning: could not restart mail-wake service {unit} ({error}); retry `systemctl --user restart {unit}`")?,
+        }
+    }
+    Ok(())
+}
+
+// Accept only literal unit names, safe to print in a shell recovery command.
+// trace:BUG-2424 | ai:codex
+fn mail_wake_unit(name: &str) -> bool {
+    name.starts_with("aida-mail-wake-")
+        && name.ends_with(".service")
+        && name
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || b"-_.".contains(&b))
 }
 
 #[cfg(test)]

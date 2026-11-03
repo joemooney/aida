@@ -2021,6 +2021,15 @@ pub(crate) fn session_end(
             );
         }
     }
+    // The lease file's real home is `<main>/.aida/sessions/`, which outlives a
+    // removed worktree. trace:STORY-2325 | ai:claude
+    let ownership_root = lease_target
+        .parent()
+        .and_then(std::path::Path::parent)
+        .and_then(std::path::Path::parent)
+        .filter(|p| p.join(".git").exists())
+        .unwrap_or(&project_root);
+    crate::ownership::dual::lease_released(ownership_root, &target.id, "session ended");
 
     // BUG-694: reap the sibling MCP work-claim for this scope. An MCP client
     // that claimed the spec via `claim_task` drops `mcp-claim.<spec>.toml`

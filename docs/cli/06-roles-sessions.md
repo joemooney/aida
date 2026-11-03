@@ -363,6 +363,15 @@ A worktree whose mail cannot be fenced is always kept, even when its mailbox loo
 
 A worktree whose mailbox holds mail is kept until an operator records that every AIDA process on the machine that can write mail takes a write permit. Run `aida mailbox retention activate --dry-run` to see where that stands; add `--json` for the report. It lists each running `aida` and `aida-server` process and whether it runs this build. The report is incomplete, and nothing can be recorded, when it runs inside a container's pid namespace or cannot read a process's command line. When the report shows every writer taking a permit, run `aida mailbox retention activate` from an interactive terminal to record it. The command re-runs the scan and refuses for agents. A worktree with an empty mailbox is not affected.
 
+The human dry-run report also names an unverified writer's owning systemd service
+when `/proc/<pid>/cgroup` identifies one, and prints its restart command. After
+swapping the live binaries, `aida dev build` promotion and `aida dev rollback`
+restart every enabled `aida-mail-wake-*.service` user unit, including units for
+other projects, and report each result. Promotion does this before re-checking
+retention activation. A failed service restart prints a command to retry; the
+binary swap has already completed. Build-only runs leave services alone.
+<!-- trace:BUG-2424 | ai:codex -->
+
 The record names the source build that made it: the version and git commit that `aida` and `aida-server` built from the same checkout share. Both honour it, and so does the same source built and promoted again. A build from a different commit (after an upgrade or `aida dev rollback`) does not: the report then says the activation was recorded by a different build, and the refusal names both builds. Run `aida mailbox retention activate` again with the new build.
 
 The dry run also lists mailbox leftovers. Reusing a worktree moves its emptied mailbox aside to `.aida/.mailbox-tomb-<id>/` before removing it. If a message lands there in that window and cannot be put back, the directory is kept as stranded mail: the report names it, and AIDA never deletes it. Move its messages out by hand. `aida agent gc` removes empty tombs and staging directories left by a crashed mailbox creation once they are ten minutes old, and never sooner. It also removes per-worktree markers whose worktree has since been removed or recreated. A mailbox that lost its identity file is refused with the command that moves it aside, so the next write creates a new one.

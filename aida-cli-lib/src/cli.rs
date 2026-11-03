@@ -60,6 +60,7 @@ pub(crate) use crate::metrics_cmd::metrics_cmd_args::MetricsCommand;
 pub(crate) use crate::node_cmd::node_cmd_args::NodeCommand;
 pub(crate) use crate::notify::notify_args::NotifyCommand;
 pub(crate) use crate::orchestrator_cmd::orchestrator_cmd_args::OrchestratorCommand;
+pub(crate) use crate::ownership_cmd::ownership_cmd_args::OwnCommand;
 pub(crate) use crate::plan_cmd::plan_cmd_args::PlanCommand;
 pub(crate) use crate::plan_intent::plan_intent_args::SpecCommand;
 pub(crate) use crate::pr_cmd::pr_cmd_args::PrCommand;
