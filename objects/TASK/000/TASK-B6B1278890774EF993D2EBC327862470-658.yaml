@@ -11,7 +11,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T09:06:27.587006751Z
-modified_at: 2026-11-03T22:51:46.481121213Z
+modified_at: 2026-11-03T23:05:58.739215313Z
 req_type: Task
 tags:
 - architecture
@@ -65,6 +65,22 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Step-1 F-H/F-ENV/R-a code largely matches the rulings, but CI lib-0 and lib-1 are red at the head, and trusted codex="aida" now lets several Codex launch surfaces skip the named refusal and run without AIDA containment (fail-open).. No triage reason was given.'
   created_at: 2026-11-03T19:38:58.743047708Z
   modified_at: 2026-11-03T19:38:58.743047708Z
+  session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
+- id: 01a1a3a9-86d3-76a1-9be2-6ebf352423fb
+  author: joe
+  content: |-
+    ADVISOR RULING (16:10, PR #3307 at its current head): fix every finding below. Specific rulings: (1)-(3) route the contained arms through the existing seat_authority/bind helpers and shared argv builders, never by new literals or allowlist growth. (4) Use aida_core home resolution. (5) Add the config-trust entry the bug_1723 tests require (an exact site), or route the write through an existing trusted writer. (6) FAIL CLOSED when no root resolves or the posture load errors. (7) Clean up on the error path. (8) Add the task_2707_ live tests to the required-live CI filter.
+    1. BLOCKER (CI lib-1, authority): story_1917 no_code_path_outside_role_enter_writes_grant_binding_or_calls_bind_grant_to_pid fails. session.rs:2109 (spawn_vendor_headless_forking contained arm) and session.rs:6621 (run_vendor_headless_child contained arm) call crate::gate::seat_authority::bind_grant_to_pid; only role_lifecycle.rs and gate/seat_authority.rs may. Move the binding into a seat_authority-owned launch-child API, with an advisor ruling if it changes binding semantics. Do not loosen the ratchet.
+    2. BLOCKER (CI lib-1): task_1752 only_seat_authority_names_or_reads_the_grant_env_var fails. containment/launch.rs:31 (ENV allow-list literal "AIDA_SESSION_GRANT") and launch.rs:473 (explicit(child, "AIDA_SESSION_GRANT")) name the grant env outside seat_authority.rs. Use crate::gate::seat_authority::GRANT_ENV.
+    3. BLOCKER (CI lib-1): headless_hint_tests headless_env_launches_route_through_shared_argv_builders fails at session.rs:7386 (spawn_vendor_headless_resume_granted). The two lines added to the issue_launch_child contained argument (session.rs:7379-7381) push headless_vendor_args_contained_in out of the 20-line window above .env("AIDA_HEADLESS", "1"). Hoist the contained-grant bool into a local, as at session.rs:2041, so the builder stays in context.
+    4. BLOCKER (CI lib-1): test_home no_direct_home_resolution_in_crate fails. containment/launch.rs:460 reads std::env::var_os("HOME") directly (and :463 derives CODEX_HOME from it). Resolve the host home through aida_core::home / crate::home_dir, or add an allow-direct-home-dir marker with a justification.
+    5. BLOCKER (CI lib-0): both bug_1723_config_trust_tests fail on the new scripts/config-trust.toml entry for aida-cli-lib/src/containment/launch.rs (channels other-file/write/trusted, sites=1). every_project_config_writer_goes_through_the_adoption_guard fails because launch.rs:580 writes the private Codex config.toml without write_config_atomic or config_edit. Either route the write through the guard or add a WRITE_CHANNEL_EXEMPT entry saying it writes generated vendor state, not project config. Then fix the inventory and site-count mismatch that every_config_toml_site_is_inventoried_and_every_worktree_key_is_policy reports.
+    6. MAJOR (strict tier, fail-open): codex_tool_env.rs:117-127 refuse_unwired_aida_posture returns Ok when no root resolves (find_main_worktree_root fails outside a repo). It also maps any load_contained_vendor error to None via .ok().flatten(), so a corrupt or unreadable trusted policy, or a git error, lets an unwired Codex surface launch without AIDA containment under codex="aida". Refuse on error, and on a missing root unless the posture is provably not aida. Add a refusal-path test for the load-error case.
+    7. MINOR: session.rs:6611-6622 run_vendor_headless_child contained arm. If stamp_lease_active_pid or bind_grant_to_pid fails, the early ? return happens after register_headless_lane_for_child. It skips finish_headless_lane_for_child and tee.stop(), leaving a stale lane record and a running tee thread. ContainedChild::drop kills the child. Wrap the spawn/bind/release sequence like spawn_vendor_headless_forking does, so cleanup runs on every exit.
+    8. MINOR (evidence): the task_2707_ live-boundary tests (F-a a-d, F-ENV, G-i, receipt timing) are not in the required-live CI gate (ci.yml:333 filters bwrap_/task_2706_egress only). In ordinary shards live_available() can return a silent SKIP via host_prerequisites (e.g. Landlock ABI>=9), so a green shard does not prove the live boundary ran. Add the task_2707_ filter and its count to the Live bwrap gate step, or cite CI log evidence that they ran ok, not skipped.
+    LIGHT gate: one targeted cargo test plus make check-ci-fast (umask 022); 'cargo check -p aida-cli-lib --tests' is mandatory before pushing. Push to the existing PR branch, then stop.
+  created_at: 2026-11-03T23:05:58.739215313Z
+  modified_at: 2026-11-03T23:05:58.739215313Z
   session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
 history:
 - id: 01a1965c-5ce8-7781-b88f-317b0b12bab5
