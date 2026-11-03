@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-189
 agreed_id: BUG-2420
 title: The final ID of a delegated block fails object-save admission after it was dispensed (next advances, nothing is saved)
 description: 'From SPIKE-708 Q1/Q3 (research on the spike, 2026-11-03). Probe: a size-one block, and the final ID of a size-two block, are dispensed (block ''next'' advances), and then the object save is refused by admission because the block is no longer spendable. The ID is burned and the object is not saved; the next add falls back to a node-local ID. Expected: admission recognizes an already-dispensed final ID independently of future block spendability. Acceptance: (1) size-one and final-of-size-two adds both persist under the delegated ID; (2) wrong-node, wrong-home and absent-hub-claim refusals still refuse; (3) a failed save never leaves ''next'' advanced without an object (no silent loss): roll back or retry the same ID. Source pointers: db_block.rs ~L302-317 (claim refusal).'
-status: InProgress
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-03T02:43:31.307915297Z
-modified_at: 2026-11-03T05:42:15.494407685Z
+modified_at: 2026-11-03T14:11:56.674691939Z
 req_type: Bug
 tags:
 - from:SPIKE-708
@@ -90,6 +90,21 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1a1c0-99c4-78f1-b74c-b6159fa43ab7
+  author: aida-auto-bump
+  timestamp: 2026-11-03T14:11:56.484797391Z
+  session_id: f5eddefe-032d-4760-94ba-3a318cf3d1d1
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1a1c0-9a82-7b30-8807-866740f7c84f
+  timestamp: 2026-11-03T14:11:56.674687629Z
+  agent: aida
+  commit_sha: 493f3ae1c526c7ab19f208112d426aecbf33c8b5
+  summary: 'Round 3: both round-2 P2s fixed. run_add holds the store write lock (WORK admission first) from dispense through save and hand-back (requirements_cli.rs:3248,3531-3545), covered by the deterministic two-add race test bug_2420_failed_save_racing_another_add_still_returns_the_id. Home refs resolve literally (check-ref-format, show-ref --verify, peel to commit; allocation_authority.rs:584-635,739-755), covered by bug_2421_revision_expression_homes_are_refused. All BUG-2420/BUG-2421 acceptance criteria have tests; every CI build/test job is green at the head. merge-hold-gate is the supervision hold, not a code failure.'
+  review_verdict: approved
 filed_at:
   code_sha: 553f7d5984c6083a9f2b47cfa358ce57c438843b
   branch: main
@@ -98,3 +113,7 @@ filed_at:
   aida_build_sha: 553f7d5984c
   vendor: claude
   session: 125337a4-7dd3-483b-9c56-3665173938ae
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-03T14:11:56.484792246Z
+  completion_sha: 493f3ae1c526c7ab19f208112d426aecbf33c8b5
