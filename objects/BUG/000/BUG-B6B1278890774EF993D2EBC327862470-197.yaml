@@ -3,13 +3,22 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-197
 agreed_id: BUG-2428
 title: A reviewer or implementer launch that fails before the agent starts leaves its worktree (aida-pr-N) or an orphaned lease, so every later attempt on that PR or spec refuses with 'branch pr-N is held by
 description: '2026-11-03 09:20-09:40: review watch (launched from a Claude Bash) failed 5 reviews on ''grant key could not be put in a session keyring (errno 40)''. Each failure left /home/joe/ai/aida-worktrees/aida-pr-N clean, with no lease and no merge-hold marker. Every retry, including from a terminal that could mint the keyring, then refused with ''branch pr-N is held by worktree ... before pickup setup''. Implementer launches for BUG-2426 and BUG-2427 likewise left orphaned leases that needed --force-claim. Expected: a launch that fails before the agent process starts rolls back what it created (worktree, lease), or the next attempt adopts a clean, lease-less worktree for the same branch instead of refusing. Also, the keyring failure should be detected before the worktree is created.'
-status: Draft
+status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-03T16:39:11.593910642Z
-modified_at: 2026-11-03T16:39:11.593910642Z
+modified_at: 2026-11-03T16:39:39.867870456Z
 req_type: Bug
+history:
+- id: 01a1a247-d85b-7aa2-abfb-3040f234a016
+  author: joe
+  timestamp: 2026-11-03T16:39:39.867866805Z
+  session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: 493f3ae1c526c7ab19f208112d426aecbf33c8b5
   branch: main
