@@ -25,7 +25,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-03T03:42:51.559496187Z
-modified_at: 2026-11-03T22:02:44.954106944Z
+modified_at: 2026-11-03T22:02:47.337996616Z
 req_type: Story
 tags:
 - area:deputy
@@ -301,6 +301,20 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: All 7 ACs are covered by traced tests and the round-3 fixes hold, but the PR does not compile against main: attribution.rs destructures binding_process as a 2-tuple, and BUG-2419 on main made it (pid, ns, start). Every CI lane is red, and has been since round 3, because CI tests the merge ref.. No triage reason was given.'
   created_at: 2026-11-03T22:02:44.954105474Z
   modified_at: 2026-11-03T22:02:44.954105474Z
+  session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
+- id: 01a1a36f-ac2c-79e2-93f6-88426d405552
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (STORY-2338):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: f47043567f3b
+    Recorded: 2026-11-03T21:38:07.233535990+00:00
+    Findings:
+    1. BLOCKER, compile break (every CI lane red at f47043567f3; also the cause of round 3's red at 4f0c3c13, because CI builds refs/pull/3287/merge, which already had main's BUG-2419): aida-cli-lib/src/deputy_shell/attribution.rs:279-282 does '.filter_map(|t| seat_authority::binding_process(t)).any(|(pid, start)| (probes.alive)(pid, start))'. Since 1fc6b8bdc6d (BUG-2419), binding_process returns Option<(u32, Option<&str>, &str)>, so 'cargo build --workspace', 'cargo build -p aida-cli --bin aida' and 'cargo check -p aida-cli --no-default-features' all fail. Fix: destructure (pid, ns, start) and keep BUG-2419's rule of never comparing process tokens across pid namespaces. Probe only a token whose namespace is the runner's (unqualified or host; see review_authority::parse_pid_ns_start / with_pid_namespace / origin_pid_ns). A token from a foreign namespace is not a live holder here and falls through to the Q5 heartbeat path. Add a refusal-table row for a foreign-namespace proc: token (it must not pass as holder-live).
+    2. Gate discipline: rounds 3 and 4 were pushed without a compile (the round-3 comment says the targeted cargo test link timed out; round 4 records untested=true). A single 'cargo check -p aida-cli-lib' (or 'cargo check --tests') on the merged tree would have caught finding 1. For the rework, at minimum confirm 'cargo build -p aida-cli --bin aida' and the targeted 'cargo test -p aida-cli-lib --lib deputy_shell' pass on a tree merged with current origin/main before pushing, and cite the output in the spec comment.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-03T22:02:47.212851064Z
+  modified_at: 2026-11-03T22:02:47.212851064Z
   session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
 history:
 - id: 01a19f81-3898-7250-96f4-65372d1968ea
