@@ -25,7 +25,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-03T03:42:51.559496187Z
-modified_at: 2026-11-03T17:25:10.437724749Z
+modified_at: 2026-11-03T17:25:11.831385590Z
 req_type: Story
 tags:
 - area:deputy
@@ -247,6 +247,21 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Round 2 closes all 12 round-1 findings and all 7 ACs are traced, but CI is red: the new kill_group probe at runner.rs:1004 trips the task_1750 liveness guard. The reworked heartbeat binding also makes Q5''s key-only fallback unreachable for the advisor seat.. No triage reason was given.'
   created_at: 2026-11-03T17:25:10.437723161Z
   modified_at: 2026-11-03T17:25:10.437723161Z
+  session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
+- id: 01a1a271-8790-7682-925a-fcd16d773fc3
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (STORY-2338):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 9e71b1a85920
+    Recorded: 2026-11-03T16:45:24.508933734+00:00
+    Findings:
+    1. CI red (lib-1, PR-caused): task_1750_liveness_primitive_guard_tests::production_code_has_no_raw_kill_zero_liveness_probe fails on aida-cli-lib/src/deputy_shell/runner.rs:1004 'libc::kill(-pid, 0)', added by the round-2 kill_group fix. It is a process-group probe, like exit_signal.rs. Add an ALLOWED row ('aida-cli-lib/src/deputy_shell/runner.rs', 'a process-GROUP probe (kill(-pgid, 0)), not single-pid liveness') in aida-cli-lib/src/tests/task_1750_liveness_primitive_guard_tests.rs, or route it through a shared group-probe helper. Build (ubuntu-latest) fails only as the downstream aggregate of this.
+    2. Q5 key-only fallback cannot fire for the default submitter seat: attribution.rs heartbeat_row_vouches requires row.id or row.name == grant.subject. A direct advisor grant (role enter -> mint_direct, seat_authority.rs:1831) has subject = current_user_id() (the OS user, e.g. 'joe'), while registry rows are named like 'claude-1593772' / 'claude-reviewer-1137'. A sandboxed key-only advisor is therefore always refused:not-live. That contradicts the Q5 ruling and docs/deputies.md:103 and :168 ('Letting a sandboxed advisor submit'). The refusal-table test passes only because its injected probe keys heartbeats on subject 'op' (tests.rs:87, :767). Fails closed, so this is not a security hole. Fix: bind the heartbeat to something the grant actually carries (the session the grant was issued to or bound by its key: token), and add a test that uses the real session_heartbeat with a direct-grant subject. Alternatively the advisor rules Q5 dropped, and the docs/help say a sandboxed advisor cannot submit.
+    3. Cosmetic: the standing-orders deputy link '../../../../../docs/deputies.md' resolves from the template master (aida-core/templates/.aida/discipline/standing-orders/advisor.md) but escapes the repo root from the generated mirror .aida/discipline/standing-orders/advisor.md, where it should be ../../../docs/deputies.md. It is also dead in installed projects. The test at tests.rs:1132 only checks the substring 'docs/deputies.md)'. Consider a repo-absolute or doc-site link.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-03T17:25:11.696149295Z
+  modified_at: 2026-11-03T17:25:11.696149295Z
   session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
 history:
 - id: 01a19f81-3898-7250-96f4-65372d1968ea
