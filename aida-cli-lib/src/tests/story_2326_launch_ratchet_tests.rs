@@ -22,6 +22,7 @@ const LAUNCHER: &[&str] = &["aida-cli-lib/src/launch/", "aida-core/src/launch_po
 /// allowlists them by site. "Generic helper" entries take their program from
 /// their callers, which PR-C classifies.
 const LEDGER: &[(&str, usize, &str)] = &[
+    ("aida-cli-lib/src/agent_codex_background.rs", 8, "slice B: STORY-2254 detached Codex worker (landed on main after slice A)"),
     ("aida-cli-lib/src/agent_launch.rs", 6, "slice B: Codex grant/finalize writes; slice D: the harness version probe"),
     ("aida-cli-lib/src/agent_registry.rs", 2, "not a vendor child: terminal title restore and probe"),
     ("aida-cli-lib/src/autopilot_intake.rs", 3, "slice B: autopilot intake"),
@@ -79,8 +80,9 @@ const LEDGER: &[(&str, usize, &str)] = &[
 
 /// The slice-A total. A later slice lowers it; it is zero after slice D.
 /// (Advisor ruling 1/2 widened the scanner to every dynamic program and
-/// `exec`/`pre_exec`; the sites were already there.)
-const CEILING: usize = 156;
+/// `exec`/`pre_exec`; the sites were already there.) The merge of main
+/// brought in STORY-2254's detached Codex worker (+8, ledgered above).
+const CEILING: usize = 164;
 
 fn rust_files(dir: &Path, out: &mut Vec<PathBuf>) {
     let Ok(entries) = std::fs::read_dir(dir) else {

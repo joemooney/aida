@@ -408,7 +408,51 @@ pub(crate) fn handle_agent_command(cmd: &AgentCommand) -> Result<()> {
         AgentCommand::Stop { name } => agent_stop(name),
         AgentCommand::ListRoles { json } => handle_agent_list_roles(*json),
         AgentCommand::Wake { command } => agent_wake(command),
+        // trace:STORY-2254 | ai:claude
+        AgentCommand::LaunchStatus { attempt } => agent_codex_background::launch_status(attempt),
+        AgentCommand::RecoverLaunch {
+            attempt,
+            retire_unknown,
+        } => agent_codex_background::recover_launch(attempt, *retire_unknown),
     }
+}
+
+/// STORY-2254: refuse entering a scope a detached launch attempt still owns
+/// (active, pending or unknown). The shared admission record covers the gap
+/// before that attempt's lease exists; no flag bypasses it.
+// trace:STORY-2254 | ai:claude
+pub(crate) fn refuse_detached_scope_owner(
+    project_root: &std::path::Path,
+    role: Option<&str>,
+    spec: Option<&str>,
+) -> Result<()> {
+    let Some(spec) = spec else {
+        return Ok(());
+    };
+    let role = role.unwrap_or_else(|| agent_new_scope_role(spec));
+    if let Some(blocker) = codex_bg_receipt::scope_entry_blocker(project_root, role, spec) {
+        anyhow::bail!("refusing to launch: {blocker}");
+    }
+    Ok(())
+}
+
+// trace:STORY-2254 | ai:claude
+#[path = "codex_bg_receipt.rs"]
+pub(crate) mod codex_bg_receipt;
+// trace:STORY-2254 | ai:claude
+#[path = "agent_codex_background.rs"]
+pub(crate) mod agent_codex_background;
+
+/// `aida internal codex-bg-supervise`.
+// trace:STORY-2254 | ai:claude
+pub(crate) fn codex_bg_supervise_main(attempt: &str) -> Result<()> {
+    agent_codex_background::supervise_main(attempt)
+}
+
+/// `aida internal codex-bg-barrier`.
+// trace:STORY-2254 | ai:claude
+pub(crate) fn codex_bg_barrier_main() -> Result<()> {
+    agent_codex_background::barrier_main()
 }
 
 /// `aida agent wake arm|retire <agent>`.
@@ -1025,6 +1069,8 @@ pub(crate) fn agent_new_command_for_type(token: &str) -> Option<AgentNewCommand>
             grant_inline: Default::default(),
             no_mail_wake: false,
             rotate: false,
+            bg: false,
+            spec_positional: None,
         }),
         "antigravity" => Some(AgentNewCommand::Antigravity {
             role: None,
@@ -1117,7 +1163,11 @@ pub(crate) fn dispatch_agent_new(cmd: &AgentNewCommand) -> Result<()> {
     let (AgentNewCommand::Claude { grant_inline, .. }
     | AgentNewCommand::Codex { grant_inline, .. }
     | AgentNewCommand::Antigravity { grant_inline, .. }) = cmd;
-    let bg = matches!(cmd, AgentNewCommand::Claude { bg: true, .. });
+    // trace:STORY-2254 | ai:claude — a detached Codex lane never mints inline.
+    let bg = matches!(
+        cmd,
+        AgentNewCommand::Claude { bg: true, .. } | AgentNewCommand::Codex { bg: true, .. }
+    );
     GRANT_INLINE_OFFER.store(
         inline_offer_enabled(*grant_inline, bg),
         std::sync::atomic::Ordering::Relaxed,
@@ -1206,6 +1256,71 @@ pub(crate) fn dispatch_agent_new(cmd: &AgentNewCommand) -> Result<()> {
             no_mail_wake,
             rotate,
             grant_inline: _,
+            bg: true,
+            spec_positional,
+        } => {
+            // trace:STORY-2254 | ai:claude
+            let spec = match (spec.clone(), spec_positional.clone()) {
+                (Some(flag), Some(positional)) if flag != positional => anyhow::bail!(
+                    "conflicting specs: --spec {flag} and positional {positional}; give one"
+                ),
+                (flag, positional) => flag.or(positional),
+            };
+            agent_codex_background::agent_new_codex_bg(agent_codex_background::CodexBgRequest {
+                role: role.clone(),
+                spec,
+                force: *force,
+                cwd: cwd.clone(),
+                bypass_sandbox: *bypass_sandbox,
+                context: AgentContextOptions::new(!*no_context, *show_context),
+                noexec: *noexec,
+                show_prompt: *show_prompt,
+                verbose: *verbose,
+                prompt: AgentPromptOptions::new(
+                    resolve_launch_prompt(prompt.clone(), prompt_file.as_deref(), *no_prompt)?,
+                    *no_prompt,
+                ),
+                resume: AgentResumeOptions::new(false, resume.clone(), *allow_duplicate, true),
+                flag_options: AgentDefaultFlagOptions::new(
+                    !*no_default_flags,
+                    extra_flags.clone(),
+                    model.clone(),
+                )
+                .rotating(*rotate),
+                name: name.clone(),
+                description: description.clone(),
+                no_mail_wake: *no_mail_wake,
+            })
+        }
+        AgentNewCommand::Codex {
+            role,
+            spec,
+            force,
+            cwd,
+            bypass_sandbox,
+            model,
+            no_context,
+            no_title,
+            show_context,
+            noexec,
+            show_prompt,
+            verbose,
+            prompt,
+            prompt_file,
+            no_prompt,
+            no_resume,
+            resume,
+            allow_duplicate,
+            no_duplicate_check,
+            no_default_flags,
+            extra_flags,
+            name,
+            description,
+            no_mail_wake,
+            rotate,
+            grant_inline: _,
+            bg: false,
+            spec_positional: _,
         } => agent_new_codex_wake(
             role.clone(),
             spec.clone(),
@@ -1348,6 +1463,13 @@ pub(crate) fn agent_resume_ended(
     project_root: &std::path::Path,
     entry: agent_registry::AgentRegistryEntry,
 ) -> Result<()> {
+    // A resume enters its recorded scope: honour detached ownership.
+    // trace:STORY-2254 | ai:claude
+    refuse_detached_scope_owner(
+        project_root,
+        entry.role.as_deref(),
+        entry.current_spec.as_deref(),
+    )?;
     if !entry.worktree_path.exists() {
         anyhow::bail!(
             "cannot resume {}: recorded worktree is gone ({})",
@@ -2986,6 +3108,8 @@ pub(crate) fn agent_new_with_config_wake(
         return Ok(());
     }
 
+    // trace:STORY-2254 | ai:claude
+    refuse_detached_scope_owner(&project_root, role.as_deref(), spec.as_deref())?;
     // A launch that fails before its child spawns releases its handle.
     // trace:STORY-1843 | ai:claude
     let mut handle_guard = crate::agent_handle::LaunchReservationGuard::new(&project_root);
@@ -3304,6 +3428,8 @@ pub(crate) fn agent_new_bg_dispatch(
         return Ok(());
     }
 
+    // trace:STORY-2254 | ai:claude
+    refuse_detached_scope_owner(&project_root, role.as_deref(), spec.as_deref())?;
     // A launch that fails before its child spawns releases its handle.
     // trace:STORY-1843 | ai:claude
     let mut handle_guard = crate::agent_handle::LaunchReservationGuard::new(&project_root);
