@@ -206,3 +206,25 @@ fn story_2254_bg_issuance_requires_delegation() {
     .unwrap_err();
     assert!(ChildGrantRefused::is_in(&err), "{err:#}");
 }
+
+/// TASK-2799: inside a non-host pid namespace that is not AIDA-contained (a
+/// plain bubblewrap shell), the worker's start identity is compared with
+/// both sides qualified alike, so accepting the supervisor's own child is
+/// not refused as "start identity changed".
+// trace:TASK-2799 | ai:claude
+#[test]
+fn task_2799_accept_inside_a_non_host_pid_namespace() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    let mut env = pinned_env();
+    crate::gate::review_authority::with_pid_namespace(Some("4026532999"), || {
+        let parent = test_support::mint_grant_for(root, SUBJECT, "advisor", &["implementer"]);
+        env.set_key(GRANT_ENV, &parent);
+        let (grant, cap) = issue(root);
+        let worker = OwnChild::spawn();
+        let token = pid_binding_token(worker.0.id()).unwrap();
+        assert!(token.contains("@pidns-4026532999/"), "{token}");
+        accept_detached_launch_child(received(cap), root, worker.0.id(), &worker.start()).unwrap();
+        assert!(read_grant(&grant.id).unwrap().binding.contains(&token));
+    });
+}
