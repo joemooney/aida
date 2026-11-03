@@ -7,12 +7,12 @@ description: |-
 
   non-blocking/minor: dev_build.rs:900 and check-ci-gates.py run_plan add 'CARGO_HOME is read-only here; new dependencies are fetched on the host' to EVERY failed cargo or gate run while CARGO_HOME is unwritable. Inside a lane that is always, so ordinary compile or test failures get a misleading fetch hint. Gate it on cargo output that shows a download or registry write (for example 'Read-only file system' or 'failed to download').
   Reviewed sha: 1c54c4d85edd1496e1a9b1921c51fe19641ade42
-status: InProgress
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-03T08:37:11.941869541Z
-modified_at: 2026-11-03T14:58:25.799321873Z
+modified_at: 2026-11-03T18:44:31.534515743Z
 req_type: Task
 tags:
 - carried-from:BUG-2418
@@ -77,6 +77,20 @@ history:
   timestamp: 2026-11-03T14:58:26.849000874Z
   session_id: f5eddefe-032d-4760-94ba-3a318cf3d1d1
   changes: []
+- id: 01a1a2ba-28a7-7341-bc49-b3abdfb01ed0
+  author: aida-auto-bump
+  timestamp: 2026-11-03T18:44:31.527731439Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1a2ba-28ae-7902-81c2-ea42bff8e572
+  timestamp: 2026-11-03T18:44:31.534510464Z
+  agent: aida
+  commit_sha: da17908306fcefc7fc1e8bcf334e2d507c72cf1a
+  summary: 'TASK-2790 + bundled TASK-2787 met: read-only CARGO_HOME hint now gated on fetch evidence in dev_build.rs run_checked and check-ci-gates.py run_plan (both streams, split-marker overlap); gate_env passes repo root as probe cwd; Rust+Python tests cover each; CI green at 830142d.'
+  review_verdict: approved
 filed_at:
   code_sha: 6c587ee595ce70f5fcc48480cfdddc8246cf158c
   branch: main
@@ -85,3 +99,7 @@ filed_at:
   aida_build_sha: db087637d57
   vendor: claude
   session: c58592f4-04ae-498b-9afd-87b0cc2bcde9
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-03T18:44:31.527723777Z
+  completion_sha: da17908306fcefc7fc1e8bcf334e2d507c72cf1a
