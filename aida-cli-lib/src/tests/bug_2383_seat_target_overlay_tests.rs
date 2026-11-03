@@ -1036,7 +1036,9 @@ fn bug_2383_bwrap_real_cargo_test_job_reports_pass_and_fail_through_the_cli() {
     // Both ran inside the real sandbox, through the limiter on PATH.
     let ran_with = format!("cargo is {}, run inside bubblewrap", limiter.display());
     for out in [&pass_out, &fail_out] {
-        assert!(out.contains("lane job: seed: "), "{out}");
+        // The seed note names the seat target: `lane job: seat target <path>: seed: ...`.
+        assert!(out.contains("lane job: seat target "), "{out}");
+        assert!(out.contains(": seed: "), "{out}");
         assert!(out.contains(&ran_with), "{out}");
     }
     let slot_log = std::fs::read_to_string(slots.join("slots.log")).unwrap();
