@@ -6,12 +6,12 @@ description: |-
 
   non-blocking/cosmetic: docs/agents/codex-mcp-setup.md:200 still recommends writable_roots = ["~/.cargo", "~/.rustup", "~/.aida"] as the 'persistent equivalent' of the contained posture; update to [] with the host cargo fetch note.
   Reviewed sha: efbb07dbdcec9339609006f18ae5577e8a329e3e
-status: Draft
+status: Superseded
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-03T18:11:47.131420379Z
-modified_at: 2026-11-03T18:18:29.439238359Z
+modified_at: 2026-11-03T18:18:32.306053580Z
 req_type: Task
 tags:
 - carried-from:TASK-B6B1278890774EF993D2EBC327862470-729
@@ -25,6 +25,15 @@ comments:
   created_at: 2026-11-03T18:18:29.439238359Z
   modified_at: 2026-11-03T18:18:29.439238359Z
   session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
+history:
+- id: 01a1a2a2-5df2-7981-b147-ce9ee9b054e7
+  author: joe
+  timestamp: 2026-11-03T18:18:32.306050392Z
+  session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: c016e786454b8d89e36474513cf42d4481398394
   branch: main
