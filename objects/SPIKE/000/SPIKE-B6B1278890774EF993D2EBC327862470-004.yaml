@@ -22,12 +22,12 @@ description: |
   ## Acceptance
 
   - Resolved (2026-11-03, operator decision via `aida questions answer`): Bounded hardening first — Repair final-slot admission and the generic claim-evidence gap, clarify direct root-to-hub scope, and add two-hub bundle regression coverage; defer recursive delegation and replenishment design.
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-31T19:23:12.694681525Z
-modified_at: 2026-11-03T02:44:35.622257351Z
+modified_at: 2026-11-03T02:44:46.166752494Z
 req_type: Spike
 tags:
 - air-gap
@@ -575,6 +575,14 @@ history:
   author: joe
   timestamp: 2026-11-03T02:43:57.474658450Z
   changes: []
+- id: 01a19f4b-79d6-79f2-8538-a84bb58db35b
+  author: joe
+  timestamp: 2026-11-03T02:44:46.166738714Z
+  session_id: 125337a4-7dd3-483b-9c56-3665173938ae
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
 filed_at:
   code_sha: 53817a25ee83981f919be3dbcee742234338ab9a
   branch: main
@@ -582,6 +590,9 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: 53817a25ee8
   vendor: claude
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-03T02:44:46.166720177Z
 human_only: true
 decision_request:
   question: Should AIDA first harden and document direct root-to-inside bundle grants, invest now in recursive offline pool delegation, or defer inside agreed-ID support?
