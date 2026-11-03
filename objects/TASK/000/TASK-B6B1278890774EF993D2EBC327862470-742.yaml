@@ -7,12 +7,12 @@ description: |-
 
   minor (non-blocking, by design): lease_process_token drops creator/active pid tokens for leases written before BUG-2419 (no *_pid_ns); in-flight leases at upgrade rely on lease/session tokens and the authorship ledger.
   Reviewed sha: 21ba1f4436fb1148802957b5e459d40edbdeebdc
-status: Draft
+status: Rejected
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-03T16:46:07.718635378Z
-modified_at: 2026-11-03T18:18:18.522024819Z
+modified_at: 2026-11-03T18:18:20.959633496Z
 req_type: Task
 tags:
 - carried-from:BUG-2419
@@ -31,6 +31,14 @@ history:
   author: joe
   timestamp: 2026-11-03T17:18:32.467125199Z
   changes: []
+- id: 01a1a2a2-319f-7c42-904c-49a0f7617298
+  author: joe
+  timestamp: 2026-11-03T18:18:20.959630444Z
+  session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Rejected
 filed_at:
   code_sha: 1fc6b8bdc6dd4337e4d9d82e9740568bdf5d9830
   branch: main
