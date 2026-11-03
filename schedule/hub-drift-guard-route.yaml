@@ -5,3 +5,9 @@ last_by:
   vendor: codex
 result: done
 note: Normal remote reconcile dry-run showed bothhubs behindlocal; --execute fast-forward pushed both, noforce/no structuralmerge. Fresh remote status confirms main/store/release in sync at store2b4cb5582d1c before this new duty receipt.
+due_since: 2026-11-03T01:13:44.226602838Z
+due_reason: on CronJobFailed:hub-drift-guard
+due_failure:
+  trip_id: hub-drift-guard@2026-11-03T01:05:47.452909454Z
+  job: hub-drift-guard
+  error: 'exit 1: '
