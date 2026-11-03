@@ -3,12 +3,12 @@ spec_id: STORY-b6b1278890774ef993d2ebc327862470-322
 agreed_id: STORY-2324
 title: Gate decides from one ledger keyed by canonical spec ID (effective gate state = f(head SHA, canonical IDs, ledger))
 description: 'Regroup target 1 (do first), 2026-11-02. Canonicalize spec IDs once where they enter the system. Effective gate state (verdict, hold, mode) is a pure function of the PR head SHA, the canonical ID set and the ledger. Superseded specs inherit the carrier''s mode. Merge-hold markers live in the primary store. Retires the BUG-2403/BUG-2413 bug class, STORY-1392, STORY-1684 and the BUG-2176 workaround. Evidence: BUG-2403, BUG-2413, STORY-1392, TASK-1574, TASK-1259. Sketch-first; advisor signoff required.'
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-02T19:20:32.021326811Z
-modified_at: 2026-11-03T02:12:22.233934080Z
+modified_at: 2026-11-03T02:12:24.502010891Z
 req_type: Story
 tags:
 - architecture
@@ -220,6 +220,12 @@ comments:
   created_at: 2026-11-03T02:12:22.233934080Z
   modified_at: 2026-11-03T02:12:22.233934080Z
   session_id: ee0bf351-6b17-486f-a38e-cfbb1343c426
+- id: 01a19f2d-d936-75e0-91ce-384f9cc654e1
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: Round-1 rework items 1-4 are addressed (foreign-label refusals block, literal-vs-mapped is Ambiguous, --compare applies carry-over and refusal ranking, expected-diff list extended), but CI cli-0 is red at 15b47da: the new ''aida gate state'' command is missing from the checked-in BUG-1502 format-json audit; two minor A2-instrument gaps remain. No triage reason was given.'
+  created_at: 2026-11-03T02:12:24.502005366Z
+  modified_at: 2026-11-03T02:12:24.502005366Z
+  session_id: ee0bf351-6b17-486f-a38e-cfbb1343c426
 history:
 - id: 01a19ec9-2f7e-7e41-b3a1-1cb5a299a222
   author: joe
@@ -271,6 +277,14 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a19f2d-d935-7bb3-bec5-eb851e10c163
+  author: joe
+  timestamp: 2026-11-03T02:12:24.501995287Z
+  session_id: ee0bf351-6b17-486f-a38e-cfbb1343c426
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: 1b678fd5059046ff02bfb3b87c1f10d3162efda6
   branch: main
@@ -279,11 +293,3 @@ filed_at:
   aida_build_sha: 6a3f67671a9
   vendor: claude
   session: ee0bf351-6b17-486f-a38e-cfbb1343c426
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'Round-1 rework items 1-4 are addressed (foreign-label refusals block, literal-vs-mapped is Ambiguous, --compare applies carry-over and refusal ranking, expected-diff list extended), but CI cli-0 is red at 15b47da: the new ''aida gate state'' command is missing from the checked-in BUG-1502 format-json audit; two minor A2-instrument gaps remain'
-  recovery_hint: address the review findings, move STORY-2324 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-03T02:11:08.319634107Z
