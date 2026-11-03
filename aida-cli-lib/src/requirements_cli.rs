@@ -3155,6 +3155,11 @@ fn run_add(
                     // The node and agreed ID a delegated block dispensed for
                     // this add, so a refused save hands it back (BUG-2420).
                     let mut delegated_spent: Option<(String, String)> = None;
+                    // The store write lock, held from the dispense through the
+                    // object's save and any hand-back, so no other writer can
+                    // dispense past an ID whose save then fails (BUG-2420).
+                    // trace:BUG-2420 | ai:claude
+                    let mut store_hold: Option<aida_core::db::StoreWriteHold> = None;
                     if id_policy.uses_blocks() {
                         let node_id = load_node_id(store_path);
                         let blocks_path = store_path.join("registry").join("blocks.yaml");
@@ -3236,6 +3241,11 @@ fn run_add(
                             // `git_ops::add(store_path, &["registry/blocks.yaml"])`
                             // runs under the store write lock.
                             // trace:TASK-1930 | ai:agy
+                            // BUG-2420: take (and keep) the store lock here, with
+                            // WORK admission entered before it, through the
+                            // object save below.
+                            // trace:BUG-2420 | ai:claude
+                            store_hold = Some(aida_core::db::hold_store_write(store_path)?);
                             aida_core::db::with_store_write_lock(store_path, || {
                                 aida_core::BlockRegistry::with_dispense_lock(&blocks_path, || {
                                     if let Ok(mut registry) =
@@ -3514,6 +3524,10 @@ fn run_add(
                     // A save refused after a delegated block dispensed its ID
                     // (admission, a full disk) returns the ID to the block, so
                     // `next` never runs ahead of the objects it vouches for.
+                    // The store lock taken before the dispense is still held,
+                    // so no other add has dispensed past it and the hand-back
+                    // always lands; it is released once the save or the
+                    // hand-back is done.
                     // trace:BUG-2420 | ai:claude
                     let added = match backend.add_requirement(req.clone()) {
                         Ok(added) => added,
@@ -3524,9 +3538,11 @@ fn run_add(
                                 );
                                 eprintln!("{}", undelivered_release_note(agreed_id, &released));
                             }
+                            drop(store_hold);
                             return Err(e);
                         }
                     };
+                    drop(store_hold);
 
                     {
                         let last = &added;

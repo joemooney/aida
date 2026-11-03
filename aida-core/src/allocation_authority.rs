@@ -581,12 +581,53 @@ fn hub_ref_blocks(root: &Path, remote: &str) -> Result<Vec<crate::node::AgreedId
     ref_blocks(root, &format!("refs/remotes/{remote}/{branch}"))
 }
 
-/// The block claims `git_ref`'s `registry/blocks.yaml` records; empty when
-/// the ref or the file does not exist.
+/// The commit the full ref name `full_ref` names, exactly: `None` when it is
+/// not a well-formed ref name (revision syntax such as `~`, `^`, `:`, `@{`
+/// or `..` is refused, never evaluated) or no ref of exactly that name
+/// exists (no DWIM lookup under `refs/heads/` or `refs/tags/`).
+// trace:BUG-2421 | ai:claude
+// remote-creds-ok(TASK-2001): reads a local ref only; no network
+fn resolve_literal_ref(root: &Path, full_ref: &str) -> Result<Option<String>> {
+    if !full_ref.starts_with("refs/") || full_ref.starts_with('-') {
+        return Ok(None);
+    }
+    let git = |args: &[&str]| crate::git_ops::host_git_command(root).args(args).output();
+    if !git(&["check-ref-format", full_ref])?.status.success() {
+        return Ok(None);
+    }
+    let shown = git(&["show-ref", "--verify", "--hash", "--", full_ref])?;
+    if !shown.status.success() {
+        return Ok(None);
+    }
+    let oid = String::from_utf8_lossy(&shown.stdout).trim().to_string();
+    if oid.is_empty() || !oid.chars().all(|c| c.is_ascii_hexdigit()) {
+        return Ok(None);
+    }
+    let peeled = git(&[
+        "rev-parse",
+        "--verify",
+        "--quiet",
+        "--end-of-options",
+        &format!("{oid}^{{commit}}"),
+    ])?;
+    if !peeled.status.success() {
+        return Ok(None);
+    }
+    let commit = String::from_utf8_lossy(&peeled.stdout).trim().to_string();
+    Ok((!commit.is_empty() && commit.chars().all(|c| c.is_ascii_hexdigit())).then_some(commit))
+}
+
+/// The block claims the full ref `git_ref`'s `registry/blocks.yaml` records,
+/// read from the one commit that ref names exactly; empty when the ref is
+/// malformed or absent, or the file does not exist.
+// trace:BUG-2421 | ai:claude
 // remote-creds-ok(TASK-2001): reads a local ref only; no network
 fn ref_blocks(root: &Path, git_ref: &str) -> Result<Vec<crate::node::AgreedIdBlock>> {
+    let Some(commit) = resolve_literal_ref(root, git_ref)? else {
+        return Ok(Vec::new());
+    };
     let out = crate::git_ops::host_git_command(root)
-        .args(["show", &format!("{git_ref}:registry/blocks.yaml")])
+        .args(["show", &format!("{commit}:registry/blocks.yaml")])
         .output()?;
     if !out.status.success() {
         return Ok(Vec::new());
@@ -695,9 +736,22 @@ fn home_claims(
         {
             continue;
         }
+        // The home is a literal `<remote>/<branch>`, read only from exactly
+        // `refs/remotes/<remote>/<branch>`; anything else records no claims,
+        // so its blocks refuse.
+        // trace:BUG-2421 | ai:claude
+        let literal = pool
+            .home_ref
+            .split_once('/')
+            .is_some_and(|(remote, branch)| !remote.is_empty() && !branch.is_empty());
+        let on_ref = if literal {
+            ref_blocks(root, &format!("refs/remotes/{}", pool.home_ref))?
+        } else {
+            Vec::new()
+        };
         out.push(crate::allocation_lineage::HomeClaims {
             home_ref: pool.home_ref.clone(),
-            on_ref: ref_blocks(root, &format!("refs/remotes/{}", pool.home_ref))?,
+            on_ref,
         });
     }
     Ok(out)
@@ -1822,6 +1876,66 @@ mod tests {
         assert_eq!(next_of(dir.path()), 102);
     }
 
+    /// One delegated dispense as `aida add` runs it: store lock, then the
+    /// dispense lock, load, dispense, record as spent.
+    fn dispense_like_add(root: &Path) -> String {
+        let path = root.join("registry/blocks.yaml");
+        crate::db::with_store_write_lock(root, || {
+            crate::node::BlockRegistry::with_dispense_lock(&path, || {
+                let mut reg = crate::node::BlockRegistry::load(&path)?;
+                let idx = delegated_block_in(root, "BUG", &reg.blocks)?
+                    .context("a spendable delegated block")?;
+                let id = reg.blocks[idx]
+                    .dispense_with_prefix("BUG")
+                    .context("an ID left")?;
+                reg.save_dispensed(&path, "7")?;
+                Ok(id)
+            })
+        })
+        .unwrap()
+    }
+
+    // Two adds interleave: A dispenses BUG-102 and its save then fails while
+    // B is already waiting to dispense. A holds the store lock from dispense
+    // through its hand-back, so B cannot dispense past BUG-102: the
+    // hand-back lands and B is issued BUG-102. No ID is left without an
+    // object.
+    // trace:BUG-2420 | ai:claude
+    #[test]
+    fn bug_2420_failed_save_racing_another_add_still_returns_the_id() {
+        let (dir, mut backend) = delegated_fixture();
+        let root = dir.path().to_path_buf();
+        let hold = crate::db::hold_store_write(&root).unwrap();
+        let a = dispense_like_add(&root);
+        assert_eq!(a, "BUG-102");
+        let contended = crate::db::store_write_lock_contended_for(&root);
+        let b = std::thread::spawn({
+            let root = root.clone();
+            move || {
+                let _hold = crate::db::hold_store_write(&root).unwrap();
+                dispense_like_add(&root)
+            }
+        });
+        // Deterministic: proceed only once B is blocked on the store lock.
+        // B finishing first means it dispensed under A's dispense: fail.
+        while crate::db::store_write_lock_contended_for(&root) == contended {
+            assert!(!b.is_finished(), "B dispensed while A held the store lock");
+            std::thread::yield_now();
+        }
+        // A's save is refused (an unbound clone cannot mint the global ID).
+        let mut req = Requirement::new("x".into(), "fixture".into());
+        req.spec_id = Some(a.clone());
+        req.agreed_id = Some(a.clone());
+        assert!(backend.add_requirement(req).is_err());
+        assert!(
+            release_undelivered(&root, "7", &a).unwrap(),
+            "no other add dispensed while A held the store lock"
+        );
+        drop(hold);
+        assert_eq!(b.join().unwrap(), "BUG-102", "B reuses A's returned ID");
+        assert_eq!(next_of(&root), 103);
+    }
+
     // A generic-pool claim the home ref never recorded mints nothing.
     // trace:BUG-2421 | ai:claude
     #[test]
@@ -1835,6 +1949,64 @@ mod tests {
             .unwrap()
             .is_some_and(|r| r.contains("gitlab/aida-store")));
         assert!(agreed(dir.path(), "BUG-101").is_err());
+    }
+
+    /// Re-home the fixture's pool on `home_ref`, keeping its accepted claim
+    /// on `refs/remotes/gitlab/aida-store`.
+    fn rehome(root: &Path, home_ref: &str) {
+        std::fs::write(
+            root.join("registry/pools.yaml"),
+            format!("pools:\n- pool_id: p-bug\n  type_prefix: BUG\n  range_start: 1\n  range_end: 1000\n  holder_node: R\n  home_ref: '{home_ref}'\n"),
+        )
+        .unwrap();
+    }
+
+    // A pool home is a literal ref name: revision syntax is refused, never
+    // evaluated against the real home's claims, and a home that does not
+    // exist mints nothing.
+    // trace:BUG-2421 | ai:claude
+    #[test]
+    fn bug_2421_revision_expression_homes_are_refused() {
+        let (dir, _) = delegated_fixture();
+        assert_eq!(delegated_block(dir.path(), "BUG").unwrap(), Some(0));
+        for home in [
+            "gitlab/aida-store~0",
+            "gitlab/aida-store^",
+            "gitlab/aida-store^{commit}",
+            "gitlab/aida-store@{1}",
+            "gitlab/aida-store@{0}",
+            "gitlab/aida-store:",
+            "gitlab/../gitlab/aida-store",
+            "gitlab/aida-store-missing",
+            "gitlab/",
+        ] {
+            rehome(dir.path(), home);
+            assert_eq!(
+                delegated_block(dir.path(), "BUG").unwrap(),
+                None,
+                "{home} is not the accepted home"
+            );
+            assert!(agreed(dir.path(), "BUG-101").is_err(), "{home}");
+        }
+        // A ref outside `refs/remotes/` that DWIM would find is not the home.
+        let git = |args: &[&str]| {
+            assert!(crate::test_git::git_command()
+                .args(args)
+                .current_dir(dir.path())
+                .status()
+                .unwrap()
+                .success());
+        };
+        git(&[
+            "update-ref",
+            "refs/heads/refs/remotes/gitlab/elsewhere",
+            "refs/remotes/gitlab/aida-store",
+        ]);
+        rehome(dir.path(), "gitlab/elsewhere");
+        assert_eq!(delegated_block(dir.path(), "BUG").unwrap(), None);
+        // The literal home is still spendable.
+        rehome(dir.path(), "gitlab/aida-store");
+        assert_eq!(delegated_block(dir.path(), "BUG").unwrap(), Some(0));
     }
 
     // trace:STORY-B6B1278890774EF993D2EBC327862470-105 | ai:claude

@@ -325,6 +325,39 @@ pub fn with_store_write_lock<T>(root: &Path, f: impl FnOnce() -> Result<T>) -> R
     f()
 }
 
+/// The store write lock held for a caller-scoped span, with the shared WORK
+/// transport admission entered first when this clone is enrolled (admission
+/// must precede the store and counter locks). Dropping it releases the lock,
+/// then the admission. A multi-step writer (dispense an ID, save its object,
+/// hand the ID back on a refused save) holds it so no other writer runs in
+/// between; nested writers re-enter both.
+// trace:BUG-2420 | ai:claude
+#[must_use = "the store write lock is released when the hold is dropped"]
+pub struct StoreWriteHold {
+    _store: StoreWriteGuard,
+    #[cfg(unix)]
+    _admission: crate::transport_policy::Admission,
+}
+
+/// Enter WORK admission (when enrolled), then take the store write lock for
+/// `root`, keeping both until the returned hold drops. Same checks as
+/// [`with_store_write_lock`].
+// trace:BUG-2420 | ai:claude
+pub fn hold_store_write(root: &Path) -> Result<StoreWriteHold> {
+    #[cfg(unix)]
+    let admission = crate::transport_policy::Admission::enter(root)?;
+    let guard = acquire(root)?;
+    if guard.is_outermost() {
+        crate::git_ops::ensure_store_hooks_supported(root)?;
+    }
+    crate::git_ops::ensure_store_write_safe(root)?;
+    Ok(StoreWriteHold {
+        _store: guard,
+        #[cfg(unix)]
+        _admission: admission,
+    })
+}
+
 /// Whether this thread holds the store write lock for `root`.
 // trace:TASK-1717 | ai:claude
 pub fn store_write_lock_held(root: &Path) -> bool {
