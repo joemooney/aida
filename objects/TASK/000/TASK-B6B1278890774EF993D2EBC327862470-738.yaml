@@ -1,5 +1,6 @@
 id: 01a1a1c1-4d08-7491-ac7a-802ad3479098
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-738
+agreed_id: TASK-2793
 title: aida pr hold reports branch pushed without performing or verifying a push
 description: During BUG-2423 implementation, aida pr hold exited 0 saying the branch was pushed, but git ls-remote --heads origin <branch> returned no matching ref. A direct git push -u origin <branch> then created the branch. Source pr_cmd.rs::pr_hold_handler only writes HoldSignal and prints the pushed claim; it performs no push or remote verification. Standalone headless launches can therefore advertise a held branch that is not recoverable from the forge. Either perform/verify the push or clearly require pushing beforehand and stop claiming remote success. The current BUG-2423 branch was pushed directly and its remote is being verified.
 status: Draft
@@ -15,6 +16,11 @@ tags:
 - kind:observation
 - linked:BUG-2423
 - severity:major
+history:
+- id: 01a1a24d-6697-7512-a824-7ebe52cf584b
+  author: joe
+  timestamp: 2026-11-03T16:45:43.959018953Z
+  changes: []
 filed_at:
   aida_version: 0.16.0
   aida_build_sha: 6c587ee595c
