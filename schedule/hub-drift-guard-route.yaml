@@ -6,3 +6,9 @@ last_by:
   vendor: claude
 result: done
 note: main and release are in sync; aida-store on gitlab is +2 and fast-forwardable. The hourly home-cron 'aida remote reconcile --execute' bridges it, and work-clone policy is gitlab-only pushes.
+due_since: 2026-11-03T19:32:24.468360180Z
+due_reason: on CronJobFailed:hub-drift-guard
+due_failure:
+  trip_id: hub-drift-guard@2026-11-03T19:28:15.618345851Z
+  job: hub-drift-guard
+  error: 'exit 1: '

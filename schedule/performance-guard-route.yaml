@@ -6,3 +6,22 @@ last_by:
   vendor: claude
 result: done
 note: 'Ruled environmental: the 24h window covers the disk at 99% (11 GB free) and cache writer_busy rebuilds. 305.7 GiB reclaimed at 07:27 MST. File a regression only if it trips again in a window after the reclaim.'
+due_since: 2026-11-03T19:32:24.468360180Z
+due_reason: on CronJobFailed:performance-guard
+due_failure:
+  trip_id: performance-guard@2026-11-03T19:28:15.618345851Z
+  performance:
+  - command: show
+    budget_ms: 2000
+    over_budget: 13
+    denominator: 217
+    proportion_millipercent: 5991
+    tolerated_millipercent: 10000
+    window_hours: 24
+    worst_ms: 5226
+    excluded_samples: 0
+    lineage_scoped: true
+    ceiling_ms: 5000
+    ceiling_breached: true
+  job: performance-guard
+  error: 'exit 1: '
