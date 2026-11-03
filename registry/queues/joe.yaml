@@ -108,3 +108,9 @@
   added_by: joe
   added_at: 2026-11-03T16:27:45.093588457Z
   for_role: advisor
+- user_id: joe
+  requirement_id: 01a1a220-58ae-77b0-a0bb-31dcfdbfc8de
+  position: 319000
+  added_by: joe
+  added_at: 2026-11-03T16:27:46.213203255Z
+  for_role: advisor
