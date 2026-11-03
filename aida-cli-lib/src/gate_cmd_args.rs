@@ -40,4 +40,23 @@ pub enum GateCommand {
         #[clap(long)]
         json: bool,
     },
+
+    /// Diagnostic: one pull request's effective gate state (verdict, merge
+    /// hold, execution mode, decision) computed from the requirements it
+    /// ships, identified once against the committed store, and its gate
+    /// ledger. Read-only: it decides nothing and changes nothing.
+    // trace:STORY-2324 | ai:claude
+    State {
+        /// The pull request: `PR-<N>` or `<N>`.
+        change: String,
+
+        /// Also show what today's merge gates decide, column by column, and
+        /// count where the two differ.
+        #[clap(long)]
+        compare: bool,
+
+        /// Emit JSON.
+        #[clap(long)]
+        json: bool,
+    },
 }

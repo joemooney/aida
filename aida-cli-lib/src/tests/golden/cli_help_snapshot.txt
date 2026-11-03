@@ -27367,11 +27367,14 @@ and prints the checklist an agent answers for the rest
 Usage: aida gate [OPTIONS] <COMMAND>
 
 Commands:
-  list  List the shipped gates, their versions, and the lifecycle moment each one is a default for
-  show  Print one gate's checklist for an agent to follow
-  run   Run a gate over a spec: the deterministic tier first, then the checklist for what it cannot
-        decide. Advisory; never edits the spec
-  help  Print this message or the help of the given subcommand(s)
+  list   List the shipped gates, their versions, and the lifecycle moment each one is a default for
+  show   Print one gate's checklist for an agent to follow
+  run    Run a gate over a spec: the deterministic tier first, then the checklist for what it cannot
+         decide. Advisory; never edits the spec
+  state  Diagnostic: one pull request's effective gate state (verdict, merge hold, execution mode,
+         decision) computed from the requirements it ships, identified once against the committed
+         store, and its gate ledger. Read-only: it decides nothing and changes nothing
+  help   Print this message or the help of the given subcommand(s)
 
 Options:
       --format <FORMAT>
@@ -27460,6 +27463,41 @@ Arguments:
 Options:
       --json
           Emit the verdict as JSON
+
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida gate state
+Diagnostic: one pull request's effective gate state (verdict, merge hold, execution mode, decision)
+computed from the requirements it ships, identified once against the committed store, and its gate
+ledger. Read-only: it decides nothing and changes nothing
+
+Usage: aida gate state [OPTIONS] <CHANGE>
+
+Arguments:
+  <CHANGE>
+          The pull request: `PR-<N>` or `<N>`
+
+Options:
+      --compare
+          Also show what today's merge gates decide, column by column, and count where the two
+          differ
+
+      --json
+          Emit JSON
 
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
@@ -57178,6 +57216,42 @@ Working on aida itself
         "name": "json",
         "takes_value": false,
         "help": "Emit the verdict as JSON"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "gate",
+      "state"
+    ],
+    "about": "Diagnostic: one pull request's effective gate state (verdict, merge hold, execution mode, decision) computed from the requirements it ships, identified once against the committed store, and its gate ledger. Read-only: it decides nothing and changes nothing",
+    "flags": [
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "compare",
+        "takes_value": false,
+        "help": "Also show what today's merge gates decide, column by column, and count where the two differ"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "json",
+        "takes_value": false,
+        "help": "Emit JSON"
       }
     ],
     "hidden": false
