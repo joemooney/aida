@@ -28,7 +28,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-01T06:49:40.328147102Z
-modified_at: 2026-11-03T18:18:50.047364376Z
+modified_at: 2026-11-03T18:18:52.833006864Z
 req_type: Task
 tags:
 - audit
@@ -124,6 +124,12 @@ comments:
     PROXY PREPARATION RECEIPT: Root read FULL agy1 report /tmp/aida-agy1-task2690-evidence.md (8824bytes), replye46b69d0-d0b6-4cfb-8400-dfaa1540f2bc, and preparationcomment01a197bd-b435-7bf3-9cf1-2d755d6fb290. Retain the pinned-main6a source/delta matrix and ordered edit/dependency checklist as this task's implementation input, not another broad audit. Task remains blocked/Approved, no source/status/queue change. Binding evidence clarification: configuration/--no-exec/dry-run output, a merged PR citation or a parity label alone does NOT prove actual contained product/advisor/implementer/reviewer operation. Final AC2 needs the actual normal model-to-tool loop receipts, proper own authority/containment and corresponding full signed runtime acceptance; retain detached, fork and wake arming/queueacceptance/actualturn/inboxACK distinctions. Proposed command spellings/previews in the checklist must be verified before use; none authorizes live auth/model/user-state probes now. Full scope remains; no premature public parity claim, no follow-up task chain.
   created_at: 2026-11-01T15:40:35.450243549Z
   modified_at: 2026-11-01T15:40:35.450243549Z
+- id: 01a1a2a2-ae21-7260-878e-b2dbdd6dfe65
+  author: joe
+  content: 'ADVISOR RULING (2026-11-03): also fix two folded findings in this PR. (1) docs/agents/codex-mcp-setup.md:200 recommends writable_roots = ["~/.cargo", "~/.rustup", "~/.aida"]; change it to [] with a note that dependencies are fetched on the host (was TASK-HOME-745). (2) docs/agents/aida-repository-guide.md:681 says the Codex profile grants write to ~/.cargo and ~/.rustup; state that dependencies must be fetched on the host (was TASK-HOME-746).'
+  created_at: 2026-11-03T18:18:52.833006864Z
+  modified_at: 2026-11-03T18:18:52.833006864Z
+  session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
 history:
 - id: 01a195df-5d92-77b3-ab1d-b81203c3f5c3
   author: joe
