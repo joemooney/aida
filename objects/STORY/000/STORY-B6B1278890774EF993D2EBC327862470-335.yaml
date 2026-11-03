@@ -1,0 +1,35 @@
+id: 01a19f83-6471-7611-a4c7-216ccdc674f8
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-335
+agreed_id: STORY-2339
+title: 'Review PR-3283: [AI:claude] fix(ids): admit a delegated block''s final dispensed ID and require accepted claims for generic pools (BUG-2420 BUG-2421)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `bug-2420-block-final-slot`.
+
+  - PR: <https://github.com/joemooney/aida/pull/3283>
+  - Branch: `bug-2420-block-final-slot` → `main`
+
+  ## Covers
+
+  - BUG-2420
+  - BUG-2421
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 3283` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-03T03:45:50.705525418Z
+modified_at: 2026-11-03T03:45:50.705525418Z
+req_type: Story
+filed_at:
+  code_sha: 553f7d5984c6083a9f2b47cfa358ce57c438843b
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 553f7d5984c
+  vendor: claude
+  session: 125337a4-7dd3-483b-9c56-3665173938ae
