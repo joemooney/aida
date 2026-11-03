@@ -6,18 +6,27 @@ description: |-
 
   non-blocking/minor (plausible): lanes now get rw on ~/.local/state/cargo-slots, where the host slot wrapper writes its build log. A lane could replace the log file with a symlink, for example to a file under ~/.cargo/bin, so the host's next log write lands there. lane_job already grants the same pair, so this class predates the PR. Confirm the host wrapper opens the log with O_NOFOLLOW, or refuses a symlinked log.
   Reviewed sha: 1c54c4d85edd1496e1a9b1921c51fe19641ade42
-status: Draft
+status: Superseded
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-03T08:37:33.725195770Z
-modified_at: 2026-11-03T08:37:33.725195770Z
+modified_at: 2026-11-03T13:50:54.638027199Z
 req_type: Task
 tags:
 - carried-from:TASK-2772
 - finding-hash:db0efea7
 - from-review:TASK-2772
 - kind:carried-forward
+history:
+- id: 01a1a1ad-58ae-7651-b8fc-09c0824cbeab
+  author: joe
+  timestamp: 2026-11-03T13:50:54.638024339Z
+  session_id: f5eddefe-032d-4760-94ba-3a318cf3d1d1
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: 6c587ee595ce70f5fcc48480cfdddc8246cf158c
   branch: main
