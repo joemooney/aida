@@ -6,12 +6,12 @@ description: |-
   2026-11-03: through aida-deputy-shell run 2, 'aida merge-hold clear 3289' succeeded, but 'aida pr train 3280' was refused three times with 'its merge needs a human at a terminal'. The cause is two different human checks. merge-hold clear uses role_authority::has_integrity_floor_authority() (stdin is a terminal AND deputy_job_floor_authorized). pr ship/train use pr_cmd::ship_interactive_tty() (stdin AND stdout are terminals, pr_cmd.rs:2108). The script deputy tees each job's stdout into its audited transcript, so stdout is never a terminal. Workaround in use: the job script sends that one command's stdout to /dev/tty, which loses the transcript.
 
   Acceptance: (1) pr ship and pr train decide 'human at a terminal' with the same function as merge-hold clear, so stdout plays no part. (2) A test: stdin is a terminal and stdout a pipe, with the deputy floor authorized; train treats the named PR as human-consented. (3) A test: with stdin not a terminal, it still refuses.
-status: Done
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-03T15:56:31.278734245Z
-modified_at: 2026-11-03T18:34:41.971816459Z
+modified_at: 2026-11-03T18:42:22.444267089Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -69,6 +69,15 @@ history:
   timestamp: 2026-11-03T18:34:44.438353886Z
   session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
   changes: []
+- id: 01a1a2b8-306c-7c03-a138-ba37854e6e23
+  author: aida-orchestrator
+  timestamp: 2026-11-03T18:42:22.444287731Z
+  session_id: 01a1a2b75e61
+  harness_version: 2.1.317 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: NeedsAttention
 filed_at:
   code_sha: 493f3ae1c526c7ab19f208112d426aecbf33c8b5
   branch: main
@@ -81,3 +90,11 @@ implementation_info:
   implemented: true
   implemented_at: 2026-11-03T17:27:53.199576825Z
   implemented_by: joe
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'Fix is correct and AC 1-3 are covered by the new deputy test, but CI lib-1 is red because of this PR: story_1698 pr_ship_consults_the_mandate_at_every_hold_gate_and_before_the_merge fails at story_1698_mandate_tests.rs:598'
+  recovery_hint: address the review findings, move BUG-2427 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-11-03T18:42:22.444267089Z
