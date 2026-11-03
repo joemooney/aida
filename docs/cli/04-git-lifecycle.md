@@ -264,6 +264,18 @@ command; `--max N` caps the batch (default 10), and naming more PRs than
 landed. The train is GitHub-only for now: GitLab's merge-hold gate has no
 train mode, so `aida pr train` refuses a GitLab project; ship its merge
 requests one at a time with `aida pr ship N`.
+A newly opened train waits up to 180 seconds for its first CI checks to
+register. After checks appear, pending lanes continue through the ordinary
+CI wait; a missing required check after the other lanes settle keeps its
+600-second registration bound. Failed check-row reads retry three times on
+the same train. If CI never starts or stays unreadable, the command exits
+non-zero and leaves the train PR open for inspection, with its members still
+eligible. Inspect the paused PR before retrying the same member list; a later
+train retires the abandoned train through the normal owner-liveness check.
+A required check that was skipped, a train PR whose head, base or state
+changed, and a required check still missing after 600 seconds are not read
+failures: the train PR is closed and its members are ejected with that reason.
+<!-- trace:BUG-2423 | ai:codex -->
 <!-- trace:STORY-1690 | ai:claude -->
 
 **Chains with** — `aida queue done` (finish on a branch) → `aida pr` (open/ship the PR) → `aida review` (if reviewed) → merge → `aida pull` (auto-bump to Completed).

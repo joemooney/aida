@@ -119,10 +119,13 @@ pub(crate) const ORCHESTRATOR_OUTSIDE_PATHS: &[(&str, &str, &[&str])] = &[
     ),
     (
         "review_authority.rs",
-        "review authorship ledger: session leases, session manifests and audit events",
+        "review authorship ledger: session leases, session manifests, audit events and the caller's pid namespace",
         &[
             "aida_core::liveness::process_identity_matches_strict",
             "aida_core::liveness::process_start_identity",
+            // BUG-2419: read-only inode of /proc/self/ns/pid, to qualify
+            // identity tokens taken inside a sandbox's pid namespace.
+            "aida_core::local_pid_ns",
             "aida_core::write_atomic",
             "crate::SessionLease",
             "crate::events::GATE_AUTHORSHIP_LEDGER",
