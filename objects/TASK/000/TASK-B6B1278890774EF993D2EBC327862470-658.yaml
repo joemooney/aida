@@ -11,7 +11,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T09:06:27.587006751Z
-modified_at: 2026-11-03T18:19:51.303125996Z
+modified_at: 2026-11-03T18:23:57.487776816Z
 req_type: Task
 tags:
 - architecture
@@ -40,6 +40,12 @@ comments:
   modified_at: 2026-11-03T18:19:51.303125996Z
   session_id: 01a1a2a08c3a
   harness_version: 2.1.317 (Claude Code)
+- id: 01a1a2a7-542f-7103-9ace-5ae7f4b7c2d1
+  author: joe
+  content: 'ADVISOR RULING (2026-11-03 11:40, round 2): your seat holds ff2dce9 (step 1, about 2.3k lines), which is committed but not pushed and was never compiled locally because the session refused cargo (BUG-2383, fixed by #3192). This round: resume in the same seat. Try the LIGHT gate once. If cargo is refused again, do not stop: push the branch, open the PR with ''(Refs TASK-2708)'', and state in the PR body that the local gate was refused. CI is the gate. Then stop. The remaining TASK-2708 scope (migrate Claude, parent acceptance surfaces) is the next PR.'
+  created_at: 2026-11-03T18:23:57.487776816Z
+  modified_at: 2026-11-03T18:23:57.487776816Z
+  session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
 history:
 - id: 01a1965c-5ce8-7781-b88f-317b0b12bab5
   author: joe
