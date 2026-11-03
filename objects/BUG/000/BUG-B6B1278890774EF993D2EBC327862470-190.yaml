@@ -8,11 +8,23 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-03T02:44:06.802259757Z
-modified_at: 2026-11-03T02:44:06.802259757Z
+modified_at: 2026-11-03T03:46:27.320928413Z
 req_type: Bug
 tags:
 - from:SPIKE-708
 - id-allocation
+relationships:
+- rel_type:
+    custom: implemented-by
+  target_id: 01a19f83-6471-7611-a4c7-216ccdc674f8
+  created_at: 2026-11-03T03:46:27.320924801Z
+  created_by: joe
+history:
+- id: 01a19f83-fa25-7ab3-938d-9c9cda17265e
+  author: joe
+  timestamp: 2026-11-03T03:46:29.029480769Z
+  session_id: 125337a4-7dd3-483b-9c56-3665173938ae
+  changes: []
 filed_at:
   code_sha: 553f7d5984c6083a9f2b47cfa358ce57c438843b
   branch: main
