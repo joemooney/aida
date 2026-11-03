@@ -146,6 +146,18 @@ fn split_pid_ns(start: &str) -> Option<(&str, &str)> {
         .filter(|(ns, _)| !ns.is_empty())
 }
 
+/// BUG-2419: a process token's start part as `(namespace, start)`:
+/// `(None, start)` for an unqualified start, `(Some(ns), start)` for
+/// `pidns-<ns>/<start>`; `None` for a malformed namespaced start.
+// trace:BUG-2419 | ai:claude
+pub(crate) fn parse_pid_ns_start(start: &str) -> Option<(Option<&str>, &str)> {
+    if start.starts_with(PID_NS_PREFIX) {
+        split_pid_ns(start).map(|(ns, s)| (Some(ns), s))
+    } else {
+        Some((None, start))
+    }
+}
+
 /// BUG-2419: qualify a process token (`proc` / `shell` / `sid`) with the pid
 /// namespace it was taken in, when that is not the host's (`ns` = `Some`).
 /// Inside a pid namespace (a bubblewrap sandbox gives every sandboxed command
@@ -352,23 +364,21 @@ pub(crate) fn binding_tokens_match(a: &str, b: &str) -> bool {
     if let (Some(x), Some(y)) = (a.strip_prefix("key:"), b.strip_prefix("key:")) {
         return x.len() == 64 && x.bytes().all(|c| c.is_ascii_hexdigit()) && x == y;
     }
-    fn process_part(token: &str) -> Option<(&str, &str)> {
+    // BUG-2419: compared as parsed `(pid, namespace, start)`: equal pids
+    // and starts in different pid namespaces (or one qualified, one not)
+    // are different processes. A namespaced start binds only by its
+    // underlying kernel start — `pidns-<inode>/` alone is a pid plus a
+    // reusable inode — and a malformed namespaced start is refused outright.
+    // trace:BUG-2419 | ai:claude
+    fn process_part(token: &str) -> Option<(&str, Option<&str>, &str)> {
         let (kind, value) = token.split_once(':')?;
         if !matches!(kind, "proc" | "shell" | "sid") {
             return None;
         }
         let (pid, start) = value.split_once('@')?;
-        // BUG-2419: a namespaced start binds only by its underlying kernel
-        // start — `pidns-<inode>/` alone is a pid plus a reusable inode. A
-        // malformed namespaced start is refused outright.
-        // trace:BUG-2419 | ai:claude
-        let underlying = if start.starts_with(PID_NS_PREFIX) {
-            split_pid_ns(start)?.1
-        } else {
-            start
-        };
-        (!pid.is_empty() && pid != "0" && pid != "1" && !underlying.trim().is_empty())
-            .then_some((pid, start))
+        let (ns, start) = parse_pid_ns_start(start)?;
+        (!pid.is_empty() && pid != "0" && pid != "1" && !start.trim().is_empty())
+            .then_some((pid, ns, start))
     }
     matches!((process_part(a), process_part(b)), (Some(x), Some(y)) if x == y)
 }
