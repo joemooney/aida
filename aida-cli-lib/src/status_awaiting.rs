@@ -1278,6 +1278,12 @@ pub(crate) fn notice_hook_session(
             // trace:STORY-HOME-096 | ai:claude
             if let Ok(entry) = entry {
                 arm_launch_mail_wake(&project_root, &entry);
+                // trace:STORY-2338 | ai:claude
+                agent_registry::record_grant_key(
+                    &project_root,
+                    &entry.id,
+                    agent_registry::held_grant_key().as_deref(),
+                );
             }
             // Hooks run outside the command sandbox, so this is where dead
             // rows get ended before a sandboxed sender counts them as
@@ -3999,6 +4005,7 @@ mod task_2253_agy_session_start_gc_tests {
             ended_at: None,
             spec_status_at_end: None,
             mail_wake: None,
+            grant_key: None,
             resumed_from: None,
         }
     }

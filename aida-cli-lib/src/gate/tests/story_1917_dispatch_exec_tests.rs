@@ -2399,6 +2399,7 @@ fn f5_live_registered_agent_or_unknown_occupant_without_lease_blocks_cleanup_and
         resumed_from: None,
         spec_status_at_end: None,
         mail_wake: None,
+        grant_key: None,
     };
     let rev_agent_file = agents_dir.join("rev91.toml");
     std::fs::write(&rev_agent_file, toml::to_string_pretty(&rev_agent).unwrap()).unwrap();
@@ -2446,6 +2447,7 @@ fn f5_live_registered_agent_or_unknown_occupant_without_lease_blocks_cleanup_and
         resumed_from: None,
         spec_status_at_end: None,
         mail_wake: None,
+        grant_key: None,
     };
     let foreign_file = agents_dir.join("foreign91.toml");
     std::fs::write(
@@ -2507,6 +2509,7 @@ fn f5_live_registered_agent_or_unknown_occupant_without_lease_blocks_cleanup_and
         resumed_from: None,
         spec_status_at_end: None,
         mail_wake: None,
+        grant_key: None,
     };
     let take_agent_file = agents_dir.join("impl100.toml");
     std::fs::write(

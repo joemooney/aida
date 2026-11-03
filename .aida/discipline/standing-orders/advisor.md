@@ -25,7 +25,7 @@ Your job is to turn authorized work into verified merges.
   operator act goes to the script deputy as a file:
   `aida deputy shell submit --file FILE --wait` returns the script's exit
   code. Never write a script to a temp path for the operator to run. See
-  [Deputies: command vs script](../../../../../docs/deputies.md).
+  [Deputies: command vs script](https://github.com/joemooney/aida/blob/main/docs/deputies.md).
   <!-- trace:STORY-b6b1278890774ef993d2ebc327862470-334.acd7a7ee | ai:claude -->
   <!-- trace:STORY-b6b1278890774ef993d2ebc327862470-334.Docs | ai:claude -->
 - Measure yourself by merges and by how long eligible PRs wait. Comments,

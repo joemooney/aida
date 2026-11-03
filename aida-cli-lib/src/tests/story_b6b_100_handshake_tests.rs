@@ -544,6 +544,7 @@ fn agent_ls_and_doctor_report_an_overdue_hello_and_its_mailbox() {
             resumed_from: None,
             spec_status_at_end: None,
             mail_wake: None,
+            grant_key: None,
         },
     )
     .unwrap();

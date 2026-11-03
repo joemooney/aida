@@ -100,7 +100,7 @@ Before a job runs, the runner refuses it when:
 | `refused:foreign-host` | it was submitted on another machine, or before this boot |
 | `refused:grant` | the grant is missing, expired, revoked, outside the roster, or does not match the job's seat, subject or principal |
 | `refused:seat` | the seat may not submit to this deputy |
-| `refused:not-live` | no process the grant is bound to is alive, and (for a sandboxed session whose grant is bound only to a session key) the session the grant was issued to has had no heartbeat in the last 10 minutes |
+| `refused:not-live` | no process the grant is bound to is alive, and (for a sandboxed session whose grant is bound only to a session key) the submitting agent session has had no heartbeat in the last 10 minutes from a registry row that holds that grant's session key |
 | `refused:schema` | the record has an unknown field, another schema version, a sha256 that is not its script's, or an id already in use |
 
 A refused job is recorded with exit code 126.
@@ -171,3 +171,11 @@ A sandboxed advisor session can submit only if its sandbox may write the
 queue's `incoming/` directory. Add exactly `~/.aida/deputy-shell/*/incoming`
 to that session's sandbox write allowlist. Never add the queue's other
 directories. A contained lane is never given this path.
+
+The runner cannot see a sandboxed session's processes, so it checks the
+session's heartbeat instead. Each prompt, the session's hooks record the
+session key of the seat grant the session holds on its agent registry row.
+The runner accepts a job only when that row belongs to the session that
+submitted it, its key is one of the grant's bindings, and its heartbeat is
+less than 10 minutes old. Start the agent from the terminal where you ran
+`aida role enter advisor`, so the session and its hooks hold the grant.

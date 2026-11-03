@@ -7433,6 +7433,7 @@ mod task_1806_launch_mandate_tests {
             ended_at: None,
             spec_status_at_end: None,
             mail_wake: None,
+            grant_key: None,
             resumed_from: None,
         };
         agent_registry::write_entry(&project, &stale).unwrap();

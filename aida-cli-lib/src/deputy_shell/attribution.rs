@@ -105,10 +105,10 @@ pub(crate) struct Probes {
     /// runner's (host) pid namespace.
     pub alive: Arc<dyn Fn(u32, &str) -> bool + Send + Sync>,
     /// The last heartbeat of agent session `session_id` in `project_root`,
-    /// counted only from a registry row that belongs to grant subject
-    /// `subject` (its agent name or id), so another session's heartbeat
-    /// never vouches for this grant.
-    pub heartbeat: Arc<dyn Fn(&Path, &str, &str) -> Option<DateTime<Utc>> + Send + Sync>,
+    /// counted only from a registry row bound to `grant` (see
+    /// [`heartbeat_row_vouches`]), so another session's heartbeat never
+    /// vouches for this grant.
+    pub heartbeat: Arc<dyn Fn(&Path, &str, &SeatGrant) -> Option<DateTime<Utc>> + Send + Sync>,
     /// This machine.
     pub host: Host,
 }
@@ -134,15 +134,12 @@ impl Probes {
 }
 
 /// The newest heartbeat of a live agent-registry row for `session_id` in
-/// `project_root` (the per-prompt heartbeat) whose agent is grant subject
-/// `subject`: a launched child's grant names the agent it was minted for, and
-/// the registry row carries that name. A row for another agent, or a grant
-/// whose subject names no agent, never vouches.
+/// `project_root` (the per-prompt heartbeat) that is bound to `grant`.
 // trace:STORY-b6b1278890774ef993d2ebc327862470-334.Authority | ai:claude
 pub(crate) fn session_heartbeat(
     project_root: &Path,
     session_id: &str,
-    subject: &str,
+    grant: &SeatGrant,
 ) -> Option<DateTime<Utc>> {
     std::fs::read_dir(crate::agent_registry::agents_dir(project_root))
         .ok()?
@@ -150,23 +147,38 @@ pub(crate) fn session_heartbeat(
         .filter(|e| e.path().extension().is_some_and(|x| x == "toml"))
         .filter_map(|e| std::fs::read_to_string(e.path()).ok())
         .filter_map(|b| toml::from_str::<crate::agent_registry::AgentRegistryEntry>(&b).ok())
-        .filter(|row| heartbeat_row_vouches(row, session_id, subject))
+        .filter(|row| heartbeat_row_vouches(row, session_id, grant))
         .map(|row| row.last_active_at)
         .max()
 }
 
-/// PURE: whether registry `row` may vouch for `session_id` under grant
-/// subject `subject`: a live row of that session AND of that agent.
+/// PURE: whether registry `row` may vouch for `session_id` under `grant`: a
+/// live row of that session AND bound to that grant, by either
+/// - the session key: the row's hooks proved they hold the key whose `key:`
+///   token is one of the grant's bindings. This is how a directly issued
+///   grant (`aida role enter`, subject = the OS user) is tied to a session;
+///   or
+/// - the agent name: a launched child's grant names the agent it was minted
+///   for, and the registry row carries that name.
+///
+/// A row for another session or agent, or one whose recorded key the grant
+/// does not carry, never vouches.
+// trace:STORY-2338 | ai:claude
 pub(crate) fn heartbeat_row_vouches(
     row: &crate::agent_registry::AgentRegistryEntry,
     session_id: &str,
-    subject: &str,
+    grant: &SeatGrant,
 ) -> bool {
     let same_session = row.claude_session_id.as_deref() == Some(session_id)
         || row.native_session_id.as_deref() == Some(session_id);
+    let holds_key = row
+        .grant_key
+        .as_deref()
+        .is_some_and(|k| k.starts_with("key:") && grant.binding.iter().any(|b| b == k));
+    let subject = grant.subject.as_str();
     let same_agent =
         !subject.is_empty() && (row.id == subject || row.name.as_deref() == Some(subject));
-    row.ended_at.is_none() && same_session && same_agent
+    row.ended_at.is_none() && same_session && (holds_key || same_agent)
 }
 
 /// A refusal: the `refused:<code>` code and why, in one sentence.
@@ -274,14 +286,14 @@ pub(crate) fn verdict(
     }
     // Q5: a key-only (sandboxed) submitter has no host process to probe; a
     // fresh heartbeat stands in for it. The job's self-declared session is
-    // not enough on its own: the heartbeat must come from the registry row of
-    // the agent the grant was minted for (its subject).
+    // not enough on its own: the heartbeat must come from a registry row
+    // bound to this grant (its session key, or the agent it was minted for).
     // TODO(STORY-2325): move this onto the liveness judge when it lands.
     // trace:STORY-2325 | ai:claude
     let fresh = s
         .session_id
         .as_deref()
-        .and_then(|sid| (probes.heartbeat)(&s.project_root, sid, &grant.subject))
+        .and_then(|sid| (probes.heartbeat)(&s.project_root, sid, &grant))
         .is_some_and(|beat| now - beat <= HEARTBEAT_FRESH && beat <= now + Duration::minutes(1));
     if fresh {
         checks.push("session-heartbeat".to_string());

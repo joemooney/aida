@@ -84,8 +84,8 @@ fn probes(
             })
         }),
         alive: Arc::new(|pid, _start| pid == LIVE_PID),
-        heartbeat: Arc::new(move |_root, sid, subject| {
-            beats.get(&(sid.to_string(), subject.to_string())).copied()
+        heartbeat: Arc::new(move |_root, sid, g: &SeatGrant| {
+            beats.get(&(sid.to_string(), g.subject.clone())).copied()
         }),
         host: host(),
     }
@@ -803,6 +803,87 @@ fn every_unattributable_job_is_refused_with_its_code_and_never_runs() {
         .contains(&"session-heartbeat".to_string()));
 }
 
+/// A registry row on disk, as the session's hooks write it.
+fn registry_row(root: &Path, id: &str, session: &str, key: Option<&str>, at: DateTime<Utc>) {
+    let dir = crate::agent_registry::agents_dir(root);
+    std::fs::create_dir_all(&dir).unwrap();
+    let key_line = key
+        .map(|k| format!("grant_key = \"{k}\"\n"))
+        .unwrap_or_default();
+    let body = format!(
+        "id = \"{id}\"\nagent_type = \"claude\"\npid = 1593772\nname = \"{id}\"\n\
+         started_at = \"{at}\"\nlast_active_at = \"{at}\"\nworktree_path = \"{root}\"\n\
+         source = \"session-start-hook\"\nclaude_session_id = \"{session}\"\n{key_line}",
+        at = at.to_rfc3339(),
+        root = root.display(),
+    );
+    std::fs::write(dir.join(format!("{id}.toml")), body).unwrap();
+}
+
+/// Q5 for the DEFAULT submitter: a direct advisor grant (`aida role enter`)
+/// names the OS user as its subject, never a registry row's name, so the
+/// heartbeat must be tied to the grant by its session key. Uses the real
+/// [`attribution::session_heartbeat`] and the real hook writer.
+// trace:STORY-2338 | ai:claude
+#[test]
+fn key_only_direct_grant_is_vouched_by_its_own_sessions_recorded_key() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    let key = key_token();
+    let other_key = format!("key:{}", "cd".repeat(32));
+    let mut direct = grant("33333333-0000-4000-8000-000000000003", "advisor", &[&key]);
+    direct.subject = "joe".into();
+    direct.principal = "joe".into();
+    let now = Utc::now();
+
+    // The hook records the key it proved it holds; then the row vouches.
+    registry_row(root, "claude-1593772", "sid-adv", None, now - CDuration::minutes(2));
+    assert_eq!(
+        attribution::session_heartbeat(root, "sid-adv", &direct),
+        None,
+        "a row that never proved the key does not vouch for a direct grant"
+    );
+    crate::agent_registry::record_grant_key(root, "claude-1593772", Some(&key));
+    assert!(attribution::session_heartbeat(root, "sid-adv", &direct).is_some());
+    // Another session's row, even holding the key, never vouches for this one.
+    assert_eq!(attribution::session_heartbeat(root, "sid-x", &direct), None);
+    // A row holding a key the grant does not carry never vouches.
+    registry_row(root, "claude-77", "sid-other", Some(&other_key), now);
+    assert_eq!(attribution::session_heartbeat(root, "sid-other", &direct), None);
+    // Dropping the grant clears the key, and the row stops vouching.
+    crate::agent_registry::record_grant_key(root, "claude-1593772", None);
+    assert_eq!(attribution::session_heartbeat(root, "sid-adv", &direct), None);
+    crate::agent_registry::record_grant_key(root, "claude-1593772", Some(&key));
+
+    // End to end through the verdict, no live process: the key-only
+    // submitter runs on its own session's heartbeat, and is refused on a
+    // session whose row holds another key.
+    let mut p = probes(std::slice::from_ref(&direct), &[], &[]);
+    p.heartbeat = Arc::new(attribution::session_heartbeat);
+    let as_job = |sub: Submitter| ShellJob {
+        schema: SCHEMA,
+        id: crate::deputy::new_job_id(),
+        deputy: "shell".into(),
+        created_at: now,
+        sha256: script_digest("true"),
+        script: "true".into(),
+        source: None,
+        timeout_secs: 60,
+        spec: None,
+        submitter: sub,
+    };
+    let ok = as_job(submitter(&direct, &key, root, "sid-adv"));
+    let checks = attribution::verdict(&ok, &["advisor".into()], &p, now).unwrap();
+    assert!(checks.contains(&"session-heartbeat".to_string()), "{checks:?}");
+    let borrowed = as_job(submitter(&direct, &key, root, "sid-other"));
+    assert_eq!(
+        attribution::verdict(&borrowed, &["advisor".into()], &p, now)
+            .unwrap_err()
+            .code,
+        "not-live"
+    );
+}
+
 // trace:STORY-b6b1278890774ef993d2ebc327862470-334.Authority | ai:claude
 // trace:STORY-b6b1278890774ef993d2ebc327862470-334.ac4ceb56 | ai:claude
 #[test]
@@ -1142,8 +1223,10 @@ fn the_advisor_standing_orders_deputy_line_submits_and_links_the_page() {
         "{line}"
     );
     assert!(
-        line.contains("[Deputies: command vs script](") && line.contains("docs/deputies.md)"),
-        "{line}"
+        line.contains(
+            "[Deputies: command vs script](https://github.com/joemooney/aida/blob/main/docs/deputies.md)"
+        ),
+        "the link must resolve from the template master, the generated mirror and an installed project alike: {line}"
     );
     let page = include_str!("../../../docs/deputies.md");
     assert!(page.starts_with("# Deputies: command vs script"));
