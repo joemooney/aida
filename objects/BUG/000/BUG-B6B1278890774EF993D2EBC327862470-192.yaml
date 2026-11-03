@@ -8,12 +8,12 @@ description: |-
   Expected: a train PR with no checks yet is 'pending', not an error. Poll with a grace window (e.g. up to 3 minutes for the first check to appear) before ejecting. Only a genuine gh/API failure after retries should stop the train, and that should retry the same train rather than eject members.
 
   Acceptance: (1) a unit test where the checks reader returns 'no checks reported' for the first N polls and then pending, then success: the train lands. (2) No checks after the grace window: the train stops with a clear 'CI never started' reason and leaves the train PR open for inspection.
-status: Approved
+status: InProgress
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-03T13:44:41.494240826Z
-modified_at: 2026-11-03T15:00:39.095512318Z
+modified_at: 2026-11-03T15:02:32.415462916Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -120,6 +120,14 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
+- id: 01a1a1ee-ecdf-7300-aeb8-a8773b164881
+  author: aida-session-start
+  timestamp: 2026-11-03T15:02:32.415461878Z
+  session_id: f5eddefe-032d-4760-94ba-3a318cf3d1d1
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 6c587ee595ce70f5fcc48480cfdddc8246cf158c
   branch: main
