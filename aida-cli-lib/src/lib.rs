@@ -169,6 +169,8 @@ mod phase_gates;
 mod plan_followups;
 mod plan_intent;
 mod plan_report;
+// trace:STORY-2325 | ai:claude — one ownership record and one pure liveness judge.
+mod ownership;
 // trace:STORY-2315 | ai:claude
 mod pr_lease_takeover;
 mod pr_lookup;
