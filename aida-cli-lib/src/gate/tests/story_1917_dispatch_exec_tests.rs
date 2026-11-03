@@ -1186,6 +1186,8 @@ fn reviewer_worktree_cleanup_preserves_merge_hold_and_refuses_live_occupant() {
         creator_pid_start_time: my_start.clone(),
         active_pid: Some(my_pid),
         active_pid_start_time: my_start,
+        creator_pid_ns: crate::gate::review_authority::recorded_pid_ns(Some(my_pid)),
+        active_pid_ns: crate::gate::review_authority::recorded_pid_ns(Some(my_pid)),
         cargo_target_dir: None,
         parent_project_root: Some(f.root.clone()),
         pr_head_sha: None,

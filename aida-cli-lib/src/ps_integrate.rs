@@ -2766,9 +2766,22 @@ pub(crate) fn ps_liveness_warning(rows: &[PsRow]) -> Option<String> {
     ))
 }
 
+/// The root `aida ps` reads running work from: the MAIN checkout, where every
+/// lease, manifest and registry row is written, whatever worktree `aida ps`
+/// is invoked in. A plain `git worktree add` tree (no `.aida/sessions` link)
+/// otherwise resolves to itself and reads an empty lease dir, so a live
+/// detached Codex lane whose lease sits in the main checkout reads
+/// `running: 0`.
+// trace:STORY-2254 | ai:claude
+pub(crate) fn ps_project_root(start: &std::path::Path) -> std::path::PathBuf {
+    main_worktree_root_from(start)
+}
+
 pub(crate) fn handle_ps(json: bool, all: bool) -> Result<()> {
     let project_root =
         find_project_root().unwrap_or_else(|_| std::env::current_dir().unwrap_or_default());
+    // trace:STORY-2254 | ai:claude
+    let project_root = ps_project_root(&project_root);
 
     let (rows, orphans) = gather_running_work(&project_root);
     let liveness_warning = ps_liveness_warning(&rows);
@@ -3860,3 +3873,7 @@ pub(crate) static INTEGRATE: crate::command_registry::CommandReg =
         },
         run: crate::command_registry::Handler::Early(run_integrate),
     };
+
+#[cfg(test)]
+#[path = "tests/story_2254_ps_detached_codex_tests.rs"]
+mod story_2254_ps_detached_codex_tests;

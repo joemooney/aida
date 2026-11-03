@@ -1177,9 +1177,137 @@ pub(crate) fn register_spawned_agent(
     resumed_from: Option<String>,
     description: Option<String>,
 ) -> Result<AgentRegistryEntry> {
+    let pid_start = crate::process_probe::process_start_identity(pid);
+    register_spawned_agent_as(
+        project_root,
+        agent_type,
+        pid,
+        pid_start,
+        current_pid_namespace(),
+        SpawnedRow {
+            role,
+            current_spec,
+            worktree_path,
+            binary,
+            name,
+            native_session_id,
+            resumed_from,
+            description,
+        },
+    )
+}
+
+/// The descriptive fields of a launcher-registered row.
+// trace:STORY-2254 | ai:claude
+pub(crate) struct SpawnedRow<'a> {
+    pub role: Option<String>,
+    pub current_spec: Option<String>,
+    pub worktree_path: PathBuf,
+    pub binary: Option<&'a AgentBinaryIdentity>,
+    pub name: Option<String>,
+    pub native_session_id: Option<String>,
+    pub resumed_from: Option<String>,
+    pub description: Option<String>,
+}
+
+/// STORY-2254: register a detached worker strictly. Its start identity is
+/// REQUIRED and must equal `expected_start` (read again now, so a reused PID
+/// is refused), and the row records the worker's own PID namespace rather
+/// than the registering supervisor's. A SessionStart hook row merges only
+/// for that same pid/start; any other row at the id is displaced as today.
+/// The persisted row is re-read and verified.
+// trace:STORY-2254 | ai:claude
+pub(crate) fn register_detached_worker(
+    project_root: &Path,
+    agent_type: &str,
+    pid: u32,
+    expected_start: &str,
+    row: SpawnedRow<'_>,
+) -> Result<AgentRegistryEntry> {
+    let start = crate::process_probe::process_start_identity(pid)
+        .context("detached worker start identity could not be read; refusing to register it")?;
+    anyhow::ensure!(
+        !expected_start.is_empty() && start == expected_start,
+        "detached worker {pid} is no longer the spawned process (start identity changed)"
+    );
+    let namespace = process_pid_namespace(pid)
+        .context("detached worker PID namespace could not be read; refusing to register it")?;
+    let entry = register_spawned_agent_as(
+        project_root,
+        agent_type,
+        pid,
+        Some(start.clone()),
+        Some(namespace),
+        row,
+    )?;
+    let path = registry_path(project_root, &entry.id);
+    let persisted: AgentRegistryEntry = toml::from_str(
+        &std::fs::read_to_string(&path).with_context(|| format!("reading {}", path.display()))?,
+    )
+    .with_context(|| format!("parsing {}", path.display()))?;
+    anyhow::ensure!(
+        persisted.pid == pid
+            && persisted.pid_start.as_deref() == Some(start.as_str())
+            && persisted.ended_at.is_none(),
+        "detached worker registry row did not persist as written"
+    );
+    Ok(persisted)
+}
+
+/// The PID-namespace inode of process `pid`, when readable.
+// trace:STORY-2254 | ai:claude
+pub(crate) fn process_pid_namespace(pid: u32) -> Option<u64> {
+    use std::os::unix::fs::MetadataExt;
+    std::fs::metadata(format!("/proc/{pid}/ns/pid"))
+        .ok()
+        .map(|m| m.ino())
+}
+
+/// STORY-2254: end the row of exactly `pid` with start `start`. A row that
+/// now belongs to another process (a successor at a reused pid) is left
+/// alone and `Ok(None)` is returned.
+// trace:STORY-2254 | ai:claude
+pub(crate) fn mark_detached_worker_ended(
+    project_root: &Path,
+    agent_type: &str,
+    pid: u32,
+    start: &str,
+) -> Result<Option<AgentRegistryEntry>> {
+    let agent_type = normalize_agent_type(agent_type.to_string());
+    let path = registry_path(project_root, &agent_id(&agent_type, pid));
+    let body = match std::fs::read_to_string(&path) {
+        Ok(body) => body,
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(err) => return Err(err).with_context(|| format!("reading {}", path.display())),
+    };
+    let entry: AgentRegistryEntry =
+        toml::from_str(&body).with_context(|| format!("parsing {}", path.display()))?;
+    if entry.pid_start.as_deref() != Some(start) || entry.ended_at.is_some() {
+        return Ok(None);
+    }
+    end_entry(project_root, entry).map(Some)
+}
+
+fn register_spawned_agent_as(
+    project_root: &Path,
+    agent_type: &str,
+    pid: u32,
+    pid_start: Option<String>,
+    pid_namespace: Option<u64>,
+    row: SpawnedRow<'_>,
+) -> Result<AgentRegistryEntry> {
+    let SpawnedRow {
+        role,
+        current_spec,
+        worktree_path,
+        binary,
+        name,
+        native_session_id,
+        resumed_from,
+        description,
+    } = row;
     let now = Utc::now();
     let agent_type = normalize_agent_type(agent_type.to_string());
-    let pid_start = crate::process_probe::process_start_identity(pid);
     // The agent is already running; wait out launch-time contention rather
     // than fail on the SessionStart budget.
     // trace:BUG-b6b1278890774ef993d2ebc327862470-030 | ai:claude
@@ -1212,7 +1340,7 @@ pub(crate) fn register_spawned_agent(
         agent_type,
         pid,
         pid_start,
-        pid_namespace: current_pid_namespace(),
+        pid_namespace,
         name,
         description,
         tty: current_tty(),
