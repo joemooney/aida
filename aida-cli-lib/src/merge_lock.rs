@@ -76,6 +76,15 @@ pub(crate) struct Holder {
     /// TASK-1750; the liveness check then degrades to a bare pid probe.
     // trace:TASK-1750 | ai:claude
     pub pid_start: Option<String>,
+    /// PID namespace inode of the holder (`/proc/self/ns/pid`), so a pid
+    /// written from inside a sandbox is never probed from outside it, nor the
+    /// reverse. `None` for a lockfile written before BUG-2417: its holder is
+    /// then TTL-only and never judged dead by pid.
+    // trace:BUG-2417 | ai:claude
+    pub pid_ns: Option<String>,
+    /// Boot id of the holder; `None` (legacy) makes the holder TTL-only.
+    // trace:BUG-2417 | ai:claude
+    pub boot: Option<String>,
     pub pr: Option<u64>,
     pub note: String,
     pub acquired_at: u64,
@@ -84,10 +93,12 @@ pub(crate) struct Holder {
 
 fn serialize(h: &Holder) -> String {
     format!(
-        "host={}\npid={}\npid_start={}\npr={}\nnote={}\nacquired_at={}\nttl_secs={}\n",
+        "host={}\npid={}\npid_start={}\npid_ns={}\nboot={}\npr={}\nnote={}\nacquired_at={}\nttl_secs={}\n",
         h.host,
         h.pid,
         h.pid_start.as_deref().unwrap_or_default(),
+        h.pid_ns.as_deref().unwrap_or_default(),
+        h.boot.as_deref().unwrap_or_default(),
         h.pr.map(|p| p.to_string()).unwrap_or_default(),
         h.note.replace('\n', " "),
         h.acquired_at,
@@ -102,6 +113,8 @@ fn parse(body: &str) -> Holder {
         host: String::new(),
         pid: 0,
         pid_start: None,
+        pid_ns: None,
+        boot: None,
         pr: None,
         note: String::new(),
         acquired_at: 0,
@@ -114,6 +127,8 @@ fn parse(body: &str) -> Holder {
                 "host" => h.host = v.to_string(),
                 "pid" => h.pid = v.parse().unwrap_or(0),
                 "pid_start" => h.pid_start = Some(v.to_string()).filter(|v| !v.is_empty()),
+                "pid_ns" => h.pid_ns = Some(v.to_string()).filter(|v| !v.is_empty()),
+                "boot" => h.boot = Some(v.to_string()).filter(|v| !v.is_empty()),
                 "pr" => h.pr = v.parse().ok(),
                 "note" => h.note = v.to_string(),
                 "acquired_at" => h.acquired_at = v.parse().unwrap_or(0),
@@ -134,6 +149,25 @@ fn parse(body: &str) -> Holder {
 // trace:TASK-1750 | ai:claude
 fn holder_alive(h: &Holder) -> bool {
     aida_core::liveness::process_identity_is_alive(h.pid, h.pid_start.as_deref())
+}
+
+/// The holder's pid when this process can probe it: same host, and a recorded
+/// boot id and PID namespace that match ours (cache_lock's `visible_pid`, as
+/// BUG-2412 does for train owners). A holder from a foreign namespace (every
+/// sandboxed call), another boot, or a record without either is `None`: its
+/// pid would name an unrelated process or none, so it is TTL-only.
+// trace:BUG-2417 | ai:claude
+fn probeable_pid(h: &Holder, our_host: &str) -> Option<u32> {
+    if h.host.is_empty() || h.host != our_host || h.pid_ns.is_none() || h.boot.is_none() {
+        return None;
+    }
+    aida_core::CacheLockInfo {
+        pid: h.pid,
+        boot_id: h.boot.clone(),
+        pid_ns: h.pid_ns.clone(),
+        ..Default::default()
+    }
+    .visible_pid()
 }
 
 /// A record is complete once its last field, `ttl_secs`, is present.
@@ -234,10 +268,12 @@ fn temp_path(path: &Path) -> PathBuf {
     path.with_file_name(format!(".{name}.{}.{nanos}.tmp", std::process::id()))
 }
 
-/// `Some(reason)` if a foreign holder is reclaimable: a DEAD pid on our host
-/// (fast, exact), or any holder aged past its TTL (backstop). `None` ⇒ live.
+/// `Some(reason)` if a foreign holder is reclaimable: a DEAD pid this process
+/// can probe (same host, boot and PID namespace — fast, exact), or any holder
+/// aged past its TTL (backstop). `None` ⇒ live.
+// trace:BUG-2417 | ai:claude
 fn stale_reason(h: &Holder, our_host: &str) -> Option<String> {
-    if !h.host.is_empty() && h.host == our_host && !holder_alive(h) {
+    if probeable_pid(h, our_host).is_some() && !holder_alive(h) {
         return Some(format!("holder pid {} is dead on this host", h.pid));
     }
     let ttl = if h.ttl_secs == 0 {
@@ -325,6 +361,8 @@ pub(crate) fn acquire(
             host: our_host.clone(),
             pid: std::process::id(),
             pid_start: aida_core::liveness::process_start_identity(std::process::id()),
+            pid_ns: aida_core::local_pid_ns(),
+            boot: aida_core::local_boot_id(),
             pr,
             note: note.to_string(),
             acquired_at: now_secs(),
@@ -406,6 +444,12 @@ pub(crate) fn status(project_root: &Path) -> Vec<(String, Holder)> {
 mod tests {
     use super::*;
 
+    /// Whether this platform resolves the boot id and PID namespace a pid
+    /// probe needs; without them every holder is TTL-only (BUG-2417).
+    fn pid_probe_supported() -> bool {
+        aida_core::local_pid_ns().is_some() && aida_core::local_boot_id().is_some()
+    }
+
     #[test]
     fn acquire_serializes_and_bounded_wait_refuses() {
         // trace:STORY-1171.ac991dc3 | ai:codex
@@ -444,6 +488,9 @@ mod tests {
     fn stale_dead_pid_same_host_is_reclaimed() {
         // trace:STORY-1171.acf58627 | ai:codex
         // trace:BUG-1184 | ai:codex
+        if !pid_probe_supported() {
+            return; // no namespace identity: dead pids are TTL-only here
+        }
         let dir = tempfile::tempdir().unwrap();
         let root = dir.path();
         std::fs::create_dir_all(locks_dir(root)).unwrap();
@@ -452,6 +499,8 @@ mod tests {
             host: crate::coordination::hostname(),
             pid: 999_999_999,
             pid_start: None,
+            pid_ns: aida_core::local_pid_ns(),
+            boot: aida_core::local_boot_id(),
             pr: Some(9),
             note: "dead".into(),
             acquired_at: now_secs(),
@@ -488,6 +537,8 @@ mod tests {
             host: crate::coordination::hostname(),
             pid: std::process::id(),
             pid_start: None,
+            pid_ns: aida_core::local_pid_ns(),
+            boot: aida_core::local_boot_id(),
             pr: Some(9),
             note: "fresh live pid".into(),
             acquired_at: now_secs(),
@@ -530,6 +581,9 @@ mod tests {
         else {
             return; // platform cannot report start times; nothing to distinguish
         };
+        if !pid_probe_supported() {
+            return;
+        }
         let dir = tempfile::tempdir().unwrap();
         let root = dir.path();
         std::fs::create_dir_all(locks_dir(root)).unwrap();
@@ -537,6 +591,8 @@ mod tests {
             host: crate::coordination::hostname(),
             pid: std::process::id(),
             pid_start: Some(our_start),
+            pid_ns: aida_core::local_pid_ns(),
+            boot: aida_core::local_boot_id(),
             pr: Some(9),
             note: "true holder".into(),
             acquired_at: now_secs(),
@@ -567,20 +623,25 @@ mod tests {
             host: "h".into(),
             pid: 42,
             pid_start: Some("2026-10-14T16:00:00+00:00".into()),
+            pid_ns: Some("4026531836".into()),
+            boot: Some("b00t".into()),
             pr: None,
             note: String::new(),
             acquired_at: 1,
             ttl_secs: 2,
         };
-        assert_eq!(parse(&serialize(&h)).pid_start, h.pid_start);
+        assert_eq!(parse(&serialize(&h)), h);
         let legacy = parse("host=h\npid=42\npr=\nnote=\nacquired_at=1\nttl_secs=2\n");
         assert_eq!(legacy.pid, 42);
         assert_eq!(legacy.pid_start, None);
+        assert_eq!((legacy.pid_ns, legacy.boot), (None, None));
         let empty = Holder {
             pid_start: None,
+            pid_ns: None,
+            boot: None,
             ..h
         };
-        assert_eq!(parse(&serialize(&empty)).pid_start, None);
+        assert_eq!(parse(&serialize(&empty)), empty);
     }
 
     #[test]
@@ -594,6 +655,8 @@ mod tests {
             host: "some-other-host".into(),
             pid: std::process::id(), // alive here, but host differs so pid path is skipped
             pid_start: None,
+            pid_ns: aida_core::local_pid_ns(),
+            boot: aida_core::local_boot_id(),
             pr: Some(1),
             note: "old".into(),
             acquired_at: now_secs().saturating_sub(10_000),
@@ -758,6 +821,9 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn live_status_drops_dead_and_expired_holders() {
+        if !pid_probe_supported() {
+            return;
+        }
         let dir = tempfile::tempdir().unwrap();
         let root = dir.path();
         std::fs::create_dir_all(locks_dir(root)).unwrap();
@@ -765,6 +831,8 @@ mod tests {
             host: crate::coordination::hostname(),
             pid: 999_999_999,
             pid_start: None,
+            pid_ns: aida_core::local_pid_ns(),
+            boot: aida_core::local_boot_id(),
             pr: Some(9),
             note: "aida pr train".into(),
             acquired_at: now_secs(),
@@ -775,6 +843,8 @@ mod tests {
             host: "elsewhere".into(),
             pid: 1,
             pid_start: None,
+            pid_ns: aida_core::local_pid_ns(),
+            boot: aida_core::local_boot_id(),
             pr: Some(10),
             note: "aida pr train".into(),
             acquired_at: now_secs().saturating_sub(DEFAULT_TTL_SECS + 60),
@@ -784,5 +854,87 @@ mod tests {
         let _live = acquire(root, "main", Some(11), "aida pr train", DEFAULT_WAIT).unwrap();
         let live: Vec<_> = live_status(root).into_iter().map(|(_, h)| h.pr).collect();
         assert_eq!(live, vec![Some(11)], "only the live holder gates");
+    }
+
+    /// BUG-2417: a holder whose pid this process cannot probe — written from a
+    /// foreign PID namespace (a sandboxed call), another boot, or before the
+    /// namespace was recorded — is TTL-only: a pid that reads dead from here
+    /// never frees the lease or drops it from `live_status` before its TTL.
+    // trace:BUG-2417 | ai:claude
+    #[test]
+    fn foreign_or_unrecorded_pid_ns_holder_is_not_judged_dead_before_its_ttl() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        std::fs::create_dir_all(locks_dir(root)).unwrap();
+        let host = crate::coordination::hostname();
+        let base = Holder {
+            host: host.clone(),
+            pid: 999_999_999, // dead from here
+            pid_start: None,
+            pid_ns: Some("1".into()),
+            boot: aida_core::local_boot_id(),
+            pr: Some(7),
+            note: crate::pr_train::TRAIN_LEASE_NOTE.into(),
+            acquired_at: now_secs(),
+            ttl_secs: DEFAULT_TTL_SECS,
+        };
+        let cases = [
+            ("foreign pid namespace", base.clone()),
+            (
+                "unrecorded pid namespace",
+                Holder {
+                    pid_ns: None,
+                    ..base.clone()
+                },
+            ),
+            (
+                "another boot",
+                Holder {
+                    pid_ns: aida_core::local_pid_ns(),
+                    boot: Some("another-boot".into()),
+                    ..base.clone()
+                },
+            ),
+            (
+                "unrecorded boot",
+                Holder {
+                    pid_ns: aida_core::local_pid_ns(),
+                    boot: None,
+                    ..base.clone()
+                },
+            ),
+        ];
+        for (label, h) in cases {
+            assert_eq!(stale_reason(&h, &host), None, "{label}: judged dead by pid");
+            std::fs::write(lock_path(root, "main"), serialize(&h)).unwrap();
+            let live: Vec<_> = live_status(root).into_iter().map(|(_, h)| h.pr).collect();
+            assert_eq!(live, vec![Some(7)], "{label}: dropped from live_status");
+            let err = acquire(root, "main", Some(8), "steal", Duration::from_millis(100))
+                .expect_err(label);
+            assert_eq!(err.kind(), std::io::ErrorKind::WouldBlock, "{label}");
+
+            // The TTL backstop still reclaims it.
+            let expired = Holder {
+                acquired_at: now_secs().saturating_sub(DEFAULT_TTL_SECS + 60),
+                ..h
+            };
+            assert!(
+                stale_reason(&expired, &host).is_some(),
+                "{label}: TTL ignored"
+            );
+        }
+    }
+
+    /// BUG-2417: `acquire` records this process's namespace and boot, so a
+    /// probe from the same namespace still reclaims a dead holder at once.
+    // trace:BUG-2417 | ai:claude
+    #[test]
+    fn acquire_records_pid_ns_and_boot() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        let _g = acquire(root, "main", Some(1), "rec", DEFAULT_WAIT).unwrap();
+        let h = parse(&std::fs::read_to_string(lock_path(root, "main")).unwrap());
+        assert_eq!(h.pid_ns, aida_core::local_pid_ns());
+        assert_eq!(h.boot, aida_core::local_boot_id());
     }
 }
