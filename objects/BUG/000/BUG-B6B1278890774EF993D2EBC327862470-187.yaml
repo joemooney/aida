@@ -8,12 +8,19 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-03T00:47:05.661792425Z
-modified_at: 2026-11-03T00:47:05.661792425Z
+modified_at: 2026-11-03T02:22:20.394798996Z
 req_type: Bug
 tags:
 - regroup
 - sandbox
 - security
+comments:
+- id: 01a19f36-f0ea-7412-bb18-c648cc40994c
+  author: joe
+  content: 'ADVISOR TRIAGE + DESIGN RULING (2026-11-02 19:25 MST). Confirmed: session.rs ~L5187-5191 (contained session write roots) pushes CARGO_HOME (default ~/.cargo) read-write. Worse than filed: ~/.cargo/bin is on the host PATH, so a contained lane could plant a binary the host later runs, in addition to tampering with registry/src and git/checkouts that the host compiles. RULING: remove CARGO_HOME from the read-write roots. Bind it READ-ONLY (sandboxes already allow reads). Do not add a per-lane overlay. A contained lane that needs a NEW crate fails loudly. Map cargo''s read-only-filesystem error to one line: ''new dependencies are fetched on the host: run cargo fetch outside the lane''. Lanes already run the cargo gate host-side (TASK-2772 workaround). Tests: (1) a contained-profile render does not include CARGO_HOME or ~/.cargo in rw roots; (2) a live bwrap test (skip without userns or bwrap) where a write to <CARGO_HOME>/bin/x and to registry/src is refused. Out of scope (note only): the ~/.npm rw root is the same class but lower risk; flag it in the PR body for STORY-2326''s declared-resources work. Bundled with TASK-2772 in one lane (same contained-sandbox settings surface).'
+  created_at: 2026-11-03T02:22:20.394798996Z
+  modified_at: 2026-11-03T02:22:20.394798996Z
+  session_id: 125337a4-7dd3-483b-9c56-3665173938ae
 filed_at:
   code_sha: 2d4c8cf53970af435900579e4e627d8f4a44d716
   branch: main
