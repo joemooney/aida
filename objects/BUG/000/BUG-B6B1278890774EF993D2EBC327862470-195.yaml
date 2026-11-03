@@ -6,13 +6,22 @@ description: |-
   2026-11-03 08:06: five open PRs (#3192 #3273 #3288 #3291 #3297) showed only 'stale overlapping head already notified' in aida review watch. The watcher sends a one-time notice to the PR author and then skips the PR (review_watch.rs:1134). The authors are headless lanes that have exited, so nobody updates the branch and nothing is reviewed. Releasing with --release does not help. The advisor saw it only by reading the watcher log; aida awaiting does not list it.
 
   Acceptance: (1) when the author is not a live session (no live lease or mail-reachable seat), the watcher runs 'gh pr update-branch' itself for a branch that merges cleanly, and reviews the new head on the next tick. (2) On conflicts, or when it cannot update, it routes the PR to the advisor as an awaiting item: 'PR-N behind main with overlap; update-branch conflicts'. (3) aida awaiting lists every PR the watcher is skipping, with the reason. (4) A test with a fake forge: an overlapping stale head and a dead author lead to update-branch being invoked and the PR reviewed on the next tick.
-status: Approved
+status: InProgress
 priority: High
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-03T15:10:46.366604771Z
-modified_at: 2026-11-03T15:10:46.366604771Z
+modified_at: 2026-11-03T16:29:12.124144686Z
 req_type: Bug
+history:
+- id: 01a1a23e-443c-7732-95c2-9e39a4719c7a
+  author: aida-session-start
+  timestamp: 2026-11-03T16:29:12.124143588Z
+  session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 493f3ae1c526c7ab19f208112d426aecbf33c8b5
   branch: main
