@@ -11,7 +11,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-03T13:49:30.195676116Z
-modified_at: 2026-11-03T15:00:44.510943095Z
+modified_at: 2026-11-03T15:00:45.621687674Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -46,6 +46,22 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: AC1/AC2 implemented with good failure isolation, but mail-wake discovery uses a glob pattern that systemctl list-unit-files rejects with exit 1 when nothing matches, so every promote/rollback on a host with no enabled mail-wake unit prints a false ''discovery failed'' warning; the empty-case test models empty as Ok("") and hides it. CI still pending at review time.. No triage reason was given.'
   created_at: 2026-11-03T15:00:44.510940644Z
   modified_at: 2026-11-03T15:00:44.510940644Z
+  session_id: f5eddefe-032d-4760-94ba-3a318cf3d1d1
+- id: 01a1a1ed-4b33-7043-837f-97f280b56de6
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2424):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: ea73cae4ad10
+    Recorded: 2026-11-03T14:30:21.395589101+00:00
+    Findings:
+    1. [blocking] aida-cli-lib/src/mailbox_wake_run.rs:1034-1040: restart_enabled_services_with passes the pattern 'aida-mail-wake-*.service' to 'systemctl --user list-unit-files'. Modern systemd (this host runs 255) exits non-zero ('0 unit files listed.') when patterns are given and none match, and systemctl() at :830 turns any non-success into Err. On a host with no enabled mail-wake unit (a fresh machine, a project that never ran 'mailbox wake enable', or the autopromote tick), every 'aida dev build' promote and 'aida dev rollback' then prints 'warning: live binaries were swapped, but mail-wake service discovery failed (... failed (exit status: 1))' via dev_build.rs:2001. Fix: drop the glob argument (keep --type=service --state=enabled,enabled-runtime) and rely on the existing mail_wake_unit() filter, or treat an empty match as zero units. Add a test that pins this. Note: the sandbox has no bus access, so I could not run systemctl to confirm the exit code here; please verify on the host.
+    2. [test-gap] aida-cli-lib/src/mailbox_wake_run_tests.rs:660-668 restart_mail_wake_empty_and_unavailable_manager models 'no enabled units' as the runner returning Ok("") for list-unit-files, which is not what systemctl does with a pattern argument, so the real empty case is untested. Make the fake match real systemctl behavior once the discovery call is fixed.
+    3. [minor] aida-cli-lib/src/mailbox_cmd.rs:1222-1247 retention_service_hint prints 'restart with systemctl --user restart <unit>' for ANY innermost .service in the writer's cgroup. A writer started under a non-AIDA service (for example a tmux, code-server or terminal-server user service) gets advice that would kill every session in that unit. Name the unit for any service, but print the restart command only for aida-mail-wake-* units (or units AIDA owns); otherwise say the process runs under <unit> and must be restarted by its owner.
+    4. [test-gap] mailbox_cmd.rs service_hint_tests covers neither the backslash-quoting branch (escaped unit names such as 'x\x2dy.service') nor the gating that limits hints to Unverified hosts at :1191-1194. Add a case for the quoted form.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-03T15:00:45.491350753Z
+  modified_at: 2026-11-03T15:00:45.491350753Z
   session_id: f5eddefe-032d-4760-94ba-3a318cf3d1d1
 history:
 - id: 01a1a1ad-cb23-70d0-8689-8418a67dbdf6
