@@ -1,0 +1,34 @@
+id: 01a19f04-6712-78e0-9ab8-c132aa986281
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-328
+agreed_id: STORY-2330
+title: 'Review PR-3278: [AI:claude] fix(train): judge a merge-lease holder by pid only in its own pid namespace and boot (BUG-2417)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a19edf`) for branch `bug-2417-work`.
+
+  - PR: <https://github.com/joemooney/aida/pull/3278>
+  - Branch: `bug-2417-work` → `main`
+
+  ## Covers
+
+  - BUG-2417
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 3278` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-03T01:27:08.306730701Z
+modified_at: 2026-11-03T01:27:08.306730701Z
+req_type: Story
+filed_at:
+  code_sha: 2d4c8cf53970af435900579e4e627d8f4a44d716
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 2d4c8cf5397
+  vendor: claude
+  session: ee0bf351-6b17-486f-a38e-cfbb1343c426
