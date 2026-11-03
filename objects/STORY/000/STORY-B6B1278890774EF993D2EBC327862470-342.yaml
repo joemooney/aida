@@ -12,13 +12,22 @@ description: |-
   2. When an active mandate exists, renew behaves as today (extends it).
   3. With no prior mandate at all, renew errors with the exact 'aida mandate start ...' line to run.
   4. About 60 minutes before an active mandate expires, the operator gets a prompt: the status line/hook banner shows 'MANDATE expires in Nm, run: aida mandate renew', and a coordination/mail notice goes to the operator and the advisor seat. The advisor's due jobs surface the same item so the advisor can batch it to the operator early.
-status: Approved
+status: InProgress
 priority: High
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-03T13:41:47.751489803Z
-modified_at: 2026-11-03T13:41:47.751489803Z
+modified_at: 2026-11-03T13:51:42.953366465Z
 req_type: Story
+history:
+- id: 01a1a1ae-1569-7562-bd46-8229e0a4ee0e
+  author: aida-session-start
+  timestamp: 2026-11-03T13:51:42.953364409Z
+  session_id: f5eddefe-032d-4760-94ba-3a318cf3d1d1
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 6c587ee595ce70f5fcc48480cfdddc8246cf158c
   branch: main
