@@ -89,7 +89,7 @@ pub(crate) const PROTOCOL: u32 = 1;
 /// start identity (so a recycled pid is not a live runner); it carries no
 /// path, token or grant.
 // trace:BUG-2383 | ai:claude
-#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize, ts_rs_forge::TS)]
 pub(crate) struct RunnerRecord {
     pub(crate) protocol: u32,
     pub(crate) runner_pid: u32,
@@ -995,7 +995,7 @@ pub(crate) fn seed_lane_target_with(lane: &LaneJobs, unshare: &str) -> SeedNote 
         return SeedNote::cold(Some(&target), "not under the primary's target");
     };
     #[cfg(unix)]
-    let on_overlay = crate::seat_target_overlay::lane_has_overlay(&target);
+    let on_overlay = crate::seat_target_overlay::lane_has_overlay(main_target, &lane.lease_id);
     #[cfg(not(unix))]
     let on_overlay = false;
     let reflink_why = if on_overlay {
@@ -1033,8 +1033,9 @@ pub(crate) fn seed_lane_target_with(lane: &LaneJobs, unshare: &str) -> SeedNote 
     }
 }
 
-/// Snapshot (or reuse) the primary's current generation, collect unpinned
-/// ones, pin it for this lane, ready the lane's overlay and prove it mounts.
+/// Snapshot (or reuse) the primary's current generation and pin it for this
+/// lane (one step, under the lane-base lock), collect unpinned ones, ready
+/// the lane's host-only overlay and prove it mounts.
 #[cfg(unix)]
 fn overlay_for(
     lane: &LaneJobs,
@@ -1045,12 +1046,11 @@ fn overlay_for(
     use crate::seat_target_overlay as ov;
     use crate::seat_target_seed::{LOCK_WAIT, SEED_PROFILES};
     let profile = SEED_PROFILES[0];
-    let generation = ov::snapshot(main_target, profile, LOCK_WAIT)?;
-    ov::pin(&generation, &lane.lease_id)?;
+    let generation = ov::snapshot(main_target, profile, &lane.lease_id, LOCK_WAIT)?;
     if let Some(main_root) = lane_main_root(lane) {
-        ov::gc(main_target, main_root, Some(&generation.dir));
+        ov::gc(main_target, main_root, Some(&generation.dir), LOCK_WAIT);
     }
-    let overlay = ov::prepare_lane(target, profile, &generation)?;
+    let overlay = ov::prepare_lane(main_target, target, profile, &lane.lease_id, &generation)?;
     ov::probe(unshare, &overlay)?;
     Ok(overlay)
 }

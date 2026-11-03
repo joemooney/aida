@@ -703,6 +703,8 @@ fn bug_2383_bwrap_host_cargo_is_read_only() {
         .unwrap()
         .join("target/bug-2383-bwrap");
     std::fs::create_dir_all(&base_dir).unwrap();
+    // A worktree's target/ may be a symlink, which bwrap cannot bind through.
+    let base_dir = std::fs::canonicalize(base_dir).unwrap();
     let base = tempfile::tempdir_in(base_dir).unwrap();
     let home = base.path().join("home");
     let cargo_home = home.join(".cargo");
@@ -1040,7 +1042,8 @@ fn drain_launcher_supplies_jobs_for_all_implementer_vendors_and_reports_evidence
                     Some((&lane.seat, "branch"))
                 )
                 .is_some(),
-                vendor == HeadlessVendor::Claude
+                // BUG-2386: Codex resumes by its bound thread id too.
+                crate::session::vendor_can_resume(vendor)
             );
             let request = if refused {
                 job(&["sh", "-c", "false"])
@@ -1382,12 +1385,44 @@ fn leases_and_results_are_outside_every_seat_writable_root() {
     std::fs::create_dir_all(&seat).unwrap();
     // The Claude contained boundary and Codex workspace-write share the seat
     // root; the temp dirs both also grant hold no checkout.
-    let roots = crate::contained_boundary::contained_write_roots(&seat);
+    let mut roots = crate::contained_boundary::contained_write_roots(&seat);
     assert!(!roots.is_empty());
+    // A lane job also writes its seat target and the cargo slot state
+    // (strict review P1 (d): the overlay dirs are outside those too).
+    let main_target = main.join("target");
+    let lane = LaneJobs {
+        seat: seat.clone(),
+        inbox: seat.join(INBOX_RELATIVE),
+        results: results_dir(&main, "lease-x"),
+        lease_id: "lease-x".into(),
+        build_env: vec![(
+            "CARGO_TARGET_DIR".into(),
+            main_target
+                .join("worktrees/aida-seat-x")
+                .display()
+                .to_string(),
+        )],
+        host_env: Vec::new(),
+        program: "cargo".into(),
+        sandbox: Sandbox::Bwrap,
+    };
+    let env: BTreeMap<String, String> = [(
+        "HOME".to_string(),
+        tmp.path().join("home").display().to_string(),
+    )]
+    .into_iter()
+    .collect();
+    roots.extend(lane.sandbox_rw_paths(&env));
+    let overlay = crate::seat_target_overlay::lane_overlay_dir(&main_target, "lease-x");
     for host_only in [
         main.join(".aida/sessions"),
         results_dir(&main, "lease-x"),
         heartbeat_path(&results_dir(&main, "lease-x")),
+        main_target.join(crate::seat_target_overlay::LANE_BASE),
+        main_target.join(crate::seat_target_overlay::LANE_OVERLAY),
+        overlay.join("upper"),
+        overlay.join("work"),
+        overlay.join("generation"),
     ] {
         for root in &roots {
             assert!(
@@ -1704,4 +1739,40 @@ fn codex_core_tool_shell_reaches_the_runner_through_its_lease() {
             }
         );
     }
+}
+
+// Strict review P3: a typed lease rewriter keeps the runner record, as it
+// keeps child_grant_id. trace:BUG-2383 | ai:claude
+#[cfg(unix)]
+#[test]
+fn update_lease_branch_keeps_the_lane_jobs_record() {
+    let tmp = tempfile::tempdir().unwrap();
+    let main = tmp.path();
+    let lease = "lease-keep";
+    let dir = main.join(".aida/sessions");
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(
+        dir.join(format!("{lease}.toml")),
+        format!(
+            "id = \"{lease}\"\nscope = \"BUG-1\"\nslug = \"bug-1\"\nowner = \"o\"\n\
+             worktree_path = \"{}\"\nbranch = \"old\"\nstarted_at = \"2026-11-02T00:00:00Z\"\n\
+             hostname = \"h\"\n\n[{LEASE_FIELD}]\nprotocol = 1\nrunner_pid = 42\n\
+             runner_started_at = \"s-42\"\n",
+            main.join("seat").display()
+        ),
+    )
+    .unwrap();
+    crate::orchestrator_leases::update_lease_branch(main, lease, "new").unwrap();
+    let body = lease_body(main, lease);
+    let parsed: crate::SessionLease = toml::from_str(&body).unwrap();
+    assert_eq!(parsed.branch, "new");
+    assert_eq!(
+        parsed.lane_jobs,
+        Some(RunnerRecord {
+            protocol: 1,
+            runner_pid: 42,
+            runner_started_at: "s-42".into(),
+        }),
+        "update_lease_branch dropped the runner record:\n{body}"
+    );
 }

@@ -911,6 +911,7 @@ fn implementer_lease(scope: &str) -> SessionLease {
         driver: None,
         child_grant_id: None,
         vendor_session_id: None,
+        lane_jobs: None,
     }
 }
 
@@ -1780,6 +1781,7 @@ fn lease_for(id: &str, scope: &str, age_secs: i64) -> SessionLease {
         driver: None,
         child_grant_id: None,
         vendor_session_id: None,
+        lane_jobs: None,
     }
 }
 

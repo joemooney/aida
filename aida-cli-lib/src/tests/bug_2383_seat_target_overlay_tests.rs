@@ -72,7 +72,7 @@ fn filetime_set(path: &Path, at: std::time::SystemTime) {
 fn a_snapshot_links_artifacts_copies_fingerprints_and_is_reused() {
     let tmp = tempfile::tempdir().unwrap();
     let target = primary(tmp.path());
-    let generation = snapshot(&target, "agent", Duration::from_secs(5)).unwrap();
+    let generation = snapshot(&target, "agent", "lease-a", Duration::from_secs(5)).unwrap();
     assert!(generation.dir.starts_with(target.join(LANE_BASE)));
     let ino = |p: &Path| std::fs::metadata(p).unwrap().ino();
     let agent = target.join("agent");
@@ -90,7 +90,7 @@ fn a_snapshot_links_artifacts_copies_fingerprints_and_is_reused() {
     );
     assert!(!generation.dir.join("incremental").exists());
     assert!(!stale(&generation.dir));
-    let again = snapshot(&target, "agent", Duration::from_secs(5)).unwrap();
+    let again = snapshot(&target, "agent", "lease-a", Duration::from_secs(5)).unwrap();
     assert_eq!(again, generation);
     // An in-place rewrite of a hardlinked primary artifact is reported stale.
     std::fs::write(
@@ -114,14 +114,14 @@ fn a_snapshot_waits_for_the_primary_build_lock() {
         .open(target.join("agent/.cargo-lock"))
         .unwrap();
     fs2::FileExt::lock_exclusive(&held).unwrap();
-    let why = snapshot(&target, "agent", Duration::from_millis(300)).unwrap_err();
+    let why = snapshot(&target, "agent", "lease-a", Duration::from_millis(300)).unwrap_err();
     assert!(why.contains("primary's build is still running"), "{why}");
     assert!(std::fs::read_dir(target.join(LANE_BASE))
         .unwrap()
         .flatten()
         .all(|e| e.file_name().to_string_lossy().starts_with('.')));
     drop(held);
-    assert!(snapshot(&target, "agent", Duration::from_secs(5)).is_ok());
+    assert!(snapshot(&target, "agent", "lease-a", Duration::from_secs(5)).is_ok());
 }
 
 // Amendment 1 (GC): a generation is removed once no pin names a lease that
@@ -150,9 +150,19 @@ fn generations_no_live_lease_pins_are_collected() {
     let unpinned = make("agent-3-a", &[]);
     let kept = make("agent-4-a", &[]);
     std::fs::create_dir_all(target.join(LANE_BASE).join(".agent-5.tmp-1")).unwrap();
-    let mut removed = gc(&target, main, Some(&kept.dir));
+    // A lane overlay is collected with its lease too.
+    let live_overlay = lane_overlay_dir(&target, "live");
+    let dead_overlay = lane_overlay_dir(&target, "gone");
+    for d in [&live_overlay, &dead_overlay] {
+        std::fs::create_dir_all(d.join("upper")).unwrap();
+    }
+    let mut removed = gc(&target, main, Some(&kept.dir), Duration::from_secs(5));
     removed.sort();
-    assert_eq!(removed, vec![dead.dir.clone(), unpinned.dir.clone()]);
+    assert_eq!(
+        removed,
+        vec![dead.dir.clone(), unpinned.dir.clone(), dead_overlay.clone()]
+    );
+    assert!(live_overlay.is_dir());
     assert!(pinned.dir.is_dir() && kept.dir.is_dir());
     assert!(pinned.dir.join(".pins/live").exists());
     assert!(
@@ -160,31 +170,143 @@ fn generations_no_live_lease_pins_are_collected() {
         "dead pins are pruned"
     );
     std::fs::remove_file(sessions.join("live.toml")).unwrap();
-    let mut removed = gc(&target, main, None);
+    let mut removed = gc(&target, main, None, Duration::from_secs(5));
     removed.sort();
-    assert_eq!(removed, vec![pinned.dir.clone(), kept.dir.clone()]);
+    assert_eq!(
+        removed,
+        vec![pinned.dir.clone(), kept.dir.clone(), live_overlay.clone()]
+    );
     assert!(target.join(LANE_BASE).join(".agent-5.tmp-1").is_dir());
 }
 
 // The lane's upper survives between jobs on one generation and is
-// discarded when the lane moves to another.
+// discarded when the lane moves to another. It lives under the primary's
+// target, never under the job-writable seat target.
 #[test]
 fn a_lane_upper_is_kept_per_generation_and_reset_on_a_new_one() {
     let tmp = tempfile::tempdir().unwrap();
-    let seat_target = tmp.path().join("target/worktrees/seat");
+    let main_target = tmp.path().join("target");
+    let seat_target = main_target.join("worktrees/seat");
     let generation = |id: &str| Generation {
         id: id.into(),
         dir: tmp.path().join(id),
     };
-    let first = prepare_lane(&seat_target, "agent", &generation("agent-1-a")).unwrap();
+    let first = prepare_lane(
+        &main_target,
+        &seat_target,
+        "agent",
+        "lease-a",
+        &generation("agent-1-a"),
+    )
+    .unwrap();
     assert_eq!(first.dest, seat_target.join("agent"));
-    assert!(lane_has_overlay(&seat_target));
+    let home = lane_overlay_dir(&main_target, "lease-a");
+    assert_eq!(first.upper, home.join("upper"));
+    assert_eq!(first.work, home.join("work"));
+    assert!(!first.upper.starts_with(&seat_target));
+    assert!(lane_has_overlay(&main_target, "lease-a"));
+    assert!(!lane_has_overlay(&main_target, "lease-b"));
     std::fs::write(first.upper.join("built"), "x").unwrap();
-    let same = prepare_lane(&seat_target, "agent", &generation("agent-1-a")).unwrap();
+    let same = prepare_lane(
+        &main_target,
+        &seat_target,
+        "agent",
+        "lease-a",
+        &generation("agent-1-a"),
+    )
+    .unwrap();
     assert!(same.upper.join("built").exists());
-    let next = prepare_lane(&seat_target, "agent", &generation("agent-2-a")).unwrap();
+    let next = prepare_lane(
+        &main_target,
+        &seat_target,
+        "agent",
+        "lease-a",
+        &generation("agent-2-a"),
+    )
+    .unwrap();
     assert_eq!(next.lower, tmp.path().join("agent-2-a"));
     assert!(!next.upper.join("built").exists());
+    assert!(prepare_lane(
+        &main_target,
+        &seat_target,
+        "agent",
+        "../x",
+        &generation("agent-2-a")
+    )
+    .is_err());
+}
+
+// Strict review P1 (b): a mount destination a job turned into a symlink is
+// refused, by prepare_lane and again by the mount script.
+// trace:BUG-2383 | ai:claude
+#[test]
+fn a_symlinked_mount_destination_is_refused() {
+    let tmp = tempfile::tempdir().unwrap();
+    let main_target = tmp.path().join("target");
+    let seat_target = main_target.join("worktrees/seat");
+    let victim = tmp.path().join("victim");
+    std::fs::create_dir_all(&victim).unwrap();
+    std::fs::create_dir_all(&seat_target).unwrap();
+    std::os::unix::fs::symlink(&victim, seat_target.join("agent")).unwrap();
+    let generation = Generation {
+        id: "agent-1-a".into(),
+        dir: tmp.path().join("agent-1-a"),
+    };
+    let why =
+        prepare_lane(&main_target, &seat_target, "agent", "lease-a", &generation).unwrap_err();
+    assert!(why.contains("not a directory"), "{why}");
+    std::fs::remove_file(seat_target.join("agent")).unwrap();
+    std::fs::write(seat_target.join("agent"), "file").unwrap();
+    assert!(prepare_lane(&main_target, &seat_target, "agent", "lease-a", &generation).is_err());
+    assert!(MOUNT_THEN_EXEC.starts_with("[ -d \"$2\" ] && [ ! -h \"$2\" ] || exit 125;"));
+}
+
+// Strict review P2: snapshot pins under the lane-base lock and gc takes the
+// same lock, so a gc racing a new lane never removes its generation between
+// the snapshot and the pin; an incomplete generation (a gc that removed it
+// half-way, say) is rebuilt, never reused. trace:BUG-2383 | ai:claude
+#[test]
+fn a_racing_gc_never_removes_a_generation_between_snapshot_and_pin() {
+    let tmp = tempfile::tempdir().unwrap();
+    let main = tmp.path();
+    let target = primary(main);
+    let sessions = main.join(".aida/sessions");
+    std::fs::create_dir_all(&sessions).unwrap();
+    std::fs::write(sessions.join("lease-b.toml"), "id = \"lease-b\"\n").unwrap();
+    let generation = snapshot(&target, "agent", "lease-b", Duration::from_secs(5)).unwrap();
+    // The pin is already there when snapshot returns: the window the old
+    // separate pin() left is gone, so the gc that ran in it keeps the
+    // generation.
+    assert!(generation.dir.join(".pins/lease-b").is_file());
+    assert!(gc(&target, main, None, Duration::from_secs(5)).is_empty());
+    assert!(complete(&generation.dir));
+    // A gc that cannot take the lane-base lock (a snapshot holds it)
+    // collects nothing, even an unpinned generation.
+    std::fs::remove_file(sessions.join("lease-b.toml")).unwrap();
+    let held = open_lock(&target.join(LANE_BASE).join(".lock")).unwrap();
+    fs2::FileExt::lock_exclusive(&held).unwrap();
+    assert!(gc(&target, main, None, Duration::from_millis(300)).is_empty());
+    assert!(generation.dir.is_dir());
+    // ...and a snapshot waits for that lock too.
+    assert!(
+        snapshot(&target, "agent", "lease-b", Duration::from_millis(300))
+            .unwrap_err()
+            .contains("another generation snapshot")
+    );
+    drop(held);
+    // A generation a gc removed half-way is rebuilt, not reused.
+    std::fs::remove_dir_all(generation.dir.join("deps")).unwrap();
+    assert!(!complete(&generation.dir));
+    let rebuilt = snapshot(&target, "agent", "lease-c", Duration::from_secs(5)).unwrap();
+    assert_eq!(rebuilt, generation);
+    assert!(complete(&rebuilt.dir));
+    assert!(rebuilt.dir.join("deps/libdep-1.rlib").is_file());
+    assert!(rebuilt.dir.join(".pins/lease-c").is_file());
+    // Every required directory is there even when the primary has no build/.
+    std::fs::remove_dir_all(target.join("agent/build")).unwrap();
+    std::fs::remove_dir_all(&rebuilt.dir).unwrap();
+    let no_build = snapshot(&target, "agent", "lease-c", Duration::from_secs(5)).unwrap();
+    assert!(complete(&no_build.dir));
 }
 
 #[test]
@@ -192,8 +314,8 @@ fn the_wrapper_mounts_then_execs_the_unchanged_bwrap_argv() {
     let ov = LaneOverlay {
         generation: "agent-1-a".into(),
         lower: "/m/target/lane-base/agent-1-a".into(),
-        upper: "/m/target/worktrees/s/overlay/upper".into(),
-        work: "/m/target/worktrees/s/overlay/work".into(),
+        upper: "/m/target/lane-overlay/l/upper".into(),
+        work: "/m/target/lane-overlay/l/work".into(),
         dest: "/m/target/worktrees/s/agent".into(),
     };
     let bwrap_args = vec![
@@ -248,7 +370,14 @@ fn an_unavailable_overlay_falls_back_to_a_reported_cold_seed() {
         id: "agent-0-0".into(),
         dir: tmp.path().join("target").join(LANE_BASE).join("agent-0-0"),
     };
-    prepare_lane(&tmp.path().join("target/worktrees/seat"), "agent", &earlier).unwrap();
+    prepare_lane(
+        &tmp.path().join("target"),
+        &tmp.path().join("target/worktrees/seat"),
+        "agent",
+        "lease-ov",
+        &earlier,
+    )
+    .unwrap();
     let note = crate::lane_job::seed_lane_target_with(&lane, "/nonexistent/unshare");
     assert!(note.cold);
     assert!(note.overlay.is_none());
@@ -258,8 +387,10 @@ fn an_unavailable_overlay_falls_back_to_a_reported_cold_seed() {
     let bare = tempfile::tempdir().unwrap();
     std::fs::create_dir_all(bare.path().join("target/agent")).unwrap();
     prepare_lane(
+        &bare.path().join("target"),
         &bare.path().join("target/worktrees/seat"),
         "agent",
+        "lease-ov",
         &earlier,
     )
     .unwrap();
@@ -288,12 +419,14 @@ fn bug_2383_bwrap_overlay_seat_write_never_changes_a_primary_inode() {
         .unwrap()
         .join("target/bug-2383-bwrap");
     std::fs::create_dir_all(&base_dir).unwrap();
+    // A worktree's target/ may be a symlink, which bwrap cannot bind through.
+    let base_dir = std::fs::canonicalize(base_dir).unwrap();
     let base = tempfile::tempdir_in(base_dir).unwrap();
     let target = primary(base.path());
     let lane = lane_under_primary(base.path());
     let seat_target = base.path().join("target/worktrees/seat");
-    let generation = snapshot(&target, "agent", Duration::from_secs(5)).unwrap();
-    let ov = prepare_lane(&seat_target, "agent", &generation).unwrap();
+    let generation = snapshot(&target, "agent", "lease-ov", Duration::from_secs(5)).unwrap();
+    let ov = prepare_lane(&target, &seat_target, "agent", "lease-ov", &generation).unwrap();
     if !overlay_usable(&ov) || !bwrap_runs() {
         assert!(
             std::env::var_os("AIDA_REQUIRE_BWRAP_LIVE").is_none(),
@@ -367,3 +500,268 @@ fn bwrap_runs() -> bool {
 }
 
 use std::collections::BTreeMap;
+
+/// A fixture base under the repository's `target/`: not under /tmp, where
+/// the lane-job profile mounts a private tmpfs.
+fn live_base() -> tempfile::TempDir {
+    let base_dir = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .unwrap()
+        .join("target/bug-2383-bwrap");
+    std::fs::create_dir_all(&base_dir).unwrap();
+    // A worktree's target/ may be a symlink, which bwrap cannot bind through.
+    let base_dir = std::fs::canonicalize(base_dir).unwrap();
+    tempfile::tempdir_in(base_dir).unwrap()
+}
+
+/// Skip a live test where userns overlay mounts or bubblewrap cannot run,
+/// unless the forced-live CI gate requires it.
+fn skip_live(why: &str) {
+    assert!(
+        std::env::var_os("AIDA_REQUIRE_BWRAP_LIVE").is_none(),
+        "AIDA_REQUIRE_BWRAP_LIVE requires this live test to run: {why}"
+    );
+    eprintln!("SKIP ({why})");
+}
+
+// Strict review P1 (c): job N plants an upperdir symlink, wherever a job can
+// write, and job N+1's writes still land in the lane's host-only upper, never
+// through the symlink. Job N cannot touch the real upper at all, and a mount
+// destination turned into a symlink stops the next mount. Runs the
+// production snapshot, lane overlay and wrapper around the real lane-job
+// bwrap profile. trace:BUG-2383 | ai:claude
+#[test]
+fn bug_2383_bwrap_a_planted_upper_symlink_never_redirects_a_later_job() {
+    let base = live_base();
+    let target = primary(base.path());
+    let lane = lane_under_primary(base.path());
+    let seat_target = base.path().join("target/worktrees/seat");
+    let generation = snapshot(&target, "agent", "lease-ov", Duration::from_secs(5)).unwrap();
+    let ov = prepare_lane(&target, &seat_target, "agent", "lease-ov", &generation).unwrap();
+    if !overlay_usable(&ov) || !bwrap_runs() {
+        return skip_live(&format!(
+            "userns overlay or bwrap unavailable: {:?}",
+            probe("unshare", &ov)
+        ));
+    }
+    let env: BTreeMap<String, String> = BTreeMap::new();
+    let rw = lane.sandbox_rw_paths(&env);
+    // (d) The upper, work and generation record are outside every root a
+    // job or its seat can write.
+    for host_only in [&ov.upper, &ov.work, &generation.dir] {
+        for root in rw.iter().chain([&lane.seat]) {
+            assert!(
+                !host_only.starts_with(root),
+                "{} is inside job-writable {}",
+                host_only.display(),
+                root.display()
+            );
+        }
+    }
+    let victim = base.path().join("victim");
+    std::fs::create_dir_all(&victim).unwrap();
+    let run = |script: String, overlay: bool| {
+        let argv = crate::session::lane_job_bwrap_argv(
+            &lane.seat,
+            &rw,
+            &[],
+            "/bin/sh",
+            vec!["-c".into(), script],
+        );
+        let (program, args) = if overlay {
+            wrap("unshare", &ov, "bwrap", argv).unwrap()
+        } else {
+            ("bwrap".to_string(), argv)
+        };
+        std::process::Command::new(program)
+            .args(&args)
+            .output()
+            .unwrap()
+    };
+    let (upper, victim_s, st, dest) = (
+        ov.upper.display().to_string(),
+        victim.display().to_string(),
+        seat_target.display().to_string(),
+        ov.dest.display().to_string(),
+    );
+    // Job N: plant the symlink at the old in-seat-target upper (writable)
+    // and try the real one (read-only to a job).
+    let planted = run(
+        format!(
+            "mkdir -p '{st}/overlay' && rm -rf '{st}/overlay/upper' && ln -s '{victim_s}' '{st}/overlay/upper' || exit 3; \
+             rm -rf '{upper}' 2>/dev/null; ln -sfn '{victim_s}' '{upper}' 2>/dev/null; exit 0"
+        ),
+        true,
+    );
+    assert!(planted.status.success(), "{planted:?}");
+    assert!(std::fs::symlink_metadata(seat_target.join("overlay/upper"))
+        .unwrap()
+        .file_type()
+        .is_symlink());
+    assert!(
+        std::fs::symlink_metadata(&ov.upper).unwrap().is_dir(),
+        "a job replaced the real upper"
+    );
+    // Job N+1 writes through the overlay: into the real upper only.
+    let wrote = run(format!("echo canary > '{dest}/canary'"), true);
+    assert!(wrote.status.success(), "{wrote:?}");
+    assert!(ov.upper.join("canary").is_file());
+    assert_eq!(
+        std::fs::read_dir(&victim).unwrap().count(),
+        0,
+        "a job wrote through the planted symlink"
+    );
+    // A job on no overlay (a cold lane) turns the mount destination into a
+    // symlink: prepare_lane refuses it, and so does the mount script.
+    let swapped = run(
+        format!("rm -rf '{dest}' && ln -s '{victim_s}' '{dest}'"),
+        false,
+    );
+    assert!(swapped.status.success(), "{swapped:?}");
+    assert!(prepare_lane(&target, &seat_target, "agent", "lease-ov", &generation).is_err());
+    let refused = run(format!("echo canary > '{dest}/canary2'"), true);
+    assert_eq!(refused.status.code(), Some(125), "{refused:?}");
+    assert_eq!(std::fs::read_dir(&victim).unwrap().count(), 0);
+}
+
+// Strict review P2 / AC2 (accf30b1): on a host without reflinks the first
+// lane job already sees a dependency the primary built as Fresh. A fixture
+// primary builds a tiny crate with one dependency; the seat runs `cargo
+// build -v` through the real lane job runner, bubblewrap and overlay.
+// trace:BUG-2383 | ai:claude
+#[test]
+fn bug_2383_bwrap_overlay_first_job_sees_a_prebuilt_dependency_as_fresh() {
+    let Some(cargo) = std::env::var_os("CARGO").map(PathBuf::from) else {
+        return skip_live("no CARGO in the test environment");
+    };
+    if !bwrap_runs() {
+        return skip_live("bwrap unavailable");
+    }
+    let base = live_base();
+    let root = base.path();
+    let lease = "lease-fresh";
+    // The dependency sits at one absolute path both checkouts name, as a
+    // registry dependency does.
+    let dep = root.join("vendor/fixture-dep");
+    std::fs::create_dir_all(dep.join("src")).unwrap();
+    std::fs::write(
+        dep.join("Cargo.toml"),
+        "[package]\nname = \"fixture-dep\"\nversion = \"0.1.0\"\nedition = \"2021\"\n",
+    )
+    .unwrap();
+    std::fs::write(dep.join("src/lib.rs"), "pub fn answer() -> u32 { 42 }\n").unwrap();
+    let manifest = format!(
+        "[package]\nname = \"fixture-app\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n\
+         [dependencies]\nfixture-dep = {{ path = '{}' }}\n\n\
+         [profile.agent]\ninherits = \"dev\"\n\n[workspace]\n",
+        dep.display()
+    );
+    let checkout = |name: &str| {
+        let dir = root.join(name);
+        std::fs::create_dir_all(dir.join("src")).unwrap();
+        std::fs::write(dir.join("Cargo.toml"), &manifest).unwrap();
+        std::fs::write(
+            dir.join("src/main.rs"),
+            "fn main() { println!(\"{}\", fixture_dep::answer()); }\n",
+        )
+        .unwrap();
+        dir
+    };
+    let primary_dir = checkout("primary");
+    let seat = checkout("seat");
+    std::fs::create_dir_all(seat.join(".git")).unwrap();
+    std::fs::create_dir_all(seat.join(".aida")).unwrap();
+    std::fs::write(
+        seat.join(".aida/config.toml"),
+        "[contained]\nos_wrap = true\n",
+    )
+    .unwrap();
+    let main_target = root.join("target");
+    let seat_target = main_target.join("worktrees/seat");
+    let host_env = crate::lane_job::scrub_host_env(
+        std::env::vars_os()
+            .filter_map(|(k, v)| Some((k.into_string().ok()?, v.into_string().ok()?))),
+    );
+    // The primary builds with the same environment a job gets.
+    let built = std::process::Command::new(&cargo)
+        .args(["build", "--profile", "agent", "-v"])
+        .current_dir(&primary_dir)
+        .env_clear()
+        .envs(host_env.iter().cloned())
+        .env("CARGO_TARGET_DIR", &main_target)
+        .env("RUSTC_WRAPPER", "")
+        .env(
+            crate::lane_job::OFFLINE_ENV.0,
+            crate::lane_job::OFFLINE_ENV.1,
+        )
+        .output()
+        .unwrap();
+    assert!(
+        built.status.success(),
+        "the primary build failed: {built:?}"
+    );
+    std::fs::copy(primary_dir.join("Cargo.lock"), seat.join("Cargo.lock")).unwrap();
+    let sessions = root.join(".aida/sessions");
+    std::fs::create_dir_all(&sessions).unwrap();
+    std::fs::write(
+        sessions.join(format!("{lease}.toml")),
+        format!("id = \"{lease}\"\n"),
+    )
+    .unwrap();
+    // Take the overlay path even on a reflink-capable filesystem: the lane
+    // already ran on an overlay (an older generation), so no reflink seed.
+    let earlier = Generation {
+        id: "agent-0-0".into(),
+        dir: main_target.join(LANE_BASE).join("agent-0-0"),
+    };
+    prepare_lane(&main_target, &seat_target, "agent", lease, &earlier).unwrap();
+    let lane = crate::lane_job::LaneJobs {
+        inbox: seat.join(crate::lane_job::INBOX_RELATIVE),
+        results: crate::lane_job::results_dir(root, lease),
+        seat: seat.clone(),
+        lease_id: lease.into(),
+        build_env: vec![
+            ("CARGO_TARGET_DIR".into(), seat_target.display().to_string()),
+            ("RUSTC_WRAPPER".into(), String::new()),
+        ],
+        host_env,
+        program: cargo.display().to_string(),
+        sandbox: crate::lane_job::Sandbox::Bwrap,
+    };
+    lane.prepare().unwrap();
+    let runner = crate::lane_job::Runner::start(lane.clone());
+    let id = crate::lane_job::new_id();
+    let job = crate::lane_job::JobRequest {
+        argv: ["cargo", "build", "--profile", "agent", "-v"]
+            .map(String::from)
+            .to_vec(),
+        env: BTreeMap::new(),
+    };
+    crate::lane_job::submit(&lane.inbox, &id, &job).unwrap();
+    let waited = crate::lane_job::wait_for(
+        &lane.inbox,
+        &lane.results,
+        &id,
+        Duration::from_secs(600),
+        Duration::from_secs(600),
+        |_, _| {},
+    );
+    drop(runner);
+    let output =
+        std::fs::read_to_string(crate::lane_job::out_path(&lane.results, &id)).unwrap_or_default();
+    eprintln!("---- lane job output (host-witnessed) ----\n{output}---- end ----");
+    if output.contains("seed: cold (") || output.contains("lane job refused") {
+        return skip_live(&format!(
+            "the lane could not use the overlay or bwrap: {output}"
+        ));
+    }
+    assert_eq!(waited, crate::lane_job::Waited::Done(0), "{output}");
+    assert!(output.contains("seed: overlay gen="), "{output}");
+    assert!(output.contains("on the lane's target overlay"), "{output}");
+    assert!(
+        output
+            .lines()
+            .any(|l| l.trim_start().starts_with("Fresh fixture-dep")),
+        "the pre-built dependency was not Fresh:\n{output}"
+    );
+}

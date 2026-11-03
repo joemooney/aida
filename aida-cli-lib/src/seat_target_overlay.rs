@@ -9,9 +9,15 @@
 //!   `build/` are hardlinked, `.fingerprint/` is really copied (cargo rewrites
 //!   fingerprints in place), `incremental/` is skipped. The snapshot is taken
 //!   under the primary's `.cargo-lock`, so it never sees a half-written build.
-//! - **upper/work**: per lane, `<seat target>/overlay/{upper,work}`, kept
-//!   between jobs (the second job is warm) and discarded when the lane moves
-//!   to another generation.
+//! - **upper/work**: per lane, `<main>/target/lane-overlay/<lease>/{upper,work}`,
+//!   kept between jobs (the second job is warm) and discarded when the lane
+//!   moves to another generation. They live beside `lane-base/`, outside every
+//!   job- and seat-writable root: a job binds its seat target read-write, and
+//!   the overlay mount runs outside bubblewrap, so an upper a job could reach
+//!   would let it plant a symlink that redirects the next job's writes onto
+//!   the host (strict review, P1). The mount destination
+//!   `<seat target>/<profile>` is in the job's reach, so it is refused when it
+//!   is not a real directory.
 //!
 //! The lower layer is read-only and every write, in place or not, copies up
 //! to a new inode in the upper layer, so no seat write ever reaches a file of
@@ -26,7 +32,9 @@
 //!
 //! A generation is pinned by each lease that uses it
 //! (`<gen>/.pins/<lease id>`) and garbage-collected once no pin names a lease
-//! that still exists.
+//! that still exists. Snapshot-and-pin and the collection both run under the
+//! lane-base lock, so a collection never removes a generation between its
+//! snapshot and its pin.
 // trace:BUG-2383 | ai:claude
 
 use std::path::{Path, PathBuf};
@@ -34,14 +42,18 @@ use std::time::Duration;
 
 /// Where generation snapshots live, under the primary's `target/`.
 pub(crate) const LANE_BASE: &str = "lane-base";
-/// A lane's overlay directory, under its seat target.
-pub(crate) const OVERLAY_DIR: &str = "overlay";
-/// The file in [`OVERLAY_DIR`] naming the generation its upper was built on.
+/// Where each lane's upper, work and generation record live, under the
+/// primary's `target/`: `<main>/target/lane-overlay/<lease id>/`.
+pub(crate) const LANE_OVERLAY: &str = "lane-overlay";
+/// The file in a lane's overlay directory naming the generation its upper
+/// was built on.
 const GENERATION_RECORD: &str = "generation";
 /// The pins directory inside a generation.
 const PINS: &str = ".pins";
 /// The (name, size, mtime) manifest of a generation's hardlinked `deps/`.
 const MANIFEST: &str = ".manifest.json";
+/// The directories every complete generation holds.
+const REQUIRED_DIRS: &[&str] = &["deps", "build", ".fingerprint"];
 /// Hardlinked into a snapshot.
 const LINKED_DIRS: &[&str] = &["deps", "build"];
 /// Copied into a snapshot.
@@ -159,14 +171,33 @@ fn deps_manifest(deps: &Path) -> Vec<(String, u64, i64)> {
     out
 }
 
+/// Whether `dir` is a complete generation: a real directory (not a
+/// symlink) holding every [`REQUIRED_DIRS`] entry and the manifest. A
+/// generation a collection removed half-way, or any other leftover, is not.
+fn complete(dir: &Path) -> bool {
+    std::fs::symlink_metadata(dir).is_ok_and(|m| m.is_dir())
+        && REQUIRED_DIRS
+            .iter()
+            .all(|d| std::fs::symlink_metadata(dir.join(d)).is_ok_and(|m| m.is_dir()))
+        && std::fs::symlink_metadata(dir.join(MANIFEST)).is_ok_and(|m| m.is_file())
+}
+
 /// Create (or reuse) the generation snapshot of `<main_target>/<profile>`
-/// under the primary's build lock. `Err` is the reason, worded for the job
-/// output.
+/// under the primary's build lock, and pin it for `lease_id`, all under the
+/// lane-base lock (strict review, P2): a concurrent [`gc`] waits for that
+/// lock, so it always sees the pin. An existing generation is reused only
+/// when it is [`complete`]; otherwise it is rebuilt. `Err` is the reason,
+/// worded for the job output.
+// trace:BUG-2383 | ai:claude
 pub(crate) fn snapshot(
     main_target: &Path,
     profile: &str,
+    lease_id: &str,
     lock_wait: Duration,
 ) -> Result<Generation, String> {
+    if !crate::lane_job::valid_id(lease_id) {
+        return Err(format!("`{lease_id}` is not a lease id"));
+    }
     let src = main_target.join(profile);
     if !src.is_dir() {
         return Err(format!("{} does not exist", src.display()));
@@ -176,24 +207,26 @@ pub(crate) fn snapshot(
     let base = main_target.join(LANE_BASE);
     std::fs::create_dir_all(&base).map_err(|e| format!("create {}: {e}", base.display()))?;
     let dir = base.join(&id);
-    if dir.is_dir() {
-        return Ok(Generation { id, dir });
-    }
-    // One snapshot at a time.
     let base_lock =
         open_lock(&base.join(".lock")).map_err(|e| format!("open the lane-base lock: {e}"))?;
     if !lock_within(&base_lock, lock_wait) {
         return Err("another generation snapshot is still running".into());
     }
-    if dir.is_dir() {
-        return Ok(Generation { id, dir });
+    let generation = Generation { id, dir };
+    if complete(&generation.dir) {
+        pin(&generation, lease_id)?;
+        return Ok(generation);
+    }
+    if std::fs::symlink_metadata(&generation.dir).is_ok() {
+        remove_any(&generation.dir)
+            .map_err(|e| format!("remove the incomplete {}: {e}", generation.dir.display()))?;
     }
     let build_lock = open_lock(&src.join(".cargo-lock"))
         .map_err(|e| format!("open the primary's build lock: {e}"))?;
     if !lock_within(&build_lock, lock_wait) {
         return Err("the primary's build is still running".into());
     }
-    let tmp = base.join(format!(".{id}.tmp-{}", std::process::id()));
+    let tmp = base.join(format!(".{}.tmp-{}", generation.id, std::process::id()));
     let _ = std::fs::remove_dir_all(&tmp);
     let built = (|| {
         std::fs::create_dir_all(&tmp).map_err(|e| format!("create {}: {e}", tmp.display()))?;
@@ -205,6 +238,11 @@ pub(crate) fn snapshot(
                 }
             }
         }
+        // A primary without build scripts has no build/: the generation
+        // still holds every required directory, so it reads as complete.
+        for d in REQUIRED_DIRS {
+            std::fs::create_dir_all(tmp.join(d)).map_err(|e| format!("create {d}: {e}"))?;
+        }
         let manifest = serde_json::to_vec(&deps_manifest(&tmp.join("deps")))
             .map_err(|e| format!("manifest: {e}"))?;
         std::fs::write(tmp.join(MANIFEST), manifest).map_err(|e| format!("manifest: {e}"))?;
@@ -212,9 +250,13 @@ pub(crate) fn snapshot(
     })();
     drop(build_lock);
     match built.and_then(|()| {
-        std::fs::rename(&tmp, &dir).map_err(|e| format!("move the snapshot into place: {e}"))
+        std::fs::rename(&tmp, &generation.dir)
+            .map_err(|e| format!("move the snapshot into place: {e}"))
     }) {
-        Ok(()) => Ok(Generation { id, dir }),
+        Ok(()) => {
+            pin(&generation, lease_id)?;
+            Ok(generation)
+        }
         Err(why) => {
             let _ = std::fs::remove_dir_all(&tmp);
             Err(why)
@@ -222,69 +264,155 @@ pub(crate) fn snapshot(
     }
 }
 
-/// Pin `generation` for `lease_id`.
-pub(crate) fn pin(generation: &Generation, lease_id: &str) -> Result<(), String> {
+/// Remove `path` whatever it is, never following a symlink.
+fn remove_any(path: &Path) -> std::io::Result<()> {
+    if std::fs::symlink_metadata(path)?.is_dir() {
+        std::fs::remove_dir_all(path)
+    } else {
+        std::fs::remove_file(path)
+    }
+}
+
+/// Pin `generation` for `lease_id`. Called by [`snapshot`] under the
+/// lane-base lock.
+fn pin(generation: &Generation, lease_id: &str) -> Result<(), String> {
     let pins = generation.dir.join(PINS);
     std::fs::create_dir_all(&pins).map_err(|e| format!("pins: {e}"))?;
     std::fs::write(pins.join(lease_id), b"").map_err(|e| format!("pin: {e}"))
 }
 
-/// Remove every generation under `<main_target>/lane-base` that no live
-/// lease pins, except `keep`. A pin is live while
+/// Under the lane-base lock (waiting at most `lock_wait`, else collecting
+/// nothing), remove every generation under `<main_target>/lane-base` that no
+/// live lease pins, except `keep`, and every lane overlay under
+/// `<main_target>/lane-overlay` whose lease is gone. A lease is live while
 /// `<main_root>/.aida/sessions/<lease id>.toml` exists. Returns the removed
 /// directories.
-pub(crate) fn gc(main_target: &Path, main_root: &Path, keep: Option<&Path>) -> Vec<PathBuf> {
+// trace:BUG-2383 | ai:claude
+pub(crate) fn gc(
+    main_target: &Path,
+    main_root: &Path,
+    keep: Option<&Path>,
+    lock_wait: Duration,
+) -> Vec<PathBuf> {
     let sessions = main_root.join(".aida").join("sessions");
+    let live = |lease: &str| sessions.join(format!("{lease}.toml")).is_file();
     let mut removed = Vec::new();
-    let Ok(entries) = std::fs::read_dir(main_target.join(LANE_BASE)) else {
+    let base = main_target.join(LANE_BASE);
+    let Ok(base_lock) = open_lock(&base.join(".lock")) else {
         return removed;
     };
-    for entry in entries.flatten() {
+    if !lock_within(&base_lock, lock_wait) {
+        return removed;
+    }
+    for entry in std::fs::read_dir(&base).into_iter().flatten().flatten() {
         let dir = entry.path();
         let name = entry.file_name().to_string_lossy().into_owned();
         if name.starts_with('.') || !dir.is_dir() || Some(dir.as_path()) == keep {
             continue;
         }
         let pins = dir.join(PINS);
-        let mut live = false;
+        let mut pinned = false;
         for pin in std::fs::read_dir(&pins).into_iter().flatten().flatten() {
-            let lease = pin.file_name().to_string_lossy().into_owned();
-            if sessions.join(format!("{lease}.toml")).is_file() {
-                live = true;
+            if live(&pin.file_name().to_string_lossy()) {
+                pinned = true;
             } else {
                 let _ = std::fs::remove_file(pin.path());
             }
         }
-        if !live && std::fs::remove_dir_all(&dir).is_ok() {
+        if !pinned && std::fs::remove_dir_all(&dir).is_ok() {
             removed.push(dir);
+        }
+    }
+    for entry in std::fs::read_dir(main_target.join(LANE_OVERLAY))
+        .into_iter()
+        .flatten()
+        .flatten()
+    {
+        let lease = entry.file_name().to_string_lossy().into_owned();
+        if !live(&lease) && remove_any(&entry.path()).is_ok() {
+            removed.push(entry.path());
         }
     }
     removed
 }
 
-/// The lane's overlay for `generation`, with its upper and work directories
-/// ready. An upper built on another generation is discarded.
+/// `<main_target>/lane-overlay/<lease_id>`: the host-only home of a lane's
+/// upper, work and generation record.
+pub(crate) fn lane_overlay_dir(main_target: &Path, lease_id: &str) -> PathBuf {
+    main_target.join(LANE_OVERLAY).join(lease_id)
+}
+
+/// Create `path` as a real directory, refusing a symlink or other file at
+/// it: `mkdir` never follows a final symlink, and the result is opened with
+/// `O_NOFOLLOW | O_DIRECTORY` to prove what is there now.
+// trace:BUG-2383 | ai:claude
+fn real_dir(path: &Path) -> Result<(), String> {
+    use std::os::unix::fs::OpenOptionsExt;
+    match std::fs::symlink_metadata(path) {
+        Ok(m) if m.is_dir() => {}
+        Ok(_) => {
+            return Err(format!(
+                "{} is not a directory (a symlink?); the overlay is not mounted on it",
+                path.display()
+            ))
+        }
+        Err(_) => match std::fs::create_dir(path) {
+            Ok(()) => {}
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {}
+            Err(e) => return Err(format!("create {}: {e}", path.display())),
+        },
+    }
+    std::fs::OpenOptions::new()
+        .read(true)
+        .custom_flags(libc::O_NOFOLLOW | libc::O_DIRECTORY)
+        .open(path)
+        .map(drop)
+        .map_err(|e| {
+            format!(
+                "{} is not a directory (a symlink?); the overlay is not mounted on it: {e}",
+                path.display()
+            )
+        })
+}
+
+/// Lane `lease_id`'s overlay for `generation`: its upper and work
+/// directories ready under [`lane_overlay_dir`] (an upper built on another
+/// generation is discarded), and its mount destination
+/// `<seat_target>/<profile>` a real directory.
+// trace:BUG-2383 | ai:claude
 pub(crate) fn prepare_lane(
+    main_target: &Path,
     seat_target: &Path,
     profile: &str,
+    lease_id: &str,
     generation: &Generation,
 ) -> Result<LaneOverlay, String> {
-    let dir = seat_target.join(OVERLAY_DIR);
+    if !crate::lane_job::valid_id(lease_id) {
+        return Err(format!("`{lease_id}` is not a lease id"));
+    }
+    let root = main_target.join(LANE_OVERLAY);
+    std::fs::create_dir_all(main_target)
+        .map_err(|e| format!("create {}: {e}", main_target.display()))?;
+    real_dir(&root)?;
+    let dir = root.join(lease_id);
+    real_dir(&dir)?;
     let upper = dir.join("upper");
     let work = dir.join("work");
     let record = dir.join(GENERATION_RECORD);
     let recorded = std::fs::read_to_string(&record).ok();
     if recorded.as_deref().map(str::trim) != Some(generation.id.as_str()) {
         for d in [&upper, &work] {
-            if d.exists() {
-                std::fs::remove_dir_all(d).map_err(|e| format!("reset {}: {e}", d.display()))?;
+            if std::fs::symlink_metadata(d).is_ok() {
+                remove_any(d).map_err(|e| format!("reset {}: {e}", d.display()))?;
             }
         }
     }
+    real_dir(&upper)?;
+    real_dir(&work)?;
+    std::fs::create_dir_all(seat_target)
+        .map_err(|e| format!("create {}: {e}", seat_target.display()))?;
     let dest = seat_target.join(profile);
-    for d in [&upper, &work, &dest] {
-        std::fs::create_dir_all(d).map_err(|e| format!("create {}: {e}", d.display()))?;
-    }
+    real_dir(&dest)?;
     std::fs::write(&record, &generation.id).map_err(|e| format!("record: {e}"))?;
     Ok(LaneOverlay {
         generation: generation.id.clone(),
@@ -295,12 +423,10 @@ pub(crate) fn prepare_lane(
     })
 }
 
-/// Whether the seat target already runs on an overlay (a previous lane on
-/// this seat set it up), so an empty mountpoint is not mistaken for a warm
-/// target.
-pub(crate) fn lane_has_overlay(seat_target: &Path) -> bool {
-    seat_target
-        .join(OVERLAY_DIR)
+/// Whether lane `lease_id` already runs on an overlay (its runner set one up
+/// before), so an empty mountpoint is not mistaken for a warm target.
+pub(crate) fn lane_has_overlay(main_target: &Path, lease_id: &str) -> bool {
+    lane_overlay_dir(main_target, lease_id)
         .join(GENERATION_RECORD)
         .is_file()
 }
@@ -325,8 +451,10 @@ fn mount_options(ov: &LaneOverlay) -> Result<String, String> {
 }
 
 /// The shell script that mounts the overlay then execs the rest of argv.
-const MOUNT_THEN_EXEC: &str =
-    "mount -t overlay overlay -o \"$1\" \"$2\" || exit 125; shift 2; exec \"$@\"";
+/// It refuses a destination that turned into a symlink since
+/// [`prepare_lane`] checked it.
+const MOUNT_THEN_EXEC: &str = "[ -d \"$2\" ] && [ ! -h \"$2\" ] || exit 125; \
+     mount -t overlay overlay -o \"$1\" \"$2\" || exit 125; shift 2; exec \"$@\"";
 
 /// Wrap `program args` (the lane-job bwrap) so it runs with the overlay
 /// mounted: `unshare -Urm sh -c <mount; exec> sh <opts> <dest> program args`.
