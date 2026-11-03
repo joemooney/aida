@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-02T19:20:59.253007269Z
-modified_at: 2026-11-03T21:06:37.518150900Z
+modified_at: 2026-11-03T22:02:56.099402797Z
 req_type: Story
 tags:
 - architecture
@@ -388,6 +388,12 @@ comments:
   modified_at: 2026-11-03T21:06:37.518150900Z
   session_id: 01a1a331583c
   harness_version: 2.1.317 (Claude Code)
+- id: 01a1a36f-cee3-76c1-81b2-25a6afdc95a8
+  author: joe
+  content: 'ADVISOR RULING (15:07, round 6, PR #3288): the round-5 push conflicts with main. This round only: merge origin/main and resolve the conflicts so the round-5 behavior is preserved. ''cargo check -p aida-cli-lib --tests'' on the merged tree is mandatory, plus make check-ci-fast (umask 022). Push, then stop.'
+  created_at: 2026-11-03T22:02:56.099402797Z
+  modified_at: 2026-11-03T22:02:56.099402797Z
+  session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
 history:
 - id: 01a19ed2-a170-7d52-94f3-7c4ff46f38c4
   author: joe
