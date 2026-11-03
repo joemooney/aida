@@ -156,7 +156,7 @@ fn concurrent_claims_emit_at_most_once_per_crossing() {
                 .count()
         });
         assert_eq!(outputs, 1);
-        assert!(dir.path().join("fixture.notice.lock").exists());
+        assert!(dir.path().join("fixture/notice.lock").exists());
     }
 }
 
@@ -166,13 +166,14 @@ fn corrupt_unreadable_and_unwritable_ledgers_emit_nothing() {
     // must both suppress a claim. Only Ok(true) violates the no-notice contract.
     // trace:BUG-2014 | ai:codex
     let dir = tempfile::tempdir().unwrap();
-    std::fs::write(dir.path().join("fixture.notice.json"), b"{").unwrap();
+    std::fs::create_dir_all(dir.path().join("fixture")).unwrap();
+    std::fs::write(dir.path().join("fixture/notice.json"), b"{").unwrap();
     assert!(!matches!(
         claim(dir.path(), "fixture", "epoch", 1),
         Ok(true)
     ));
-    std::fs::remove_file(dir.path().join("fixture.notice.json")).unwrap();
-    std::fs::create_dir(dir.path().join("fixture.notice.json")).unwrap();
+    std::fs::remove_file(dir.path().join("fixture/notice.json")).unwrap();
+    std::fs::create_dir(dir.path().join("fixture/notice.json")).unwrap();
     assert!(!matches!(
         claim(dir.path(), "fixture", "epoch", 1),
         Ok(true)
@@ -276,4 +277,19 @@ fn client_protocol_rendering_for_claude_codex_and_antigravity() {
         NoticeClient::Antigravity.render(None),
         Some(serde_json::json!({}))
     );
+}
+
+// trace:TASK-2707 | ai:codex
+#[test]
+fn task_2707_notice_leaf_epoch_and_crossed_dedup() {
+    let dir = tempfile::tempdir().unwrap();
+    let id = "11111111-1111-4111-8111-111111111111";
+    assert!(claim(dir.path(), id, "epoch-one", 1).unwrap());
+    assert!(!claim(dir.path(), id, "epoch-one", 1).unwrap());
+    assert!(claim(dir.path(), id, "epoch-one", 2).unwrap());
+    assert!(!claim(dir.path(), id, "epoch-one", 1).unwrap());
+    assert!(claim(dir.path(), id, "epoch-two", 1).unwrap());
+    assert!(dir.path().join(id).join("notice.json").exists());
+    assert!(dir.path().join(id).join("notice.lock").exists());
+    assert!(!dir.path().join(format!("{id}.notice.json")).exists());
 }

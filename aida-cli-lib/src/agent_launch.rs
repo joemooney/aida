@@ -2508,7 +2508,7 @@ pub(crate) fn refuse_uncontained_child_of_contained_parent(
         return Ok(());
     }
     let containable = session::HeadlessVendor::parse(config.agent_type)
-        .is_some_and(|v| session::containment_applied(v, true));
+        .is_some_and(|v| session::containment_applied(v, true, None));
     if !containable {
         anyhow::bail!(
             "[contained] this session is contained (AIDA_CONTAINED), but `{}` cannot run an \
@@ -6411,7 +6411,7 @@ pub(crate) fn is_contained_launch(config: &AgentLaunchConfig) -> bool {
         Some(v) => v,
         None => return false,
     };
-    session::containment_applied(vendor, config.contained)
+    session::containment_applied(vendor, config.contained, None)
 }
 
 /// TASK-1467: the `AIDA_*` environment variables `run_tracked_agent` sets on

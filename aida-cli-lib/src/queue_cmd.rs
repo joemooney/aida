@@ -13541,7 +13541,7 @@ pub(crate) fn handle_queue_work(
                 &crate::canonical_role_name(&role),
                 &crate::current_user_id(None),
                 // trace:TASK-2631 | ai:codex
-                session::containment_applied(launch_vendor, contained),
+                session::containment_applied(launch_vendor, contained, None),
             )?;
             child_grant_id = Some(child_grant.id);
         } else if matches!(launch, QueueWorkLaunch::Fresh(_)) {
@@ -13555,7 +13555,7 @@ pub(crate) fn handle_queue_work(
                 &seat,
                 &crate::current_user_id(None),
                 // trace:TASK-2631 | ai:codex
-                session::containment_applied(launch_vendor, contained),
+                session::containment_applied(launch_vendor, contained, None),
             )?;
             match &grant {
                 crate::gate::seat_authority::HeadlessChildGrant::Issued(issued) => {
@@ -14174,7 +14174,7 @@ pub(crate) fn run_standalone_reviewer(
                         project_root,
                         "reviewer",
                         &crate::current_user_id(None),
-                        session::containment_applied(recorded, contained),
+                        session::containment_applied(recorded, contained, None),
                     )?;
                     // A reviewer never runs a plan lane; the seat comes from
                     // the reviewer grant, set by `finalize_codex_resume`.

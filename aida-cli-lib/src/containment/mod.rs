@@ -1,8 +1,9 @@
-//! Closed, model-free tracer. Nothing here can launch a vendor or stored command.
-//! The filesystem/supervisor primitives are the intended shared backend; they
-//! confer no applied-containment receipt until the later egress/grant slices.
+//! Fixed model-free diagnostics and the separate headless launch owner.
+//! Diagnostic success never grants applied credit. Only `launch` validates a
+//! production receipt before releasing the contained vendor exec barrier.
 // trace:TASK-2705 | ai:codex
 mod filesystem;
+pub(crate) mod launch;
 mod supervisor;
 
 use serde::{Deserialize, Serialize};

@@ -85,6 +85,18 @@ pub(crate) fn codex_tool_env_overrides(child: &Command) -> Result<Vec<String>> {
 /// Call once, after the child grant, identity and customization are final,
 /// immediately before spawn/exec. Other vendors never enter this adapter.
 pub(crate) fn prepare_launch(child: &mut Command) -> Result<()> {
+    // AIDA-posture children must enter the receipt-owning launch boundary.
+    // Unhandled interactive/background surfaces refuse until PR2.
+    // trace:TASK-2707 | ai:codex
+    anyhow::ensure!(
+        child
+            .get_envs()
+            .find(|(k, _)| *k == "AIDA_CONTAINMENT_POSTURE")
+            .and_then(|(_, v)| v)
+            .and_then(|v| v.to_str())
+            != Some("aida"),
+        "Codex AIDA posture requires the receipt-owning headless launch boundary"
+    );
     // The child Command is the full source of truth for whitelisted metadata:
     // under Codex's default inherit="all", a key the launcher process has but
     // the child never assigned would otherwise leak into the tool shell and
@@ -465,4 +477,17 @@ mod tests;
 #[cfg(test)]
 pub(crate) fn tool_env_keys_for_test() -> &'static [&'static str] {
     TOOL_ENV
+}
+
+// trace:TASK-2707 | ai:codex
+pub(crate) fn sandbox_args_for_contained(args: &[String]) -> Result<Vec<String>> {
+    let mut cmd = Command::new("codex");
+    cmd.args(args);
+    sandbox_args(&cmd)?
+        .into_iter()
+        .map(|v| {
+            v.into_string()
+                .map_err(|_| anyhow::anyhow!("non-UTF8 sandbox argument"))
+        })
+        .collect()
 }

@@ -603,7 +603,7 @@ pub(crate) fn handle_burndown_run(
         } else {
             // trace:BUG-2165 | ai:antigravity
             // trace:BUG-2218 TASK-2328 | ai:codex
-            if session::containment_applied(vendor, contained) {
+            if session::containment_applied(vendor, contained, None) {
                 session::prepare_contained_mailbox_for_launch(&project_root)?;
             }
             // trace:TASK-b6b1278890774ef993d2ebc327862470-144 | ai:claude
@@ -611,7 +611,7 @@ pub(crate) fn handle_burndown_run(
                 &project_root,
                 "implementer",
                 &current_user_id(None),
-                session::containment_applied(vendor, contained),
+                session::containment_applied(vendor, contained, None),
             )?;
             if let crate::gate::seat_authority::HeadlessChildGrant::Baseline { cause } =
                 &child_grant
@@ -2063,7 +2063,7 @@ pub(crate) fn run_burndown_verbose(
         find_project_root().unwrap_or_else(|_| std::env::current_dir().unwrap_or_default());
     // Prepare before logs/tee and child authority are allocated.
     // trace:BUG-2218 TASK-2328 | ai:codex
-    if session::containment_applied(vendor, contained) {
+    if session::containment_applied(vendor, contained, None) {
         session::prepare_contained_mailbox_for_launch(&project_root)?;
     }
     // TASK-1169 / ADR-22: same bounded ceiling the quiet launch sets.
@@ -2111,7 +2111,7 @@ pub(crate) fn run_burndown_verbose(
         &project_root,
         "implementer",
         &current_user_id(None),
-        session::containment_applied(vendor, contained),
+        session::containment_applied(vendor, contained, None),
     )?;
     if let crate::gate::seat_authority::HeadlessChildGrant::Baseline { cause } = &child_grant {
         eprintln!(
