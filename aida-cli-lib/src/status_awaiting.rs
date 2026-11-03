@@ -689,6 +689,16 @@ pub(crate) fn collect_awaiting_report_with_mail_facts(
             .into_values()
             .collect()
     });
+    // trace:STORY-2336 | ai:codex — only the network-enabled report refreshes.
+    let idle_eligible = crate::idle_eligible::collect(
+        project_root,
+        if no_ci || notice_fast {
+            None
+        } else {
+            Some(collect_open_prs(project_root))
+        },
+        chrono::Utc::now(),
+    );
     let mergeable_prs = match &open_prs {
         None => Vec::new(),
         Some(all_prs) => {
@@ -1201,6 +1211,7 @@ pub(crate) fn collect_awaiting_report_with_mail_facts(
     };
 
     awaiting_you::AwaitingReport {
+        idle_eligible,
         mergeable_prs,
         recusal_holds,
         held_prs,
