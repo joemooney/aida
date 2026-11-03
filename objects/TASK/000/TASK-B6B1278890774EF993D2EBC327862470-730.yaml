@@ -7,12 +7,12 @@ description: |-
 
   non-blocking/minor: dev_build.rs:900 and check-ci-gates.py run_plan add 'CARGO_HOME is read-only here; new dependencies are fetched on the host' to EVERY failed cargo or gate run while CARGO_HOME is unwritable. Inside a lane that is always, so ordinary compile or test failures get a misleading fetch hint. Gate it on cargo output that shows a download or registry write (for example 'Read-only file system' or 'failed to download').
   Reviewed sha: 1c54c4d85edd1496e1a9b1921c51fe19641ade42
-status: Approved
+status: InProgress
 priority: Medium
-owner: joe
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-03T08:37:11.941869541Z
-modified_at: 2026-11-03T13:52:12.263232433Z
+modified_at: 2026-11-03T14:29:54.320362747Z
 req_type: Task
 tags:
 - carried-from:BUG-2418
@@ -59,6 +59,14 @@ history:
   timestamp: 2026-11-03T14:11:40.667356033Z
   session_id: f5eddefe-032d-4760-94ba-3a318cf3d1d1
   changes: []
+- id: 01a1a1d1-0c10-7980-a4e5-1828fb2e70c5
+  author: aida-session-start
+  timestamp: 2026-11-03T14:29:54.320360682Z
+  session_id: f5eddefe-032d-4760-94ba-3a318cf3d1d1
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 6c587ee595ce70f5fcc48480cfdddc8246cf158c
   branch: main
