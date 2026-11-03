@@ -4509,6 +4509,29 @@ pub(crate) fn prepare_agent_launch_attempt_on_branch(
     prepared
 }
 
+/// Refuse to re-enter a spec's existing lease for a launch that named a lane
+/// branch the lease is not on: re-entry keeps the lease's worktree and
+/// branch as they are, so the lane would silently work somewhere else.
+// trace:BUG-2390 | ai:claude
+pub(crate) fn ensure_reentered_lease_on_lane_branch(
+    lease: &crate::leases::SessionLease,
+    lane_branch: &LaneBranch,
+) -> Result<()> {
+    match lane_branch.branch.as_deref() {
+        Some(wanted) if wanted != lease.branch => anyhow::bail!(
+            "refusing to launch on branch `{wanted}`: {} already has a session ({}) in {} on \
+             branch `{}`, and re-entering it keeps that branch. End that session \
+             (`aida session end {}`) or launch without `--branch`.",
+            lease.scope,
+            lease.id,
+            lease.worktree_path.display(),
+            lease.branch,
+            lease.id
+        ),
+        _ => Ok(()),
+    }
+}
+
 // trace:BUG-2188 BUG-2168 | ai:codex
 #[allow(clippy::too_many_arguments)]
 fn prepare_agent_launch_attempt_inner(
@@ -4615,6 +4638,8 @@ fn prepare_agent_launch_attempt_inner(
                 Some(&spec),
                 explicit_cwd,
             )? {
+                // trace:BUG-2390 | ai:claude
+                ensure_reentered_lease_on_lane_branch(&lease, lane_branch)?;
                 let plan_role = lease.role.clone().or(role);
                 let name = agent_registry::generate_or_validate_name(
                     project_root,
@@ -4721,6 +4746,10 @@ fn prepare_agent_launch_attempt_inner(
                 .into_iter()
                 .find(|lease| lease.id == lease_id)
                 .context("session setup receipt's exact lease is no longer visible")?;
+            if !receipt.owns_setup() {
+                // trace:BUG-2390 | ai:claude
+                ensure_reentered_lease_on_lane_branch(&lease, lane_branch)?;
+            }
             let plan_role = lease.role.clone().or(role.clone());
             let name = prepared_name;
             let lease_id = Some(lease.id.clone());

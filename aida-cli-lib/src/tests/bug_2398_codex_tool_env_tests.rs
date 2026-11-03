@@ -510,7 +510,18 @@ const LAUNCH_INVENTORY: &[(&str, usize, Finalization)] = &[
             "cfg(test) synthetic selector proving the probe's env_clear forwards none",
         ),
     ),
-    ("dispatch.rs", 1, Finalization::PrepareLaunch(1)),
+    // trace:BUG-2390 | ai:claude — the one marker is the Claude/Agy
+    // implementer builder blanking the grant (Boundary B). A Codex take/impl
+    // lane runs `aida agent new codex --bg`, a separate aida process that
+    // finalizes in agent_codex_background.rs.
+    (
+        "dispatch.rs",
+        1,
+        Finalization::NotACodexLaunch(
+            "Claude/Agy implementer lanes blank the grant; Codex lanes launch through \
+             `aida agent new codex --bg`, finalized in agent_codex_background.rs",
+        ),
+    ),
     ("phase_driver.rs", 1, Finalization::PrepareLaunch(1)),
     ("phase_driver_trait.rs", 1, Finalization::PrepareLaunch(1)),
     ("questions.rs", 2, Finalization::CoordinatorSpawn),
@@ -1607,7 +1618,15 @@ const ROLE_LAUNCH_SITES: &[(&str, usize, RoleRoute)] = &[
     // STORY-2254: the detached Codex worker finalizes via prepare_launch.
     ("agent_codex_background.rs", 1, RoleRoute::LaunchInventory),
     ("autopilot_intake.rs", 1, RoleRoute::LaunchInventory),
-    ("dispatch.rs", 1, RoleRoute::LaunchInventory),
+    // trace:BUG-2390 | ai:claude
+    (
+        "dispatch.rs",
+        1,
+        RoleRoute::AidaChild(
+            "the role site is the Claude/Agy implementer builder; Codex take/impl run \
+             `aida agent new codex --bg`, which finalizes in agent_codex_background.rs",
+        ),
+    ),
     (
         "orchestrator_leases.rs",
         1,

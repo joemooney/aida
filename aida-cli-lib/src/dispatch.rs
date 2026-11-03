@@ -193,10 +193,18 @@ pub(crate) fn resolve_lane_vendor(
 
 /// What a Codex lane's prompt says its worktree is: the detached launch
 /// creates that worktree itself, so its path is not known when the prompt
-/// is rendered.
+/// is rendered. It fills `{{WORKTREE}}` in "You are already in your worktree
+/// {{WORKTREE}} (branch ...)", so it carries no parentheses of its own.
 // trace:BUG-2390 | ai:claude
-pub(crate) const CODEX_LANE_WORKTREE: &str =
-    "(the directory you start in: this lane's own session worktree)";
+pub(crate) const CODEX_LANE_WORKTREE: &str = "at the directory you start in";
+
+/// The refusal for a Codex `take`/`impl` lane claimed by the cron/schedule
+/// `dispatch tick`: the tick holds no advisor seat grant, and the detached
+/// Codex launch mints its worker's grant from one that delegates
+/// `implementer`.
+// trace:BUG-2390 | ai:claude
+pub(crate) const CODEX_LANE_NEEDS_GRANT: &str =
+    "codex lanes need a delegated grant; run aida dispatch take from a role-entered terminal";
 
 /// Render the `take` or `impl` prompt wrapper from the embedded template in
 /// `aida-core/templates/dispatch/`.
@@ -1611,6 +1619,7 @@ pub(crate) fn execute_one_request_with_token(
             main_worktree,
             &req,
             &admission,
+            via_serve,
             *pr,
             branch,
             spec,
@@ -1630,6 +1639,7 @@ pub(crate) fn execute_one_request_with_token(
             main_worktree,
             &req,
             &admission,
+            via_serve,
             name,
             branch,
             spec,
@@ -2601,6 +2611,7 @@ fn run_take_verb(
     main_worktree: &Path,
     req: &DispatchRequest,
     _admission: &ExecutionAdmission,
+    via_serve: bool,
     pr: u64,
     branch: &str,
     spec: &str,
@@ -2641,6 +2652,9 @@ fn run_take_verb(
     // trace:BUG-2390 | ai:claude — a Codex lane's own detached launch makes
     // its lease and worktree on the PR branch; dispatch prepares none.
     if vendor == DispatchVendor::Codex {
+        if let Some(refusal) = codex_lane_tick_refusal(req, via_serve) {
+            return refusal;
+        }
         return run_codex_lane(
             main_worktree,
             req,
@@ -2693,6 +2707,7 @@ fn run_impl_verb(
     main_worktree: &Path,
     req: &DispatchRequest,
     _admission: &ExecutionAdmission,
+    via_serve: bool,
     name: &str,
     branch: &str,
     spec: &str,
@@ -2733,6 +2748,9 @@ fn run_impl_verb(
     // trace:BUG-2390 | ai:claude — a new named branch forked from the default
     // branch, created by the Codex lane's own detached launch.
     if vendor == DispatchVendor::Codex {
+        if let Some(refusal) = codex_lane_tick_refusal(req, via_serve) {
+            return refusal;
+        }
         return run_codex_lane(
             main_worktree,
             req,
@@ -2863,6 +2881,20 @@ fn launch_implementer_lane(
             exit_code: None,
         },
     }
+}
+
+/// A Codex `take`/`impl` lane outside `aida dispatch serve` (the schedule
+/// tick, or `dispatch run` without `--via-serve`) is refused before anything
+/// is fetched or launched: it has no seat grant to delegate to the worker.
+// trace:BUG-2390 | ai:claude
+fn codex_lane_tick_refusal(req: &DispatchRequest, via_serve: bool) -> Option<RunnerOutcome> {
+    (!via_serve).then(|| RunnerOutcome::Refused {
+        reason: format!(
+            "{CODEX_LANE_NEEDS_GRANT}: the dispatch tick holds no seat grant, so this Codex {} \
+             lane must run under `aida dispatch serve` started there",
+            req.action().verb_str()
+        ),
+    })
 }
 
 /// Bound on `aida agent new codex --bg` reaching its spawn verdict: session

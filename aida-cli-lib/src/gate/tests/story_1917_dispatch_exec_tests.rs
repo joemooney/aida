@@ -4133,16 +4133,16 @@ fn bug_2390_codex_take_and_impl_launch_detached_and_report_acceptance() {
     )
     .unwrap();
 
-    let started = std::time::Instant::now();
-    let summary = run_dispatch_tick_sync(&f.root, &f.mandate_dir, now).unwrap();
-    assert!(
-        started.elapsed() < std::time::Duration::from_secs(20),
-        "the tick must not wait for the detached worker ({:?})",
-        started.elapsed()
-    );
-    assert_eq!(summary.spawned, 2);
+    // `aida dispatch serve` runs them: it holds the advisor grant the
+    // detached launch delegates from.
     for id in [&take.request.id, &imp.request.id] {
-        let (_, res) = load_pair(&f.root, id).unwrap();
+        let started = std::time::Instant::now();
+        let res = execute_one_request(&f.root, &f.mandate_dir, id, true, now).unwrap();
+        assert!(
+            started.elapsed() < std::time::Duration::from_secs(20),
+            "dispatch must not wait for the detached worker ({:?})",
+            started.elapsed()
+        );
         assert_eq!(res.status, DispatchStatus::Done, "{res:?}");
         assert_eq!(res.spawned_session.as_deref(), Some("att-2390"));
     }
@@ -4180,6 +4180,63 @@ fn bug_2390_codex_take_and_impl_launch_detached_and_report_acceptance() {
     assert!(!wt_root.join("impl-1917").exists());
 }
 
+/// BUG-2390 (review finding 4): the schedule `dispatch tick` holds no seat
+/// grant, and the detached Codex launch mints its worker's grant from one.
+/// A Codex take/impl claimed by the tick is refused with a named error
+/// before anything is launched.
+// trace:BUG-2390 | ai:claude
+#[test]
+fn bug_2390_tick_refuses_codex_take_and_impl_without_a_grant() {
+    let f = ExecFixture::new(&["implementer"]);
+    write_agents_vendor(&f.root, "codex");
+    f.start_mandate(&[Scope::ShipHeld, Scope::Dispatch], false);
+    let now = Utc::now();
+    let log = f._tmp.path().join("codex-tick.log");
+    let _bins = install_test_bins(Some(fake_codex_bg_aida(&f, &log, true)), None);
+
+    let take = submit_request(
+        &f.root,
+        &f.mandate_dir,
+        &f.principal,
+        &DispatchRequestVerb::Take {
+            pr: 100,
+            branch: "claude/fix-100".into(),
+            spec: "TASK-100".into(),
+            brief: f.write_brief("take.md", "Fix PR 100.\n"),
+            vendor: None,
+        },
+        now,
+    )
+    .unwrap();
+    let imp = submit_request(
+        &f.root,
+        &f.mandate_dir,
+        &f.principal,
+        &DispatchRequestVerb::Impl {
+            name: "impl-1917".into(),
+            branch: "codex/story-1917-s2".into(),
+            spec: "STORY-1917".into(),
+            brief: f.write_brief("impl.md", "Implement slice 2.\n"),
+            vendor: Some(DispatchVendor::Codex),
+        },
+        now,
+    )
+    .unwrap();
+
+    run_dispatch_tick_sync(&f.root, &f.mandate_dir, now).unwrap();
+    for id in [&take.request.id, &imp.request.id] {
+        let (_, res) = load_pair(&f.root, id).unwrap();
+        assert_eq!(res.status, DispatchStatus::Refused, "{res:?}");
+        let reason = res.refusal_reason.as_deref().unwrap_or_default();
+        assert!(reason.starts_with(CODEX_LANE_NEEDS_GRANT), "{reason}");
+        assert!(res.spawned_session.is_none());
+    }
+    assert!(
+        !log.exists(),
+        "no detached Codex launch may run from the tick"
+    );
+}
+
 /// BUG-2390: a launcher that exits 0 without an `accepted:` line did not
 /// start a worker; the request fails rather than reporting success.
 // trace:BUG-2390 | ai:claude
@@ -4204,7 +4261,7 @@ fn bug_2390_codex_lane_without_acceptance_fails() {
         now,
     )
     .unwrap();
-    let res = execute_one_request(&f.root, &f.mandate_dir, &imp.request.id, false, now).unwrap();
+    let res = execute_one_request(&f.root, &f.mandate_dir, &imp.request.id, true, now).unwrap();
     assert_eq!(res.status, DispatchStatus::Failed, "{res:?}");
     assert!(res.spawned_session.is_none());
 
