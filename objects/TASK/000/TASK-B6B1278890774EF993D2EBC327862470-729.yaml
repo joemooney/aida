@@ -7,12 +7,12 @@ description: |-
 
   non-blocking/minor: config_cmd.rs:1364 write_codex_posture(Contained) still sets sandbox_workspace_write.writable_roots to ~/.cargo, ~/.rustup and ~/.aida. That is the BUG-2418 exposure in a codex workspace-write lane that runs outside the os_wrap bwrap. It is out of this ruling's scope (the bwrap profile); needs a follow-up.
   Reviewed sha: 1c54c4d85edd1496e1a9b1921c51fe19641ade42
-status: InProgress
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-03T08:37:09.154000416Z
-modified_at: 2026-11-03T14:19:04.724633680Z
+modified_at: 2026-11-03T18:11:38.302081794Z
 req_type: Task
 tags:
 - carried-from:BUG-2418
@@ -95,6 +95,21 @@ history:
   timestamp: 2026-11-03T14:19:05.764628825Z
   session_id: f5eddefe-032d-4760-94ba-3a318cf3d1d1
   changes: []
+- id: 01a1a29c-0cb7-7cb0-a8a7-6ef018f66963
+  author: aida-auto-bump
+  timestamp: 2026-11-03T18:11:38.295433219Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1a29c-0cbe-7b80-be70-3e57aa84f5a4
+  timestamp: 2026-11-03T18:11:38.302077489Z
+  agent: aida
+  commit_sha: c016e786454b8d89e36474513cf42d4481398394
+  pr: 3294
+  summary: Contained Codex posture now writes writable_roots=[] clearing legacy ~/.cargo/~/.rustup/~/.aida grants in both scopes; regression test covers both scopes, backup and idempotence; all CI green at head.
+  review_verdict: approved
 filed_at:
   code_sha: 6c587ee595ce70f5fcc48480cfdddc8246cf158c
   branch: main
@@ -103,3 +118,7 @@ filed_at:
   aida_build_sha: db087637d57
   vendor: claude
   session: c58592f4-04ae-498b-9afd-87b0cc2bcde9
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-03T18:11:38.295428624Z
+  completion_sha: c016e786454b8d89e36474513cf42d4481398394
