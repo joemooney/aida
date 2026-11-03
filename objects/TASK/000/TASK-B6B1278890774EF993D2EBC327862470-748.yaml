@@ -1,0 +1,27 @@
+id: 01a1a2ba-58fe-77c2-83f3-359717dd8d38
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-748
+title: 'non-blocking/minor: check-ci-gates.py run_gate stream_diagnostics swallows only…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-2790, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  non-blocking/minor: check-ci-gates.py run_gate stream_diagnostics swallows only BrokenPipeError; any other sink OSError (or a sys.stdout without .buffer) kills the reader thread, the child then blocks on a full pipe and child.wait() hangs. Catch OSError/ValueError like the Rust reader, which ignores all write errors.
+  Reviewed sha: 830142d58d10db713961b42585a9604ff10a654d
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-03T18:44:43.902352640Z
+modified_at: 2026-11-03T18:44:43.902352640Z
+req_type: Task
+tags:
+- carried-from:TASK-2790
+- finding-hash:883e2f08
+- from-review:TASK-2790
+- kind:carried-forward
+filed_at:
+  code_sha: da17908306fcefc7fc1e8bcf334e2d507c72cf1a
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: c016e786454
+  vendor: claude
