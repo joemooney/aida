@@ -8,12 +8,172 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-02T19:20:32.021326811Z
-modified_at: 2026-11-03T00:22:40.411673105Z
+modified_at: 2026-11-03T00:27:54.637807914Z
 req_type: Story
 tags:
 - architecture
 - needs-sketch
 - regroup
+comments:
+- id: 01a19ece-2d8d-71d1-9b1b-e5f03c67b814
+  author: joe
+  content: |
+    SKETCH (awaiting independent signoff): STORY-2324
+
+    Author: claude sketch seat (no grant), 2026-11-02. This is a proposal only. It is not design approval, implementation approval, or permission to clear a hold. No code was changed, nothing was committed, and no queue, ledger or hold was mutated. Source read at fcb4d8d38ed. Live state read-only from ~/ai/aida/.aida.
+
+    ## 0. Production state today (counted read-only)
+    - Primary `.aida/gate-ledger/`: 362 entries. `by-spec/` holds 200 entries under upper-cased native IDs (`BUG-B6B1...-020`) and 160 under friendly IDs, so the same requirement is partitioned under 2-3 spellings. Distinct `spec` labels on PR-*.jsonl events: 96 native and 65 friendly.
+    - Legacy layer still present and still read: 2790 `.aida/review-verdicts/*` files (145 under native IDs), 14 `.aida/merge-holds/PR-*` markers, 247 `.aida/merge-hold-clearances/*`, and spec-keyed `.aida/pr-holds/<spec>.json`.
+
+    ## 1. Current data flow and failure modes (file:line, aida-cli-lib/src)
+    Spec IDs enter as raw strings in at least four places and are never canonicalized. Each reader compensates in its own way.
+
+    Entry points:
+    - (E1) PR subject. `pr_cmd.rs:1825 pr_gate_subject` collects branch, head ref and commit-trailer IDs as typed, then `trailer_coverage::covered_gate_ids`.
+    - (E2) Verdict write. `gate/ledger/mod.rs:181 record_verdict_at` keys the event on `key.trim().to_ascii_uppercase()` (`:206`). `record_collected_verdict` (`:237`) and `bind_specs` (`:269`) take caller strings, and `event.rs:200` upper-cases them again.
+    - (E3) Hold placement. `MergeHoldRecord.spec: Option<String>` (`gate/merge_hold_core.rs:228`) and `punt.rs:426 hold_signal_path(.aida/pr-holds/<spec>.json)` use the literal spec.
+    - (E4) CLI readers: `review verdict <spec>`, `queue rework/done <spec>`, the mandate (`gate/mandate.rs:1003 note_exclusions(id)`).
+
+    Failure modes:
+    - F1, literal partitions. `ledger/project.rs:12 spec_key` upper-cases, which mints a third spelling of native IDs (the hex is lowercase in the store). `:116 changes_for_spec` reads one literal index, and `:160-188 verdict_events` filters `e.spec == spec` (`:173`), so each label answers with its own newest record. This is BUG-2403 (PR3185 #19 vs #20, and the PR3194 #7 rework replay).
+    - F2, compensation by per-read identity proof. `gate/review_alias.rs:444 snapshot_labels` runs bounded git subprocesses and does a full store load for every key read. A dirty or moving store bridges nothing and falls back to literal reads (`rework_hold_release.rs:618 arming_labels`). Selection (`review_alias.rs:583/621`) compares wall-clock order times across partitions and can come out Ambiguous. The BUG-2403 round-3 ruling explicitly deferred three items to this story: the snapshot-load budget, the global discovery blast radius, and the merge-hold status readers that were not rerouted.
+    - F3, the merge gate is still literal. `gate/ship.rs:1034 merge_gate_verdict_candidates` (called by `gate/approval.rs:287` and `gate/mandate_ship.rs:380`) reads each label's newest record through `project::newest_verdict_event` with no cross-label selection. The candidate set depends on how the trailer happened to spell the ID.
+    - F4, two stores for one fact. `review_verdict.rs:996 ledger_supersedes` and `:1171 choose_current` weigh the legacy file against the ledger by `recorded_at` or file mtime. `ledger/hold.rs:118-150 state_at` lets a legacy marker override the ledger when its mtime is newer (`:129`). That means mtime is an authority input.
+    - F5, index lag. `ledger/store.rs:172-181` appends the event first and indexes the spec afterwards, only warning on failure. A missed index hides a newer refusal from `changes_for_spec`. BUG-2403 r3 patched this only on the checked path.
+    - F6, three root resolvers. `ledger/mod.rs:107 store_root` refuses an unverified seat clone. `ledger/hold.rs:107 read_root` and `merge_hold_core.rs:414 hold_store_root` fall back to the caller's own directory instead, which can answer "no hold". This is the residue of BUG-2176, together with `gate/hold_collect.rs:19` and `gate/dispatch_reviewer_hold.rs:49`, which preserve markers that no current writer produces.
+    - F7, mode lookup by string, failing open. `pr_cmd.rs:1269 ship_gate_spec_records_for_ids` matches only `spec_id`/`agreed_id` with `eq_ignore_ascii_case` (`:1281`). An ID that does not resolve there (node-label form `BUG-HOME-176`, a retired ID) is silently dropped (`:1291`). It then contributes no mode, and `gate/ship.rs:511 supervised_merge_holds` sees nothing to supervise. The only protection is the upstream trailer guard.
+    - F8, superseded inheritance ignores the PR. `pr_cmd.rs:1307 gating_execution_mode` (BUG-2413) follows superseded-by to any carrier, including one this PR does not ship.
+    - F9, no single answer. Ship, train (`pr_train.rs:1284`, `pr_train_verified.rs:296`), auto-release (`rework_hold_release.rs:680`), queue done, awaiting/status and rework each assemble verdict, hold and mode from different readers. This is why STORY-1392 says position can "only be reconstructed by joining sources and knowing which to distrust".
+
+    ## 2. Proposed canonical-ID boundary
+    Type: `gate/canon.rs`
+    - `SpecKey(Uuid)` is the requirement's UUID.
+    - `CanonicalSpec { key, native, friendly, mode, tags, status, superseded_by: Option<SpecKey> }`.
+    - `CanonicalSet`.
+
+    DESIGN FORK for the signer: key by UUID, or by native `spec_id`. I recommend the UUID. `registry/retired_ids.toml` shows native IDs have already been renumbered (`CR-1-116 -> CR-<hex>-001`, same uuid). Node labels re-bind. Upper-casing already forks native spellings today. The UUID has never changed. Native `spec_id` stays the display spelling.
+
+    One resolver: `StoreSnapshot::at_head(store) -> Snapshot` reads objects and the `registry/{node_aliases,retired_ids}.toml` files from the store's HEAD commit, using one bounded `git cat-file --batch`. The working tree is never consulted, so a dirty store cannot change identity and cannot block resolution either (this removes the dirt-refusal half of F2). Then `Snapshot::resolve(labels) -> Result<CanonicalSet, Unresolved>` accepts a literal friendly, native, node-label or retired ID, case-insensitive on the ID text, and only exact mapping hits. There is no prefix or substring matching.
+
+    The resolver runs exactly once per operation, at the four entries:
+    - E1: `pr_gate_subject` returns `CanonicalSet`. Unresolved IDs are returned separately.
+    - E2: every ledger writer takes `SpecKey`.
+    - E3: `MergeHoldRecord.spec` becomes `Option<SpecKey>`, and the pr-hold signal is keyed by `SpecKey`.
+    - E4: CLI args are resolved on entry.
+
+    Below the boundary, nothing in `gate/` or `ledger/` takes a spec `&str`. A ratchet test enforces this.
+
+    ## 3. effective_gate_state
+    `fn effective_gate_state(head: &Sha, set: &CanonicalSet, view: &LedgerView, policy: &GatePolicy) -> GateState`
+
+    It is pure: no fs, git, clock or env access.
+
+    Inputs:
+    - `head`: the PR head SHA pinned from the forge.
+    - `set`: the PR's members and each member's mode, tags, status and superseded_by edge, plus any Unresolved labels.
+    - `view`: one checked, bounded load (today's `ledger/checked.rs` Discovery is the only I/O) of `PR-N.jsonl` and the `by-spec/<uuid>.jsonl` unbound events for set members. Events are ordered by ledger `seq`, a total order within a file stamped by the single primary writer, so no wall-clock comparison across partitions is needed. Unbound events are folded in only if not yet bound (AC2 binding is kept).
+    - `policy`: interactive TTY or not, the draft-only tag set, and the author set from E1.
+
+    Output `GateState`:
+    - `verdict`: per member and aggregate, one of `Approved{event, reviewed_sha}`, `ChangesRequested{event, findings}`, `Stale{reviewed, head}` (carry-over proofs from the ledger applied), `Absent`, or `Unsafe{reason}`. Ambiguous disappears, because one partition and one seq order cannot tie. The phase-3 overlay pairing (`project.rs:242 proved_phase3_origin`) is kept as is.
+    - `hold`: `Open{record, authorized}`, `Released{clearance}`, or `None`. This is today's `hold::fold` (`hold.rs:59`) without the marker branch.
+    - `mode`: `Drain` or `Supervised{members, label}`. A member with no mode of its own inherits its carrier's mode ONLY IF the carrier is in `set`. Otherwise it keeps its own mode (unset stays supervised). The chain is bounded, and a cycle means supervised. This tightens F8.
+    - `draft_only`: members carrying the tag.
+    - `decision`: `Mergeable{pin}` or `Refused(Vec<Refusal>)`, with today's refusal precedence. Any Unresolved label refuses ("cannot prove what this PR ships"), which closes F7.
+
+    Authority stays a separate, unchanged stage. Receipt, grant, independence and solo checks (`ship.rs:787` etc.) run on the selected event, so selection grants nothing. A thin `load(root, pr) -> (CanonicalSet, LedgerView)` and `aida gate state PR-N [--format json]` expose the result. Ship, train, mandate_ship, auto-release, queue done, review verdict, rework, awaiting and status all read this one function. That is the canonical gate column STORY-1392 needs.
+
+    ## 4. Where merge-hold markers move
+    There are no markers afterwards. A hold is already written as a `hold` / `hold-release` event on `<primary checkout>/.aida/gate-ledger/PR-N.jsonl`, and that becomes the only place it exists or is read. This proposal makes three changes:
+    - The legacy read-through is deleted: `ledger/legacy.rs` marker/clearance readers, the `hold.rs:118-150` marker branch, `hold_collect.rs`, the `dispatch_reviewer_hold.rs` preservation step, and `merge_hold_core::hold_store_root`.
+    - `ledger::store_root` is the one resolver. An unverified seat clone is refused, which reads as held: the fail-closed direction, closing F6.
+    - The `.aida/pr-holds/<spec>.json` signals become `pr-hold` events on `by-spec/<uuid>.jsonl`.
+
+    Interpretation for the signer: "primary store" is read here as the primary checkout's shared gate ledger. The alternative, moving holds into the git-canonical `aida-store`, would need merge semantics for append-only lock-step state across hubs. I propose it stays out of scope; the forge label remains the cross-machine signal.
+
+    ## 5. One-time ledger rewrite (single user; no compatibility shims)
+    `aida gate migrate --dry-run | --execute`, operator-run once. It refuses under a live drain lock, from a contained seat, or from a non-TTY.
+    1. Snapshot the store HEAD, then resolve every event `spec` label, legacy verdict file stem, marker `spec` and pr-hold stem to a `SpecKey`.
+    2. Write `gate-ledger.v2/` from v1:
+       - Each event gains `spec_key: <uuid>` and keeps `spec_label` (the original text) for audit. Record bodies are copied byte for byte.
+       - Legacy verdict files and per-SHA archives not already on a ledger are appended as `verdict` events, flagged `imported: true`.
+       - Markers and clearances not already reflected become `hold` / `hold-release` events.
+       - pr-holds become `pr-hold` events.
+       - The `by-spec/*.json` index is dropped. Discovery is the reader; if a cache is needed later, it is derived and versioned.
+    3. Verify: each v1 record body's hash appears in v2, event counts reconcile, and every legacy file is accounted for. Any unresolvable label is kept, with `spec_key: null`, and listed. The dry-run report must show none attached to an open PR before `--execute` runs.
+    4. Atomic directory swap. v1, the legacy dirs and pr-holds are archived to `.aida/gate-ledger.v1-<date>.tar.zst` and then removed.
+    Rollback is to restore the tar and the previous binary (`aida dev rollback`).
+
+    ## 6. Specs this retires
+    - Closes the class behind BUG-2403 (completed), including its three deferred r3 items.
+    - Closes the class behind BUG-2413 (completed). Its fix moves into the canonical set, with the carrier-in-set tightening.
+    - Closes the class behind BUG-2176 (completed). The workaround code is deleted.
+    - The following specs are evidence, not retirements. Read honestly, they are not closed by this work:
+      - STORY-1392 covers drain, event and status position, and this delivers only its gate column. Recommendation: re-scope it to consume `aida gate state`.
+      - TASK-1574 is waiting for authorized producer and clearance witnesses. This gives those witnesses one hold source (its item 5, mutually-pointing hold messages, gets simpler) but does not supply the witnesses.
+      - TASK-1259 (blocking harvest gate) becomes one more input to `effective_gate_state`; its deferral trigger (measured precision) still governs.
+      - STORY-1684 (fasttrack routing) stays a product call. It could read `mode`, but it is not retired.
+
+    ## 7. Threat model: no authority loosening
+    - Identity comes only from committed store HEAD mappings. Exact hits only; no prefix, substring or UUID-fragment matching. An unresolved label refuses the merge, where today it is silently dropped. A store-working-tree edit cannot change identity.
+    - Merging partitions cannot promote an old approval:
+      - Order is ledger seq within the change file.
+      - Approvals stay head-bound (`same_reviewed_sha` plus the ledger's carry-over proofs).
+      - Any member's open refusal newer than the approval blocks.
+      - A spec approval recorded on a different change never counts for this PR.
+    - Superseded inheritance applies only to a carrier in the same PR, with a committed superseded-by edge and a bounded chain. Otherwise the member keeps its own mode (unset means supervised).
+    - Removing the legacy read-through removes mtime as an authority input. The only remaining writer is the uncontained primary-side appender, and contained seats are still refused (`mod.rs:166`).
+    - The migration never creates approvals: bodies are hash-verified, it is operator TTY only, it refuses under a drain lock, it runs a dry-run first, and v1 is archived.
+    - Unchanged: hold clearance (human TTY), auto-release (fresh independent APPROVED at head plus a record-time grant), the same-origin receipt check, and refusal precedence.
+
+    ## 8. Test plan
+    - Pure table tests on `effective_gate_state` (no fs), each case built from event vectors:
+      - PR3185 #19 friendly approval vs #20/#21 canonical at a new head.
+      - PR3185 #22/#23 and PR3194 #14/#15/#16 receipt asymmetry.
+      - PR3194 #7 obsolete findings vs a fresh refusal.
+      - Superseded member with the carrier in the set (drain), with the carrier absent (supervised), and with a cycle.
+      - Unset mode.
+      - An unresolved label (refuse).
+      - Stale head, carry-over proof and carry-over refused.
+      - Hold open, released, authorized and withdrawn, plus label-sync.
+      - Draft-only.
+    - Property test (proptest): re-spelling a member's labels (friendly, native, node, retired, case) never changes `GateState`. Appending an approval older than an existing refusal never yields Mergeable.
+    - Resolver tests: retired ID, node-label form, upper-cased hex, a dirty working tree (ignored, HEAD wins), an unknown label, and two requirements claiming one label (Err).
+    - Migration tests on a synthetic v1 tree with legacy files, markers, clearances, pr-holds and mixed labels:
+      - Record bodies are hash-preserved.
+      - The migration is idempotent.
+      - An unresolvable label is reported and kept.
+      - `--execute` refuses under a drain lock or from a contained seat.
+      - Rollback restores v1.
+    - Agreement test: one fixture through ship, train, auto-release, queue done, review verdict and rework yields the same verdict, hold and mode.
+    - Ratchets: no spec `&str` parameter in `gate/ledger`; no path literal `merge-holds|review-verdicts|merge-hold-clearances|pr-holds` outside `gate/migrate.rs`.
+    - Gate: LIGHT. One targeted cargo filter per PR, plus `make check-ci-fast`.
+
+    ## 9. Slice plan (3 PRs, one optional 4th)
+    - PR-A, boundary and pure core, with no decision change:
+      - Adds `gate/canon.rs` (SpecKey, HEAD snapshot, resolver) and `gate/effective.rs` (`effective_gate_state` plus `load`).
+      - Adds `aida gate state PR-N [--compare]`, which prints the new state next to what today's readers decide, as a diagnostic only.
+      - Tests: pure, property and resolver.
+    - PR-B, writers and the one-time rewrite:
+      - Writers (E2/E3, collected verdicts, holds, pr-hold signal) take SpecKey and write `spec_key`.
+      - `aida gate migrate`, with migration tests.
+      - The operator runs `--dry-run`, then `--execute`, right after the dev build promotes.
+    - PR-C, cutover and deletion:
+      - Ship, train, mandate_ship, auto-release, queue done/rework, review verdict, awaiting and status read `effective_gate_state` only.
+      - Deletes: the review_alias cross-label selection and snapshot code, `ledger/legacy.rs`, the hold marker branch, the file side of `ledger_supersedes`/`choose_current`, `hold_store_root`, `hold_collect.rs`, the dispatch_reviewer_hold preservation step, and the string matching in `ship_gate_spec_records_for_ids`. The review skill template records only via `aida review record`, so `adopt_direct_write` and `adopt_verdict_file` go.
+      - Adds the ratchets and the agreement test.
+    - PR-D, optional: the monitor/STORY-1392 consumer and docs (OVERVIEW and the repository guide's gate section).
+
+    Trailers: A and B use `(Refs STORY-2324)`. C carries `(STORY-2324)`.
+
+    Open questions for the signer:
+    - (Q1) UUID or native ID as the key; I recommend UUID.
+    - (Q2) Whether holds in the git-canonical aida-store stay out of scope; I propose yes.
+    - (Q3) Whether an Unresolved trailer label refusing the merge is acceptable. It is a tightening, and may surface old trailers on open PRs.
+  created_at: 2026-11-03T00:27:54.637807914Z
+  modified_at: 2026-11-03T00:27:54.637807914Z
+  session_id: 112c9837-0f93-478b-8a7c-6e791a056df1
 history:
 - id: 01a19ec9-2f7e-7e41-b3a1-1cb5a299a222
   author: joe
