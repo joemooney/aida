@@ -25,7 +25,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-03T03:42:51.559496187Z
-modified_at: 2026-11-03T21:23:36.067536647Z
+modified_at: 2026-11-03T21:29:03.253775988Z
 req_type: Story
 tags:
 - area:deputy
@@ -276,6 +276,13 @@ comments:
   created_at: 2026-11-03T20:49:27.466326212Z
   modified_at: 2026-11-03T20:49:27.466326212Z
   session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
+- id: 01a1a350-ca15-7fc2-83b7-90b0b47fbf37
+  author: joe
+  content: Commit f47043567f3 references this requirement
+  created_at: 2026-11-03T21:29:03.253775988Z
+  modified_at: 2026-11-03T21:29:03.253775988Z
+  session_id: 01a1a34bc5b7
+  harness_version: 2.1.317 (Claude Code)
 history:
 - id: 01a19f81-3898-7250-96f4-65372d1968ea
   author: aida-session-start
