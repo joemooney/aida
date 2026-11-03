@@ -19,7 +19,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T02:25:46.947809262Z
-modified_at: 2026-11-03T15:35:33.609682809Z
+modified_at: 2026-11-03T15:35:38.834926045Z
 req_type: Bug
 tags:
 - area:agents
@@ -497,6 +497,20 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: CI red at head: the PR''s own live bwrap real-cargo test asserts a stale seed-note prefix; AC1/AC4 evidence therefore unverified. AC2 (Fresh overlay test) and AC3 (prompt + untested=true tests) covered.. No triage reason was given.'
   created_at: 2026-11-03T15:35:33.609676702Z
   modified_at: 2026-11-03T15:35:33.609676702Z
+  session_id: f5eddefe-032d-4760-94ba-3a318cf3d1d1
+- id: 01a1a20d-2b4f-7b52-991b-0fdb41937387
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2383):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 9693af6eaea9
+    Recorded: 2026-11-03T15:27:16.011277763+00:00
+    Findings:
+    1. CI lib-1 and gates shards fail (Build aggregator red): bug_2383_bwrap_real_cargo_test_job_reports_pass_and_fail_through_the_cli panics at aida-cli-lib/src/tests/bug_2383_seat_target_overlay_tests.rs:1039 asserting out.contains("lane job: seed: "), but lane_job.rs:1294 writes the seed note as "lane job: seat target <path>: seed: cold (...)" (sibling test bug_2383_lane_job_tests.rs:301 already expects "lane job: seat target "). Fix the assertion (e.g. contains("lane job: seat target ") && contains(": seed: ")) and get both shards green; this test is the only evidence for AC acd61bb0 and the 'headless lane fixture runs one filtered cargo test' AC.
+    2. Criterion-level traceability: aida criteria reports all four BUG-2383 acceptance criteria (acd61bb0, accf30b1, acd7d2a4, and the Test criterion) as untraced, although tests exist for them. Add criterion trace tags to bug_2383_bwrap_real_cargo_test_job_reports_pass_and_fail_through_the_cli (acd61bb0 + Test AC), bug_2383_bwrap_overlay_first_job_sees_a_prebuilt_dependency_as_fresh (accf30b1), and result_line_says_untested_when_no_job_completed / the contract test at bug_2383_lane_job_tests.rs:888-921 (acd7d2a4) so the criteria check passes.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-03T15:35:34.479594758Z
+  modified_at: 2026-11-03T15:35:34.479594758Z
   session_id: f5eddefe-032d-4760-94ba-3a318cf3d1d1
 history:
 - id: 01a19525-88eb-79e3-aab8-8d511ad2f605
