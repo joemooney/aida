@@ -157,16 +157,31 @@ lease_pid_start() {
     [ -n "${20:-}" ] && printf 'linux-starttime:%s' "${20}"
 }
 
+# This process's PID namespace inode and boot id, as merge_lock.rs records
+# them (BUG-2417); empty when unreadable. A holder whose pid_ns or boot is
+# missing or differs from ours is TTL-only: its pid is never probed here.
+# trace:BUG-2417 | ai:claude
+lease_pid_ns() {
+    local link
+    link=$(readlink /proc/self/ns/pid 2>/dev/null) || return 0
+    link=${link#*\[}
+    printf '%s' "${link%\]}"
+}
+lease_boot() {
+    [ -r /proc/sys/kernel/random/boot_id ] && tr -d '[:space:]' < /proc/sys/kernel/random/boot_id || true
+}
+
 lease_field() {
     sed -n "s/^$1=//p" "$lease_file" 2>/dev/null | head -n1
 }
 
 # Exit 0 when the lease file names a live holder, mirroring merge_lock.rs's
-# stale_reason: a same-host holder whose pid is dead (or recycled, or a zombie)
-# is stale, and so is any holder aged past its TTL.
+# stale_reason: a holder whose pid is probeable here (same host, boot and PID
+# namespace) and dead (or recycled, or a zombie) is stale, and so is any
+# holder aged past its TTL.
 lease_is_live() {
     [ -f "$lease_file" ] || return 1
-    local host pid start ttl acquired age live_start state mtime
+    local host pid start ttl acquired age live_start state mtime pidns boot local_ns local_boot
     # An empty or cut-short record is a writer mid-publish (merge_lock.rs
     # before TASK-1-421 created the file, then wrote it): live for a 30s grace
     # after its mtime, not acquired_at=0 and TTL-stale.
@@ -181,13 +196,19 @@ lease_is_live() {
     host=$(lease_field host)
     pid=$(lease_field pid)
     start=$(lease_field pid_start)
+    pidns=$(lease_field pid_ns)
+    boot=$(lease_field boot)
     ttl=$(lease_field ttl_secs)
     acquired=$(lease_field acquired_at)
     case "$ttl" in ''|*[!0-9]*|0) ttl=600 ;; esac
     case "$acquired" in ''|*[!0-9]*) acquired=0 ;; esac
     age=$(( $(date +%s) - acquired ))
     [ "$age" -gt "$ttl" ] && return 1
-    if [ -n "$host" ] && [ "$host" = "$lease_host" ]; then
+    local_ns=$(lease_pid_ns)
+    local_boot=$(lease_boot)
+    if [ -n "$host" ] && [ "$host" = "$lease_host" ] \
+        && [ -n "$pidns" ] && [ "$pidns" = "$local_ns" ] \
+        && [ -n "$boot" ] && [ "$boot" = "$local_boot" ]; then
         case "$pid" in ''|*[!0-9]*|0) return 1 ;; esac
         kill -0 "$pid" 2>/dev/null || [ -d "/proc/$pid" ] || return 1
         state=$(sed -n 's/.*) \([A-Z]\).*/\1/p' "/proc/$pid/stat" 2>/dev/null)
@@ -222,8 +243,8 @@ lease_acquire() {
         # trace:TASK-1955 | ai:claude (TASK-1-422)
         lease_tmp=$(mktemp "$(dirname "$lease_file")/.$(basename "$lease_file").XXXXXX")
         local tmp=$lease_tmp
-        printf 'host=%s\npid=%s\npid_start=%s\npr=%s\nnote=%s\nacquired_at=%s\nttl_secs=%s\n' \
-            "$lease_host" "$$" "$(lease_pid_start "$$")" "${2:-}" \
+        printf 'host=%s\npid=%s\npid_start=%s\npid_ns=%s\nboot=%s\npr=%s\nnote=%s\nacquired_at=%s\nttl_secs=%s\n' \
+            "$lease_host" "$$" "$(lease_pid_start "$$")" "$(lease_pid_ns)" "$(lease_boot)" "${2:-}" \
             "scripts/release.sh v$new" "$(date +%s)" "$lease_ttl" > "$tmp"
         if ln "$tmp" "$lease_file" 2>/dev/null; then
             rm -f "$tmp"

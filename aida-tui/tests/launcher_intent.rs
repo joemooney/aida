@@ -116,16 +116,20 @@ fn in_process_launch_plans_to_run_aida_queue_work() {
 }
 
 #[test]
-fn in_process_resume_plans_to_claude_resume() {
+fn in_process_resume_plans_to_vendor_neutral_session_resume() {
     use aida_tui::__test_only::{dispatch_plan, Dispatch, Intent};
-    // `resume:<id>` → the wrapper ran `claude --resume <id>`; in-process
-    // we spawn the same.
+    // `resume:<id>` → `aida session resume <id>`, which resumes on the
+    // vendor that recorded the session (BUG-2386). trace:BUG-2386 | ai:claude
     let d = dispatch_plan(&Intent::Resume("019e2d4f-7777-7abc".to_string())).unwrap();
     assert_eq!(
         d,
         Dispatch::Run {
-            program: "claude".to_string(),
-            args: vec!["--resume".to_string(), "019e2d4f-7777-7abc".to_string()],
+            program: "aida".to_string(),
+            args: vec![
+                "session".to_string(),
+                "resume".to_string(),
+                "019e2d4f-7777-7abc".to_string()
+            ],
         }
     );
 }

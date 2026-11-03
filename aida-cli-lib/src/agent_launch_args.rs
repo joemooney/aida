@@ -116,9 +116,10 @@ pub enum SessionCommand {
         all: bool,
     },
 
-    /// Pick a session interactively and resume it via `claude --resume`.
-    /// When `id` is given, resume that session directly without the
-    /// picker. The picker shows the same enriched columns as `list`.
+    /// Pick a session interactively and resume it on the vendor that
+    /// recorded it (`claude --resume` or `codex resume`). When `id` is
+    /// given, resume that session directly without the picker. The picker
+    /// shows the same enriched columns as `list`.
     Resume {
         /// Specific session id (or 8-char prefix) to resume. When
         /// omitted, opens an interactive picker.

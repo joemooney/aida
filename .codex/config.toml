@@ -1,3 +1,5 @@
+sandbox_mode = "workspace-write"
+
 [mcp_servers.aida]
 command = "aida"
 args = ["mcp-serve"]

@@ -111,6 +111,7 @@ fn file_zen_review_brief_short_circuits() {
         ending_retained_reason: None,
         driver: None,
         child_grant_id: None,
+        vendor_session_id: None,
     };
 
     // Handoff disabled → None, no side effects.

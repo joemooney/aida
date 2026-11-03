@@ -13613,9 +13613,9 @@ Commands:
                  context extracted from each conversation's .jsonl. By default shows conversations
                  with activity in the last 24 hours, up to 20 entries — `--all` bypasses the recency
                  cutoff
-  resume         Pick a session interactively and resume it via `claude --resume`. When `id` is
-                 given, resume that session directly without the picker. The picker shows the same
-                 enriched columns as `list`
+  resume         Pick a session interactively and resume it on the vendor that recorded it (`claude
+                 --resume` or `codex resume`). When `id` is given, resume that session directly
+                 without the picker. The picker shows the same enriched columns as `list`
   focus          Focus the terminal pane/window for a live registered AIDA session
   send           Send text to a live registered AIDA session through its terminal adapter
   new            Launch a new Claude Code session, recording the active role + a user-chosen title
@@ -13726,8 +13726,9 @@ Options:
   -h, --help
           Print help (see a summary with '-h')
 ===== aida session resume
-Pick a session interactively and resume it via `claude --resume`. When `id` is given, resume that
-session directly without the picker. The picker shows the same enriched columns as `list`
+Pick a session interactively and resume it on the vendor that recorded it (`claude --resume` or
+`codex resume`). When `id` is given, resume that session directly without the picker. The picker
+shows the same enriched columns as `list`
 
 Usage: aida session resume [OPTIONS] [ID]
 
@@ -43431,7 +43432,7 @@ Working on aida itself
       "session",
       "resume"
     ],
-    "about": "Pick a session interactively and resume it via `claude --resume`. When `id` is given, resume that session directly without the picker. The picker shows the same enriched columns as `list`",
+    "about": "Pick a session interactively and resume it on the vendor that recorded it (`claude --resume` or `codex resume`). When `id` is given, resume that session directly without the picker. The picker shows the same enriched columns as `list`",
     "flags": [
       {
         "name": "canonical-ids",

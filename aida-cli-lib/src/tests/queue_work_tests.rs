@@ -910,6 +910,7 @@ fn implementer_lease(scope: &str) -> SessionLease {
         ending_retained_reason: None,
         driver: None,
         child_grant_id: None,
+        vendor_session_id: None,
     }
 }
 
@@ -1778,6 +1779,7 @@ fn lease_for(id: &str, scope: &str, age_secs: i64) -> SessionLease {
         ending_retained_reason: None,
         driver: None,
         child_grant_id: None,
+        vendor_session_id: None,
     }
 }
 

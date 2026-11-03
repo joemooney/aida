@@ -221,6 +221,13 @@ pub(crate) struct SessionLease {
     // trace:BUG-2165 | ai:antigravity
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) child_grant_id: Option<String>,
+    /// BUG-2386: the vendor's own resumable id for this lease's session, when
+    /// it differs from the AIDA-minted one (Codex mints its own thread id).
+    /// Stamped by `codex_resume`; absent on older leases, which read as
+    /// unbound.
+    // trace:BUG-2386 | ai:claude
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) vendor_session_id: Option<String>,
 }
 
 pub(crate) fn leases_dir(project_root: &std::path::Path) -> std::path::PathBuf {
@@ -353,6 +360,7 @@ pub(crate) fn session_harness_worktree_register(
         ending_retained_reason: None,
         driver: aida_core::driver_registry::driver_from_env(), // trace:STORY-1653 | ai:claude
         child_grant_id: None,
+        vendor_session_id: None,
     };
 
     std::fs::create_dir_all(leases_dir(&project_root))?;
