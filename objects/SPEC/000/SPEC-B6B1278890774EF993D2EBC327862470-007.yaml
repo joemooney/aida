@@ -8,12 +8,19 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-03T14:06:21.777399609Z
-modified_at: 2026-11-03T14:06:21.777399609Z
+modified_at: 2026-11-03T18:18:55.899380718Z
 req_type: Task
 tags:
 - from-implementer:STORY-2346
 - kind:bug-spotted
 - severity:major
+comments:
+- id: 01a1a2a2-ba1b-76f3-88fa-95b25799e763
+  author: joe
+  content: 'ADVISOR RULING (2026-11-03): duplicate of TASK-2712, which owns native Codex git publication under workspace-write with .git read-only. Superseded.'
+  created_at: 2026-11-03T18:18:55.899380718Z
+  modified_at: 2026-11-03T18:18:55.899380718Z
+  session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
 history:
 - id: 01a1a1c0-5ed0-7bb2-85f6-6023e0b33f5e
   author: joe
