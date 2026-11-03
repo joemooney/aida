@@ -8,6 +8,6 @@ result: done
 due_since: 2026-11-03T07:57:21.563631156Z
 due_reason: on CronJobFailed:disk-headroom-guard
 due_failure:
-  trip_id: disk-headroom-guard@2026-11-03T11:07:00.318141916Z
+  trip_id: disk-headroom-guard@2026-11-03T11:44:10.273571655Z
   job: disk-headroom-guard
   error: 'exit 1: 1 finding(s) in disk-headroom — failing because --fail-on-findings was requested'
