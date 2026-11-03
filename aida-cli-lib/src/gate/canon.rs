@@ -26,7 +26,11 @@ use uuid::Uuid;
 
 /// A requirement's canonical identity: its UUID.
 // trace:STORY-2324 | ai:claude
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize, serde::Deserialize,
+)]
+#[serde(transparent)]
+// trace:STORY-2325 | ai:claude — ownership records persist the spec key.
 pub(crate) struct SpecKey(pub Uuid);
 
 impl std::fmt::Display for SpecKey {
