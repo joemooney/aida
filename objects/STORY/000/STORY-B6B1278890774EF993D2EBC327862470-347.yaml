@@ -11,7 +11,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-03T14:28:02.283438627Z
-modified_at: 2026-11-03T22:35:01.934006122Z
+modified_at: 2026-11-03T23:06:14.611426402Z
 req_type: Story
 relationships:
 - rel_type:
@@ -58,6 +58,18 @@ comments:
   modified_at: 2026-11-03T21:43:25.959168192Z
   session_id: 01a1a316c58f
   harness_version: 2.1.317 (Claude Code)
+- id: 01a1a3a9-c4d3-7cc0-8912-3ef6bee28f80
+  author: joe
+  content: |-
+    ADVISOR RULING (16:10, PR #3317 at its current head): fix every finding below. Specific rulings: (1) regenerate docs/cli-format-json-audit.md with its target. (2)-(3) Enforce the budget inside the reclaim loop (check the deadline per removal) and give the disk-headroom reclaim its own timeout. (4) Age a salvage candidate from lease heartbeat/mtime, not started_at.
+    1. BLOCKING (CI red): docs/cli-format-json-audit.md was not regenerated for the new 'aida session hygiene' command, so aida-cli/tests/bug_1502_format_json_audit.rs:493 (checked_in_audit_is_exhaustive_and_every_honoured_probe_parses) fails in CI (cli-0), and the Build aggregate fails with it. Fix: run scripts/generate-format-json-audit.py and commit the new row (expected 'JSON not honoured', since Hygiene declares no --json), then run make check-ci-fast.
+    2. minor (budget gap): session_hygiene::run checks SOFT_BUDGET (180s) only before reclaim starts. The reclaim survey plus remove_dir_all (the 2026-11-03 incident had 305 GiB reclaimable) has no deadline, so a reap that ends near 179s leaves about 120s before HYGIENE_COMMAND_TIMEOUT (300s) kills the child. The run then routes as 'timed out', the noise the budget exists to prevent. Bound the apply loop with a deadline (stop between entries and note it as deferred).
+    3. minor (budget gap): doctor_cmd.rs floor_reclaim runs a full worktree_reclaim survey+apply inside the disk-headroom-guard child, which keeps the default 120s SCHEDULED_COMMAND_TIMEOUT (command_timeout special-cases only 'session hygiene'). A large floor reclaim can be killed mid-delete and route a timeout instead of the 'freed X' evidence AC4 promises. Give that path a deadline or a longer ceiling.
+    4. minor (routing accuracy): session_hygiene.rs salvage_candidates falls back to the lease's age since started_at when dirty_newest_mtime_age_secs is None. That is session age, not idle time, so a session started 24h+ ago that died minutes ago routes immediately as 'untouched for Nh'. Prefer the process-exit time or the worktree's newest mtime, or omit the hours claim on the fallback.
+    LIGHT gate: one targeted cargo test plus make check-ci-fast (umask 022); 'cargo check -p aida-cli-lib --tests' is mandatory before pushing. Push to the existing PR branch, then stop.
+  created_at: 2026-11-03T23:06:14.611426402Z
+  modified_at: 2026-11-03T23:06:14.611426402Z
+  session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
 history:
 - id: 01a1a316-cb8a-7301-85a2-3b4f27c65f7a
   author: aida-session-start
