@@ -22,8 +22,20 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-03T21:48:34.768627497Z
-modified_at: 2026-11-03T21:48:34.768627497Z
+modified_at: 2026-11-03T21:48:46.398002799Z
 req_type: Story
+relationships:
+- rel_type:
+    custom: implements
+  target_id: 01a1a1cf-566b-7f73-b24b-4b03b2e82170
+  created_at: 2026-11-03T21:48:46.397999267Z
+  created_by: joe
+history:
+- id: 01a1a362-dbe6-7aa2-91a7-972cbdadc707
+  author: joe
+  timestamp: 2026-11-03T21:48:47.462332348Z
+  session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
+  changes: []
 filed_at:
   code_sha: 0ddf5ca5930ec7e4de1fa612d149c3a22c85b867
   branch: codex/task-2347-receipt-scan
