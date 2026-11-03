@@ -1,14 +1,8 @@
 job: mail-backlog-guard-route-advisor
-last_run: 2026-10-31T20:22:49.075611977Z
+last_run: 2026-11-03T16:01:42.946877031Z
 last_by:
   seat: advisor
-  session: f5694f22-ff09-4e87-8934-e79adca4efba
+  session: f5eddefe-032d-4760-94ba-3a318cf3d1d1
   vendor: claude
 result: done
-note: 'advisor: unread [request] from claude-reviewer-1069, 2h37m old: Review of PR-3274 (TASK-2707 PR0, round-3 delta) finished: APPROVED at de26f6932…'
-due_since: 2026-10-31T20:28:12.000013116Z
-due_reason: on CronJobFired:mail-backlog-guard-route-advisor
-due_failure:
-  trip_id: mail-backlog-guard-route-advisor@2026-11-03T01:06:40Z
-  job: mail-backlog
-  error: 'advisor: unread [request] from claude-reviewer-1069, 2h37m old: Review of PR-3274 (TASK-2707 PR0, round-3 delta) finished: APPROVED at de26f6932…'
+note: 'Stale: the PR-3274 approval it names merged long ago; the backlog is October relay mail, already superseded.'
