@@ -17,7 +17,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-03T13:41:47.751489803Z
-modified_at: 2026-11-03T15:34:54.634449521Z
+modified_at: 2026-11-03T15:34:55.744915710Z
 req_type: Story
 relationships:
 - rel_type:
@@ -47,6 +47,24 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Behavior meets all 4 ACs in code and unit tests, but no test traces any AC (aida criteria reports 4/4 untested), the revive output omits the old mandate id and is untested, and the revive audit event drops lineage. CI partly pending at review time (cli-0/1, rest, contracts green; lib-0/1, gates running).. No triage reason was given.'
   created_at: 2026-11-03T15:34:54.634448123Z
   modified_at: 2026-11-03T15:34:54.634448123Z
+  session_id: f5eddefe-032d-4760-94ba-3a318cf3d1d1
+- id: 01a1a20c-937d-7293-83be-d5e27b313bad
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (STORY-2346):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 1a08dc6c1f08
+    Recorded: 2026-11-03T15:21:52.317581645+00:00
+    Findings:
+    1. [blocking] AC traceability: aida criteria STORY-2346 reports all four criteria untraced. Add '// trace:STORY-b6b1278890774ef993d2ebc327862470-342.<ac>' tags in aida-cli-lib/src/gate/tests/story_b6b_166_mandate_renew_tests.rs: .ace68c46 on renew_revives_expired_but_refuses_stopped_mandates and expired_revival_requires_human_and_preserves_explicit_ttl; .ac3d0b19 on an in-place renewal test (e.g. grants_naming_the_mandate_stay_valid_across_the_renewal); .ac53ee20 on renew_with_no_mandate_points_at_start; .ac425dbf on expiry_warning_crosses_at_one_hour_and_clears_on_renewal, expiry_due_job_is_human_action_for_advisor_and_operator_only and expiry_mail_retries_failed_delivery_and_deduplicates_each_expiry.
+    2. [blocking] AC3 'exact line' is not asserted: renew_with_no_mandate_points_at_start only checks contains('aida mandate start'). Assert the full line the error prints (gate/mandate.rs:624 'run: aida mandate start --ship-held') so a future change cannot drop it.
+    3. [blocking] AC1 'prints what it revived': the revive println in mandate.rs handle_mandate Renew arm (~line 944) prints the NEW id and the old expiry, but never the old mandate's id, because extend() overwrites m.id before returning. Return or carry the old id and print e.g. 'Revived mandate <old-id> (expired <t>) as <new-id> ...'. No test covers this output; add one (e.g. factor the message into a pure fn and unit-test it).
+    4. [minor] Revive audit lineage: the revive path calls emit_changed(root, &m, true), which emits MandateChanged with renewed_from: None, so the event log shows a fresh unrelated start. Set renewed_from (old id or old expiry, like emit_renewed does at mandate.rs:490) so the audit trail links the revived mandate to the expired one.
+    5. [cosmetic] gate/mandate.rs:598-603 extend() doc comment still says 'same id' and 'a Renewal is appended to its lineage'. Neither holds on the revive path (fresh id, issued_at=now, renewals cleared). Update the prose.
+    6. [minor] notify_expiry (mandate.rs ~601) reloads RecipientDirectory on every statusline/hook render in the final hour whenever one recipient cannot be resolved (e.g. person:<principal> missing from the registry), because that marker is never written. Bounded to 60m but runs per statusline tick; consider a short negative-cache marker.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-03T15:34:55.613953307Z
+  modified_at: 2026-11-03T15:34:55.613953307Z
   session_id: f5eddefe-032d-4760-94ba-3a318cf3d1d1
 history:
 - id: 01a1a1ae-1569-7562-bd46-8229e0a4ee0e
