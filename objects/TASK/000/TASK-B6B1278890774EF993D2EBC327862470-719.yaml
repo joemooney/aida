@@ -12,7 +12,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-02T19:57:10.687170645Z
-modified_at: 2026-11-03T02:16:01.847528939Z
+modified_at: 2026-11-03T02:16:24.075669767Z
 req_type: Task
 tags:
 - carried-from:BUG-2411
@@ -24,6 +24,13 @@ relationships:
   target_id: 01a19dd6-6b18-74b0-81e4-0d16eb0088a4
   created_at: 2026-11-03T02:16:01.847524055Z
   created_by: joe
+comments:
+- id: 01a19f31-810b-74a0-b3c6-360229670033
+  author: joe
+  content: 'Advisor ruling (10-28 rule-once): accepted, not fixed. The reviewer confirmed the branch is evidence-equivalent (it requires an existing all-admitting record); the cfg(not(test)) side is a /proc scan shared with the activation scan that is exercised live.'
+  created_at: 2026-11-03T02:16:24.075669767Z
+  modified_at: 2026-11-03T02:16:24.075669767Z
+  session_id: 125337a4-7dd3-483b-9c56-3665173938ae
 history:
 - id: 01a19df0-9fe5-7510-9334-136659a3375d
   author: joe
