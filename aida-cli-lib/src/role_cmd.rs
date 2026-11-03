@@ -509,9 +509,12 @@ fn emit_persona_enter_eval(
 }
 
 /// STORY-821: after a successful interactive role-enter, offer to resume a
-/// recent Claude conversation whose parsed AIDA role matches the entered role.
-/// The picker writes to stderr, leaving stdout as eval-only shell payload.
+/// recent Claude or Codex conversation whose parsed AIDA role matches the
+/// entered role. The picker writes to stderr, leaving stdout as eval-only
+/// shell payload. Returns the resume command line to emit
+/// ([`role_resume_shell_line`]).
 // trace:STORY-821 | ai:codex
+// trace:BUG-2386 | ai:claude
 fn pick_recent_session_for_role(
     project_root: &std::path::Path,
     role: &str,
@@ -527,7 +530,8 @@ fn pick_recent_session_for_role(
         return Ok(None);
     }
 
-    let sessions = session::list_role_sessions(role, 8).unwrap_or_default();
+    let mut sessions = session::list_role_sessions(role, 8).unwrap_or_default();
+    sessions.retain(|s| role_resume_shell_line(&s.agent, &s.id).is_some());
     if sessions.is_empty() {
         return Ok(None);
     }
@@ -540,7 +544,7 @@ fn pick_recent_session_for_role(
             .map(session::format_role_resume_session_line),
     );
     let prompt = format!(
-        "{} recent claude session(s) for role `{}` — resume one?",
+        "{} recent session(s) for role `{}` — resume one?",
         sessions.len(),
         role
     );
@@ -561,7 +565,26 @@ fn pick_recent_session_for_role(
         .position(|l| l == &pick)
         .map(|p| p.saturating_sub(1))
         .unwrap_or(0);
-    Ok(Some(sessions[idx].id.clone()))
+    Ok(role_resume_shell_line(
+        &sessions[idx].agent,
+        &sessions[idx].id,
+    ))
+}
+
+/// BUG-2386: the eval line that resumes a picked role session on the vendor
+/// that recorded it: `claude --resume '<id>'`, or for Codex `aida session
+/// resume '<id>'`, which resolves the seat's posture and containment (and
+/// refuses under a contained parent that has not opted Codex in) instead of
+/// running bare `codex resume` on Codex's default posture. A vendor with no
+/// resume command (agy) offers nothing.
+// trace:BUG-2386 | ai:claude
+pub(crate) fn role_resume_shell_line(agent: &str, id: &str) -> Option<String> {
+    let id = sh_single_quote(id);
+    match agent {
+        "claude" => Some(format!("claude --resume '{id}'")),
+        "codex" => Some(format!("aida session resume '{id}'")),
+        _ => None,
+    }
 }
 
 fn role_resume_prompt_enabled(project_root: &std::path::Path) -> bool {
@@ -740,7 +763,7 @@ fn emit_role_enter_eval(
     state: &RoleState,
     cd: bool,
     was_existing: bool,
-    resume_session_id: Option<String>,
+    resume_command: Option<String>,
     no_title: bool,
     registry_entry: Option<&crate::agent_registry::AgentRegistryEntry>,
     grant_id: Option<&str>,
@@ -950,8 +973,8 @@ fn emit_role_enter_eval(
             }
         }
     }
-    if let Some(id) = resume_session_id {
-        println!("claude --resume '{}'", sh_single_quote(&id));
+    if let Some(line) = resume_command {
+        println!("{line}");
     }
 }
 
@@ -1555,6 +1578,21 @@ fn handle_role_scaffold() -> Result<()> {
 
 #[cfg(test)]
 mod tests {
+    // trace:BUG-2386 | ai:claude
+    #[test]
+    fn role_resume_line_names_the_recording_vendor() {
+        assert_eq!(
+            super::role_resume_shell_line("claude", "abc-1").as_deref(),
+            Some("claude --resume 'abc-1'")
+        );
+        assert_eq!(
+            super::role_resume_shell_line("codex", "019a-thread").as_deref(),
+            Some("aida session resume '019a-thread'"),
+            "a Codex resume goes through the posture/containment-resolving verb"
+        );
+        assert_eq!(super::role_resume_shell_line("antigravity", "x"), None);
+    }
+
     use super::*;
 
     // trace:BUG-1196 | ai:codex

@@ -3,7 +3,7 @@
 //! Background: STORY-244 split `aida tui` into a launcher that paints a
 //! board, exits emitting one [`crate::intent::Intent`] line on fd 3, and a
 //! bash `aida-tui` wrapper that read that line, dispatched the action
-//! (`eval` the command / `claude --resume <id>`), reset the terminal, and
+//! (`eval` the command / `aida session resume <id>`), reset the terminal, and
 //! re-entered the launcher. BUG-612 then routed bare `aida tui` through
 //! that wrapper so it Just Worked — but it still *required* the shell
 //! function.
@@ -36,7 +36,7 @@ pub enum Dispatch {
     Quit,
     /// Run a child process (program + args) that inherits the terminal,
     /// then re-enter the launcher when it exits. Covers `launch:` /
-    /// `shell:` (the typed command) and `resume:` (`claude --resume <id>`).
+    /// `shell:` (the typed command) and `resume:` (`aida session resume <id>`).
     Run { program: String, args: Vec<String> },
 }
 
@@ -46,7 +46,7 @@ pub enum Dispatch {
 ///   - `Quit`            → [`Dispatch::Quit`]
 ///   - `Launch(cmd)`     → run the tokenised `cmd`
 ///   - `Shell(cmd)`      → run the tokenised `cmd`
-///   - `Resume(id)`      → run `claude --resume <id>`
+///   - `Resume(id)`      → run `aida session resume <id>` (Claude or Codex)
 ///
 /// Returns `Err` when a `Launch`/`Shell` payload is empty (no program to
 /// run) — the caller surfaces it as a transient notice and re-enters rather
@@ -65,14 +65,17 @@ pub fn plan(intent: &Intent) -> Result<Dispatch> {
             let args = parts.map(str::to_string).collect();
             Ok(Dispatch::Run { program, args })
         }
+        // BUG-2386: `aida session resume` resumes on the vendor that recorded
+        // the session (Claude or Codex, with its containment posture), so the
+        // TUI never hardcodes `claude --resume`. trace:BUG-2386 | ai:claude
         Intent::Resume(id) => {
             anyhow::ensure!(
                 !id.trim().is_empty(),
                 "resume intent had an empty session id"
             );
             Ok(Dispatch::Run {
-                program: "claude".to_string(),
-                args: vec!["--resume".to_string(), id.clone()],
+                program: "aida".to_string(),
+                args: vec!["session".to_string(), "resume".to_string(), id.clone()],
             })
         }
     }
@@ -128,13 +131,18 @@ mod tests {
     }
 
     #[test]
-    fn resume_becomes_claude_resume() {
+    // trace:BUG-2386 | ai:claude
+    fn resume_becomes_vendor_neutral_session_resume() {
         let d = plan(&Intent::Resume("019e2d4f-7777-7abc".into())).unwrap();
         assert_eq!(
             d,
             Dispatch::Run {
-                program: "claude".into(),
-                args: vec!["--resume".into(), "019e2d4f-7777-7abc".into()],
+                program: "aida".into(),
+                args: vec![
+                    "session".into(),
+                    "resume".into(),
+                    "019e2d4f-7777-7abc".into()
+                ],
             }
         );
     }

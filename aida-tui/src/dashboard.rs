@@ -799,7 +799,7 @@ fn run_with_timeout(cmd: &mut Command, timeout: Duration) -> Result<std::process
     }
 }
 
-/// Sessions section rows: recorded Claude conversations for the launch
+/// Sessions section rows: recorded Claude/Codex conversations for the launch
 /// scope (TASK-112 `--list-sessions`). When the dialog tab also has a
 /// stored session id, prepend it as a row at the top.
 fn fetch_sessions(launch_scope: Option<&str>, dialog_session_id: Option<&str>) -> Vec<ListRow> {
@@ -905,7 +905,7 @@ pub fn ensure_preview(model: &mut DashboardModel) {
         RowKind::Session => PreviewBody::Plain(vec![
             format!("Session id: {}", row.id),
             String::new(),
-            "Enter resumes this conversation via `claude --resume`.".into(),
+            "Enter resumes this conversation via `aida session resume`.".into(),
         ]),
         RowKind::Action => PreviewBody::Plain(vec![row.title.clone()]),
         // Blocked-board reason rows preview the spec body, except the

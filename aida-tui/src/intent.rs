@@ -28,7 +28,8 @@ pub enum Intent {
     /// Run `<command>` as a shell command (typically `aida queue work
     /// <SPEC>`). The wrapper `eval`s it.
     Launch(String),
-    /// Resume a recorded Claude conversation via `claude --resume <id>`.
+    /// Resume a recorded Claude or Codex conversation via `aida session
+    /// resume <id>` (BUG-2386).
     Resume(String),
     /// Generic shell escape (e.g. `gh pr view 42`). Dispatched by the
     /// wrapper as a plain shell command, like [`Intent::Launch`] but with

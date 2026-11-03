@@ -653,16 +653,16 @@ pub(crate) fn resume_with(
     if parent_contained {
         let cwd = std::env::current_dir().context("failed to read the current directory")?;
         let mut cmd = build_contained_resume_command(&target, &cwd)?;
-        return exec_or_spawn_claude(&mut cmd);
+        return exec_or_spawn_agent(&mut cmd);
     }
     exec_resume_command(&target, None, false)
 }
 
 /// BUG-2157 (ruling on BUG-2151: a contained parent's env ALWAYS wins). The
-/// `aida session resume` command for a contained parent: only a claude
-/// session can resume contained — codex/agy are refused, never resumed
-/// uncontained — and it resumes with the contained flags and `AIDA_CONTAINED=1`
-/// kept on the child. It runs in the session's lease tree when a host lease
+/// `aida session resume` command for a contained parent: a claude session
+/// resumes AIDA-contained, a codex session under Codex's native sandbox
+/// (BUG-2386), and agy is refused — never resumed uncontained. A claude
+/// resume keeps the contained flags and `AIDA_CONTAINED=1` on the child. It runs in the session's lease tree when a host lease
 /// minted it (TASK-2031), else in the checkout whose Claude project store
 /// listed it, and that tree's git root is the write boundary. Claude keys
 /// transcripts by cwd, so a lease-tree resume first copies the one transcript
@@ -676,6 +676,23 @@ pub(crate) fn build_contained_resume_command(
     target: &ResumeTarget,
     launcher_cwd: &Path,
 ) -> Result<std::process::Command> {
+    // BUG-2386: a Codex session resumes contained under Codex's own native
+    // sandbox when `[contained.vendors]` opts it in, else is refused — never
+    // resumed uncontained. trace:BUG-2386 | ai:claude
+    if target.agent == "codex" {
+        require_vendor_containment(HeadlessVendor::Codex, true, "resumed codex session")
+            .with_context(|| {
+                format!(
+                    "refusing to resume codex session `{}` uncontained",
+                    target.id
+                )
+            })?;
+        let mut cmd = codex_session_resume_command(target, true)?;
+        if cmd.get_current_dir().is_none() {
+            cmd.current_dir(launcher_cwd);
+        }
+        return Ok(cmd);
+    }
     if target.agent != "claude" {
         anyhow::bail!(
             "[contained] this session is contained (AIDA_CONTAINED), but `{}` sessions cannot \
@@ -846,16 +863,20 @@ pub(crate) fn stage_resume_transcript(id: &str, listed_in: &Path, cwd: &Path) ->
 
 /// Replace this process with `cmd` (spawn + wait where exec is unavailable).
 // trace:BUG-2157 | ai:claude
-fn exec_or_spawn_claude(cmd: &mut std::process::Command) -> Result<()> {
+fn exec_or_spawn_agent(cmd: &mut std::process::Command) -> Result<()> {
+    // BUG-2386: a Codex resume execs through here too; name the real program.
+    let program = cmd.get_program().to_string_lossy().into_owned();
     #[cfg(unix)]
     {
         use std::os::unix::process::CommandExt;
         let err = cmd.exec();
-        anyhow::bail!("failed to exec claude: {}", err);
+        anyhow::bail!("failed to exec {program}: {}", err);
     }
     #[cfg(not(unix))]
     {
-        let status = cmd.status().context("failed to spawn claude")?;
+        let status = cmd
+            .status()
+            .with_context(|| format!("failed to spawn {program}"))?;
         std::process::exit(status.code().unwrap_or(1));
     }
 }
@@ -1841,10 +1862,15 @@ pub(crate) fn codex_exec_fork_support_within(
 }
 
 /// BUG-044: [`compose_headless_command`], with `resume` rewriting the
-/// composed `--session-id <id>` to `--resume <id>` (Claude only) so a resume
-/// keeps the launch's posture, model and wrapper. One shared builder, so the
-/// BUG-342 ratchet sees every headless launch route through it.
+/// composed `--session-id <id>` to `--resume <id>` so a resume keeps the
+/// launch's posture, model and wrapper. One shared builder, so the BUG-342
+/// ratchet sees every headless launch route through it.
+///
+/// BUG-2386: Codex resumes too, as `codex exec resume <id> <prompt>`; there
+/// `session_id` must be the Codex thread id ([`crate::codex_resume`]). Agy has
+/// no resume surface and is refused by name.
 // trace:BUG-B6B1278890774EF993D2EBC327862470-044 | ai:claude
+// trace:BUG-2386 | ai:claude
 pub(crate) fn compose_headless_command_for(
     vendor: HeadlessVendor,
     prompt: &str,
@@ -1859,13 +1885,16 @@ pub(crate) fn compose_headless_command_for(
     if !resume {
         return Ok((program, args));
     }
-    anyhow::ensure!(
-        vendor == HeadlessVendor::Claude,
-        "only a claude session can be resumed headless, not {}",
-        vendor.as_str()
-    );
-    Ok((program, resume_session_args(args, session_id)?))
+    match vendor {
+        HeadlessVendor::Claude => Ok((program, resume_session_args(args, session_id)?)),
+        HeadlessVendor::Codex => Ok((program, codex_resume_exec_args(args, session_id)?)),
+        HeadlessVendor::Agy => anyhow::bail!("{AGY_RESUME_REFUSAL}"),
+    }
 }
+
+/// BUG-2386: agy has no verified resume surface.
+pub(crate) const AGY_RESUME_REFUSAL: &str =
+    "an agy session cannot be resumed: agy has no resume command. Start a fresh run instead.";
 
 /// STORY-683: spawn (not exec) a headless run of `vendor`'s CLI and wait,
 /// returning the exit status. The vendor-neutral generalization of
@@ -2697,6 +2726,112 @@ pub fn exec_codex_session(
     }
 }
 
+/// BUG-2386: an interactive `codex resume <thread>` on the posture a fresh
+/// interactive Codex launch resolves ([`exec_codex_session`]): a contained
+/// request (the parent's `AIDA_CONTAINED` or the `[agents] contained` knob)
+/// takes Codex's native sandbox or is refused, never run uncontained;
+/// otherwise `bypass` maps to Codex's bypass flag. `grant_id` binds the
+/// child's seat grant. `contained` is the caller's own request (e.g.
+/// `queue work --sandbox`), OR-ed with the parent env and the knob so a
+/// flag-only request is never dropped. `read_only` keeps a plan lane's
+/// read-only sandbox (BUG-2394) on the resumed thread; it wins over bypass.
+// trace:BUG-2386 | ai:claude
+pub(crate) fn build_codex_resume_command(
+    thread_id: &str,
+    bypass: bool,
+    read_only: bool,
+    grant_id: Option<&str>,
+    contained: bool,
+) -> Result<std::process::Command> {
+    let requested = contained || drain_contained(&headless_worktree_root())?;
+    require_vendor_containment(HeadlessVendor::Codex, requested, "resumed codex session")?;
+    let posture = containment_posture(HeadlessVendor::Codex, requested)?;
+    let native = posture == ContainmentPosture::Native;
+    let mut cmd =
+        std::process::Command::new(resolve_agent_program(HeadlessVendor::Codex.program()));
+    cmd.args(codex_interactive_resume_args(
+        thread_id,
+        native,
+        bypass && !native,
+        read_only,
+    )?);
+    // An explicit grant decision either way: the delegated grant, or the
+    // empty baseline selector (BUG-2398 finalization refuses neither-nor).
+    // trace:BUG-2386 | ai:claude
+    cmd.env(
+        crate::gate::seat_authority::GRANT_ENV,
+        grant_id.unwrap_or(""),
+    );
+    // trace:BUG-2139 | ai:claude
+    scrub_launcher_session_env(&mut cmd);
+    cmd.env_remove("AIDA_CONTAINED");
+    stamp_containment_posture(&mut cmd, posture);
+    if native {
+        eprintln!("  codex: {}", posture.label());
+    }
+    Ok(cmd)
+}
+
+/// BUG-2386: replace this process with [`build_codex_resume_command`].
+// trace:BUG-2386 | ai:claude
+pub fn exec_codex_resume(
+    thread_id: &str,
+    bypass: bool,
+    read_only: bool,
+    grant_id: Option<&str>,
+    contained: bool,
+) -> Result<()> {
+    let mut cmd = build_codex_resume_command(thread_id, bypass, read_only, grant_id, contained)?;
+    finalize_codex_resume(&mut cmd, &headless_worktree_root())?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::process::CommandExt;
+        let err = cmd.exec();
+        anyhow::bail!("failed to exec codex: {}", err);
+    }
+    #[cfg(not(unix))]
+    {
+        let status = cmd.status().context("failed to spawn codex")?;
+        std::process::exit(status.code().unwrap_or(1));
+    }
+}
+
+/// BUG-2386: finalize an interactive Codex resume built by
+/// [`build_codex_resume_command`] exactly like a fresh interactive Codex
+/// launch ([`exec_codex_session`]): public child metadata, the seat the
+/// delegated grant names (unless the caller already set one), then
+/// [`crate::codex_tool_env::prepare_launch`]. Call last, after the caller's
+/// cwd/seat customization and before any stdio or spawn/exec. A caller that
+/// issued the grant revokes it when this refuses.
+// trace:BUG-2386 | ai:claude
+pub(crate) fn finalize_codex_resume(
+    cmd: &mut std::process::Command,
+    project_root: &Path,
+) -> Result<()> {
+    let explicit = |cmd: &std::process::Command, key: &str| {
+        cmd.get_envs()
+            .find(|(k, _)| *k == key)
+            .and_then(|(_, v)| v)
+            .map(|v| v.to_string_lossy().into_owned())
+    };
+    let user = crate::current_user_id(None);
+    if explicit(cmd, "AIDA_SESSION_ROLE").is_none() {
+        if let Some(id) =
+            explicit(cmd, crate::gate::seat_authority::GRANT_ENV).filter(|id| !id.is_empty())
+        {
+            if let crate::gate::seat_authority::GrantCheck::Valid(grant) =
+                crate::gate::seat_authority::grant_check_for(project_root, &id, &user)
+            {
+                cmd.env("AIDA_SESSION_ROLE", grant.seat);
+            }
+        }
+    }
+    cmd.env("AIDA_USER", user)
+        .env("AIDA_PROJECT_ROOT", project_root)
+        .env("AIDA_AGENT_TYPE", "codex");
+    crate::codex_tool_env::prepare_launch(cmd)
+}
+
 /// BUG-1607: the interactive reviewer launch a resolved `vendor` maps to —
 /// PURE decision (which program + argv, or a refusal for an unsupported
 /// vendor); no process is spawned. Every interactive reviewer launch site
@@ -3257,6 +3392,28 @@ fn explicit_headless_vendor_selected(worktree_root: &Path) -> bool {
 /// and checked against the persisted `[agents] enabled` profile before
 /// `session_start` creates a worktree or writes a lease.
 // trace:BUG-898 | ai:codex
+/// BUG-2386: the gate a resume passes instead of the configured-vendor check.
+/// A resume continues the session on the vendor that RECORDED it, so that
+/// vendor must be resumable and enabled by `[agents] enabled`; the configured
+/// launch vendor does not matter.
+// trace:BUG-2386 | ai:claude
+pub(crate) fn require_resume_vendor(worktree_root: &Path, recorded: HeadlessVendor) -> Result<()> {
+    if !vendor_can_resume(recorded) {
+        anyhow::bail!("{AGY_RESUME_REFUSAL}");
+    }
+    if let Some(selection) = crate::init_cmd::read_enabled_agent_selection(worktree_root) {
+        if !agent_selection_allows_vendor(selection, recorded) {
+            anyhow::bail!(
+                "this session was recorded by `{}`, which `[agents] enabled` disables; refusing \
+                 to resume it on another vendor. Recovery: enable `{}`, or start a fresh run.",
+                recorded.as_str(),
+                recorded.as_str()
+            );
+        }
+    }
+    Ok(())
+}
+
 pub(crate) fn resolve_enabled_headless_vendor(worktree_root: &Path) -> Result<HeadlessVendor> {
     let resolved = resolve_headless_vendor(worktree_root);
     let Some(selection) = crate::init_cmd::read_enabled_agent_selection(worktree_root) else {
@@ -3814,6 +3971,66 @@ pub fn codex_headless_args_with_model_and_effort(
     }
     args.push(prompt.to_string());
     args
+}
+
+/// BUG-2386: a composed `codex … exec <flags> <prompt>` argv rewritten to
+/// `codex … exec resume <flags> <thread> <prompt>`, every flag kept, so a
+/// resume runs with the posture, model and wrapper of the launch it continues
+/// (the Codex half of [`resume_session_args`]).
+// trace:BUG-2386 | ai:claude
+pub(crate) fn codex_resume_exec_args(
+    mut args: Vec<String>,
+    thread_id: &str,
+) -> Result<Vec<String>> {
+    anyhow::ensure!(
+        crate::codex_resume::valid_thread_id(thread_id),
+        "refusing to resume `{thread_id}`: not a Codex thread id"
+    );
+    let exec = args
+        .iter()
+        .position(|a| a == "exec")
+        .ok_or_else(|| anyhow::anyhow!("no `codex exec` launch to resume"))?;
+    anyhow::ensure!(
+        args.len() > exec + 1,
+        "the `codex exec` launch to resume has no prompt"
+    );
+    let prompt_at = args.len() - 1;
+    args.insert(prompt_at, thread_id.to_string());
+    args.insert(exec + 1, "resume".to_string());
+    Ok(args)
+}
+
+/// BUG-2386: the argv (after `codex`) of an interactive `codex resume
+/// <thread>`. A native-contained resume takes Codex's own sandbox flags and
+/// never the bypass; otherwise the uniform `[agents] bypass` posture maps to
+/// Codex's bypass flag, as a fresh interactive launch does (BUG-743).
+/// `read_only` (a plan lane, BUG-2394) forces Codex's read-only sandbox over
+/// either posture, exactly as a fresh plan-only launch does.
+// trace:BUG-2386 | ai:claude
+pub(crate) fn codex_interactive_resume_args(
+    thread_id: &str,
+    native_contained: bool,
+    bypass: bool,
+    read_only: bool,
+) -> Result<Vec<String>> {
+    anyhow::ensure!(
+        crate::codex_resume::valid_thread_id(thread_id),
+        "refusing to resume `{thread_id}`: not a Codex thread id"
+    );
+    let mut args = if native_contained {
+        crate::tool_contained_flags("codex")?
+    } else if bypass {
+        vec!["--dangerously-bypass-approvals-and-sandbox".to_string()]
+    } else {
+        Vec::new()
+    };
+    args.extend(["resume".to_string(), thread_id.to_string()]);
+    // trace:BUG-2394 | ai:claude — a plan lane never writes, resumed or not.
+    Ok(if read_only {
+        codex_read_only_args(args)
+    } else {
+        args
+    })
 }
 
 // trace:TASK-1581 | ai:antigravity — test-only default-argument wrapper; every
@@ -5620,19 +5837,27 @@ pub(crate) fn exec_vendor_headless(
 }
 
 /// BUG-050: which [`exec_vendor_headless`] launches get the drain resume
-/// loop: a Claude implementer lane that has both a lease and a seat tree.
-/// Everything else (a reviewer or advisor seat, a Codex/Antigravity lane, a
+/// loop: a resumable-vendor implementer lane that has both a lease and a seat
+/// tree. Everything else (a reviewer or advisor seat, an Antigravity lane, a
 /// launch with no lease or no lane tree) runs once.
 // trace:BUG-B6B1278890774EF993D2EBC327862470-050 | ai:claude
+// trace:BUG-2386 | ai:claude
 pub(crate) fn drain_resume_lane<'a>(
     vendor: HeadlessVendor,
     seat: &str,
     lease_id: Option<&'a str>,
     lane_tree: Option<(&'a Path, &'a str)>,
 ) -> Option<(&'a str, (&'a Path, &'a str))> {
-    lease_id.zip(lane_tree).filter(|_| {
-        vendor == HeadlessVendor::Claude && crate::canonical_role_name(seat) == "implementer"
-    })
+    lease_id
+        .zip(lane_tree)
+        .filter(|_| vendor_can_resume(vendor) && crate::canonical_role_name(seat) == "implementer")
+}
+
+/// BUG-2386: whether `vendor`'s sessions can be resumed (Claude by its
+/// `--session-id`, Codex by its bound thread id). Agy cannot.
+// trace:BUG-2386 | ai:claude
+pub(crate) fn vendor_can_resume(vendor: HeadlessVendor) -> bool {
+    matches!(vendor, HeadlessVendor::Claude | HeadlessVendor::Codex)
 }
 
 /// BUG-050: run the `--auto-complete` drain's phase-1 implementer on `lease`
@@ -5990,13 +6215,29 @@ fn run_vendor_headless_child(
         vendor,
         aida_core::agents_config::AgentSeat::Implementer,
     );
+    // BUG-2386: a Codex resume continues the thread Codex minted, not the
+    // AIDA id; resolve it (lease stamp, headless log, unique rollout) or
+    // refuse by name. trace:BUG-2386 | ai:claude
+    let resume_id = if hooks.resume && vendor == HeadlessVendor::Codex {
+        let project_root = crate::find_project_root()?;
+        let worktree = headless_worktree_root();
+        crate::codex_resume::resolve_thread_id(&crate::codex_resume::ThreadLookup {
+            project_root: &project_root,
+            session_id,
+            lease_id,
+            worktree: &worktree,
+            since: None,
+        })?
+    } else {
+        session_id.to_string()
+    };
     // Own reservations from command construction through the actual spawn.
     // trace:STORY-1843 | ai:codex
     let mut handle_guard = child_reservation_guard();
     let mut child_cmd = build_exec_vendor_headless_command_for(
         vendor,
         prompt,
-        session_id,
+        &resume_id,
         contained,
         tuning.model.as_deref(),
         tuning.effort.as_deref(),
@@ -6079,6 +6320,14 @@ fn run_vendor_headless_child(
         lease_id,
         status.as_ref().ok().copied(),
     );
+    // BUG-2386: bind the thread a fresh Codex run started to its lease, so a
+    // later resume (background wait, `queue work --resume`) continues it.
+    // trace:BUG-2386 | ai:claude
+    if vendor == HeadlessVendor::Codex && !hooks.resume {
+        if let (Some(lease), Ok(root)) = (lease_id, crate::find_project_root()) {
+            crate::codex_resume::bind_thread_from_log(&root, lease, log_path);
+        }
+    }
     let status = status?;
     tee.stop();
     Ok(status)
@@ -6590,6 +6839,168 @@ pub(crate) fn spawn_claude_headless_resume_granted(
     Ok((status, child_grant.id))
 }
 
+/// BUG-2386: what a headless resume continues — the vendor that recorded the
+/// session and the id that vendor resumes it by.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct HeadlessResume<'a> {
+    pub(crate) vendor: HeadlessVendor,
+    /// The AIDA session id (Claude's `--session-id`; the handle key).
+    pub(crate) session_id: &'a str,
+    /// The id the vendor resumes by: the same id for Claude, the bound
+    /// thread id for Codex.
+    pub(crate) resume_id: &'a str,
+}
+
+/// BUG-2386: the vendor-neutral [`spawn_claude_headless_resume_granted`]:
+/// Claude keeps its own path byte for byte; Codex resumes its thread with
+/// `codex exec resume <thread> <prompt>`, on the posture, grant and identity
+/// env a fresh headless Codex child gets. Agy is refused by name.
+// trace:BUG-2386 | ai:claude
+pub(crate) fn spawn_vendor_headless_resume_granted(
+    target: &HeadlessResume<'_>,
+    prompt: &str,
+    log_path: &Path,
+    cwd: &Path,
+    tee_opts: &crate::headless_tee::TeeOptions,
+    contained: bool,
+    seat: &str,
+) -> Result<(std::process::ExitStatus, String)> {
+    use std::process::{Command, Stdio};
+    let vendor = target.vendor;
+    match vendor {
+        HeadlessVendor::Claude => {
+            return spawn_claude_headless_resume_granted(
+                prompt,
+                target.session_id,
+                log_path,
+                cwd,
+                tee_opts,
+                contained,
+                seat,
+            )
+        }
+        HeadlessVendor::Agy => anyhow::bail!("{AGY_RESUME_REFUSAL}"),
+        HeadlessVendor::Codex => {}
+    }
+    let contained = aida_contained_env()? || contained;
+    // Refuse before the log file and tee exist: a contained parent never
+    // resumes its child uncontained. trace:BUG-2144 | ai:claude
+    require_vendor_containment(vendor, contained, &format!("resumed {seat} session"))?;
+    let posture = containment_posture_in(cwd, vendor.as_str(), contained)?;
+    let agent_seat = match crate::canonical_role_name(seat).as_str() {
+        "reviewer" => aida_core::agents_config::AgentSeat::Reviewer,
+        "advisor" => aida_core::agents_config::AgentSeat::Advisor,
+        _ => aida_core::agents_config::AgentSeat::Implementer,
+    };
+    let tuning = resolve_agent_tuning(cwd, vendor, agent_seat);
+    let effective_prompt = codex_inline_prompt(prompt).unwrap_or_else(|| prompt.to_string());
+    if let Some(dir) = log_path.parent() {
+        std::fs::create_dir_all(dir)
+            .with_context(|| format!("failed to create {}", dir.display()))?;
+    }
+    let log = std::fs::File::create(log_path)
+        .with_context(|| format!("failed to create headless log {}", log_path.display()))?;
+    let tee = crate::headless_tee::start_tee(log_path, tee_opts);
+    let (ceiling_key, ceiling_value) = crate::bg_wait_ceiling_env(Some(cwd));
+    // Same order as the Claude resume path: the argv comes from the shared
+    // headless builder right beside the launch (BUG-342 ratchet).
+    // trace:BUG-2386 | ai:claude
+    let (program, args) = os_wrapped_program_and_args(
+        cwd,
+        &resolve_agent_program(vendor.program()),
+        codex_resume_exec_args(
+            headless_vendor_args_contained_in(
+                vendor,
+                &effective_prompt,
+                target.session_id,
+                contained.then_some(cwd),
+                tuning.model.as_deref(),
+                tuning.effort.as_deref(),
+            )?,
+            target.resume_id,
+        )?,
+    )?;
+    let child_grant = crate::gate::seat_authority::issue_launch_child(
+        cwd,
+        seat,
+        &crate::current_user_id(None),
+        containment_applied(vendor, contained),
+    )?;
+    let mut cmd = Command::new(program);
+    cmd.current_dir(cwd)
+        .args(args)
+        .env("AIDA_HEADLESS", "1")
+        .env("AIDA_SESSION_ROLE", seat)
+        .env(crate::gate::seat_authority::GRANT_ENV, &child_grant.id)
+        .env("AIDA_DRIVE_ROOT", headless_worktree_root())
+        .env("PATH", drive_path_env().unwrap_or_default())
+        .envs(crate::headless_wait_envs(ceiling_key, &ceiling_value));
+    let mut handle_guard = child_reservation_guard();
+    apply_resumed_child_agent_identity(&mut cmd, vendor, seat, target.session_id);
+    apply_headless_harness_version(&mut cmd, vendor, cwd);
+    scrub_launcher_session_env(&mut cmd);
+    // Codex never runs AIDA-contained; its native sandbox is the posture.
+    cmd.env_remove("AIDA_CONTAINED");
+    stamp_containment_posture(&mut cmd, posture);
+    // Finalize like every fresh headless Codex launch; a refusal leaves no
+    // live child grant. trace:BUG-2386 | ai:claude
+    cmd.env("AIDA_USER", crate::current_user_id(None))
+        .env("AIDA_PROJECT_ROOT", headless_worktree_root());
+    if let Err(error) = crate::codex_tool_env::prepare_launch(&mut cmd) {
+        tee.stop();
+        revoke_headless_child_grant(&child_grant.id);
+        return Err(error);
+    }
+    let status = reviewer_status_with_handle_guard(cmd.stdout(Stdio::from(log)), &mut handle_guard)
+        .context("failed to spawn codex")?;
+    tee.stop();
+    record_headless_session_end(cwd, target.session_id);
+    Ok((status, child_grant.id))
+}
+
+/// BUG-2386: [`spawn_vendor_headless_resume_granted`] without the grant id.
+// trace:BUG-2386 | ai:claude
+pub(crate) fn spawn_vendor_headless_resume(
+    target: &HeadlessResume<'_>,
+    prompt: &str,
+    log_path: &Path,
+    cwd: &Path,
+    tee_opts: &crate::headless_tee::TeeOptions,
+    contained: bool,
+    seat: &str,
+) -> Result<std::process::ExitStatus> {
+    spawn_vendor_headless_resume_granted(target, prompt, log_path, cwd, tee_opts, contained, seat)
+        .map(|(status, _)| status)
+}
+
+/// BUG-2386: the vendor and resumable id of the AIDA session `session_id`
+/// that ran on `vendor` in `worktree`: Claude resumes by the same id; Codex
+/// by the thread bound to the session (lease stamp, headless log, or the one
+/// rollout started in `worktree` since `since`).
+// trace:BUG-2386 | ai:claude
+pub(crate) fn resolve_headless_resume_id(
+    vendor: HeadlessVendor,
+    project_root: &Path,
+    session_id: &str,
+    lease_id: Option<&str>,
+    worktree: &Path,
+    since: Option<SystemTime>,
+) -> Result<String> {
+    match vendor {
+        HeadlessVendor::Claude => Ok(session_id.to_string()),
+        HeadlessVendor::Codex => {
+            crate::codex_resume::resolve_thread_id(&crate::codex_resume::ThreadLookup {
+                project_root,
+                session_id,
+                lease_id,
+                worktree,
+                since,
+            })
+        }
+        HeadlessVendor::Agy => anyhow::bail!("{AGY_RESUME_REFUSAL}"),
+    }
+}
+
 /// One line of `~/.aida/session-launches.log` matching the current cwd,
 /// parsed back into structured form so `aida session list` can correlate
 /// by timestamp. (The cwd field is dropped after the filter — every
@@ -6733,8 +7144,10 @@ fn claude_entries_for_cwd(cwd: &Path) -> Result<Vec<SessionLogEntry>> {
 }
 
 fn codex_entries() -> Result<Vec<SessionLogEntry>> {
-    let home = crate::home_dir().context("HOME not set; cannot locate Codex sessions")?;
-    let root = home.join(".codex").join("sessions");
+    // BUG-2386: the same root resume classification reads, so the pickers
+    // never list an id `recorded_resume` cannot place. trace:BUG-2386 | ai:claude
+    let root = crate::vendor_activity::codex_sessions_root()
+        .context("HOME not set; cannot locate Codex sessions")?;
     if !root.is_dir() {
         return Ok(Vec::new());
     }
@@ -7908,17 +8321,56 @@ fn resume_command_for(target: &ResumeTarget) -> (String, Vec<String>) {
     }
 }
 
+// trace:BUG-2386 | ai:claude
 fn exec_resume_command(
     target: &ResumeTarget,
     permission_mode: Option<&str>,
     contained: bool,
 ) -> Result<()> {
-    if target.agent == "claude" {
-        return exec_claude_resume(&target.id, permission_mode, contained, None);
+    match target.agent.as_str() {
+        "claude" => exec_claude_resume(&target.id, permission_mode, contained, None),
+        // BUG-2386: exec `codex resume <id>` rather than printing it. The
+        // resume is native (no bypass): a resume never widens the posture a
+        // fresh `aida session new` would need consent for.
+        "codex" => exec_or_spawn_agent(&mut codex_session_resume_command(target, contained)?),
+        _ => {
+            let (program, args) = resume_command_for(target);
+            anyhow::bail!(
+                "{AGY_RESUME_REFUSAL} (`{} {}` is not a verified resume command)",
+                program,
+                crate::shell_join_display(&args)
+            )
+        }
     }
-    let (program, args) = resume_command_for(target);
-    println!("{} {}", program, crate::shell_join_display(&args));
-    Ok(())
+}
+
+/// BUG-2386: the `codex resume <id>` an `aida session resume` of a Codex
+/// session runs (exec'd, never printed): native posture (no bypass — a
+/// resume never widens what a fresh launch would need consent for), the
+/// caller's containment request honoured, in the session's own tree.
+// trace:BUG-2386 | ai:claude
+pub(crate) fn codex_session_resume_command(
+    target: &ResumeTarget,
+    contained: bool,
+) -> Result<std::process::Command> {
+    let mut cmd = build_codex_resume_command(&target.id, false, false, None, contained)?;
+    if let Some(cwd) = codex_resume_cwd(target) {
+        cmd.current_dir(cwd);
+    }
+    finalize_codex_resume(&mut cmd, &headless_worktree_root())?;
+    Ok(cmd)
+}
+
+/// BUG-2386: where a Codex session resumes: the tree of the lease that minted
+/// it, else the cwd its rollout recorded, when that still exists.
+// trace:BUG-2386 | ai:claude
+fn codex_resume_cwd(target: &ResumeTarget) -> Option<PathBuf> {
+    resume_lease_tree(target).or_else(|| {
+        let root = crate::vendor_activity::codex_sessions_root()?;
+        crate::codex_resume::find_rollout(&root, &target.id)?
+            .cwd
+            .filter(|p| p.is_dir())
+    })
 }
 
 /// Replace this process with `claude --resume <id>`. Falls back to spawn
@@ -7972,7 +8424,7 @@ pub fn exec_claude_resume(
     grant_id: Option<&str>,
 ) -> Result<()> {
     let mut cmd = build_claude_resume_exec_command(id, permission_mode, contained, grant_id)?;
-    exec_or_spawn_claude(&mut cmd)
+    exec_or_spawn_agent(&mut cmd)
 }
 
 /// TASK-2031: the tree a contained `aida session resume` is bounded to: the
@@ -9669,22 +10121,24 @@ mod tests {
         );
     }
 
-    /// BUG-050: only a Claude implementer lane with a lease and a seat tree
-    /// gets the drain resume loop; the queue lane launch wires the lease's
-    /// worktree and branch into it.
+    /// BUG-050: only a resumable-vendor implementer lane with a lease and a
+    /// seat tree gets the drain resume loop; the queue lane launch wires the
+    /// lease's worktree and branch into it. BUG-2386: Codex lanes resume too.
     // trace:BUG-B6B1278890774EF993D2EBC327862470-050 | ai:claude
+    // trace:BUG-2386 | ai:claude
     #[test]
-    fn only_a_claude_implementer_lane_gets_the_drain_resume_loop() {
+    fn only_a_resumable_implementer_lane_gets_the_drain_resume_loop() {
         let tree = Path::new("/seat");
         let lane = Some((tree, "bug-1"));
-        assert_eq!(
-            drain_resume_lane(HeadlessVendor::Claude, "implementer", Some("L1"), lane),
-            Some(("L1", (tree, "bug-1")))
-        );
+        for vendor in [HeadlessVendor::Claude, HeadlessVendor::Codex] {
+            assert_eq!(
+                drain_resume_lane(vendor, "implementer", Some("L1"), lane),
+                Some(("L1", (tree, "bug-1")))
+            );
+        }
         for (vendor, seat, lease, lane_tree) in [
             (HeadlessVendor::Claude, "reviewer", Some("L1"), lane),
             (HeadlessVendor::Claude, "advisor", Some("L1"), lane),
-            (HeadlessVendor::Codex, "implementer", Some("L1"), lane),
             (HeadlessVendor::Agy, "implementer", Some("L1"), lane),
             (HeadlessVendor::Claude, "implementer", None, lane),
             (HeadlessVendor::Claude, "implementer", Some("L1"), None),
@@ -10922,6 +11376,114 @@ mod tests {
                 }
             }
         }
+    }
+
+    /// BUG-2386: a Codex headless resume is the launch's own argv rewritten to
+    /// `exec resume <flags> <thread> <prompt>`: posture, model and effort kept.
+    // trace:BUG-2386 | ai:claude
+    #[test]
+    fn codex_headless_resume_keeps_the_launch_flags() {
+        let _env = AgentCmdEnvGuard::acquire();
+        let (prog, args) = compose_headless_command_for(
+            HeadlessVendor::Codex,
+            "do a thing",
+            "019a-thread",
+            false,
+            Some("gpt-x"),
+            Some("high"),
+            true,
+        )
+        .unwrap();
+        assert!(prog.ends_with("codex"), "{prog}");
+        assert_eq!(&args[..2], ["exec", "resume"], "{args:?}");
+        let n = args.len();
+        assert_eq!(&args[n - 2..], ["019a-thread", "do a thing"], "{args:?}");
+        for flag in [
+            "--json",
+            "--dangerously-bypass-approvals-and-sandbox",
+            "gpt-x",
+            "model_reasoning_effort=high",
+        ] {
+            assert!(args.iter().any(|a| a == flag), "{flag}: {args:?}");
+        }
+        // A native-contained launch keeps its sandbox flags ahead of `exec`.
+        let contained: Vec<String> = [
+            "--sandbox",
+            "workspace-write",
+            "--ask-for-approval",
+            "never",
+            "exec",
+            "--json",
+            "p",
+        ]
+        .map(String::from)
+        .to_vec();
+        assert_eq!(
+            codex_resume_exec_args(contained, "t-1").unwrap(),
+            [
+                "--sandbox",
+                "workspace-write",
+                "--ask-for-approval",
+                "never",
+                "exec",
+                "resume",
+                "--json",
+                "t-1",
+                "p"
+            ]
+            .map(String::from)
+        );
+        assert!(codex_resume_exec_args(vec!["exec".into(), "p".into()], "--last").is_err());
+        assert!(codex_resume_exec_args(vec!["-p".into(), "p".into()], "t-1").is_err());
+        let agy =
+            compose_headless_command_for(HeadlessVendor::Agy, "p", "sid", false, None, None, true)
+                .unwrap_err();
+        assert!(format!("{agy:#}").contains("cannot be resumed"), "{agy:#}");
+    }
+
+    /// BUG-2386: the interactive `codex resume` argv per posture.
+    // trace:BUG-2386 | ai:claude
+    #[test]
+    fn codex_interactive_resume_argv_per_posture() {
+        assert_eq!(
+            codex_interactive_resume_args("t-1", false, false, false).unwrap(),
+            ["resume", "t-1"]
+        );
+        assert_eq!(
+            codex_interactive_resume_args("t-1", false, true, false).unwrap(),
+            [
+                "--dangerously-bypass-approvals-and-sandbox",
+                "resume",
+                "t-1"
+            ]
+        );
+        let native = codex_interactive_resume_args("t-1", true, true, false).unwrap();
+        assert!(
+            !native.iter().any(|a| a.contains("dangerously")),
+            "a contained resume never carries the bypass: {native:?}"
+        );
+        assert_eq!(&native[native.len() - 2..], ["resume", "t-1"]);
+        assert!(native.iter().any(|a| a == "workspace-write"), "{native:?}");
+        assert!(codex_interactive_resume_args("-x", false, false, false).is_err());
+        // BUG-2394: a plan-only resume keeps the read-only sandbox and never
+        // the bypass, on either posture. trace:BUG-2394 | ai:claude
+        assert_eq!(
+            codex_interactive_resume_args("t-1", false, true, true).unwrap(),
+            ["--sandbox", "read-only", "resume", "t-1"]
+        );
+        let plan_native = codex_interactive_resume_args("t-1", true, false, true).unwrap();
+        assert_eq!(&plan_native[..2], ["--sandbox", "read-only"]);
+        assert_eq!(
+            plan_native.iter().filter(|a| *a == "--sandbox").count(),
+            1,
+            "{plan_native:?}"
+        );
+        assert!(!plan_native
+            .iter()
+            .any(|a| a.contains("dangerously") || a == "workspace-write"));
+        assert!(plan_native.ends_with(&["resume".to_string(), "t-1".to_string()]));
+        assert!(vendor_can_resume(HeadlessVendor::Codex));
+        assert!(!vendor_can_resume(HeadlessVendor::Agy));
     }
 
     #[test]

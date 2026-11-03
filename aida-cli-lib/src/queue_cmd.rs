@@ -11709,25 +11709,29 @@ pub(crate) fn handle_queue_work(
     // launching and non-launching previews. A codex-only profile should
     // auto-pick codex; disabled defaults must not leak into dry-run or
     // no-launch output. trace:BUG-898 BUG-902 BUG-913 | ai:codex
+    // BUG-2386: a `--resume`'s recorded vendor and resumable id, resolved
+    // once here (before any lease is minted) and reused by the launch arms.
+    // trace:BUG-2386 | ai:claude
+    let mut resume_target: Option<(session::HeadlessVendor, String)> = None;
     let resolved_launch_vendor = if !list_sessions {
         let root = project_root_for_config
             .clone()
             .or_else(|| std::env::current_dir().ok())
             .unwrap_or_else(|| std::path::PathBuf::from("."));
-        let resolved = session::resolve_enabled_headless_vendor(&root)?;
-        if !no_launch
-            && matches!(launch, Some(QueueWorkLaunch::Resume(_)))
-            && resolved != session::HeadlessVendor::Claude
-        {
-            anyhow::bail!(
-                "headless resume currently supports only the Claude session model, but the \
-                 enabled launch vendor resolved to `{}`. Recovery: re-run with an enabled \
-                 Claude profile, start a fresh `{}` run, or use `--no-launch`.",
-                resolved.as_str(),
-                resolved.as_str()
-            );
+        // BUG-2386: a resume runs on the vendor that recorded the session
+        // (a Codex thread resumes on Codex), gated on that vendor being
+        // resumable and enabled — not on the configured vendor being Claude.
+        // trace:BUG-2386 | ai:claude
+        match (&launch, no_launch) {
+            (Some(QueueWorkLaunch::Resume(id)), false) => {
+                let (recorded, resume_id) =
+                    crate::codex_resume::recorded_resume(&root, id, Some(plan.scope.as_str()))?;
+                session::require_resume_vendor(&root, recorded)?;
+                resume_target = Some((recorded, resume_id));
+                Some(recorded)
+            }
+            _ => Some(session::resolve_enabled_headless_vendor(&root)?),
         }
-        Some(resolved)
     } else {
         None
     };
@@ -13617,9 +13621,48 @@ pub(crate) fn handle_queue_work(
             let codex_bypass = permission_mode.as_deref() == Some("bypassPermissions");
             // BUG-2394: `--plan-only` resolves to `plan`, which Codex has no
             // permission-mode for — map it to the read-only sandbox instead of
-            // falling through to the ordinary write posture.
+            // falling through to the ordinary write posture. A resumed plan
+            // lane keeps it too (BUG-2386).
             // trace:BUG-2394 | ai:claude
             let codex_read_only = session::codex_plan_read_only(permission_mode.as_deref());
+            // BUG-2386: `--resume` continues the recorded Codex thread instead
+            // of silently starting a fresh session. trace:BUG-2386 | ai:claude
+            if let QueueWorkLaunch::Resume(id) = &launch {
+                let (_, thread) = match resume_target.clone() {
+                    Some(target) => target,
+                    None => crate::codex_resume::recorded_resume(
+                        &project_root,
+                        id,
+                        Some(lease.scope.as_str()),
+                    )?,
+                };
+                eprintln!(
+                    "{} {}",
+                    crate::glyph(crate::glyphs::Glyph::FlowActive)
+                        .green()
+                        .bold(),
+                    format!(
+                        "resuming codex session {} in {} ({})",
+                        &thread[..thread.len().min(8)],
+                        lease.worktree_path.display(),
+                        if codex_read_only {
+                            "read-only sandbox"
+                        } else if codex_bypass {
+                            "bypass"
+                        } else {
+                            "native"
+                        },
+                    )
+                    .cyan()
+                );
+                return session::exec_codex_resume(
+                    &thread,
+                    codex_bypass,
+                    codex_read_only,
+                    child_grant_id.as_deref(),
+                    contained,
+                );
+            }
             eprintln!(
                 "{} {}",
                 crate::glyph(crate::glyphs::Glyph::FlowActive)
@@ -13670,12 +13713,19 @@ pub(crate) fn handle_queue_work(
                             .green()
                             .bold(),
                         format!(
-                        "resuming claude headless session {} in {} (claude -p, {}, prompt `{}`)",
-                        &id[..id.len().min(8)],
-                        lease.worktree_path.display(),
-                        claude_posture_display(permission_mode.as_deref(), contained),
-                        prompt
-                    )
+                            "resuming {} headless session {} in {} ({}, prompt `{}`)",
+                            launch_vendor.as_str(),
+                            &id[..id.len().min(8)],
+                            lease.worktree_path.display(),
+                            match launch_vendor {
+                                session::HeadlessVendor::Codex => "codex exec resume".to_string(),
+                                _ => format!(
+                                    "claude -p, {}",
+                                    claude_posture_display(permission_mode.as_deref(), contained)
+                                ),
+                            },
+                            prompt
+                        )
                         .cyan()
                     );
                     eprintln!(
@@ -13689,9 +13739,23 @@ pub(crate) fn handle_queue_work(
                     // trace:BUG-342 | ai:codex
                     let tee_opts = headless_tee::TeeOptions::from_env_and_flag(false)
                         .with_label(&lease.branch);
-                    let status = session::spawn_claude_headless_resume(
+                    // BUG-2386: resume on the recorded vendor — a Codex thread
+                    // resumes as `codex exec resume`. trace:BUG-2386 | ai:claude
+                    let (vendor, resume_id) = match resume_target.clone() {
+                        Some(target) => target,
+                        None => crate::codex_resume::recorded_resume(
+                            &project_root,
+                            &id,
+                            Some(lease.scope.as_str()),
+                        )?,
+                    };
+                    let status = session::spawn_vendor_headless_resume(
+                        &session::HeadlessResume {
+                            vendor,
+                            session_id: &id,
+                            resume_id: &resume_id,
+                        },
                         &prompt,
-                        &id,
                         &log_path,
                         &lease.worktree_path,
                         &tee_opts,
@@ -14067,58 +14131,113 @@ pub(crate) fn run_standalone_reviewer(
                 // trace:BUG-342 | ai:codex
                 let tee_opts =
                     headless_tee::TeeOptions::from_env_and_flag(false).with_label("reviewer");
-                let (status, grant) = session::spawn_claude_headless_resume_granted(
-                    prompt, &id, &log_path, worktree, &tee_opts, contained, "reviewer",
+                // BUG-2386: resume on the recorded vendor. trace:BUG-2386 | ai:claude
+                let (vendor, resume_id) =
+                    crate::codex_resume::recorded_resume(project_root, &id, Some(scope))?;
+                let (status, grant) = session::spawn_vendor_headless_resume_granted(
+                    &session::HeadlessResume {
+                        vendor,
+                        session_id: &id,
+                        resume_id: &resume_id,
+                    },
+                    prompt,
+                    &log_path,
+                    worktree,
+                    &tee_opts,
+                    contained,
+                    "reviewer",
                 )?;
                 (status, Some(log_path), Some(grant))
             } else {
-                // BUG-1607: `handle_queue_work` already refuses a
-                // non-Claude `--resume` before minting the launch decision
-                // (headless resume currently only supports the Claude
-                // session model), so `launch_vendor` here is guaranteed
-                // Claude. Guard it anyway — this function is unit-tested
-                // directly, so the invariant must hold even when this arm
-                // is reached without going through that outer gate.
+                // BUG-1607 / BUG-2386: `handle_queue_work` resolves the launch
+                // vendor to the vendor that recorded the session. Guard the
+                // pairing anyway — this function is unit-tested directly, so the
+                // invariant must hold even when this arm is reached without
+                // going through that outer gate.
                 // trace:BUG-1607 | ai:claude
-                if launch_vendor != session::HeadlessVendor::Claude {
+                // trace:BUG-2386 | ai:claude
+                let (recorded, resume_id) =
+                    crate::codex_resume::recorded_resume(project_root, &id, Some(scope))?;
+                if launch_vendor != recorded {
                     anyhow::bail!(
-                        "resuming an interactive reviewer session currently supports only the \
-                         Claude session model, but the resolved launch vendor is `{}`. \
-                         Recovery: start a fresh `{}` reviewer instead of `--resume`.",
+                        "this reviewer session was recorded by `{}`, but the resolved launch \
+                         vendor is `{}`. Recovery: start a fresh `{}` reviewer instead of \
+                         `--resume`.",
+                        recorded.as_str(),
                         launch_vendor.as_str(),
                         launch_vendor.as_str()
                     );
                 }
-                eprintln!(
-                    "{} {}",
-                    crate::glyph(crate::glyphs::Glyph::FlowActive)
-                        .green()
-                        .bold(),
-                    format!(
-                        "resuming claude reviewer session {} in {} ({})",
-                        &id[..id.len().min(8)],
-                        worktree.display(),
-                        claude_posture_display(permission_mode, contained)
-                    )
-                    .cyan()
-                );
-                // trace:BUG-b6b1278890774ef993d2ebc327862470-045 | ai:claude
-                let grant = crate::gate::seat_authority::issue_launch_child(
-                    project_root,
-                    "reviewer",
-                    &crate::current_user_id(None),
-                    contained || session::aida_contained_env()?,
-                )?;
-                (
-                    session::spawn_claude_resume_with_grant(
-                        &id,
-                        permission_mode,
-                        contained,
+                if recorded == session::HeadlessVendor::Codex {
+                    // A Codex reviewer resumes its thread interactively.
+                    let grant = crate::gate::seat_authority::issue_launch_child(
+                        project_root,
+                        "reviewer",
+                        &crate::current_user_id(None),
+                        session::containment_applied(recorded, contained),
+                    )?;
+                    // A reviewer never runs a plan lane; the seat comes from
+                    // the reviewer grant, set by `finalize_codex_resume`.
+                    let mut cmd = session::build_codex_resume_command(
+                        &resume_id,
+                        permission_mode == Some("bypassPermissions"),
+                        false,
                         Some(&grant.id),
-                    )?,
-                    None,
-                    Some(grant.id),
-                )
+                        contained,
+                    )?;
+                    cmd.current_dir(worktree);
+                    // trace:BUG-2386 | ai:claude
+                    if let Err(error) = session::finalize_codex_resume(&mut cmd, project_root) {
+                        session::revoke_headless_child_grant(&grant.id);
+                        return Err(error);
+                    }
+                    eprintln!(
+                        "{} {}",
+                        crate::glyph(crate::glyphs::Glyph::FlowActive)
+                            .green()
+                            .bold(),
+                        format!(
+                            "resuming codex reviewer session {} in {}",
+                            &resume_id[..resume_id.len().min(8)],
+                            worktree.display(),
+                        )
+                        .cyan()
+                    );
+                    let status = crate::review_watch::reviewer_status(&mut cmd)
+                        .context("failed to spawn codex")?;
+                    (status, None, Some(grant.id))
+                } else {
+                    eprintln!(
+                        "{} {}",
+                        crate::glyph(crate::glyphs::Glyph::FlowActive)
+                            .green()
+                            .bold(),
+                        format!(
+                            "resuming claude reviewer session {} in {} ({})",
+                            &id[..id.len().min(8)],
+                            worktree.display(),
+                            claude_posture_display(permission_mode, contained)
+                        )
+                        .cyan()
+                    );
+                    // trace:BUG-b6b1278890774ef993d2ebc327862470-045 | ai:claude
+                    let grant = crate::gate::seat_authority::issue_launch_child(
+                        project_root,
+                        "reviewer",
+                        &crate::current_user_id(None),
+                        contained || session::aida_contained_env()?,
+                    )?;
+                    (
+                        session::spawn_claude_resume_with_grant(
+                            &id,
+                            permission_mode,
+                            contained,
+                            Some(&grant.id),
+                        )?,
+                        None,
+                        Some(grant.id),
+                    )
+                }
             }
         }
         QueueWorkLaunch::Fresh(id) => {

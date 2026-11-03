@@ -1346,11 +1346,9 @@ pub(crate) fn aida_exe() -> PathBuf {
 ///     `--resume <session-id>`. The minted/resumed id is tracked so the TUI can
 ///     re-attach the conversation.
 ///   - `Codex` — adds `--vendor codex`. Codex's interactive CLI has no
-///     caller-minted `--session-id` and no addressable resume from the TUI's
-///     side, so a Codex tab always hosts a *fresh* session (a `Resume` launch
-///     falls back to fresh) and threads no `--session-id`/`--resume`. The
-///     returned session id is empty, which suppresses the (claude-only) resume
-///     hint at exit. Codex resume-parity is a follow-up.
+///     caller-minted `--session-id`, so a fresh Codex tab threads none and
+///     returns an empty session id. A `Resume` launch threads `--resume
+///     <thread-id>` and returns that id (BUG-2386).
 // trace:TASK-895 | ai:claude
 fn queue_work_argv(
     exe: &str,
@@ -1382,12 +1380,20 @@ fn queue_work_argv(
             (argv, session_id)
         }
         TabVendor::Codex => {
-            // Codex has no caller-minted session id and no TUI-addressable
-            // resume, so always host a fresh session (drop any `Resume` id) and
-            // route `aida queue work` to the codex interactive CLI.
+            // Codex has no caller-minted session id, so a fresh tab threads
+            // none. BUG-2386: a `Resume` tab threads `--resume <thread-id>`;
+            // `aida queue work` resumes the recorded Codex thread.
+            // trace:BUG-2386 | ai:claude
             argv.push("--vendor".to_string());
             argv.push(TabVendor::Codex.as_str().to_string());
-            (argv, String::new())
+            match launch {
+                TabLaunch::Fresh => (argv, String::new()),
+                TabLaunch::Resume(sid) => {
+                    argv.push("--resume".to_string());
+                    argv.push(sid.clone());
+                    (argv, sid)
+                }
+            }
         }
     }
 }
@@ -2096,17 +2102,20 @@ mod tests {
     }
 
     #[test]
-    fn queue_work_argv_codex_resume_falls_back_to_fresh() {
-        // A `Resume` launch on Codex must drop the id (Codex can't resume from
-        // the TUI) and still host a fresh session with no resume threading.
+    // trace:BUG-2386 | ai:claude
+    fn queue_work_argv_codex_resume_threads_the_thread_id() {
+        // A `Resume` launch on Codex resumes the recorded thread.
         let (argv, sid) = queue_work_argv(
             "aida",
             "TASK-1",
-            TabLaunch::Resume("ignored".to_string()),
+            TabLaunch::Resume("019a-thread".to_string()),
             TabVendor::Codex,
         );
-        assert!(sid.is_empty());
-        assert!(!argv.iter().any(|a| a == "--resume"));
-        assert!(argv.iter().any(|a| a == "--vendor"));
+        assert_eq!(sid, "019a-thread");
+        let pos = argv.iter().position(|a| a == "--resume").unwrap();
+        assert_eq!(argv[pos + 1], "019a-thread");
+        let pos = argv.iter().position(|a| a == "--vendor").unwrap();
+        assert_eq!(argv[pos + 1], "codex");
+        assert!(!argv.iter().any(|a| a == "--session-id"));
     }
 }

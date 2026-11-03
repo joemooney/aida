@@ -35,6 +35,7 @@ fn lease_with_worktree(path: PathBuf) -> SessionLease {
         ending_retained_reason: None,
         driver: None,
         child_grant_id: None,
+        vendor_session_id: None,
     }
 }
 

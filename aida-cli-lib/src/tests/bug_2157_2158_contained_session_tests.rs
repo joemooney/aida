@@ -200,8 +200,12 @@ fn contained_resume_falls_back_to_the_launcher_cwd_when_the_session_checkout_is_
     }
 }
 
+/// BUG-2386: a codex session resumes contained only under Codex's native
+/// sandbox (opted in by `[contained.vendors]`); without it, it is refused like
+/// agy — never resumed uncontained.
+// trace:BUG-2386 | ai:claude
 #[test]
-fn contained_resume_refuses_codex_and_agy_sessions() {
+fn contained_resume_refuses_codex_without_native_sandbox_and_agy_sessions() {
     let tmp = tempfile::tempdir().unwrap();
     let launcher = worktree(tmp.path(), "launcher");
     for agent in ["codex", "antigravity"] {
@@ -213,7 +217,7 @@ fn contained_resume_refuses_codex_and_agy_sessions() {
         let err = build_contained_resume_command(&target, &launcher)
             .expect_err("codex/agy cannot resume contained");
         assert!(
-            format!("{err:#}").contains("refusing to resume"),
+            format!("{err:#}").contains("uncontained"),
             "{agent}: {err:#}"
         );
     }
