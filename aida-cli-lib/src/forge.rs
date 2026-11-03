@@ -3960,6 +3960,16 @@ pub(crate) fn gh_pr_checks_json(project_root: &Path, pr: u64, extra: &[&str]) ->
     if stdout.starts_with('[') {
         return Ok(stdout);
     }
+    // GitHub may not have registered any checks yet. Preserve that positive
+    // empty answer; transport/authentication failures still return errors.
+    // trace:BUG-2423 | ai:codex
+    if extra.is_empty()
+        && String::from_utf8_lossy(&out.stderr)
+            .trim()
+            .starts_with("no checks reported on ")
+    {
+        return Ok("[]".into());
+    }
     anyhow::bail!(
         "`gh pr checks {pr} --json` produced no JSON: {}",
         String::from_utf8_lossy(&out.stderr).trim()

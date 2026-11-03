@@ -1176,6 +1176,8 @@ struct FakeForge {
     open_fails_at: Option<u64>,
     merge_fails: bool,
     ci_unreadable: bool,
+    // trace:BUG-2423 | ai:codex
+    ci_states: Option<VecDeque<TrainCiReadiness>>,
     // BUG-2214: the land step's hold releases.
     released: Vec<u64>,
     rearmed: Vec<u64>,
@@ -1234,6 +1236,16 @@ impl TrainForge for FakeForge {
     fn wait_ci(&mut self, _change: &crate::forge::ChangeRef, _train: &Built) -> Result<CiVerdict> {
         if self.ci_unreadable {
             anyhow::bail!("no CI registered within 600s");
+        }
+        if let Some(states) = self.ci_states.as_mut() {
+            let clock = std::cell::Cell::new(0);
+            return wait_train_ci(
+                _change.id,
+                0,
+                || Ok(states.pop_front().unwrap_or(TrainCiReadiness::Unregistered)),
+                || clock.get(),
+                || clock.set(clock.get() + TRAIN_CI_POLL_SECS),
+            );
         }
         Ok(CiVerdict::Green)
     }
@@ -1502,12 +1514,12 @@ fn an_unreadable_ci_stops_the_run_instead_of_bisecting_it_as_red() {
     let error = out.error.clone().expect("the CI error is in the outcome");
     assert!(error.contains("no CI registered"), "{error}");
     assert_eq!(f.opened, 1, "no rerun or bisect on an infrastructure error");
-    assert_eq!(out.ejected.len(), 3);
-    for e in &out.ejected {
-        assert!(e.reason.contains("no CI registered"), "{e:?}");
-        assert!(!e.reason.contains("CI is red"), "{e:?}");
-    }
-    assert_eq!(f.retired.len(), 1, "the open train PR is retired");
+    assert!(
+        out.ejected.is_empty(),
+        "unreadable CI does not incriminate members"
+    );
+    assert!(f.retired.is_empty(), "the train stays open for inspection");
+    assert_eq!(f.comments, [901], "only the train receives the pause note");
 }
 
 // ─────────────────────────── round-4 review fixes ───────────────────────────
@@ -2463,7 +2475,7 @@ esac
     write(dir, "rows.json", "[]");
     assert!(matches!(
         host.train_ci_snapshot(&change, &tip, &[]).unwrap(),
-        TrainCiReadiness::Missing(_)
+        TrainCiReadiness::Unregistered
     ));
     write(dir, "rows.json", &rows_json(Some("pass")));
     assert_eq!(
@@ -3080,4 +3092,129 @@ fn bug_2413_inheritance_never_loosens_the_supervised_gate() {
         crate::pr_cmd::gating_execution_mode(&[a.clone(), b], &a),
         None
     );
+}
+
+#[test]
+// trace:BUG-2423 | ai:codex
+fn bug2423_delayed_ci_registration_lands_the_same_train() {
+    let mut f = FakeForge::mains(&["m0"]);
+    f.ci_states = Some(VecDeque::from([
+        TrainCiReadiness::Unregistered,
+        TrainCiReadiness::Unregistered,
+        TrainCiReadiness::Unregistered,
+        TrainCiReadiness::Pending(vec!["Build".into()]),
+        TrainCiReadiness::Green,
+    ]));
+    let mut rails = ForgeRails::new(&mut f, "t".into());
+    let out = drive(&mut rails, fms(&[1, 2])).unwrap();
+    assert_eq!(out.landed.len(), 2);
+    assert!(out.ejected.is_empty());
+    assert!(out.error.is_none());
+    assert_eq!(f.opened, 1);
+    assert_eq!(f.merged.len(), 1);
+    assert!(f.retired.is_empty());
+}
+
+#[test]
+// trace:BUG-2423 | ai:codex
+fn bug2423_ci_never_started_retains_train_and_members() {
+    let mut f = FakeForge::mains(&["m0"]);
+    f.ci_states = Some(VecDeque::new());
+    let mut rails = ForgeRails::new(&mut f, "t".into());
+    let out = drive(&mut rails, fms(&[1, 2])).unwrap();
+    assert!(out.error.unwrap().contains("CI never started within 180s"));
+    assert!(out.ejected.is_empty());
+    assert!(out.landed.is_empty());
+    assert_eq!(f.opened, 1);
+    assert!(f.merged.is_empty());
+    assert!(f.retired.is_empty());
+    assert_eq!(f.comments, [901]);
+}
+
+#[test]
+// trace:BUG-2423 | ai:codex
+fn bug2423_transient_ci_reads_retry_but_persistent_errors_stop() {
+    for recovers in [true, false] {
+        let attempts = std::cell::Cell::new(0);
+        let clock = std::cell::Cell::new(0);
+        let result = wait_train_ci(
+            901,
+            0,
+            || {
+                attempts.set(attempts.get() + 1);
+                if recovers && attempts.get() == 3 {
+                    Ok(TrainCiReadiness::Green)
+                } else {
+                    Err(TrainCiReadError(anyhow::anyhow!("HTTP 503")).into())
+                }
+            },
+            || clock.get(),
+            || clock.set(clock.get() + TRAIN_CI_POLL_SECS),
+        );
+        assert_eq!(attempts.get(), 3);
+        if recovers {
+            assert_eq!(result.unwrap(), CiVerdict::Green);
+        } else {
+            assert!(result.unwrap_err().to_string().contains("HTTP 503"));
+        }
+    }
+    let result = wait_train_ci(
+        901,
+        0,
+        || anyhow::bail!("authority revoked"),
+        || 0,
+        || panic!("authority refusals must not retry"),
+    );
+    assert!(result
+        .unwrap_err()
+        .to_string()
+        .contains("authority revoked"));
+}
+
+#[test]
+// trace:BUG-2423 | ai:codex
+fn bug2423_gh_no_checks_reported_is_empty_but_api_errors_refuse() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let root = tempfile::tempdir().unwrap();
+    let gh = root.path().join("gh");
+    crate::test_exec::write_executable(
+        &gh,
+        r#"#!/bin/sh
+if test -f fail; then echo 'HTTP 503: Service Unavailable' >&2; exit 1; fi
+if test -f malformed; then echo '[broken'; exit 1; fi
+if test -f pending; then echo '[{"name":"Build","bucket":"pending","workflow":"CI"}]'; exit 8; fi
+echo "no checks reported on the 'train/fixture' branch" >&2
+exit 1
+"#,
+    );
+    let path = format!(
+        "{}:{}",
+        root.path().display(),
+        std::env::var("PATH").unwrap()
+    );
+    let _env = crate::test_env::EnvVarsGuard::set(&[("PATH", &path)]);
+    let forge = crate::forge::forge_for_kind(root.path(), crate::forge::ForgeKind::GitHub);
+    let change = crate::forge::ChangeRef {
+        id: 901,
+        url: "fixture".into(),
+        branch: "train/fixture".into(),
+        base: "main".into(),
+        title: None,
+    };
+    for _ in 0..3 {
+        assert!(forge.check_rows(&change).unwrap().is_empty());
+    }
+    write(root.path(), "pending", "");
+    assert_eq!(forge.check_rows(&change).unwrap()[0].bucket, "pending");
+    write(root.path(), "fail", "");
+    assert!(forge
+        .check_rows(&change)
+        .unwrap_err()
+        .to_string()
+        .contains("HTTP 503"));
+    std::fs::remove_file(root.path().join("fail")).unwrap();
+    write(root.path(), "malformed", "");
+    assert!(forge.check_rows(&change).is_err());
 }

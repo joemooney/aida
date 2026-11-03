@@ -284,6 +284,9 @@ pub(crate) trait Rails {
     fn land(&mut self, train: &Built) -> Result<Landing>;
     /// Told once per member that is not landing, after the run.
     fn ejected(&mut self, _e: &Ejected) {}
+    /// CI is unavailable: retain the open train for inspection and retry.
+    // trace:BUG-2423 | ai:codex
+    fn suspend(&mut self, _error: &str) {}
     /// The run stopped on `error`: release whatever is still open.
     fn abort(&mut self, _error: &str) {}
 }
@@ -296,32 +299,38 @@ pub(crate) struct Outcome {
     pub ejected: Vec<Ejected>,
     /// CI runs spent.
     pub ci_runs: usize,
-    /// The error that stopped the run early; every member it left in flight
-    /// is in `ejected`.
+    /// The error that stopped the run early. CI-unavailable stops retain
+    /// in-flight members without ejecting them.
     pub error: Option<String>,
 }
 
 /// Drive `members` to main through `rails`: build on the current main, test,
 /// land green trains while main is still their base, rerun the first red
 /// once, then bisect by halves with up to two sub-trains in flight. Every
-/// member ends landed or ejected with a reason.
+/// member ends landed or ejected with a reason, unless unavailable CI pauses
+/// the run with its in-flight members retained.
 // trace:STORY-1690 | ai:claude
 pub(crate) fn drive(rails: &mut dyn Rails, members: Vec<Member>) -> Result<Outcome> {
     let mut out = Outcome::default();
-    // A forge or git error mid-run must not abort with train PRs left open
-    // and ejected members never told: release what is open, eject what was
-    // in flight, and report the error in the outcome.
+    // Ordinary forge/git failures clean up the open trains. CI-unavailable
+    // failures instead preserve them for inspection and retry.
     if let Err(e) = drive_into(rails, &members, &mut out) {
         let error = format!("{e:#}");
-        rails.abort(&error);
-        for m in &members {
-            let done = out.landed.iter().any(|(pr, _)| *pr == m.pr)
-                || out.ejected.iter().any(|x| x.pr == m.pr);
-            if !done {
-                out.ejected.push(Ejected {
-                    pr: m.pr,
-                    reason: format!("the train stopped before landing it ({error}); re-train"),
-                });
+        // Infrastructure failures say nothing about the members' correctness.
+        // trace:BUG-2423 | ai:codex
+        if e.downcast_ref::<TrainCiUnavailable>().is_some() {
+            rails.suspend(&error);
+        } else {
+            rails.abort(&error);
+            for m in &members {
+                let done = out.landed.iter().any(|(pr, _)| *pr == m.pr)
+                    || out.ejected.iter().any(|x| x.pr == m.pr);
+                if !done {
+                    out.ejected.push(Ejected {
+                        pr: m.pr,
+                        reason: format!("the train stopped before landing it ({error}); re-train"),
+                    });
+                }
             }
         }
         out.error = Some(error);
@@ -549,6 +558,8 @@ pub(crate) fn hold_release_admitted(
 // trace:BUG-2401 | ai:codex
 #[derive(Debug, PartialEq, Eq)]
 enum TrainCiReadiness {
+    // trace:BUG-2423 | ai:codex
+    Unregistered,
     Missing(Vec<String>),
     Pending(Vec<String>),
     Red(String),
@@ -655,6 +666,30 @@ fn train_ci_readiness(
     TrainCiReadiness::Green
 }
 
+// trace:BUG-2423 | ai:codex
+#[derive(Debug)]
+struct TrainCiUnavailable(String);
+impl std::fmt::Display for TrainCiUnavailable {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+impl std::error::Error for TrainCiUnavailable {}
+
+/// A failed row read can be retried without retrying an authority refusal.
+// trace:BUG-2423 | ai:codex
+#[derive(Debug)]
+struct TrainCiReadError(anyhow::Error);
+impl std::fmt::Display for TrainCiReadError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:#}", self.0)
+    }
+}
+impl std::error::Error for TrainCiReadError {}
+
+const TRAIN_CI_START_SECS: u64 = 180;
+const TRAIN_CI_READ_ATTEMPTS: usize = 3;
+
 /// Seconds between train CI readiness polls.
 const TRAIN_CI_POLL_SECS: u64 = 10;
 /// How long a required check may stay unregistered once every observed row
@@ -675,8 +710,29 @@ fn wait_train_ci(
     mut sleep: impl FnMut(),
 ) -> Result<CiVerdict> {
     let mut missing_since: Option<u64> = None;
+    let mut unregistered_since: Option<u64> = None;
+    let mut read_errors = 0;
     loop {
-        let state = snapshot()?;
+        // Retry the same train, never rebuild/bisect on a failed API read.
+        // trace:BUG-2423 | ai:codex
+        let state = match snapshot() {
+            Ok(state) => {
+                read_errors = 0;
+                state
+            }
+            Err(e) if e.downcast_ref::<TrainCiReadError>().is_some() => {
+                read_errors += 1;
+                println!("  train PR #{pr} CI read failed ({read_errors}/{TRAIN_CI_READ_ATTEMPTS}): {e:#}");
+                if read_errors >= TRAIN_CI_READ_ATTEMPTS
+                    || (settle_limit != 0 && elapsed() >= settle_limit)
+                {
+                    return Err(e);
+                }
+                sleep();
+                continue;
+            }
+            Err(e) => return Err(e),
+        };
         let now = elapsed();
         let waiting = match state {
             TrainCiReadiness::Green => return Ok(CiVerdict::Green),
@@ -688,6 +744,17 @@ fn wait_train_ci(
             waiting => waiting,
         };
         println!("  train PR #{pr} CI waiting: {waiting:?}");
+        // An empty row set is normal immediately after opening the PR.
+        // trace:BUG-2423 | ai:codex
+        if waiting == TrainCiReadiness::Unregistered {
+            let since = *unregistered_since.get_or_insert(now);
+            anyhow::ensure!(
+                now.saturating_sub(since) < TRAIN_CI_START_SECS,
+                "train PR #{pr}: CI never started within {TRAIN_CI_START_SECS}s; leaving the train PR open for inspection"
+            );
+        } else {
+            unregistered_since = None;
+        }
         if let TrainCiReadiness::Missing(names) = &waiting {
             let since = *missing_since.get_or_insert(now);
             anyhow::ensure!(
@@ -1955,17 +2022,12 @@ impl LiveTrainForge<'_> {
                 fresh.as_slice()
             }
         };
-        let rows = self.forge.check_rows(change)?;
-        // A forge that reports no CI at all refuses at once, as before; it
-        // never waits out the registration bound. trace:BUG-2401 | ai:claude
-        if rows.is_empty()
-            && required.is_empty()
-            && self.forge.checks_registered(change)? == crate::forge::CheckRegistration::NoCi
-        {
-            anyhow::bail!(
-                "the forge reports no CI for train PR #{}; a train lands only on a green CI",
-                change.id
-            );
+        // trace:BUG-2423 | ai:codex
+        let rows = self.forge.check_rows(change).map_err(TrainCiReadError)?;
+        if rows.is_empty() {
+            assert_head()?;
+            self.dispatch_check()?;
+            return Ok(TrainCiReadiness::Unregistered);
         }
         let cfg = crate::ci_gate::read_ci_gate_config(&self.project_root);
         // Only the existing, live member-label proof may tolerate a hold. The
@@ -2443,10 +2505,17 @@ impl Rails for ForgeRails<'_> {
             // A CI that cannot be read (none registered, an API error) is not
             // a red verdict: bisecting it would spend CI runs and eject every
             // member as "red alone". It stops the run with the real reason.
-            let v = self
-                .ports
-                .wait_ci(change, train)
-                .with_context(|| format!("train PR #{}'s CI could not be read", change.id))?;
+            // Authority revocation keeps its ordinary abort path. A CI read
+            // failure retains this train and leaves member eligibility alone.
+            // trace:BUG-2423 | ai:codex
+            let v = match self.ports.wait_ci(change, train) {
+                Ok(v) => v,
+                Err(e) if self.ports.dispatch_abort().is_some() => return Err(e),
+                Err(e) => return Err(TrainCiUnavailable(format!(
+                    "train PR #{}'s CI could not be read: {e:#}; train PR remains open; retry the same members",
+                    change.id
+                )).into()),
+            };
             if let CiVerdict::Red(why) = &v {
                 println!("  train PR #{} is red: {why}", change.id);
                 self.retire(
@@ -2678,6 +2747,17 @@ impl Rails for ForgeRails<'_> {
             e.pr,
             &format!("Not landed by the merge train: {}.", e.reason),
         );
+    }
+
+    // trace:BUG-2423 | ai:codex
+    fn suspend(&mut self, error: &str) {
+        for change in self.live.clone() {
+            self.ports.comment(change.id, &format!("Train paused: {error}. Members remain eligible; inspect this train before retrying."));
+            self.warn(format!(
+                "train PR #{} left open for inspection: {}",
+                change.id, change.url
+            ));
+        }
     }
 
     fn abort(&mut self, error: &str) {
@@ -2985,6 +3065,11 @@ pub(crate) fn pr_train_handler_with_dispatch_ctx(
     // trace:STORY-1917 trace:TASK-2344 | ai:claude
     if let Some(why) = dispatch_abort {
         return Err(dispatch_aborted(&why));
+    }
+    // A paused train must also fail under --all-ready.
+    // trace:BUG-2423 | ai:codex
+    if let Some(error) = &outcome.error {
+        anyhow::bail!("the train stopped early: {error}");
     }
     let not_landed = refused.len() + outcome.ejected.len();
     if not_landed > 0 && !opts.all_ready {
