@@ -2135,6 +2135,11 @@ impl TrainForge for LiveTrainForge<'_> {
             },
             &specs,
         )
+        .inspect(|change| {
+            // Dual-write: each rider's change record names the train. // trace:STORY-2325 | ai:claude
+            let riders: Vec<u64> = train.cars.iter().map(|c| c.member.pr).collect();
+            crate::ownership::dual::train_opened(&self.main_worktree, change.id, &riders);
+        })
     }
 
     fn wait_ci(&mut self, change: &crate::forge::ChangeRef, train: &Built) -> Result<CiVerdict> {
