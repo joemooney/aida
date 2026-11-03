@@ -8477,6 +8477,13 @@ fn run_ship(
             dry_run: *dry_run,
         });
     }
+    // TASK-2712: a native Codex lane outside a seat clone has a read-only git
+    // directory; say so before any git runs.
+    // trace:TASK-2712 | ai:claude
+    crate::codex_native_sandbox::refuse_native_publication_outside_clone(
+        std::env::var("AIDA_CONTAINMENT_POSTURE").ok().as_deref(),
+        &crate::find_project_root().unwrap_or(std::env::current_dir()?),
+    )?;
     return run_human_finish_ceremony(HumanFinishOptions {
         spec: spec.clone(),
         message: message.clone(),

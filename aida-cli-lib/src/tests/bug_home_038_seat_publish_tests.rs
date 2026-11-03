@@ -506,6 +506,52 @@ fn bug_home_038_from_seat_handler_pushes_lease_branch_and_opens_pr() {
     assert_eq!(*opened_for.borrow(), vec!["seat-feat".to_string()]);
 }
 
+/// TASK-2712 N2/N4: a native Codex lane commits in its own seat clone (the
+/// one `.git` its write set grants), then the unchanged `ship --from-seat`
+/// publishes it against a fake origin and forge. Hooks the seat planted
+/// afterwards (in `.git/hooks` and through `core.hooksPath`) never run on
+/// the host, and `aida ship`'s native-Codex refusal lets the clone through.
+// trace:TASK-2712 | ai:claude
+#[cfg(unix)]
+#[test]
+fn task_2712_native_codex_seat_commit_ships_from_seat_without_seat_hooks() {
+    let fx = fixture();
+    let (clone, tip) = seat_with_commit(
+        &fx,
+        "native",
+        "c0ffee271201",
+        "native-feat",
+        "fix: native codex seat (BUG-1)",
+    );
+    crate::codex_native_sandbox::refuse_native_publication_outside_clone(Some("native"), &clone)
+        .unwrap();
+    let sentinel = fx.root.join("hook-ran");
+    plant_hooks(&clone, &sentinel, &fx.root);
+    let forge = crate::forge::fake::RecordingForge {
+        opens_as: Some(88),
+        ..crate::forge::fake::RecordingForge::new()
+    };
+    let deps = crate::ship_from_seat::Deps {
+        bundle: &test_bundle,
+        forge: &|_| Box::new(forge.clone()) as Box<dyn crate::forge::Forge>,
+        after_open: &|_, _| {},
+    };
+    crate::ship_from_seat::run_from(&fx.main, opts(&clone, false, false), &deps).unwrap();
+    assert_eq!(
+        git_ok(&fx.origin, &["rev-parse", "refs/heads/native-feat"]),
+        tip,
+        "the pushed commit is the seat's own, byte for byte"
+    );
+    let opened = forge.opened.lock().unwrap().clone();
+    assert_eq!(opened.len(), 1);
+    assert_eq!(opened[0].title, "fix: native codex seat (BUG-1)");
+    assert!(
+        !sentinel.exists(),
+        "a seat hook ran on the host: {}",
+        std::fs::read_to_string(&sentinel).unwrap_or_default()
+    );
+}
+
 /// Review finding 2: a failed open-PR lookup after the push is reported as
 /// an error, and no (possibly duplicate) PR is opened.
 #[test]

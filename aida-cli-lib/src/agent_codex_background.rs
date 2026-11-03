@@ -661,13 +661,19 @@ pub(crate) fn agent_new_codex_bg(mut req: CodexBgRequest) -> Result<()> {
             "codex",
             name,
             cwd_ref,
-            false,
+            // TASK-2712: a native Codex lane commits only in a seat clone.
+            // trace:TASK-2712 | ai:claude
+            true,
             LaneBranch {
                 branch: req.branch.clone(),
                 base: req.base.clone(),
             },
         )?
     };
+    // TASK-2712: the shared write set, scoped to the lane's own tree.
+    // trace:TASK-2712 | ai:claude
+    crate::agent_launch::rescope_contained_settings(&mut config, &plan.launch_cwd)?;
+    refuse_posture_overrides(&config.default_args)?;
     let mut setup_receipt = setup_receipt;
     if let Some(setup) = setup_receipt.as_mut() {
         let (dir, root, attempt, me) = (
