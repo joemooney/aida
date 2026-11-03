@@ -25,7 +25,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-03T03:42:51.559496187Z
-modified_at: 2026-11-03T15:10:30.511767214Z
+modified_at: 2026-11-03T15:10:32.809481638Z
 req_type: Story
 tags:
 - area:deputy
@@ -210,6 +210,30 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Script deputy design and tests are solid, but CI is red on 4 PR-caused ratchets, a tracked-config path can widen who runs scripts at the operator''s terminal, and AC1/AC7''s standing-orders move is deferred out of the PR. No triage reason was given.'
   created_at: 2026-11-03T15:10:30.511763999Z
   modified_at: 2026-11-03T15:10:30.511763999Z
+  session_id: f5eddefe-032d-4760-94ba-3a318cf3d1d1
+- id: 01a1a1f6-4085-7d71-a7c3-935f788e5d83
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (STORY-2338):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: c8025aef2e45
+    Recorded: 2026-11-03T13:50:48.277252858+00:00
+    Findings:
+    1. CI red (bug_2398_final_spawn_boundary_ratchet): aida-cli-lib/src/deputy_shell/runner.rs:799 adds a seat-granted child launch (.env(GRANT_ENV, grant_id)) not listed in LAUNCH_INVENTORY (aida-cli-lib/src/tests/bug_2398_codex_tool_env_tests.rs). Audit the site and add the inventory row.
+    2. CI red (task_1752 only_seat_authority_names_or_reads_the_grant_env_var): aida-cli-lib/src/deputy_shell/tests.rs:438 has the literal AIDA_SESSION_GRANT in echo "grant=$AIDA_SESSION_GRANT". The guard scans this file (it is named tests.rs, not *_tests.rs under a skipped tests/ dir). Build the string from seat_authority::GRANT_ENV, or move the module to a path the guard skips.
+    3. CI red (bug_1723 every_config_toml_site_is_inventoried_and_every_worktree_key_is_policy): deputy_shell/mod.rs:802 load_config is a new .aida/config.toml read site with no trust classification in the inventory.
+    4. CI red (bug_1502 checked_in_audit_is_exhaustive_and_every_honoured_probe_parses): the new aida deputy shell run|submit|list|status|log|wait|cancel|pause|resume|ack leaves inherit the global --format flag but are missing from the checked-in format-json audit. Add the rows (they emit human text only).
+    5. SECURITY (authority widening from repo content): [deputy_shell] submit_seats is read from the main checkout's TRACKED .aida/config.toml (deputy_shell/mod.rs:788-797; deputy_shell_cmd.rs:35 and 139-141). A merged PR written by any lane can widen submitters (e.g. to implementer), and their scripts then run with operator-at-terminal authority (Q1). The Q3 ruling only sanctions widening by the operator's --allow-seat at run. Drop the config key (keep keep_days), or read it only from operator-owned user config. Add a test that a config entry cannot widen the seats.
+    6. AC1/AC7 unmet in this PR: AC1 says the advisor's submission habit moves to submit 'in the same PR', and AC7 requires docs/deputies.md to be linked from the advisor standing orders' deputy line. The PR defers both to post-merge operator steps, and aida-core/templates/.aida/discipline/standing-orders/advisor.md has no deputy line or link. Land the standing-orders change, or have the advisor amend the AC with an explicit ruling.
+    7. Untraced criteria: aida criteria STORY-2338 reports all 7 ACs untraced, although tests exist (deputy_shell/tests.rs carries only a file-level trace:STORY-2338). Tag each test with its criterion (trace:STORY-b6b1278890774ef993d2ebc327862470-334.<ac-id>): queue/no-tmp tests -> .acd7a7ee, record/retention/refresh -> .acf28460, wait/status -> .ac930a33, refusal table/subshell -> .Authority, awaiting -> .acbdfb5a, pty/no-tmp/unattributed -> .ac4ceb56, help/docs -> .Docs.
+    8. Strict-tier refusal paths untested: deputy_shell_cmd.rs start() refuses with no valid grant (116-127) or a non-advisor seat (128-135), and nothing tests those refusals. The real refresh minter seat_authority::issue_runner_refresh (require_direct_human, then mint_direct) has no test either; runner tests inject the minter. Add refusal tests through injectable probes.
+    9. attribution.rs:258-262 key-only liveness fallback trusts the job's self-declared submitter.session_id. It does not check that the session belongs to the named grant, so any fresh heartbeat in the project satisfies liveness for a key-only grant whose holder is gone. Bind the heartbeat session to the grant's own session or subject before accepting it (still under the STORY-2325 TODO).
+    10. runner.rs:397-415 id-collision claim path files the submission aside and audits refused, but writes no state.json. The job never shows as a failed script job in aida awaiting, and submit --wait / wait fail with 'no script job' instead of returning 126. File a refused state for the collided id, or surface it in awaiting.
+    11. runner.rs:961-977 kill_group sends SIGKILL to -pid unconditionally after the grace period, even after try_wait already reaped the leader and the group may be empty. Skip the final group kill when the child was reaped and the group is gone, or accept ESRCH explicitly; the pgid could be recycled.
+    12. Cosmetic: the ack audit actor (deputy_shell_cmd.rs:577-583) is a raw session id or operator-tty, not the grant-prefix+seat form the AuditRow.actor doc and sketch section 2 specify.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-03T15:10:32.581925233Z
+  modified_at: 2026-11-03T15:10:32.581925233Z
   session_id: f5eddefe-032d-4760-94ba-3a318cf3d1d1
 history:
 - id: 01a19f81-3898-7250-96f4-65372d1968ea
