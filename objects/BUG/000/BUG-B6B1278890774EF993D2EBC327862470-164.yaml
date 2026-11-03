@@ -21,7 +21,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T06:46:56.104025446Z
-modified_at: 2026-11-03T22:45:54.700957370Z
+modified_at: 2026-11-03T23:06:03.690312801Z
 req_type: Bug
 tags:
 - audit
@@ -98,6 +98,20 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was punted on: design-fork: STORY-2254 has shipped, but its detached Codex lifecycle cannot take over a lane that dispatch has already prepared. Dispatch take/impl build the lane worktree themselves (prepare_lane_worktree): take checks out the PR branch, impl creates the requested --branch. ''aida agent new codex --bg'' (agent_codex_background.rs:651 -> prepare_agent_launch_attempt -> session_start_with_receipt, branch=None) always creates its own lease and worktree. An existing --cwd tree is re-entered only as an orphan adoption (session_start.rs:1997-2032), and there is no --branch. Proxy decision: reuse the STORY-2254 lifecycle and never bolt on an unscoped process. Options: (A) extend the STORY-2254 path so it can adopt a dispatch-prepared worktree/branch (e.g. a --branch plus a dispatch-owned lease handed to agent new). This changes the signed lease/worktree lifecycle, so it needs an architecture sketch and advisor signoff. (B) For Codex, dispatch skips its own worktree prep and delegates entirely to ''agent new codex --bg --spec''. This drops impl''s requested branch name and breaks take, which must work on the existing PR branch. (C) Split: ship AC1 + tests now (configured-vendor default; explicit override; Codex occupancy diagnostic). Codex take/impl from dispatch refuse fast with a pointer to ''aida agent new codex --bg'' instead of blocking on codex exec. A child spec carries the detached integration via (A).. No triage reason was given.'
   created_at: 2026-11-03T18:58:45.682024691Z
   modified_at: 2026-11-03T18:58:45.682024691Z
+  session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
+- id: 01a1a3a9-9a2a-7891-8d46-36a97d5b1001
+  author: joe
+  content: |-
+    ADVISOR RULING (16:10, PR #3309 at its current head): fix every finding below. Specific rulings: (1) update LAUNCH_INVENTORY to the new spawn path; do not keep a dead entry. (2) Regenerate the help golden with its make target; never hand-edit it. (3) Identify the contracts failure. (4) The dispatch tick holds no grant, so a Codex lane from the tick refuses with a named error ('codex lanes need a delegated grant; run aida dispatch take from a role-entered terminal'), with a test. (5) When an existing lease ignores --branch/--base, say so in the accepted line. (6) Fix the prompt wording.
+    1. CI lib-1 bug_2398_final_spawn_boundary_ratchet fails (bug_2398_codex_tool_env_tests.rs:726). The PR removed crate::codex_tool_env::prepare_launch from launch_implementer_lane, but LAUNCH_INVENTORY still lists ("dispatch.rs", 1, Finalization::PrepareLaunch(1)) at bug_2398_codex_tool_env_tests.rs:513, and dispatch.rs still has its GRANT_ENV launch marker at dispatch.rs:2587. Audit the site and update the inventory: Codex now finalizes inside agent_codex_background.rs, so dispatch.rs becomes NotACodexLaunch with a reason. Check the RoleRoute entry at line 1610 too.
+    2. CI lib-0 help_surface_matches_golden_snapshot fails. The golden file was hand-edited: the --branch/--base help block was added, but the catalog JSON section of cli_help_snapshot.txt (the 'agent new codex' flag list near line 46990) has no 'base' row (before 'bg') and no 'branch' row (between 'bg' and 'bypass-sandbox'). Regenerate with AIDA_UPDATE_SNAPSHOTS=1 and commit the result.
+    3. CI contracts shard failed at a648795c339c. The reviewer could not read the job log (log download blocked in the reviewer sandbox). Identify the failing step and either fix it or show it is unrelated to this PR with a green re-run.
+    4. AC2 gap on the dispatch tick path. Per the dispatch.rs module doc, the cron/schedule 'dispatch tick' runs exactly take and impl, and holds no advisor seat grant (the Claude lane blanks GRANT_ENV at dispatch.rs:2587). run_codex_lane now runs 'aida agent new codex --bg', which mints the worker's child grant through seat_authority::issue_detached_launch_child, and that requires a parent seat grant that delegates implementer. So from tick, every Codex take/impl will be refused. Since AC1 routes vendor-less take/impl to Codex in a codex-configured project, all of that project's tick lanes go there. The tests only use a fake aida, so this path is untested. Either refuse Codex take/impl under tick with a clear 'run under aida dispatch serve' outcome (like review/flow/train), or prove the tick path works, and add a test for whichever you choose.
+    5. minor: for take, if the spec already has a lease, prepare_agent_launch_attempt_on_branch re-enters it as it is and ignores --branch/--base (agent_launch.rs doc on LaneBranch). Yet run_codex_lane reports 'accepted detached Codex take ... on branch <pr-branch>' even when that worktree is on a different branch. Either check the re-entered lease's branch and refuse on a mismatch, or report the branch the lane actually got.
+    6. cosmetic: with CODEX_LANE_WORKTREE substituted, the take/impl prompt's first line reads 'You are already in your worktree (the directory you start in: this lane's own session worktree) (branch X, ...)': two back-to-back parentheticals. Reword the constant or the template line.
+    LIGHT gate: one targeted cargo test plus make check-ci-fast (umask 022); 'cargo check -p aida-cli-lib --tests' is mandatory before pushing. Push to the existing PR branch, then stop.
+  created_at: 2026-11-03T23:06:03.690312801Z
+  modified_at: 2026-11-03T23:06:03.690312801Z
   session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
 history:
 - id: 01a195dc-94a3-73e2-8979-5b3cd7a026e1
