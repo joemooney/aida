@@ -190,6 +190,9 @@ pub(crate) fn handle_claim(spec: &str, worktree: Option<&str>) -> Result<()> {
         creator_pid_start_time: my_pid.and_then(process_probe::process_start_identity),
         active_pid: None,
         active_pid_start_time: None,
+        // trace:BUG-2419 | ai:claude
+        creator_pid_ns: crate::gate::review_authority::recorded_pid_ns(my_pid),
+        active_pid_ns: None,
         cargo_target_dir: None,
         parent_project_root: Some(
             project_root

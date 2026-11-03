@@ -306,6 +306,8 @@ fn missing_covered_specs_and_one_sensitive_member_stay_held() {
     )
     .is_err());
     let mut other = f.req.clone();
+    // Distinct objects: resolution maps back by UUID (BUG-2422).
+    other.id = uuid::Uuid::new_v4();
     other.title = "Credential logging".into();
     assert!(eligible(
         &f.hold,
@@ -529,7 +531,17 @@ struct ReleaseChange {
     hold_field: Option<&'static str>,
 }
 
+const FRIENDLY_NODE: &str = "fedcba9876543210fedcba9876543210";
+
 fn auto_release_fixture(change: ReleaseChange) {
+    let friendly = change
+        .spec_field
+        .is_some_and(|field| field.starts_with("friendly:"));
+    let _alias = friendly.then(|| {
+        let mut map = aida_core::node_alias::NodeAliasMap::default();
+        map.set("HOME", FRIENDLY_NODE).unwrap();
+        aida_core::node_alias::install_for_thread(map)
+    });
     let mut f = Fixture::new();
     f.req.spec_id = Some("TASK-37".into());
     if change.spec_field == Some("agreed_id") {
@@ -615,6 +627,8 @@ fn auto_release_fixture(change: ReleaseChange) {
     if let Some(key) = change.corpus_key {
         if key != "PR-37" {
             let mut other = f.req.clone();
+            // Distinct objects: resolution maps back by UUID (BUG-2422).
+            other.id = uuid::Uuid::new_v4();
             other.spec_id = Some(key.into());
             store.requirements.push(other);
         }
@@ -734,9 +748,22 @@ fn auto_release_fixture(change: ReleaseChange) {
                 }
                 let mut current = store.clone();
                 let mut current_ids = ids.clone();
-                if spec_reads.get() >= change_at {
+                // BUG-2422: the PR names the covered spec by its node-local
+                // friendly label; the store holds it under its canonical id.
+                // trace:BUG-2422 | ai:claude
+                if let Some(label) = change
+                    .spec_field
+                    .and_then(|field| field.strip_prefix("friendly:"))
+                {
+                    current.requirements[0].spec_id = Some(format!("TASK-{FRIENDLY_NODE}-37"));
+                    current.requirements[0].agreed_id = Some("TASK-37".into());
+                    current_ids = vec![format!("TASK-{label}-37")];
+                }
+                if spec_reads.get() >= change_at && !friendly {
                     if change.fresh_corpus_id {
                         let mut other = f.req.clone();
+                        // Distinct objects: resolution maps back by UUID (BUG-2422).
+                        other.id = uuid::Uuid::new_v4();
                         other.spec_id = Some("TASK-40".into());
                         current.requirements.push(other);
                         current_ids.push("TASK-40".into());
@@ -791,6 +818,8 @@ fn auto_release_fixture(change: ReleaseChange) {
                         Some("empty") => current_ids.clear(),
                         Some("new-sensitive") => {
                             let mut other = f.req.clone();
+                            // Distinct objects: resolution maps back by UUID (BUG-2422).
+                            other.id = uuid::Uuid::new_v4();
                             other.spec_id = Some("TASK-38".into());
                             other.tags.insert("adr-75:authority".into());
                             current.requirements.push(other);
@@ -977,7 +1006,7 @@ fn auto_release_fixture(change: ReleaseChange) {
             "absent" => "no validated reviewer grant",
             _ => "identity",
         })
-    } else if let Some(field) = change.spec_field {
+    } else if let Some(field) = change.spec_field.filter(|f| *f != "friendly:HOME") {
         Some(match field {
             "collision-spec" | "collision-agreed" | "collision-mixed" => {
                 "TASK-37 resolves to 2 requirements; exactly one required"
@@ -988,6 +1017,7 @@ fn auto_release_fixture(change: ReleaseChange) {
             "missing" | "spec_id" | "agreed_id" => {
                 "TASK-37 resolves to 0 requirements; exactly one required"
             }
+            "friendly:WORK" => "TASK-WORK-37 resolves to 0 requirements; exactly one required",
             _ => "sensitive",
         })
     } else if change.corpus_key.is_some() || change.fresh_corpus_id {
@@ -1588,4 +1618,23 @@ fn label_failure_names_the_auto_release_retry() {
     assert!(err.contains("HTTP 502"), "{err}");
     assert!(err.contains("aida merge-hold auto-release 37"), "{err}");
     assert!(!err.contains("merge-hold clear"), "{err}");
+}
+
+/// BUG-2422: a covered spec named by its node-local friendly label resolves
+/// exactly as `aida show` resolves it, so an eligible approval auto-releases;
+/// a label no node answers to still resolves to nothing and stays held.
+// trace:BUG-2422 | ai:claude
+#[test]
+fn auto_release_resolves_a_friendly_spec_label_like_show() {
+    for label in ["HOME", "WORK"] {
+        let field: &'static str = if label == "HOME" {
+            "friendly:HOME"
+        } else {
+            "friendly:WORK"
+        };
+        auto_release_fixture(ReleaseChange {
+            spec_field: Some(field),
+            ..Default::default()
+        });
+    }
 }
