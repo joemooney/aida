@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-02T19:20:59.253007269Z
-modified_at: 2026-11-03T00:42:33.142545847Z
+modified_at: 2026-11-03T00:47:03.994801119Z
 req_type: Story
 tags:
 - architecture
@@ -259,6 +259,48 @@ comments:
   created_at: 2026-11-03T00:42:33.142545847Z
   modified_at: 2026-11-03T00:42:33.142545847Z
   session_id: 06875d70-911b-4054-b85a-65e7207379ab
+- id: 01a19edf-b73a-7e23-be0d-35779890c656
+  author: joe
+  content: |-
+    ADVISOR SIGNOFF APPROVED, with binding amendments 1-10 (claude advisor, 2026-11-02 17:50 MST). Independent: I did not author this sketch. The security review was done by a fresh-context read-only reviewer (file:line claims spot-checked) and adopted by the advisor. TASK-1749 C1/C2 carry over, and STORY-2238 C1-C12 plus its 07:40 decisions bind wherever the two touch. This signs the architecture only; it approves no head, merge or hold clearance.
+
+    Corrections to the sketch:
+    - dispatch.rs already calls prepare_launch (:2779). Its gap is posture: --full-auto is hard-coded at :2555.
+    - LAUNCH_INVENTORY and ROLE_LAUNCH_SITES (tests/bug_2398_codex_tool_env_tests.rs:494, :1598) already exist; the new scanner must subsume them.
+    - There are 10 issue_child sites, not 8: add agent_launch.rs:6956 and queue_cmd.rs:13539.
+    - seat_build_env is at seat_clone.rs:895.
+    - STORY-2238 must be cited.
+
+    Amendments:
+    1. ONE boundary owner with STORY-2238. Under posture Aida, spawn_agent delegates to containment::launch, its supervisor and its receipts; no second Codex bwrap or env path. EnvPolicy is the single allowlist and feeds 2238's --clearenv. TOOL_ENV and TOOL_NET_ENV stay byte-identical. PR-B lands after 2238 PR1, or touches only Native/None Codex sites. containment/ is a permitted constructor module. Test: aida_posture_spawn_routes_through_containment_launch.
+    2. The owned AIDA set includes AIDA_ROLE_INSTANCE. AIDA_AGENT_REGISTRY_TOKEN and AIDA_HANDLE_LAUNCH_TOKEN go on the vendor process only, never into TOOL_ENV or a tool shell. One const, pinned by a test. Tests: companion_marker_survives_spawn_agent, registry_and_launch_tokens_absent_in_tool_shell.
+    3. The Background (--bg) hand-off carries no AIDA_SESSION_GRANT, ROLE or PURPOSE, from PR-A on. Test: background_handoff_env_has_no_seat_keys.
+    4. Inherit is only legal when the program is the canonicalised current aida executable. It forwards the selector, never a role, and never reaches a vendor program. The scanner enforces this.
+    5. The argv tail is untrusted. Refuse posture-bearing flags in both the tail and default_flags: --settings, --permission-mode, --dangerously-*, --sandbox, --add-dir, -c sandbox*, --full-auto. Table test.
+    6. Exact env names: no XDG_* wildcard; enumerate the Bedrock/Vertex keys. Under Aida posture, drop ambient proxies in favour of TOOL_NET_ENV. Never GIT_ASKPASS, GIT_SSH_COMMAND, GIT_CONFIG_*, NPM_TOKEN or CARGO_REGISTRY_TOKEN. Drop a proxy URL that carries userinfo. Test: proxy_url_with_userinfo_dropped.
+    7. Resources:
+       - The slot dir must pre-exist, be owned by the uid and be mode 0700; AIDA never creates or widens it.
+       - The target dir must be seat-private: refuse if it resolves to the authority_root target or another seat's.
+       - The generated --settings file is host-owned, mode 0600, outside every write root. Test: lane_cannot_write_its_settings_file.
+       - The legacy os_wrap profile stays byte-identical; the AIDA profile is 2238's (--bind, never --bind-try; no wholesale ~/.claude).
+       - The CARGO_HOME rw bind is filed as its own bug.
+    8. The scanner covers at least LAUNCH_INVENTORY plus ROLE_LAUNCH_SITES before either is retired. It extends to aida-tui and aida-core, .envs(, tokio::process::Command, CommandExt::exec and pre_exec, with a mutant fixture for each.
+    9. Claude does not regress: PR-A adds a golden test per converted Claude path (env keys and argv equal to before, minus the listed removals).
+    10. LaunchVendor refuses opencode/gemini until a 2238 descriptor exists. The Q7 probe result is recorded before PR-C.
+
+    Open questions:
+    - Q1: yes, supersede TASK-1749. PR-A strips and reinstates the AIDA namespace; PR-D does env_clear vendor by vendor.
+    - Q2: yes. The lease supplies identity only; the grant goes through GrantFix (Export only if the keyring validates it for the lease's seat, else Unset).
+    - Q3: OPERATOR RULING REQUIRED before any resume-path PR. The advisor recommends refuse.
+    - Q4: absent. Pushes go through host-side aida ship / aida pr, which covers SSH_AUTH_SOCK.
+    - Q5: route it through spawn_agent. --full-auto comes only from the Codex profile.
+    - Q6: yes to both, under amendment 7. Sccache stays off everywhere.
+    - Q7: yes, required; if it fails, PR-C uses the fallback.
+
+    Slices: PR-A, then PR-B (after STORY-2238 PR1), then PR-C, then PR-D. STRICT independent review plus functional verification for each (containment-class PRs). LIGHT local gate.
+  created_at: 2026-11-03T00:47:03.994801119Z
+  modified_at: 2026-11-03T00:47:03.994801119Z
+  session_id: ee0bf351-6b17-486f-a38e-cfbb1343c426
 history:
 - id: 01a19ed2-a170-7d52-94f3-7c4ff46f38c4
   author: joe
