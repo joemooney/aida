@@ -807,16 +807,23 @@ fn every_unattributable_job_is_refused_with_its_code_and_never_runs() {
 fn registry_row(root: &Path, id: &str, session: &str, key: Option<&str>, at: DateTime<Utc>) {
     let dir = crate::agent_registry::agents_dir(root);
     std::fs::create_dir_all(&dir).unwrap();
-    let key_line = key
-        .map(|k| format!("grant_key = \"{k}\"\n"))
-        .unwrap_or_default();
-    let body = format!(
-        "id = \"{id}\"\nagent_type = \"claude\"\npid = 1593772\nname = \"{id}\"\n\
-         started_at = \"{at}\"\nlast_active_at = \"{at}\"\nworktree_path = \"{root}\"\n\
-         source = \"session-start-hook\"\nclaude_session_id = \"{session}\"\n{key_line}",
-        at = at.to_rfc3339(),
-        root = root.display(),
-    );
+    let mut row = toml::Table::new();
+    let mut put = |k: &str, v: toml::Value| {
+        row.insert(k.to_string(), v);
+    };
+    put("id", id.into());
+    put("agent_type", "claude".into());
+    put("pid", 1_593_772_i64.into());
+    put("name", id.into());
+    put("started_at", at.to_rfc3339().into());
+    put("last_active_at", at.to_rfc3339().into());
+    put("worktree_path", root.display().to_string().into());
+    put("source", "session-start-hook".into());
+    put("claude_session_id", session.into());
+    if let Some(k) = key {
+        put("grant_key", k.into());
+    }
+    let body = toml::to_string(&row).unwrap();
     std::fs::write(dir.join(format!("{id}.toml")), body).unwrap();
 }
 
