@@ -6,12 +6,12 @@ description: |-
 
   non-blocking/minor: config_cmd.rs:1364 write_codex_posture(Contained) still sets sandbox_workspace_write.writable_roots to ~/.cargo, ~/.rustup and ~/.aida. That is the BUG-2418 exposure in a codex workspace-write lane that runs outside the os_wrap bwrap. It is out of this ruling's scope (the bwrap profile); needs a follow-up.
   Reviewed sha: 1c54c4d85edd1496e1a9b1921c51fe19641ade42
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-03T08:37:09.154000416Z
-modified_at: 2026-11-03T14:06:29.508088753Z
+modified_at: 2026-11-03T14:07:52.426261241Z
 req_type: Task
 tags:
 - carried-from:BUG-2418
@@ -57,6 +57,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1a1bc-e06a-79f2-b57b-28b59fd72ab7
+  author: joe
+  timestamp: 2026-11-03T14:07:52.426279603Z
+  session_id: 01a1a1b1a181
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 6c587ee595ce70f5fcc48480cfdddc8246cf158c
   branch: main
@@ -65,3 +73,9 @@ filed_at:
   aida_build_sha: db087637d57
   vendor: claude
   session: c58592f4-04ae-498b-9afd-87b0cc2bcde9
+attention_reason:
+  category: other
+  detail: 'Unable to publish: fix committed as 34e47e7e61f in assigned seat; aida ship --no-merge refuses Git in this native-sandbox private clone and requires host publication with aida ship --from-seat from main checkout, outside seat writable scope. No PR opened. Targeted permissions_set_ tests and make check-ci-fast blocked by Cargo 15 GiB disk floor (~14.4 GiB free). Formatting and diff checks pass.'
+  lean: Preserve committed seat; reclaim host build-cache space, run the targeted test and make check-ci-fast, then publish via aida ship TASK-b6b1278890774ef993d2ebc327862470-729 --from-seat /home/joe/ai/aida-worktrees/aida-seat-aida-task-b6b1278890774ef993d2ebc327862470-729 from main checkout for independent review.
+  raised_by: implementer
+  raised_at: 2026-11-03T14:07:52.426261241Z
