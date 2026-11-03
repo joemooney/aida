@@ -59,7 +59,9 @@ that is not a job failure.
 
 `submit` refuses unless the session holds a valid seat grant, refuses inside a
 script job (a job cannot queue its successor), and refuses a seat the runner
-does not accept.
+does not accept. Only the advisor seat may submit unless you start the runner
+with `--allow-seat`; no setting in the project's tracked `.aida/config.toml`
+can add a seat, because any merged change could edit that file.
 
 ### What happens to a job
 
@@ -98,7 +100,7 @@ Before a job runs, the runner refuses it when:
 | `refused:foreign-host` | it was submitted on another machine, or before this boot |
 | `refused:grant` | the grant is missing, expired, revoked, outside the roster, or does not match the job's seat, subject or principal |
 | `refused:seat` | the seat may not submit to this deputy |
-| `refused:not-live` | no process the grant is bound to is alive, and (for a sandboxed session whose grant is bound only to a session key) its session has had no heartbeat in the last 10 minutes |
+| `refused:not-live` | no process the grant is bound to is alive, and (for a sandboxed session whose grant is bound only to a session key) the session the grant was issued to has had no heartbeat in the last 10 minutes |
 | `refused:schema` | the record has an unknown field, another schema version, a sha256 that is not its script's, or an id already in use |
 
 A refused job is recorded with exit code 126.

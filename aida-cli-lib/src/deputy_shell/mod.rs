@@ -755,21 +755,31 @@ pub(crate) fn unacked_failed_jobs(
     }
 }
 
-/// `[deputy_shell]` in the project's `.aida/config.toml`: `keep_days` and
-/// `submit_seats`. Missing or unreadable means the defaults.
+/// `[deputy_shell]` in the project's `.aida/config.toml`: `keep_days` only.
+/// Missing or unreadable means the default.
+///
+/// Who may submit is deliberately NOT a config key: the file is tracked, so
+/// any merged PR could widen the seats whose scripts run with the operator's
+/// at-the-terminal authority. The advisor seat is the fixed default and only
+/// the operator's `--allow-seat` at `run` widens it (Q3). A `submit_seats`
+/// entry in the file is ignored.
+// trace:STORY-b6b1278890774ef993d2ebc327862470-334.Authority | ai:claude
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct ShellConfig {
     pub keep_days: u32,
-    pub submit_seats: Vec<String>,
 }
 
 impl Default for ShellConfig {
     fn default() -> Self {
         Self {
             keep_days: DEFAULT_KEEP_DAYS,
-            submit_seats: DEFAULT_SUBMIT_SEATS.iter().map(|s| s.to_string()).collect(),
         }
     }
+}
+
+/// The seats that may submit before any `--allow-seat`: the advisor.
+pub(crate) fn default_submit_seats() -> Vec<String> {
+    DEFAULT_SUBMIT_SEATS.iter().map(|s| s.to_string()).collect()
 }
 
 pub(crate) fn parse_config(body: &str) -> ShellConfig {
@@ -783,16 +793,6 @@ pub(crate) fn parse_config(body: &str) -> ShellConfig {
     if let Some(days) = table.get("keep_days").and_then(|v| v.as_integer()) {
         if let Ok(days) = u32::try_from(days) {
             cfg.keep_days = days.max(1);
-        }
-    }
-    if let Some(seats) = table.get("submit_seats").and_then(|v| v.as_array()) {
-        let seats: Vec<String> = seats
-            .iter()
-            .filter_map(|s| s.as_str())
-            .map(|s| aida_core::team::canonical_role(&s.to_ascii_lowercase()))
-            .collect();
-        if !seats.is_empty() {
-            cfg.submit_seats = seats;
         }
     }
     cfg

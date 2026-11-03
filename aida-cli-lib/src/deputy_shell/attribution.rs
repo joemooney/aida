@@ -104,8 +104,11 @@ pub(crate) struct Probes {
     /// Whether process `pid` with start identity `start` is alive, in the
     /// runner's (host) pid namespace.
     pub alive: Arc<dyn Fn(u32, &str) -> bool + Send + Sync>,
-    /// The last heartbeat of agent session `session_id` in `project_root`.
-    pub heartbeat: Arc<dyn Fn(&Path, &str) -> Option<DateTime<Utc>> + Send + Sync>,
+    /// The last heartbeat of agent session `session_id` in `project_root`,
+    /// counted only from a registry row that belongs to grant subject
+    /// `subject` (its agent name or id), so another session's heartbeat
+    /// never vouches for this grant.
+    pub heartbeat: Arc<dyn Fn(&Path, &str, &str) -> Option<DateTime<Utc>> + Send + Sync>,
     /// This machine.
     pub host: Host,
 }
@@ -131,21 +134,39 @@ impl Probes {
 }
 
 /// The newest heartbeat of a live agent-registry row for `session_id` in
-/// `project_root` (the per-prompt heartbeat).
-pub(crate) fn session_heartbeat(project_root: &Path, session_id: &str) -> Option<DateTime<Utc>> {
+/// `project_root` (the per-prompt heartbeat) whose agent is grant subject
+/// `subject`: a launched child's grant names the agent it was minted for, and
+/// the registry row carries that name. A row for another agent, or a grant
+/// whose subject names no agent, never vouches.
+// trace:STORY-b6b1278890774ef993d2ebc327862470-334.Authority | ai:claude
+pub(crate) fn session_heartbeat(
+    project_root: &Path,
+    session_id: &str,
+    subject: &str,
+) -> Option<DateTime<Utc>> {
     std::fs::read_dir(crate::agent_registry::agents_dir(project_root))
         .ok()?
         .flatten()
         .filter(|e| e.path().extension().is_some_and(|x| x == "toml"))
         .filter_map(|e| std::fs::read_to_string(e.path()).ok())
         .filter_map(|b| toml::from_str::<crate::agent_registry::AgentRegistryEntry>(&b).ok())
-        .filter(|row| row.ended_at.is_none())
-        .filter(|row| {
-            row.claude_session_id.as_deref() == Some(session_id)
-                || row.native_session_id.as_deref() == Some(session_id)
-        })
+        .filter(|row| heartbeat_row_vouches(row, session_id, subject))
         .map(|row| row.last_active_at)
         .max()
+}
+
+/// PURE: whether registry `row` may vouch for `session_id` under grant
+/// subject `subject`: a live row of that session AND of that agent.
+pub(crate) fn heartbeat_row_vouches(
+    row: &crate::agent_registry::AgentRegistryEntry,
+    session_id: &str,
+    subject: &str,
+) -> bool {
+    let same_session = row.claude_session_id.as_deref() == Some(session_id)
+        || row.native_session_id.as_deref() == Some(session_id);
+    let same_agent =
+        !subject.is_empty() && (row.id == subject || row.name.as_deref() == Some(subject));
+    row.ended_at.is_none() && same_session && same_agent
 }
 
 /// A refusal: the `refused:<code>` code and why, in one sentence.
@@ -252,13 +273,15 @@ pub(crate) fn verdict(
         return Ok(checks);
     }
     // Q5: a key-only (sandboxed) submitter has no host process to probe; a
-    // fresh session heartbeat stands in for it.
+    // fresh heartbeat stands in for it. The job's self-declared session is
+    // not enough on its own: the heartbeat must come from the registry row of
+    // the agent the grant was minted for (its subject).
     // TODO(STORY-2325): move this onto the liveness judge when it lands.
     // trace:STORY-2325 | ai:claude
     let fresh = s
         .session_id
         .as_deref()
-        .and_then(|sid| (probes.heartbeat)(&s.project_root, sid))
+        .and_then(|sid| (probes.heartbeat)(&s.project_root, sid, &grant.subject))
         .is_some_and(|beat| now - beat <= HEARTBEAT_FRESH && beat <= now + Duration::minutes(1));
     if fresh {
         checks.push("session-heartbeat".to_string());
@@ -266,6 +289,6 @@ pub(crate) fn verdict(
     }
     Err(Refusal::new(
         "not-live",
-        "no process the grant is bound to is alive, and the submitting session has no heartbeat in the last 10 minutes",
+        "no process the grant is bound to is alive, and the grant's own agent session has no heartbeat in the last 10 minutes",
     ))
 }

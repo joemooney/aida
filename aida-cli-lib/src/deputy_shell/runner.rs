@@ -400,17 +400,27 @@ fn claim(q: &Queue, id: &str, now: DateTime<Utc>) -> Option<Claimed> {
                 .jobs()
                 .join(format!(".{id}.collision-{}.job", uuid::Uuid::now_v7()));
             let _ = std::fs::rename(&from, &aside);
-            q.audit_event(now, "refused", Some(id), "unknown", |r| {
-                r.rc = Some(RC_REFUSED);
-                r.reason = Some(format!(
-                    "refused:schema (job id {id} is already in use; the submission was filed at {})",
-                    aside.display()
-                ));
-            });
-            eprintln!(
-                "deputy shell {}: refused job {id}: its id is already in use",
-                q.name
+            let why = format!(
+                "job id {id} is already in use; the submission was filed at {}",
+                aside.display()
             );
+            // A job dir with no state.json is what an interrupted claim
+            // leaves: file the refusal there, so `wait` returns 126 and
+            // `status` shows it. A dir WITH a state belongs to a real job,
+            // which keeps its own record; the refusal is audited only.
+            // trace:STORY-b6b1278890774ef993d2ebc327862470-334.ac930a33 | ai:claude
+            if q.read_state(id).is_none() {
+                file_schema_refusal(q, id, now, now, &why);
+            } else {
+                q.audit_event(now, "refused", Some(id), "unknown", |r| {
+                    r.rc = Some(RC_REFUSED);
+                    r.reason = Some(format!("refused:schema: {why}"));
+                });
+                eprintln!(
+                    "deputy shell {}: refused job {id}: its id is already in use",
+                    q.name
+                );
+            }
         }
         return None;
     }
@@ -958,22 +968,46 @@ fn run_on_pty(
     }
 }
 
+/// SIGTERM the job's process group, give it `grace`, then SIGKILL what is
+/// left and reap the leader. The group id is the leader's pid, so it is only
+/// signalled while it cannot have been recycled: before the leader is reaped
+/// (its zombie holds the pid), or after, only while a member still exists
+/// (a live session/group member keeps the id in use; ESRCH means none does).
 fn kill_group(child: &mut std::process::Child, grace: Duration) {
     let pid = child.id() as libc::pid_t;
-    // SAFETY: signalling the job's own process group (it called setsid).
+    // SAFETY: signalling the job's own process group (it called setsid);
+    // the leader is not reaped yet, so the id is still the job's.
     unsafe {
         libc::kill(-pid, libc::SIGTERM);
     }
     let deadline = Instant::now() + grace;
+    let mut reaped = false;
     while Instant::now() < deadline {
         if matches!(child.try_wait(), Ok(Some(_))) {
+            reaped = true;
             break;
         }
         std::thread::sleep(Duration::from_millis(50));
     }
-    // SAFETY: as above; sweeps what is left of the group.
-    unsafe {
-        libc::kill(-pid, libc::SIGKILL);
+    if !reaped {
+        // SAFETY: as above; the unreaped leader still holds the id. SIGKILL
+        // first, then reap.
+        unsafe {
+            libc::kill(-pid, libc::SIGKILL);
+        }
+        let _ = child.wait();
+        return;
+    }
+    // The leader is gone. Probe the group: ESRCH means it is empty and the
+    // id may be reused, so nothing is sent.
+    // SAFETY: signal 0 only checks for existence.
+    let members_left = unsafe { libc::kill(-pid, 0) } == 0;
+    if members_left {
+        // SAFETY: a member still carries the id as its group, so the kernel
+        // cannot have handed it to another process.
+        unsafe {
+            libc::kill(-pid, libc::SIGKILL);
+        }
     }
 }
 

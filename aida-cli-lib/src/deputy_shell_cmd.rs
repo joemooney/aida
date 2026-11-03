@@ -29,10 +29,12 @@ pub(crate) fn run(args: DeputyShellArgs) -> Result<()> {
             let q = ds::current_queue(&a.name)?;
             let main = main_root()?;
             let submitter = ds::attribution::capture(&main)?;
+            // The live runner's seats (the operator's `--allow-seat`), else
+            // the fixed default. Never the tracked config file.
             let seats = q
                 .live_runner()
                 .map(|r| r.submit_seats)
-                .unwrap_or_else(|| ds::load_config(&main).submit_seats);
+                .unwrap_or_else(ds::default_submit_seats);
             let rc = submit(&q, &a, submitter, &seats, &mut out)?;
             exit_with(rc, &mut out)
         }
@@ -72,7 +74,9 @@ pub(crate) fn run(args: DeputyShellArgs) -> Result<()> {
             let session = std::env::var("AIDA_SESSION_ID")
                 .ok()
                 .filter(|s| !s.trim().is_empty());
-            ack(&q, &main, &a, session.as_deref(), &mut out)
+            let grant = crate::gate::seat_authority::grant_check(&main).into_valid();
+            let actor = ack_actor(grant.as_ref(), session.as_deref());
+            ack(&q, &main, &a, session.as_deref(), &actor, &mut out)
         }
     }
 }
@@ -113,32 +117,13 @@ fn start(a: &ShellRunArgs) -> Result<()> {
     }
     let refresh = parse_secs(&a.refresh, "--refresh")?.max(60);
     let main = main_root()?;
-    let grant = match grant_check(&main) {
-        GrantCheck::Valid(g) => g,
-        other => bail!(
-            "aida deputy shell refuses to start: {}",
-            other.rejection_sentence().unwrap_or_else(|| {
-                format!(
-                    "this shell holds no seat grant. Run `aida role enter {}` here first",
-                    ds::RUNNER_SEAT
-                )
-            })
-        ),
-    };
-    let seat = crate::gate::dispatch_deps::canonical_role_name(&grant.seat);
-    if seat != ds::RUNNER_SEAT {
-        bail!(
-            "aida deputy shell refuses to start: it runs under an {} grant and this shell holds a {seat} grant. Run `aida role enter {}` here first",
-            ds::RUNNER_SEAT,
-            ds::RUNNER_SEAT
-        );
-    }
+    let grant = runner_grant(grant_check(&main))?;
     let q = ds::current_queue(&a.name)?;
     q.ensure()?;
     drop(ds::runner::acquire_lock(&q)?); // fail fast before the banner
     let config = ds::load_config(&main);
     let keep_days = a.keep_days.unwrap_or(config.keep_days).max(1);
-    let submit_seats = submit_seats(&config.submit_seats, &a.allow_seat);
+    let submit_seats = submit_seats(&ds::default_submit_seats(), &a.allow_seat);
     let delegate: Vec<String> = if a.delegate_seat.is_empty() {
         DEFAULT_DELEGATE_SEATS
             .iter()
@@ -244,8 +229,39 @@ fn start(a: &ShellRunArgs) -> Result<()> {
     Ok(())
 }
 
-/// Who may submit: the configured seats (advisor by default) plus each
-/// `--allow-seat`, canonical and deduplicated.
+/// PURE: the grant `run` starts under, from this shell's grant check. It
+/// refuses without a valid grant, and with a valid grant for any seat but the
+/// advisor's.
+// trace:STORY-b6b1278890774ef993d2ebc327862470-334.Authority | ai:claude
+pub(crate) fn runner_grant(
+    check: crate::gate::seat_authority::GrantCheck,
+) -> Result<crate::gate::seat_authority::SeatGrant> {
+    use crate::gate::seat_authority::GrantCheck;
+    let grant = match check {
+        GrantCheck::Valid(g) => g,
+        other => bail!(
+            "aida deputy shell refuses to start: {}",
+            other.rejection_sentence().unwrap_or_else(|| {
+                format!(
+                    "this shell holds no seat grant. Run `aida role enter {}` here first",
+                    ds::RUNNER_SEAT
+                )
+            })
+        ),
+    };
+    let seat = crate::gate::dispatch_deps::canonical_role_name(&grant.seat);
+    if seat != ds::RUNNER_SEAT {
+        bail!(
+            "aida deputy shell refuses to start: it runs under an {} grant and this shell holds a {seat} grant. Run `aida role enter {}` here first",
+            ds::RUNNER_SEAT,
+            ds::RUNNER_SEAT
+        );
+    }
+    Ok(grant)
+}
+
+/// Who may submit: the default seats (the advisor) plus each `--allow-seat`
+/// typed at the operator's terminal, canonical and deduplicated.
 pub(crate) fn submit_seats(configured: &[String], extra: &[String]) -> Vec<String> {
     let mut seats: Vec<String> = configured
         .iter()
@@ -526,6 +542,25 @@ pub(crate) fn resume(q: &Queue, out: &mut dyn Write) -> Result<()> {
     Ok(())
 }
 
+/// PURE: the audit actor of an `ack`, in the `AuditRow::actor` form: the
+/// acking shell's grant prefix and seat, else `operator-tty` outside any
+/// session, else `- unattributed` (a session holding no valid grant).
+// trace:STORY-b6b1278890774ef993d2ebc327862470-334.acf28460 | ai:claude
+pub(crate) fn ack_actor(
+    grant: Option<&crate::gate::seat_authority::SeatGrant>,
+    session: Option<&str>,
+) -> String {
+    match (grant, session) {
+        (Some(g), _) => format!(
+            "{} {}",
+            g.id.chars().take(8).collect::<String>(),
+            crate::gate::dispatch_deps::canonical_role_name(&g.seat)
+        ),
+        (None, None) => OPERATOR_TTY.to_string(),
+        (None, Some(_)) => "- unattributed".to_string(),
+    }
+}
+
 /// Acknowledge failed script jobs. `--all` takes every failed job `session`
 /// submitted from this project (every one outside a session). Inside a
 /// session, another session's job is refused, as for the command deputy.
@@ -534,6 +569,7 @@ pub(crate) fn ack(
     main: &Path,
     a: &ShellAckArgs,
     session: Option<&str>,
+    actor: &str,
     out: &mut dyn Write,
 ) -> Result<()> {
     let ids: Vec<String> = if a.all {
@@ -574,13 +610,9 @@ pub(crate) fn ack(
             }
         }
         q.acknowledge(id)?;
-        q.audit_event(
-            Utc::now(),
-            "acked",
-            Some(id),
-            session.unwrap_or(OPERATOR_TTY),
-            |_| {},
-        );
+        q.audit_event(Utc::now(), "acked", Some(id), actor, |r| {
+            r.detail = session.map(|s| serde_json::json!({ "session": s }));
+        });
         writeln!(out, "script job {id}: acknowledged")?;
     }
     if ids.is_empty() {
