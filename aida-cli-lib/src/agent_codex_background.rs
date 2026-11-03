@@ -329,7 +329,7 @@ pub(crate) fn exec_matches(expected: &ExpectedExec, exe: &std::path::Path) -> bo
         ExpectedExec::ExecveShim { interpreter } => {
             exe.file_name().and_then(|n| n.to_str()) == Some("codex")
                 && exe != interpreter
-                && Some(exe) != std::env::current_exe().ok().as_deref()
+                && exe != crate::kernel::resolve_aida_exe().as_path()
         }
     }
 }
@@ -1172,8 +1172,8 @@ pub(crate) struct SupervisorEnv {
 impl SupervisorEnv {
     fn production() -> Result<Self> {
         Ok(Self {
-            barrier_program: std::env::current_exe()
-                .context("cannot resolve this aida executable")?,
+            // trace:STORY-2254 | ai:claude — the hardened resolver (TASK-1262).
+            barrier_program: crate::kernel::resolve_aida_exe(),
             barrier_args: vec!["internal".into(), "codex-bg-barrier".into()],
             barrier_env: Vec::new(),
             at: Box::new(|_, _| Ok(())),

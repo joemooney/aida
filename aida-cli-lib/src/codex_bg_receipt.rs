@@ -558,10 +558,12 @@ pub(crate) fn read_receipt(dir: &Path, project_root: &Path, attempt: &str) -> Re
         Ok(path) => path,
         Err(e) => return ReceiptRead::Unknown(format!("{e:#}")),
     };
-    read_receipt_at(&path, project_root)
+    read_receipt_at(&path, project_root, &project_key(project_root))
 }
 
-fn read_receipt_at(path: &Path, project_root: &Path) -> ReceiptRead {
+/// `key` is `project_key(project_root)`, computed once by the caller: the
+/// key resolves the main checkout, which a listing must not repeat per file.
+fn read_receipt_at(path: &Path, project_root: &Path, key: &str) -> ReceiptRead {
     let meta = match std::fs::symlink_metadata(path) {
         Ok(meta) => meta,
         Err(e) => return ReceiptRead::Unknown(format!("receipt unreadable: {e}")),
@@ -583,7 +585,8 @@ fn read_receipt_at(path: &Path, project_root: &Path) -> ReceiptRead {
             receipt.version
         ));
     }
-    if project_key(&receipt.project_root) != project_key(project_root) {
+    // trace:STORY-2254 | ai:claude — an identical root has the same key.
+    if receipt.project_root != project_root && project_key(&receipt.project_root) != key {
         return ReceiptRead::Unknown("receipt belongs to another project".into());
     }
     let stem = path
@@ -627,6 +630,7 @@ pub(crate) fn list_receipts(dir: &Path, project_root: &Path) -> Vec<(String, Rec
     let Ok(entries) = std::fs::read_dir(dir.join(ATTEMPTS_DIR)) else {
         return Vec::new();
     };
+    let key = project_key(project_root);
     let mut out = Vec::new();
     for entry in entries.flatten() {
         let name = entry.file_name().to_string_lossy().into_owned();
@@ -635,7 +639,7 @@ pub(crate) fn list_receipts(dir: &Path, project_root: &Path) -> Vec<(String, Rec
         }
         let attempt = name.strip_suffix(".json").unwrap_or(&name).to_string();
         let read = if name.ends_with(".json") && uuid::Uuid::parse_str(&attempt).is_ok() {
-            read_receipt_at(&entry.path(), project_root)
+            read_receipt_at(&entry.path(), project_root, &key)
         } else {
             ReceiptRead::Unknown(format!("unexpected file {name}"))
         };

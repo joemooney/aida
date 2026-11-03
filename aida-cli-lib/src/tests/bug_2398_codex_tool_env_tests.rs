@@ -1599,6 +1599,8 @@ enum RoleRoute {
 // trace:BUG-2395 | ai:claude
 const ROLE_LAUNCH_SITES: &[(&str, usize, RoleRoute)] = &[
     ("agent_launch.rs", 2, RoleRoute::LaunchInventory),
+    // STORY-2254: the detached Codex worker finalizes via prepare_launch.
+    ("agent_codex_background.rs", 1, RoleRoute::LaunchInventory),
     ("autopilot_intake.rs", 1, RoleRoute::LaunchInventory),
     ("dispatch.rs", 1, RoleRoute::LaunchInventory),
     (
