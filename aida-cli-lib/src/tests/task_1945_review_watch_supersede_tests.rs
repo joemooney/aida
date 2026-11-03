@@ -753,3 +753,19 @@ fn bug_2425_foreign_watch_process_past_its_backstop_is_released() {
     assert!(!fresh.within_foreign_backstop(now, Some("another-boot")));
     assert!(fresh.within_foreign_backstop(now, Some(fresh.boot.as_str())));
 }
+
+// Advisor ruling (PR #3298 round 4): `recorded_at` is observation metadata,
+// not identity. Two reads of the same process taken at different instants
+// must compare equal, or every self-identity check in the dispatcher fails.
+// trace:BUG-2425 | ai:claude
+#[test]
+fn bug_2425_identity_equality_ignores_recorded_at() {
+    let first = Identity::current().unwrap();
+    std::thread::sleep(std::time::Duration::from_millis(5));
+    let second = Identity::current().unwrap();
+    assert_ne!(first.recorded_at, second.recorded_at);
+    assert_eq!(first, second);
+    let mut other_process = second.clone();
+    other_process.pid ^= 1;
+    assert_ne!(first, other_process);
+}

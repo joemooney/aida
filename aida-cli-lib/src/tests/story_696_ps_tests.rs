@@ -2121,6 +2121,29 @@ fn bug_2425_foreign_pidns_lease_past_its_backstop_is_reapable() {
     ));
 }
 
+// Advisor ruling (PR #3298 round 4): the foreign-namespace backstop ages a
+// lease from its heartbeat (lease-file mtime), not from started_at, so a
+// live long-running foreign session is not judged gone.
+// trace:BUG-2425 | ai:claude
+#[test]
+fn bug_2425_foreign_pidns_lease_with_fresh_heartbeat_is_not_gone() {
+    let tmp = tempfile::tempdir().unwrap();
+    let mut lease = ps_lease("foreign-live", "BUG-2425", tmp.path().to_path_buf());
+    lease.pid_namespace = Some(agent_registry::current_pid_namespace().unwrap_or(0) ^ 1);
+    lease.active_pid = Some(u32::MAX - 1);
+    lease.active_pid_start_time = Some("linux-starttime:1".into());
+    lease.started_at = chrono::Utc::now() - chrono::Duration::hours(48);
+    lease.parent_project_root = Some(tmp.path().to_path_buf());
+    // No lease file yet: the heartbeat falls back to started_at.
+    assert_eq!(crate::leases::lease_owner_gone(&lease), Some(true));
+    // A freshly written lease file is a heartbeat.
+    let path = crate::leases::lease_path(tmp.path(), &lease.id);
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    std::fs::write(&path, toml::to_string(&lease).unwrap()).unwrap();
+    assert!(crate::leases::lease_heartbeat(&lease) > lease.started_at);
+    assert_eq!(crate::leases::lease_owner_gone(&lease), None);
+}
+
 // trace:BUG-2425 | ai:codex
 #[test]
 fn bug_2425_foreign_pid_collision_cannot_borrow_local_process() {

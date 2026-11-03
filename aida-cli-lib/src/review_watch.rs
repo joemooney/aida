@@ -115,11 +115,14 @@ fn bounded_diagnostic(text: &str) -> String {
     out
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Identity {
-    // Absent fields are omitted so state this binary writes for a legacy
-    // record still parses after `aida dev rollback`.
+    // Absent fields are omitted only so a legacy record round-trips
+    // unchanged. Identity::of always stamps both, so state this binary writes
+    // does NOT parse under a pre-BUG-2425 binary after `aida dev rollback`
+    // (deny_unknown_fields); that break is accepted (single-user substrate,
+    // clear the review-watch state by hand if rolling back).
     // trace:BUG-2425 | ai:codex
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pid_namespace: Option<u64>,
@@ -131,6 +134,19 @@ struct Identity {
     start: String,
     boot: String,
 }
+/// Process identity equality: the same kernel process, regardless of when it
+/// was observed. `recorded_at` is observation metadata (the foreign-namespace
+/// backstop clock) and must not make two reads of one process differ.
+// trace:BUG-2425 | ai:claude
+impl PartialEq for Identity {
+    fn eq(&self, other: &Self) -> bool {
+        self.pid_namespace == other.pid_namespace
+            && self.pid == other.pid
+            && self.start == other.start
+            && self.boot == other.boot
+    }
+}
+impl Eq for Identity {}
 impl Identity {
     fn current() -> Result<Self> {
         Self::of(std::process::id())

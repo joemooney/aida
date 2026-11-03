@@ -1410,14 +1410,16 @@ pub fn classify_lease_state(
 // trace:BUG-2425 | ai:claude
 pub const FOREIGN_LEASE_BACKSTOP_HOURS: i64 = 24;
 
-/// Whether a foreign-namespace lease started at `started_at` has outlived
-/// [`FOREIGN_LEASE_BACKSTOP_HOURS`].
+/// Whether a foreign-namespace lease last refreshed at `last_heartbeat` (its
+/// lease-file mtime, never earlier than `started_at`) has gone silent for
+/// [`FOREIGN_LEASE_BACKSTOP_HOURS`]. Keyed on the heartbeat, not the start,
+/// so a live long-running session is not presumed gone.
 // trace:BUG-2425 | ai:claude
 pub fn foreign_lease_backstop_expired(
-    started_at: chrono::DateTime<chrono::Utc>,
+    last_heartbeat: chrono::DateTime<chrono::Utc>,
     now: chrono::DateTime<chrono::Utc>,
 ) -> bool {
-    now.signed_duration_since(started_at).num_hours() >= FOREIGN_LEASE_BACKSTOP_HOURS
+    now.signed_duration_since(last_heartbeat).num_hours() >= FOREIGN_LEASE_BACKSTOP_HOURS
 }
 
 /// BUG-2425: the lease state of a lease whose recorded pids live in another

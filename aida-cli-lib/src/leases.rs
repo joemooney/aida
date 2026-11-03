@@ -266,6 +266,23 @@ pub(crate) fn lease_path(project_root: &std::path::Path, id: &str) -> std::path:
     leases_dir(project_root).join(format!("{}.toml", id))
 }
 
+/// The lease's last sign of life: the later of `started_at` and its lease
+/// file's mtime (heartbeats, role changes and lease rewrites bump it — the
+/// same freshness clock `auto_release_decision_for_lease` uses). The file is
+/// found under `parent_project_root`, where every lease writer records the
+/// root it wrote to; a lease with no readable file falls back to
+/// `started_at`.
+// trace:BUG-2425 | ai:claude
+pub(crate) fn lease_heartbeat(lease: &SessionLease) -> chrono::DateTime<chrono::Utc> {
+    lease
+        .parent_project_root
+        .as_deref()
+        .and_then(|root| std::fs::metadata(lease_path(root, &lease.id)).ok())
+        .and_then(|m| m.modified().ok())
+        .map(chrono::DateTime::<chrono::Utc>::from)
+        .map_or(lease.started_at, |mtime| mtime.max(lease.started_at))
+}
+
 pub(crate) fn session_harness_branch(
     cwd: &std::path::Path,
     override_branch: Option<&str>,
@@ -5066,14 +5083,14 @@ pub(crate) static FASTTRACK: crate::command_registry::CommandReg =
 
 /// [`aida_core::liveness::lease_owner_process_gone`] for a lease, from this
 /// observer. Pids recorded in another PID namespace are not probed: such an
-/// owner is unknown (`None`) until the lease outlives the age backstop, which
-/// is independent evidence it is gone.
+/// owner is unknown (`None`) until the lease goes unrefreshed past the age
+/// backstop, which is independent evidence it is gone.
 // trace:BUG-2425 | ai:codex
 // trace:BUG-2425 | ai:claude
 pub(crate) fn lease_owner_gone(lease: &SessionLease) -> Option<bool> {
     if !aida_core::pid_observer::PidObserver::current().can_observe(lease.pid_namespace) {
         return aida_core::liveness::foreign_lease_backstop_expired(
-            lease.started_at,
+            lease_heartbeat(lease),
             chrono::Utc::now(),
         )
         .then_some(true);
