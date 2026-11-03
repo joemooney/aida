@@ -85,6 +85,10 @@ remote = ["tonic", "prost", "tonic-build", "protox"]
 # `aida tui` ships in release binaries. trace:STORY-137 | ai:claude
 tui = ["aida-tui"]
 
+[dev-dependencies]
+# STORY-2324: property tests for the canonical gate state.
+proptest = { version = "1", default-features = false, features = ["std"] }
+
 [build-dependencies]
 tonic-build = { workspace = true, optional = true }
 protox = { workspace = true, optional = true }

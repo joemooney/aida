@@ -60,6 +60,7 @@ mod backlog;
 mod brief;
 mod brief_cmd;
 mod burndown;
+mod idle_eligible;
 // trace:TASK-1500 | ai:codex
 mod burndown_run;
 mod bypass_confirm;
@@ -166,6 +167,8 @@ mod phase_gates;
 mod plan_followups;
 mod plan_intent;
 mod plan_report;
+// trace:STORY-2325 | ai:claude — one ownership record and one pure liveness judge.
+mod ownership;
 // trace:STORY-2315 | ai:claude
 mod pr_lease_takeover;
 mod pr_lookup;

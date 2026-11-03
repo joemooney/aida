@@ -515,10 +515,7 @@ pub fn scan_holders_in(
     }
 }
 
-/// Inode of the initial (host) pid namespace. The kernel reserves it
-/// (`PROC_PID_INIT_INO` in `include/linux/proc_ns.h`); every other pid
-/// namespace gets a dynamically allocated inode, which never equals it.
-const INITIAL_PID_NAMESPACE_INODE: u64 = 0xEFFF_FFFC;
+use crate::process_probe::{parse_pid_ns_link, INITIAL_PID_NAMESPACE_INODE};
 
 /// `Some(reason)` when this process runs in a pid namespace other than the
 /// host's. Processes outside the namespace (a host-side build in a
@@ -532,12 +529,7 @@ const INITIAL_PID_NAMESPACE_INODE: u64 = 0xEFFF_FFFC;
 pub(crate) fn separate_pid_namespace(proc_root: &Path, self_pid: u32) -> Option<String> {
     let link =
         std::fs::read_link(proc_root.join(self_pid.to_string()).join("ns").join("pid")).ok()?;
-    let inode: u64 = link
-        .to_str()?
-        .strip_prefix("pid:[")?
-        .strip_suffix(']')?
-        .parse()
-        .ok()?;
+    let inode = parse_pid_ns_link(link.to_str()?)?;
     (inode != INITIAL_PID_NAMESPACE_INODE).then(|| {
         "this process runs in a separate pid namespace (a container?), so processes \
          outside it are hidden"

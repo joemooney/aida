@@ -893,6 +893,15 @@ fn run_checked(cmd: &mut Command, what: &str) -> Result<()> {
                 );
             }
         }
+        // BUG-2418: inside a contained lane CARGO_HOME is read-only, so a
+        // build that needs a crate not yet downloaded fails there. Say so in
+        // one line instead of leaving cargo's raw read-only-filesystem error.
+        // trace:BUG-2418 | ai:claude
+        if let Some(note) = crate::session::cargo_home_dir()
+            .and_then(|home| crate::session::cargo_home_read_only_note(&home))
+        {
+            bail!("{what} exited with {status}\nCARGO_HOME is read-only here; {note}");
+        }
         bail!("{what} exited with {status}");
     }
     Ok(())

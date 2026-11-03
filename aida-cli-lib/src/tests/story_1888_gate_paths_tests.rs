@@ -3489,6 +3489,9 @@ fn all_rust_files(dir: &Path, out: &mut Vec<PathBuf>) {
 // trace:TASK-b6b1278890774ef993d2ebc327862470-024 | ai:claude
 const GATE_KERNELS: &[&str] = &[
     "branch_policy.rs",
+    // trace:STORY-2324 | ai:claude
+    "canon.rs",
+    "effective.rs",
     "fleet_lanes.rs",
     "hold_collect.rs",
     "kernel_deps.rs",

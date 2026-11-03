@@ -349,6 +349,10 @@ fn bug_1929_linked_worktree_grants_its_own_main_only() {
         ],
     );
 
+    // The cargo-slot grant reads XDG_RUNTIME_DIR and CARGO_HOME: hold the env
+    // lock so a sibling test pinning them cannot change them between the
+    // render and the expectation. trace:BUG-2418 | ai:claude
+    let env_lock = crate::test_env::env_lock();
     let (json, settings) = launch_settings(&[worktree.clone()]);
     let mut expected = vec![
         format!("/{}", main.join(".aida-store").display()),
@@ -359,6 +363,16 @@ fn bug_1929_linked_worktree_grants_its_own_main_only() {
     // The deputy's submit side only, never `.aida/deputy` itself.
     // trace:STORY-B6B1278890774EF993D2EBC327862470-099 | ai:claude
     expected.push(format!("/{}", main.join(".aida/deputy/incoming").display()));
+    // The lane's cargo-slot grant (slot locks + build log), from the same
+    // helper the launch uses, so the uid/HOME spellings match the host.
+    // trace:BUG-2418 | ai:claude
+    for path in crate::contained_boundary::lane_build_write_paths() {
+        let entry = format!("/{}", path.display());
+        if !expected.contains(&entry) {
+            expected.push(entry);
+        }
+    }
+    drop(env_lock);
     assert_eq!(allow_write(&settings), expected, "{json}");
     assert_eq!(
         deny_write(&settings),
