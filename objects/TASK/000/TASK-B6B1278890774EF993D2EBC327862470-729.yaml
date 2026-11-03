@@ -1,0 +1,28 @@
+id: 01a1a08e-17a2-7930-be9c-f9d4498b91c0
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-729
+title: 'non-blocking/minor: config_cmd.rs:1364 write_codex_posture(Contained) still set…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on BUG-2418, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  non-blocking/minor: config_cmd.rs:1364 write_codex_posture(Contained) still sets sandbox_workspace_write.writable_roots to ~/.cargo, ~/.rustup and ~/.aida. That is the BUG-2418 exposure in a codex workspace-write lane that runs outside the os_wrap bwrap. It is out of this ruling's scope (the bwrap profile); needs a follow-up.
+  Reviewed sha: 1c54c4d85edd1496e1a9b1921c51fe19641ade42
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-03T08:37:09.154000416Z
+modified_at: 2026-11-03T08:37:09.154000416Z
+req_type: Task
+tags:
+- carried-from:BUG-2418
+- finding-hash:e63aac0f
+- from-review:BUG-2418
+- kind:carried-forward
+filed_at:
+  code_sha: 6c587ee595ce70f5fcc48480cfdddc8246cf158c
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: db087637d57
+  vendor: claude
+  session: c58592f4-04ae-498b-9afd-87b0cc2bcde9
