@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-186
 agreed_id: BUG-2417
 title: 'merge_lock holder liveness ignores PID namespaces: a sandboxed train''s merge lease reads as dead, so the BUG-2412 live-lease guard can close a live train PR'
 description: 'From the STORY-2325 signoff (A5). merge_lock::Holder records no pid_ns or boot; stale_reason checks only the host before calling the lenient holder_alive, so a holder in a foreign PID namespace (every sandboxed Bash call) reads as absent, which reads as dead. live_trains filters merge leases through merge_lock::live_status, so the BUG-2412 ''a live merge lease protects this train PR'' guard rests on a namespace-blind check. Expected: record pid_ns and boot on Holder (reuse the cache_lock helpers); a foreign or unrecorded holder is TTL-only (never judged dead by pid). Regression test: a holder from a foreign pidns is not judged dead before its TTL.'
-status: InProgress
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-03T00:46:11.465609525Z
-modified_at: 2026-11-03T01:38:43.284105638Z
+modified_at: 2026-11-03T01:40:01.340828894Z
 req_type: Bug
 tags:
 - liveness
@@ -46,6 +46,20 @@ history:
   timestamp: 2026-11-03T01:38:43.371425511Z
   session_id: ee0bf351-6b17-486f-a38e-cfbb1343c426
   changes: []
+- id: 01a19f10-32b7-7371-8a09-245d7e0a09c0
+  author: aida-auto-bump
+  timestamp: 2026-11-03T01:40:01.335412734Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a19f10-32bc-7120-9fea-e56d3e1326fa
+  timestamp: 2026-11-03T01:40:01.340824517Z
+  agent: aida
+  commit_sha: 3a3b9b34b6b7f239c4aef860a210f32c9da2dadb
+  summary: 'BUG-2417 PASS: Holder records pid_ns/boot; stale_reason probes pid only via visible_pid (same host/boot/ns), else TTL-only; Rust tests cover foreign/unrecorded ns and boot across stale_reason/live_status/acquire plus TTL backstop; release.sh mirrors the rule (Test 4b1); CI green at head. Non-blocking nit: shell test lacks a foreign-boot case.'
+  review_verdict: approved
 execution_mode: drain
 filed_at:
   code_sha: 1737d4e5f91bd2ddb7f15579e259c0a47652f80f
@@ -55,3 +69,7 @@ filed_at:
   aida_build_sha: 6a3f67671a9
   vendor: claude
   session: ee0bf351-6b17-486f-a38e-cfbb1343c426
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-03T01:40:01.335406087Z
+  completion_sha: 3a3b9b34b6b7f239c4aef860a210f32c9da2dadb
