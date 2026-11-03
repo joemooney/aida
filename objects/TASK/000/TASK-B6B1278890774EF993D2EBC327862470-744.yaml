@@ -7,12 +7,12 @@ description: |-
 
   minor (non-blocking, fail-closed; from the BUG-2419 semantic merge): seat_authority.rs:2411-2415 accept_detached_launch_child compares pid_binding_token (now author_process_token, qualified with pidns-<ino> in a non-host pid namespace) to the unqualified review_authority::process_token. Inside a non-host pid namespace that is not AIDA-contained (e.g. a plain bubblewrap shell), every detached accept is refused with the misleading error 'start identity changed'. On the same path, session.rs stamp_lease_detached_worker_at writes active_pid without active_pid_ns, unlike stamp_lease_active_pid_at, so lease_tokens drops the worker's proc token. review_authority.rs record_detached_worker_strict records an unqualified process_token where author_process_token is expected. Fix: compare against author_process_token, set or remove active_pid_ns in the strict stamp, record author_process_token, and add a with_pid_namespace test.
   Reviewed sha: c0ff84f2d84612e2cb940d713673ed55c5222621
-status: InProgress
+status: Done
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-03T17:40:41.186637978Z
-modified_at: 2026-11-03T21:29:56.599435356Z
+modified_at: 2026-11-03T21:36:33.650709470Z
 req_type: Task
 tags:
 - carried-from:STORY-2254
@@ -45,6 +45,15 @@ history:
   session_id: 01a1a351523e
   harness_version: 2.1.317 (Claude Code)
   changes: []
+- id: 01a1a357-c492-7e03-b739-18b66c517e37
+  author: joe
+  timestamp: 2026-11-03T21:36:40.594739250Z
+  session_id: 01a1a351523e
+  harness_version: 2.1.317 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 filed_at:
   code_sha: fc08dfd16d424a30f87ef943aedc6261295928d2
   branch: main
@@ -52,3 +61,7 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: 493f3ae1c52
   vendor: claude
+implementation_info:
+  implemented: true
+  implemented_at: 2026-11-03T21:36:33.650709470Z
+  implemented_by: joe
