@@ -3,12 +3,12 @@ spec_id: STORY-b6b1278890774ef993d2ebc327862470-329
 agreed_id: STORY-2331
 title: 'Regression test: a pool grant round-trips an air gap by git bundle (two bare hubs)'
 description: 'From SPIKE-708 (direct root-to-inside workflow, which the advisor ruled the supported model on 2026-11-02). One hermetic integration test: two bare hubs, bundle-only in and out; two inside clones with an observed claim collision and a retry into disjoint ranges; a divergent outside claim; a disjoint union on return; an overlap refusal with refs/HEAD/status unchanged; an ordinary clean bundle pull; and final-slot and exhaustion coverage (depends on the final-slot bug). Also assert that a root block claim leaves no untracked registry/blocks.lock that makes the store dirty and refuses reconcile (Q4). If it does, fix the sidecar''s placement or ignore rule in this story without weakening the lock. Document the supported boundary (direct root-to-hub grants; recursive delegation and pool replenishment are not supported) in the storage docs.'
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-03T02:44:16.945490220Z
-modified_at: 2026-11-03T22:02:27.229251336Z
+modified_at: 2026-11-03T22:02:40.371499517Z
 req_type: Story
 tags:
 - from:SPIKE-708
@@ -64,6 +64,12 @@ comments:
   content: 'ADVISOR RULING (15:05, round 3, final, PR #3308): CI contracts is still red at 35768f7c. Run tests/test_bug_1796_normal_two_remote_pull_byte_identical.sh locally, diff the actual output against the expected bytes, and make the fixture match the intended new behavior exactly; give the reason in the commit. LIGHT gate: one targeted cargo test plus make check-ci-fast (umask 022). A ''cargo check -p aida-cli-lib --tests'' on the merged tree is MANDATORY before pushing. Push to the existing PR branch, then stop. This is the final round: the review is scoped to these findings.'
   created_at: 2026-11-03T22:02:27.229251336Z
   modified_at: 2026-11-03T22:02:27.229251336Z
+  session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
+- id: 01a1a36f-9173-70b1-b002-3f2513461e3d
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Round-2 rework resolves findings 1 (cli-1 time budget now green) and 4 (doc cites story_164 spendability proofs), and code plus test meet every STORY-2331 criterion on inspection; but CI contracts is still red at 35768f7c: the BUG-1796 byte fixture fails with the edited expected bytes, while main''s contracts lane is green on its last 4 runs. AC status: bare hubs bundle-only both ways verified by story_2331_bundle_air_gap.rs:305-331; inside collision and disjoint retry :333-359; final slot and exhaustion :361-384 plus db_block.rs PoolExhausted Ok(None) refill fallback; divergent outside claim :388-391; Q4 no untracked blocks.lock :392-399 plus init_cmd.rs:4717-4723; disjoint union on return :401-430; overlap refusal with nothing moved :432-474; clean bundle pull :476-500; supported boundary documented docs/cli/10-storage.md:332-383; CI green unverified (contracts red).. No triage reason was given.'
+  created_at: 2026-11-03T22:02:40.371498130Z
+  modified_at: 2026-11-03T22:02:40.371498130Z
   session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
 history:
 - id: 01a19f4b-61ed-7310-b584-0af8f83cd6a1
@@ -125,6 +131,14 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1a36f-9173-70b1-b002-3f1bdb684025
+  author: joe
+  timestamp: 2026-11-03T22:02:40.371485910Z
+  session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: 553f7d5984c6083a9f2b47cfa358ce57c438843b
   branch: main
@@ -137,11 +151,3 @@ implementation_info:
   implemented: true
   implemented_at: 2026-11-03T19:19:28.879161279Z
   implemented_by: joe
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'Round-2 rework resolves findings 1 (cli-1 time budget now green) and 4 (doc cites story_164 spendability proofs), and code plus test meet every STORY-2331 criterion on inspection; but CI contracts is still red at 35768f7c: the BUG-1796 byte fixture fails with the edited expected bytes, while main''s contracts lane is green on its last 4 runs. AC status: bare hubs bundle-only both ways verified by story_2331_bundle_air_gap.rs:305-331; inside collision and disjoint retry :333-359; final slot and exhaustion :361-384 plus db_block.rs PoolExhausted Ok(None) refill fallback; divergent outside claim :388-391; Q4 no untracked blocks.lock :392-399 plus init_cmd.rs:4717-4723; disjoint union on return :401-430; overlap refusal with nothing moved :432-474; clean bundle pull :476-500; supported boundary documented docs/cli/10-storage.md:332-383; CI green unverified (contracts red).'
-  recovery_hint: address the review findings, move STORY-2331 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-03T21:35:46.761417011Z
