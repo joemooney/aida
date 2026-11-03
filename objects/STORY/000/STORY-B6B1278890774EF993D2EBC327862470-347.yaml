@@ -6,12 +6,12 @@ description: |-
   2026-11-03: aida ps had piled up about 51 stale, 9 orphaned and 28 salvageable rows. The disk reached 99% (11 GB free), which blocked every lane's cargo runs, and 305.7 GiB was reclaimable. Nothing runs session reap, agent gc or worktree reclaim on a schedule; they wait for an advisor sweep.
 
   Acceptance: (1) an hourly project-scope scheduled job runs 'aida session reap --yes' (finished + merged + exited only), 'aida agent gc', and 'aida worktree reclaim --apply' limited to caches idle more than 24h. (2) It never touches salvageable (uncommitted) trees, live leases or a foreign pidns. (3) Its summary routes to the advisor only when it hits something it must keep (for example retention not activated, or salvageable work older than 24h), naming the act needed. (4) The disk-headroom guard runs reclaim itself before routing to the advisor.
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-03T14:28:02.283438627Z
-modified_at: 2026-11-03T23:06:14.611426402Z
+modified_at: 2026-11-03T23:06:17.143921337Z
 req_type: Story
 relationships:
 - rel_type:
@@ -70,6 +70,12 @@ comments:
   created_at: 2026-11-03T23:06:14.611426402Z
   modified_at: 2026-11-03T23:06:14.611426402Z
   session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
+- id: 01a1a3a9-ceb7-7262-a87b-03893673faa4
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: AC1-AC4 implemented and unit-tested, but CI is red because of this PR: the new ''aida session hygiene'' leaf is missing from the generated JSON-format audit doc. No triage reason was given.'
+  created_at: 2026-11-03T23:06:17.143918870Z
+  modified_at: 2026-11-03T23:06:17.143918870Z
+  session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
 history:
 - id: 01a1a316-cb8a-7301-85a2-3b4f27c65f7a
   author: aida-session-start
@@ -101,6 +107,14 @@ history:
   - field_name: status
     old_value: Done
     new_value: NeedsAttention
+- id: 01a1a3a9-ceb7-7262-a87b-037b8a6c2a97
+  author: joe
+  timestamp: 2026-11-03T23:06:17.143905120Z
+  session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: 493f3ae1c526c7ab19f208112d426aecbf33c8b5
   branch: main
@@ -113,11 +127,3 @@ implementation_info:
   implemented: true
   implemented_at: 2026-11-03T21:44:25.592290105Z
   implemented_by: joe
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'AC1-AC4 implemented and unit-tested, but CI is red because of this PR: the new ''aida session hygiene'' leaf is missing from the generated JSON-format audit doc'
-  recovery_hint: address the review findings, move STORY-2351 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-03T22:35:01.934006122Z
