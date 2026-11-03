@@ -1,0 +1,24 @@
+id: 01a19f71-ad19-70c1-8288-026e3fe68269
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-728
+agreed_id: TASK-2882
+title: Advisor standing orders open with a vendor-neutral delivery contract (merges and eligible-PR wait time are the measure)
+description: 'Operator request 2026-11-02 20:26 MST, after a Codex advisor ran 8h without a merge while a Claude advisor shipped 24 merges in 15h. Codex''s self-diagnosis: blocked work dominated the queue, advisor authority was underused, procedure was added instead of acting, and activity was confused with delivery. Add a short contract as the first block of aida-core/templates/.aida/discipline/standing-orders/advisor.md, vendor-neutral so both vendors'' advisors read it at session start: ready-to-ship first; act once the next action is known; route around a blocker; rule forks with a recorded reason; review alongside CI; use the established deputies and check that a queued command finished; measure merges and eligible-PR waiting time. Acceptance: the contract is in the template master and its mirrors (make sync-templates; make check-templates passes), and the existing numbered orders are unchanged.'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-03T03:26:29.657952623Z
+modified_at: 2026-11-03T03:26:29.657952623Z
+req_type: Task
+tags:
+- area:discipline
+- fasttrack
+- mode:drain
+filed_at:
+  code_sha: 553f7d5984c6083a9f2b47cfa358ce57c438843b
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 553f7d5984c
+  vendor: claude
+  session: 125337a4-7dd3-483b-9c56-3665173938ae
