@@ -54,6 +54,8 @@ fn under(entry: &str, dir: &Path) -> bool {
 #[test]
 fn bug_2418_contained_render_has_no_cargo_home_in_rw_roots() {
     let (_tmp, main) = main_checkout();
+    // trace:BUG-2418 | ai:claude
+    let _lock = crate::test_env::env_lock();
     let mut cargo_homes: Vec<PathBuf> = crate::session::cargo_home_dir().into_iter().collect();
     if let Some(home) = crate::home_dir() {
         cargo_homes.push(home.join(".cargo"));
@@ -254,10 +256,16 @@ fn bug_2418_task_2772_lane_build_paths_never_reach_cargo_home() {
 #[test]
 fn bug_2418_task_2772_contained_settings_allow_lane_build_paths() {
     let (_tmp, main) = main_checkout();
-    let settings =
-        crate::session::claude_contained_settings_json(&contained_write_roots(&main)).unwrap();
+    // Siblings pin XDG_RUNTIME_DIR/CARGO_HOME under the env lock; read both
+    // sides under it too. trace:BUG-2418 | ai:claude
+    let (settings, expected) = {
+        let _lock = crate::test_env::env_lock();
+        (
+            crate::session::claude_contained_settings_json(&contained_write_roots(&main)).unwrap(),
+            sandbox_allow_write_entries(&lane_build_write_paths()),
+        )
+    };
     let allowed = allow_write(&settings);
-    let expected = sandbox_allow_write_entries(&lane_build_write_paths());
     assert!(!expected.is_empty(), "no lane build path resolved here");
     for entry in &expected {
         assert!(allowed.contains(entry), "{entry} missing from {allowed:?}");
@@ -279,4 +287,200 @@ fn bug_2418_task_2772_contained_settings_allow_lane_build_paths() {
             "an Edit rule grants {entry}"
         );
     }
+}
+
+fn uid() -> u32 {
+    // SAFETY: getuid never fails and has no preconditions.
+    unsafe { libc::getuid() }
+}
+
+/// A tempdir resolved through any symlinked `/tmp`, so expected paths match
+/// what [`resolve_through_existing`] returns.
+fn real_tmp() -> (tempfile::TempDir, PathBuf) {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = std::fs::canonicalize(tmp.path()).unwrap();
+    (tmp, root)
+}
+
+/// BUG-2418 (review F1): a CARGO_HOME that is a symlink to the real slot
+/// directory, or a slot path reached through a symlink into CARGO_HOME, is
+/// never granted, though the spellings differ.
+#[test]
+fn bug_2418_lane_build_paths_resolve_cargo_home_aliases() {
+    let (_tmp, root) = real_tmp();
+    let run = root.join("run");
+    let slot = run.join("cargo-slots-1000");
+    std::fs::create_dir_all(&slot).unwrap();
+    let link = root.join("cargo-link");
+    std::os::unix::fs::symlink(&slot, &link).unwrap();
+    let env = LaneBuildEnv {
+        runtime_dir: Some(run.clone()),
+        uid: Some(1000),
+        home: None,
+        cargo_home: Some(link.clone()),
+    };
+    let (paths, notes) = lane_build_write_grants_from(&env);
+    assert!(paths.is_empty(), "granted CARGO_HOME's target: {paths:?}");
+    assert!(
+        notes.is_empty(),
+        "an overlap is not an ambiguity: {notes:?}"
+    );
+
+    // CARGO_HOME inside the slot's real target, reached through an alias.
+    let cargo_home = root.join("real-cargo");
+    std::fs::create_dir_all(&cargo_home).unwrap();
+    let home = root.join("home");
+    std::fs::create_dir_all(home.join(".local")).unwrap();
+    std::os::unix::fs::symlink(&cargo_home, home.join(".local/state")).unwrap();
+    let env = LaneBuildEnv {
+        runtime_dir: None,
+        uid: None,
+        home: Some(home.clone()),
+        cargo_home: Some(cargo_home.clone()),
+    };
+    assert!(lane_build_write_paths_from(&env).is_empty());
+
+    // A slot that does not exist yet resolves through its existing parent.
+    let env = LaneBuildEnv {
+        runtime_dir: Some(run.join("missing")),
+        uid: Some(7),
+        home: None,
+        cargo_home: Some(cargo_home),
+    };
+    assert_eq!(
+        lane_build_write_paths_from(&env),
+        [run.join("missing/cargo-slots-7")]
+    );
+}
+
+/// BUG-2418 (review F1): when CARGO_HOME or the slot cannot be resolved (a
+/// dangling symlink on the way), the slot is refused with one note each.
+#[test]
+fn bug_2418_lane_build_paths_refuse_unresolvable_sides() {
+    let (_tmp, root) = real_tmp();
+    let run = root.join("run");
+    std::fs::create_dir_all(&run).unwrap();
+    let dangling = root.join("dangling");
+    std::os::unix::fs::symlink(root.join("nowhere"), &dangling).unwrap();
+
+    let env = LaneBuildEnv {
+        runtime_dir: Some(run.clone()),
+        uid: Some(1000),
+        home: None,
+        cargo_home: Some(dangling.join("cargo")),
+    };
+    let (paths, notes) = lane_build_write_grants_from(&env);
+    assert!(paths.is_empty());
+    assert_eq!(notes.len(), 1, "{notes:?}");
+    assert!(notes[0].contains("CARGO_HOME"), "{notes:?}");
+
+    let env = LaneBuildEnv {
+        runtime_dir: Some(dangling.clone()),
+        uid: Some(1000),
+        home: None,
+        cargo_home: Some(root.join("cargo")),
+    };
+    let (paths, notes) = lane_build_write_grants_from(&env);
+    assert!(paths.is_empty());
+    assert_eq!(notes.len(), 1, "{notes:?}");
+
+    let env = LaneBuildEnv {
+        runtime_dir: Some(run),
+        uid: Some(1000),
+        home: None,
+        cargo_home: None,
+    };
+    assert!(lane_build_write_paths_from(&env).is_empty());
+}
+
+/// BUG-2418 (review F1 regression): with CARGO_HOME a symlink to the real
+/// slot directory, the generated contained settings carry no allowWrite entry
+/// for it.
+#[test]
+fn bug_2418_contained_settings_never_grant_aliased_cargo_home() {
+    let (_tmp, main) = main_checkout();
+    let (_tmp2, root) = real_tmp();
+    let run = root.join("run");
+    let slot = run.join(format!("cargo-slots-{}", uid()));
+    std::fs::create_dir_all(&slot).unwrap();
+    let link = root.join("cargo-link");
+    std::os::unix::fs::symlink(&slot, &link).unwrap();
+    let run_s = run.to_string_lossy().into_owned();
+    let link_s = link.to_string_lossy().into_owned();
+    let settings = {
+        let _env = crate::test_env::EnvVarsGuard::set(&[
+            ("XDG_RUNTIME_DIR", run_s.as_str()),
+            ("CARGO_HOME", link_s.as_str()),
+        ]);
+        crate::session::claude_contained_settings_json(&contained_write_roots(&main)).unwrap()
+    };
+    let allowed = allow_write(&settings);
+    for dir in [&slot, &link] {
+        assert!(
+            allowed.iter().all(|e| !under(e, dir)),
+            "the settings let Bash write CARGO_HOME ({}): {allowed:?}",
+            dir.display()
+        );
+    }
+}
+
+/// TASK-2772 (review F2): the production os_wrap launch rw-binds the slot
+/// pair and binds CARGO_HOME read-only only; live, the wrapped program writes
+/// a slot and cannot write CARGO_HOME.
+#[test]
+fn task_2772_os_wrapped_launch_binds_slots_rw_and_cargo_home_ro() {
+    if !bwrap_usable() {
+        eprintln!("SKIP (bwrap cannot create a user namespace here)");
+        return;
+    }
+    let (_tmp, main) = main_checkout();
+    let (_tmp2, root) = real_tmp();
+    let run = root.join("run");
+    let slot = run.join(format!("cargo-slots-{}", uid()));
+    let cargo_home = root.join("cargo");
+    std::fs::create_dir_all(cargo_home.join("bin")).unwrap();
+    std::fs::create_dir_all(&run).unwrap();
+    let run_s = run.to_string_lossy().into_owned();
+    let cargo_s = cargo_home.to_string_lossy().into_owned();
+    let script = format!(
+        "echo ok > '{slot}/lock' && ! (echo x > '{cargo}/bin/x') 2>/dev/null",
+        slot = slot.display(),
+        cargo = cargo_home.display()
+    );
+    let (program, args) = {
+        let _env = crate::test_env::EnvVarsGuard::set(&[
+            ("AIDA_OS_WRAP", "1"),
+            ("XDG_RUNTIME_DIR", run_s.as_str()),
+            ("CARGO_HOME", cargo_s.as_str()),
+        ]);
+        crate::session::os_wrapped_program_and_args(&main, "sh", vec!["-c".to_string(), script])
+            .unwrap()
+    };
+    assert_eq!(program, "bwrap");
+    let slot_s = slot.to_string_lossy().into_owned();
+    let rw_bound = |path: &str| {
+        args.windows(3)
+            .any(|w| (w[0] == "--bind" || w[0] == "--bind-try") && w[1] == path && w[2] == path)
+    };
+    assert!(rw_bound(&slot_s), "slot not rw-bound: {args:?}");
+    assert!(
+        args.windows(2)
+            .all(|w| !((w[0] == "--bind" || w[0] == "--bind-try")
+                && Path::new(&w[1]).starts_with(&cargo_home))),
+        "CARGO_HOME rw-bound: {args:?}"
+    );
+    assert!(
+        args.windows(3)
+            .any(|w| w[0] == "--ro-bind-try" && w[1] == cargo_s),
+        "CARGO_HOME not bound read-only: {args:?}"
+    );
+
+    let out = Command::new(&program).args(&args).output().unwrap();
+    assert!(
+        out.status.success(),
+        "wrapped launch: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(slot.join("lock").exists(), "the slot write did not land");
+    assert!(!cargo_home.join("bin/x").exists(), "CARGO_HOME was written");
 }

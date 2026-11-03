@@ -5184,7 +5184,19 @@ pub(crate) fn os_wrap_rw_paths(worktree_root: &Path) -> Result<Vec<PathBuf>> {
             paths.extend(crate::seat_clone::seat_extra_write_paths(&clone));
             paths
         }
-        None => vec![worktree_root.join(".aida-store")],
+        // TASK-2772: the same validated cargo slot pair the contained
+        // settings grant, or the outer bwrap keeps them read-only and the
+        // inner sandbox cannot reopen them. Never for a seat clone.
+        // trace:TASK-2772 trace:BUG-2418 | ai:claude
+        None => {
+            let mut paths = vec![worktree_root.join(".aida-store")];
+            for path in crate::contained_boundary::lane_build_write_paths() {
+                if !paths.contains(&path) {
+                    paths.push(path);
+                }
+            }
+            paths
+        }
     };
     // trace:BUG-2218 | ai:codex
     let main = crate::main_worktree_root_from(worktree_root);
@@ -5394,6 +5406,17 @@ pub(crate) fn os_wrapped_program_and_args(
     // instead of letting the drain die on a cryptic `uid map: Permission denied`.
     bwrap_preflight()?;
     let rw_paths = os_wrap_rw_paths(worktree_root)?;
+    // TASK-2772: `--bind-try` skips a missing directory, which would leave a
+    // first-use slot read-only inside the wrapper. Create the validated slot
+    // pair (0700) first; best-effort, it never widens the boundary.
+    // trace:TASK-2772 | ai:claude
+    if crate::seat_clone::host_recorded_clone(worktree_root).is_none() {
+        for slot in crate::contained_boundary::lane_build_write_paths() {
+            if rw_paths.contains(&slot) {
+                let _ = create_private_dir_all(&slot);
+            }
+        }
+    }
     // STORY-617: opt-in strict read-confinement. Default-ABSENT => empty =>
     // `bwrap_confinement_args_inner` falls back to the unchanged `--ro-bind / /`.
     let read_allowlist = contained_read_allowlist(worktree_root);
@@ -5439,6 +5462,19 @@ pub(crate) fn os_wrapped_program_and_args(
     full.push(program.to_string());
     full.extend(claude_args);
     Ok(("bwrap".to_string(), full))
+}
+
+/// `mkdir -p` with mode 0700 for every directory it creates.
+// trace:TASK-2772 | ai:claude
+fn create_private_dir_all(path: &Path) -> std::io::Result<()> {
+    let mut builder = std::fs::DirBuilder::new();
+    builder.recursive(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::DirBuilderExt;
+        builder.mode(0o700);
+    }
+    builder.create(path)
 }
 
 /// Run a trivial `bwrap … true` to confirm bubblewrap can actually create the

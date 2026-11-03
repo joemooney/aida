@@ -349,6 +349,10 @@ fn bug_1929_linked_worktree_grants_its_own_main_only() {
         ],
     );
 
+    // The cargo-slot grant reads XDG_RUNTIME_DIR and CARGO_HOME: hold the env
+    // lock so a sibling test pinning them cannot change them between the
+    // render and the expectation. trace:BUG-2418 | ai:claude
+    let env_lock = crate::test_env::env_lock();
     let (json, settings) = launch_settings(&[worktree.clone()]);
     let mut expected = vec![
         format!("/{}", main.join(".aida-store").display()),
@@ -368,6 +372,7 @@ fn bug_1929_linked_worktree_grants_its_own_main_only() {
             expected.push(entry);
         }
     }
+    drop(env_lock);
     assert_eq!(allow_write(&settings), expected, "{json}");
     assert_eq!(
         deny_write(&settings),
