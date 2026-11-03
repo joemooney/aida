@@ -11,7 +11,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-03T13:49:30.195676116Z
-modified_at: 2026-11-03T15:02:19.125999355Z
+modified_at: 2026-11-03T19:05:27.944226651Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -63,6 +63,12 @@ comments:
   created_at: 2026-11-03T15:00:45.491350753Z
   modified_at: 2026-11-03T15:00:45.491350753Z
   session_id: f5eddefe-032d-4760-94ba-3a318cf3d1d1
+- id: 01a1a2cd-5488-7211-8a25-d5ecc2d74e1a
+  author: joe
+  content: 'ADVISOR RULING (2026-11-03 12:00, round 3): PR #3296 was approved at b1a0d843 but now conflicts with main. This round only: merge origin/main into the PR branch and resolve the conflicts so the approved behavior is preserved. Make no other changes. LIGHT gate: one targeted cargo test -p aida-cli-lib --lib dev_build plus make check-ci-fast (run it with umask 022; see BUG-2432). Push, then stop.'
+  created_at: 2026-11-03T19:05:27.944226651Z
+  modified_at: 2026-11-03T19:05:27.944226651Z
+  session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
 history:
 - id: 01a1a1ad-cb23-70d0-8689-8418a67dbdf6
   author: aida-session-start
