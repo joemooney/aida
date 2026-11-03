@@ -32,7 +32,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T00:54:49.371776631Z
-modified_at: 2026-11-03T02:38:43.204795123Z
+modified_at: 2026-11-03T02:39:22.816215929Z
 req_type: Story
 tags:
 - architecture
@@ -475,6 +475,26 @@ comments:
   content: 'ADVISOR RULING (19:40 MST), TASK-2707 PR1 receipt question: R-a APPROVED. PR1 adds ContainmentReceipt, pinned to the actual worker (namespace identity, host-side uid_map 1:1, policy SHA). containment_applied() is true for Codex ONLY with a receipt; posture=aida with no receipt refuses the launch. Claude keeps today''s behaviour as an explicitly named ClaudeNative arm until PR3 replaces it with a receipt (C12/M1). Add a ratchet test: no Codex arm returns applied without a receipt. R-b rejected: it changes Claude lanes'' mailbox and AIDA_CONTAINED behaviour before PR3.'
   created_at: 2026-11-03T02:38:43.204795123Z
   modified_at: 2026-11-03T02:38:43.204795123Z
+  session_id: 125337a4-7dd3-483b-9c56-3665173938ae
+- id: 01a19f46-8ac0-7be1-a928-5a70ada8c309
+  author: joe
+  content: |-
+    CODEX IMPLEMENTER BRIEF: STORY-2238 PR1 (headless contained Codex, carried by TASK-2707). Advisor, 2026-11-02 19:45 MST.
+    A Claude host lane started this and was stopped by a model safety classifier (the TASK-2706 precedent). You continue in /home/joe/ai/aida-task2707-pr1 (branch task-2707-pr1).
+
+    START FROM: two untracked files the Claude lane wrote and smoke-tested on this host: aida-cli-lib/src/containment/contained_lane.py (in-lane shim: relay helper, seccomp filter, seat preflight, exec) and contained_host.py (child-only session keyring, exact-env bwrap spawn, host-side uid_map identity check, F-a broker, CONNECT proxy, receipt). The manual bwrap smoke test passed: the relay is reachable only via the broker, other loopback ports get ECONNREFUSED, host D-Bus gets EACCES, UDP is denied, and the receipt is written. The no-broker positive control connects to D-Bus and allows UDP.
+
+    BINDING RULINGS (aida comment list STORY-2238): the 07:40 signoff plus C1-C12, the 19:30 forks ruling (F-a, G-i, python3 -I -S shim from /usr/bin/python3 only), and the 19:40 R-a ruling (ContainmentReceipt; Codex is applied only with a receipt; Claude keeps a named ClaudeNative arm until PR3; ratchet test).
+
+    REMAINING WORK (PR1 only; no PR2/PR3):
+    1. containment/launch.rs: the Rust launcher that embeds both .py files (include_str!) and spawns the host side with an exact --clearenv allow-list. The API key travels only as the vendor env var.
+    2. session.rs wiring: containment_applied() takes the receipt (R-a).
+    3. Tests (task_2707_ prefix): registry_and_launch_tokens_absent_in_outer_and_inner (the key is also absent from the lease, store, receipts and logs); host_dbus_and_codex_daemon_socket_unreachable WITH a positive control; the F-a tests (a) relay reachable, (b) any other 127.0.0.1 port refused with a positive control, (c) a racing sockaddr rewrite still reaches only the relay; the R-a ratchet; a named refusal for ChatGPT auth.json. Live tests skip only without userns/bwrap.
+    4. PR body: map every item to file:line and test; label host-witnessed evidence separately; the live authenticated run is PENDING (it needs an operator API key).
+
+    GATE (LIGHT): AIDA_CARGO_TIMEOUT=40m cargo test --profile agent -p aida-cli-lib --lib task_2707_ plus make check-ci-fast. If .git is read-only in your sandbox, do NOT try to work around it: leave the diff in the worktree, write DONE plus your gate output to .aida-lane-report.md at the worktree root, and stop. The advisor host-commits it (the TASK-2706 arrangement). If a design choice is not settled by the rulings, write it as a FORK in that report and stop instead of guessing.
+  created_at: 2026-11-03T02:39:22.816215929Z
+  modified_at: 2026-11-03T02:39:22.816215929Z
   session_id: 125337a4-7dd3-483b-9c56-3665173938ae
 history:
 - id: 01a1949a-3f43-7b12-bc6b-0d5bf40ee2f2
