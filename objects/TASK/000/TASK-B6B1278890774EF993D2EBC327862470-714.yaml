@@ -14,13 +14,20 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-02T16:23:31.327068915Z
-modified_at: 2026-11-02T16:23:31.327068915Z
+modified_at: 2026-11-03T02:16:15.095636243Z
 req_type: Task
 tags:
 - carried-from:TASK-2759
 - finding-hash:5591d6c8
 - from-review:PR-3264
 - kind:carried-forward
+comments:
+- id: 01a19f31-5df7-7232-9ea7-a8ab6a8fa002
+  author: joe
+  content: 'Advisor ruling (10-28 rule-once): accepted, not fixed. No const/static GRANT_ENV alias exists in-tree, and the sibling TASK-1752 guard already covers let|const|static over the same files; STORY-2326''s env-clear allowlist supersedes both scans.'
+  created_at: 2026-11-03T02:16:15.095636243Z
+  modified_at: 2026-11-03T02:16:15.095636243Z
+  session_id: 125337a4-7dd3-483b-9c56-3665173938ae
 history:
 - id: 01a19d56-730e-7ce2-9cbc-ea06b2393818
   author: joe
