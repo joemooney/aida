@@ -683,10 +683,25 @@ fn every_unattributable_job_is_refused_with_its_code_and_never_runs() {
         "advisor",
         &[key.as_str()],
     );
+    // BUG-2419: LIVE_PID with a live start, but taken in another pid
+    // namespace: it names some other process here and must not pass as
+    // holder-live. // trace:STORY-2338 | ai:claude
+    let foreign_token = "proc:4242@pidns-4026532999/100";
+    let foreign = grant(
+        "abababab-0000-4000-8000-00000000000a",
+        "advisor",
+        &[foreign_token],
+    );
     let expired = "88888888-0000-4000-8000-000000000008";
     let revoked = "99999999-0000-4000-8000-000000000009";
     let p = probes(
-        &[adv.clone(), dead.clone(), imp.clone(), keyed.clone()],
+        &[
+            adv.clone(),
+            dead.clone(),
+            imp.clone(),
+            keyed.clone(),
+            foreign.clone(),
+        ],
         &[
             (expired, GrantRejection::Expired { at: now }),
             (revoked, GrantRejection::Revoked { at: now }),
@@ -724,6 +739,11 @@ fn every_unattributable_job_is_refused_with_its_code_and_never_runs() {
     add(
         "dead-holder",
         submitter(&dead, "proc:9999@1", &root, "s"),
+        "refused:not-live",
+    );
+    add(
+        "foreign-pid-ns",
+        submitter(&foreign, foreign_token, &root, "s"),
         "refused:not-live",
     );
     let mut s = base();

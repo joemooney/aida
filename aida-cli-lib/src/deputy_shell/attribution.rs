@@ -279,7 +279,17 @@ pub(crate) fn verdict(
         .binding
         .iter()
         .filter_map(|t| crate::gate::seat_authority::binding_process(t))
-        .any(|(pid, start)| (probes.alive)(pid, start));
+        // BUG-2419: a pid bound in another pid namespace names some other
+        // process here, so only a token taken in the runner's own namespace
+        // (unqualified, or qualified with it) is probed. A foreign one is not
+        // a live holder and falls through to the Q5 heartbeat path.
+        // trace:STORY-2338 | ai:claude
+        .filter(|(_, ns, _)| {
+            ns.is_none_or(|ns| {
+                crate::gate::review_authority::origin_pid_ns().as_deref() == Some(ns)
+            })
+        })
+        .any(|(pid, _, start)| (probes.alive)(pid, start));
     if process_live {
         checks.push("holder-live".to_string());
         return Ok(checks);
