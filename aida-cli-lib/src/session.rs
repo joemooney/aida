@@ -6617,6 +6617,14 @@ pub(crate) fn stamp_lease_active_pid_at(
         if let Some(start_time) = &start_time {
             doc["active_pid_start_time"] = value(start_time.clone());
         }
+        // BUG-2419: the pid was read in this process's pid namespace.
+        // trace:BUG-2419 | ai:claude
+        match crate::gate::review_authority::origin_pid_ns() {
+            Some(ns) => doc["active_pid_ns"] = value(ns),
+            None => {
+                doc.remove("active_pid_ns");
+            }
+        }
         // STORY-1429: atomic, so a reader never sees a half-rewritten lease.
         // trace:STORY-1429 | ai:claude
         aida_core::write_atomic(&path, doc.to_string())
@@ -6625,11 +6633,12 @@ pub(crate) fn stamp_lease_active_pid_at(
     // BUG-1918: the spawned worker — not the launcher that claimed — works
     // this lease; record its process as one of the lease's authors so the
     // ledger outlives the lease.
-    // trace:BUG-1918 | ai:claude
+    // A pid read inside a sandbox's pid namespace is qualified with it.
+    // trace:BUG-1918 trace:BUG-2419 | ai:claude
     crate::gate::review_authority::record_lease_identity(
         project_root,
         lease_id,
-        &[crate::gate::review_authority::process_token(
+        &[crate::gate::review_authority::author_process_token(
             "proc",
             pid,
             start_time.as_deref(),
