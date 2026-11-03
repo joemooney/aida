@@ -3152,6 +3152,9 @@ fn run_add(
                     if aida_core::allocation_authority::resolve(store_path)?.authoritative {
                         pull_store_before_id_allocation(store_path, &project_dir)?;
                     }
+                    // The node and agreed ID a delegated block dispensed for
+                    // this add, so a refused save hands it back (BUG-2420).
+                    let mut delegated_spent: Option<(String, String)> = None;
                     if id_policy.uses_blocks() {
                         let node_id = load_node_id(store_path);
                         let blocks_path = store_path.join("registry").join("blocks.yaml");
@@ -3463,6 +3466,12 @@ fn run_add(
                                                             &["registry/blocks.yaml"],
                                                         );
                                                     }
+                                                    if delegated_idx.is_some() {
+                                                        delegated_spent = Some((
+                                                            node_id.clone(),
+                                                            agreed_id.clone(),
+                                                        ));
+                                                    }
                                                     req.agreed_id = Some(agreed_id.clone());
                                                     // An unbound (legacy single-node) store uses the
                                                     // agreed ID as the spec_id too. A bound clone keeps
@@ -3502,7 +3511,30 @@ fn run_add(
                     // faster end-to-end median at full scale). This also removes the
                     // redundant second `write_object` (GitBackend::add_requirement
                     // already writes it). trace:TASK-856 | ai:claude
-                    let added = backend.add_requirement(req.clone())?;
+                    // A save refused after a delegated block dispensed its ID
+                    // (admission, a full disk) returns the ID to the block, so
+                    // `next` never runs ahead of the objects it vouches for.
+                    // trace:BUG-2420 | ai:claude
+                    let added = match backend.add_requirement(req.clone()) {
+                        Ok(added) => added,
+                        Err(e) => {
+                            if let Some((node, agreed_id)) = &delegated_spent {
+                                match aida_core::allocation_authority::release_undelivered(
+                                    store_path, node, agreed_id,
+                                ) {
+                                    Ok(true) => eprintln!(
+                                        "{} {agreed_id} was returned to this clone's block; nothing was filed.",
+                                        "Note:".dimmed(),
+                                    ),
+                                    Ok(false) => {}
+                                    Err(release) => eprintln!(
+                                        "Warning: could not return {agreed_id} to this clone's block: {release:#}"
+                                    ),
+                                }
+                            }
+                            return Err(e);
+                        }
+                    };
 
                     {
                         let last = &added;

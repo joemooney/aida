@@ -402,11 +402,15 @@ children, a child outside its parent, a type mismatch, an unknown parent, a
 cycle, or a root pool not held by the root are listed as conflicts and never
 resolved automatically. A clone may spend a block only when the block is bound
 to its node and the block's pool chain reaches a root pool held by the root.
-Off the root, the block's pool must also be homed on the declared upstream.
-Only that immediate parent pool's `home_ref` is checked against the upstream
-for now; the home refs of pools further up the chain are not yet matched
-against the upstream's own upstream. A block that merely appears in an imported
-store is never spendable.
+Off the root, the block's pool must also be homed on the declared upstream,
+and the identical claim must be recorded on that pool's home ref (this clone's
+remote-tracking copy, so a ref fetched from a bundle counts); a hub pool's claim
+must be on its hub's store ref. Only that immediate parent pool's home is
+checked for now; the home refs of pools further up the chain are not yet
+matched against the upstream's own upstream. A claim that was never pushed to
+its home, or that merely appears in an imported store, is never spendable. An
+ID already dispensed from a block stays admitted when it is saved, including
+the block's final ID, and an ID whose save is refused returns to the block.
 
 When blocks are configured but this clone cannot use one, `aida add` issues a
 node-local ID and prints the reason once per session: no upstream, no block

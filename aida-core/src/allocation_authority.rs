@@ -578,11 +578,15 @@ fn single_hub_blocks(root: &Path) -> Result<Option<(String, Vec<crate::node::Agr
 // remote-creds-ok(TASK-2001): reads the local remote-tracking ref only; no network
 fn hub_ref_blocks(root: &Path, remote: &str) -> Result<Vec<crate::node::AgreedIdBlock>> {
     let branch = crate::git_ops::current_branch(root).unwrap_or_else(|_| "aida-store".to_string());
+    ref_blocks(root, &format!("refs/remotes/{remote}/{branch}"))
+}
+
+/// The block claims `git_ref`'s `registry/blocks.yaml` records; empty when
+/// the ref or the file does not exist.
+// remote-creds-ok(TASK-2001): reads a local ref only; no network
+fn ref_blocks(root: &Path, git_ref: &str) -> Result<Vec<crate::node::AgreedIdBlock>> {
     let out = crate::git_ops::host_git_command(root)
-        .args([
-            "show",
-            &format!("refs/remotes/{remote}/{branch}:registry/blocks.yaml"),
-        ])
+        .args(["show", &format!("{git_ref}:registry/blocks.yaml")])
         .output()?;
     if !out.status.success() {
         return Ok(Vec::new());
@@ -631,6 +635,7 @@ fn with_lineage_view_of<T>(
     let root_record = RootRecord::load(root)?;
     let hub = single_hub_blocks(root)?;
     let hub_remotes = hub_remotes(root)?;
+    let home_claims = home_claims(root, mode, &pools.pools)?;
     let view = LineageView {
         pools: &pools.pools,
         blocks,
@@ -640,6 +645,7 @@ fn with_lineage_view_of<T>(
         upstream: mode.upstream.as_deref(),
         hub: hub.as_ref().map(|(hub, on_hub)| HubSpend { hub, on_hub }),
         hub_remotes: &hub_remotes,
+        home_claims: &home_claims,
     };
     Ok(f(&view))
 }
@@ -661,6 +667,37 @@ fn hub_remotes(root: &Path) -> Result<Vec<crate::allocation_lineage::HubReach>> 
             hub: h.name.clone(),
             remote,
             on_hub,
+        });
+    }
+    Ok(out)
+}
+
+/// The claims each generic pool home ref on this clone's upstream records
+/// (its remote-tracking copy, so a ref carried in by bundle counts and no
+/// network is touched). Empty on the root and without an upstream.
+// trace:BUG-2421 | ai:claude
+fn home_claims(
+    root: &Path,
+    mode: &AllocationMode,
+    pools: &[crate::allocation_lineage::PoolRecord],
+) -> Result<Vec<crate::allocation_lineage::HomeClaims>> {
+    let Some(upstream) = mode.upstream.as_deref() else {
+        return Ok(Vec::new());
+    };
+    if mode.role != AllocationRole::Node {
+        return Ok(Vec::new());
+    }
+    let mut out: Vec<crate::allocation_lineage::HomeClaims> = Vec::new();
+    for pool in pools {
+        if crate::allocation_lineage::promoted_hub(pool).is_some()
+            || crate::allocation_lineage::home_remote(&pool.home_ref) != upstream
+            || out.iter().any(|h| h.home_ref == pool.home_ref)
+        {
+            continue;
+        }
+        out.push(crate::allocation_lineage::HomeClaims {
+            home_ref: pool.home_ref.clone(),
+            on_ref: ref_blocks(root, &format!("refs/remotes/{}", pool.home_ref))?,
         });
     }
     Ok(out)
@@ -740,25 +777,60 @@ pub fn delegated_block_in(
     })
 }
 
+/// `TYPE-N` split into its alphabetic type and sequence number.
+fn agreed_parts(agreed_id: &str) -> Option<(&str, u32)> {
+    let (prefix, seq) = agreed_id.trim().rsplit_once('-')?;
+    let seq = seq.parse::<u32>().ok()?;
+    (!prefix.is_empty() && prefix.chars().all(|c| c.is_ascii_alphabetic())).then_some((prefix, seq))
+}
+
 /// Whether `agreed_id` lies inside a delegated block this non-root clone may
 /// spend (same type, within the block's range, below its `next`). The one
 /// way a non-root clone may write a bare agreed ID.
 // trace:STORY-B6B1278890774EF993D2EBC327862470-105 | ai:claude
 fn dispensed_from_delegated_block(root: &Path, node: &str, agreed_id: &str) -> Result<bool> {
-    let Some((prefix, seq)) = agreed_id.trim().rsplit_once('-') else {
+    let Some((prefix, seq)) = agreed_parts(agreed_id) else {
         return Ok(false);
     };
-    let Ok(seq) = seq.parse::<u32>() else {
-        return Ok(false);
-    };
-    if prefix.contains('-') || !prefix.chars().all(|c| c.is_ascii_alphabetic()) {
-        return Ok(false);
-    }
     let mode = resolve(root)?;
+    // The block that dispensed this ID, judged on its claim's authority
+    // only: the final ID exhausts the block as it is dispensed, so future
+    // spendability would refuse the very save it was dispensed for.
+    // trace:BUG-2420 | ai:claude
     with_lineage_view(root, node, &mode, |view| {
-        view.spendable_block(prefix).is_ok_and(|i| {
-            let b = &view.blocks[i];
-            b.range_start <= seq && seq < b.next
+        view.dispensed_block(prefix, seq).is_some()
+    })
+}
+
+/// Return an agreed ID dispensed from this node's delegated block whose
+/// object was never saved, so no ID is silently burned: `next` steps back
+/// to `agreed_id` only while it still sits just past it (no later dispense
+/// under the same locks). Returns whether the block was rewound. The write
+/// changes nothing but that one block's `next` cursor.
+// trace:BUG-2420 | ai:claude
+pub fn release_undelivered(root: &Path, node: &str, agreed_id: &str) -> Result<bool> {
+    let Some((prefix, seq)) = agreed_parts(agreed_id) else {
+        return Ok(false);
+    };
+    let path = root.join("registry/blocks.yaml");
+    crate::db::with_store_write_lock(root, || {
+        crate::node::BlockRegistry::with_dispense_lock(&path, || {
+            let mut registry = crate::node::BlockRegistry::load(&path)?;
+            let Some(block) = registry.blocks.iter_mut().find(|b| {
+                b.node_id == node
+                    && b.type_prefix.eq_ignore_ascii_case(&prefix)
+                    && b.range_start <= seq
+                    && seq <= b.range_end
+                    && b.next == seq.saturating_add(1)
+            }) else {
+                return Ok(false);
+            };
+            block.next = seq;
+            crate::write_atomic(&path, serde_yaml::to_string(&registry)?)?;
+            if !crate::git_ops::store_commit_deferred_to_host(root) {
+                let _ = crate::git_ops::add(root, &["registry/blocks.yaml"]);
+            }
+            Ok(true)
         })
     })
 }
@@ -1632,12 +1704,137 @@ mod tests {
             "pools:\n- pool_id: p-bug\n  type_prefix: BUG\n  range_start: 1\n  range_end: 1000\n  holder_node: R\n  home_ref: gitlab/aida-store\n",
         )
         .unwrap();
-        std::fs::write(
-            registry.join("blocks.yaml"),
-            "blocks:\n- node_id: '7'\n  owner: o\n  hostname: h\n  type_prefix: BUG\n  range_start: 101\n  range_end: 200\n  next: 102\n  allocated_at: 2026-10-31T00:00:00Z\n  pool_id: p-bug\n",
-        )
-        .unwrap();
+        let blocks = "blocks:\n- node_id: '7'\n  owner: o\n  hostname: h\n  type_prefix: BUG\n  range_start: 101\n  range_end: 200\n  next: 102\n  allocated_at: 2026-10-31T00:00:00Z\n  pool_id: p-bug\n";
+        std::fs::write(registry.join("blocks.yaml"), blocks).unwrap();
+        accept_on_home(dir.path(), "gitlab/aida-store", blocks);
         (dir, backend)
+    }
+
+    /// Record `blocks_yaml` as the claims the pool home `home_ref` accepted:
+    /// this clone's remote-tracking `refs/remotes/<home_ref>`, as a fetch or
+    /// a bundle carries it in.
+    // trace:BUG-2421 | ai:claude
+    fn accept_on_home(root: &Path, home_ref: &str, blocks_yaml: &str) {
+        use std::io::Write as _;
+        let git = |args: &[&str], input: Option<&str>| -> String {
+            let mut child = crate::test_git::git_command()
+                .args(["-c", "user.name=t", "-c", "user.email=t@t"])
+                .args(args)
+                .current_dir(root)
+                .stdin(std::process::Stdio::piped())
+                .stdout(std::process::Stdio::piped())
+                .spawn()
+                .unwrap();
+            if let Some(input) = input {
+                child
+                    .stdin
+                    .take()
+                    .unwrap()
+                    .write_all(input.as_bytes())
+                    .unwrap();
+            }
+            let out = child.wait_with_output().unwrap();
+            assert!(out.status.success(), "git {args:?}");
+            String::from_utf8(out.stdout).unwrap().trim().to_string()
+        };
+        let blob = git(&["hash-object", "-w", "--stdin"], Some(blocks_yaml));
+        let inner = git(
+            &["mktree"],
+            Some(&format!("100644 blob {blob}\tblocks.yaml\n")),
+        );
+        let tree = git(
+            &["mktree"],
+            Some(&format!("040000 tree {inner}\tregistry\n")),
+        );
+        let commit = git(&["commit-tree", &tree, "-m", "accepted claims"], None);
+        git(
+            &["update-ref", &format!("refs/remotes/{home_ref}"), &commit],
+            None,
+        );
+    }
+
+    fn agreed(root: &Path, agreed_id: &str) -> Result<()> {
+        let mut req = Requirement::new("x".into(), "fixture".into());
+        req.agreed_id = Some(agreed_id.into());
+        admit(root, std::slice::from_ref(&req), &[])
+    }
+
+    fn set_block(root: &Path, range_end: u32, next: u32) {
+        let path = root.join("registry/blocks.yaml");
+        let mut reg = crate::node::BlockRegistry::load(&path).unwrap();
+        reg.blocks[0].range_end = range_end;
+        reg.blocks[0].next = next;
+        std::fs::write(&path, serde_yaml::to_string(&reg).unwrap()).unwrap();
+        accept_on_home(
+            root,
+            "gitlab/aida-store",
+            &serde_yaml::to_string(&reg).unwrap(),
+        );
+    }
+
+    fn next_of(root: &Path) -> u32 {
+        crate::node::BlockRegistry::load(&root.join("registry/blocks.yaml"))
+            .unwrap()
+            .blocks[0]
+            .next
+    }
+
+    // The final ID of a delegated block exhausts it as it is dispensed; its
+    // save is still admitted (size one, and the last of size two).
+    // trace:BUG-2420 | ai:claude
+    #[test]
+    fn bug_2420_final_id_of_a_delegated_block_is_admitted() {
+        let (dir, _) = delegated_fixture();
+        set_block(dir.path(), 101, 102);
+        agreed(dir.path(), "BUG-101").expect("size-one block's only ID");
+        assert!(agreed(dir.path(), "BUG-102").is_err(), "outside the block");
+        set_block(dir.path(), 102, 103);
+        agreed(dir.path(), "BUG-101").unwrap();
+        agreed(dir.path(), "BUG-102").expect("final of a size-two block");
+        assert!(agreed(dir.path(), "BUG-103").is_err());
+        // Wrong home: an upstream the pool is not homed on admits nothing.
+        write_mode(dir.path(), AllocationRole::Node, Some("origin")).unwrap();
+        assert!(agreed(dir.path(), "BUG-102").is_err());
+    }
+
+    // A dispensed ID whose object was never saved goes back to the block,
+    // so `next` never runs ahead of the objects it vouches for.
+    // trace:BUG-2420 | ai:claude
+    #[test]
+    fn bug_2420_failed_save_returns_the_dispensed_id() {
+        let (dir, mut backend) = delegated_fixture();
+        set_block(dir.path(), 102, 103);
+        // BUG-102 was dispensed, then its save refused (an unbound clone
+        // cannot mint a global ID beside it): nothing was saved.
+        let mut req = Requirement::new("x".into(), "fixture".into());
+        req.spec_id = Some("BUG-102".into());
+        req.agreed_id = Some("BUG-102".into());
+        assert!(backend.add_requirement(req).is_err());
+        // Only the most recent dispense steps back: not an earlier ID, and
+        // not another node's.
+        assert!(!release_undelivered(dir.path(), "7", "BUG-101").unwrap());
+        assert!(!release_undelivered(dir.path(), "8", "BUG-102").unwrap());
+        assert_eq!(next_of(dir.path()), 103);
+        assert!(release_undelivered(dir.path(), "7", "BUG-102").unwrap());
+        assert_eq!(next_of(dir.path()), 102, "BUG-102 is dispensable again");
+        // And only once.
+        assert!(!release_undelivered(dir.path(), "7", "BUG-102").unwrap());
+        assert_eq!(next_of(dir.path()), 102);
+    }
+
+    // A generic-pool claim the home ref never recorded mints nothing.
+    // trace:BUG-2421 | ai:claude
+    #[test]
+    fn bug_2421_local_only_generic_claim_is_not_spendable() {
+        let (dir, _) = delegated_fixture();
+        assert_eq!(delegated_block(dir.path(), "BUG").unwrap(), Some(0));
+        // The home ref holds a different claim (or none at all).
+        accept_on_home(dir.path(), "gitlab/aida-store", "blocks: []\n");
+        assert_eq!(delegated_block(dir.path(), "BUG").unwrap(), None);
+        assert!(downgrade_reason(dir.path(), "BUG")
+            .unwrap()
+            .is_some_and(|r| r.contains("gitlab/aida-store")));
+        assert!(agreed(dir.path(), "BUG-101").is_err());
     }
 
     // trace:STORY-B6B1278890774EF993D2EBC327862470-105 | ai:claude

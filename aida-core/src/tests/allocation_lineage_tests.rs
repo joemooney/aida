@@ -226,6 +226,18 @@ fn view<'a>(
     role: AllocationRole,
     upstream: Option<&'a str>,
 ) -> LineageView<'a> {
+    // Every generic pool home ref has accepted every listed claim (the
+    // BUG-2421 tests below build views without that evidence).
+    let accepted: &'a [HomeClaims] = Box::leak(
+        pools
+            .iter()
+            .map(|p| HomeClaims {
+                home_ref: p.home_ref.clone(),
+                on_ref: blocks.to_vec(),
+            })
+            .collect::<Vec<_>>()
+            .into_boxed_slice(),
+    );
     LineageView {
         pools,
         blocks,
@@ -235,6 +247,7 @@ fn view<'a>(
         upstream,
         hub: None,
         hub_remotes: &[],
+        home_claims: accepted,
     }
 }
 
@@ -483,6 +496,7 @@ fn hub_view<'a>(
             on_hub,
         }),
         hub_remotes: &[],
+        home_claims: &[],
     }
 }
 
@@ -778,4 +792,185 @@ fn a_clone_of_the_granted_hub_claims_and_spends_inside_the_grant() {
         ..grant
     };
     assert_eq!(carve_block(&tiny, &pools, &blocks, 10), None);
+}
+
+// --- BUG-2420: the final dispensed ID of a block is still admitted ---
+
+fn dispensed(mut b: AgreedIdBlock, next: u32) -> AgreedIdBlock {
+    b.next = next;
+    b
+}
+
+// trace:BUG-2420 | ai:claude
+#[test]
+fn bug_2420_final_dispensed_id_is_admitted_after_the_block_exhausts() {
+    let pools = tree();
+    let r = root();
+    // Size one, its only ID dispensed: exhausted, yet that ID was issued.
+    let one = vec![dispensed(
+        block(LEAF, "BUG", 2001, 2001, Some("p-hub-bug")),
+        2002,
+    )];
+    let v = view(
+        &pools,
+        &one,
+        Some(&r),
+        LEAF,
+        AllocationRole::Node,
+        Some("gitlab"),
+    );
+    assert_eq!(
+        v.spendable_block("BUG"),
+        Err(Unusable::Exhausted("BUG".into()))
+    );
+    assert_eq!(v.dispensed_block("BUG", 2001), Some(0));
+    assert_eq!(v.dispensed_block("BUG", 2002), None, "past the range");
+    // Size two, both dispensed: the first and the final are admitted.
+    let two = vec![dispensed(
+        block(LEAF, "BUG", 2001, 2002, Some("p-hub-bug")),
+        2003,
+    )];
+    let v = view(
+        &pools,
+        &two,
+        Some(&r),
+        LEAF,
+        AllocationRole::Node,
+        Some("gitlab"),
+    );
+    assert_eq!(v.dispensed_block("bug", 2001), Some(0));
+    assert_eq!(v.dispensed_block("BUG", 2002), Some(0));
+    // Not yet dispensed is never admitted.
+    let half = vec![dispensed(
+        block(LEAF, "BUG", 2001, 2002, Some("p-hub-bug")),
+        2002,
+    )];
+    let v = view(
+        &pools,
+        &half,
+        Some(&r),
+        LEAF,
+        AllocationRole::Node,
+        Some("gitlab"),
+    );
+    assert_eq!(v.dispensed_block("BUG", 2001), Some(0));
+    assert_eq!(v.dispensed_block("BUG", 2002), None);
+}
+
+// trace:BUG-2420 | ai:claude
+#[test]
+fn bug_2420_exhausted_block_refusals_still_refuse() {
+    let pools = tree();
+    let r = root();
+    let spent = vec![dispensed(
+        block(LEAF, "BUG", 2001, 2001, Some("p-hub-bug")),
+        2002,
+    )];
+    // Wrong node: another node's dispensed ID is not this node's.
+    let v = view(
+        &pools,
+        &spent,
+        Some(&r),
+        HUB,
+        AllocationRole::Node,
+        Some("gitlab"),
+    );
+    assert_eq!(v.dispensed_block("BUG", 2001), None);
+    // Wrong home: the pool is not on the declared upstream.
+    let v = view(
+        &pools,
+        &spent,
+        Some(&r),
+        LEAF,
+        AllocationRole::Node,
+        Some("origin"),
+    );
+    assert_eq!(v.dispensed_block("BUG", 2001), None);
+    // Absent hub claim: a hub-stamped block never pushed to its hub.
+    let stamped = vec![dispensed(
+        block(LEAF, "BUG", 1, 1, Some("hub:github:BUG")),
+        2,
+    )];
+    let v = hub_view(&stamped, None, &[]);
+    assert_eq!(v.dispensed_block("BUG", 1), None);
+    let v = hub_view(&stamped, None, &stamped);
+    assert_eq!(
+        v.dispensed_block("BUG", 1),
+        Some(0),
+        "on the hub it is admitted"
+    );
+}
+
+// --- BUG-2421: a generic pool block needs its claim on the pool's home ref ---
+
+fn generic_view<'a>(
+    pools: &'a [PoolRecord],
+    blocks: &'a [AgreedIdBlock],
+    root: &'a RootRecord,
+    upstream: &'a str,
+    home_claims: &'a [HomeClaims],
+) -> LineageView<'a> {
+    LineageView {
+        pools,
+        blocks,
+        root: Some(root),
+        node: LEAF,
+        role: AllocationRole::Node,
+        upstream: Some(upstream),
+        hub: None,
+        hub_remotes: &[],
+        home_claims,
+    }
+}
+
+// trace:BUG-2421 | ai:claude
+#[test]
+fn bug_2421_generic_pool_block_without_accepted_claim_is_refused() {
+    let pools = tree();
+    let r = root();
+    let blocks = vec![block(LEAF, "BUG", 2001, 2100, Some("p-hub-bug"))];
+    let not_accepted = Err(Unusable::NotAccepted {
+        type_prefix: "BUG".into(),
+        home_ref: "gitlab/aida-store".into(),
+    });
+    // Absent claim: the home ref records nothing (local-only claim).
+    let v = generic_view(&pools, &blocks, &r, "gitlab", &[]);
+    assert_eq!(v.spendable_block("BUG"), not_accepted);
+    let empty = [HomeClaims {
+        home_ref: "gitlab/aida-store".into(),
+        on_ref: vec![],
+    }];
+    let v = generic_view(&pools, &blocks, &r, "gitlab", &empty);
+    assert_eq!(v.spendable_block("BUG"), not_accepted);
+    // Wrong claim: the home ref accepted a different range for this node.
+    let other = [HomeClaims {
+        home_ref: "gitlab/aida-store".into(),
+        on_ref: vec![block(LEAF, "BUG", 2001, 2050, Some("p-hub-bug"))],
+    }];
+    let v = generic_view(&pools, &blocks, &r, "gitlab", &other);
+    assert_eq!(v.spendable_block("BUG"), not_accepted);
+    // The claim accepted on some other ref vouches for nothing.
+    let elsewhere = [HomeClaims {
+        home_ref: "gitlab/other".into(),
+        on_ref: blocks.clone(),
+    }];
+    let v = generic_view(&pools, &blocks, &r, "gitlab", &elsewhere);
+    assert_eq!(v.spendable_block("BUG"), not_accepted);
+    // Wrong home: the immediate pool is not on the declared upstream.
+    let accepted = [HomeClaims {
+        home_ref: "gitlab/aida-store".into(),
+        on_ref: blocks.clone(),
+    }];
+    let v = generic_view(&pools, &blocks, &r, "origin", &accepted);
+    assert!(matches!(
+        v.spendable_block("BUG"),
+        Err(Unusable::WrongUpstream { .. })
+    ));
+    // Accepted on the home ref (fetched, or carried in by bundle): spends.
+    let v = generic_view(&pools, &blocks, &r, "gitlab", &accepted);
+    assert_eq!(v.spendable_block("BUG"), Ok(0));
+    // A dispensed ID of an unaccepted block is not admitted either.
+    let spent = vec![dispensed(blocks[0].clone(), 2002)];
+    let v = generic_view(&pools, &spent, &r, "gitlab", &[]);
+    assert_eq!(v.dispensed_block("BUG", 2001), None);
 }
