@@ -187,14 +187,17 @@ impl HeldGrant {
     }
 }
 
-/// PURE: the pid and start identity of a `proc:`/`sid:` binding token.
+/// PURE: the pid, pid namespace (`None` = unqualified) and start identity
+/// proper of a `proc:`/`sid:` binding token.
 // trace:BUG-B6B1278890774EF993D2EBC327862470-151 | ai:claude
-pub(crate) fn binding_process(token: &str) -> Option<(u32, &str)> {
+// trace:BUG-2419 | ai:claude
+pub(crate) fn binding_process(token: &str) -> Option<(u32, Option<&str>, &str)> {
     let rest = token
         .strip_prefix("proc:")
         .or_else(|| token.strip_prefix("sid:"))?;
     let (pid, start) = rest.split_once('@')?;
-    Some((pid.parse().ok()?, start))
+    let (ns, start) = crate::gate::review_authority::parse_pid_ns_start(start)?;
+    Some((pid.parse().ok()?, ns, start))
 }
 
 /// Read-only: every unexpired, unrevoked grant in `dir` for `seat`, its
@@ -232,7 +235,15 @@ pub(crate) fn held_grants_in(
                 .binding
                 .iter()
                 .filter_map(|t| binding_process(t))
-                .map(|(pid, start)| (pid, alive(pid, start)))
+                // BUG-2419: a pid bound in another pid namespace names some
+                // other process here, so it is never probed as alive.
+                // trace:BUG-2419 | ai:claude
+                .map(|(pid, ns, start)| {
+                    let here = ns.is_none_or(|ns| {
+                        crate::gate::review_authority::non_host_pid_ns().as_deref() == Some(ns)
+                    });
+                    (pid, here && alive(pid, start))
+                })
                 .collect(),
             id: g.id,
             seat: g.seat,
@@ -967,10 +978,15 @@ fn own_process_token() -> Option<String> {
 
 /// `proc:<pid>@<start>` for live process `pid`; `None` when its start
 /// identity cannot be read (a binding without one could never match).
+/// BUG-2419: qualified with this process's pid namespace exactly as a
+/// presenter qualifies its own tokens, so a grant bound inside a sandbox is
+/// presented there; on the host both sides stay unqualified.
 // trace:BUG-1934 | ai:claude
+// trace:BUG-2419 | ai:claude
 fn pid_binding_token(pid: u32) -> Option<String> {
-    let start = aida_core::liveness::process_start_identity(pid)?;
-    Some(crate::gate::review_authority::process_token(
+    let start =
+        aida_core::liveness::process_start_identity(pid).filter(|s| !s.trim().is_empty())?;
+    Some(crate::gate::review_authority::author_process_token(
         "proc",
         pid,
         Some(&start),
@@ -1938,7 +1954,11 @@ pub(crate) fn direct_issue_binding(
         p.start
             .as_deref()
             .filter(|s| !s.trim().is_empty() && p.pid > 1)
-            .map(|start| crate::gate::review_authority::process_token(kind, p.pid, Some(start)))
+            // BUG-2419: the presenter's namespace-qualified form.
+            // trace:BUG-2419 | ai:claude
+            .map(|start| {
+                crate::gate::review_authority::author_process_token(kind, p.pid, Some(start))
+            })
     };
     let shell = caller
         .chain
@@ -2021,7 +2041,9 @@ pub(crate) fn check_bind_target(
         .start
         .as_deref()
         .filter(|s| !s.trim().is_empty())
-        .map(|start| crate::gate::review_authority::process_token("proc", pid, Some(start)))
+        // BUG-2419: the presenter's namespace-qualified form.
+        // trace:BUG-2419 | ai:claude
+        .map(|start| crate::gate::review_authority::author_process_token("proc", pid, Some(start)))
         .with_context(|| format!("--bind-pid {pid}: the process start identity could not be read"))
 }
 
