@@ -18,16 +18,21 @@ description: |
 
   ## Out of scope
   Local models for coding agents in an air gap (see docs/what-is-aida.md, Air-gapped development).
+
+  ## Acceptance
+
+  - Resolved (2026-11-03, operator decision via `aida questions answer`): Bounded hardening first — Repair final-slot admission and the generic claim-evidence gap, clarify direct root-to-hub scope, and add two-hub bundle regression coverage; defer recursive delegation and replenishment design.
 status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-31T19:23:12.694681525Z
-modified_at: 2026-11-03T02:43:14.722997587Z
+modified_at: 2026-11-03T02:43:42.670928842Z
 req_type: Spike
 tags:
 - air-gap
 - id-allocation
+- spike708:bounded-hardening
 - spike:deliverable-produced
 relationships:
 - rel_type: Supersedes
@@ -560,6 +565,10 @@ history:
   - field_name: agreed_id
     old_value: ''
     new_value: SPIKE-708
+- id: 01a19f4a-bba2-7eb0-a784-6dca98501da3
+  author: joe
+  timestamp: 2026-11-03T02:43:57.474658450Z
+  changes: []
 filed_at:
   code_sha: 53817a25ee83981f919be3dbcee742234338ab9a
   branch: main
@@ -582,4 +591,6 @@ decision_request:
     resolution: tag:+spike708:deferred
   recommended: 0
   rationale: The direct bundle workflow already works through grant import, inside-hub claim ordering, non-final minting, return union, and overlap refusal. Bounded repairs address observed failures without prematurely expanding the authority model. Recursive grants require a separate reviewed design for offline ancestor acceptance and stable authority identity.
+  answered: 0
   asked_at: 2026-11-03T02:42:27.887807136Z
+  answered_at: 2026-11-03T02:43:42.670882161Z
