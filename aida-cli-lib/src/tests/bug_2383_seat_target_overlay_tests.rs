@@ -309,6 +309,30 @@ fn a_racing_gc_never_removes_a_generation_between_snapshot_and_pin() {
     assert!(complete(&no_build.dir));
 }
 
+// Strict review P3: a generation whose deps/ no longer matches its stored
+// manifest (one rlib deleted) is incomplete, so snapshot rebuilds it rather
+// than reusing it. trace:BUG-2383 | ai:claude
+#[test]
+fn a_generation_missing_an_rlib_is_rebuilt_not_reused() {
+    let tmp = tempfile::tempdir().unwrap();
+    let main = tmp.path();
+    let target = primary(main);
+    let sessions = main.join(".aida/sessions");
+    std::fs::create_dir_all(&sessions).unwrap();
+    std::fs::write(sessions.join("lease-d.toml"), "id = \"lease-d\"\n").unwrap();
+    let generation = snapshot(&target, "agent", "lease-d", Duration::from_secs(5)).unwrap();
+    assert!(complete(&generation.dir));
+    std::fs::remove_file(generation.dir.join("deps/libdep-1.rlib")).unwrap();
+    assert!(!complete(&generation.dir));
+    let rebuilt = snapshot(&target, "agent", "lease-d", Duration::from_secs(5)).unwrap();
+    assert_eq!(rebuilt, generation);
+    assert!(complete(&rebuilt.dir));
+    assert!(rebuilt.dir.join("deps/libdep-1.rlib").is_file());
+    // A manifest that does not parse is not reused either.
+    std::fs::write(rebuilt.dir.join(MANIFEST), "not json").unwrap();
+    assert!(!complete(&rebuilt.dir));
+}
+
 #[test]
 fn the_wrapper_mounts_then_execs_the_unchanged_bwrap_argv() {
     let ov = LaneOverlay {
@@ -678,10 +702,14 @@ fn bug_2383_bwrap_overlay_first_job_sees_a_prebuilt_dependency_as_fresh() {
     .unwrap();
     let main_target = root.join("target");
     let seat_target = main_target.join("worktrees/seat");
-    let host_env = crate::lane_job::scrub_host_env(
+    // CI sets CARGO_TERM_COLOR=always; the job's cargo output is matched
+    // as text, so colour is off in the environment every build here gets.
+    let mut host_env = crate::lane_job::scrub_host_env(
         std::env::vars_os()
             .filter_map(|(k, v)| Some((k.into_string().ok()?, v.into_string().ok()?))),
     );
+    host_env.retain(|(k, _)| k != "CARGO_TERM_COLOR");
+    host_env.push(("CARGO_TERM_COLOR".into(), "never".into()));
     // The primary builds with the same environment a job gets.
     let built = std::process::Command::new(&cargo)
         .args(["build", "--profile", "agent", "-v"])
@@ -759,9 +787,55 @@ fn bug_2383_bwrap_overlay_first_job_sees_a_prebuilt_dependency_as_fresh() {
     assert!(output.contains("seed: overlay gen="), "{output}");
     assert!(output.contains("on the lane's target overlay"), "{output}");
     assert!(
-        output
-            .lines()
-            .any(|l| l.trim_start().starts_with("Fresh fixture-dep")),
+        cargo_reports_fresh(&output, "fixture-dep"),
         "the pre-built dependency was not Fresh:\n{output}"
     );
+}
+
+/// `text` without ANSI CSI escape sequences (`ESC [ ... final-byte`).
+fn strip_ansi(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    let mut chars = text.chars();
+    while let Some(c) = chars.next() {
+        if c != '\u{1b}' {
+            out.push(c);
+            continue;
+        }
+        if chars.next() == Some('[') {
+            for c in chars.by_ref() {
+                if ('\u{40}'..='\u{7e}').contains(&c) {
+                    break;
+                }
+            }
+        }
+    }
+    out
+}
+
+/// Whether cargo's output names `krate` as `Fresh`, whatever its colour and
+/// column padding.
+// trace:BUG-2383 | ai:claude
+fn cargo_reports_fresh(output: &str, krate: &str) -> bool {
+    strip_ansi(output).lines().any(|l| {
+        let mut words = l.split_whitespace();
+        words.next() == Some("Fresh") && words.next() == Some(krate)
+    })
+}
+
+#[test]
+fn the_fresh_match_ignores_ansi_colour_and_padding() {
+    let ci = "\u{1b}[92m       Fresh\u{1b}[0m fixture-dep v0.1.0\n";
+    assert!(cargo_reports_fresh(ci, "fixture-dep"));
+    assert!(cargo_reports_fresh(
+        "  Fresh   fixture-dep v0.1.0",
+        "fixture-dep"
+    ));
+    assert!(!cargo_reports_fresh(
+        "\u{1b}[92m   Compiling\u{1b}[0m fixture-dep v0.1.0",
+        "fixture-dep"
+    ));
+    assert!(!cargo_reports_fresh(
+        "Fresh fixture-dep-extra v0.1.0",
+        "fixture-dep"
+    ));
 }

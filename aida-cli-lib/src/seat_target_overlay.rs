@@ -172,14 +172,21 @@ fn deps_manifest(deps: &Path) -> Vec<(String, u64, i64)> {
 }
 
 /// Whether `dir` is a complete generation: a real directory (not a
-/// symlink) holding every [`REQUIRED_DIRS`] entry and the manifest. A
-/// generation a collection removed half-way, or any other leftover, is not.
+/// symlink) holding every [`REQUIRED_DIRS`] entry and a manifest that
+/// still matches its `deps/` ([`deps_manifest`]). A generation a collection
+/// removed half-way, one missing a dependency file, or any other leftover,
+/// is not.
+// trace:BUG-2383 | ai:claude
 fn complete(dir: &Path) -> bool {
     std::fs::symlink_metadata(dir).is_ok_and(|m| m.is_dir())
         && REQUIRED_DIRS
             .iter()
             .all(|d| std::fs::symlink_metadata(dir.join(d)).is_ok_and(|m| m.is_dir()))
         && std::fs::symlink_metadata(dir.join(MANIFEST)).is_ok_and(|m| m.is_file())
+        && std::fs::read(dir.join(MANIFEST))
+            .ok()
+            .and_then(|b| serde_json::from_slice::<Vec<(String, u64, i64)>>(&b).ok())
+            .is_some_and(|recorded| recorded == deps_manifest(&dir.join("deps")))
 }
 
 /// Create (or reuse) the generation snapshot of `<main_target>/<profile>`
