@@ -28,6 +28,10 @@ pub(crate) use ready::required_checks;
 // The author's findings mail and the round-cap wake. trace:TASK-1945 | ai:claude
 #[path = "review_watch_notice.rs"]
 mod notice;
+// The watcher's one branch write: updating a stale head whose author is
+// gone, else routing it to the advisor. trace:BUG-2426 | ai:claude
+#[path = "review_watch_update.rs"]
+mod update;
 
 #[derive(Args, Debug)]
 pub struct ReviewWatchArgs {
@@ -350,6 +354,14 @@ struct Entry {
     // The last readiness report, for display only: never authority.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     readiness: Option<Reported>,
+    // The branch update the watcher requested for a stale overlapping head.
+    // trace:BUG-2426 | ai:claude
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    update: Option<update::BranchUpdate>,
+    // Why the current head is parked (skipped and not reviewed), since when:
+    // what `aida awaiting` lists. Display only. trace:BUG-2426 | ai:claude
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    skipped: Option<Reported>,
 }
 impl Entry {
     fn is_empty(&self) -> bool {
@@ -359,6 +371,8 @@ impl Entry {
             && self.findings.is_empty()
             && self.cap.is_none()
             && self.readiness.is_none()
+            && self.update.is_none()
+            && self.skipped.is_none()
     }
 }
 /// One readiness report: the head it judged, the verdict line, and when.
@@ -1119,6 +1133,18 @@ fn validate_state(state: &State, repository: &str) -> Result<()> {
                 )),
             "invalid review-watch findings receipt"
         );
+        // trace:BUG-2426 | ai:claude
+        anyhow::ensure!(
+            entry
+                .update
+                .as_ref()
+                .is_none_or(update::BranchUpdate::valid)
+                && entry
+                    .skipped
+                    .as_ref()
+                    .is_none_or(|r| valid_sha(&r.head) && r.line.len() <= DIAGNOSTIC_LIMIT),
+            "invalid review-watch branch update or skip record"
+        );
     }
     Ok(())
 }
@@ -1179,6 +1205,10 @@ fn select(
         // and keeping one per stale head grew to the 256 cap and then failed
         // every transaction for the change. trace:TASK-1955 | ai:claude (TASK-2064)
         entry.notices.retain(|head, _| *head == change.head);
+        // trace:BUG-2426 | ai:claude
+        if entry.update.as_ref().is_some_and(|u| u.head != change.head) {
+            entry.update = None;
+        }
         let history = store.history(&key)?;
         store.retain(&key, history.blocking_keys())?;
         if overlap {
@@ -1191,7 +1221,7 @@ fn select(
             // ID), so a retry re-delivers that exact message idempotently; one
             // recorded before notices named the base still matches its
             // template. trace:TASK-1993 | ai:claude
-            if notice.sent { return Ok(Action::Skip("stale overlapping head already notified".into())); }
+            if notice.sent { return Ok(Action::Skip(update::STALE_NOTIFIED.into())); }
             let recorded = serde_json::to_value(&notice.message)?;
             // A notice recorded before recipients were mapped went to the
             // forge login itself. trace:TASK-1955 | ai:claude (TASK-1-410)
@@ -1255,7 +1285,7 @@ fn probe_unneeded(store: &Store, change: &forge::Change) -> Result<Option<String
             return Ok(None);
         };
         if entry.notices.get(head).is_some_and(|n| n.sent) {
-            return Ok(Some("stale overlapping head already notified".to_string()));
+            return Ok(Some(update::STALE_NOTIFIED.to_string()));
         }
         Ok(entry
             .attempts
@@ -2067,14 +2097,38 @@ fn watch_change(
     // A reviewed head is reported on, and needs no base probe to be skipped.
     // trace:TASK-1945 | ai:claude
     let live = ready::Live { root, repo };
+    // A notified stale head whose author is gone gets its branch updated, or
+    // is routed to the advisor, instead of waiting forever.
+    // trace:BUG-2426 | ai:claude
+    if let Some(reason) = update::follow_up(
+        root,
+        store,
+        &change,
+        &|c| update::author_live(root, c),
+        &|c| update::forge_update(root, repo, c),
+    )? {
+        eprintln!("{key}: {reason}");
+        record_skip(store, &change, Some(&reason))?;
+        return report(root, store, &change, &live);
+    }
     // trace:TASK-1955 | ai:claude (TASK-2064, TASK-1-411)
     if let Some(reason) = probe_unneeded(store, &change)? {
         eprintln!("{key}: {reason}");
+        record_skip(store, &change, Some(&reason))?;
         return report(root, store, &change, &live);
     }
     repo.probe(root, &mut change)
         .context("base evidence refused")?;
-    match select(store, &change, args.vendor.clone(), args.max_concurrent)? {
+    let action = select(store, &change, args.vendor.clone(), args.max_concurrent)?;
+    record_skip(
+        store,
+        &change,
+        match &action {
+            Action::Skip(reason) => Some(reason.as_str()),
+            _ => None,
+        },
+    )?;
+    match action {
         Action::Skip(reason) => {
             eprintln!("{key}: {reason}");
             report(root, store, &change, &live)?;
@@ -2176,6 +2230,67 @@ fn watch_change(
         }
     }
     Ok(())
+}
+
+/// Whether a skip reason parks the head: it is not reviewed and nothing in
+/// flight will review it. A head already reviewed or under review, or one
+/// waiting only for a free reviewer slot, is not parked.
+// trace:BUG-2426 | ai:claude
+fn parks(reason: &str) -> bool {
+    ![
+        "head already has a recorded review",
+        "head already reserved",
+        "global reviewer capacity",
+    ]
+    .iter()
+    .any(|p| reason.starts_with(p))
+}
+
+/// Record (or clear) why the current head is parked, for `aida awaiting`.
+/// The record keeps its first-seen time while the head and reason hold, so
+/// a steady skip writes no state.
+// trace:BUG-2426 | ai:claude
+fn record_skip(store: &Store, change: &forge::Change, reason: Option<&str>) -> Result<()> {
+    let key = change.key();
+    let line = reason.filter(|r| parks(r)).map(bounded_diagnostic);
+    store.transaction(&key, |state| {
+        let current = state.entries.get(&key).and_then(|e| e.skipped.as_ref());
+        let same = match (current, line.as_deref()) {
+            (Some(r), Some(line)) => r.head == change.head && r.line == line,
+            (None, None) => true,
+            _ => false,
+        };
+        if same {
+            return Ok(());
+        }
+        let entry = state.entries.entry(key.clone()).or_default();
+        entry.skipped = line.map(|line| Reported {
+            head: change.head.clone(),
+            line,
+            checked_at: chrono::Utc::now(),
+        });
+        Ok(())
+    })
+}
+
+/// Every change whose current head the watcher is parking, as `(change,
+/// head, reason, since)`, read without creating or changing any watcher
+/// state (`aida awaiting`).
+// trace:BUG-2426 | ai:claude
+pub(crate) fn skipped_changes(
+    root: &Path,
+) -> Vec<(String, String, String, chrono::DateTime<chrono::Utc>)> {
+    let Some(state) = read_only_state(root) else {
+        return Vec::new();
+    };
+    state
+        .entries
+        .into_iter()
+        .filter_map(|(key, entry)| {
+            let r = entry.skipped?;
+            Some((key, r.head, r.line, r.checked_at))
+        })
+        .collect()
 }
 
 /// Report a reviewed change's ship readiness, at most once per
@@ -2361,3 +2476,7 @@ mod ready_tests;
 #[cfg(test)]
 #[path = "tests/task_1945_review_watch_notice_tests.rs"]
 mod notice_tests;
+
+#[cfg(test)]
+#[path = "tests/bug_2426_review_watch_update_tests.rs"]
+mod update_tests;
