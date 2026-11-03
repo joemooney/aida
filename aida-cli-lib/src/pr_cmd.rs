@@ -119,9 +119,10 @@ pub(crate) fn handle_pr_command(cmd: &PrCommand) -> Result<()> {
 
 /// BUG-250: `aida pr hold` — deliberately hold the PR on the current session.
 ///
-/// The implementer pushed its branch but is intentionally not opening the PR
-/// yet (a manual gate runs first). This resolves the session's spec + branch
-/// from the active lease covering cwd and records a [`punt::HoldSignal`]. When
+/// The implementer is intentionally not opening the PR yet (a manual gate
+/// runs first). This resolves the session's spec + branch from the active
+/// lease covering cwd, pushes the branch to origin and verifies the remote tip
+/// (TASK-2793), and only then records a [`punt::HoldSignal`]. When
 /// invoked under an `--auto-complete` drain the orchestrator provisions
 /// [`punt::HOLD_SIGNAL_FILE_ENV`] pointing at an absolute path under the main
 /// worktree root (the handshake is worktree-resolution-independent, exactly
@@ -141,6 +142,10 @@ pub(crate) fn pr_hold_handler(reason: Option<&str>) -> Result<()> {
     })?;
     let spec = lease.scope.clone();
     let branch = lease.branch.clone();
+    // TASK-2793: the hold claims the branch is on the forge, so push it and
+    // confirm origin's tip matches before recording the hold or saying so.
+    // trace:TASK-2793 | ai:claude
+    let pushed_sha = push_and_verify_held_branch(&cwd, "origin", &branch)?;
     let signal = punt::HoldSignal {
         spec: spec.clone(),
         branch: branch.clone(),
@@ -158,11 +163,12 @@ pub(crate) fn pr_hold_handler(reason: Option<&str>) -> Result<()> {
         .with_context(|| format!("could not write the PR-hold marker to {:?}", signal_path))?;
 
     eprintln!(
-        "{} {} held — branch `{}` pushed, PR deliberately not opened{}",
+        "{} {} held — branch `{}` pushed to origin at {}, PR deliberately not opened{}",
         "⏸".yellow().bold(),
         // trace:STORY-B6B1278890774EF993D2EBC327862470-078 | ai:claude
         aida_core::node_alias::display_spec_id(&spec).bold(),
         branch,
+        &pushed_sha[..pushed_sha.len().min(12)],
         reason.map(|r| format!(" ({r})")).unwrap_or_default(),
     );
     // TASK-1240: derive the create-command + change noun from the resolved
@@ -180,6 +186,72 @@ pub(crate) fn pr_hold_handler(reason: Option<&str>) -> Result<()> {
         noun,
     );
     Ok(())
+}
+
+/// Push `branch` from `repo` to `remote` (setting upstream), then read the
+/// remote's tip back with `ls-remote` and require it to equal the local
+/// branch tip. Returns the verified sha. Any failure — the push is rejected,
+/// the remote is unreachable, or the remote ref is absent or different —
+/// is an error, so `aida pr hold` never reports a push it cannot prove.
+// trace:TASK-2793 | ai:claude
+pub(crate) fn push_and_verify_held_branch(
+    repo: &std::path::Path,
+    remote: &str,
+    branch: &str,
+) -> Result<String> {
+    let full_ref = format!("refs/heads/{branch}");
+    let local = std::process::Command::new("git")
+        .arg("-C")
+        .arg(repo)
+        .args(["rev-parse", "--verify", "--quiet", &full_ref])
+        .output()
+        .context("could not invoke git rev-parse")?;
+    if !local.status.success() {
+        anyhow::bail!("local branch `{branch}` does not exist — nothing to push for the hold");
+    }
+    let local_sha = String::from_utf8_lossy(&local.stdout).trim().to_string();
+
+    let push = std::process::Command::new("git")
+        .arg("-C")
+        .arg(repo)
+        .args(["push", "-u", remote, &format!("{full_ref}:{full_ref}")])
+        // trace:BUG-2181 | ai:claude
+        .remote_credentials(repo, remote)
+        .output()
+        .context("could not invoke git push")?;
+    if !push.status.success() {
+        anyhow::bail!(
+            "could not push `{branch}` to {remote}, so the PR is not held: {}\n\
+             Fix the push (e.g. `git push -u {remote} {branch}`), then re-run `aida pr hold`.",
+            String::from_utf8_lossy(&push.stderr).trim()
+        );
+    }
+
+    let ls = std::process::Command::new("git")
+        .arg("-C")
+        .arg(repo)
+        .args(["ls-remote", remote, &full_ref])
+        // trace:BUG-2181 | ai:claude
+        .remote_credentials(repo, remote)
+        .output()
+        .context("could not invoke git ls-remote")?;
+    if !ls.status.success() {
+        anyhow::bail!(
+            "pushed `{branch}` but could not verify it on {remote}: {}",
+            String::from_utf8_lossy(&ls.stderr).trim()
+        );
+    }
+    let remote_tip =
+        pr_rebase::parse_ls_remote_tip(&String::from_utf8_lossy(&ls.stdout), &full_ref);
+    match remote_tip {
+        Some(tip) if tip == local_sha => Ok(local_sha),
+        Some(tip) => anyhow::bail!(
+            "{remote} has `{branch}` at {tip}, not the local tip {local_sha} — the PR is not held"
+        ),
+        None => anyhow::bail!(
+            "git push reported success but {remote} has no `{branch}` ref — the PR is not held"
+        ),
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -6414,6 +6486,10 @@ pub(crate) fn find_open_approved_prs(
 #[cfg(test)]
 #[path = "tests/bug_2164_default_branch_ship_refusal_tests.rs"]
 mod bug_2164_default_branch_ship_refusal_tests;
+
+#[cfg(test)]
+#[path = "tests/task_2793_pr_hold_push_tests.rs"]
+mod task_2793_pr_hold_push_tests;
 
 #[cfg(test)]
 #[path = "tests/task_140_squash_subject_tests.rs"]
