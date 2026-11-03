@@ -12,12 +12,12 @@ description: |-
   2. When an active mandate exists, renew behaves as today (extends it).
   3. With no prior mandate at all, renew errors with the exact 'aida mandate start ...' line to run.
   4. About 60 minutes before an active mandate expires, the operator gets a prompt: the status line/hook banner shows 'MANDATE expires in Nm, run: aida mandate renew', and a coordination/mail notice goes to the operator and the advisor seat. The advisor's due jobs surface the same item so the advisor can batch it to the operator early.
-status: NeedsAttention
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-03T13:41:47.751489803Z
-modified_at: 2026-11-03T15:34:52.586343499Z
+modified_at: 2026-11-03T15:34:54.634449521Z
 req_type: Story
 relationships:
 - rel_type:
@@ -42,6 +42,12 @@ comments:
   created_at: 2026-11-03T15:34:52.485404659Z
   modified_at: 2026-11-03T15:34:52.485404659Z
   session_id: f5eddefe-032d-4760-94ba-3a318cf3d1d1
+- id: 01a1a20c-8faa-73a1-a00c-61b1dc9eea42
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Behavior meets all 4 ACs in code and unit tests, but no test traces any AC (aida criteria reports 4/4 untested), the revive output omits the old mandate id and is untested, and the revive audit event drops lineage. CI partly pending at review time (cli-0/1, rest, contracts green; lib-0/1, gates running).. No triage reason was given.'
+  created_at: 2026-11-03T15:34:54.634448123Z
+  modified_at: 2026-11-03T15:34:54.634448123Z
+  session_id: f5eddefe-032d-4760-94ba-3a318cf3d1d1
 history:
 - id: 01a1a1ae-1569-7562-bd46-8229e0a4ee0e
   author: aida-session-start
@@ -65,6 +71,14 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1a20c-8faa-73a1-a00c-61a2fde74a15
+  author: joe
+  timestamp: 2026-11-03T15:34:54.634432256Z
+  session_id: f5eddefe-032d-4760-94ba-3a318cf3d1d1
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: 6c587ee595ce70f5fcc48480cfdddc8246cf158c
   branch: main
@@ -73,11 +87,3 @@ filed_at:
   aida_build_sha: 6c587ee595c
   vendor: claude
   session: f5eddefe-032d-4760-94ba-3a318cf3d1d1
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: Behavior meets all 4 ACs in code and unit tests, but no test traces any AC (aida criteria reports 4/4 untested), the revive output omits the old mandate id and is untested, and the revive audit event drops lineage. CI partly pending at review time (cli-0/1, rest, contracts green; lib-0/1, gates running).
-  recovery_hint: address the review findings, move STORY-2346 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-03T15:21:53.167321491Z
