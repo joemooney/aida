@@ -14,13 +14,20 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-02T16:23:36.782966684Z
-modified_at: 2026-11-02T16:23:36.782966684Z
+modified_at: 2026-11-03T02:16:08.942620636Z
 req_type: Task
 tags:
 - carried-from:TASK-2759
 - finding-hash:c78decdc
 - from-review:PR-3264
 - kind:carried-forward
+comments:
+- id: 01a19f31-45ee-73b2-8a3b-762f20017482
+  author: joe
+  content: 'Advisor ruling (10-28 rule-once): accepted, not fixed. Source-scan guard heuristic in a test; every in-tree call site passes GRANT_ENV directly. STORY-2326 moves env construction into one env-clear allowlist, which removes the need for this regex inventory.'
+  created_at: 2026-11-03T02:16:08.942620636Z
+  modified_at: 2026-11-03T02:16:08.942620636Z
+  session_id: 125337a4-7dd3-483b-9c56-3665173938ae
 history:
 - id: 01a19d56-7283-7291-8c78-78ea595921d5
   author: joe
