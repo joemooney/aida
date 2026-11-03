@@ -11,7 +11,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T09:06:27.587006751Z
-modified_at: 2026-11-03T19:07:55.829201626Z
+modified_at: 2026-11-03T19:38:40.541359233Z
 req_type: Task
 tags:
 - architecture
@@ -45,6 +45,20 @@ comments:
   content: 'ADVISOR RULING (2026-11-03 11:40, round 2): your seat holds ff2dce9 (step 1, about 2.3k lines), which is committed but not pushed and was never compiled locally because the session refused cargo (BUG-2383, fixed by #3192). This round: resume in the same seat. Try the LIGHT gate once. If cargo is refused again, do not stop: push the branch, open the PR with ''(Refs TASK-2708)'', and state in the PR body that the local gate was refused. CI is the gate. Then stop. The remaining TASK-2708 scope (migrate Claude, parent acceptance surfaces) is the next PR.'
   created_at: 2026-11-03T18:23:57.487776816Z
   modified_at: 2026-11-03T18:23:57.487776816Z
+  session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
+- id: 01a1a2eb-bc1d-7f83-8efd-75ca0a577e0c
+  author: joe
+  content: |-
+    ADVISOR RULING (2026-11-03 12:15, round 3, PR #3307 at ff2dce95): fix all five findings.
+    Step-1 F-H/F-ENV/R-a code largely matches the rulings, but CI lib-0 and lib-1 are red at the head, and trusted codex="aida" now lets several Codex launch surfaces skip the named refusal and run without AIDA containment (fail-open).
+    1. BLOCKER (CI): CI (lib-0) and CI (lib-1) both fail at 'Run tests' on ff2dce95ee5. The commit was never compiled or tested locally. The reviewer could not fetch the job logs (the log blob host is blocked in the reviewer sandbox). Likely cause: CI installs bubblewrap and enables unprivileged userns in every shard (.github/workflows/ci.yml:112-118), so live_available() is true. Then task_2707_native_composition_companion_empty_grant_and_generated_
+    2. BLOCKER (fail-open, strict tier): vendor_containment_posture now maps trusted codex="aida" to ContainmentPosture::Aida (session.rs:3221). The only refusal for surfaces that are not wired is the guard in codex_tool_env::prepare_launch (codex_tool_env.rs:91), and it fires only when the child Command explicitly carries AIDA_CONTAINMENT_POSTURE=aida. Several Codex surfaces never stamp that value from containment_posture. (a) Interactive 'aida agen
+    3. MINOR (test strength, G-i): task_2707_registry_and_launch_tokens_absent_in_outer_and_inner (launch_tests.rs:277-315) writes its own 'synthetic lease'/'synthetic store' files into the temp state and then scans them. That cannot detect a production lease, store or log write of OPENAI_API_KEY. Exercise the real lease/registry/log writers on the contained path (stamp_lease_active_pid, register_headless_lane_for_child, the tee log), or assert on th
+    4. MINOR: sweep_legacy_notices (grant_expiry_notice.rs:131) does a readdir of session-grants on every grant-expiry hook invocation, which runs per tool call. The F-H ruling asked for a one-time host-side sweep. Gate it once, for example with a marker in the grant-notices base, or move it to an upgrade/host-only command.
+    5. MINOR (PR body): the brief required the PR body to map each ruling item (F-a a-d, G-i, F-ENV tests 1-3, R-a ratchet, F-H tests, receipt timing) to file:line and test, to label the live authenticated run as PENDING, and (F-a) to record that socket options set before connect are lost on the replaced fd. The PR body has none of these. OVERVIEW.md covers the socket-option limitation, but the PR body does not.
+    RULINGS: (1) Reproduce the lib-0/lib-1 failures locally (run the task_2707_ filter with bwrap available) and fix them. (2) FAIL CLOSED: every Codex launch surface derives AIDA_CONTAINMENT_POSTURE from vendor_containment_posture. Any surface not wired for the Aida posture refuses with the named error when trusted codex="aida". Add a ratchet test enumerating every Codex spawn path (including agent new interactive and agent_codex_background.rs). (3) Exercise the real lease, registry and log writers. (4) Make the legacy sweep one-time, with a marker in the grant-notices base. (5) Rewrite the PR body to map each ruling item to file:line and test, and label the live authenticated run PENDING. LIGHT gate: one targeted cargo test -p <crate> <filter> plus make check-ci-fast (with umask 022, BUG-2432). Push to the existing PR branch, then stop.
+  created_at: 2026-11-03T19:38:40.541359233Z
+  modified_at: 2026-11-03T19:38:40.541359233Z
   session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
 history:
 - id: 01a1965c-5ce8-7781-b88f-317b0b12bab5
