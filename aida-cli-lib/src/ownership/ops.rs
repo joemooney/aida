@@ -119,6 +119,32 @@ pub(crate) fn release(
     ))
 }
 
+/// A rider leaves train `train` (the train's merge lease was released): its
+/// change record moves out of `Training` to `Leased`, keeping its holder
+/// (none once it is in a PR), so it is free to acquire. `None` when it no
+/// longer rides that train.
+// trace:STORY-2325 | ai:claude
+pub(crate) fn leave_train(
+    current: Option<&Ownership>,
+    key: &WorkKey,
+    train: &ChangeId,
+    why: &str,
+) -> Option<(Ownership, Option<String>)> {
+    let cur = current?;
+    if !matches!(&cur.phase, Phase::Training { train: t } if t == train) {
+        return None;
+    }
+    Some((
+        Ownership {
+            key: key.clone(),
+            generation: cur.generation,
+            holder: cur.holder.clone(),
+            phase: Phase::Leased,
+        },
+        Some(format!("left train {}-{}: {why}", train.forge, train.n)),
+    ))
+}
+
 /// A rider joins train `train`: its change record says so. The rider's own
 /// holder (none once it is in a PR) is kept.
 // trace:STORY-2325 | ai:claude

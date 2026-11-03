@@ -139,29 +139,32 @@ pub(crate) fn change_scope(scope: &str) -> Option<u64> {
 }
 
 /// The work key and phase a lease stands for, given a resolver for spec
-/// labels. A `PR-N` review lease with a recorded head is a review; any other
-/// `PR-N` lease is the change itself; anything else is a spec.
+/// labels. A review lease (`aida review`) is a `Review` of its PR's head
+/// only when it names a `PR-N` and records that head; any other review lease
+/// stands for no key and is not recorded, so a reviewer never takes the
+/// change (overwriting its `InPr` handoff) or the spec (replacing its
+/// implementer). Any other `PR-N` lease is the change itself; anything else
+/// is a spec.
 // trace:STORY-2325 | ai:claude
 pub(crate) fn key_for_lease(
     lease: &crate::SessionLease,
     resolve: &dyn Fn(&str) -> Option<SpecKey>,
 ) -> Option<(WorkKey, Phase)> {
-    if let Some(n) = change_scope(&lease.scope) {
-        let change = change(n);
-        return Some(
-            match lease.pr_head_sha.as_deref().filter(|h| !h.is_empty()) {
-                Some(head) if lease.review_verb => (
-                    WorkKey::Review {
-                        change,
-                        head: head.to_string(),
-                    },
-                    Phase::Reviewing {
-                        head: head.to_string(),
-                    },
-                ),
-                _ => (WorkKey::Change { change }, Phase::Leased),
+    if lease.review_verb {
+        let n = change_scope(&lease.scope)?;
+        let head = lease.pr_head_sha.as_deref().filter(|h| !h.is_empty())?;
+        return Some((
+            WorkKey::Review {
+                change: change(n),
+                head: head.to_string(),
             },
-        );
+            Phase::Reviewing {
+                head: head.to_string(),
+            },
+        ));
+    }
+    if let Some(n) = change_scope(&lease.scope) {
+        return Some((WorkKey::Change { change: change(n) }, Phase::Leased));
     }
     let spec = resolve(&lease.scope)?;
     Some((WorkKey::Spec { spec }, Phase::Leased))
@@ -248,6 +251,16 @@ fn store_for(project_root: &Path) -> Option<OwnershipStore> {
     if !enabled() {
         return None;
     }
+    // A1/A6: refuse explicitly instead of relying on the sandbox to deny the
+    // write. From a seat clone the main worktree resolves to the clone, so
+    // a write that got through would land in the clone's own directory.
+    if crate::session::process_contained() {
+        report(
+            "the ownership store",
+            anyhow::anyhow!("a contained seat never writes the ownership records"),
+        );
+        return None;
+    }
     match OwnershipStore::for_project(project_root) {
         Ok(store) => store,
         Err(e) => {
@@ -273,6 +286,11 @@ pub(crate) fn lease_written(project_root: &Path, lease: &crate::SessionLease) {
             .and_then(|s| spec_key_in_store(s, label))
     };
     let Some((key, phase)) = key_for_lease(lease, &resolve) else {
+        if lease.review_verb {
+            // A review with no recorded PR head is not recorded (see
+            // `key_for_lease`); that is expected, not a gap.
+            return;
+        }
         report(
             &format!("lease {}", lease.id),
             anyhow::anyhow!("its scope `{}` names no requirement", lease.scope),
@@ -294,30 +312,74 @@ pub(crate) fn lease_released(project_root: &Path, lease_id: &str, why: &str) {
         return;
     };
     let (records, _) = store.list();
-    let held: Vec<WorkKey> = records
-        .into_iter()
-        .filter(|r| r.holder.as_ref().is_some_and(|h| h.session == lease_id))
-        .map(|r| r.key)
-        .collect();
-    if held.is_empty() {
+    let steps = release_steps(&records, lease_id, why);
+    if steps.is_empty() {
         return;
     }
-    let steps = held
-        .into_iter()
-        .map(|key| {
-            let session = lease_id.to_string();
+    if let Err(e) = store.update_all(steps) {
+        report(&format!("the release of lease {lease_id}"), e);
+    }
+}
+
+/// One `release` step per record `session` holds.
+// trace:STORY-2325 | ai:claude
+pub(crate) fn release_steps(
+    records: &[super::types::Ownership],
+    session: &str,
+    why: &str,
+) -> Vec<Step<'static>> {
+    records
+        .iter()
+        .filter(|r| r.holder.as_ref().is_some_and(|h| h.session == session))
+        .map(|r| {
+            let session = session.to_string();
             let why = why.to_string();
             Step {
-                key,
+                key: r.key.clone(),
                 op: "release".to_string(),
                 expect: Expect::Any,
                 transition: Box::new(move |cur| ops::release(cur, &session, &why)),
             }
         })
+        .collect()
+}
+
+/// The steps that end a train's merge lease held by `session`: release
+/// every record it holds, and move every rider change still riding one of
+/// its trains out of `Training`.
+// trace:STORY-2325 | ai:claude
+pub(crate) fn train_release_steps(
+    records: &[super::types::Ownership],
+    session: &str,
+    why: &str,
+) -> Vec<Step<'static>> {
+    let trains: Vec<ChangeId> = records
+        .iter()
+        .filter(|r| r.holder.as_ref().is_some_and(|h| h.session == session))
+        .filter_map(|r| match &r.key {
+            WorkKey::Train { train } => Some(train.clone()),
+            _ => None,
+        })
         .collect();
-    if let Err(e) = store.update_all(steps) {
-        report(&format!("the release of lease {lease_id}"), e);
+    let mut steps = release_steps(records, session, why);
+    for r in records {
+        let (WorkKey::Change { .. }, Phase::Training { train }) = (&r.key, &r.phase) else {
+            continue;
+        };
+        if !trains.contains(train) {
+            continue;
+        }
+        let key = r.key.clone();
+        let train = train.clone();
+        let why = why.to_string();
+        steps.push(Step {
+            key: key.clone(),
+            op: "leave-train".to_string(),
+            expect: Expect::Any,
+            transition: Box::new(move |cur| ops::leave_train(cur, &key, &train, &why)),
+        });
     }
+    steps
 }
 
 /// What a handoff was verified against.
@@ -368,10 +430,11 @@ pub(crate) fn verify_seat_at_pr_head(seat: &Path, branch: &str) -> Result<String
     Ok(head)
 }
 
-/// The holder hands its work to the PR (Q2, option (a) of the PR-B fork):
-/// the spec and the change records both move to `InPr` with no holder, in
-/// one locked write. The seat HEAD is not detached in PR-B; the seat keeps
-/// its branch, so same-seat rework is unchanged until PR-C's cutover.
+/// The holder hands its work to the PR (Q2): the spec and the change records
+/// both move to `InPr` with no holder, in one locked write. The seat HEAD is
+/// not detached here: per the advisor ruling of 2026-11-03 (round 3 on PR
+/// #3291), the ship-time detach under the ownership lock is deferred to
+/// PR-C, which completes STORY-2325. Until then the seat keeps its branch.
 // trace:STORY-2325 | ai:claude
 pub(crate) fn handoff_steps(facts: &HandoffFacts, now: DateTime<Utc>) -> Vec<Step<'static>> {
     let mut keys = vec![WorkKey::Change {
@@ -494,14 +557,27 @@ pub(crate) fn train_lease_taken(project_root: &Path, train: u64) {
     }
 }
 
-/// The train's merge lease in this process was released.
+/// The train's merge lease in this process was released: the train record
+/// closes and its riders leave it.
 // trace:STORY-2325 | ai:claude
 pub(crate) fn train_lease_released(project_root: &Path) {
-    lease_released(
-        project_root,
-        &merge_lease_session(std::process::id()),
-        "the train's merge lease was released",
-    );
+    train_released_by(project_root, &merge_lease_session(std::process::id()));
+}
+
+/// [`train_lease_released`] for the merge lease held under `session`.
+// trace:STORY-2325 | ai:claude
+pub(crate) fn train_released_by(project_root: &Path, session: &str) {
+    let Some(store) = store_for(project_root) else {
+        return;
+    };
+    let (records, _) = store.list();
+    let steps = train_release_steps(&records, session, "the train's merge lease was released");
+    if steps.is_empty() {
+        return;
+    }
+    if let Err(e) = store.update_all(steps) {
+        report(&format!("the release of {session}"), e);
+    }
 }
 
 /// Train PR `train` opened carrying `riders`: each rider's change record

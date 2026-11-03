@@ -385,6 +385,17 @@ fn a_lease_maps_to_its_work_key() {
         Some((spec(7), Phase::Leased))
     );
     assert_eq!(dual::key_for_lease(&s, &none), None);
+    // Round 3, finding 3: a review lease with no recorded head (what `aida
+    // review` writes) or one scoped to a spec stands for no key, so it can
+    // never take the change or the spec.
+    let headless_review = lease("r2", "PR-12", "review_verb = true\n");
+    assert_eq!(dual::key_for_lease(&headless_review, &none), None);
+    let spec_review = lease(
+        "r3",
+        "STORY-7",
+        "review_verb = true\npr_head_sha = \"abc\"\n",
+    );
+    assert_eq!(dual::key_for_lease(&spec_review, &known), None);
     assert_eq!(dual::change_scope("PR-0"), None);
     assert_eq!(dual::change_scope("PRX-3"), None);
     assert_eq!(dual::change_scope("MR-3"), Some(3));
@@ -698,6 +709,213 @@ fn migrate_reports_two_leases_for_one_key() {
     assert_eq!(plan.records().len(), 1);
     assert_eq!(plan.duplicates.len(), 1);
     assert_eq!(plan.records()[0].holder.as_ref().unwrap().session, "a");
+}
+
+#[test]
+fn migrate_prefers_a_live_lease_over_an_unknown_one_for_one_key() {
+    // Round 3, finding 7: the dead lease is first in list order, but the
+    // running holder's lease wins the key.
+    let dead = facts(lease("dead", "STORY-1", ""), Some((spec(1), Phase::Leased)));
+    let l = lease(
+        "live",
+        "STORY-1",
+        "creator_pid = 42\ncreator_pid_start_time = \"linux-starttime:9\"\n",
+    );
+    let w = host_writer()
+        .witness(42, Some("linux-starttime:9"), now())
+        .unwrap();
+    let live = LeaseFacts {
+        live_witnesses: vec![w],
+        ..facts(l, Some((spec(1), Phase::Leased)))
+    };
+    let plan = migrate::plan(
+        &[dead, live],
+        &[],
+        Default::default(),
+        vec![],
+        &host_writer(),
+        &|_, _| false,
+        now(),
+    );
+    assert_eq!(plan.records().len(), 1);
+    assert_eq!(plan.records()[0].holder.as_ref().unwrap().session, "live");
+    assert_eq!(plan.duplicates.len(), 1);
+    assert!(
+        plan.duplicates[0].1.contains("lease dead (kept live)"),
+        "{:?}",
+        plan.duplicates
+    );
+}
+
+#[test]
+fn migrate_records_nothing_for_a_review_lease_without_a_head() {
+    let l = lease("r", "PR-12", "review_verb = true\n");
+    let p = classify(&facts(l.clone(), dual::key_for_lease(&l, &|_| None)));
+    assert_eq!(p.class, Class::Unresolved);
+    assert!(p.records.is_empty());
+    assert!(p.detail.contains("review"), "{}", p.detail);
+}
+
+// ---- round 3: reviews, containment, train riders ------------------------
+
+fn repo_store(dir: &Path) -> OwnershipStore {
+    OwnershipStore::at(dir.join(".aida").join(store::DIR))
+}
+
+#[test]
+fn a_review_lease_never_takes_the_change_or_the_spec() {
+    dual::enable_for_test();
+    let dir = repo();
+    let id = uuid::Uuid::from_u128(91);
+    // The implementer holds the spec; PR-12 was handed off.
+    dual::lease_written(dir.path(), &lease("impl", &id.to_string(), ""));
+    let store = repo_store(dir.path());
+    store
+        .update_all(dual::handoff_steps(
+            &dual::HandoffFacts {
+                spec: None,
+                change: dual::change(12),
+                head: "h12".into(),
+            },
+            now(),
+        ))
+        .unwrap();
+    let change_key = WorkKey::Change {
+        change: dual::change(12),
+    };
+    let spec_key = WorkKey::Spec { spec: SpecKey(id) };
+    let before_change = store.load(&change_key).unwrap().unwrap();
+    let before_spec = store.load(&spec_key).unwrap().unwrap();
+    // What `aida review` writes: a PR-N or a spec scope, no head.
+    dual::lease_written(dir.path(), &lease("rv1", "PR-12", "review_verb = true\n"));
+    dual::lease_written(
+        dir.path(),
+        &lease("rv2", &id.to_string(), "review_verb = true\n"),
+    );
+    assert_eq!(store.load(&change_key).unwrap().unwrap(), before_change);
+    assert_eq!(store.load(&spec_key).unwrap().unwrap(), before_spec);
+    assert_eq!(before_spec.holder.as_ref().unwrap().session, "impl");
+}
+
+#[test]
+fn the_review_lease_guard_releases_its_record_on_drop() {
+    dual::enable_for_test();
+    let dir = repo();
+    let store = repo_store(dir.path());
+    // A review recorded with its head, held by the review session.
+    dual::lease_written(
+        dir.path(),
+        &lease(
+            "rv1",
+            "PR-12",
+            "review_verb = true\npr_head_sha = \"h12\"\n",
+        ),
+    );
+    let key = WorkKey::Review {
+        change: dual::change(12),
+        head: "h12".into(),
+    };
+    assert_eq!(
+        store.load(&key).unwrap().unwrap().holder.unwrap().session,
+        "rv1"
+    );
+    let lease_file = dir.path().join("rv1.toml");
+    std::fs::write(&lease_file, "").unwrap();
+    drop(crate::ReviewLeaseGuard {
+        path: lease_file.clone(),
+        project_root: dir.path().to_path_buf(),
+        lease_id: "rv1".to_string(),
+    });
+    assert!(!lease_file.exists());
+    let r = store.load(&key).unwrap().unwrap();
+    assert!(r.holder.is_none(), "{r:?}");
+    assert!(matches!(r.phase, Phase::Closed { .. }), "{r:?}");
+}
+
+#[test]
+fn a_contained_process_writes_no_ownership_record() {
+    dual::enable_for_test();
+    let dir = repo();
+    let _env = crate::test_env::EnvVarsGuard::apply(&[("AIDA_CONTAINED", Some("1"))]);
+    let id = uuid::Uuid::from_u128(92);
+    dual::lease_written(dir.path(), &lease("s", &id.to_string(), ""));
+    dual::train_lease_taken(dir.path(), 5);
+    dual::handed_off_from_seat(dir.path(), &id.to_string(), "tip", 7);
+    let own = dir.path().join(".aida").join(store::DIR);
+    assert!(
+        !own.exists(),
+        "a contained process created {}",
+        own.display()
+    );
+    // The store itself refuses, before it creates or locks anything.
+    let store = repo_store(dir.path());
+    let err = store
+        .update(&spec(92), "acquire", Expect::Any, |cur| {
+            ops::acquire(cur, &spec(92), holder("s"), Phase::Leased)
+        })
+        .unwrap_err();
+    assert!(format!("{err:#}").contains("contained"), "{err:#}");
+    assert!(!own.exists());
+}
+
+#[test]
+fn releasing_a_train_moves_its_riders_out_of_training() {
+    let (_d, store) = store();
+    let session = dual::merge_lease_session(4242);
+    let train = dual::change(50);
+    let train_key = WorkKey::Train {
+        train: train.clone(),
+    };
+    let t_holder = Holder {
+        seat: "train".into(),
+        role: Role::Train,
+        session: session.clone(),
+        tree: None,
+        witnesses: vec![],
+    };
+    let k = train_key.clone();
+    let t = train.clone();
+    store
+        .update(&train_key, "begin-train", Expect::Any, |cur| {
+            ops::acquire(cur, &k, t_holder, Phase::Training { train: t })
+        })
+        .unwrap();
+    let rider = |n| WorkKey::Change {
+        change: dual::change(n),
+    };
+    for (n, on) in [(11, 50), (12, 50), (13, 60)] {
+        let key = rider(n);
+        let k = key.clone();
+        store
+            .update(&key, "ride", Expect::Any, |cur| {
+                ops::ride(cur, &k, &dual::change(on))
+            })
+            .unwrap();
+    }
+    let (records, _) = store.list();
+    store
+        .update_all(dual::train_release_steps(&records, &session, "merged"))
+        .unwrap();
+    let t = store.load(&train_key).unwrap().unwrap();
+    assert!(t.holder.is_none());
+    assert!(matches!(t.phase, Phase::Closed { .. }), "{t:?}");
+    for n in [11, 12] {
+        let r = store.load(&rider(n)).unwrap().unwrap();
+        assert_eq!(r.phase, Phase::Leased, "rider {n}: {r:?}");
+    }
+    // A rider on another train is untouched.
+    assert_eq!(
+        store.load(&rider(13)).unwrap().unwrap().phase,
+        Phase::Training {
+            train: dual::change(60)
+        }
+    );
+    // Released again: nothing left to do.
+    let (records, _) = store.list();
+    let again = store
+        .update_all(dual::train_release_steps(&records, &session, "merged"))
+        .unwrap();
+    assert!(again.iter().all(Option::is_none));
 }
 
 #[test]

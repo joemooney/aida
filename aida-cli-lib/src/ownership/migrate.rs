@@ -4,8 +4,8 @@
 //! The classification is pure ([`classify`]): every fact is read first by
 //! [`collect`]. The rewrite only ADDS records. It never edits, archives or
 //! deletes a lease, lane file, review marker or merge lock (they stay
-//! authoritative until PR-C, A6), never detaches a seat HEAD (the PR-B fork,
-//! option (a)), and never touches a tree. Rolling it back is removing
+//! authoritative until PR-C, A6), never detaches a seat HEAD (deferred to
+//! PR-C by the advisor ruling of 2026-11-03), and never touches a tree. Rolling it back is removing
 //! `.aida/ownership/`.
 //!
 //! A4: a process is recorded alive only when its recorded start identity
@@ -143,6 +143,13 @@ pub(crate) fn classify(
         records,
     };
     let Some((key, leased_phase)) = f.key.clone() else {
+        if f.lease.review_verb {
+            return plan(
+                Class::Unresolved,
+                "a review lease with no recorded PR head: reviews are not recorded".to_string(),
+                vec![],
+            );
+        }
         return plan(
             Class::Unresolved,
             format!("its scope `{}` names no requirement", f.lease.scope),
@@ -308,7 +315,8 @@ pub(crate) struct MigrationPlan {
     pub leases: Vec<LeasePlan>,
     pub trains: Vec<Ownership>,
     pub accounted: Accounted,
-    /// Records two inputs both planned for one key: the first wins.
+    /// Records two inputs both planned for one key: a Live plan wins over
+    /// any other, then the first in list order.
     pub duplicates: Vec<(WorkKey, String)>,
     /// What could not be read (the forge, the store); classification ran
     /// without it.
@@ -316,13 +324,13 @@ pub(crate) struct MigrationPlan {
 }
 
 impl MigrationPlan {
-    /// Every record to write, one per key, first plan wins.
+    /// Every record to write, one per key: a Live plan wins over any other,
+    /// then the first in list order.
     // trace:STORY-2325 | ai:claude
     pub(crate) fn records(&self) -> Vec<Ownership> {
         let mut seen = BTreeMap::new();
-        for rec in self
-            .leases
-            .iter()
+        for rec in by_preference(&self.leases)
+            .into_iter()
             .flat_map(|p| p.records.iter())
             .chain(self.trains.iter())
         {
@@ -338,6 +346,16 @@ impl MigrationPlan {
         }
         out
     }
+}
+
+/// The lease plans in the order their records claim a key: Live plans
+/// first (a running holder beats a dead or unproven one for the same key),
+/// otherwise list order.
+// trace:STORY-2325 | ai:claude
+fn by_preference(plans: &[LeasePlan]) -> Vec<&LeasePlan> {
+    let mut out: Vec<&LeasePlan> = plans.iter().collect();
+    out.sort_by_key(|p| p.class != Class::Live);
+    out
 }
 
 /// Plan the records for every lease and train lease. Pure.
@@ -358,7 +376,7 @@ pub(crate) fn plan(
     let trains: Vec<Ownership> = trains.iter().map(classify_train).collect();
     let mut owners: BTreeMap<WorkKey, String> = BTreeMap::new();
     let mut duplicates = Vec::new();
-    for p in &lease_plans {
+    for p in by_preference(&lease_plans) {
         for rec in &p.records {
             match owners.get(&rec.key) {
                 Some(first) if *first != p.lease_id => duplicates.push((
@@ -655,7 +673,7 @@ pub(crate) fn collect(main: &Path, now: DateTime<Utc>) -> MigrationPlan {
             accounted.lanes_orphaned.push(name);
         }
     }
-    accounted.review_markers = file_names(&main.join(".aida").join("review-in-progress"));
+    accounted.review_markers = file_names(&crate::gate::review_marker::markers_dir(main));
     let mut trains = Vec::new();
     for (branch, h) in crate::merge_lock::status(main) {
         match h.pr.filter(|_| h.note == crate::pr_train::TRAIN_LEASE_NOTE) {
@@ -675,10 +693,9 @@ pub(crate) fn collect(main: &Path, now: DateTime<Utc>) -> MigrationPlan {
                 .push(format!("{branch} ({})", h.note)),
         }
     }
+    // BUG-1985/BUG-1929: through the hardened host builder, as `git_out`.
     let is_ancestor = |a: &str, b: &str| {
-        std::process::Command::new("git")
-            .arg("-C")
-            .arg(main)
+        aida_core::git_ops::host_git_command(main)
             .args(["merge-base", "--is-ancestor", a, b])
             .status()
             .is_ok_and(|s| s.success())

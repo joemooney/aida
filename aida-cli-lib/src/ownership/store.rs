@@ -6,6 +6,7 @@
 //! the caller's expected generation, writes the new record atomically with
 //! the generation bumped by one, and appends one line to
 //! `.aida/ownership/journal.jsonl`. A lost race refuses and never overwrites.
+//! A contained process is refused before it touches the directory.
 //!
 //! The directory lives on the main worktree only: sibling worktrees resolve
 //! it through git's common dir, the same way seat occupancy does.
@@ -186,10 +187,25 @@ impl OwnershipStore {
     /// record and check its `expect`, ask each `transition` for the next
     /// record (`None` = no change), and only when every step passed, commit
     /// each changed record with its generation bumped by one and journal it.
-    /// A failed expectation writes nothing for any step (refuse rather than
-    /// half-apply).
+    ///
+    /// A failed expectation writes nothing for any step: the batch refuses
+    /// on expectation failures. The writes themselves are not staged: an
+    /// I/O error part-way through a multi-key batch (a record write or a
+    /// journal append) can leave the earlier steps written, and a record
+    /// written without its journal line. Replaying the journal against the
+    /// records reconciles that; staged writes arrive with PR-C (advisor
+    /// ruling round 3 on PR #3291).
+    ///
+    /// A contained seat never writes here (A1, A6): the call refuses before
+    /// it creates or locks anything. Its records are written host-side.
     // trace:STORY-2325 | ai:claude
     pub(crate) fn update_all(&self, steps: Vec<Step<'_>>) -> Result<Vec<Option<Committed>>> {
+        if crate::session::process_contained() {
+            bail!(
+                "a contained seat never writes the ownership records; \
+                 the host process that launched it records them"
+            );
+        }
         let _lock = self.lock(LOCK_TIMEOUT)?;
         let mut planned = Vec::with_capacity(steps.len());
         for step in steps {

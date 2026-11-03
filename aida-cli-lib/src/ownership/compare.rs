@@ -31,6 +31,8 @@ pub(crate) enum Outcome {
 /// share one wording.
 // trace:STORY-2325 | ai:claude
 pub(crate) mod expected {
+    pub(crate) const REVIEW_UNRECORDED: &str =
+        "a review lease with no recorded PR head: reviews are not recorded before PR-C";
     pub(crate) const UNRECORDED: &str =
         "no record yet: the lease predates the dual-write (run `aida own migrate`)";
     pub(crate) const HANDED_OFF: &str =
@@ -209,6 +211,12 @@ pub(crate) fn run(main: &Path, filter: Option<&str>, compare: bool, json: bool) 
             let rec = dual::key_for_lease(lease, &resolve)
                 .and_then(|(k, _)| records.iter().find(|r| r.key == k));
             let owner = rec.and_then(judged);
+            let outcome = match rec {
+                None if lease.review_verb => {
+                    Outcome::Expected(expected::REVIEW_UNRECORDED.to_string())
+                }
+                _ => compare_one(&lease.id, today, rec, owner.as_ref()),
+            };
             rows.push(Row {
                 lease: lease.id.clone(),
                 scope: lease.scope.clone(),
@@ -217,7 +225,7 @@ pub(crate) fn run(main: &Path, filter: Option<&str>, compare: bool, json: bool) 
                     || rec.map_or("no record".to_string(), |r| describe_phase(&r.phase)),
                     describe_owner,
                 ),
-                outcome: compare_one(&lease.id, today, rec, owner.as_ref()),
+                outcome,
             });
         }
         let ids: std::collections::BTreeSet<&str> = leases.iter().map(|l| l.id.as_str()).collect();
