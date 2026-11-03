@@ -121,6 +121,7 @@ pub fn should_refresh(
 // trace:BUG-677 | ai:claude
 fn row_liveness_from(state: &SpecLiveness) -> RowLiveness {
     match state {
+        SpecLiveness::Unknown => RowLiveness::Unknown,
         SpecLiveness::Live => RowLiveness::Live,
         SpecLiveness::Stale | SpecLiveness::FlagOnly => RowLiveness::Stale,
         SpecLiveness::NoSession => RowLiveness::Idle,

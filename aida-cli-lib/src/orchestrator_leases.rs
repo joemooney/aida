@@ -430,6 +430,10 @@ pub(crate) fn orchestrated_lease_owner_alive(
     let Some(peek) = peek_orchestrated_lease(project_root, claude_session_id) else {
         return false;
     };
+    // trace:BUG-2425 | ai:codex
+    if !aida_core::pid_observer::PidObserver::current().can_observe(peek.pid_namespace) {
+        return true;
+    }
     let owner = match peek.active_pid {
         Some(pid) => Some((pid, peek.active_pid_start_time)),
         None => peek
