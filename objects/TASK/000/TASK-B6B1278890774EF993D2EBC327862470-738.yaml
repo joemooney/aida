@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-03T14:12:42.376405847Z
-modified_at: 2026-11-03T22:47:27.623714972Z
+modified_at: 2026-11-03T23:06:09.062765268Z
 req_type: Task
 tags:
 - aida:pr-hold
@@ -22,6 +22,18 @@ relationships:
   target_id: 01a1a37a-e35c-7d72-9297-5ffb97ca1838
   created_at: 2026-11-03T22:15:16.340443041Z
   created_by: joe
+comments:
+- id: 01a1a3a9-af26-7191-951d-efef887fafe0
+  author: joe
+  content: |-
+    ADVISOR RULING (16:10, PR #3311 at its current head): fix every finding below. Specific rulings: (1)-(2) use aida_core::git_ops::host_git_command (or contained_seat_git_command for a proven contained clone); do not grow the ratchet allowlist. (3) Add the non-fast-forward test.
+    1. aida-cli-lib/src/pr_cmd.rs:202,214,239 (push_and_verify_held_branch): the rev-parse, push and ls-remote calls use raw std::process::Command::new("git") against the lease worktree (cwd), which can be a seat clone. That bypasses aida_core::git_ops::host_git_command's BUG-2169 refusal/contained-seat path (host git would run seat-written config and hooks such as pre-push). Build all three with aida_core::git_ops::host_git_command(repo), keeping .remote_credentials(...) on push and ls-remote.
+    2. CI red at 982b6bbf: seat_clone::clone_git_ratchet_tests::task_2143_no_new_raw_git_where_a_lease_tree_is_read panics (task_2143_clone_git_ratchet_tests.rs:400) because pr_cmd.rs now has 50 raw git builders vs the allowlisted 47. Fix by switching to host_git_command (count goes back to 47). Do not raise the allowlist. Build (ubuntu-latest) fails only on its 'Require every CI lane' aggregator step, so it clears once lib-0 is green.
+    3. Test gap (minor): no test covers the branch where origin has the ref at a different sha with a clean push exit ((Some(tip), None) arm), nor a rejected non-fast-forward push. Add one for the non-ff case so the 'not held' refusal path is pinned beyond the unreachable-remote case.
+    LIGHT gate: one targeted cargo test plus make check-ci-fast (umask 022); 'cargo check -p aida-cli-lib --tests' is mandatory before pushing. Push to the existing PR branch, then stop.
+  created_at: 2026-11-03T23:06:09.062765268Z
+  modified_at: 2026-11-03T23:06:09.062765268Z
+  session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
 history:
 - id: 01a1a24d-6697-7512-a824-7ebe52cf584b
   author: joe
