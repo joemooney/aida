@@ -100,11 +100,21 @@ Some paths never ship under a mandate: the project's authority configuration and
 ![The deputy runs submitted jobs under your grant, without a terminal unless you allow it](showcase/assets/authority-deputy.svg)
 
 - **Started by you.** It refuses to start unless stdin, stdout and stderr are your terminal and your shell holds a grant. It will not start inside an agent session, a headless run or another deputy job.
-- **AIDA commands only, by default.** Other programs run only if you add them with `--allow-exec`, and shell scripts only with `--allow-scripts`.
-- **No terminal unless you say so.** A job gets a terminal only if its command matches an entry you set at your terminal, such as `aida deputy --allow-tty 'aida merge-hold clear' --ttl 8h`, or later with `aida deputy allow`. An entry never outlasts your grant. Scripts never get a terminal, and neither does a command carrying a gate-bypass flag. Any other job runs without one, so a command that needs a person at the keyboard refuses it.
+- **AIDA commands only, by default.** Other programs run only if you add them with `--allow-exec`. It runs no shell scripts: those belong to the script deputy below.
+- **No terminal unless you say so.** A job gets a terminal only if its command matches an entry you set at your terminal, such as `aida deputy --allow-tty 'aida merge-hold clear' --ttl 8h`, or later with `aida deputy allow`. An entry never outlasts your grant. A command carrying a gate-bypass flag never gets one. Any other job runs without one, so a command that needs a person at the keyboard refuses it.
 - **Stops with your authority.** When your grant expires or is revoked, the deputy takes no new jobs and exits once running jobs finish. If a mandate was active when you started it, the same happens when the mandate ends, unless you started the deputy with `--keep-after-mandate`.
 - **Recorded.** A ledger records who submitted each job, its command, whether it ran on a terminal and its exit code.
 - **Planned.** A per-deputy command policy, and capabilities a submitting session can present, are not built yet. Until they are, the deputy refuses any job that presents a capability, and refuses every job while a command policy file is present, rather than running it as though the check had passed.
+
+## The script deputy: whole scripts, at your terminal, as you
+
+**Status: built.** Some operator acts take several steps (clear a merge hold, then ship; a dev build; a live acceptance run). For those, start the script deputy in your terminal: `aida deputy shell run`. Advisor sessions queue a bash script with `aida deputy shell submit --file FILE --wait`, and the deputy runs it, one at a time, on your terminal. **Every script it runs counts as you at the keyboard.** Starting it at your terminal is your consent to that.
+
+- **Started by you, with an advisor grant.** It refuses exactly where the command deputy refuses, and also without an advisor grant.
+- **Checked before it runs.** Each job must come from a live session with a valid, allow-listed grant on this machine; anything else is refused with a named reason and never runs. The script is shown on your terminal before it runs.
+- **Recorded.** Each job keeps its script, sha256, submitter, times, exit code and full transcript for 30 days, and `audit.jsonl` records every step.
+
+[Deputies: command vs script](deputies.md) explains when to use which, what each records, and what the script deputy's checks do and do not protect against.
 
 ## What always needs a person at a terminal
 
@@ -114,7 +124,7 @@ Some paths never ship under a mandate: the project's authority configuration and
 - Changing the roster: `aida team allow-seat` and `aida team disallow-seat`.
 - Starting, renewing and stopping a mandate.
 - Accepting the one-time grant `aida agent new` offers, by typing `y`.
-- Starting a deputy, resuming a paused one, and giving its jobs a terminal.
+- Starting a deputy of either kind, resuming a paused one, and giving the command deputy's jobs a terminal.
 - Clearing an advisor's escalation to a person.
 
 Holds are the emergency brake. A person at an interactive terminal can reach them even without a grant. A mandate releases only a hold whose recorded reason it covers. A hold that exists only as a label on the pull request, or one placed because a reviewer stepped aside from the change, always needs a person.

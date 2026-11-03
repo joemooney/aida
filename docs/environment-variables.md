@@ -205,6 +205,8 @@ missing, the human-terminal checks refuse it.
 | `AIDA_DEPUTY_SPOOL` | The path of the deputy spool the job came from, where its terminal marker lives. With `AIDA_DEPUTY_JOB` set and this unset or wrong, the floor check fails closed. | unset outside a deputy job. | launch-path (`aida deputy` worker) | process env |
 | `AIDA_DEPUTY_REQUESTER` | The session id of whoever submitted the job (`unknown` if the submitter had no session id). For display and attribution only; it grants nothing. | unset outside a deputy job. | launch-path (`aida deputy` worker) | process env |
 | `AIDA_DEPUTY_VIA_WRAPPER` | Set by the `aida()` shell function, only for the one command, when it starts `aida deputy`. A bare binary run without it is told to start the deputy from the shell. The worker strips it from every job's environment. | unset. | launch-path (`aida()` shell function) | per-command env |
+| `AIDA_DEPUTY_SHELL_JOB` | The id of the script-deputy job (`aida deputy shell`) this process belongs to. A process that carries it cannot submit another script job or start a deputy of either kind. It grants nothing: a script job runs as the operator at their terminal by design. | unset outside a script job. | launch-path (`aida deputy shell` runner) | process env |
+| `AIDA_DEPUTY_SHELL_NAME` | The name of the script deputy that runs this job. Display only. | unset outside a script job. | launch-path (`aida deputy shell` runner) | process env |
 
 ---
 

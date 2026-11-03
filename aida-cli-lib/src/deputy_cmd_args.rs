@@ -6,8 +6,16 @@ use std::path::PathBuf;
 
 /// Run jobs other sessions submit, under the grant held by your terminal.
 ///
-/// Start it once in your own terminal, from your shell (`aida deputy`, through
-/// the `aida()` shell function). It refuses to start without a human
+/// Two kinds of deputy exist. The command deputy (`aida deputy`) runs single
+/// allow-listed commands, several at once, with no terminal unless you allow
+/// a command prefix one, and is safe to leave running. The script deputy
+/// (`aida deputy shell`) runs whole shell scripts, one at a time, in your
+/// terminal and as you: every script it runs counts as you at the keyboard.
+/// Use the command deputy for single commands, and the script deputy only for
+/// multi-step operator acts the command deputy cannot express.
+///
+/// This is the command deputy. Start it once in your own terminal, from your
+/// shell (`aida deputy`, through the `aida()` shell function). It refuses to start without a human
 /// terminal, outside the shell function, or without a seat grant. Sessions
 /// then hand it work with `aida deputy submit -- <command…>`, and get the exit
 /// code and output back with `--wait`, `aida deputy status <id>` or
@@ -47,10 +55,6 @@ pub(crate) struct DeputyStartArgs {
     /// An executable other than `aida` that jobs may run (repeatable).
     #[arg(long = "allow-exec", value_name = "PATH")]
     pub allow_exec: Vec<PathBuf>,
-    /// Also run shell-script jobs (`submit -f FILE` / `--script`). Script jobs
-    /// never get a terminal.
-    #[arg(long)]
-    pub allow_scripts: bool,
     /// A terminal job silent this long shows as waiting on a prompt in
     /// `aida deputy status`. It is never stopped for it; its --timeout
     /// still applies.
@@ -88,6 +92,26 @@ pub(crate) enum DeputyCommand {
     Resume(DeputyNameArgs),
     /// Acknowledge failed jobs so `aida awaiting` stops listing them.
     Ack(DeputyAckArgs),
+    /// The script deputy: run whole shell scripts at your terminal, as you.
+    ///
+    /// Two kinds of deputy exist. The command deputy (`aida deputy`) runs single
+    /// allow-listed commands, several at once, with no terminal unless you allow
+    /// a command prefix one, and is safe to leave running. The script deputy
+    /// (`aida deputy shell`) runs whole shell scripts, one at a time, in your
+    /// terminal and as you: every script it runs counts as you at the keyboard.
+    /// Use the command deputy for single commands, and the script deputy only for
+    /// multi-step operator acts the command deputy cannot express.
+    ///
+    /// This is the script deputy. Start it in your own terminal with `aida
+    /// deputy shell run`, through the `aida()` shell function and holding an
+    /// advisor grant. Advisor sessions queue a script with `aida deputy shell
+    /// submit --file FILE --wait` and get its exit code back. Before each job
+    /// runs, the deputy checks that its submitter is a live session with a
+    /// valid grant on this machine, and shows you the script. Every job's
+    /// script, sha256, submitter, times, exit code and transcript are kept
+    /// under ~/.aida/deputy-shell/<name>/, with every step in its audit.jsonl.
+    // trace:STORY-2338 | ai:claude
+    Shell(crate::deputy_shell_cmd::DeputyShellArgs),
 }
 
 /// trace:STORY-B6B1278890774EF993D2EBC327862470-155 | ai:claude
@@ -129,13 +153,6 @@ pub(crate) struct DeputySubmitArgs {
     /// The spec this job is for (recorded in the ledger).
     #[arg(long, value_name = "SPEC-ID", value_parser = crate::spec_arg::spec_id)]
     pub spec: Option<String>,
-    /// Run this file's contents as a bash script (needs a deputy started with
-    /// --allow-scripts).
-    #[arg(short = 'f', long = "file", value_name = "FILE", conflicts_with_all = ["script", "argv"])]
-    pub file: Option<PathBuf>,
-    /// Run this text as a bash script (needs --allow-scripts on the deputy).
-    #[arg(long, value_name = "BODY", conflicts_with = "argv")]
-    pub script: Option<String>,
     /// The command to run, after `--`.
     #[arg(last = true, value_name = "COMMAND")]
     pub argv: Vec<String>,

@@ -636,10 +636,12 @@ views. The spec records themselves are the data it acts on, not part of it.
 
 ### Deputy
 
-A helper you start in your own terminal with `aida deputy`. Agents hand it
-commands to run under your seat grant, and it runs only what you allowed,
-records each job and tells the submitting agent the result. See
-[`aida deputy`](../cli/06-roles-sessions.md#aida-deputy).
+A helper you start in your own terminal that runs work other sessions hand
+it, under your seat grant. There are two kinds. The command deputy
+(`aida deputy`) runs single commands you allowed. The script deputy
+(`aida deputy shell`) runs whole scripts from the advisor, one at a time, at
+your terminal and as you. Both record each job and tell the submitting
+session the result. See [Deputies: command vs script](../deputies.md).
 
 ### Grant
 

@@ -1194,10 +1194,15 @@ pub(crate) fn collect_awaiting_report_with_mail_facts(
         let session = std::env::var("AIDA_SESSION_ID")
             .ok()
             .filter(|s| !s.trim().is_empty());
-        crate::deputy::unacked_failed_jobs(
-            &main_worktree_root_from(project_root),
+        let main = main_worktree_root_from(project_root);
+        let mut jobs = crate::deputy::unacked_failed_jobs(&main, session.as_deref());
+        // Script-deputy failures sit beside the command deputy's, labelled.
+        // trace:STORY-2338 | ai:claude
+        jobs.extend(crate::deputy_shell::unacked_failed_jobs(
+            &main,
             session.as_deref(),
-        )
+        ));
+        jobs
     };
 
     awaiting_you::AwaitingReport {

@@ -28,7 +28,9 @@ pub(crate) struct HumanTerminal {
     pub ttys: [bool; 3],
     pub agent: bool,
     pub headless: bool,
-    /// Running as (or under) a deputy job: `AIDA_DEPUTY_JOB` is set.
+    /// Running as (or under) a job of either deputy: `AIDA_DEPUTY_JOB` or
+    /// `AIDA_DEPUTY_SHELL_JOB` is set.
+    // trace:STORY-2338 | ai:claude
     pub in_deputy_job: bool,
     /// The `aida()` shell function routed this call.
     pub via_wrapper: bool,
@@ -37,7 +39,7 @@ pub(crate) struct HumanTerminal {
 }
 
 impl HumanTerminal {
-    fn ambient() -> Self {
+    pub(crate) fn ambient() -> Self {
         use crate::gate::kernel_deps as k;
         let set = |key: &str| std::env::var_os(key).is_some_and(|v| !v.is_empty());
         Self {
@@ -48,7 +50,7 @@ impl HumanTerminal {
             ],
             agent: set("AIDA_AGENT_TYPE"),
             headless: std::env::var("AIDA_HEADLESS").as_deref() == Ok("1"),
-            in_deputy_job: set(deputy::JOB_ENV),
+            in_deputy_job: set(deputy::JOB_ENV) || set(crate::deputy_shell::JOB_ENV),
             via_wrapper: std::env::var(deputy::VIA_WRAPPER_ENV).as_deref() == Ok("1"),
             wrapper_marker: std::env::var("AIDA_SHELL_WRAPPER").ok(),
         }
@@ -124,6 +126,8 @@ fn run_deputy(
             ambient_refusal(false),
             &mut out,
         ),
+        // trace:STORY-2338 | ai:claude
+        Some(DeputyCommand::Shell(a)) => crate::deputy_shell_cmd::run(a),
         Some(DeputyCommand::Ack(a)) => {
             let main = crate::worktree_gc::find_main_worktree_root()
                 .context("aida deputy needs a git checkout")?;
@@ -194,7 +198,7 @@ fn start(a: &DeputyStartArgs) -> Result<()> {
     );
     eprintln!("  spool: {}", spool.root.display());
     eprintln!(
-        "  jobs:  `aida` commands{}{}",
+        "  jobs:  `aida` commands{}",
         if allow_exec.is_empty() {
             String::new()
         } else {
@@ -206,11 +210,6 @@ fn start(a: &DeputyStartArgs) -> Result<()> {
                     .collect::<Vec<_>>()
                     .join(", ")
             )
-        },
-        if a.allow_scripts {
-            "; SHELL SCRIPTS ALLOWED (--allow-scripts)"
-        } else {
-            ""
         }
     );
     print_policy(&pol, now, Some(grant.expires_at));
@@ -251,7 +250,6 @@ fn start(a: &DeputyStartArgs) -> Result<()> {
         name: a.name.clone(),
         workers: a.workers,
         allow_exec,
-        allow_scripts: a.allow_scripts,
         tty_idle: Duration::from_secs(tty_idle),
         poll: Duration::from_millis(500),
         grant: probe,
@@ -491,14 +489,12 @@ pub(crate) fn submit(
     requester: deputy::Requester,
     out: &mut dyn Write,
 ) -> Result<i32> {
-    let body = match (&a.file, &a.script, a.argv.is_empty()) {
-        (Some(f), None, true) => JobBody::Script(
-            std::fs::read_to_string(f).with_context(|| format!("read {}", f.display()))?,
-        ),
-        (None, Some(s), true) => JobBody::Script(s.clone()),
-        (None, None, false) => JobBody::Argv(a.argv.clone()),
-        _ => bail!("give the job as `-- <command…>`, `-f FILE` or `--script BODY` (exactly one)"),
-    };
+    // A shell script is the script deputy's job (`aida deputy shell submit`).
+    // trace:STORY-2338 | ai:claude
+    if a.argv.is_empty() {
+        bail!("give the job as `-- <command…>`; to run a shell script, use `aida deputy shell submit --file FILE`");
+    }
+    let body = JobBody::Argv(a.argv.clone());
     let timeout_secs = parse_secs(&a.timeout, "--timeout")?.max(1);
     let rec = JobRecord {
         id: deputy::new_job_id(),
