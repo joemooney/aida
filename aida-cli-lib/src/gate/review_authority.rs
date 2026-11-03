@@ -1062,7 +1062,9 @@ pub(crate) fn record_detached_worker_strict(
         is_work_lease(&lease),
         "lease {lease_id} is not a work lease; cannot record its worker"
     );
-    let token = process_token("proc", pid, Some(start));
+    // A pid read inside a sandbox's pid namespace is qualified with it.
+    // trace:TASK-2799 | ai:claude
+    let token = author_process_token("proc", pid, Some(start));
     let record = authorship_record(project_root, &lease, vec![token.clone()], false, None);
     let path = ledger_path(project_root);
     append_record(&path, &record).map_err(|e| {
