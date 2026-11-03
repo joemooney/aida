@@ -1,0 +1,29 @@
+id: 01a1a1a5-0067-7922-a823-0eccd7a4d181
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-342
+agreed_id: STORY-2346
+title: aida mandate renew revives the operator's most recent mandate even after it expired, and warns before expiry
+description: |-
+  Problem (2026-11-03): the ship-held mandate expired at 01:28 MST overnight. The operator ran 'aida mandate renew', but renew only extends an ACTIVE mandate, so it did nothing. Nothing merged for 5h: three approved green PRs (#3284 #3283 #3280) sat held and every implementer lane stalled.
+
+  The operator only ever renews the same mandate.
+
+  Acceptance:
+  1. With no active mandate, 'aida mandate renew' re-mints the operator's most recently expired mandate with the same scope (--ship-held, --include-supervised, protected paths, human gates) and a fresh TTL. It prints what it revived and when the old one expired. It still requires the same human-TTY authority as 'mandate start'.
+  2. When an active mandate exists, renew behaves as today (extends it).
+  3. With no prior mandate at all, renew errors with the exact 'aida mandate start ...' line to run.
+  4. About 60 minutes before an active mandate expires, the operator gets a prompt: the status line/hook banner shows 'MANDATE expires in Nm, run: aida mandate renew', and a coordination/mail notice goes to the operator and the advisor seat. The advisor's due jobs surface the same item so the advisor can batch it to the operator early.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-03T13:41:47.751489803Z
+modified_at: 2026-11-03T13:41:47.751489803Z
+req_type: Story
+filed_at:
+  code_sha: 6c587ee595ce70f5fcc48480cfdddc8246cf158c
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 6c587ee595c
+  vendor: claude
+  session: f5eddefe-032d-4760-94ba-3a318cf3d1d1
