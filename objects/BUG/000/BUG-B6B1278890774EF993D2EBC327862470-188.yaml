@@ -20,12 +20,12 @@ description: |
 
   ## Expected
   A reviewer lane's own lease never counts as an author of the PR it reviews. An operator-authored PR with no implementer lease is approvable by an independent reviewer lane. Identity tokens taken inside a pid namespace are not compared across namespaces.
-status: InProgress
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-03T02:31:19.103221790Z
-modified_at: 2026-11-03T07:18:48.013357241Z
+modified_at: 2026-11-03T16:45:55.094370701Z
 req_type: Bug
 tags:
 - area:gate
@@ -150,6 +150,20 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1a24d-920f-7812-a863-ce0a8823a9d6
+  author: aida-auto-bump
+  timestamp: 2026-11-03T16:45:55.087774537Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1a24d-9216-7f82-a47c-6b236752d211
+  timestamp: 2026-11-03T16:45:55.094366354Z
+  agent: aida
+  commit_sha: 1fc6b8bdc6dd4337e4d9d82e9740568bdf5d9830
+  summary: 'Re-review at 21ba1f44 (clean merge of main onto previously approved bb9854aa, no conflict hunks). All 3 BUG-2419 Expected criteria verified: reviewer leases never authors (reviewer_lease_on_the_pr_branch_is_never_an_author), PR-3277 sandboxed pid-2 false match fixed (pr_3277_reviewer_is_not_the_author_of_an_unrelated_sandboxed_claim, unqualified_pid_one_and_two_never_match), process tokens never compared across pid namespaces in authorship/lease/presenter/binding paths (namespaced_tokens_match_only_within_their_namespace, a_lease_from_another_namespace_never_matches_by_equal_pid_and_start, grant_writers tests). Every lease pid writer, including main''s newly merged code, records *_pid_ns. Full CI green at head (Build, cli-0/1, lib-0/1, rest, contracts, gates, merge-hold-gate).'
+  review_verdict: approved
 filed_at:
   code_sha: 553f7d5984c6083a9f2b47cfa358ce57c438843b
   branch: main
@@ -162,3 +176,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-11-03T03:08:20.705838150Z
   implemented_by: joe
+  completed_at: 2026-11-03T16:45:55.087768054Z
+  completion_sha: 1fc6b8bdc6dd4337e4d9d82e9740568bdf5d9830
