@@ -11,8 +11,14 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-03T13:49:30.195676116Z
-modified_at: 2026-11-03T13:51:23.939262970Z
+modified_at: 2026-11-03T13:57:14.834258212Z
 req_type: Bug
+comments:
+- id: 01a1a1b3-25d2-7b13-bb06-f3c50afaf135
+  author: mcp
+  content: 'Implementation in progress: promotion and rollback enumerate enabled/enabled-runtime aida-mail-wake services and restart/report each after the live pair swap, before promotion rechecks retention. Failed restarts retain explicit systemctl recovery commands and do not skip other units. Human retention dry runs identify unverified writers'' owning service from /proc/<pid>/cgroup and show the scoped restart command. Adding targeted regression coverage; no host services have been restarted during tests.'
+  created_at: 2026-11-03T13:57:14.834246310Z
+  modified_at: 2026-11-03T13:57:14.834246310Z
 history:
 - id: 01a1a1ad-cb23-70d0-8689-8418a67dbdf6
   author: aida-session-start
