@@ -14,12 +14,12 @@ description: |
   2. The lane's target dir is warm on first use: seeded or shared with the primary's agent-profile target, so the first targeted run isn't a cold full build.
   3. The implementer prompt names that path in place of `setsid nohup`, and a lane that cannot run it says so in its result line (`untested=true`) so the advisor knows.
   4. Test: a headless lane fixture runs one filtered cargo test via the sanctioned path and reports its pass/fail.
-status: InProgress
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T02:25:46.947809262Z
-modified_at: 2026-11-03T15:37:02.186437184Z
+modified_at: 2026-11-03T20:40:20.139900610Z
 req_type: Bug
 tags:
 - area:agents
@@ -864,6 +864,23 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1a324-2f90-7c10-8e17-7b5151d5c67c
+  author: aida-auto-bump
+  timestamp: 2026-11-03T20:40:20.112099489Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1a324-2fab-7383-9671-032a64324683
+  timestamp: 2026-11-03T20:40:20.139896321Z
+  agent: aida
+  commit_sha: 71a98c8d2859a8382d945f8fdfbe2d91529cb36c
+  summary: 'Independent re-review at fabbd68 (clean merge of main b8f4eaa onto previously-approved c6c910e; overlap files claim.rs/session.rs/session_start.rs/help golden/json-audit carry only PR hunks, every SessionLease literal has lane_jobs). AC acd61bb0 verified by overlay_tests.rs:890 real-cargo bwrap lane job + lane_job.rs validate/allow-list, host cargo wrapper with XDG_RUNTIME_DIR for slot limiter; accf30b1 by overlay_tests.rs:730 + seat_target_seed/session_start.rs reflink seed; acd7d2a4 by lane_job_tests.rs:888/915 + LANE_JOB_CONTRACT and with_untested (runner absent => untested=true); Test criterion by lane_job_tests.rs:268 + overlay_tests.rs:890. Containment: env_clear + allow-lists, O_NOFOLLOW inbox, unwrapped sandbox cfg(test)-only, fail-closed without os_wrap/bwrap. CI at head green on all 7 shards incl. gates (live bwrap gate with bug_2383_bwrap_ prefix); merge-hold-gate red is the expected supervised hold. No defects found.'
+  punted:
+  - 'punted: Independent full sweep: 3 confirmed CI failures plus false tested tally, Claude-only drain job setup, and non-mandatory live containment regression; CI remains a ship blocker.'
+  - 'punted: AC1/AC3/AC4 native tool integration unmet: env-only runner discovery and direct shell fixture bypass Codex core tool policy; other five blockers corrected.'
+  review_verdict: approved
 filed_at:
   code_sha: 7518617e469376bbe5debebd7cadd980e08656e5
   branch: main
@@ -876,3 +893,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-11-01T04:19:25.125387348Z
   implemented_by: joe
+  completed_at: 2026-11-03T20:40:20.112092858Z
+  completion_sha: 71a98c8d2859a8382d945f8fdfbe2d91529cb36c
