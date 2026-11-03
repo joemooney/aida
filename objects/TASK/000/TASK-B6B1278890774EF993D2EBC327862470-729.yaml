@@ -6,12 +6,12 @@ description: |-
 
   non-blocking/minor: config_cmd.rs:1364 write_codex_posture(Contained) still sets sandbox_workspace_write.writable_roots to ~/.cargo, ~/.rustup and ~/.aida. That is the BUG-2418 exposure in a codex workspace-write lane that runs outside the os_wrap bwrap. It is out of this ruling's scope (the bwrap profile); needs a follow-up.
   Reviewed sha: 1c54c4d85edd1496e1a9b1921c51fe19641ade42
-status: Draft
+status: Approved
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-03T08:37:09.154000416Z
-modified_at: 2026-11-03T13:50:27.621637390Z
+modified_at: 2026-11-03T13:52:10.034978624Z
 req_type: Task
 tags:
 - carried-from:BUG-2418
@@ -29,6 +29,14 @@ history:
   timestamp: 2026-11-03T13:50:28.709588294Z
   session_id: f5eddefe-032d-4760-94ba-3a318cf3d1d1
   changes: []
+- id: 01a1a1ae-7f32-7541-85f5-22b885466b25
+  author: joe
+  timestamp: 2026-11-03T13:52:10.034972878Z
+  session_id: f5eddefe-032d-4760-94ba-3a318cf3d1d1
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: 6c587ee595ce70f5fcc48480cfdddc8246cf158c
   branch: main
