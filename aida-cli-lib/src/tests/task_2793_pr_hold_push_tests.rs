@@ -79,3 +79,21 @@ fn hold_fails_when_the_local_branch_is_missing() {
 
     assert!(err.to_string().contains("does not exist"), "{err}");
 }
+
+#[test]
+fn hold_succeeds_when_the_push_lands_but_the_upstream_config_write_fails() {
+    let (_tmp, work, origin) = repo_with_bare_origin();
+    let local = git(&work, &["rev-parse", "HEAD"]);
+    // A held config lock makes `push -u` exit nonzero after the ref uploaded —
+    // the sandboxed-seat failure seen while shipping this fix.
+    std::fs::write(work.join(".git").join("config.lock"), "").unwrap();
+
+    let sha = push_and_verify_held_branch(&work, "origin", "held-branch")
+        .expect("origin's verified tip, not the push exit code, decides the hold");
+
+    assert_eq!(sha, local);
+    assert_eq!(
+        git(&origin, &["rev-parse", "refs/heads/held-branch"]),
+        local
+    );
+}

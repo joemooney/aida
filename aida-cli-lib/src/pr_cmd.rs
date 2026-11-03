@@ -219,13 +219,17 @@ pub(crate) fn push_and_verify_held_branch(
         .remote_credentials(repo, remote)
         .output()
         .context("could not invoke git push")?;
-    if !push.status.success() {
-        anyhow::bail!(
-            "could not push `{branch}` to {remote}, so the PR is not held: {}\n\
-             Fix the push (e.g. `git push -u {remote} {branch}`), then re-run `aida pr hold`.",
-            String::from_utf8_lossy(&push.stderr).trim()
-        );
-    }
+    // A push can upload the ref yet exit nonzero (e.g. `-u` cannot write the
+    // upstream into a read-only `.git/config` in a sandbox), so origin's tip
+    // decides success; the push's stderr only explains a failure.
+    let push_err =
+        (!push.status.success()).then(|| String::from_utf8_lossy(&push.stderr).trim().to_string());
+    let not_pushed = |detail: &str| {
+        anyhow::anyhow!(
+            "could not push `{branch}` to {remote}, so the PR is not held: {detail}\n\
+             Fix the push (e.g. `git push -u {remote} {branch}`), then re-run `aida pr hold`."
+        )
+    };
 
     let ls = std::process::Command::new("git")
         .arg("-C")
@@ -236,19 +240,31 @@ pub(crate) fn push_and_verify_held_branch(
         .output()
         .context("could not invoke git ls-remote")?;
     if !ls.status.success() {
-        anyhow::bail!(
-            "pushed `{branch}` but could not verify it on {remote}: {}",
-            String::from_utf8_lossy(&ls.stderr).trim()
-        );
+        let ls_err = String::from_utf8_lossy(&ls.stderr).trim().to_string();
+        return Err(match push_err {
+            Some(e) => not_pushed(&e),
+            None => anyhow::anyhow!(
+                "pushed `{branch}` but could not verify it on {remote}, so the PR is not held: {ls_err}"
+            ),
+        });
     }
     let remote_tip =
         pr_rebase::parse_ls_remote_tip(&String::from_utf8_lossy(&ls.stdout), &full_ref);
-    match remote_tip {
-        Some(tip) if tip == local_sha => Ok(local_sha),
-        Some(tip) => anyhow::bail!(
+    match (remote_tip, push_err) {
+        (Some(tip), push_err) if tip == local_sha => {
+            if let Some(e) = push_err {
+                eprintln!(
+                    "  {} {remote} has `{branch}` at {local_sha}, but git push also reported: {e}",
+                    "⚠".yellow()
+                );
+            }
+            Ok(local_sha)
+        }
+        (_, Some(e)) => Err(not_pushed(&e)),
+        (Some(tip), None) => anyhow::bail!(
             "{remote} has `{branch}` at {tip}, not the local tip {local_sha} — the PR is not held"
         ),
-        None => anyhow::bail!(
+        (None, None) => anyhow::bail!(
             "git push reported success but {remote} has no `{branch}` ref — the PR is not held"
         ),
     }
