@@ -630,3 +630,39 @@ fn story_2256_hand_started_codex_session_arms_wakes_once_and_retires() {
     assert!(run_once(&opts, &lock, &watcher, &queue).is_empty());
     assert_eq!(queue.sent.borrow().len(), 1);
 }
+
+// trace:BUG-2424 | ai:codex
+#[test]
+fn restart_enabled_mail_wake_services_reports_each_and_continues_after_failure() {
+    let mut calls = Vec::new();
+    let mut out = Vec::new();
+    restart_enabled_services_with(&mut out, |args| {
+        calls.push(args.join(" "));
+        if args[0] == "list-unit-files" {
+            return Ok("aida-mail-wake-a.service enabled enabled\naida-mail-wake-b.service enabled-runtime -\naida-mail-wake-disabled.service disabled enabled\nunrelated.service enabled enabled\naida-mail-wake-a.service enabled enabled\naida-mail-wake-;bad.service enabled enabled\n".into());
+        }
+        if args[1] == "aida-mail-wake-a.service" {
+            anyhow::bail!("manager refused");
+        }
+        Ok(String::new())
+    }).unwrap();
+    assert_eq!(
+        &calls[1..],
+        [
+            "restart aida-mail-wake-a.service",
+            "restart aida-mail-wake-b.service"
+        ]
+    );
+    let out = String::from_utf8(out).unwrap();
+    assert!(out.contains("systemctl --user restart aida-mail-wake-a.service"));
+    assert!(out.contains("Restarted mail-wake service: aida-mail-wake-b.service"));
+}
+
+// trace:BUG-2424 | ai:codex
+#[test]
+fn restart_mail_wake_empty_and_unavailable_manager() {
+    let mut out = Vec::new();
+    restart_enabled_services_with(&mut out, |_| Ok(String::new())).unwrap();
+    assert!(out.is_empty());
+    assert!(restart_enabled_services_with(&mut out, |_| anyhow::bail!("no user manager")).is_err());
+}

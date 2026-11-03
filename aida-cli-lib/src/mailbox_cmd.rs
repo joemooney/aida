@@ -1187,6 +1187,17 @@ fn print_retention_report(project_root: &std::path::Path, json: bool) -> Result<
             }
         };
         println!("  pid {:>7}  {}  ({verdict})", host.pid, host.command);
+        // trace:BUG-2424 | ai:codex
+        if matches!(
+            &host.verdict,
+            aida_core::mailbox_lifecycle::activation::HostVerdict::Unverified { .. }
+        ) {
+            if let Ok(cgroup) = std::fs::read_to_string(format!("/proc/{}/cgroup", host.pid)) {
+                if let Some(line) = retention_service_hint(&cgroup) {
+                    println!("    {line}");
+                }
+            }
+        }
     }
     if let Some(why) = &report.scan_incomplete {
         println!("  the process scan is incomplete: {why}");
@@ -1203,6 +1214,36 @@ fn print_retention_report(project_root: &std::path::Path, json: bool) -> Result<
         );
     }
     Ok(())
+}
+
+// The innermost service owns the writer; user@UID.service is the manager,
+// not a writer's service. Read-only /proc evidence never grants activation.
+// trace:BUG-2424 | ai:codex
+#[cfg(unix)]
+fn retention_service_hint(cgroup: &str) -> Option<String> {
+    let unit = cgroup.lines().find_map(|line| {
+        let path = line.splitn(3, ':').nth(2)?;
+        path.split('/').rev().find(|name| {
+            name.ends_with(".service")
+                && !name.starts_with("user@")
+                && name
+                    .bytes()
+                    .all(|b| b.is_ascii_alphanumeric() || b"-_.@:\\".contains(&b))
+        })
+    })?;
+    let quoted = if unit.contains('\\') {
+        format!("'{unit}'")
+    } else {
+        unit.to_string()
+    };
+    let scope = if cgroup.lines().any(|line| line.contains("/user.slice/")) {
+        " --user"
+    } else {
+        ""
+    };
+    Some(format!(
+        "systemd unit {unit}; restart with `systemctl{scope} restart {quoted}`"
+    ))
 }
 
 /// The report's lines about the recorded activation. A record made by
@@ -3211,5 +3252,26 @@ fn mailbox_cli_policy(matches: &clap::ArgMatches) -> crate::command_registry::Cm
         per_write_auto_push: false,
         skip_role_restore_prompt: false,
         team_identity_write: false,
+    }
+}
+
+// trace:BUG-2424 | ai:codex
+#[cfg(test)]
+mod service_hint_tests {
+    use super::retention_service_hint;
+
+    #[test]
+    fn names_owning_service_with_actionable_user_restart() {
+        let line = retention_service_hint("0::/user.slice/user-1000.slice/user@1000.service/app.slice/aida-mail-wake-abc.service/child\n").unwrap();
+        assert!(line.contains("systemd unit aida-mail-wake-abc.service"));
+        assert!(line.contains("systemctl --user restart aida-mail-wake-abc.service"));
+        assert!(retention_service_hint(
+            "0::/user.slice/user-1000.slice/user@1000.service/app.slice/session.scope\n"
+        )
+        .is_none());
+        assert!(retention_service_hint("malformed\n").is_none());
+        assert!(retention_service_hint("0::/system.slice/writer.service\n")
+            .unwrap()
+            .contains("systemctl restart writer.service"));
     }
 }

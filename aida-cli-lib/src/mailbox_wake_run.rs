@@ -1018,6 +1018,55 @@ pub(crate) fn service(
     }
 }
 
+/// Refresh all enabled project watchers, including projects other than this cwd.
+// trace:BUG-2424 | ai:codex
+pub(crate) fn restart_enabled_services(out: &mut dyn std::io::Write) -> Result<()> {
+    restart_enabled_services_with(out, systemctl)
+}
+
+// Each call has the existing systemctl deadline. A failed restart must not hide
+// the remaining units or claim that the already-completed swap was undone.
+// trace:BUG-2424 | ai:codex
+fn restart_enabled_services_with(
+    out: &mut dyn std::io::Write,
+    mut run: impl FnMut(&[&str]) -> Result<String>,
+) -> Result<()> {
+    let listing = run(&[
+        "list-unit-files",
+        "aida-mail-wake-*.service",
+        "--state=enabled,enabled-runtime",
+        "--no-legend",
+        "--no-pager",
+    ])?;
+    let mut units = std::collections::BTreeSet::new();
+    for line in listing.lines() {
+        let mut fields = line.split_whitespace();
+        let (Some(name), Some(state)) = (fields.next(), fields.next()) else {
+            continue;
+        };
+        if matches!(state, "enabled" | "enabled-runtime") && mail_wake_unit(name) {
+            units.insert(name);
+        }
+    }
+    for unit in units {
+        match run(&["restart", unit]) {
+            Ok(_) => writeln!(out, "Restarted mail-wake service: {unit}")?,
+            Err(error) => writeln!(out, "warning: could not restart mail-wake service {unit} ({error:#}); retry `systemctl --user restart {unit}`")?,
+        }
+    }
+    Ok(())
+}
+
+// Accept only literal unit names, safe to print in a shell recovery command.
+// trace:BUG-2424 | ai:codex
+fn mail_wake_unit(name: &str) -> bool {
+    name.starts_with("aida-mail-wake-")
+        && name.ends_with(".service")
+        && name
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || b"-_.".contains(&b))
+}
+
 #[cfg(test)]
 #[path = "mailbox_wake_run_tests.rs"]
 mod tests;
