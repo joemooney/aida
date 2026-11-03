@@ -18,12 +18,12 @@ description: |-
   1. `aida session resume` actually execs `codex resume <id>` (with resolved posture/containment) when resuming a Codex session.
   2. `aida queue work --resume` (interactive and headless), `standalone_implementer` background-wait resume, and `phase_driver_trait::resume_implementer_with_advisor_answer` support `HeadlessVendor::Codex` via `codex resume` / `codex exec resume` and `~/.codex/sessions` lookup.
   3. `aida role enter --resume` and `aida tui` (`Intent::Resume`, `TabVendor::Codex`) support resuming Codex sessions alongside Claude.
-status: InProgress
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T06:45:38.111981577Z
-modified_at: 2026-11-02T22:09:55.894689039Z
+modified_at: 2026-11-03T00:29:59.199847888Z
 req_type: Bug
 tags:
 - architecture
@@ -612,6 +612,20 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a19ed0-137e-7e83-a802-fcd097c48558
+  author: aida-auto-bump
+  timestamp: 2026-11-03T00:29:59.038619509Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a19ed0-141f-78a3-8482-4f7ca392a786
+  timestamp: 2026-11-03T00:29:59.199839586Z
+  agent: aida
+  commit_sha: 2d4c8cf53970af435900579e4e627d8f4a44d716
+  summary: 'Round-8 delta: all 4 ruling items fixed (lib-1 inventory ratchet, Codex plan-only resume keeps read-only sandbox + test, recorded_resume step 4 binds lease to its own ids via lease_owns_id + foreign-id tests, exec_or_spawn_agent rename). AC1 session resume execs codex resume; AC2 queue work --resume/bg-wait/punt-resume route Codex via prepare_launch; AC3 role enter offer + TUI resume Codex. Main merge 7fcde6e is clean (TASK-2707 cache dir, no overlap). CI run 41543671676 green at head.'
+  review_verdict: approved
 execution_mode: drain
 filed_at:
   code_sha: 6dc7d4977ac5e47c42ddfb26597fe3ec5fb70b60
@@ -621,3 +635,7 @@ filed_at:
   aida_build_sha: 962ca07af25
   vendor: antigravity
   session: 01a194b1bcfb
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-03T00:29:59.038614164Z
+  completion_sha: 2d4c8cf53970af435900579e4e627d8f4a44d716
