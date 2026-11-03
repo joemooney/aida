@@ -2358,7 +2358,7 @@ pub(crate) fn collect_fast_status_snapshot(project_root: &std::path::Path) -> Fa
     // the snapshot can reconcile "163 routed" against a far smaller live set.
     let queue_actionable = role_queue_actionable(project_root, &role).len();
     let mcp_authority_lines = agent_registry::mcp_authority_status_lines_for_project(project_root);
-    let cache_path = project_root.join(".aida/cache.db");
+    let cache_path = aida_core::db::migrated_project_cache_path(project_root);
     let cache_present = cache_path.exists();
     let (counts, by_status) = fast_status_counts_from_cache(&cache_path);
     FastStatusSnapshot {
@@ -2982,7 +2982,7 @@ pub(crate) fn role_queue_actionable(
     // Resolve id + title + liveness fields from the read-only cache (no full
     // store load), keyed by the requirement UUID the queue entry carries, and
     // KEEP only the actionable ones.
-    let cache_path = project_root.join(".aida/cache.db");
+    let cache_path = aida_core::db::migrated_project_cache_path(project_root);
     let conn = rusqlite::Connection::open_with_flags(
         &cache_path,
         rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY,

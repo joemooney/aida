@@ -1514,7 +1514,8 @@ pub(crate) fn describe_status_entry(line: &str) -> String {
 
 /// Whether a probe `git status` entry is the session's runtime state or
 /// build/cache output rather than work: the `.aida-store` link to the
-/// primary's store, `.aida/cache.db*`, `.aida/agents`, and `target/`. Only
+/// primary's store, `.aida/cache-db` (and legacy `.aida/cache.db*`),
+/// `.aida/agents`, and `target/`. Only
 /// untracked entries qualify; `.aida-store` only while it is a symlink (read
 /// with metadata only; nothing in the clone is opened).
 // trace:BUG-B6B1278890774EF993D2EBC327862470-051 | ai:claude
@@ -1527,7 +1528,10 @@ pub(crate) fn is_runtime_noise_entry(clone: &Path, line: &str) -> bool {
         return std::fs::symlink_metadata(clone.join(path))
             .is_ok_and(|meta| meta.file_type().is_symlink());
     }
+    // trace:TASK-2707 | ai:claude
     path.starts_with(".aida/cache.db")
+        || path == ".aida/cache-db"
+        || path.starts_with(".aida/cache-db/")
         || path == ".aida/agents"
         || path.starts_with(".aida/agents/")
         || path == "target"
@@ -1624,23 +1628,82 @@ pub(crate) fn probe_counting_origin(
     if facts.unpushed == 0 {
         return first;
     }
-    let Some(branch) = branch
+    let budget = || {
+        let remaining = deadline.map_or(PROBE_TIMEOUT, |end| {
+            end.saturating_duration_since(std::time::Instant::now())
+        });
+        (remaining / 2).min(ORIGIN_REFRESH_CAP)
+    };
+    let branch = branch
         .filter(|b| !b.is_empty())
         .map(str::to_owned)
-        .or_else(|| facts.branch.clone())
-    else {
-        return first;
+        .or_else(|| facts.branch.clone());
+    let mut best = first;
+    if let Some(branch) = branch {
+        if refresh_origin_branch(main, &branch, budget()) {
+            if let again @ Probe::Known(_) = probe_until(main, clone, shipped, deadline) {
+                best = again;
+            }
+        }
+    }
+    // BUG-2415: a seat that pushed with an explicit refspec
+    // (`HEAD:refs/heads/<name>`) may have published under a name other than
+    // the lease branch, and neither the clone nor main tracks it. Ask origin
+    // for its real branch tips: a clone ref tip equal to one is on origin, and
+    // so is everything it reaches. Any failure keeps the reading standing.
+    // trace:BUG-2415 | ai:claude
+    if matches!(&best, Probe::Known(facts) if facts.unpushed > 0) {
+        let heads = origin_head_oids(main, budget());
+        if !heads.is_empty() {
+            let excused: Vec<String> = shipped.iter().cloned().chain(heads).collect();
+            if let again @ Probe::Known(_) = probe_until(main, clone, &excused, deadline) {
+                best = again;
+            }
+        }
+    }
+    best
+}
+
+/// The most origin branch tips [`origin_head_oids`] hands the probe; past it
+/// none are used, and the count stays conservative.
+const ORIGIN_HEADS_CAP: usize = 5_000;
+
+/// The commit ids origin's branches point at right now (`git ls-remote
+/// --heads origin`, host git in main only, bounded, no prompts), for
+/// [`probe_counting_origin`] to excuse. Empty on any failure, a timeout, or
+/// more than [`ORIGIN_HEADS_CAP`] branches.
+// trace:BUG-2415 | ai:claude
+pub(crate) fn origin_head_oids(main: &Path, timeout: std::time::Duration) -> Vec<String> {
+    if timeout.is_zero() {
+        return Vec::new();
+    }
+    let mut cmd = aida_core::git_ops::host_remote_git_command(main, "origin");
+    cmd.env(ACCESSOR_ENV, "1")
+        .env("GIT_TERMINAL_PROMPT", "0")
+        .env(
+            "GIT_SSH_COMMAND",
+            crate::forge::batch_mode_ssh_command(main),
+        )
+        .stdin(std::process::Stdio::null())
+        .args(["ls-remote", "--heads", "origin"]);
+    let Some(out) = crate::command_output_with_timeout(cmd, timeout) else {
+        return Vec::new();
     };
-    let remaining = deadline.map_or(PROBE_TIMEOUT, |end| {
-        end.saturating_duration_since(std::time::Instant::now())
-    });
-    if !refresh_origin_branch(main, &branch, (remaining / 2).min(ORIGIN_REFRESH_CAP)) {
-        return first;
+    if !out.status.success() {
+        return Vec::new();
     }
-    match probe_until(main, clone, shipped, deadline) {
-        again @ Probe::Known(_) => again,
-        _ => first,
+    let mut oids: Vec<String> = String::from_utf8_lossy(&out.stdout)
+        .lines()
+        .filter_map(|line| line.split_whitespace().next())
+        .filter(|oid| is_full_oid(oid))
+        .map(str::to_string)
+        .collect();
+    oids.sort_unstable();
+    oids.dedup();
+    if oids.len() > ORIGIN_HEADS_CAP {
+        return Vec::new();
     }
+    oids
 }
 
 /// Parse [`UNPUSHED_COUNT_SCRIPT`]'s output: the total on the first line,

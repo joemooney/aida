@@ -170,7 +170,7 @@ memory before relying on it. Prefer the `$aida-memory-query` and
             )
         } else {
             "Requirements database: distributed git-canonical store at `.aida-store/` \
-             (orphan branch `aida-store`, plus a rebuildable SQLite cache at `.aida/cache.db`)."
+             (orphan branch `aida-store`, plus a rebuildable SQLite cache at `.aida/cache-db/cache.db`)."
                 .to_string()
         };
 

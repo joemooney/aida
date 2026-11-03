@@ -509,7 +509,14 @@ const LAUNCH_INVENTORY: &[(&str, usize, Finalization)] = &[
     ("questions.rs", 2, Finalization::CoordinatorSpawn),
     // Claude-only builders/resumes plus the shared seat-env helper; every
     // Codex spawn in this file (incl. the coordinator spawn) finalizes.
-    ("session.rs", 12, Finalization::PrepareLaunch(5)),
+    // BUG-2386 adds two Codex resume sites, both finalized: the interactive
+    // `build_codex_resume_command` (finalized by `finalize_codex_resume`, which
+    // `aida session resume`, `queue work --resume` and the reviewer resume
+    // call last) and the headless `spawn_vendor_headless_resume_granted`
+    // (punt/bg resume), which finalizes before stdio and revokes on refusal.
+    ("session.rs", 14, Finalization::PrepareLaunch(7)),
+    // trace:BUG-2416 | ai:claude — the guided `aida do` session.
+    ("zen_drive_root.rs", 1, Finalization::PrepareLaunch(1)),
 ];
 
 /// Child-launch markers in whitespace-normalized source: a grant selector
@@ -1474,6 +1481,101 @@ fn bug_2398_codex_advisor_consult_delegates_own_child_and_refuses_without_delega
     crate::session::set_headless_vendor_override(None);
 }
 
+/// BUG-2403 (signoff amendment 8): BUG-2398's recorder-artifact floor holds
+/// through the REMAPPED selectors too. An older friendly-label refusal and a
+/// newer native-label approval of the same requirement: the cross-label
+/// selection answers with the native approval, and that approval earns
+/// positive actionability only when it carries durable independent grant
+/// authority — the absent-grant artifact stays recordable but never
+/// resolves; an invalid presented grant still refuses recording; the
+/// protective refusal is never lost to an unselectable read.
+// trace:BUG-2403 | ai:claude
+#[test]
+fn bug_2403_bug_2398_recorder_artifacts_hold_through_remapped_selectors() {
+    use crate::gate::{review_authority as ra, review_verdict as rv, seat_authority as sa};
+    const FRIENDLY: &str = "TASK-24039";
+    const NATIVE: &str = "TASK-B6B1278890774EF993D2EBC327862470-399";
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    let mut ambient = crate::test_env::AmbientGuard::hermetic_and(
+        root,
+        None,
+        &[
+            ("AIDA_AGENT_NAME", Some("codex-reviewer-fixture")),
+            ("AIDA_AGENT_TYPE", Some("codex")),
+            ("AIDA_SESSION_ID", Some("independent-fixture-reviewer")),
+            ("AIDA_REVIEW_VERDICT_FILE", None),
+            ("AIDA_ROLE_INSTANCE", Some("driver")),
+            ("AIDA_CONTAINED", None),
+        ],
+    );
+    let head = crate::test_git::commit_fixture(root);
+    rv::record_verdict(
+        root,
+        FRIENDLY,
+        Some("request-changes"),
+        Some(&head),
+        Some("main"),
+        Some("older friendly refusal"),
+        &["obsolete finding".to_string()],
+        "ungranted-reviewer",
+    )
+    .unwrap();
+    std::thread::sleep(std::time::Duration::from_millis(15));
+    let record = || {
+        crate::handle_review_record_at(
+            root.to_path_buf(),
+            NATIVE,
+            "approved",
+            Some(&head),
+            Some("main"),
+            Some("actual recorder output"),
+            &[],
+            &[],
+            None,
+        )
+    };
+    let identity = ra::IdentitySource {
+        session_ids: vec!["independent-fixture-reviewer".into()],
+        ..Default::default()
+    };
+    let check = |authorized: bool| {
+        for ids in [[FRIENDLY, NATIVE], [NATIVE, FRIENDLY]] {
+            let v = rv::read_recorded_verdict_any(root, &ids).expect("a selection");
+            assert_eq!(v.kind, rv::VerdictKind::Approved, "{ids:?}");
+            let action =
+                rv::review_actionability(root, NATIVE, Some(&v), rv::TipRelation::AtReviewedSha);
+            assert_eq!(
+                action == rv::ReviewActionability::Resolved,
+                authorized,
+                "{ids:?}: {action:?}"
+            );
+        }
+        assert_eq!(
+            crate::queue_cmd::rework_findings_block_for_spec(root, FRIENDLY, NATIVE),
+            None,
+            "the obsolete friendly refusal's findings are not replayed"
+        );
+    };
+    // The absent-grant named-agent artifact: recordable, never positive.
+    ra::with_identity_source(identity.clone(), record).unwrap();
+    check(false);
+    // An invalid presented grant refuses recording.
+    ambient.set_key(sa::GRANT_ENV, uuid::Uuid::new_v4().to_string());
+    assert!(ra::with_identity_source(identity.clone(), record).is_err());
+    // A durable independent grant: positive through either label order.
+    let grant = sa::test_support::mint_grant_for(
+        root,
+        crate::test_env::HERMETIC_TEST_USER,
+        "reviewer",
+        &[],
+    );
+    ambient.set_key(sa::GRANT_ENV, &grant);
+    std::thread::sleep(std::time::Duration::from_millis(15));
+    ra::with_identity_source(identity, record).unwrap();
+    check(true);
+}
+
 /// How a production file that assigns `AIDA_SESSION_ROLE` to a child Command
 /// gets that role to a Codex child's hooks and tool shells.
 // trace:BUG-2395 | ai:claude
@@ -1503,15 +1605,12 @@ const ROLE_LAUNCH_SITES: &[(&str, usize, RoleRoute)] = &[
         RoleRoute::AidaChild("reviewer gate runs `aida queue work`, which finalizes in session.rs"),
     ),
     ("phase_driver.rs", 2, RoleRoute::LaunchInventory),
-    ("session.rs", 6, RoleRoute::LaunchInventory),
-    (
-        "zen_drive_root.rs",
-        1,
-        RoleRoute::KnownGap(
-            "guided `codex` launch sets the implementer role without prepare_launch; \
-             reported on BUG-2395 as a follow-up (new grant decision = separate spec)",
-        ),
-    ),
+    // BUG-2386 adds two: `finalize_codex_resume` (interactive resume, seat
+    // from the delegated grant) and `spawn_vendor_headless_resume_granted`
+    // (punt/bg resume); both finalize through `prepare_launch`.
+    // trace:BUG-2386 | ai:claude
+    ("session.rs", 8, RoleRoute::LaunchInventory),
+    ("zen_drive_root.rs", 1, RoleRoute::LaunchInventory),
 ];
 
 // trace:BUG-2395 | ai:claude
@@ -1623,5 +1722,64 @@ fn bug_2395_hook_under_prepared_codex_launch_sees_seat_role() {
         stdout.contains("AIDA active role: implementer") && stdout.contains("Lane fixture purpose"),
         "hook did not see the prepared seat role: {stdout}{}",
         String::from_utf8_lossy(&out.stderr)
+    );
+}
+
+/// BUG-2416: the guided `aida do` Codex launch makes an explicit baseline
+/// grant decision and takes its argv and env from `prepare_launch`; the
+/// Claude launch never enters the Codex adapter.
+// trace:BUG-2416 | ai:claude
+#[test]
+fn bug_2416_guided_codex_launch_is_finalized_by_prepare_launch() {
+    let tmp = tempfile::TempDir::new().unwrap();
+    let launch = crate::session::GuidedSessionLaunch {
+        program: "codex",
+        prompt: "guided prompt".into(),
+    };
+    let cmd = crate::zen_drive_root::guided_launch_command(&launch, tmp.path()).unwrap();
+
+    let mut expected = Command::new("codex");
+    expected
+        .arg("guided prompt")
+        .current_dir(tmp.path())
+        .env(GRANT_ENV, "")
+        .env(crate::gate::seat_authority::GRANT_FILE_ENV, "")
+        .env("AIDA_SESSION_ROLE", "implementer");
+    prepare_launch(&mut expected).unwrap();
+    let args = |c: &Command| c.get_args().map(|a| a.to_owned()).collect::<Vec<_>>();
+    let envs = |c: &Command| {
+        c.get_envs()
+            .map(|(k, v)| (k.to_owned(), v.map(|v| v.to_owned())))
+            .collect::<std::collections::BTreeMap<_, _>>()
+    };
+    assert_eq!(
+        args(&cmd),
+        args(&expected),
+        "argv comes from prepare_launch"
+    );
+    assert_eq!(envs(&cmd), envs(&expected), "env comes from prepare_launch");
+    assert!(
+        cmd.get_args().any(|a| a.to_string_lossy()
+            == "shell_environment_policy.set.AIDA_SESSION_ROLE=\"implementer\""),
+        "tool shells get the implementer seat: {:?}",
+        args(&cmd)
+    );
+    assert_eq!(
+        cmd.get_envs()
+            .find(|(k, _)| *k == GRANT_ENV)
+            .map(|(_, v)| v),
+        Some(Some(std::ffi::OsStr::new(""))),
+        "explicit empty baseline, never the launcher's grant"
+    );
+    assert_eq!(args(&cmd).last().unwrap(), "guided prompt");
+
+    let claude = crate::session::GuidedSessionLaunch {
+        program: "claude",
+        prompt: "/aida-guided-implement TASK-9".into(),
+    };
+    let cmd = crate::zen_drive_root::guided_launch_command(&claude, tmp.path()).unwrap();
+    assert_eq!(
+        args(&cmd),
+        vec![std::ffi::OsString::from("/aida-guided-implement TASK-9")]
     );
 }

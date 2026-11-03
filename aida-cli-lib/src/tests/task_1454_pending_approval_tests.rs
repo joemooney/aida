@@ -117,6 +117,7 @@ fn test_lease(id: &str, scope: &str, worktree: std::path::PathBuf, pid: u32) -> 
         ending_retained_reason: None,
         driver: None,
         child_grant_id: None,
+        vendor_session_id: None,
     }
 }
 

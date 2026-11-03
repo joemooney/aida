@@ -221,6 +221,13 @@ pub(crate) struct SessionLease {
     // trace:BUG-2165 | ai:antigravity
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) child_grant_id: Option<String>,
+    /// BUG-2386: the vendor's own resumable id for this lease's session, when
+    /// it differs from the AIDA-minted one (Codex mints its own thread id).
+    /// Stamped by `codex_resume`; absent on older leases, which read as
+    /// unbound.
+    // trace:BUG-2386 | ai:claude
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) vendor_session_id: Option<String>,
 }
 
 pub(crate) fn leases_dir(project_root: &std::path::Path) -> std::path::PathBuf {
@@ -353,6 +360,7 @@ pub(crate) fn session_harness_worktree_register(
         ending_retained_reason: None,
         driver: aida_core::driver_registry::driver_from_env(), // trace:STORY-1653 | ai:claude
         child_grant_id: None,
+        vendor_session_id: None,
     };
 
     std::fs::create_dir_all(leases_dir(&project_root))?;
@@ -3245,20 +3253,10 @@ pub(crate) fn force_cleanup_lease(project_root: &std::path::Path, lease: &Sessio
     if store_link.is_symlink() {
         let _ = std::fs::remove_file(&store_link);
     }
-    let aida_dir = lease.worktree_path.join(".aida");
-    for runtime in &[
-        "sessions",
-        "roles",
-        "cache.db",
-        "cache.db-shm",
-        "cache.db-wal",
-        "pgdata",
-    ] {
-        let p = aida_dir.join(runtime);
-        if p.is_symlink() {
-            let _ = std::fs::remove_file(&p);
-        }
-    }
+    // TASK-2707: the shared strip (current links, `agents`, and the legacy
+    // per-file cache links) instead of a private copy of the list.
+    // trace:TASK-2707 | ai:claude
+    crate::worktree_gc::unlink_worktree_aida_runtime(&lease.worktree_path.join(".aida"));
 
     // `git worktree remove --force` — `--force` because the dirty-tree
     // refusal in `session_end` is gated by interactive prompts; an

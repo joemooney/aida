@@ -603,7 +603,7 @@ fn temp_store(tmp: &Path) -> aida_core::CachedGitBackend {
     let store = tmp.join(".aida-store");
     std::fs::create_dir_all(&store).unwrap();
     std::fs::create_dir_all(tmp.join(".aida")).unwrap();
-    crate::test_env::home_fixture_cached_backend(&store, &tmp.join(".aida").join("cache.db"))
+    crate::test_env::home_fixture_cached_backend(&store, &aida_core::db::project_cache_path(&tmp))
         .unwrap()
 }
 

@@ -410,6 +410,11 @@ pub(crate) trait BuildSteps {
     fn version_sha(&mut self, aida: &Path) -> Option<String>;
     /// Restart MCP servers still running a replaced binary.
     fn restart_mcp(&mut self, layout: &DevLayout) -> Result<()>;
+    /// After a promote, re-record an existing mail-retention activation for
+    /// the new live build, only when a fresh scan shows every mail writer
+    /// running it.
+    // trace:BUG-2411 | ai:claude
+    fn rerecord_retention(&mut self, layout: &DevLayout) -> RetentionRerecord;
     /// Ask before replacing existing files at the link location.
     fn confirm(&mut self, prompt: &str) -> bool;
 }
@@ -423,6 +428,23 @@ pub(crate) struct DevBuildOptions {
     pub yes: bool,
     pub after_wave: bool,
 }
+
+/// What re-recording the mail-retention activation after a promote did.
+// trace:BUG-2411 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum RetentionRerecord {
+    /// No activation was ever recorded here (or there is no mail anchor), so
+    /// there is nothing to carry over to the new build.
+    NothingRecorded,
+    /// The fresh scan passed and the activation now names the new build.
+    Recorded,
+    /// Not recorded; `why` says what the scan (or the step) found.
+    NotRecorded { why: String },
+}
+
+/// The operator command that records the activation by hand.
+// trace:BUG-2411 | ai:claude
+pub(crate) const RETENTION_RECORD_COMMAND: &str = "aida mailbox retention activate";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum BuildOutcome {
@@ -632,6 +654,25 @@ pub(crate) fn run_dev_build(
                     "warning: could not restart stale MCP servers ({e:#}); they respawn on their next \
                      request, or restart your MCP client"
                 )?;
+            }
+            // Ruling C: carry the retention activation over to the new build
+            // only when a fresh scan admits it; otherwise name the command.
+            // trace:BUG-2411 | ai:claude
+            match steps.rerecord_retention(layout) {
+                RetentionRerecord::NothingRecorded => {}
+                RetentionRerecord::Recorded => writeln!(
+                    out,
+                    "Mail retention activation re-recorded for the new build: every running \
+                     mail writer runs it."
+                )?,
+                RetentionRerecord::NotRecorded { why } => writeln!(
+                    out,
+                    "note: mail retention activation was not re-recorded for the new build: {why}.\n\
+                     Until it is, ending a session whose mailbox holds mail is refused. Once every \
+                     mail writer runs the new build, an operator runs `{RETENTION_RECORD_COMMAND}` \
+                     (`{}` lists the writers still on another build).",
+                    aida_core::mailbox_lifecycle::ACTIVATION_COMMAND
+                )?,
             }
             BuildOutcome::Promoted
         }
@@ -1474,6 +1515,83 @@ fn run_with_timeout(cmd: &mut Command, timeout: Duration) -> Result<(bool, Strin
     }
 }
 
+/// Ask the new live `aida` for the source build it names (its read-only
+/// retention report), then re-record the activation for it in this process,
+/// judged against the new binary. The scan runs here, not in the new binary,
+/// because the new binary would count this still-running older `aida` as a
+/// writer of another build and always refuse.
+// trace:BUG-2411 | ai:claude
+#[cfg(unix)]
+fn rerecord_retention_real(layout: &DevLayout) -> Result<RetentionRerecord> {
+    use aida_core::mailbox_lifecycle::activation;
+    let aida = layout.live("aida");
+    let (ok, stdout, stderr) = run_with_timeout(
+        Command::new(&aida)
+            .args(["mailbox", "retention", "activate", "--dry-run", "--json"])
+            .current_dir(&layout.repo),
+        Duration::from_secs(120),
+    )
+    .context("the new build's retention report did not finish")?;
+    if !ok {
+        bail!(
+            "the new build's retention report failed: {}",
+            stderr.trim().lines().last().unwrap_or("no output")
+        );
+    }
+    let report: serde_json::Value = serde_json::from_str(stdout.trim())
+        .context("the new build's retention report was not JSON")?;
+    let Some(source) = report.get("this_build").and_then(|v| v.as_str()) else {
+        bail!("the new build names no exact source (it was built from uncommitted changes)");
+    };
+    let Some(report) = activation::rerecord_for_promoted_build(&layout.repo, &aida, source)
+        .map_err(|e| anyhow!("{e}"))?
+    else {
+        return Ok(RetentionRerecord::NothingRecorded);
+    };
+    if report.recorded {
+        return Ok(RetentionRerecord::Recorded);
+    }
+    Ok(RetentionRerecord::NotRecorded {
+        why: rerecord_refusal(&report),
+    })
+}
+
+#[cfg(not(unix))]
+fn rerecord_retention_real(_layout: &DevLayout) -> Result<RetentionRerecord> {
+    Ok(RetentionRerecord::NothingRecorded)
+}
+
+/// Why a fresh scan did not admit the new build: the incomplete scan, or the
+/// first few writers still running something else.
+// trace:BUG-2411 | ai:claude
+#[cfg(unix)]
+fn rerecord_refusal(report: &aida_core::mailbox_lifecycle::activation::ActivationReport) -> String {
+    use aida_core::mailbox_lifecycle::activation::HostVerdict;
+    if let Some(why) = &report.scan_incomplete {
+        return format!("the process scan was incomplete ({why})");
+    }
+    let others: Vec<String> = report
+        .hosts
+        .iter()
+        .filter_map(|h| match &h.verdict {
+            HostVerdict::Unverified { why } => Some(format!("pid {} {} ({why})", h.pid, h.exe)),
+            HostVerdict::Admitting => None,
+        })
+        .collect();
+    if others.is_empty() {
+        return "the new build could not be identified".into();
+    }
+    let more = others.len().saturating_sub(3);
+    let mut why = format!(
+        "other mail writers are running: {}",
+        others[..others.len().min(3)].join("; ")
+    );
+    if more > 0 {
+        why.push_str(&format!(" and {more} more"));
+    }
+    why
+}
+
 /// One smoke check: run, require exit 0 and a stdout predicate.
 fn smoke_check(
     label: &str,
@@ -1592,6 +1710,12 @@ impl BuildSteps for RealSteps {
                 .current_dir(&layout.repo),
             "scripts/restart-mcp-servers.sh",
         )
+    }
+
+    fn rerecord_retention(&mut self, layout: &DevLayout) -> RetentionRerecord {
+        rerecord_retention_real(layout).unwrap_or_else(|e| RetentionRerecord::NotRecorded {
+            why: format!("{e:#}"),
+        })
     }
 
     fn confirm(&mut self, prompt: &str) -> bool {

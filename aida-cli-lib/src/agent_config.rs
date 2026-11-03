@@ -78,15 +78,34 @@ pub(crate) fn load_agents_bypass(project_root: &std::path::Path) -> Result<bool>
 /// `bypass` / `contained`. Absent everywhere means the default surface (`off`).
 // trace:TASK-1558 | ai:claude
 pub(crate) fn load_agents_mcp(project_root: &std::path::Path) -> Result<session::AgentMcpSurface> {
-    let mut surface = session::AgentMcpSurface::default();
+    Ok(load_agents_mcp_explicit(project_root)?.unwrap_or_default())
+}
+
+/// BUG-2394: the surface a Codex seat gets. Unset means `aida`: Codex lanes
+/// complete queue work through AIDA's MCP server, so only an explicit
+/// `[agents] mcp = "off"` removes it.
+// trace:BUG-2394 | ai:claude
+pub(crate) fn load_codex_agents_mcp(
+    project_root: &std::path::Path,
+) -> Result<session::AgentMcpSurface> {
+    Ok(load_agents_mcp_explicit(project_root)?.unwrap_or(session::AgentMcpSurface::Aida))
+}
+
+/// `[agents] mcp` as configured (project over user base), or `None` when
+/// neither file sets it.
+// trace:BUG-2394 | ai:claude
+fn load_agents_mcp_explicit(
+    project_root: &std::path::Path,
+) -> Result<Option<session::AgentMcpSurface>> {
+    let mut surface = None;
     if let Some(home) = aida_home_dir() {
         if let Some(raw) = read_agents_string_from_file(&home.join(".aida/agents.toml"), "mcp")? {
-            surface = session::AgentMcpSurface::parse(&raw)?;
+            surface = Some(session::AgentMcpSurface::parse(&raw)?);
         }
     }
     if let Some(raw) = read_agents_string_from_file(&project_root.join(".aida/agents.toml"), "mcp")?
     {
-        surface = session::AgentMcpSurface::parse(&raw)?;
+        surface = Some(session::AgentMcpSurface::parse(&raw)?);
     }
     Ok(surface)
 }

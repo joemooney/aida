@@ -5,7 +5,7 @@ trace:TASK-2835 | ai:claude
 
 Usage (from the repository root):
 
-    python3 scripts/showcase-pr-size.py            # summary statistics per window
+    python3 scripts/showcase-pr-size.py            # summary statistics per window, then the chart's bucket shares
     python3 scripts/showcase-pr-size.py --svg      # also the chart's density polylines and marker x positions
 
 Method (the audit's methodology note states the same thing):
@@ -14,6 +14,8 @@ Method (the audit's methodology note states the same thing):
   ``(#N)``, read from ``git log --first-parent <rev> --format='@%cs %s' --shortstat``.
 * PR size = insertions + deletions from that shortstat; no files are excluded.
 * Windows filter on committer date (``%cs`` >= start date).
+* Bucket shares (the chart's histogram tab) use the 2026-05-10 window and the buckets
+  Small <=100, Medium 101-400, Large 401-1000 and X-Large >1000 LoC, rounded to 0.1%.
 * Median is the midpoint average; p90 is the inclusive decile
   (``statistics.quantiles(..., n=10, method="inclusive")``); mean is the arithmetic mean.
 
@@ -49,6 +51,12 @@ X0, X1 = 45.0, 490.0
 LOG_LO, LOG_HI = 1.0, math.log10(5012)
 Y_BASE, Y_PEAK = 236.0, 90.0
 GRID_POINTS = 46
+BUCKETS = [  # (label, inclusive upper bound in LoC; None = unbounded)
+    ("Small (<=100 LoC)", 100),
+    ("Medium (101-400 LoC)", 400),
+    ("Large (401-1000 LoC)", 1000),
+    ("X-Large (>1000 LoC)", None),
+]
 
 
 def pr_sizes(rev):
@@ -86,6 +94,19 @@ def summary(sizes):
     }
 
 
+def bucket_shares(sizes):
+    """Return (label, count, percent) for each histogram bucket.
+
+    trace:TASK-2762 | ai:claude
+    """
+    out, lo = [], None
+    for label, hi in BUCKETS:
+        count = sum((lo is None or s > lo) and (hi is None or s <= hi) for s in sizes)
+        out.append((label, count, 100 * count / len(sizes)))
+        lo = hi
+    return out
+
+
 def x_of(loc):
     return X0 + (X1 - X0) * (math.log10(loc) - LOG_LO) / (LOG_HI - LOG_LO)
 
@@ -112,9 +133,12 @@ def main():
         s = summary(window(prs, start, end))
         print(f"{label}: {s['prs']} PRs, median {s['median']:g}, p90 {s['p90']:.1f}, mean {s['mean']:.1f}, "
               f"{s['gt400_pct']:.1f}% >400, {s['gt1000_pct']:.1f}% >1,000")
+    sizes = window(prs, CHART_WINDOW_START, None)
+    print(f"Bucket shares since {CHART_WINDOW_START} ({len(sizes)} PRs):")
+    for label, count, pct in bucket_shares(sizes):
+        print(f"  {label}: {count} PRs, {pct:.1f}%")
     if not args.svg:
         return
-    sizes = window(prs, CHART_WINDOW_START, None)
     s = summary(sizes)
     h, pts = kde_points(sizes)
     print(f"KDE: Gaussian kernel, Silverman bandwidth h = {h:.4f} log10 units, n = {len(sizes)}")

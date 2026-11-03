@@ -21,7 +21,7 @@ fn open_backend(project_root: &std::path::Path) -> CachedGitBackend {
     // the project is a real Git checkout (a non-Git one is a partial view).
     crate::mailbox_view::tests::git(project_root, &["init", "-q", "-b", "main"]);
     let store_root = project_root.join("store");
-    let cache_path = project_root.join(".aida").join("cache.db");
+    let cache_path = aida_core::db::project_cache_path(&project_root);
     std::fs::create_dir_all(&store_root).unwrap();
     crate::test_env::home_fixture_cached_backend(&store_root, &cache_path).unwrap()
 }

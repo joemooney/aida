@@ -562,6 +562,7 @@ mod tests {
             ending_retained_reason: None,
             driver: driver.map(String::from),
             child_grant_id: None,
+            vendor_session_id: None,
         }
     }
 

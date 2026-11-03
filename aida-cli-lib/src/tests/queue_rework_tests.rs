@@ -257,6 +257,15 @@ fn rework_writes_blocking_review_findings_comment() {
         }"#,
     )
     .unwrap();
+    // BUG-2403: the PR review is bound to the spec through the gate
+    // ledger's index, not through its prose naming the ID.
+    // trace:BUG-2403 | ai:claude
+    crate::gate::ledger::project::index_spec(
+        &crate::gate::ledger::store_root(root).unwrap(),
+        "BUG-814",
+        crate::gate::ledger::ChangeKey::pr(1637),
+    )
+    .unwrap();
 
     let store_root = root.join(".aida-store");
     let backend = crate::test_env::home_fixture_backend(&store_root).unwrap();
@@ -1243,6 +1252,7 @@ fn lease_for(scope: &str, active_pid: Option<u32>) -> crate::SessionLease {
         ending_retained_reason: None,
         driver: None,
         child_grant_id: None,
+        vendor_session_id: None,
     }
 }
 

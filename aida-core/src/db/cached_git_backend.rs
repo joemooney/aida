@@ -85,7 +85,7 @@ impl CachedGitBackend {
     }
 
     /// Default cache location for a project's git store at `git_root`:
-    /// `<project_root>/.aida/cache.db`. We never put the cache *inside* the
+    /// `<project_root>/.aida/cache-db/cache.db`. We never put the cache *inside* the
     /// store directory — that would pollute the orphan branch's worktree —
     /// so the probe starts at `git_root.parent()` and walks up.
     pub fn default_cache_path(git_root: &Path) -> PathBuf {
@@ -118,7 +118,11 @@ impl CachedGitBackend {
                 break;
             }
             if probe.join(".aida").is_dir() {
-                return probe.join(".aida").join("cache.db");
+                // TASK-2707: the cache's own directory, migrated out of the
+                // legacy `.aida/cache.db` layout first.
+                // trace:TASK-2707 | ai:claude
+                crate::db::migrate_legacy_cache_layout(&probe.join(".aida"));
+                return crate::db::project_cache_path(&probe);
             }
             match probe.parent() {
                 Some(p) => probe = p.to_path_buf(),
@@ -2133,7 +2137,7 @@ mod tests {
         let unguarded = CachedGitBackend::default_cache_path_with_roots(&git_root, &[]);
         assert_eq!(
             unguarded,
-            fake_temp_root.path().join(".aida").join("cache.db"),
+            crate::db::project_cache_path(fake_temp_root.path()),
             "fixture must be adoptable when nothing is guarded, or this test proves nothing"
         );
     }

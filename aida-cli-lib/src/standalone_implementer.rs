@@ -673,7 +673,9 @@ pub(crate) fn run(launch: Launch<'_>) -> Result<()> {
     // BUG-044: a run that parks on its own background build is resumed, not
     // reported. trace:BUG-B6B1278890774EF993D2EBC327862470-044 | ai:claude
     use crate::headless_background as bg;
-    let can_resume = launch.vendor == crate::session::HeadlessVendor::Claude;
+    // BUG-2386: a Codex lane resumes too, by the thread its first run bound
+    // to the lease. trace:BUG-2386 | ai:claude
+    let can_resume = crate::session::vendor_can_resume(launch.vendor);
     let ceiling = std::time::Duration::from_millis(
         crate::burndown_run::resolved_bg_wait_ceiling_ms(Some(launch.project_root)),
     );

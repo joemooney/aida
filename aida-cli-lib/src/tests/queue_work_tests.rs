@@ -910,6 +910,7 @@ fn implementer_lease(scope: &str) -> SessionLease {
         ending_retained_reason: None,
         driver: None,
         child_grant_id: None,
+        vendor_session_id: None,
     }
 }
 
@@ -1339,9 +1340,11 @@ fn prompt_implementer_item_leads_with_review_findings() {
 }
 
 /// BUG-814: orchestrated reviews record PR-keyed verdict files, while rework is
-/// invoked with the spec id. The lookup must bridge that key mismatch when the
-/// reviewer summary/findings name the spec.
+/// invoked with the spec id. The lookup must bridge that key mismatch.
+/// BUG-2403: the bridge is the gate ledger's spec → change binding, never the
+/// reviewer's prose mentioning the ID.
 // trace:BUG-814 | ai:codex
+// trace:BUG-2403 | ai:claude
 #[test]
 fn rework_findings_lookup_reads_pr_keyed_verdict_for_spec() {
     let tmp = tempfile::tempdir().unwrap();
@@ -1360,8 +1363,18 @@ fn rework_findings_lookup_reads_pr_keyed_verdict_for_spec() {
     )
     .unwrap();
 
+    assert!(
+        rework_findings_block_for_spec(root, "BUG-814", "BUG-814").is_none(),
+        "prose naming the spec does not bind a PR review to it"
+    );
+    crate::gate::ledger::project::index_spec(
+        root,
+        "BUG-814",
+        crate::gate::ledger::ChangeKey::pr(1637),
+    )
+    .unwrap();
     let block = rework_findings_block_for_spec(root, "BUG-814", "BUG-814")
-        .expect("PR-keyed verdict should be found");
+        .expect("PR-keyed verdict bound to the spec should be found");
     assert!(block.contains("REVIEW FINDINGS TO ADDRESS (PR #1637)"));
     assert!(block.contains("1. BUG-814 prompt omits the RequestChanges text"));
 }
@@ -1766,6 +1779,7 @@ fn lease_for(id: &str, scope: &str, age_secs: i64) -> SessionLease {
         ending_retained_reason: None,
         driver: None,
         child_grant_id: None,
+        vendor_session_id: None,
     }
 }
 

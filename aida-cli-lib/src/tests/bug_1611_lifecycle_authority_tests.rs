@@ -170,7 +170,7 @@ fn forced_reopen_runs_the_approval_authority_predicate() {
 fn git_store_with_draft() -> (tempfile::TempDir, std::path::PathBuf, Requirement) {
     let dir = tempfile::tempdir().unwrap();
     let store_root = dir.path().join("store");
-    let cache_path = dir.path().join(".aida").join("cache.db");
+    let cache_path = aida_core::db::project_cache_path(&dir.path());
     std::fs::create_dir_all(&store_root).unwrap();
     aida_core::git_ops::init(&store_root).unwrap();
     aida_core::git_ops::configure_user(&store_root, "fixture", "fixture@localhost").unwrap();
@@ -184,7 +184,7 @@ fn git_store_with_draft() -> (tempfile::TempDir, std::path::PathBuf, Requirement
 }
 
 fn status_on_disk(store_root: &std::path::Path, spec: &str) -> S {
-    let cache_path = store_root.parent().unwrap().join(".aida").join("cache.db");
+    let cache_path = aida_core::db::project_cache_path(&store_root.parent().unwrap());
     let backend = CachedGitBackend::open(store_root, &cache_path).unwrap();
     backend
         .get_requirement_by_spec_id(spec)

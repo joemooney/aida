@@ -288,8 +288,9 @@ fn identity_differs(recorded: Option<&str>, local: Option<&str>) -> bool {
     recorded.is_some_and(|recorded| Some(recorded) != local)
 }
 
+/// This boot's id (`/proc/sys/kernel/random/boot_id`), `None` off Linux.
 // trace:TASK-1526 | ai:codex
-pub(super) fn local_boot_id() -> Option<String> {
+pub fn local_boot_id() -> Option<String> {
     #[cfg(target_os = "linux")]
     {
         std::fs::read_to_string("/proc/sys/kernel/random/boot_id")
@@ -302,8 +303,9 @@ pub(super) fn local_boot_id() -> Option<String> {
     }
 }
 
+/// This process's PID namespace inode, `None` off Linux.
 // trace:TASK-1526 | ai:codex
-pub(super) fn local_pid_ns() -> Option<String> {
+pub fn local_pid_ns() -> Option<String> {
     #[cfg(target_os = "linux")]
     {
         use std::os::unix::fs::MetadataExt;
@@ -507,12 +509,25 @@ pub fn cache_lock_info_path(cache_path: &Path) -> PathBuf {
 /// path). `Some` only when that file exists and differs from the shared
 /// sidecar; doctor reports it and dead owners' copies are reclaimed.
 // trace:BUG-1644 | ai:claude
+///
+/// TASK-2707: a `cache.db.lock-info` an older binary left at the top of the
+/// `.aida/` that a `.aida/cache-db/cache.db` path belongs to (beside the legacy
+/// cache location) is stray too.
+// trace:TASK-2707 | ai:claude
 pub fn stray_cache_lock_info_path(cache_path: &Path) -> Option<PathBuf> {
+    let shared = cache_lock_info_path(cache_path);
+    let is_file = |p: &Path| {
+        std::fs::symlink_metadata(p)
+            .map(|m| m.file_type().is_file())
+            .unwrap_or(false)
+    };
     let lexical = sidecar_beside(cache_path, "lock-info");
-    let exists = std::fs::symlink_metadata(&lexical)
-        .map(|m| m.file_type().is_file())
-        .unwrap_or(false);
-    (exists && lexical != cache_lock_info_path(cache_path)).then_some(lexical)
+    if is_file(&lexical) && lexical != shared {
+        return Some(lexical);
+    }
+    let legacy =
+        super::cache_location::aida_dir_of_cache_path(cache_path)?.join("cache.db.lock-info");
+    (is_file(&legacy) && legacy != shared).then_some(legacy)
 }
 
 pub fn read_cache_lock_info(cache_path: &Path) -> Result<Option<CacheLockInfo>> {

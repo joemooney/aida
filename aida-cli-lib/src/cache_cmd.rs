@@ -507,10 +507,10 @@ fn handle_cache_verify(backend: &aida_core::CachedGitBackend, fix: bool, json: b
 pub(crate) fn cache_corruption_message(problem: Option<&str>) -> String {
     match problem {
         Some(problem) => format!(
-            "the local AIDA cache (.aida/cache.db) is corrupt ({problem}). Fix: aida cache rebuild"
+            "the local AIDA cache (.aida/cache-db/cache.db) is corrupt ({problem}). Fix: aida cache rebuild"
         ),
         None => {
-            "the local AIDA cache (.aida/cache.db) is corrupt. Fix: aida cache rebuild".to_string()
+            "the local AIDA cache (.aida/cache-db/cache.db) is corrupt. Fix: aida cache rebuild".to_string()
         }
     }
 }
