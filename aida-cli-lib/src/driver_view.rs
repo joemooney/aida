@@ -565,6 +565,7 @@ mod tests {
             driver: driver.map(String::from),
             child_grant_id: None,
             vendor_session_id: None,
+            lane_jobs: None,
         }
     }
 

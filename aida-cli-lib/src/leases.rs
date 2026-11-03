@@ -241,6 +241,12 @@ pub(crate) struct SessionLease {
     // trace:BUG-2386 | ai:claude
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) vendor_session_id: Option<String>,
+    /// BUG-2383: the lane job runner serving this lease, stamped by the host
+    /// while it runs. Kept on the typed struct so a lease rewriter
+    /// (`update_lease_branch`, ...) does not drop it.
+    // trace:BUG-2383 | ai:claude
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) lane_jobs: Option<crate::lane_job::RunnerRecord>,
 }
 
 pub(crate) fn leases_dir(project_root: &std::path::Path) -> std::path::PathBuf {
@@ -377,6 +383,7 @@ pub(crate) fn session_harness_worktree_register(
         driver: aida_core::driver_registry::driver_from_env(), // trace:STORY-1653 | ai:claude
         child_grant_id: None,
         vendor_session_id: None,
+        lane_jobs: None,
     };
 
     std::fs::create_dir_all(leases_dir(&project_root))?;
@@ -3139,6 +3146,12 @@ pub(crate) fn force_cleanup_lease(project_root: &std::path::Path, lease: &Sessio
         // trace:BUG-2139 | ai:claude
         crate::session::revoke_lease_child_grant(&lease_path(project_root, &lease.id));
         let _ = std::fs::remove_file(lease_path(project_root, &lease.id));
+        // trace:STORY-2325 | ai:claude
+        crate::ownership::dual::lease_released(
+            project_root,
+            &lease.id,
+            "advisory lease cleaned up",
+        );
         let activity = session_activity_path(project_root, &lease.id);
         if activity.exists() {
             let _ = std::fs::remove_file(&activity);
@@ -3351,6 +3364,8 @@ pub(crate) fn force_cleanup_lease(project_root: &std::path::Path, lease: &Sessio
     match std::fs::remove_file(lease_target) {
         Ok(_) | Err(_) => {}
     }
+    // trace:STORY-2325 | ai:claude
+    crate::ownership::dual::lease_released(project_root, &lease.id, "lease cleaned up");
 
     // Companion files — quiet on missing.
     let manifest_target = session_manifest::manifest_path(project_root, &lease.id);
@@ -4664,6 +4679,10 @@ pub(crate) fn remove_session_lease_record_only(
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => true,
         Err(_) => false,
     };
+    if removed {
+        // trace:STORY-2325 | ai:claude
+        crate::ownership::dual::lease_released(project_root, lease_id, "lease record removed");
+    }
     let manifest = session_manifest::manifest_path(project_root, lease_id);
     if manifest.exists() {
         let _ = std::fs::remove_file(manifest);

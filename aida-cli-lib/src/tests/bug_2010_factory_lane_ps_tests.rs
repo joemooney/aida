@@ -40,6 +40,7 @@ fn ps_lease(id: &str, scope: &str, owner: &str, worktree: PathBuf) -> SessionLea
         driver: None,
         child_grant_id: None,
         vendor_session_id: None,
+        lane_jobs: None,
     }
 }
 

@@ -1206,6 +1206,7 @@ fn reviewer_worktree_cleanup_preserves_merge_hold_and_refuses_live_occupant() {
         driver: None,
         child_grant_id: None,
         vendor_session_id: None,
+        lane_jobs: None,
     };
     let lease_dir = crate::leases::leases_dir(&f.root);
     std::fs::create_dir_all(&lease_dir).unwrap();
