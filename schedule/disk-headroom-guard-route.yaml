@@ -8,6 +8,6 @@ result: done
 due_since: 2026-11-03T07:57:21.563631156Z
 due_reason: on CronJobFailed:disk-headroom-guard
 due_failure:
-  trip_id: disk-headroom-guard@2026-11-03T07:52:24.040795164Z
+  trip_id: disk-headroom-guard@2026-11-03T09:08:59.955593432Z
   job: disk-headroom-guard
-  error: 'exit 124: timed out: doctor check disk-headroom --fail-on-findings did not complete within 120s (killed)'
+  error: 'exit 1: 1 finding(s) in disk-headroom — failing because --fail-on-findings was requested'
