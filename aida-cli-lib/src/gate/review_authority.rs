@@ -480,14 +480,11 @@ pub(crate) struct ProcEntry {
 }
 
 impl ProcEntry {
-    fn token(&self, kind: &str) -> String {
-        process_token(kind, self.pid, self.start.as_deref())
-    }
-
-    /// [`Self::token`] for authorship and grant-presenter identity:
-    /// qualified with this process's pid namespace when it is not the
-    /// host's (BUG-2419).
+    /// This process's token for authorship and grant-presenter identity:
+    /// qualified with its pid namespace when that is not the host's
+    /// (BUG-2419). The sole token constructor on `ProcEntry` (TASK-2796).
     // trace:BUG-2419 | ai:claude
+    // trace:TASK-2796 | ai:claude
     fn author_token(&self, kind: &str) -> String {
         author_process_token(kind, self.pid, self.start.as_deref())
     }
