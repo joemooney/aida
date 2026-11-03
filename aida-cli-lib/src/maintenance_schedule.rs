@@ -2017,7 +2017,7 @@ fn builtin_routed_seat_task(store: &Path, name: &str) -> Option<Task> {
 /// network). Seat jobs are filtered to `seat` when given; substrate jobs are
 /// included only when no seat filter is given (`include_substrate`).
 // trace:STORY-1226 | ai:claude
-fn collect_due(project_root: &Path, seat: Option<&str>, include_substrate: bool) -> Vec<DueJob> {
+fn scheduled_due(project_root: &Path, seat: Option<&str>, include_substrate: bool) -> Vec<DueJob> {
     let Ok(config) = load_registry(project_root) else {
         return Vec::new();
     };
@@ -2099,6 +2099,46 @@ fn collect_due(project_root: &Path, seat: Option<&str>, include_substrate: bool)
 // trace:STORY-1226 | ai:claude
 pub(crate) fn due_seat_jobs(project_root: &Path, seat: Option<&str>) -> Vec<DueJob> {
     collect_due(project_root, seat, false)
+}
+
+// trace:STORY-2346 | ai:codex
+fn collect_due(project_root: &Path, seat: Option<&str>, include_substrate: bool) -> Vec<DueJob> {
+    let mut due = scheduled_due(project_root, seat, include_substrate);
+    // trace:STORY-2346 | ai:codex
+    let now = Utc::now();
+    let state = crate::gate::mandate::current_state();
+    if let Some(job) = mandate_renewal_job(&state, now, seat) {
+        if let Ok(dir) = crate::gate::mandate::mandate_dir() {
+            crate::mandate::notify_expiry(&dir, project_root, &state, now);
+        }
+        due.push(job);
+    }
+    due
+}
+
+// trace:STORY-2346 | ai:codex
+pub(crate) fn mandate_renewal_job(
+    state: &crate::gate::mandate::MandateState,
+    now: DateTime<Utc>,
+    seat: Option<&str>,
+) -> Option<DueJob> {
+    if seat.is_some_and(|s| !matches!(s, "advisor" | "operator")) {
+        return None;
+    }
+    let prompt = crate::mandate::expiry_warning(state, now)?;
+    Some(DueJob {
+        name: "mandate-renewal".into(),
+        kind: JobKind::Seat,
+        seats: vec!["advisor".into(), "operator".into()],
+        schedule: "before mandate expiry".into(),
+        reason: "expires within 60m".into(),
+        prompt: Some(format!("Ask the operator at a human terminal: {prompt}")),
+        command: None,
+        last_run: None,
+        last_by: None,
+        due_since: None,
+        failure: None,
+    })
 }
 
 /// The due seat jobs `aida awaiting` surfaces: `seat`'s own, plus the

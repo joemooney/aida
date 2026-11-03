@@ -3960,6 +3960,20 @@ pub(crate) fn gh_pr_checks_json(project_root: &Path, pr: u64, extra: &[&str]) ->
     if stdout.starts_with('[') {
         return Ok(stdout);
     }
+    // GitHub may not have registered any checks yet. Preserve that positive
+    // empty answer through the shared gh no-checks classifier (one registry,
+    // so the detectors cannot drift); transport/authentication failures still
+    // return errors.
+    // external-prose-classifier: forge::gh_pr_checks_json
+    // trace:BUG-2423 | ai:claude
+    if extra.is_empty()
+        && crate::pr_ship::gh_pr_checks_output_is_unregistered(
+            &stdout,
+            &String::from_utf8_lossy(&out.stderr),
+        )
+    {
+        return Ok("[]".into());
+    }
     anyhow::bail!(
         "`gh pr checks {pr} --json` produced no JSON: {}",
         String::from_utf8_lossy(&out.stderr).trim()

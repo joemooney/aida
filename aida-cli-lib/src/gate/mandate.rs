@@ -346,8 +346,8 @@ fn renewal_problem(m: &Mandate) -> Option<String> {
         if r.renewed_at < since || r.previous_expires_at != expiry {
             return Some("its renewal lineage is out of order".into());
         }
-        // `extend` only renews an ACTIVE mandate, so a renewal at or after the
-        // expiry it extends cannot be genuine: it would resurrect an expired one.
+        // In-place renewal requires an ACTIVE mandate. Revival uses a fresh
+        // ID with empty lineage, so a late entry here cannot be genuine.
         if r.renewed_at >= r.previous_expires_at {
             return Some("its renewal lineage renews an already-expired mandate".into());
         }
@@ -578,7 +578,7 @@ pub(crate) fn renew_as_human(
     by: &str,
     ttl: Option<Duration>,
     now: DateTime<Utc>,
-) -> Result<(Mandate, Renewal)> {
+) -> Result<(Mandate, Renewal, Option<String>)> {
     extend(dir, &require_mandate_human, by, ttl, now)
 }
 
@@ -592,14 +592,35 @@ pub(crate) fn renew(
     ttl: Option<Duration>,
     now: DateTime<Utc>,
 ) -> Result<(Mandate, Renewal)> {
+    extend(dir, human, by, ttl, now).map(|(m, r, _)| (m, r))
+}
+
+/// Test seam: [`renew`] that also returns the id a revival replaced.
+// trace:STORY-2346 | ai:claude
+#[cfg(test)]
+pub(crate) fn renew_reporting_revival(
+    dir: &Path,
+    human: &dyn Fn() -> Result<()>,
+    by: &str,
+    ttl: Option<Duration>,
+    now: DateTime<Utc>,
+) -> Result<(Mandate, Renewal, Option<String>)> {
     extend(dir, human, by, ttl, now)
 }
 
-/// Extend the ACTIVE mandate in place: same id, scopes, flags, principal and
-/// reason; the expiry becomes `now + ttl` (default: the original duration,
-/// at most [`MAX_TTL`]) and a [`Renewal`] is appended to its lineage. Same
-/// floor as [`mint`]. A stop racing this write still wins: its tombstone is
-/// never removed and revokes whatever the record says. Private: production
+/// Renew the principal's mandate. Scopes, flags, principal and reason are
+/// always kept, and the expiry becomes `now + ttl` (default: the original
+/// duration, at most [`MAX_TTL`]).
+///
+/// - An active mandate is extended in place: same id and issuance, and a
+///   [`Renewal`] is appended to its lineage. The third value is `None`.
+/// - With none active, the latest expired one is re-minted under a fresh id,
+///   `issued_at = now` and an empty lineage (expired grants and the old
+///   record are left alone); the returned [`Renewal`] is only a receipt
+///   naming the old expiry, and the third value is the old mandate's id.
+///
+/// Same floor as [`mint`]. A stop racing this write still wins: its tombstone
+/// is never removed and revokes whatever the record says. Private: production
 /// binds `human` in [`renew_as_human`].
 // trace:STORY-B6B1278890774EF993D2EBC327862470-166 | ai:claude
 fn extend(
@@ -608,7 +629,7 @@ fn extend(
     by: &str,
     ttl: Option<Duration>,
     now: DateTime<Utc>,
-) -> Result<(Mandate, Renewal)> {
+) -> Result<(Mandate, Renewal, Option<String>)> {
     if let Err(err) = human() {
         bail!("a mandate can only be renewed by a human at an interactive terminal ({err})");
     }
@@ -616,8 +637,13 @@ fn extend(
     if by.is_empty() {
         bail!("cannot renew a mandate: the human user identity is unknown");
     }
-    let MandateState::Active(mut m) = state_at(&load_valid(dir, by, now).0, now) else {
-        bail!("no mandate is active to renew; start one with `aida mandate start`");
+    // trace:STORY-2346 | ai:codex
+    let (mut m, revive) = match state_at(&load_valid(dir, by, now).0, now) {
+        MandateState::Active(m) => (m, false),
+        MandateState::Expired(m) => (m, true),
+        MandateState::None | MandateState::Stopped(_) => {
+            bail!("no renewable mandate; run: aida mandate start --ship-held");
+        }
     };
     let ttl = ttl.unwrap_or_else(|| m.original_ttl()).min(MAX_TTL);
     if ttl <= Duration::zero() {
@@ -630,13 +656,23 @@ fn extend(
         expires_at: now + ttl,
     };
     m.expires_at = renewal.expires_at;
-    m.renewals.push(renewal.clone());
+    let revived_from = if revive {
+        // A new identity leaves expired grants and the old audit record alone.
+        // trace:STORY-2346 | ai:claude
+        let old_id = std::mem::replace(&mut m.id, Uuid::new_v4().to_string());
+        m.issued_at = now;
+        m.renewals.clear();
+        Some(old_id)
+    } else {
+        m.renewals.push(renewal.clone());
+        None
+    };
     write_private(
         &dir.join(format!("{}.json", m.id)),
         &serde_json::to_vec_pretty(&m)?,
     )
     .with_context(|| format!("could not write the renewed mandate {}", m.id))?;
-    Ok((m, renewal))
+    Ok((m, renewal, revived_from))
 }
 
 /// Test seam: mint a mandate with an injected `human` floor. Production

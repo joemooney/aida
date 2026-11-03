@@ -4,6 +4,11 @@ Claude retains AIDA containment. Missing non-Claude vendor keys still refuse;
 unsupported native vendors refuse. See OVERVIEW.md.
 <!-- trace:TASK-2631 | ai:codex -->
 
+The contained Codex permission preset writes an empty extra `writable_roots`
+list, clearing legacy grants to `~/.cargo`, `~/.rustup` and `~/.aida` in either
+project or user scope. Fetch new Cargo dependencies on the host outside the lane.
+<!-- trace:TASK-b6b1278890774ef993d2ebc327862470-729 | ai:codex -->
+
 A host-side Codex mail adapter can queue notifications to one existing thread
 without model polling. Read [setup and recovery](docs/agents/codex-mail-wake.md);
 queue acceptance and inbox acknowledgement remain distinct.
