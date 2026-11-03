@@ -1,0 +1,28 @@
+id: 01a1a08e-3cd0-7420-bb35-2097e0cb7d6a
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-732
+title: 'cosmetic: check-ci-gates.py sccache_fallback calls sccache_probe_bin(env) witho…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on BUG-2418, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  cosmetic: check-ci-gates.py sccache_fallback calls sccache_probe_bin(env) without a cwd, so configured_rustc_wrapper resolves .cargo/config.toml from the process cwd instead of the repo root that run_plan uses. Pass root through.
+  Reviewed sha: 1c54c4d85edd1496e1a9b1921c51fe19641ade42
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-03T08:37:18.672223043Z
+modified_at: 2026-11-03T08:37:18.672223043Z
+req_type: Task
+tags:
+- carried-from:BUG-2418
+- finding-hash:3f65b470
+- from-review:BUG-2418
+- kind:carried-forward
+filed_at:
+  code_sha: 6c587ee595ce70f5fcc48480cfdddc8246cf158c
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: db087637d57
+  vendor: claude
+  session: c58592f4-04ae-498b-9afd-87b0cc2bcde9
