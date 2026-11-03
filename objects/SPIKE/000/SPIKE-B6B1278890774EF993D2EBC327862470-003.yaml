@@ -27,11 +27,24 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-30T14:13:30.512568229Z
-modified_at: 2026-10-30T15:59:26.495693639Z
+modified_at: 2026-11-03T02:46:07.465713636Z
 req_type: Spike
 tags:
 - area:agents
+- spike:deliverable-produced
 - vendor:opencode
+comments:
+- id: 01a19f4c-b769-7873-8a3c-35e135c34b3f
+  author: research-agent
+  content: |-
+    [research-lane] source-grounded analysis (agent: claude / deep-research).
+
+    OpenCode is a credible fourth-harness target, with a conditional go for a staged, version-pinned v2 pilot rather than production parity today. Isolated v2.2.5 probes verified fresh launch, exact-session resume, authenticated idle wake and generation-time queuing, headless plugins, and short awaited pre-idle continuation. Tool permissions failed an out-of-worktree shell-write containment probe, so AIDA-contained launch must refuse. V1.19.5 connected real AIDA MCP and discovered global skills/commands, but current v2 parsed equivalent native configuration without runtime activation in bounded probes; resolving this is the first gate. Attribution syntax works in metrics/trace linkage, while first-class vendor identity needs changes. No specs, implementation or project direction were changed.
+
+    Full analysis + citations: `/tmp/claude-1000/-home-joe-ai-aida/125337a4-7dd3-483b-9c56-3665173938ae/scratchpad/research/2026-11-03-spike-707-research.md`
+  created_at: 2026-11-03T02:46:07.465713636Z
+  modified_at: 2026-11-03T02:46:07.465713636Z
+  session_id: 125337a4-7dd3-483b-9c56-3665173938ae
 history:
 - id: 01a18d89-951f-79b2-87ba-1fd31dc3ce28
   author: joe
@@ -58,3 +71,18 @@ filed_at:
   vendor: claude
   session: 1b444f41-0180-4b90-95e1-e30a1b6300a4
 human_only: true
+decision_request:
+  question: Should AIDA fund a bounded, v2-first OpenCode adapter path that first resolves global MCP/skills/commands activation, keeps AIDA-contained launch unsupported, and proceeds to a version-pinned pilot only after the integration gate passes?
+  choices:
+  - label: Staged v2 pilot
+    consequence: Qualify current v2 global integration first; if it passes, consider the decomposed version-pinned adapter pilot with explicit capability limits and containment refusal. Stop for human review if qualification fails.
+    resolution: tag:+adapter:staged-v2
+  - label: Defer v2 integration
+    consequence: Retain the research and postpone adapter investment until current v2 MCP, skills and command activation is repeatable or an upstream blocker is resolved.
+    resolution: tag:+deferred:opencode-v2-integration
+  - label: Legacy v1 pilot
+    consequence: Consider a deliberately v1.19.5-only pilot using demonstrated global integration, accepting no pre-stop hold parity and near-term major-version migration work.
+    resolution: tag:+adapter:legacy-v1-pilot
+  recommended: 0
+  rationale: Current v2 provides measured exact-session execution, durable authenticated input and an awaited pre-idle seam that make an adapter technically worthwhile. An early global-integration gate contains the largest unresolved risk without silently substituting v1 evidence. Deferring is reasonable if that bounded investment is not a priority; production support, OS containment and long interactive holds are not justified by this spike.
+  asked_at: 2026-11-03T02:46:07.465713636Z
