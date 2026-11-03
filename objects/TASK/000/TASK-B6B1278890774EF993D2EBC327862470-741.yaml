@@ -7,12 +7,12 @@ description: |-
 
   cosmetic (non-blocking): ProcEntry::token (gate/review_authority.rs:483) has no callers left; delete it or route author_token through it.
   Reviewed sha: 21ba1f4436fb1148802957b5e459d40edbdeebdc
-status: Draft
+status: Approved
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-03T16:46:04.867318285Z
-modified_at: 2026-11-03T16:46:04.867318285Z
+modified_at: 2026-11-03T18:19:38.754254534Z
 req_type: Task
 tags:
 - carried-from:BUG-2419
@@ -24,6 +24,14 @@ history:
   author: joe
   timestamp: 2026-11-03T17:18:32.443475260Z
   changes: []
+- id: 01a1a2a3-6182-7ae3-9da5-1e8f10b97ed7
+  author: joe
+  timestamp: 2026-11-03T18:19:38.754251478Z
+  session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: 1fc6b8bdc6dd4337e4d9d82e9740568bdf5d9830
   branch: main
