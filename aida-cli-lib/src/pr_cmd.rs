@@ -2104,10 +2104,16 @@ pub(crate) fn probe_ship_drive_block(
 
 /// BUG-727: a human at an interactive terminal is the explicit merge the
 /// supervised-merge gate waits for.
-// trace:BUG-727 | ai:claude
+///
+/// BUG-2427: decided by the same function as `merge-hold clear`
+/// (`has_integrity_floor_authority`: stdin is a terminal and, inside a deputy
+/// job, the deputy's TTY policy authorized it). Stdout plays no part: the
+/// script deputy tees a job's stdout into its audited transcript, so a stdout
+/// check refused a human-authorized `pr ship`/`pr train` that `merge-hold
+/// clear` accepted.
+// trace:BUG-727 trace:BUG-2427 | ai:claude
 pub(crate) fn ship_interactive_tty() -> bool {
-    std::io::IsTerminal::is_terminal(&std::io::stdin())
-        && std::io::IsTerminal::is_terminal(&std::io::stdout())
+    crate::gate::role_authority::has_integrity_floor_authority()
 }
 
 #[allow(clippy::too_many_arguments)]

@@ -588,6 +588,67 @@ fn integrity_floor_refuses_a_deputy_job_without_a_live_marker() {
     );
 }
 
+/// BUG-2427: `pr ship` / `pr train` decide "human at a terminal" with the
+/// same function as `merge-hold clear`, so a deputy job whose stdout is teed
+/// into its transcript (a pipe) still counts as the human who named the PR.
+// trace:BUG-2427 | ai:claude
+#[cfg(unix)]
+#[test]
+fn ship_and_train_tty_consent_ignores_stdout_like_merge_hold_clear() {
+    use crate::gate::role_authority::has_integrity_floor_authority;
+    use crate::pr_cmd::ship_interactive_tty;
+    use crate::pr_train::tty_consents;
+    let dir = tempfile::tempdir().unwrap();
+    let spool = spool_in(&dir);
+    let root = spool.root.to_string_lossy().to_string();
+    let id = new_job_id();
+    let pin = |stdin: bool| {
+        crate::test_ambient::replace(Some(crate::test_ambient::Ambient {
+            project_root: dir.path().to_path_buf(),
+            stdin_is_terminal: stdin,
+            stdout_is_terminal: !stdin,
+            stderr_is_terminal: true,
+        }))
+    };
+
+    // (2) stdin a terminal, stdout a pipe, deputy floor authorized.
+    let previous = pin(true);
+    {
+        let _env = crate::test_env::EnvVarsGuard::apply(&[(JOB_ENV, None), (SPOOL_ENV, None)]);
+        assert_eq!(ship_interactive_tty(), has_integrity_floor_authority());
+        assert!(
+            tty_consents(ship_interactive_tty(), true),
+            "a human outside any job, stdout piped: the named PR is consented"
+        );
+    }
+    let _env =
+        crate::test_env::EnvVarsGuard::apply(&[(JOB_ENV, Some(&id)), (SPOOL_ENV, Some(&root))]);
+    assert!(
+        !tty_consents(ship_interactive_tty(), true),
+        "a deputy job with no live marker is refused, as merge-hold clear refuses it"
+    );
+    write_tty_marker(
+        &spool,
+        &bound_marker(&spool, &id, Utc::now() + CDuration::minutes(10)),
+    )
+    .unwrap();
+    assert_eq!(ship_interactive_tty(), has_integrity_floor_authority());
+    assert!(
+        tty_consents(ship_interactive_tty(), true),
+        "the policy-authorized job with its stdout teed: the named PR is consented"
+    );
+
+    // (3) stdin not a terminal (stdout is): still refused.
+    crate::test_ambient::replace(previous);
+    let previous = pin(false);
+    assert!(!ship_interactive_tty());
+    assert!(
+        !tty_consents(ship_interactive_tty(), true),
+        "no terminal on stdin: refused even with a terminal on stdout"
+    );
+    crate::test_ambient::replace(previous);
+}
+
 // ── start-path refusals ─────────────────────────────────────────────────────
 
 #[test]
