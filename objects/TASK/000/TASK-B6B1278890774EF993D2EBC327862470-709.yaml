@@ -14,7 +14,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-02T15:44:54.664620062Z
-modified_at: 2026-11-03T02:15:38.135336628Z
+modified_at: 2026-11-03T02:16:03.997296211Z
 req_type: Task
 tags:
 - carried-from:TASK-2754
@@ -30,6 +30,13 @@ relationships:
   target_id: 01a19cef-9909-74e2-90fe-63bc0ea26670
   created_at: 2026-11-03T02:15:38.135331703Z
   created_by: joe
+comments:
+- id: 01a19f31-329d-78d3-af58-234ec231b507
+  author: joe
+  content: 'Advisor ruling (10-28 rule-once): accepted, not fixed. The walk only happens when the rollout file is absent (pruned or foreign CODEX_HOME), it is bounded by the sessions tree, and it runs once per tick; caching would add invalidation state for no measured cost.'
+  created_at: 2026-11-03T02:16:03.997296211Z
+  modified_at: 2026-11-03T02:16:03.997296211Z
+  session_id: 125337a4-7dd3-483b-9c56-3665173938ae
 history:
 - id: 01a19d12-58f0-72b3-adf6-ab58a8019c1c
   author: joe
