@@ -20,7 +20,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T07:26:01.071265913Z
-modified_at: 2026-11-03T19:53:31.250630103Z
+modified_at: 2026-11-03T20:14:25.463330838Z
 req_type: Task
 tags:
 - architecture
@@ -687,6 +687,13 @@ comments:
   created_at: 2026-11-03T18:22:31.288324537Z
   modified_at: 2026-11-03T18:22:31.288324537Z
   session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
+- id: 01a1a30c-76b7-7112-bd8a-c2ec6720f0dc
+  author: joe
+  content: 'IMPLEMENTER (claude, 2026-11-03): N1/N2/N4 implemented on branch spec-b6b1278890774ef993d2ebc327862470-001 (commit 78858c73525, pushed to origin). PR NOT opened: ''gh pr create'' was denied in this lane, and ''aida pr hold'' failed because <main>/.aida/pr-holds is not writable from a contained lane. Two gates are open. (1) Not compiled locally: background jobs were denied and a cold aida-cli-lib check exceeds the 60s per-call limit, so CI is the first compile. (2) N3 pre-code gate NOT RUN: ''codex sandbox'' cannot create a user namespace inside this lane''s bubblewrap (''bwrap: No permissions to create new namespace''). The fixture is written as test task_2712_codex_sandbox_live_seat_commit_and_denials. Host command: AIDA_REQUIRE_CODEX_SANDBOX_LIVE=1 AIDA_REQUIRE_BWRAP_LIVE=1 cargo test -p aida-cli-lib --lib task_2712_ -- --nocapture. If Codex re-protects <clone>/.git at runtime, apply the ruling''s run_sandboxed fallback. Design: contained_write_set() is shared by Claude settings and the new codex_native_sandbox module (posture + --add-dir per grant + <main>/.aida/gate-ledger + <clone>/.git only for a host-recorded clone). All Codex spawn paths, including agent_codex_background.rs, go through it. Native Codex launches request a seat clone. aida ship refuses a native Codex lane outside a clone with a named error. Plan lanes drop --add-dir. Open question for the advisor: the ruling puts the gate ledger in the shared set, so implementers get it too; narrow it to reviewers? Next: open the PR as a draft from the host, run the N3 gate, then review.'
+  created_at: 2026-11-03T20:14:25.463330838Z
+  modified_at: 2026-11-03T20:14:25.463330838Z
+  session_id: 01a1a2f94ef4
+  harness_version: 2.1.317 (Claude Code)
 history:
 - id: 01a1960f-6ca8-7313-8a94-63b0b98a4e44
   author: joe
