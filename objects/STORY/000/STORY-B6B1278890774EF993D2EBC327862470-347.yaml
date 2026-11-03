@@ -11,8 +11,35 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-03T14:28:02.283438627Z
-modified_at: 2026-11-03T20:25:42.538960101Z
+modified_at: 2026-11-03T20:29:40.779271384Z
 req_type: Story
+comments:
+- id: 01a1a31a-6e2b-7a70-9aad-14191aa5905a
+  author: joe
+  content: |-
+    ## Implementer approach
+
+    One new model-free command, `aida session hygiene`, runs the three passes in-process and is registered as an hourly project job. Its paired advisor route fires only when the command exits non-zero, and it exits non-zero only on a must-keep item.
+
+    ### Acceptance criteria as tests
+    - **(1) unit:** the schedule allowlist parses `session hygiene` (args `session hygiene`, never on the per-turn hook path); a config fixture test pins the `session-hygiene` job at `every = "1h"`, enabled. **unit:** the reclaim options built by hygiene use `min_age_mins = idle_hours*60` (24h default), `--apply`, `no_scratch`, and neither `include_live` nor `include_open_prs`.
+    - **(2) unit:** reap goes through `session_reap::reap_quiet_outcomes` (finished + merged + exited only; no protected-lease release, BUG-2197), agent gc through `gc_dead_agents` (an unobservable pidns reads unknown, never dead), and reclaim through `worktree_reclaim::plan` with live/open-PR rails on. Test: the options builder never waives a rail.
+    - **(3) unit:** a pure `keep_items()` over reap outcomes and salvageable ps rows. Salvageable dirty work idle >= 24h yields a keep item naming the salvage act. A retention refusal that needs activation names the activation command. Fresh salvageable work and ordinary skips yield nothing, so the exit is 0 and nothing is routed. The last stderr line is the one-line routed evidence.
+    - **(4) unit:** `disk_headroom_light_report_finish` gets an injected floor-reclaim closure. In a scheduled run with a floor finding, reclaim runs before the report is rebuilt, and a breach that reclaim fixes routes nothing. In a manual run, reclaim never runs.
+
+    ### Expected files
+    - `aida-cli-lib/src/session_hygiene.rs` (new) + `tests/story_2351_session_hygiene_tests.rs`
+    - `aida-cli-lib/src/agent_launch_args.rs`, `agent_launch.rs` (SessionCommand::Hygiene)
+    - `aida-cli-lib/src/maintenance_schedule.rs` (allowlist)
+    - `aida-cli-lib/src/doctor_cmd.rs` (floor reclaim before routing)
+    - `.aida/config.toml`, `aida-cli-lib/src/init_cmd.rs` scaffold, help golden, docs/cli
+
+    ### Ambiguities / conflicts as questions
+    - The scheduled child has a 120s kill budget, and a reap scan alone took >50s here. Should the command stop early instead of timing out? Resolved: it uses a soft deadline. Reclaim is deferred (exit 0, noted) when the budget is spent, so a timeout never routes as a finding.
+  created_at: 2026-11-03T20:29:40.779271384Z
+  modified_at: 2026-11-03T20:29:40.779271384Z
+  session_id: 01a1a316c58f
+  harness_version: 2.1.317 (Claude Code)
 history:
 - id: 01a1a316-cb8a-7301-85a2-3b4f27c65f7a
   author: aida-session-start
