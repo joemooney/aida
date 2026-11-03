@@ -25,7 +25,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-03T03:42:51.559496187Z
-modified_at: 2026-11-03T21:29:03.253775988Z
+modified_at: 2026-11-03T21:29:26.830939628Z
 req_type: Story
 tags:
 - area:deputy
@@ -281,6 +281,13 @@ comments:
   content: Commit f47043567f3 references this requirement
   created_at: 2026-11-03T21:29:03.253775988Z
   modified_at: 2026-11-03T21:29:03.253775988Z
+  session_id: 01a1a34bc5b7
+  harness_version: 2.1.317 (Claude Code)
+- id: 01a1a351-262e-7632-9d8b-c3c1d4e08b09
+  author: joe
+  content: 'Round 4: merged origin/main into PR #3287 (f47043567f3), now MERGEABLE. Only conflict was cli_help_snapshot.txt: kept the branch''s deputy shell blocks and put main''s aida lane blocks after them, before aida adoption. LIGHT gate NOT run (untested=true): this lease has no lane job runner, the sandbox kills background cargo, and a cold cargo test runs past the 60s limit. CI is the gate for this round.'
+  created_at: 2026-11-03T21:29:26.830939628Z
+  modified_at: 2026-11-03T21:29:26.830939628Z
   session_id: 01a1a34bc5b7
   harness_version: 2.1.317 (Claude Code)
 history:
