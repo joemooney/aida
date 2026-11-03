@@ -8,11 +8,18 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-03T02:55:28.039090255Z
-modified_at: 2026-11-03T07:22:14.661618045Z
+modified_at: 2026-11-03T07:22:19.792009663Z
 req_type: Task
 tags:
 - mode:drain
 - probe
+comments:
+- id: 01a1a049-9710-7983-abf2-2da4f709c427
+  author: joe
+  content: 'Rejected by design: a no-op live probe for STORY-2254 AC1. AC1 was met on run 6 (see the STORY-2254 comment, 2026-11-03 00:18).'
+  created_at: 2026-11-03T07:22:19.792009663Z
+  modified_at: 2026-11-03T07:22:19.792009663Z
+  session_id: c58592f4-04ae-498b-9afd-87b0cc2bcde9
 history:
 - id: 01a19f73-3c5b-7802-9f5d-33fdd9db87df
   author: aida-session-start
