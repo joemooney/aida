@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-03T02:44:16.945490220Z
-modified_at: 2026-11-03T21:35:46.761417011Z
+modified_at: 2026-11-03T22:02:27.229251336Z
 req_type: Story
 tags:
 - from:SPIKE-708
@@ -58,6 +58,12 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-03T20:48:58.467516396Z
   modified_at: 2026-11-03T20:48:58.467516396Z
+  session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
+- id: 01a1a36f-5e1d-7080-8e86-e997f0f2bab4
+  author: joe
+  content: 'ADVISOR RULING (15:05, round 3, final, PR #3308): CI contracts is still red at 35768f7c. Run tests/test_bug_1796_normal_two_remote_pull_byte_identical.sh locally, diff the actual output against the expected bytes, and make the fixture match the intended new behavior exactly; give the reason in the commit. LIGHT gate: one targeted cargo test plus make check-ci-fast (umask 022). A ''cargo check -p aida-cli-lib --tests'' on the merged tree is MANDATORY before pushing. Push to the existing PR branch, then stop. This is the final round: the review is scoped to these findings.'
+  created_at: 2026-11-03T22:02:27.229251336Z
+  modified_at: 2026-11-03T22:02:27.229251336Z
   session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
 history:
 - id: 01a19f4b-61ed-7310-b584-0af8f83cd6a1
