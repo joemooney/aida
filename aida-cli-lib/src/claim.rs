@@ -223,7 +223,16 @@ pub(crate) fn handle_claim(spec: &str, worktree: Option<&str>) -> Result<()> {
     // trace:STORY-1429 | ai:claude
     let path = lease_path(&project_root, &id);
     let bytes = toml::to_string_pretty(&lease)?;
-    aida_core::write_atomic(&path, &bytes)?;
+    // STORY-2254: a scope a detached launch attempt holds is not claimed; the
+    // check and the lease write share the admission lock.
+    // trace:STORY-2254 | ai:claude
+    crate::agent_launch::codex_bg_receipt::with_scope_entry(
+        &project_root,
+        role.as_deref()
+            .unwrap_or_else(|| crate::agent_launch::agent_new_scope_role(&scope)),
+        &scope,
+        || aida_core::write_atomic(&path, &bytes).map_err(Into::into),
+    )?;
     // trace:BUG-2215 | ai:codex
     finish_claim_write(
         &path,
