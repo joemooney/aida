@@ -494,6 +494,42 @@ pub(crate) fn emit_renewed(project_root: &Path, mandate: &Mandate, renewal: &Ren
     crate::events::emit(project_root, &event);
 }
 
+/// The audit copy of a revival in `.aida/events.jsonl`: a start whose
+/// `renewed_from` names the expired mandate it re-minted, so the trail links
+/// the two. Best-effort.
+// trace:STORY-2346 | ai:claude
+pub(crate) fn emit_revived(project_root: &Path, mandate: &Mandate, old_id: &str) {
+    let mut event = crate::events::Event::new(
+        None,
+        "",
+        crate::events::EventKind::MandateChanged {
+            id: mandate.id.clone(),
+            active: true,
+            principal: mandate.principal.clone(),
+            expires_at: mandate.expires_at.to_rfc3339(),
+            include_supervised: mandate.include_supervised,
+            reason: mandate.reason.clone(),
+            renewed_from: Some(old_id.to_string()),
+        },
+    );
+    event.seat = crate::events::active_seat();
+    crate::events::emit(project_root, &event);
+}
+
+/// What `aida mandate renew` prints after reviving an expired mandate: the
+/// old id and expiry, the new id, scope and flags, and the new expiry.
+// trace:STORY-2346 | ai:claude
+pub(crate) fn revived_message(old_id: &str, m: &Mandate, receipt: &Renewal) -> String {
+    format!(
+        "Revived mandate {old_id} (expired {}) as {} ({}, supervised: {}); active until {}. Scope, flags, protected paths and human gates are unchanged.",
+        receipt.previous_expires_at.to_rfc3339(),
+        m.id,
+        m.effective_scopes().iter().map(|s| s.as_str()).collect::<Vec<_>>().join(", "),
+        m.include_supervised,
+        m.expires_at.to_rfc3339()
+    )
+}
+
 /// The audit copy of a start / stop in `.aida/events.jsonl`. Best-effort.
 // trace:STORY-1698 | ai:claude
 pub(crate) fn emit_changed(project_root: &Path, mandate: &Mandate, active: bool) {
@@ -625,7 +661,8 @@ pub(crate) fn notify_expiry(dir: &Path, root: &Path, state: &MandateState, now: 
         return;
     }
     let prefix = format!("mandate-expiry-{}-{}", m.id, m.expires_at.timestamp());
-    if (0..2).all(|i| dir.join(".seen").join(format!("{prefix}-{i}")).exists()) {
+    let seen = dir.join(".seen");
+    if (0..2).all(|i| expiry_notice_settled(&seen, &format!("{prefix}-{i}"), now)) {
         return;
     }
     let store = root.join(".aida-store");
@@ -637,11 +674,18 @@ pub(crate) fn notify_expiry(dir: &Path, root: &Path, state: &MandateState, now: 
         .enumerate()
     {
         let id = format!("{prefix}-{index}");
-        let marker = dir.join(".seen").join(&id);
-        if marker.exists() {
+        let marker = seen.join(&id);
+        if expiry_notice_settled(&seen, &id, now) {
             continue;
         }
         let Ok(resolved) = directory.resolve_send(recipient, true) else {
+            // Negative cache: an unresolvable recipient (e.g. a principal
+            // missing from the registry) must not reload the directory on
+            // every statusline tick. trace:STORY-2346 | ai:claude
+            let _ = write_private(
+                &seen.join(format!("{id}.miss")),
+                now.timestamp().to_string().as_bytes(),
+            );
             continue;
         };
         let Ok((deliveries, _)) = crate::mailbox_resolver::delivery_sidecar(
@@ -678,6 +722,27 @@ pub(crate) fn notify_expiry(dir: &Path, root: &Path, state: &MandateState, now: 
             let _ = write_private(&marker, b"delivered");
         }
     }
+}
+
+/// How long [`notify_expiry`] waits before retrying a recipient it could
+/// not resolve.
+// trace:STORY-2346 | ai:claude
+const EXPIRY_NOTICE_MISS_RETRY_SECS: i64 = 600;
+
+/// A notice needs no work now: delivered, or its recipient failed to
+/// resolve less than [`EXPIRY_NOTICE_MISS_RETRY_SECS`] ago.
+// trace:STORY-2346 | ai:claude
+fn expiry_notice_settled(seen: &Path, id: &str, now: DateTime<Utc>) -> bool {
+    if seen.join(id).exists() {
+        return true;
+    }
+    std::fs::read_to_string(seen.join(format!("{id}.miss")))
+        .ok()
+        .and_then(|t| t.trim().parse::<i64>().ok())
+        .and_then(|secs| DateTime::<Utc>::from_timestamp(secs, 0))
+        .is_some_and(|missed| {
+            now >= missed && (now - missed).num_seconds() < EXPIRY_NOTICE_MISS_RETRY_SECS
+        })
 }
 
 /// The [`status_line`] for the mandates in `dir` right now, with the human
@@ -929,27 +994,18 @@ pub(crate) fn handle_mandate(action: &crate::cli::MandateAction) -> Result<()> {
         crate::cli::MandateAction::Renew { duration } => {
             // Same grammar and 24h cap as `start --ttl`, named for this flag.
             let ttl = duration.as_deref().map(parse_renew_for).transpose()?;
-            let (m, renewal) =
+            let (m, renewal, revived_from) =
                 renew_as_human(&dir, &crate::current_user_id(None), ttl, Utc::now())?;
-            // trace:STORY-2346 | ai:codex
-            let revived = m.renewals.is_empty();
-            if let Some(root) = &audit_root {
-                if revived {
-                    emit_changed(root, &m, true);
-                } else {
-                    emit_renewed(root, &m, &renewal);
+            // trace:STORY-2346 | ai:claude
+            if let Some(old_id) = revived_from {
+                if let Some(root) = &audit_root {
+                    emit_revived(root, &m, &old_id);
                 }
-            }
-            if revived {
-                println!(
-                    "Revived mandate as {} ({}, supervised: {}); old mandate expired at {}; active until {}. Scope, flags, protected paths and human gates are unchanged.",
-                    m.id,
-                    m.effective_scopes().iter().map(|s| s.as_str()).collect::<Vec<_>>().join(", "),
-                    m.include_supervised,
-                    renewal.previous_expires_at.to_rfc3339(),
-                    m.expires_at.to_rfc3339()
-                );
+                println!("{}", revived_message(&old_id, &m, &renewal));
                 return Ok(());
+            }
+            if let Some(root) = &audit_root {
+                emit_renewed(root, &m, &renewal);
             }
             println!(
                 "Mandate {} renewed until {} (was {}); its scope, flags and reason are unchanged (renewal {}).",

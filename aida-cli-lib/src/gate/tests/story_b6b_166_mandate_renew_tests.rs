@@ -52,14 +52,24 @@ fn renew_refuses_without_a_human_at_a_terminal_and_leaves_the_record_alone() {
 // ── AC2: only an active, unexpired mandate ─────────────────────────────────
 
 // trace:STORY-B6B1278890774EF993D2EBC327862470-166.acdac1e7 | ai:claude
+// trace:STORY-b6b1278890774ef993d2ebc327862470-342.ac53ee20 | ai:claude
 #[test]
 fn renew_with_no_mandate_points_at_start() {
     let tmp = tempfile::tempdir().unwrap();
     let err = renew(tmp.path(), &human_ok, "joe", None, t0()).unwrap_err();
-    assert!(err.to_string().contains("aida mandate start"), "{err}");
+    // The exact line to run, not just a mention of `start`.
+    assert_eq!(
+        err.to_string(),
+        "no renewable mandate; run: aida mandate start --ship-held"
+    );
+    assert!(err
+        .to_string()
+        .lines()
+        .any(|l| l.ends_with("run: aida mandate start --ship-held")));
 }
 
 // trace:STORY-B6B1278890774EF993D2EBC327862470-166.acdac1e7 | ai:claude
+// trace:STORY-b6b1278890774ef993d2ebc327862470-342.ace68c46 | ai:claude
 #[test]
 fn renew_revives_expired_but_refuses_stopped_mandates() {
     let tmp = tempfile::tempdir().unwrap();
@@ -98,6 +108,7 @@ fn renew_revives_expired_but_refuses_stopped_mandates() {
 // ── AC3: scope and flags kept; expiry = now + duration, capped ─────────────
 
 // trace:STORY-B6B1278890774EF993D2EBC327862470-166.ac139435 | ai:claude
+// trace:STORY-b6b1278890774ef993d2ebc327862470-342.ac3d0b19 | ai:claude
 #[test]
 fn renew_keeps_scope_and_flags_and_defaults_to_the_original_duration() {
     let tmp = tempfile::tempdir().unwrap();
@@ -298,6 +309,7 @@ fn a_stop_after_a_renewal_still_wins() {
 // ── AC5: grants derived from the mandate survive the renewal ──────────────
 
 // trace:STORY-B6B1278890774EF993D2EBC327862470-166.ac446b4b | ai:claude
+// trace:STORY-b6b1278890774ef993d2ebc327862470-342.ac3d0b19 | ai:claude
 #[test]
 fn grants_naming_the_mandate_stay_valid_across_the_renewal() {
     let tmp = tempfile::tempdir().unwrap();
@@ -328,6 +340,7 @@ fn grants_naming_the_mandate_stay_valid_across_the_renewal() {
 }
 
 // trace:STORY-2346 | ai:codex
+// trace:STORY-b6b1278890774ef993d2ebc327862470-342.ac425dbf | ai:claude
 #[test]
 fn expiry_warning_crosses_at_one_hour_and_clears_on_renewal() {
     let tmp = tempfile::tempdir().unwrap();
@@ -352,6 +365,7 @@ fn expiry_warning_crosses_at_one_hour_and_clears_on_renewal() {
 }
 
 // trace:STORY-2346 | ai:codex
+// trace:STORY-b6b1278890774ef993d2ebc327862470-342.ace68c46 | ai:claude
 #[test]
 fn expired_revival_requires_human_and_preserves_explicit_ttl() {
     let tmp = tempfile::tempdir().unwrap();
@@ -372,6 +386,7 @@ fn expired_revival_requires_human_and_preserves_explicit_ttl() {
 }
 
 // trace:STORY-2346 | ai:codex
+// trace:STORY-b6b1278890774ef993d2ebc327862470-342.ac425dbf | ai:claude
 #[test]
 fn expiry_due_job_is_human_action_for_advisor_and_operator_only() {
     let tmp = tempfile::tempdir().unwrap();
@@ -404,6 +419,7 @@ fn expiry_due_job_is_human_action_for_advisor_and_operator_only() {
 }
 
 // trace:STORY-2346 | ai:codex
+// trace:STORY-b6b1278890774ef993d2ebc327862470-342.ac425dbf | ai:claude
 #[test]
 fn expiry_mail_retries_failed_delivery_and_deduplicates_each_expiry() {
     let tmp = tempfile::tempdir().unwrap();
@@ -457,5 +473,97 @@ fn expiry_mail_retries_failed_delivery_and_deduplicates_each_expiry() {
             .unwrap()
             .len(),
         4
+    );
+}
+
+// trace:STORY-b6b1278890774ef993d2ebc327862470-342.ace68c46 | ai:claude
+#[test]
+fn revival_prints_the_old_id_and_links_the_audit_event_to_it() {
+    let tmp = tempfile::tempdir().unwrap();
+    let original = started(tmp.path());
+    let late = original.expires_at + Duration::hours(1);
+    let (revived, receipt, old_id) =
+        renew_reporting_revival(tmp.path(), &human_ok, "joe", None, late).unwrap();
+    assert_eq!(old_id.as_deref(), Some(original.id.as_str()));
+    let text = crate::mandate::revived_message(&original.id, &revived, &receipt);
+    assert!(
+        text.starts_with(&format!(
+            "Revived mandate {} (expired {}) as {} (",
+            original.id,
+            original.expires_at.to_rfc3339(),
+            revived.id
+        )),
+        "{text}"
+    );
+    assert!(
+        text.contains(&format!("active until {}", revived.expires_at.to_rfc3339())),
+        "{text}"
+    );
+
+    crate::mandate::emit_revived(tmp.path(), &revived, &original.id);
+    let events: Vec<_> = crate::events::read_all(tmp.path())
+        .into_iter()
+        .filter_map(|e| match e.kind {
+            crate::events::EventKind::MandateChanged {
+                id,
+                active,
+                renewed_from,
+                ..
+            } => Some((id, active, renewed_from)),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(
+        events,
+        vec![(revived.id.clone(), true, Some(original.id.clone()))]
+    );
+
+    // An in-place renewal reports no revival.
+    let (_, _, none) = renew_reporting_revival(
+        tmp.path(),
+        &human_ok,
+        "joe",
+        None,
+        late + Duration::hours(1),
+    )
+    .unwrap();
+    assert_eq!(none, None);
+}
+
+// trace:STORY-b6b1278890774ef993d2ebc327862470-342.ac425dbf | ai:claude
+#[test]
+fn expiry_mail_caches_an_unresolvable_recipient_briefly() {
+    let tmp = tempfile::tempdir().unwrap();
+    let dir = tmp.path().join("mandates");
+    let root = tmp.path().join("project");
+    let registry = root.join(".aida-store/registry");
+    std::fs::create_dir_all(&registry).unwrap();
+    // The principal is not in the registry: `person:joe` cannot resolve.
+    std::fs::write(registry.join("team.toml"), "[members]\nann = ['advisor']\n").unwrap();
+    let m = started(&dir);
+    let state = MandateState::Active(m.clone());
+    let now = m.expires_at - Duration::minutes(50);
+    crate::mandate::notify_expiry(&dir, &root, &state, now);
+    let seen = dir.join(".seen");
+    let prefix = format!("mandate-expiry-{}-{}", m.id, m.expires_at.timestamp());
+    let miss = seen.join(format!("{prefix}-0.miss"));
+    assert!(miss.exists(), "the miss is cached");
+    assert!(
+        seen.join(format!("{prefix}-1")).exists(),
+        "the advisor was told"
+    );
+    // Within the window the miss is not retried (the marker is untouched).
+    std::fs::write(&miss, now.timestamp().to_string()).unwrap();
+    crate::mandate::notify_expiry(&dir, &root, &state, now + Duration::minutes(5));
+    assert_eq!(
+        std::fs::read_to_string(&miss).unwrap(),
+        now.timestamp().to_string()
+    );
+    // After it, the recipient is retried (and misses again).
+    let later = now + Duration::minutes(11);
+    crate::mandate::notify_expiry(&dir, &root, &state, later);
+    assert_eq!(
+        std::fs::read_to_string(&miss).unwrap(),
+        later.timestamp().to_string()
     );
 }
