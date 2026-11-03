@@ -12,7 +12,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-02T19:57:22.084881790Z
-modified_at: 2026-11-03T02:15:55.734765832Z
+modified_at: 2026-11-03T02:16:21.313114939Z
 req_type: Task
 tags:
 - carried-from:BUG-2415
@@ -24,6 +24,13 @@ relationships:
   target_id: 01a19dd6-5941-7bd3-bf49-45bbcd9c9fc5
   created_at: 2026-11-03T02:15:55.734761304Z
   created_by: joe
+comments:
+- id: 01a19f31-7641-7960-beb4-c54edd0d671d
+  author: joe
+  content: 'Advisor ruling (10-28 rule-once): accepted, not fixed. The bwrap early return is the standard host-capability skip; CI runners have bwrap, and the BUG-2415 fix was verified live on host when the stuck leases ended on 2026-11-02.'
+  created_at: 2026-11-03T02:16:21.313114939Z
+  modified_at: 2026-11-03T02:16:21.313114939Z
+  session_id: 125337a4-7dd3-483b-9c56-3665173938ae
 history:
 - id: 01a19df0-9f38-7a93-980e-1bf51aefff30
   author: joe
