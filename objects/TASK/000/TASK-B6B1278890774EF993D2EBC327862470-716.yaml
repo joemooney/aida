@@ -14,13 +14,20 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-02T16:23:45.262487628Z
-modified_at: 2026-11-02T16:23:45.262487628Z
+modified_at: 2026-11-03T02:16:11.505614150Z
 req_type: Task
 tags:
 - carried-from:TASK-2759
 - finding-hash:47387421
 - from-review:PR-3264
 - kind:carried-forward
+comments:
+- id: 01a19f31-4ff1-7a21-875b-08e4bfbfd79b
+  author: joe
+  content: 'Advisor ruling (10-28 rule-once): accepted, not fixed. Cosmetic test-helper false negative (a ''mutable'' identifier); no such binding exists in-tree, and STORY-2326 retires the regex inventory.'
+  created_at: 2026-11-03T02:16:11.505614150Z
+  modified_at: 2026-11-03T02:16:11.505614150Z
+  session_id: 125337a4-7dd3-483b-9c56-3665173938ae
 history:
 - id: 01a19d56-72ac-7870-a0c6-15c96b22b588
   author: joe
