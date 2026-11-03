@@ -12,7 +12,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-02T19:57:15.214039140Z
-modified_at: 2026-11-03T02:15:50.085148618Z
+modified_at: 2026-11-03T02:16:18.663233932Z
 req_type: Task
 tags:
 - carried-from:BUG-2415
@@ -24,6 +24,13 @@ relationships:
   target_id: 01a19dd6-47a0-7210-b4bf-f09b726dea5d
   created_at: 2026-11-03T02:15:50.085144065Z
   created_by: joe
+comments:
+- id: 01a19f31-6be7-70e2-979c-1d5c14f45c0d
+  author: joe
+  content: 'Advisor ruling (10-28 rule-once): accepted, not fixed. rerecord_for_promoted_build is a thin composition of classify + record_named, both directly tested; the dev-build path was exercised live on 2026-11-02 when the operator''s promote re-recorded activation.'
+  created_at: 2026-11-03T02:16:18.663233932Z
+  modified_at: 2026-11-03T02:16:18.663233932Z
+  session_id: 125337a4-7dd3-483b-9c56-3665173938ae
 history:
 - id: 01a19df0-9efc-7c01-bdec-b1a6c1431524
   author: joe
