@@ -1,0 +1,165 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-2383",
+  "publishes": [
+    {
+      "at": "2026-11-03T20:40:26.375509525Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-01T06:05:44.568393355Z",
+      "spec": "BUG-2383",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-01T08:41:15.149560997Z",
+      "spec": "BUG-2383",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "Independent full sweep: 3 confirmed CI failures plus false tested tally, Claude-only drain job setup, and non-mandatory live containment regression; CI remains a ship blocker.",
+        "recovery_hint": "address the review findings, move BUG-B6B1278890774EF993D2EBC327862470-157 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-11-01T08:50:31.866422332Z",
+      "spec": "BUG-2383",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-01T10:28:28.955094916Z",
+      "spec": "BUG-2383",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "AC1/AC3/AC4 native tool integration unmet: env-only runner discovery and direct shell fixture bypass Codex core tool policy; other five blockers corrected.",
+        "recovery_hint": "address the review findings, move BUG-B6B1278890774EF993D2EBC327862470-157 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-11-01T13:35:49.642626607Z",
+      "spec": "BUG-2383",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "BUG-2383",
+        "branch": "pr-3192",
+        "first_seen": "2026-11-01T13:35:49.642564333+00:00"
+      }
+    },
+    {
+      "ts": "2026-11-02T11:49:56.737677317Z",
+      "spec": "BUG-2383",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-02T12:55:17.986606041Z",
+      "spec": "BUG-2383",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-11-03T02:18:29.764896349Z",
+      "spec": "BUG-2383",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-11-03T03:40:27.805605262Z",
+      "spec": "BUG-2383",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-11-03T05:16:37.746046135Z",
+      "spec": "BUG-2383",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-11-03T07:19:29.161949031Z",
+      "spec": "BUG-2383",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-11-03T15:35:34.319238051Z",
+      "spec": "BUG-2383",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-03T20:39:48.935909154Z",
+      "spec": "BUG-2383",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 3192
+      }
+    },
+    {
+      "ts": "2026-11-03T20:40:26.113844186Z",
+      "spec": "BUG-2383",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "71a98c8d2859a8382d945f8fdfbe2d91529cb36c",
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
