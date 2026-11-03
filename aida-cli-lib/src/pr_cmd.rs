@@ -200,9 +200,10 @@ pub(crate) fn push_and_verify_held_branch(
     branch: &str,
 ) -> Result<String> {
     let full_ref = format!("refs/heads/{branch}");
-    let local = std::process::Command::new("git")
-        .arg("-C")
-        .arg(repo)
+    // Every git call goes through host_git_command: `repo` can be a seat
+    // clone, where raw host git would run seat-written config and hooks
+    // (e.g. pre-push). trace:BUG-2169 | ai:claude
+    let local = aida_core::git_ops::host_git_command(repo)
         .args(["rev-parse", "--verify", "--quiet", &full_ref])
         .output()
         .context("could not invoke git rev-parse")?;
@@ -211,9 +212,7 @@ pub(crate) fn push_and_verify_held_branch(
     }
     let local_sha = String::from_utf8_lossy(&local.stdout).trim().to_string();
 
-    let push = std::process::Command::new("git")
-        .arg("-C")
-        .arg(repo)
+    let push = aida_core::git_ops::host_git_command(repo)
         .args(["push", "-u", remote, &format!("{full_ref}:{full_ref}")])
         // trace:BUG-2181 | ai:claude
         .remote_credentials(repo, remote)
@@ -231,9 +230,7 @@ pub(crate) fn push_and_verify_held_branch(
         )
     };
 
-    let ls = std::process::Command::new("git")
-        .arg("-C")
-        .arg(repo)
+    let ls = aida_core::git_ops::host_git_command(repo)
         .args(["ls-remote", remote, &full_ref])
         // trace:BUG-2181 | ai:claude
         .remote_credentials(repo, remote)

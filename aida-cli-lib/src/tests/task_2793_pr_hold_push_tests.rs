@@ -3,10 +3,10 @@
 // trace:TASK-2793 | ai:claude
 
 use super::push_and_verify_held_branch;
-use crate::test_git::{commit_fixture, git_command};
+use crate::test_git::commit_fixture;
 
 fn git(dir: &std::path::Path, args: &[&str]) -> String {
-    let out = git_command()
+    let out = crate::test_git::git_command()
         .arg("-C")
         .arg(dir)
         .args(args)
@@ -95,5 +95,42 @@ fn hold_succeeds_when_the_push_lands_but_the_upstream_config_write_fails() {
     assert_eq!(
         git(&origin, &["rev-parse", "refs/heads/held-branch"]),
         local
+    );
+}
+
+#[test]
+fn hold_fails_when_origin_rejects_a_non_fast_forward_push() {
+    let (_tmp, work, origin) = repo_with_bare_origin();
+    git(&work, &["push", "-q", "origin", "held-branch"]);
+    let published = git(&work, &["rev-parse", "HEAD"]);
+    // Rewrite the local tip so it no longer descends from origin's.
+    git(
+        &work,
+        &[
+            "-c",
+            "user.name=t",
+            "-c",
+            "user.email=t@example.invalid",
+            "commit",
+            "-q",
+            "--amend",
+            "--allow-empty",
+            "-m",
+            "diverged",
+        ],
+    );
+    let local = git(&work, &["rev-parse", "HEAD"]);
+    assert_ne!(local, published);
+
+    let err = push_and_verify_held_branch(&work, "origin", "held-branch")
+        .expect_err("a rejected non-fast-forward push must not report a held branch");
+
+    let msg = err.to_string();
+    assert!(msg.contains("could not push"), "{msg}");
+    assert!(msg.contains("not held"), "{msg}");
+    assert_eq!(
+        git(&origin, &["rev-parse", "refs/heads/held-branch"]),
+        published,
+        "origin keeps its tip"
     );
 }
