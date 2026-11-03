@@ -12,13 +12,20 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-02T20:26:07.113409958Z
-modified_at: 2026-11-02T20:26:07.113409958Z
+modified_at: 2026-11-03T02:16:26.821669780Z
 req_type: Task
 tags:
 - carried-from:BUG-2394
 - finding-hash:afcab2d7
 - from-review:BUG-2394
 - kind:carried-forward
+comments:
+- id: 01a19f31-8bc5-76c0-8c5d-d6ec1df55e48
+  author: joe
+  content: 'Advisor ruling (10-28 rule-once): accepted, not fixed. Untested branch in an MCP-flag rescope edge case (mcp=off with only a seat-trusted server); STORY-2326 consolidates launch flag assembly and will carry the matrix test.'
+  created_at: 2026-11-03T02:16:26.821669780Z
+  modified_at: 2026-11-03T02:16:26.821669780Z
+  session_id: 125337a4-7dd3-483b-9c56-3665173938ae
 history:
 - id: 01a19e05-b1d0-7ea0-9f74-8506fd68341b
   author: joe
