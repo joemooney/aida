@@ -8480,7 +8480,18 @@ pub(crate) fn handle_queue_rework(
     // rework pickup. Persist it onto the spec before queueing so every later
     // pickup surface sees the same blocking context. trace:BUG-814 | ai:codex
     if let Ok(root) = find_project_root() {
-        if let Some(block) = rework_findings_block_for_spec(&root, &display_id, &spec_id) {
+        // BUG-2430: a review keyed by the spec's open PR counts too.
+        // trace:BUG-2430 | ai:claude
+        let open_change = spec_open_change_key(&root, &[display_id.as_str(), spec_id.as_str()]);
+        let findings =
+            match resolve_rework_findings(&root, &display_id, &spec_id, open_change.as_deref()) {
+                Ok(block) => block,
+                Err(why) => {
+                    eprintln!("warning: no review findings imported for {display_id}: {why}");
+                    None
+                }
+            };
+        if let Some(block) = findings {
             let author = get_default_author();
             let comment = aida_core::Comment::new(author, block.clone());
             // BUG-1213 (round 2): recurrence means the IMMEDIATELY PREVIOUS
@@ -10888,54 +10899,189 @@ pub(crate) fn rework_findings_block_for_spec(
     display_id: &str,
     spec_id: &str,
 ) -> Option<String> {
+    match resolve_rework_findings(project_root, display_id, spec_id, None) {
+        Ok(block) => block,
+        Err(why) => {
+            eprintln!("warning: no review findings imported for {display_id}: {why}");
+            None
+        }
+    }
+}
+
+/// BUG-2430: the change key (`PR-N`) of the spec's open pull request, if the
+/// forge names exactly one. A failed lookup is `None`: the ledger bindings
+/// still answer, and an unknown PR never binds a review to the spec.
+// trace:BUG-2430 | ai:claude
+pub(crate) fn spec_open_change_key(project_root: &std::path::Path, ids: &[&str]) -> Option<String> {
+    let forge = Ok(crate::forge::resolve_forge_kind(project_root));
+    let mut ids: Vec<String> = ids.iter().map(|s| s.trim().to_string()).collect();
+    ids.dedup();
+    crate::reconcile_evidence::check_open_changes(project_root, &forge, ids, false)
+        .into_iter()
+        .find_map(|(_, check)| match check {
+            crate::reconcile_evidence::OpenChangeCheck::Open(n) => {
+                Some(crate::gate::ledger::ChangeKey::pr(n).as_key())
+            }
+            _ => None,
+        })
+}
+
+/// BUG-2430: the time a verdict was recorded, for ordering a spec-keyed
+/// record against a change-keyed one: its own `recorded_at`, else when the
+/// reader saw it written.
+// trace:BUG-2430 | ai:claude
+fn verdict_recorded_time(
+    verdict: &crate::gate::review_verdict::RecordedVerdict,
+    fallback: Option<chrono::DateTime<chrono::Utc>>,
+) -> Option<chrono::DateTime<chrono::Utc>> {
+    verdict
+        .recorded_at
+        .as_deref()
+        .and_then(|at| chrono::DateTime::parse_from_rfc3339(at.trim()).ok())
+        .map(|at| at.with_timezone(&chrono::Utc))
+        .or(fallback)
+}
+
+/// The findings block a rework pickup leads with, or why it cannot be read.
+///
+/// BUG-2430: a review recorded under the change key (`PR-N`) with no spec
+/// binding in the ledger was invisible here, so the rework lane launched
+/// with only older rulings. `open_change` (the spec's open PR, from
+/// [`spec_open_change_key`]) now binds that change's verdict to the spec,
+/// and when both a spec-keyed and a change-keyed record answer, the newer
+/// one wins. `Err` means a request-changes verdict exists but its findings
+/// cannot be selected; a rework launch must refuse rather than send the
+/// lane out on stale instructions.
+// trace:BUG-2430 | ai:claude
+pub(crate) fn resolve_rework_findings(
+    project_root: &std::path::Path,
+    display_id: &str,
+    spec_id: &str,
+    open_change: Option<&str>,
+) -> Result<Option<String>, String> {
     use crate::gate::review_alias::{select_verdict, spec_labels, AliasSelection};
+    use crate::gate::review_verdict::RecordedVerdict;
     let ids = [display_id, spec_id];
     let labels = spec_labels(&ids);
     let shown = labels
         .first()
         .cloned()
         .unwrap_or_else(|| display_id.to_string());
-    match select_verdict(project_root, &ids) {
-        // Named by the caller's first label, not the answering partition's:
-        // the recurrence guard compares whole blocks, so the same findings
-        // must render the same whichever label recorded them.
-        AliasSelection::Selected(s) => {
-            return crate::review_verdict_display::rework_findings_comment(
-                &shown, &shown, &s.verdict,
-            );
-        }
-        AliasSelection::Absent => {}
-        unavailable => {
-            eprintln!(
-                "warning: no review findings imported for {shown}: its current review cannot be selected ({})",
-                unavailable.unavailable_reason().unwrap_or_default()
-            );
-            return None;
-        }
-    }
+    let spec_keyed: Option<(RecordedVerdict, Option<chrono::DateTime<chrono::Utc>>)> =
+        match select_verdict(project_root, &ids) {
+            AliasSelection::Selected(s) => {
+                let at = verdict_recorded_time(
+                    &s.verdict,
+                    s.order_time.map(|t| t.with_timezone(&chrono::Utc)),
+                );
+                Some((s.verdict, at))
+            }
+            AliasSelection::Absent => None,
+            unavailable => {
+                let reason = unavailable
+                    .unavailable_reason()
+                    .unwrap_or_default()
+                    .to_string();
+                if unavailable.fail_closed().is_some() {
+                    return Err(format!(
+                        "a request-changes review of {shown} exists but its current review cannot be selected ({reason})"
+                    ));
+                }
+                eprintln!(
+                    "warning: no review findings imported for {shown}: its current review cannot be selected ({reason})"
+                );
+                return Ok(None);
+            }
+        };
 
-    // M1: every key with a verdict, the ledger's included, each read as the
-    // gates weigh it. trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
-    // trace:TASK-1191 | ai:codex
-    let mut bound = crate::gate::review_verdict::list_active_verdicts(project_root)
-        .into_iter()
-        .filter(|(_, verdict)| verdict.kind.blocks_done())
-        .filter(|(key, _)| change_verdict_bound_to(project_root, key, &labels))
-        .collect::<Vec<_>>();
-    if bound.len() > 1 {
-        eprintln!(
-            "warning: no review findings imported for {shown}: {} changes each hold a current refusal for it ({})",
-            bound.len(),
-            bound.iter().map(|(k, _)| k.as_str()).collect::<Vec<_>>().join(", ")
+    let open_key = open_change
+        .and_then(crate::gate::ledger::ChangeKey::parse)
+        .map(|k| k.as_key());
+    let change_keyed: Option<(String, RecordedVerdict)> = match open_key.as_deref() {
+        // The spec's open PR answers for its change key, approval included:
+        // a newer approval there means no findings are outstanding.
+        Some(key) => match crate::gate::review_verdict::current_verdict(project_root, key) {
+            None => None,
+            Some(current) => {
+                match crate::gate::review_verdict::parse_recorded_verdict(&current.body) {
+                    Some(v) => Some((key.to_string(), v)),
+                    None => {
+                        return Err(format!(
+                            "the review recorded for {key} (the open pull request of {shown}) cannot be read"
+                        ))
+                    }
+                }
+            }
+        },
+        None => None,
+    };
+    let change_keyed = match change_keyed {
+        Some(found) => Some(found),
+        None => {
+            // M1: every key with a verdict, the ledger's included, each read
+            // as the gates weigh it.
+            // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+            // trace:TASK-1191 | ai:codex
+            let mut bound = crate::gate::review_verdict::list_active_verdicts(project_root)
+                .into_iter()
+                .filter(|(_, verdict)| verdict.kind.blocks_done())
+                .filter(|(key, _)| change_verdict_bound_to(project_root, key, &labels))
+                .collect::<Vec<_>>();
+            if bound.len() > 1 && spec_keyed.is_some() {
+                // The spec's own record answers, as before BUG-2430.
+                bound.clear();
+            } else if bound.len() > 1 {
+                return Err(format!(
+                    "{} changes each hold a current refusal for {shown} ({})",
+                    bound.len(),
+                    bound
+                        .iter()
+                        .map(|(k, _)| k.as_str())
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                ));
+            }
+            bound.pop()
+        }
+    };
+
+    let change_time = |key: &str, v: &RecordedVerdict| {
+        let written = crate::gate::review_verdict::current_verdict(project_root, key)
+            .and_then(|c| c.written_at)
+            .map(chrono::DateTime::<chrono::Utc>::from);
+        verdict_recorded_time(v, written)
+    };
+    let render_change = |key: &str, v: &RecordedVerdict| {
+        let review_ref = review_ref_from_verdict_filename(
+            &crate::gate::review_verdict::verdict_path(project_root, key),
         );
-        return None;
-    }
-    let (key, verdict) = bound.pop()?;
-    let review_ref = review_ref_from_verdict_filename(&crate::gate::review_verdict::verdict_path(
-        project_root,
-        &key,
-    ));
-    crate::review_verdict_display::rework_findings_comment(display_id, &review_ref, &verdict)
+        crate::review_verdict_display::rework_findings_comment(display_id, &review_ref, v)
+    };
+    // Named by the caller's first label, not the answering partition's: the
+    // recurrence guard compares whole blocks, so the same findings must
+    // render the same whichever label recorded them.
+    let render_spec = |v: &RecordedVerdict| {
+        crate::review_verdict_display::rework_findings_comment(&shown, &shown, v)
+    };
+    Ok(match (spec_keyed, change_keyed) {
+        (None, None) => None,
+        (Some((v, _)), None) => render_spec(&v),
+        (None, Some((key, v))) => render_change(&key, &v),
+        (Some((sv, s_at)), Some((key, cv))) => {
+            let c_at = change_time(&key, &cv);
+            let change_newer = match (s_at, c_at) {
+                (Some(s), Some(c)) => c > s,
+                // Unordered: fail closed toward the refusal so its findings
+                // are not dropped.
+                _ => cv.kind.blocks_done() && !sv.kind.blocks_done(),
+            };
+            if change_newer {
+                render_change(&key, &cv)
+            } else {
+                render_spec(&sv)
+            }
+        }
+    })
 }
 
 /// BUG-225: render the copy-pasteable `claude` command line for a
@@ -12104,18 +12250,33 @@ pub(crate) fn handle_queue_work(
         maybe_show_faithful_launcher_notice();
     }
 
-    let review_findings = (!role.eq_ignore_ascii_case("reviewer") && !plan_only && !guided)
-        .then(|| {
-            project_root_for_config.as_deref().and_then(|root| {
-                let spec_id = plan
-                    .entries
-                    .first()
-                    .map(|entry| entry.spec_id.as_str())
-                    .unwrap_or(plan.anchor_display.as_str());
-                rework_findings_block_for_spec(root, &plan.anchor_display, spec_id)
-            })
-        })
-        .flatten();
+    // BUG-2430: the findings come from the newest review of the spec, its
+    // open PR's change-keyed record included; a refusal that exists but
+    // cannot be read stops the launch instead of sending the lane out on
+    // older rulings. trace:BUG-2430 | ai:claude
+    let review_findings = match project_root_for_config
+        .as_deref()
+        .filter(|_| !role.eq_ignore_ascii_case("reviewer") && !plan_only && !guided)
+    {
+        None => None,
+        Some(root) => {
+            let spec_id = plan
+                .entries
+                .first()
+                .map(|entry| entry.spec_id.as_str())
+                .unwrap_or(plan.anchor_display.as_str());
+            let open_change = spec_open_change_key(root, &[plan.anchor_display.as_str(), spec_id]);
+            resolve_rework_findings(root, &plan.anchor_display, spec_id, open_change.as_deref())
+                .map_err(|why| {
+                    anyhow::anyhow!(
+                        "refusing to launch {}: {why}. Read the review with `aida review verdict {}` \
+                         or post its findings as an advisor ruling, then relaunch.",
+                        plan.anchor_display,
+                        open_change.as_deref().unwrap_or(&plan.anchor_display)
+                    )
+                })?
+        }
+    };
     // BUG-1213: the pickup leads with the ACTUAL rework round, derived from
     // the spec's recorded findings blocks (one per `queue rework`), not a
     // constant. trace:BUG-1213 | ai:claude
