@@ -1,0 +1,79 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-2422",
+  "publishes": [
+    {
+      "at": "2026-11-03T17:18:48.446698748Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-03T07:51:10.439576878Z",
+      "spec": "BUG-2422",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-11-03T09:17:11.377461222Z",
+      "spec": "BUG-2422",
+      "kind": {
+        "event": "PhaseDonePr",
+        "pr": 3289
+      }
+    },
+    {
+      "ts": "2026-11-03T09:48:32.719717595Z",
+      "spec": "BUG-2422",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-11-03T11:20:16.896504107Z",
+      "spec": "BUG-2422",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "BUG-2422",
+        "branch": "bug-2422-work",
+        "first_seen": "2026-11-03T11:20:16.896296394+00:00"
+      }
+    },
+    {
+      "ts": "2026-11-03T17:17:51.173214807Z",
+      "spec": "BUG-2422",
+      "seat": "advisor",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-11-03T17:18:23.964408197Z",
+      "spec": "BUG-2422",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 3289
+      }
+    },
+    {
+      "ts": "2026-11-03T17:18:48.295413783Z",
+      "spec": "BUG-2422",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "d32d909128fa7dec11860bf2092baaccd1040034",
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
