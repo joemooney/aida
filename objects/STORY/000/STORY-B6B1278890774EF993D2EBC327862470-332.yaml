@@ -8,11 +8,18 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-03T03:27:01.757035796Z
-modified_at: 2026-11-03T05:06:02.696624122Z
+modified_at: 2026-11-03T05:08:25.460326051Z
 req_type: Story
 tags:
 - area:advisor
 - area:awaiting
+comments:
+- id: 01a19fce-fef4-7940-8c54-31225123d5b3
+  author: joe
+  content: 'ADVISOR RULING on the design fork (2026-11-02 22:15 MST): APPROVE the lean. (1) A derived, non-canonical cache under .aida/ keyed by (PR, head SHA, eligibility kind: ship-ready | unreviewed-push) records first_observed_at. Reset it on a head change or a known disqualification (hold armed, CI not green, verdict not approved at head, review started). (2) The age is labelled honestly as ''idle >= N min (since first observed)''. Where a cheap exact start exists, seed from it instead: for ship-ready, max(verdict recorded_at at head, CI completed_at at head) when the rollup carries it. (3) A plain ''aida awaiting'' (network allowed) refreshes the cache. --notice and the status line read it only, with no forge probe, and omit entries whose observation is older than 15 min (stale evidence is never shown). (4) No daemon and no new event producer. True transition age is out of scope. Threshold N from config, default 15 min. Reason: it delivers the delivery-contract signal now with no new canonical state; an over-estimate errs toward alerting.'
+  created_at: 2026-11-03T05:08:25.460326051Z
+  modified_at: 2026-11-03T05:08:25.460326051Z
+  session_id: c58592f4-04ae-498b-9afd-87b0cc2bcde9
 history:
 - id: 01a19fca-bff8-7861-962b-b70530102a36
   author: aida-session-start
