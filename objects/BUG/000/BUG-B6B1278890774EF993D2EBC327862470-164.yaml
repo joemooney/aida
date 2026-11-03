@@ -21,7 +21,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T06:46:56.104025446Z
-modified_at: 2026-11-03T23:09:14.382958517Z
+modified_at: 2026-11-03T23:55:40.726366180Z
 req_type: Bug
 tags:
 - audit
@@ -137,6 +137,13 @@ comments:
   created_at: 2026-11-03T23:06:07.149662874Z
   modified_at: 2026-11-03T23:06:07.149662874Z
   session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
+- id: 01a1a3d7-0736-7513-9847-a9ffd5d7f818
+  author: joe
+  content: 'Round 2 (45d6795f7d4): findings 1,3,4,5,6 fixed. Finding 2 NOT done: regenerating cli_help_snapshot.txt needs AIDA_UPDATE_SNAPSHOTS=1 cargo test ... help_surface_matches_golden_snapshot, and this headless session''s permission mode denied every command setting that variable; per ruling it was not hand-edited, so CI lib-0 will still fail until someone runs the regen. Contracts failure was the CLI-manual drift guard: --vendor cited under the aida agent section (no agent subcommand has it); reworded. Targeted cargo test could not finish within the 10-min tool limit (3 tries); cargo check --tests and make check-ci-fast (36 gates) pass.'
+  created_at: 2026-11-03T23:55:40.726366180Z
+  modified_at: 2026-11-03T23:55:40.726366180Z
+  session_id: 01a1a3ac7b64
+  harness_version: 2.1.317 (Claude Code)
 history:
 - id: 01a195dc-94a3-73e2-8979-5b3cd7a026e1
   author: joe
