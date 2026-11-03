@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-02T19:20:32.021326811Z
-modified_at: 2026-11-03T02:11:08.319634107Z
+modified_at: 2026-11-03T02:12:22.233934080Z
 req_type: Story
 tags:
 - architecture
@@ -213,6 +213,12 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: PR-A core is solid, but effective_gate_state ignores an open refusal on the PR''s own ledger whose spec label names no member (today''s PR-N key blocks on it), a loosening the test suite locks in; --compare fidelity and expected-diff list also need fixing before A2 can rely on it. No triage reason was given.'
   created_at: 2026-11-03T01:35:28.939512694Z
   modified_at: 2026-11-03T01:35:28.939512694Z
+  session_id: ee0bf351-6b17-486f-a38e-cfbb1343c426
+- id: 01a19f2d-d059-74f0-9982-4c653a9a17b4
+  author: joe
+  content: 'ADVISOR RULING (19:14), PR #3279 round 2 (cap reached): ONE last push, then a delta review and ship. (1) Add ''aida gate state'' to the checked-in BUG-1502 format-json audit, so CI cli-0 goes green. (2) Fix the two minor A2-instrument gaps the reviewer named. Nothing else.'
+  created_at: 2026-11-03T02:12:22.233934080Z
+  modified_at: 2026-11-03T02:12:22.233934080Z
   session_id: ee0bf351-6b17-486f-a38e-cfbb1343c426
 history:
 - id: 01a19ec9-2f7e-7e41-b3a1-1cb5a299a222
