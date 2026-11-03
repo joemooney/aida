@@ -29,6 +29,45 @@ Every flag that bounds a window in time takes the same forms, whichever command 
 - **A zone-less ISO datetime** (`2026-05-01T10:00`, `2026-05-01 10:00`) — that local wall-clock time.
 - **RFC3339** (`2026-05-01T10:00:00Z`, `…+02:00`) — the explicit zone wins.
 
+## Idle eligible PRs
+
+`aida awaiting` refreshes a derived `.aida/idle-eligible.json` cache from the
+open-PR snapshot and local gate/reviewer evidence. Its `idle_eligible` section
+shows overdue PRs with state `ship` or `review`, an age labelled
+`idle >= N min (since first observed)`, and one next command. The same rows
+appear in `aida awaiting --format json`.
+
+A ship row requires an APPROVED verdict at the exact head, green CI, a
+mergeable PR, and no hold or active review. A review row requires a pushed
+head that contains the base branch tip (the forge compare reports it zero
+commits behind), no verdict at that head, and no active reviewer. GitHub's
+merge state is not used for this; when ancestry cannot be read, no review
+observation starts. Drafts and
+armed holds are excluded. Holds remain excluded until cleared; this signal
+does not authorize hold release or bypass any ship gate.
+
+Configure the due threshold in the project's `.aida/config.toml`:
+
+```toml
+[advisor]
+eligible_idle_minutes = 15
+```
+
+The default is 15 minutes. Observations are keyed by PR, head SHA and kind
+(`ship-ready` or `unreviewed-push`); a refresh resets them after a head change
+or disqualification. When every CI check supplies `completedAt`, ship age can
+start at the later of CI completion, verdict recording and the last observed
+disqualification for that PR, head and kind, so clearing a hold or review
+restarts the age. Otherwise it starts at first observation. This is an observed lower-bound signal, not a history
+of eligibility transitions.
+
+`--notice`, `--no-ci`, the status line and statusbar read the cache without
+forge probes or cache writes, omitting evidence older than 15 minutes and
+locally disqualified entries. They show the overdue count. Run a normal
+`aida awaiting` to refresh evidence; no daemon or event producer is installed.
+The cache is disposable and non-canonical, and grants no lifecycle authority.
+<!-- trace:STORY-2336 | ai:codex -->
+
 ## Merge-hold gate and clearance limits
 
 The required `merge-hold-gate` check uses three forge labels. An active
