@@ -29,6 +29,8 @@ fn lease(id: &str, scope: &str, worktree: PathBuf, branch: &str) -> SessionLease
         creator_pid_start_time: Some("t0".into()),
         active_pid: None,
         active_pid_start_time: None,
+        creator_pid_ns: crate::gate::review_authority::recorded_pid_ns(Some(4242)),
+        active_pid_ns: crate::gate::review_authority::origin_pid_ns(),
         cargo_target_dir: None,
         parent_project_root: None,
         pr_head_sha: None,

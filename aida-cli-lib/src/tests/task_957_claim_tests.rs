@@ -18,6 +18,8 @@ fn claim(id: &str, scope: &str, pid: Option<u32>) -> SessionLease {
         creator_pid_start_time: None,
         active_pid: None,
         active_pid_start_time: None,
+        creator_pid_ns: crate::gate::review_authority::recorded_pid_ns(pid),
+        active_pid_ns: crate::gate::review_authority::origin_pid_ns(),
         cargo_target_dir: None,
         parent_project_root: None,
         pr_head_sha: None,

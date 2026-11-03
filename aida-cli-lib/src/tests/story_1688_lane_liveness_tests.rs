@@ -54,6 +54,8 @@ fn lease(id: &str, scope: &str, pid: &Pid, started_at: DateTime<Utc>) -> Session
         creator_pid_start_time: None,
         active_pid: Some(pid.0),
         active_pid_start_time: pid.1.clone(),
+        creator_pid_ns: crate::gate::review_authority::origin_pid_ns(),
+        active_pid_ns: crate::gate::review_authority::recorded_pid_ns(Some(pid.0)),
         cargo_target_dir: None,
         parent_project_root: None,
         pr_head_sha: None,

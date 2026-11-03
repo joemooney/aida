@@ -6503,6 +6503,14 @@ pub(crate) fn stamp_lease_active_pid_at(
         if let Some(start_time) = &start_time {
             doc["active_pid_start_time"] = value(start_time.clone());
         }
+        // BUG-2419: the pid was read in this process's pid namespace.
+        // trace:BUG-2419 | ai:claude
+        match crate::gate::review_authority::origin_pid_ns() {
+            Some(ns) => doc["active_pid_ns"] = value(ns),
+            None => {
+                doc.remove("active_pid_ns");
+            }
+        }
         // STORY-1429: atomic, so a reader never sees a half-rewritten lease.
         // trace:STORY-1429 | ai:claude
         aida_core::write_atomic(&path, doc.to_string())
