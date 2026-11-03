@@ -1135,10 +1135,6 @@ fn reap_one_with_clear_hooks(
     before_missing_worktree_clear: impl FnOnce(),
     after_final_registration_check: impl FnOnce(),
 ) -> String {
-    // trace:BUG-2425 | ai:codex
-    if !aida_core::liveness::pid_namespace_observable(lease.pid_namespace) {
-        return "skipped — unknown (foreign pidns); run outside the sandbox".into();
-    }
     let lease = &reap_view(lease, project_root);
     // trace:TASK-2053 | ai:claude
     if lease.tree_kind == crate::seat_clone::TreeKind::Clone {
@@ -1409,10 +1405,6 @@ pub(crate) fn reap_one_clone(
     lease: &SessionLease,
     checked_tip: Option<&str>,
 ) -> String {
-    // trace:BUG-2425 | ai:codex
-    if !aida_core::liveness::pid_namespace_observable(lease.pid_namespace) {
-        return "skipped — unknown (foreign pidns); run outside the sandbox".into();
-    }
     let Some(tip) = checked_tip else {
         return "skipped — the scan recorded no HEAD for the seat clone".to_string();
     };

@@ -1200,17 +1200,18 @@ fn live_holders(main_root: &Path) -> Vec<Holder> {
         .filter(|l| !l.worktree_path.as_os_str().is_empty())
         .filter(|l| {
             // trace:BUG-2425 | ai:codex
-            let gone = if aida_core::liveness::pid_namespace_observable(l.pid_namespace) {
-                aida_core::liveness::lease_owner_process_gone(
-                    l.active_pid,
-                    l.active_pid_start_time.as_deref(),
-                    l.creator_pid,
-                    l.creator_pid_start_time.as_deref(),
-                    aida_core::liveness::process_identity_is_alive,
-                )
-            } else {
-                None
-            };
+            let gone =
+                if aida_core::pid_observer::PidObserver::current().can_observe(l.pid_namespace) {
+                    aida_core::liveness::lease_owner_process_gone(
+                        l.active_pid,
+                        l.active_pid_start_time.as_deref(),
+                        l.creator_pid,
+                        l.creator_pid_start_time.as_deref(),
+                        aida_core::liveness::process_identity_is_alive,
+                    )
+                } else {
+                    None
+                };
             // A lease with no PID at all reads as live, as in reclaim.
             !gone.unwrap_or(false)
         })

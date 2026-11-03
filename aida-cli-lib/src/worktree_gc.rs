@@ -1811,7 +1811,8 @@ pub(crate) fn probe_lease_death_facts(
     caller: Option<(u32, Option<&str>)>,
     active: &HashSet<std::path::PathBuf>,
 ) -> LeaseDeathFacts {
-    let owner_is_caller = aida_core::liveness::pid_namespace_observable(lease.pid_namespace)
+    let owner_is_caller = aida_core::pid_observer::PidObserver::current()
+        .can_observe(lease.pid_namespace)
         && lease.active_pid.is_none()
         && caller.is_some_and(|(pid, start)| {
             lease.creator_pid == Some(pid)

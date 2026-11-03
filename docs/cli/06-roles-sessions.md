@@ -107,11 +107,22 @@ From a different namespace, `aida ps` shows `unknown (foreign pidns)`, retains
 the row, and prints a `liveness: partial` header with the reader namespace and
 counts by recorded namespace. JSON reports `live: null` and a
 `liveness_warning`; these sessions are neither stale-hidden nor orphaned.
-Unstamped legacy records are also unknown outside the initial PID namespace.
-Run outside the sandbox to resolve them. Session reap, stale-lease recovery,
-worktree GC, agent GC, and review-watch stale release retain unobservable owners;
-review-watch also refuses to signal their PIDs or process groups. The TUI uses
-`?` for an unknown spec liveness reading. <!-- trace:BUG-2425 | ai:codex -->
+Unstamped legacy records are also unknown when the reader is in a sandbox,
+even one that reports the initial namespace. Running outside the sandbox
+resolves records stamped in the host namespace. A foreign namespace only means
+the PID can't be checked. It is not evidence that the process exited, so every
+other signal still applies:
+- A claim whose heartbeat is older than its TTL is reclaimed.
+- A session lease is stale once its worktree is gone or it is 24 hours old,
+  so session reap, stale-lease recovery and worktree GC can then clear it.
+- A dormant lease is auto-released once its lease file is older than the
+  stale-lease threshold.
+- A review-watch process is treated as gone after a reboot, or 4 hours after
+  it was recorded.
+
+Until then those commands keep the record. Review-watch never signals a PID or
+process group recorded in another namespace. The TUI shows `?` for an unknown
+spec liveness reading. <!-- trace:BUG-2425 | ai:codex -->
 
 **Don't reach for it when** — you want the "who's working" view but typed `conversations` (that's historical conversations — use `leases`). And don't `start` a scoped worktree for trivial in-place work; the worktree-per-scope model pays off for *parallel* or *long-running* work, not a two-line fix on your current branch.
 

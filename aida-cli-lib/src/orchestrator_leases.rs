@@ -431,7 +431,7 @@ pub(crate) fn orchestrated_lease_owner_alive(
         return false;
     };
     // trace:BUG-2425 | ai:codex
-    if !aida_core::liveness::pid_namespace_observable(peek.pid_namespace) {
+    if !aida_core::pid_observer::PidObserver::current().can_observe(peek.pid_namespace) {
         return true;
     }
     let owner = match peek.active_pid {

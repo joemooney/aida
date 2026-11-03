@@ -1842,7 +1842,7 @@ pub(crate) fn live_lease_worktrees(
                 return None;
             }
             // trace:BUG-2425 | ai:codex
-            if !aida_core::liveness::pid_namespace_observable(l.pid_namespace) {
+            if !aida_core::pid_observer::PidObserver::current().can_observe(l.pid_namespace) {
                 return Some(l.worktree_path.clone());
             }
             let worktree_exists = l.worktree_path.exists();

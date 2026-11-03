@@ -249,13 +249,14 @@ pub(crate) fn decide_claim(
     // (its pid is the ephemeral `session start` shell), so its death is
     // meaningless — only the TTL backstop governs it. trace:STORY-637
     let same_host = !holder.host.is_empty() && holder.host == our_host;
-    // trace:BUG-2425 | ai:codex
-    if same_host && !aida_core::liveness::pid_namespace_observable(holder.pid_namespace) {
-        return ClaimDecision::Refuse {
-            holder: Box::new(holder.clone()),
-        };
-    }
-    if holder.process_backed && same_host && !is_alive(holder.pid, holder.pid_start_time.as_deref())
+    // BUG-2425: a holder pid recorded in another PID namespace cannot be
+    // probed from here, so only the pid probe is skipped — a foreign
+    // namespace is not evidence of death. The TTL backstop below still
+    // governs: heartbeat expiry is independent evidence.
+    // trace:BUG-2425 | ai:claude
+    let pid_probe = same_host
+        && aida_core::pid_observer::PidObserver::current().can_observe(holder.pid_namespace);
+    if holder.process_backed && pid_probe && !is_alive(holder.pid, holder.pid_start_time.as_deref())
     {
         return ClaimDecision::Reclaim {
             stale_reason: format!(
@@ -336,14 +337,6 @@ pub(crate) fn claim_staleness(
     is_alive: impl Fn(u32, Option<&str>) -> bool,
     session_live: impl Fn(&Claim) -> bool,
 ) -> Option<String> {
-    // A same-host namespace mismatch cannot become death through either
-    // a failed PID probe or the fallback heartbeat timeout.
-    // trace:BUG-2425 | ai:codex
-    if claim.host == our_host && !aida_core::liveness::pid_namespace_observable(claim.pid_namespace)
-    {
-        return None;
-    }
-
     // Clause 0 (BUG-1765) — a verified-live session outranks TTL age, exactly
     // as in `decide_claim`: a claim this clause spares is one `decide_claim`
     // would refuse to reclaim. trace:BUG-1765 | ai:claude
@@ -367,7 +360,12 @@ pub(crate) fn claim_staleness(
     // process table and must not be excused as unreachable just because its
     // path differs (BUG-1764 clause 3 — all eight leases in the filed
     // measurement were `host = "imac"` queried from `imac`).
-    let same_host = !claim.host.is_empty() && claim.host == our_host;
+    // BUG-2425: as in `decide_claim`, a pid from another PID namespace is
+    // not probed (its absence here proves nothing); the TTL clause above
+    // already applied. trace:BUG-2425 | ai:claude
+    let same_host = !claim.host.is_empty()
+        && claim.host == our_host
+        && aida_core::pid_observer::PidObserver::current().can_observe(claim.pid_namespace);
     if claim.process_backed && same_host && !is_alive(claim.pid, claim.pid_start_time.as_deref()) {
         return Some(format!(
             "holder pid {} on {} is not running",
@@ -492,11 +490,11 @@ pub(crate) fn probe_session_liveness_with(
     let Some(lease) = crate::find_scope_lease_conflict(&leases, &claim.scope) else {
         return false;
     };
+    // A foreign-namespace lease reads `Unknown`: no affirmative signal, so the
+    // claim's TTL backstop still decides. trace:BUG-2425 | ai:claude
     matches!(
         crate::lease_state_for(&lease, live_sessions, now),
-        aida_core::liveness::LeaseState::Unknown
-            | aida_core::liveness::LeaseState::Live
-            | aida_core::liveness::LeaseState::Dormant
+        aida_core::liveness::LeaseState::Live | aida_core::liveness::LeaseState::Dormant
     )
 }
 
@@ -3257,9 +3255,7 @@ mod bug2188_claim_rollback_tests {
 mod bug_2425_tests {
     use super::*;
 
-    // trace:BUG-2425 | ai:codex
-    #[test]
-    fn foreign_namespace_claim_is_not_reclaimed_even_after_heartbeat_expires() {
+    fn foreign_claim(heartbeat_at: &str) -> (Claim, Claim) {
         let mut holder = build_claim(
             Path::new("/absent/store"),
             "BUG-2425",
@@ -3268,33 +3264,50 @@ mod bug_2425_tests {
             false,
         );
         holder.host = "test-host".into();
-        holder.pid_namespace = Some(crate::agent_registry::current_pid_namespace().unwrap() ^ 1);
-        holder.heartbeat_at = "2020-01-01T00:00:00Z".into();
+        holder.pid_namespace =
+            Some(crate::agent_registry::current_pid_namespace().unwrap_or(0) ^ 1);
+        holder.heartbeat_at = heartbeat_at.into();
         let mut ours = holder.clone();
         ours.clone_path = "/other-clone".into();
+        (holder, ours)
+    }
+
+    // A foreign pid namespace is not evidence of death: within its TTL the
+    // claim stands and its pid is never probed.
+    // trace:BUG-2425 | ai:claude
+    #[test]
+    fn foreign_namespace_claim_within_ttl_is_held_without_a_pid_probe() {
         let now = Utc::now();
+        let (mut holder, ours) = foreign_claim(&now.to_rfc3339());
         for process_backed in [false, true] {
             holder.process_backed = process_backed;
+            let probe = |_: u32, _: Option<&str>| -> bool { panic!("foreign pid probe") };
             assert_eq!(
-                claim_staleness(
-                    &holder,
-                    now,
-                    "test-host",
-                    |_, _| panic!("foreign pid probe"),
-                    |_| false
-                ),
+                claim_staleness(&holder, now, "test-host", probe, |_| false),
                 None
             );
             assert!(matches!(
-                decide_claim(
-                    Some(&holder),
-                    &ours,
-                    now,
-                    "test-host",
-                    |_, _| panic!("foreign pid probe"),
-                    |_| false
-                ),
+                decide_claim(Some(&holder), &ours, now, "test-host", probe, |_| false),
                 ClaimDecision::Refuse { .. }
+            ));
+        }
+    }
+
+    // Heartbeat/TTL expiry is independent evidence and still reclaims a
+    // foreign-namespace claim (advisor ruling, PR #3298 round 2).
+    // trace:BUG-2425 | ai:claude
+    #[test]
+    fn foreign_namespace_claim_past_ttl_is_reclaimed() {
+        let now = Utc::now();
+        let (mut holder, ours) = foreign_claim("2020-01-01T00:00:00Z");
+        for process_backed in [false, true] {
+            holder.process_backed = process_backed;
+            let probe = |_: u32, _: Option<&str>| -> bool { panic!("foreign pid probe") };
+            let stale = claim_staleness(&holder, now, "test-host", probe, |_| false);
+            assert!(stale.is_some_and(|r| r.contains("TTL")));
+            assert!(matches!(
+                decide_claim(Some(&holder), &ours, now, "test-host", probe, |_| false),
+                ClaimDecision::Reclaim { .. }
             ));
         }
     }

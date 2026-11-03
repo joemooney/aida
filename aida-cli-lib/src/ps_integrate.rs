@@ -2160,7 +2160,7 @@ pub(crate) fn gather_running_work(project_root: &std::path::Path) -> (Vec<PsRow>
     // Preserve uncertainty through local activity/driver overlays.
     // trace:BUG-2425 | ai:codex
     for row in &mut rows {
-        if !aida_core::liveness::pid_namespace_observable(row.lease.pid_namespace) {
+        if !aida_core::pid_observer::PidObserver::current().can_observe(row.lease.pid_namespace) {
             row.state = LeaseState::Unknown;
             row.pid = None;
             row.dispatch = None;

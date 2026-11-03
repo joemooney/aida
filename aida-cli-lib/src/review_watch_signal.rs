@@ -100,17 +100,31 @@ pub(super) fn signal_attempt(
     anchor: Option<&Identity>,
     signal: Option<Signal>,
 ) -> Vec<String> {
-    // trace:BUG-2425 | ai:codex
+    // BUG-2425: a process recorded in another PID namespace is never
+    // signalled — its pid (and its process group) name something else here.
+    // While its backstop holds it keeps the slot; once the backstop expires
+    // it is gone, and only observable processes are swept.
+    // trace:BUG-2425 | ai:claude
     if recorded
         .iter()
         .copied()
         .chain(anchor)
-        .any(|p| !aida_core::liveness::pid_namespace_observable(p.pid_namespace))
+        .any(|p| !p.observable() && p.alive())
     {
         return vec![
             "unknown (foreign pidns); held without signalling; run outside the sandbox".into(),
         ];
     }
+    let recorded: Vec<&Identity> = recorded
+        .iter()
+        .copied()
+        .filter(|p| p.observable())
+        .collect();
+    let recorded = recorded.as_slice();
+    let (pgid, anchor) = match anchor {
+        Some(a) if !a.observable() => (None, None),
+        _ => (pgid, anchor),
+    };
     #[cfg(target_os = "linux")]
     {
         imp::signal_attempt(recorded, pgid, anchor, signal)

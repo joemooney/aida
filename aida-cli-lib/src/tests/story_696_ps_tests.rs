@@ -2030,8 +2030,9 @@ mod bug_1553_seat_activity {
 #[test]
 fn bug_2425_foreign_pidns_is_unknown_and_cannot_be_reaped() {
     let tmp = tempfile::tempdir().unwrap();
-    let mut lease = ps_lease("foreign", "BUG-2425", tmp.path().join("gone"));
-    lease.pid_namespace = Some(agent_registry::current_pid_namespace().unwrap() ^ 1);
+    let mut lease = ps_lease("foreign", "BUG-2425", tmp.path().to_path_buf());
+    lease.started_at = chrono::Utc::now();
+    lease.pid_namespace = Some(agent_registry::current_pid_namespace().unwrap_or(0) ^ 1);
     lease.active_pid = Some(u32::MAX - 1);
     lease.active_pid_start_time = Some("linux-starttime:1".into());
     assert!(
@@ -2073,28 +2074,57 @@ fn bug_2425_foreign_pidns_is_unknown_and_cannot_be_reaped() {
     assert_ne!(rows[0].state, LeaseState::Stale); // never stale_hidden
     assert_eq!(rows[0].pid, None);
     assert!(orphans.is_empty());
+    assert_eq!(crate::leases::lease_owner_gone(&lease), None);
     assert!(!session_reap::session_process_exited(
         rows[0].state,
-        Some(true),
+        crate::leases::lease_owner_gone(&lease),
         false
     ));
     assert_eq!(
         lease_recorded_owner(&lease),
         aida_core::liveness::RecordedLeaseOwner::NotProvablyDead
     );
-    assert!(session_reap::reap_one(tmp.path(), &lease, None).starts_with("skipped — unknown"));
-    assert!(session_reap::reap_one_clone(tmp.path(), &lease, None).starts_with("skipped — unknown"));
     assert_eq!(
         aida_core::liveness::classify_stale_lease_recovery(rows[0].state, Some(true), false, 0),
         aida_core::liveness::StaleLeaseRecovery::UnknownLiveness
     );
 }
 
+// Advisor ruling (PR #3298 round 2): a foreign namespace skips only the pid
+// probe. Past the 24h age backstop the lease is Stale, its owner counts as
+// gone, and reap / stale-lease recovery may proceed on their other gates.
+// trace:BUG-2425 | ai:claude
+#[test]
+fn bug_2425_foreign_pidns_lease_past_its_backstop_is_reapable() {
+    let tmp = tempfile::tempdir().unwrap();
+    let mut lease = ps_lease("foreign-old", "BUG-2425", tmp.path().to_path_buf());
+    lease.pid_namespace = Some(agent_registry::current_pid_namespace().unwrap_or(0) ^ 1);
+    lease.active_pid = Some(u32::MAX - 1);
+    lease.active_pid_start_time = Some("linux-starttime:1".into());
+    lease.started_at = chrono::Utc::now() - chrono::Duration::hours(25);
+    let now = chrono::Utc::now();
+    assert_eq!(lease_state_for(&lease, &[], now), LeaseState::Stale);
+    assert!(!lease_is_live(&[], now)(&lease));
+    assert_eq!(crate::leases::lease_owner_gone(&lease), Some(true));
+    assert!(session_reap::session_process_exited(
+        lease_state_for(&lease, &[], now),
+        crate::leases::lease_owner_gone(&lease),
+        false
+    ));
+    // A live process seen in the worktree still keeps it.
+    assert!(!session_reap::session_process_exited(
+        LeaseState::Stale,
+        Some(true),
+        true
+    ));
+}
+
 // trace:BUG-2425 | ai:codex
 #[test]
 fn bug_2425_foreign_pid_collision_cannot_borrow_local_process() {
     let mut lease = ps_lease("collision", "BUG-2425", std::path::PathBuf::from("."));
-    lease.pid_namespace = Some(agent_registry::current_pid_namespace().unwrap() ^ 1);
+    lease.started_at = chrono::Utc::now();
+    lease.pid_namespace = Some(agent_registry::current_pid_namespace().unwrap_or(0) ^ 1);
     lease.active_pid = Some(std::process::id());
     assert_eq!(
         lease_state_for(&lease, &[], chrono::Utc::now()),

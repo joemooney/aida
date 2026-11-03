@@ -204,7 +204,7 @@ pub(crate) fn in_flight_vendor_children(project_root: &Path, drain_pid: u32) -> 
             .get("pid_namespace")
             .and_then(|v| v.as_integer())
             .and_then(|n| u64::try_from(n).ok());
-        if !aida_core::liveness::pid_namespace_observable(namespace) {
+        if !aida_core::pid_observer::PidObserver::current().can_observe(namespace) {
             continue;
         }
         let creator = table

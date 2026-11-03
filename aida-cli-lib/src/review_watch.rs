@@ -80,6 +80,11 @@ const READY_INTERVAL: chrono::Duration = if cfg!(test) {
 } else {
     chrono::Duration::seconds(120)
 };
+// How long a review process recorded in another PID namespace (one this
+// observer cannot probe) keeps its slot: well past the one-hour bound
+// `aida dispatch` puts on a review run, so expiry is evidence it is gone.
+// trace:BUG-2425 | ai:claude
+const FOREIGN_IDENTITY_TTL: chrono::Duration = chrono::Duration::hours(4);
 // Wakes kept per change: current-head ones only, so two at most.
 const MAX_WAKES: usize = 8;
 
@@ -113,9 +118,15 @@ fn bounded_diagnostic(text: &str) -> String {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 struct Identity {
+    // Absent fields are omitted so state this binary writes for a legacy
+    // record still parses after `aida dev rollback`.
     // trace:BUG-2425 | ai:codex
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pid_namespace: Option<u64>,
+    // When the identity was recorded: the backstop for a process this
+    // observer cannot probe. trace:BUG-2425 | ai:claude
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    recorded_at: Option<chrono::DateTime<chrono::Utc>>,
     pid: u32,
     start: String,
     boot: String,
@@ -127,6 +138,7 @@ impl Identity {
     fn of(pid: u32) -> Result<Self> {
         Ok(Self {
             pid_namespace: crate::agent_registry::current_pid_namespace(),
+            recorded_at: Some(chrono::Utc::now()),
             pid,
             start: aida_core::liveness::process_start_identity_exact(pid)
                 .context("cannot bind review launch to its kernel process identity")?,
@@ -136,10 +148,9 @@ impl Identity {
     /// The same kernel process is still running (not reused, not a zombie).
     // trace:TASK-1993 | ai:claude
     fn alive(&self) -> bool {
-        // An invisible process retains its reservation; absence here proves nothing.
-        // trace:BUG-2425 | ai:codex
-        if !aida_core::liveness::pid_namespace_observable(self.pid_namespace) {
-            return true;
+        // trace:BUG-2425 | ai:claude
+        if !self.observable() {
+            return self.within_foreign_backstop(chrono::Utc::now(), boot_id().ok().as_deref());
         }
         let zombie = std::fs::read_to_string(format!("/proc/{}/stat", self.pid))
             .ok()
@@ -152,6 +163,30 @@ impl Identity {
             && boot_id().is_ok_and(|boot| boot == self.boot)
             && aida_core::liveness::process_start_identity_exact(self.pid).as_deref()
                 == Some(self.start.as_str())
+    }
+}
+impl Identity {
+    /// This observer shares the PID namespace the identity was recorded in.
+    // trace:BUG-2425 | ai:claude
+    fn observable(&self) -> bool {
+        aida_core::pid_observer::PidObserver::current().can_observe(self.pid_namespace)
+    }
+    /// A process in another PID namespace cannot be probed from here, and
+    /// that absence proves nothing — but independent evidence still ends it:
+    /// a reboot (the boot id changed), or its record outliving
+    /// [`FOREIGN_IDENTITY_TTL`]. A legacy record with no `recorded_at` keeps
+    /// its reservation until a reboot or an observer in its namespace.
+    // trace:BUG-2425 | ai:claude
+    fn within_foreign_backstop(
+        &self,
+        now: chrono::DateTime<chrono::Utc>,
+        boot: Option<&str>,
+    ) -> bool {
+        if boot.is_some_and(|boot| boot != self.boot) {
+            return false;
+        }
+        self.recorded_at
+            .is_none_or(|at| now - at <= FOREIGN_IDENTITY_TTL)
     }
 }
 fn boot_id() -> Result<String> {
@@ -1462,6 +1497,13 @@ fn confirm(attempt: &Attempt) -> std::result::Result<(), String> {
     }
     if let Some(process) = attempt.recorded().into_iter().find(|p| p.alive()) {
         return Err(format!("recorded process {} is still running", process.pid));
+    }
+    // BUG-2425: a group led from another PID namespace cannot be scanned
+    // here; with every recorded process past its backstop (checked above),
+    // the group is gone with its namespace. trace:BUG-2425 | ai:claude
+    let anchor = attempt.dispatcher.as_ref().or(attempt.identity.as_ref());
+    if anchor.is_some_and(|a| !a.observable()) {
+        return Ok(());
     }
     let unrecorded = attempt.unrecorded_descendant()
         || (attempt.identity.is_none() && attempt.dispatcher.is_none());

@@ -1022,17 +1022,18 @@ fn lease_holds(main_root: &Path) -> Vec<LeaseHold> {
         .map(|l| {
             let pid = l.active_pid.or(l.creator_pid);
             // trace:BUG-2425 | ai:codex
-            let gone = if aida_core::liveness::pid_namespace_observable(l.pid_namespace) {
-                aida_core::liveness::lease_owner_process_gone(
-                    l.active_pid,
-                    l.active_pid_start_time.as_deref(),
-                    l.creator_pid,
-                    l.creator_pid_start_time.as_deref(),
-                    aida_core::liveness::process_identity_is_alive,
-                )
-            } else {
-                None
-            };
+            let gone =
+                if aida_core::pid_observer::PidObserver::current().can_observe(l.pid_namespace) {
+                    aida_core::liveness::lease_owner_process_gone(
+                        l.active_pid,
+                        l.active_pid_start_time.as_deref(),
+                        l.creator_pid,
+                        l.creator_pid_start_time.as_deref(),
+                        aida_core::liveness::process_identity_is_alive,
+                    )
+                } else {
+                    None
+                };
             LeaseHold {
                 worktree_path: l.worktree_path,
                 // No PID at all (a legacy lease) reads as LIVE: holding a cache

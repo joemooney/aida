@@ -492,7 +492,7 @@ pub(crate) fn adopt_spec_lease_for_subagent(
             .get("pid_namespace")
             .and_then(|v| v.as_integer())
             .and_then(|n| u64::try_from(n).ok());
-        if !aida_core::liveness::pid_namespace_observable(recorded_ns) {
+        if !aida_core::pid_observer::PidObserver::current().can_observe(recorded_ns) {
             continue;
         }
         let already_live = table
@@ -1193,9 +1193,24 @@ pub(crate) fn lease_state_for(
     live_sessions: &[process_probe::LiveSession],
     now: chrono::DateTime<chrono::Utc>,
 ) -> LeaseState {
-    // trace:BUG-2425 | ai:codex
-    if !aida_core::liveness::pid_namespace_observable(l.pid_namespace) {
-        return LeaseState::Unknown;
+    // BUG-2425: pids recorded in another PID namespace are not probed; the
+    // pid-free signals (a live claude in the worktree, a missing worktree,
+    // the 24h age backstop) still decide. trace:BUG-2425 | ai:claude
+    if !aida_core::pid_observer::PidObserver::current().can_observe(l.pid_namespace) {
+        let advisory = (l.review_verb || l.claim_verb) && l.worktree_path.as_os_str().is_empty();
+        let has_live_claude = !advisory
+            && attributable_live_sessions(l, live_sessions, inspector_pids())
+                .iter()
+                .any(|s| {
+                    !s.stale_cwd
+                        && (s.cwd == l.worktree_path || s.cwd.starts_with(&l.worktree_path))
+                });
+        return aida_core::liveness::classify_foreign_lease_state(
+            advisory,
+            l.worktree_path.exists(),
+            has_live_claude,
+            now.signed_duration_since(l.started_at).num_hours(),
+        );
     }
     // BUG-511 review leases AND TASK-957 claim leases are advisory locks when
     // they have no worktree of their own — the standard worktree/claude/age
@@ -1267,7 +1282,7 @@ pub(crate) fn lease_has_durable_owner(l: &SessionLease) -> bool {
 // trace:BUG-2197 | ai:claude
 pub(crate) fn lease_recorded_owner(l: &SessionLease) -> aida_core::liveness::RecordedLeaseOwner {
     // trace:BUG-2425 | ai:codex
-    if !aida_core::liveness::pid_namespace_observable(l.pid_namespace) {
+    if !aida_core::pid_observer::PidObserver::current().can_observe(l.pid_namespace) {
         return aida_core::liveness::RecordedLeaseOwner::NotProvablyDead;
     }
     aida_core::liveness::recorded_lease_owner(
@@ -2153,12 +2168,13 @@ pub(crate) fn requeue_lease_liveness(
     if std::fs::read_dir("/proc").is_err() {
         return Err("the process table (/proc) is not readable".to_string());
     }
-    // trace:BUG-2425 | ai:codex
-    if !aida_core::liveness::pid_namespace_observable(l.pid_namespace) {
-        return Err("unknown (foreign pidns); run outside the sandbox".into());
-    }
     let live = live_sessions.get_or_init(process_probe::probe_live_claude_sessions);
-    Ok(matches!(lease_state_for(l, live, now), LeaseState::Live))
+    // A foreign-namespace lease still inside its backstop cannot be judged.
+    // trace:BUG-2425 | ai:codex
+    match lease_state_for(l, live, now) {
+        LeaseState::Unknown => Err("unknown (foreign pidns); run outside the sandbox".into()),
+        state => Ok(state == LeaseState::Live),
+    }
 }
 
 /// Run the requeue lease gate for `spec_ids` against the leases under
@@ -2634,7 +2650,7 @@ pub(crate) fn session_leases_prune_stale(yes: bool) -> Result<()> {
         if lease.scope == worktree_lease::HARNESS_WORKTREE_SCOPE
             && lease.active_pid.is_none()
             && lease.creator_pid.is_none()
-            && aida_core::liveness::pid_namespace_observable(lease.pid_namespace)
+            && aida_core::pid_observer::PidObserver::current().can_observe(lease.pid_namespace)
             && lease.started_at < harness_threshold
         {
             stale_local_harness_leases.push(lease);
@@ -4192,10 +4208,12 @@ pub(crate) fn auto_release_decision_for_lease(
     lease: &SessionLease,
     config: &orchestrator::OrchestratorConfig,
 ) -> orchestrator::AutoReleaseDecision {
-    // trace:BUG-2425 | ai:codex
-    if !aida_core::liveness::pid_namespace_observable(lease.pid_namespace) {
-        return orchestrator::AutoReleaseDecision::Live;
-    }
+    // BUG-2425: pids recorded in another PID namespace are not probed (their
+    // absence here proves nothing); every other signal — the lease-file mtime
+    // threshold, the worktree-holder scan, a live claude in the tree — still
+    // decides. trace:BUG-2425 | ai:claude
+    let pid_observable =
+        aida_core::pid_observer::PidObserver::current().can_observe(lease.pid_namespace);
     // BUG-511: worktree-less review-verb leases are advisory PID locks — no
     // worktree, no uncommitted work to lose — so liveness is the creator
     // process, full stop. Decided BEFORE the config gate and the mtime clock:
@@ -4203,19 +4221,26 @@ pub(crate) fn auto_release_decision_for_lease(
     // always refuses. BUG-882 reviewer worktree leases carry review_verb as
     // metadata but still use the normal worktree cleanup gates below.
     if lease.review_verb && lease.worktree_path.as_os_str().is_empty() {
-        let pid_alive = lease
-            .creator_pid
-            .map(process_probe::pid_is_alive)
-            .unwrap_or(false);
+        let mtime_age_secs = std::fs::metadata(lease_path(project_root, &lease.id))
+            .ok()
+            .and_then(|m| m.modified().ok())
+            .and_then(|t| t.elapsed().ok())
+            .map(|d| d.as_secs() as i64)
+            .unwrap_or(0);
+        // A foreign-namespace creator cannot be probed: the stale-lease
+        // threshold on the lease file's age is the backstop instead.
+        // trace:BUG-2425 | ai:claude
+        let pid_alive = if pid_observable {
+            lease
+                .creator_pid
+                .map(process_probe::pid_is_alive)
+                .unwrap_or(false)
+        } else {
+            mtime_age_secs < (config.stale_lease_threshold_minutes as i64).saturating_mul(60)
+        };
         return if pid_alive {
             orchestrator::AutoReleaseDecision::Live
         } else {
-            let mtime_age_secs = std::fs::metadata(lease_path(project_root, &lease.id))
-                .ok()
-                .and_then(|m| m.modified().ok())
-                .and_then(|t| t.elapsed().ok())
-                .map(|d| d.as_secs() as i64)
-                .unwrap_or(0);
             orchestrator::AutoReleaseDecision::SafelyDormant {
                 process_dead: true,
                 mtime_age_secs,
@@ -4244,11 +4269,12 @@ pub(crate) fn auto_release_decision_for_lease(
     // authoritative child liveness signal; `creator_pid` may be the still-live
     // orchestrator that is trying to reclaim the dead child.
     // trace:BUG-1111 | ai:codex
-    let pid_alive = lease
-        .active_pid
-        .or(lease.creator_pid)
-        .map(process_probe::pid_is_alive)
-        .unwrap_or(false);
+    let pid_alive = pid_observable
+        && lease
+            .active_pid
+            .or(lease.creator_pid)
+            .map(process_probe::pid_is_alive)
+            .unwrap_or(false);
 
     // Signal 2: lease-file mtime age. We use the filesystem mtime rather
     // than `started_at` because future writers (mark_lease_escalated_to_human
@@ -5012,10 +5038,19 @@ pub(crate) static FASTTRACK: crate::command_registry::CommandReg =
         run: crate::command_registry::Handler::Store(run_fasttrack),
     };
 
+/// [`aida_core::liveness::lease_owner_process_gone`] for a lease, from this
+/// observer. Pids recorded in another PID namespace are not probed: such an
+/// owner is unknown (`None`) until the lease outlives the age backstop, which
+/// is independent evidence it is gone.
 // trace:BUG-2425 | ai:codex
+// trace:BUG-2425 | ai:claude
 pub(crate) fn lease_owner_gone(lease: &SessionLease) -> Option<bool> {
-    if !aida_core::liveness::pid_namespace_observable(lease.pid_namespace) {
-        return None;
+    if !aida_core::pid_observer::PidObserver::current().can_observe(lease.pid_namespace) {
+        return aida_core::liveness::foreign_lease_backstop_expired(
+            lease.started_at,
+            chrono::Utc::now(),
+        )
+        .then_some(true);
     }
     aida_core::liveness::lease_owner_process_gone(
         lease.active_pid,

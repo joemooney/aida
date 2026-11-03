@@ -595,6 +595,7 @@ fn test_signal_guard_refuses_foreign_processes() {
 fn start_order_compares_ticks_on_one_boot() {
     let anchor = Identity {
         pid_namespace: crate::agent_registry::current_pid_namespace(),
+        recorded_at: None,
         pid: 10,
         start: "linux-starttime:100".into(),
         boot: "boot-a".into(),
@@ -705,15 +706,22 @@ fn hold_cause_drops_an_exited_member() {
     stays.wait().unwrap();
 }
 
-// trace:BUG-2425 | ai:codex
-#[test]
-fn bug_2425_foreign_watch_process_retains_capacity_and_refuses_signals() {
-    let identity = Identity {
-        pid_namespace: Some(crate::agent_registry::current_pid_namespace().unwrap() ^ 1),
+fn bug_2425_foreign_identity(recorded_at: chrono::DateTime<chrono::Utc>) -> Identity {
+    Identity {
+        pid_namespace: Some(crate::agent_registry::current_pid_namespace().unwrap_or(0) ^ 1),
+        recorded_at: Some(recorded_at),
         pid: u32::MAX - 1,
         start: "linux-starttime:1".into(),
         boot: boot_id().unwrap(),
-    };
+    }
+}
+
+// A foreign pid namespace is not evidence of death: inside its backstop the
+// process keeps its slot and is never signalled.
+// trace:BUG-2425 | ai:codex
+#[test]
+fn bug_2425_foreign_watch_process_retains_capacity_and_refuses_signals() {
+    let identity = bug_2425_foreign_identity(chrono::Utc::now());
     assert!(
         identity.alive(),
         "an invisible process must retain watch capacity"
@@ -723,4 +731,25 @@ fn bug_2425_foreign_watch_process_retains_capacity_and_refuses_signals() {
         assert_eq!(holds.len(), 1);
         assert!(holds[0].contains("foreign pidns"));
     }
+}
+
+// The backstop is independent evidence: past its TTL, or after a reboot, a
+// foreign-namespace process is gone, frees its slot and is not held.
+// trace:BUG-2425 | ai:claude
+#[test]
+fn bug_2425_foreign_watch_process_past_its_backstop_is_released() {
+    let now = chrono::Utc::now();
+    let expired = bug_2425_foreign_identity(now - chrono::Duration::hours(5));
+    assert!(
+        !expired.alive(),
+        "an expired foreign record must not wedge its slot"
+    );
+    let held = signal::signal_attempt(&[&expired], Some(1), Some(&expired), None);
+    assert!(
+        held.iter().all(|h| !h.contains("foreign pidns")),
+        "{held:?}"
+    );
+    let fresh = bug_2425_foreign_identity(now);
+    assert!(!fresh.within_foreign_backstop(now, Some("another-boot")));
+    assert!(fresh.within_foreign_backstop(now, Some(fresh.boot.as_str())));
 }
