@@ -7,12 +7,12 @@ description: |-
 
   non-blocking/minor: config_cmd.rs:1364 write_codex_posture(Contained) still sets sandbox_workspace_write.writable_roots to ~/.cargo, ~/.rustup and ~/.aida. That is the BUG-2418 exposure in a codex workspace-write lane that runs outside the os_wrap bwrap. It is out of this ruling's scope (the bwrap profile); needs a follow-up.
   Reviewed sha: 1c54c4d85edd1496e1a9b1921c51fe19641ade42
-status: NeedsAttention
+status: InProgress
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-03T08:37:09.154000416Z
-modified_at: 2026-11-03T14:07:52.426261241Z
+modified_at: 2026-11-03T14:18:13.774262868Z
 req_type: Task
 tags:
 - carried-from:BUG-2418
@@ -36,6 +36,12 @@ comments:
   content: 'Implemented advisor ruling in commit 34e47e7e61f on task-b6b1278890774ef993d2ebc327862470-729: contained Codex posture now writes writable_roots = [], clearing legacy ~/.cargo, ~/.rustup and ~/.aida grants. Added fresh-config and both-scope upgrade/idempotence/backup regression coverage; updated AGENTS.md and OVERVIEW.md with read-only home-state and host cargo fetch guidance. cargo fmt --all -- --check and git diff --check pass. Targeted cargo test --profile agent -p aida-cli-lib permissions_set_ --lib and make check-ci-fast could not run: Cargo wrapper refuses target filesystem at ~14.4 GiB free below its 15 GiB hard floor. aida ship --no-merge (including dry-run) refuses this native-sandbox private clone, directs host publication via aida ship --from-seat from the main checkout. No PR has been opened; commit retained in the assigned seat.'
   created_at: 2026-11-03T14:06:29.508074628Z
   modified_at: 2026-11-03T14:06:29.508074628Z
+- id: 01a1a1c6-5b8e-76f2-9673-0d16b369a246
+  author: joe
+  content: 'Returned from NeedsAttention to In Progress via `aida edit --status`. It was punted on: other: Unable to publish: fix committed as 34e47e7e61f in assigned seat; aida ship --no-merge refuses Git in this native-sandbox private clone and requires host publication with aida ship --from-seat from main checkout, outside seat writable scope. No PR opened. Targeted permissions_set_ tests and make check-ci-fast blocked by Cargo 15 GiB disk floor (~14.4 GiB free). Formatting and diff checks pass.. No triage reason was given.'
+  created_at: 2026-11-03T14:18:13.774259509Z
+  modified_at: 2026-11-03T14:18:13.774259509Z
+  session_id: f5eddefe-032d-4760-94ba-3a318cf3d1d1
 history:
 - id: 01a1a1ac-f365-7d02-97f3-f8460ea8a486
   author: joe
@@ -71,6 +77,14 @@ history:
   timestamp: 2026-11-03T14:11:40.634368879Z
   session_id: f5eddefe-032d-4760-94ba-3a318cf3d1d1
   changes: []
+- id: 01a1a1c6-5b8e-76f2-9673-0d034b6d5bcc
+  author: joe
+  timestamp: 2026-11-03T14:18:13.774249121Z
+  session_id: f5eddefe-032d-4760-94ba-3a318cf3d1d1
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: InProgress
 filed_at:
   code_sha: 6c587ee595ce70f5fcc48480cfdddc8246cf158c
   branch: main
@@ -79,9 +93,3 @@ filed_at:
   aida_build_sha: db087637d57
   vendor: claude
   session: c58592f4-04ae-498b-9afd-87b0cc2bcde9
-attention_reason:
-  category: other
-  detail: 'Unable to publish: fix committed as 34e47e7e61f in assigned seat; aida ship --no-merge refuses Git in this native-sandbox private clone and requires host publication with aida ship --from-seat from main checkout, outside seat writable scope. No PR opened. Targeted permissions_set_ tests and make check-ci-fast blocked by Cargo 15 GiB disk floor (~14.4 GiB free). Formatting and diff checks pass.'
-  lean: Preserve committed seat; reclaim host build-cache space, run the targeted test and make check-ci-fast, then publish via aida ship TASK-b6b1278890774ef993d2ebc327862470-729 --from-seat /home/joe/ai/aida-worktrees/aida-seat-aida-task-b6b1278890774ef993d2ebc327862470-729 from main checkout for independent review.
-  raised_by: implementer
-  raised_at: 2026-11-03T14:07:52.426261241Z
