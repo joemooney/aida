@@ -3,12 +3,12 @@ spec_id: STORY-b6b1278890774ef993d2ebc327862470-332
 agreed_id: STORY-2336
 title: aida awaiting flags an eligible PR left idle (approved + green + no hold, or pushed with no review running) for more than N minutes
 description: 'Operator request 2026-11-02 20:26 MST. This makes the advisor delivery contract''s metric (eligible-PR waiting time) a due signal, not a reminder. Definitions: an eligible-to-ship PR has an APPROVED verdict at its exact head, green CI at that head, and no armed merge-hold (or the hold''s release condition is met and the active mandate covers it). An eligible-to-review PR has a head that is pushed and up to date with main, no review verdict at that head, and no reviewer session running on it. Acceptance: (1) ''aida awaiting'' shows an ''idle_eligible'' section, one row per PR, with its state (ship|review), idle minutes since the condition first held, and the ONE next command; (2) the threshold comes from config ([advisor] eligible_idle_minutes, default 20); (3) the status line / AIDA hook banner shows a count when any row exceeds the threshold; (4) hermetic tests for each state, including a PR that becomes eligible, is acted on (row disappears), and a held PR whose release condition is not met (never listed); (5) ''aida awaiting --format json'' carries the rows. No new daemon: compute from the gate ledger, CI status and the lease/reviewer records at read time.'
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-03T03:27:01.757035796Z
-modified_at: 2026-11-03T05:08:25.460326051Z
+modified_at: 2026-11-03T05:08:27.719450600Z
 req_type: Story
 tags:
 - area:advisor
@@ -19,6 +19,12 @@ comments:
   content: 'ADVISOR RULING on the design fork (2026-11-02 22:15 MST): APPROVE the lean. (1) A derived, non-canonical cache under .aida/ keyed by (PR, head SHA, eligibility kind: ship-ready | unreviewed-push) records first_observed_at. Reset it on a head change or a known disqualification (hold armed, CI not green, verdict not approved at head, review started). (2) The age is labelled honestly as ''idle >= N min (since first observed)''. Where a cheap exact start exists, seed from it instead: for ship-ready, max(verdict recorded_at at head, CI completed_at at head) when the rollup carries it. (3) A plain ''aida awaiting'' (network allowed) refreshes the cache. --notice and the status line read it only, with no forge probe, and omit entries whose observation is older than 15 min (stale evidence is never shown). (4) No daemon and no new event producer. True transition age is out of scope. Threshold N from config, default 15 min. Reason: it delivers the delivery-contract signal now with no new canonical state; an over-estimate errs toward alerting.'
   created_at: 2026-11-03T05:08:25.460326051Z
   modified_at: 2026-11-03T05:08:25.460326051Z
+  session_id: c58592f4-04ae-498b-9afd-87b0cc2bcde9
+- id: 01a19fcf-07c7-7300-bcd7-ddfc7acc3e58
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was punted on: design-fork: Read-time evidence cannot establish the requested idle minutes since eligibility first held. status_prs::parse_open_pr_snapshot retains only CI rollup and PR created_at, and review_marker::clear/MarkerGuard deletes review activity without preserving its end time. Two PR histories (review abandoned just now versus an hour ago) can therefore have identical current gate ledger/CI/lease inputs but require different idle ages. Also awaiting --notice and statusline/statusbar deliberately prohibit forge/network probes, so fresh PR eligibility cannot reach the banner without a derived snapshot or event producer. Decide whether first-observed eligibility plus a bounded-staleness cache is acceptable, or require persisted transition evidence and its producer/ownership. No implementation changes made.. No triage reason was given.'
+  created_at: 2026-11-03T05:08:27.719445839Z
+  modified_at: 2026-11-03T05:08:27.719445839Z
   session_id: c58592f4-04ae-498b-9afd-87b0cc2bcde9
 history:
 - id: 01a19fca-bff8-7861-962b-b70530102a36
@@ -37,6 +43,14 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a19fcf-07c7-7300-bcd7-ddeb2a551066
+  author: joe
+  timestamp: 2026-11-03T05:08:27.719415993Z
+  session_id: c58592f4-04ae-498b-9afd-87b0cc2bcde9
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: 553f7d5984c6083a9f2b47cfa358ce57c438843b
   branch: main
@@ -45,9 +59,3 @@ filed_at:
   aida_build_sha: 553f7d5984c
   vendor: claude
   session: 125337a4-7dd3-483b-9c56-3665173938ae
-attention_reason:
-  category: design-fork
-  detail: Read-time evidence cannot establish the requested idle minutes since eligibility first held. status_prs::parse_open_pr_snapshot retains only CI rollup and PR created_at, and review_marker::clear/MarkerGuard deletes review activity without preserving its end time. Two PR histories (review abandoned just now versus an hour ago) can therefore have identical current gate ledger/CI/lease inputs but require different idle ages. Also awaiting --notice and statusline/statusbar deliberately prohibit forge/network probes, so fresh PR eligibility cannot reach the banner without a derived snapshot or event producer. Decide whether first-observed eligibility plus a bounded-staleness cache is acceptable, or require persisted transition evidence and its producer/ownership. No implementation changes made.
-  lean: Approve a derived head-bound eligibility observation cache, explicitly label age since first observed, clear/reset on known disqualification or head/state change, omit expired/unknown banner evidence, and let explicit awaiting refresh it without adding a daemon. If true transition age is mandatory, scope event producers and a sketch first.
-  raised_by: implementer
-  raised_at: 2026-11-03T05:06:02.696624122Z
