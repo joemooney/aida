@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-02T19:20:50.092491662Z
-modified_at: 2026-11-03T17:32:07.057213216Z
+modified_at: 2026-11-03T18:37:19.896259256Z
 req_type: Story
 tags:
 - architecture
@@ -273,6 +273,12 @@ comments:
     RULINGS: (5) The seat-HEAD detach is deferred to PR-C. This PR is Refs-only and PR-C completes STORY-2325. Remove the reference to an unrecorded fork; the dual.rs comment cites this ruling. (6) Narrow the doc and commit claim to 'refuses on expectation failures'. Document that an I/O error mid-batch can leave a partial write, which the journal replay reconciles; staged writes move to PR-C. (7) Fix both: release rider Change records when the train lease is released, and make migrate::plan prefer a Live lease over Unknown for the same key. (1)-(4) are blockers. LIGHT gate: one targeted cargo test -p aida-cli-lib <filter> plus make check-ci-fast. Push to the existing PR branch, then stop.
   created_at: 2026-11-03T17:32:07.057213216Z
   modified_at: 2026-11-03T17:32:07.057213216Z
+  session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
+- id: 01a1a2b3-9298-7b72-9f78-ac4546886ee2
+  author: joe
+  content: 'ADVISOR RULING (round 4, PR #3291 at 0b518ac9): the round-3 fixes are pushed and await review, but the PR now conflicts with main. This round only: merge origin/main into story-2325-prb and resolve the conflicts so that the round-3 behavior is preserved. Make no other changes. LIGHT gate: one targeted cargo test -p aida-cli-lib --lib ownership plus make check-ci-fast. Push, then stop.'
+  created_at: 2026-11-03T18:37:19.896259256Z
+  modified_at: 2026-11-03T18:37:19.896259256Z
   session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
 history:
 - id: 01a19ed2-508b-7401-9865-70193fa0d0af
