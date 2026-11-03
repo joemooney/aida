@@ -1,0 +1,30 @@
+id: 01a1a1c1-5470-7170-a9c0-3dcdc33c68de
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-739
+title: '[P3 non-blocking] idle_eligible.rs:244-248: any armed hold disqualifies ship-re…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on STORY-2336, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  [P3 non-blocking] idle_eligible.rs:244-248: any armed hold disqualifies ship-ready, so a held PR whose release condition is met under a covering mandate (spec definition parenthetical) is never listed; consistent with advisor ruling's 'hold armed' disqualifier and docs, but leaves the most common supervised population out of the signal. Follow-up.
+
+  PR: #3284
+  Reviewed sha: a42ff79c1ba5c1a5b27cefd3cf44b80f63cd7e7a
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-03T14:12:44.272564934Z
+modified_at: 2026-11-03T14:12:44.272564934Z
+req_type: Task
+tags:
+- carried-from:STORY-2336
+- finding-hash:cf98f1df
+- from-review:PR-3284
+- kind:carried-forward
+filed_at:
+  code_sha: 493f3ae1c526c7ab19f208112d426aecbf33c8b5
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 6c587ee595c
+  vendor: claude
+  session: f5eddefe-032d-4760-94ba-3a318cf3d1d1
