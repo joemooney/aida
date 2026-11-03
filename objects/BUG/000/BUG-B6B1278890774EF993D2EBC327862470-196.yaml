@@ -6,12 +6,12 @@ description: |-
   2026-11-03: through aida-deputy-shell run 2, 'aida merge-hold clear 3289' succeeded, but 'aida pr train 3280' was refused three times with 'its merge needs a human at a terminal'. The cause is two different human checks. merge-hold clear uses role_authority::has_integrity_floor_authority() (stdin is a terminal AND deputy_job_floor_authorized). pr ship/train use pr_cmd::ship_interactive_tty() (stdin AND stdout are terminals, pr_cmd.rs:2108). The script deputy tees each job's stdout into its audited transcript, so stdout is never a terminal. Workaround in use: the job script sends that one command's stdout to /dev/tty, which loses the transcript.
 
   Acceptance: (1) pr ship and pr train decide 'human at a terminal' with the same function as merge-hold clear, so stdout plays no part. (2) A test: stdin is a terminal and stdout a pipe, with the deputy floor authorized; train treats the named PR as human-consented. (3) A test: with stdin not a terminal, it still refuses.
-status: InProgress
+status: Done
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-03T15:56:31.278734245Z
-modified_at: 2026-11-03T16:32:37.810209532Z
+modified_at: 2026-11-03T17:27:53.199576825Z
 req_type: Bug
 comments:
 - id: 01a1a241-67b2-74f3-be5b-f6b98c996fc3
@@ -49,6 +49,15 @@ history:
   session_id: 01a1a240ce6a
   harness_version: 2.1.317 (Claude Code)
   changes: []
+- id: 01a1a273-fed5-72e0-8a25-72f0e4ccf364
+  author: joe
+  timestamp: 2026-11-03T17:27:53.301440133Z
+  session_id: 01a1a240ce6a
+  harness_version: 2.1.317 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 filed_at:
   code_sha: 493f3ae1c526c7ab19f208112d426aecbf33c8b5
   branch: main
@@ -57,3 +66,7 @@ filed_at:
   aida_build_sha: 493f3ae1c52
   vendor: claude
   session: f5eddefe-032d-4760-94ba-3a318cf3d1d1
+implementation_info:
+  implemented: true
+  implemented_at: 2026-11-03T17:27:53.199576825Z
+  implemented_by: joe
