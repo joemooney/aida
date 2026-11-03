@@ -8,6 +8,6 @@ note: Normal remote reconcile dry-run showed bothhubs behindlocal; --execute fas
 due_since: 2026-11-03T01:13:44.226602838Z
 due_reason: on CronJobFailed:hub-drift-guard
 due_failure:
-  trip_id: hub-drift-guard@2026-11-03T01:05:47.452909454Z
+  trip_id: hub-drift-guard@2026-11-03T07:15:09.445611233Z
   job: hub-drift-guard
   error: 'exit 1: '
