@@ -16,12 +16,12 @@ description: |-
   1. When `--vendor` is omitted on `aida dispatch request take` or `impl`, `dispatch` resolves the project's configured `[agents] vendor` rather than hardcoding `DispatchVendor::Claude`.
   2. Launching a Codex implementer lane from `dispatch` detaches cleanly (integrating with STORY-2254) without blocking `dispatch tick` / `serve` to completion.
   3. Unit tests verify default vendor resolution and non-blocking launch behavior for `take` and `impl`.
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T06:46:56.104025446Z
-modified_at: 2026-11-03T18:12:29.776716008Z
+modified_at: 2026-11-03T18:14:29.424382060Z
 req_type: Bug
 tags:
 - audit
@@ -62,6 +62,26 @@ comments:
   created_at: 2026-11-02T13:35:01.194890518Z
   modified_at: 2026-11-02T13:35:01.194890518Z
   session_id: ee0bf351-6b17-486f-a38e-cfbb1343c426
+- id: 01a1a29e-81c5-7fe0-ad6b-9c7ce5bf407c
+  author: joe
+  content: |-
+    ## Implementer approach (2026-11-03, blocker STORY-2254 now Completed)
+
+    ### Acceptance criteria as tests
+    - **Unit (AC1/AC3):** take/impl with no `--vendor` resolve `[agents] vendor` (via `resolve_headless_vendor`) in `render_lane_prompt` and `run_take_verb`/`run_impl_verb`; explicit `--vendor` still overrides. Fixture: agents.toml vendor=codex makes the rendered prompt show `codex`.
+    - **Unit (AC2/AC3):** the Codex lane runs the STORY-2254 lifecycle (`aida agent new codex --bg ... --prompt-file <frozen .prompt.md>`). Outcome = spawn acceptance (`accepted:` line), never the terminal model result. A fake aida bin that sleeps after printing acceptance proves there is no synchronous model wait.
+    - **Unit:** occupancy diagnostics also name live Codex lanes (dispatch.rs:1878).
+
+    ### Expected files
+    - `aida-cli-lib/src/dispatch.rs` plus its tests
+    - possibly `agent_codex_background.rs` / `session_start.rs` (see the question below)
+
+    ### Ambiguities / conflicts as questions
+    - **Integration seam (blocking):** dispatch prepares the lane worktree itself: the PR branch `origin/<branch>` for `take`, a named `--branch` from the default branch for `impl`. `aida agent new codex --bg` creates its OWN lease and worktree through `session_start` with branch=None. With an existing explicit `--cwd` that is not an orphan re-entry, it tries to create a new worktree there and fails. It has no `--branch` and cannot adopt a dispatch-prepared tree. How should the two meet? See the punt.
+  created_at: 2026-11-03T18:14:19.333281051Z
+  modified_at: 2026-11-03T18:14:19.333281051Z
+  session_id: 01a1a29ccfae
+  harness_version: 2.1.317 (Claude Code)
 history:
 - id: 01a195dc-94a3-73e2-8979-5b3cd7a026e1
   author: joe
@@ -102,6 +122,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1a29e-a930-7ef3-8e81-b4e159e83689
+  author: joe
+  timestamp: 2026-11-03T18:14:29.424405313Z
+  session_id: 01a1a29ccfae
+  harness_version: 2.1.317 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 6dc7d4977ac5e47c42ddfb26597fe3ec5fb70b60
   branch: main
@@ -110,3 +139,9 @@ filed_at:
   aida_build_sha: 962ca07af25
   vendor: antigravity
   session: 01a194b1bcfb
+attention_reason:
+  category: design-fork
+  detail: 'STORY-2254 has shipped, but its detached Codex lifecycle cannot take over a lane that dispatch has already prepared. Dispatch take/impl build the lane worktree themselves (prepare_lane_worktree): take checks out the PR branch, impl creates the requested --branch. ''aida agent new codex --bg'' (agent_codex_background.rs:651 -> prepare_agent_launch_attempt -> session_start_with_receipt, branch=None) always creates its own lease and worktree. An existing --cwd tree is re-entered only as an orphan adoption (session_start.rs:1997-2032), and there is no --branch. Proxy decision: reuse the STORY-2254 lifecycle and never bolt on an unscoped process. Options: (A) extend the STORY-2254 path so it can adopt a dispatch-prepared worktree/branch (e.g. a --branch plus a dispatch-owned lease handed to agent new). This changes the signed lease/worktree lifecycle, so it needs an architecture sketch and advisor signoff. (B) For Codex, dispatch skips its own worktree prep and delegates entirely to ''agent new codex --bg --spec''. This drops impl''s requested branch name and breaks take, which must work on the existing PR branch. (C) Split: ship AC1 + tests now (configured-vendor default; explicit override; Codex occupancy diagnostic). Codex take/impl from dispatch refuse fast with a pointer to ''aida agent new codex --bg'' instead of blocking on codex exec. A child spec carries the detached integration via (A).'
+  lean: C now (removes both the wrong default and the blocking path without inventing a lifecycle), then (A) as a sketched child spec on STORY-2254's lifecycle.
+  raised_by: implementer
+  raised_at: 2026-11-03T18:14:29.424382060Z
