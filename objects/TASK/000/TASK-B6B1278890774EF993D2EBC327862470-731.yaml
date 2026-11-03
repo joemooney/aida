@@ -7,12 +7,12 @@ description: |-
 
   non-blocking/minor (plausible): lanes now get rw on ~/.local/state/cargo-slots, where the host slot wrapper writes its build log. A lane could replace the log file with a symlink, for example to a file under ~/.cargo/bin, so the host's next log write lands there. lane_job already grants the same pair, so this class predates the PR. Confirm the host wrapper opens the log with O_NOFOLLOW, or refuses a symlinked log.
   Reviewed sha: 1c54c4d85edd1496e1a9b1921c51fe19641ade42
-status: Approved
+status: InProgress
 priority: Medium
-owner: joe
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-03T08:37:14.756047804Z
-modified_at: 2026-11-03T13:52:22.652431744Z
+modified_at: 2026-11-03T14:29:26.458260294Z
 req_type: Task
 tags:
 - carried-from:BUG-2418
@@ -50,6 +50,14 @@ history:
   timestamp: 2026-11-03T14:11:39.999151660Z
   session_id: f5eddefe-032d-4760-94ba-3a318cf3d1d1
   changes: []
+- id: 01a1a1d0-9f3a-7383-ae90-5876077d6438
+  author: aida-session-start
+  timestamp: 2026-11-03T14:29:26.458256854Z
+  session_id: f5eddefe-032d-4760-94ba-3a318cf3d1d1
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 6c587ee595ce70f5fcc48480cfdddc8246cf158c
   branch: main
