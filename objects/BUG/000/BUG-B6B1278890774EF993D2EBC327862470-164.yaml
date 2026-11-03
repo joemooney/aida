@@ -21,7 +21,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T06:46:56.104025446Z
-modified_at: 2026-11-03T18:14:29.424382060Z
+modified_at: 2026-11-03T18:23:22.585240581Z
 req_type: Bug
 tags:
 - audit
@@ -82,6 +82,12 @@ comments:
   modified_at: 2026-11-03T18:14:19.333281051Z
   session_id: 01a1a29ccfae
   harness_version: 2.1.317 (Claude Code)
+- id: 01a1a2a6-cbd9-76d0-aaf4-499921645d92
+  author: joe
+  content: 'ADVISOR RULING (2026-11-03 11:35) on the integration-seam fork: one PR covering all ACs. For a Codex lane, dispatch does NOT pre-create the worktree. It delegates to the STORY-2254 lifecycle by adding ''--branch <name>'' and ''--base <ref>'' to ''aida agent new codex --bg''; session_start then creates the lane''s own lease and worktree on that branch (take: base origin/<pr-branch>, existing branch; impl: new named branch from the default branch). Claude lanes keep the current dispatch-prepared tree. The dispatch token and permit checks run before the agent new call, unchanged. Outcome = the ''accepted:'' spawn line, never the model result. Include the occupancy fix (dispatch.rs:1878). Tests as in your approach comment, plus one for --branch/--base in agent new. LIGHT gate: one targeted cargo test -p aida-cli-lib dispatch plus make check-ci-fast.'
+  created_at: 2026-11-03T18:23:22.585240581Z
+  modified_at: 2026-11-03T18:23:22.585240581Z
+  session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
 history:
 - id: 01a195dc-94a3-73e2-8979-5b3cd7a026e1
   author: joe
