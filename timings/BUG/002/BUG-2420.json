@@ -1,0 +1,74 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-2420",
+  "publishes": [
+    {
+      "at": "2026-11-03T14:12:13.419518729Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-03T02:45:43.394460605Z",
+      "spec": "BUG-2420",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-11-03T04:01:26.857974659Z",
+      "spec": "BUG-2420",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-11-03T05:42:16.972547815Z",
+      "spec": "BUG-2420",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-11-03T05:48:26.336679980Z",
+      "spec": "BUG-2420",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "BUG-2420",
+        "branch": "bug-2420-block-final-slot",
+        "first_seen": "2026-11-03T05:48:26.336647406+00:00"
+      }
+    },
+    {
+      "ts": "2026-11-03T14:11:29.342243189Z",
+      "spec": "BUG-2420",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 3283
+      }
+    },
+    {
+      "ts": "2026-11-03T14:12:13.242294834Z",
+      "spec": "BUG-2420",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "493f3ae1c526c7ab19f208112d426aecbf33c8b5",
+        "pr": 3283,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
