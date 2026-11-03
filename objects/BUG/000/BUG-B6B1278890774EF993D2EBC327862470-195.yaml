@@ -11,7 +11,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-03T15:10:46.366604771Z
-modified_at: 2026-11-03T18:42:27.529682748Z
+modified_at: 2026-11-03T19:38:36.358524207Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -19,6 +19,20 @@ relationships:
   target_id: 01a1a2ad-de81-7981-8c62-e9744d2c1b1b
   created_at: 2026-11-03T18:32:15.741728369Z
   created_by: joe
+comments:
+- id: 01a1a2eb-abc6-7f30-a2c0-396fea76d760
+  author: joe
+  content: |-
+    ADVISOR RULING (2026-11-03 12:15, round 2, PR #3305 at 681992b0): fix all four findings.
+    CI red: GitLab iteration of task1993_live_discovery fails (fixture lacks source_branch, so unknown-branch path parks without routing); AC2 also unmet for unknown-branch changes. AC1/AC3/AC4 unit-covered.
+    1. BLOCKER (CI, lib-1): review_watch::tests::task1993_live_discovery_probes_both_forges_and_refuses_moving_or_unknown_heads fails at aida-cli-lib/src/tests/task_1993_review_watch_tests.rs:851 (messages.len() == 2) on the gitlab=true iteration. The GitLab fixture row (line ~618) has no "source_branch", so parse_change sets head_branch=None, update::author_live returns None, and follow_up (review_watch_update.rs, the 'branch is unknown' arm) return
+    2. AC2 gap (major): when the forge omits the source branch (head_branch None), follow_up parks the change forever with reason 'branch is unknown ... does not update it': no update-branch and no advisor routing. This repeats the BUG-2426 failure mode (parked, nobody acting) and contradicts AC2 'when it cannot update, it routes the PR to the advisor'. Route once to the advisor (same idempotent route_message path) when liveness cannot be judged, and
+    3. AC2 robustness (minor): forge_update maps every non-success (60s timeout, network or gh auth flake) to a permanent BranchUpdate.refused for that head; it is routed once and never retried. Retry transient failures, e.g. once on a later pass before routing, or say in the advisor mail that the cause may be transient.
+    4. Follow-up (minor, implementer-flagged): when gh accepts update-branch but discovery never reports a new head, the change stays parked as STALE_UPDATED forever with no timeout and no routing. Route it to the advisor after a bounded wait (compare BranchUpdate.at).
+    RULINGS: (2) when liveness cannot be judged (head_branch None), route once to the advisor through the same idempotent route_message path. (3) Retry a transient update failure once on a later pass before routing, and the advisor mail says the cause may be transient. (4) After a bounded wait (30 min from BranchUpdate.at) with no new head, route to the advisor. LIGHT gate: one targeted cargo test -p <crate> <filter> plus make check-ci-fast (with umask 022, BUG-2432). Push to the existing PR branch, then stop.
+  created_at: 2026-11-03T19:38:36.358524207Z
+  modified_at: 2026-11-03T19:38:36.358524207Z
+  session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
 history:
 - id: 01a1a23e-443c-7732-95c2-9e39a4719c7a
   author: aida-session-start
