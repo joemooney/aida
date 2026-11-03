@@ -13,7 +13,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-03T13:53:28.187901734Z
-modified_at: 2026-11-03T15:35:03.163228679Z
+modified_at: 2026-11-03T15:35:04.356199909Z
 req_type: Bug
 comments:
 - id: 01a1a1d6-839c-7112-b475-14091d1d6799
@@ -32,6 +32,23 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: CI gates red from this PR (portability ratchet: /proc literals in aida-core liveness tests); also sandbox per-command pidns makes sandbox-stamped claims/leases/watch slots permanently unreclaimable because the TTL/heartbeat backstop is suppressed. No triage reason was given.'
   created_at: 2026-11-03T15:35:03.163226221Z
   modified_at: 2026-11-03T15:35:03.163226221Z
+  session_id: f5eddefe-032d-4760-94ba-3a318cf3d1d1
+- id: 01a1a20c-b522-7013-aed1-6499b5555b5d
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2425):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 5d337c45cfa5
+    Recorded: 2026-11-03T15:13:05.336697187+00:00
+    Findings:
+    1. [blocker/CI] CI (gates) 'Check Rust test portability ratchet' fails because of this PR: scripts/check-portability.sh reports 'proc literal' at aida-core/src/liveness.rs:2719 (test fixture lease(): std::fs::metadata("/proc/self/ns/pid")) and aida-core/src/liveness.rs:3206 (bug_2425_tests). Gate them behind #[cfg(target_os = "linux")] or route through a non-test helper (e.g. an aida_core current_pid_namespace() fn) so test code carries no /proc literal; do not grow the allowlist.
+    2. [major/design] Foreign-namespace records can never be reclaimed. Claude Code's Bash sandbox gives EVERY command a fresh pid namespace (observed: /proc/self/ns/pid = 4026535474 then 4026535355 on consecutive commands), so any claim/lease/review-watch Identity stamped by a sandboxed aida invocation (build_claim / acquire_claim_receipted coordination.rs:694,813,1296; Identity::of review_watch.rs:126; stamp_lease_active_pid_at session.rs:6614; session_start.rs:3168) records a namespace no later observer, host included, will ever share. The PR then suppresses the non-PID backstops too: claim_staleness returns None before the TTL/heartbeat check (coordination.rs:336-345) and decide_claim refuses unconditionally (coordination.rs:249-257); the new test asserts no reclaim even with a 2020 heartbeat. Identity::alive() returns true forever (review_watch.rs:136), auto_release_decision_for_lease returns Live (leases.rs:4192), and reap_one/reap_one_clone skip. A dead sandboxed holder therefore wedges its scope, its watch slot and its worktree permanently, and the docs' 'Run outside the sandbox to resolve them' (docs/cli/06-roles-sessions.md) is false for these records. The spec forbids treating a foreign pidns as evidence of death; heartbeat/TTL expiry is independent evidence and should keep working. Keep the TTL/heartbeat backstop for foreign-namespace claims and leases, and either don't stamp from an isolated or ephemeral observer or give operators an explicit release path. Add a test for a foreign-ns claim past TTL.
+    3. [major/consistency] aida_core::liveness::pid_namespace_observable (liveness.rs:1680) is a second namespace judge that ignores BUG-2212 isolation. agent_registry::PidObserver::can_observe (agent_registry.rs:2440) refuses unstamped rows from an isolated observer whose inode reads as the initial namespace (PidNamespaceProbe::is_isolated: pid1 ns differs, NSpid levels > 1, or a non-init pid1 comm). The new judge accepts them on the inode alone. In that masked-sandbox case, legacy unstamped leases are still probed and judged dead, which is the original BUG-2425 failure, and ps/reap disagree with agent ls. Move the PidObserver/is_isolated logic into aida-core and use one judge for both.
+    4. [minor/test-coverage] Acceptance (4) 'gc refuses to reap' is not proven for worktree GC: worktree_gc.rs active_worktree_paths (Unknown counted active) and probe_lease_death_facts (owner_gone None) changed with no foreign-pidns test. Session reap and review watch are covered (story_696_ps_tests bug_2425_*, task_1945 bug_2425_*); agent GC relies on the pre-existing registry can_observe tests. Add a worktree-gc test with a foreign-ns lease whose worktree would otherwise be reapable.
+    5. [minor/compat] review_watch Identity is #[serde(deny_unknown_fields)] and the new pid_namespace field serializes unconditionally (no skip_serializing_if). Review-watch state written by this binary fails to parse after 'aida dev rollback' to the previous pair. Add skip_serializing_if = "Option::is_none" (as on SessionLease/Claim) or accept the break explicitly.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-03T15:35:04.226561827Z
+  modified_at: 2026-11-03T15:35:04.226561827Z
   session_id: f5eddefe-032d-4760-94ba-3a318cf3d1d1
 history:
 - id: 01a1a1d0-8859-7540-8fa6-1596c5def92a
