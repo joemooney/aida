@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-03T07:21:01.822528019Z
-modified_at: 2026-11-03T20:51:18.465510605Z
+modified_at: 2026-11-03T21:15:46.732416550Z
 req_type: Story
 tags:
 - area:deputy
@@ -48,6 +48,12 @@ comments:
   modified_at: 2026-11-03T20:51:12.049823770Z
   session_id: 01a1a32d0d9e
   harness_version: 2.1.317 (Claude Code)
+- id: 01a1a344-a2ac-76d3-ac2c-b0be0087cff0
+  author: joe
+  content: 'ADVISOR SIGNOFF (2026-11-03 14:20) on SKETCH v1: APPROVED with these rulings. Q1: (a), refuse ''start aida deputy shell first'' when no runner is live; the file path stays only as the runner''s own spool. Q2: (a), the runner moves accepted jobs into a runner-only accepted/ directory that no seat sandbox can write, and incoming/ stops being a claim source; no HMAC. Q3: the socket rule covers the advisor and implementer seats only, in contained_boundary.rs and the seat settings templates; reviewers do not get it. Q4: the ancestry walk accepts the launcher pid that STORY-2338''s grant binding records (the lane or claude process), with the pidfd pin plus start-time recheck as sketched. SEQUENCING: implement only after PR #3287 (STORY-2338) merges, on a branch from main, never stacked on story-2338-sketch. Tests as sketched. LIGHT gate.'
+  created_at: 2026-11-03T21:15:46.732416550Z
+  modified_at: 2026-11-03T21:15:46.732416550Z
+  session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
 history:
 - id: 01a1a2a3-f27f-7463-9a97-0b8c7a670b77
   author: joe
