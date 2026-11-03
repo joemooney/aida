@@ -1,26 +1,10 @@
 job: performance-guard
-last_run: 2026-11-03T13:24:00.317317672Z
+last_run: 2026-11-03T19:28:15.618345851Z
 last_by:
   seat: substrate
   vendor: tick
 result: failed:1
 failure_trips:
-- trip_id: performance-guard@2026-10-27T19:21:20.764108841Z
-  at: 2026-10-27T19:21:20.764108841Z
-  status: 1
-  performance:
-  - command: show
-    budget_ms: 1000
-    over_budget: 24
-    denominator: 113
-    proportion_millipercent: 21239
-    tolerated_millipercent: 10000
-    window_hours: 24
-    worst_ms: 3814
-    excluded_samples: 0
-    lineage_scoped: true
-    ceiling_ms: 5000
-    ceiling_breached: false
 - trip_id: performance-guard@2026-10-28T01:30:35.827958768Z
   at: 2026-10-28T01:30:35.827958768Z
   status: 1
@@ -321,6 +305,22 @@ failure_trips:
     tolerated_millipercent: 10000
     window_hours: 24
     worst_ms: 6075
+    excluded_samples: 0
+    lineage_scoped: true
+    ceiling_ms: 5000
+    ceiling_breached: true
+- trip_id: performance-guard@2026-11-03T19:28:15.618345851Z
+  at: 2026-11-03T19:28:15.618345851Z
+  status: 1
+  performance:
+  - command: show
+    budget_ms: 2000
+    over_budget: 13
+    denominator: 217
+    proportion_millipercent: 5991
+    tolerated_millipercent: 10000
+    window_hours: 24
+    worst_ms: 5226
     excluded_samples: 0
     lineage_scoped: true
     ceiling_ms: 5000
