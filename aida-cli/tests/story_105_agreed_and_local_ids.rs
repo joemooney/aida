@@ -145,6 +145,36 @@ impl Fixture {
             .unwrap_or_else(|| panic!("no object titled {title}"))
     }
 
+    /// Record `blocks_yaml` as `registry/blocks.yaml` on
+    /// `refs/remotes/<home_ref>`: the pool home's accepted claims, as a
+    /// fetch or bundle would carry them here.
+    // trace:BUG-2421 | ai:claude
+    fn accept_on_home(&self, home_ref: &str, blocks_yaml: &str) {
+        use std::io::Write as _;
+        let git_in = |args: &[&str], input: &str| -> String {
+            let mut child = self
+                .command(true, args)
+                .stdin(std::process::Stdio::piped())
+                .stdout(std::process::Stdio::piped())
+                .spawn()
+                .unwrap();
+            child
+                .stdin
+                .take()
+                .unwrap()
+                .write_all(input.as_bytes())
+                .unwrap();
+            let out = child.wait_with_output().unwrap();
+            assert!(out.status.success(), "git {args:?}");
+            String::from_utf8(out.stdout).unwrap().trim().to_string()
+        };
+        let blob = git_in(&["hash-object", "-w", "--stdin"], blocks_yaml);
+        let inner = git_in(&["mktree"], &format!("100644 blob {blob}\tblocks.yaml\n"));
+        let tree = git_in(&["mktree"], &format!("040000 tree {inner}\tregistry\n"));
+        let commit = self.git(&["commit-tree", &tree, "-m", "accepted claims"]);
+        self.git(&["update-ref", &format!("refs/remotes/{home_ref}"), &commit]);
+    }
+
     fn add(&self, title: &str) -> Output {
         self.aida(&[
             "add",
@@ -415,13 +445,13 @@ fn story_105_root_writes_agreed_and_local_ids_in_one_object() {
     assert!(f.objects().iter().all(|r| r.title != "refused"));
 }
 
-/// A non-root clone holding a delegated BUG block (carved from the root's
-/// pool on its upstream) dispenses `aida add` from it instead of
-/// downgrading: the object carries the block's agreed ID and the clone's
-/// local ID, and `blocks.yaml` records the block's advanced `next`.
-// trace:STORY-B6B1278890774EF993D2EBC327862470-105.ac5e9c08 | ai:claude
-#[test]
-fn story_105_non_root_add_dispenses_from_a_delegated_block() {
+/// A bound non-root clone whose upstream `gitlab` homes generic pool p-bug
+/// and whose `blocks.yaml` holds its own BUG block 101-200 (next 102). With
+/// `accepted`, the identical claim is also on the pool's home ref
+/// (`refs/remotes/gitlab/aida-store`, as a fetch or bundle carries it).
+/// Returns the fixture, the clone's node, and the `blocks.yaml` path.
+// trace:BUG-2421 | ai:claude
+fn delegated_bug_block(accepted: bool) -> (Fixture, String, PathBuf) {
     let f = Fixture::new();
     let out = f.add("bind the clone");
     assert!(
@@ -449,13 +479,25 @@ fn story_105_non_root_add_dispenses_from_a_delegated_block() {
     )
     .unwrap();
     let blocks = registry.join("blocks.yaml");
-    fs::write(
-        &blocks,
-        format!(
-            "blocks:\n- node_id: '{node}'\n  owner: o\n  hostname: h\n  type_prefix: BUG\n  range_start: 101\n  range_end: 200\n  next: 102\n  allocated_at: 2026-10-31T00:00:00Z\n  pool_id: p-bug\n"
-        ),
-    )
-    .unwrap();
+    let claim = format!(
+        "blocks:\n- node_id: '{node}'\n  owner: o\n  hostname: h\n  type_prefix: BUG\n  range_start: 101\n  range_end: 200\n  next: 102\n  allocated_at: 2026-10-31T00:00:00Z\n  pool_id: p-bug\n"
+    );
+    fs::write(&blocks, &claim).unwrap();
+    if accepted {
+        f.accept_on_home("gitlab/aida-store", &claim);
+    }
+    (f, node, blocks)
+}
+
+/// A non-root clone holding a delegated BUG block (carved from the root's
+/// pool on its upstream, and accepted on that pool's home ref) dispenses
+/// `aida add` from it instead of downgrading: the object carries the
+/// block's agreed ID and the clone's local ID, and `blocks.yaml` records
+/// the block's advanced `next`.
+// trace:STORY-B6B1278890774EF993D2EBC327862470-105.ac5e9c08 | ai:claude
+#[test]
+fn story_105_non_root_add_dispenses_from_a_delegated_block() {
+    let (f, node, blocks) = delegated_bug_block(true);
 
     let out = f.aida(&[
         "add",
@@ -500,4 +542,79 @@ fn story_105_non_root_add_dispenses_from_a_delegated_block() {
         String::from_utf8_lossy(&out.stderr)
     );
     assert_eq!(f.by_title("story without a block").agreed_id, None);
+}
+
+/// The same delegated block with its claim NOT on the pool's home ref: the
+/// home never accepted it, so the add downgrades to a local ID and says
+/// why, and the block's `next` is untouched.
+// trace:BUG-2421 | ai:claude
+#[test]
+fn bug_2421_unaccepted_delegated_block_downgrades_to_a_local_id() {
+    let (f, _node, blocks) = delegated_bug_block(false);
+    let out = f.aida(&[
+        "add",
+        "--type",
+        "bug",
+        "--title",
+        "unaccepted bug",
+        "--description",
+        "fixture",
+    ]);
+    let said = format!(
+        "{}{}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(out.status.success(), "{said}");
+    assert_eq!(f.by_title("unaccepted bug").agreed_id, None, "{said}");
+    assert!(
+        said.contains("is not on `gitlab/aida-store`"),
+        "the not-accepted note: {said}"
+    );
+    let ledger = aida_core::BlockRegistry::load(&blocks).unwrap();
+    assert_eq!(ledger.blocks[0].next, 102, "nothing dispensed");
+}
+
+/// A delegated add whose save is refused after the block dispensed its ID
+/// (here: the BUG object directory is not writable, as on a full or
+/// read-only disk) returns the ID to the block: `next` is unchanged and the
+/// returned-ID note is printed.
+// trace:BUG-2420 | ai:claude
+#[test]
+fn bug_2420_refused_delegated_save_returns_the_id_to_the_block() {
+    use std::os::unix::fs::PermissionsExt as _;
+    if unsafe { libc::geteuid() } == 0 {
+        eprintln!("skipping: root ignores directory write bits");
+        return;
+    }
+    let (f, _node, blocks) = delegated_bug_block(true);
+    let bug_objects = f.store.join("objects/BUG");
+    fs::create_dir_all(&bug_objects).unwrap();
+    fs::set_permissions(&bug_objects, fs::Permissions::from_mode(0o555)).unwrap();
+    let out = f.aida(&[
+        "add",
+        "--type",
+        "bug",
+        "--title",
+        "refused bug",
+        "--description",
+        "fixture",
+    ]);
+    let said = format!(
+        "{}{}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
+    fs::set_permissions(&bug_objects, fs::Permissions::from_mode(0o755)).unwrap();
+    assert!(!out.status.success(), "the save is refused: {said}");
+    assert!(
+        f.objects().iter().all(|r| r.title != "refused bug"),
+        "{said}"
+    );
+    assert!(
+        said.contains("BUG-102 was returned to this clone's block"),
+        "the returned-ID note: {said}"
+    );
+    let ledger = aida_core::BlockRegistry::load(&blocks).unwrap();
+    assert_eq!(ledger.blocks[0].next, 102, "next did not run ahead: {said}");
 }
