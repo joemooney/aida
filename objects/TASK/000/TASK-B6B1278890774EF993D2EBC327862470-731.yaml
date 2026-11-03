@@ -1,0 +1,28 @@
+id: 01a1a08e-2d84-75d3-bae6-c476ab9431d6
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-731
+title: 'non-blocking/minor (plausible): lanes now get rw on ~/.local/state/cargo-slots,…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on BUG-2418, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  non-blocking/minor (plausible): lanes now get rw on ~/.local/state/cargo-slots, where the host slot wrapper writes its build log. A lane could replace the log file with a symlink, for example to a file under ~/.cargo/bin, so the host's next log write lands there. lane_job already grants the same pair, so this class predates the PR. Confirm the host wrapper opens the log with O_NOFOLLOW, or refuses a symlinked log.
+  Reviewed sha: 1c54c4d85edd1496e1a9b1921c51fe19641ade42
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-03T08:37:14.756047804Z
+modified_at: 2026-11-03T08:37:14.756047804Z
+req_type: Task
+tags:
+- carried-from:BUG-2418
+- finding-hash:db0efea7
+- from-review:BUG-2418
+- kind:carried-forward
+filed_at:
+  code_sha: 6c587ee595ce70f5fcc48480cfdddc8246cf158c
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: db087637d57
+  vendor: claude
+  session: c58592f4-04ae-498b-9afd-87b0cc2bcde9
