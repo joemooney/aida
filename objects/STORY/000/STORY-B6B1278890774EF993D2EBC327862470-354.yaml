@@ -1,0 +1,36 @@
+id: 01a1a2c6-abb5-7093-a8cb-d28dd7b80c9d
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-354
+agreed_id: STORY-2362
+title: 'Review PR-3307: [AI:claude] feat(containment): headless contained Codex launch with F-H notice leaves and F-ENV exact env (Refs TASK-2708)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a1a2be`) for branch `task-b6b1278890774ef993d2ebc327862470-658`.
+
+  - PR: <https://github.com/joemooney/aida/pull/3307>
+  - Branch: `task-b6b1278890774ef993d2ebc327862470-658` → `main`
+
+  ## Slice of (Refs only — not completed by this PR)
+
+  Commit subjects carry `(Refs SPEC-ID)`: this PR is one slice of a spec that a later PR completes. Review this slice against that spec's acceptance criteria.
+
+  - TASK-2708
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 3307` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-03T18:58:11.509562505Z
+modified_at: 2026-11-03T18:58:11.509562505Z
+req_type: Story
+filed_at:
+  code_sha: da17908306fcefc7fc1e8bcf334e2d507c72cf1a
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: c016e786454
+  vendor: claude
+  session: 04f971d5-7365-46ed-b777-d4ff41d730ed
