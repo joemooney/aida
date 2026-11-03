@@ -6,12 +6,12 @@ description: |-
   2026-11-03 08:06: five open PRs (#3192 #3273 #3288 #3291 #3297) showed only 'stale overlapping head already notified' in aida review watch. The watcher sends a one-time notice to the PR author and then skips the PR (review_watch.rs:1134). The authors are headless lanes that have exited, so nobody updates the branch and nothing is reviewed. Releasing with --release does not help. The advisor saw it only by reading the watcher log; aida awaiting does not list it.
 
   Acceptance: (1) when the author is not a live session (no live lease or mail-reachable seat), the watcher runs 'gh pr update-branch' itself for a branch that merges cleanly, and reviews the new head on the next tick. (2) On conflicts, or when it cannot update, it routes the PR to the advisor as an awaiting item: 'PR-N behind main with overlap; update-branch conflicts'. (3) aida awaiting lists every PR the watcher is skipping, with the reason. (4) A test with a fake forge: an overlapping stale head and a dead author lead to update-branch being invoked and the PR reviewed on the next tick.
-status: InProgress
+status: Done
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-03T15:10:46.366604771Z
-modified_at: 2026-11-03T16:31:47.865884790Z
+modified_at: 2026-11-03T17:22:39.174086315Z
 req_type: Bug
 history:
 - id: 01a1a23e-443c-7732-95c2-9e39a4719c7a
@@ -28,6 +28,15 @@ history:
   session_id: 01a1a2407253
   harness_version: 2.1.317 (Claude Code)
   changes: []
+- id: 01a1a26f-3467-7a20-9860-cd7f8754755c
+  author: joe
+  timestamp: 2026-11-03T17:22:39.335089759Z
+  session_id: 01a1a2407253
+  harness_version: 2.1.317 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 filed_at:
   code_sha: 493f3ae1c526c7ab19f208112d426aecbf33c8b5
   branch: main
@@ -36,3 +45,7 @@ filed_at:
   aida_build_sha: 493f3ae1c52
   vendor: claude
   session: f5eddefe-032d-4760-94ba-3a318cf3d1d1
+implementation_info:
+  implemented: true
+  implemented_at: 2026-11-03T17:22:39.174086315Z
+  implemented_by: joe
