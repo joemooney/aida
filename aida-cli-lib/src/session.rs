@@ -4426,6 +4426,19 @@ pub(crate) fn claude_contained_settings_json(write_roots: &[PathBuf]) -> Result<
         .first()
         .and_then(|root| crate::seat_clone::host_recorded_clone(root));
     let (mut store_paths, mut extra_deny) = (store_paths, main_git_deny);
+    // TASK-2772: sandboxed Bash in a lane may write the cargo slot locks and
+    // build log, so the LIGHT gate gets a build slot inside the sandbox. Never
+    // the shared sccache (ruling O2); the gate runner falls back to
+    // `RUSTC_WRAPPER=`. Only beside a store grant (a fail-closed launch stays
+    // empty), and never for a seat clone, which has its own target directory.
+    // trace:TASK-2772 | ai:claude
+    if clone.is_none() && !store_paths.is_empty() {
+        for path in crate::contained_boundary::lane_build_write_paths() {
+            if !store_paths.contains(&path) {
+                store_paths.push(path);
+            }
+        }
+    }
     if let Some(clone) = &clone {
         store_paths.extend(crate::seat_clone::seat_extra_write_paths(clone));
         for main in crate::contained_boundary::contained_write_roots(&clone.main) {
@@ -5153,10 +5166,10 @@ pub(crate) fn bwrap_confinement_args_inner(
 }
 
 /// The read-WRITE binds `os_wrap` adds beside the code worktree: the store
-/// worktree, the cargo/npm caches and Claude Code's own state. Cargo/npm
-/// registry + build caches must stay writable or cargo/npm fail mid-build;
-/// `~/.claude` + `~/.claude.json` hold Claude Code's session state and auth,
-/// which it writes during a run.
+/// worktree, the npm cache and Claude Code's own state. The npm cache must
+/// stay writable or npm fails mid-install; CARGO_HOME is read-only (BUG-2418:
+/// cargo fetches new crates on the host); `~/.claude` + `~/.claude.json`
+/// hold Claude Code's session state and auth, which it writes during a run.
 ///
 /// BUG-2169 S2: for a seat clone the host recorded, the main checkout's
 /// store and cache files and the seat's own cargo target directory instead
@@ -5171,7 +5184,19 @@ pub(crate) fn os_wrap_rw_paths(worktree_root: &Path) -> Result<Vec<PathBuf>> {
             paths.extend(crate::seat_clone::seat_extra_write_paths(&clone));
             paths
         }
-        None => vec![worktree_root.join(".aida-store")],
+        // TASK-2772: the same validated cargo slot pair the contained
+        // settings grant, or the outer bwrap keeps them read-only and the
+        // inner sandbox cannot reopen them. Never for a seat clone.
+        // trace:TASK-2772 trace:BUG-2418 | ai:claude
+        None => {
+            let mut paths = vec![worktree_root.join(".aida-store")];
+            for path in crate::contained_boundary::lane_build_write_paths() {
+                if !paths.contains(&path) {
+                    paths.push(path);
+                }
+            }
+            paths
+        }
     };
     // trace:BUG-2218 | ai:codex
     let main = crate::main_worktree_root_from(worktree_root);
@@ -5184,16 +5209,77 @@ pub(crate) fn os_wrap_rw_paths(worktree_root: &Path) -> Result<Vec<PathBuf>> {
     rw_paths.extend(crate::contained_boundary::contained_deputy_write_paths(
         &main,
     )?);
+    // BUG-2418: CARGO_HOME is deliberately absent. The host compiles its
+    // registry sources and runs `~/.cargo/bin` from PATH, so a lane that could
+    // write there could plant code the host later runs. It is bound read-only
+    // instead ([`os_wrap_cargo_home_ro_args`]).
     if let Some(home) = crate::home_dir() {
-        let cargo_home = std::env::var_os("CARGO_HOME")
-            .map(PathBuf::from)
-            .unwrap_or_else(|| home.join(".cargo"));
-        rw_paths.push(cargo_home);
-        rw_paths.push(home.join(".npm"));
-        rw_paths.push(home.join(".claude"));
-        rw_paths.push(home.join(".claude.json"));
+        rw_paths.extend(os_wrap_home_rw_paths(&home));
     }
     Ok(rw_paths)
+}
+
+/// The read-write binds under the operator's home directory: the npm cache
+/// and Claude Code's own state. Never CARGO_HOME (BUG-2418).
+// trace:BUG-2418 | ai:claude
+pub(crate) fn os_wrap_home_rw_paths(home: &Path) -> Vec<PathBuf> {
+    vec![
+        home.join(".npm"),
+        home.join(".claude"),
+        home.join(".claude.json"),
+    ]
+}
+
+/// Cargo's home directory as the host's cargo resolves it: `$CARGO_HOME`, or
+/// `~/.cargo` when unset.
+// trace:BUG-2418 | ai:claude
+pub(crate) fn cargo_home_dir() -> Option<PathBuf> {
+    std::env::var_os("CARGO_HOME")
+        .filter(|v| !v.is_empty())
+        .map(PathBuf::from)
+        .or_else(|| crate::home_dir().map(|home| home.join(".cargo")))
+}
+
+/// BUG-2418: bind `cargo_home` READ-ONLY. Appended after every read-write
+/// bind, so it wins even when a broader read-write root covers it, and in the
+/// strict read-allowlist mode it keeps the toolchain and registry readable.
+/// `--ro-bind-try`: a host without the directory skips it.
+// trace:BUG-2418 | ai:claude
+pub(crate) fn os_wrap_cargo_home_ro_args(cargo_home: &Path) -> Vec<String> {
+    let path = cargo_home.to_string_lossy().into_owned();
+    vec!["--ro-bind-try".to_string(), path.clone(), path]
+}
+
+/// BUG-2418: the one line a contained lane sees when cargo fails because
+/// CARGO_HOME is read-only there (a new crate cannot be downloaded).
+// trace:BUG-2418 | ai:claude
+pub(crate) const CARGO_HOME_READ_ONLY_NOTE: &str =
+    "new dependencies are fetched on the host: run cargo fetch outside the lane";
+
+/// [`CARGO_HOME_READ_ONLY_NOTE`] when `cargo_home` exists but this process
+/// cannot write to it (a read-only bind, or no write permission); `None` when
+/// it is writable or absent. Probes by creating and removing a temporary file,
+/// so call it only after cargo has already failed.
+// trace:BUG-2418 | ai:claude
+pub(crate) fn cargo_home_read_only_note(cargo_home: &Path) -> Option<&'static str> {
+    if !cargo_home.is_dir() {
+        return None;
+    }
+    match tempfile::Builder::new()
+        .prefix(".aida-write-probe")
+        .tempfile_in(cargo_home)
+    {
+        Ok(_) => None,
+        Err(e)
+            if matches!(
+                e.kind(),
+                std::io::ErrorKind::ReadOnlyFilesystem | std::io::ErrorKind::PermissionDenied
+            ) =>
+        {
+            Some(CARGO_HOME_READ_ONLY_NOTE)
+        }
+        Err(_) => None,
+    }
 }
 
 /// Explicit runtime preparation; never called by path/settings renderers.
@@ -5320,10 +5406,25 @@ pub(crate) fn os_wrapped_program_and_args(
     // instead of letting the drain die on a cryptic `uid map: Permission denied`.
     bwrap_preflight()?;
     let rw_paths = os_wrap_rw_paths(worktree_root)?;
+    // TASK-2772: `--bind-try` skips a missing directory, which would leave a
+    // first-use slot read-only inside the wrapper. Create the validated slot
+    // pair (0700) first; best-effort, it never widens the boundary.
+    // trace:TASK-2772 | ai:claude
+    if crate::seat_clone::host_recorded_clone(worktree_root).is_none() {
+        for slot in crate::contained_boundary::lane_build_write_paths() {
+            if rw_paths.contains(&slot) {
+                let _ = create_private_dir_all(&slot);
+            }
+        }
+    }
     // STORY-617: opt-in strict read-confinement. Default-ABSENT => empty =>
     // `bwrap_confinement_args_inner` falls back to the unchanged `--ro-bind / /`.
     let read_allowlist = contained_read_allowlist(worktree_root);
     let mut full = bwrap_confinement_args_inner(worktree_root, &rw_paths, &read_allowlist);
+    // trace:BUG-2418 | ai:claude
+    if let Some(cargo_home) = cargo_home_dir() {
+        full.extend(os_wrap_cargo_home_ro_args(&cargo_home));
+    }
     // trace:BUG-2169 | ai:claude
     full.extend(os_wrap_seat_env_args(worktree_root));
     // TASK-809: when `[contained] managed_domains_only` is on, deliver the hard
@@ -5361,6 +5462,19 @@ pub(crate) fn os_wrapped_program_and_args(
     full.push(program.to_string());
     full.extend(claude_args);
     Ok(("bwrap".to_string(), full))
+}
+
+/// `mkdir -p` with mode 0700 for every directory it creates.
+// trace:TASK-2772 | ai:claude
+fn create_private_dir_all(path: &Path) -> std::io::Result<()> {
+    let mut builder = std::fs::DirBuilder::new();
+    builder.recursive(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::DirBuilderExt;
+        builder.mode(0o700);
+    }
+    builder.create(path)
 }
 
 /// Run a trivial `bwrap … true` to confirm bubblewrap can actually create the

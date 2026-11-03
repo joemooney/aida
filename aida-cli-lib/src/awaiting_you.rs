@@ -26,6 +26,8 @@ pub(crate) const DEFAULT_CAP: usize = 5;
 /// signal, so a quiet `aida status` stays quiet.
 #[derive(Debug, Default, Clone)]
 pub(crate) struct AwaitingReport {
+    // trace:STORY-2336 | ai:codex
+    pub idle_eligible: Vec<crate::idle_eligible::IdleEligibleItem>,
     /// Open PRs that pass the awaiting-you gate: `MERGEABLE` + no failing
     /// or pending CI + reviewer verdict is not `CHANGES_REQUESTED`. The
     /// aida-chat motivating case: 5 PRs sat open for hours because the
@@ -1875,6 +1877,7 @@ impl AwaitingReport {
     pub(crate) fn contributions(&self) -> Vec<(&'static str, usize)> {
         vec![
             ("prs", self.mergeable_prs.len()),
+            ("idle_eligible", self.idle_eligible.len()),
             (
                 "recusal_holds",
                 self.recusal_holds
@@ -2046,6 +2049,27 @@ impl AwaitingReport {
             "reviewer_actionable: {} of {} routed",
             self.reviewer_actionable_count(),
             self.reviewer_queue_items.len()
+        );
+        let idle: Vec<Vec<String>> = self
+            .idle_eligible
+            .iter()
+            .map(|p| {
+                vec![
+                    p.pr.to_string(),
+                    p.state.clone(),
+                    p.age_label(),
+                    p.next_command.clone(),
+                ]
+            })
+            .collect();
+        let _ = writeln!(
+            out,
+            "{}",
+            crate::toon::table_raw(
+                "idle_eligible",
+                &["pr", "state", "age", "next_command"],
+                &idle
+            )
         );
         let prs: Vec<Vec<String>> = self
             .mergeable_prs
@@ -2529,6 +2553,22 @@ impl AwaitingReport {
             budget -= 1;
         }
 
+        // trace:STORY-2336 | ai:codex
+        for item in &self.idle_eligible {
+            if budget == 0 {
+                overflow += 1;
+                continue;
+            }
+            writeln!(
+                w,
+                "  idle_eligible PR-{} {} — {} → {}",
+                item.pr,
+                item.state,
+                item.age_label(),
+                item.next_command
+            )?;
+            budget -= 1;
+        }
         for pr in &self.mergeable_prs {
             if budget == 0 {
                 overflow += 1;
@@ -3011,6 +3051,7 @@ impl AwaitingReport {
     pub fn to_json(&self) -> serde_json::Value {
         serde_json::json!({
             "total": self.total(),
+            "idle_eligible": self.idle_eligible,
             "mergeable_prs": self.mergeable_prs.iter().map(|p| serde_json::json!({
                 "number": p.number,
                 "title": p.title,
@@ -3248,6 +3289,9 @@ impl AwaitingReport {
                 "failed deputy job",
                 "failed deputy jobs",
             ));
+        }
+        if !self.idle_eligible.is_empty() {
+            parts.push(format!("{} idle eligible", self.idle_eligible.len()));
         }
         if !self.mergeable_prs.is_empty() {
             parts.push(pluralize(self.mergeable_prs.len(), "PR", "PRs"));
@@ -5718,6 +5762,19 @@ mod tests {
                     ci_rollup: None,
                     under_review: None,
                 })
+            }),
+            ("idle_eligible", |r| {
+                r.idle_eligible
+                    .push(crate::idle_eligible::IdleEligibleItem {
+                        pr: 42,
+                        head_sha: "abcdef1234".into(),
+                        state: "review".into(),
+                        kind: "unreviewed-push".into(),
+                        idle_minutes: 20,
+                        first_observed_at: chrono::Utc::now(),
+                        observed_at: chrono::Utc::now(),
+                        next_command: "aida queue work PR-42 --role reviewer".into(),
+                    });
             }),
             ("recusal_holds", |r| {
                 r.recusal_holds.push(RecusalHoldItem {
