@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-02T19:20:32.021326811Z
-modified_at: 2026-11-03T20:21:13.349543407Z
+modified_at: 2026-11-03T20:22:23.675402139Z
 req_type: Story
 tags:
 - architecture
@@ -226,6 +226,13 @@ comments:
   created_at: 2026-11-03T02:12:24.502005366Z
   modified_at: 2026-11-03T02:12:24.502005366Z
   session_id: ee0bf351-6b17-486f-a38e-cfbb1343c426
+- id: 01a1a313-c2bb-7dc1-9f68-fe0f6ffb7975
+  author: joe
+  content: 'Pickup 2026-11-03 13:21 MST (headless implementer): the round-1 brief (18:37) and round-2 ruling (19:14) for PR #3279 are already satisfied, and PR-A merged at 2026-11-03T04:50Z. Round 1 items 1-4 landed in ''fix(gate): foreign-label refusals block, literal-vs-mapped…''. Round 2 landed in ''fix(gate): add aida gate state to the BUG-1502 format-json audit; --compare reports unauthorized approvals and compares draft-only as a set''. The audit row is at docs/cli-format-json-audit.md:702. The strict re-review passed and CI was green. No push was made, since the PR branch is merged. PR-B (writers plus aida gate migrate) has no dispatch yet: the signoff dispatched only PR-A, and the round-2 ruling says ''Nothing else''. I left PR-B unstarted, pending advisor dispatch. The spec stays in progress because PR-B and PR-C remain.'
+  created_at: 2026-11-03T20:22:23.675402139Z
+  modified_at: 2026-11-03T20:22:23.675402139Z
+  session_id: 01a1a312aaf3
+  harness_version: 2.1.317 (Claude Code)
 history:
 - id: 01a19ec9-2f7e-7e41-b3a1-1cb5a299a222
   author: joe
