@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-190
 agreed_id: BUG-2421
 title: Generic (non-hub) pools mint from a local-only claim that its authority ref never accepted
 description: 'From SPIKE-708 Q5. Probe: an injected generic pool tree minted IDs although the claim was never on origin''s authority ref; only the immediate pool''s home_ref is checked. Expected: generic spend requires exact accepted-claim evidence on its authority ref, or the generic spend path is refused outright. Single-user repo, so no legacy-compat shim: refuse unsupported generic spend. Acceptance tests: absent claim, wrong claim and wrong home are refused; a supported hub grant and an offline-carried accepted grant (the bundle workflow) still mint. Scope: the generic fallback only.'
-status: NeedsAttention
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-03T02:44:06.802259757Z
-modified_at: 2026-11-03T05:30:58.640025681Z
+modified_at: 2026-11-03T14:11:59.937881265Z
 req_type: Bug
 tags:
 - from:SPIKE-708
@@ -46,6 +46,21 @@ history:
   author: joe
   timestamp: 2026-11-03T05:30:58.799610301Z
   changes: []
+- id: 01a1a1c0-a73d-7141-983e-09fcc8a0d638
+  author: aida-auto-bump
+  timestamp: 2026-11-03T14:11:59.933924152Z
+  session_id: f5eddefe-032d-4760-94ba-3a318cf3d1d1
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Completed
+processing_record:
+- id: 01a1a1c0-a741-73f3-8199-41dab88b173c
+  timestamp: 2026-11-03T14:11:59.937877871Z
+  agent: aida
+  commit_sha: 493f3ae1c526c7ab19f208112d426aecbf33c8b5
+  summary: 'Round 3: both round-2 P2s fixed. run_add holds the store write lock (WORK admission first) from dispense through save and hand-back (requirements_cli.rs:3248,3531-3545), covered by the deterministic two-add race test bug_2420_failed_save_racing_another_add_still_returns_the_id. Home refs resolve literally (check-ref-format, show-ref --verify, peel to commit; allocation_authority.rs:584-635,739-755), covered by bug_2421_revision_expression_homes_are_refused. All BUG-2420/BUG-2421 acceptance criteria have tests; every CI build/test job is green at the head. merge-hold-gate is the supervision hold, not a code failure.'
+  review_verdict: approved
 filed_at:
   code_sha: 553f7d5984c6083a9f2b47cfa358ce57c438843b
   branch: main
@@ -54,11 +69,7 @@ filed_at:
   aida_build_sha: 553f7d5984c
   vendor: claude
   session: 125337a4-7dd3-483b-9c56-3665173938ae
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'Request Changes: failed-save recovery can burn an ID, and generic home-ref reads accept Git revision expressions.'
-  recovery_hint: address the review findings, move BUG-2421 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-03T05:30:58.640025681Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-03T14:11:59.933918992Z
+  completion_sha: 493f3ae1c526c7ab19f208112d426aecbf33c8b5
