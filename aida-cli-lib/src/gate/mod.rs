@@ -8,6 +8,8 @@
 
 pub(crate) mod approval;
 pub(crate) mod branch_policy;
+// trace:STORY-2324 | ai:claude — canonical spec identity and the pure effective gate state.
+pub(crate) mod canon;
 pub(crate) mod ci_freshness;
 pub(crate) mod dispatch_auth;
 pub(crate) mod dispatch_authority;
@@ -17,6 +19,7 @@ pub(crate) mod dispatch_ledger;
 pub(crate) mod dispatch_lock;
 pub(crate) mod dispatch_reviewer_hold;
 pub(crate) mod dispatch_types;
+pub(crate) mod effective;
 pub(crate) mod fleet_lanes;
 pub(crate) mod hold_collect;
 pub(crate) mod kernel_deps;
