@@ -11905,24 +11905,42 @@ pub(crate) fn handle_queue_work(
                         &project_root,
                         &child_seat,
                     )
-                    .map(|_| ())
+                    .map(|authority| {
+                        matches!(
+                            authority,
+                            crate::gate::seat_authority::HeadlessChildAuthority::Delegated
+                        )
+                    })
                 } else {
                     crate::gate::seat_authority::validate_child_delegation(
                         &project_root,
                         &child_seat,
                     )
-                    .map(|_| ())
+                    .map(|_| true)
                 };
-                if let Err(cause) = preflight {
-                    let launcher = crate::gate::seat_authority::current_grant(&project_root);
-                    anyhow::bail!(queue_work_delegation_refusal(
-                        &child_seat,
-                        role_origin,
-                        launcher
-                            .as_ref()
-                            .map(|g| (g.seat.as_str(), g.delegable_seats.as_slice())),
-                        &format!("{cause:#}"),
-                    ));
+                let mints_child = match preflight {
+                    Ok(mints_child) => mints_child,
+                    Err(cause) => {
+                        let launcher = crate::gate::seat_authority::current_grant(&project_root);
+                        anyhow::bail!(queue_work_delegation_refusal(
+                            &child_seat,
+                            role_origin,
+                            launcher
+                                .as_ref()
+                                .map(|g| (g.seat.as_str(), g.delegable_seats.as_slice())),
+                            &format!("{cause:#}"),
+                        ));
+                    }
+                };
+                // BUG-2428: a sandboxed child whose grant key this launcher
+                // cannot put in a session keyring is refused at mint time —
+                // after the worktree and lease exist. Probe the keyring now,
+                // before any setup, so that refusal leaves nothing behind.
+                // trace:BUG-2428 | ai:claude
+                if is_standalone_reviewer(&role, plan.review_target.is_some()) {
+                    refuse_unpresentable_contained_reviewer(contained)?;
+                } else if mints_child && session::containment_applied(launch_vendor, contained) {
+                    crate::gate::seat_authority::preflight_sandboxed_child_key(&child_seat)?;
                 }
             }
             // trace:STORY-1662 | ai:claude
@@ -13192,20 +13210,23 @@ pub(crate) fn handle_queue_work(
             // trace:BUG-2169 | ai:claude
             /* contained_seat */
             contained,
-            /* rollback_failed_setup */ false,
+            // BUG-2428: a launching pickup keeps the setup's rollback armed
+            // until it knows whether an agent was launched (below).
+            // trace:BUG-2428 | ai:claude
+            /* rollback_failed_setup */
+            !no_launch,
             // BUG-2223: re-enter the orphan's tree in place. Session start
             // re-checks it and bypasses nothing else: a live claim on the
             // scope still refuses. trace:BUG-2223 | ai:claude
             /* adopt_orphan */
             adopt_orphan.is_some(),
         )
-        .map(|mut receipt| receipt.disarm())
     };
-    if no_launch {
-        start()?;
+    let mut setup_receipt = if no_launch {
+        start()?
     } else {
-        crate::gate::review_authority::as_launcher(start)?;
-    }
+        crate::gate::review_authority::as_launcher(start)?
+    };
 
     // The lease this pickup minted, for the refused-delegation release below.
     let mut minted_lease_id: Option<String> = None;
@@ -13902,9 +13923,28 @@ pub(crate) fn handle_queue_work(
             }
         }
     })();
+    // BUG-2428: a launch refused at its child grant launched nobody. Roll back
+    // everything this invocation's setup created (worktree, branch, lease,
+    // claim and status write), so neither the tree nor the lease blocks the
+    // next attempt with "held by worktree ... before pickup setup". Any other
+    // outcome keeps the setup: the agent ran, or the manual continuation
+    // below needs the tree.
+    // trace:BUG-2428 | ai:claude
+    if launch_refused_before_agent(&setup_result) && setup_receipt.owns_setup() {
+        // The launcher may have entered the tree; leave it before removal.
+        let _ = std::env::set_current_dir(&project_root);
+        drop(setup_receipt);
+        eprintln!(
+            "  no agent was launched: rolled back the {} pickup setup (worktree, lease, claim; anything kept is named above)",
+            plan.scope
+        );
+        return setup_result;
+    }
+    setup_receipt.disarm();
     // Advisor comment 35: a reviewer launch refused at child-seat delegation
     // launched nobody, so its PR-N lease would only block the next pickup
-    // until --force-claim. Release it (the worktree stays).
+    // until --force-claim. Release it. (A setup this invocation owned was
+    // rolled back above; this covers a re-entered lease.)
     // trace:TASK-1955 | ai:claude (advisor comment 35)
     if release_refused_review_lease(
         &project_root,
@@ -13982,6 +14022,16 @@ pub(crate) fn end_finished_review(
             (l.id, outcome)
         })
         .collect()
+}
+
+/// BUG-2428: whether a pickup's launch failed before any agent process
+/// started, so the setup it created serves nothing and is rolled back. A
+/// refused child grant is minted before the worker is spawned or exec'd.
+// trace:BUG-2428 | ai:claude
+pub(crate) fn launch_refused_before_agent(setup_result: &Result<()>) -> bool {
+    setup_result
+        .as_ref()
+        .is_err_and(crate::gate::seat_authority::ChildGrantRefused::is_in)
 }
 
 /// Advisor comment 35: whether a failed pickup's lease is released — only a
@@ -17911,3 +17961,7 @@ pub(crate) fn clear_standalone_reviewer_verdict(path: &std::path::Path) {
 #[cfg(test)]
 #[path = "tests/bug_home_045_reviewer_verdict_tests.rs"]
 mod bug_home_045_reviewer_verdict_tests;
+
+#[cfg(test)]
+#[path = "tests/bug_2428_launch_rollback_tests.rs"]
+mod bug_2428_launch_rollback_tests;
