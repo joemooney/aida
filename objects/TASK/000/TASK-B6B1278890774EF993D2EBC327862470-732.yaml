@@ -6,18 +6,27 @@ description: |-
 
   cosmetic: check-ci-gates.py sccache_fallback calls sccache_probe_bin(env) without a cwd, so configured_rustc_wrapper resolves .cargo/config.toml from the process cwd instead of the repo root that run_plan uses. Pass root through.
   Reviewed sha: 1c54c4d85edd1496e1a9b1921c51fe19641ade42
-status: Draft
+status: Superseded
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-03T08:37:18.672223043Z
-modified_at: 2026-11-03T08:37:18.672223043Z
+modified_at: 2026-11-03T13:51:03.333374237Z
 req_type: Task
 tags:
 - carried-from:BUG-2418
 - finding-hash:3f65b470
 - from-review:BUG-2418
 - kind:carried-forward
+history:
+- id: 01a1a1ad-7aa5-7622-bb51-99723996dc6d
+  author: joe
+  timestamp: 2026-11-03T13:51:03.333368335Z
+  session_id: f5eddefe-032d-4760-94ba-3a318cf3d1d1
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: 6c587ee595ce70f5fcc48480cfdddc8246cf158c
   branch: main
