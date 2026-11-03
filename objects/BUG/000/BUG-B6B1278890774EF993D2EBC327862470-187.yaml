@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-187
 agreed_id: BUG-2418
 title: Lane sandbox binds CARGO_HOME read-write, so a lane can modify registry sources the host later compiles
 description: 'From the STORY-2326 signoff (amendment 7, C2 precedent). The existing lane bwrap profile binds CARGO_HOME read-write. Registry sources under CARGO_HOME are compiled by the host later, so a contained lane could plant code that runs host-side. Expected: CARGO_HOME read-only in lanes (or a per-lane CARGO_HOME overlay), with a test that a lane write to the registry sources is refused.'
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-03T00:47:05.661792425Z
-modified_at: 2026-11-03T02:22:20.394798996Z
+modified_at: 2026-11-03T02:22:23.645144809Z
 req_type: Bug
 tags:
 - regroup
@@ -21,6 +21,15 @@ comments:
   created_at: 2026-11-03T02:22:20.394798996Z
   modified_at: 2026-11-03T02:22:20.394798996Z
   session_id: 125337a4-7dd3-483b-9c56-3665173938ae
+history:
+- id: 01a19f36-fd9d-7612-ad48-75a3494a7199
+  author: joe
+  timestamp: 2026-11-03T02:22:23.645141576Z
+  session_id: 125337a4-7dd3-483b-9c56-3665173938ae
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: 2d4c8cf53970af435900579e4e627d8f4a44d716
   branch: main
