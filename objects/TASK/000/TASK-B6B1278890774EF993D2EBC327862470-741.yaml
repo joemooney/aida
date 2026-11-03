@@ -1,0 +1,27 @@
+id: 01a1a24d-b843-72d3-a07c-c856d96258a3
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-741
+title: 'cosmetic (non-blocking): ProcEntry::token (gate/review_authority.rs:483) has no…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on BUG-2419, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  cosmetic (non-blocking): ProcEntry::token (gate/review_authority.rs:483) has no callers left; delete it or route author_token through it.
+  Reviewed sha: 21ba1f4436fb1148802957b5e459d40edbdeebdc
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-03T16:46:04.867318285Z
+modified_at: 2026-11-03T16:46:04.867318285Z
+req_type: Task
+tags:
+- carried-from:BUG-2419
+- finding-hash:a5eca699
+- from-review:BUG-2419
+- kind:carried-forward
+filed_at:
+  code_sha: 1fc6b8bdc6dd4337e4d9d82e9740568bdf5d9830
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 493f3ae1c52
+  vendor: claude
