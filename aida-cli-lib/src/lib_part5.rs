@@ -849,6 +849,7 @@ pub(crate) fn acquire_review_lease_with_mode(
         .or_else(|| std::env::var("USER").ok())
         .unwrap_or_else(|| "unknown".to_string());
     let lease = SessionLease {
+        pid_namespace: crate::agent_registry::current_pid_namespace(),
         tree_kind: Default::default(),
         id: id.clone(),
         scope: spec_id.to_string(),

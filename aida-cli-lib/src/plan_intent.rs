@@ -1717,7 +1717,10 @@ pub(crate) fn handle_why(id: &str, plain: bool, json: bool) -> Result<()> {
         if let Some(lease) = spec_scoped_lease(&leases, &id_refs) {
             let now = chrono::Utc::now();
             let live = process_probe::probe_live_claude_sessions();
-            if !matches!(lease_state_for(lease, &live, now), LeaseState::Live) {
+            if !matches!(
+                lease_state_for(lease, &live, now),
+                LeaseState::Live | LeaseState::Unknown
+            ) {
                 let elapsed = now
                     .signed_duration_since(lease.started_at)
                     .num_seconds()

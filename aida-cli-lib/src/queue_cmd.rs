@@ -14760,6 +14760,9 @@ impl crate::gate::review_verdict::VerdictCollectionChecks for StandaloneVerdictC
 /// needs to discover after spawning a session. trace:STORY-246 | ai:claude
 #[derive(serde::Deserialize)]
 pub(crate) struct LeasePeek {
+    // trace:BUG-2425 | ai:codex
+    #[serde(default)]
+    pub(crate) pid_namespace: Option<u64>,
     pub(crate) id: String,
     pub(crate) branch: String,
     /// Optional for older leases and minimal test fixtures. Used only by the
