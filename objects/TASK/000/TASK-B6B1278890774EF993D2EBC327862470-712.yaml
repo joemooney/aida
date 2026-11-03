@@ -14,7 +14,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-02T15:45:06.933394368Z
-modified_at: 2026-11-03T02:15:43.572742675Z
+modified_at: 2026-11-03T02:16:06.366564182Z
 req_type: Task
 tags:
 - carried-from:TASK-2755
@@ -26,6 +26,13 @@ relationships:
   target_id: 01a19cef-7b29-7de1-8430-34405192e970
   created_at: 2026-11-03T02:15:43.572731413Z
   created_by: joe
+comments:
+- id: 01a19f31-3bde-7be0-b029-f34e07007337
+  author: joe
+  content: 'Advisor ruling (10-28 rule-once): accepted, not fixed. innermost_agent_vendor is a 10-line depth comparison exercised end-to-end by the resolve_register_identity matrix; STORY-2326 (one launcher) replaces this identity path, so a dedicated unit test now would be thrown away.'
+  created_at: 2026-11-03T02:16:06.366564182Z
+  modified_at: 2026-11-03T02:16:06.366564182Z
+  session_id: 125337a4-7dd3-483b-9c56-3665173938ae
 history:
 - id: 01a19d12-58fa-7b22-9339-0b73a732c858
   author: joe
