@@ -57,6 +57,7 @@ fn lease(id: &str, scope: &str, worktree: PathBuf, branch: &str) -> SessionLease
         driver: None,
         child_grant_id: None,
         vendor_session_id: None,
+        lane_jobs: None,
     }
 }
 

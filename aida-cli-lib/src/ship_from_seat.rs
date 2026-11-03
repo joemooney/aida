@@ -633,6 +633,10 @@ fn finish_published(
         }
     };
     (deps.after_open)(main, branch);
+    // Dual-write, host side: the contained seat never writes `.aida/` itself
+    // (A6); the host that verified and pushed its bundle records the
+    // handoff. // trace:STORY-2325 | ai:claude
+    crate::ownership::dual::handed_off_from_seat(main, spec, tip, pr);
     eprintln!(
         "{} aida ship --from-seat — PR-{pr} open for {} (not merged)",
         "⏸".yellow().bold(),

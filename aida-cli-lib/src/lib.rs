@@ -147,6 +147,9 @@ mod knowledge_list;
 // trace:BUG-1944 | ai:claude — live-work evidence + start-of-work status bump.
 // trace:STORY-1662 | ai:claude
 mod lane_env;
+// trace:BUG-2383 | ai:claude — the lane job runner and `aida lane job`.
+mod lane_cmd;
+mod lane_job;
 // One agent launcher. trace:STORY-2326 | ai:claude
 mod launch;
 mod leases;
@@ -171,6 +174,8 @@ mod plan_intent;
 mod plan_report;
 // trace:STORY-2325 | ai:claude — one ownership record and one pure liveness judge.
 mod ownership;
+// trace:STORY-2325 | ai:claude
+mod ownership_cmd;
 // trace:STORY-2315 | ai:claude
 mod pr_lease_takeover;
 mod pr_lookup;
@@ -616,6 +621,11 @@ mod seat_occupancy;
 // trace:BUG-2014 | ai:codex
 mod grant_expiry_notice;
 mod seat_rotation;
+// trace:BUG-2383 | ai:claude
+mod seat_target_seed;
+// trace:BUG-2383 | ai:claude
+#[cfg(unix)]
+mod seat_target_overlay;
 // trace:STORY-B6B1278890774EF993D2EBC327862470-101 | ai:claude
 mod agent_rotation;
 mod seats;

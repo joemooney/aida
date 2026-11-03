@@ -434,6 +434,9 @@ hermetic audit. `JSON not honoured` means unsupported and explicitly rejected.
 | `aida pr gc` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida orchestrator` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida orchestrator status` | COULD NOT VERIFY | Dedicated --json exists; needs command-specific state or external service |
+| `aida own` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
+| `aida own show` | COULD NOT VERIFY | Dedicated --json exists; needs command-specific state or external service |
+| `aida own migrate` | COULD NOT VERIFY | Dedicated --json exists; needs command-specific state or external service |
 | `aida zen` | COULD NOT VERIFY | Dedicated --json exists; needs command-specific state or external service |
 | `aida zen status` | COULD NOT VERIFY | Dedicated --json exists; needs command-specific state or external service |
 | `aida zen finish` | COULD NOT VERIFY | Dedicated --json exists; needs command-specific state or external service |
@@ -685,6 +688,10 @@ hermetic audit. `JSON not honoured` means unsupported and explicitly rejected.
 | `aida lint constants` | COULD NOT VERIFY | Dedicated --json exists; needs command-specific state or external service |
 | `aida verify` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida verify constraints` | JSON honoured | verify constraints |
+| `aida lane` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
+| `aida lane job` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
+| `aida lane job run` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
+| `aida lane job wait` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida lifecycle` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida plan` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida plan verify` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |

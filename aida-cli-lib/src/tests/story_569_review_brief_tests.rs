@@ -114,6 +114,7 @@ fn file_zen_review_brief_short_circuits() {
         driver: None,
         child_grant_id: None,
         vendor_session_id: None,
+        lane_jobs: None,
     };
 
     // Handoff disabled → None, no side effects.

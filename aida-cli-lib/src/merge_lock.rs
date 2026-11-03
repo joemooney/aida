@@ -295,6 +295,10 @@ fn stale_reason(h: &Holder, our_host: &str) -> Option<String> {
 pub(crate) struct MergeLease {
     path: PathBuf,
     held: bool,
+    /// The main worktree, when this is a train's lease: its ownership record
+    /// is released with it (dual-write).
+    // trace:STORY-2325 | ai:claude
+    train_root: Option<PathBuf>,
 }
 
 impl MergeLease {
@@ -330,6 +334,10 @@ impl MergeLease {
         if self.held {
             let _ = std::fs::remove_file(&self.path);
             self.held = false;
+            // trace:STORY-2325 | ai:claude
+            if let Some(root) = self.train_root.take() {
+                crate::ownership::dual::train_lease_released(&root);
+            }
         }
     }
 }
@@ -385,7 +393,18 @@ pub(crate) fn acquire(
             });
         let _ = std::fs::remove_file(&tmp);
         match linked {
-            Ok(()) => return Ok(MergeLease { path, held: true }),
+            Ok(()) => {
+                // Dual-write: the lock file stays authoritative. // trace:STORY-2325 | ai:claude
+                let train = pr.filter(|_| note == crate::pr_train::TRAIN_LEASE_NOTE);
+                if let Some(train) = train {
+                    crate::ownership::dual::train_lease_taken(project_root, train);
+                }
+                return Ok(MergeLease {
+                    path,
+                    held: true,
+                    train_root: train.map(|_| project_root.to_path_buf()),
+                });
+            }
             Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
                 let reclaimable = file_stale_reason(&path, &our_host);
                 if reclaimable.is_some() {
