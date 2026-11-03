@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import argparse
 import contextlib
+import errno
 import os
 import re
 import shlex
@@ -370,6 +371,75 @@ def ensure_sccache_server() -> None:
         subprocess.run([sccache_bin, "--start-server"], env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 
+# trace:TASK-2772 | ai:claude
+SCCACHE_PROBE_TIMEOUT = 15.0
+
+
+def sccache_wrapper_active(env: dict[str, str]) -> bool:
+    """Whether cargo would run rustc through sccache: RUSTC_WRAPPER unset (the
+    cargo config may name it) or naming sccache."""
+    wrapper = env.get("RUSTC_WRAPPER")
+    if wrapper is None:
+        return True
+    wrapper = wrapper.strip()
+    return bool(wrapper) and "sccache" in wrapper
+
+
+def sccache_fallback(env: dict[str, str], probe=None) -> dict[str, str]:
+    """TASK-2772: ask sccache once, with a deadline, whether it can serve this
+    process. When it is refused (a lane sandbox without its socket) or does not
+    answer, build without it: RUSTC_WRAPPER= and one note. Never hangs."""
+    if not sccache_wrapper_active(env) or env.get("AIDA_SCCACHE_DISABLE") == "1":
+        return env
+    if probe is None:
+        sccache_bin = env.get("AIDA_SCCACHE") or shutil.which("sccache", path=env.get("PATH"))
+        if not sccache_bin:
+            return env
+
+        def probe() -> bool:
+            try:
+                # The call cargo itself makes first: `--show-stats` can
+                # succeed where a wrapped compile is refused (EPERM).
+                done = subprocess.run(
+                    [sccache_bin, env.get("RUSTC") or "rustc", "-vV"],
+                    env=env,
+                    stdin=subprocess.DEVNULL,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    timeout=SCCACHE_PROBE_TIMEOUT,
+                )
+            except (OSError, subprocess.TimeoutExpired):
+                return False
+            return done.returncode == 0
+
+    if probe():
+        return env
+    print(
+        "check-ci-gates: sccache is unavailable here; building without it (RUSTC_WRAPPER=).",
+        file=sys.stderr,
+    )
+    return {**env, "RUSTC_WRAPPER": ""}
+
+
+# trace:BUG-2418 | ai:claude
+CARGO_HOME_READ_ONLY_NOTE = "new dependencies are fetched on the host: run cargo fetch outside the lane"
+
+
+def cargo_home_read_only_note(env: dict[str, str]) -> str | None:
+    """BUG-2418: the one-line note when CARGO_HOME exists but is not writable
+    (a contained lane binds it read-only, so cargo cannot fetch a new crate)."""
+    home = env.get("CARGO_HOME") or os.path.join(os.path.expanduser("~"), ".cargo")
+    if not os.path.isdir(home):
+        return None
+    try:
+        with tempfile.NamedTemporaryFile(dir=home, prefix=".aida-write-probe"):
+            return None
+    except PermissionError:
+        return CARGO_HOME_READ_ONLY_NOTE
+    except OSError as err:
+        return CARGO_HOME_READ_ONLY_NOTE if err.errno == errno.EROFS else None
+
+
 def run_gate(root: Path, name: str, command: str, env: dict[str, str]) -> tuple[bool, float]:
     started = time.monotonic()
     completed = subprocess.run([*CI_SHELL_ARGV, command], cwd=root, env=env)
@@ -460,7 +530,7 @@ def main(argv: list[str] | None = None) -> int:
 
     ensure_sccache_server()
     with contextlib.ExitStack() as stack:
-        env = dict(os.environ)
+        env = sccache_fallback(dict(os.environ))
         if args.tier == "fast":
             env["PATH"] = aida_stub_dir(root, stack) + os.pathsep + env.get("PATH", "")
         return run_plan(root, args.tier, plan, tiers, env)
@@ -508,6 +578,9 @@ def run_plan(
                         f"        hint: restart sccache with: sccache --stop-server; TMPDIR=/tmp sccache --start-server",
                         file=sys.stderr,
                     )
+            note = cargo_home_read_only_note(env)
+            if note:
+                print(f"check-ci-gates: CARGO_HOME is read-only here; {note}", file=sys.stderr)
             # Exit on the FIRST failure: CI's order is the cheapest order,
             # and a second failure after the first is noise.
             origin = (

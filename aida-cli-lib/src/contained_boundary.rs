@@ -142,6 +142,80 @@ pub(crate) fn contained_store_write_paths(main: &Path) -> Vec<PathBuf> {
     paths
 }
 
+/// TASK-2772: the build-coordination paths a lane's sandboxed Bash must write
+/// for the LIGHT gate: the cargo slot pair (`$XDG_RUNTIME_DIR/cargo-slots-<uid>`
+/// for the slot locks, `~/.local/state/cargo-slots` for the build log), and
+/// nothing else. The shared sccache cache is never granted (advisor ruling,
+/// BUG-2169 O2): a lane that wrote it could plant an artifact the host and
+/// other seats reuse; the gate runner falls back to `RUSTC_WRAPPER=` instead.
+/// Any path inside CARGO_HOME is dropped: BUG-2418 keeps CARGO_HOME read-only.
+/// Seat clones never get these (they build with no compiler wrapper).
+// trace:TASK-2772 | ai:claude
+pub(crate) fn lane_build_write_paths() -> Vec<PathBuf> {
+    let env_path = |key: &str| {
+        std::env::var_os(key)
+            .filter(|v| !v.is_empty())
+            .map(PathBuf::from)
+    };
+    lane_build_write_paths_from(&LaneBuildEnv {
+        runtime_dir: env_path("XDG_RUNTIME_DIR"),
+        uid: current_uid(),
+        home: crate::home_dir(),
+        cargo_home: crate::session::cargo_home_dir(),
+    })
+}
+
+#[cfg(unix)]
+fn current_uid() -> Option<u32> {
+    // SAFETY: getuid never fails and has no preconditions.
+    Some(unsafe { libc::getuid() })
+}
+
+#[cfg(not(unix))]
+fn current_uid() -> Option<u32> {
+    None
+}
+
+/// The inputs [`lane_build_write_paths`] reads from the environment.
+// trace:TASK-2772 | ai:claude
+#[derive(Debug, Clone, Default)]
+pub(crate) struct LaneBuildEnv {
+    pub(crate) runtime_dir: Option<PathBuf>,
+    pub(crate) uid: Option<u32>,
+    pub(crate) home: Option<PathBuf>,
+    pub(crate) cargo_home: Option<PathBuf>,
+}
+
+/// Pure core of [`lane_build_write_paths`]. Relative paths are dropped (the
+/// sandbox needs absolute ones), as is the filesystem root.
+// trace:TASK-2772 | ai:claude
+pub(crate) fn lane_build_write_paths_from(env: &LaneBuildEnv) -> Vec<PathBuf> {
+    let mut candidates = Vec::new();
+    if let (Some(runtime), Some(uid)) = (&env.runtime_dir, env.uid) {
+        candidates.push(runtime.join(format!("cargo-slots-{uid}")));
+    }
+    if let Some(home) = &env.home {
+        candidates.push(home.join(".local").join("state").join("cargo-slots"));
+    }
+    let mut paths: Vec<PathBuf> = Vec::new();
+    for path in candidates {
+        let path = normalize_lexical(&path);
+        if !path.is_absolute() || path.parent().is_none() {
+            continue;
+        }
+        if let Some(cargo_home) = &env.cargo_home {
+            let cargo_home = normalize_lexical(cargo_home);
+            if path.starts_with(&cargo_home) || cargo_home.starts_with(&path) {
+                continue;
+            }
+        }
+        if !paths.contains(&path) {
+            paths.push(path);
+        }
+    }
+    paths
+}
+
 /// The shared runtime mailbox alone; never grant the enclosing `.aida`
 /// directory (which contains grants, leases and other coordination authority).
 /// Refuse symlinked mailbox/state directories rather than binding their target.
@@ -720,3 +794,8 @@ mod baseline_tests;
 #[cfg(test)]
 #[path = "tests/task_1952_contained_launch_tests.rs"]
 mod task_1952_launch_tests;
+
+// trace:BUG-2418 TASK-2772 | ai:claude
+#[cfg(test)]
+#[path = "tests/bug_2418_task_2772_lane_cargo_tests.rs"]
+mod bug_2418_task_2772_lane_cargo_tests;

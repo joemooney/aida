@@ -179,5 +179,68 @@ class TestSccacheTmpdirDetection(unittest.TestCase):
         self.assertIn(expected_hint, rust_src)
 
 
+class TestTask2772SccacheFallback(unittest.TestCase):
+    """TASK-2772: a refused or silent sccache falls back to RUSTC_WRAPPER= once.
+
+    trace:TASK-2772 | ai:claude
+    """
+
+    def fake(self, td, body):
+        script = Path(td) / "fake_sccache"
+        script.write_text("#!/bin/bash\n" + body + "\n")
+        script.chmod(0o755)
+        return str(script)
+
+    def test_refused_sccache_falls_back_with_one_note(self):
+        with tempfile.TemporaryDirectory() as td:
+            env = {"RUSTC_WRAPPER": "sccache", "AIDA_SCCACHE": self.fake(td, "exit 2")}
+            out = check_ci.sccache_fallback(env)
+            self.assertEqual(out["RUSTC_WRAPPER"], "")
+
+    def test_silent_sccache_never_hangs(self):
+        with tempfile.TemporaryDirectory() as td:
+            env = {"AIDA_SCCACHE": self.fake(td, "sleep 30")}
+            saved = check_ci.SCCACHE_PROBE_TIMEOUT
+            check_ci.SCCACHE_PROBE_TIMEOUT = 0.5
+            try:
+                out = check_ci.sccache_fallback(env)
+            finally:
+                check_ci.SCCACHE_PROBE_TIMEOUT = saved
+            self.assertEqual(out["RUSTC_WRAPPER"], "")
+
+    def test_working_sccache_and_opt_outs_are_untouched(self):
+        with tempfile.TemporaryDirectory() as td:
+            env = {"RUSTC_WRAPPER": "sccache", "AIDA_SCCACHE": self.fake(td, "exit 0")}
+            self.assertIs(check_ci.sccache_fallback(env), env)
+        refuse = lambda: self.fail("an opted-out wrapper must not be probed")
+        for env in ({"RUSTC_WRAPPER": ""}, {"RUSTC_WRAPPER": "other"}, {"AIDA_SCCACHE_DISABLE": "1"}):
+            self.assertIs(check_ci.sccache_fallback(env, probe=refuse), env)
+
+
+class TestBug2418CargoHomeNote(unittest.TestCase):
+    """BUG-2418: a read-only CARGO_HOME maps to one line.
+
+    trace:BUG-2418 | ai:claude
+    """
+
+    def test_writable_or_missing_home_has_no_note(self):
+        with tempfile.TemporaryDirectory() as td:
+            self.assertIsNone(check_ci.cargo_home_read_only_note({"CARGO_HOME": td}))
+            missing = str(Path(td) / "absent")
+            self.assertIsNone(check_ci.cargo_home_read_only_note({"CARGO_HOME": missing}))
+
+    @unittest.skipIf(os.geteuid() == 0, "root ignores directory write bits")
+    def test_unwritable_home_maps_to_the_fetch_note(self):
+        with tempfile.TemporaryDirectory() as td:
+            os.chmod(td, 0o555)
+            try:
+                note = check_ci.cargo_home_read_only_note({"CARGO_HOME": td})
+            finally:
+                os.chmod(td, 0o755)
+            self.assertEqual(
+                note, "new dependencies are fetched on the host: run cargo fetch outside the lane"
+            )
+
+
 if __name__ == "__main__":
     unittest.main()
