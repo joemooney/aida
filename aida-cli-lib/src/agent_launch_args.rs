@@ -798,6 +798,30 @@ pub enum SessionCommand {
         #[clap(long)]
         release_unknown_owner: bool,
     },
+
+    /// One unattended cleanup pass: reap finished sessions (spec finished,
+    /// branch merged, process exited), prune dead agent-registry rows, and
+    /// delete worktree build caches idle for at least `--idle-hours`. Every
+    /// safety rail of `session reap`, `agent gc` and `worktree reclaim`
+    /// stays on: uncommitted work, live leases, open PRs, protected checkouts
+    /// and processes in another pid namespace are never touched.
+    ///
+    /// Exits 0 unless it kept something someone must act on: salvageable
+    /// work idle past the threshold, a reap refused because mail retention
+    /// is not activated, or a step that failed. Then it exits non-zero and
+    /// its last stderr line names each item and the act it needs, which is
+    /// what the hourly `session-hygiene` scheduled job routes to the advisor.
+    // trace:STORY-2351 | ai:claude
+    Hygiene {
+        /// Report what the pass would do without touching anything.
+        #[clap(long)]
+        dry_run: bool,
+
+        /// Reclaim only caches idle at least this many hours, and route
+        /// salvageable work only once it has been untouched this long.
+        #[clap(long, value_name = "HOURS", default_value_t = crate::session_hygiene::DEFAULT_IDLE_HOURS)]
+        idle_hours: u64,
+    },
 }
 
 /// Planned-cluster manifest subcommands. The manifest is a per-session

@@ -13668,6 +13668,11 @@ Commands:
                  lease, and delete the branch, in one pass, so a headless agent that exited when its
                  work landed doesn't leave a stranded worktree behind for someone to clean up by
                  hand
+  hygiene        One unattended cleanup pass: reap finished sessions (spec finished, branch merged,
+                 process exited), prune dead agent-registry rows, and delete worktree build caches
+                 idle for at least `--idle-hours`. Every safety rail of `session reap`, `agent gc`
+                 and `worktree reclaim` stays on: uncommitted work, live leases, open PRs, protected
+                 checkouts and processes in another pid namespace are never touched
   help           Print this message or the help of the given subcommand(s)
 
 Options:
@@ -14818,6 +14823,45 @@ Options:
       --release-unknown-owner
           Also release main-checkout leases with an unknown owner (no recorded agent process).
           Without it they are listed and kept
+
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida session hygiene
+One unattended cleanup pass: reap finished sessions (spec finished, branch merged, process exited),
+prune dead agent-registry rows, and delete worktree build caches idle for at least `--idle-hours`.
+Every safety rail of `session reap`, `agent gc` and `worktree reclaim` stays on: uncommitted work,
+live leases, open PRs, protected checkouts and processes in another pid namespace are never touched.
+
+Exits 0 unless it kept something someone must act on: salvageable work idle past the threshold, a
+reap refused because mail retention is not activated, or a step that failed. Then it exits non-zero
+and its last stderr line names each item and the act it needs, which is what the hourly
+`session-hygiene` scheduled job routes to the advisor.
+
+Usage: aida session hygiene [OPTIONS]
+
+Options:
+      --dry-run
+          Report what the pass would do without touching anything
+
+      --idle-hours <HOURS>
+          Reclaim only caches idle at least this many hours, and route salvageable work only once it
+          has been untouched this long
+          
+          [default: 24]
 
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
@@ -44854,6 +44898,42 @@ Working on aida itself
         "name": "yes",
         "takes_value": false,
         "help": "Skip the y/N confirmation and reap immediately after printing the candidate list"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "session",
+      "hygiene"
+    ],
+    "about": "One unattended cleanup pass: reap finished sessions (spec finished, branch merged, process exited), prune dead agent-registry rows, and delete worktree build caches idle for at least `--idle-hours`. Every safety rail of `session reap`, `agent gc` and `worktree reclaim` stays on: uncommitted work, live leases, open PRs, protected checkouts and processes in another pid namespace are never touched",
+    "flags": [
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "dry-run",
+        "takes_value": false,
+        "help": "Report what the pass would do without touching anything"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "idle-hours",
+        "takes_value": true,
+        "help": "Reclaim only caches idle at least this many hours, and route salvageable work only once it has been untouched this long"
       }
     ],
     "hidden": false
