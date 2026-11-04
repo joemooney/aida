@@ -11,7 +11,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-20T23:41:45.676543397Z
-modified_at: 2026-11-04T19:28:45.653023793Z
+modified_at: 2026-11-04T19:59:29.170394180Z
 req_type: Task
 tags:
 - contained
@@ -103,6 +103,13 @@ comments:
   created_at: 2026-11-04T18:58:14.978949111Z
   modified_at: 2026-11-04T18:58:14.978949111Z
   session_id: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
+- id: 01a1a825-2592-7582-976a-54eb7e77480e
+  author: joe
+  content: 'Round 4 (merge with main, head 0648fb1c): resolved conflicts with #3288 (LaunchContext/spawn_agent) and TASK-2712 (native Codex write set). Kept main''s structure; the pinned host main now rides in LaunchRequest/LaunchContext.host_main, so spawn_agent''s aida_boundary prepares the mailbox from it. contained_write_set, codex_native_* helpers, rescope_native_codex_for_seat, CodexLane and exec_codex_session take host_main; queue-work arms pass the value pinned before the chdir. ship_from_seat::post_exit_commit and the codex --bg post-exit check anchor host_recorded_clone on the recorded main. Two sites have no pinned main (codex_interactive_session_config, apply_agent_default_flags native arm) and pass None: in a seat clone the Codex write set fails closed. Gate: cargo check --tests clean except one test call site, fixed before the push; targeted cargo test (task_2032 bug_2169 bug_1982 task_2053 task_2712 story_2326) timed out at 900s on a stale overlay seed (untested=true locally); make check-ci-fast not run (over the 60s tool cap). CI on the head is the gate.'
+  created_at: 2026-11-04T19:59:29.170394180Z
+  modified_at: 2026-11-04T19:59:29.170394180Z
+  session_id: 01a1a808dc5c
+  harness_version: 2.1.318 (Claude Code)
 history:
 - id: 01a15cbb-fc05-7050-907c-e1e0d5b0996b
   author: joe
