@@ -22,13 +22,20 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-13T12:37:25.038401003Z
-modified_at: 2026-10-13T12:44:39.823940662Z
+modified_at: 2026-11-04T02:32:46.183289855Z
 req_type: Story
 tags:
 - capacity
 - from:aida-host
 - operator-held
 - shift
+comments:
+- id: 01a1a466-d967-7db3-9a9f-481fd28cd50e
+  author: joe
+  content: 'OPERATOR RULING (2026-11-03 19:30 MST, relayed by advisor): regroup ruling 4: the capacity guard folds into STORY-2326''s declared sandbox resources.'
+  created_at: 2026-11-04T02:32:46.183289855Z
+  modified_at: 2026-11-04T02:32:46.183289855Z
+  session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
 deferred: true
 deferred_at: 2026-10-13T12:44:39.823940662Z
 deferred_until: when the night shift is enabled for a clone Joe actively drains, or aida-host STORY-50 ships
