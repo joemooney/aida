@@ -101,6 +101,30 @@ Around that core sit the **launchers** and the **comms**. `aida agent new` and `
 - `aida session conversations` / `resume` — finding and re-entering a *past conversation* by its role+spec context instead of grepping Claude's auto-generated subjects. (`conversations` is the renamed `session list`; the old verb is a deprecated alias.) Each row also names the **process behind it** when one can be found — a PID and TTY column (`pts/3`) so a forgotten tab is findable — and the liveness glyph is three-state: `●` means a process was resolved and is alive (the AGE cell is then the process's elapsed time), `◐` means the transcript was written in the last five minutes but no process could be resolved, blank means neither. Resolution is best-effort and never invented: a session lease's recorded pid first, else a live claude/codex process whose cwd matches the transcript and whose start time falls inside the transcript's launch/resume window; two candidates render `?` and `--format json` lists both (`pids`), alongside `liveness` (`alive|file-touched|none`), `resolution` (`lease|proc-scan|none`) and the covering lease's `lease_role` when it differs from the transcript's hook role — the same role rule `aida ps` uses.
 - `aida session reap` — clearing up after sessions that already finished: a headless agent exits the moment its work lands, and because a session can't tear down its own worktree (it *is* the live cwd), every spec boundary otherwise needs a human to end the session, remove the worktree, and delete the branch. This pass does all three in one go for the sessions it can prove are done. It never reaps a lease held on the main checkout (or the store tree, or a protected branch such as `main`), but it can **release** one: it deletes only the lease file and never touches a file of the checkout. It does this when the agent process the lease recorded is provably gone, meaning no process has that pid or the pid now belongs to a different process (its start time differs). If the start time can't be read, the process does not count as gone. A lease that records no agent process, or only the short-lived shell that ran `aida session start`, has an **unknown owner**: it is neither live nor dead. Reap lists it and keeps it unless you pass `--release-unknown-owner`. A lease whose recorded process is still running is always kept, as is a lease taken on another host. Releasing follows the same `--dry-run` / `--yes` / confirmation rules as reaping, and the reap that runs after `aida pr ship` merges never releases a lease. `aida session leases` marks such leases "unknown owner" (`owner_unknown` in `--json`), and `aida session handoff --check` doesn't count them as a reason to compact. A lease with an unknown owner is never credited to the process that is looking at it. <!-- trace:BUG-2197 | ai:claude -->
 
+PID liveness is relative to the reader's namespace. New session leases and
+review-watch process records stamp the namespace where their PIDs were recorded.
+From a different namespace, `aida ps` shows `unknown (foreign pidns)`, retains
+the row, and prints a `liveness: partial` header with the reader namespace and
+counts by recorded namespace. JSON reports `live: null` and a
+`liveness_warning`; these sessions are neither stale-hidden nor orphaned.
+Unstamped legacy records are also unknown when the reader is in a sandbox,
+even one that reports the initial namespace. Running outside the sandbox
+resolves records stamped in the host namespace. A foreign namespace only means
+the PID can't be checked. It is not evidence that the process exited, so every
+other signal still applies:
+- A claim whose heartbeat is older than its TTL is reclaimed.
+- A session lease is stale once its worktree is gone or its heartbeat is
+  older than 24 hours,
+  so session reap, stale-lease recovery and worktree GC can then clear it.
+- A dormant lease is auto-released once its lease file is older than the
+  stale-lease threshold.
+- A review-watch process is treated as gone after a reboot, or 4 hours after
+  it was recorded.
+
+Until then those commands keep the record. Review-watch never signals a PID or
+process group recorded in another namespace. The TUI shows `?` for an unknown
+spec liveness reading. <!-- trace:BUG-2425 | ai:codex -->
+
 **Don't reach for it when** — you want the "who's working" view but typed `conversations` (that's historical conversations — use `leases`). And don't `start` a scoped worktree for trivial in-place work; the worktree-per-scope model pays off for *parallel* or *long-running* work, not a two-line fix on your current branch.
 
 **Key options (rationale only).**
@@ -550,7 +574,24 @@ A stale base with overlapping changed paths receives a local mailbox request to
 merge the change's base branch, named in the notice; a stale non-overlapping head remains reviewable. The
 recipient is the exact forge author login/username, with no inferred mapping to
 an agent seat. Read that identity's mailbox with `aida mailbox inbox <login>`.
-The watcher never updates a branch.
+
+<!-- trace:BUG-2426 | ai:claude -->
+A notified stale head is not left waiting forever. On a later pass, if no live
+session lease holds the change's branch (its author lane has exited), the
+watcher runs `gh pr update-branch` once for that head, and the merged head is
+reviewed when discovery reports it. This is the only branch write the watcher
+makes. While the author's session is live, the watcher leaves the merge to
+the author. A failure that may be transient (a timeout, or a non-conflict
+forge error) is retried once on a later pass. The watcher routes the change to
+the advisor's mailbox once, with a subject such as "PR-N behind main with
+overlap; update-branch conflicts", when the forge refuses the update
+(conflicts), the update cannot run (GitLab merge requests) or fails again on
+its retry, the forge did not report the branch so the author's liveness cannot
+be judged, or an accepted update produces no new head within 30 minutes.
+`aida awaiting` lists every change the
+watcher is parking, with its reason and since when (`review_watch_skipped` in
+`--json`). Changes that are only waiting for a reviewer slot, or that are under
+review or already reviewed, are not listed.
 
 Version-1 atomic state lives under the main worktree's `.aida/review-watch/`.
 Permanent admission and per-change lock files coordinate watcher instances.
@@ -582,7 +623,8 @@ holder's change, head and token. A missing/corrupt/unsafe state file refuses
 reinitialization; inspect the state, dispatcher logs in `review-watch/logs/`,
 and `aida session leases --all` before operator recovery. Do not delete lock
 files or clear ambiguous receipts while a reviewer may still be running.
-Changes that are skipped leave no state, and state for changes no longer open
+Changes skipped only while under review, already reviewed, or waiting for
+capacity leave no state, and state for changes no longer open
 and non-draft is pruned on each complete discovery pass unless an attempt is
 still live. Observed blocking review identities are kept per change in
 `review-watch/history/`, which pruning never removes, so a draft toggle or a

@@ -145,6 +145,8 @@ pub fn status_glyph(status: &str, mode: GlyphMode) -> &'static str {
 // trace:TASK-1252 | ai:codex
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RowLiveness {
+    // trace:BUG-2425 | ai:codex
+    Unknown,
     /// A spec-scoped session/lease is alive — work is actively backing this row.
     Live,
     /// The In-Progress flag is set but no live session backs it (a dead/dormant
@@ -162,6 +164,7 @@ pub enum RowLiveness {
 // trace:TASK-978 | ai:claude
 pub fn liveness_glyph(state: RowLiveness, mode: GlyphMode) -> &'static str {
     match (state, mode) {
+        (RowLiveness::Unknown, _) => "?",
         (RowLiveness::Live, GlyphMode::Unicode) => "●",
         (RowLiveness::Live, GlyphMode::Ascii) => "*",
         (RowLiveness::Stale, GlyphMode::Unicode) => "⚠",
@@ -179,6 +182,7 @@ pub fn liveness_glyph(state: RowLiveness, mode: GlyphMode) -> &'static str {
 pub fn liveness_style(state: RowLiveness, theme: &Theme) -> Style {
     match state {
         // Live → green, matching the CLI's `.green()` "live" label.
+        RowLiveness::Unknown => Style::default().fg(theme.dim),
         RowLiveness::Live => Style::default().fg(Color::Green),
         // Stale → the theme's warn role (yellow), matching the CLI's `.yellow()`.
         RowLiveness::Stale => Style::default().fg(theme.warn),

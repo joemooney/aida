@@ -722,6 +722,10 @@ def own_health_job(args, project, remove=False, check_only=False):
             temporary = ".health-" + str(uuid.uuid4())
             fd = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, mode, dir_fd=anchor)
             try:
+                # os.open's mode is masked by the umask; set the preserved
+                # mode exactly so a 0077 umask cannot narrow config.toml.
+                # trace:BUG-2432 | ai:claude
+                os.fchmod(fd, mode)
                 with os.fdopen(fd, "w", closefd=False) as out:
                     out.write(data)
                     out.flush()

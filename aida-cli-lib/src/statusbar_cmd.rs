@@ -454,6 +454,7 @@ mod tests {
     fn you_channels_flattens_every_populated_channel_with_counts() {
         let report = AwaitingReport {
             idle_eligible: Vec::new(),
+            review_watch_skipped: Vec::new(),
             mergeable_prs: vec![MergeablePrItem {
                 number: 7,
                 title: "t".into(),

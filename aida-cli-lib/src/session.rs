@@ -6881,6 +6881,12 @@ pub(crate) fn stamp_lease_active_pid_at(
             .parse::<DocumentMut>()
             .with_context(|| format!("parsing lease {}", path.display()))?;
         doc["active_pid"] = value(i64::from(pid));
+        // trace:BUG-2425 | ai:codex
+        if let Some(ns) = crate::agent_registry::current_pid_namespace() {
+            doc["pid_namespace"] = value(ns as i64);
+        } else {
+            doc.remove("pid_namespace");
+        }
         if let Some(start_time) = &start_time {
             doc["active_pid_start_time"] = value(start_time.clone());
         }
@@ -6968,6 +6974,15 @@ pub(crate) fn stamp_lease_detached_worker_at(
         }
         doc["active_pid"] = value(i64::from(pid));
         doc["active_pid_start_time"] = value(start);
+        // BUG-2419: the pid was read in this process's pid namespace; without
+        // it `lease_tokens` drops the worker's proc token.
+        // trace:TASK-2799 | ai:claude
+        match crate::gate::review_authority::origin_pid_ns() {
+            Some(ns) => doc["active_pid_ns"] = value(ns),
+            None => {
+                doc.remove("active_pid_ns");
+            }
+        }
         aida_core::write_atomic(&path, doc.to_string())
             .with_context(|| format!("writing lease {}", path.display()))?;
         let back: toml::Table = std::fs::read_to_string(&path)
