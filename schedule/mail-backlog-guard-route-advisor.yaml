@@ -5,4 +5,10 @@ last_by:
   session: f5eddefe-032d-4760-94ba-3a318cf3d1d1
   vendor: claude
 result: done
-note: 'Stale: the PR-3274 approval it names merged long ago; the backlog is October relay mail, already superseded.'
+note: 'advisor: unread [request] from review-watch, 3h55m old: PR-3288 behind `main` with overlap; update-branch conflicts'
+due_since: 2026-11-04T05:14:44.203881337Z
+due_reason: on CronJobFired:mail-backlog-guard-route-advisor
+due_failure:
+  trip_id: mail-backlog-guard-route-advisor@2026-11-04T05:14:44Z
+  job: mail-backlog
+  error: 'advisor: unread [request] from review-watch, 3h55m old: PR-3288 behind `main` with overlap; update-branch conflicts'
