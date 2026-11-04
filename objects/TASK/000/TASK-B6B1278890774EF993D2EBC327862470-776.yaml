@@ -14,7 +14,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-04T09:16:30.996316298Z
-modified_at: 2026-11-04T11:04:51.059746535Z
+modified_at: 2026-11-04T11:04:58.645003090Z
 req_type: Task
 tags:
 - carried-from:BUG-2435
@@ -30,6 +30,13 @@ relationships:
   target_id: 01a1a5d8-8dcf-7e62-afd0-7013743e7037
   created_at: 2026-11-04T11:04:51.059740604Z
   created_by: joe
+comments:
+- id: 01a1a63b-ca15-7fa1-8558-758e94634e98
+  author: joe
+  content: 'ADVISOR RULING (2026-11-04 03:56 MST, rule non-blocking findings once): APPROVED; also covers TASK-2825 and TASK-2830. (1) seat_target_overlay::probe must exercise the nested bwrap --unshare-user --uid/--gid that overlay jobs use, not only unshare -Urm. (2) Rename or select the live probes from TASK-2033 (bug_2169 lines 686 and 815) so CI''s forced-live gate (AIDA_REQUIRE_BWRAP_LIVE) runs them. (3) Add a forced-live test that remount,rw of a ro bind fails inside an overlay job (--cap-drop ALL). Gate LIGHT.'
+  created_at: 2026-11-04T11:04:58.645003090Z
+  modified_at: 2026-11-04T11:04:58.645003090Z
+  session_id: da1c0d85-1d45-4ce4-a292-5358644f65b9
 history:
 - id: 01a1a60b-2440-7a91-9cbd-c8d018b1e3af
   author: joe
