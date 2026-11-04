@@ -1,0 +1,29 @@
+id: 01a1a473-2c55-7160-9769-a7ab46b93853
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-760
+title: 'Non-blocking (cosmetic): scripts/test-time-budget.toml story_2331 entry (90s) i…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on STORY-2331, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  Non-blocking (cosmetic): scripts/test-time-budget.toml story_2331 entry (90s) is labelled an estimate, not a measurement; replace it with a measured value from the test-timings-cli-1 artifact of run 41757527185 per the file's header rule.
+
+  PR: #3308
+  Reviewed sha: 6d6a8fcdd0b39da133eb8896fcf276f5d759fd66
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-04T02:46:13.845914003Z
+modified_at: 2026-11-04T02:46:13.845914003Z
+req_type: Task
+tags:
+- carried-from:STORY-2331
+- finding-hash:dbc03d07
+- from-review:PR-3308
+- kind:carried-forward
+filed_at:
+  code_sha: 4671a4e53dcf6ac0f7f8fe8018f030ccd8a6723f
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 0754a362d79
+  vendor: claude
