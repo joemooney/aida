@@ -24,7 +24,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T02:34:05.889367844Z
-modified_at: 2026-11-04T03:41:14.935143234Z
+modified_at: 2026-11-04T04:59:06.552738508Z
 req_type: Story
 comments:
 - id: 01a1a468-8b42-7db0-844b-20336f857370
@@ -94,6 +94,12 @@ comments:
   created_at: 2026-11-04T03:41:14.935143234Z
   modified_at: 2026-11-04T03:41:14.935143234Z
   session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
+- id: 01a1a4ec-d3b8-7943-bb11-79fa136688e4
+  author: joe
+  content: 'ADVISOR SIGNOFF (2026-11-03 22:02 MST): sketch APPROVED as four PRs (slices 2-5). Rulings: (1) Decision-making sites migrate in this story: train, idle_eligible, phase_driver/phase_gates, dispatch_flow, reconcile_evidence, pr_lookup and the review-watch head fetch. Display-only sites (status_prs, TUI, history_timeline) are frozen under the slice-2 ratchet with no follow-up TASKs. Reason: a display read cannot make a destructive transition, and follow-up tasks would grow the open list. (2) ''Spec-state flips'' means every site that changes a spec or story status from a forge read: phase_driver''s publication close, the ''PR merged before review finished'' review-story auto-complete, and queue rework/review flows that read PR state. Enumerate them with rg in slice 3 and route each through confirmed_negative. (3) Option (a): refuse only when the digest differs. No re-trigger mutation, and no follow-up. (4) Yes: Unconfirmed suspends and never ejects or closes. In the same slice, apply this to review watch: a transient fetch failure retries with backoff and never records a terminal attempt (the 20:41 evidence comment). (5) Start slice 2 now. It is independent of #3324. Slices 3 and 4 start only after #3324 (BUG-2433) merges. DISPATCH: slice 2 (PR A: Observed<T>, observe_* reads, mergeable Observed with the TASK-2794 fix, train/idle_eligible spawns behind forge, gh-read ratchet). Gate LIGHT: one targeted cargo test filter on the new ratchet and forge_observed tests, plus make check-ci-fast. Then push and open the PR.'
+  created_at: 2026-11-04T04:59:06.552738508Z
+  modified_at: 2026-11-04T04:59:06.552738508Z
+  session_id: da1c0d85-1d45-4ce4-a292-5358644f65b9
 history:
 - id: 01a1a468-8096-78c1-952c-5aad63c7704e
   author: joe
