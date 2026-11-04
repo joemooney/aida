@@ -20,7 +20,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T07:26:01.071265913Z
-modified_at: 2026-11-04T07:51:11.433671687Z
+modified_at: 2026-11-04T08:01:27.627005828Z
 req_type: Task
 tags:
 - architecture
@@ -759,6 +759,12 @@ comments:
   modified_at: 2026-11-04T07:48:01.866991225Z
   session_id: 01a1a569ce34
   harness_version: 2.1.318 (Claude Code)
+- id: 01a1a593-c64b-71d2-ae3f-119949ddf36d
+  author: joe
+  content: 'ADVISOR REWORK BRIEF (2026-11-04 01:05 MST, PR #3351 head 58127530). Address ALL eight findings in the latest .aida/gate-ledger/PR-3351.jsonl verdict, in this one push. Rulings: F1: after the native Codex child exits, the lane''s own post-exit step on the host (standalone launcher / lane job, not the operator) runs commit_pending for the seat clone. Wire it there, with a test that a lane whose child left pending work ends with a host commit. F2: give the gate-ledger --add-dir to every reviewer Codex path: headless, exec_codex_session, interactive and resume. Route all of them through one role-aware helper. F3: validate the trailer and explicit spec BEFORE creating the commit; a refusal must leave nothing committed. Add a test. F4: host evidence is the advisor''s job after CI is green. Do not fake it. F5: drive the live probe through the production --add-dir argv and also assert a .aida-store write and an own-scope aida claim. F6: add the listed refusal tests (foreign or non-host-recorded clone, ended or foreign-owned lease, symlinked or replaced path, a bind miss that must fail loudly, not silently stay read-only). F7: refuse a foreign --add-dir in refuse_posture_overrides and the agents.toml passthrough, and make rescope strip every user --add-dir. F8: resolve the resume write set from the resumed lane''s tree, not the process cwd. Mark each finding fixed in your PR comment. Gate (LIGHT): one targeted cargo test filter plus make check-ci-fast, then push to the same PR branch. The advisor re-reviews only the delta.'
+  created_at: 2026-11-04T08:01:27.627005828Z
+  modified_at: 2026-11-04T08:01:27.627005828Z
+  session_id: da1c0d85-1d45-4ce4-a292-5358644f65b9
 history:
 - id: 01a1960f-6ca8-7313-8a94-63b0b98a4e44
   author: joe
