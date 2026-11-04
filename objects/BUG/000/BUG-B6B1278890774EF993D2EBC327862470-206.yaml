@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-206
 agreed_id: BUG-2437
 title: 'Every dev promote deactivates mail retention for hours: writers running a replaced binary count as ''not known to take a write permit'' even when that build already took permits'
 description: 'Observed 2026-11-03 21:40 MST. After promoting b5577764ec0, ''aida mailbox retention activate'' refused: ''not every mail writer is known to take a write permit''. The listed writers were running lanes, a reviewer, a lane job and the operator''s command deputy, all running 0f1624a8b38. That build had itself recorded the previous activation, so it does take permits. Their /proc exe reads ''(deleted)'', so the check cannot identify their build and treats them as unknown. Until every lane turns over and the operator restarts the deputy, retention stays off and ''session end'' refuses for any session whose mailbox holds mail. That breaks lease cleanup between promotes. Fix: each writer records its build id at startup (for example in a pid-keyed runtime file, or the lease), and activation accepts any writer whose recorded build is at or after the permit-capable build. Alternatively, promote keeps the activation when the new build''s permit protocol is unchanged.'
-status: Approved
+status: InProgress
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T04:41:19.994753856Z
-modified_at: 2026-11-04T08:36:21.398472836Z
+modified_at: 2026-11-04T09:27:50.539405406Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -153,6 +153,13 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
+- id: 01a1a5e2-dc0b-7c31-bfc4-1ba21452835d
+  author: aida-session-start
+  timestamp: 2026-11-04T09:27:50.539401751Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: b5577764ec0466133c191b7e51d62c40ea3a2c83
   branch: main
