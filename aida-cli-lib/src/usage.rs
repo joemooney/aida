@@ -686,6 +686,8 @@ enabled = true
 
     // BUG-2129: a root-level flag before the subcommand must not hide the
     // call as `<root>`. trace:TASK-1954 | ai:claude  trace:BUG-2129 | ai:claude
+    // trace:BUG-2129.acbd0e82 | ai:codex
+    // trace:BUG-2129.ac086007 | ai:codex
     #[test]
     fn derive_cmd_shape_skips_leading_global_flags() {
         let shape = |args: &[&str]| {

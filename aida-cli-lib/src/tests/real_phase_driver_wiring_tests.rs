@@ -3283,3 +3283,75 @@ fn bug_2185_phase_driver_implementer_commits_child_store_writes() {
     assert_eq!(failure.kind, FailureKind::LaunchRefused, "{failure:?}");
     bug_2185_assert_store_committed_by(&store_root, "implementer");
 }
+
+/// A refused best-effort store commit must preserve the implementer watchdog
+/// classification so the orchestrator can shelve the stopped phase.
+// trace:TASK-1954 trace:TASK-1625 | ai:codex
+#[cfg(unix)]
+#[test]
+fn task_1625_implementer_watchdog_survives_store_commit_refusal() {
+    let tmp = tempfile::tempdir().unwrap();
+    let (work, store_root) = bug_2185_project_with_store(tmp.path(), "");
+    git(&work, &["checkout", "-q", "-b", "task-1625"]);
+    // The hardened host commit refuses an embedded repository, even if the
+    // store otherwise has nothing pending. Prove the refusal below first.
+    let plant = store_root.join("objects/evil/.git");
+    std::fs::create_dir_all(&plant).unwrap();
+    std::fs::write(plant.join("HEAD"), "ref: refs/heads/main\n").unwrap();
+    let fake_aida = tmp.path().join("aida");
+    crate::test_exec::write_executable(
+        &fake_aida,
+        r#"#!/usr/bin/env bash
+set -eu
+sid=""; prev=""
+for arg in "$@"; do
+  if [ "$prev" = "--session-id" ]; then sid="$arg"; fi
+  prev="$arg"
+done
+mkdir -p .aida/sessions
+cat > ".aida/sessions/${sid}.toml" <<EOF
+id = "$sid"
+scope = "TASK-1625"
+slug = "task-1625"
+owner = "test"
+worktree_path = "$PWD"
+branch = "task-1625"
+started_at = "2026-09-03T00:00:00Z"
+hostname = "test"
+EOF
+cat > ".aida/sessions/${sid}.manifest.toml" <<EOF
+session_id = "$sid"
+planned_at = "2026-09-03T00:00:00Z"
+plan_source = "queue work"
+claude_session_id = "$sid"
+items = []
+EOF
+exec sleep 120
+"#,
+    );
+    let gh = fake_gh(tmp.path(), "#!/bin/sh\nprintf '[]\\n'\n");
+    let _env = crate::test_env::EnvVarsGuard::set(&[("AIDA_TEST_GH_BINARY", gh.to_str().unwrap())]);
+    let mut d = driver(&work, "TASK-1625");
+    d.aida_exe = fake_aida;
+    d.contained = true;
+    d.no_human = Some(crate::auto_complete::NoHumanMode::Both);
+    d.drain_tuning.no_progress = std::time::Duration::ZERO;
+    d.drain_tuning.ceiling = std::time::Duration::from_secs(1);
+    d.exit_cfg.poll = std::time::Duration::from_millis(10);
+    d.exit_cfg.grace = std::time::Duration::from_millis(10);
+
+    let refused = d
+        .commit_contained_child_store_changes("implementer phase")
+        .unwrap_err();
+    assert_eq!(refused.kind, FailureKind::Internal);
+    assert!(
+        refused.reason.contains("embedded git repository"),
+        "{refused:?}"
+    );
+    let failure = d.run_implementer().unwrap_err();
+    assert_eq!(failure.kind, FailureKind::Watchdog, "{failure:?}");
+    assert!(
+        failure.reason.contains("implementer phase watchdog"),
+        "{failure:?}"
+    );
+}

@@ -976,6 +976,40 @@ fn match_arm_patterns_reads_patterns_not_bodies_or_guards() {
     assert_eq!(patterns, ["X::A", "_ if late", "other"]);
 }
 
+/// Command enums whose variants a use item imports, regardless of path prefix.
+// trace:TASK-1954 trace:TASK-1983 | ai:codex
+fn imported_command_verbs(item: &str, enums: &[String]) -> Vec<String> {
+    // Consume only each path segment and its separator. Consuming the next
+    // segment too would hide the enum behind a crate/module prefix.
+    let segment = regex::Regex::new(r"\b(\w+)\s*::\s*").unwrap();
+    let verbs = regex::Regex::new(r"^(\*|\{[^}]*\}|[A-Z]\w*)").unwrap();
+    segment
+        .captures_iter(item)
+        .filter(|caps| enums.iter().any(|name| name == &caps[1]))
+        .filter_map(|caps| {
+            let tail = &item[caps.get(0).unwrap().end()..];
+            let imported = verbs.find(tail)?.as_str();
+            (imported.trim_matches(['{', '}']).trim() != "self").then(|| caps[1].to_string())
+        })
+        .collect()
+}
+
+// trace:TASK-1954 trace:TASK-1983 | ai:codex
+#[test]
+fn imported_command_verbs_checks_each_qualified_enum_segment() {
+    let enums = vec!["FooCommand".to_string()];
+    for prefix in ["", "crate::", "crate::cli::", "super::", "super::cli::"] {
+        for shape in ["*", "{A, B}", "{self, *}", "A as X"] {
+            let item = format!("use {prefix}FooCommand::{shape};");
+            assert_eq!(imported_command_verbs(&item, &enums), enums, "{item}");
+        }
+        let item = format!("use {prefix}FooCommand::{{self}};");
+        assert!(imported_command_verbs(&item, &enums).is_empty(), "{item}");
+    }
+    assert!(imported_command_verbs("use OtherCommand::*;", &enums).is_empty());
+    assert!(imported_command_verbs("use crate::FooCommand;", &enums).is_empty());
+}
+
 // Criterion 4, enforced: no hot file holds a per-verb dispatcher for a
 // command's subcommand enum (a fn taking one, or a match over its variants
 // with no catch-all arm), or a `{ … }` or tuple pattern over a command's clap
@@ -1005,10 +1039,6 @@ fn adding_a_flag_to_a_command_cannot_require_a_hot_file_edit() {
         r"(?s)^\s*\|?\s*(?:ref\s+)?(?:mut\s+)?(_|[a-z_]\w*)\s*(?:@\s*_\s*)?(?:if\b.*)?$",
     )
     .unwrap();
-    // Any import that names a command enum's variants: a glob, a `{…}`
-    // group (other than `{self}`), or a single variant. trace:TASK-1954
-    // trace:TASK-1983 | ai:claude
-    let verb_import = regex::Regex::new(r"\b(\w+)::(\*|\{[^}]*\}|[A-Z]\w*)").unwrap();
     let arm_follow = regex::Regex::new(r"^\s*(=>|\||if\s)").unwrap();
     let match_kw = regex::Regex::new(r"\bmatch\b").unwrap();
     let mut violations = Vec::new();
@@ -1048,15 +1078,11 @@ fn adding_a_flag_to_a_command_cannot_require_a_hot_file_edit() {
         }
         // After every rename is known, so `use X as Y; use Y::A;` is caught.
         for item in use_item.find_iter(&text) {
-            for caps in verb_import.captures_iter(item.as_str()) {
-                let group = caps[2].trim_matches(['{', '}']).trim();
-                if enums.contains(&caps[1].to_string()) && group != "self" {
-                    violations.push(format!(
-                        "{name}:{} imports `{}` verbs; name them through the enum",
-                        line_of(item.start()),
-                        &caps[1]
-                    ));
-                }
+            for enum_name in imported_command_verbs(item.as_str(), &enums) {
+                violations.push(format!(
+                    "{name}:{} imports `{enum_name}` verbs; name them through the enum",
+                    line_of(item.start()),
+                ));
             }
         }
         // A variant segment is capitalised; `Type::method(…)` is a call.

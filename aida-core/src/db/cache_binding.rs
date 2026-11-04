@@ -401,12 +401,6 @@ mod tests {
         assert!(binding.due(Instant::now()));
     }
 
-    /// A1 (TASK-1739): if a host replacement happens inside the open bind
-    /// window (after SQLite opens its fds, before `CacheBinding::capture`
-    /// records `stat(path)`), or before a sidecar is first adopted at a later
-    /// check, `/proc/self/fd` still carries SQLite's open inode and detects
-    /// the split.
-    // trace:TASK-1739 | ai:antigravity
     /// An excluded descriptor number reused for a different file (this
     /// handle's lazily opened sidecar) is inspected again; one still naming
     /// the file it named when excluded stays skipped.
@@ -440,6 +434,12 @@ mod tests {
         );
     }
 
+    /// A1 (TASK-1739): if a host replacement happens inside the open bind
+    /// window (after SQLite opens its fds, before `CacheBinding::capture`
+    /// records `stat(path)`), or before a sidecar is first adopted at a later
+    /// check, `/proc/self/fd` still carries SQLite's open inode and detects
+    /// the split.
+    // trace:TASK-1739 | ai:antigravity
     #[cfg(target_os = "linux")]
     #[test]
     fn holder_rebinds_when_replaced_inside_bind_window_or_before_sidecar_adoption() {
