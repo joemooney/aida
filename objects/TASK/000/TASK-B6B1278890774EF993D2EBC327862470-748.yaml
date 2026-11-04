@@ -12,7 +12,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-03T18:44:43.902352640Z
-modified_at: 2026-11-04T03:31:59.599282417Z
+modified_at: 2026-11-04T05:35:24.711592229Z
 req_type: Task
 tags:
 - carried-from:TASK-2790
@@ -40,6 +40,12 @@ comments:
   created_at: 2026-11-04T01:15:51.656024088Z
   modified_at: 2026-11-04T01:15:51.656024088Z
   session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
+- id: 01a1a50e-1027-7ed1-a1af-678130b0d571
+  author: joe
+  content: 'ADVISOR REWORK BRIEF (2026-11-03 23:12 MST, PR #3326 head 33321634). The review could not record its verdict because the reviewer''s grant expired, but its findings stand. The CI gates job fails on the non-portable-test ratchet. Fix: put failing_run and the two run_checked_fetch_error_* tests (dev_build_tests.rs:2139 and :2166) behind #[cfg(unix)], following story_1688_lane_liveness_tests.rs:257. Guard the read-only test''s PermissionsExt and libc::geteuid uses the same way. The rest of TASK-2802, TASK-2803 and TASK-2804 was verified as met. Gate (LIGHT): cargo test -p aida-cli-lib --lib dev_build_tests plus make check-ci-fast, then push to the PR branch. The advisor re-reviews only the delta.'
+  created_at: 2026-11-04T05:35:24.711592229Z
+  modified_at: 2026-11-04T05:35:24.711592229Z
+  session_id: da1c0d85-1d45-4ce4-a292-5358644f65b9
 history:
 - id: 01a1a2c0-afc1-7270-9cfc-ad60e57cfdba
   author: joe
