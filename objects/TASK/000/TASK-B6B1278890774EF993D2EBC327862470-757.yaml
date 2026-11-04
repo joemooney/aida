@@ -14,7 +14,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T01:17:09.371397785Z
-modified_at: 2026-11-04T09:45:08.679443323Z
+modified_at: 2026-11-04T10:14:07.612879453Z
 req_type: Task
 tags:
 - carried-from:BUG-2428
@@ -89,6 +89,12 @@ comments:
   modified_at: 2026-11-04T09:25:06.183379594Z
   session_id: 01a1a5b9285d
   harness_version: 2.1.318 (Claude Code)
+- id: 01a1a60d-3bfc-7dd2-9dda-1ad098c43d34
+  author: joe
+  content: 'ADVISOR REWORK BRIEF (2026-11-04 03:17 MST, PR #3343 head 5ac08e2c). The rollback kernel and spawn counting are approved, and lib-0, lib-1 and gates are green. BLOCKING: CI cli-0 fails aida-cli/tests/queue_work_dry_run.rs:1548 task_1337_post_setup_launch_error_rolls_back_the_owned_setup with ''the worktree is removed''. After the launch error, git worktree list still shows a pooled worktree aida-pool-repo-0. Either the rollback must also release or remove a worktree taken from the pool (return it to the pool if the pool owns it, or remove it if this setup created it), or, if pool reuse is intended to keep it, the assertion must accept a pooled worktree that is returned to the pool. Decide from the pool''s ownership contract and state which in one line. Gate: cargo test -p aida-cli --test queue_work_dry_run task_1337 plus make check-ci-fast, then push.'
+  created_at: 2026-11-04T10:14:07.612879453Z
+  modified_at: 2026-11-04T10:14:07.612879453Z
+  session_id: da1c0d85-1d45-4ce4-a292-5358644f65b9
 history:
 - id: 01a1a443-3d11-7700-8298-3f5783f310c6
   author: joe
