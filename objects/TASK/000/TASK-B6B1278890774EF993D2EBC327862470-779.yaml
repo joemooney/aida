@@ -1,0 +1,29 @@
+id: 01a1a66b-94c4-7ba3-a261-04362aaab859
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-779
+title: 'non-blocking: deputy_shell_cmd.rs wait() gains a 10s CLAIM_GRACE poll (trace ST…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on BUG-2438, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  non-blocking: deputy_shell_cmd.rs wait() gains a 10s CLAIM_GRACE poll (trace STORY-...-334) inside a BUG-2438 commit. It is an unrelated logic change, a fix for the submit_wait_and_wait_return_the_jobs_exit_code flake, with no dedicated test for the claim-window path. It looks correct (bounded, errors once the grace expires), but it should have its own trailer/spec.
+
+  PR: #3353
+  Reviewed sha: ab7108bd9065ff87111108a22469177ef5387a22
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-04T11:57:10.724108127Z
+modified_at: 2026-11-04T11:57:10.724108127Z
+req_type: Task
+tags:
+- carried-from:BUG-2438
+- finding-hash:aa5cc8dd
+- from-review:PR-3353
+- kind:carried-forward
+filed_at:
+  code_sha: 238a7ecc3eaf8123b58a85fffe626be170d139a1
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: c514dc9e625
+  vendor: claude
