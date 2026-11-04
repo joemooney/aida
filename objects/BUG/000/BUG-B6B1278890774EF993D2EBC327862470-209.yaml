@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-209
 agreed_id: BUG-2440
 title: 'Codex implementer lanes under AIDA_OS_WRAP fail at launch: the OS wrapper emits no ''--'' before the program, but codex_tool_env requires one'
 description: 'Observed 2026-11-04 05:51-06:00 MST on live be275c31: every ''aida queue work SPEC --role implementer --no-human --vendor codex'' lane with AIDA_OS_WRAP=1 (BUG-2434 also defaults the wrapper ON for headless implementer lanes) exited at once with: Codex bwrap launch has no command separator. The lanes were BUG-2439, SPEC-447, STORY-2343 and TASK-2032. Cause: session.rs os_wrapped_program_and_args pushes program then args with no ''--'' (around line 5559), while codex_tool_env.rs codex_argv_start requires ''--'' after bwrap (line 155). Acceptance: (1) a wrapped Codex launch succeeds: either the wrapper emits ''--'' before the program for every vendor (bwrap accepts it), or the Codex native posture skips the AIDA outer wrapper by design; the sketch must say which, consistent with the STORY-2460 ruling. (2) A regression test builds the wrapped Codex argv and runs codex_tool_env::prepare_launch over it. (3) The default-on lane wrapper (BUG-2434) does not break Codex. Interim workaround in use: AIDA_OS_WRAP=0 for Codex lanes (posture native = Codex''s own sandbox, per .aida/config.toml [contained.vendors]).'
-status: InProgress
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T15:44:00.054377754Z
-modified_at: 2026-11-04T16:18:37.342818963Z
+modified_at: 2026-11-04T17:48:23.939475765Z
 req_type: Bug
 tags:
 - area:containment
@@ -50,6 +50,20 @@ history:
   author: joe
   timestamp: 2026-11-04T16:18:38.388449995Z
   changes: []
+- id: 01a1a7ad-21fe-7091-891a-2307a9903282
+  author: aida-auto-bump
+  timestamp: 2026-11-04T17:48:23.934722Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1a7ad-2203-7fa0-ae01-786a5a82f3a6
+  timestamp: 2026-11-04T17:48:23.939473897Z
+  agent: aida
+  commit_sha: 6a331a8a5c91ca7485b695a076af44bdf9be3894
+  summary: 'os_wrapped_program_and_args now emits bwrap''s ''--'' before the executable for every vendor (session.rs:5563), satisfying codex_argv_start (codex_tool_env.rs:154-162); regression bug_2440_wrapped_codex_prepares_with_explicit_command_separator builds the production wrapped argv (env AIDA_OS_WRAP=1 and config os_wrap=true) and runs prepare_launch over it. AC1/AC2/AC3 met by source; no existing consumer breaks (bug_2169 pops trailing program then re-appends a command after ''--''; position-based asserts still hold). Bug protocol: touches test file - met. CI at head was still QUEUED at review time (run 41865525357) - ship must still gate on green CI.'
+  review_verdict: approved
 filed_at:
   code_sha: c19294416a9bc68dab12b910c0566ad80a7cc995
   branch: main
@@ -58,3 +72,7 @@ filed_at:
   aida_build_sha: c19294416a9
   vendor: claude
   session: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-04T17:48:23.934716680Z
+  completion_sha: 6a331a8a5c91ca7485b695a076af44bdf9be3894
