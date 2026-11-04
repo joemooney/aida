@@ -2957,6 +2957,12 @@ mod s4b_seat_trees_tests;
 #[path = "tests/bug_2223_orphan_seat_reentry_tests.rs"]
 mod orphan_reentry_tests;
 
+// The queue-work launch rollback against a real setup; mounted here for the
+// git fixture. trace:TASK-2807 | ai:claude
+#[cfg(test)]
+#[path = "tests/task_2807_pickup_launch_rollback_tests.rs"]
+mod pickup_launch_rollback_tests;
+
 #[cfg(test)]
 #[path = "tests/story_1843_c2_seat_clone_retention_tests.rs"]
 mod retention_tests;
