@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-04T04:51:58.350086137Z
-modified_at: 2026-11-04T05:58:43.867074870Z
+modified_at: 2026-11-04T15:59:23.825379801Z
 req_type: Task
 tags:
 - docs
@@ -20,6 +20,12 @@ comments:
   created_at: 2026-11-04T05:58:43.867074870Z
   modified_at: 2026-11-04T05:58:43.867074870Z
   session_id: da1c0d85-1d45-4ce4-a292-5358644f65b9
+- id: 01a1a749-56b1-7310-9732-16948d64926f
+  author: joe
+  content: 'ADVISOR NOTE for the round-2 reviewer (2026-11-04 09:00 MST), PR #3339 head 4e1a6879: round-1 finding 1 was fixed by raising the BUG-/FIX SHARE green threshold to projBug < 16.0, so that the target scenario''s 15.45% shows green. Verify that the card''s visible label and band text match the new threshold. If the label still says <= 15%, the threshold was moved to fit the demo; the fix must make label and threshold agree, or change the scenario rather than the bar. Check the churn card''s 10.5/15.0 thresholds against its ''<15%'' sub-label the same way.'
+  created_at: 2026-11-04T15:59:23.825379801Z
+  modified_at: 2026-11-04T15:59:23.825379801Z
+  session_id: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
 history:
 - id: 01a1a4ee-6b2f-76f3-ab0a-825f63cdb4b9
   author: joe
