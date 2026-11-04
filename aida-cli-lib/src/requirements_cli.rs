@@ -7429,6 +7429,38 @@ fn run_show(
                                     degrees.heft
                                 );
                             }
+                            // TASK-1471: linked narrative Docs, both directions. The
+                            // reverse (`aida doc add --about`) edge lives on the Doc,
+                            // so scan live Docs only when something points in here.
+                            // Human view only — TOON/JSON returned above.
+                            // trace:TASK-1471 | ai:claude
+                            {
+                                let mut candidates: Vec<aida_core::models::Requirement> =
+                                    Vec::new();
+                                for rel in &req.relationships {
+                                    if rel.rel_type == RelationshipType::References {
+                                        if let Ok(Some(t)) = read_target(&rel.target_id) {
+                                            candidates.push(t);
+                                        }
+                                    }
+                                }
+                                if degrees.in_degree > 0 {
+                                    let filter = aida_core::db::ListFilter {
+                                        req_type: Some("Doc".to_string()),
+                                        defer: aida_core::db::DeferFilter::Both,
+                                        ..Default::default()
+                                    };
+                                    for s in backend.list_summaries(&filter).unwrap_or_default() {
+                                        if let Ok(Some(d)) = read_target(&s.id) {
+                                            candidates.push(d);
+                                        }
+                                    }
+                                }
+                                let docs = crate::show_docs::collect_linked_docs(&req, candidates);
+                                for line in crate::show_docs::render_linked_docs(&docs) {
+                                    println!("{line}");
+                                }
+                            }
                             // STORY-446: Blockers section — one line per BlockedBy edge
                             // with the blocker's status + a pickability glyph (check when
                             // Completed/satisfied, in-flight when it still blocks pickup), so the
