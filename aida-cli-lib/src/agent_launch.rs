@@ -6530,8 +6530,6 @@ pub(crate) fn refuse_bg_under_os_wrap(
     Ok(())
 }
 
-// trace:BUG-2006 | ai:antigravity
-// trace:BUG-2124 | ai:antigravity
 /// TASK-2712: whether this launch's lane is a private seat clone: a contained
 /// launch (BUG-2169), or a native Codex launch, which can commit only in a
 /// clone the host recorded (Codex keeps every other `.git` read-only).
@@ -6542,6 +6540,8 @@ pub(crate) fn launch_wants_seat_clone(config: &AgentLaunchConfig) -> bool {
             && crate::codex_native_sandbox::carries_native_posture(&config.default_args))
 }
 
+// trace:BUG-2006 | ai:antigravity
+// trace:BUG-2124 | ai:antigravity
 pub(crate) fn is_contained_launch(config: &AgentLaunchConfig) -> bool {
     let vendor = match session::HeadlessVendor::parse(config.agent_type) {
         Some(v) => v,
