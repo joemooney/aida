@@ -120,6 +120,10 @@ impl Fixture {
         self._env = Some(guard);
     }
     fn new(bound: bool) -> Self {
+        Self::with_member_metadata(bound, None, None)
+    }
+    // trace:BUG-2441 | ai:codex
+    fn with_member_metadata(bound: bool, branch: Option<&str>, title: Option<&str>) -> Self {
         let dir = tempfile::tempdir().unwrap();
         let origin = tempfile::tempdir().unwrap();
         let root = dir.path();
@@ -165,8 +169,14 @@ impl Fixture {
                 "STORY-b6b1278890774ef993d2ebc327862470-123",
             ),
         ] {
-            let title = format!("[AI:codex] fix: fixture {n} ({alias})");
-            let branch = format!("source/{alias}");
+            let title = title
+                .filter(|_| n == 11)
+                .map(str::to_owned)
+                .unwrap_or_else(|| format!("[AI:codex] fix: fixture {n} ({alias})"));
+            let branch = branch
+                .filter(|_| n == 11)
+                .map(str::to_owned)
+                .unwrap_or_else(|| format!("source/{alias}"));
             g(root, &["checkout", "-qb", &branch, "main"]);
             fs::write(root.join(format!("car{n}")), format!("reviewed {n}\n")).unwrap();
             let sha = commit(root, &title);
@@ -278,6 +288,78 @@ impl Fixture {
         assert_eq!(live.wait_ci(&change, &train).unwrap(), CiVerdict::Green);
         (train, change)
     }
+}
+
+// Exercise the real builder and final gate with queue-work's suffixed branches.
+// trace:BUG-2441 | ai:codex
+fixture_case!(
+    bug2441_rework_branch_with_resolved_title_trains,
+    bug2441_rework_branch_trains,
+    false
+);
+fixture_case!(
+    bug2441_rework_branch_with_resolved_commit_trailer_trains,
+    bug2441_rework_branch_trains,
+    true
+);
+fn bug2441_rework_branch_trains(trailer_only: bool) {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let f = Fixture::with_member_metadata(
+        true,
+        Some("bug-b6b1278890774ef993d2ebc327862470-173-2"),
+        Some(if trailer_only {
+            "fix: rework (BUG-2400)"
+        } else {
+            "fix: rework (Refs BUG-2400)"
+        }),
+    );
+    if trailer_only {
+        // Keep the committed subject's spec while removing the PR-title hint.
+        let mut state: Value =
+            serde_json::from_slice(&fs::read(f.root().join("transport.json")).unwrap()).unwrap();
+        state["prs"]["11"]["title"] = json!("fix: rework");
+        save(f.root(), &state);
+    }
+    let forge = GitHubForge::new(f.root());
+    let mut live = f.live(&forge);
+    let (train, change) = f.opened(&mut live);
+    let lease = live.lease(change.id).unwrap();
+    live.merge_verified(&change, &train, lease.as_ref())
+        .unwrap_or_else(|e| panic!("rework member must train: {e:#}"));
+    assert_eq!(calls(f.root()).len(), 1);
+}
+
+fixture_case!(
+    bug2441_unknown_rework_branch_without_resolved_spec_refuses,
+    bug2441_unresolved_member_refuses,
+    ("bug-b6b1278890774ef993d2ebc327862470-173-2", "fix: rework")
+);
+fixture_case!(
+    bug2441_member_without_spec_ids_refuses,
+    bug2441_unresolved_member_refuses,
+    ("feature/rework", "fix: rework")
+);
+fixture_case!(
+    bug2441_explicit_unknown_id_with_resolved_spec_refuses,
+    bug2441_unresolved_member_refuses,
+    ("feature/rework", "fix: rework (BUG-2400 TASK-999999)")
+);
+fn bug2441_unresolved_member_refuses((branch, title): (&str, &str)) {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let f = Fixture::with_member_metadata(true, Some(branch), Some(title));
+    let forge = GitHubForge::new(f.root());
+    let mut live = f.live(&forge);
+    let (train, change) = f.opened(&mut live);
+    let lease = live.lease(change.id).unwrap();
+    let error = live
+        .merge_verified(&change, &train, lease.as_ref())
+        .unwrap_err();
+    assert!(format!("{error:#}").contains("spec"), "{error:#}");
+    assert!(calls(f.root()).is_empty());
 }
 
 fixture_case!(
