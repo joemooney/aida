@@ -1,0 +1,29 @@
+id: 01a1a4d5-8713-74e2-a4cd-e283f5b82f83
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-764
+title: 'minor: a detached-HEAD worktree with commits on no remote is reported by neithe…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-1595, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  minor: a detached-HEAD worktree with commits on no remote is reported by neither path (no branch -> unpushed skipped; worktree HEAD counts as reachable under --all).
+
+  PR: #3332
+  Reviewed sha: 8b6a91bed225a9fd060e6a67834c68516c55fbf7
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-04T04:33:39.603965316Z
+modified_at: 2026-11-04T04:33:39.603965316Z
+req_type: Task
+tags:
+- carried-from:TASK-1595
+- finding-hash:f98e46bf
+- from-review:PR-3332
+- kind:carried-forward
+filed_at:
+  code_sha: b5577764ec0466133c191b7e51d62c40ea3a2c83
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 76d65a8b0d8
+  vendor: claude
