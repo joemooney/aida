@@ -24,7 +24,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T02:34:05.889367844Z
-modified_at: 2026-11-04T03:35:05.441421612Z
+modified_at: 2026-11-04T03:38:01.401532306Z
 req_type: Story
 comments:
 - id: 01a1a468-8b42-7db0-844b-20336f857370
@@ -33,6 +33,61 @@ comments:
   created_at: 2026-11-04T02:34:37.250445419Z
   modified_at: 2026-11-04T02:34:37.250445419Z
   session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
+- id: 01a1a4a2-9739-7c21-ad67-210c7baf60b1
+  author: joe
+  content: |-
+    ## Architecture sketch + slice plan (implementer, for advisor signoff — no code written)
+
+    Base: origin/main 76d65a8b0d8. Slice 1 = BUG-2433 / PR #3324 (open, unmerged): `merged_at_tip` + `TrainForge::merged_despite_error` (3 reads × 3s, then main-tree == tip-tree ground truth). The slices below generalise it rather than replace it.
+
+    ### Where the forge is read today (the blast radius)
+    - `aida-cli-lib/src/forge.rs:850-1095` — `trait Forge`; every read returns `anyhow::Result<T>`, so "errored" and "said no" collapse into `Err`/`false`. Existing ad-hoc tri-states we'd unify: `ChangeLookup` (forge.rs:431, `NoChange` vs `Unreachable`, BUG-257), `CiProbeResult::NoSignal` (forge.rs:593), `CheckRegistration::NotYet` (forge.rs:568), `idle_eligible::Ancestry::Unknown` (idle_eligible.rs:20), `TrainCiReadiness::Pending` (pr_train.rs:560).
+    - TASK-2794 lives at forge.rs:1994: `mergeable = field == "MERGEABLE"` — GitHub `UNKNOWN` becomes `false`.
+    - Raw gh spawns (`Command::new("gh")` / `resolve_gh_binary()`), non-test: ~70 sites in 35 files. Biggest outside forge.rs: status_prs.rs 7, pr_cmd.rs 4, lib_part3.rs 4, dispatch_flow.rs 4, reconcile_evidence.rs 3, pr_lookup.rs 3, kernel.rs 3, pr_train.rs 2 (`train_policy_read` :929, `gh_stdout` :943), idle_eligible.rs 2 (`forge_ancestry` :29), phase_driver.rs 2, phase_gates.rs 2, plus 1–2 each in ~22 more files (TUI included).
+    - Destructive transitions: `ForgeRails::land` retire/refuse paths pr_train.rs:2552-2703; merge-error path ~2720 (slice 1); `ForgeRails::abort` :2796; `ForgeRails::ejected` :2776; `drive` ejections :329/:356/:413; `wait_train_ci` :708 (BUG-2414: a read timeout becomes an ordinary eject via `TrainCiReadError` :685); `LiveTrainForge::retire` :2233 / member close :2397; `close_abandoned_train` :1723 (BUG-2412); phase_driver.rs:823 (`close_change` on a refused publication).
+    - CI-definition staleness: `pr_stale_check_warning` lib_part3.rs:204 → `behind_base_refusal` gate/ci_freshness.rs:69-90 → `ShipRefusal::StaleDefinition = 24` gate/ship.rs:160. This is a blanket refusal keyed by "did any definition file change", not by digest.
+
+    ### Slice 2 — one read type + ratchet (PR A) — acceptance (1)
+    - New `aida-cli-lib/src/forge_observed.rs` (forge.rs is 6.9k lines; keep it off the 1 MiB codegraph cliff):
+      - `pub(crate) enum Observed<T> { Known(T), Pending(String), Transient(String) }` with `map`, `known()`, `is_settled()`.
+      - `observe_gh(out: Option<Output>) -> Observed<Output>`: one classifier for missing CLI / timeout / network-transient / API-error / ok, reusing the existing transient detection (`pr_lookup` `GhUnreachable`, forge.rs:3464 `glab_stderr_is_transient`, `network_retry`).
+      - `confirm_negative(read, ground_truth, backoff) -> Confirmed { Negative, Positive, Unconfirmed }` — the generic form of slice 1's loop (used by slice 3).
+    - Forge trait gets `observe_*` read methods for the decision-making reads: `observe_change_status`, `observe_change_metadata`, `observe_check_rows`, `observe_change_for_branch`. Default impls wrap the existing `Result` methods (`Err` → `Transient`) so GitLab/pure-git compile unchanged; GitHubForge overrides them with real classification.
+    - `ChangeStatus.mergeable: bool` (forge.rs:495) → `Observed<bool>`; GitHub `UNKNOWN` → `Pending` (fixes TASK-2794); callers of `.mergeable` move to `Observed`.
+    - Move the train's raw spawns (pr_train.rs:929, :943) and `forge_ancestry` (idle_eligible.rs:29; `Ancestry::Unknown` becomes `Observed::Pending/Transient`) behind forge.rs.
+    - Ratchet `aida-cli-lib/src/tests/story_2401_forge_read_ratchet_tests.rs`, same shape as `task_2143_clone_git_ratchet_tests.rs`: per-file count of gh spawns outside `forge*.rs`, seeded with today's counts, failing in either direction (counts only go down). An escape comment `// raw-gh-ok(STORY-2401): <why>` for non-reads (e.g. `gh auth status` in doctor/capabilities).
+
+    ### Slice 3 — confirmed negatives before destroying (PR B) — acceptance (2)
+    - One gate: `fn confirmed_negative(forge, change, train) -> Confirmed`. It needs a second `Observed::Known` read after a bounded backoff (3 × 3s, matching slice 1) **and** git ground truth: is the pinned tip (or its tree, for a rebase merge) an ancestor of / equal to freshly fetched `origin/<base>`? If either one is not settled, the result is `Unconfirmed`.
+    - Rules at the destructive sites listed above: `Negative` → eject/close as today; `Positive` → take the landed path (slice 1 behaviour); `Unconfirmed` → `Rails::suspend` (BUG-2423's existing path: the train PR stays open, members stay eligible, a comment is posted). It never ejects or closes.
+    - `wait_train_ci` :708: a read timeout or transient error becomes `Observed::Transient` → `suspend`, not `TrainCiReadError` → eject (BUG-2414). A missing aggregate becomes `Pending` (BUG-2401/2423).
+    - Slice 1's `merged_despite_error` becomes a thin caller of `confirmed_negative` (no behaviour change).
+    - Tests: `story_1690_train_tests.rs` fake-rails cases: transient-then-merged → landed; transient ×N → suspended with nothing ejected or closed; a known closed state confirmed on re-read → ejected.
+
+    ### Slice 4 — resumable train journal (PR C) — acceptance (3)
+    - New `aida-cli-lib/src/pr_train_journal.rs`: `<git-common-dir>/aida/train-journal/<base>.json`, written atomically (tmp+rename) while the base's merge lease is held (pr_train.rs:2072). Record: `{ train_pr, branch, base_sha, pinned_tip, members: [(pr, head)], step }` with `step ∈ Built | Opened | CiWait | HoldReleased | Merging | Landing{done:[pr]} | Retiring`.
+    - The write comes *before* each forge mutation: `open` (Opened), `release_hold` (HoldReleased, with the records for a re-arm), `merge_verified` (Merging), each `member_landed` (Landing), `retire` (Retiring). The journal is deleted on a clean finish.
+    - Resume runs at `pr_train_handler_with_dispatch_ctx` entry (~pr_train.rs:2930), before `live_trains`. A journal left by a dead owner (same liveness test as `train_abandoned` :1589) is reconciled from forge truth through slice 3's `confirmed_negative`. Merging/Landing + merged at tip → finish the `member_landed` closes for the remaining cars. Merging + confirmed not merged → retire, and re-arm any HoldReleased records. Opened/CiWait → retire, as `close_abandoned_train` :1723 does today. Unconfirmed → leave the journal and refuse with a hint. BUG-2412's PR-body owner line stays as the cross-host signal; the journal is the same-host resume record.
+
+    ### Slice 5 — CI evidence keyed by (head SHA, workflow digest) (PR D) — acceptance (4)
+    - The digest is the git tree id of `.github/workflows` (or GitLab's `.gitlab-ci.yml` blob) at a rev: `git rev-parse <rev>:.github/workflows`. That is pure git, needs no network, and is stable.
+    - `pr_stale_check_warning` lib_part3.rs:204 gains `head_digest` / `base_digest`. The evidence key becomes `(head_sha, digest)`. `behind_base_refusal` gate/ci_freshness.rs:69 only returns `StaleDefinition` when the digest *differs*. A definition-file touch that leaves the digest equal (say a revert) no longer refuses.
+
+    ### Expected files
+    forge.rs, new forge_observed.rs, pr_train.rs, new pr_train_journal.rs, idle_eligible.rs, phase_driver.rs (close at :823), lib_part3.rs, gate/ci_freshness.rs, the callers of `ChangeStatus.mergeable`, tests/story_1690_train_tests.rs, new tests/story_2401_*_tests.rs. The cost is four PRs after slice 1; the story estimated 2–3. If you want three, slices 4+5 or 2+3 can combine.
+
+    ### Questions for the advisor
+    1. **Scope of acceptance (1).** Does "every forge read" mean all ~70 spawns migrate inside this story? My proposal: the ratchet lands in slice 2, and every *decision-making* site migrates (train, idle_eligible, phase_driver/phase_gates, dispatch_flow, reconcile_evidence, pr_lookup). Display-only sites (status_prs, TUI board/dashboard/welcome, history_timeline) get burned down later as ratchet-lowering follow-up TASKs. Is that acceptable?
+    2. **"Spec-state flips"** in (2): which flips are forge-driven today? `aida pull`'s Done→Completed reads git, not the forge. My candidates are phase_driver's publication close and `queue rework`/review flows reading PR state. Is there a specific site you mean, or is this aimed at future callers (STORY-2324)?
+    3. **"Re-runs only the definition check"** in (4): (a) the gate stops refusing when the digest is unchanged and keeps refusing (exit 24) when it changed, or (b) on a digest change, the gate actively re-triggers CI for that head (`retrigger_change_ci` forge.rs:1066) and waits instead of refusing? (a) is pure gating; (b) is a new forge mutation. My lean is (a), with (b) as a follow-up.
+    4. **Unconfirmed → suspend.** A train that cannot confirm a negative stays open and its members are not ejected. That trades false ejections for a possibly parked train, which needs a human or the next run's journal resume to clear. OK?
+    5. **Slice 1 dependency.** Slices 3/4 build on #3324's `merged_despite_error`. Should I wait for #3324 to merge before starting slice 2, or can slice 2 (type + ratchet, no train-landing changes) start now in parallel?
+
+    Stopping here for signoff per the dispatch. Gate for slices 2-5 per dispatch: LIGHT.
+  created_at: 2026-11-04T03:38:01.401532306Z
+  modified_at: 2026-11-04T03:38:01.401532306Z
+  session_id: 01a1a49fd9f3
+  harness_version: 2.1.318 (Claude Code)
 history:
 - id: 01a1a468-8096-78c1-952c-5aad63c7704e
   author: joe
