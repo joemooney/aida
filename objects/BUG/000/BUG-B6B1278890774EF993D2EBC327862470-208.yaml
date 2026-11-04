@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T12:51:07.563355298Z
-modified_at: 2026-11-04T20:56:03.574816407Z
+modified_at: 2026-11-04T21:07:38.895624555Z
 req_type: Bug
 tags:
 - area:compete
@@ -71,6 +71,11 @@ comments:
   content: 'Rework approach for binding advisor brief / PR #3382 head 674e710d: keep Codex native global sandbox/approval/add-dir flags before exec (validate installed parser), replace the brittle five-argument assertion with explicit expected native posture including every writable-root grant, and assert the complete expected argv against preview, built Command, and observed fake-vendor argv. Route the parent-death regression''s test-runner lookup through the shared current-executable resolver without weakening its guard. Gate: compete_cmd tests, resolve_aida_exe tests, make check-ci-fast and formatting. Existing implementer session 01a1a857 owns this checkout; leave edits uncommitted for advisor publication as instructed.'
   created_at: 2026-11-04T20:56:03.574803123Z
   modified_at: 2026-11-04T20:56:03.574803123Z
+- id: 01a1a863-8d0f-70b1-8dd0-122772bf098b
+  author: mcp
+  content: 'Advisor rework complete in the assigned seat checkout, left uncommitted for aida ship --from-seat per binding brief. Only aida-cli-lib/src/compete_cmd.rs changed. Retained valid native global option order: --sandbox workspace-write --ask-for-approval never [--add-dir PATH ...] exec PROMPT; installed Codex accepted this order via exec --help. The regression now creates a mailbox grant, pins the complete expected argv (including grants and the tool-shell override prefix) against preview, built Command and fake-vendor stdout for contained/uncontained launches. Parent-death regression now re-execs through aida_bin::current_executable_path, matching existing test-runner practice; raw-lookup inventory guard remains unchanged. Validation: cargo test -p aida-cli-lib --lib compete_cmd: 8 passed; cargo test -p aida-cli-lib --lib resolve_aida_exe: 7 passed; make check-ci-fast: all 36 gates passed; cargo fmt --all -- --check and git diff --check passed. Two fast guards emitted read-only .git/FETCH_HEAD diagnostics but each reported success and the overall gate exited 0. Logs: /tmp/bug2439-compete-tests.log, /tmp/bug2439-resolver-tests.log, /tmp/bug2439-check-ci-fast.log. No commit/push/ship/review record performed; spec remains In Progress for advisor publication.'
+  created_at: 2026-11-04T21:07:38.895615577Z
+  modified_at: 2026-11-04T21:07:38.895615577Z
 history:
 - id: 01a1a69d-4a2d-7292-9de1-00c519ffe27a
   author: joe
