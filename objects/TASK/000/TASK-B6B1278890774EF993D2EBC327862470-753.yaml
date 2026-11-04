@@ -14,13 +14,20 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-04T01:15:11.009301343Z
-modified_at: 2026-11-04T01:15:11.009301343Z
+modified_at: 2026-11-04T04:18:37.894262765Z
 req_type: Task
 tags:
 - carried-from:BUG-2426
 - finding-hash:70c07357
 - from-review:PR-3305
 - kind:carried-forward
+comments:
+- id: 01a1a4c7-c4c6-7003-9076-46837b30f745
+  author: joe
+  content: 'ADVISOR RULING (2026-11-03 21:20 MST): bundle and fix. Fail-open liveness is the real defect: update::author_live uses list_leases_strict, and treats an unreadable lease dir or torn lease file as liveness unknown, so it never runs update-branch on a branch a live lane may own. Add a test with a torn lease file. Bundled (TASK-2810/2814, cosmetic): parks() excludes changes with an in-flight supersede, and record_skip keeps the original parked ''since'' across reason changes. Gate: LIGHT.'
+  created_at: 2026-11-04T04:18:37.894262765Z
+  modified_at: 2026-11-04T04:18:37.894262765Z
+  session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
 history:
 - id: 01a1a443-3db8-70c3-aad1-ac7901b84264
   author: joe
