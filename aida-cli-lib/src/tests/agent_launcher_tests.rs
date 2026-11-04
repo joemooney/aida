@@ -2985,8 +2985,16 @@ fn task_2712_foreground_lane_commits_pending_work_after_exit() {
             agent_initial_prompt_args(&config, &plan, &AgentPromptOptions::new(None, false));
         crate::ship_from_seat::with_post_exit_step(step, || {
             // BUG-423: retry a transient spawn failure of the fresh binary.
-            let mut result =
-                run_tracked_agent(&fake_agent, &config, &plan, None, &prompt_args, None, false, false);
+            let mut result = run_tracked_agent(
+                &fake_agent,
+                &config,
+                &plan,
+                None,
+                &prompt_args,
+                None,
+                false,
+                false,
+            );
             for _ in 0..5 {
                 if result.is_ok() {
                     break;

@@ -1029,9 +1029,18 @@ fn task_2712_post_exit_salvage_after_failed_exit_uses_refs_trailer() {
 fn task_2712_index_restore_only_while_head_unmoved() {
     use crate::seat_clone::index_restore_allowed;
     assert!(index_restore_allowed(Some("abc"), Some("abc")));
-    assert!(!index_restore_allowed(Some("abc"), Some("def")), "commit landed");
-    assert!(!index_restore_allowed(Some("abc"), None), "HEAD unreadable now");
-    assert!(!index_restore_allowed(None, Some("abc")), "HEAD unknown before");
+    assert!(
+        !index_restore_allowed(Some("abc"), Some("def")),
+        "commit landed"
+    );
+    assert!(
+        !index_restore_allowed(Some("abc"), None),
+        "HEAD unreadable now"
+    );
+    assert!(
+        !index_restore_allowed(None, Some("abc")),
+        "HEAD unknown before"
+    );
     assert!(!index_restore_allowed(None, None));
 }
 

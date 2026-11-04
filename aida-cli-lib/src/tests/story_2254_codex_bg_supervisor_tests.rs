@@ -1221,7 +1221,11 @@ fn task_2712_bg_lane_failed_exit_commits_salvage_with_refs() {
     assert_eq!(case.calls.len(), 1);
     assert!(!case.calls[0].2, "a non-zero exit is not clean");
     assert!(!case.pending);
-    assert!(case.subject.ends_with("(Refs TASK-2712)"), "{}", case.subject);
+    assert!(
+        case.subject.ends_with("(Refs TASK-2712)"),
+        "{}",
+        case.subject
+    );
 }
 
 /// Advisor F3: the role gate: a non-implementer lane's post-exit step never
