@@ -21,14 +21,6 @@
   for_role: reviewer
   added_by_machine: imac
 - user_id: joe
-  requirement_id: 01a1a530-dedd-7d70-ad93-efbdb1826fbc
-  position: 381000
-  added_by: joe
-  note: auto-queued by `session end` (01a1a521); covers 1 spec
-  added_at: 2026-11-04T06:13:41.487297954Z
-  for_role: reviewer
-  added_by_machine: imac
-- user_id: joe
   requirement_id: 01a1a54c-662f-7f33-bf61-69fe28e37bb2
   position: 382000
   added_by: joe
