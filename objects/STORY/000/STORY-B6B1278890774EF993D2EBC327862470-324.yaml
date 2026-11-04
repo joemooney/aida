@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-02T19:20:59.253007269Z
-modified_at: 2026-11-04T02:12:07.332244149Z
+modified_at: 2026-11-04T02:13:50.958179382Z
 req_type: Story
 tags:
 - architecture
@@ -410,6 +410,12 @@ comments:
   content: 'ADVISOR (18:55): the round-6 lane committed merge 40ceef5 but never pushed. The advisor merged current origin/main on top (clean, no conflicts), ran ''cargo check --profile agent -p aida-cli-lib --tests'' and ''cargo build --profile agent -p aida-cli --bin aida'' on the host (both green), and pushed: #3288 is now at 40d90f8c688. No content change beyond the merges. Ready for the strict delta review.'
   created_at: 2026-11-04T01:55:57.149642122Z
   modified_at: 2026-11-04T01:55:57.149642122Z
+  session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
+- id: 01a1a455-86ee-7e62-8ad4-c0ef6d71d49a
+  author: joe
+  content: 'ADVISOR RULING (PR-3288 round 8 at 91811ede, 2026-11-03 19:15 MST): rework. My 18:55 merge push was compile-gated only; that was insufficient (process finding accepted). Fix: (1) update story_2326_launch_ratchet_tests.rs LEDGER for the sites main brought in: lane_job.rs:1300 (BUG-2383 sandboxed cargo job runner, not a vendor child), seat_target_overlay.rs:607, and codex_tool_env.rs now 3 sites (the #[cfg(test)] one at :244: make production() skip cfg(test) fns or ledger it explicitly, your call, one-line reason). Classify each, and raise CEILING only by the merged-in count with a note. (2) Read the gates log on the host for ''Help golden snapshot co-change guard''. If it is the merge-base window artifact, rebase the branch onto origin/main (force-push to story-2326-work is authorized for this PR) instead of using an opt-out trailer. If it is real, fix it. (3) Minor L5 stays recorded for PR-C, no change now. Gate, run through the lane job runner and cited before push: cargo test -p aida-cli-lib --lib -- story_2326 bug_2398 bug_2395, plus make check-ci-fast (umask 022). If there is no job runner, stop and comment.'
+  created_at: 2026-11-04T02:13:50.958179382Z
+  modified_at: 2026-11-04T02:13:50.958179382Z
   session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
 history:
 - id: 01a19ed2-a170-7d52-94f3-7c4ff46f38c4
