@@ -1,0 +1,29 @@
+id: 01a1a66b-8bee-7a82-a4e4-42f5f5a00800
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-778
+title: 'non-blocking: bug2438_old_head_refusal_without_current_head_verdict_refuses and…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on BUG-2438, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  non-blocking: bug2438_old_head_refusal_without_current_head_verdict_refuses and bug2438_malformed_reviewed_sha_refusal_is_not_superseded (bug2406_train_tests.rs) only assert merge_verified is_err. Because the ledger is recorded after the train opens, the refresh also fails on the evidence/mapped mismatch ('train proof or original source review evidence changed') or on 'no original authorized approval', so both tests still pass if the supersession guard is removed or malformed SHAs are superseded. Assert that the error contains 'train source has a refusing review' so they actually prove the refusal path.
+
+  PR: #3353
+  Reviewed sha: ab7108bd9065ff87111108a22469177ef5387a22
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-04T11:57:08.462259290Z
+modified_at: 2026-11-04T11:57:08.462259290Z
+req_type: Task
+tags:
+- carried-from:BUG-2438
+- finding-hash:37e38088
+- from-review:PR-3353
+- kind:carried-forward
+filed_at:
+  code_sha: 238a7ecc3eaf8123b58a85fffe626be170d139a1
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: c514dc9e625
+  vendor: claude
