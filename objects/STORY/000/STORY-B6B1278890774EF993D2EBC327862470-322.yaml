@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-02T19:20:32.021326811Z
-modified_at: 2026-11-04T06:20:06.016481600Z
+modified_at: 2026-11-04T06:35:53.063207279Z
 req_type: Story
 tags:
 - architecture
@@ -271,6 +271,12 @@ comments:
   modified_at: 2026-11-04T05:32:37.651632048Z
   session_id: 01a1a4fde763
   harness_version: 2.1.318 (Claude Code)
+- id: 01a1a545-6d67-7842-8212-c9c237fbe301
+  author: joe
+  content: 'ADVISOR REWORK BRIEF (2026-11-03 23:38 MST, PR #3331 head a4931a74). Round 2: the round-1 ruling items are all implemented. BLOCKING (CI red, both introduced here): (1) the new writer fixture file trips the BUG-1723 config.toml guard. Build the fixture in a temp dir through the test_env helper instead of a checked-in or literal config.toml path. (2) The unbound-verdict assertion is wrong: an earlier hold in the same test already indexes the spec to PR-41. Either assert the bound PR-41 result, or use a fresh spec with no prior hold for the unbound case. Fix these two and nothing else. Gate (LIGHT): one targeted cargo test filter covering the changed module, plus make check-ci-fast, then push to the same PR branch. The advisor re-reviews only the delta.'
+  created_at: 2026-11-04T06:35:53.063207279Z
+  modified_at: 2026-11-04T06:35:53.063207279Z
+  session_id: da1c0d85-1d45-4ce4-a292-5358644f65b9
 history:
 - id: 01a19ec9-2f7e-7e41-b3a1-1cb5a299a222
   author: joe
