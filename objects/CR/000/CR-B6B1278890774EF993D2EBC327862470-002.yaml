@@ -29,7 +29,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-23T04:44:59.122261809Z
-modified_at: 2026-11-04T01:39:11.530154049Z
+modified_at: 2026-11-04T01:39:13.201065777Z
 req_type: ChangeRequest
 tags:
 - cross-vendor
@@ -141,6 +141,12 @@ comments:
   created_at: 2026-10-12T19:33:04.606731420Z
   modified_at: 2026-10-12T19:33:04.606731420Z
   session_id: 2057f093-34f4-4dd8-8426-9a0077db8580
+- id: 01a1a435-d2b1-79c1-8a2f-30945630081c
+  author: joe
+  content: 'ADVISOR REGROUP (2026-11-03): closed as obsolete/already fixed after verification in the regroup inventory: blocker BUG-1693 completed; Codex mail wake (STORY-2256), lane liveness (STORY-1688) and the mail-backlog guard shipped. Antigravity reads unsupported by design.'
+  created_at: 2026-11-04T01:39:13.201065777Z
+  modified_at: 2026-11-04T01:39:13.201065777Z
+  session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
 history:
 - id: 01a15cbc-268e-74a1-9737-f038aeb8534b
   author: joe
