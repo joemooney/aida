@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-13T02:44:47.629375520Z
-modified_at: 2026-11-04T02:32:11.897511895Z
+modified_at: 2026-11-04T02:32:13.287629426Z
 req_type: Task
 tags:
 - canonical-hub
@@ -18,6 +18,13 @@ relationships:
 - rel_type: Child
   target_id: 019ec824-8b71-7b73-a74a-27b973fb441f
   created_at: 2026-10-13T02:44:53.053128402Z
+comments:
+- id: 01a1a466-58e7-7d12-a20c-f18c6004396f
+  author: joe
+  content: 'OPERATOR RULING (2026-11-03 19:30 MST, relayed by advisor): regroup ruling 2: GitLab does not become canonical; keep the hourly hub bridge (work clone pushes GitLab, cron reconciles). Rejected.'
+  created_at: 2026-11-04T02:32:13.287629426Z
+  modified_at: 2026-11-04T02:32:13.287629426Z
+  session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
 history:
 - id: 01a154db-fe91-7d42-8054-ffdb50844940
   author: joe
