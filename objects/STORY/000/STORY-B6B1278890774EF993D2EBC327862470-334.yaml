@@ -20,12 +20,12 @@ description: |-
   6. Hermetic tests for submit, run (under a pty), the rc propagation, refusing an unattributed job, and that no /tmp path is read.
   7. Docs: one page, 'Deputies: command vs script', linked from the advisor standing orders' deputy line.
   Architecture-sensitive (operator authority surface): sketch on this spec and advisor signoff before implementation.
-status: NeedsAttention
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-03T03:42:51.559496187Z
-modified_at: 2026-11-04T01:12:40.667645214Z
+modified_at: 2026-11-04T01:13:03.674901260Z
 req_type: Story
 tags:
 - area:deputy
@@ -322,6 +322,12 @@ comments:
   created_at: 2026-11-04T01:12:40.667645214Z
   modified_at: 2026-11-04T01:12:40.667645214Z
   session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
+- id: 01a1a41d-dfba-72b3-85cd-2cf3a5095926
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was punted on: blocked-dependency: Round-5 fix is committed locally on story-2338-sketch as 9951eaca9c8 (worktree aida-seat-aida-story-b6b1278890774ef993d2ebc327862470-334), NOT pushed. Change: deputy_shell/attribution.rs destructures binding_process as (pid, ns, start), probes only tokens whose pid ns is unqualified or equals origin_pid_ns() (foreign-namespace tokens fall through to the Q5 heartbeat path); tests.rs adds a foreign-pid-ns refusal row (proc:4242@pidns-4026532999/100, expects refused:not-live). Tree already contains origin/main 34c0d8e4173; rustfmt --check is clean. The ruling makes ''cargo check -p aida-cli-lib --tests'' mandatory before push, and I could not run it. Cargo runs are capped at 60s per call, this session has no lane job runner (''lease names no lane job runner''), and the permission layer then denied further cargo invocations. untested=true. Need: an operator, or a launch with a lane job runner, to run ''cargo check -p aida-cli-lib --tests'' plus ''cargo test -p aida-cli-lib --lib deputy_shell'' on 9951eaca9c8, then push to story-2338-sketch.. No triage reason was given.'
+  created_at: 2026-11-04T01:13:03.674899814Z
+  modified_at: 2026-11-04T01:13:03.674899814Z
+  session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
 history:
 - id: 01a19f81-3898-7250-96f4-65372d1968ea
   author: aida-session-start
@@ -445,6 +451,14 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1a41d-dfba-72b3-85cd-2cead40a04a3
+  author: joe
+  timestamp: 2026-11-04T01:13:03.674890724Z
+  session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: 553f7d5984c6083a9f2b47cfa358ce57c438843b
   branch: main
@@ -453,9 +467,3 @@ filed_at:
   aida_build_sha: 553f7d5984c
   vendor: claude
   session: 125337a4-7dd3-483b-9c56-3665173938ae
-attention_reason:
-  category: blocked-dependency
-  detail: 'Round-5 fix is committed locally on story-2338-sketch as 9951eaca9c8 (worktree aida-seat-aida-story-b6b1278890774ef993d2ebc327862470-334), NOT pushed. Change: deputy_shell/attribution.rs destructures binding_process as (pid, ns, start), probes only tokens whose pid ns is unqualified or equals origin_pid_ns() (foreign-namespace tokens fall through to the Q5 heartbeat path); tests.rs adds a foreign-pid-ns refusal row (proc:4242@pidns-4026532999/100, expects refused:not-live). Tree already contains origin/main 34c0d8e4173; rustfmt --check is clean. The ruling makes ''cargo check -p aida-cli-lib --tests'' mandatory before push, and I could not run it. Cargo runs are capped at 60s per call, this session has no lane job runner (''lease names no lane job runner''), and the permission layer then denied further cargo invocations. untested=true. Need: an operator, or a launch with a lane job runner, to run ''cargo check -p aida-cli-lib --tests'' plus ''cargo test -p aida-cli-lib --lib deputy_shell'' on 9951eaca9c8, then push to story-2338-sketch.'
-  lean: Diff is small and mirrors seat_authority::held_grants_in's BUG-2419 namespace rule; expected to compile. Push once cargo check is green.
-  raised_by: implementer
-  raised_at: 2026-11-03T22:22:54.751960171Z
