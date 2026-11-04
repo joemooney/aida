@@ -23,7 +23,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-04T15:39:15.141070572Z
-modified_at: 2026-11-04T15:43:16.911919616Z
+modified_at: 2026-11-04T17:12:57.956169692Z
 req_type: Story
 tags:
 - area:containment
@@ -42,6 +42,12 @@ comments:
   content: 'OPERATOR RULING (2026-11-04 08:43 MST, joe: ''agreed''): adopt the direction ''AIDA owns the containment policy and its proof, not necessarily the enforcement''. A vendor''s native sandbox earns the ''native'' posture by passing a vendor-neutral conformance suite of negative tests (writes outside the worktree, hosts outside allowed_hosts); AIDA''s own wrapper is the fallback for vendors that fail it. The sketch must define the conformance suite first, run it against ''agy --sandbox'', and then pick (A) or (B) for agy from the results. Codex''s existing native posture must also pass the suite.'
   created_at: 2026-11-04T15:43:16.911919616Z
   modified_at: 2026-11-04T15:43:16.911919616Z
+  session_id: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
+- id: 01a1a78c-b164-7d81-8bc3-ef8bac140239
+  author: joe
+  content: 'ADVISOR DISPATCH (2026-11-04 10:25 MST): SKETCH ONLY. Write no code and open no PR. Post SKETCH v1 as a comment on this story covering: (1) a vendor-neutral containment conformance suite: the exact negative tests (a write outside the worktree, a host outside allowed_hosts, a write to .git or the store) and how each runs against a launched vendor; (2) results of probing ''agy --sandbox'' (and ''agy --help'') empirically from your lane: what it restricts; (3) the recommended agy posture, (A) the AIDA wrapper or (B) native, decided from (2); (4) whether Codex''s current native posture passes the suite. List open questions as Q1..Qn for advisor signoff. Then end with aida punt, reason ''sketch posted, awaiting advisor signoff''.'
+  created_at: 2026-11-04T17:12:57.956169692Z
+  modified_at: 2026-11-04T17:12:57.956169692Z
   session_id: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
 history:
 - id: 01a1a739-849a-7023-b534-bbe543e4ef1f
