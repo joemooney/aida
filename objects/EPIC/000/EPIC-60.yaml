@@ -43,7 +43,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-08-29T19:06:45.483941259Z
-modified_at: 2026-11-01T06:32:03.977237401Z
+modified_at: 2026-11-04T01:39:26.106185476Z
 req_type: Epic
 tags:
 - codex
@@ -101,6 +101,8 @@ history:
   timestamp: 2026-10-31T15:55:40.445807153Z
   session_id: 9b4a9d0a-69b7-4ebd-9bee-314b36573de5
   changes: []
-deferred: true
-deferred_at: 2026-09-07T06:17:55.247559939Z
-deferred_until: next work-machine visit — the TASK-1196 environment smoke and the STORY-782 fan-out decision are its only remaining children; run the smoke, then decide fan-out from what the environment permits
+- id: 01a1a436-0596-7de0-aa5e-a3df0c2e1375
+  author: joe
+  timestamp: 2026-11-04T01:39:26.230369740Z
+  session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
+  changes: []
