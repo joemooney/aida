@@ -21,7 +21,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-09-16T01:17:17.223576217Z
-modified_at: 2026-09-16T01:19:57.118641034Z
+modified_at: 2026-11-04T01:39:47.241817462Z
 req_type: Task
 tags:
 - from-advisor:general
@@ -35,6 +35,8 @@ history:
   - field_name: spec_id
     old_value: TASK-1-134
     new_value: TASK-b6b1278890774ef993d2ebc327862470-329
-deferred: true
-deferred_at: 2026-09-16T01:19:57.118641034Z
-deferred_until: the contained posture drifts back to full-access AGAIN after a clean 'config permissions set contained' — that confirms an active reverter; then promote to a BUG (EPIC-65) and add drift detect+warn in 'config permissions show'
+- id: 01a1a436-582e-7931-8c15-d37ef95a4b9b
+  author: joe
+  timestamp: 2026-11-04T01:39:47.374248774Z
+  session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
+  changes: []
