@@ -14,13 +14,20 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-04T08:51:43.478621612Z
-modified_at: 2026-11-04T08:51:43.478621612Z
+modified_at: 2026-11-04T11:03:10.006108576Z
 req_type: Task
 tags:
 - carried-from:BUG-2434
 - finding-hash:bea01fec
 - from-review:PR-3347
 - kind:carried-forward
+comments:
+- id: 01a1a63a-21b6-7582-b194-b6aacaf85464
+  author: joe
+  content: 'ADVISOR RULING (2026-11-04 03:56 MST, rule non-blocking findings once): Accepted: stale PR-body text on a merged PR; CI at the head is the evidence of record.'
+  created_at: 2026-11-04T11:03:10.006108576Z
+  modified_at: 2026-11-04T11:03:10.006108576Z
+  session_id: da1c0d85-1d45-4ce4-a292-5358644f65b9
 history:
 - id: 01a1a5d8-1fcc-7552-90c7-754af6c24774
   author: joe
