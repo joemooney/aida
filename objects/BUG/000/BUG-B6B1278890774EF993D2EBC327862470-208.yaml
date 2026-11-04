@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-208
 agreed_id: BUG-2439
 title: aida compete passes Claude-only flags to codex exec
 description: 'Observed 2026-11-04 05:55 MST on live be275c31: aida compete TASK-1715 --vendors codex,claude ran ''codex exec --permission-mode dontAsk --setting-sources project --settings {...}''. Codex exited at once with: unexpected argument ''--permission-mode'' found (log: ~/.aida/compete/compete-task-1715-codex/codex.log). The --dry-run prints the same argv. The compete vendor-argv path applies the Claude settings and permission wrapper to every vendor, instead of building the codex argv the way queue work --vendor codex does. Also: killing the compete parent leaves the claude leg running as an orphan. Acceptance: (1) a codex leg runs with a valid codex exec argv, and a regression test pins it; (2) the --dry-run argv equals the real one; (3) the vendor child dies with compete. Why: the operator wants routine cross-vendor bake-offs to measure relative implementation quality.'
-status: Done
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T12:51:07.563355298Z
-modified_at: 2026-11-04T20:50:09.136366795Z
+modified_at: 2026-11-04T20:50:12.271659242Z
 req_type: Bug
 tags:
 - area:compete
@@ -90,6 +90,14 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a1a853-9526-7680-9855-ce1540789d2b
+  author: joe
+  timestamp: 2026-11-04T20:50:12.390685736Z
+  session_id: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Approved
 filed_at:
   code_sha: be275c313c1482b990ba38f323bdc67304f1d15c
   branch: main
@@ -102,3 +110,4 @@ implementation_info:
   implemented: true
   implemented_at: 2026-11-04T20:00:49.095793592Z
   implemented_by: joe
+  reopened_at_sha: 83ce565277a264e7468fc8b2e08e75dedc095284
