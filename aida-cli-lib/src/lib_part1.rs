@@ -1466,6 +1466,14 @@ pub(crate) fn project_is_aida_initialized(root: &std::path::Path) -> bool {
         || root.join(".aida-store").exists()
 }
 
+/// TASK-1472: whether the current directory sits in an initialized AIDA
+/// project. Only an existence probe — no store is opened, so bare `aida`
+/// stays ahead of `run()`'s early-dispatch storage boundary.
+/// trace:TASK-1472 | ai:claude
+fn cwd_in_initialized_aida_project() -> bool {
+    find_project_root().is_ok_and(|root| project_is_aida_initialized(&root))
+}
+
 /// TASK-1472: the argv bare `aida` is rewritten to when it opens the picker.
 /// trace:TASK-1472 | ai:claude
 pub(crate) fn bare_aida_picker_argv(argv0: &str) -> Vec<String> {
@@ -1848,9 +1856,7 @@ pub(crate) fn run() -> Result<()> {
             let agent_mode = agent_output_mode();
             let interactive = std::io::IsTerminal::is_terminal(&std::io::stdin())
                 && std::io::IsTerminal::is_terminal(&std::io::stdout());
-            let initialized = !agent_mode
-                && interactive
-                && find_project_root().is_ok_and(|root| project_is_aida_initialized(&root));
+            let initialized = !agent_mode && interactive && cwd_in_initialized_aida_project();
             match bare_aida_action(agent_mode, interactive, initialized) {
                 BareAidaAction::StatusSnapshot => return handle_bare_agent_status(),
                 BareAidaAction::AgentPicker => bare_picker = true,
