@@ -1,0 +1,34 @@
+id: 01a1a770-18d0-74c3-b3c2-1e6f6a67cd83
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-393
+agreed_id: STORY-2465
+title: 'Review PR-3366: [AI:claude] perf(preflight): skip the worktree aida build when the project cannot build aida (TASK-1299)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a1a637`) for branch `task-1299`.
+
+  - PR: <https://github.com/joemooney/aida/pull/3366>
+  - Branch: `task-1299` → `main`
+
+  ## Covers
+
+  - TASK-1299
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 3366` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-04T16:41:43.888862637Z
+modified_at: 2026-11-04T16:41:43.888862637Z
+req_type: Story
+filed_at:
+  code_sha: e422daaa1a43d53b3cd801f51edf709f1adec89b
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: c19294416a9
+  vendor: claude
+  session: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
