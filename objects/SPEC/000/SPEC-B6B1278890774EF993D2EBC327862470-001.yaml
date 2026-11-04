@@ -15,12 +15,12 @@ description: |
   4. Add decisive synthetic native-boundary/host-channel tests and actual host smoke evidence. Preserve source/publication byte identity and real Git/forge refusals. Tests fake HOME/store/credentials only, never user data or actual live store. No new timers/unattended run enablement. Independent strict review and normal merge floors required. This does not grant permission to bypass native SDK protections.
 
   Architecture/sketch-first; serialize touched launcher/authority code after BUG2398. Reuse signed contained C8/C9 primitives where appropriate but do not block native delivery behind an unrelated full backend or silently treat contained-only success as native proof. A precise design dependency may be added after independent sketch judgment. LIGHT one targeted regression plus fast; >10files/sharedinfra adds required touched/compile, longcargo background, normal slots. No blind broad rebuilds.
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T07:26:01.071265913Z
-modified_at: 2026-11-04T08:01:27.627005828Z
+modified_at: 2026-11-04T08:01:36.332994146Z
 req_type: Task
 tags:
 - architecture
@@ -765,6 +765,12 @@ comments:
   created_at: 2026-11-04T08:01:27.627005828Z
   modified_at: 2026-11-04T08:01:27.627005828Z
   session_id: da1c0d85-1d45-4ce4-a292-5358644f65b9
+- id: 01a1a593-e84c-7d82-933d-45d24e2a5412
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Rework 581275302ff fixes only the three CI items (help golden, git add -A staging, task_2631 assertion); prior findings 2-8 are unchanged at this head, CI is still pending, and there is no host live-probe evidence. ACs: ac6e55fd unverified; ac774e2b partial; acca6182 unverified; ac97960f unverified.. Triage reason: rework brief on spec'
+  created_at: 2026-11-04T08:01:36.332992561Z
+  modified_at: 2026-11-04T08:01:36.332992561Z
+  session_id: da1c0d85-1d45-4ce4-a292-5358644f65b9
 history:
 - id: 01a1960f-6ca8-7313-8a94-63b0b98a4e44
   author: joe
@@ -907,14 +913,14 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1a593-e84c-7d82-933d-45ce4fbd4de9
+  author: joe
+  timestamp: 2026-11-04T08:01:36.332978569Z
+  session_id: da1c0d85-1d45-4ce4-a292-5358644f65b9
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   aida_version: 0.16.0
   aida_build_sha: 53c89700b4d
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'Rework 581275302ff fixes only the three CI items (help golden, git add -A staging, task_2631 assertion); prior findings 2-8 are unchanged at this head, CI is still pending, and there is no host live-probe evidence. ACs: ac6e55fd unverified; ac774e2b partial; acca6182 unverified; ac97960f unverified.'
-  recovery_hint: address the review findings, move TASK-2712 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-04T07:51:11.433671687Z
