@@ -14,13 +14,20 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-04T01:17:01.565107006Z
-modified_at: 2026-11-04T01:17:01.565107006Z
+modified_at: 2026-11-04T04:19:23.961879522Z
 req_type: Task
 tags:
 - carried-from:BUG-2429
 - finding-hash:5dae72ce
 - from-review:PR-3315
 - kind:carried-forward
+comments:
+- id: 01a1a4c8-78b9-79c2-b235-0c73dd5ae1a2
+  author: joe
+  content: 'ADVISOR RULING (2026-11-03 21:20 MST): accepted, no change. Dropping a non-ELOOP member (EDQUOT, EKEYREVOKED) only makes the later error less specific (''not held''); it still fails closed, and these errnos have not been observed. Revisit if a ''not held'' error appears without ELOOP.'
+  created_at: 2026-11-04T04:19:23.961879522Z
+  modified_at: 2026-11-04T04:19:23.961879522Z
+  session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
 history:
 - id: 01a1a443-3cfe-7211-8f6c-0798ac7eb804
   author: joe
