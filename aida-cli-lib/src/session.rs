@@ -1379,7 +1379,6 @@ pub(crate) fn build_claude_exec_command(
     model: Option<&str>,
     grant_id: Option<&str>,
 ) -> Result<std::process::Command> {
-    use std::process::Command;
     let (program, args) = interactive_claude_program_and_args(
         contained,
         claude_session_args(
@@ -1391,25 +1390,53 @@ pub(crate) fn build_claude_exec_command(
             model,
         )?,
     )?;
-    // trace:BUG-2218 TASK-2328 | ai:codex
-    if contained {
-        prepare_contained_mailbox_for_launch(&std::env::current_dir()?)?;
-    }
-    let mut cmd = Command::new(program);
-    if let Some(grant) = grant_id {
-        cmd.env(crate::gate::seat_authority::GRANT_ENV, grant);
-    }
-    if contained {
-        cmd.env("AIDA_CONTAINED", "1");
-        // trace:TASK-2631 | ai:codex — do not inherit a native parent's display marker.
-        cmd.env("AIDA_CONTAINMENT_POSTURE", "aida");
-    } else {
-        cmd.env_remove("AIDA_CONTAINED");
-        // trace:TASK-2631 | ai:codex
-        cmd.env("AIDA_CONTAINMENT_POSTURE", "none");
-    }
-    cmd.args(args);
+    // trace:STORY-2326 | ai:claude
+    let ctx = interactive_claude_context(
+        aida_core::launch_policy::LaunchKind::Exec,
+        program,
+        args,
+        contained,
+    )?;
+    let mut cmd = crate::launch::spawn_agent(&ctx)?;
+    crate::launch::assign_seat(
+        &mut cmd,
+        ctx.kind(),
+        crate::launch::SeatDecision::ThisSession { grant: grant_id },
+    )?;
     Ok(cmd)
+}
+
+/// The context of an interactive Claude session this process becomes or
+/// waits on: it inherits this process's cwd.
+// trace:STORY-2326 | ai:claude
+fn interactive_claude_context(
+    kind: aida_core::launch_policy::LaunchKind,
+    program: String,
+    args: Vec<String>,
+    contained: bool,
+) -> Result<crate::launch::LaunchContext> {
+    let posture = if contained {
+        ContainmentPosture::Aida
+    } else {
+        ContainmentPosture::None
+    };
+    // The process cwd, as the contained flags resolve it (tests pin it).
+    let cwd = match contained_session_cwd() {
+        Some(cwd) => cwd,
+        None => std::env::current_dir()?,
+    };
+    Ok(crate::launch::LaunchContext::resolve(
+        crate::launch::LaunchRequest {
+            vendor: aida_core::launch_policy::LaunchVendor::Claude,
+            kind,
+            program: program.into(),
+            args,
+            tail: Vec::new(),
+            posture,
+            cwd,
+            set_cwd: false,
+        },
+    )?)
 }
 
 /// BUG-2169 S2: an interactive contained `claude` runs inside the
@@ -1502,21 +1529,19 @@ pub(crate) fn build_run_claude_session_command(
             model,
         )?,
     )?;
-    // trace:BUG-2218 TASK-2328 | ai:codex
-    if contained {
-        prepare_contained_mailbox_for_launch(&std::env::current_dir()?)?;
-    }
-    let mut cmd = std::process::Command::new(program);
-    if contained {
-        cmd.env("AIDA_CONTAINED", "1");
-        // trace:TASK-2631 | ai:codex — do not inherit a native parent's display marker.
-        cmd.env("AIDA_CONTAINMENT_POSTURE", "aida");
-    } else {
-        cmd.env_remove("AIDA_CONTAINED");
-        // trace:TASK-2631 | ai:codex
-        cmd.env("AIDA_CONTAINMENT_POSTURE", "none");
-    }
-    cmd.args(args);
+    // trace:STORY-2326 | ai:claude
+    let ctx = interactive_claude_context(
+        aida_core::launch_policy::LaunchKind::Fresh,
+        program,
+        args,
+        contained,
+    )?;
+    let mut cmd = crate::launch::spawn_agent(&ctx)?;
+    crate::launch::assign_seat(
+        &mut cmd,
+        ctx.kind(),
+        crate::launch::SeatDecision::ThisSession { grant: None },
+    )?;
     Ok(cmd)
 }
 
@@ -1994,7 +2019,7 @@ fn spawn_vendor_headless_forking(
     contained: bool,
     fork_thread: Option<&str>,
 ) -> Result<(std::process::ExitStatus, String)> {
-    use std::process::{Command, Stdio};
+    use std::process::Stdio;
     // trace:BUG-2172 | ai:codex
     let contained = aida_contained_env()? || contained;
     // BUG-2144: refuse before the log file and tee exist. trace:BUG-2144 | ai:claude
@@ -2018,11 +2043,6 @@ fn spawn_vendor_headless_forking(
         );
     }
     let tuning = resolve_agent_tuning(&headless_worktree_root(), vendor, seat);
-    // trace:BUG-2218 TASK-2328 | ai:codex
-    // trace:TASK-2631 | ai:codex
-    if containment_applied(vendor, contained) {
-        prepare_contained_mailbox_for_launch(&headless_worktree_root())?;
-    }
     // TASK-1169 / ADR-22: bound the child's turn-end background-wait ceiling
     // ourselves rather than inheriting whatever the ambient shell carried, so
     // every headless phase behaves identically whoever launched it.
@@ -2039,6 +2059,10 @@ fn spawn_vendor_headless_forking(
     )?;
     // Each seat gets its own role's write set. trace:TASK-2712 | ai:claude
     rescope_native_codex_for_seat(vendor, &mut args, &headless_worktree_root(), seat.as_str())?;
+    // The boundary (the contained mailbox) is set up before any grant exists.
+    let posture = containment_posture(vendor, contained)?; // trace:TASK-2631 | ai:codex
+    let ctx = headless_launch_context(vendor, program, args, posture)?; // trace:STORY-2326 | ai:claude
+    let mut cmd = crate::launch::spawn_agent(&ctx)?;
     // trace:BUG-b6b1278890774ef993d2ebc327862470-045 | ai:claude
     let child_grant = crate::gate::seat_authority::issue_launch_child(
         &headless_worktree_root(),
@@ -2046,11 +2070,7 @@ fn spawn_vendor_headless_forking(
         &crate::current_user_id(None),
         containment_applied(vendor, contained),
     )?;
-    let mut cmd = Command::new(program);
-    cmd.args(args)
-        .env("AIDA_HEADLESS", "1")
-        .env("AIDA_SESSION_ROLE", seat.as_str())
-        .env(crate::gate::seat_authority::GRANT_ENV, &child_grant.id)
+    cmd.env("AIDA_HEADLESS", "1")
         // BUG-802: anchor the drive root so `aida review record --pr N` (and
         // any future handshake writer) lands artifacts where the orchestrator
         // polls, no matter where the session wanders (PR checkouts, /tmp).
@@ -2066,21 +2086,15 @@ fn spawn_vendor_headless_forking(
     // trace:TASK-1955 | ai:claude (TASK-1804)
     apply_headless_harness_version(&mut cmd, vendor, &headless_worktree_root());
     // BUG-2139: the child holds its own grant; the launcher's purpose stays
-    // behind. trace:BUG-2139 | ai:claude
-    scrub_launcher_session_env(&mut cmd);
-    // trace:BUG-2006 | ai:antigravity
-    // trace:TASK-2631 | ai:codex
-    let posture = containment_posture(vendor, contained)?;
-    if containment_applied(vendor, contained) {
-        cmd.env("AIDA_CONTAINED", "1");
-        // trace:TASK-2631 | ai:codex — do not inherit a native parent's display marker.
-        cmd.env("AIDA_CONTAINMENT_POSTURE", "aida");
-    } else {
-        cmd.env_remove("AIDA_CONTAINED");
-        // trace:TASK-2631 | ai:codex
-        cmd.env("AIDA_CONTAINMENT_POSTURE", "none");
-    }
-    stamp_containment_posture(&mut cmd, posture);
+    // behind. trace:BUG-2139 STORY-2326 | ai:claude
+    crate::launch::assign_seat(
+        &mut cmd,
+        ctx.kind(),
+        crate::launch::SeatDecision::Child {
+            role: seat.as_str(),
+            grant: &child_grant.id,
+        },
+    )?;
     if vendor == HeadlessVendor::Codex {
         cmd.env("AIDA_USER", crate::current_user_id(None))
             .env("AIDA_PROJECT_ROOT", headless_worktree_root());
@@ -2098,6 +2112,29 @@ fn spawn_vendor_headless_forking(
     // trace:BUG-B6B1278890774EF993D2EBC327862470-151 | ai:claude
     record_headless_session_end(&headless_worktree_root(), session_id);
     Ok((status, child_grant.id))
+}
+
+/// The context of a headless vendor child, which inherits this process's cwd
+/// and is contained (when it is) at the drive's worktree root.
+// trace:STORY-2326 | ai:claude
+pub(crate) fn headless_launch_context(
+    vendor: HeadlessVendor,
+    program: impl Into<std::ffi::OsString>,
+    args: Vec<String>,
+    posture: ContainmentPosture,
+) -> Result<crate::launch::LaunchContext> {
+    Ok(crate::launch::LaunchContext::resolve(
+        crate::launch::LaunchRequest {
+            vendor: crate::launch::context::launch_vendor(vendor),
+            kind: aida_core::launch_policy::LaunchKind::Fresh,
+            program: program.into(),
+            args,
+            tail: Vec::new(),
+            posture,
+            cwd: headless_worktree_root(),
+            set_cwd: false,
+        },
+    )?)
 }
 
 /// End the registry row of the headless session `session_id`, which ran from
@@ -2983,20 +3020,24 @@ pub(crate) fn build_advisor_interactive_command(
     let root = headless_worktree_root();
     let plan = advisor_interactive_launch_plan(vendor, prompt, contained)?;
     let (program, args) = os_wrapped_program_and_args(&root, &plan.program, plan.args)?;
-    if plan.contained {
-        prepare_contained_mailbox_for_launch(&root)?;
-    }
-    let mut cmd = std::process::Command::new(program);
-    cmd.args(args);
-    apply_headless_child_seat_env(&mut cmd, "advisor", grant_env);
+    // trace:STORY-2326 | ai:claude
+    let ctx = headless_launch_context(
+        vendor,
+        program,
+        args,
+        containment_posture(vendor, contained)?,
+    )?;
+    let mut cmd = crate::launch::spawn_agent(&ctx)?;
+    crate::launch::assign_seat(
+        &mut cmd,
+        ctx.kind(),
+        crate::launch::SeatDecision::Child {
+            role: "advisor",
+            grant: grant_env,
+        },
+    )?;
     apply_child_agent_identity(&mut cmd, vendor, "advisor");
     apply_headless_harness_version(&mut cmd, vendor, &root);
-    if plan.contained {
-        cmd.env("AIDA_CONTAINED", "1");
-    } else {
-        cmd.env_remove("AIDA_CONTAINED");
-    }
-    stamp_containment_posture(&mut cmd, containment_posture(vendor, contained)?);
     Ok(cmd)
 }
 
@@ -3030,39 +3071,6 @@ pub(crate) fn spawn_reviewer_launch_plan_granted(
     if parent_contained && !plan.contained {
         anyhow::bail!("[contained] reviewer launch plan is uncontained; rebuild it under the current parent before launching");
     }
-    // trace:BUG-2218 TASK-2328 | ai:codex
-    if plan.contained {
-        prepare_contained_mailbox_for_launch(&std::env::current_dir()?)?;
-    }
-    // A contained reviewer's tool calls run in a sandbox, where only a
-    // keyring-held key presents its grant: refuse before the review is spent.
-    // trace:BUG-b6b1278890774ef993d2ebc327862470-045 | ai:claude
-    let grant = crate::gate::seat_authority::issue_launch_child(
-        project_root,
-        "reviewer",
-        &crate::current_user_id(None),
-        plan.contained,
-    )?;
-    let mut cmd = std::process::Command::new(&plan.program);
-    cmd.args(&plan.args)
-        .env(crate::gate::seat_authority::GRANT_ENV, &grant.id)
-        .env("AIDA_SESSION_ROLE", "reviewer");
-    // trace:BUG-2187 | ai:claude
-    // trace:STORY-1843 | ai:codex
-    let mut handle_guard = child_reservation_guard();
-    apply_child_agent_identity(&mut cmd, plan.vendor, "reviewer");
-    // trace:BUG-2139 | ai:claude
-    scrub_launcher_session_env(&mut cmd);
-    // trace:BUG-2006 | ai:antigravity
-    if plan.contained {
-        cmd.env("AIDA_CONTAINED", "1");
-        // trace:TASK-2631 | ai:codex — do not inherit a native parent's display marker.
-        cmd.env("AIDA_CONTAINMENT_POSTURE", "aida");
-    } else {
-        cmd.env_remove("AIDA_CONTAINED");
-        // trace:TASK-2631 | ai:codex
-        cmd.env("AIDA_CONTAINMENT_POSTURE", "none");
-    }
     // trace:TASK-2631 | ai:codex
     let posture = if plan.contained {
         ContainmentPosture::Aida
@@ -3076,7 +3084,41 @@ pub(crate) fn spawn_reviewer_launch_plan_granted(
     } else {
         ContainmentPosture::None
     };
-    stamp_containment_posture(&mut cmd, posture);
+    // The boundary (the contained mailbox) is set up before the grant exists.
+    // trace:STORY-2326 | ai:claude
+    let ctx = crate::launch::LaunchContext::resolve(crate::launch::LaunchRequest {
+        vendor: crate::launch::context::launch_vendor(plan.vendor),
+        kind: aida_core::launch_policy::LaunchKind::Fresh,
+        program: plan.program.clone().into(),
+        args: plan.args.clone(),
+        tail: Vec::new(),
+        posture,
+        cwd: std::env::current_dir()?,
+        set_cwd: false,
+    })?;
+    let mut cmd = crate::launch::spawn_agent(&ctx)?;
+    // A contained reviewer's tool calls run in a sandbox, where only a
+    // keyring-held key presents its grant: refuse before the review is spent.
+    // trace:BUG-b6b1278890774ef993d2ebc327862470-045 | ai:claude
+    let grant = crate::gate::seat_authority::issue_launch_child(
+        project_root,
+        "reviewer",
+        &crate::current_user_id(None),
+        plan.contained,
+    )?;
+    // trace:BUG-2187 | ai:claude
+    // trace:STORY-1843 | ai:codex
+    let mut handle_guard = child_reservation_guard();
+    apply_child_agent_identity(&mut cmd, plan.vendor, "reviewer");
+    // trace:BUG-2139 STORY-2326 | ai:claude
+    crate::launch::assign_seat(
+        &mut cmd,
+        ctx.kind(),
+        crate::launch::SeatDecision::Child {
+            role: "reviewer",
+            grant: &grant.id,
+        },
+    )?;
     if posture == ContainmentPosture::Native {
         eprintln!("  codex: {}", posture.label());
     }
@@ -6072,7 +6114,6 @@ fn build_coordinator_headless_command_inner(
     mode: Option<&str>,
     stream: bool,
 ) -> Result<std::process::Command> {
-    use std::process::Command;
     // trace:BUG-2172 | ai:codex
     let contained = aida_contained_env()? || contained;
     let (program, mut args) =
@@ -6084,14 +6125,12 @@ fn build_coordinator_headless_command_inner(
     // path is the `--no-human` phase-1 implementer, which must not diverge.
     // trace:TASK-1169 | ai:claude
     let (ceiling_key, ceiling_value) = crate::bg_wait_ceiling_env(Some(&headless_worktree_root()));
-    // trace:BUG-2218 TASK-2328 | ai:codex
     // trace:TASK-2631 | ai:codex
-    if containment_applied(vendor, contained) {
-        prepare_contained_mailbox_for_launch(&headless_worktree_root())?;
-    }
-    let mut child_cmd = Command::new(program);
+    let posture = containment_posture(vendor, contained)?;
+    // trace:STORY-2326 | ai:claude
+    let ctx = headless_launch_context(vendor, program, args, posture)?;
+    let mut child_cmd = crate::launch::spawn_agent(&ctx)?;
     child_cmd
-        .args(args)
         .env("AIDA_HEADLESS", "1")
         // BUG-802: same drive-root anchor as the spawn path — the two launch
         // paths must never diverge on env.
@@ -6102,19 +6141,19 @@ fn build_coordinator_headless_command_inner(
     // BUG-2139: the child's seat authority is ALWAYS set explicitly — the
     // grant minted for this launch, or `""` for a baseline child — never
     // inherited from the launcher, whose grant may carry delegable seats.
-    apply_headless_child_seat_env(&mut child_cmd, seat, grant_env);
+    // trace:STORY-2326 | ai:claude
+    crate::launch::assign_seat(
+        &mut child_cmd,
+        ctx.kind(),
+        crate::launch::SeatDecision::Child {
+            role: seat,
+            grant: grant_env,
+        },
+    )?;
     // trace:BUG-2187 | ai:codex
     apply_child_agent_identity(&mut child_cmd, vendor, seat);
     // trace:TASK-1955 | ai:claude (TASK-1804)
     apply_headless_harness_version(&mut child_cmd, vendor, &headless_worktree_root());
-    // trace:TASK-2631 | ai:codex
-    let posture = containment_posture(vendor, contained)?;
-    if containment_applied(vendor, contained) {
-        child_cmd.env("AIDA_CONTAINED", "1");
-    } else {
-        child_cmd.env_remove("AIDA_CONTAINED");
-    }
-    stamp_containment_posture(&mut child_cmd, posture);
     Ok(child_cmd)
 }
 
@@ -12748,6 +12787,12 @@ mod tests {
     #[test]
     #[cfg(unix)]
     fn interactive_reviewer_and_resume_inherit_parent_before_spawn() {
+        // A contained parent refuses the `AIDA_AGENT_CMD` seam (STORY-2326),
+        // so the fake is the `claude` on PATH, in its own process.
+        // trace:STORY-2326 | ai:claude
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
         let tmp = tempfile::tempdir().unwrap();
         let fake = tmp.path().join("fake-claude");
         let capture = tmp.path().join("capture");
@@ -12758,12 +12803,14 @@ mod tests {
                 capture.display()
             ),
         );
+        let path = path_with_fake_claude(tmp.path(), &fake);
         let _ambient = crate::test_env::AmbientGuard::hermetic_with_seat_and(
             tmp.path(),
             "advisor",
             &["reviewer"],
             &[
-                ("AIDA_AGENT_CMD", Some(fake.to_str().unwrap())),
+                ("AIDA_AGENT_CMD", None),
+                ("PATH", path.to_str()),
                 ("AIDA_CONTAINED", Some("1")),
                 ("AIDA_OS_WRAP", Some("0")),
             ],
@@ -12807,9 +12854,24 @@ mod tests {
         .is_err());
     }
 
+    /// A PATH whose first entry holds `fake` as `claude`.
+    // trace:STORY-2326 | ai:claude
+    fn path_with_fake_claude(dir: &std::path::Path, fake: &std::path::Path) -> std::ffi::OsString {
+        let bin = dir.join("fake-bin");
+        std::fs::create_dir_all(&bin).unwrap();
+        std::fs::copy(fake, bin.join("claude")).unwrap();
+        std::env::join_paths(std::iter::once(bin).chain(std::env::split_paths(
+            &std::env::var_os("PATH").unwrap_or_default(),
+        )))
+        .unwrap()
+    }
+
     // trace:BUG-2006 | ai:antigravity
     #[test]
     fn spawn_vendor_headless_with_seat_preserves_parent_containment() {
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
         let tmp = tempfile::tempdir().unwrap();
         let project = tmp.path().join("project");
         std::fs::create_dir_all(project.join(".aida-store")).unwrap();
@@ -12832,14 +12894,18 @@ mod tests {
         };
 
         // trace:BUG-2172 | ai:codex
-        // 1. Caller passes false, but contained parent must win.
+        // 1. Caller passes false, but contained parent must win. A contained
+        // parent refuses `AIDA_AGENT_CMD` (STORY-2326): the fake is on PATH.
+        // trace:STORY-2326 | ai:claude
         {
+            let path = path_with_fake_claude(tmp.path(), &fake);
             let _ambient = crate::test_env::AmbientGuard::hermetic_with_seat_and(
                 &project,
                 "advisor",
                 &["implementer"],
                 &[
-                    ("AIDA_AGENT_CMD", Some(fake.to_str().unwrap())),
+                    ("AIDA_AGENT_CMD", None),
+                    ("PATH", path.to_str()),
                     ("AIDA_OS_WRAP", Some("0")),
                     ("AIDA_CONTAINED", Some("1")),
                 ],

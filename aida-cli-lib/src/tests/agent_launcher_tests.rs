@@ -4446,7 +4446,9 @@ fn run_tracked_agent_contained_exports_aida_contained_and_uncontained_strips_it(
     };
     let prompt_opts = AgentPromptOptions::new(None, false);
 
-    // 1. Uncontained with ambient AIDA_CONTAINED=1 -> stripped in child
+    // 1. Uncontained under a contained parent (ambient AIDA_CONTAINED=1) ->
+    // refused before any spawn: containment is monotonic (STORY-2326).
+    // trace:STORY-2326 | ai:claude
     {
         let _env = crate::test_env::EnvVarsGuard::apply(&[
             (
@@ -4466,7 +4468,7 @@ fn run_tracked_agent_contained_exports_aida_contained_and_uncontained_strips_it(
             contained: false,
         };
         let prompt_args = agent_initial_prompt_args(&config, &plan, &prompt_opts);
-        run_tracked_agent(
+        let err = run_tracked_agent(
             &fake_agent,
             &config,
             &plan,
@@ -4476,13 +4478,14 @@ fn run_tracked_agent_contained_exports_aida_contained_and_uncontained_strips_it(
             false,
             false,
         )
-        .unwrap();
-        let env_contents = std::fs::read_to_string(&env_out).unwrap();
+        .unwrap_err();
         assert!(
-            !env_contents
-                .lines()
-                .any(|l| l.starts_with("AIDA_CONTAINED=")),
-            "uncontained run_tracked_agent must strip AIDA_CONTAINED: {env_contents}"
+            format!("{err:#}").contains("refusing to launch it"),
+            "{err:#}"
+        );
+        assert!(
+            !env_out.exists(),
+            "a refused launch must not spawn the child"
         );
     }
 

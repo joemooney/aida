@@ -5,7 +5,7 @@ use crate::gate::seat_authority::GRANT_ENV;
 use anyhow::{Context, Result};
 use std::process::{Command, Stdio};
 
-const TOOL_ENV: &[&str] = &[
+pub(crate) const TOOL_ENV: &[&str] = &[
     GRANT_ENV,
     "AIDA_SESSION_ROLE",
     "AIDA_ROLE_INSTANCE",
