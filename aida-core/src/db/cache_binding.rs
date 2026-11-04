@@ -19,7 +19,7 @@
 //! refusing anything.
 // trace:BUG-1984 | ai:claude
 
-use std::collections::HashSet;
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
@@ -65,14 +65,24 @@ fn identity(path: &Path) -> Option<(u64, u64)> {
     }
 }
 
-/// Open descriptors in `/proc/self/fd` (excluding `excluded`) whose `readlink`
-/// target matches `path` (including when the kernel suffixes `" (deleted)"`),
-/// paired with `stat("/proc/self/fd/N")`'s `(dev, ino)`. Reading metadata from
+/// Descriptor numbers another handle held before this connection opened,
+/// each with the `(dev, ino)` it named then.
+// trace:TASK-1954 trace:TASK-1632 | ai:claude
+pub(crate) type ExcludedFds = HashMap<u32, (u64, u64)>;
+
+/// Open descriptors in `/proc/self/fd` whose `readlink` target matches `path`
+/// (including when the kernel suffixes `" (deleted)"`), paired with
+/// `stat("/proc/self/fd/N")`'s `(dev, ino)`. A descriptor in `excluded` is
+/// skipped only while it still names the file it named when excluded: once
+/// the other handle closes it and this handle's lazily opened sidecar reuses
+/// the number, it names a different file and is inspected again. The one
+/// residual blind spot is a reuse that lands on the very same inode, which
+/// falls back to the stat-only check. Reading metadata from
 /// `/proc/self/fd/N` inspects the open file without opening a new handle, so
 /// SQLite's POSIX advisory locks are never dropped.
 // trace:TASK-1739 | ai:antigravity
 #[cfg(target_os = "linux")]
-fn matching_fds(path: &Path, excluded: &HashSet<u32>) -> Vec<(u32, (u64, u64))> {
+fn matching_fds(path: &Path, excluded: &ExcludedFds) -> Vec<(u32, (u64, u64))> {
     use std::os::unix::fs::MetadataExt;
     let Ok(entries) = std::fs::read_dir("/proc/self/fd") else {
         return Vec::new();
@@ -87,9 +97,6 @@ fn matching_fds(path: &Path, excluded: &HashSet<u32>) -> Vec<(u32, (u64, u64))> 
         let Ok(fd_num) = entry.file_name().to_string_lossy().parse::<u32>() else {
             continue;
         };
-        if excluded.contains(&fd_num) {
-            continue;
-        }
         let Ok(link) = std::fs::read_link(entry.path()) else {
             continue;
         };
@@ -102,7 +109,12 @@ fn matching_fds(path: &Path, excluded: &HashSet<u32>) -> Vec<(u32, (u64, u64))> 
             continue;
         }
         if let Ok(meta) = std::fs::metadata(entry.path()) {
-            matches.push((fd_num, (meta.dev(), meta.ino())));
+            let id = (meta.dev(), meta.ino());
+            // trace:TASK-1954 trace:TASK-1632 | ai:claude
+            if excluded.get(&fd_num) == Some(&id) {
+                continue;
+            }
+            matches.push((fd_num, id));
         }
     }
     matches
@@ -111,7 +123,7 @@ fn matching_fds(path: &Path, excluded: &HashSet<u32>) -> Vec<(u32, (u64, u64))> 
 /// `(dev, ino)` of SQLite's open descriptor for `path` from `/proc/self/fd`,
 /// or `None` on non-Linux or when no descriptor is open for `path`.
 // trace:TASK-1739 | ai:antigravity
-fn fd_identity(path: &Path, excluded: &HashSet<u32>) -> Option<(u64, u64)> {
+fn fd_identity(path: &Path, excluded: &ExcludedFds) -> Option<(u64, u64)> {
     #[cfg(target_os = "linux")]
     {
         let fds = matching_fds(path, excluded);
@@ -141,7 +153,7 @@ pub(crate) struct CacheBinding {
     files: Vec<BoundFile>,
     next_check: Instant,
     pinned: bool,
-    excluded_fds: HashSet<u32>,
+    excluded_fds: ExcludedFds,
 }
 
 impl CacheBinding {
@@ -149,31 +161,33 @@ impl CacheBinding {
     /// its sidecars before a new connection is opened, so the new handle's
     /// binding inspects only its own connection's descriptors.
     // trace:TASK-1739 | ai:antigravity
-    pub(crate) fn open_fds_for(cache_path: &Path) -> HashSet<u32> {
+    pub(crate) fn open_fds_for(cache_path: &Path) -> ExcludedFds {
         #[cfg(target_os = "linux")]
         {
-            let empty = HashSet::new();
+            let empty = ExcludedFds::new();
             CacheFile::ALL
                 .iter()
                 .flat_map(|file| matching_fds(&file.path_for(cache_path), &empty))
-                .map(|(fd, _)| fd)
                 .collect()
         }
         #[cfg(not(target_os = "linux"))]
         {
             let _ = cache_path;
-            HashSet::new()
+            ExcludedFds::new()
         }
     }
 
     /// Record what each cache file's open descriptor (or path on non-Linux)
-    /// names right after the connection opened it.
+    /// names right after the connection opened it. Test-only: production opens
+    /// go through [`Self::capture_with_excluded`].
+    // trace:TASK-1954 trace:TASK-1927 | ai:claude
+    #[cfg(test)]
     pub(crate) fn capture(cache_path: &Path) -> Self {
-        Self::capture_with_excluded(cache_path, HashSet::new())
+        Self::capture_with_excluded(cache_path, ExcludedFds::new())
     }
 
     // trace:TASK-1739 | ai:antigravity
-    pub(crate) fn capture_with_excluded(cache_path: &Path, excluded_fds: HashSet<u32>) -> Self {
+    pub(crate) fn capture_with_excluded(cache_path: &Path, excluded_fds: ExcludedFds) -> Self {
         Self {
             files: CacheFile::ALL
                 .iter()
@@ -199,7 +213,7 @@ impl CacheBinding {
             files: Vec::new(),
             next_check: Instant::now() + BINDING_CHECK_INTERVAL,
             pinned: true,
-            excluded_fds: HashSet::new(),
+            excluded_fds: ExcludedFds::new(),
         }
     }
 
@@ -393,6 +407,39 @@ mod tests {
     /// check, `/proc/self/fd` still carries SQLite's open inode and detects
     /// the split.
     // trace:TASK-1739 | ai:antigravity
+    /// An excluded descriptor number reused for a different file (this
+    /// handle's lazily opened sidecar) is inspected again; one still naming
+    /// the file it named when excluded stays skipped.
+    // trace:TASK-1954 trace:TASK-1632 | ai:claude
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn an_excluded_fd_number_reused_for_another_file_is_not_skipped() {
+        use std::os::fd::AsRawFd;
+        let dir = tempfile::tempdir().unwrap();
+        let other = dir.path().join("cache.db");
+        let sidecar = dir.path().join("cache.db-wal");
+        std::fs::write(&other, b"db").unwrap();
+        std::fs::write(&sidecar, b"wal").unwrap();
+        let held = std::fs::File::open(&sidecar).unwrap();
+        let fd = u32::try_from(held.as_raw_fd()).unwrap();
+        let sidecar_id = identity(&sidecar).unwrap();
+
+        // The number was excluded while it named another handle's cache.db.
+        let reused = ExcludedFds::from([(fd, identity(&other).unwrap())]);
+        assert!(
+            matching_fds(&sidecar, &reused).contains(&(fd, sidecar_id)),
+            "a reused excluded fd must be inspected"
+        );
+
+        let still_foreign = ExcludedFds::from([(fd, sidecar_id)]);
+        assert!(
+            !matching_fds(&sidecar, &still_foreign)
+                .iter()
+                .any(|(n, _)| *n == fd),
+            "an excluded fd still naming its original file stays skipped"
+        );
+    }
+
     #[cfg(target_os = "linux")]
     #[test]
     fn holder_rebinds_when_replaced_inside_bind_window_or_before_sidecar_adoption() {

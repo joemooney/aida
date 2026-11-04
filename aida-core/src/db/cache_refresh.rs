@@ -526,13 +526,21 @@ pub fn tui_owns_terminal() -> bool {
     TUI_OWNS_TERMINAL.load(std::sync::atomic::Ordering::SeqCst)
 }
 
-/// The latest cache note recorded while a TUI owned the terminal. Process-wide
-/// rather than thread-local: a rebind or reopen note can fire on a background
-/// refresh thread, and the TUI reads it on its render thread.
+/// The latest cache note recorded while a TUI owned the terminal, with when it
+/// was recorded. Process-wide rather than thread-local: a rebind or reopen note
+/// can fire on a background refresh thread, and the TUI reads it on its render
+/// thread.
 // trace:TASK-1739 | ai:antigravity
-static TUI_CACHE_NOTE: std::sync::Mutex<Option<String>> = std::sync::Mutex::new(None);
+static TUI_CACHE_NOTE: std::sync::Mutex<Option<(String, std::time::Instant)>> =
+    std::sync::Mutex::new(None);
 
-fn tui_cache_note() -> std::sync::MutexGuard<'static, Option<String>> {
+/// How long a recorded cache note stays on the TUI status line. The notes
+/// report one-off events (a rebind, a quarantine, a fallback), so they expire
+/// on their own instead of lingering until a deliberate refresh.
+// trace:TASK-1954 trace:TASK-1629 | ai:claude
+pub(crate) const TUI_CACHE_NOTE_TTL: Duration = Duration::from_secs(60);
+
+fn tui_cache_note() -> std::sync::MutexGuard<'static, Option<(String, std::time::Instant)>> {
     TUI_CACHE_NOTE
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner)
@@ -541,7 +549,16 @@ fn tui_cache_note() -> std::sync::MutexGuard<'static, Option<String>> {
 /// Record a cache note for [`cache_read_note`], from any thread.
 // trace:TASK-1739 | ai:antigravity
 pub fn record_cache_note(note: impl Into<String>) {
-    *tui_cache_note() = Some(note.into());
+    *tui_cache_note() = Some((note.into(), std::time::Instant::now()));
+}
+
+/// Make the recorded note look `by` older (tests).
+// trace:TASK-1954 trace:TASK-1629 | ai:claude
+#[cfg(test)]
+fn age_recorded_cache_note(by: Duration) {
+    if let Some((_, at)) = tui_cache_note().as_mut() {
+        *at = at.checked_sub(by).unwrap_or(*at);
+    }
 }
 
 /// Emit a one-line cache note: to `cache_read_note()` while a TUI owns the
@@ -644,7 +661,17 @@ pub fn reset_cache_read_observations() {
 // trace:TASK-1526 | ai:codex trace:TASK-1739 | ai:antigravity
 pub fn cache_read_note() -> Option<String> {
     let stale = COLLECTED.with(|c| c.borrow().stale.as_ref().map(StaleServe::note));
-    let recorded = tui_cache_note().clone();
+    // trace:TASK-1954 trace:TASK-1629 | ai:claude
+    let recorded = {
+        let mut slot = tui_cache_note();
+        if slot
+            .as_ref()
+            .is_some_and(|(_, at)| at.elapsed() >= TUI_CACHE_NOTE_TTL)
+        {
+            *slot = None;
+        }
+        slot.as_ref().map(|(note, _)| note.clone())
+    };
     match (stale, recorded) {
         (Some(stale), Some(recorded)) => Some(format!("{stale} | {recorded}")),
         (stale, recorded) => stale.or(recorded),
@@ -1247,6 +1274,22 @@ except OSError:
         assert!(note.ends_with(" | note: background rebind"), "{note}");
 
         reset_cache_read_observations();
+        assert_eq!(cache_read_note(), None);
+    }
+
+    /// A recorded note expires after its TTL without a deliberate refresh.
+    // trace:TASK-1954 trace:TASK-1629 | ai:claude
+    #[test]
+    fn recorded_note_expires_without_a_deliberate_refresh() {
+        let _serial = TUI_TERMINAL_TEST_LOCK
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let _scope = CacheReadScope::new();
+        reset_cache_read_observations();
+        record_cache_note("note: rebind");
+        age_recorded_cache_note(TUI_CACHE_NOTE_TTL / 2);
+        assert_eq!(cache_read_note().as_deref(), Some("note: rebind"));
+        age_recorded_cache_note(TUI_CACHE_NOTE_TTL);
         assert_eq!(cache_read_note(), None);
     }
 
