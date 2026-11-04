@@ -39,7 +39,7 @@ const ENTRY_POINTS: &[(&str, &str)] = &[
     ("autopilot_intake.rs", "build_autopilot_intake_command"),
     ("burndown_run.rs", "handle_burndown_run"),
     ("burndown_run.rs", "run_burndown_verbose"),
-    ("burndown_run.rs", "build_burndown_command"),
+    ("burndown_run.rs", "build_burndown_quiet_command"),
     ("burndown_run.rs", "build_burndown_verbose_command"),
     ("compete_cmd.rs", "build_compete_arm_command"),
     ("phase_driver.rs", "spawn_advisor_session"),
