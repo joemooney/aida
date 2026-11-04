@@ -1,4 +1,11 @@
 - user_id: role:implementer
+  requirement_id: 01a1965c-3483-70e3-af35-1caaf7df3f96
+  position: 179000
+  added_by: role:implementer
+  note: 'merge conflict with #3288'
+  added_at: 2026-11-04T11:14:35.899276721Z
+  for_role: implementer
+- user_id: role:implementer
   requirement_id: 01a1a421-9f7b-7781-aa9c-40d608365d38
   position: 180000
   added_by: role:implementer
@@ -32,13 +39,6 @@
   added_by: role:implementer
   note: rework brief on spec
   added_at: 2026-11-04T08:36:22.126324116Z
-  for_role: implementer
-- user_id: role:implementer
-  requirement_id: 01a1965c-3483-70e3-af35-1caaf7df3f96
-  position: 185000
-  added_by: role:implementer
-  note: rework brief on spec
-  added_at: 2026-11-04T08:36:15.037609765Z
   for_role: implementer
 - user_id: role:implementer
   requirement_id: 01a15bb1-414c-7890-aedc-951a3e038991
