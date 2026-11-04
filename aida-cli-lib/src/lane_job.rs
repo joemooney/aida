@@ -366,19 +366,30 @@ pub(crate) const UNTESTED_MARKER: &str = "untested";
 /// The lane job runner for `lease_id`'s seat at `seat`, when it can be
 /// offered: its directories are ready and `[contained] os_wrap` is on (a job
 /// runs only inside bubblewrap, so with it off the runner would refuse every
-/// job). Otherwise warns why and returns `None`; the lane then reports
+/// job). An unset os_wrap is turned on first when bubblewrap works here
+/// (BUG-2434). Otherwise warns why and returns `None`; the lane then reports
 /// `untested=true`. Shared by the standalone implementer and the drain's
 /// phase-1 implementer.
 // trace:BUG-2383 | ai:claude
 pub(crate) fn offer(main_root: &Path, seat: &Path, lease_id: &str) -> Option<LaneJobs> {
     use colored::Colorize;
+    // BUG-2434: a host that never chose os_wrap but has working bubblewrap
+    // gets it on for this lane, so its tests can run. trace:BUG-2434 | ai:claude
+    let os_wrap = crate::session::default_os_wrap_for_implementer_lane(seat);
+    if os_wrap == crate::session::LaneOsWrap::DefaultOn {
+        eprintln!(
+            "  {} bubblewrap works on this host, so this lane runs with `[contained] os_wrap` on \
+             and its tests can run (AIDA_OS_WRAP=0 opts out)",
+            crate::glyph(crate::glyphs::Glyph::InfoAlt).cyan()
+        );
+    }
     let lane_jobs = LaneJobs::for_lease(main_root, seat, lease_id);
     match lane_jobs.prepare() {
         Ok(()) if !crate::session::os_wrap_enabled(seat) => {
             eprintln!(
-                "{} the lane job runner needs `[contained] os_wrap` (jobs run only inside \
-                 bubblewrap), so the implementer cannot run tests and its result says untested=true",
-                "Warning:".yellow().bold()
+                "{} {}",
+                "Warning:".yellow().bold(),
+                no_runner_reason(os_wrap)
             );
             None
         }
@@ -391,6 +402,23 @@ pub(crate) fn offer(main_root: &Path, seat: &Path, lease_id: &str) -> Option<Lan
             None
         }
     }
+}
+
+/// Why the lane gets no job runner when os_wrap stays off: an explicit
+/// opt-out or a host whose bubblewrap does not work, each with its fix.
+// trace:BUG-2434 | ai:claude
+pub(crate) fn no_runner_reason(os_wrap: crate::session::LaneOsWrap) -> String {
+    let why = match os_wrap {
+        crate::session::LaneOsWrap::Explicit(_) => {
+            "`[contained] os_wrap` is set off (AIDA_OS_WRAP or .aida/config.toml); unset it or \
+             set it on"
+        }
+        _ => "bubblewrap does not work on this host; run `aida doctor --fix-sandbox`",
+    };
+    format!(
+        "the lane job runner needs `[contained] os_wrap` (jobs run only inside bubblewrap), so \
+         the implementer cannot run tests and its result says untested=true: {why}"
+    )
 }
 
 /// Record whether `lease_id`'s lane ran a local test: leave
@@ -1615,3 +1643,7 @@ pub(crate) fn tail(text: &str, n: usize) -> String {
 #[cfg(test)]
 #[path = "tests/bug_2383_lane_job_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "tests/bug_2434_lane_os_wrap_tests.rs"]
+mod bug_2434_tests;

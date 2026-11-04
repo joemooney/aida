@@ -5042,13 +5042,63 @@ fn destructive_command_deny_rules() -> Vec<&'static str> {
 /// an unrecognized value is ignored (falls through to config).
 /// trace:TASK-876 | ai:claude
 pub(crate) fn os_wrap_enabled(worktree_root: &Path) -> bool {
+    os_wrap_explicit(worktree_root).unwrap_or(false)
+}
+
+/// The `[contained] os_wrap` value someone actually chose: the `AIDA_OS_WRAP`
+/// override, else the config key. `None` when neither says anything, which is
+/// what lets a headless implementer lane default it on
+/// ([`default_os_wrap_for_implementer_lane`]). trace:BUG-2434 | ai:claude
+pub(crate) fn os_wrap_explicit(worktree_root: &Path) -> Option<bool> {
     if let Some(over) = os_wrap_env_override() {
-        return over;
+        return Some(over);
     }
     let cfg = crate::read_project_config_value(worktree_root);
-    crate::config_lookup(cfg.as_ref(), "contained", "os_wrap")
-        .and_then(|v| v.as_bool())
-        .unwrap_or(false)
+    crate::config_lookup(cfg.as_ref(), "contained", "os_wrap").and_then(|v| v.as_bool())
+}
+
+/// How a headless implementer lane's `[contained] os_wrap` resolves.
+// trace:BUG-2434 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum LaneOsWrap {
+    /// Set by `AIDA_OS_WRAP` or the config: honoured as given.
+    Explicit(bool),
+    /// Unset, and bubblewrap works on this host: the lane turns it on.
+    DefaultOn,
+    /// Unset, and bubblewrap does not work here: it stays off.
+    Unavailable,
+}
+
+/// BUG-2434: decide a headless implementer lane's os_wrap. The lane job
+/// runner runs a job only inside bubblewrap and only with os_wrap on, and
+/// os_wrap is opt-in, so on a host that never opted in every lane reported
+/// `untested=true`. When nobody chose a value and bubblewrap works here, the
+/// lane defaults it on; an explicit choice, either way, wins. Pure.
+// trace:BUG-2434 | ai:claude
+pub(crate) fn lane_os_wrap(explicit: Option<bool>, bwrap_live: bool) -> LaneOsWrap {
+    match explicit {
+        Some(on) => LaneOsWrap::Explicit(on),
+        None if bwrap_live => LaneOsWrap::DefaultOn,
+        None => LaneOsWrap::Unavailable,
+    }
+}
+
+/// Apply [`lane_os_wrap`] for a headless implementer lane at `seat`: on
+/// [`LaneOsWrap::DefaultOn`] set `AIDA_OS_WRAP=1` in this launcher process,
+/// so the seat it is about to launch and the lane job runner it serves both
+/// see os_wrap on, exactly as an operator's `AIDA_OS_WRAP=1` would. Call it
+/// before the seat is spawned and before any runner thread starts.
+// trace:BUG-2434 | ai:claude
+pub(crate) fn default_os_wrap_for_implementer_lane(seat: &Path) -> LaneOsWrap {
+    let explicit = os_wrap_explicit(seat);
+    let decision = lane_os_wrap(
+        explicit,
+        explicit.is_none() && bwrap_availability() == BwrapAvailability::Ok,
+    );
+    if decision == LaneOsWrap::DefaultOn {
+        std::env::set_var("AIDA_OS_WRAP", "1");
+    }
+    decision
 }
 
 /// Parse the `AIDA_OS_WRAP` per-host override. Returns `Some(true)`/`Some(false)`

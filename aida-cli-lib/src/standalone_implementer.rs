@@ -640,7 +640,9 @@ pub(crate) fn run(launch: Launch<'_>) -> Result<()> {
     let worktree = lease_worktree(launch.project_root, launch.lease_id);
     // A job runs seat-written code, so it runs only inside bubblewrap: with
     // os_wrap off the runner would refuse every job, so it is not offered and
-    // the lane reports untested=true.
+    // the lane reports untested=true. An unset os_wrap is turned on here when
+    // bubblewrap works (BUG-2434), before the seat is launched below.
+    // trace:BUG-2434 | ai:claude
     let lane_jobs = crate::lane_job::offer(&main_root, &worktree, launch.lease_id);
     let prompt = format!(
         "{}{STOP_CONTRACT}{}",
