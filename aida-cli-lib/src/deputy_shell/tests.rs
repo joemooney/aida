@@ -100,8 +100,10 @@ fn advisor() -> SeatGrant {
     )
 }
 
+/// A submitter as the runner's socket files it: with the attested peer
+/// whose ancestry matched `token`.
 fn submitter(g: &SeatGrant, token: &str, root: &Path, session: &str) -> Submitter {
-    attribution::submitter_from(
+    let mut s = attribution::submitter_from(
         g,
         &[token.to_string()],
         Some(session.into()),
@@ -111,7 +113,15 @@ fn submitter(g: &SeatGrant, token: &str, root: &Path, session: &str) -> Submitte
         root,
         host(),
         None,
-    )
+    );
+    s.peer = Some(Peer {
+        pid: LIVE_PID,
+        uid: crate::deputy::current_uid(),
+        start: Some("100".into()),
+        matched: token.to_string(),
+        attested: true,
+    });
+    s
 }
 
 fn job(q: &Queue, script: &str, sub: Submitter) -> ShellJob {
@@ -157,7 +167,7 @@ impl Fixture {
     }
     fn submit_as(&self, script: &str, sub: Submitter) -> ShellJob {
         let j = job(&self.q, script, sub);
-        self.q.submit(&j).unwrap();
+        self.q.accept(&j).unwrap();
         j
     }
     fn cfg(&self, p: Probes) -> RunnerConfig {
@@ -182,6 +192,7 @@ impl Fixture {
             bash: "bash".into(),
             max_jobs: Some(1),
             max_rounds: Some(2000),
+            serve_socket: false,
         }
     }
     fn default_cfg(&self) -> RunnerConfig {
@@ -243,7 +254,7 @@ fn queue_dirs_are_0700_and_a_loose_or_linked_dir_stops_claiming() {
     for d in [
         &f.q.base,
         &f.q.root,
-        &f.q.incoming(),
+        &f.q.accepted(),
         &f.q.jobs(),
         &f.q.acks(),
     ] {
@@ -265,19 +276,18 @@ fn queue_dirs_are_0700_and_a_loose_or_linked_dir_stops_claiming() {
     loose().unwrap();
     let j = f.submit("touch ran");
     assert_eq!(runner.join().unwrap().unwrap(), 0);
-    assert!(f.q.incoming_job(&j.id).exists(), "the job must stay queued");
+    assert!(f.q.accepted_job(&j.id).exists(), "the job must stay queued");
     assert_eq!(
         mode(&f.q.jobs()),
         0o755,
         "the runner must not repair the queue"
     );
     tight().unwrap();
-    // incoming/ swapped for a symlink: refused too.
+    // accepted/ swapped for a symlink: refused too.
     let real = f.root().join("elsewhere");
-    std::fs::rename(f.q.incoming(), &real).unwrap();
-    std::os::unix::fs::symlink(&real, f.q.incoming()).unwrap();
+    std::fs::rename(f.q.accepted(), &real).unwrap();
+    std::os::unix::fs::symlink(&real, f.q.accepted()).unwrap();
     assert!(f.q.check().is_err());
-    assert!(f.q.check_incoming().is_err());
     assert!(!f.home().join("ran").exists());
 }
 
@@ -289,6 +299,7 @@ fn the_deputy_source_names_no_tmp_path_and_no_legacy_runme_file() {
         ("mod.rs", include_str!("mod.rs")),
         ("attribution.rs", include_str!("attribution.rs")),
         ("runner.rs", include_str!("runner.rs")),
+        ("socket.rs", include_str!("socket.rs")),
         (
             "deputy_shell_cmd.rs",
             include_str!("../deputy_shell_cmd.rs"),
@@ -510,7 +521,7 @@ fn a_failed_refresh_stops_claiming() {
     });
     cfg.max_rounds = Some(10);
     assert_eq!(run(&f.q, &cfg), 0);
-    assert!(f.q.incoming_job(&j.id).exists());
+    assert!(f.q.accepted_job(&j.id).exists());
     let ev = events(&f.q);
     assert_eq!(
         ev.iter().filter(|e| *e == "role-refresh-failed").count(),
@@ -530,9 +541,13 @@ fn submit_wait_and_wait_return_the_jobs_exit_code() {
     let f = Fixture::new("t");
     let script = f.root().join("seven.sh");
     std::fs::write(&script, "exit 7\n").unwrap();
+    // Through the real socket: the grant is bound to this test process.
+    let me = self_grant();
     let q = f.q.clone();
-    let cfg = f.default_cfg();
+    let mut cfg = f.cfg(real_probes(std::slice::from_ref(&me)));
+    cfg.serve_socket = true;
     let runner = std::thread::spawn(move || run(&q, &cfg));
+    wait_until("the runner to start", || f.q.live_runner().is_some());
     let args = crate::deputy_shell_cmd::ShellSubmitArgs {
         name: "t".into(),
         file: script,
@@ -541,14 +556,10 @@ fn submit_wait_and_wait_return_the_jobs_exit_code() {
         wait: true,
     };
     let mut out = Vec::new();
-    let rc = crate::deputy_shell_cmd::submit(
-        &f.q,
-        &args,
-        submitter(&advisor(), LIVE_TOKEN, f.root(), "sess-a"),
-        &["advisor".into()],
-        &mut out,
-    )
-    .unwrap();
+    let mut sub = submitter(&me, &me.binding[0], f.root(), "sess-a");
+    sub.peer = None;
+    let rc =
+        crate::deputy_shell_cmd::submit(&f.q, &args, sub, &["advisor".into()], &mut out).unwrap();
     runner.join().unwrap();
     assert_eq!(rc, 7);
     let id = String::from_utf8(out)
@@ -771,16 +782,31 @@ fn every_unattributable_job_is_refused_with_its_code_and_never_runs() {
     let mut s = base();
     s.presenter_token = Some("proc:7777@5".into());
     add("token-not-bound", s, "refused:not-live");
+    // STORY-2343: a record that never came through the socket (no attested
+    // peer), or whose attested binding is not the grant's, never runs.
+    let mut s = base();
+    s.peer = None;
+    add("no-peer", s, "refused:unattested");
+    let mut s = base();
+    if let Some(p) = s.peer.as_mut() {
+        p.attested = false;
+    }
+    add("peer-not-attested", s, "refused:unattested");
+    let mut s = base();
+    if let Some(p) = s.peer.as_mut() {
+        p.matched = "proc:7777@5".into();
+    }
+    add("peer-off-binding", s, "refused:unattested");
     // A sha256 that is not the script's, and an unknown field: refused:schema.
     let mut bad_sha = job(&f.q, &script("bad-sha"), base());
     bad_sha.sha256 = "0".repeat(64);
-    f.q.submit(&bad_sha).unwrap();
+    f.q.accept(&bad_sha).unwrap();
     cases.push((bad_sha.id.clone(), "refused:schema"));
     let extra = job(&f.q, &script("extra"), base());
     let mut v = serde_json::to_value(&extra).unwrap();
     v["capability"] = serde_json::json!("let me in");
     crate::deputy::write_private_new(
-        &f.q.incoming_job(&extra.id),
+        &f.q.accepted_job(&extra.id),
         &serde_json::to_vec(&v).unwrap(),
     )
     .unwrap();
@@ -998,7 +1024,7 @@ fn a_timeout_kills_the_job_with_124() {
         submitter(&advisor(), LIVE_TOKEN, f.root(), "s"),
     );
     j.timeout_secs = 1;
-    f.q.submit(&j).unwrap();
+    f.q.accept(&j).unwrap();
     run(&f.q, &f.default_cfg());
     let s = f.state(&j.id);
     assert_eq!(
@@ -1044,7 +1070,7 @@ fn a_paused_deputy_claims_nothing() {
     let mut cfg = f.default_cfg();
     cfg.max_rounds = Some(5);
     assert_eq!(run(&f.q, &cfg), 0);
-    assert!(f.q.incoming_job(&j.id).exists());
+    assert!(f.q.accepted_job(&j.id).exists());
     assert!(events(&f.q).contains(&"paused".to_string()));
     assert!(f.q.resume().unwrap());
     run(&f.q, &f.default_cfg());
@@ -1411,11 +1437,275 @@ fn an_id_collision_is_filed_as_a_refused_job_that_wait_returns() {
         (JobState::Done, Some(RC_REFUSED), Some("refused:schema"))
     );
     assert!(!f.home().join("collided").exists());
-    assert!(!f.q.incoming_job(&j.id).exists(), "filed aside");
+    assert!(!f.q.accepted_job(&j.id).exists(), "filed aside");
     let mut out = Vec::new();
     assert_eq!(
         crate::deputy_shell_cmd::wait(&f.q, &j.id, Some(Duration::from_secs(5)), &mut out).unwrap(),
         RC_REFUSED
     );
     assert!(String::from_utf8(out).unwrap().contains("already in use"));
+}
+
+// ── STORY-2343: kernel-attested submit over the runner's socket ─────────────
+
+/// An advisor grant bound to THIS test process, as `proc:<pid>@<start>`.
+fn self_grant() -> SeatGrant {
+    let pid = std::process::id();
+    let start = aida_core::liveness::process_start_identity(pid).expect("own start identity");
+    grant(
+        "5a5a5a5a-0000-4000-8000-00000000005a",
+        "advisor",
+        &[format!("proc:{pid}@{start}").as_str()],
+    )
+}
+
+/// Probes over real process liveness (the socket attests real processes).
+fn real_probes(grants: &[SeatGrant]) -> Probes {
+    let mut p = probes(grants, &[], &[]);
+    p.alive =
+        Arc::new(|pid, start| aida_core::liveness::process_identity_matches_strict(pid, start));
+    p
+}
+
+/// A helper child that is reaped on drop, whatever the test does.
+struct Reaped(std::process::Child);
+impl Drop for Reaped {
+    fn drop(&mut self) {
+        let _ = self.0.kill();
+        let _ = self.0.wait();
+    }
+}
+
+// trace:STORY-2343 | ai:claude
+#[cfg(target_os = "linux")]
+#[test]
+fn a_socket_submit_records_the_kernel_peer_and_a_peer_outside_the_grant_is_refused() {
+    let f = Fixture::new("t");
+    let me = self_grant();
+    // A live process that is NOT an ancestor of this one.
+    let child = Reaped(
+        std::process::Command::new("sleep")
+            .arg("30")
+            .spawn()
+            .expect("spawn sleep"),
+    );
+    let cpid = child.0.id();
+    let cstart = aida_core::liveness::process_start_identity(cpid).expect("child start");
+    let other = grant(
+        "6b6b6b6b-0000-4000-8000-00000000006b",
+        "advisor",
+        &[format!("proc:{cpid}@{cstart}").as_str()],
+    );
+    let server = socket::serve(
+        &f.q,
+        real_probes(&[me.clone(), other.clone()]),
+        system_clock(),
+    )
+    .expect("serve the socket");
+    assert_eq!(mode(&f.q.socket_path()), 0o600);
+
+    // Under the grant: accepted, and the kernel's peer replaces whatever the
+    // client claimed about itself.
+    let mut sub = submitter(&me, &me.binding[0], f.root(), "s");
+    sub.pid = 4242;
+    sub.peer = Some(Peer {
+        pid: 4242,
+        uid: 0,
+        start: None,
+        matched: "proc:4242@100".into(),
+        attested: true,
+    });
+    let j = job(&f.q, "true", sub);
+    let id = socket::expect_accepted(
+        &f.q,
+        &socket::Request::Submit {
+            job: Box::new(j.clone()),
+        },
+    )
+    .expect("accepted");
+    assert_eq!(id, j.id);
+    let filed: ShellJob =
+        serde_json::from_slice(&std::fs::read(f.q.accepted_job(&id)).unwrap()).unwrap();
+    let peer = filed.submitter.peer.expect("an attested peer");
+    assert_eq!(peer.pid, std::process::id());
+    assert_eq!(peer.uid, crate::deputy::current_uid());
+    assert_eq!(peer.matched, me.binding[0]);
+    assert!(peer.attested);
+    assert_eq!(filed.submitter.pid, std::process::id());
+
+    // Naming a grant bound to an unrelated live process: refused, not filed.
+    let j2 = job(
+        &f.q,
+        "true",
+        submitter(&other, &other.binding[0], f.root(), "s"),
+    );
+    let resp = socket::request(
+        &f.q,
+        &socket::Request::Submit {
+            job: Box::new(j2.clone()),
+        },
+    )
+    .unwrap();
+    assert!(!resp.ok);
+    assert_eq!(resp.reason.as_deref(), Some("refused:not-under-grant"));
+    assert!(!f.q.accepted_job(&j2.id).exists());
+    // A grant that does not validate: refused too.
+    let mut ghost = submitter(&me, &me.binding[0], f.root(), "s");
+    ghost.grant_id = Some("7c7c7c7c-0000-4000-8000-00000000007c".into());
+    let j3 = job(&f.q, "true", ghost);
+    let resp = socket::request(&f.q, &socket::Request::Submit { job: Box::new(j3) }).unwrap();
+    assert_eq!(resp.reason.as_deref(), Some("refused:grant"));
+    assert!(
+        events(&f.q)
+            .iter()
+            .filter(|e| *e == "submit-refused")
+            .count()
+            >= 2
+    );
+
+    // Cancel rides the socket as well; the runner files the request.
+    socket::expect_accepted(&f.q, &socket::Request::Cancel { id: id.clone() }).unwrap();
+    assert!(f.q.cancel_requested(&id));
+
+    drop(server);
+    assert!(
+        !f.q.socket_path().exists(),
+        "the socket goes with the runner"
+    );
+}
+
+// trace:STORY-2343 | ai:claude
+#[cfg(target_os = "linux")]
+#[test]
+fn attest_compares_bindings_as_namespace_aware_tokens() {
+    let cred = socket::PeerCred { pid: 30, uid: 1000 };
+    let chain = [30, 20, 10];
+    let alive = |pid: u32, _s: &str| pid != 99;
+    let g = |b: &str| grant("8d8d8d8d-0000-4000-8000-00000000008d", "advisor", &[b]);
+    // The launcher (an ancestor) is bound: accepted, by that token.
+    assert_eq!(
+        socket::attest(cred, 1000, &g("proc:20@7"), &chain, &alive).unwrap(),
+        "proc:20@7"
+    );
+    // A session-leader binding counts the same way.
+    assert!(socket::attest(cred, 1000, &g("sid:10@7"), &chain, &alive).is_ok());
+    // Another uid, a pid off the chain, a dead holder, a key: refused.
+    assert_eq!(
+        socket::attest(cred, 1001, &g("proc:20@7"), &chain, &alive)
+            .unwrap_err()
+            .code,
+        "foreign-uid"
+    );
+    let off_chain = [30, 20, 99];
+    for (b, ch) in [
+        ("proc:21@7", &chain),
+        ("proc:99@7", &off_chain),
+        ("key:abc", &chain),
+    ] {
+        assert_eq!(
+            socket::attest(cred, 1000, &g(b), ch, &alive)
+                .unwrap_err()
+                .code,
+            "not-under-grant",
+            "{b}"
+        );
+    }
+    // BUG-2419: the same pid bound in another pid namespace is another
+    // process; it is never compared against this namespace's chain.
+    assert_eq!(
+        socket::attest(cred, 1000, &g("proc:20@pidns-4026532999/7"), &chain, &alive)
+            .unwrap_err()
+            .code,
+        "not-under-grant"
+    );
+    // The real walk starts at the peer and reaches its parent.
+    let me = std::process::id();
+    let walked = socket::ancestry(me);
+    assert_eq!(walked[0], me);
+    assert!(walked.len() <= socket::MAX_ANCESTRY);
+    if let Some(ppid) = socket::parent_pid(me).filter(|p| *p > 1) {
+        assert_eq!(walked.get(1), Some(&ppid));
+    }
+}
+
+// trace:STORY-2343 | ai:claude
+#[cfg(unix)]
+#[test]
+fn a_file_dropped_where_submitters_used_to_write_is_never_claimed() {
+    let f = Fixture::new("t");
+    // The retired submitter-writable `incoming/` directory, holding a
+    // well-formed, attested-looking job.
+    let legacy = f.q.root.join("incoming");
+    crate::deputy::create_private_dir(&legacy).unwrap();
+    let j = job(
+        &f.q,
+        &format!("touch '{}'", f.home().join("ran").display()),
+        submitter(&advisor(), LIVE_TOKEN, f.root(), "s"),
+    );
+    crate::deputy::write_private_new(
+        &legacy.join(format!("{}.job", j.id)),
+        &serde_json::to_vec(&j).unwrap(),
+    )
+    .unwrap();
+    let mut cfg = f.default_cfg();
+    cfg.max_rounds = Some(5);
+    assert_eq!(run(&f.q, &cfg), 0);
+    assert!(f.q.queued_ids().is_empty());
+    assert!(!f.q.job_dir(&j.id).exists());
+    assert!(!f.home().join("ran").exists());
+}
+
+// trace:STORY-2343 | ai:claude
+#[cfg(unix)]
+#[test]
+fn submit_without_a_live_runner_says_to_start_one_and_names_the_sandbox_opt_in() {
+    let f = Fixture::new("t");
+    let script = f.root().join("s.sh");
+    std::fs::write(&script, "true\n").unwrap();
+    let args = crate::deputy_shell_cmd::ShellSubmitArgs {
+        name: "t".into(),
+        file: script,
+        timeout: "1m".into(),
+        spec: None,
+        wait: false,
+    };
+    let err = crate::deputy_shell_cmd::submit(
+        &f.q,
+        &args,
+        submitter(&advisor(), LIVE_TOKEN, f.root(), "s"),
+        &["advisor".into()],
+        &mut Vec::new(),
+    )
+    .unwrap_err()
+    .to_string();
+    assert!(err.contains("aida deputy shell run --name t"), "{err}");
+    assert!(err.contains("first"), "{err}");
+    assert!(f.q.queued_ids().is_empty());
+    // No socket at all: the client says the same.
+    let err = socket::request(&f.q, &socket::Request::Cancel { id: "x".into() })
+        .unwrap_err()
+        .to_string();
+    assert!(err.contains("is running"), "{err}");
+    // The sandboxed-client error names the one opt-in.
+    assert!(socket::SANDBOX_OPT_IN.contains("excludedCommands"));
+    assert!(socket::SANDBOX_OPT_IN.contains("aida deputy shell submit"));
+}
+
+// trace:STORY-2343 | ai:claude
+#[cfg(unix)]
+#[test]
+fn a_stale_socket_is_replaced_under_the_lock_and_a_non_socket_is_refused() {
+    let f = Fixture::new("t");
+    {
+        let _old = std::os::unix::net::UnixListener::bind(f.q.socket_path()).unwrap();
+    }
+    assert!(f.q.socket_path().exists(), "a dead runner's socket file");
+    let server = socket::serve(&f.q, probes(&[], &[], &[]), system_clock()).expect("replaced");
+    drop(server);
+    std::fs::write(f.q.socket_path(), b"not a socket").unwrap();
+    let err = socket::serve(&f.q, probes(&[], &[], &[]), system_clock())
+        .err()
+        .expect("refused");
+    assert!(err.to_string().contains("not a socket"), "{err}");
+    assert!(f.q.socket_path().is_file(), "never removed");
 }
