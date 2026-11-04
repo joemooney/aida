@@ -6,12 +6,12 @@ description: |
   seat_clone_detect::is_host_main (aida-core/src/seat_clone_detect.rs:92) checks against a process-wide HOST_MAINS set: every non-clone main ever resolved via main_worktree_root_from (worktree_gc.rs:758), plus the cwd git root. It does not check the launcher's main. No host path that resolves a seat-chosen dir was found, but a long-lived process widens the set. Pass the launcher's main into host_recorded_clone explicitly.
 
   Raised in review of PR-2787: https://github.com/joemooney/aida/pull/2787#issuecomment-6304296951
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-20T23:41:45.676543397Z
-modified_at: 2026-11-04T04:35:44.057562680Z
+modified_at: 2026-11-04T04:36:18.710079758Z
 req_type: Task
 tags:
 - contained
@@ -35,6 +35,12 @@ comments:
   content: 'ADVISOR RULING (PR-3336 round 1 at e0a1ce634d, 2026-11-03 21:37 MST): rework, all in this round. (1) BLOCKER: launcher_main() must not derive main from the process cwd. Capture the host-resolved main once, before session_start''s set_current_dir into the seat clone (session_start.rs:3568), and thread it explicitly into new_session_for_vendor and every boundary builder (claude_contained_settings_json, contained_main_checkout_git_deny_paths, os_wrap_rw_paths, os_wrapped_program_and_args). No global or cwd lookup below that point. (2) TEST: drive the contained boundary exactly as session start does: cwd and project root inside the clone, no LauncherMainPin. Assert the clone''s .git is writable and its target dir is granted. Keep the pinned tests but stop relying on them for this path. (3) AUTHORITY: add refusal tests that pass a forged, seat-writable main (git-inited under the clone''s target/worktrees) to host_recorded_clone and resume_lease_tree, and make resume_lease_tree anchor only on a lease-recorded host main, never on target.worktree. (4) COSMETIC, bundled: drop the now-redundant main-equality filters (ship_from_seat.rs:58, mail_retention.rs:42) and fix the note_host_main doc. Gate, through the lane job runner and cited: cargo test -p aida-cli-lib --lib -- task_2032 bug_2169 bug_1982 task_2053 plus check-ci-fast (umask 022).'
   created_at: 2026-11-04T04:35:44.057562680Z
   modified_at: 2026-11-04T04:35:44.057562680Z
+  session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
+- id: 01a1a4d7-f496-7131-b248-84909f46c823
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: Anchor change is right in direction, but launcher_main() reads the process cwd, which session_start chdirs into the seat clone before building the contained boundary, so contained clone launches lose clone recognition; tests mask this with LauncherMainPin. CI still pending at review time.. No triage reason was given.'
+  created_at: 2026-11-04T04:36:18.710075796Z
+  modified_at: 2026-11-04T04:36:18.710075796Z
   session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
 history:
 - id: 01a15cbb-fc05-7050-907c-e1e0d5b0996b
@@ -85,6 +91,14 @@ history:
   - field_name: status
     old_value: Done
     new_value: NeedsAttention
+- id: 01a1a4d7-f496-7131-b248-848a4cf13984
+  author: joe
+  timestamp: 2026-11-04T04:36:18.710063234Z
+  session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: 45025e7234009af5f935bde71591c6f0469de938
   branch: pr-2787
@@ -97,11 +111,3 @@ implementation_info:
   implemented: true
   implemented_at: 2026-11-04T04:25:29.357042790Z
   implemented_by: joe
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: Anchor change is right in direction, but launcher_main() reads the process cwd, which session_start chdirs into the seat clone before building the contained boundary, so contained clone launches lose clone recognition; tests mask this with LauncherMainPin. CI still pending at review time.
-  recovery_hint: address the review findings, move TASK-2032 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-04T04:34:10.634314706Z
