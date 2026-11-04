@@ -1,5 +1,6 @@
 id: 01a1a82b-d518-7a42-bf62-ed3839f5e173
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-790
+agreed_id: TASK-2843
 title: 'minor: aliases() runs on the coverage-filtered list (pr_train_verified.rs:315).…'
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on BUG-2441, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
@@ -20,6 +21,11 @@ tags:
 - finding-hash:c41b81a8
 - from-review:PR-3380
 - kind:carried-forward
+history:
+- id: 01a1a873-b278-7562-9bc2-ac1b6409693f
+  author: joe
+  timestamp: 2026-11-04T21:25:17.048244760Z
+  changes: []
 filed_at:
   code_sha: 83ce565277a264e7468fc8b2e08e75dedc095284
   branch: main
