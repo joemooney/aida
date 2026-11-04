@@ -1133,7 +1133,7 @@ blocks:
   type_prefix: TASK
   range_start: 2912
   range_end: 3011
-  next: 2997
+  next: 2998
   allocated_at: 2026-11-03T07:03:15.683681811Z
 - node_id: b6b1278890774ef993d2ebc327862470
   owner: redacted@node.invalid
@@ -1141,7 +1141,7 @@ blocks:
   type_prefix: STORY
   range_start: 2419
   range_end: 2518
-  next: 2440
+  next: 2442
   allocated_at: 2026-11-04T01:45:18.845749471Z
 - node_id: b6b1278890774ef993d2ebc327862470
   owner: redacted@node.invalid

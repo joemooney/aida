@@ -9,12 +9,12 @@ description: |-
 
   PR: #3305
   Reviewed sha: af914bb0693fd92bdaf5cccd6b8f8888360ca7c2
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T01:15:11.009301343Z
-modified_at: 2026-11-04T05:57:58.901786497Z
+modified_at: 2026-11-04T06:07:54.676161811Z
 req_type: Task
 tags:
 - carried-from:BUG-2426
@@ -83,6 +83,15 @@ history:
   timestamp: 2026-11-04T05:57:59.998626915Z
   session_id: da1c0d85-1d45-4ce4-a292-5358644f65b9
   changes: []
+- id: 01a1a52b-d134-7b61-90cc-544c3d0d6fa8
+  author: aida-orchestrator
+  timestamp: 2026-11-04T06:07:54.676189393Z
+  session_id: 01a1a52919fa
+  harness_version: 2.1.318 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 0f1624a8b38d961973328d79d05642add4464fc8
   branch: main
@@ -90,3 +99,11 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: 02cfbd22515
   vendor: claude
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: author_live fails closed and the parks()/since fixes are correct and tested, but list_leases_strict_all treats aida lock's lock-only entries (lock-<slug>.toml, which do not parse as a SessionLease) as torn leases, so while any worktree lock exists the watcher never updates a dead author's branch; CI also red at this head (unrelated deputy_shell flake)
+  recovery_hint: address the review findings, move TASK-2813 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-11-04T06:07:54.676161811Z
