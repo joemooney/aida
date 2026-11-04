@@ -11,7 +11,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-20T23:41:45.676543397Z
-modified_at: 2026-11-04T19:59:29.170394180Z
+modified_at: 2026-11-04T20:50:10.139607895Z
 req_type: Task
 tags:
 - contained
@@ -110,6 +110,12 @@ comments:
   modified_at: 2026-11-04T19:59:29.170394180Z
   session_id: 01a1a808dc5c
   harness_version: 2.1.318 (Claude Code)
+- id: 01a1a853-8c5b-7bd3-b3c9-3c74e4708716
+  author: joe
+  content: 'ADVISOR REWORK BRIEF (2026-11-04 14:15 MST), PR #3336 head 0648fb1c (after the main merge), CI red in four tests: headless_hint_tests.rs:128 headless_env_launches_route_through_shared_argv_builders; bug_2169_contained_clone_bwrap_tests.rs:637 a_clone_launched_from_inside_itself_keeps_its_boundary, :322 only_the_host_lease_makes_a_host_recorded_clone, and :789 task_2032_every_queue_work_launch_arm_keeps_the_clone_boundary. CI (gates) is also red. These most likely come from the merge with #3288 (LaunchContext/spawn_agent): the launch arms moved, so the anchor to the launcher''s main must flow through the new LaunchContext. Fix in-tree; do not re-merge. Gate: cargo test -p aida-cli-lib --lib bug_2169 plus headless_hint, then make check-ci-fast. Codex lane: leave the edits in the tree; the advisor publishes them.'
+  created_at: 2026-11-04T20:50:10.139607895Z
+  modified_at: 2026-11-04T20:50:10.139607895Z
+  session_id: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
 history:
 - id: 01a15cbb-fc05-7050-907c-e1e0d5b0996b
   author: joe
