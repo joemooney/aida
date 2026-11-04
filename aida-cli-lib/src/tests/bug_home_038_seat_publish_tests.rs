@@ -423,13 +423,41 @@ fn test_bundle(main: &Path, clone: &Path, branch: &str) -> anyhow::Result<Vec<u8
     Ok(out.stdout)
 }
 
+/// The handler's commit step for a run without `--commit-pending`: never
+/// reached.
+// trace:TASK-2712 | ai:claude
+fn no_commit(_: &Path, _: &Path, _: &str, _: &str) -> anyhow::Result<Option<String>> {
+    panic!("the commit step ran without --commit-pending")
+}
+
 fn opts(clone: &Path, dry_run: bool, no_pr: bool) -> crate::ship_from_seat::FromSeatOptions {
     crate::ship_from_seat::FromSeatOptions {
         clone: clone.to_path_buf(),
         spec: Some("BUG-1".into()),
         no_pr,
         dry_run,
+        commit_pending: None,
     }
+}
+
+/// Whether bwrap can create an unprivileged sandbox here. When it cannot,
+/// the caller skips, unless `AIDA_REQUIRE_BWRAP_LIVE` is set.
+// trace:TASK-2712 | ai:claude
+#[cfg(target_os = "linux")]
+fn bwrap_live_or_skip() -> bool {
+    let live = std::process::Command::new("bwrap")
+        .args(["--unshare-all", "--ro-bind", "/", "/", "--dev", "/dev"])
+        .args(["--proc", "/proc", "true"])
+        .output()
+        .is_ok_and(|o| o.status.success());
+    if !live {
+        assert!(
+            std::env::var_os("AIDA_REQUIRE_BWRAP_LIVE").is_none(),
+            "AIDA_REQUIRE_BWRAP_LIVE=1 but bwrap cannot run here"
+        );
+        eprintln!("SKIP (bwrap unavailable)");
+    }
+    live
 }
 
 /// Every seat-import quarantine ref in `repo`.
@@ -469,6 +497,7 @@ fn bug_home_038_from_seat_handler_pushes_lease_branch_and_opens_pr() {
     let opened_for = std::cell::RefCell::new(Vec::<String>::new());
     let deps = crate::ship_from_seat::Deps {
         bundle: &test_bundle,
+        commit: &no_commit,
         forge: &|_| Box::new(forge.clone()) as Box<dyn crate::forge::Forge>,
         after_open: &|_, branch| opened_for.borrow_mut().push(branch.to_string()),
     };
@@ -506,49 +535,121 @@ fn bug_home_038_from_seat_handler_pushes_lease_branch_and_opens_pr() {
     assert_eq!(*opened_for.borrow(), vec!["seat-feat".to_string()]);
 }
 
-/// TASK-2712 N2/N4: a native Codex lane commits in its own seat clone (the
-/// one `.git` its write set grants), then the unchanged `ship --from-seat`
-/// publishes it against a fake origin and forge. Hooks the seat planted
-/// afterwards (in `.git/hooks` and through `core.hooksPath`) never run on
-/// the host, and `aida ship`'s native-Codex refusal lets the clone through.
+/// TASK-2712 (the advisor's N3 fallback): a native Codex lane cannot commit
+/// in its own sandbox, so `aida ship` inside its seat refuses with the
+/// host-commit recovery, and `--commit-pending` in a dry run commits nothing.
 // trace:TASK-2712 | ai:claude
-#[cfg(unix)]
 #[test]
-fn task_2712_native_codex_seat_commit_ships_from_seat_without_seat_hooks() {
+fn task_2712_native_seat_ship_refuses_with_host_commit_recovery() {
     let fx = fixture();
     let (clone, tip) = seat_with_commit(
         &fx,
-        "native",
-        "c0ffee271201",
-        "native-feat",
+        "nativedry",
+        "c0ffee271202",
+        "native-dry",
         "fix: native codex seat (BUG-1)",
     );
-    crate::codex_native_sandbox::refuse_native_publication_outside_clone(Some("native"), &clone)
-        .unwrap();
+    let err = crate::codex_native_sandbox::refuse_native_publication(Some("native"), &clone)
+        .unwrap_err()
+        .to_string();
+    assert!(err.contains("--commit-pending"), "{err}");
+    assert!(err.contains("--from-seat"), "{err}");
+    assert!(err.contains("untouched"), "{err}");
+    crate::codex_native_sandbox::refuse_native_publication(None, &clone).unwrap();
+
+    let deps = crate::ship_from_seat::Deps {
+        bundle: &test_bundle,
+        commit: &no_commit,
+        forge: &|_| panic!("forge reached in a dry run"),
+        after_open: &|_, _| {},
+    };
+    let mut dry = opts(&clone, true, false);
+    dry.commit_pending = Some("fix: more (BUG-1)".into());
+    crate::ship_from_seat::run_from(&fx.main, dry, &deps).unwrap();
+    assert_eq!(git_ok(&clone, &["rev-parse", "HEAD"]), tip);
+}
+
+/// TASK-2712 N2/N4 with the advisor's N3 fallback, end to end where bwrap
+/// runs: a native Codex seat leaves its work uncommitted; `ship --from-seat
+/// --commit-pending` commits it host-side in AIDA's own sandbox (hooks off,
+/// the host's identity, the lease's branch only), then the unchanged
+/// publication pushes exactly that commit to a fake origin and opens the PR
+/// on a fake forge. Hooks the seat planted (in `.git/hooks` and through
+/// `core.hooksPath`) never run. A seat on another branch is refused with
+/// nothing committed.
+// trace:TASK-2712 | ai:claude
+#[cfg(target_os = "linux")]
+#[test]
+fn task_2712_native_codex_seat_commit_ships_from_seat_without_seat_hooks() {
+    if !bwrap_live_or_skip() {
+        return;
+    }
+    let fx = fixture();
+    let clone =
+        super::s4_host_git_tests::leased_clone_on(&fx, "native", "c0ffee271201", "native-feat");
+    git_ok(&fx.main, &["config", "user.name", "Host Operator"]);
+    git_ok(&fx.main, &["config", "user.email", "host@example.com"]);
+    git_ok(&clone, &["config", "user.name", "Seat Forged"]);
+    git_ok(&clone, &["config", "user.email", "forged@example.com"]);
     let sentinel = fx.root.join("hook-ran");
     plant_hooks(&clone, &sentinel, &fx.root);
+    std::fs::write(clone.join("native.txt"), "native seat\n").unwrap();
+    let base = git_ok(&clone, &["rev-parse", "HEAD"]);
+    let message = "fix: native codex seat (BUG-1)";
+
+    // A seat that moved off its lease's branch is refused; nothing commits.
+    git_ok(&clone, &["checkout", "-q", "-b", "elsewhere"]);
+    let err = crate::seat_clone::commit_pending(&fx.main, &clone, "native-feat", message)
+        .unwrap_err()
+        .to_string();
+    assert!(err.contains("not its lease's branch"), "{err}");
+    assert_eq!(git_ok(&clone, &["rev-parse", "HEAD"]), base);
+    git_ok(&clone, &["checkout", "-q", "native-feat"]);
+
     let forge = crate::forge::fake::RecordingForge {
         opens_as: Some(88),
         ..crate::forge::fake::RecordingForge::new()
     };
     let deps = crate::ship_from_seat::Deps {
         bundle: &test_bundle,
+        commit: &crate::seat_clone::commit_pending,
         forge: &|_| Box::new(forge.clone()) as Box<dyn crate::forge::Forge>,
         after_open: &|_, _| {},
     };
-    crate::ship_from_seat::run_from(&fx.main, opts(&clone, false, false), &deps).unwrap();
+    let mut run = opts(&clone, false, false);
+    run.commit_pending = Some(message.into());
+    crate::ship_from_seat::run_from(&fx.main, run, &deps).unwrap();
+
+    let tip = git_ok(&clone, &["rev-parse", "HEAD"]);
+    assert_ne!(tip, base, "the host committed nothing");
     assert_eq!(
         git_ok(&fx.origin, &["rev-parse", "refs/heads/native-feat"]),
         tip,
-        "the pushed commit is the seat's own, byte for byte"
+        "the pushed commit is the one the host made in the seat, byte for byte"
     );
+    assert_eq!(
+        git_ok(&clone, &["log", "-1", "--format=%an <%ae>|%cn <%ce>|%s"]),
+        "Host Operator <host@example.com>|Host Operator <host@example.com>|fix: native codex seat (BUG-1)",
+        "the host's identity, never the seat's"
+    );
+    assert_eq!(
+        git_ok(&clone, &["show", "--format=", "--name-only", "HEAD"]),
+        "native.txt"
+    );
+    assert_eq!(git_ok(&clone, &["status", "--porcelain"]), "");
     let opened = forge.opened.lock().unwrap().clone();
     assert_eq!(opened.len(), 1);
-    assert_eq!(opened[0].title, "fix: native codex seat (BUG-1)");
+    assert_eq!(opened[0].title, message);
     assert!(
         !sentinel.exists(),
-        "a seat hook ran on the host: {}",
+        "a seat hook ran: {}",
         std::fs::read_to_string(&sentinel).unwrap_or_default()
+    );
+
+    // Nothing pending: the commit step is a no-op.
+    assert_eq!(
+        crate::seat_clone::commit_pending(&fx.main, &clone, "native-feat", message).unwrap(),
+        None
     );
 }
 
@@ -571,6 +672,7 @@ fn bug_home_038_from_seat_failed_pr_lookup_opens_no_pr() {
     };
     let deps = crate::ship_from_seat::Deps {
         bundle: &test_bundle,
+        commit: &no_commit,
         forge: &|_| Box::new(forge.clone()) as Box<dyn crate::forge::Forge>,
         after_open: &|_, _| panic!("after_open ran without an open PR"),
     };
@@ -596,6 +698,7 @@ fn bug_home_038_from_seat_explicit_spec_must_match_trailers() {
     );
     let deps = crate::ship_from_seat::Deps {
         bundle: &test_bundle,
+        commit: &no_commit,
         forge: &|_| panic!("forge reached despite a spec mismatch"),
         after_open: &|_, _| {},
     };
@@ -621,6 +724,7 @@ fn bug_home_038_from_seat_inside_a_clone_is_refused() {
     let (clone, _) = seat_with_commit(&fx, "inside", "c0ffee038008", "inside", "fix: x (BUG-1)");
     let deps = crate::ship_from_seat::Deps {
         bundle: &|_, _, _| panic!("bundled from inside a clone"),
+        commit: &no_commit,
         forge: &|_| panic!("forge reached from inside a clone"),
         after_open: &|_, _| {},
     };
@@ -639,6 +743,7 @@ fn bug_home_038_from_seat_trailer_check_runs_before_push() {
     let (clone, _) = seat_with_commit(&fx, "bare", "c0ffee038009", "bare", "fix: no trailer");
     let deps = crate::ship_from_seat::Deps {
         bundle: &test_bundle,
+        commit: &no_commit,
         forge: &|_| panic!("forge reached despite a refused trailer"),
         after_open: &|_, _| {},
     };
@@ -688,6 +793,7 @@ fn bug_2431_from_seat_accepts_refs_only_trailer() {
     };
     let deps = crate::ship_from_seat::Deps {
         bundle: &test_bundle,
+        commit: &no_commit,
         forge: &|_| Box::new(forge.clone()) as Box<dyn crate::forge::Forge>,
         after_open: &|_, _| {},
     };
@@ -828,6 +934,7 @@ fn ship_from_seat_run_prunes_stale_quarantine_and_reflogs_imports() {
     quarantine_ref_at(&fx.main, &stale, &base, Some(long_ago));
     let deps = crate::ship_from_seat::Deps {
         bundle: &test_bundle,
+        commit: &no_commit,
         forge: &|_| panic!("a dry run reached the forge"),
         after_open: &|_, _| {},
     };

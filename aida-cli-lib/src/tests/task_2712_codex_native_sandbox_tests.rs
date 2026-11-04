@@ -15,7 +15,7 @@ fn s(v: &[&str]) -> Vec<String> {
 /// no `--add-dir` at all: the write set fails closed.
 #[test]
 fn no_write_roots_means_the_bare_posture() {
-    let flags = codex_native_sandbox_flags_for_roots(&[]).unwrap();
+    let flags = codex_native_sandbox_flags_for_roots(&[], Some("reviewer")).unwrap();
     assert_eq!(flags, s(&CODEX_NATIVE_POSTURE));
     assert!(carries_native_posture(&flags));
 }
@@ -39,7 +39,7 @@ fn rescope_replaces_only_the_emitted_add_dir_run() {
         "--model",
         "m",
     ]);
-    rescope_codex_native_flags(&mut args, tmp.path()).unwrap();
+    rescope_codex_native_flags(&mut args, tmp.path(), None).unwrap();
     assert_eq!(
         args,
         s(&[
@@ -59,7 +59,7 @@ fn rescope_replaces_only_the_emitted_add_dir_run() {
         "/x",
     ]);
     let before = other.clone();
-    rescope_codex_native_flags(&mut other, tmp.path()).unwrap();
+    rescope_codex_native_flags(&mut other, tmp.path(), None).unwrap();
     assert_eq!(other, before);
 }
 
@@ -90,20 +90,29 @@ fn a_read_only_plan_lane_drops_every_add_dir() {
     );
 }
 
-/// N1: only a native Codex lane is refused publication outside a clone, and
-/// the refusal names the reason and the way out.
+/// N1 with the N3 fallback: only a native Codex lane is refused publication,
+/// and outside a seat clone the refusal names the reason and the way out.
+/// (The in-clone refusal, which points at the host commit, is tested beside
+/// the seat-publish fixture.)
 #[test]
 fn publication_outside_a_clone_is_refused_only_for_native_codex() {
     let tmp = tempfile::tempdir().unwrap();
-    let err = refuse_native_publication_outside_clone(Some("native"), tmp.path())
+    let err = refuse_native_publication(Some("native"), tmp.path())
         .unwrap_err()
         .to_string();
     assert!(err.contains("native Codex sandbox"), "{err}");
     assert!(err.contains("seat clone"), "{err}");
     assert!(err.contains("untouched"), "{err}");
     for posture in [None, Some("aida"), Some("none")] {
-        refuse_native_publication_outside_clone(posture, tmp.path()).unwrap();
+        refuse_native_publication(posture, tmp.path()).unwrap();
     }
+}
+
+/// Advisor ruling 2026-11-03 18:32: the gate ledger is a reviewer grant
+/// only. The one role constant is `reviewer`.
+#[test]
+fn the_gate_ledger_role_is_the_reviewer() {
+    assert_eq!(GATE_LEDGER_ROLE, "reviewer");
 }
 
 /// The source of `src/<file>`.
@@ -178,14 +187,25 @@ fn every_codex_spawn_path_gets_the_shared_write_set() {
         .collect();
     assert!(
         bg.contains(
-            "crate::agent_launch::rescope_contained_settings(&mutconfig,&plan.launch_cwd)?"
+            "crate::agent_launch::rescope_contained_settings(&mutconfig,&plan.launch_cwd,plan.role.as_deref(),)?"
         ),
-        "the --bg lane must rescope its write set to its own tree"
+        "the --bg lane must rescope its write set to its own tree and role"
     );
     assert!(
         bg.contains(
-            "prepare_agent_launch_attempt(&project_root,role,spec,\"codex\",name,cwd_ref,true)?"
+            "prepare_agent_launch_attempt_on_branch(&project_root,role,spec,\"codex\",name,cwd_ref,true,"
         ),
         "the --bg lane must ask for a seat clone"
+    );
+    // Every agent-new launch passes the plan's role, so the gate ledger
+    // follows the role (reviewer only).
+    assert_eq!(
+        launch
+            .matches(
+                "rescope_contained_settings(&mutconfig,&plan.launch_cwd,plan.role.as_deref())?"
+            )
+            .count(),
+        2,
+        "both agent-new paths must rescope with the plan's role"
     );
 }

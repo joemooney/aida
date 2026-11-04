@@ -2024,14 +2024,17 @@ pub(crate) fn rescope_codex_mcp_flags(
 pub(crate) fn rescope_contained_settings(
     config: &mut AgentLaunchConfig,
     tree: &std::path::Path,
+    role: Option<&str>,
 ) -> Result<()> {
     // TASK-2712: a native Codex launch's `--add-dir` write set follows the
-    // lane's tree the same way.
+    // lane's tree the same way; its role decides the gate-ledger grant
+    // (reviewer only).
     // trace:TASK-2712 | ai:claude
     if config.agent_type == "codex" {
         return crate::codex_native_sandbox::rescope_codex_native_flags(
             &mut config.default_args,
             tree,
+            role,
         );
     }
     if config.agent_type != "claude" || !is_contained_launch(config) {
@@ -3148,7 +3151,7 @@ pub(crate) fn agent_new_with_config_wake(
         launch_wants_seat_clone(&config),
     )?;
     // trace:BUG-2169 | ai:claude
-    rescope_contained_settings(&mut config, &plan.launch_cwd)?;
+    rescope_contained_settings(&mut config, &plan.launch_cwd, plan.role.as_deref())?;
     // trace:BUG-2394 | ai:claude
     rescope_codex_mcp_flags(
         &mut config,
@@ -3468,7 +3471,7 @@ pub(crate) fn agent_new_bg_dispatch(
         launch_wants_seat_clone(&config),
     )?;
     // trace:BUG-2169 | ai:claude
-    rescope_contained_settings(&mut config, &plan.launch_cwd)?;
+    rescope_contained_settings(&mut config, &plan.launch_cwd, plan.role.as_deref())?;
     config.default_args.extend(agent_seed_session_args(
         config.agent_type,
         plan.native_session_id.as_deref(),

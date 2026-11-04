@@ -47,6 +47,10 @@ pub(crate) struct FromSeatOptions {
     pub(crate) no_pr: bool,
     /// Verify and report in a scratch repository; import and push nothing.
     pub(crate) dry_run: bool,
+    /// TASK-2712: first commit the seat's pending work with this message,
+    /// host-side in AIDA's own sandbox ([`crate::seat_clone::commit_pending`]),
+    /// for a native Codex seat that cannot commit in its own sandbox.
+    pub(crate) commit_pending: Option<String>,
 }
 
 /// `clone` as a seat clone `main` recorded, or the refusal.
@@ -473,6 +477,10 @@ pub(crate) fn explicit_spec_check(explicit: &str, trailer_ids: &[String]) -> Res
 pub(crate) struct Deps<'a> {
     /// Bundle `refs/heads/<branch>` of the clone (`main`, `clone`, `branch`).
     pub(crate) bundle: &'a dyn Fn(&Path, &Path, &str) -> Result<Vec<u8>>,
+    /// Commit the clone's pending work (`main`, `clone`, `branch`,
+    /// `message`); the new tip, or `None` when there was nothing to commit.
+    // trace:TASK-2712 | ai:claude
+    pub(crate) commit: &'a dyn Fn(&Path, &Path, &str, &str) -> Result<Option<String>>,
     /// The forge to open the PR on, for `main`.
     pub(crate) forge: &'a dyn Fn(&Path) -> Box<dyn crate::forge::Forge>,
     /// Called with `main` and the branch once the PR is open.
@@ -488,6 +496,7 @@ pub(crate) fn run(opts: FromSeatOptions) -> Result<()> {
         opts,
         &Deps {
             bundle: &crate::seat_clone::bundle_branch,
+            commit: &crate::seat_clone::commit_pending,
             forge: &|main| crate::forge::forge_for_open_change(main),
             after_open: &|main, branch| {
                 let _ = crate::queue_review_for_open_pr(main, branch);
@@ -539,6 +548,20 @@ pub(crate) fn run_from(cwd: &Path, opts: FromSeatOptions, deps: &Deps<'_>) -> Re
         eprintln!("  pruned stale {pruned}");
     }
 
+    // TASK-2712: the host commits a native Codex seat's pending work first,
+    // in AIDA's own sandbox with the seat's hooks off. The trailer check
+    // below then judges that commit like any other seat commit.
+    // trace:TASK-2712 | ai:claude
+    if let Some(message) = &opts.commit_pending {
+        if opts.dry_run {
+            eprintln!("  dry run: would commit the seat's pending work first; committed nothing");
+        } else {
+            match (deps.commit)(&main, &seat.root, &branch, message)? {
+                Some(tip) => eprintln!("  committed the seat's pending work as {tip} (hooks off)"),
+                None => eprintln!("  the seat had no pending work to commit"),
+            }
+        }
+    }
     let bytes = (deps.bundle)(&main, &seat.root, &branch)?;
     let staged = stage_bundle(&main, &branch, &bytes, opts.dry_run)?;
     let checked = check_staged(&main, &staged, &opts);

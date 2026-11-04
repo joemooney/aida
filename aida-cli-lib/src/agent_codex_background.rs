@@ -654,6 +654,9 @@ pub(crate) fn agent_new_codex_bg(mut req: CodexBgRequest) -> Result<()> {
         // already admitted, attempt.
         let _own = receipt::OwnAttemptScope::enter(&attempt);
         // trace:BUG-2390 | ai:claude — dispatch take/impl name the lane branch.
+        // TASK-2712: a native Codex lane runs in a seat clone (`true`), whose
+        // pending work the host commits and publishes.
+        // trace:TASK-2712 | ai:claude
         prepare_agent_launch_attempt_on_branch(
             &project_root,
             role,
@@ -661,8 +664,6 @@ pub(crate) fn agent_new_codex_bg(mut req: CodexBgRequest) -> Result<()> {
             "codex",
             name,
             cwd_ref,
-            // TASK-2712: a native Codex lane commits only in a seat clone.
-            // trace:TASK-2712 | ai:claude
             true,
             LaneBranch {
                 branch: req.branch.clone(),
@@ -672,7 +673,11 @@ pub(crate) fn agent_new_codex_bg(mut req: CodexBgRequest) -> Result<()> {
     };
     // TASK-2712: the shared write set, scoped to the lane's own tree.
     // trace:TASK-2712 | ai:claude
-    crate::agent_launch::rescope_contained_settings(&mut config, &plan.launch_cwd)?;
+    crate::agent_launch::rescope_contained_settings(
+        &mut config,
+        &plan.launch_cwd,
+        plan.role.as_deref(),
+    )?;
     refuse_posture_overrides(&config.default_args)?;
     let mut setup_receipt = setup_receipt;
     if let Some(setup) = setup_receipt.as_mut() {

@@ -2673,10 +2673,13 @@ pub fn exec_codex_session(
     let posture = containment_posture(HeadlessVendor::Codex, requested)?;
     let mut cmd = if posture == ContainmentPosture::Native {
         let mut cmd = std::process::Command::new("codex");
-        // TASK-2712: the write set of the lane's own tree.
+        // TASK-2712: the write set of the lane's own tree. No role is known
+        // here, so no gate ledger (reviewer only).
         // trace:TASK-2712 | ai:claude
-        let mut args =
-            crate::codex_native_sandbox::codex_native_sandbox_flags_in(&headless_worktree_root())?;
+        let mut args = crate::codex_native_sandbox::codex_native_sandbox_flags_in(
+            &headless_worktree_root(),
+            None,
+        )?;
         args.extend(codex_session_args(initial_prompt, false, model));
         // trace:BUG-2394 | ai:claude — a plan lane narrows the native sandbox.
         if read_only {
@@ -3662,11 +3665,13 @@ pub(crate) fn headless_vendor_args_contained_in(
             containment_posture_in(dir, vendor.as_str(), true)?;
             let mut args = codex_headless_args_with_model_and_effort(prompt, model, effort);
             args.retain(|arg| arg != "--dangerously-bypass-approvals-and-sandbox");
-            // TASK-2712: the write set of the child's own tree.
+            // TASK-2712: the write set of the child's own tree. A drain
+            // child's role is not known here, so no gate ledger (reviewer
+            // only).
             // trace:TASK-2712 | ai:claude
             args.splice(
                 0..0,
-                crate::codex_native_sandbox::codex_native_sandbox_flags_in(dir)?,
+                crate::codex_native_sandbox::codex_native_sandbox_flags_in(dir, None)?,
             );
             Ok(args)
         }
