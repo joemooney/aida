@@ -37,12 +37,6 @@
   added_at: 2026-11-04T12:45:50.766010844Z
   for_role: advisor
 - user_id: joe
-  requirement_id: 01a1a69c-f8ab-7371-b247-7ba016857f83
-  position: 393000
-  added_by: joe
-  added_at: 2026-11-04T12:51:38.976005505Z
-  for_role: advisor
-- user_id: joe
   requirement_id: 01a1a76e-bac7-7761-8dde-c17ecd9576e7
   position: 400000
   added_by: joe
