@@ -47,6 +47,9 @@ pub(crate) mod expected {
         "today waits out its 24h age clock; the judge already has proof the holder ended";
     pub(crate) const RELEASED: &str =
         "the record was released while today's lease remains (a release path that ends no lease)";
+    // trace:BUG-2425 | ai:claude
+    pub(crate) const UNKNOWN_FOREIGN: &str =
+        "today abstains: the lease's pids live in a pid namespace this reader cannot observe";
 }
 
 /// Compare one lease's state today with its record and the judge's verdict
@@ -80,7 +83,9 @@ pub(crate) fn compare_one(
     match (today, owner) {
         (LeaseState::Live, OwnerVerdict::Alive { .. })
         | (LeaseState::Stale, OwnerVerdict::Dead { .. })
-        | (LeaseState::Dormant, OwnerVerdict::Unknown { .. }) => Outcome::Agree,
+        | (LeaseState::Dormant, OwnerVerdict::Unknown { .. })
+        | (LeaseState::Unknown, OwnerVerdict::Unknown { .. }) => Outcome::Agree,
+        (LeaseState::Unknown, _) => Outcome::Expected(expected::UNKNOWN_FOREIGN.to_string()),
         (LeaseState::Live, OwnerVerdict::Unknown { .. }) => {
             Outcome::Expected(expected::LIVE_UNPROVEN.to_string())
         }

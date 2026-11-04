@@ -30,6 +30,7 @@ fn change(head: u64) -> forge::Change {
         gitlab: false,
         overlap: Some(false),
         behind: Some(0),
+        head_branch: None,
     }
 }
 

@@ -13,9 +13,12 @@
 //! the agent's worktree uses `work_grace_secs` (default 10s) to distinguish
 //! recent descendant work from a finished seat.
 
-use crate::gate::dispatch_deps::PidNamespaceProbe;
+// trace:BUG-2425 | ai:claude — the one namespace judge lives in aida-core.
 use crate::leases::SessionLease;
 use crate::process_retry::RetryEtxtbsy;
+#[cfg(test)]
+use aida_core::pid_observer::PidNamespaceProbe;
+pub(crate) use aida_core::pid_observer::PidObserver;
 use std::path::{Path, PathBuf};
 
 use aida_core::liveness::ProcTree;
@@ -2543,8 +2546,7 @@ pub(crate) fn named_agent_liveness(project_root: &Path, name: &str) -> Option<bo
 // records the host-visible PID even when the target itself is namespaced.
 // trace:STORY-1843 | ai:codex
 pub(crate) fn current_pid_namespace() -> Option<u64> {
-    use std::os::unix::fs::MetadataExt;
-    std::fs::metadata("/proc/self/ns/pid").ok().map(|m| m.ino())
+    aida_core::pid_observer::current_pid_namespace()
 }
 
 /// Liveness as this observer can actually see it. `None` when the row's PID
@@ -2582,7 +2584,8 @@ pub(crate) fn observed_liveness_from(
 
 /// Inode of Linux's initial PID namespace.
 // trace:STORY-1843 | ai:claude
-pub(crate) const INITIAL_PID_NAMESPACE: u64 = 0xEFFF_FFFC;
+#[cfg(test)]
+pub(crate) const INITIAL_PID_NAMESPACE: u64 = aida_core::process_probe::INITIAL_PID_NAMESPACE_INODE;
 
 /// How long a row whose process this observer cannot see stays in a human
 /// LISTING, from its last heartbeat. Display only: guards never apply a
@@ -2592,38 +2595,6 @@ pub(crate) const INITIAL_PID_NAMESPACE: u64 = 0xEFFF_FFFC;
 // trace:BUG-2212 | ai:claude
 // trace:TASK-2272 | ai:claude
 pub(crate) const UNOBSERVED_HEARTBEAT_TTL_SECS: i64 = 24 * 60 * 60;
-
-/// The PID view a liveness check runs from: which namespace this process is
-/// in, and whether that namespace is an isolated sandbox.
-// trace:BUG-2212 | ai:claude
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) struct PidObserver {
-    pub(crate) namespace: Option<u64>,
-    pub(crate) isolated: bool,
-}
-
-impl PidObserver {
-    pub(crate) fn current() -> Self {
-        Self::from_probe(&PidNamespaceProbe::read())
-    }
-
-    pub(crate) fn from_probe(probe: &PidNamespaceProbe) -> Self {
-        Self {
-            namespace: probe.self_ns,
-            isolated: probe.is_isolated(),
-        }
-    }
-
-    /// A row's process is visible only from the namespace it was stamped in;
-    /// an unstamped legacy row only from a non-isolated initial namespace.
-    pub(crate) fn can_observe(&self, recorded: Option<u64>) -> bool {
-        match (recorded, self.namespace) {
-            (Some(recorded), Some(current)) => recorded == current,
-            (None, Some(INITIAL_PID_NAMESPACE)) => !self.isolated,
-            _ => false,
-        }
-    }
-}
 
 /// What a displayed row's liveness rests on.
 // trace:BUG-2212 | ai:claude
@@ -4750,6 +4721,33 @@ mod tests {
         }
         assert!(probe(host, None, 1, "bwrap").is_isolated());
         assert!(probe(7, Some(host), 1, "runit").is_isolated());
+    }
+
+    // BUG-2425: the mandate gate keeps a floor copy of the probe; it must
+    // judge isolation exactly as the shared aida-core judge does.
+    // trace:BUG-2425 | ai:claude
+    #[test]
+    fn gate_floor_probe_matches_the_core_isolation_judge() {
+        let host = INITIAL_PID_NAMESPACE;
+        for (self_ns, pid1_ns, nspid, comm) in [
+            (host, Some(host), 1, "systemd"),
+            (host, None, 1, "init"),
+            (7, Some(host), 1, "systemd"),
+            (7, None, 2, "systemd"),
+            (7, None, 1, "3"),
+            (host, None, 1, "bwrap"),
+            (host, None, 1, "tini"),
+            (7, Some(host), 1, "runit"),
+        ] {
+            let core = probe(self_ns, pid1_ns, nspid, comm);
+            let gate = crate::gate::dispatch_deps::PidNamespaceProbe {
+                self_ns: core.self_ns,
+                pid1_ns: core.pid1_ns,
+                nspid_levels: core.nspid_levels,
+                pid1_comm: core.pid1_comm.clone(),
+            };
+            assert_eq!(gate.is_isolated(), core.is_isolated(), "{core:?}");
+        }
     }
 
     // trace:BUG-2212 | ai:claude

@@ -22,6 +22,7 @@ fn change(id: u64, head: u64) -> forge::Change {
         gitlab: false,
         overlap: Some(false),
         behind: Some(0),
+        head_branch: None,
     }
 }
 fn until(what: &str, done: impl Fn() -> bool) {
@@ -594,6 +595,8 @@ fn test_signal_guard_refuses_foreign_processes() {
 #[test]
 fn start_order_compares_ticks_on_one_boot() {
     let anchor = Identity {
+        pid_namespace: crate::agent_registry::current_pid_namespace(),
+        recorded_at: None,
         pid: 10,
         start: "linux-starttime:100".into(),
         boot: "boot-a".into(),
@@ -702,4 +705,68 @@ fn hold_cause_drops_an_exited_member() {
     assert!(held.contains(&format!("process {} ", stays.id())), "{held}");
     signal::test_signal(stays.id(), Signal::Kill);
     stays.wait().unwrap();
+}
+
+fn bug_2425_foreign_identity(recorded_at: chrono::DateTime<chrono::Utc>) -> Identity {
+    Identity {
+        pid_namespace: Some(crate::agent_registry::current_pid_namespace().unwrap_or(0) ^ 1),
+        recorded_at: Some(recorded_at),
+        pid: u32::MAX - 1,
+        start: "linux-starttime:1".into(),
+        boot: boot_id().unwrap(),
+    }
+}
+
+// A foreign pid namespace is not evidence of death: inside its backstop the
+// process keeps its slot and is never signalled.
+// trace:BUG-2425 | ai:codex
+#[test]
+fn bug_2425_foreign_watch_process_retains_capacity_and_refuses_signals() {
+    let identity = bug_2425_foreign_identity(chrono::Utc::now());
+    assert!(
+        identity.alive(),
+        "an invisible process must retain watch capacity"
+    );
+    for sig in [None, Some(signal::Signal::Term), Some(signal::Signal::Kill)] {
+        let holds = signal::signal_attempt(&[&identity], Some(1), Some(&identity), sig);
+        assert_eq!(holds.len(), 1);
+        assert!(holds[0].contains("foreign pidns"));
+    }
+}
+
+// The backstop is independent evidence: past its TTL, or after a reboot, a
+// foreign-namespace process is gone, frees its slot and is not held.
+// trace:BUG-2425 | ai:claude
+#[test]
+fn bug_2425_foreign_watch_process_past_its_backstop_is_released() {
+    let now = chrono::Utc::now();
+    let expired = bug_2425_foreign_identity(now - chrono::Duration::hours(5));
+    assert!(
+        !expired.alive(),
+        "an expired foreign record must not wedge its slot"
+    );
+    let held = signal::signal_attempt(&[&expired], Some(1), Some(&expired), None);
+    assert!(
+        held.iter().all(|h| !h.contains("foreign pidns")),
+        "{held:?}"
+    );
+    let fresh = bug_2425_foreign_identity(now);
+    assert!(!fresh.within_foreign_backstop(now, Some("another-boot")));
+    assert!(fresh.within_foreign_backstop(now, Some(fresh.boot.as_str())));
+}
+
+// Advisor ruling (PR #3298 round 4): `recorded_at` is observation metadata,
+// not identity. Two reads of the same process taken at different instants
+// must compare equal, or every self-identity check in the dispatcher fails.
+// trace:BUG-2425 | ai:claude
+#[test]
+fn bug_2425_identity_equality_ignores_recorded_at() {
+    let first = Identity::current().unwrap();
+    std::thread::sleep(std::time::Duration::from_millis(5));
+    let second = Identity::current().unwrap();
+    assert_ne!(first.recorded_at, second.recorded_at);
+    assert_eq!(first, second);
+    let mut other_process = second.clone();
+    other_process.pid ^= 1;
+    assert_ne!(first, other_process);
 }

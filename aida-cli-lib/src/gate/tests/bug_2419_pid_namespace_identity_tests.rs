@@ -582,3 +582,65 @@ fn reviewer_lease_on_the_pr_branch_is_never_an_author() {
         1
     );
 }
+
+/// TASK-2799: the detached-worker path (STORY-2254) stamps and records its
+/// worker exactly as the attached path does: the strict lease stamp records
+/// the origin pid namespace beside `active_pid` (so `lease_tokens` keeps the
+/// worker's proc token), and the strict authorship record names the worker
+/// with its namespace-qualified token.
+// trace:TASK-2799 | ai:claude
+#[test]
+fn detached_worker_stamp_and_record_carry_the_pid_namespace() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    let grant = "33333333-3333-3333-3333-333333333333";
+    let l = super::bug_1918_review_authority_tests::lease(
+        "01a2b3c4d5f7",
+        "TASK-27990",
+        root.join("wt"),
+    );
+    super::bug_1918_review_authority_tests::write_lease(root, &l);
+    let path = crate::lease_path(root, &l.id);
+    let mut doc: toml_edit::DocumentMut = std::fs::read_to_string(&path).unwrap().parse().unwrap();
+    doc[crate::session::LEASE_CHILD_GRANT_KEY] = toml_edit::value(grant);
+    std::fs::write(&path, doc.to_string()).unwrap();
+
+    let me = std::process::id();
+    let start = "linux-starttime:4242";
+    with_pid_namespace(Some(NS_A), || {
+        crate::session::stamp_lease_detached_worker_at(root, &l.id, grant, me, start).unwrap();
+        record_detached_worker_strict(root, &l.id, me, start).unwrap();
+    });
+
+    let stamped = toml::from_str::<SessionLease>(&std::fs::read_to_string(&path).unwrap()).unwrap();
+    assert_eq!(stamped.active_pid_ns.as_deref(), Some(NS_A));
+    let qualified = format!("proc:{me}@{PID_NS_PREFIX}{NS_A}/{start}");
+    assert!(
+        lease_tokens(&stamped, None).contains(&qualified),
+        "{:?}",
+        lease_tokens(&stamped, None)
+    );
+    let ledger = load_ledger(root);
+    assert!(
+        ledger
+            .iter()
+            .any(|r| r.lease_id == l.id && r.tokens.contains(&qualified)),
+        "{ledger:?}"
+    );
+    assert!(
+        !ledger
+            .iter()
+            .any(|r| r.tokens.contains(&process_token("proc", me, Some(start)))),
+        "the unqualified token is never recorded inside a namespace"
+    );
+
+    // On the host the stamp records the host namespace and the token stays
+    // unqualified.
+    crate::session::stamp_lease_detached_worker_at(root, &l.id, grant, me, start).unwrap();
+    let stamped = toml::from_str::<SessionLease>(&std::fs::read_to_string(&path).unwrap()).unwrap();
+    assert_eq!(
+        stamped.active_pid_ns.as_deref(),
+        Some(INITIAL_PID_NAMESPACE_INODE)
+    );
+    assert!(lease_tokens(&stamped, None).contains(&process_token("proc", me, Some(start))));
+}

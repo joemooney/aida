@@ -18,6 +18,7 @@ fn change(id: u64, head: u64, overlap: bool) -> forge::Change {
         gitlab: false,
         overlap: Some(overlap),
         behind: Some(u64::from(overlap)),
+        head_branch: None,
     }
 }
 fn dispatch(action: Action) -> Attempt {
@@ -614,9 +615,9 @@ fn task1993_live_discovery_probes_both_forges_and_refuses_moving_or_unknown_head
             "https://github.com/owner/repo.git"
         };
         let row = if gitlab {
-            serde_json::json!({"iid":1,"state":"opened","draft":false,"sha":head,"target_branch":"main","author":{"username":"writer"}})
+            serde_json::json!({"iid":1,"state":"opened","draft":false,"sha":head,"source_branch":"feature","target_branch":"main","author":{"username":"writer"}})
         } else {
-            serde_json::json!({"number":1,"state":"OPEN","isDraft":false,"headRefOid":head,"baseRefName":"main","author":{"login":"writer"},"statusCheckRollup":[{"status":"IN_PROGRESS"}]})
+            serde_json::json!({"number":1,"state":"OPEN","isDraft":false,"headRefOid":head,"headRefName":"feature","baseRefName":"main","author":{"login":"writer"},"statusCheckRollup":[{"status":"IN_PROGRESS"}]})
         };
         let list = temp.path().join("list.json");
         let view = temp.path().join("view.json");
@@ -630,7 +631,7 @@ fn task1993_live_discovery_probes_both_forges_and_refuses_moving_or_unknown_head
         let script = if gitlab {
             format!("#!/bin/sh\n[ \"$GITLAB_HOST\" = gitlab.example.test ] || exit 81\n[ \"$1 $2 $3\" = 'api -X GET' ] || exit 82\ncase \"$4\" in projects/group%2Fsub%2Frepo/merge_requests) cat '{}' ;; projects/group%2Fsub%2Frepo/merge_requests/1) cat '{}' ;; *) exit 83 ;; esac\n", q(&list), q(&view))
         } else {
-            format!("#!/bin/sh\n[ \"$GH_HOST\" = github.com ] || exit 81\n[ \"$1\" = pr ] || exit 82\ncase \"$2\" in list) cat '{}' ;; view) cat '{}' ;; *) exit 83 ;; esac\n", q(&list), q(&view))
+            format!("#!/bin/sh\n[ \"$GH_HOST\" = github.com ] || exit 81\n[ \"$1\" = pr ] || exit 82\ncase \"$2\" in list) cat '{}' ;; view) cat '{}' ;; update-branch) printf '%s\\n' \"$*\" >> '{}' ; echo 'merge conflict between base and head' >&2 ; exit 1 ;; *) exit 83 ;; esac\n", q(&list), q(&view), q(&temp.path().join("gh-update.log")))
         };
         crate::test_exec::write_executable(&bin.join(if gitlab { "glab" } else { "gh" }), &script);
         let path = format!("{}:/usr/bin:/bin", bin.display());
@@ -843,12 +844,43 @@ exit 3
         super::run(&args).unwrap();
         std::env::set_current_dir(&cwd).unwrap();
         let messages = aida_core::mailbox::read_local_messages(&root).unwrap();
+        // The first pass notifies the author; the second, finding no live
+        // session on the branch, runs the real `gh pr update-branch`, and the
+        // conflict it reports routes the change to the advisor.
+        // trace:BUG-2426 | ai:claude
         assert_eq!(
             messages.len(),
-            1,
-            "actual watcher passes must send one stale-head notice"
+            2,
+            "a stale-head notice, then one advisor routing: {messages:?}"
         );
-        assert_eq!(messages[0].from, "review-watch");
+        assert!(messages.iter().all(|m| m.from == "review-watch"));
+        // GitLab has no update the watcher may run: the refusal is not
+        // transient, so the second pass routes it without a retry.
+        let routed = if gitlab {
+            "MR-1 behind `main` with overlap; the watcher could not update it"
+        } else {
+            "PR-1 behind `main` with overlap; update-branch conflicts"
+        };
+        assert!(
+            messages.iter().any(
+                |m| m.to == aida_core::mailbox::Recipient::Agent("advisor".into())
+                    && m.subject.as_deref() == Some(routed)
+            ),
+            "{messages:?}"
+        );
+        if !gitlab {
+            let update_log = std::fs::read_to_string(temp.path().join("gh-update.log")).unwrap();
+            assert_eq!(
+                update_log.trim(),
+                "pr update-branch 1 --repo github.com/owner/repo"
+            );
+        }
+        let skipped = skipped_changes(&root);
+        assert_eq!(skipped.len(), 1, "{skipped:?}");
+        assert!(
+            skipped[0].2.contains("routed to the advisor"),
+            "{skipped:?}"
+        );
         assert!(
             git_run(
                 &root,
@@ -1340,6 +1372,10 @@ fn task1993_watcher_never_signals_merges_or_runs_cargo() {
         "review_watch_ready.rs",
         "review_watch_notice.rs",
         "forge_commit_ci.rs",
+        // The one sanctioned branch write: `gh pr update-branch` for a stale
+        // head whose author is gone. Every other token stays forbidden there.
+        // trace:BUG-2426 | ai:claude
+        "review_watch_update.rs",
     ] {
         let text = std::fs::read_to_string(src.join(file)).unwrap();
         for forbidden in [
@@ -1361,6 +1397,9 @@ fn task1993_watcher_never_signals_merges_or_runs_cargo() {
             "prctl",
             "pre_exec",
         ] {
+            if file == "review_watch_update.rs" && forbidden == "\"update-branch\"" {
+                continue;
+            }
             assert!(!text.contains(forbidden), "{file} contains {forbidden}");
         }
     }

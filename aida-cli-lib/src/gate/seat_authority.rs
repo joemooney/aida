@@ -2448,9 +2448,17 @@ pub(crate) fn accept_detached_launch_child(
     );
     let token = pid_binding_token(worker_pid)
         .context("detached launch: the worker's start identity could not be read")?;
+    // Both sides qualified alike: `pid_binding_token` qualifies with this
+    // process's pid namespace, so a plain token here would never match
+    // inside a non-host namespace.
+    // trace:TASK-2799 | ai:claude
     anyhow::ensure!(
         token
-            == crate::gate::review_authority::process_token("proc", worker_pid, Some(worker_start)),
+            == crate::gate::review_authority::author_process_token(
+                "proc",
+                worker_pid,
+                Some(worker_start)
+            ),
         "detached launch: process {worker_pid} is no longer the worker that was spawned (start identity changed)"
     );
     let now = Utc::now();

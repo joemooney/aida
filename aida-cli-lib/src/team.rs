@@ -667,6 +667,7 @@ mod tests {
         let dir = store.join("coordination").join("leases");
         std::fs::create_dir_all(&dir).unwrap();
         let claim = crate::coordination::Claim {
+            pid_namespace: crate::agent_registry::current_pid_namespace(),
             // trace:BUG-2188 | ai:codex
             claim_id: None,
             scope: scope.to_string(),
