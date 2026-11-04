@@ -5,3 +5,9 @@ last_by:
   vendor: codex
 result: done
 note: Exact doctor check runaway-seats --fail-on-findings --json exited0 at current471540a; zero findings in covered Claude sources, historical trip lacks actor/rule metrics, Codex explicitly not-read and missing transcript directories retained. BUG2391 sketch independent changes requested and amendment delegated; no fabricated Codex health or new poll.
+due_since: 2026-11-04T10:50:20.308563973Z
+due_reason: on CronJobFailed:watchdog
+due_failure:
+  trip_id: watchdog@2026-11-04T10:26:33.016908413Z
+  job: watchdog
+  error: 'exit 124: timed out: doctor check runaway-seats --fail-on-findings did not complete within 120s (killed)'
