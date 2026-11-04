@@ -13,6 +13,16 @@ req_type: Task
 tags:
 - area:containment
 - vendor:agy
+relationships:
+- rel_type: Child
+  target_id: 01a1a736-e545-7881-9b39-de61a3c68b66
+  created_at: 2026-11-04T17:53:57.750825898Z
+history:
+- id: 01a1a7b2-3e77-7b11-be33-eb44a8ab90c9
+  author: joe
+  timestamp: 2026-11-04T17:53:58.903059437Z
+  session_id: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
+  changes: []
 filed_at:
   code_sha: 6a331a8a5c91ca7485b695a076af44bdf9be3894
   branch: main
