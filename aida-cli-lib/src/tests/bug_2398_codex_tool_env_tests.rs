@@ -510,6 +510,16 @@ const LAUNCH_INVENTORY: &[(&str, usize, Finalization)] = &[
             "cfg(test) synthetic selector proving the probe's env_clear forwards none",
         ),
     ),
+    // trace:STORY-2338 | ai:claude — the script deputy hands each job the
+    // operator's own (refreshed) grant; the child is `bash` running the
+    // submitted script, never a Codex agent.
+    (
+        "deputy_shell/runner.rs",
+        1,
+        Finalization::NotACodexLaunch(
+            "bash running a script-deputy job under the operator's grant; no agent vendor",
+        ),
+    ),
     ("dispatch.rs", 1, Finalization::PrepareLaunch(1)),
     ("phase_driver.rs", 1, Finalization::PrepareLaunch(1)),
     ("phase_driver_trait.rs", 1, Finalization::PrepareLaunch(1)),

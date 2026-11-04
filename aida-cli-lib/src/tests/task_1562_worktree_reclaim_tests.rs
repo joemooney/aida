@@ -407,6 +407,34 @@ fn task_1562_target_pct_stops_early_and_leaves_the_rest_warm() {
     );
 }
 
+/// STORY-2351: a budgeted apply checks its deadline before every deletion
+/// and defers the rest untouched once it has passed.
+// trace:STORY-2351 | ai:claude
+#[test]
+fn story_2351_apply_until_defers_every_entry_past_the_deadline() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    let a = worktree(root, "aida-a", 2_000);
+    let b = worktree(root, "aida-b", 1_000);
+    let p = plan(&survey(root, vec![entry(&a, "a"), entry(&b, "b")]));
+    assert_eq!(p.reclaim.len(), 2);
+
+    let passed = std::time::Instant::now();
+    let done =
+        crate::worktree_reclaim::apply_until(&p, passed, |path| std::fs::remove_dir_all(path))
+            .unwrap();
+    assert!(done.deleted.is_empty(), "{:?}", done.deleted);
+    assert_eq!(done.deferred.len(), 2);
+    assert!(a.join("target").is_dir() && b.join("target").is_dir());
+
+    let later = std::time::Instant::now() + Duration::from_secs(3600);
+    let done =
+        crate::worktree_reclaim::apply_until(&p, later, |path| std::fs::remove_dir_all(path))
+            .unwrap();
+    assert_eq!(done.deleted.len(), 2);
+    assert!(done.deferred.is_empty());
+}
+
 // trace:TASK-1562 | ai:claude
 #[test]
 fn task_1562_porcelain_parser_reads_paths_and_shortens_branches() {

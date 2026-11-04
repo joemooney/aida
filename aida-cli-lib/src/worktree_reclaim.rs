@@ -245,6 +245,10 @@ pub struct Reclaimed {
     pub failed: Vec<(PathBuf, String)>,
     /// Entries left alone because `--target-pct` was already satisfied.
     pub stopped_early: Vec<PathBuf>,
+    /// Entries left alone because the caller's deadline passed
+    /// ([`apply_until`]); the next run picks them up.
+    // trace:STORY-2351 | ai:claude
+    pub deferred: Vec<PathBuf>,
     pub freed_bytes: u64,
 }
 
@@ -659,6 +663,36 @@ pub fn apply(
     disk_pct: impl Fn(&Path) -> Option<u8>,
     remove: impl Fn(&Path) -> std::io::Result<()>,
 ) -> Result<Reclaimed> {
+    apply_inner(plan, stop_at_pct, disk_pct, || false, remove)
+}
+
+/// [`apply`] for a caller with a wall-clock budget (the scheduled hygiene
+/// pass and the disk-headroom guard, each killed by the scheduler at its
+/// timeout). The deadline is checked before every deletion; once it has
+/// passed, the remaining entries land in [`Reclaimed::deferred`] untouched,
+/// so a large reclaim stops between caches instead of being killed mid-delete.
+// trace:STORY-2351 | ai:claude
+pub fn apply_until(
+    plan: &Plan,
+    deadline: std::time::Instant,
+    remove: impl Fn(&Path) -> std::io::Result<()>,
+) -> Result<Reclaimed> {
+    apply_inner(
+        plan,
+        None,
+        |_| None,
+        || std::time::Instant::now() >= deadline,
+        remove,
+    )
+}
+
+fn apply_inner(
+    plan: &Plan,
+    stop_at_pct: Option<u8>,
+    disk_pct: impl Fn(&Path) -> Option<u8>,
+    past_deadline: impl Fn() -> bool,
+    remove: impl Fn(&Path) -> std::io::Result<()>,
+) -> Result<Reclaimed> {
     let protected = protected_target(&plan.main_root);
     let mut out = Reclaimed::default();
 
@@ -672,6 +706,12 @@ pub fn apply(
             );
         }
         refuse_outside_allowlist(plan, &entry.target)?;
+
+        // trace:STORY-2351 | ai:claude
+        if past_deadline() {
+            out.deferred.push(entry.target.clone());
+            continue;
+        }
 
         if let Some(floor) = stop_at_pct {
             if let Some(pct) = disk_pct(&plan.main_root) {

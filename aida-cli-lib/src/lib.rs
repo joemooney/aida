@@ -135,6 +135,9 @@ mod gate;
 // trace:STORY-B6B1278890774EF993D2EBC327862470-099 | ai:claude
 mod deputy;
 mod deputy_cmd;
+// trace:STORY-2338 | ai:claude
+mod deputy_shell;
+mod deputy_shell_cmd;
 mod gitlab_mirror_link;
 mod graph_cmd;
 mod help;
@@ -638,6 +641,8 @@ mod whoami_view;
 // trace:TASK-1177 | ai:claude — the substrate-state reap pass for sessions
 // whose spec is finished, branch merged, and process exited.
 mod session_reap;
+// trace:STORY-2351 | ai:claude — the hourly reap + agent gc + idle-cache reclaim pass.
+mod session_hygiene;
 // trace:TASK-1171 | ai:claude — the dedicated marker-delimited channel the
 // `aida()` wrapper evals, so ordinary stdout is never an eval candidate.
 mod shell_eval;

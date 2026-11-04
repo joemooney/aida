@@ -27,7 +27,7 @@
 <h3 id="control-plane">Control plane</h3>
 <p>The part of AIDA that decides whether work may move forward and reports what is in flight: the queue, seats, leases, reviews, merge holds and the status views. The spec records themselves are the data it acts on, not part of it.</p>
 <h3 id="deputy">Deputy</h3>
-<p>A helper you start in your own terminal with <code>aida deputy</code>. Agents hand it commands to run under your seat grant, and it runs only what you allowed, records each job and tells the submitting agent the result. See <a href="../cli/06-roles-sessions.md#aida-deputy"><code>aida deputy</code></a>.</p>
+<p>A helper you start in your own terminal that runs work other sessions hand it, under your seat grant. There are two kinds. The command deputy (<code>aida deputy</code>) runs single commands you allowed. The script deputy (<code>aida deputy shell</code>) runs whole scripts from the advisor, one at a time, at your terminal and as you. Both record each job and tell the submitting session the result. See <a href="../deputies.md">Deputies: command vs script</a>.</p>
 <h3 id="grant">Grant</h3>
 <p>The authority your terminal session holds to act in a <a href="#seat">seat</a>. You get one by running <code>aida role enter &lt;seat&gt;</code> at an interactive terminal; it expires after a set time (24 hours by default) and works only for processes started from that terminal. See <a href="../cli/06-roles-sessions.md#entering-seats-and-delegating-child-seats">Entering seats and delegating child seats</a>.</p>
 <h3 id="handoff">Handoff</h3>
