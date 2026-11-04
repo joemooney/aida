@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-03T07:21:01.822528019Z
-modified_at: 2026-11-04T03:20:23.127505291Z
+modified_at: 2026-11-04T04:20:23.845617503Z
 req_type: Story
 tags:
 - area:deputy
@@ -85,6 +85,12 @@ comments:
   modified_at: 2026-11-04T03:20:14.105241307Z
   session_id: 01a1a48f6ec8
   harness_version: 2.1.318 (Claude Code)
+- id: 01a1a4c9-62a5-7cf0-bf56-6e3238082b39
+  author: joe
+  content: 'ADVISOR RULING (2026-11-03 21:22 MST) on the Linux socket fork: (B). No seat sandbox gets an AF_UNIX rule, so no allowAllUnixSockets widening anywhere. Only unsandboxed processes submit over the socket: the operator shell, host-run agents, and an aida deputy shell submit that the operator has explicitly added to sandbox excludedCommands. Rationale: (A) would let any contained lane drive docker or ssh-agent, which is a far larger exposure than the forgery residual it closes, and (C) leaves acceptance (2) only partly met. Consequences to implement: the file-drop incoming/ path is removed, along with its allowlist docs (it closes the same-uid forgery residual entirely). docs/deputies.md documents the one excludedCommands opt-in for a sandboxed advisor, and the CLI error for a sandboxed submit names that opt-in. Q4 (launcher pid compared as BUG-2419 tokens) stands. The operator decides whether to add the opt-in for the advisor seat. The advisor today submits from unsandboxed host shells, so nothing breaks. Gate: LIGHT through the lane job runner.'
+  created_at: 2026-11-04T04:20:23.845617503Z
+  modified_at: 2026-11-04T04:20:23.845617503Z
+  session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
 history:
 - id: 01a1a2a3-f27f-7463-9a97-0b8c7a670b77
   author: joe
