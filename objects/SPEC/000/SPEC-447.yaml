@@ -7,12 +7,11 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-15T15:48:13.617378738Z
-modified_at: 2026-10-19T15:51:00.865126849Z
+modified_at: 2026-11-04T01:41:10.705515511Z
 req_type: Task
 tags:
 - from-implementer:TASK-1734
 - kind:followup-suggestion
-- operator-held
 - severity:minor
 comments:
 - id: 01a1409b-f5f9-76d0-8171-0c0089b21dbf
@@ -27,10 +26,11 @@ history:
   timestamp: 2026-10-19T15:51:01.146860787Z
   session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
   changes: []
-deferred: true
-deferred_at: 2026-10-19T15:51:00.865126849Z
-deferred_until: when STORY-1853, STORY-1690 and TASK-1945 have landed (dev-cycle speed work) or an operator asks for it
-deferred_reason: 'Advisor triage 2026-10-19: P3 roadmap/design work, parked so the open view shows actionable work while the dev-cycle speed push is on (operator goal: under 100 open).'
+- id: 01a1a437-9e22-78e0-b50f-1c8e7a2ff9da
+  author: joe
+  timestamp: 2026-11-04T01:41:10.818027046Z
+  session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
+  changes: []
 filed_at:
   code_sha: 3d85bbde84130b00330ac845d79ffdd4eb9bcce7
   branch: main
