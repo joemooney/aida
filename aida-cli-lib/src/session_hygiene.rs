@@ -31,9 +31,11 @@
 //! `session-hygiene-route` (`on = ["CronJobFailed:session-hygiene"]`).
 //!
 //! **Budget.** The scheduler kills a child at its timeout, and a killed run
-//! routes as "did not finish". The reclaim step is skipped (noted, exit 0)
-//! once [`SOFT_BUDGET`] is spent, so a slow reap scan defers the reclaim to
-//! the next hourly run instead of routing noise.
+//! routes as "did not finish". Everything after the reap runs against
+//! [`SOFT_BUDGET`]: the reclaim step is skipped (noted, exit 0) once it is
+//! spent, and a reclaim that starts in time checks the deadline before every
+//! deletion, deferring the rest to the next hourly run instead of being
+//! killed mid-delete.
 // trace:STORY-2351 | ai:claude
 
 use std::path::{Path, PathBuf};
@@ -84,9 +86,12 @@ pub(crate) fn reclaim_options(opts: &HygieneOptions) -> ReclaimOptions {
 pub(crate) struct SalvageCandidate {
     pub session: String,
     pub worktree: PathBuf,
-    /// Seconds since the newest uncommitted file was written, or the
-    /// lease's age when no dirty path could be read.
-    pub idle_secs: u64,
+    /// Seconds since the session last showed activity: the newest
+    /// uncommitted file's mtime, else the newest of the lease file, its
+    /// activity log and the worktree root. `None` when none could be read;
+    /// the route then makes no idle-time claim. Never the lease's
+    /// `started_at`, which is session age, not idle time.
+    pub idle_secs: Option<u64>,
     /// The `aida ps` next-command hint for the row.
     pub hint: Option<String>,
 }
@@ -110,6 +115,8 @@ pub(crate) struct HygieneOutcome {
     /// Caches deleted (or, on a dry run, that would be).
     pub reclaimed: Vec<(PathBuf, u64)>,
     pub reclaim_failed: Vec<(PathBuf, String)>,
+    /// Caches the reclaim left for the next run because the budget ran out.
+    pub reclaim_deferred: usize,
     /// Why reclaim did not run, when it did not.
     pub reclaim_skipped: Option<String>,
     pub salvageable: Vec<SalvageCandidate>,
@@ -152,15 +159,18 @@ pub(crate) fn keep_items(outcome: &HygieneOutcome, idle_hours: u64) -> Vec<KeepI
         });
     }
     for c in &outcome.salvageable {
-        if c.idle_secs < idle_secs {
-            continue;
-        }
+        // An unknown idle time still routes (the tree is salvageable and
+        // nothing shows it alive), but makes no hours claim.
+        let idle = match c.idle_secs {
+            Some(secs) if secs < idle_secs => continue,
+            Some(secs) => format!("untouched for {}h", secs / 3600),
+            None => "idle time unknown".to_string(),
+        };
         items.push(KeepItem {
             what: format!(
-                "salvageable work in {} (session {}) untouched for {}h",
+                "salvageable work in {} (session {}) {idle}",
                 c.worktree.display(),
                 c.session,
-                c.idle_secs / 3600
             ),
             act: c.hint.clone().unwrap_or_else(|| {
                 format!(
@@ -221,6 +231,13 @@ pub(crate) fn render_summary(outcome: &HygieneOutcome, dry_run: bool) -> String 
             human_bytes(bytes),
             outcome.reclaimed.len()
         ));
+        if outcome.reclaim_deferred > 0 {
+            out.push_str(&format!(
+                "  deferred {} cache(s) to the next run: the {}s budget was spent\n",
+                outcome.reclaim_deferred,
+                SOFT_BUDGET.as_secs()
+            ));
+        }
         for (path, err) in &outcome.reclaim_failed {
             out.push_str(&format!("  FAILED {}  — {err}\n", path.display()));
         }
@@ -243,23 +260,43 @@ fn salvage_candidates(project_root: &Path) -> Vec<SalvageCandidate> {
                 return None;
             }
             let probe = dispatch_health_ps::probe_worktree(&row.lease.worktree_path);
-            let lease_age = chrono::Utc::now()
-                .signed_duration_since(row.lease.started_at)
-                .num_seconds()
-                .max(0) as u64;
+            let idle_secs = probe.dirty_newest_mtime_age_secs.or_else(|| {
+                dispatch_health_ps::newest_mtime_age_secs(
+                    &activity_paths(project_root, &row.lease.id, &row.lease.worktree_path),
+                    std::time::SystemTime::now(),
+                )
+            });
             Some(SalvageCandidate {
                 session: row.lease.id.chars().take(8).collect(),
                 worktree: row.lease.worktree_path.clone(),
-                idle_secs: probe.dirty_newest_mtime_age_secs.unwrap_or(lease_age),
+                idle_secs,
                 hint: dispatch.hint.clone(),
             })
         })
         .collect()
 }
 
-/// The reclaim step, in-process, worktree caches only.
+/// The idle-time fallback when no dirty path could be stat'd: the files a
+/// live session touches (its lease, its activity log) and the worktree root,
+/// whose mtime moves when a top-level entry is created or removed.
 // trace:STORY-2351 | ai:claude
-fn reclaim(project_root: &Path, opts: &HygieneOptions, outcome: &mut HygieneOutcome) {
+pub(crate) fn activity_paths(project_root: &Path, lease_id: &str, worktree: &Path) -> Vec<PathBuf> {
+    vec![
+        crate::leases::lease_path(project_root, lease_id),
+        crate::leases::session_activity_path(project_root, lease_id),
+        worktree.to_path_buf(),
+    ]
+}
+
+/// The reclaim step, in-process, worktree caches only, stopping between
+/// deletions once `deadline` passes.
+// trace:STORY-2351 | ai:claude
+fn reclaim(
+    project_root: &Path,
+    opts: &HygieneOptions,
+    deadline: Instant,
+    outcome: &mut HygieneOutcome,
+) {
     let ropts = reclaim_options(opts);
     let survey = match worktree_reclaim::survey_from_env(project_root, &ropts) {
         Ok(s) => s,
@@ -277,10 +314,11 @@ fn reclaim(project_root: &Path, opts: &HygieneOptions, outcome: &mut HygieneOutc
             .collect();
         return;
     }
-    match worktree_reclaim::apply(&plan, None, |_| None, |p| std::fs::remove_dir_all(p)) {
+    match worktree_reclaim::apply_until(&plan, deadline, |p| std::fs::remove_dir_all(p)) {
         Ok(done) => {
             outcome.reclaimed = done.deleted;
             outcome.reclaim_failed = done.failed;
+            outcome.reclaim_deferred = done.deferred.len();
         }
         Err(e) => outcome
             .reclaim_failed
@@ -320,7 +358,7 @@ pub(crate) fn run(opts: &HygieneOptions) -> Result<()> {
             SOFT_BUDGET.as_secs()
         ));
     } else {
-        reclaim(&project_root, opts, &mut outcome);
+        reclaim(&project_root, opts, started + SOFT_BUDGET, &mut outcome);
     }
 
     print!("{}", render_summary(&outcome, opts.dry_run));

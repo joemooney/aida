@@ -4736,6 +4736,12 @@ mod tests {
         );
         let reap = parse_scheduled_command("session reap").unwrap();
         assert_eq!(command_timeout(&reap), SCHEDULED_COMMAND_TIMEOUT);
+        // The disk guard's floor reclaim runs under the default ceiling; its
+        // own budget leaves the re-probe and report room before the kill.
+        assert!(
+            crate::doctor_cmd::FLOOR_RECLAIM_BUDGET * 2 <= SCHEDULED_COMMAND_TIMEOUT,
+            "the floor reclaim must stop well before the guard child is killed"
+        );
     }
 
     // STORY-2351: this repo registers the hygiene pass hourly and routes its

@@ -17,7 +17,7 @@ fn salvage(idle_secs: u64) -> SalvageCandidate {
     SalvageCandidate {
         session: "abcd1234".into(),
         worktree: PathBuf::from("/wt/aida-take-9"),
-        idle_secs,
+        idle_secs: Some(idle_secs),
         hint: Some("dead process, uncommitted work in /wt/aida-take-9 — salvage it".into()),
     }
 }
@@ -147,4 +147,62 @@ fn deferred_reclaim_is_reported_not_routed() {
         "{text}"
     );
     assert!(keep_items(&outcome, DEFAULT_IDLE_HOURS).is_empty());
+}
+
+/// A reclaim cut short by the budget defers the rest: reported, not routed.
+#[test]
+fn a_reclaim_stopped_by_the_deadline_is_reported_not_routed() {
+    let outcome = HygieneOutcome {
+        agent_gc: Some(Ok(0)),
+        reclaimed: vec![(PathBuf::from("/t/worktrees/x"), 10)],
+        reclaim_deferred: 4,
+        ..Default::default()
+    };
+    let text = render_summary(&outcome, false);
+    assert!(
+        text.contains("deferred 4 cache(s) to the next run"),
+        "{text}"
+    );
+    assert!(keep_items(&outcome, DEFAULT_IDLE_HOURS).is_empty());
+}
+
+/// Review round 2: with no readable activity signal the route makes no
+/// idle-time claim (it never falls back to session age).
+#[test]
+fn unknown_idle_time_routes_without_an_hours_claim() {
+    let outcome = HygieneOutcome {
+        salvageable: vec![SalvageCandidate {
+            idle_secs: None,
+            ..salvage(0)
+        }],
+        ..Default::default()
+    };
+    let items = keep_items(&outcome, DEFAULT_IDLE_HOURS);
+    assert_eq!(items.len(), 1);
+    assert!(
+        items[0].what.contains("idle time unknown"),
+        "{:?}",
+        items[0]
+    );
+    assert!(!items[0].what.contains("untouched for"), "{:?}", items[0]);
+}
+
+/// Review round 2: the fallback ages a session from its lease, activity log
+/// and worktree root, and a fresh worktree reads fresh even when the lease
+/// started long ago.
+#[test]
+fn the_idle_fallback_reads_activity_mtimes_not_started_at() {
+    let tmp = tempfile::tempdir().unwrap();
+    let wt = tmp.path().join("wt");
+    std::fs::create_dir_all(&wt).unwrap();
+    let paths = activity_paths(tmp.path(), "lease-1", &wt);
+    assert_eq!(paths.len(), 3);
+    assert!(paths[0].to_string_lossy().contains("lease-1"));
+    assert!(paths[1]
+        .to_string_lossy()
+        .ends_with("lease-1.activity.toml"));
+    assert_eq!(paths[2], wt);
+    let age =
+        dispatch_health_ps::newest_mtime_age_secs(&paths, std::time::SystemTime::now()).unwrap();
+    assert!(age < 60, "a just-touched worktree is not idle: {age}s");
 }

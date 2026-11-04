@@ -1788,8 +1788,16 @@ pub(crate) fn disk_headroom_light_report(project_root: &std::path::Path) -> Doct
 /// `aida worktree reclaim --apply` the route used to ask the advisor to run,
 /// with every rail on (no live lease, no open PR, no cache touched in the
 /// last hour, no agent scratch). Returns the bytes freed.
+///
+/// It runs inside the `disk-headroom-guard` child, which the scheduler kills
+/// at [`crate::maintenance_schedule::SCHEDULED_COMMAND_TIMEOUT`]. A killed
+/// guard routes a timeout instead of the "freed X" evidence, so the survey
+/// and every deletion run against [`FLOOR_RECLAIM_BUDGET`]: once it passes,
+/// the remaining caches stay for the next guard run and the report still
+/// says what was freed.
 // trace:STORY-2351 | ai:claude
 fn floor_reclaim(project_root: &std::path::Path) -> u64 {
+    let deadline = std::time::Instant::now() + FLOOR_RECLAIM_BUDGET;
     let opts = crate::worktree_reclaim::ReclaimOptions {
         apply: true,
         min_age_mins: 60,
@@ -1804,10 +1812,15 @@ fn floor_reclaim(project_root: &std::path::Path) -> u64 {
         return 0;
     };
     let plan = crate::worktree_reclaim::plan(&survey);
-    crate::worktree_reclaim::apply(&plan, None, |_| None, |p| std::fs::remove_dir_all(p))
+    crate::worktree_reclaim::apply_until(&plan, deadline, |p| std::fs::remove_dir_all(p))
         .map(|done| done.freed_bytes)
         .unwrap_or(0)
 }
+
+/// The floor reclaim's wall-clock budget: half the guard child's kill
+/// ceiling, leaving the re-probe, the stuck scan and the report time to run.
+// trace:STORY-2351 | ai:claude
+pub(crate) const FLOOR_RECLAIM_BUDGET: std::time::Duration = std::time::Duration::from_secs(60);
 
 /// A finding the guard's floor reclaim can act on (the project or build-cache
 /// filesystem below the floor; the Cargo slot tmpfs is not reclaimable here).
