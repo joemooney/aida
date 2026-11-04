@@ -1,0 +1,29 @@
+id: 01a1a883-cf45-7c20-9ce6-17a1e24d4299
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-792
+title: 'non-blocking/cosmetic: bug_2383_seat_target_overlay_tests.rs:537-538 carries du…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-2829, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  non-blocking/cosmetic: bug_2383_seat_target_overlay_tests.rs:537-538 carries duplicate trace lines for TASK-2829 (ai:claude and ai:codex).
+
+  PR: #3385
+  Reviewed sha: ef087ebb6e7430b8b6a85277144480993f2a46af
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-04T21:42:52.997305115Z
+modified_at: 2026-11-04T21:42:52.997305115Z
+req_type: Task
+tags:
+- carried-from:TASK-2829
+- finding-hash:d87a53aa
+- from-review:PR-3385
+- kind:carried-forward
+filed_at:
+  code_sha: 47e9f216d38bf2bb6c503baeebfcca728604bd57
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 83ce565277a
+  vendor: claude
