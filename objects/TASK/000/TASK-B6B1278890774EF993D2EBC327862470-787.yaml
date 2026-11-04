@@ -1,0 +1,23 @@
+id: 01a1a7b3-5233-7033-9bbb-750072f402c1
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-787
+agreed_id: TASK-3049
+title: 'STORY-2460 S4: one bounded real spec through PR-open on a contained agy lane'
+description: 'Acceptance 5 of STORY-2460, after S2: run one small approved spec on ''aida queue work SPEC --vendor agy --no-human'' under the new posture through PR-open, and cite the result on STORY-2460.'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-04T17:55:09.491652650Z
+modified_at: 2026-11-04T17:55:09.491652650Z
+req_type: Task
+tags:
+- area:containment
+- vendor:agy
+filed_at:
+  code_sha: 6a331a8a5c91ca7485b695a076af44bdf9be3894
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: e422daaa1a4
+  vendor: claude
+  session: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
