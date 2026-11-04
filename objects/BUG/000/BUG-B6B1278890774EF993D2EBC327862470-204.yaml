@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T02:15:29.023069877Z
-modified_at: 2026-11-04T06:14:26.590849715Z
+modified_at: 2026-11-04T06:35:50.379823143Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -39,6 +39,12 @@ comments:
   modified_at: 2026-11-04T04:46:52.783472760Z
   session_id: 01a1a4d883ab
   harness_version: 2.1.318 (Claude Code)
+- id: 01a1a545-62eb-7bc2-ab68-a41f1cae1b61
+  author: joe
+  content: 'ADVISOR REWORK BRIEF (2026-11-03 23:38 MST, PR #3340 head ffaed881). Review: the fix is correct and CI is green. Required (bundled per the 2026-10-28 rule): the only test proving the lane job lands in the host cargo slot dir sits outside the forced-live bwrap CI gate, so CI can skip it silently. Register it with the live bwrap gate (the expected-count list the gates job checks: ''only N of M live bwrap tests ran ok'') so a skip fails CI. Nothing else changes. Gate (LIGHT): one targeted cargo test filter covering the changed module, plus make check-ci-fast, then push to the same PR branch. The advisor re-reviews only the delta.'
+  created_at: 2026-11-04T06:35:50.379823143Z
+  modified_at: 2026-11-04T06:35:50.379823143Z
+  session_id: da1c0d85-1d45-4ce4-a292-5358644f65b9
 history:
 - id: 01a1a4a6-2fae-7cd2-9310-1a89843f3963
   author: joe
