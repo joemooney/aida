@@ -7,12 +7,12 @@ description: |-
 
   minor (non-blocking, fail-closed; from the BUG-2419 semantic merge): seat_authority.rs:2411-2415 accept_detached_launch_child compares pid_binding_token (now author_process_token, qualified with pidns-<ino> in a non-host pid namespace) to the unqualified review_authority::process_token. Inside a non-host pid namespace that is not AIDA-contained (e.g. a plain bubblewrap shell), every detached accept is refused with the misleading error 'start identity changed'. On the same path, session.rs stamp_lease_detached_worker_at writes active_pid without active_pid_ns, unlike stamp_lease_active_pid_at, so lease_tokens drops the worker's proc token. review_authority.rs record_detached_worker_strict records an unqualified process_token where author_process_token is expected. Fix: compare against author_process_token, set or remove active_pid_ns in the strict stamp, record author_process_token, and add a with_pid_namespace test.
   Reviewed sha: c0ff84f2d84612e2cb940d713673ed55c5222621
-status: Done
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-03T17:40:41.186637978Z
-modified_at: 2026-11-03T22:19:52.344632557Z
+modified_at: 2026-11-04T01:13:56.617583235Z
 req_type: Task
 tags:
 - carried-from:STORY-2254
@@ -65,6 +65,20 @@ history:
   timestamp: 2026-11-03T22:19:53.453420779Z
   session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
   changes: []
+- id: 01a1a41e-ae86-7b31-9963-31f5c06acff7
+  author: aida-auto-bump
+  timestamp: 2026-11-04T01:13:56.614399878Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a1a41e-ae89-7811-8c54-21f46a7d35d8
+  timestamp: 2026-11-04T01:13:56.617579120Z
+  agent: aida
+  commit_sha: bf22fdd2741d62a7bb312b6be26fbe72926afd69
+  summary: 'All four TASK-2799 fixes present and tested: accept_detached_launch_child compares author_process_token (both sides qualified), stamp_lease_detached_worker_at sets/removes active_pid_ns like stamp_lease_active_pid_at, record_detached_worker_strict records author_process_token, with_pid_namespace tests cover stamp/record and accept; CI green at head.'
+  review_verdict: approved
 filed_at:
   code_sha: fc08dfd16d424a30f87ef943aedc6261295928d2
   branch: main
@@ -76,3 +90,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-11-03T21:36:33.650709470Z
   implemented_by: joe
+  completed_at: 2026-11-04T01:13:56.614394100Z
+  completion_sha: bf22fdd2741d62a7bb312b6be26fbe72926afd69
