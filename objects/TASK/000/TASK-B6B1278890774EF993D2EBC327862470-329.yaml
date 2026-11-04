@@ -16,12 +16,12 @@ description: |-
   Why it matters: EPIC-65's contained posture is only useful if it STAYS. If codex (or a refresh) silently reverts it to full-access, a user believing they're sandboxed is not — the exact "substrate lies" failure. `aida config permissions set contained` re-applies correctly (verified), but a re-apply that gets clobbered again is whack-a-mole.
 
   Promote to a bug (EPIC-65) on recurrence: if the posture drifts back to full-access again after a clean `set contained`, that confirms an active reverter and warrants a durability fix (e.g. detect+warn in `config permissions show`, or a periodic re-assert). trace:EPIC-65
-status: Approved
+status: Rejected
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-09-16T01:17:17.223576217Z
-modified_at: 2026-11-04T01:39:50.491641925Z
+modified_at: 2026-11-04T01:39:57.939921914Z
 req_type: Task
 tags:
 - from-advisor:general
@@ -47,3 +47,11 @@ history:
   timestamp: 2026-11-04T01:39:47.374248774Z
   session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
   changes: []
+- id: 01a1a436-8173-7fb0-aa97-4839943907a5
+  author: joe
+  timestamp: 2026-11-04T01:39:57.939918211Z
+  session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Rejected
