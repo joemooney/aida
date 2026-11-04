@@ -1,0 +1,20 @@
+id: 01a1a432-7e6b-7873-89c5-e83d7181ed30
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-203
+agreed_id: BUG-2434
+title: 'Headless implementer lanes run untested by default: the lane job runner requires [contained] os_wrap, which defaults off, so every lane result is untested=true'
+description: 'Observed 2026-11-03: lanes for STORY-2338 and STORY-2326 committed fixes and then could not compile (''lease names no lane job runner''; cargo capped at 60s per call). The STORY-2338 fix failed cargo check on the host (E0063) and was never pushed. Lane logs warn: ''the lane job runner needs [contained] os_wrap (jobs run only inside bubblewrap), so the implementer cannot run tests and its result says untested=true''. The warning is buried in a lane log, and nothing surfaces it to the advisor or operator. Fix options: (a) when bwrap is live on the host (doctor already probes it), the launcher sets os_wrap for implementer lanes, or the job runner runs unwrapped jobs under the launcher''s own containment; (b) at minimum, aida doctor and the advisor sweep flag it. Trial: the advisor launched STORY-2338 with AIDA_OS_WRAP=1 at 18:33 to test whether jobs then run.'
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-04T01:35:35.019044810Z
+modified_at: 2026-11-04T01:35:35.019044810Z
+req_type: Bug
+filed_at:
+  code_sha: 0f1624a8b38d961973328d79d05642add4464fc8
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 0f1624a8b38
+  vendor: claude
+  session: 04f971d5-7365-46ed-b777-d4ff41d730ed
