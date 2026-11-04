@@ -1463,7 +1463,9 @@ pub(crate) fn bare_aida_action(
 pub(crate) fn project_is_aida_initialized(root: &std::path::Path) -> bool {
     root.join(".aida").join("config.toml").is_file()
         || root.join("requirements.db").is_file()
-        || root.join(".aida-store").exists()
+        // symlink_metadata, so a dangling `.aida-store` symlink (store moved
+        // or not yet materialized) still marks the project as initialized.
+        || std::fs::symlink_metadata(root.join(".aida-store")).is_ok()
 }
 
 /// TASK-1472: whether the current directory sits in an initialized AIDA

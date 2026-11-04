@@ -65,6 +65,20 @@ fn initialized_project_markers() {
     let store = tempfile::tempdir().unwrap();
     std::fs::create_dir_all(store.path().join(".aida-store")).unwrap();
     assert!(project_is_aida_initialized(store.path()), ".aida-store");
+
+    #[cfg(unix)]
+    {
+        let dangling = tempfile::tempdir().unwrap();
+        std::os::unix::fs::symlink(
+            dangling.path().join("missing-store"),
+            dangling.path().join(".aida-store"),
+        )
+        .unwrap();
+        assert!(
+            project_is_aida_initialized(dangling.path()),
+            "a dangling .aida-store symlink still marks the project"
+        );
+    }
 }
 
 #[test]
