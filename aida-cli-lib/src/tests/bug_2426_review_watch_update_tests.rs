@@ -277,6 +277,7 @@ fn task2813_unreadable_lease_dir_makes_liveness_unknown() {
     let (temp, store) = fixture();
     write_live_lease(temp.path());
     let dir = crate::leases::leases_dir(temp.path());
+    let original = std::fs::metadata(&dir).unwrap().permissions();
     std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o000)).unwrap();
     let mut stale = change(1, true);
     stale.head_branch = Some("other-branch".into());
@@ -290,7 +291,7 @@ fn task2813_unreadable_lease_dir_makes_liveness_unknown() {
         }
     }
     let mail = advisor_mail(temp.path()).len();
-    std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o755)).unwrap();
+    std::fs::set_permissions(&dir, original).unwrap();
     assert!(probe.is_err(), "{probe:?}");
     assert_eq!(reasons.len(), 2, "{reasons:?}");
     for reason in &reasons {
