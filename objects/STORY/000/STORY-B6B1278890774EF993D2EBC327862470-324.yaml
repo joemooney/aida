@@ -8,13 +8,18 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-02T19:20:59.253007269Z
-modified_at: 2026-11-04T01:13:13.060485642Z
+modified_at: 2026-11-04T01:40:28.806706237Z
 req_type: Story
 tags:
 - architecture
 - needs-sketch
 - regroup
 - security
+relationships:
+- rel_type: Supersedes
+  target_id: 01a1389b-7827-7513-bca7-4218d6d08ba8
+  created_at: 2026-11-04T01:40:28.806699482Z
+  created_by: joe
 comments:
 - id: 01a19edb-9536-7152-af5d-cedac4c16cf8
   author: joe
@@ -534,6 +539,11 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Approved
+- id: 01a1a437-001b-77e2-8002-0d3b873edfc7
+  author: joe
+  timestamp: 2026-11-04T01:40:30.363727673Z
+  session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
+  changes: []
 filed_at:
   code_sha: 1b678fd5059046ff02bfb3b87c1f10d3162efda6
   branch: main
