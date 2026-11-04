@@ -25,7 +25,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-14T04:11:15.367292037Z
-modified_at: 2026-11-04T01:40:16.991956198Z
+modified_at: 2026-11-04T01:40:18.944556081Z
 req_type: Task
 tags:
 - arch-review-2026-10-13
@@ -95,6 +95,12 @@ comments:
   created_at: 2026-10-20T05:07:49.348417808Z
   modified_at: 2026-10-20T05:07:49.348417808Z
   session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+- id: 01a1a436-d380-79a2-a568-761026fe231a
+  author: joe
+  content: 'ADVISOR REGROUP (2026-11-03): closed as obsolete/already fixed after verification in the regroup inventory: same scope as STORY-2326, which cites it as evidence.'
+  created_at: 2026-11-04T01:40:18.944556081Z
+  modified_at: 2026-11-04T01:40:18.944556081Z
+  session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
 history:
 - id: 01a154eb-d392-7811-adf8-d43de174ed67
   author: joe
