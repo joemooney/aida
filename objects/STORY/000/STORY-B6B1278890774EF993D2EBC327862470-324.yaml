@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-02T19:20:59.253007269Z
-modified_at: 2026-11-04T01:40:28.806706237Z
+modified_at: 2026-11-04T01:55:57.149642122Z
 req_type: Story
 tags:
 - architecture
@@ -404,6 +404,12 @@ comments:
   content: 'ADVISOR RULING (PR-3288, 2026-11-03 18:15 MST): merge-only round. gh update-branch conflicts with main. Merge origin/main into the PR branch, resolve conflicts preserving both sides'' intent (main''s BUG-2428 launch rollback / keyring probe in queue-work and BUG-2383 sandboxed launcher jobs are likely overlaps), keep the existing approved-round scope, no new features. Gate: cargo build -p aida-cli --bin aida + check-ci-fast (umask 022), then push.'
   created_at: 2026-11-04T01:12:42.502762862Z
   modified_at: 2026-11-04T01:12:42.502762862Z
+  session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
+- id: 01a1a445-245d-75d1-a6b9-65559543a98f
+  author: joe
+  content: 'ADVISOR (18:55): the round-6 lane committed merge 40ceef5 but never pushed. The advisor merged current origin/main on top (clean, no conflicts), ran ''cargo check --profile agent -p aida-cli-lib --tests'' and ''cargo build --profile agent -p aida-cli --bin aida'' on the host (both green), and pushed: #3288 is now at 40d90f8c688. No content change beyond the merges. Ready for the strict delta review.'
+  created_at: 2026-11-04T01:55:57.149642122Z
+  modified_at: 2026-11-04T01:55:57.149642122Z
   session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
 history:
 - id: 01a19ed2-a170-7d52-94f3-7c4ff46f38c4
