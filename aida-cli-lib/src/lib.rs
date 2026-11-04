@@ -135,6 +135,9 @@ mod gate;
 // trace:STORY-B6B1278890774EF993D2EBC327862470-099 | ai:claude
 mod deputy;
 mod deputy_cmd;
+// trace:STORY-2338 | ai:claude
+mod deputy_shell;
+mod deputy_shell_cmd;
 mod gitlab_mirror_link;
 mod graph_cmd;
 mod help;
@@ -593,6 +596,8 @@ mod rules_sync;
 mod sandbox_cmd;
 // trace:BUG-2211 trace:TASK-2270 | ai:claude — sandbox-left config.lock doctor check.
 mod sandbox_config_lock;
+// trace:TASK-1595 | ai:claude
+mod stranded_commits;
 // trace:BUG-b6b1278890774ef993d2ebc327862470-001 | ai:claude
 mod allocation_health;
 // trace:TASK-2324 | ai:codex

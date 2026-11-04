@@ -299,19 +299,11 @@ fn policy_prefix_ttl_single_use_and_grant_cap() {
 }
 
 #[test]
-fn script_jobs_never_get_a_terminal_and_bypass_flags_are_refused() {
+fn bypass_flags_are_refused() {
     let now = Utc::now();
     let mut p = Policy::default();
     p.allow(policy::parse_prefix("aida"), 3600, false, now)
         .unwrap();
-    assert_eq!(
-        p.decide(
-            &JobBody::Script("aida merge-hold clear 1".into()),
-            now,
-            None
-        ),
-        TtyDecision::NoTty
-    );
     assert_eq!(
         p.decide(&argv("aida pr ship 1 --force"), now, None),
         TtyDecision::RefuseBypass("--force".into())
@@ -799,7 +791,6 @@ mod worker_fixtures {
             name: "test".into(),
             workers: 2,
             allow_exec: vec![],
-            allow_scripts: false,
             tty_idle: Duration::from_secs(2),
             poll: Duration::from_millis(50),
             grant: Arc::new(|| GrantState::Valid {
@@ -1040,8 +1031,18 @@ mod worker_fixtures {
             30,
         );
         spool.submit(&bypass).unwrap();
-        let script = job(JobBody::Script("echo hi".into()), None, 30);
-        spool.submit(&script).unwrap();
+        // A shell-script body is the script deputy's; this deputy no longer
+        // parses one, so it is refused as malformed and never runs.
+        // trace:STORY-2338 | ai:claude
+        let script_id = new_job_id();
+        let mut forged = serde_json::to_value(job(sh("true"), None, 30)).unwrap();
+        forged["id"] = serde_json::json!(script_id);
+        forged["body"] = serde_json::json!({ "script": "echo hi" });
+        crate::deputy::write_private_new(
+            &spool.job_path("incoming", &script_id),
+            &serde_json::to_vec(&forged).unwrap(),
+        )
+        .unwrap();
         let exec = job(
             JobBody::Argv(vec!["/bin/echo".into(), "hi".into()]),
             None,
@@ -1049,15 +1050,15 @@ mod worker_fixtures {
         );
         spool.submit(&exec).unwrap();
         run(&spool, &cfg(3));
-        for (j, want) in [
-            (&bypass, "refused:bypass-flag"),
-            (&script, "refused:script-jobs-disabled"),
-            (&exec, "refused:exec-not-allowed"),
+        for (id, want) in [
+            (&bypass.id, "refused:bypass-flag"),
+            (&script_id, "refused:malformed"),
+            (&exec.id, "refused:exec-not-allowed"),
         ] {
-            let r = spool.read_result(&j.id).unwrap();
+            let r = spool.read_result(id).unwrap();
             assert_eq!(r.rc, RC_REFUSED);
             assert!(r.reason.starts_with(want), "{}", r.reason);
-            assert!(spool.job_path("failed", &j.id).exists());
+            assert!(spool.job_path("failed", id).exists());
             // The result names an output file; a refusal writes it.
             // trace:BUG-B6B1278890774EF993D2EBC327862470-150 | ai:claude
             let out = std::fs::read_to_string(&r.output)
@@ -1198,11 +1199,9 @@ mod worker_fixtures {
     }
 
     #[test]
-    fn scripts_and_allowed_execs_run_when_the_operator_allows_them() {
+    fn allowed_execs_run_when_the_operator_allows_them() {
         let dir = tempfile::tempdir().unwrap();
         let spool = spool_in(&dir);
-        let script = job(JobBody::Script("echo from-script; exit 0".into()), None, 30);
-        spool.submit(&script).unwrap();
         let echo = std::fs::canonicalize("/bin/echo").unwrap();
         let exec = job(
             JobBody::Argv(vec![echo.to_string_lossy().to_string(), "from-exec".into()]),
@@ -1210,11 +1209,9 @@ mod worker_fixtures {
             30,
         );
         spool.submit(&exec).unwrap();
-        let mut c = cfg(2);
-        c.allow_scripts = true;
+        let mut c = cfg(1);
         c.allow_exec = vec![echo];
         run(&spool, &c);
-        assert!(out(&spool, &script.id).contains("from-script"));
         assert!(out(&spool, &exec.id).contains("from-exec"));
     }
 
@@ -1651,6 +1648,7 @@ mod worker_fixtures {
                     rc: 3,
                     reason: "exit".into(),
                     output: "/x/out/j.out".into(),
+                    kind: crate::deputy::DeputyKind::Command,
                 }],
                 ..Default::default()
             };

@@ -4734,6 +4734,13 @@ pub(crate) fn handle_init_distributed_worktree(
     std::fs::write(store_path.join("objects/.gitkeep"), "")?;
     git_ops::add(&store_path, &["objects/.gitkeep"])?;
     git_ops::add(&store_path, &["objects"])?;
+    // The store's tracked runtime and staging ignores, the set `aida doctor`
+    // heals older stores to: without them the agreed-ID dispense lock
+    // (`registry/blocks.lock`) a block claim leaves behind dirties the store
+    // and `aida remote reconcile --execute` refuses it (SPIKE-708 Q4).
+    // trace:STORY-B6B1278890774EF993D2EBC327862470-329 | ai:claude
+    crate::doctor_cmd::ensure_store_tracked_runtime_gitignore(&store_path)?;
+    git_ops::add(&store_path, &[".gitignore"])?;
     if roster_seeded {
         let _ = git_ops::add(&store_path, &["registry"]);
         println!(

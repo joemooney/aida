@@ -877,6 +877,19 @@ fn doctor_multi_agent(opts: DoctorRunOptions) -> Result<()> {
         findings.sort_by(|a, b| a.category.cmp(&b.category).then(a.id.cmp(&b.id)));
     }
 
+    // TASK-1595: commits that exist in one agent worktree only — a branch on
+    // no remote, or a spec commit a reset left reachable from the reflog
+    // alone. Reflogs only, bounded; no fsck. trace:TASK-1595 | ai:claude
+    if doctor_category_selected(opts.category.as_deref(), crate::stranded_commits::CATEGORY)? {
+        let is_terminal = |spec: &str| {
+            store
+                .get_requirement_by_spec_id(spec)
+                .is_some_and(|r| crate::kernel::is_terminal_status(&r.status))
+        };
+        findings.extend(crate::stranded_commits::scan(&project_root, &is_terminal));
+        findings.sort_by(|a, b| a.category.cmp(&b.category).then(a.id.cmp(&b.id)));
+    }
+
     // A clone whose node-local allocation would refuse: unsafe allocation
     // state or a dispenser on another node. A few stats + two TOML reads.
     // trace:BUG-b6b1278890774ef993d2ebc327862470-001 | ai:claude
@@ -8535,6 +8548,17 @@ fn heal_doctor_finding(
         "stale-locks" => heal_doctor_stale_lock(finding),
         // trace:BUG-2211 | ai:claude
         "sandbox-config-lock" => heal_doctor_sandbox_config_lock(project_root, finding),
+        // trace:TASK-1595 | ai:claude
+        "stranded-commits" => {
+            let outcome = crate::stranded_commits::heal(project_root, &finding.id);
+            Ok(DoctorHealResult {
+                category: finding.category.clone(),
+                id: finding.id.clone(),
+                action: outcome.action,
+                status: if outcome.healed { "healed" } else { "skipped" }.to_string(),
+                detail: outcome.detail,
+            })
+        }
         "dead-agents" => heal_doctor_dead_agent(project_root, finding),
         // STORY-1128: permission-posture heal applies the contained profile
         // through the same merge-preserving writer as `config permissions set`.
@@ -9253,7 +9277,9 @@ const STORE_RUNTIME_GITIGNORE_PATTERNS: &[&str] = &[
     "registry/*.lock",
 ];
 
-fn ensure_store_tracked_runtime_gitignore(store_worktree: &std::path::Path) -> Result<bool> {
+pub(crate) fn ensure_store_tracked_runtime_gitignore(
+    store_worktree: &std::path::Path,
+) -> Result<bool> {
     ensure_store_tracked_runtime_gitignore_with_patterns(
         store_worktree,
         aida_core::fs_atomic::STORE_STAGING_IGNORE_PATTERNS,
