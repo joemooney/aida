@@ -1962,6 +1962,19 @@ pub(crate) static DOCTOR_CATEGORY_ALIASES: &[(&[&str], &str)] = &[
     ),
     // trace:TASK-2324 | ai:codex
     (&["rustc-cache", "rustc-info"], "rustc-cache"),
+    // TASK-1595: work committed in an agent worktree that is on no remote, or
+    // a spec commit left reachable only from a reflog. Heal pins dangling
+    // commits to `recovered/<spec>`; nothing is deleted. trace:TASK-1595 | ai:claude
+    (
+        &[
+            "stranded-commits",
+            "stranded-commit",
+            "local-only-commits",
+            "unpushed-commits",
+            "dangling-commits",
+        ],
+        "stranded-commits",
+    ),
     // BUG-b6b1278890774ef993d2ebc327862470-001: node-local ID allocation that
     // would refuse (unsafe state file, dispenser on another node). Report-only.
     // trace:BUG-b6b1278890774ef993d2ebc327862470-001 | ai:claude
