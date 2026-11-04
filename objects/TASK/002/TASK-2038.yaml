@@ -13,12 +13,19 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-21T04:21:30.919680820Z
-modified_at: 2026-11-04T02:33:19.666747855Z
+modified_at: 2026-11-04T02:33:20.702442310Z
 req_type: Task
 tags:
 - from-review:PR-2791
 - severity:minor
 - testing
+comments:
+- id: 01a1a467-603e-7422-a6a1-8a9964a6c36c
+  author: joe
+  content: 'OPERATOR RULING (2026-11-03 19:30 MST, relayed by advisor): regroup ruling 8: rejected (TASK-1308: the dogfood wave is superseded by daily Codex use; TASK-2038: evidence-only).'
+  created_at: 2026-11-04T02:33:20.702442310Z
+  modified_at: 2026-11-04T02:33:20.702442310Z
+  session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
 history:
 - id: 01a15d01-5c8c-7f13-9f1e-4c1b5470b560
   author: joe
