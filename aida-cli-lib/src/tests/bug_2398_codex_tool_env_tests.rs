@@ -1958,3 +1958,70 @@ fn bug_2416_guided_codex_launch_is_finalized_by_prepare_launch() {
         vec![std::ffi::OsString::from("/aida-guided-implement TASK-9")]
     );
 }
+
+// trace:BUG-2440 | ai:codex
+#[test]
+fn bug_2440_wrapped_codex_prepares_with_explicit_command_separator() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path().join("project");
+    let bin = tmp.path().join("bin");
+    std::fs::create_dir_all(root.join(".git")).unwrap();
+    std::fs::create_dir_all(root.join(".aida")).unwrap();
+    std::fs::create_dir_all(&bin).unwrap();
+    // Stub only the host namespace availability probe: no model or real
+    // sandbox launch is needed to verify argv construction and adaptation.
+    crate::test_exec::write_executable(&bin.join("bwrap"), "#!/bin/sh\nexit 0\n");
+    let path = format!(
+        "{}:{}",
+        bin.display(),
+        std::env::var("PATH").unwrap_or_default()
+    );
+    for (os_wrap, config) in [
+        (Some("1"), "[contained]\nos_wrap = false\n"),
+        (None, "[contained]\nos_wrap = true\n"),
+    ] {
+        std::fs::write(root.join(".aida/config.toml"), config).unwrap();
+        let _ambient = crate::test_env::AmbientGuard::hermetic_and(
+            &root,
+            Some("advisor"),
+            &[("PATH", Some(path.as_str())), ("AIDA_OS_WRAP", os_wrap)],
+        );
+        for vendor in ["codex", "claude", "agy"] {
+            let executable = format!("/opt/vendor/{vendor}");
+            let args = vec!["exec".into(), "--".into(), "prompt mentioning codex".into()];
+            let (program, wrapped) =
+                crate::session::os_wrapped_program_and_args(&root, &executable, args.clone())
+                    .unwrap();
+            assert_eq!(program, "bwrap");
+            let separator = wrapped.iter().position(|arg| arg == "--").unwrap();
+            assert_eq!(wrapped[separator + 1], executable);
+            assert_eq!(&wrapped[separator + 2..], &args);
+            assert!(wrapped[..separator]
+                .iter()
+                .any(|arg| arg == "--die-with-parent"));
+            if vendor == "codex" {
+                let mut child = std::process::Command::new(&program);
+                child
+                    .args(&wrapped)
+                    .current_dir(&root)
+                    .env("AIDA_SESSION_GRANT", "")
+                    .env("AIDA_USER", "wrapped-child");
+                prepare_launch(&mut child).unwrap();
+                let prepared: Vec<_> = child
+                    .get_args()
+                    .map(|arg| arg.to_str().unwrap().to_string())
+                    .collect();
+                assert_eq!(&prepared[..separator + 2], &wrapped[..separator + 2]);
+                assert_eq!(&prepared[prepared.len() - args.len()..], &args);
+                assert!(prepared[separator + 2..].windows(2).any(|pair| {
+                    pair[0] == "-c"
+                        && pair[1] == "shell_environment_policy.set.AIDA_USER=\"wrapped-child\""
+                }));
+                assert_eq!(child.get_current_dir(), Some(root.as_path()));
+            }
+        }
+    }
+}
