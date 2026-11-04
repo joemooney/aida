@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-202
 agreed_id: BUG-2433
 title: aida pr train ejects every member when gh pr merge returns a transient error though GitHub merged the train PR
 description: 'Observed 2026-11-03 23:32Z, train #3322 (10 members). gh pr merge for the train PR returned ''GraphQL: Something went wrong while executing your query'' but GitHub had rebase-merged it: origin/main''s tree equals the train head and all 10 member commits are on main. The train reported ''0 landed, 10 ejected'', exited 1, and left all 10 member PRs open with merge-hold-cleared labels; BUG-2425/BUG-2426 stayed in-progress. Fix: after any merge-call error, re-read the train PR state (and/or compare origin/main to the pinned head) before deciding; if MERGED, proceed with the landed path (close members with commit pointers, complete specs). The advisor closed the members by hand.'
-status: InProgress
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T01:08:27.711738671Z
-modified_at: 2026-11-04T06:42:03.430681321Z
+modified_at: 2026-11-04T08:20:43.661618095Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -83,6 +83,20 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1a5a5-6a07-7f73-8f8b-3e1378e146d9
+  author: aida-auto-bump
+  timestamp: 2026-11-04T08:20:43.655539985Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1a5a5-6a0d-7b33-9b5d-eaa14a596223
+  timestamp: 2026-11-04T08:20:43.661613854Z
+  agent: aida
+  commit_sha: 8c28911d6d6b58dc14b3aaec85ccade018618b50
+  summary: 'All four round-2 advisor rulings met: landed-path test asserts car commits on out.landed and Lcar1/Lcar2 on rails.landed_on_main; judge_merge_error/main_carries_tip/merged_at_tip extracted and unit-tested incl. main==base and tree-mismatch refusals; re-read only on ForgeMergeCallFailed-tagged errors (pre-merge refusal test proves 0 rechecks); fail-closed OpenButOnMain contradiction reported, members stay open. CI green at head (lib-0/1, cli-0/1, gates, contracts, rest, Build); merge-hold-gate red is the expected supervised hold.'
+  review_verdict: approved
 filed_at:
   code_sha: 0f1624a8b38d961973328d79d05642add4464fc8
   branch: main
@@ -95,3 +109,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-11-04T01:31:40.290522363Z
   implemented_by: joe
+  completed_at: 2026-11-04T08:20:43.655533099Z
+  completion_sha: 8c28911d6d6b58dc14b3aaec85ccade018618b50
