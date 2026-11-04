@@ -20,7 +20,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T07:26:01.071265913Z
-modified_at: 2026-11-04T08:26:58.976368566Z
+modified_at: 2026-11-04T09:21:30.511363684Z
 req_type: Task
 tags:
 - architecture
@@ -791,6 +791,13 @@ comments:
   created_at: 2026-11-04T08:01:47.467204738Z
   modified_at: 2026-11-04T08:01:47.467204738Z
   session_id: da1c0d85-1d45-4ce4-a292-5358644f65b9
+- id: 01a1a5dd-0f8f-7fb0-ad2c-1b49548af3df
+  author: joe
+  content: 'Rework for the advisor brief (PR #3351) is pushed at 8e1fdae9551. F1 fixed: the bg supervisor (supervise_until_exit) and the foreground launcher commit an implementer''s pending seat work after the child exits (ship_from_seat::post_exit_commit). queue work execs Codex, so it has no post-exit step. F2 fixed: one role-aware helper, codex_native_sandbox_flags_in(tree, role), on every path: headless and coordinator by seat, exec_codex_session and queue resume by role, interactive reviewer and reviewer resume as reviewer. F3 fixed: pending_commit_preflight checks the trailer and the explicit spec before any commit, --dry-run too. F4 is the advisor''s job; the live probe now needs AIDA_TEST_AIDA_BIN under AIDA_REQUIRE_CODEX_SANDBOX_LIVE. F5 fixed but not run here: the probe uses the production --add-dir argv, which codex must accept; codex sandbox has no --add-dir, so the same paths go in as writable_roots; it adds a .aida-store write and an own-scope aida claim. F6 fixed: refusals for a foreign or unrecorded clone, an ended lease, a lease held by another live process, and a symlinked or replaced path (identity pin); a bind miss is now a hard error; the host identity is read first; the index is restored from a write-tree snapshot if the commit fails. F7 fixed: foreign --add-dir is refused in refuse_posture_overrides and the agents.toml/--extra-flag passthrough, and rescope strips every --add-dir. F8 fixed: resume uses the resumed lane''s tree (CodexLane). The inert clone .git grant is dropped. Gate: cargo check of the lib and tests passes with no warnings. The targeted cargo test timed out twice at the lane runner''s 900s cap on a stale overlay; make check-ci-fast can''t finish in the 60s tool cap. untested=true. The PR comment could not be posted from this lane (gh comment was denied).'
+  created_at: 2026-11-04T09:21:30.511363684Z
+  modified_at: 2026-11-04T09:21:30.511363684Z
+  session_id: 01a1a5ab1ad3
+  harness_version: 2.1.318 (Claude Code)
 history:
 - id: 01a1960f-6ca8-7313-8a94-63b0b98a4e44
   author: joe
