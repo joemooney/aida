@@ -404,3 +404,51 @@ fn containment_claude_rejects_native_even_for_generated_explicit_flags() {
             .is_none()
     );
 }
+
+// Refusals must offer only supported vendor policies, never suggest that agy
+// can be enabled by choosing another contained.vendors value.
+// trace:TASK-3047 | ai:codex
+#[test]
+fn containment_agy_refusal_names_supported_vendors_and_stays_closed() {
+    let root = tempfile::tempdir().unwrap();
+    let _cwd = session::contained_cwd_seam::pin(root.path());
+    let supported = "Supported [contained.vendors] settings: claude = \"aida\" (AIDA containment), codex = \"native\" (explicit opt-in in the trusted default-branch config; native sandbox, not AIDA-contained). Use --vendor claude or AIDA_HEADLESS_VENDOR=claude for AIDA containment.";
+
+    for setting in ["", "agy = \"aida\"", "agy = \"native\""] {
+        policy(root.path(), setting);
+        let error = session::containment_posture_in(root.path(), "agy", true).unwrap_err();
+        let message = error.to_string();
+        assert!(message.contains("agy"), "{message}");
+        assert!(message.contains("refusing to launch"), "{message}");
+        assert!(message.ends_with(supported), "{message}");
+        assert!(!message.contains("fix [contained.vendors]"), "{message}");
+
+        for (child, error) in [
+            (
+                "implementer",
+                session::require_vendor_containment(HeadlessVendor::Agy, true, "implementer")
+                    .unwrap_err(),
+            ),
+            (
+                "reviewer",
+                session::child_containment_preflight(HeadlessVendor::Agy, true, true, "reviewer")
+                    .unwrap_err(),
+            ),
+            (
+                "reviewer",
+                session::child_containment_preflight(HeadlessVendor::Agy, true, false, "reviewer")
+                    .unwrap_err(),
+            ),
+        ] {
+            assert_eq!(
+                error.to_string(),
+                format!(
+                    "the `agy` vendor cannot run a contained session: {supported}\n  [contained] refusing to launch the {child} uncontained"
+                )
+            );
+        }
+        session::require_vendor_containment(HeadlessVendor::Agy, false, "implementer").unwrap();
+        session::child_containment_preflight(HeadlessVendor::Agy, false, false, "reviewer")
+            .unwrap();
+    }
+}
