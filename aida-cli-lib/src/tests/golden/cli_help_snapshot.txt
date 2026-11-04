@@ -47073,9 +47073,19 @@ Working on aida itself
         "help": "Skip the live-duplicate confirmation prompt while still checking for duplicates"
       },
       {
+        "name": "base",
+        "takes_value": true,
+        "help": "Ref a new `--branch` forks from (only with `--bg`; default: the project's default branch). Ignored when BRANCH already exists"
+      },
+      {
         "name": "bg",
         "takes_value": false,
         "help": "Launch a detached Codex implementer or reviewer for SPEC: a fresh `codex exec` worker under its own lease and child grant, in the trusted native sandbox (`[agents] contained` plus `[contained.vendors] codex = \"native\"`), supervised by AIDA after this command returns. Prints the attempt id; it reports \"accepted\" when the worker started, not when the work completed. Inspect with `aida agent launch-status <ATTEMPT>`. Needs a seat grant that delegates the role; never offers an inline grant"
+      },
+      {
+        "name": "branch",
+        "takes_value": true,
+        "help": "Put the detached lane's worktree on BRANCH (only with `--bg`). An existing branch, local or on origin, is checked out; a new one forks from `--base`"
       },
       {
         "name": "bypass-sandbox",
