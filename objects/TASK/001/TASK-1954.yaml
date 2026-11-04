@@ -58,7 +58,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-19T16:01:15.460127350Z
-modified_at: 2026-11-04T19:53:19.569362277Z
+modified_at: 2026-11-04T20:28:09.192094408Z
 req_type: Task
 tags:
 - cli
@@ -293,6 +293,12 @@ comments:
   content: 'Advisor rework for PR #3372: replaced the overlapping variant-import matcher with an extracted path-segment helper and fixtures for glob/group/mixed/renamed imports under bare, crate:: and super:: prefixes, including allowed {self}. Restored the cache-binding A1 doc attachment, added both BUG-2129 criterion traces, and added a real implementer-driver watchdog/store-commit-refusal regression. Its CI budget covers the production 30-second watchdog cadence. Final make check-ci-fast passed all 36 gates; targeted Rust test binary is still compiling. No shipping or review-verdict action will be taken by this standalone implementer.'
   created_at: 2026-11-04T19:53:19.569343927Z
   modified_at: 2026-11-04T19:53:19.569343927Z
+- id: 01a1a83f-6468-7960-b6a2-f34ce0023d78
+  author: joe
+  content: 'Advisor rework complete and pushed to PR #3372; GitHub-confirmed head 4b5a0ad74467960705e28e2e6f28b4018be8c2fa. All five brief items addressed. Final LIGHT gate: 111 CLI registry/driver/usage tests passed; 13 cache-binding tests passed with one helper-only ignored; all 36 check-ci-fast gates passed. Matching CLI fixture prerequisite built. PR description updated, worktree clean, PR open for delta re-review. Push succeeded; sandbox blocked only the local origin/task-1954 tracking-ref refresh. No ship, review record, or merge-hold clearance attempted.'
+  created_at: 2026-11-04T20:28:09.192094408Z
+  modified_at: 2026-11-04T20:28:09.192094408Z
+  session_id: 01a1a80ab4a1
 history:
 - id: 01a154e5-8be2-7ad1-b92b-8f8f1d3f7bcf
   author: joe
