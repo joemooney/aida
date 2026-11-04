@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-2432",
+  "publishes": [
+    {
+      "at": "2026-11-04T01:14:40.223959371Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-04T01:14:39.243100044Z",
+      "spec": "BUG-2432",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "0f1624a8b38d961973328d79d05642add4464fc8",
+        "pr": 3320,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
