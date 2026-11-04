@@ -24,7 +24,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-13T04:41:09.209313801Z
-modified_at: 2026-10-19T16:08:18.138445563Z
+modified_at: 2026-11-04T02:33:31.101215430Z
 req_type: Epic
 tags:
 - architecture
@@ -32,6 +32,13 @@ tags:
 - hexagonal
 - layering
 - operator-held
+comments:
+- id: 01a1a467-88dd-7fe1-aa54-f3e2f6fc06d6
+  author: joe
+  content: 'OPERATOR RULING (2026-11-03 19:30 MST, relayed by advisor): regroup ruling 7: reopen incrementally after STORY-2324, STORY-2325 and STORY-2326 land.'
+  created_at: 2026-11-04T02:33:31.101215430Z
+  modified_at: 2026-11-04T02:33:31.101215430Z
+  session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
 history:
 - id: 01a154eb-bf11-7023-a7b6-c81d42084fba
   author: joe
