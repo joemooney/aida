@@ -1707,7 +1707,8 @@ pub(crate) fn supervise_until_exit(
     // races the commit). A refused or failed commit leaves the work
     // uncommitted and is reported; it does not hold the scope.
     // trace:TASK-2712 | ai:claude
-    let failure = match post_exit_seat_commit(init, problems.is_empty()) {
+    let clean_exit = terminal.unknown.is_none() && terminal.code == Some(0);
+    let failure = match post_exit_seat_commit(init, problems.is_empty(), clean_exit) {
         Some(note) => Some(match failure {
             Some(why) => format!("{why}; {note}"),
             None => note,
@@ -1746,8 +1747,13 @@ pub(crate) fn supervise_until_exit(
 /// work ([`crate::ship_from_seat::post_exit_commit_reported`]), for an
 /// implementer lane whose exit scan came back clear. A note for the
 /// receipt when the commit was refused or failed; `None` otherwise.
+/// `clean_exit` (status 0) decides a completing vs `(Refs SPEC)` trailer.
 // trace:TASK-2712 | ai:claude
-fn post_exit_seat_commit(init: &SupervisorInit, exit_clear: bool) -> Option<String> {
+fn post_exit_seat_commit(
+    init: &SupervisorInit,
+    exit_clear: bool,
+    clean_exit: bool,
+) -> Option<String> {
     if aida_core::team::canonical_role(&init.role) != "implementer" {
         return None;
     }
@@ -1763,6 +1769,7 @@ fn post_exit_seat_commit(init: &SupervisorInit, exit_clear: bool) -> Option<Stri
         &init.worker.cwd,
         &init.spec,
         &init.agent_name,
+        clean_exit,
     ) {
         crate::ship_from_seat::PostExitCommit::Failed(why) => Some(format!(
             "the lane's pending seat work was not committed: {why}"

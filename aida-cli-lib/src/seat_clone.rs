@@ -2294,7 +2294,8 @@ fn salvage_capped(main: &Path, clone: &Path, cap: u64) -> Result<PathBuf> {
 /// before committing, so a path replaced mid-run is refused. On a failure
 /// the working tree is untouched, and a failure after staging restores the
 /// index to the exact tree it held before (`git write-tree` snapshot, then
-/// `git read-tree`), so nothing is left staged.
+/// `git read-tree`), so nothing is left staged, but only while HEAD has not
+/// moved ([`index_restore_allowed`]).
 // trace:TASK-2712 | ai:claude
 pub(crate) fn commit_pending(
     main: &Path,
@@ -2374,6 +2375,10 @@ pub(crate) fn commit_pending(
             clone.display()
         )
     };
+    // HEAD before anything is staged: the index is restored only while HEAD
+    // still points here (F5), never behind a commit that did land.
+    // trace:TASK-2712 | ai:claude
+    let head_before = probe_text(&[os("rev-parse"), os("--verify"), os("HEAD")]).ok();
     // The index as it is now, so a failure after staging can put it back.
     ensure_dir_identity(clone, pinned)?;
     let index_tree = run_commit_sandboxed(clone, main, &[os("write-tree")], &identity)
@@ -2440,7 +2445,18 @@ pub(crate) fn commit_pending(
     match staged {
         Ok(tip) => Ok(Some(tip)),
         Err(error) => {
-            // Put the index back exactly; never touch the working tree.
+            // Put the index back exactly, but only while HEAD has not moved:
+            // after a commit that landed, the index matches the new HEAD and
+            // rolling it back would stage a reversal. Never touch the tree.
+            let head_now = probe_text(&[os("rev-parse"), os("--verify"), os("HEAD")]).ok();
+            if !index_restore_allowed(head_before.as_deref(), head_now.as_deref()) {
+                return Err(error.context(format!(
+                    "HEAD of {} moved or could not be read after the commit step, so its index \
+                     was left as is (not rolled back to tree {index_tree}); check `git log -1` \
+                     in the seat",
+                    clone.display()
+                )));
+            }
             let restored = ensure_dir_identity(clone, pinned).is_ok()
                 && run_commit_sandboxed(
                     clone,
@@ -2460,6 +2476,14 @@ pub(crate) fn commit_pending(
             }
         }
     }
+}
+
+/// [`commit_pending`]'s failure path may roll the index back only when HEAD
+/// was read before staging and still reads the same now. A HEAD that moved
+/// (the commit landed) or could not be read leaves the index alone.
+// trace:TASK-2712 | ai:claude
+pub(crate) fn index_restore_allowed(head_before: Option<&str>, head_now: Option<&str>) -> bool {
+    matches!((head_before, head_now), (Some(before), Some(now)) if before == now)
 }
 
 /// A bundle of `refs/heads/<branch>` alone, made by git inside the probe

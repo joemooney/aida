@@ -6847,7 +6847,8 @@ fn run_tracked_agent_after_spawn(
     };
     // TASK-2712 (advisor ruling F1): the launcher's own post-exit step
     // commits what a native Codex implementer left pending in its seat
-    // clone, whatever the child's exit status (its work is kept either way).
+    // clone, whatever the child's exit status (its work is kept either way);
+    // only a clean exit gets a completing trailer, the rest is `(Refs SPEC)`.
     // trace:TASK-2712 | ai:claude
     if let Some(spec) = native_post_exit_spec(config, plan) {
         crate::ship_from_seat::post_exit_commit_reported(
@@ -6855,6 +6856,7 @@ fn run_tracked_agent_after_spawn(
             &plan.launch_cwd,
             spec,
             &plan.name,
+            status.success(),
         );
     }
     if !status.success() {

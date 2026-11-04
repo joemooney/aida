@@ -986,24 +986,53 @@ fn task_2712_lane_post_exit_commits_pending_seat_work() {
     let fx = fixture();
     let clone = seat_with_pending(&fx, "postexit", "c0ffee271214", "post-exit");
     let base = git_ok(&clone, &["rev-parse", "HEAD"]);
-    let outcome = post_exit_commit(&fx.main, &clone, "BUG-1", "lane-7", &test_commit);
+    let outcome = post_exit_commit(&fx.main, &clone, "BUG-1", "lane-7", true, &test_commit);
     let tip = git_ok(&clone, &["rev-parse", "HEAD"]);
     assert_ne!(tip, base, "the host made no commit");
     assert_eq!(outcome, PostExitCommit::Committed(tip));
     let subject = git_ok(&clone, &["log", "-1", "--format=%s"]);
-    assert_eq!(subject, post_exit_message("BUG-1", "lane-7"));
+    assert_eq!(subject, post_exit_message("BUG-1", "lane-7", true));
     assert!(subject.ends_with("(BUG-1)"), "{subject}");
     assert_eq!(git_ok(&clone, &["status", "--porcelain"]), "");
     // Nothing pending now.
     assert_eq!(
-        post_exit_commit(&fx.main, &clone, "BUG-1", "lane-7", &test_commit),
+        post_exit_commit(&fx.main, &clone, "BUG-1", "lane-7", true, &test_commit),
         PostExitCommit::Clean
     );
     // Not a seat clone: untouched, the commit step never runs.
     assert_eq!(
-        post_exit_commit(&fx.main, &fx.main, "BUG-1", "lane-7", &commit_never),
+        post_exit_commit(&fx.main, &fx.main, "BUG-1", "lane-7", true, &commit_never),
         PostExitCommit::NotASeat
     );
+}
+
+/// Advisor F4: the leftovers of a lane whose child did NOT exit cleanly are
+/// salvage: committed with `(Refs SPEC)`, never a completing trailer.
+// trace:TASK-2712 | ai:claude
+#[test]
+fn task_2712_post_exit_salvage_after_failed_exit_uses_refs_trailer() {
+    use crate::ship_from_seat::{post_exit_commit, post_exit_message, PostExitCommit};
+    let fx = fixture();
+    let clone = seat_with_pending(&fx, "salvage", "c0ffee271216", "salvage");
+    let outcome = post_exit_commit(&fx.main, &clone, "BUG-1", "lane-9", false, &test_commit);
+    let tip = git_ok(&clone, &["rev-parse", "HEAD"]);
+    assert_eq!(outcome, PostExitCommit::Committed(tip));
+    let subject = git_ok(&clone, &["log", "-1", "--format=%s"]);
+    assert_eq!(subject, post_exit_message("BUG-1", "lane-9", false));
+    assert!(subject.ends_with("(Refs BUG-1)"), "{subject}");
+    assert!(!subject.contains(" (BUG-1)"), "{subject}");
+}
+
+/// Advisor F5: the index is rolled back only while HEAD has not moved.
+// trace:TASK-2712 | ai:claude
+#[test]
+fn task_2712_index_restore_only_while_head_unmoved() {
+    use crate::seat_clone::index_restore_allowed;
+    assert!(index_restore_allowed(Some("abc"), Some("abc")));
+    assert!(!index_restore_allowed(Some("abc"), Some("def")), "commit landed");
+    assert!(!index_restore_allowed(Some("abc"), None), "HEAD unreadable now");
+    assert!(!index_restore_allowed(None, Some("abc")), "HEAD unknown before");
+    assert!(!index_restore_allowed(None, None));
 }
 
 /// Advisor F1 end to end where bwrap runs: the post-exit step with the
@@ -1027,6 +1056,7 @@ fn task_2712_lane_post_exit_commit_runs_the_sandboxed_host_commit() {
         &clone,
         "BUG-1",
         "lane-8",
+        true,
         &crate::seat_clone::commit_pending,
     );
     let tip = git_ok(&clone, &["rev-parse", "HEAD"]);

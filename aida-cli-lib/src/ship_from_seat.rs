@@ -236,13 +236,21 @@ pub(crate) enum PostExitCommit {
     Failed(String),
 }
 
-/// The message the host commits a native lane's leftover work with.
+/// The message the host commits a native lane's leftover work with. Only a
+/// clean child exit (status 0) earns a completing `(SPEC)` trailer; the
+/// leftovers of a crashed or failed lane are salvage, committed with
+/// `(Refs SPEC)` so they never complete the spec at merge (advisor F4).
 // trace:TASK-2712 | ai:claude
-pub(crate) fn post_exit_message(spec: &str, lane: &str) -> String {
-    format!(
-        "[AI:codex] chore(seat): work native Codex lane {lane} left uncommitted ({})",
-        aida_core::node_alias::display_spec_id(spec)
-    )
+pub(crate) fn post_exit_message(spec: &str, lane: &str, clean_exit: bool) -> String {
+    let spec = aida_core::node_alias::display_spec_id(spec);
+    if clean_exit {
+        format!("[AI:codex] chore(seat): work native Codex lane {lane} left uncommitted ({spec})")
+    } else {
+        format!(
+            "[AI:codex] chore(seat): salvage work native Codex lane {lane} left uncommitted \
+             after a failed exit (Refs {spec})"
+        )
+    }
 }
 
 /// TASK-2712 (advisor ruling F1): after a native Codex implementer's child
@@ -258,6 +266,7 @@ pub(crate) fn post_exit_commit(
     tree: &Path,
     spec: &str,
     lane: &str,
+    clean_exit: bool,
     commit: &dyn Fn(&Path, &Path, &str, &str) -> Result<Option<String>>,
 ) -> PostExitCommit {
     let main = crate::main_worktree_root_from(main);
@@ -269,7 +278,7 @@ pub(crate) fn post_exit_commit(
         &main,
         tree,
         Some(spec),
-        &post_exit_message(spec, lane),
+        &post_exit_message(spec, lane, clean_exit),
         commit,
     ) {
         Ok(Some(tip)) => PostExitCommit::Committed(tip),
@@ -278,15 +287,61 @@ pub(crate) fn post_exit_commit(
     }
 }
 
+/// The lanes' post-exit step as a test sees it: `(main, tree, spec, lane,
+/// clean_exit)`. A test installs one on its own thread through
+/// [`with_post_exit_step`] to observe the step the lane itself runs.
+#[cfg(test)]
+pub(crate) type PostExitStep = dyn Fn(&Path, &Path, &str, &str, bool) -> PostExitCommit;
+
+#[cfg(test)]
+thread_local! {
+    static POST_EXIT_STEP: std::cell::RefCell<Option<Box<PostExitStep>>> =
+        const { std::cell::RefCell::new(None) };
+}
+
+/// Run `body` with `step` standing in for the production post-exit step on
+/// this thread (the lane drivers call [`post_exit_commit_reported`] on the
+/// thread that waited for the child).
+// trace:TASK-2712 | ai:claude
+#[cfg(test)]
+pub(crate) fn with_post_exit_step<R>(step: Box<PostExitStep>, body: impl FnOnce() -> R) -> R {
+    struct Reset;
+    impl Drop for Reset {
+        fn drop(&mut self) {
+            POST_EXIT_STEP.with(|s| *s.borrow_mut() = None);
+        }
+    }
+    POST_EXIT_STEP.with(|s| *s.borrow_mut() = Some(step));
+    let _reset = Reset;
+    body()
+}
+
 /// [`post_exit_commit`] with the production commit, reported on stderr.
+/// `clean_exit` is whether the child exited with status 0.
 // trace:TASK-2712 | ai:claude
 pub(crate) fn post_exit_commit_reported(
     main: &Path,
     tree: &Path,
     spec: &str,
     lane: &str,
+    clean_exit: bool,
 ) -> PostExitCommit {
-    let outcome = post_exit_commit(main, tree, spec, lane, &crate::seat_clone::commit_pending);
+    #[cfg(test)]
+    if let Some(outcome) = POST_EXIT_STEP.with(|s| {
+        s.borrow()
+            .as_ref()
+            .map(|step| step(main, tree, spec, lane, clean_exit))
+    }) {
+        return outcome;
+    }
+    let outcome = post_exit_commit(
+        main,
+        tree,
+        spec,
+        lane,
+        clean_exit,
+        &crate::seat_clone::commit_pending,
+    );
     match &outcome {
         PostExitCommit::Committed(tip) => eprintln!(
             "  committed the work lane {lane} left pending in {} as {tip} (host, hooks off). \

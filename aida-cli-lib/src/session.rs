@@ -2037,8 +2037,7 @@ fn spawn_vendor_headless_forking(
         tuning.effort.as_deref(),
         fork_thread,
     )?;
-    // TASK-2712: the headless reviewer (and every other seat) gets the write
-    // set of its own seat role. trace:TASK-2712 | ai:claude
+    // Each seat gets its own role's write set. trace:TASK-2712 | ai:claude
     rescope_native_codex_for_seat(vendor, &mut args, &headless_worktree_root(), seat.as_str())?;
     // trace:BUG-b6b1278890774ef993d2ebc327862470-045 | ai:claude
     let child_grant = crate::gate::seat_authority::issue_launch_child(
