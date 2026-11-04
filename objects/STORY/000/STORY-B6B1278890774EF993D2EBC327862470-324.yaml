@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-02T19:20:59.253007269Z
-modified_at: 2026-11-04T02:33:33.761826672Z
+modified_at: 2026-11-04T03:31:55.807459570Z
 req_type: Story
 tags:
 - architecture
@@ -427,6 +427,13 @@ comments:
   created_at: 2026-11-04T02:33:33.761826672Z
   modified_at: 2026-11-04T02:33:33.761826672Z
   session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
+- id: 01a1a49d-031f-7a02-a11d-13244d7bac61
+  author: joe
+  content: 'PR-3288 round 8 (implementer, seat story-...-324): NOT PUSHED — the ruling''s gate could not be completed in this seat. Local branch story-2326-work = 63e38722 (prior PR tree 91811ede squashed onto origin/main 0754a362, i.e. the rebase for the help-golden window artifact) + 3c0d8b6a (fix). Fix: LEDGER adds lane_job.rs 1 (BUG-2383 cargo job runner, not a vendor child), seat_target_overlay.rs 1 (overlay probe runs true under unshare), codex_tool_env.rs 2->3 (the cfg(test) tool_shell_command_for_test, ledgered explicitly: production() skips cfg(test) modules only); CEILING 164->167 (+3 merged-in, noted). Also fixed the other lib-0 CI failures: the ratchet test''s clean fixture spelled current_exe() (TASK-1262 resolver ratchet), and the BUG-2172 session tests ran a contained parent through AIDA_AGENT_CMD (now a fake claude on PATH in a PATH-isolated process, as bug_2393 does). Help-golden guard: vs the true merge base no *_args.rs/command_registry.rs is touched, so it is the shallow-window artifact; rebased, no opt-out trailer. I could not read the CI log (the blob host is sandbox-denied). Gate via lane job j20261104T032201888-5-0: cargo test -p aida-cli-lib --lib -- story_2326 bug_2398 bug_2395 (+ the 3 CI-failing tests): 26 passed, 8 failed, all environmental: 5 are ''build the matching CLI before these process fixtures'' (the bug_2398 real-codex/dispatch fixtures; still failing after a lane cargo build -p aida), and 3 are ''contained launch refused: seat .git resolves to /home/joe/ai/aida, not a recorded seat clone'' (golden_headless_and_lane, aida_posture_spawn_routes, the resume half of interactive_reviewer). The ledger, resolver ratchet and spawn_vendor_headless tests pass. make check-ci-fast NOT run (60s tool cap; make/script runs denied here). Needs: an operator with a normal host checkout runs the gate + check-ci-fast on 3c0d8b6a, then force-pushes story-2326-work (authorized by the ruling), or authorizes a push so CI can run it.'
+  created_at: 2026-11-04T03:31:55.807459570Z
+  modified_at: 2026-11-04T03:31:55.807459570Z
+  session_id: 01a1a4613eb5
+  harness_version: 2.1.318 (Claude Code)
 history:
 - id: 01a19ed2-a170-7d52-94f3-7c4ff46f38c4
   author: joe
