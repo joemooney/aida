@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-02T19:20:59.253007269Z
-modified_at: 2026-11-04T03:31:55.807459570Z
+modified_at: 2026-11-04T05:21:18.011576650Z
 req_type: Story
 tags:
 - architecture
@@ -434,6 +434,12 @@ comments:
   modified_at: 2026-11-04T03:31:55.807459570Z
   session_id: 01a1a4613eb5
   harness_version: 2.1.318 (Claude Code)
+- id: 01a1a501-24bb-7f82-9342-62fee4646e72
+  author: joe
+  content: 'ADVISOR REWORK BRIEF r8-push (2026-11-03 22:24 MST): local branch story-2326-work (63e38722 + 3c0d8b6a) in seat ...-324 was never pushed and now CONFLICTS with origin/main. Steps: (1) rebase story-2326-work onto current origin/main and resolve the conflicts, keeping main''s side for unrelated code and re-ledgering any new spawn sites main brought in (update the exact-count LEDGER and CEILING with a one-line note each). (2) Gate: ONE targeted run, cargo test -p aida-cli-lib --lib story_2326 (the ledger ratchet), plus make check-ci-fast. Do NOT run the full lib suite: two earlier runs died at 900s, and CI''s shards are the gate. (3) Force-push-with-lease to story-2326-work (PR #3288). The advisor reviews only the delta from 91811ede.'
+  created_at: 2026-11-04T05:21:18.011576650Z
+  modified_at: 2026-11-04T05:21:18.011576650Z
+  session_id: da1c0d85-1d45-4ce4-a292-5358644f65b9
 history:
 - id: 01a19ed2-a170-7d52-94f3-7c4ff46f38c4
   author: joe
