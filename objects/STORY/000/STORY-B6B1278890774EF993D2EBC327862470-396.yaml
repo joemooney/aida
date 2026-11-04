@@ -1,0 +1,60 @@
+id: 01a1a807-b79e-7931-abe7-ad13d189b367
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-396
+agreed_id: STORY-2468
+title: 'Review PR-3372: [AI:claude] test: assert the specific JSON refusal, visible python3 skip, arm-anchored hot-file guard (TASK-1954, TASK-1969, TASK-1972, TASK-1973, TASK-1982, TASK-1983)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a1a63a`) for branch `task-1954`.
+
+  - PR: <https://github.com/joemooney/aida/pull/3372>
+  - Branch: `task-1954` → `main`
+
+  ## Covers
+
+  - TASK-1954
+  - TASK-1969
+  - TASK-1972
+  - TASK-1973
+  - TASK-1982
+  - TASK-1983
+  - BUG-2129
+  - TASK-1796
+  - TASK-1760
+  - TASK-1771
+  - TASK-2002
+  - TASK-1656
+  - TASK-1657
+  - TASK-1812
+  - TASK-1916
+  - TASK-1654
+  - TASK-1655
+  - TASK-1653
+  - TASK-1762
+  - TASK-1927
+  - TASK-1632
+  - TASK-1629
+  - TASK-1974
+  - TASK-1624
+  - TASK-1625
+  - TASK-1626
+  - TASK-1413
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 3372` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-04T19:27:20.478189983Z
+modified_at: 2026-11-04T19:27:20.478189983Z
+req_type: Story
+filed_at:
+  code_sha: 1c51f44695cfa1ac8fcfc24583bd6e95c6797093
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: e44c9e595a7
+  vendor: claude
+  session: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
