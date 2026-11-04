@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-03T02:44:16.945490220Z
-modified_at: 2026-11-03T22:16:05.759845464Z
+modified_at: 2026-11-04T01:12:38.974347601Z
 req_type: Story
 tags:
 - from:SPIKE-708
@@ -84,6 +84,12 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-03T22:02:41.463872203Z
   modified_at: 2026-11-03T22:02:41.463872203Z
+  session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
+- id: 01a1a41d-7f3e-7f80-a842-f2db3b3dac89
+  author: joe
+  content: 'ADVISOR RULING (PR-3308 round 3, 2026-11-03 18:15 MST): rework. Blocking: CI contracts ''Run normal two-remote pull byte identical fixture'' still fails at 35768f7c. The expected bytes in tests/test_bug_1796_normal_two_remote_pull_byte_identical.sh:74-84 were inferred and the inference is wrong. REPRODUCE, do not infer: run that fixture script locally against your built binary (umask 022), capture the actual pull output, and set the expected bytes from it; then explain in the spec comment which line init_cmd.rs:4722 changed and why main''s output differs. Update-branch onto current main first. Nothing else is open: findings 1 and 4 resolved. Gate: LIGHT (that fixture + check-ci-fast).'
+  created_at: 2026-11-04T01:12:38.974347601Z
+  modified_at: 2026-11-04T01:12:38.974347601Z
   session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
 history:
 - id: 01a19f4b-61ed-7310-b584-0af8f83cd6a1
