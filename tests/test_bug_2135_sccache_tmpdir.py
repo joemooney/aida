@@ -403,13 +403,37 @@ class TestTask2790FailureHints(unittest.TestCase):
         self.assertTrue(evidence)
 
     # trace:TASK-2802 | ai:claude
+    def test_gate_keeps_draining_into_a_sink_without_buffer(self):
+        text_only = io.StringIO()  # a replaced sys.stdout has no .buffer
+        command = "head -c 200000 /dev/zero | tr '\\0' x; echo 'failed to download'; exit 0"
+        result = []
+
+        def run():
+            result.append(check_ci.run_gate(REPO, "fixture", command, dict(os.environ)))
+
+        with mock.patch.object(check_ci.sys, "stdout", text_only):
+            worker = threading.Thread(target=run, daemon=True)
+            worker.start()
+            worker.join(30)
+        self.assertFalse(worker.is_alive(), "run_gate hung: a reader stopped draining")
+        passed, _, evidence = result[0]
+        self.assertTrue(passed)
+        self.assertTrue(evidence)
+        self.assertIn("failed to download", text_only.getvalue())
+
+    # trace:TASK-2802 | ai:claude
     def test_cargo_tty_env_only_for_a_terminal_and_never_overrides(self):
         base = {"PATH": "/bin", "CARGO_TERM_COLOR": "never"}
         self.assertIs(check_ci.cargo_tty_env(base, False), base)
-        tty = check_ci.cargo_tty_env(base, True)
+        tty = check_ci.cargo_tty_env(base, True, 120)
         self.assertEqual(tty["CARGO_TERM_COLOR"], "never")
-        self.assertEqual(tty["CARGO_TERM_PROGRESS_WHEN"], "auto")
-        self.assertEqual(check_ci.cargo_tty_env({}, True)["CARGO_TERM_COLOR"], "always")
+        # `auto` would still see the pipe: the bar needs `always` plus a width.
+        self.assertEqual(tty["CARGO_TERM_PROGRESS_WHEN"], "always")
+        self.assertEqual(tty["CARGO_TERM_PROGRESS_WIDTH"], "120")
+        # Cargo rejects `always` without a width: an unknown width is colour only.
+        self.assertEqual(check_ci.cargo_tty_env({}, True), {"CARGO_TERM_COLOR": "always"})
+        chosen = check_ci.cargo_tty_env({"CARGO_TERM_PROGRESS_WHEN": "never"}, True, 80)
+        self.assertEqual(chosen["CARGO_TERM_PROGRESS_WHEN"], "never")
 
     def test_start_path_uses_repo_config_from_an_unrelated_cwd(self):
         with tempfile.TemporaryDirectory() as td:

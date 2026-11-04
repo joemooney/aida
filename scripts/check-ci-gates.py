@@ -20,6 +20,7 @@ trace:TASK-1555 | ai:claude
 from __future__ import annotations
 
 import argparse
+import codecs
 import contextlib
 from concurrent.futures import ThreadPoolExecutor
 import errno
@@ -521,15 +522,31 @@ CARGO_FETCH_ERRORS = (b"read-only file system", b"failed to download", b"failed 
 
 
 # trace:TASK-2802 | ai:claude
-CARGO_TTY_ENV = {"CARGO_TERM_COLOR": "always", "CARGO_TERM_PROGRESS_WHEN": "auto"}
-
-
-def cargo_tty_env(env: dict[str, str], parent_is_tty: bool) -> dict[str, str]:
+def cargo_tty_env(env: dict[str, str], parent_is_tty: bool, width: int | None = None) -> dict[str, str]:
     """TASK-2802: the gate env plus cargo's terminal settings when the parent
-    stream is a TTY; values already in `env` are left alone."""
+    stream is a TTY; values already in `env` are left alone. Cargo's progress
+    `auto` still checks its own (piped) stderr, so the bar needs `always`, and
+    cargo rejects `always` without a width: the progress keys are added only
+    when the terminal width is known."""
     if not parent_is_tty:
         return env
-    return {**CARGO_TTY_ENV, **env}
+    tty = {"CARGO_TERM_COLOR": "always"}
+    if width:
+        tty |= {"CARGO_TERM_PROGRESS_WHEN": "always", "CARGO_TERM_PROGRESS_WIDTH": str(width)}
+    return {**tty, **env}
+
+
+def stderr_tty_width() -> tuple[bool, int | None]:
+    """TASK-2802: whether our stderr is a terminal, and its width if known."""
+    try:
+        if not sys.stderr.isatty():
+            return False, None
+    except (AttributeError, ValueError):
+        return False, None
+    try:
+        return True, os.get_terminal_size(sys.stderr.fileno()).columns
+    except (AttributeError, OSError, ValueError):
+        return True, None
 
 
 def run_gate(root: Path, name: str, command: str, env: dict[str, str]) -> tuple[bool, float, bool]:
@@ -538,24 +555,33 @@ def run_gate(root: Path, name: str, command: str, env: dict[str, str]) -> tuple[
     def stream_diagnostics(source, sink):
         fetch_error = False
         tail = b""
+        # trace:TASK-2802 | ai:claude
+        # A replaced sys.stdout (a StringIO) has no .buffer: write it text.
+        binary = getattr(sink, "buffer", None)
+        decoder = codecs.getincrementaldecoder("utf-8")(errors="replace")
         while chunk := source.read1(8192):
             try:
-                sink.buffer.write(chunk)
-                sink.buffer.flush()
-            # trace:TASK-2802 | ai:claude
-            except (OSError, ValueError):
-                # Drain the child even when the caller's sink went away (a
-                # broken pipe, a closed file, a full disk), like the Rust reader.
+                if binary is not None:
+                    binary.write(chunk)
+                    binary.flush()
+                else:
+                    sink.write(decoder.decode(chunk))
+                    sink.flush()
+            except (OSError, ValueError, AttributeError, TypeError):
+                # Drain the child even when the caller's sink went away or
+                # cannot take the write (a broken pipe, a closed file, a full
+                # disk, an odd sink), like the Rust reader.
                 pass
             evidence = tail + chunk.lower()
             fetch_error |= any(marker in evidence for marker in CARGO_FETCH_ERRORS)
             tail = evidence[-64:]
         return fetch_error
 
-    # Piped streams hide the terminal from cargo, which then drops colour; keep
-    # it when our own stderr is a terminal, unless the caller already chose.
+    # Piped streams hide the terminal from cargo, which then drops colour and
+    # the progress bar; keep them when our own stderr is a terminal, unless the
+    # caller already chose.
     # trace:TASK-2802 | ai:claude
-    env = cargo_tty_env(env, sys.stderr.isatty())
+    env = cargo_tty_env(env, *stderr_tty_width())
     # The reads below finish at EOF, not at the child's exit: a grandchild that
     # inherits a pipe and outlives the gate keeps its result() blocked.
     with subprocess.Popen(

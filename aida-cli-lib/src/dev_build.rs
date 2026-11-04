@@ -907,18 +907,24 @@ fn stream_cargo_diagnostics(mut input: impl Read, mut output: impl Write) -> std
     }
 }
 
-/// Piping stderr hides the terminal from cargo, so it would drop colour. When
-/// our own stderr is a terminal, tell cargo children to keep it, unless the
-/// caller (or the command itself) already chose a value.
+/// Piping stderr hides the terminal from cargo, so it would drop colour and
+/// the progress bar. When our own stderr is a terminal, tell cargo children to
+/// keep both, unless the caller (or the environment) already chose a value.
+/// Cargo's progress `auto` still checks its own stderr, which is our pipe, so
+/// the bar needs `always`; cargo rejects `always` without a width, so the
+/// progress keys are set only when the terminal width is known.
 // trace:TASK-2802 | ai:claude
-fn inherit_cargo_tty_env(cmd: &mut Command, parent_is_tty: bool) {
-    if !parent_is_tty {
+fn inherit_cargo_tty_env(cmd: &mut Command, parent_tty_width: Option<Option<u16>>) {
+    let Some(width) = parent_tty_width else {
         return;
+    };
+    let width = width.map(|cols| cols.to_string());
+    let mut vars = vec![("CARGO_TERM_COLOR", "always")];
+    if let Some(width) = width.as_deref() {
+        vars.push(("CARGO_TERM_PROGRESS_WHEN", "always"));
+        vars.push(("CARGO_TERM_PROGRESS_WIDTH", width));
     }
-    for (key, value) in [
-        ("CARGO_TERM_COLOR", "always"),
-        ("CARGO_TERM_PROGRESS_WHEN", "auto"),
-    ] {
+    for (key, value) in vars {
         let set_on_cmd = cmd.get_envs().any(|(k, _)| k == key);
         if !set_on_cmd && std::env::var_os(key).is_none() {
             cmd.env(key, value);
@@ -928,7 +934,10 @@ fn inherit_cargo_tty_env(cmd: &mut Command, parent_is_tty: bool) {
 
 fn run_checked(cmd: &mut Command, what: &str) -> Result<()> {
     use std::io::IsTerminal;
-    inherit_cargo_tty_env(cmd, std::io::stderr().is_terminal());
+    let tty_width = std::io::stderr()
+        .is_terminal()
+        .then(|| crossterm::terminal::size().ok().map(|(cols, _)| cols));
+    inherit_cargo_tty_env(cmd, tty_width);
     run_checked_in(
         cmd,
         what,

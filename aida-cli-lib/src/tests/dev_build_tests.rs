@@ -2127,6 +2127,7 @@ fn cargo_diagnostics_detect_marker_split_across_reads() {
 
 /// A failing command whose stderr carries `stderr_line`, run with an injected
 /// cargo home and no sccache problem.
+#[cfg(unix)]
 fn failing_run(stderr_line: &str, cargo_home: Option<PathBuf>) -> String {
     let mut cmd = Command::new("sh");
     cmd.args(["-c", &format!("echo '{stderr_line}' >&2; exit 101")]);
@@ -2136,6 +2137,7 @@ fn failing_run(stderr_line: &str, cargo_home: Option<PathBuf>) -> String {
 }
 
 // trace:TASK-2802 | ai:claude
+#[cfg(unix)]
 #[test]
 fn run_checked_fetch_error_on_read_only_cargo_home_adds_the_note() {
     // SAFETY: geteuid never fails and has no preconditions.
@@ -2162,6 +2164,7 @@ fn run_checked_fetch_error_on_read_only_cargo_home_adds_the_note() {
 }
 
 // trace:TASK-2802 | ai:claude
+#[cfg(unix)]
 #[test]
 fn run_checked_fetch_error_on_writable_or_unknown_cargo_home_stays_plain() {
     let tmp = tempfile::tempdir().unwrap();
@@ -2177,16 +2180,46 @@ fn run_checked_fetch_error_on_writable_or_unknown_cargo_home_stays_plain() {
 // trace:TASK-2802 | ai:claude
 #[test]
 fn cargo_tty_env_is_set_only_for_a_terminal_and_never_overrides() {
+    fn env_of<'a>(cmd: &'a Command, key: &str) -> Option<&'a std::ffi::OsStr> {
+        cmd.get_envs().find(|(k, _)| *k == key).and_then(|(_, v)| v)
+    }
+    // The host environment may already set these; then nothing is injected.
+    let host_sets = |key: &str| std::env::var_os(key).is_some();
+
     let mut piped = Command::new("cargo");
-    inherit_cargo_tty_env(&mut piped, false);
+    inherit_cargo_tty_env(&mut piped, None);
     assert_eq!(piped.get_envs().count(), 0);
 
     let mut explicit = Command::new("cargo");
     explicit.env("CARGO_TERM_COLOR", "never");
-    inherit_cargo_tty_env(&mut explicit, true);
-    let color = explicit
-        .get_envs()
-        .find(|(k, _)| *k == "CARGO_TERM_COLOR")
-        .and_then(|(_, v)| v);
-    assert_eq!(color, Some(std::ffi::OsStr::new("never")));
+    explicit.env("CARGO_TERM_PROGRESS_WHEN", "never");
+    inherit_cargo_tty_env(&mut explicit, Some(Some(120)));
+    assert_eq!(
+        env_of(&explicit, "CARGO_TERM_COLOR"),
+        Some(std::ffi::OsStr::new("never"))
+    );
+    assert_eq!(
+        env_of(&explicit, "CARGO_TERM_PROGRESS_WHEN"),
+        Some(std::ffi::OsStr::new("never"))
+    );
+
+    // `auto` would still see the pipe, so the bar needs `always` plus a width.
+    let mut terminal = Command::new("cargo");
+    inherit_cargo_tty_env(&mut terminal, Some(Some(120)));
+    if !host_sets("CARGO_TERM_PROGRESS_WHEN") && !host_sets("CARGO_TERM_PROGRESS_WIDTH") {
+        assert_eq!(
+            env_of(&terminal, "CARGO_TERM_PROGRESS_WHEN"),
+            Some(std::ffi::OsStr::new("always"))
+        );
+        assert_eq!(
+            env_of(&terminal, "CARGO_TERM_PROGRESS_WIDTH"),
+            Some(std::ffi::OsStr::new("120"))
+        );
+    }
+
+    // Cargo rejects `always` without a width: an unknown width keeps colour only.
+    let mut no_width = Command::new("cargo");
+    inherit_cargo_tty_env(&mut no_width, Some(None));
+    assert_eq!(env_of(&no_width, "CARGO_TERM_PROGRESS_WHEN"), None);
+    assert_eq!(env_of(&no_width, "CARGO_TERM_PROGRESS_WIDTH"), None);
 }
