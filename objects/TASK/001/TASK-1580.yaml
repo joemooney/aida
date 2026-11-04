@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-03T19:02:30.986259622Z
-modified_at: 2026-10-05T04:16:48.441119506Z
+modified_at: 2026-11-04T02:33:26.698380789Z
 req_type: Task
 tags:
 - operator-held
@@ -25,6 +25,12 @@ comments:
   created_at: 2026-10-05T04:15:10.144426517Z
   modified_at: 2026-10-05T04:15:10.144426517Z
   session_id: bfd19354-cbdf-496f-9fae-64fb73c21959
+- id: 01a1a467-77aa-7501-92b5-85c9774a14f0
+  author: joe
+  content: 'OPERATOR RULING (2026-11-03 19:30 MST, relayed by advisor): regroup rulings 6/8: stays parked on its named external trigger.'
+  created_at: 2026-11-04T02:33:26.698380789Z
+  modified_at: 2026-11-04T02:33:26.698380789Z
+  session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
 deferred: true
 deferred_at: 2026-10-05T04:16:48.441119506Z
 deferred_until: a second human works this repo; seats run on hosts the operator does not control; the product serves external users
