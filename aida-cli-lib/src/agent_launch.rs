@@ -4723,7 +4723,16 @@ fn prepare_agent_launch_attempt_inner(
                     // trace:BUG-2169 | ai:claude
                     contained_seat,
                     true,
-                    /* adopt_orphan */ false,
+                    // A lane naming both its branch and an existing tree
+                    // (dispatch `take` on a branch checked out elsewhere)
+                    // re-enters that tree; session setup checks it is a
+                    // registered worktree on the branch that no lease holds.
+                    // trace:TASK-2823 | ai:claude
+                    if lane_branch.branch.is_some() && requested_path.is_some() {
+                        crate::session_start::PathReentry::LaneWorktree
+                    } else {
+                        crate::session_start::PathReentry::None
+                    },
                 )
             });
             let restore_result = std::env::set_current_dir(&previous_cwd);

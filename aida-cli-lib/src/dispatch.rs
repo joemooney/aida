@@ -2671,13 +2671,29 @@ fn run_take_verb(
         if let Some(refusal) = codex_lane_tick_refusal(req, via_serve) {
             return refusal;
         }
+        // Like the Claude path, reuse a worktree that already has the PR
+        // branch checked out: git refuses to check it out a second time.
+        // trace:TASK-2823 | ai:claude
+        let existing_wt = find_worktree_for_branch(main_worktree, branch);
+        if let Some(wt) = existing_wt.as_deref().filter(|wt| *wt != wt_path.as_path()) {
+            if let Some(busy) =
+                check_live_worktree_or_branch_occupant(main_worktree, wt, Some(branch), Some(spec))
+            {
+                return RunnerOutcome::Refused {
+                    reason: format!("cannot launch takeover on PR #{pr}: {busy}"),
+                };
+            }
+        }
         return run_codex_lane(
             main_worktree,
             req,
-            spec,
-            branch,
-            &start_ref,
-            Some(branch),
+            CodexLaneTarget {
+                spec,
+                branch,
+                base: &start_ref,
+                fetch_ref: Some(branch),
+                existing_worktree: existing_wt.as_deref(),
+            },
             &brief_body,
             now,
         );
@@ -2770,10 +2786,13 @@ fn run_impl_verb(
         return run_codex_lane(
             main_worktree,
             req,
-            spec,
-            branch,
-            &default_remote_ref,
-            Some(&default_branch),
+            CodexLaneTarget {
+                spec,
+                branch,
+                base: &default_remote_ref,
+                fetch_ref: Some(&default_branch),
+                existing_worktree: None,
+            },
             &brief_body,
             now,
         );
@@ -2930,20 +2949,32 @@ fn codex_lane_accept_timeout() -> std::time::Duration {
     CODEX_LANE_ACCEPT_TIMEOUT
 }
 
+/// Where a Codex `take`/`impl` lane works: its spec, branch, the base a new
+/// branch forks from, the ref fetched first, and a linked worktree that
+/// already has the branch checked out (re-entered via `--cwd`).
+// trace:TASK-2823 | ai:claude
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct CodexLaneTarget<'a> {
+    pub spec: &'a str,
+    pub branch: &'a str,
+    pub base: &'a str,
+    pub fetch_ref: Option<&'a str>,
+    pub existing_worktree: Option<&'a Path>,
+}
+
 /// The detached Codex launch for a `take`/`impl` lane (STORY-2254): `aida
 /// agent new codex --role implementer --bg --spec <SPEC> --branch <BRANCH>
 /// --base <BASE> --prompt-file <PROMPT>`, run from the main worktree. Its own
 /// session setup creates the lane's lease and worktree on BRANCH (an existing
-/// branch is checked out; a new one forks from BASE) and mints the worker's
+/// branch is checked out; a new one forks from BASE; a linked worktree that
+/// already has BRANCH checked out is re-entered with `--cwd`) and mints the worker's
 /// child grant from the seat grant this process holds. The dispatch worker
 /// token and session purpose are not passed on.
 // trace:BUG-2390 | ai:claude
 pub(crate) fn build_codex_lane_command(
     aida_bin: &Path,
     main_worktree: &Path,
-    spec: &str,
-    branch: &str,
-    base: &str,
+    target: &CodexLaneTarget<'_>,
     prompt_file: &Path,
 ) -> std::process::Command {
     let mut cmd = std::process::Command::new(aida_bin);
@@ -2956,15 +2987,19 @@ pub(crate) fn build_codex_lane_command(
             "implementer",
             "--bg",
             "--spec",
-            spec,
+            target.spec,
             "--branch",
-            branch,
+            target.branch,
             "--base",
-            base,
+            target.base,
             "--prompt-file",
         ])
-        .arg(prompt_file)
-        .env_remove("AIDA_SESSION_PURPOSE")
+        .arg(prompt_file);
+    // trace:TASK-2823 | ai:claude — re-enter the tree already on the branch.
+    if let Some(wt) = target.existing_worktree {
+        cmd.arg("--cwd").arg(wt);
+    }
+    cmd.env_remove("AIDA_SESSION_PURPOSE")
         .env_remove(DISPATCH_CLAIM_TOKEN_ENV)
         .stdin(std::process::Stdio::null());
     cmd
@@ -3013,17 +3048,16 @@ fn fetch_origin_ref(main_worktree: &Path, git_ref: &str) -> Result<()> {
 /// line), never the model's result: `aida dispatch tick`/`serve` returns as
 /// soon as the worker is accepted.
 // trace:BUG-2390 | ai:claude
-#[allow(clippy::too_many_arguments)]
 fn run_codex_lane(
     main_worktree: &Path,
     req: &DispatchRequest,
-    spec: &str,
-    branch: &str,
-    base: &str,
-    fetch_ref: Option<&str>,
+    target: CodexLaneTarget<'_>,
     brief_body: &str,
     now: DateTime<Utc>,
 ) -> RunnerOutcome {
+    let CodexLaneTarget {
+        branch, fetch_ref, ..
+    } = target;
     let action = req.action();
     let label = format!("{} {}", action.verb_str(), action.subject_label());
     if let Some(fetch_ref) = fetch_ref {
@@ -3065,7 +3099,7 @@ fn run_codex_lane(
             }
         }
     };
-    let cmd = build_codex_lane_command(&aida_bin, main_worktree, spec, branch, base, &prompt_path);
+    let cmd = build_codex_lane_command(&aida_bin, main_worktree, &target, &prompt_path);
     let timeout = codex_lane_accept_timeout();
     match crate::command_output_with_timeout_capped(cmd, timeout, CODEX_LANE_OUTPUT_CAP) {
         crate::BoundedCommandOutput::Completed(out) => {

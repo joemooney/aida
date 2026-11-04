@@ -2626,6 +2626,11 @@ mod s4b_seat_trees_tests;
 #[path = "tests/bug_2223_orphan_seat_reentry_tests.rs"]
 mod orphan_reentry_tests;
 
+// trace:TASK-2823 | ai:claude
+#[cfg(test)]
+#[path = "tests/task_2823_lane_worktree_reentry_tests.rs"]
+mod lane_worktree_reentry_tests;
+
 #[cfg(test)]
 #[path = "tests/story_1843_c2_seat_clone_retention_tests.rs"]
 mod retention_tests;

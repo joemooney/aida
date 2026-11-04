@@ -844,6 +844,36 @@ pub(crate) fn creator_shell_pid() -> Option<u32> {
     sys.process(me)?.parent().map(|p| p.as_u32())
 }
 
+/// How `session start` may re-enter an existing explicit `--path` in place
+/// (with `--force-claim`, any registered worktree on the branch may be).
+// trace:BUG-2223 TASK-2823 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum PathReentry {
+    /// An existing path is refused.
+    None,
+    /// BUG-2223: re-enter the orphaned lease the path records
+    /// (`aida queue work --resume`). Unlike `force_claim` it bypasses no live
+    /// claim, and refuses when the path is not an adoptable orphan's.
+    AdoptOrphan,
+    /// TASK-2823: a lane launch naming `--branch` re-enters a linked worktree
+    /// that already has that branch checked out (git refuses a second
+    /// checkout of it) when no session's lease records that tree.
+    LaneWorktree,
+}
+
+/// The lease, if any, whose recorded worktree is `path`.
+// trace:TASK-2823 | ai:claude
+fn lease_recording_tree(
+    project_root: &std::path::Path,
+    path: &std::path::Path,
+) -> Option<SessionLease> {
+    let canonical = |p: &std::path::Path| p.canonicalize().unwrap_or_else(|_| p.to_path_buf());
+    let tree = canonical(path);
+    list_leases(project_root)
+        .into_iter()
+        .find(|l| !l.worktree_path.as_os_str().is_empty() && canonical(&l.worktree_path) == tree)
+}
+
 /// BUG-2223: the orphaned lease an explicit `--path` + `--force-claim` start
 /// adopts in place: the one lease that records exactly this tree, for this
 /// scope and branch, whose owner is verifiably gone. A seat clone can be
@@ -860,11 +890,7 @@ pub(crate) fn orphan_lease_to_adopt(
     branch: &str,
     is_clone: bool,
 ) -> Result<Option<SessionLease>> {
-    let canonical = |p: &std::path::Path| p.canonicalize().unwrap_or_else(|_| p.to_path_buf());
-    let tree = canonical(path);
-    let recorded = list_leases(project_root)
-        .into_iter()
-        .find(|l| !l.worktree_path.as_os_str().is_empty() && canonical(&l.worktree_path) == tree);
+    let recorded = lease_recording_tree(project_root, path);
     let refuse = |why: String| -> Result<Option<SessionLease>> {
         if is_clone {
             anyhow::bail!(
@@ -1826,7 +1852,7 @@ pub(crate) fn session_start(
         review_coexistence,
         contained_seat,
         false,
-        /* adopt_orphan */ false,
+        PathReentry::None,
     )
     .map(|mut receipt| receipt.disarm())
 }
@@ -1868,12 +1894,11 @@ pub(crate) fn session_start_with_receipt(
     // `[contained] seat_tree = "clone"` it gets a private clone, not a worktree.
     contained_seat: bool,
     rollback_failed_setup: bool,
-    // BUG-2223: re-enter the orphaned lease `explicit_path` records, in place
-    // (`aida queue work --resume`). Unlike `force_claim` it bypasses no live
-    // claim: it only permits the path re-entry, and refuses when that path is
-    // not an adoptable orphan's.
-    adopt_orphan: bool,
+    // BUG-2223 / TASK-2823: whether an existing `explicit_path` may be
+    // re-entered in place, and on what terms (see [`PathReentry`]).
+    path_reentry: PathReentry,
 ) -> Result<SessionStartReceipt> {
+    let adopt_orphan = path_reentry == PathReentry::AdoptOrphan;
     // BUG-75: derive paths from the MAIN worktree root, not from cwd's
     // git ancestor — when the user invokes `aida session start` from
     // inside a linked worktree, find_project_root() returns the linked
@@ -1993,9 +2018,10 @@ pub(crate) fn session_start_with_receipt(
         None => pickup_worktree_path(&project_root, &slug)?,
     };
     // BUG-2223: an orphan adoption may re-enter its recorded --path too.
-    let path_reentry = force_claim || adopt_orphan;
+    // TASK-2823: so may a lane launch onto a worktree already on its branch.
+    let reenters_path = force_claim || path_reentry != PathReentry::None;
     let reuse_existing_worktree_path = explicit_path.is_some()
-        && path_reentry
+        && reenters_path
         && worktree_path.exists()
         && aida_core::git_ops::is_git_repo(&worktree_path)
         && std::process::Command::new("git")
@@ -2015,7 +2041,7 @@ pub(crate) fn session_start_with_receipt(
     // clone no orphaned lease of this scope and branch records.
     // trace:BUG-2223 | ai:claude
     let clone_reentry = explicit_path.is_some()
-        && path_reentry
+        && reenters_path
         && worktree_path.exists()
         && crate::seat_clone::seat_clone_root(&worktree_path)
             .is_some_and(|root| worktree_path.canonicalize().ok() == Some(root));
@@ -2036,6 +2062,24 @@ pub(crate) fn session_start_with_receipt(
              session on branch `{branch_name}`. Nothing was changed in it.",
             worktree_path.display()
         );
+    }
+    // A lane re-entry takes over a tree no session holds; one a lease still
+    // records (other than an adoptable orphan of this scope) is that
+    // session's. trace:TASK-2823 | ai:claude
+    if path_reentry == PathReentry::LaneWorktree
+        && reuse_existing_worktree_path
+        && adopted_orphan.is_none()
+    {
+        if let Some(lease) = lease_recording_tree(&project_root, &worktree_path) {
+            anyhow::bail!(
+                "refusing to re-enter {}: session {} for `{}` still records it. End that \
+                 session (`aida session end {}`) first. Nothing was changed in it.",
+                worktree_path.display(),
+                lease.id,
+                lease.scope,
+                lease.id
+            );
+        }
     }
     if clone_reentry && !contained_seat {
         anyhow::bail!(
