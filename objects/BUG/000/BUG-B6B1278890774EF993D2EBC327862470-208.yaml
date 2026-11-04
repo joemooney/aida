@@ -8,11 +8,17 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T12:51:07.563355298Z
-modified_at: 2026-11-04T12:52:54.928418930Z
+modified_at: 2026-11-04T16:04:00.768694563Z
 req_type: Bug
 tags:
 - area:compete
 - vendor:codex
+comments:
+- id: 01a1a74d-9080-7571-935e-53418d0b4c26
+  author: mcp
+  content: Standalone Codex implementer picked up BUG-2439. Confirmed compete_arm_argv unconditionally adds Claude permission/settings flags for contained Codex. Implementing vendor-specific posture shared by preview/runtime and parent-death binding for vendor children. CLI status write refused because linked cache points outside writable sandbox; current status already In Progress.
+  created_at: 2026-11-04T16:04:00.768673405Z
+  modified_at: 2026-11-04T16:04:00.768673405Z
 history:
 - id: 01a1a69d-4a2d-7292-9de1-00c519ffe27a
   author: joe
