@@ -23,12 +23,12 @@ description: |-
   4. Documented in the away/home/presence and questions --help, alongside the (a)/(d) knobs.
 
   Related: TASK-769 (the sibling decouple-escalation-from-away_drain slice for consumer b); STORY-561 (the presence design); the stale-header fix in presence.rs already names this gap.
-status: Done
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-06-30T16:58:24.316766298Z
-modified_at: 2026-11-04T16:38:57.042598291Z
+modified_at: 2026-11-04T17:48:25.568928754Z
 req_type: Task
 tags:
 - aida:presence
@@ -95,7 +95,23 @@ history:
   timestamp: 2026-11-04T16:38:58.125587516Z
   session_id: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
   changes: []
+- id: 01a1a7ad-2859-79f2-b8b7-761199c12e26
+  author: aida-auto-bump
+  timestamp: 2026-11-04T17:48:25.561256477Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a1a7ad-2860-72a0-9770-43a1a4c5bacb
+  timestamp: 2026-11-04T17:48:25.568924591Z
+  agent: aida
+  commit_sha: 89eb582c3311ccda9e9fe85ee626ac3e437cbfaa
+  summary: 'All 4 TASK-1059 criteria met: questions knob parses w/ quiet-when-away default + fallback (presence_config_parses_questions_knob); status nudge gated by surface_questions (status_sections.rs:2382, pure-fn test); questions.rs presence-blind (source-scan test); documented in presence/away help, questions list help, docs/cli, config knob registry; CI green at head.'
+  review_verdict: approved
 implementation_info:
   implemented: true
   implemented_at: 2026-11-04T12:49:22.762693865Z
   implemented_by: joe
+  completed_at: 2026-11-04T17:48:25.561250210Z
+  completion_sha: 89eb582c3311ccda9e9fe85ee626ac3e437cbfaa
