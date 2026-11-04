@@ -553,8 +553,8 @@ use crate::process_retry::RetryEtxtbsy;
 // `classify_lease_state` etc. keep resolving for every existing call site.
 // trace:BUG-677 | ai:claude
 pub(crate) use aida_core::liveness::{
-    classify_lease_state, classify_spec_liveness, classify_stale_lease_recovery,
-    lease_owner_process_gone, LeaseState, SpecLiveness, StaleLeaseRecovery,
+    classify_lease_state, classify_spec_liveness, classify_stale_lease_recovery, LeaseState,
+    SpecLiveness, StaleLeaseRecovery,
 };
 mod prompts;
 mod ship;

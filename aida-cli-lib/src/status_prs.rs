@@ -3398,6 +3398,7 @@ mod story_1043_unshipped_work_tests {
 
     fn write_live_lease(root: &std::path::Path, spec: &str, branch: &str) {
         let lease = SessionLease {
+            pid_namespace: crate::agent_registry::current_pid_namespace(),
             tree_kind: Default::default(),
             id: "live1043".to_string(),
             scope: spec.to_string(),

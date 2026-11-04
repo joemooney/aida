@@ -23,6 +23,7 @@ const DEAD_PID: u32 = 999_999_999;
 /// agent: only the (now exited) creator pid, no active pid.
 fn hand_started_lease(worktree: PathBuf) -> SessionLease {
     SessionLease {
+        pid_namespace: crate::agent_registry::current_pid_namespace(),
         tree_kind: Default::default(),
         id: "01a194b1bcfb".into(),
         scope: "TASK-2631".into(),

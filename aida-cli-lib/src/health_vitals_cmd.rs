@@ -130,7 +130,7 @@ pub(crate) fn handle_health_vitals_command(json: bool, brief: bool) -> Result<()
         match lease_state_for(&l, &live_sessions, now) {
             LeaseState::Live => live_leases += 1,
             LeaseState::Stale => stale_leases += 1,
-            LeaseState::Dormant => {}
+            LeaseState::Unknown | LeaseState::Dormant => {}
         }
     }
 

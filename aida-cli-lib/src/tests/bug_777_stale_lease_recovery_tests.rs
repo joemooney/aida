@@ -31,6 +31,7 @@ fn lease_at(
     active_pid: Option<u32>,
 ) -> SessionLease {
     SessionLease {
+        pid_namespace: crate::agent_registry::current_pid_namespace(),
         tree_kind: Default::default(),
         id: "019f8357abcd".to_string(),
         scope: "TASK-5".to_string(),

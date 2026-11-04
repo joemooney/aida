@@ -431,6 +431,11 @@ class WatcherTests(unittest.TestCase):
         self.assertFalse((self.root / ".aida/codex-mail-health.lock").exists())
 
     def test_service_later_install_failures_retain_private_original_evidence_and_user_edits(self):
+        # Run under the implementer lanes' restrictive umask so the config
+        # mode assertion holds regardless of the caller's umask.
+        # trace:BUG-2432 | ai:claude
+        previous_umask = os.umask(0o077)
+        self.addCleanup(os.umask, previous_umask)
         for failure in ("unit-write", "daemon-reload", "enable"):
             with self.subTest(failure=failure), tempfile.TemporaryDirectory(dir=self.root) as project_dir:
                 project = Path(project_dir)

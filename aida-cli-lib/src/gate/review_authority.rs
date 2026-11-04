@@ -480,14 +480,11 @@ pub(crate) struct ProcEntry {
 }
 
 impl ProcEntry {
-    fn token(&self, kind: &str) -> String {
-        process_token(kind, self.pid, self.start.as_deref())
-    }
-
-    /// [`Self::token`] for authorship and grant-presenter identity:
-    /// qualified with this process's pid namespace when it is not the
-    /// host's (BUG-2419).
+    /// This process's token for authorship and grant-presenter identity:
+    /// qualified with its pid namespace when that is not the host's
+    /// (BUG-2419). The sole token constructor on `ProcEntry` (TASK-2796).
     // trace:BUG-2419 | ai:claude
+    // trace:TASK-2796 | ai:claude
     fn author_token(&self, kind: &str) -> String {
         author_process_token(kind, self.pid, self.start.as_deref())
     }
@@ -1065,7 +1062,9 @@ pub(crate) fn record_detached_worker_strict(
         is_work_lease(&lease),
         "lease {lease_id} is not a work lease; cannot record its worker"
     );
-    let token = process_token("proc", pid, Some(start));
+    // A pid read inside a sandbox's pid namespace is qualified with it.
+    // trace:TASK-2799 | ai:claude
+    let token = author_process_token("proc", pid, Some(start));
     let record = authorship_record(project_root, &lease, vec![token.clone()], false, None);
     let path = ledger_path(project_root);
     append_record(&path, &record).map_err(|e| {

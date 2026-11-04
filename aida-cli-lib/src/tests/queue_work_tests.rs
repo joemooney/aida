@@ -878,6 +878,7 @@ fn batch_members_report_and_emit_unresolvable_member() {
 
 fn implementer_lease(scope: &str) -> SessionLease {
     SessionLease {
+        pid_namespace: crate::agent_registry::current_pid_namespace(),
         tree_kind: Default::default(),
         id: "lease-1082".to_string(),
         scope: scope.to_string(),
@@ -1750,6 +1751,7 @@ fn review_pickup_hint_names_reviewer_role() {
 
 fn lease_for(id: &str, scope: &str, age_secs: i64) -> SessionLease {
     SessionLease {
+        pid_namespace: crate::agent_registry::current_pid_namespace(),
         tree_kind: Default::default(),
         id: id.to_string(),
         scope: scope.to_string(),

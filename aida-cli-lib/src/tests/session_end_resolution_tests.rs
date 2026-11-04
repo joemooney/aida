@@ -4,6 +4,7 @@ use std::process::Command;
 
 fn lease(id: &str, scope: &str, cwd: &str, creator_pid: Option<u32>) -> SessionLease {
     SessionLease {
+        pid_namespace: crate::agent_registry::current_pid_namespace(),
         tree_kind: Default::default(),
         id: id.to_string(),
         scope: scope.to_string(),

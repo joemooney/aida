@@ -840,3 +840,42 @@ fn probe_lease_death_facts_matches_the_caller_only_by_pid_and_start_identity() {
         "agent lease"
     );
 }
+
+/// BUG-2425 (finding 4): worktree GC never reaps the tree of a lease whose pids
+/// were recorded in another PID namespace while it is within its backstop:
+/// the lease keeps the tree active and its owner is unknown, not gone. Once
+/// the 24h backstop expires the lease is judged on its other gates.
+// trace:BUG-2425 | ai:claude
+#[test]
+fn bug_2425_worktree_gc_keeps_a_foreign_namespace_lease_tree() {
+    let root = tempfile::tempdir().unwrap();
+    let tree = root.path().join("aida-bug-2425");
+    std::fs::create_dir_all(&tree).unwrap();
+    let now = chrono::Utc::now();
+    let mut lease = task_1784_lease("dddddddddddd", tree.to_str().unwrap(), &now.to_rfc3339());
+    lease.pid_namespace = Some(crate::agent_registry::current_pid_namespace().unwrap_or(0) ^ 1);
+    lease.active_pid = Some(u32::MAX - 1);
+    lease.active_pid_start_time = Some("linux-starttime:1".into());
+    let path = lease_path(root.path(), &lease.id);
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    std::fs::write(&path, toml::to_string_pretty(&lease).unwrap()).unwrap();
+
+    // The tree a fresh foreign lease names counts as active, so the GC
+    // verdict and reap's worktree gate both keep it.
+    let active = crate::worktree_gc::active_worktree_paths(root.path());
+    assert!(active.contains(&tree.canonicalize().unwrap()), "{active:?}");
+
+    // Even with the tree deleted, a fresh foreign lease is not provably dead:
+    // its pid is not probed, so its owner is unknown.
+    std::fs::remove_dir_all(&tree).unwrap();
+    let none = std::collections::HashSet::new();
+    let facts = probe_lease_death_facts(&lease, "h", None, &none);
+    assert_eq!(facts.owner_gone, None);
+    assert!(!lease_is_dead(&lease, facts));
+
+    // Past the backstop the age is independent evidence the owner is gone.
+    lease.started_at = now - chrono::Duration::hours(25);
+    let facts = probe_lease_death_facts(&lease, "h", None, &none);
+    assert_eq!(facts.owner_gone, Some(true));
+    assert!(lease_is_dead(&lease, facts));
+}

@@ -753,3 +753,7 @@ fn choose(
 #[cfg(test)]
 #[path = "tests/bug_2403_alias_selection_tests.rs"]
 mod bug_2403_alias_selection_tests;
+
+#[cfg(test)]
+#[path = "tests/bug_2430_rework_change_key_tests.rs"]
+mod bug_2430_rework_change_key_tests;
