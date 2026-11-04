@@ -7,12 +7,12 @@ description: |-
 
   ## Revisit trigger
   Discipline telemetry (aida usage --auto-complete / auto-complete.jsonl halt rate, plus the field-study violations) shows headless drain STILL halting on codex/gemini AFTER slices 1+2 land — i.e. the lighter pattern proved insufficient. Until then, keep dispatching codex/gemini via CLI brief pickup + resume-by-branch, not a bespoke adapter.
-status: Approved
+status: Rejected
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-02T16:43:29.399510347Z
-modified_at: 2026-11-04T01:40:03.350838962Z
+modified_at: 2026-11-04T01:40:05.959559231Z
 req_type: Task
 tags:
 - followup-src:docs/plans/2026-07-02-spike-76-dispatch-resilience.md
@@ -33,3 +33,11 @@ history:
   timestamp: 2026-11-04T01:40:01.314021614Z
   session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
   changes: []
+- id: 01a1a436-a0c7-7e61-8518-23e5416de754
+  author: joe
+  timestamp: 2026-11-04T01:40:05.959556770Z
+  session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Rejected
