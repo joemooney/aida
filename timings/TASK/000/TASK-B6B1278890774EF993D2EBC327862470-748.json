@@ -1,0 +1,74 @@
+{
+  "schema_version": 1,
+  "spec": "TASK-B6B1278890774EF993D2EBC327862470-748",
+  "publishes": [
+    {
+      "at": "2026-11-04T11:13:36.894984244Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-04T01:18:37.657230752Z",
+      "spec": "TASK-b6b1278890774ef993d2ebc327862470-748",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-04T01:27:40.121445028Z",
+      "spec": "TASK-b6b1278890774ef993d2ebc327862470-748",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-11-04T03:05:52.766680091Z",
+      "spec": "TASK-B6B1278890774EF993D2EBC327862470-748",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "TASK-B6B1278890774EF993D2EBC327862470-748",
+        "branch": "origin/task-b6b1278890774ef993d2ebc327862470-748",
+        "first_seen": "2026-11-04T03:05:52.766650636+00:00"
+      }
+    },
+    {
+      "ts": "2026-11-04T08:58:31.791915639Z",
+      "spec": "TASK-b6b1278890774ef993d2ebc327862470-748",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-11-04T11:13:35.632833563Z",
+      "spec": "TASK-b6b1278890774ef993d2ebc327862470-748",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "c514dc9e625bd97b81d40d6523b21bc48a2788f9",
+        "pr": 3326,
+        "closed_by": "auto-bump"
+      }
+    },
+    {
+      "ts": "2026-11-04T11:13:36.682775464Z",
+      "spec": "TASK-b6b1278890774ef993d2ebc327862470-748",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "c514dc9e625bd97b81d40d6523b21bc48a2788f9",
+        "pr": 3326,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
