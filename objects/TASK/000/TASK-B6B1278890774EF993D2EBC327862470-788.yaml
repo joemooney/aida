@@ -7,7 +7,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-04T19:21:39.461941007Z
-modified_at: 2026-11-04T19:21:39.461941007Z
+modified_at: 2026-11-04T19:25:46.898944310Z
 req_type: Task
 tags:
 - area:train
@@ -16,6 +16,13 @@ tags:
 - linked:BUG-2441
 - severity:minor
 - test-flake
+comments:
+- id: 01a1a806-4a12-7cd2-a1c8-c6a0b4292325
+  author: joe
+  content: 'Follow-up validation: the complete same 54-test suite passed with --test-threads=1 (54 passed, 0 failed), including all five forged-build cases that failed during the parallel run. No fixture or production changes were made between these two runs. Cause remains unconfirmed.'
+  created_at: 2026-11-04T19:25:46.898944310Z
+  modified_at: 2026-11-04T19:25:46.898944310Z
+  session_id: 01a1a7f2ef8a
 filed_at:
   aida_version: 0.16.0
   aida_build_sha: e44c9e595a7
