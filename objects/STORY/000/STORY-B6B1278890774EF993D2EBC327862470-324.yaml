@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-02T19:20:59.253007269Z
-modified_at: 2026-11-04T05:21:18.011576650Z
+modified_at: 2026-11-04T07:44:24.670691776Z
 req_type: Story
 tags:
 - architecture
@@ -439,6 +439,12 @@ comments:
   content: 'ADVISOR REWORK BRIEF r8-push (2026-11-03 22:24 MST): local branch story-2326-work (63e38722 + 3c0d8b6a) in seat ...-324 was never pushed and now CONFLICTS with origin/main. Steps: (1) rebase story-2326-work onto current origin/main and resolve the conflicts, keeping main''s side for unrelated code and re-ledgering any new spawn sites main brought in (update the exact-count LEDGER and CEILING with a one-line note each). (2) Gate: ONE targeted run, cargo test -p aida-cli-lib --lib story_2326 (the ledger ratchet), plus make check-ci-fast. Do NOT run the full lib suite: two earlier runs died at 900s, and CI''s shards are the gate. (3) Force-push-with-lease to story-2326-work (PR #3288). The advisor reviews only the delta from 91811ede.'
   created_at: 2026-11-04T05:21:18.011576650Z
   modified_at: 2026-11-04T05:21:18.011576650Z
+  session_id: da1c0d85-1d45-4ce4-a292-5358644f65b9
+- id: 01a1a584-2a5e-74c2-8d86-ec7e26375f00
+  author: joe
+  content: 'ADVISOR (2026-11-04 00:30 MST): the round-8 commits (63e38722 + 3c0d8b6a) are preserved on origin as recovered/story-2326-r8, and the orphaned seat lease is ended. The rework lane starts from that ref: check out recovered/story-2326-r8, rebase onto origin/main, then follow the r8-push brief above and force-push-with-lease to story-2326-work (PR #3288).'
+  created_at: 2026-11-04T07:44:24.670691776Z
+  modified_at: 2026-11-04T07:44:24.670691776Z
   session_id: da1c0d85-1d45-4ce4-a292-5358644f65b9
 history:
 - id: 01a19ed2-a170-7d52-94f3-7c4ff46f38c4
