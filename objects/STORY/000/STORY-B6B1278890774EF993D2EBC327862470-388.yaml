@@ -18,12 +18,12 @@ description: |
   3. A contained agy lane cannot write outside its worktree or reach hosts outside allowed_hosts (one negative test each).
   4. The refusal message stops telling agy users to "fix [contained.vendors]" until a value actually works; it names the supported vendors.
   5. One real agy lane completes a small spec end to end (PR opened), and the result is cited on this story.
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T15:39:15.141070572Z
-modified_at: 2026-11-04T17:19:44.653719815Z
+modified_at: 2026-11-04T17:20:17.730309267Z
 req_type: Story
 tags:
 - area:containment
@@ -138,6 +138,14 @@ history:
   timestamp: 2026-11-04T17:15:35.341143414Z
   session_id: 01a1a78e6a90
   changes: []
+- id: 01a1a793-6742-7400-b731-a94ddbc49ddf
+  author: joe
+  timestamp: 2026-11-04T17:20:17.730330008Z
+  session_id: 01a1a78e6a90
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: c19294416a9bc68dab12b910c0566ad80a7cc995
   branch: main
@@ -146,3 +154,9 @@ filed_at:
   aida_build_sha: c19294416a9
   vendor: claude
   session: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
+attention_reason:
+  category: design-fork
+  detail: sketch posted, awaiting advisor signoff
+  lean: Provisional AIDA-wrapper path; keep AGY refused until host-side native experiments and the signed conformance policy resolve Q1-Q6. No native pass was demonstrated.
+  raised_by: implementer
+  raised_at: 2026-11-04T17:20:17.730309267Z
