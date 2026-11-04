@@ -20,7 +20,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T07:26:01.071265913Z
-modified_at: 2026-11-04T16:48:08.694727Z
+modified_at: 2026-11-04T17:11:14.404391577Z
 req_type: Task
 tags:
 - architecture
@@ -859,6 +859,12 @@ comments:
   content: 'ADVISOR REWORK BRIEF 2 (2026-11-04 09:30 MST), PR #3351 head 29cdc258: the rustfmt fix is in, but CI ''Executable fixture ratchet'' now fails. aida-cli-lib/src/tests/bug_home_038_seat_publish_tests.rs lines 963 and 965 set an executable mode directly; use test_exec::mark_executable instead. Nothing else is in scope. Gate: FASTTRACK. make check-ci-fast is REQUIRED before the push (it runs this ratchet; the last push skipped it). Push to the PR branch.'
   created_at: 2026-11-04T16:44:25.571811432Z
   modified_at: 2026-11-04T16:44:25.571811432Z
+  session_id: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
+- id: 01a1a78b-1ce4-7c23-b1fa-ad4022d8c336
+  author: joe
+  content: 'ADVISOR: the lane committed this rework (9df014db60) but held it back unpushed. It is a clean fast-forward of PR #3351, so I pushed it; CI gates the ship and review covers the delta.'
+  created_at: 2026-11-04T17:11:14.404391577Z
+  modified_at: 2026-11-04T17:11:14.404391577Z
   session_id: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
 history:
 - id: 01a1960f-6ca8-7313-8a94-63b0b98a4e44
