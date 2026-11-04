@@ -907,7 +907,54 @@ fn stream_cargo_diagnostics(mut input: impl Read, mut output: impl Write) -> std
     }
 }
 
+/// Piping stderr hides the terminal from cargo, so it would drop colour and
+/// the progress bar. When our own stderr is a terminal, tell cargo children to
+/// keep both, unless the caller (or the environment) already chose a value.
+/// Cargo's progress `auto` still checks its own stderr, which is our pipe, so
+/// the bar needs `always`; cargo rejects `always` without a width, so the
+/// progress keys are set only when the terminal width is known.
+// trace:TASK-2802 | ai:claude
+fn inherit_cargo_tty_env(cmd: &mut Command, parent_tty_width: Option<Option<u16>>) {
+    let Some(width) = parent_tty_width else {
+        return;
+    };
+    let width = width.map(|cols| cols.to_string());
+    let mut vars = vec![("CARGO_TERM_COLOR", "always")];
+    if let Some(width) = width.as_deref() {
+        vars.push(("CARGO_TERM_PROGRESS_WHEN", "always"));
+        vars.push(("CARGO_TERM_PROGRESS_WIDTH", width));
+    }
+    for (key, value) in vars {
+        let set_on_cmd = cmd.get_envs().any(|(k, _)| k == key);
+        if !set_on_cmd && std::env::var_os(key).is_none() {
+            cmd.env(key, value);
+        }
+    }
+}
+
 fn run_checked(cmd: &mut Command, what: &str) -> Result<()> {
+    use std::io::IsTerminal;
+    let tty_width = std::io::stderr()
+        .is_terminal()
+        .then(|| crossterm::terminal::size().ok().map(|(cols, _)| cols));
+    inherit_cargo_tty_env(cmd, tty_width);
+    run_checked_in(
+        cmd,
+        what,
+        crate::session::cargo_home_dir(),
+        sccache_missing_tmpdir,
+    )
+}
+
+/// `run_checked` with its host probes injected, so the failure branches can
+/// be exercised without a real cargo home or sccache server.
+// trace:TASK-2802 | ai:claude
+fn run_checked_in(
+    cmd: &mut Command,
+    what: &str,
+    cargo_home: Option<PathBuf>,
+    sccache_missing: impl FnOnce() -> Option<PathBuf>,
+) -> Result<()> {
     let mut child = cmd
         .stderr(Stdio::piped())
         .spawn()
@@ -915,6 +962,12 @@ fn run_checked(cmd: &mut Command, what: &str) -> Result<()> {
     let stderr = child.stderr.take().expect("piped stderr");
     let diagnostics =
         std::thread::spawn(move || stream_cargo_diagnostics(stderr, std::io::stderr()));
+    // Wait for the child's exit, then for EOF on its stderr. EOF arrives only
+    // once every holder of the pipe's write end has closed it, so a grandchild
+    // that inherits stderr and outlives the child (a daemon cargo spawns, say)
+    // keeps this join blocked until it exits. Long-lived helpers must be
+    // started with their stdio detached, as ensure_sccache_server does.
+    // trace:TASK-2802 | ai:claude
     let status = child.wait();
     let fetch_error = diagnostics
         .join()
@@ -929,7 +982,7 @@ fn run_checked(cmd: &mut Command, what: &str) -> Result<()> {
             Err(_) => true,
         };
         if sccache_active {
-            if let Some(missing) = sccache_missing_tmpdir() {
+            if let Some(missing) = sccache_missing() {
                 bail!(
                     "{what} exited with {status}\n\
                      sccache: error: sccache server temp directory ({}) is missing.\n\
@@ -941,8 +994,9 @@ fn run_checked(cmd: &mut Command, what: &str) -> Result<()> {
         // A read-only home alone does not explain ordinary compile/test failures.
         // trace:TASK-2790 | ai:codex
         if fetch_error {
-            if let Some(note) = crate::session::cargo_home_dir()
-                .and_then(|home| crate::session::cargo_home_read_only_note(&home))
+            if let Some(note) = cargo_home
+                .as_deref()
+                .and_then(crate::session::cargo_home_read_only_note)
             {
                 bail!("{what} exited with {status}\nCARGO_HOME is read-only here; {note}");
             }
