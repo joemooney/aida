@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-198
 agreed_id: BUG-2429
 title: 'aida review watch and aida queue work cannot launch contained workers from a Claude Code Bash (sandbox on or off): grant key keyring fails with errno 40'
 description: '2026-11-03: from the advisor''s Claude Code Bash (dangerouslyDisableSandbox), ''aida queue work <SPEC> --role implementer --no-human'' and every review launched by ''aida review watch'' fail: ''its grant key could not be put in a session keyring (cannot hold the previous session keyring (errno 40))''. The same command run from aida-deputy-shell (operator terminal) works. The previous advisor session''s watcher worked, so it depends on how the launching process''s session keyring was set up. Workaround in the standing orders: launch lanes and the watcher through aida-deputy-shell run 3 with setsid nohup. Expected: the launcher joins or creates a fresh session keyring (keyctl join_session_keyring with a new anonymous keyring) instead of failing on ELOOP, or the error names the real cause.'
-status: Done
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-03T16:39:24.171572087Z
-modified_at: 2026-11-03T22:23:03.045502206Z
+modified_at: 2026-11-04T01:13:39.092621530Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -46,6 +46,20 @@ history:
   timestamp: 2026-11-03T22:23:04.117359375Z
   session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
   changes: []
+- id: 01a1a41e-6a10-7c62-99c2-0e4be965cb5c
+  author: aida-auto-bump
+  timestamp: 2026-11-04T01:13:39.088502756Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a1a41e-6a14-7820-98d9-47de4be1080e
+  timestamp: 2026-11-04T01:13:39.092618244Z
+  agent: aida
+  commit_sha: a7301e95ed43910ded83729007dde015115bed9b
+  summary: ELOOP on holding the previous session keyring now flattens to its direct members (bounded depth, parent keys stay possessed); non-ELOOP errors still refuse; ELOOP Display names the cause; 3 linux tests; CI green at head.
+  review_verdict: approved
 filed_at:
   code_sha: 493f3ae1c526c7ab19f208112d426aecbf33c8b5
   branch: main
@@ -58,3 +72,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-11-03T21:42:08.388222761Z
   implemented_by: joe
+  completed_at: 2026-11-04T01:13:39.088496717Z
+  completion_sha: a7301e95ed43910ded83729007dde015115bed9b
