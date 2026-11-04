@@ -1,0 +1,29 @@
+id: 01a1a883-d7f0-79a1-861b-b1b9bac45a3e
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-793
+title: 'non-blocking/minor: bug_2435_bwrap_overlay_job_cannot_remount_a_ro_bind_rw has …'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-2829, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  non-blocking/minor: bug_2435_bwrap_overlay_job_cannot_remount_a_ro_bind_rw has no negative control, so it proves the job cannot remount but not that --cap-drop ALL is the load-bearing reason (the nested non-root userns would also refuse); TASK-2830's 'audit other unshare -r call sites' was outside the advisor ruling and remains undone.
+
+  PR: #3385
+  Reviewed sha: ef087ebb6e7430b8b6a85277144480993f2a46af
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-04T21:42:55.216287493Z
+modified_at: 2026-11-04T21:42:55.216287493Z
+req_type: Task
+tags:
+- carried-from:TASK-2829
+- finding-hash:ecaa213e
+- from-review:PR-3385
+- kind:carried-forward
+filed_at:
+  code_sha: 47e9f216d38bf2bb6c503baeebfcca728604bd57
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 83ce565277a
+  vendor: claude
