@@ -1,0 +1,36 @@
+id: 01a1a468-10c1-7770-82f8-211bbc415870
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-367
+agreed_id: STORY-2401
+title: 'Forge reads reconcile before acting: tri-state Observed<T> forge reads, confirmed negatives before destructive transitions, resumable train journal'
+description: |-
+  Regroup R1, approved by the operator 2026-11-03 19:30 MST. Slice 1 is BUG-2433 (PR #3324).
+
+  ### R1. Forge reads reconcile before acting (priority 1)
+
+  - **Evidence:** BUG-2433 (gh merge errored, but GitHub had merged, so 10 members were ejected and closed by hand), BUG-2423 (checks read before registration), BUG-2401 (green lanes before the aggregate registered), BUG-2219 (DNS), BUG-2412 (killed train left its PR open), TASK-2794 (GitHub `UNKNOWN` mergeable treated as no), BUG-2400 (search results treated as exact), BUG-2414 (load-induced timeout ejecting members), and the stale-CI-definition exit 24.
+  - **Root cause:** about 18 files spawn `gh` directly, and each call site turns one response into a decision, including destructive ones: eject, close, refuse. The forge is eventually consistent, but the code treats it as a transactional database.
+  - **Proposal:**
+    - **One read type.** Every forge read returns `Observed<T> = Known(T) | Pending | Transient(err)`, and no caller may branch on raw `gh` exit status (enforced by a ratchet).
+    - **Reconcile before destroying.** Every destructive transition (eject, close, mark failed, flip spec state) requires a *confirmed negative*: a second read after a bounded backoff, plus a ground-truth check such as "is the pinned head an ancestor of origin/main?".
+    - **Resumable trains.** The train writes an intent journal (`pinned head`, `members`, `step`) before each forge call, so a crash or error resumes from forge truth instead of guessing.
+    - **CI evidence keyed by workflow.** Key CI evidence by `(head SHA, workflow-definition digest)` so a CI-file change re-runs only the definition check, not a blanket invalidation.
+  - **Payoff:** false ejections, by-hand member closes, phantom failures after a successful merge, and UNKNOWN-mergeable refusals all go away.
+  - **Cost:** M, about 2-3 PRs. Inside `forge.rs`, `pr_train*.rs` and `idle_eligible.rs`.
+  - **Dependencies:** BUG-2433 should land as slice 1. It feeds STORY-2324 (gate inputs must be tri-state, so it must never read "unknown" as "fail") and STORY-2325 (train ownership).
+
+  Acceptance: (1) every forge read goes through one Observed<T> = Known|Pending|Transient type, and a ratchet forbids branching on raw gh exit status outside forge.rs; (2) eject, close, mark-failed and spec-state flips require a confirmed negative (re-read after a bounded backoff plus a ground-truth check such as pinned head ancestor of origin/main); (3) the train writes an intent journal before each forge call and resumes from forge truth after an error or crash; (4) CI evidence is keyed by (head SHA, workflow-definition digest). Architecture: the implementer posts a file:line sketch with the slice plan on this spec for advisor signoff before code.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-04T02:34:05.889367844Z
+modified_at: 2026-11-04T02:34:05.889367844Z
+req_type: Story
+filed_at:
+  code_sha: 0754a362d797d2d9b246b4609456735b5486095d
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 0f1624a8b38
+  vendor: claude
+  session: 04f971d5-7365-46ed-b777-d4ff41d730ed
