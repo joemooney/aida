@@ -25,7 +25,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-01T04:49:50.135214184Z
-modified_at: 2026-09-24T16:29:24.958093485Z
+modified_at: 2026-11-04T02:33:12.561338017Z
 req_type: Epic
 tags:
 - from-advisor
@@ -45,6 +45,13 @@ relationships:
   target_id: 019f1bfd-4781-7e13-8088-61225ada2b57
   created_at: 2026-07-01T04:50:03.695276888Z
   created_by: joe
+comments:
+- id: 01a1a467-4071-7751-8753-aa7772832bf4
+  author: joe
+  content: 'OPERATOR RULING (2026-11-03 19:30 MST, relayed by advisor): regroup ruling 5: operator said defer entirely; it stays deferred (epic status is a rollup).'
+  created_at: 2026-11-04T02:33:12.561338017Z
+  modified_at: 2026-11-04T02:33:12.561338017Z
+  session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
 deferred: true
 deferred_at: 2026-07-20T04:46:50.394465383Z
 deferred_until: 'operator revisits model-per-purpose (recorded answer 2026-07-14: defer entirely)'
