@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-785
 agreed_id: TASK-3047
 title: 'STORY-2460 S3: fix the vendor containment refusal so it names the supported vendors instead of ''fix [contained.vendors]'''
 description: 'Acceptance 4 of STORY-2460. session.rs vendor_containment_posture and the two ''cannot run a contained session'' messages (~3873, ~3913) tell agy users to ''fix [contained.vendors]'', but no value works for agy. Name what is supported: claude = aida, codex = native (explicit trusted opt-in). Add a regression test pinning the refusal text and that agy still fails closed. Small; independent of S1.'
-status: Done
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T17:54:13.928308359Z
-modified_at: 2026-11-04T20:46:18.641499370Z
+modified_at: 2026-11-04T21:25:36.214303428Z
 req_type: Task
 tags:
 - area:containment
@@ -76,6 +76,20 @@ history:
   timestamp: 2026-11-04T20:46:19.704644067Z
   session_id: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
   changes: []
+- id: 01a1a873-fd44-7f42-bb9c-3969d17b5da8
+  author: aida-auto-bump
+  timestamp: 2026-11-04T21:25:36.196253362Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a1a873-fd56-7291-abfd-2df867db5a29
+  timestamp: 2026-11-04T21:25:36.214301348Z
+  agent: aida
+  commit_sha: 782bc11bf2fc89295a491f5df8e583230c6ce45b
+  summary: 'All TASK-3047 acceptance met: the three vendor_containment_posture refusals and both contained-launch preflights now name supported vendors (claude=aida, codex=native trusted opt-in) instead of ''fix [contained.vendors]''; the new regression test pins the exact text and the agy fail-closed behavior for missing/aida/native policies. CI run 41909693523 is green at the head commit. Non-blocking cosmetic issue: an alternate-format {:#} error chain prints the supported-vendors sentence twice (outer context plus inner cause).'
+  review_verdict: approved
 filed_at:
   code_sha: 6a331a8a5c91ca7485b695a076af44bdf9be3894
   branch: main
@@ -91,6 +105,8 @@ implementation_info:
     cargo fmt --all -- --check and git diff --check (passed)
   implemented_at: 2026-11-04T19:20:19.183655283Z
   implemented_by: joe
+  completed_at: 2026-11-04T21:25:36.196248583Z
+  completion_sha: 782bc11bf2fc89295a491f5df8e583230c6ce45b
 interface_changes:
   cli:
   - Contained vendor refusals name supported Claude aida and trusted opt-in Codex native settings; agy remains refused.
