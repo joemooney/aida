@@ -17,12 +17,12 @@ description: |
   - Generate a structured review prompt with `aida review prompt --pr 3316` and verify each spec's acceptance criteria.
   - Approve and merge, or request changes by spec id.
   - Mark this story `completed` once the PR is merged.
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-03T22:21:17.123251765Z
-modified_at: 2026-11-03T22:21:26.596063201Z
+modified_at: 2026-11-04T01:14:16.457903874Z
 req_type: Story
 relationships:
 - rel_type:
@@ -30,12 +30,25 @@ relationships:
   target_id: 01a1a247-69e9-7a01-9688-56619f30368a
   created_at: 2026-11-03T22:21:26.596059768Z
   created_by: joe
+comments:
+- id: 01a1a41e-fc09-7173-8587-561f7262f39e
+  author: aida-auto-bump
+  content: 'Auto-completed: PR #3316 merged without a reviewer session (self-merge or orchestrator skipped phase 3).'
+  created_at: 2026-11-04T01:14:16.457901203Z
+  modified_at: 2026-11-04T01:14:16.457901203Z
 history:
 - id: 01a1a380-c523-7172-9525-9e5b5544bd6b
   author: joe
   timestamp: 2026-11-03T22:21:27.715385957Z
   session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
   changes: []
+- id: 01a1a41e-fc09-7173-8587-56041b4b8290
+  author: aida-auto-bump
+  timestamp: 2026-11-04T01:14:16.457888967Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
 filed_at:
   code_sha: 34c0d8e417354cfaa83c676aac28200ebfb525b6
   branch: main
@@ -44,3 +57,7 @@ filed_at:
   aida_build_sha: 34c0d8e4173
   vendor: claude
   session: 04f971d5-7365-46ed-b777-d4ff41d730ed
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-04T01:14:16.457884126Z
+  completion_sha: 1c0d2bffed2335ca018d2a6f910c756efd30ae12
