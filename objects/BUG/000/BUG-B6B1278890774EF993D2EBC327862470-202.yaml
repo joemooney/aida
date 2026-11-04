@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-202
 agreed_id: BUG-2433
 title: aida pr train ejects every member when gh pr merge returns a transient error though GitHub merged the train PR
 description: 'Observed 2026-11-03 23:32Z, train #3322 (10 members). gh pr merge for the train PR returned ''GraphQL: Something went wrong while executing your query'' but GitHub had rebase-merged it: origin/main''s tree equals the train head and all 10 member commits are on main. The train reported ''0 landed, 10 ejected'', exited 1, and left all 10 member PRs open with merge-hold-cleared labels; BUG-2425/BUG-2426 stayed in-progress. Fix: after any merge-call error, re-read the train PR state (and/or compare origin/main to the pinned head) before deciding; if MERGED, proceed with the landed path (close members with commit pointers, complete specs). The advisor closed the members by hand.'
-status: InProgress
+status: Done
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T01:08:27.711738671Z
-modified_at: 2026-11-04T01:22:32.314745871Z
+modified_at: 2026-11-04T01:31:40.290522363Z
 req_type: Bug
 history:
 - id: 01a1a423-4350-7112-af29-196ae6b08115
@@ -26,6 +26,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1a42e-ea3e-76c3-9702-8af89969772c
+  author: joe
+  timestamp: 2026-11-04T01:31:40.478234890Z
+  session_id: 01a1a42684b1
+  harness_version: 2.1.318 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 filed_at:
   code_sha: 0f1624a8b38d961973328d79d05642add4464fc8
   branch: main
@@ -34,3 +43,7 @@ filed_at:
   aida_build_sha: 02cfbd22515
   vendor: claude
   session: 04f971d5-7365-46ed-b777-d4ff41d730ed
+implementation_info:
+  implemented: true
+  implemented_at: 2026-11-04T01:31:40.290522363Z
+  implemented_by: joe
