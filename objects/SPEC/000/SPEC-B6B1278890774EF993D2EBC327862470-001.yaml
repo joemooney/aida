@@ -20,7 +20,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T07:26:01.071265913Z
-modified_at: 2026-11-04T07:11:34.329513531Z
+modified_at: 2026-11-04T07:11:39.212207962Z
 req_type: Task
 tags:
 - architecture
@@ -731,6 +731,26 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Request changes: CI lib-0 red at head (main base green); headless/interactive Codex reviewer launches still get no gate-ledger grant so the original merge-hold failure is unfixed; queue-work Codex implementers still cannot publish; no host live-probe evidence at this head. ACs: ac6e55fd unverified, ac774e2b partial (signed narrow design; hooks-off proven only by bwrap-gated test), acca6182 unverified (refusal paths untested), ac97960f unverified.. Triage reason: advisor rework brief on spec; review findings to address'
   created_at: 2026-11-04T07:11:34.329511413Z
   modified_at: 2026-11-04T07:11:34.329511413Z
+  session_id: da1c0d85-1d45-4ce4-a292-5358644f65b9
+- id: 01a1a566-2c41-7370-b185-6abbacf52961
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (TASK-2712):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 4f245df54eae
+    Recorded: 2026-11-04T06:50:43.685979570+00:00
+    Findings:
+    1. CI lib-0 'Run tests' FAILED at 4f245df54eae while main base 640afc1b66 is green; failing test not identified (job log not readable from the review sandbox). The implementer recorded untested=true (comment 14). Identify and fix before re-review.
+    2. Ruling N1/N5 unmet for the observed failure: headless Codex reviewers (queue work --no-human / review watch: spawn_headless_session session.rs:1792 -> headless_vendor_args -> tool_contained_flags(codex) session.rs:3631, role None) and interactive Codex reviewers (session.rs:2911) get NO gate-ledger --add-dir, so place_hold at lib_part5.rs:3294 (taken when !process_contained, i.e. native Codex) still fails 'could not protect PR-N with a merge hold'. Only aida agent new --role reviewer gets the ledger. Thread the role through these paths (or route native reviewers through the launcher-collected hold like contained reviewers) and test the headless reviewer argv.
+    3. AC ac6e55fd partial: launch_wants_seat_clone is applied only in the agent-new paths (agent_launch.rs:3151/3471, agent_codex_background.rs:667). Queue-work/headless Codex implementers still run in linked worktrees and are refused by aida ship with 'relaunch in a seat clone'. Even seat lanes need a host operator to run 'aida ship --from-seat --commit-pending'; the ruling's fallback (supervisor commits after the child exits) is not implemented (acknowledged open gap in comment 14). A normal native implementer therefore still cannot complete handoff without another publisher.
+    4. AC ac97960f unverified: no host smoke evidence at this head. task_2712_codex_sandbox_live_seat_commit_and_denials and task_2712_native_codex_seat_commit_ships_from_seat_without_seat_hooks skip unless AIDA_REQUIRE_CODEX_SANDBOX_LIVE/AIDA_REQUIRE_BWRAP_LIVE, and the advisor's host re-run after the fallback push is not recorded on the spec. Record the host probe result (both tests) at the PR head.
+    5. Live probe does not exercise the production boundary: bug_2169_contained_clone_bwrap_tests.rs live test passes the grants as '-c sandbox_workspace_write.writable_roots=' to codex sandbox, not the '--add-dir' argv the launch emits, and it probes only cache-db, not a store (.aida-store) write or an own-scope aida claim/edit. AC acca6182 names shared canonical store/cache operations; demonstrate them with the real argv shape.
+    6. AC acca6182 refusal paths untested for the new --commit-pending channel: only the wrong-branch refusal is tested. No test for a non-host-recorded/foreign clone, a clone whose lease is ended or owned by another live process, a symlinked clone path or replaced worktree, or a commit_sandbox_args miss (clone bind not found). Add refusal tests; keep the tree-untouched recovery assertion.
+    7. Minor (AC ac774e2b, no blanket write roots): refuse_posture_overrides (agent_codex_background.rs:163) and the foreground agents.toml passthrough do not refuse a foreign '--add-dir' (e.g. '--add-dir /'); now that --add-dir is part of the sanctioned native posture, only helper-emitted grants should survive. rescope_codex_native_flags (codex_native_sandbox.rs:167) replaces only a run adjacent to the posture, so a non-adjacent user --add-dir persists.
+    8. Minor/design: tool_contained_flags(codex) now runs contained_write_set side effects (migrate_legacy_cache_layout, mark_store_contained, resolve_store_hooks_dir) and its refusals for every native Codex launch, including codex_interactive_resume_args (session.rs:4040) resolved from the process cwd, not the resumed lane's tree. A native reviewer also gets direct gate-ledger write where a contained Claude reviewer hands the hold to its launcher (lib_part5.rs:3277-3290); confirm with the advisor that this asymmetry is intended.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-04T07:11:39.073625735Z
+  modified_at: 2026-11-04T07:11:39.073625735Z
   session_id: da1c0d85-1d45-4ce4-a292-5358644f65b9
 history:
 - id: 01a1960f-6ca8-7313-8a94-63b0b98a4e44
