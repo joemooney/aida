@@ -431,6 +431,7 @@ pub(crate) fn handle_burndown_run(
         // trace:BUG-2389 | ai:claude
         println!("\n{} dry run — not launching. Would run:", "·".dimmed());
         let (program, args) = session::coordinator_headless_preview(
+            crate::seat_clone::launcher_main().as_deref(),
             vendor,
             &prompt,
             mode,
@@ -2233,7 +2234,10 @@ pub(crate) fn build_burndown_quiet_command(
     contained: bool,
 ) -> Result<std::process::Command> {
     // trace:BUG-2389 | ai:codex
+    // TASK-2032: burndown runs at the host project root, never in a seat.
+    // trace:TASK-2032 | ai:claude
     let mut cmd = session::build_coordinator_headless_command(
+        crate::seat_clone::launcher_main().as_deref(),
         vendor,
         current_prompt,
         mode,
@@ -2261,7 +2265,10 @@ pub(crate) fn build_burndown_verbose_command(
     contained: bool,
 ) -> Result<std::process::Command> {
     // trace:BUG-2389 | ai:codex
+    // TASK-2032: burndown runs at the host project root, never in a seat.
+    // trace:TASK-2032 | ai:claude
     let mut cmd = session::build_coordinator_headless_command(
+        crate::seat_clone::launcher_main().as_deref(),
         vendor,
         prompt,
         mode,

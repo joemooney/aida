@@ -11095,7 +11095,14 @@ pub(crate) fn resolve_rework_findings(
 pub(crate) fn headless_launch_hint(prompt: &str, session_id: &str, contained: bool) -> String {
     // BUG-1982: a refused contained launch shows the refusal, not a command.
     // trace:BUG-1982 | ai:claude
-    match session::claude_headless_args_with_posture(prompt, session_id, contained) {
+    // TASK-2032: a `--no-launch` hint renders before any chdir into a seat.
+    // trace:TASK-2032 | ai:claude
+    match session::claude_headless_args_with_posture(
+        crate::seat_clone::launcher_main().as_deref(),
+        prompt,
+        session_id,
+        contained,
+    ) {
         Ok(argv) => format!("AIDA_HEADLESS=1 claude {}", shell_join_display(&argv)),
         Err(err) => format!("{err:#}"),
     }
@@ -11119,8 +11126,10 @@ pub(crate) fn deferred_headless_launch_hint(
             format!("AIDA_HEADLESS=1 codex {}", shell_join_display(&argv))
         }
         session::HeadlessVendor::Agy => {
-            match session::headless_vendor_args(vendor, prompt, session_id, contained, model, None)
-            {
+            // Agy's argv never reads the host main.
+            match session::headless_vendor_args(
+                None, vendor, prompt, session_id, contained, model, None,
+            ) {
                 Ok(argv) => format!("AIDA_HEADLESS=1 agy {}", shell_join_display(&argv)),
                 Err(err) => format!("{err:#}"),
             }
@@ -13715,6 +13724,7 @@ pub(crate) fn handle_queue_work(
                 &verdict_path,
                 contained,
                 launch_vendor,
+                host_main.as_deref(),
             );
         }
         // trace:TASK-1594 | ai:claude
@@ -13790,6 +13800,7 @@ pub(crate) fn handle_queue_work(
                     branch: &lease.branch,
                     contained,
                     child_grant,
+                    host_main: host_main.as_deref(),
                 });
             }
         }
@@ -13938,6 +13949,7 @@ pub(crate) fn handle_queue_work(
                         )?,
                     };
                     let status = session::spawn_vendor_headless_resume(
+                        host_main.as_deref(),
                         &session::HeadlessResume {
                             vendor,
                             session_id: &id,
@@ -14052,6 +14064,7 @@ pub(crate) fn handle_queue_work(
                         .as_ref()
                         .expect("BUG-2139: a fresh headless launch minted its child authority");
                     return session::exec_vendor_headless(
+                        host_main.as_deref(),
                         headless_vendor,
                         &prompt,
                         &id,
@@ -14276,6 +14289,10 @@ pub(crate) fn run_standalone_reviewer(
     // codex-routed standalone reviewer actually launches `codex`.
     // trace:BUG-1607 | ai:claude
     launch_vendor: session::HeadlessVendor,
+    // TASK-2032: the host main `handle_queue_work` resolved before its chdir
+    // into the seat; every launch arm below builds its boundary from it.
+    // trace:TASK-2032 | ai:claude
+    host_main: Option<&std::path::Path>,
 ) -> Result<()> {
     // Watch context only restricts an ordinary attested launch; it cannot
     // authorize a verdict or a reviewer seat. trace:TASK-1993 | ai:codex
@@ -14354,6 +14371,7 @@ pub(crate) fn run_standalone_reviewer(
                 let (vendor, resume_id) =
                     crate::codex_resume::recorded_resume(project_root, &id, Some(scope))?;
                 let (status, grant) = session::spawn_vendor_headless_resume_granted(
+                    host_main,
                     &session::HeadlessResume {
                         vendor,
                         session_id: &id,
@@ -14448,6 +14466,7 @@ pub(crate) fn run_standalone_reviewer(
                     )?;
                     (
                         session::spawn_claude_resume_with_grant(
+                            host_main,
                             &id,
                             permission_mode,
                             contained,
@@ -14495,6 +14514,7 @@ pub(crate) fn run_standalone_reviewer(
                 let tee_opts =
                     headless_tee::TeeOptions::from_env_and_flag(false).with_label("reviewer");
                 let (status, grant) = session::spawn_vendor_headless_with_seat_granted(
+                    host_main,
                     launch_vendor,
                     aida_core::agents_config::AgentSeat::Reviewer,
                     prompt,
@@ -14513,6 +14533,7 @@ pub(crate) fn run_standalone_reviewer(
                 // regardless, failing after the lease + worktree already
                 // existed. trace:BUG-1607 | ai:claude
                 let plan = session::interactive_reviewer_launch_plan(
+                    host_main,
                     launch_vendor,
                     permission_mode,
                     name.as_deref(),

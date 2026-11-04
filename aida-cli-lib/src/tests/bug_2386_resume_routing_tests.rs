@@ -506,6 +506,7 @@ fn headless_resume_refuses_agy_by_name() {
         label: None,
     };
     let err = session::spawn_vendor_headless_resume_granted(
+        crate::seat_clone::launcher_main().as_deref(),
         &session::HeadlessResume {
             vendor: HeadlessVendor::Agy,
             session_id: "sid",
@@ -564,6 +565,7 @@ fn headless_codex_resume_gets_grant_role_native_posture_and_no_aida_contained() 
         label: None,
     };
     let (status, grant) = session::spawn_vendor_headless_resume_granted(
+        crate::seat_clone::launcher_main().as_deref(),
         &session::HeadlessResume {
             vendor: HeadlessVendor::Codex,
             session_id: "aida-sid",

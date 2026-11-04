@@ -1304,6 +1304,7 @@ mod containment_tests {
                 .unwrap();
         let arm = build_compete_arm_command(dir.path(), dir.path(), &bin, &argv, "claude").unwrap();
         let exec = session::build_exec_vendor_headless_command(
+            None,
             session::HeadlessVendor::Claude,
             prompt,
             "sid",
@@ -1464,6 +1465,7 @@ mod containment_tests {
         let dir = tempfile::tempdir().unwrap();
         let _env = crate::test_env::EnvVarsGuard::apply(&[("AIDA_CONTAINED", Some("typo"))]);
         assert!(session::compose_headless_command(
+            None,
             session::HeadlessVendor::Claude,
             "prompt",
             "sid",
@@ -1483,6 +1485,7 @@ mod containment_tests {
         )
         .is_err());
         assert!(session::interactive_reviewer_launch_plan(
+            None,
             session::HeadlessVendor::Claude,
             None,
             None,
@@ -1491,7 +1494,7 @@ mod containment_tests {
             false,
         )
         .is_err());
-        assert!(session::spawn_claude_resume_with_grant("sid", None, true, None).is_err());
+        assert!(session::spawn_claude_resume_with_grant(None, "sid", None, true, None).is_err());
         assert!(handle_compete_command(
             "TASK-1",
             &["claude".into()],
@@ -1503,6 +1506,7 @@ mod containment_tests {
         .is_err());
         let log = dir.path().join("must-not-exist.log");
         assert!(session::spawn_vendor_headless_with_seat_granted(
+            None,
             session::HeadlessVendor::Claude,
             aida_core::agents_config::AgentSeat::Implementer,
             "prompt",
@@ -1516,6 +1520,7 @@ mod containment_tests {
         )
         .is_err());
         assert!(session::spawn_claude_headless_resume_granted(
+            None,
             "prompt",
             "sid",
             &log,

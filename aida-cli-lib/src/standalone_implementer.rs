@@ -571,6 +571,10 @@ pub(crate) struct Launch<'a> {
     pub(crate) branch: &'a str,
     pub(crate) contained: bool,
     pub(crate) child_grant: &'a crate::gate::seat_authority::HeadlessChildGrant,
+    /// TASK-2032: the host main `handle_queue_work` resolved before its chdir
+    /// into the seat; the child's boundary is built from it.
+    // trace:TASK-2032 | ai:claude
+    pub(crate) host_main: Option<&'a Path>,
 }
 
 /// The audit reason for a baseline child whose launcher presented no grant at
@@ -742,6 +746,7 @@ pub(crate) fn run(launch: Launch<'_>) -> Result<()> {
         prompt,
         |prompt, log, resume, hold| {
             crate::session::run_standalone_implementer_child(
+                launch.host_main,
                 launch.vendor,
                 prompt,
                 launch.session_id,

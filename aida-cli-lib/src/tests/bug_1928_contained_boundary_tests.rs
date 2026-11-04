@@ -605,8 +605,13 @@ fn contained_resume_fails_closed_unless_cwd_is_a_git_root() {
     );
     let sub = worktree.join("src");
     assert!(crate::session::contained_resume_write_roots(&sub).is_empty());
-    let args =
-        crate::session::claude_headless_resume_args_with_posture("p", "sid", Some(&sub)).unwrap();
+    let args = crate::session::claude_headless_resume_args_with_posture(
+        crate::seat_clone::launcher_main().as_deref(),
+        "p",
+        "sid",
+        Some(&sub),
+    )
+    .unwrap();
     assert!(
         args.windows(2)
             .any(|w| w == ["--permission-mode", "dontAsk"]),
@@ -624,9 +629,13 @@ fn contained_resume_fails_closed_unless_cwd_is_a_git_root() {
 #[test]
 fn contained_resume_argv_scopes_boundary_to_its_worktree() {
     let (_tmp, _parent, worktree) = pool_fixture();
-    let args =
-        crate::session::claude_headless_resume_args_with_posture("proceed", "sid", Some(&worktree))
-            .unwrap();
+    let args = crate::session::claude_headless_resume_args_with_posture(
+        crate::seat_clone::launcher_main().as_deref(),
+        "proceed",
+        "sid",
+        Some(&worktree),
+    )
+    .unwrap();
     assert!(
         args.windows(2)
             .any(|w| w == ["--permission-mode", "dontAsk"]),
@@ -653,7 +662,8 @@ fn contained_resume_argv_scopes_boundary_to_its_worktree() {
     // The uncontained resume carries no contained boundary: its one
     // `--settings` is the headless posture alone (no sandbox, no allow rules).
     let plain =
-        crate::session::claude_headless_resume_args_with_posture("proceed", "sid", None).unwrap();
+        crate::session::claude_headless_resume_args_with_posture(None, "proceed", "sid", None)
+            .unwrap();
     crate::session::assert_headless_posture(&plain, false, "uncontained resume");
     assert!(no_allow_rules(&plain), "{plain:?}");
     assert!(
@@ -1186,6 +1196,7 @@ fn spawn_claude_headless_resume_forwards_contained_then_some_cwd() {
 
     // 1. contained = true -> forwards Some(cwd), producing dontAsk + worktree allow rules
     let status = crate::session::spawn_claude_headless_resume(
+        crate::seat_clone::launcher_main().as_deref(),
         "proceed",
         "sid-1",
         &log_path,
@@ -1218,6 +1229,7 @@ fn spawn_claude_headless_resume_forwards_contained_then_some_cwd() {
     // 2. contained = false -> forwards None: bypassPermissions, and the only
     // `--settings` is the headless posture (no contained boundary).
     let status = crate::session::spawn_claude_headless_resume(
+        crate::seat_clone::launcher_main().as_deref(),
         "proceed",
         "sid-2",
         &log_path,

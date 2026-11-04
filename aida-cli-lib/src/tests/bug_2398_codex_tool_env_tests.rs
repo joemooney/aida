@@ -92,6 +92,7 @@ fn bug_2398_only_explicit_child_selector_and_sandbox_options() {
     // Pure argv builders for other vendors retain their prior behavior.
     assert_eq!(
         crate::session::headless_vendor_args(
+            crate::seat_clone::launcher_main().as_deref(),
             crate::session::HeadlessVendor::Agy,
             "fixture",
             "session",

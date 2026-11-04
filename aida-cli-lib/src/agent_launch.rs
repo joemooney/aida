@@ -2057,13 +2057,14 @@ pub(crate) fn rescope_contained_settings(
 }
 
 // trace:BUG-1178 | ai:codex
-pub(crate) fn tool_contained_flags(agent_type: &str) -> Result<Vec<String>> {
+pub(crate) fn tool_contained_flags(
+    host_main: Option<&std::path::Path>,
+    agent_type: &str,
+) -> Result<Vec<String>> {
     Ok(match agent_type {
         "claude" => {
             let mut flags = Vec::new();
-            flags.extend(session::claude_contained_flags(
-                crate::seat_clone::launcher_main().as_deref(),
-            )?);
+            flags.extend(session::claude_contained_flags(host_main)?);
             flags
         }
         // trace:STORY-1124 | ai:codex
@@ -2470,7 +2471,10 @@ pub(crate) fn resolve_claude_new_posture(
         // trace:BUG-2131 | ai:claude
         aida_core::git_ops::ensure_git_supports_contained()?;
         Ok(ClaudeNewPosture {
-            default_args: tool_contained_flags("claude")?,
+            default_args: tool_contained_flags(
+                crate::seat_clone::launcher_main().as_deref(),
+                "claude",
+            )?,
             contained: true,
             explicit: true,
         })

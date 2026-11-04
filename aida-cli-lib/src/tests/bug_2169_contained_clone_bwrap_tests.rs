@@ -664,6 +664,148 @@ mod linux {
         }
     }
 
+    /// The `--settings` sandbox document in a launch argv.
+    fn sandbox_settings_in(args: &[String]) -> Option<serde_json::Value> {
+        args.windows(2)
+            .filter(|w| w[0] == "--settings")
+            .filter_map(|w| serde_json::from_str::<serde_json::Value>(&w[1]).ok())
+            .find(|s| s.pointer("/sandbox/filesystem").is_some())
+    }
+
+    /// TASK-2032 round 3: every launch arm `queue work` reaches after its
+    /// chdir into the seat, built exactly as it runs there: cwd and project
+    /// root inside the clone, no `LauncherMainPin`, only the host main the
+    /// entry point resolved before the chdir. Each keeps clone recognition:
+    /// the clone's `.git` is writable and its cargo target dir is granted.
+    // trace:TASK-2032 | ai:claude
+    #[test]
+    fn task_2032_every_queue_work_launch_arm_keeps_the_clone_boundary() {
+        use crate::session::HeadlessVendor::Claude;
+        let fx = fixture();
+        let clone = launch_clone_seat(&fx);
+        let target = crate::seat_clone::host_recorded_clone(&fx.main, &clone)
+            .and_then(|recorded| recorded.cargo_target_dir)
+            .expect("the seat's target dir");
+
+        // `handle_queue_work` resolves the host main in main, before the chdir.
+        let host_main = {
+            let _in_main = ambient(&fx.main);
+            crate::seat_clone::launcher_main()
+        };
+        assert_eq!(host_main.as_deref(), Some(fx.main.as_path()));
+        let hm = host_main.as_deref();
+
+        // After the chdir: cwd and project root are the clone.
+        let _in_clone = crate::test_env::AmbientGuard::hermetic_with_seat_and(
+            &clone,
+            "implementer",
+            &["reviewer"],
+            &[
+                ("AIDA_OS_WRAP", None),
+                ("AIDA_CONTAINED", None),
+                // A mocked vendor: no harness-version probe runs.
+                ("AIDA_AGENT_CMD", Some("true")),
+            ],
+        );
+        let _cwd = crate::session::contained_cwd_seam::pin(&clone);
+        assert_eq!(crate::seat_clone::launcher_main(), None);
+
+        let command_args = |cmd: std::process::Command| -> Vec<String> {
+            cmd.get_args()
+                .map(|a| a.to_string_lossy().into_owned())
+                .collect()
+        };
+        let arms: Vec<(&str, Vec<String>)> = vec![
+            (
+                "headless implementer (exec_vendor_headless, standalone implementer)",
+                command_args(
+                    crate::session::build_exec_vendor_headless_command_for(
+                        hm,
+                        Claude,
+                        "p",
+                        "sid",
+                        true,
+                        None,
+                        None,
+                        "implementer",
+                        "",
+                        false,
+                    )
+                    .unwrap(),
+                ),
+            ),
+            (
+                "headless implementer resume (BUG-044 resume loop)",
+                command_args(
+                    crate::session::build_exec_vendor_headless_command_for(
+                        hm,
+                        Claude,
+                        "p",
+                        "sid",
+                        true,
+                        None,
+                        None,
+                        "implementer",
+                        "",
+                        true,
+                    )
+                    .unwrap(),
+                ),
+            ),
+            (
+                "headless reviewer (spawn_vendor_headless_with_seat_granted)",
+                crate::session::compose_headless_command(hm, Claude, "p", "sid", true, None, None)
+                    .unwrap()
+                    .1,
+            ),
+            (
+                "headless resume (spawn_vendor_headless_resume)",
+                crate::session::claude_headless_resume_args_with_posture(
+                    hm,
+                    "p",
+                    "sid",
+                    Some(&clone),
+                )
+                .unwrap(),
+            ),
+            (
+                "interactive reviewer (interactive_reviewer_launch_plan)",
+                crate::session::interactive_reviewer_launch_plan(
+                    hm, Claude, None, None, "p", "sid", true,
+                )
+                .unwrap()
+                .args,
+            ),
+            (
+                "interactive session and resume (exec_claude_*, spawn_claude_resume_with_grant)",
+                crate::session::claude_contained_flags(hm).unwrap(),
+            ),
+        ];
+        for (arm, args) in arms {
+            let settings = sandbox_settings_in(&args)
+                .unwrap_or_else(|| panic!("{arm}: no contained --settings in {args:?}"));
+            let allow = entries(&settings, "allowWrite");
+            let deny = entries(&settings, "denyWrite");
+            assert!(allow.contains(&clone), "{arm}: {settings}");
+            assert!(!deny.contains(&clone.join(".git")), "{arm}: {settings}");
+            assert!(deny.contains(&fx.main.join(".git")), "{arm}: {settings}");
+            assert!(allow.contains(&target), "{arm}: {settings}");
+        }
+        // The os_wrap layer every arm shares takes the same host main.
+        let rw = crate::session::os_wrap_rw_paths(hm, &clone).unwrap();
+        assert!(rw.contains(&target), "{rw:?}");
+        // Without it (the cwd lookup the arms used before), the clone is lost.
+        let lost = crate::session::claude_contained_flags(None)
+            .ok()
+            .and_then(|flags| sandbox_settings_in(&flags));
+        if let Some(settings) = lost {
+            assert!(
+                !entries(&settings, "allowWrite").contains(&target),
+                "{settings}"
+            );
+        }
+    }
+
     /// Nothing the seat can write makes a directory a host-recorded clone: not
     /// the `aida-seat-*` name plus marker on a main checkout, not a lease naming
     /// the main checkout itself, and not a directory inside a real clone.
@@ -833,11 +975,14 @@ mod linux {
         // trace:TASK-2033 | ai:claude
         let main_git = fx.main.join(".git");
         assert!(
-            crate::contained_boundary::contained_main_checkout_git_deny_paths(&[fx.main.clone()])
-                .contains(&main_git),
+            crate::contained_boundary::contained_main_checkout_git_deny_paths(
+                Some(&fx.main),
+                &[fx.main.clone()]
+            )
+            .contains(&main_git),
             "main's .git is still a denied main checkout"
         );
-        let rw = crate::session::os_wrap_rw_paths(&clone).unwrap_or_default();
+        let rw = crate::session::os_wrap_rw_paths(Some(&fx.main), &clone).unwrap_or_default();
         assert!(
             !rw.iter()
                 .any(|p| main_git.starts_with(p) || p.starts_with(&main_git)),
@@ -893,7 +1038,8 @@ true"#,
     fn a_genuine_main_lease_naming_another_cargo_target_dir_grants_nothing() {
         let fx = fixture();
         let clone = launch_clone_seat(&fx);
-        let recorded = crate::seat_clone::host_recorded_clone(&clone).expect("real clone");
+        let recorded =
+            crate::seat_clone::host_recorded_clone(&fx.main, &clone).expect("real clone");
         let real_target = recorded.cargo_target_dir.clone().expect("target dir");
         let lease = crate::list_leases(&fx.main)
             .into_iter()
@@ -941,7 +1087,7 @@ true"#,
                 "the edited lease is read back"
             );
 
-            let recorded = crate::seat_clone::host_recorded_clone(&clone)
+            let recorded = crate::seat_clone::host_recorded_clone(&fx.main, &clone)
                 .expect("the genuine lease still records the clone");
             assert_eq!(recorded.main, fx.main);
             assert_eq!(
@@ -960,7 +1106,7 @@ true"#,
                 settings["env"].get("CARGO_TARGET_DIR").is_none(),
                 "{settings}"
             );
-            let rw = crate::session::os_wrap_rw_paths(&clone).unwrap();
+            let rw = crate::session::os_wrap_rw_paths(Some(&fx.main), &clone).unwrap();
             for path in [other, &real_target] {
                 assert!(
                     !rw.iter().any(|p| path.starts_with(p)),
@@ -985,7 +1131,8 @@ true"#,
 
         std::fs::write(&lease_file, original).unwrap();
         assert_eq!(
-            crate::seat_clone::host_recorded_clone(&clone).and_then(|c| c.cargo_target_dir),
+            crate::seat_clone::host_recorded_clone(&fx.main, &clone)
+                .and_then(|c| c.cargo_target_dir),
             Some(real_target),
             "restoring the lease restores the grant"
         );

@@ -739,9 +739,11 @@ pub(crate) fn apply_agent_default_flags(
             per_tool = split_posture_flags(config.agent_type, per_tool).0;
             config.default_args =
                 split_posture_flags(config.agent_type, std::mem::take(&mut config.default_args)).0;
+            // A native posture is a vendor sandbox (Codex), whose flags never
+            // read the host main; `None` keeps any other tool fail-closed.
             config
                 .default_args
-                .extend(tool_contained_flags(config.agent_type)?);
+                .extend(tool_contained_flags(None, config.agent_type)?);
             config.contained = false;
         }
         if contained_claude_parent {
@@ -771,9 +773,20 @@ pub(crate) fn apply_agent_default_flags(
             if contained {
                 // trace:BUG-2131 | ai:claude
                 aida_core::git_ops::ensure_git_supports_contained()?;
-                config
-                    .default_args
-                    .extend(tool_contained_flags(config.agent_type)?);
+                // TASK-2032: only Claude's flags read the host main, and a
+                // Claude launch reaches this from `aida agent new` at a host
+                // cwd. The Codex arm, which `queue work` reaches after its
+                // chdir into a seat, never resolves one.
+                // trace:TASK-2032 | ai:claude
+                let host_main = if config.agent_type == "claude" {
+                    crate::seat_clone::launcher_main()
+                } else {
+                    None
+                };
+                config.default_args.extend(tool_contained_flags(
+                    host_main.as_deref(),
+                    config.agent_type,
+                )?);
                 config.contained = config.agent_type == "claude";
             } else if bypass {
                 config

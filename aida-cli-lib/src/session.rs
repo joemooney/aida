@@ -950,7 +950,8 @@ fn codex_interactive_session_config(contained: bool) -> Result<crate::AgentLaunc
         containment_posture_in(&root, "codex", true)?;
         config
             .default_args
-            .extend(crate::tool_contained_flags("codex")?);
+            // Codex's contained flags never read the host main.
+            .extend(crate::tool_contained_flags(None, "codex")?);
     }
     crate::apply_agent_default_flags(
         &mut config,
@@ -1747,7 +1748,12 @@ pub(crate) fn drive_path_env() -> Option<std::ffi::OsString> {
     std::env::join_paths(parts).ok()
 }
 
+/// `host_main` is the main checkout the launch's entry point resolved before
+/// any chdir into a seat (TASK-2032): every builder below takes it
+/// explicitly and never derives it from the process cwd.
+// trace:TASK-2032 | ai:claude
 pub(crate) fn compose_headless_command(
+    host_main: Option<&Path>,
     vendor: HeadlessVendor,
     prompt: &str,
     session_id: &str,
@@ -1755,7 +1761,9 @@ pub(crate) fn compose_headless_command(
     model: Option<&str>,
     effort: Option<&str>,
 ) -> Result<(String, Vec<String>)> {
-    compose_headless_command_forking(vendor, prompt, session_id, contained, model, effort, None)
+    compose_headless_command_forking(
+        host_main, vendor, prompt, session_id, contained, model, effort, None,
+    )
 }
 
 /// [`compose_headless_command`], optionally forking the Codex thread
@@ -1764,7 +1772,9 @@ pub(crate) fn compose_headless_command(
 /// get, so a contained fork carries the same flags and no bypass flag.
 /// `Some` on a non-Codex vendor is an error.
 // trace:STORY-2255 | ai:claude
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn compose_headless_command_forking(
+    host_main: Option<&Path>,
     vendor: HeadlessVendor,
     prompt: &str,
     session_id: &str,
@@ -1817,6 +1827,7 @@ pub(crate) fn compose_headless_command_forking(
         std::borrow::Cow::Borrowed(prompt)
     };
     let args = headless_vendor_args(
+        host_main,
         vendor,
         &effective_prompt,
         session_id,
@@ -1829,7 +1840,7 @@ pub(crate) fn compose_headless_command_forking(
         None => args,
     };
     os_wrapped_program_and_args(
-        crate::seat_clone::launcher_main().as_deref(),
+        host_main,
         &worktree,
         &resolve_agent_program(vendor.program()),
         args,
@@ -1903,7 +1914,9 @@ pub(crate) fn codex_exec_fork_support_within(
 /// no resume surface and is refused by name.
 // trace:BUG-B6B1278890774EF993D2EBC327862470-044 | ai:claude
 // trace:BUG-2386 | ai:claude
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn compose_headless_command_for(
+    host_main: Option<&Path>,
     vendor: HeadlessVendor,
     prompt: &str,
     session_id: &str,
@@ -1912,8 +1925,9 @@ pub(crate) fn compose_headless_command_for(
     effort: Option<&str>,
     resume: bool,
 ) -> Result<(String, Vec<String>)> {
-    let (program, args) =
-        compose_headless_command(vendor, prompt, session_id, contained, model, effort)?;
+    let (program, args) = compose_headless_command(
+        host_main, vendor, prompt, session_id, contained, model, effort,
+    )?;
     if !resume {
         return Ok((program, args));
     }
@@ -1964,8 +1978,18 @@ pub fn spawn_vendor_headless_with_seat(
     tee_opts: &crate::headless_tee::TeeOptions,
     contained: bool,
 ) -> Result<std::process::ExitStatus> {
+    // TASK-2032: an entry wrapper, called from a host cwd (never after a
+    // chdir into a seat); it resolves the host main once for the builders.
+    // trace:TASK-2032 | ai:claude
     spawn_vendor_headless_with_seat_granted(
-        vendor, seat, prompt, session_id, log_path, tee_opts, contained,
+        crate::seat_clone::launcher_main().as_deref(),
+        vendor,
+        seat,
+        prompt,
+        session_id,
+        log_path,
+        tee_opts,
+        contained,
     )
     .map(|(status, _)| status)
 }
@@ -1974,7 +1998,9 @@ pub fn spawn_vendor_headless_with_seat(
 /// child seat grant it issued, so the caller can bind the child's recorded
 /// output to exactly this launch.
 // trace:BUG-2149 | ai:claude
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn spawn_vendor_headless_with_seat_granted(
+    host_main: Option<&Path>,
     vendor: HeadlessVendor,
     seat: aida_core::agents_config::AgentSeat,
     prompt: &str,
@@ -1984,7 +2010,7 @@ pub(crate) fn spawn_vendor_headless_with_seat_granted(
     contained: bool,
 ) -> Result<(std::process::ExitStatus, String)> {
     spawn_vendor_headless_forking(
-        vendor, seat, prompt, session_id, log_path, tee_opts, contained, None,
+        host_main, vendor, seat, prompt, session_id, log_path, tee_opts, contained, None,
     )
 }
 
@@ -2002,7 +2028,9 @@ pub(crate) fn spawn_codex_headless_fork(
     tee_opts: &crate::headless_tee::TeeOptions,
     contained: bool,
 ) -> Result<std::process::ExitStatus> {
+    // TASK-2032: an entry wrapper run from a host cwd. trace:TASK-2032 | ai:claude
     spawn_vendor_headless_forking(
+        crate::seat_clone::launcher_main().as_deref(),
         HeadlessVendor::Codex,
         seat,
         prompt,
@@ -2017,6 +2045,7 @@ pub(crate) fn spawn_codex_headless_fork(
 
 #[allow(clippy::too_many_arguments)]
 fn spawn_vendor_headless_forking(
+    host_main: Option<&Path>,
     vendor: HeadlessVendor,
     seat: aida_core::agents_config::AgentSeat,
     prompt: &str,
@@ -2053,10 +2082,7 @@ fn spawn_vendor_headless_forking(
     // trace:BUG-2218 TASK-2328 | ai:codex
     // trace:TASK-2631 | ai:codex
     if containment_applied(vendor, contained) {
-        prepare_contained_mailbox_for_launch(
-            crate::seat_clone::launcher_main().as_deref(),
-            &headless_worktree_root(),
-        )?;
+        prepare_contained_mailbox_for_launch(host_main, &headless_worktree_root())?;
     }
     // TASK-1169 / ADR-22: bound the child's turn-end background-wait ceiling
     // ourselves rather than inheriting whatever the ambient shell carried, so
@@ -2064,6 +2090,7 @@ fn spawn_vendor_headless_forking(
     // trace:TASK-1169 | ai:claude
     let (ceiling_key, ceiling_value) = crate::bg_wait_ceiling_env(Some(&headless_worktree_root()));
     let (program, args) = compose_headless_command_forking(
+        host_main,
         vendor,
         prompt,
         session_id,
@@ -2097,7 +2124,7 @@ fn spawn_vendor_headless_forking(
     let mut handle_guard = child_reservation_guard();
     apply_child_agent_identity(&mut cmd, vendor, seat.as_str());
     // trace:TASK-1955 | ai:claude (TASK-1804)
-    apply_headless_harness_version(&mut cmd, vendor, &headless_worktree_root());
+    apply_headless_harness_version(host_main, &mut cmd, vendor, &headless_worktree_root());
     // BUG-2139: the child holds its own grant; the launcher's purpose stays
     // behind. trace:BUG-2139 | ai:claude
     scrub_launcher_session_env(&mut cmd);
@@ -2376,11 +2403,12 @@ pub(crate) fn contained_resume_write_roots(cwd: &Path) -> Vec<PathBuf> {
 /// of `exec_claude_resume` for the standalone reviewer summary path.
 /// trace:BUG-226 | ai:claude
 pub fn spawn_claude_resume(
+    host_main: Option<&Path>,
     id: &str,
     permission_mode: Option<&str>,
     contained: bool,
 ) -> Result<std::process::ExitStatus> {
-    spawn_claude_resume_with_grant(id, permission_mode, contained, None)
+    spawn_claude_resume_with_grant(host_main, id, permission_mode, contained, None)
 }
 
 /// BUG-2149: [`spawn_claude_resume`] with an explicit seat grant for the
@@ -2388,6 +2416,7 @@ pub fn spawn_claude_resume(
 /// the resumed session records under. `None` inherits the ambient grant.
 // trace:BUG-2149 | ai:claude
 pub(crate) fn spawn_claude_resume_with_grant(
+    host_main: Option<&Path>,
     id: &str,
     permission_mode: Option<&str>,
     contained: bool,
@@ -2415,9 +2444,7 @@ pub(crate) fn spawn_claude_resume_with_grant(
         cmd.args(["--permission-mode", m]);
     }
     if contained {
-        cmd.args(claude_contained_flags(
-            crate::seat_clone::launcher_main().as_deref(),
-        )?);
+        cmd.args(claude_contained_flags(host_main)?);
     }
     // trace:BUG-2006 | ai:antigravity
     if contained {
@@ -2430,10 +2457,7 @@ pub(crate) fn spawn_claude_resume_with_grant(
         cmd.env("AIDA_CONTAINMENT_POSTURE", "none");
     }
     if contained {
-        prepare_contained_mailbox_for_launch(
-            crate::seat_clone::launcher_main().as_deref(),
-            &std::env::current_dir()?,
-        )?;
+        prepare_contained_mailbox_for_launch(host_main, &std::env::current_dir()?)?;
     }
     // A watch-launched reviewer is recorded before the wait. trace:TASK-1993 | ai:claude
     crate::review_watch::reviewer_status(&mut cmd).context("failed to spawn claude")
@@ -2707,7 +2731,8 @@ pub fn exec_codex_session(
     let posture = containment_posture(HeadlessVendor::Codex, requested)?;
     let mut cmd = if posture == ContainmentPosture::Native {
         let mut cmd = std::process::Command::new("codex");
-        let mut args = crate::tool_contained_flags("codex")?;
+        // Codex's contained flags never read the host main.
+        let mut args = crate::tool_contained_flags(None, "codex")?;
         args.extend(codex_session_args(initial_prompt, false, model));
         // trace:BUG-2394 | ai:claude — a plan lane narrows the native sandbox.
         if read_only {
@@ -2893,10 +2918,16 @@ pub(crate) struct ReviewerLaunchPlan {
     pub(crate) args: Vec<String>,
     // trace:BUG-2006 | ai:antigravity
     pub(crate) contained: bool,
+    /// TASK-2032: the host main the plan's entry point resolved before any
+    /// chdir into a seat; the spawn builds its boundary from this, never
+    /// from the process cwd.
+    // trace:TASK-2032 | ai:claude
+    pub(crate) host_main: Option<PathBuf>,
 }
 
 // trace:BUG-1607 | ai:claude
 pub(crate) fn interactive_reviewer_launch_plan(
+    host_main: Option<&Path>,
     vendor: HeadlessVendor,
     permission_mode: Option<&str>,
     name: Option<&str>,
@@ -2916,7 +2947,7 @@ pub(crate) fn interactive_reviewer_launch_plan(
             vendor,
             program: resolve_agent_program(vendor.program()),
             args: claude_session_args(
-                crate::seat_clone::launcher_main().as_deref(),
+                host_main,
                 permission_mode,
                 name,
                 Some(prompt),
@@ -2925,6 +2956,7 @@ pub(crate) fn interactive_reviewer_launch_plan(
                 None,
             )?,
             contained: containment_applied(vendor, contained),
+            host_main: host_main.map(Path::to_path_buf),
         }),
         HeadlessVendor::Codex => {
             // Interactive queue-work's Codex-tab launch maps the uniform
@@ -2937,13 +2969,14 @@ pub(crate) fn interactive_reviewer_launch_plan(
                 program: resolve_agent_program(vendor.program()),
                 // trace:TASK-2631 | ai:codex
                 args: if contained {
-                    let mut args = crate::tool_contained_flags("codex")?;
+                    let mut args = crate::tool_contained_flags(host_main, "codex")?;
                     args.extend(codex_session_args(prompt, false, None));
                     args
                 } else {
                     codex_session_args(prompt, bypass, None)
                 },
                 contained: containment_applied(vendor, contained),
+                host_main: host_main.map(Path::to_path_buf),
             })
         }
         HeadlessVendor::Agy => anyhow::bail!(
@@ -2959,6 +2992,7 @@ pub(crate) fn interactive_reviewer_launch_plan(
 /// handle, so the dry-run preview uses it too.
 // trace:BUG-2389 | ai:claude
 pub(crate) fn advisor_interactive_launch_plan(
+    host_main: Option<&Path>,
     vendor: HeadlessVendor,
     prompt: &str,
     contained: bool,
@@ -2968,6 +3002,7 @@ pub(crate) fn advisor_interactive_launch_plan(
     let prompt =
         crate::intake::materialize_skill_invocation(prompt, vendor == HeadlessVendor::Claude);
     interactive_reviewer_launch_plan(
+        host_main,
         vendor,
         None,
         None,
@@ -2980,6 +3015,7 @@ pub(crate) fn advisor_interactive_launch_plan(
 /// Use the shared interactive vendor plan with an advisor's own child grant.
 // trace:BUG-2389 | ai:codex
 pub(crate) fn build_advisor_interactive_command(
+    host_main: Option<&Path>,
     vendor: HeadlessVendor,
     prompt: &str,
     grant_env: &str,
@@ -2987,21 +3023,16 @@ pub(crate) fn build_advisor_interactive_command(
 ) -> Result<std::process::Command> {
     let contained = aida_contained_env()? || contained;
     let root = headless_worktree_root();
-    let plan = advisor_interactive_launch_plan(vendor, prompt, contained)?;
-    let (program, args) = os_wrapped_program_and_args(
-        crate::seat_clone::launcher_main().as_deref(),
-        &root,
-        &plan.program,
-        plan.args,
-    )?;
+    let plan = advisor_interactive_launch_plan(host_main, vendor, prompt, contained)?;
+    let (program, args) = os_wrapped_program_and_args(host_main, &root, &plan.program, plan.args)?;
     if plan.contained {
-        prepare_contained_mailbox_for_launch(crate::seat_clone::launcher_main().as_deref(), &root)?;
+        prepare_contained_mailbox_for_launch(host_main, &root)?;
     }
     let mut cmd = std::process::Command::new(program);
     cmd.args(args);
     apply_headless_child_seat_env(&mut cmd, "advisor", grant_env);
     apply_child_agent_identity(&mut cmd, vendor, "advisor");
-    apply_headless_harness_version(&mut cmd, vendor, &root);
+    apply_headless_harness_version(host_main, &mut cmd, vendor, &root);
     if plan.contained {
         cmd.env("AIDA_CONTAINED", "1");
     } else {
@@ -3043,10 +3074,7 @@ pub(crate) fn spawn_reviewer_launch_plan_granted(
     }
     // trace:BUG-2218 TASK-2328 | ai:codex
     if plan.contained {
-        prepare_contained_mailbox_for_launch(
-            crate::seat_clone::launcher_main().as_deref(),
-            &std::env::current_dir()?,
-        )?;
+        prepare_contained_mailbox_for_launch(plan.host_main.as_deref(), &std::env::current_dir()?)?;
     }
     // A contained reviewer's tool calls run in a sandbox, where only a
     // keyring-held key presents its grant: refuse before the review is spent.
@@ -3643,6 +3671,7 @@ pub(crate) fn guided_session_launch(
 // trace:STORY-683 TASK-1048 | ai:claude
 // trace:BUG-2006 | ai:antigravity
 pub fn headless_vendor_args(
+    host_main: Option<&Path>,
     vendor: HeadlessVendor,
     prompt: &str,
     session_id: &str,
@@ -3653,6 +3682,7 @@ pub fn headless_vendor_args(
     let actually_contained = containment_applied(vendor, contained);
     Ok(match vendor {
         HeadlessVendor::Claude => claude_headless_args_with_posture_model_and_effort(
+            host_main,
             prompt,
             session_id,
             actually_contained,
@@ -3665,7 +3695,7 @@ pub fn headless_vendor_args(
             if contained {
                 containment_posture(vendor, true)?;
                 args.retain(|arg| arg != "--dangerously-bypass-approvals-and-sandbox");
-                let flags = crate::tool_contained_flags("codex")?;
+                let flags = crate::tool_contained_flags(host_main, "codex")?;
                 args.splice(0..0, flags);
             }
             args
@@ -3682,6 +3712,7 @@ pub fn headless_vendor_args(
 /// vendor that cannot apply containment never reaches this with `Some`.
 // trace:BUG-2133 | ai:claude
 pub(crate) fn headless_vendor_args_contained_in(
+    host_main: Option<&Path>,
     vendor: HeadlessVendor,
     prompt: &str,
     session_id: &str,
@@ -3691,6 +3722,7 @@ pub(crate) fn headless_vendor_args_contained_in(
 ) -> Result<Vec<String>> {
     match (vendor, contained_in) {
         (HeadlessVendor::Claude, Some(dir)) => claude_headless_args_for_roots(
+            host_main,
             prompt,
             session_id,
             Some(&contained_resume_write_roots(dir)),
@@ -3702,10 +3734,10 @@ pub(crate) fn headless_vendor_args_contained_in(
             containment_posture_in(dir, vendor.as_str(), true)?;
             let mut args = codex_headless_args_with_model_and_effort(prompt, model, effort);
             args.retain(|arg| arg != "--dangerously-bypass-approvals-and-sandbox");
-            args.splice(0..0, crate::tool_contained_flags("codex")?);
+            args.splice(0..0, crate::tool_contained_flags(host_main, "codex")?);
             Ok(args)
         }
-        _ => headless_vendor_args(vendor, prompt, session_id, false, model, effort),
+        _ => headless_vendor_args(host_main, vendor, prompt, session_id, false, model, effort),
     }
 }
 
@@ -4067,7 +4099,8 @@ pub(crate) fn codex_interactive_resume_args(
         "refusing to resume `{thread_id}`: not a Codex thread id"
     );
     let mut args = if native_contained {
-        crate::tool_contained_flags("codex")?
+        // Codex's contained flags never read the host main.
+        crate::tool_contained_flags(None, "codex")?
     } else if bypass {
         vec!["--dangerously-bypass-approvals-and-sandbox".to_string()]
     } else {
@@ -4086,29 +4119,34 @@ pub(crate) fn codex_interactive_resume_args(
 // production launch builds its argv through `headless_vendor_args`.
 #[cfg(test)]
 pub fn claude_headless_args(prompt: &str, session_id: &str) -> Vec<String> {
-    claude_headless_args_with_posture(prompt, session_id, false).unwrap()
+    claude_headless_args_with_posture(None, prompt, session_id, false).unwrap()
 }
 
 pub fn claude_headless_args_with_posture(
+    host_main: Option<&Path>,
     prompt: &str,
     session_id: &str,
     contained: bool,
 ) -> Result<Vec<String>> {
-    claude_headless_args_with_posture_and_model(prompt, session_id, contained, None)
+    claude_headless_args_with_posture_and_model(host_main, prompt, session_id, contained, None)
 }
 
 // trace:STORY-1003 | ai:codex
 pub fn claude_headless_args_with_posture_and_model(
+    host_main: Option<&Path>,
     prompt: &str,
     session_id: &str,
     contained: bool,
     model: Option<&str>,
 ) -> Result<Vec<String>> {
-    claude_headless_args_with_posture_model_and_effort(prompt, session_id, contained, model, None)
+    claude_headless_args_with_posture_model_and_effort(
+        host_main, prompt, session_id, contained, model, None,
+    )
 }
 
 // trace:STORY-1033 | ai:codex
 pub fn claude_headless_args_with_posture_model_and_effort(
+    host_main: Option<&Path>,
     prompt: &str,
     session_id: &str,
     contained: bool,
@@ -4116,7 +4154,14 @@ pub fn claude_headless_args_with_posture_model_and_effort(
     effort: Option<&str>,
 ) -> Result<Vec<String>> {
     let roots = contained.then(contained_session_write_roots);
-    claude_headless_args_for_roots(prompt, session_id, roots.as_deref(), model, effort)
+    claude_headless_args_for_roots(
+        host_main,
+        prompt,
+        session_id,
+        roots.as_deref(),
+        model,
+        effort,
+    )
 }
 
 /// BUG-2133: the `claude -p` argv with the contained write boundary given
@@ -4129,6 +4174,7 @@ pub fn claude_headless_args_with_posture_model_and_effort(
 /// to the wrong tree.
 // trace:BUG-2133 | ai:claude
 pub(crate) fn claude_headless_args_for_roots(
+    host_main: Option<&Path>,
     prompt: &str,
     session_id: &str,
     contained_roots: Option<&[PathBuf]>,
@@ -4136,9 +4182,7 @@ pub(crate) fn claude_headless_args_for_roots(
     effort: Option<&str>,
 ) -> Result<Vec<String>> {
     let contained_flags = contained_roots
-        .map(|roots| {
-            claude_contained_flags_for_roots(crate::seat_clone::launcher_main().as_deref(), roots)
-        })
+        .map(|roots| claude_contained_flags_for_roots(host_main, roots))
         .transpose()?
         .unwrap_or_default();
     let permission_mode = if contained_roots.is_some() {
@@ -4190,9 +4234,12 @@ pub(crate) use aida_core::ai::headless_posture::{
 /// [`headless_claude_posture`] for a launch that is `contained` in the
 /// process cwd's boundary ([`claude_contained_flags`]), or not.
 // trace:BUG-B6B1278890774EF993D2EBC327862470-050 | ai:claude
-pub(crate) fn headless_claude_posture_for(contained: bool) -> Result<Vec<String>> {
+pub(crate) fn headless_claude_posture_for(
+    host_main: Option<&Path>,
+    contained: bool,
+) -> Result<Vec<String>> {
     let contained_flags = if contained {
-        claude_contained_flags(crate::seat_clone::launcher_main().as_deref())?
+        claude_contained_flags(host_main)?
     } else {
         Vec::new()
     };
@@ -5436,11 +5483,12 @@ pub(crate) fn resolve_agent_program(vendor_program: &str) -> String {
 /// sibling is bound rw).
 // trace:STORY-612 trace:TASK-1081 | ai:claude
 fn claude_program_and_args(
+    host_main: Option<&Path>,
     worktree_root: &Path,
     claude_args: Vec<String>,
 ) -> Result<(String, Vec<String>)> {
     os_wrapped_program_and_args(
-        crate::seat_clone::launcher_main().as_deref(),
+        host_main,
         worktree_root,
         &resolve_agent_program("claude"),
         claude_args,
@@ -5769,7 +5817,9 @@ fn which_on_path(exe: &str) -> Option<PathBuf> {
 // trace:BUG-898 | ai:codex
 // trace:BUG-2006 | ai:antigravity
 // trace:BUG-2139 | ai:claude
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn build_exec_vendor_headless_command(
+    host_main: Option<&Path>,
     vendor: HeadlessVendor,
     prompt: &str,
     session_id: &str,
@@ -5780,7 +5830,7 @@ pub(crate) fn build_exec_vendor_headless_command(
     grant_env: &str,
 ) -> Result<std::process::Command> {
     build_exec_vendor_headless_command_for(
-        vendor, prompt, session_id, contained, model, effort, seat, grant_env, false,
+        host_main, vendor, prompt, session_id, contained, model, effort, seat, grant_env, false,
     )
 }
 
@@ -5789,6 +5839,7 @@ pub(crate) fn build_exec_vendor_headless_command(
 // trace:BUG-B6B1278890774EF993D2EBC327862470-044 | ai:claude
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn build_exec_vendor_headless_command_for(
+    host_main: Option<&Path>,
     vendor: HeadlessVendor,
     prompt: &str,
     session_id: &str,
@@ -5800,7 +5851,8 @@ pub(crate) fn build_exec_vendor_headless_command_for(
     resume: bool,
 ) -> Result<std::process::Command> {
     build_coordinator_headless_command_inner(
-        vendor, prompt, session_id, contained, model, effort, seat, grant_env, resume, None, true,
+        host_main, vendor, prompt, session_id, contained, model, effort, seat, grant_env, resume,
+        None, true,
     )
 }
 
@@ -5810,7 +5862,9 @@ pub(crate) fn build_exec_vendor_headless_command_for(
 /// and to the launch, so what is printed is what runs.
 // trace:BUG-2389 | ai:codex
 // trace:BUG-2389 | ai:claude
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn build_coordinator_headless_command(
+    host_main: Option<&Path>,
     vendor: HeadlessVendor,
     prompt: &str,
     mode: &str,
@@ -5824,6 +5878,7 @@ pub(crate) fn build_coordinator_headless_command(
     let prompt =
         crate::intake::materialize_skill_invocation(prompt, vendor == HeadlessVendor::Claude);
     let mut command = build_coordinator_headless_command_inner(
+        host_main,
         vendor,
         &prompt,
         &uuid::Uuid::now_v7().to_string(),
@@ -5845,6 +5900,7 @@ pub(crate) fn build_coordinator_headless_command(
 /// probes no harness version and prepares no mailbox.
 // trace:BUG-2389 | ai:claude
 pub(crate) fn coordinator_headless_preview(
+    host_main: Option<&Path>,
     vendor: HeadlessVendor,
     prompt: &str,
     mode: &str,
@@ -5858,6 +5914,7 @@ pub(crate) fn coordinator_headless_preview(
         crate::intake::materialize_skill_invocation(prompt, vendor == HeadlessVendor::Claude);
     let contained = aida_contained_env()? || contained;
     let (program, mut args) = compose_headless_command_for(
+        host_main,
         vendor,
         &prompt,
         "preview",
@@ -5983,6 +6040,7 @@ pub(crate) fn coordinator_status_with_handle_guard(
 // trace:BUG-2389 | ai:codex
 #[allow(clippy::too_many_arguments)]
 fn build_coordinator_headless_command_inner(
+    host_main: Option<&Path>,
     vendor: HeadlessVendor,
     prompt: &str,
     session_id: &str,
@@ -5998,8 +6056,9 @@ fn build_coordinator_headless_command_inner(
     use std::process::Command;
     // trace:BUG-2172 | ai:codex
     let contained = aida_contained_env()? || contained;
-    let (program, mut args) =
-        compose_headless_command_for(vendor, prompt, session_id, contained, model, effort, resume)?;
+    let (program, mut args) = compose_headless_command_for(
+        host_main, vendor, prompt, session_id, contained, model, effort, resume,
+    )?;
     adapt_coordinator_args(vendor, &mut args, mode, contained, stream);
     // TASK-1169 / ADR-22: same bounded ceiling as the spawn path — the exec
     // path is the `--no-human` phase-1 implementer, which must not diverge.
@@ -6008,10 +6067,7 @@ fn build_coordinator_headless_command_inner(
     // trace:BUG-2218 TASK-2328 | ai:codex
     // trace:TASK-2631 | ai:codex
     if containment_applied(vendor, contained) {
-        prepare_contained_mailbox_for_launch(
-            crate::seat_clone::launcher_main().as_deref(),
-            &headless_worktree_root(),
-        )?;
+        prepare_contained_mailbox_for_launch(host_main, &headless_worktree_root())?;
     }
     let mut child_cmd = Command::new(program);
     child_cmd
@@ -6030,7 +6086,7 @@ fn build_coordinator_headless_command_inner(
     // trace:BUG-2187 | ai:codex
     apply_child_agent_identity(&mut child_cmd, vendor, seat);
     // trace:TASK-1955 | ai:claude (TASK-1804)
-    apply_headless_harness_version(&mut child_cmd, vendor, &headless_worktree_root());
+    apply_headless_harness_version(host_main, &mut child_cmd, vendor, &headless_worktree_root());
     // trace:TASK-2631 | ai:codex
     let posture = containment_posture(vendor, contained)?;
     if containment_applied(vendor, contained) {
@@ -6045,6 +6101,7 @@ fn build_coordinator_headless_command_inner(
 // trace:BUG-2139 | ai:claude
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn exec_vendor_headless(
+    host_main: Option<&Path>,
     vendor: HeadlessVendor,
     prompt: &str,
     session_id: &str,
@@ -6074,6 +6131,7 @@ pub(crate) fn exec_vendor_headless(
             let run_once =
                 |prompt: &str, log: &Path, resume: bool, hold: Option<&dyn Fn() -> bool>| {
                     run_vendor_headless_child(
+                        host_main,
                         vendor,
                         prompt,
                         session_id,
@@ -6412,6 +6470,7 @@ fn child_handle_root() -> Option<PathBuf> {
 /// rather than leaving the launcher's version on the child.
 // trace:TASK-1955 | ai:claude (TASK-1804)
 fn apply_headless_harness_version(
+    host_main: Option<&Path>,
     cmd: &mut std::process::Command,
     vendor: HeadlessVendor,
     worktree_root: &Path,
@@ -6420,7 +6479,7 @@ fn apply_headless_harness_version(
     let probe = (!mocked)
         .then(|| {
             os_wrapped_program_and_args(
-                crate::seat_clone::launcher_main().as_deref(),
+                host_main,
                 worktree_root,
                 vendor.program(),
                 vec!["--version".to_string()],
@@ -6488,6 +6547,7 @@ pub(crate) fn resume_session_args(mut args: Vec<String>, session_id: &str) -> Re
 // trace:STORY-1662 | ai:claude
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn run_standalone_implementer_child(
+    host_main: Option<&Path>,
     vendor: HeadlessVendor,
     prompt: &str,
     session_id: &str,
@@ -6499,6 +6559,7 @@ pub(crate) fn run_standalone_implementer_child(
     hooks: &HeadlessChildHooks<'_>,
 ) -> Result<std::process::ExitStatus> {
     run_vendor_headless_child(
+        host_main,
         vendor,
         prompt,
         session_id,
@@ -6526,6 +6587,7 @@ pub(crate) fn revoke_standalone_implementer_grant(
 // trace:BUG-2139 | ai:claude
 #[allow(clippy::too_many_arguments)]
 fn run_vendor_headless_child(
+    host_main: Option<&Path>,
     vendor: HeadlessVendor,
     prompt: &str,
     session_id: &str,
@@ -6584,6 +6646,7 @@ fn run_vendor_headless_child(
     // trace:STORY-1843 | ai:codex
     let mut handle_guard = child_reservation_guard();
     let mut child_cmd = build_exec_vendor_headless_command_for(
+        host_main,
         vendor,
         prompt,
         &resume_id,
@@ -6976,7 +7039,7 @@ pub(crate) fn stamp_lease_detached_worker_at(
 /// set is unit-tested without spawning claude. trace:STORY-306 | ai:claude
 pub fn claude_headless_resume_args(prompt: &str, session_id: &str) -> Vec<String> {
     // Uncontained: no contained settings are built, so nothing can refuse.
-    claude_headless_resume_args_with_posture(prompt, session_id, None).unwrap_or_default()
+    claude_headless_resume_args_with_posture(None, prompt, session_id, None).unwrap_or_default()
 }
 
 /// `contained_in` is `Some(worktree)` for a contained resume: the write
@@ -6984,6 +7047,7 @@ pub fn claude_headless_resume_args(prompt: &str, session_id: &str) -> Vec<String
 /// process cwd. `None` is the uncontained `bypassPermissions` posture.
 // trace:BUG-1971 | ai:claude
 pub fn claude_headless_resume_args_with_posture(
+    host_main: Option<&Path>,
     prompt: &str,
     session_id: &str,
     contained_in: Option<&Path>,
@@ -7001,10 +7065,9 @@ pub fn claude_headless_resume_args_with_posture(
     let contained_flags = match contained_in {
         // BUG-1971: only when `worktree` is itself a git root; otherwise no
         // write roots. trace:BUG-1971 | ai:claude
-        Some(worktree) => claude_contained_flags_for_roots(
-            crate::seat_clone::launcher_main().as_deref(),
-            &contained_resume_write_roots(worktree),
-        )?,
+        Some(worktree) => {
+            claude_contained_flags_for_roots(host_main, &contained_resume_write_roots(worktree))?
+        }
         None => Vec::new(),
     };
     // BUG-050: a resumed lane is as headless as the launch it continues.
@@ -7077,7 +7140,10 @@ pub fn advisor_tier_program_and_args_with_tuning(
     model: Option<&str>,
     effort: Option<&str>,
 ) -> (String, Vec<String>) {
+    // Uncontained: no contained settings are built (so no host main is
+    // read), and nothing can refuse.
     advisor_tier_program_and_args_with_posture(
+        None,
         vendor,
         is_fork,
         seeded_prompt,
@@ -7086,7 +7152,6 @@ pub fn advisor_tier_program_and_args_with_tuning(
         effort,
         None,
     )
-    // Uncontained: no contained settings are built, so nothing can refuse.
     .unwrap_or_else(|_| (resolve_agent_program(vendor.program()), Vec::new()))
 }
 
@@ -7097,7 +7162,9 @@ pub fn advisor_tier_program_and_args_with_tuning(
 /// be contained — the caller refuses them first via
 /// [`require_child_containment`].
 // trace:BUG-2133 | ai:claude
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn advisor_tier_program_and_args_with_posture(
+    host_main: Option<&Path>,
     vendor: HeadlessVendor,
     is_fork: bool,
     seeded_prompt: &str,
@@ -7111,6 +7178,7 @@ pub(crate) fn advisor_tier_program_and_args_with_posture(
             let args = if is_fork {
                 // Fork branch inherits the live advisor's context via --resume.
                 claude_headless_resume_args_with_posture(
+                    host_main,
                     "/aida-advise",
                     advisor_uuid,
                     contained_in,
@@ -7118,6 +7186,7 @@ pub(crate) fn advisor_tier_program_and_args_with_posture(
             } else {
                 let roots = contained_in.map(contained_resume_write_roots);
                 claude_headless_args_for_roots(
+                    host_main,
                     seeded_prompt,
                     advisor_uuid,
                     roots.as_deref(),
@@ -7142,6 +7211,7 @@ pub(crate) fn advisor_tier_program_and_args_with_posture(
             // trace:STORY-2255 | ai:claude
             // TASK-1081: same mock resolver as the Claude arm. trace:TASK-1081
             let args = headless_vendor_args_contained_in(
+                host_main,
                 vendor,
                 seeded_prompt,
                 advisor_uuid,
@@ -7183,7 +7253,9 @@ pub(crate) fn advisor_tier_program_and_args_with_posture(
 /// wrong slug folder and fails with "No conversation found." The original
 /// SPIKE-7 verification of this code missed this because the unit test
 /// exercises only the argv. trace:STORY-306 | ai:claude
+#[allow(clippy::too_many_arguments)]
 pub fn spawn_claude_headless_resume(
+    host_main: Option<&Path>,
     prompt: &str,
     session_id: &str,
     log_path: &Path,
@@ -7193,7 +7265,7 @@ pub fn spawn_claude_headless_resume(
     seat: &str,
 ) -> Result<std::process::ExitStatus> {
     spawn_claude_headless_resume_granted(
-        prompt, session_id, log_path, cwd, tee_opts, contained, seat,
+        host_main, prompt, session_id, log_path, cwd, tee_opts, contained, seat,
     )
     .map(|(status, _)| status)
 }
@@ -7201,7 +7273,9 @@ pub fn spawn_claude_headless_resume(
 /// BUG-2149: [`spawn_claude_headless_resume`], also returning the id of the
 /// child seat grant it issued.
 // trace:BUG-2149 | ai:claude
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn spawn_claude_headless_resume_granted(
+    host_main: Option<&Path>,
     prompt: &str,
     session_id: &str,
     log_path: &Path,
@@ -7228,14 +7302,20 @@ pub(crate) fn spawn_claude_headless_resume_granted(
     // original implementer's worktree), so that is the rw bind scope.
     // trace:STORY-612 | ai:claude
     let (program, args) = claude_program_and_args(
+        host_main,
         cwd,
         // BUG-1971: the write boundary is the worktree being resumed in.
         // trace:BUG-1971 | ai:claude
-        claude_headless_resume_args_with_posture(prompt, session_id, contained.then_some(cwd))?,
+        claude_headless_resume_args_with_posture(
+            host_main,
+            prompt,
+            session_id,
+            contained.then_some(cwd),
+        )?,
     )?;
     // trace:BUG-2218 TASK-2328 | ai:codex
     if contained {
-        prepare_contained_mailbox_for_launch(crate::seat_clone::launcher_main().as_deref(), cwd)?;
+        prepare_contained_mailbox_for_launch(host_main, cwd)?;
     }
     // A contained resume is sandboxed like a fresh launch: refuse a grant
     // its tool calls could not present. trace:BUG-b6b1278890774ef993d2ebc327862470-045 | ai:claude
@@ -7261,7 +7341,7 @@ pub(crate) fn spawn_claude_headless_resume_granted(
     let mut handle_guard = child_reservation_guard();
     apply_resumed_child_agent_identity(&mut cmd, HeadlessVendor::Claude, seat, session_id);
     // trace:TASK-1955 | ai:claude (TASK-1804)
-    apply_headless_harness_version(&mut cmd, HeadlessVendor::Claude, cwd);
+    apply_headless_harness_version(host_main, &mut cmd, HeadlessVendor::Claude, cwd);
     // trace:BUG-2139 | ai:claude
     scrub_launcher_session_env(&mut cmd);
     // trace:BUG-2006 | ai:antigravity
@@ -7300,7 +7380,9 @@ pub(crate) struct HeadlessResume<'a> {
 /// `codex exec resume <thread> <prompt>`, on the posture, grant and identity
 /// env a fresh headless Codex child gets. Agy is refused by name.
 // trace:BUG-2386 | ai:claude
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn spawn_vendor_headless_resume_granted(
+    host_main: Option<&Path>,
     target: &HeadlessResume<'_>,
     prompt: &str,
     log_path: &Path,
@@ -7314,6 +7396,7 @@ pub(crate) fn spawn_vendor_headless_resume_granted(
     match vendor {
         HeadlessVendor::Claude => {
             return spawn_claude_headless_resume_granted(
+                host_main,
                 prompt,
                 target.session_id,
                 log_path,
@@ -7350,11 +7433,12 @@ pub(crate) fn spawn_vendor_headless_resume_granted(
     // headless builder right beside the launch (BUG-342 ratchet).
     // trace:BUG-2386 | ai:claude
     let (program, args) = os_wrapped_program_and_args(
-        crate::seat_clone::launcher_main().as_deref(),
+        host_main,
         cwd,
         &resolve_agent_program(vendor.program()),
         codex_resume_exec_args(
             headless_vendor_args_contained_in(
+                host_main,
                 vendor,
                 &effective_prompt,
                 target.session_id,
@@ -7382,7 +7466,7 @@ pub(crate) fn spawn_vendor_headless_resume_granted(
         .envs(crate::headless_wait_envs(ceiling_key, &ceiling_value));
     let mut handle_guard = child_reservation_guard();
     apply_resumed_child_agent_identity(&mut cmd, vendor, seat, target.session_id);
-    apply_headless_harness_version(&mut cmd, vendor, cwd);
+    apply_headless_harness_version(host_main, &mut cmd, vendor, cwd);
     scrub_launcher_session_env(&mut cmd);
     // Codex never runs AIDA-contained; its native sandbox is the posture.
     cmd.env_remove("AIDA_CONTAINED");
@@ -7405,7 +7489,9 @@ pub(crate) fn spawn_vendor_headless_resume_granted(
 
 /// BUG-2386: [`spawn_vendor_headless_resume_granted`] without the grant id.
 // trace:BUG-2386 | ai:claude
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn spawn_vendor_headless_resume(
+    host_main: Option<&Path>,
     target: &HeadlessResume<'_>,
     prompt: &str,
     log_path: &Path,
@@ -7414,8 +7500,10 @@ pub(crate) fn spawn_vendor_headless_resume(
     contained: bool,
     seat: &str,
 ) -> Result<std::process::ExitStatus> {
-    spawn_vendor_headless_resume_granted(target, prompt, log_path, cwd, tee_opts, contained, seat)
-        .map(|(status, _)| status)
+    spawn_vendor_headless_resume_granted(
+        host_main, target, prompt, log_path, cwd, tee_opts, contained, seat,
+    )
+    .map(|(status, _)| status)
 }
 
 /// BUG-2386: the vendor and resumable id of the AIDA session `session_id`
@@ -9073,7 +9161,7 @@ mod tests {
         // off (guard cleared AIDA_OS_WRAP; the temp root has no config).
         let tmp = tempfile::tempdir().unwrap();
         let claude_args = claude_headless_args("/aida-review", "sid");
-        let (program, args) = claude_program_and_args(tmp.path(), claude_args.clone())
+        let (program, args) = claude_program_and_args(None, tmp.path(), claude_args.clone())
             .expect("unwrapped launch never errors");
         assert_eq!(program, fake, "override swaps the vendor program");
         assert_eq!(args, claude_args, "argv is passed through unchanged");
@@ -9315,7 +9403,7 @@ mod tests {
             }
             let dummy = claude_headless_args("/aida-review", "sid");
             let (program, args) =
-                claude_program_and_args(wt, dummy).expect("wrapped launch builds");
+                claude_program_and_args(None, wt, dummy).expect("wrapped launch builds");
             assert_eq!(program, "bwrap");
             Some(args)
         }
@@ -10498,6 +10586,7 @@ mod tests {
         let prompt = "/aida-pickup STORY-1003";
         let sid = "sid";
         let claude = headless_vendor_args(
+            None,
             HeadlessVendor::Claude,
             prompt,
             sid,
@@ -10516,6 +10605,7 @@ mod tests {
         assert_eq!(claude.last().map(String::as_str), Some(prompt));
 
         let codex = headless_vendor_args(
+            None,
             HeadlessVendor::Codex,
             prompt,
             sid,
@@ -10534,6 +10624,7 @@ mod tests {
         assert_eq!(codex.last().map(String::as_str), Some(prompt));
 
         let agy = headless_vendor_args(
+            None,
             HeadlessVendor::Agy,
             prompt,
             sid,
@@ -10551,6 +10642,7 @@ mod tests {
         let sid = "sid";
 
         let claude = headless_vendor_args(
+            None,
             HeadlessVendor::Claude,
             prompt,
             sid,
@@ -10569,6 +10661,7 @@ mod tests {
         assert_eq!(claude.last().map(String::as_str), Some(prompt));
 
         let codex = headless_vendor_args(
+            None,
             HeadlessVendor::Codex,
             prompt,
             sid,
@@ -10586,8 +10679,16 @@ mod tests {
         );
         assert_eq!(codex.last().map(String::as_str), Some(prompt));
 
-        let agy = headless_vendor_args(HeadlessVendor::Agy, prompt, sid, false, None, Some("low"))
-            .unwrap();
+        let agy = headless_vendor_args(
+            None,
+            HeadlessVendor::Agy,
+            prompt,
+            sid,
+            false,
+            None,
+            Some("low"),
+        )
+        .unwrap();
         assert_eq!(
             agy.windows(2)
                 .find(|w| w[0] == "--effort")
@@ -10611,14 +10712,27 @@ mod tests {
             (
                 "fresh-contained",
                 true,
-                claude_headless_args_for_roots("p", "sid", Some(&[dir.clone()]), None, None)
-                    .unwrap(),
+                claude_headless_args_for_roots(
+                    crate::seat_clone::launcher_main().as_deref(),
+                    "p",
+                    "sid",
+                    Some(&[dir.clone()]),
+                    None,
+                    None,
+                )
+                .unwrap(),
             ),
             ("resume", false, claude_headless_resume_args("p", "sid")),
             (
                 "resume-contained",
                 true,
-                claude_headless_resume_args_with_posture("p", "sid", Some(&dir)).unwrap(),
+                claude_headless_resume_args_with_posture(
+                    crate::seat_clone::launcher_main().as_deref(),
+                    "p",
+                    "sid",
+                    Some(&dir),
+                )
+                .unwrap(),
             ),
         ] {
             assert_headless_posture(&args, contained, label);
@@ -10787,7 +10901,13 @@ mod tests {
 
     #[test]
     fn contained_headless_args_use_strict_sandbox_settings() {
-        let args = claude_headless_args_with_posture("/aida-review", "sid", true).unwrap();
+        let args = claude_headless_args_with_posture(
+            crate::seat_clone::launcher_main().as_deref(),
+            "/aida-review",
+            "sid",
+            true,
+        )
+        .unwrap();
         let pos = args
             .iter()
             .position(|a| a == "--permission-mode")
@@ -10879,7 +10999,8 @@ mod tests {
 
         // Claude arm: -p print mode + the prompt survives, NOT a codex command.
         let claude =
-            headless_vendor_args(HeadlessVendor::Claude, prompt, sid, false, None, None).unwrap();
+            headless_vendor_args(None, HeadlessVendor::Claude, prompt, sid, false, None, None)
+                .unwrap();
         assert!(claude.contains(&"-p".to_string()), "claude -p: {claude:?}");
         assert!(
             claude.contains(&"bypassPermissions".to_string()),
@@ -10893,13 +11014,14 @@ mod tests {
         // Identical to the dedicated claude builder — the default path is unchanged.
         assert_eq!(
             claude,
-            claude_headless_args_with_posture(prompt, sid, false).unwrap()
+            claude_headless_args_with_posture(None, prompt, sid, false).unwrap()
         );
 
         // Codex arm: `codex exec --json --dangerously-bypass-approvals-and-sandbox
         // <prompt>`, with the prompt as the final positional and NO claude `-p`.
         let codex =
-            headless_vendor_args(HeadlessVendor::Codex, prompt, sid, false, None, None).unwrap();
+            headless_vendor_args(None, HeadlessVendor::Codex, prompt, sid, false, None, None)
+                .unwrap();
         assert_eq!(codex.first().map(String::as_str), Some("exec"), "{codex:?}");
         assert!(
             codex.contains(&"--json".to_string()),
@@ -10919,8 +11041,8 @@ mod tests {
         // with the prompt as `-p`'s value at the tail and NO codex `exec`.
         // BUG-1686: the permission flag leads; `-p` is value-taking on agy.
         // trace:BUG-1686 | ai:claude
-        let agy =
-            headless_vendor_args(HeadlessVendor::Agy, prompt, sid, false, None, None).unwrap();
+        let agy = headless_vendor_args(None, HeadlessVendor::Agy, prompt, sid, false, None, None)
+            .unwrap();
         assert_eq!(agy, agy_headless_args(prompt), "{agy:?}");
         assert_eq!(
             agy.first().map(String::as_str),
@@ -11413,6 +11535,7 @@ mod tests {
         // test leaking an override into this one.
         let _env = AgentCmdEnvGuard::acquire();
         let plan = interactive_reviewer_launch_plan(
+            crate::seat_clone::launcher_main().as_deref(),
             HeadlessVendor::Codex,
             None,
             Some("review-story-1"),
@@ -11435,6 +11558,7 @@ mod tests {
         // `--permission-mode bypassPermissions` maps to Codex's own bypass
         // flag (mirrors the general interactive Codex-tab dispatch, BUG-743).
         let bypass_plan = interactive_reviewer_launch_plan(
+            crate::seat_clone::launcher_main().as_deref(),
             HeadlessVendor::Codex,
             Some("bypassPermissions"),
             Some("review-story-1"),
@@ -11458,6 +11582,7 @@ mod tests {
     fn interactive_reviewer_launch_plan_claude_matches_claude_session_args() {
         let _env = AgentCmdEnvGuard::acquire();
         let plan = interactive_reviewer_launch_plan(
+            crate::seat_clone::launcher_main().as_deref(),
             HeadlessVendor::Claude,
             Some("acceptEdits"),
             Some("review-story-1"),
@@ -11491,6 +11616,7 @@ mod tests {
     fn interactive_reviewer_launch_plan_agy_refuses_with_recovery_hint() {
         let _env = AgentCmdEnvGuard::acquire();
         let err = interactive_reviewer_launch_plan(
+            crate::seat_clone::launcher_main().as_deref(),
             HeadlessVendor::Agy,
             None,
             None,
@@ -11550,6 +11676,7 @@ mod tests {
     fn codex_phase_argv_carries_the_expanded_body_and_claude_is_unchanged() {
         let _env = AgentCmdEnvGuard::acquire();
         let (_, args) = compose_headless_command(
+            crate::seat_clone::launcher_main().as_deref(),
             HeadlessVendor::Codex,
             "/aida-review --pr 7",
             "sid",
@@ -11569,6 +11696,7 @@ mod tests {
         );
 
         let (_, cargs) = compose_headless_command(
+            crate::seat_clone::launcher_main().as_deref(),
             HeadlessVendor::Claude,
             "/aida-review --pr 7",
             "sid",
@@ -11847,6 +11975,7 @@ mod tests {
         let previews: Vec<_> = cases
             .map(|(vendor, stream)| {
                 let (program, preview) = coordinator_headless_preview(
+                    None,
                     vendor,
                     "/aida-burndown --max 2",
                     "acceptEdits",
@@ -11865,6 +11994,7 @@ mod tests {
         for (vendor, stream, preview) in previews {
             {
                 let launched: Vec<String> = build_coordinator_headless_command(
+                    None,
                     vendor,
                     "/aida-burndown --max 2",
                     "acceptEdits",
@@ -11900,6 +12030,7 @@ mod tests {
     fn codex_headless_resume_keeps_the_launch_flags() {
         let _env = AgentCmdEnvGuard::acquire();
         let (prog, args) = compose_headless_command_for(
+            None,
             HeadlessVendor::Codex,
             "do a thing",
             "019a-thread",
@@ -11950,9 +12081,17 @@ mod tests {
         );
         assert!(codex_resume_exec_args(vec!["exec".into(), "p".into()], "--last").is_err());
         assert!(codex_resume_exec_args(vec!["-p".into(), "p".into()], "t-1").is_err());
-        let agy =
-            compose_headless_command_for(HeadlessVendor::Agy, "p", "sid", false, None, None, true)
-                .unwrap_err();
+        let agy = compose_headless_command_for(
+            None,
+            HeadlessVendor::Agy,
+            "p",
+            "sid",
+            false,
+            None,
+            None,
+            true,
+        )
+        .unwrap_err();
         assert!(format!("{agy:#}").contains("cannot be resumed"), "{agy:#}");
     }
 
@@ -12005,6 +12144,7 @@ mod tests {
     fn compose_headless_command_routes_per_vendor() {
         let _env = AgentCmdEnvGuard::acquire();
         let (prog, args) = compose_headless_command(
+            crate::seat_clone::launcher_main().as_deref(),
             HeadlessVendor::Codex,
             "do a thing",
             "sid",
@@ -12018,6 +12158,7 @@ mod tests {
         assert!(!args.contains(&"-p".to_string()), "{args:?}");
 
         let (prog, args) = compose_headless_command(
+            crate::seat_clone::launcher_main().as_deref(),
             HeadlessVendor::Claude,
             "do a thing",
             "sid",
@@ -12329,7 +12470,7 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         assert!(!os_wrap_enabled(tmp.path()), "absent config => os_wrap off");
         let claude_args = claude_headless_args("/aida-review", "sid");
-        let (program, args) = claude_program_and_args(tmp.path(), claude_args.clone())
+        let (program, args) = claude_program_and_args(None, tmp.path(), claude_args.clone())
             .expect("unwrapped launch never errors");
         assert_eq!(
             program, "claude",
@@ -12390,7 +12531,7 @@ mod tests {
                  and/or `sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0`."
             );
             // Restricted host (no force): the launch MUST fail closed with remediation.
-            let err = claude_program_and_args(wt, dummy)
+            let err = claude_program_and_args(None, wt, dummy)
                 .expect_err("userns-restricted host must NOT yield a runnable wrapped command");
             let msg = format!("{err:#}");
             assert!(
@@ -12401,7 +12542,8 @@ mod tests {
         }
 
         // Live path: the launcher wraps with bwrap…
-        let (program, _args) = claude_program_and_args(wt, dummy).expect("wrapped launch builds");
+        let (program, _args) =
+            claude_program_and_args(None, wt, dummy).expect("wrapped launch builds");
         assert_eq!(program, "bwrap", "userns-capable host must wrap with bwrap");
 
         // …and the EXACT flags it emits actually confine writes. Probe inside
@@ -12612,7 +12754,7 @@ mod tests {
             outside_git.path().to_path_buf(),
             "headless_worktree_root must honor contained_cwd_seam in unit tests"
         );
-        let err2 = claude_program_and_args(&headless_worktree_root(), args)
+        let err2 = claude_program_and_args(None, &headless_worktree_root(), args)
             .expect_err("headless claude_program_and_args outside git must refuse os_wrap");
         assert!(
             format!("{err2:#}").contains("not inside a git repository"),
@@ -12652,6 +12794,7 @@ mod tests {
                 program: fake.to_string_lossy().to_string(),
                 args: vec![],
                 contained: false,
+                host_main: None,
             };
             let err = spawn_reviewer_launch_plan(&plan, &project).unwrap_err();
             assert!(err
@@ -12673,6 +12816,7 @@ mod tests {
                 program: fake.to_string_lossy().to_string(),
                 args: vec![],
                 contained: true,
+                host_main: crate::seat_clone::launcher_main(),
             };
             let status = spawn_reviewer_launch_plan(&plan, &project).unwrap();
             assert!(status.success());
@@ -12701,7 +12845,13 @@ mod tests {
                 ("AIDA_AGENT_CMD", Some(fake.to_str().unwrap())),
                 ("AIDA_CONTAINED", Some("1")),
             ]);
-            let status = spawn_claude_resume("session-123", None, false).unwrap();
+            let status = spawn_claude_resume(
+                crate::seat_clone::launcher_main().as_deref(),
+                "session-123",
+                None,
+                false,
+            )
+            .unwrap();
             assert!(status.success());
             let env_contents = std::fs::read_to_string(&env_out).unwrap();
             assert!(
@@ -12716,7 +12866,13 @@ mod tests {
                 ("AIDA_AGENT_CMD", Some(fake.to_str().unwrap())),
                 ("AIDA_CONTAINED", None),
             ]);
-            let status = spawn_claude_resume("session-123", None, true).unwrap();
+            let status = spawn_claude_resume(
+                crate::seat_clone::launcher_main().as_deref(),
+                "session-123",
+                None,
+                true,
+            )
+            .unwrap();
             assert!(status.success());
             let env_contents = std::fs::read_to_string(&env_out).unwrap();
             assert!(
@@ -12751,6 +12907,7 @@ mod tests {
             ],
         );
         let plan = interactive_reviewer_launch_plan(
+            crate::seat_clone::launcher_main().as_deref(),
             HeadlessVendor::Claude,
             None,
             None,
@@ -12768,17 +12925,25 @@ mod tests {
         assert!(output.starts_with("1\n"), "{output}");
         assert!(output.lines().any(|l| l == "--settings"));
         std::fs::remove_file(&capture).unwrap();
-        let status = spawn_claude_resume_with_grant("sid", None, false, None).unwrap();
+        let host_main = crate::seat_clone::launcher_main();
+        let status =
+            spawn_claude_resume_with_grant(host_main.as_deref(), "sid", None, false, None).unwrap();
         assert!(status.success());
         let output = std::fs::read_to_string(&capture).unwrap();
         assert!(output.starts_with("1\n--resume\nsid\n"), "{output}");
         assert!(output.lines().any(|l| l == "--settings"));
         std::fs::remove_file(&capture).unwrap();
-        assert!(
-            spawn_claude_resume_with_grant("sid", Some("bypassPermissions"), false, None).is_err()
-        );
+        assert!(spawn_claude_resume_with_grant(
+            host_main.as_deref(),
+            "sid",
+            Some("bypassPermissions"),
+            false,
+            None
+        )
+        .is_err());
         assert!(!capture.exists());
         assert!(interactive_reviewer_launch_plan(
+            crate::seat_clone::launcher_main().as_deref(),
             HeadlessVendor::Codex,
             None,
             None,
@@ -12913,6 +13078,7 @@ mod tests {
                 ],
             );
             let status = spawn_claude_headless_resume(
+                crate::seat_clone::launcher_main().as_deref(),
                 "prompt",
                 "sid",
                 &log_path,
@@ -12943,6 +13109,7 @@ mod tests {
                 ],
             );
             let status = spawn_claude_headless_resume(
+                crate::seat_clone::launcher_main().as_deref(),
                 "prompt",
                 "sid",
                 &log_path,
@@ -13094,6 +13261,7 @@ mod tests {
         // BUG-2144: a contained Codex reviewer used to be planned uncontained;
         // per the BUG-2133 ruling it is refused instead. trace:BUG-2144 | ai:claude
         let err = interactive_reviewer_launch_plan(
+            crate::seat_clone::launcher_main().as_deref(),
             HeadlessVendor::Codex,
             Some("bypassPermissions"),
             Some("codex-reviewer"),
@@ -13110,6 +13278,7 @@ mod tests {
         let plan = {
             let _env = AgentCmdEnvGuard::acquire();
             interactive_reviewer_launch_plan(
+                None,
                 HeadlessVendor::Codex,
                 Some("bypassPermissions"),
                 Some("codex-reviewer"),
@@ -13413,7 +13582,7 @@ mod tests {
                 ("implementer", ""),
             ] {
                 let cmd = build_exec_vendor_headless_command(
-                    vendor, "prompt", "sid", false, None, None, seat, grant,
+                    None, vendor, "prompt", "sid", false, None, None, seat, grant,
                 )
                 .unwrap();
                 let envs: std::collections::HashMap<_, _> = cmd.get_envs().collect();
@@ -13464,6 +13633,7 @@ mod tests {
         };
         let build = || {
             build_exec_vendor_headless_command(
+                None,
                 HeadlessVendor::Codex,
                 "prompt",
                 "sid",
@@ -13547,6 +13717,7 @@ mod tests {
         };
         let spawn_log = root.path().join("spawn.log");
         let (status, _) = spawn_vendor_headless_with_seat_granted(
+            None,
             HeadlessVendor::Codex,
             aida_core::agents_config::AgentSeat::Implementer,
             "prompt",
@@ -13563,6 +13734,7 @@ mod tests {
         );
         let resume_log = root.path().join("resume.log");
         let (status, _) = spawn_claude_headless_resume_granted(
+            crate::seat_clone::launcher_main().as_deref(),
             "prompt",
             "sid",
             &resume_log,
@@ -13596,7 +13768,7 @@ mod tests {
             (HeadlessVendor::Claude, "reviewer", "claude"),
         ] {
             let cmd = build_exec_vendor_headless_command(
-                vendor, "prompt", "sid", false, None, None, seat, "",
+                None, vendor, "prompt", "sid", false, None, None, seat, "",
             )
             .unwrap();
             let env = |key: &str| {
@@ -13626,6 +13798,7 @@ mod tests {
             (crate::mail_wake::LAUNCH_WAKE_ENV, Some("off")),
         ]);
         let cmd = build_exec_vendor_headless_command(
+            crate::seat_clone::launcher_main().as_deref(),
             HeadlessVendor::Codex,
             "prompt",
             "sid",
@@ -13656,6 +13829,7 @@ mod tests {
         ]);
         // Claude contained -> exported
         let cmd_claude_contained = build_exec_vendor_headless_command(
+            crate::seat_clone::launcher_main().as_deref(),
             HeadlessVendor::Claude,
             "prompt",
             "sid",
@@ -13676,6 +13850,7 @@ mod tests {
 
         // Claude uncontained -> stripped
         let cmd_claude_uncontained = build_exec_vendor_headless_command(
+            crate::seat_clone::launcher_main().as_deref(),
             HeadlessVendor::Claude,
             "prompt",
             "sid",
@@ -13697,6 +13872,7 @@ mod tests {
         // BUG-2144: Codex with contained=true is REFUSED (this used to pin a
         // silent downgrade that stripped AIDA_CONTAINED); uncontained strips it.
         let err = build_exec_vendor_headless_command(
+            crate::seat_clone::launcher_main().as_deref(),
             HeadlessVendor::Codex,
             "prompt",
             "sid",
@@ -13709,6 +13885,7 @@ mod tests {
         .expect_err("a contained Codex exec headless launch must be refused");
         assert!(format!("{err:#}").contains("refusing to launch"), "{err:#}");
         let cmd_codex = build_exec_vendor_headless_command(
+            crate::seat_clone::launcher_main().as_deref(),
             HeadlessVendor::Codex,
             "prompt",
             "sid",
@@ -13730,6 +13907,7 @@ mod tests {
         // BUG-2144: Agy with contained=true is REFUSED (this used to pin a
         // silent downgrade that stripped AIDA_CONTAINED); uncontained strips it.
         let err = build_exec_vendor_headless_command(
+            crate::seat_clone::launcher_main().as_deref(),
             HeadlessVendor::Agy,
             "prompt",
             "sid",
@@ -13742,6 +13920,7 @@ mod tests {
         .expect_err("a contained Agy exec headless launch must be refused");
         assert!(format!("{err:#}").contains("refusing to launch"), "{err:#}");
         let cmd_agy = build_exec_vendor_headless_command(
+            crate::seat_clone::launcher_main().as_deref(),
             HeadlessVendor::Agy,
             "prompt",
             "sid",
@@ -13776,6 +13955,7 @@ mod tests {
         let _cwd = contained_cwd_seam::pin(root.path());
         let log = root.path().join("failed.log");
         let result = run_vendor_headless_child(
+            None,
             HeadlessVendor::Claude,
             "prompt",
             "sid",

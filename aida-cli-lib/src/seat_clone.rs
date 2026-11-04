@@ -832,8 +832,10 @@ pub(crate) struct HostRecordedClone {
 /// long-lived process does not widen it. The trust rests on that caller
 /// contract: `main` is host-resolved, never read from a seat-writable file.
 /// As defense in depth `main` must also pass [`plausible_host_main`], which
-/// refuses the forgeries a seat can build in the directories it writes. On
-/// top of that,
+/// refuses a clone or a repository under a `target/worktrees` directory. That
+/// is a partial filter, not a forgery guarantee: a repository a seat
+/// `git init`s in another root it writes (its sandbox TMPDIR, say) passes it,
+/// so only the caller contract keeps such a path out. On top of that,
 /// `root` must be the clone root itself (not a directory inside one), be
 /// named `aida-seat-*`, and neither contain the main checkout nor sit inside
 /// it. The cargo target directory is accepted only at exactly
@@ -923,7 +925,11 @@ pub(crate) fn host_main_from(start: &Path) -> Option<PathBuf> {
 /// runs in (its cwd, or a test's pinned project root). A launch entry point
 /// calls this ONCE, before it changes directory into a seat, and threads the
 /// result explicitly through every boundary builder: after a chdir into a
-/// seat clone the cwd names the clone, and this returns `None`.
+/// seat clone the cwd names the clone, and this returns `None`. Boundary
+/// builders never call it: they take the host main as a parameter. The
+/// functions allowed to call it are listed in
+/// `tests/task_2032_launcher_main_ratchet_tests.rs`, which fails on any new
+/// caller.
 // trace:TASK-2032 | ai:claude
 pub(crate) fn launcher_main() -> Option<PathBuf> {
     host_main_from(&crate::find_project_root().ok()?)
@@ -2704,6 +2710,10 @@ mod lifecycle_tests;
 #[cfg(test)]
 #[path = "tests/bug_2169_contained_clone_bwrap_tests.rs"]
 mod bwrap_tests;
+
+#[cfg(test)]
+#[path = "tests/task_2032_launcher_main_ratchet_tests.rs"]
+mod launcher_main_ratchet_tests;
 
 #[cfg(test)]
 #[path = "tests/task_2053_s4_host_git_tests.rs"]
