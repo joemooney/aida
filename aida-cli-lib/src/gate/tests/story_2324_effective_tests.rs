@@ -658,3 +658,35 @@ proptest! {
         prop_assert!(!matches!(s.decision, Decision::Mergeable { .. }), "{:?}", s);
     }
 }
+
+/// Advisor evidence 2026-11-03 15:35 (train #3321, PR #3306): a round-1
+/// RequestChanges recorded at a superseded head under one label of a member,
+/// then an approval at the current head keyed by the change itself. Once
+/// PR-C reads by canonical key plus head, the refusal at a head the change
+/// no longer has must not count. Today's selection (and PR-A's pure core)
+/// still answer with it, so this stays ignored until the PR-C cutover.
+// trace:STORY-2324 | ai:claude
+#[test]
+#[ignore = "STORY-2324 PR-C: the reader keyed by SpecKey + head ignores refusals at superseded heads"]
+fn a_refusal_at_a_superseded_head_under_another_label_does_not_block_the_current_approval() {
+    let r = subject();
+    let superseded = "a2b504db00000000000000000000000000000000";
+    let current = "3d1d467300000000000000000000000000000000";
+    let mut stale_refusal = verdict_ev(5, Some("BUG-2403"), "changes_requested", superseded);
+    stale_refusal.spec_key = Some(SpecKey(r.id));
+    let approval = verdict_ev(9, None, "approved", current);
+    let s = state(
+        &[r],
+        &["BUG-2403"],
+        &view(vec![stale_refusal, approval]),
+        current,
+    );
+    assert!(
+        !refusals(&s).contains(&Refusal::ChangesRequested),
+        "a refusal at a superseded head still blocks: {s:?}"
+    );
+    assert!(
+        matches!(s.verdict, Verdict::Approved { seq: 9, .. }),
+        "{s:?}"
+    );
+}
