@@ -15,7 +15,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-14T20:01:42.458630605Z
-modified_at: 2026-11-04T02:31:57.550433761Z
+modified_at: 2026-11-04T02:31:59.222186805Z
 req_type: Story
 tags:
 - parent:EPIC-35
@@ -53,6 +53,12 @@ comments:
   content: 'Pulled from the autonomous queue: this is the ~113-site gh→forge migration (EPIC-35), a supervised keyboard-lane effort, not a bounded drain item. Keep for a focused supervised session.'
   created_at: 2026-07-13T05:33:18.470662124Z
   modified_at: 2026-07-13T05:33:18.470662124Z
+- id: 01a1a466-21f6-7222-8919-756e15c047cf
+  author: joe
+  content: 'OPERATOR RULING (2026-11-03 19:30 MST, relayed by advisor): regroup ruling 2: GitLab does not become canonical; keep the hourly hub bridge (work clone pushes GitLab, cron reconciles). Rejected.'
+  created_at: 2026-11-04T02:31:59.222186805Z
+  modified_at: 2026-11-04T02:31:59.222186805Z
+  session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
 history:
 - id: 01a1a466-1bff-7193-891f-de067baa83d8
   author: joe
