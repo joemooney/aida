@@ -833,7 +833,8 @@ mod tests {
     // trace:BUG-2437 | ai:claude
     #[test]
     fn a_binary_that_links_admission_carries_the_permit_marker() {
-        let found = inspect_file(Path::new("/proc/self/exe")).expect("readable");
+        let exe = std::env::current_exe().expect("own executable path");
+        let found = inspect_file(&exe).expect("readable");
         assert!(found.permit_marker);
     }
 
