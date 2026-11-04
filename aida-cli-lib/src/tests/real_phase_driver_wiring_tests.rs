@@ -3291,7 +3291,8 @@ fn bug_2185_phase_driver_implementer_commits_child_store_writes() {
 #[test]
 fn task_1625_implementer_watchdog_survives_store_commit_refusal() {
     let tmp = tempfile::tempdir().unwrap();
-    let (work, store_root) = bug_2185_project_with_store(tmp.path(), "");
+    let (work, store_root) =
+        bug_2185_project_with_store(tmp.path(), "[forge]\nprovider = \"github\"\n");
     git(&work, &["checkout", "-q", "-b", "task-1625"]);
     // The hardened host commit refuses an embedded repository, even if the
     // store otherwise has nothing pending. Prove the refusal below first.
