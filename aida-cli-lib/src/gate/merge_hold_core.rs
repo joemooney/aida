@@ -226,6 +226,11 @@ pub(crate) struct MergeHoldRecord {
     // trace:BUG-1562 | ai:claude
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub spec: Option<String>,
+    /// STORY-2324 PR-B: the canonical key `spec` resolved to when the hold
+    /// was written to the gate ledger (E3). `spec` stays the display label.
+    // trace:STORY-2324 | ai:claude
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub spec_key: Option<crate::gate::canon::SpecKey>,
     /// STORY-1416: the seat that PLACED this marker, so a later verdict write
     /// can show who asserted what the marker says. `None` on markers written
     /// before this field existed.
@@ -389,6 +394,7 @@ impl MergeHoldRecord {
             verdict_ref: None,
             release_condition: None,
             spec: None,
+            spec_key: None,
             placed_by: None,
             absorbed: Vec::new(),
         }
@@ -642,6 +648,7 @@ pub(crate) fn parse_hold_marker(read: std::io::Result<String>, pr: u64) -> Optio
                     verdict_ref: None,
                     release_condition: None,
                     spec: None,
+                    spec_key: None,
                     placed_by: None,
                     absorbed: Vec::new(),
                 }),
@@ -663,6 +670,7 @@ pub(crate) fn parse_hold_marker(read: std::io::Result<String>, pr: u64) -> Optio
             verdict_ref: None,
             release_condition: None,
             spec: None,
+            spec_key: None,
             placed_by: None,
             absorbed: Vec::new(),
         }),
@@ -1671,6 +1679,7 @@ pub(crate) fn collected_hold(record: &MergeHoldRecord) -> MergeHoldRecord {
     );
     typed.label_state = record.label_state.clone();
     typed.spec = record.spec.clone();
+    typed.spec_key = record.spec_key;
     typed.release_condition = Some(format!(
         "a fresh APPROVED verdict recorded at PR #{}'s current head by an independent reviewer releases it",
         record.pr
@@ -1908,6 +1917,7 @@ pub(crate) fn typed_hold(
         verdict_ref: None,
         release_condition: None,
         spec: None,
+        spec_key: None,
         placed_by: Some(placing_seat()),
         absorbed: Vec::new(),
     }

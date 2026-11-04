@@ -16,7 +16,9 @@
 //! fragment ever links two labels, a label two requirements claim is an
 //! error, and a label nothing claims is reported as unresolved.
 //!
-//! PR-A only reads: nothing in the gate decides from this module yet.
+//! PR-A only reads: nothing in the gate decides from this module yet. PR-B
+//! makes the ledger's writers take a [`GateSpec`] and stamp its `spec_key`;
+//! readers still decide by label until PR-C.
 // trace:STORY-2324 | ai:claude
 // mandate-gate
 
@@ -589,6 +591,96 @@ fn git_bounded(
         return Err(fail(format!("exited {status}")));
     }
     Ok(out)
+}
+
+/// STORY-2324 PR-B: a spec label as a gate-ledger writer received it,
+/// together with the canonical key it resolves to. Writers take this, not a
+/// bare string, so the label is resolved once where it enters (E1-E4) and
+/// every event and hold it reaches carries the same `spec_key`.
+///
+/// `key` is `None` when the label names no requirement in the committed
+/// store snapshot (or the project has none): the label is still written as
+/// the writer typed it, so nothing about today's decision changes, and
+/// `aida gate migrate` reports it.
+// trace:STORY-2324 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct GateSpec {
+    /// Upper-cased, trimmed: the spelling today's readers index by.
+    pub label: String,
+    pub key: Option<SpecKey>,
+}
+
+impl GateSpec {
+    /// `label` with an already-known key (or none).
+    pub(crate) fn with_key(label: &str, key: Option<SpecKey>) -> Self {
+        Self {
+            label: norm(label),
+            key,
+        }
+    }
+
+    /// Resolve `label` against the committed snapshot of the store the
+    /// project at `start` uses. Ambiguous and unknown labels carry no key.
+    // trace:STORY-2324 | ai:claude
+    pub(crate) fn resolve(start: &Path, label: &str) -> Self {
+        let key = writer_snapshot(start).and_then(|snap| match snap.resolve_one(label) {
+            Resolution::Hit(k) => Some(k),
+            Resolution::Unknown | Resolution::Ambiguous(_) => None,
+        });
+        Self::with_key(label, key)
+    }
+
+    /// [`GateSpec::resolve`] over several labels, one snapshot read.
+    pub(crate) fn resolve_all<S: AsRef<str>>(start: &Path, labels: &[S]) -> Vec<Self> {
+        labels
+            .iter()
+            .map(|l| Self::resolve(start, l.as_ref()))
+            .collect()
+    }
+}
+
+/// The committed snapshot writers resolve against, memoised per store and
+/// store HEAD: a process that writes several events reads the store once,
+/// and a store that moved is read afresh. `None` when the project has no
+/// git-canonical store or its snapshot does not read (said once per
+/// process): the writer then records the label without a key.
+// trace:STORY-2324 | ai:claude
+fn writer_snapshot(start: &Path) -> Option<std::sync::Arc<Snapshot>> {
+    use std::collections::HashMap;
+    use std::path::PathBuf;
+    use std::sync::{Arc, Mutex, OnceLock};
+    static MEMO: OnceLock<Mutex<HashMap<PathBuf, Arc<Snapshot>>>> = OnceLock::new();
+    static WARNED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+    let store = aida_core::store_locate::detect_distributed_store_from(start)?;
+    let head = git_bounded(
+        &store,
+        &["rev-parse", "--verify", "HEAD^{commit}"],
+        None,
+        256,
+    )
+    .ok()
+    .map(|h| String::from_utf8_lossy(&h).trim().to_string())?;
+    let memo = MEMO.get_or_init(Default::default);
+    if let Some(hit) = memo.lock().ok().and_then(|m| m.get(&store).cloned()) {
+        if hit.head == head {
+            return Some(hit);
+        }
+    }
+    match Snapshot::of_store(&store) {
+        Ok(snap) => {
+            let snap = Arc::new(snap);
+            if let Ok(mut m) = memo.lock() {
+                m.insert(store, snap.clone());
+            }
+            Some(snap)
+        }
+        Err(e) => {
+            if !WARNED.swap(true, std::sync::atomic::Ordering::Relaxed) {
+                eprintln!("warning: gate ledger writes carry no canonical spec key: {e}");
+            }
+            None
+        }
+    }
 }
 
 #[cfg(test)]

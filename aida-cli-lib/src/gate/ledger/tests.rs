@@ -346,7 +346,11 @@ fn a_spec_only_verdict_binds_to_the_change_when_it_opens() {
     rv::write_verdict_object(&rv::verdict_path(&root, "STORY-9"), &early).unwrap();
     assert_eq!(project::newest_verdict(&root, "PR-21"), None);
 
-    super::bind_specs(&root, ChangeKey::pr(21), &["story-9".to_string()]);
+    super::bind_specs(
+        &root,
+        ChangeKey::pr(21),
+        &[super::GateSpec::with_key("story-9", None)],
+    );
     assert_eq!(project::newest_verdict(&root, "PR-21"), Some(early.clone()));
     assert_eq!(
         project::changes_for_spec(&root, "STORY-9"),
@@ -359,7 +363,11 @@ fn a_spec_only_verdict_binds_to_the_change_when_it_opens() {
     );
     assert_eq!(store::read_unbound(&root, "STORY-9").len(), 1);
 
-    super::bind_specs(&root, ChangeKey::pr(21), &["STORY-9".to_string()]);
+    super::bind_specs(
+        &root,
+        ChangeKey::pr(21),
+        &[super::GateSpec::with_key("STORY-9", None)],
+    );
     let bound = store::read_file(&root, ChangeKey::pr(21))
         .into_iter()
         .filter(|e| e.verdict_record().is_some())
@@ -385,8 +393,16 @@ fn a_bound_spec_verdict_does_not_bind_again_to_a_second_change() {
     let early = record("approved", "2026-10-29T09:00:00Z", Some(&a));
     rv::write_verdict_object(&rv::verdict_path(&root, "STORY-9"), &early).unwrap();
 
-    super::bind_specs(&root, ChangeKey::pr(21), &["STORY-9".to_string()]);
-    super::bind_specs(&root, ChangeKey::pr(22), &["STORY-9".to_string()]);
+    super::bind_specs(
+        &root,
+        ChangeKey::pr(21),
+        &[super::GateSpec::with_key("STORY-9", None)],
+    );
+    super::bind_specs(
+        &root,
+        ChangeKey::pr(22),
+        &[super::GateSpec::with_key("STORY-9", None)],
+    );
 
     assert_eq!(project::newest_verdict(&root, "PR-21"), Some(early.clone()));
     assert_eq!(

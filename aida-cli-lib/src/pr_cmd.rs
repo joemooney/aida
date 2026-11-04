@@ -150,6 +150,10 @@ pub(crate) fn pr_hold_handler(reason: Option<&str>) -> Result<()> {
         spec: spec.clone(),
         branch: branch.clone(),
         reason: reason.map(str::to_string),
+        // trace:STORY-2324 | ai:claude — E3: the held spec resolves once, here.
+        spec_key: crate::gate::canon::GateSpec::resolve(&project_root, &spec)
+            .key
+            .map(|k| k.0),
     };
 
     // Prefer the orchestrator-provisioned absolute path (handshake); fall back

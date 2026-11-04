@@ -6,6 +6,7 @@
 
 use super::event::{EventBody, GateEvent};
 use super::{ledger_dir, legacy, ChangeKey, Delivered};
+use crate::gate::canon::GateSpec;
 use std::io::Write as _;
 use std::path::{Path, PathBuf};
 
@@ -226,12 +227,13 @@ pub(crate) fn read_unbound(root: &Path, spec: &str) -> Vec<GateEvent> {
 /// Append `record` as a verdict event on `spec`'s unbound ledger, unless
 /// that ledger already holds it.
 // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+// trace:STORY-2324 | ai:claude
 pub(crate) fn append_unbound(
     root: &Path,
-    spec: &str,
+    gate_spec: &GateSpec,
     record: &crate::gate::review_verdict::JsonObj,
 ) -> std::io::Result<Delivered> {
-    let spec = spec.trim().to_ascii_uppercase();
+    let spec = gate_spec.label.clone();
     let safe = !spec.is_empty()
         && !spec.starts_with('.')
         && spec
@@ -249,7 +251,7 @@ pub(crate) fn append_unbound(
         if existing.iter().any(|e| e.verdict_record() == Some(record)) {
             return Ok(Delivered::Unchanged);
         }
-        let mut event = super::event::verdict_event_unbound(root, &spec, record);
+        let mut event = super::event::verdict_event_unbound(root, gate_spec, record);
         event.seq = existing.last().map(|e| e.seq).unwrap_or(0) + 1;
         event.at = chrono::Utc::now().to_rfc3339();
         let mut line = serde_json::to_string(&event).map_err(std::io::Error::other)?;
@@ -270,10 +272,16 @@ pub(crate) fn append_unbound(
 /// answers for the change it was bound to, not for a later one. Older
 /// unbound records stay readable through the spec. The unbound ledger is
 /// left as written: binding copies, it never deletes evidence. Returns how
-/// many records were bound.
+/// many records were bound. Each bound copy carries `gate_spec`'s key (or
+/// the key its unbound original was written with).
 // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
-pub(crate) fn bind_unbound(root: &Path, spec: &str, change: ChangeKey) -> std::io::Result<usize> {
-    let spec = spec.trim().to_ascii_uppercase();
+// trace:STORY-2324 | ai:claude
+pub(crate) fn bind_unbound(
+    root: &Path,
+    gate_spec: &GateSpec,
+    change: ChangeKey,
+) -> std::io::Result<usize> {
+    let spec = gate_spec.label.clone();
     if spec.is_empty() || ChangeKey::parse(&spec).is_some() {
         return Ok(0);
     }
@@ -308,6 +316,7 @@ pub(crate) fn bind_unbound(root: &Path, spec: &str, change: ChangeKey) -> std::i
             .map(|mut e| {
                 e.change = change.as_key();
                 e.spec = Some(spec.clone());
+                e.spec_key = gate_spec.key.or(e.spec_key);
                 e
             })
             .collect();
