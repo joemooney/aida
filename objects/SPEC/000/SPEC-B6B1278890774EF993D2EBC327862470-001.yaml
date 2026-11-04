@@ -20,7 +20,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T07:26:01.071265913Z
-modified_at: 2026-11-04T08:01:36.332994146Z
+modified_at: 2026-11-04T08:01:47.615619614Z
 req_type: Task
 tags:
 - architecture
@@ -770,6 +770,26 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Rework 581275302ff fixes only the three CI items (help golden, git add -A staging, task_2631 assertion); prior findings 2-8 are unchanged at this head, CI is still pending, and there is no host live-probe evidence. ACs: ac6e55fd unverified; ac774e2b partial; acca6182 unverified; ac97960f unverified.. Triage reason: rework brief on spec'
   created_at: 2026-11-04T08:01:36.332992561Z
   modified_at: 2026-11-04T08:01:36.332992561Z
+  session_id: da1c0d85-1d45-4ce4-a292-5358644f65b9
+- id: 01a1a594-13cb-77a3-a786-402aef9b2954
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (TASK-2712):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 581275302ff0
+    Recorded: 2026-11-04T07:51:10.342674705+00:00
+    Findings:
+    1. 1. AC ac6e55fd still unmet (prior finding 3): commit_pending is reachable only through an operator running 'aida ship --from-seat <clone> --commit-pending' from main (pr_cmd.rs:8486, ship_from_seat.rs:555). Nothing commits after the child exits (the ruling's fallback), and launch_wants_seat_clone applies only to agent-new paths (agent_launch.rs:3151/3471, agent_codex_background.rs:667). Queue-work/headless Codex implementers still run in linked worktrees and get the relaunch refusal (codex_native_sandbox.rs:200). A normal native implementer still cannot finish handoff without another publisher.
+    2. 2. Ruling N1 unmet for reviewers (prior finding 2): headless Codex reviewers (session.rs:3668 codex_native_sandbox_flags_in(dir, None)), exec_codex_session (session.rs:2679, None) and interactive Codex reviewers (session.rs:2911, 948, 4040 via tool_contained_flags -> role None) get no gate-ledger --add-dir, so place_hold (lib_part5.rs:3294) still fails with 'could not protect PR-N with a merge hold'. Pass the role through these paths, or route native reviewers through the launcher-collected hold, and add a test for the headless reviewer argv.
+    3. 3. NEW, ship_from_seat.rs:555-565 vs :637: --commit-pending commits BEFORE the trailer and explicit-spec checks. A message without the (SPEC) trailer creates the commit, then ship refuses. The native seat cannot amend (.git read-only), and a rerun with --commit-pending finds nothing pending and hits the same refusal, so the seat is stuck until a host hand-edits git. --dry-run skips the commit, so it never checks the message either. Validate the message's trailer and --spec match before committing, also under --dry-run, and add a test.
+    4. 4. AC ac97960f unverified (prior finding 4): there is still no host smoke evidence at this head. task_2712_codex_sandbox_live_seat_commit_and_denials and task_2712_native_codex_seat_commit_ships_from_seat_without_seat_hooks skip without AIDA_REQUIRE_CODEX_SANDBOX_LIVE/AIDA_REQUIRE_BWRAP_LIVE, and the spec has no host run since the fallback push. The implementer recorded untested=true (spec comment 18), and CI at 581275302ff is still pending (lib-0/lib-1/cli/gates/rest).
+    5. 5. Prior finding 5 is unchanged: the live probe (bug_2169_contained_clone_bwrap_tests.rs) passes grants as '-c sandbox_workspace_write.writable_roots=' instead of the production '--add-dir' argv, and checks only a cache-db write. It does not check a .aida-store write or an own-scope aida claim/edit, which AC acca6182 names.
+    6. 6. AC acca6182 refusal paths for the new --commit-pending channel are still untested (prior finding 6). Only the wrong-branch refusal has a test. Missing: a non-host-recorded/foreign clone, an ended lease or a lease owned by another live process, a symlinked or replaced clone path, a commit_sandbox_args bind miss (seat_clone.rs:1052 silently stays read-only), a missing host user.name/email, and an add that succeeds before the commit fails (the index is left staged, though the doc says 'untouched').
+    7. 7. Minor, prior finding 7 (AC ac774e2b, no blanket write roots): refuse_posture_overrides (agent_codex_background.rs:163) and the foreground agents.toml passthrough still accept a foreign '--add-dir' (e.g. '--add-dir /'). rescope_codex_native_flags (codex_native_sandbox.rs:167) replaces only the --add-dir run directly after the posture, so a user --add-dir that is not adjacent survives.
+    8. 8. Minor/design, prior finding 8: still not answered. tool_contained_flags(codex) runs contained_write_set's side effects and refusals for every native Codex launch, including codex_interactive_resume_args (session.rs:4040), which resolves from the process cwd rather than the resumed lane's tree. The native reviewer's direct ledger write versus the contained reviewer's launcher-collected hold still needs advisor confirmation on the spec. The <clone>/.git --add-dir is now known to be dead (Codex re-protects it); drop it or document it as intentionally inert.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-04T08:01:47.467204738Z
+  modified_at: 2026-11-04T08:01:47.467204738Z
   session_id: da1c0d85-1d45-4ce4-a292-5358644f65b9
 history:
 - id: 01a1960f-6ca8-7313-8a94-63b0b98a4e44
