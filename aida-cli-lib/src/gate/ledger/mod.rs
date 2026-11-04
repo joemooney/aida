@@ -29,11 +29,14 @@ pub(crate) mod checked;
 pub(crate) mod event;
 pub(crate) mod hold;
 pub(crate) mod legacy;
+// trace:STORY-2324 | ai:claude — the one-time spec_key rewrite.
+pub(crate) mod migrate;
 pub(crate) mod project;
 pub(crate) mod store;
 
 use std::path::{Path, PathBuf};
 
+pub(crate) use crate::gate::canon::GateSpec;
 pub(crate) use event::{EventBody, GateEvent};
 
 /// The forge's name for a change: a GitHub pull request or a GitLab merge
@@ -176,12 +179,14 @@ pub(crate) fn record_event(start: &Path, event: GateEvent) -> std::io::Result<De
 /// change, indexed by `spec` when given. A spec key lands on the spec's most
 /// recent indexed change; a spec no change has been recorded against yet
 /// lands on its unbound entry ([`store::append_unbound`]), read with the
-/// spec's change-bound records. No legacy file is written.
+/// spec's change-bound records. No legacy file is written. A spec key read
+/// from the path is resolved here, the one place it enters (STORY-2324 E2).
 // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+// trace:STORY-2324 | ai:claude
 pub(crate) fn record_verdict_at(
     path: &Path,
     record: &crate::gate::review_verdict::JsonObj,
-    spec: Option<&str>,
+    spec: Option<&GateSpec>,
 ) -> std::io::Result<Delivered> {
     let (root, key) =
         crate::gate::review_verdict::canonical_verdict_key(path).ok_or_else(|| {
@@ -203,13 +208,13 @@ pub(crate) fn record_verdict_at(
         }
         return store::append_one(&store, event::verdict_event(&store, change, record, spec));
     }
-    let spec_key = key.trim().to_ascii_uppercase();
-    match project::changes_for_spec(&store, &spec_key).last() {
+    let spec = GateSpec::resolve(&root, &key);
+    match project::changes_for_spec(&store, &spec.label).last() {
         Some(change) => store::append_one(
             &store,
-            event::verdict_event(&store, *change, record, Some(&spec_key)),
+            event::verdict_event(&store, *change, record, Some(&spec)),
         ),
-        None => store::append_unbound(&store, &spec_key, record),
+        None => store::append_unbound(&store, &spec, record),
     }
 }
 
@@ -234,11 +239,12 @@ pub(crate) fn adopt_verdict_file(
 /// one record per spec the PR credits, appended from the launcher's side in
 /// one locked write. Returns how many events were new.
 // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+// trace:STORY-2324 | ai:claude
 pub(crate) fn record_collected_verdict(
     launcher_root: &Path,
     change: ChangeKey,
     record: &crate::gate::review_verdict::JsonObj,
-    spec_records: &[(String, crate::gate::review_verdict::JsonObj)],
+    spec_records: &[(GateSpec, crate::gate::review_verdict::JsonObj)],
 ) -> std::io::Result<usize> {
     if crate::session::process_contained() {
         return Err(std::io::Error::new(
@@ -266,7 +272,8 @@ pub(crate) fn record_collected_verdict(
 /// the one key that answers for them. Best effort, from `start` (any
 /// checkout sharing the ledger); a contained seat binds nothing.
 // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
-pub(crate) fn bind_specs(start: &Path, change: ChangeKey, specs: &[String]) {
+// trace:STORY-2324 | ai:claude
+pub(crate) fn bind_specs(start: &Path, change: ChangeKey, specs: &[GateSpec]) {
     if crate::session::process_contained() {
         return;
     }
@@ -276,7 +283,8 @@ pub(crate) fn bind_specs(start: &Path, change: ChangeKey, specs: &[String]) {
     for spec in specs {
         if let Err(e) = store::bind_unbound(&root, spec, change) {
             eprintln!(
-                "warning: could not bind {spec}'s recorded verdicts to {}: {e}",
+                "warning: could not bind {}'s recorded verdicts to {}: {e}",
+                spec.label,
                 change.as_key()
             );
         }
@@ -299,7 +307,11 @@ pub(crate) fn open_change_bound(
 ) -> anyhow::Result<crate::forge::ChangeRef> {
     let change = forge.open_change(req)?;
     if change.id != 0 {
-        bind_specs(start, ChangeKey::pr(change.id), specs);
+        bind_specs(
+            start,
+            ChangeKey::pr(change.id),
+            &GateSpec::resolve_all(start, specs),
+        );
     }
     Ok(change)
 }
@@ -311,7 +323,11 @@ pub(crate) fn open_change_bound(
 // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
 pub(crate) fn adopt_change_bound(start: &Path, id: u64, specs: &[String]) -> u64 {
     if id != 0 {
-        bind_specs(start, ChangeKey::pr(id), specs);
+        bind_specs(
+            start,
+            ChangeKey::pr(id),
+            &GateSpec::resolve_all(start, specs),
+        );
     }
     id
 }

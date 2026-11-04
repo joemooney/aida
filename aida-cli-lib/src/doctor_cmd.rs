@@ -8109,6 +8109,8 @@ fn render_doctor_bwrap_row() {
                  no shared-config change), or repo-wide with [contained] os_wrap = true in .aida/config.toml."
                     .dimmed()
             );
+            // BUG-2434: say what an implementer lane does with it.
+            println!("    {}", doctor_lane_tests_note(true).dimmed());
         }
         crate::session::BwrapAvailability::NotInstalled => {
             // Exact install command, then the guided-setup pointer.
@@ -8141,6 +8143,23 @@ fn render_doctor_bwrap_row() {
                 "Then run `aida doctor --fix-sandbox` for the full setup + verify steps.".dimmed()
             );
         }
+    }
+    if avail != crate::session::BwrapAvailability::Ok {
+        // BUG-2434: the cost of a host without working bubblewrap, stated
+        // here rather than only in a lane log. trace:BUG-2434 | ai:claude
+        println!("    {}", doctor_lane_tests_note(false).yellow());
+    }
+}
+
+/// `aida doctor`'s note on what bubblewrap means for headless implementer
+/// lanes' local tests. trace:BUG-2434 | ai:claude
+pub(crate) fn doctor_lane_tests_note(bwrap_live: bool) -> &'static str {
+    if bwrap_live {
+        "Headless implementer lanes use it for their test runner when os_wrap is unset, so \
+         they can run their tests (AIDA_OS_WRAP=0 opts out)."
+    } else {
+        "Until bubblewrap works here, headless implementer lanes cannot run local tests: \
+         every lane result says untested=true."
     }
 }
 

@@ -450,11 +450,14 @@ pub(crate) fn handle_block_command(cmd: &BlockCommand, store_path: &std::path::P
                         return Ok(());
                     }
                     Ok(false) => {
-                        // Push rejected — undo commit, pull, retry
-                        let _ = aida_core::git_ops::rollback_commit_if_head_matches(
+                        // Push rejected — undo commit, pull, retry. A rollback
+                        // that fails leaves the store unclean: stop, never retry.
+                        // trace:BUG-2194 | ai:claude
+                        aida_core::git_ops::rollback_commit_if_head_matches(
                             store_path,
                             &committed_sha,
-                        );
+                        )
+                        .context("block claim push was rejected and its rollback failed")?;
                         if attempt + 1 == max_retries {
                             anyhow::bail!(
                                 "Could not push block claim after {} attempts. Run `aida db sync --pull` and retry.",
@@ -1148,8 +1151,9 @@ pub(crate) fn auto_allocate_block_inner(
                 return Ok(Some(label));
             }
             Ok(false) => {
-                let _ =
-                    aida_core::git_ops::rollback_commit_if_head_matches(store_path, &committed_sha);
+                // trace:BUG-2194 | ai:claude
+                aida_core::git_ops::rollback_commit_if_head_matches(store_path, &committed_sha)
+                    .context("block claim push was rejected and its rollback failed")?;
                 continue;
             }
             Err(e) => anyhow::bail!("Push failed: {}", e),
@@ -1614,6 +1618,11 @@ mod block_allocation_reader_tests;
 #[cfg(test)]
 #[path = "tests/merge_contiguous_blocks_tests.rs"]
 mod merge_contiguous_blocks_tests;
+
+// trace:BUG-2194 | ai:claude
+#[cfg(all(test, unix))]
+#[path = "tests/bug_2194_rollback_caller_tests.rs"]
+mod bug_2194_rollback_caller_tests;
 
 #[cfg(test)]
 mod task_1930_tests {

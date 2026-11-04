@@ -322,6 +322,10 @@ jobs:
       # (`bug_2383_bwrap_overlay_...`, unshare -Urm + overlayfs around the
       # lane-job bwrap) joins under the same prefix and count.
       # trace:BUG-2383 | ai:claude
+      # BUG-2435: the overlay job that takes its cargo slot in the host
+      # cargo-slots-<uid> dir (`bug_2435_bwrap_...`) joins the forced-live
+      # selection and the exact count, so a probe skip fails the gate.
+      # trace:BUG-2435 | ai:claude
       - name: Live bwrap OS-wrap confinement gate
         if: ${{ matrix.shard == 'gates' && (steps.changes.outputs.full_ci == 'true' && runner.os == 'Linux') }}
         run: |
@@ -331,11 +335,11 @@ jobs:
           # TASK-2705 nested userns is host-attested; keep its normal shard mode.
           # TASK-2706 slice B is required-live on this runner. trace:TASK-2706 | ai:codex
           AIDA_REQUIRE_BWRAP_LIVE=1 AIDA_REQUIRE_CODEX_CONTAINMENT_LIVE=1 cargo test -p aida-cli-lib --lib -- --nocapture \
-            bwrap_write_confinement_live_or_fail_closed bug_2169_bwrap_ task_2053_bwrap_ bug_2224_bwrap_ bug_2383_bwrap_ containment::tests::task_2706_egress_ipc_live 2>&1 | tee "$log"
+            bwrap_write_confinement_live_or_fail_closed bug_2169_bwrap_ task_2053_bwrap_ bug_2224_bwrap_ bug_2383_bwrap_ bug_2435_bwrap_ containment::tests::task_2706_egress_ipc_live 2>&1 | tee "$log"
           AIDA_REQUIRE_BWRAP_LIVE=1 cargo test -p aida-cli --test bug_1934_bwrap_presenter -- --nocapture \
             bug_1934_bwrap_ 2>&1 | tee -a "$log"
-          expected=$(grep -rhoE 'fn (bug_2169|task_2053|bug_2224|bug_1934|bug_2383)_bwrap_[a-z0-9_]+' aida-cli-lib/src aida-cli/tests/bug_1934_bwrap_presenter.rs | sort -u | wc -l)
-          ran=$(grep -oE '(bug_2169|task_2053|bug_2224|bug_1934|bug_2383)_bwrap_[a-z0-9_]+ \.\.\. ok$' "$log" | sort -u | wc -l)
+          expected=$(grep -rhoE 'fn (bug_2169|task_2053|bug_2224|bug_1934|bug_2383|bug_2435)_bwrap_[a-z0-9_]+' aida-cli-lib/src aida-cli/tests/bug_1934_bwrap_presenter.rs | sort -u | wc -l)
+          ran=$(grep -oE '(bug_2169|task_2053|bug_2224|bug_1934|bug_2383|bug_2435)_bwrap_[a-z0-9_]+ \.\.\. ok$' "$log" | sort -u | wc -l)
           echo "live bwrap tests: $ran of $expected ran ok"
           grep -n 'SKIP (' "$log" || true
           if grep -q 'SKIP (bwrap unavailable)' "$log"; then echo "::error::a live bwrap test skipped under the gate"; exit 1; fi
