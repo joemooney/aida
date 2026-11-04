@@ -3,12 +3,12 @@ spec_id: TASK-1778
 agreed_id: TASK-1778
 title: 'aida regen trial: continuation policy and re-invocation until the completeness check passes (split from STORY-1677)'
 description: Split from STORY-1677 bullet 2 by advisor ruling 2026-10-15. Every harness launched by aida regen trial receives the same continuation policy text; harnesses with a turn limit or print mode are re-invoked until the completeness check passes or a configurable attempt cap is hit; the attempt count is recorded on the trial. Needs the regen trial launcher; must reuse the contained launcher, never a second one. Blocked on launcher-file serialization (BUG-2151/2139/2140) and STORY-1678 scope.
-status: Rejected
+status: Draft
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-15T11:44:29.118951084Z
-modified_at: 2026-11-04T02:44:55.592116670Z
+modified_at: 2026-11-04T02:44:57.825246685Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -57,6 +57,14 @@ history:
   timestamp: 2026-11-04T02:44:55.772342178Z
   session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
   changes: []
+- id: 01a1a472-0361-7c12-9de2-abed3b94f2f5
+  author: joe
+  timestamp: 2026-11-04T02:44:57.825244532Z
+  session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
+  changes:
+  - field_name: status
+    old_value: Rejected
+    new_value: Draft
 filed_at:
   code_sha: 6ddf336dddb944e409cfd1d7f96f42bd293a0bc5
   branch: main
