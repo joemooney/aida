@@ -11,7 +11,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T09:06:27.587006751Z
-modified_at: 2026-11-04T08:24:29.564629687Z
+modified_at: 2026-11-04T08:36:05.627746072Z
 req_type: Task
 tags:
 - architecture
@@ -131,6 +131,12 @@ comments:
   content: 'ADVISOR (01:20 MST): the lane committed the facade fix (15e1dc65) but held it back because its local test run timed out (slot oversubscription). The fix is a fast-forward on the PR head, and the ratchet is a source scan, so I pushed it to #3307 and CI''s lib-1 shard is the gate (LIGHT rule: CI''s shards gate). The review covers only this delta.'
   created_at: 2026-11-04T08:18:12.999941643Z
   modified_at: 2026-11-04T08:18:12.999941643Z
+  session_id: da1c0d85-1d45-4ce4-a292-5358644f65b9
+- id: 01a1a5b3-7b7b-7491-9032-34b8aea0a0f8
+  author: joe
+  content: 'ADVISOR REWORK BRIEF (2026-11-04 01:38 MST, PR #3307 head c01127d7). Review: the facade delta is correct. BLOCKING: merge c01127d brought in BUG-2390 (#3309), which removed dispatch.rs''s prepare_launch call, and task_2708_every_codex_spawn_path_is_inventoried_and_guarded still expects it. Update the spawn-path inventory to main''s current dispatch path: find where #3309''s detached Codex launch now spawns and inventory it with its guard. If that new path spawns Codex WITHOUT the containment guard, add the guard (that is a real gap, not just a ledger edit). Nothing else changes. AC (1)-(3) stay open by design (Refs slice). Gate (LIGHT): one targeted cargo test filter plus make check-ci-fast, then push to the same PR branch. The advisor re-reviews only the delta.'
+  created_at: 2026-11-04T08:36:05.627746072Z
+  modified_at: 2026-11-04T08:36:05.627746072Z
   session_id: da1c0d85-1d45-4ce4-a292-5358644f65b9
 history:
 - id: 01a1965c-5ce8-7781-b88f-317b0b12bab5
