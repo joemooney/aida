@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-203
 agreed_id: BUG-2434
 title: 'Headless implementer lanes run untested by default: the lane job runner requires [contained] os_wrap, which defaults off, so every lane result is untested=true'
 description: 'Observed 2026-11-03: lanes for STORY-2338 and STORY-2326 committed fixes and then could not compile (''lease names no lane job runner''; cargo capped at 60s per call). The STORY-2338 fix failed cargo check on the host (E0063) and was never pushed. Lane logs warn: ''the lane job runner needs [contained] os_wrap (jobs run only inside bubblewrap), so the implementer cannot run tests and its result says untested=true''. The warning is buried in a lane log, and nothing surfaces it to the advisor or operator. Fix options: (a) when bwrap is live on the host (doctor already probes it), the launcher sets os_wrap for implementer lanes, or the job runner runs unwrapped jobs under the launcher''s own containment; (b) at minimum, aida doctor and the advisor sweep flag it. Trial: the advisor launched STORY-2338 with AIDA_OS_WRAP=1 at 18:33 to test whether jobs then run.'
-status: InProgress
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T01:35:35.019044810Z
-modified_at: 2026-11-04T07:56:11.387640438Z
+modified_at: 2026-11-04T08:51:30.850468141Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -125,6 +125,20 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1a5c1-9993-72b3-a6d2-44b8fc475df1
+  author: aida-auto-bump
+  timestamp: 2026-11-04T08:51:30.835797488Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1a5c1-99a2-71d3-bc3a-e4e1556b056c
+  timestamp: 2026-11-04T08:51:30.850462954Z
+  agent: aida
+  commit_sha: 4280b671a2daf0b9357a0940c8f26b78b0eb8ca3
+  summary: Lane os_wrap default now scoped to the lane's own job runner (Sandbox::BwrapDefaultOn, no env mutation); explicit choice wins; os_wrap=off reaches the phase/result lines; doctor note added; all round-1 findings fixed; CI green at head (cli-0/1, lib-0/1, gates, contracts, rest); merge-hold-gate red only by design.
+  review_verdict: approved
 filed_at:
   code_sha: 0f1624a8b38d961973328d79d05642add4464fc8
   branch: main
@@ -137,3 +151,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-11-04T05:49:35.998674193Z
   implemented_by: joe
+  completed_at: 2026-11-04T08:51:30.835790365Z
+  completion_sha: 4280b671a2daf0b9357a0940c8f26b78b0eb8ca3
