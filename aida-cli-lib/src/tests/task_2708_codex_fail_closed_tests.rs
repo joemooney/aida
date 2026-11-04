@@ -298,3 +298,61 @@ fn task_2708_detached_codex_lane_refuses_under_trusted_aida() {
     let native = preflight.find("ContainmentPosture::Native").unwrap();
     assert!(at_aida < named && named < native);
 }
+
+/// Fail closed (advisor ruling finding 6): a trusted policy that cannot be
+/// loaded refuses the unwired launch by name, whatever the stamp; it never
+/// degrades to "no policy".
+// trace:TASK-2708 | ai:claude
+#[test]
+fn task_2708_trusted_policy_load_error_refuses_unwired_codex() {
+    // An out-of-range value, and a body that is not TOML at all.
+    for codex in ["sideways", "x\"\n[broken"] {
+        let root = tempfile::tempdir().unwrap();
+        trusted_policy(root.path(), codex);
+        assert!(
+            crate::agent_config::load_contained_vendor(root.path(), "codex").is_err(),
+            "fixture must be unloadable: {codex:?}"
+        );
+        for stamp in [None, Some("none"), Some("native")] {
+            let mut cmd = Command::new("codex");
+            cmd.env("AIDA_PROJECT_ROOT", root.path());
+            if let Some(stamp) = stamp {
+                cmd.env("AIDA_CONTAINMENT_POSTURE", stamp);
+            }
+            let error = refuse_unwired_aida_posture(&cmd).unwrap_err().to_string();
+            assert!(
+                error.contains(UNWIRED_AIDA_POSTURE),
+                "{codex:?} stamp {stamp:?}: {error}"
+            );
+        }
+    }
+}
+
+/// Fail closed: when the child names no project and the main worktree cannot
+/// be resolved, only a stamp proving a non-AIDA posture admits the launch.
+// trace:TASK-2708 | ai:claude
+#[test]
+fn task_2708_unresolved_root_refuses_unless_stamp_proves_non_aida() {
+    for stamp in [
+        None,
+        Some("aida"),
+        Some("bogus"),
+        Some("none"),
+        Some("native"),
+    ] {
+        let mut cmd = Command::new("codex");
+        if let Some(stamp) = stamp {
+            cmd.env("AIDA_CONTAINMENT_POSTURE", stamp);
+        }
+        let result =
+            refuse_unwired_aida_posture_with(&cmd, || anyhow::bail!("not inside a git repository"));
+        assert_eq!(
+            result.is_ok(),
+            matches!(stamp, Some("none" | "native")),
+            "stamp {stamp:?}: {result:?}"
+        );
+        if let Err(error) = result {
+            assert!(error.to_string().contains(UNWIRED_AIDA_POSTURE), "{error}");
+        }
+    }
+}

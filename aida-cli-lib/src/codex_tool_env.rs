@@ -98,6 +98,30 @@ pub(crate) const UNWIRED_AIDA_POSTURE: &str =
 /// stamps at all, cannot launch Codex uncontained under `codex = "aida"`.
 // trace:TASK-2708 | ai:claude
 pub(crate) fn refuse_unwired_aida_posture(child: &Command) -> Result<()> {
+    // Tests never inherit this checkout's policy (mirrors the
+    // `session::containment_posture` test seam): a test child that names no
+    // root is judged projectless. Production resolves the main worktree and
+    // fails closed when it cannot; `refuse_unwired_aida_posture_with` carries
+    // that logic and is exercised directly with a failing resolver.
+    #[cfg(not(test))]
+    let fallback = || crate::find_main_worktree_root().map(Some);
+    #[cfg(test)]
+    let fallback = || Ok(None);
+    refuse_unwired_aida_posture_with(child, fallback)
+}
+
+/// [`refuse_unwired_aida_posture`] with an explicit fallback root resolver,
+/// consulted only when the child names no project (`AIDA_PROJECT_ROOT`, then
+/// its cwd). FAILS CLOSED: a resolver error refuses unless the child's own
+/// stamp proves a non-AIDA posture (`native`/`none`, which the launcher only
+/// writes after resolving the posture itself), and any error loading the
+/// trusted policy refuses. `Ok(None)` from the resolver means there is no
+/// project, so no trusted policy can select `aida`.
+// trace:TASK-2708 | ai:claude
+pub(crate) fn refuse_unwired_aida_posture_with(
+    child: &Command,
+    fallback_root: impl FnOnce() -> Result<Option<std::path::PathBuf>>,
+) -> Result<()> {
     let explicit = |key: &str| {
         child
             .get_envs()
@@ -105,22 +129,33 @@ pub(crate) fn refuse_unwired_aida_posture(child: &Command) -> Result<()> {
             .and_then(|(_, v)| v)
             .map(std::path::PathBuf::from)
     };
-    anyhow::ensure!(
-        explicit("AIDA_CONTAINMENT_POSTURE").as_deref() != Some(std::path::Path::new("aida")),
-        "{UNWIRED_AIDA_POSTURE}"
-    );
-    let root = explicit("AIDA_PROJECT_ROOT")
+    let stamp = explicit("AIDA_CONTAINMENT_POSTURE");
+    let stamp = stamp.as_deref().and_then(std::path::Path::to_str);
+    anyhow::ensure!(stamp != Some("aida"), "{UNWIRED_AIDA_POSTURE}");
+    let named = explicit("AIDA_PROJECT_ROOT")
         .or_else(|| child.get_current_dir().map(std::path::Path::to_path_buf));
-    // Tests without an explicit child root must not inherit this checkout's
-    // policy (mirrors the `session::containment_posture` test seam).
-    #[cfg(not(test))]
-    let root = root.or_else(|| crate::find_main_worktree_root().ok());
+    let root = match named {
+        Some(root) => Some(root),
+        None => match fallback_root() {
+            Ok(root) => root,
+            Err(_) if matches!(stamp, Some("native" | "none")) => None,
+            Err(error) => {
+                return Err(error.context(format!(
+                    "{UNWIRED_AIDA_POSTURE}: no project root resolves, so the trusted Codex \
+                     containment policy cannot be checked; refusing to launch Codex"
+                )))
+            }
+        },
+    };
     let Some(root) = root else {
         return Ok(());
     };
-    let trusted = crate::agent_config::load_contained_vendor(&root, "codex")
-        .ok()
-        .flatten();
+    let trusted = crate::agent_config::load_contained_vendor(&root, "codex").map_err(|error| {
+        error.context(format!(
+            "{UNWIRED_AIDA_POSTURE}: the trusted Codex containment policy could not be \
+             loaded; refusing to launch Codex"
+        ))
+    })?;
     anyhow::ensure!(
         trusted.as_deref() != Some("aida"),
         "{UNWIRED_AIDA_POSTURE}: the trusted policy sets [contained.vendors] codex = \"aida\" \

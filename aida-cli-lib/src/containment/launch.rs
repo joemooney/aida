@@ -28,7 +28,7 @@ const ENV: &[&str] = &[
     "XDG_RUNTIME_DIR",
     "TMPDIR",
     "OPENAI_API_KEY",
-    "AIDA_SESSION_GRANT",
+    crate::gate::seat_authority::GRANT_ENV,
     "AIDA_SESSION_ROLE",
     "AIDA_ROLE_INSTANCE",
     "AIDA_USER",
@@ -457,9 +457,8 @@ impl PreparedLaunch {
             .prefix("aida-contained-")
             .tempdir()?;
         std::fs::set_permissions(state.path(), std::fs::Permissions::from_mode(0o700))?;
-        let host_home = std::env::var_os("HOME")
-            .map(PathBuf::from)
-            .context("host HOME unavailable")?;
+        // trace:TASK-2708 | ai:claude — one home resolution for the crate.
+        let host_home = crate::home_dir().context("host HOME unavailable")?;
         let codex_home = std::env::var_os("CODEX_HOME")
             .map(PathBuf::from)
             .unwrap_or_else(|| host_home.join(".codex"));
@@ -470,7 +469,7 @@ impl PreparedLaunch {
             )
         })?;
         anyhow::ensure!(!key.is_empty(), "contained Codex requires OPENAI_API_KEY");
-        let grant = explicit(child, "AIDA_SESSION_GRANT")
+        let grant = explicit(child, crate::gate::seat_authority::GRANT_ENV)
             .context("contained child requires explicit grant decision")?;
         let ttl = if grant.is_empty() {
             0

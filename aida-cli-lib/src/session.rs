@@ -2106,7 +2106,8 @@ fn spawn_vendor_headless_forking(
             if let Some(guard) = &mut handle_guard {
                 guard.disarm();
             }
-            crate::gate::seat_authority::bind_grant_to_pid(
+            // trace:TASK-2708 | ai:claude
+            crate::gate::seat_authority::bind_contained_launch_worker(
                 &child_grant.id,
                 run.receipt().worker_pid(),
             )?;
@@ -6592,48 +6593,55 @@ fn run_vendor_headless_child(
     if vendor == HeadlessVendor::Codex
         && containment_posture(vendor, contained)? == ContainmentPosture::Aida
     {
-        let mut run = crate::containment::launch::PreparedLaunch::prepare(
-            &child_cmd,
-            &headless_worktree_root(),
-        )?
-        .spawn(Stdio::from(log))?;
-        anyhow::ensure!(
-            containment_applied(vendor, true, Some(run.receipt())),
-            "missing applied receipt"
-        );
-        let worker = run.receipt().worker_pid();
-        if let Some(guard) = &mut handle_guard {
-            guard.disarm();
+        // trace:TASK-2708 | ai:claude — every exit past the tee start, success
+        // or error, finishes the lane record it registered and stops the tee;
+        // a dropped ContainedChild kills the wrapper.
+        let mut registered = false;
+        let result = (|| -> Result<std::process::ExitStatus> {
+            let mut run = crate::containment::launch::PreparedLaunch::prepare(
+                &child_cmd,
+                &headless_worktree_root(),
+            )?
+            .spawn(Stdio::from(log))?;
+            anyhow::ensure!(
+                containment_applied(vendor, true, Some(run.receipt())),
+                "missing applied receipt"
+            );
+            let worker = run.receipt().worker_pid();
+            if let Some(guard) = &mut handle_guard {
+                guard.disarm();
+            }
+            if let Some(on_spawn) = hooks.on_spawn {
+                on_spawn(worker);
+            }
+            if let Some(id) = lease_id {
+                stamp_lease_active_pid(id, worker)?;
+            }
+            crate::lane_liveness::register_headless_lane_for_child(
+                log_path,
+                lease_id,
+                vendor.as_str(),
+                worker,
+            );
+            registered = true;
+            crate::gate::seat_authority::bind_contained_launch_worker(grant_env, worker)?;
+            run.release()?;
+            crate::headless_linger::wait_reaping_after_result_holding(
+                &mut run.child,
+                log_path,
+                crate::headless_linger::result_grace(),
+                hooks.hold_reap.unwrap_or(&|| false),
+            )
+            .map(|w| w.status)
+            .context("failed to wait for contained Codex")
+        })();
+        if registered {
+            crate::lane_liveness::finish_headless_lane_for_child(
+                log_path,
+                lease_id,
+                result.as_ref().ok().copied(),
+            );
         }
-        if let Some(on_spawn) = hooks.on_spawn {
-            on_spawn(worker);
-        }
-        if let Some(id) = lease_id {
-            stamp_lease_active_pid(id, worker)?;
-        }
-        crate::lane_liveness::register_headless_lane_for_child(
-            log_path,
-            lease_id,
-            vendor.as_str(),
-            worker,
-        );
-        if !grant_env.is_empty() {
-            crate::gate::seat_authority::bind_grant_to_pid(grant_env, worker)?;
-        }
-        run.release()?;
-        let result = crate::headless_linger::wait_reaping_after_result_holding(
-            &mut run.child,
-            log_path,
-            crate::headless_linger::result_grace(),
-            hooks.hold_reap.unwrap_or(&|| false),
-        )
-        .map(|w| w.status)
-        .context("failed to wait for contained Codex");
-        crate::lane_liveness::finish_headless_lane_for_child(
-            log_path,
-            lease_id,
-            result.as_ref().ok().copied(),
-        );
         tee.stop();
         return result;
     }
@@ -7354,6 +7362,11 @@ pub(crate) fn spawn_vendor_headless_resume_granted(
         .with_context(|| format!("failed to create headless log {}", log_path.display()))?;
     let tee = crate::headless_tee::start_tee(log_path, tee_opts);
     let (ceiling_key, ceiling_value) = crate::bg_wait_ceiling_env(Some(cwd));
+    // trace:TASK-2708 | ai:claude — hoisted so the shared argv builder stays
+    // beside the headless env stamp below.
+    let sandboxed_grant = containment_applied(vendor, contained, None)
+        || (vendor == HeadlessVendor::Codex
+            && containment_posture(vendor, contained)? == ContainmentPosture::Aida);
     // Same order as the Claude resume path: the argv comes from the shared
     // headless builder right beside the launch (BUG-342 ratchet).
     // trace:BUG-2386 | ai:claude
@@ -7376,9 +7389,7 @@ pub(crate) fn spawn_vendor_headless_resume_granted(
         cwd,
         seat,
         &crate::current_user_id(None),
-        containment_applied(vendor, contained, None)
-            || (vendor == HeadlessVendor::Codex
-                && containment_posture(vendor, contained)? == ContainmentPosture::Aida),
+        sandboxed_grant,
     )?;
     let mut cmd = Command::new(program);
     cmd.current_dir(cwd)
