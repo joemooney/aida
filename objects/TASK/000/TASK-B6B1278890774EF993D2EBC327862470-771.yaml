@@ -14,13 +14,20 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-04T06:35:32.978489212Z
-modified_at: 2026-11-04T06:35:32.978489212Z
+modified_at: 2026-11-04T10:57:40.004709966Z
 req_type: Task
 tags:
 - carried-from:TASK-2033
 - finding-hash:fada6df9
 - from-review:PR-3348
 - kind:carried-forward
+comments:
+- id: 01a1a635-18a4-7211-8c69-797e69100e7a
+  author: joe
+  content: 'ADVISOR RULING (2026-11-04 03:56 MST, rule non-blocking findings once): Accepted: a redundant assertion adds no evidence but costs nothing; the os_wrap rw check and live probe carry the property.'
+  created_at: 2026-11-04T10:57:40.004709966Z
+  modified_at: 2026-11-04T10:57:40.004709966Z
+  session_id: da1c0d85-1d45-4ce4-a292-5358644f65b9
 history:
 - id: 01a1a565-6e3a-7a40-b7ed-755440d0fc92
   author: joe
