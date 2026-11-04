@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-07T02:27:12.323674694Z
-modified_at: 2026-09-08T02:49:09.312751242Z
+modified_at: 2026-11-04T02:33:25.212044010Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -21,6 +21,12 @@ comments:
   created_at: 2026-09-08T02:49:09.312751242Z
   modified_at: 2026-09-08T02:49:09.312751242Z
   session_id: 3653ac9c-29de-4f43-909c-f36e8f33e21d
+- id: 01a1a467-71dc-7642-bd4a-2116a7bc7a16
+  author: joe
+  content: 'OPERATOR RULING (2026-11-03 19:30 MST, relayed by advisor): regroup rulings 6/8: stays parked on its named external trigger.'
+  created_at: 2026-11-04T02:33:25.212044010Z
+  modified_at: 2026-11-04T02:33:25.212044010Z
+  session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
 deferred: true
 deferred_at: 2026-09-07T02:28:10.038037102Z
 deferred_until: next time the operator is at the work machine
