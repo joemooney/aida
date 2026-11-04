@@ -5,11 +5,25 @@
     {
       "at": "2026-11-04T01:14:41.507878483Z",
       "closed_by": "auto-bump"
+    },
+    {
+      "at": "2026-11-04T01:14:43.457037776Z",
+      "closed_by": "auto-bump"
     }
   ],
   "events": [
     {
       "ts": "2026-11-04T01:14:40.733133995Z",
+      "spec": "TASK-2794",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "cd1ad8f4f7414b0be97a2d72d6232301a0f9d325",
+        "pr": 3312,
+        "closed_by": "auto-bump"
+      }
+    },
+    {
+      "ts": "2026-11-04T01:14:42.673185649Z",
       "spec": "TASK-2794",
       "kind": {
         "event": "SpecCompleted",
