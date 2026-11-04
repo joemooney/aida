@@ -19,6 +19,8 @@ pub(crate) struct VerifiedTrainMerge<'a> {
     evidence: Value,
     mapped: Bodies,
     refresh: Box<dyn FnMut() -> Result<(Value, Bodies)> + 'a>,
+    /// BUG-2433: a final gate passed, so a forge merge call was issued.
+    reached_forge: bool,
 }
 
 impl VerifiedTrainMerge<'_> {
@@ -118,6 +120,8 @@ impl VerifiedTrainMerge<'_> {
             meta.head_sha == self.tip,
             "train head moved during final gate"
         );
+        // trace:BUG-2433 | ai:claude
+        self.reached_forge = true;
         Ok(())
     }
 }
@@ -142,13 +146,21 @@ pub(super) fn merge(
         match_head: Some(train.tip.clone()),
     };
     let mut context = verified(live, change, train, lease)?;
-    forge.merge_train_change(
+    let merged = forge.merge_train_change(
         change,
         &opts,
         &mut crate::network_retry::StderrSink,
         &mut context,
-    )?;
-    Ok(())
+    );
+    // BUG-2433: only an error from (or after) an issued merge call can hide a
+    // merge that took effect; a refusal before any call stays untagged, so
+    // it surfaces at once instead of waiting through post-error re-reads.
+    // trace:BUG-2433 | ai:claude
+    match merged {
+        Ok(_) => Ok(()),
+        Err(e) if context.reached_forge => Err(e.context(ForgeMergeCallFailed)),
+        Err(e) => Err(e),
+    }
 }
 
 fn verified<'a>(
@@ -177,6 +189,7 @@ fn verified<'a>(
         evidence,
         mapped,
         refresh: Box::new(|| collect(live, change, train, lease)),
+        reached_forge: false,
     })
 }
 
