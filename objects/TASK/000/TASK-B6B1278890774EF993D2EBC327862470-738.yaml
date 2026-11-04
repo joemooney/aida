@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-738
 agreed_id: TASK-2793
 title: aida pr hold reports branch pushed without performing or verifying a push
 description: During BUG-2423 implementation, aida pr hold exited 0 saying the branch was pushed, but git ls-remote --heads origin <branch> returned no matching ref. A direct git push -u origin <branch> then created the branch. Source pr_cmd.rs::pr_hold_handler only writes HoldSignal and prints the pushed claim; it performs no push or remote verification. Standalone headless launches can therefore advertise a held branch that is not recoverable from the forge. Either perform/verify the push or clearly require pushing beforehand and stop claiming remote success. The current BUG-2423 branch was pushed directly and its remote is being verified.
-status: InProgress
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-03T14:12:42.376405847Z
-modified_at: 2026-11-03T23:11:50.977363312Z
+modified_at: 2026-11-04T01:54:06.434640344Z
 req_type: Task
 tags:
 - aida:pr-hold
@@ -119,6 +119,20 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1a443-73dc-7100-a9be-bef0ddf52df9
+  author: aida-auto-bump
+  timestamp: 2026-11-04T01:54:06.428291010Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1a443-73e2-7703-8614-b0a77bce61d9
+  timestamp: 2026-11-04T01:54:06.434634658Z
+  agent: aida
+  commit_sha: 0754a362d797d2d9b246b4609456735b5486095d
+  summary: pr hold now pushes and verifies origin's tip before writing the HoldSignal; all three git calls go through host_git_command (ratchet back to 47/47); non-ff refusal pinned; all CI lanes green at ac69354 (merge-hold-gate is the supervised-spec gate, not a code failure).
+  review_verdict: approved
 filed_at:
   aida_version: 0.16.0
   aida_build_sha: 6c587ee595c
@@ -128,3 +142,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-11-03T21:19:14.881876664Z
   implemented_by: joe
+  completed_at: 2026-11-04T01:54:06.428284038Z
+  completion_sha: 0754a362d797d2d9b246b4609456735b5486095d
