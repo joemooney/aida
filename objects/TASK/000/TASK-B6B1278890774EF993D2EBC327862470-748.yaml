@@ -12,7 +12,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-03T18:44:43.902352640Z
-modified_at: 2026-11-04T07:11:51.315098164Z
+modified_at: 2026-11-04T07:11:55.210973747Z
 req_type: Task
 tags:
 - carried-from:TASK-2790
@@ -51,6 +51,21 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: CI red, caused by this PR: the portability ratchet flags the new ungated Command::new("sh") test helper. Criteria: TASK-2802(1) OSError/ValueError drain is verified by test_gate_keeps_draining_when_the_sink_is_closed. TASK-2803 colour env is verified by cargo_tty_env tests in Rust and Python, but progress is not restored (auto is a no-op on a pipe). TASK-2804 fetch_error-branch tests and the EOF-vs-exit comments are present (dev_build.rs:956, check-ci-gates.py:559) but need cfg(unix).. Triage reason: advisor rework brief on spec; review findings to address'
   created_at: 2026-11-04T07:11:51.315095314Z
   modified_at: 2026-11-04T07:11:51.315095314Z
+  session_id: da1c0d85-1d45-4ce4-a292-5358644f65b9
+- id: 01a1a566-6ad0-7a71-bc4a-d7b8666b118e
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #3326):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 33321634ce85
+    Recorded: 2026-11-04T06:27:37.754845335+00:00
+    Findings:
+    1. BLOCKING (CI gates job, 'Check Rust test portability ratchet'): aida-cli-lib/src/tests/dev_build_tests.rs:2131 failing_run uses Command::new("sh") without #[cfg(unix)]. Put failing_run and the two run_checked_fetch_error_* tests (:2139, :2166) behind #[cfg(unix)], following story_1688_lane_liveness_tests.rs:257. That also guards the read-only test's std::os::unix PermissionsExt and libc::geteuid uses. Build (ubuntu-latest) is only the every-lane aggregate and turns green with it. The lane_fixture_fails panic in the log is the bwrap gate's intended failing fixture, not a defect.
+    2. minor (TASK-2803): CARGO_TERM_PROGRESS_WHEN=auto (dev_build.rs:921, check-ci-gates.py:524) is a no-op. Cargo's 'auto' still requires stderr to be a TTY, and stderr is piped here, so the progress bar the spec names is still lost. Restoring it needs 'always' plus CARGO_TERM_PROGRESS_WIDTH (cargo rejects 'always' without a width, e.g. from the terminal size). Otherwise drop the progress var and narrow the comment and PR body to colour only.
+    3. minor (TASK-2802): check-ci-gates.py stream_diagnostics catches (OSError, ValueError) but not AttributeError. The spec text explicitly names 'a sys.stdout without .buffer', e.g. a StringIO-replaced stdout, which still kills the reader and hangs child.wait() on a full pipe. Catch AttributeError too, or resolve sink.buffer once up front with a fallback, and add a test like the closed-sink one.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-04T07:11:55.088287610Z
+  modified_at: 2026-11-04T07:11:55.088287610Z
   session_id: da1c0d85-1d45-4ce4-a292-5358644f65b9
 history:
 - id: 01a1a2c0-afc1-7270-9cfc-ad60e57cfdba
