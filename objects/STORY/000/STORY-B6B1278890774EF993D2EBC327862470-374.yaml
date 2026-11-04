@@ -1,0 +1,34 @@
+id: 01a1a4b6-79f0-7143-b0b4-cc1f482940a1
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-374
+agreed_id: STORY-2412
+title: 'Review PR-3332: [AI:claude] feat(doctor): stranded-commits reports unpushed worktree branches and reflog-only spec commits; heal pins them to recovered/<spec> (TASK-1595)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a1a481`) for branch `task-1595`.
+
+  - PR: <https://github.com/joemooney/aida/pull/3332>
+  - Branch: `task-1595` → `main`
+
+  ## Covers
+
+  - TASK-1595
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 3332` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-04T03:59:44.624918387Z
+modified_at: 2026-11-04T03:59:44.624918387Z
+req_type: Story
+filed_at:
+  code_sha: 76d65a8b0d8f2458d0e0803ee1c05e329d76ccff
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 76d65a8b0d8
+  vendor: claude
+  session: 04f971d5-7365-46ed-b777-d4ff41d730ed
