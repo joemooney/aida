@@ -1,0 +1,22 @@
+id: 01a1a4e6-4b0e-7a01-bb98-6c3bf7cb65f9
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-766
+agreed_id: TASK-2994
+title: 'Showcase: engineering-audit visual palette, chart label layout, what-if state colors, and framework tooltips'
+description: 'Update docs/showcase/engineering-audit.html and docs/reports/2026-11-01-aida-industry-engineering-audit.html visual styling and tooltips without altering TASK-2709 AC2 proxy/unmeasured distinctions. Acceptance: (1) docs/showcase/engineering-audit.html and docs/reports/2026-11-01-aida-industry-engineering-audit.html remain in sync; python3 docs/showcase/build.py --check and tests/test_showcase_build.py + tests/test_showcase_publish.py pass with no external runtime dependencies. (2) All TASK-2709 AC2 measured/proxy/unmeasured labels, methodology notes, and dora.dev caveats from main (1b678fd5059) are preserved verbatim. (3) Uses blue (--blue / --blue-soft) for .spec-tier.active (AIDA POSITION and TOTAL PHYSICAL LINES) and section subheaders; uses green (--emerald / --emerald-mid / --emerald-light) for .tab-btn.active, Merged PRs/MRs, and AIDA velocity/sizing bars with unclipped right-edge labels (padR=168) and non-overlapping 150 PRs/mo reference text; colors What-If Explorer baseline cards red/amber/grey and target scenario green; and adds factual hover tooltips on DORA, GitClear, and LinearB in the hero meta-strip.'
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-04T04:51:58.350086137Z
+modified_at: 2026-11-04T04:51:58.350086137Z
+req_type: Task
+tags:
+- docs
+- showcase
+filed_at:
+  code_sha: 6dcf370f9d3e6fc593ef2c22489665b702a248fc
+  branch: agy2/audit-polish
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: b5577764ec0
+  vendor: antigravity
