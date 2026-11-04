@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-02T19:20:59.253007269Z
-modified_at: 2026-11-03T22:14:33.512617508Z
+modified_at: 2026-11-04T01:12:42.502762862Z
 req_type: Story
 tags:
 - architecture
@@ -393,6 +393,12 @@ comments:
   content: 'ADVISOR RULING (15:07, round 6, PR #3288): the round-5 push conflicts with main. This round only: merge origin/main and resolve the conflicts so the round-5 behavior is preserved. ''cargo check -p aida-cli-lib --tests'' on the merged tree is mandatory, plus make check-ci-fast (umask 022). Push, then stop.'
   created_at: 2026-11-03T22:02:56.099402797Z
   modified_at: 2026-11-03T22:02:56.099402797Z
+  session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
+- id: 01a1a41d-8d06-7982-a58e-ec922e4fb986
+  author: joe
+  content: 'ADVISOR RULING (PR-3288, 2026-11-03 18:15 MST): merge-only round. gh update-branch conflicts with main. Merge origin/main into the PR branch, resolve conflicts preserving both sides'' intent (main''s BUG-2428 launch rollback / keyring probe in queue-work and BUG-2383 sandboxed launcher jobs are likely overlaps), keep the existing approved-round scope, no new features. Gate: cargo build -p aida-cli --bin aida + check-ci-fast (umask 022), then push.'
+  created_at: 2026-11-04T01:12:42.502762862Z
+  modified_at: 2026-11-04T01:12:42.502762862Z
   session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
 history:
 - id: 01a19ed2-a170-7d52-94f3-7c4ff46f38c4
