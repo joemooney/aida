@@ -3,12 +3,12 @@ spec_id: STORY-b6b1278890774ef993d2ebc327862470-339
 agreed_id: STORY-2343
 title: 'Kernel-attested submit for the script deputy: a SO_PEERCRED socket instead of the file queue''s same-uid residual'
 description: 'Follow-up to STORY-2338 (advisor ruling Q6: later, filed by the implementer). The script deputy (aida deputy shell) attributes a job from the submitter''s validated grant record and re-checks it at claim, but a same-uid, uncontained process can still write incoming/<id>.job naming a live session''s grant (grant records are readable by the user). Close that residual with kernel-attested submission: the runner listens on a unix socket in its 0700 queue; submit connects, the runner reads SO_PEERCRED (pid, uid) and checks the peer pid''s ancestry/session against the grant''s binding before accepting the job. Needs: a live runner at submit time (or a defined fallback), a sandbox socket rule for the advisor seat, and a decision on whether the file queue stays for offline submits. Acceptance: (1) a job submitted over the socket records the kernel-reported peer and is refused when the peer does not run under the named grant''s binding; (2) a forged incoming/ file is refused, or the file path is removed; (3) hermetic tests for both. Architecture-sensitive: sketch + advisor signoff first.'
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-03T07:21:01.822528019Z
-modified_at: 2026-11-04T06:00:41.126973534Z
+modified_at: 2026-11-04T07:04:11.249898711Z
 req_type: Story
 tags:
 - area:deputy
@@ -97,6 +97,30 @@ comments:
   created_at: 2026-11-04T04:20:26.628687011Z
   modified_at: 2026-11-04T04:20:26.628687011Z
   session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
+- id: 01a1a55f-41e1-7b31-b0d0-be4655979c17
+  author: joe
+  content: |-
+    ## Implementation done per ruling (B); UNTESTED, so not pushed
+
+    Local commit d12c6fef624 on branch story-b6b1278890774ef993d2ebc327862470-339 (worktree aida-seat-aida-story-b6b1278890774ef993d2ebc327862470-339). Not pushed, because the dispatch says not to push untested work.
+
+    **What it does**
+    - New deputy_shell/socket.rs. The runner binds <queue>/submit.sock (0600, inside the 0700 queue). A stale socket is replaced under the runner lock; any other kind of file at that path is refused, never removed.
+    - How a submit is attested: the runner reads SO_PEERCRED and pins the peer with SO_PEERPIDFD, falling back to pidfd_open. It requires the peer's uid to equal the runner's. It walks /proc ppid ancestry (bounded at 64) until it finds a proc:/sid: binding of the named grant, compared as BUG-2419 (pid, ns, start) tokens; a binding from a foreign pid namespace is never compared. It then re-checks that the pidfd is still live and the start identity is unchanged. The kernel peer overwrites submitter.pid/pid_start, and a new Submitter.peer {pid, uid, start, matched, attested} is recorded. A refusal returns refused:foreign-uid, refused:not-under-grant or refused:grant to the client immediately, and is audited as submit-refused.
+    - The incoming/ directory is removed. The runner files accepted jobs in a runner-only accepted/ directory (Q2a). The claim-side verdict now refuses a job with no attested peer, or whose peer.matched is not one of the grant's bindings: refused:unattested.
+    - Cancel also goes over the socket (uid check). With no live runner, submit refuses with 'start aida deputy shell run --name N first' (Q1a). A sandboxed client gets EPERM/EACCES, and the error names the excludedCommands opt-in.
+    - No sandbox or template changes (B). docs/deputies.md and docs/cli/06-roles-sessions.md are updated: the incoming allowlist section is replaced by the excludedCommands opt-in.
+
+    **Verification**
+    - cargo check --profile agent -p aida-cli-lib --lib --tests passes with 0 warnings (lane job j20261104T064454607-7-0).
+    - cargo test -p aida-cli-lib --lib -- deputy_shell was run three times through the lane job runner. All three runs hit the runner's 900s cap while still compiling aida-cli-lib (j20261104T060909618-12-0, j20261104T062945733-7-0, j20261104T064845597-7-0). Raising AIDA_CARGO_TIMEOUT was denied in this session. make check-ci-fast cannot finish inside this lane's 60s tool cap.
+    - New tests: socket submit records the kernel peer and refuses a peer outside the grant (a live non-ancestor child); attest namespace and uid table; a legacy incoming/ file is never claimed; no-runner and sandbox error text; stale socket vs non-socket file. Existing tests now file through accept() with an attested peer, and the unattributable table gains no-peer, peer-not-attested and peer-off-binding cases. submit_wait now runs through the real socket.
+
+    **Needed to finish:** run cargo test -p aida-cli-lib --lib deputy_shell plus make check-ci-fast with a longer timeout (operator or a lane with a warm test target), then push and open the PR.
+  created_at: 2026-11-04T07:04:05.857615334Z
+  modified_at: 2026-11-04T07:04:05.857615334Z
+  session_id: 01a1a5252b52
+  harness_version: 2.1.318 (Claude Code)
 history:
 - id: 01a1a2a3-f27f-7463-9a97-0b8c7a670b77
   author: joe
@@ -161,6 +185,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1a55f-56f1-72f1-9734-e533313cca90
+  author: joe
+  timestamp: 2026-11-04T07:04:11.249917753Z
+  session_id: 01a1a5252b52
+  harness_version: 2.1.318 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: cfee54e5aabfce342a2e385a63dc2deb7d3c1d96
   branch: story-2338-sketch
@@ -169,3 +202,9 @@ filed_at:
   aida_build_sha: cfee54e5aab
   vendor: claude
   session: bb607549-3128-4075-9764-5206b7a40790
+attention_reason:
+  category: blocked-dependency
+  detail: 'Implementation is complete and committed locally (d12c6fef624 on branch story-b6b1278890774ef993d2ebc327862470-339). It is not pushed because it is untested: the lane job runner timed out at 900s three times while compiling aida-cli-lib''s lib tests, and this session may not raise AIDA_CARGO_TIMEOUT. cargo check (lib and tests) is clean. The dispatch said not to push untested work. Details are in the latest spec comment.'
+  lean: Have the operator, or a lane with a longer cargo budget, run cargo test -p aida-cli-lib --lib deputy_shell and make check-ci-fast on that branch, then push and open the PR as-is.
+  raised_by: implementer
+  raised_at: 2026-11-04T07:04:11.249898711Z
