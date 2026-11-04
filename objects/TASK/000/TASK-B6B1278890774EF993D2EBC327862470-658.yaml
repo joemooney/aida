@@ -11,7 +11,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T09:06:27.587006751Z
-modified_at: 2026-11-04T11:14:28.023977396Z
+modified_at: 2026-11-04T11:14:33.202418797Z
 req_type: Task
 tags:
 - architecture
@@ -163,6 +163,12 @@ comments:
   content: 'ADVISOR REWORK BRIEF (2026-11-04 04:17 MST, PR #3307 head dec6cffc): the PR now CONFLICTS with main. #3288 (STORY-2326 PR-A: LaunchContext + spawn_agent for Claude contained paths) and #3326 landed and touch the same launch code. Merge origin/main into the PR branch and resolve: keep main''s LaunchContext/spawn_agent structure and re-apply this PR''s change on top of it (route the change through spawn_agent/LaunchContext where main moved the code; do not resurrect removed call sites). Keep the round-5 facade fix (15e1dc65), and update the task_2708 spawn-path inventory to main''s current spawn sites, including spawn_agent from #3288. Gate (LIGHT): one targeted cargo test filter for this PR''s tests plus make check-ci-fast, then push (no force-push needed after a merge). If the local test run times out, push anyway and say so: CI''s shards are the gate.'
   created_at: 2026-11-04T11:14:23.013620776Z
   modified_at: 2026-11-04T11:14:23.013620776Z
+  session_id: da1c0d85-1d45-4ce4-a292-5358644f65b9
+- id: 01a1a644-8d9b-7bc2-9648-395b5410b229
+  author: joe
+  content: 'merge conflict with #3288'
+  created_at: 2026-11-04T11:14:32.987344633Z
+  modified_at: 2026-11-04T11:14:32.987344633Z
   session_id: da1c0d85-1d45-4ce4-a292-5358644f65b9
 history:
 - id: 01a1965c-5ce8-7781-b88f-317b0b12bab5
