@@ -21,11 +21,18 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-09-16T01:17:17.223576217Z
-modified_at: 2026-11-04T01:39:47.241817462Z
+modified_at: 2026-11-04T01:39:50.491641925Z
 req_type: Task
 tags:
 - from-advisor:general
 - kind:observation
+comments:
+- id: 01a1a436-645b-7800-ba29-805520d6dd49
+  author: joe
+  content: 'ADVISOR REGROUP (2026-11-03): closed as obsolete/already fixed after verification in the regroup inventory: single 2026-09-15 observation, never recurred; per-vendor posture is explicit (TASK-2631) with a doctor contradiction check. Reopen if it recurs.'
+  created_at: 2026-11-04T01:39:50.491641925Z
+  modified_at: 2026-11-04T01:39:50.491641925Z
+  session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
 history:
 - id: 01a1942b-5c5d-7533-9f5e-4f48fd185438
   author: aida-backfill-agreed-ids
