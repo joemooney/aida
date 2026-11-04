@@ -439,7 +439,12 @@ fn session_resume_codex_arm_builds_a_codex_resume_command() {
         id: "019a-thread".to_string(),
         worktree: None,
     };
-    let cmd = session::codex_session_resume_command(&target, false).unwrap();
+    let cmd = session::codex_session_resume_command(
+        crate::seat_clone::launcher_main().as_deref(),
+        &target,
+        false,
+    )
+    .unwrap();
     assert!(
         cmd.get_program().to_string_lossy().ends_with("codex"),
         "{:?}",
@@ -483,7 +488,12 @@ fn session_resume_codex_arm_builds_a_codex_resume_command() {
         id: "--last".to_string(),
         ..target
     };
-    assert!(session::codex_session_resume_command(&bad, false).is_err());
+    assert!(session::codex_session_resume_command(
+        crate::seat_clone::launcher_main().as_deref(),
+        &bad,
+        false
+    )
+    .is_err());
 }
 
 // ── headless Codex resume spawn ─────────────────────────────────────────────

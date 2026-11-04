@@ -1121,16 +1121,27 @@ pub(crate) fn build_compete_arm_command(
     let contained = session::drain_contained(project_root)?;
     let headless_vendor = session::HeadlessVendor::parse(vendor);
     let args = compete_arm_argv(argv, vendor, contained, || {
-        session::claude_contained_flags_for(worktree_dir)
+        session::claude_contained_flags_for(
+            crate::seat_clone::launcher_main().as_deref(),
+            worktree_dir,
+        )
     })?;
     let (program, args) = if contained {
-        session::os_wrapped_program_and_args(worktree_dir, command, args)?
+        session::os_wrapped_program_and_args(
+            crate::seat_clone::launcher_main().as_deref(),
+            worktree_dir,
+            command,
+            args,
+        )?
     } else {
         (command.to_string(), args)
     };
     // trace:BUG-2218 TASK-2328 | ai:codex
     if contained {
-        session::prepare_contained_mailbox_for_launch(worktree_dir)?;
+        session::prepare_contained_mailbox_for_launch(
+            crate::seat_clone::launcher_main().as_deref(),
+            worktree_dir,
+        )?;
     }
     let mut cmd = std::process::Command::new(program);
     cmd.args(args).current_dir(worktree_dir);

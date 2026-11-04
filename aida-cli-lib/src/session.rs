@@ -676,6 +676,10 @@ pub(crate) fn build_contained_resume_command(
     target: &ResumeTarget,
     launcher_cwd: &Path,
 ) -> Result<std::process::Command> {
+    // TASK-2032: the host main this resume is anchored to, resolved from the
+    // launcher's own directory (never from the target's recorded checkout).
+    // trace:TASK-2032 | ai:claude
+    let host_main = crate::seat_clone::host_main_from(launcher_cwd);
     // BUG-2386: a Codex session resumes contained under Codex's own native
     // sandbox when `[contained.vendors]` opts it in, else is refused — never
     // resumed uncontained. trace:BUG-2386 | ai:claude
@@ -687,7 +691,7 @@ pub(crate) fn build_contained_resume_command(
                     target.id
                 )
             })?;
-        let mut cmd = codex_session_resume_command(target, true)?;
+        let mut cmd = codex_session_resume_command(host_main.as_deref(), target, true)?;
         if cmd.get_current_dir().is_none() {
             cmd.current_dir(launcher_cwd);
         }
@@ -709,17 +713,18 @@ pub(crate) fn build_contained_resume_command(
     // listed it: a cwd of main would leave main inside Claude Code's own
     // working-directory permissions.
     // trace:TASK-1952 | trace:TASK-2031 | ai:claude
-    let lease_tree = resume_lease_tree(target);
+    let lease_tree = resume_lease_tree(host_main.as_deref(), target);
     if let (Some(tree), Some(listed_in)) = (&lease_tree, &target.worktree) {
         stage_resume_transcript(&target.id, listed_in, tree)?;
     }
     let worktree = lease_tree
         .or_else(|| target.worktree.clone().filter(|p| p.is_dir()))
         .unwrap_or_else(|| launcher_cwd.to_path_buf());
-    prepare_contained_mailbox_for_launch(&worktree)?;
+    prepare_contained_mailbox_for_launch(host_main.as_deref(), &worktree)?;
     let mut cmd = std::process::Command::new("claude");
     cmd.args(["--resume", &target.id]);
     cmd.args(claude_contained_flags_for_roots(
+        host_main.as_deref(),
         &contained_session_write_roots_from(&worktree),
     )?);
     cmd.env("AIDA_CONTAINED", "1");
@@ -989,9 +994,16 @@ pub(crate) fn start_launch_child_role(explicit: Option<&str>, owns: &str) -> Str
 /// launcher does not repeat it. A start --launch pins the vendor before
 /// allocating the seat, including when project agents.toml is absent in the
 /// newly created child worktree.
+///
+/// `host_main` is the host main the caller resolved before any chdir into a
+/// seat ([`crate::seat_clone::launcher_main`]); every contained boundary
+/// builder below takes it explicitly and none re-derives it from the cwd,
+/// which after `session start --launch` names the seat clone (TASK-2032).
 // trace:BUG-b6b1278890774ef993d2ebc327862470-159 | ai:claude
+// trace:TASK-2032 | ai:claude
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn new_session_for_vendor(
+    host_main: Option<&Path>,
     vendor: &str,
     spec: Option<String>,
     title: Option<String>,
@@ -1090,6 +1102,7 @@ pub(crate) fn new_session_for_vendor(
     );
 
     run_claude_session(
+        host_main,
         permission_mode,
         display_name.as_deref(),
         persona_guidance,
@@ -1296,6 +1309,7 @@ fn sanitize_for_tsv(s: &str) -> String {
 /// claude rejects anything else. trace:STORY-42, TASK-112 | ai:claude
 // trace:TASK-1594 | ai:claude
 pub fn exec_claude_with_session(
+    host_main: Option<&Path>,
     permission_mode: Option<&str>,
     name: Option<&str>,
     initial_prompt: &str,
@@ -1305,6 +1319,7 @@ pub fn exec_claude_with_session(
     grant_id: Option<&str>,
 ) -> Result<()> {
     exec_claude(
+        host_main,
         permission_mode,
         name,
         Some(initial_prompt),
@@ -1333,6 +1348,7 @@ pub fn exec_claude_with_session(
 /// Errors when a contained launch must be refused (BUG-1982).
 // trace:BUG-1982 | ai:claude
 pub fn claude_session_args(
+    host_main: Option<&Path>,
     permission_mode: Option<&str>,
     name: Option<&str>,
     initial_prompt: Option<&str>,
@@ -1346,7 +1362,7 @@ pub fn claude_session_args(
         args.push(m.to_string());
     }
     if contained {
-        args.extend(claude_contained_flags()?);
+        args.extend(claude_contained_flags(host_main)?);
     }
     if let Some(n) = name {
         args.push("--name".to_string());
@@ -1371,6 +1387,7 @@ pub fn claude_session_args(
 
 // trace:BUG-2006 | ai:antigravity
 pub(crate) fn build_claude_exec_command(
+    host_main: Option<&Path>,
     permission_mode: Option<&str>,
     name: Option<&str>,
     initial_prompt: Option<&str>,
@@ -1381,8 +1398,10 @@ pub(crate) fn build_claude_exec_command(
 ) -> Result<std::process::Command> {
     use std::process::Command;
     let (program, args) = interactive_claude_program_and_args(
+        host_main,
         contained,
         claude_session_args(
+            host_main,
             permission_mode,
             name,
             initial_prompt,
@@ -1393,7 +1412,7 @@ pub(crate) fn build_claude_exec_command(
     )?;
     // trace:BUG-2218 TASK-2328 | ai:codex
     if contained {
-        prepare_contained_mailbox_for_launch(&std::env::current_dir()?)?;
+        prepare_contained_mailbox_for_launch(host_main, &std::env::current_dir()?)?;
     }
     let mut cmd = Command::new(program);
     if let Some(grant) = grant_id {
@@ -1418,6 +1437,7 @@ pub(crate) fn build_claude_exec_command(
 /// os_wrap off, or for an uncontained launch, the program stays `claude`.
 // trace:BUG-2169 | ai:claude
 pub(crate) fn interactive_claude_program_and_args(
+    host_main: Option<&Path>,
     contained: bool,
     args: Vec<String>,
 ) -> Result<(String, Vec<String>)> {
@@ -1425,11 +1445,12 @@ pub(crate) fn interactive_claude_program_and_args(
         return Ok(("claude".to_string(), args));
     }
     let cwd = contained_session_cwd().unwrap_or_else(|| PathBuf::from("."));
-    os_wrapped_program_and_args(&cwd, "claude", args)
+    os_wrapped_program_and_args(host_main, &cwd, "claude", args)
 }
 
 // trace:TASK-1594 | ai:claude
 fn exec_claude(
+    host_main: Option<&Path>,
     permission_mode: Option<&str>,
     name: Option<&str>,
     initial_prompt: Option<&str>,
@@ -1439,6 +1460,7 @@ fn exec_claude(
     grant_id: Option<&str>,
 ) -> Result<()> {
     let mut cmd = build_claude_exec_command(
+        host_main,
         permission_mode,
         name,
         initial_prompt,
@@ -1483,6 +1505,7 @@ impl Drop for TerminalTitleRestoreGuard {
 
 // trace:BUG-2006 | ai:antigravity
 pub(crate) fn build_run_claude_session_command(
+    host_main: Option<&Path>,
     permission_mode: Option<&str>,
     name: Option<&str>,
     initial_prompt: Option<&str>,
@@ -1492,8 +1515,10 @@ pub(crate) fn build_run_claude_session_command(
 ) -> Result<std::process::Command> {
     // trace:BUG-2169 | ai:claude
     let (program, args) = interactive_claude_program_and_args(
+        host_main,
         contained,
         claude_session_args(
+            host_main,
             permission_mode,
             name,
             initial_prompt,
@@ -1504,7 +1529,7 @@ pub(crate) fn build_run_claude_session_command(
     )?;
     // trace:BUG-2218 TASK-2328 | ai:codex
     if contained {
-        prepare_contained_mailbox_for_launch(&std::env::current_dir()?)?;
+        prepare_contained_mailbox_for_launch(host_main, &std::env::current_dir()?)?;
     }
     let mut cmd = std::process::Command::new(program);
     if contained {
@@ -1522,6 +1547,7 @@ pub(crate) fn build_run_claude_session_command(
 
 // trace:STORY-994 | ai:codex
 fn run_claude_session(
+    host_main: Option<&Path>,
     permission_mode: Option<&str>,
     name: Option<&str>,
     initial_prompt: Option<&str>,
@@ -1532,6 +1558,7 @@ fn run_claude_session(
 ) -> Result<()> {
     let mut title_restore = TerminalTitleRestoreGuard::new(title_restore);
     let mut cmd = build_run_claude_session_command(
+        host_main,
         permission_mode,
         name,
         initial_prompt,
@@ -1801,7 +1828,12 @@ pub(crate) fn compose_headless_command_forking(
         Some(thread) => codex_exec_fork_args(args, thread)?,
         None => args,
     };
-    os_wrapped_program_and_args(&worktree, &resolve_agent_program(vendor.program()), args)
+    os_wrapped_program_and_args(
+        crate::seat_clone::launcher_main().as_deref(),
+        &worktree,
+        &resolve_agent_program(vendor.program()),
+        args,
+    )
 }
 
 /// Rewrite a fresh `codex [posture] exec [opts] PROMPT` argv into
@@ -2021,7 +2053,10 @@ fn spawn_vendor_headless_forking(
     // trace:BUG-2218 TASK-2328 | ai:codex
     // trace:TASK-2631 | ai:codex
     if containment_applied(vendor, contained) {
-        prepare_contained_mailbox_for_launch(&headless_worktree_root())?;
+        prepare_contained_mailbox_for_launch(
+            crate::seat_clone::launcher_main().as_deref(),
+            &headless_worktree_root(),
+        )?;
     }
     // TASK-1169 / ADR-22: bound the child's turn-end background-wait ceiling
     // ourselves rather than inheriting whatever the ambient shell carried, so
@@ -2380,7 +2415,9 @@ pub(crate) fn spawn_claude_resume_with_grant(
         cmd.args(["--permission-mode", m]);
     }
     if contained {
-        cmd.args(claude_contained_flags()?);
+        cmd.args(claude_contained_flags(
+            crate::seat_clone::launcher_main().as_deref(),
+        )?);
     }
     // trace:BUG-2006 | ai:antigravity
     if contained {
@@ -2393,7 +2430,10 @@ pub(crate) fn spawn_claude_resume_with_grant(
         cmd.env("AIDA_CONTAINMENT_POSTURE", "none");
     }
     if contained {
-        prepare_contained_mailbox_for_launch(&std::env::current_dir()?)?;
+        prepare_contained_mailbox_for_launch(
+            crate::seat_clone::launcher_main().as_deref(),
+            &std::env::current_dir()?,
+        )?;
     }
     // A watch-launched reviewer is recorded before the wait. trace:TASK-1993 | ai:claude
     crate::review_watch::reviewer_status(&mut cmd).context("failed to spawn claude")
@@ -2876,6 +2916,7 @@ pub(crate) fn interactive_reviewer_launch_plan(
             vendor,
             program: resolve_agent_program(vendor.program()),
             args: claude_session_args(
+                crate::seat_clone::launcher_main().as_deref(),
                 permission_mode,
                 name,
                 Some(prompt),
@@ -2947,9 +2988,14 @@ pub(crate) fn build_advisor_interactive_command(
     let contained = aida_contained_env()? || contained;
     let root = headless_worktree_root();
     let plan = advisor_interactive_launch_plan(vendor, prompt, contained)?;
-    let (program, args) = os_wrapped_program_and_args(&root, &plan.program, plan.args)?;
+    let (program, args) = os_wrapped_program_and_args(
+        crate::seat_clone::launcher_main().as_deref(),
+        &root,
+        &plan.program,
+        plan.args,
+    )?;
     if plan.contained {
-        prepare_contained_mailbox_for_launch(&root)?;
+        prepare_contained_mailbox_for_launch(crate::seat_clone::launcher_main().as_deref(), &root)?;
     }
     let mut cmd = std::process::Command::new(program);
     cmd.args(args);
@@ -2997,7 +3043,10 @@ pub(crate) fn spawn_reviewer_launch_plan_granted(
     }
     // trace:BUG-2218 TASK-2328 | ai:codex
     if plan.contained {
-        prepare_contained_mailbox_for_launch(&std::env::current_dir()?)?;
+        prepare_contained_mailbox_for_launch(
+            crate::seat_clone::launcher_main().as_deref(),
+            &std::env::current_dir()?,
+        )?;
     }
     // A contained reviewer's tool calls run in a sandbox, where only a
     // keyring-held key presents its grant: refuse before the review is spent.
@@ -4087,7 +4136,9 @@ pub(crate) fn claude_headless_args_for_roots(
     effort: Option<&str>,
 ) -> Result<Vec<String>> {
     let contained_flags = contained_roots
-        .map(claude_contained_flags_for_roots)
+        .map(|roots| {
+            claude_contained_flags_for_roots(crate::seat_clone::launcher_main().as_deref(), roots)
+        })
         .transpose()?
         .unwrap_or_default();
     let permission_mode = if contained_roots.is_some() {
@@ -4141,7 +4192,7 @@ pub(crate) use aida_core::ai::headless_posture::{
 // trace:BUG-B6B1278890774EF993D2EBC327862470-050 | ai:claude
 pub(crate) fn headless_claude_posture_for(contained: bool) -> Result<Vec<String>> {
     let contained_flags = if contained {
-        claude_contained_flags()?
+        claude_contained_flags(crate::seat_clone::launcher_main().as_deref())?
     } else {
         Vec::new()
     };
@@ -4213,7 +4264,7 @@ pub(crate) fn assert_headless_posture(args: &[String], contained: bool, label: &
 /// Pure — the flag set is unit-tested without spawning claude.
 /// trace:STORY-263 | ai:claude
 
-pub fn claude_contained_flags() -> Result<Vec<String>> {
+pub fn claude_contained_flags(host_main: Option<&Path>) -> Result<Vec<String>> {
     // BUG-1928: the write boundary is the worktree this process runs in — the
     // git root of cwd, which `queue work` has already `set_current_dir`'d to the
     // lease's worktree (pool or named), and the same root the STORY-612 OS
@@ -4221,26 +4272,35 @@ pub fn claude_contained_flags() -> Result<Vec<String>> {
     // pool may have replaced. trace:BUG-1928 | ai:claude
     // BUG-1971: no git root means no write roots (fail closed), never a cwd
     // fallback. trace:BUG-1971 | ai:claude
-    claude_contained_flags_for_roots(&contained_session_write_roots())
+    claude_contained_flags_for_roots(host_main, &contained_session_write_roots())
 }
 
 /// BUG-1928: the contained launch flags with the write boundary scoped to
 /// `worktree` (see `crate::contained_boundary`).
 // trace:BUG-1928 | ai:claude
-pub fn claude_contained_flags_for(worktree: &Path) -> Result<Vec<String>> {
-    claude_contained_flags_for_roots(&crate::contained_boundary::contained_write_roots(worktree))
+pub fn claude_contained_flags_for(
+    host_main: Option<&Path>,
+    worktree: &Path,
+) -> Result<Vec<String>> {
+    claude_contained_flags_for_roots(
+        host_main,
+        &crate::contained_boundary::contained_write_roots(worktree),
+    )
 }
 
 /// The contained launch flags for an explicit list of write roots. Errors when
 /// the launch must be refused ([`claude_contained_settings_json`]).
 // trace:BUG-1971 | ai:claude
 // trace:BUG-1982 | ai:claude
-pub(crate) fn claude_contained_flags_for_roots(write_roots: &[PathBuf]) -> Result<Vec<String>> {
+pub(crate) fn claude_contained_flags_for_roots(
+    host_main: Option<&Path>,
+    write_roots: &[PathBuf],
+) -> Result<Vec<String>> {
     Ok(vec![
         "--setting-sources".to_string(),
         "project".to_string(),
         "--settings".to_string(),
-        claude_contained_settings_json(write_roots)?,
+        claude_contained_settings_json(host_main, write_roots)?,
     ])
 }
 
@@ -4335,8 +4395,15 @@ pub(crate) fn aida_mcp_server_config_json() -> String {
 /// a sandbox and tool rule (BUG-1982): Claude Code's own sandbox would leave
 /// it writable to a linked-worktree session, so a launch without that deny
 /// fails open.
+///
+/// `host_main` (TASK-2032) is the only anchor that can make the first write
+/// root a host-recorded seat clone; `None` recognises no clone.
 // trace:BUG-1982 | ai:claude
-pub(crate) fn claude_contained_settings_json(write_roots: &[PathBuf]) -> Result<String> {
+// trace:TASK-2032 | ai:claude
+pub(crate) fn claude_contained_settings_json(
+    host_main: Option<&Path>,
+    write_roots: &[PathBuf],
+) -> Result<String> {
     // Egress allowlist is strictly opt-in via `[contained] allowed_hosts`. When
     // the project root or config can't be resolved we fall back to an empty
     // allowlist — i.e. the pre-STORY-605 behavior. trace:STORY-605 | ai:claude
@@ -4366,7 +4433,7 @@ pub(crate) fn claude_contained_settings_json(write_roots: &[PathBuf]) -> Result<
         Some(worktree) => {
             let main = crate::main_worktree_root_from(worktree);
             // trace:TASK-1952 | trace:BUG-2016 | ai:claude
-            verify_linked_worktree_main(worktree, &main)?;
+            verify_linked_worktree_main(host_main, worktree, &main)?;
             // Review round 1 F3: every spelling, from every write root (the
             // as-given and canonical roots may resolve to differently spelled
             // mains). trace:BUG-1982 | ai:claude
@@ -4424,7 +4491,7 @@ pub(crate) fn claude_contained_settings_json(write_roots: &[PathBuf]) -> Result<
     // trace:BUG-2169 | ai:claude
     let clone = write_roots
         .first()
-        .and_then(|root| crate::seat_clone::launcher_recorded_clone(root));
+        .and_then(|root| crate::seat_clone::recorded_clone_for(host_main, root));
     let (mut store_paths, mut extra_deny) = (store_paths, main_git_deny);
     // TASK-2772: sandboxed Bash in a lane may write the cargo slot locks and
     // build log, so the LIGHT gate gets a build slot inside the sandbox. Never
@@ -4449,6 +4516,7 @@ pub(crate) fn claude_contained_settings_json(write_roots: &[PathBuf]) -> Result<
         }
     }
     let json = contained_settings_json_with_boundary(
+        host_main,
         &allowed_hosts,
         managed_only,
         write_roots,
@@ -4526,7 +4594,11 @@ pub(crate) fn contained_store_grant(
 /// itself, it is accepted only as a host-recorded seat clone of that main.
 // trace:TASK-1952 | trace:BUG-2016 | ai:claude
 // trace:TASK-1952 | trace:TASK-2111 | ai:claude
-pub(crate) fn verify_linked_worktree_main(worktree: &Path, main: &Path) -> Result<()> {
+pub(crate) fn verify_linked_worktree_main(
+    host_main: Option<&Path>,
+    worktree: &Path,
+    main: &Path,
+) -> Result<()> {
     let git_entry = worktree.join(".git");
     let canon = |p: &Path| std::fs::canonicalize(p).ok();
     if canon(worktree) == canon(main) {
@@ -4536,7 +4608,7 @@ pub(crate) fn verify_linked_worktree_main(worktree: &Path, main: &Path) -> Resul
         return Ok(());
     };
     if !meta.file_type().is_file() {
-        let recorded = crate::seat_clone::launcher_recorded_clone(worktree)
+        let recorded = crate::seat_clone::recorded_clone_for(host_main, worktree)
             .is_some_and(|clone| canon(&clone.main).is_some() && canon(&clone.main) == canon(main));
         if recorded {
             return Ok(());
@@ -4792,6 +4864,7 @@ pub(crate) fn contained_settings_json_with_store(
     store_write_paths: &[PathBuf],
 ) -> String {
     contained_settings_json_with_boundary(
+        None,
         allowed_hosts,
         managed_domains_only,
         write_roots,
@@ -4808,6 +4881,7 @@ pub(crate) fn contained_settings_json_with_store(
 /// missing deny never sits beside a write grant (fails closed).
 // trace:BUG-1982 | ai:claude
 pub(crate) fn contained_settings_json_with_boundary(
+    host_main: Option<&Path>,
     allowed_hosts: &[String],
     managed_domains_only: bool,
     write_roots: &[PathBuf],
@@ -4820,7 +4894,7 @@ pub(crate) fn contained_settings_json_with_boundary(
     // dropped from both layers while the write roots stay granted.
     // trace:TASK-1952 | trace:TASK-2037 | ai:claude
     let main_git_deny =
-        crate::contained_boundary::contained_main_checkout_git_deny_paths(write_roots);
+        crate::contained_boundary::contained_main_checkout_git_deny_paths(host_main, write_roots);
     let deny_expressible = extra_deny
         .iter()
         .chain(&main_git_deny)
@@ -5177,8 +5251,11 @@ pub(crate) fn bwrap_confinement_args_inner(
 /// bound: the seat commits in its own clone and pushes to origin.
 // trace:STORY-612 | ai:claude
 // trace:BUG-2169 | ai:claude
-pub(crate) fn os_wrap_rw_paths(worktree_root: &Path) -> Result<Vec<PathBuf>> {
-    let mut rw_paths = match crate::seat_clone::launcher_recorded_clone(worktree_root) {
+pub(crate) fn os_wrap_rw_paths(
+    host_main: Option<&Path>,
+    worktree_root: &Path,
+) -> Result<Vec<PathBuf>> {
+    let mut rw_paths = match crate::seat_clone::recorded_clone_for(host_main, worktree_root) {
         Some(clone) => {
             let mut paths = crate::contained_boundary::contained_store_write_paths(&clone.main);
             paths.extend(crate::seat_clone::seat_extra_write_paths(&clone));
@@ -5284,10 +5361,13 @@ pub(crate) fn cargo_home_read_only_note(cargo_home: &Path) -> Option<&'static st
 
 /// Explicit runtime preparation; never called by path/settings renderers.
 // trace:BUG-2218 TASK-2327 TASK-2328 | ai:codex
-pub(crate) fn prepare_contained_mailbox_for_launch(worktree: &Path) -> Result<()> {
+pub(crate) fn prepare_contained_mailbox_for_launch(
+    host_main: Option<&Path>,
+    worktree: &Path,
+) -> Result<()> {
     if let Some(root) = contained_session_write_roots_from(worktree).first() {
         let main = crate::main_worktree_root_from(root);
-        verify_linked_worktree_main(root, &main)?;
+        verify_linked_worktree_main(host_main, root, &main)?;
         crate::contained_boundary::prepare_mailbox(&main)?;
         // Best-effort: a launcher that cannot create it (a contained parent
         // whose own sandbox did not bind it) leaves the path missing, which
@@ -5304,8 +5384,8 @@ pub(crate) fn prepare_contained_mailbox_for_launch(worktree: &Path) -> Result<()
 /// so a build the OS layer runs never reaches the shared sccache either.
 /// Empty for any other tree.
 // trace:BUG-2169 | ai:claude
-pub(crate) fn os_wrap_seat_env_args(worktree_root: &Path) -> Vec<String> {
-    let Some(clone) = crate::seat_clone::launcher_recorded_clone(worktree_root) else {
+pub(crate) fn os_wrap_seat_env_args(host_main: Option<&Path>, worktree_root: &Path) -> Vec<String> {
+    let Some(clone) = crate::seat_clone::recorded_clone_for(host_main, worktree_root) else {
         return Vec::new();
     };
     crate::seat_clone::seat_build_env(&clone)
@@ -5359,7 +5439,12 @@ fn claude_program_and_args(
     worktree_root: &Path,
     claude_args: Vec<String>,
 ) -> Result<(String, Vec<String>)> {
-    os_wrapped_program_and_args(worktree_root, &resolve_agent_program("claude"), claude_args)
+    os_wrapped_program_and_args(
+        crate::seat_clone::launcher_main().as_deref(),
+        worktree_root,
+        &resolve_agent_program("claude"),
+        claude_args,
+    )
 }
 
 /// Generalized form of `claude_program_and_args` that wraps an ARBITRARY program
@@ -5374,6 +5459,7 @@ fn claude_program_and_args(
 ///
 /// trace:TASK-864 | ai:claude
 pub(crate) fn os_wrapped_program_and_args(
+    host_main: Option<&Path>,
     worktree_root: &Path,
     program: &str,
     program_args: Vec<String>,
@@ -5405,12 +5491,12 @@ pub(crate) fn os_wrapped_program_and_args(
     // restriction — SPIKE-61 §7.7). Catch it here with an actionable message
     // instead of letting the drain die on a cryptic `uid map: Permission denied`.
     bwrap_preflight()?;
-    let rw_paths = os_wrap_rw_paths(worktree_root)?;
+    let rw_paths = os_wrap_rw_paths(host_main, worktree_root)?;
     // TASK-2772: `--bind-try` skips a missing directory, which would leave a
     // first-use slot read-only inside the wrapper. Create the validated slot
     // pair (0700) first; best-effort, it never widens the boundary.
     // trace:TASK-2772 | ai:claude
-    if crate::seat_clone::launcher_recorded_clone(worktree_root).is_none() {
+    if crate::seat_clone::recorded_clone_for(host_main, worktree_root).is_none() {
         for slot in crate::contained_boundary::lane_build_write_paths() {
             if rw_paths.contains(&slot) {
                 let _ = create_private_dir_all(&slot);
@@ -5426,7 +5512,7 @@ pub(crate) fn os_wrapped_program_and_args(
         full.extend(os_wrap_cargo_home_ro_args(&cargo_home));
     }
     // trace:BUG-2169 | ai:claude
-    full.extend(os_wrap_seat_env_args(worktree_root));
+    full.extend(os_wrap_seat_env_args(host_main, worktree_root));
     // TASK-809: when `[contained] managed_domains_only` is on, deliver the hard
     // default-deny egress via the MANAGED-settings tier — Claude Code only
     // blocks-without-prompt when the flag arrives there, not via the project
@@ -5922,7 +6008,10 @@ fn build_coordinator_headless_command_inner(
     // trace:BUG-2218 TASK-2328 | ai:codex
     // trace:TASK-2631 | ai:codex
     if containment_applied(vendor, contained) {
-        prepare_contained_mailbox_for_launch(&headless_worktree_root())?;
+        prepare_contained_mailbox_for_launch(
+            crate::seat_clone::launcher_main().as_deref(),
+            &headless_worktree_root(),
+        )?;
     }
     let mut child_cmd = Command::new(program);
     child_cmd
@@ -6331,6 +6420,7 @@ fn apply_headless_harness_version(
     let probe = (!mocked)
         .then(|| {
             os_wrapped_program_and_args(
+                crate::seat_clone::launcher_main().as_deref(),
                 worktree_root,
                 vendor.program(),
                 vec!["--version".to_string()],
@@ -6911,9 +7001,10 @@ pub fn claude_headless_resume_args_with_posture(
     let contained_flags = match contained_in {
         // BUG-1971: only when `worktree` is itself a git root; otherwise no
         // write roots. trace:BUG-1971 | ai:claude
-        Some(worktree) => {
-            claude_contained_flags_for_roots(&contained_resume_write_roots(worktree))?
-        }
+        Some(worktree) => claude_contained_flags_for_roots(
+            crate::seat_clone::launcher_main().as_deref(),
+            &contained_resume_write_roots(worktree),
+        )?,
         None => Vec::new(),
     };
     // BUG-050: a resumed lane is as headless as the launch it continues.
@@ -7144,7 +7235,7 @@ pub(crate) fn spawn_claude_headless_resume_granted(
     )?;
     // trace:BUG-2218 TASK-2328 | ai:codex
     if contained {
-        prepare_contained_mailbox_for_launch(cwd)?;
+        prepare_contained_mailbox_for_launch(crate::seat_clone::launcher_main().as_deref(), cwd)?;
     }
     // A contained resume is sandboxed like a fresh launch: refuse a grant
     // its tool calls could not present. trace:BUG-b6b1278890774ef993d2ebc327862470-045 | ai:claude
@@ -7259,6 +7350,7 @@ pub(crate) fn spawn_vendor_headless_resume_granted(
     // headless builder right beside the launch (BUG-342 ratchet).
     // trace:BUG-2386 | ai:claude
     let (program, args) = os_wrapped_program_and_args(
+        crate::seat_clone::launcher_main().as_deref(),
         cwd,
         &resolve_agent_program(vendor.program()),
         codex_resume_exec_args(
@@ -8680,12 +8772,25 @@ fn exec_resume_command(
     permission_mode: Option<&str>,
     contained: bool,
 ) -> Result<()> {
+    // TASK-2032: this resume's entry point resolves the host main once.
+    // trace:TASK-2032 | ai:claude
+    let host_main = crate::seat_clone::launcher_main();
     match target.agent.as_str() {
-        "claude" => exec_claude_resume(&target.id, permission_mode, contained, None),
+        "claude" => exec_claude_resume(
+            host_main.as_deref(),
+            &target.id,
+            permission_mode,
+            contained,
+            None,
+        ),
         // BUG-2386: exec `codex resume <id>` rather than printing it. The
         // resume is native (no bypass): a resume never widens the posture a
         // fresh `aida session new` would need consent for.
-        "codex" => exec_or_spawn_agent(&mut codex_session_resume_command(target, contained)?),
+        "codex" => exec_or_spawn_agent(&mut codex_session_resume_command(
+            host_main.as_deref(),
+            target,
+            contained,
+        )?),
         _ => {
             let (program, args) = resume_command_for(target);
             anyhow::bail!(
@@ -8703,11 +8808,12 @@ fn exec_resume_command(
 /// caller's containment request honoured, in the session's own tree.
 // trace:BUG-2386 | ai:claude
 pub(crate) fn codex_session_resume_command(
+    host_main: Option<&Path>,
     target: &ResumeTarget,
     contained: bool,
 ) -> Result<std::process::Command> {
     let mut cmd = build_codex_resume_command(&target.id, false, false, None, contained)?;
-    if let Some(cwd) = codex_resume_cwd(target) {
+    if let Some(cwd) = codex_resume_cwd(host_main, target) {
         cmd.current_dir(cwd);
     }
     finalize_codex_resume(&mut cmd, &headless_worktree_root())?;
@@ -8717,8 +8823,8 @@ pub(crate) fn codex_session_resume_command(
 /// BUG-2386: where a Codex session resumes: the tree of the lease that minted
 /// it, else the cwd its rollout recorded, when that still exists.
 // trace:BUG-2386 | ai:claude
-fn codex_resume_cwd(target: &ResumeTarget) -> Option<PathBuf> {
-    resume_lease_tree(target).or_else(|| {
+fn codex_resume_cwd(host_main: Option<&Path>, target: &ResumeTarget) -> Option<PathBuf> {
+    resume_lease_tree(host_main, target).or_else(|| {
         let root = crate::vendor_activity::codex_sessions_root()?;
         crate::codex_resume::find_rollout(&root, &target.id)?
             .cwd
@@ -8732,6 +8838,7 @@ fn codex_resume_cwd(target: &ResumeTarget) -> Option<PathBuf> {
 ///   the same permission posture as a fresh one. trace:TASK-112 | ai:claude
 // trace:BUG-2006 | ai:antigravity
 pub(crate) fn build_claude_resume_exec_command(
+    host_main: Option<&Path>,
     id: &str,
     permission_mode: Option<&str>,
     contained: bool,
@@ -8743,14 +8850,14 @@ pub(crate) fn build_claude_resume_exec_command(
         args.extend(["--permission-mode".to_string(), m.to_string()]);
     }
     if contained {
-        args.extend(claude_contained_flags()?);
+        args.extend(claude_contained_flags(host_main)?);
     }
     // BUG-2169 S2: a contained interactive resume runs inside os_wrap too.
     // trace:BUG-2169 | ai:claude
-    let (program, args) = interactive_claude_program_and_args(contained, args)?;
+    let (program, args) = interactive_claude_program_and_args(host_main, contained, args)?;
     // trace:BUG-2218 TASK-2328 | ai:codex
     if contained {
-        prepare_contained_mailbox_for_launch(&std::env::current_dir()?)?;
+        prepare_contained_mailbox_for_launch(host_main, &std::env::current_dir()?)?;
     }
     let mut cmd = Command::new(program);
     cmd.args(args);
@@ -8771,12 +8878,14 @@ pub(crate) fn build_claude_resume_exec_command(
 
 // trace:TASK-1594 | ai:claude
 pub fn exec_claude_resume(
+    host_main: Option<&Path>,
     id: &str,
     permission_mode: Option<&str>,
     contained: bool,
     grant_id: Option<&str>,
 ) -> Result<()> {
-    let mut cmd = build_claude_resume_exec_command(id, permission_mode, contained, grant_id)?;
+    let mut cmd =
+        build_claude_resume_exec_command(host_main, id, permission_mode, contained, grant_id)?;
     exec_or_spawn_agent(&mut cmd)
 }
 
@@ -8786,34 +8895,39 @@ pub fn exec_claude_resume(
 /// worktree of it or a host-recorded seat clone of it). A lease naming any
 /// other tree is ignored, so a forged lease can never widen the boundary to
 /// another repository. `None` keeps the process-cwd boundary.
+///
+/// TASK-2032: the only anchor is `host_main`, the main the launcher resolved
+/// on the host side ([`crate::seat_clone::host_main_from`] its own
+/// directory); the lease is read from that main's `.aida/sessions`.
+/// `target.worktree` (where the transcript was found, which may be a seat
+/// clone and so seat-writable) never anchors anything. A `host_main` a seat
+/// could have forged ([`crate::seat_clone::plausible_host_main`]) is refused.
 // trace:TASK-1952 | trace:TASK-2031 | ai:claude
-pub(crate) fn resume_lease_tree(target: &ResumeTarget) -> Option<PathBuf> {
-    let main = target
-        .worktree
-        .clone()
-        .or_else(|| crate::find_main_worktree_root().ok())?;
-    // TASK-2032: a transcript found in a seat clone resolves main from the
-    // clone's seat-writable marker, so only the launcher's main may then
-    // anchor the clone; a host-resolved main anchors itself.
-    // trace:TASK-2032 | ai:claude
-    let host_resolved = crate::seat_clone::main_for(&main) == crate::seat_clone::MainFor::NotAClone;
-    let main = crate::main_worktree_root_from(&main);
-    let anchor = if host_resolved {
-        Some(main.clone())
-    } else {
-        crate::seat_clone::launcher_main()
-    };
+// trace:TASK-2032 | ai:claude
+pub(crate) fn resume_lease_tree(
+    host_main: Option<&Path>,
+    target: &ResumeTarget,
+) -> Option<PathBuf> {
+    let main = host_main?.canonicalize().ok()?;
+    if crate::seat_clone::main_for(&main) != crate::seat_clone::MainFor::NotAClone
+        || !crate::seat_clone::plausible_host_main(&main)
+    {
+        return None;
+    }
     let (_, _, tree, _) = crate::orchestrator_leases::find_orchestrated_lease(&main, &target.id)?;
     if !tree.is_dir() {
         return None;
     }
     let canon = |p: &Path| std::fs::canonicalize(p).ok();
-    let recorded = anchor.and_then(|anchor| crate::seat_clone::host_recorded_clone(&anchor, &tree));
-    let tree_main = match recorded {
+    let tree_main = match crate::seat_clone::host_recorded_clone(&main, &tree) {
         Some(clone) => clone.main,
+        // A clone the host main does not vouch for anchors nothing.
+        None if crate::seat_clone::main_for(&tree) != crate::seat_clone::MainFor::NotAClone => {
+            return None;
+        }
         None => crate::main_worktree_root_from(&tree),
     };
-    (canon(&tree_main).is_some() && canon(&tree_main) == canon(&main)).then_some(tree)
+    (canon(&tree_main) == Some(main)).then_some(tree)
 }
 
 #[cfg(test)]
@@ -9163,7 +9277,17 @@ mod tests {
             previous_title: Some("before launch".to_string()),
         };
 
-        run_claude_session(None, None, None, None, false, None, Some(restore)).unwrap();
+        run_claude_session(
+            crate::seat_clone::launcher_main().as_deref(),
+            None,
+            None,
+            None,
+            None,
+            false,
+            None,
+            Some(restore),
+        )
+        .unwrap();
 
         let calls = std::fs::read_to_string(log).unwrap();
         assert_eq!(calls.trim(), "child-exit\nrename-window before launch");
@@ -10131,8 +10255,16 @@ mod tests {
     /// trace:STORY-495 | ai:claude
     #[test]
     fn claude_session_args_native_omits_permission_mode() {
-        let args = claude_session_args(None, None, Some("/aida-pickup"), Some("sid"), false, None)
-            .unwrap();
+        let args = claude_session_args(
+            crate::seat_clone::launcher_main().as_deref(),
+            None,
+            None,
+            Some("/aida-pickup"),
+            Some("sid"),
+            false,
+            None,
+        )
+        .unwrap();
         assert!(
             !args.iter().any(|a| a == "--permission-mode"),
             "native launch must not inject --permission-mode: {args:?}"
@@ -10146,8 +10278,16 @@ mod tests {
     /// trace:STORY-495 | ai:claude
     #[test]
     fn claude_session_args_some_injects_permission_mode() {
-        let args =
-            claude_session_args(Some("bypassPermissions"), None, None, None, false, None).unwrap();
+        let args = claude_session_args(
+            crate::seat_clone::launcher_main().as_deref(),
+            Some("bypassPermissions"),
+            None,
+            None,
+            None,
+            false,
+            None,
+        )
+        .unwrap();
         let pos = args
             .iter()
             .position(|a| a == "--permission-mode")
@@ -10271,6 +10411,7 @@ mod tests {
     #[test]
     fn interactive_session_args_pass_model_before_prompt() {
         let claude = claude_session_args(
+            crate::seat_clone::launcher_main().as_deref(),
             None,
             None,
             Some("/aida-pickup STORY-1003"),
@@ -10311,9 +10452,16 @@ mod tests {
     #[test]
     fn headless_args_force_bypass_regardless_of_interactive_default() {
         // The interactive builder is now native-by-default…
-        let interactive =
-            claude_session_args(None, None, Some("/aida-review"), Some("sid"), false, None)
-                .unwrap();
+        let interactive = claude_session_args(
+            crate::seat_clone::launcher_main().as_deref(),
+            None,
+            None,
+            Some("/aida-review"),
+            Some("sid"),
+            false,
+            None,
+        )
+        .unwrap();
         assert!(!interactive.iter().any(|a| a == "--permission-mode"));
         // …yet the headless builder still hard-forces bypass.
         let headless = claude_headless_args("/aida-review", "sid");
@@ -10476,7 +10624,9 @@ mod tests {
             assert_headless_posture(&args, contained, label);
             assert_eq!(args.last().map(String::as_str), Some("p"), "[{label}]");
         }
-        let interactive = claude_contained_flags_for_roots(&[dir]).unwrap();
+        let interactive =
+            claude_contained_flags_for_roots(crate::seat_clone::launcher_main().as_deref(), &[dir])
+                .unwrap();
         assert!(
             !interactive
                 .iter()
@@ -11321,6 +11471,7 @@ mod tests {
         assert_eq!(
             plan.args,
             claude_session_args(
+                crate::seat_clone::launcher_main().as_deref(),
                 Some("acceptEdits"),
                 Some("review-story-1"),
                 Some("/aida-review"),
@@ -12378,9 +12529,13 @@ mod tests {
 
         // OFF (no config, no env) → bare program + args unchanged.
         let off_dir = tempfile::tempdir().unwrap();
-        let (program, out_args) =
-            os_wrapped_program_and_args(off_dir.path(), resolved_binary, args.clone())
-                .expect("off path never errors");
+        let (program, out_args) = os_wrapped_program_and_args(
+            crate::seat_clone::launcher_main().as_deref(),
+            off_dir.path(),
+            resolved_binary,
+            args.clone(),
+        )
+        .expect("off path never errors");
         assert_eq!(
             program, resolved_binary,
             "os_wrap OFF must exec the resolved binary directly"
@@ -12391,7 +12546,12 @@ mod tests {
         _env.set("1");
         let on_dir = tempfile::tempdir().unwrap();
         std::fs::create_dir_all(on_dir.path().join(".git")).unwrap();
-        match os_wrapped_program_and_args(on_dir.path(), resolved_binary, args.clone()) {
+        match os_wrapped_program_and_args(
+            crate::seat_clone::launcher_main().as_deref(),
+            on_dir.path(),
+            resolved_binary,
+            args.clone(),
+        ) {
             Ok((program, out_args)) => {
                 // userns-capable host: bwrap wrap with the resolved binary inside.
                 assert_eq!(program, "bwrap", "enabled => wrap with bwrap");
@@ -12432,8 +12592,13 @@ mod tests {
         let resolved_binary = "/bin/echo";
         let args = vec!["--print".to_string(), "hi".to_string()];
 
-        let err = os_wrapped_program_and_args(outside_git.path(), resolved_binary, args.clone())
-            .expect_err("os_wrap outside git must refuse before binding non-repo dir read-write");
+        let err = os_wrapped_program_and_args(
+            crate::seat_clone::launcher_main().as_deref(),
+            outside_git.path(),
+            resolved_binary,
+            args.clone(),
+        )
+        .expect_err("os_wrap outside git must refuse before binding non-repo dir read-write");
         let msg = format!("{err:#}");
         assert!(
             msg.contains("not inside a git repository")
@@ -12978,9 +13143,17 @@ mod tests {
     // trace:BUG-2006 | ai:antigravity
     #[test]
     fn build_claude_exec_command_exports_when_contained_and_strips_when_uncontained() {
-        let cmd_contained =
-            build_claude_exec_command(None, None, Some("prompt"), Some("sid"), true, None, None)
-                .unwrap();
+        let cmd_contained = build_claude_exec_command(
+            crate::seat_clone::launcher_main().as_deref(),
+            None,
+            None,
+            Some("prompt"),
+            Some("sid"),
+            true,
+            None,
+            None,
+        )
+        .unwrap();
         let envs: Vec<(&std::ffi::OsStr, Option<&std::ffi::OsStr>)> =
             cmd_contained.get_envs().collect();
         assert!(
@@ -12989,9 +13162,17 @@ mod tests {
             "contained build_claude_exec_command must export AIDA_CONTAINED=1: {envs:?}"
         );
 
-        let cmd_uncontained =
-            build_claude_exec_command(None, None, Some("prompt"), Some("sid"), false, None, None)
-                .unwrap();
+        let cmd_uncontained = build_claude_exec_command(
+            crate::seat_clone::launcher_main().as_deref(),
+            None,
+            None,
+            Some("prompt"),
+            Some("sid"),
+            false,
+            None,
+            None,
+        )
+        .unwrap();
         let envs_uncontained: Vec<(&std::ffi::OsStr, Option<&std::ffi::OsStr>)> =
             cmd_uncontained.get_envs().collect();
         assert!(
@@ -13005,9 +13186,16 @@ mod tests {
     // trace:BUG-2006 | ai:antigravity
     #[test]
     fn build_run_claude_session_command_exports_when_contained_and_strips_when_uncontained() {
-        let cmd_contained =
-            build_run_claude_session_command(None, None, Some("prompt"), Some("sid"), true, None)
-                .unwrap();
+        let cmd_contained = build_run_claude_session_command(
+            crate::seat_clone::launcher_main().as_deref(),
+            None,
+            None,
+            Some("prompt"),
+            Some("sid"),
+            true,
+            None,
+        )
+        .unwrap();
         let envs: Vec<(&std::ffi::OsStr, Option<&std::ffi::OsStr>)> =
             cmd_contained.get_envs().collect();
         assert!(
@@ -13016,9 +13204,16 @@ mod tests {
             "contained build_run_claude_session_command must export AIDA_CONTAINED=1: {envs:?}"
         );
 
-        let cmd_uncontained =
-            build_run_claude_session_command(None, None, Some("prompt"), Some("sid"), false, None)
-                .unwrap();
+        let cmd_uncontained = build_run_claude_session_command(
+            crate::seat_clone::launcher_main().as_deref(),
+            None,
+            None,
+            Some("prompt"),
+            Some("sid"),
+            false,
+            None,
+        )
+        .unwrap();
         let envs_uncontained: Vec<(&std::ffi::OsStr, Option<&std::ffi::OsStr>)> =
             cmd_uncontained.get_envs().collect();
         assert!(
@@ -13032,8 +13227,14 @@ mod tests {
     // trace:BUG-2006 | ai:antigravity
     #[test]
     fn build_claude_resume_exec_command_exports_when_contained_and_strips_when_uncontained() {
-        let cmd_contained =
-            build_claude_resume_exec_command("session-123", None, true, None).unwrap();
+        let cmd_contained = build_claude_resume_exec_command(
+            crate::seat_clone::launcher_main().as_deref(),
+            "session-123",
+            None,
+            true,
+            None,
+        )
+        .unwrap();
         let envs: Vec<(&std::ffi::OsStr, Option<&std::ffi::OsStr>)> =
             cmd_contained.get_envs().collect();
         assert!(
@@ -13042,8 +13243,14 @@ mod tests {
             "contained build_claude_resume_exec_command must export AIDA_CONTAINED=1: {envs:?}"
         );
 
-        let cmd_uncontained =
-            build_claude_resume_exec_command("session-123", None, false, None).unwrap();
+        let cmd_uncontained = build_claude_resume_exec_command(
+            crate::seat_clone::launcher_main().as_deref(),
+            "session-123",
+            None,
+            false,
+            None,
+        )
+        .unwrap();
         let envs_uncontained: Vec<(&std::ffi::OsStr, Option<&std::ffi::OsStr>)> =
             cmd_uncontained.get_envs().collect();
         assert!(

@@ -604,7 +604,10 @@ pub(crate) fn handle_burndown_run(
             // trace:BUG-2165 | ai:antigravity
             // trace:BUG-2218 TASK-2328 | ai:codex
             if session::containment_applied(vendor, contained) {
-                session::prepare_contained_mailbox_for_launch(&project_root)?;
+                session::prepare_contained_mailbox_for_launch(
+                    crate::seat_clone::launcher_main().as_deref(),
+                    &project_root,
+                )?;
             }
             // trace:TASK-b6b1278890774ef993d2ebc327862470-144 | ai:claude
             let child_grant = crate::gate::seat_authority::issue_headless_child(
@@ -2064,7 +2067,10 @@ pub(crate) fn run_burndown_verbose(
     // Prepare before logs/tee and child authority are allocated.
     // trace:BUG-2218 TASK-2328 | ai:codex
     if session::containment_applied(vendor, contained) {
-        session::prepare_contained_mailbox_for_launch(&project_root)?;
+        session::prepare_contained_mailbox_for_launch(
+            crate::seat_clone::launcher_main().as_deref(),
+            &project_root,
+        )?;
     }
     // TASK-1169 / ADR-22: same bounded ceiling the quiet launch sets.
     // trace:TASK-1169 | ai:claude

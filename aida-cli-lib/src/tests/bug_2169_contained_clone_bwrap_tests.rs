@@ -315,7 +315,11 @@ mod linux {
     fn settings_for(main: &Path, tree: &Path) -> serde_json::Value {
         let _ambient = ambient(main);
         let roots = crate::session::contained_session_write_roots_from(tree);
-        let flags = crate::session::claude_contained_flags_for_roots(&roots).unwrap();
+        let flags = crate::session::claude_contained_flags_for_roots(
+            crate::seat_clone::launcher_main().as_deref(),
+            &roots,
+        )
+        .unwrap();
         serde_json::from_str(flags.last().unwrap()).unwrap()
     }
 
@@ -385,8 +389,13 @@ mod linux {
             &[],
             &[("AIDA_OS_WRAP", Some("1"))],
         );
-        let (program, mut argv) =
-            crate::session::os_wrapped_program_and_args(tree, "true", Vec::new()).unwrap();
+        let (program, mut argv) = crate::session::os_wrapped_program_and_args(
+            crate::seat_clone::launcher_main().as_deref(),
+            tree,
+            "true",
+            Vec::new(),
+        )
+        .unwrap();
         assert_eq!(program, "bwrap");
         assert_eq!(argv.pop().as_deref(), Some("true"));
         argv
@@ -502,17 +511,31 @@ mod linux {
                 crate::seat_clone::launcher_main(),
                 Some(other.canonicalize().unwrap())
             );
-            assert!(crate::seat_clone::launcher_recorded_clone(&clone).is_none());
+            assert!(crate::seat_clone::recorded_clone_for(
+                crate::seat_clone::launcher_main().as_deref(),
+                &clone,
+            )
+            .is_none());
             assert!(crate::seat_clone::host_recorded_clone(&other, &clone).is_none());
-            let denied =
-                crate::contained_boundary::contained_main_checkout_git_deny_paths(&[clone.clone()]);
+            let denied = crate::contained_boundary::contained_main_checkout_git_deny_paths(
+                crate::seat_clone::launcher_main().as_deref(),
+                &[clone.clone()],
+            );
             assert!(denied.contains(&clone.join(".git")), "{denied:?}");
         }
         let _launcher = crate::seat_clone::LauncherMainPin::new(&fx.main);
-        assert!(crate::seat_clone::launcher_recorded_clone(&clone).is_some());
+        assert!(crate::seat_clone::recorded_clone_for(
+            crate::seat_clone::launcher_main().as_deref(),
+            &clone,
+        )
+        .is_some());
         let _inside = crate::seat_clone::LauncherMainPin::new(&clone);
         assert_eq!(crate::seat_clone::launcher_main(), None);
-        assert!(crate::seat_clone::launcher_recorded_clone(&clone).is_none());
+        assert!(crate::seat_clone::recorded_clone_for(
+            crate::seat_clone::launcher_main().as_deref(),
+            &clone,
+        )
+        .is_none());
     }
 
     /// The seat's own `.git` is exempt from the BUG-2012 main-checkout deny only
@@ -538,8 +561,10 @@ mod linux {
             "session_start must create the seat's target dir"
         );
 
-        let denied =
-            crate::contained_boundary::contained_main_checkout_git_deny_paths(&[clone.clone()]);
+        let denied = crate::contained_boundary::contained_main_checkout_git_deny_paths(
+            crate::seat_clone::launcher_main().as_deref(),
+            &[clone.clone()],
+        );
         assert!(!denied.contains(&clone.join(".git")), "{denied:?}");
 
         let settings = settings_for(&fx.main, &clone);
@@ -575,6 +600,70 @@ mod linux {
         assert!(!allow_rules.contains(&format!("Edit(/{}/**)", fx.main.display())));
     }
 
+    /// TASK-2032 round 2: the boundary built the way `aida session start
+    /// --launch` builds it. The launcher resolves the host main while it still
+    /// runs in main, then changes directory into the seat clone; from there
+    /// the cwd and project root name the clone, so a cwd lookup finds no host
+    /// main. No `LauncherMainPin`: the main threaded from before the chdir
+    /// still recognises the clone, so its `.git` stays writable and its cargo
+    /// target directory is granted, in the settings and in os_wrap alike.
+    // trace:TASK-2032 | ai:claude
+    #[test]
+    fn a_clone_launched_from_inside_itself_keeps_its_boundary() {
+        let fx = fixture();
+        let clone = launch_clone_seat(&fx);
+        let target = crate::seat_clone::host_recorded_clone(&fx.main, &clone)
+            .and_then(|recorded| recorded.cargo_target_dir)
+            .expect("the seat's target dir");
+
+        // Before the chdir: session start runs in main.
+        let host_main = {
+            let _in_main = ambient(&fx.main);
+            crate::seat_clone::launcher_main()
+        };
+        assert_eq!(host_main.as_deref(), Some(fx.main.as_path()));
+
+        // After the chdir: cwd and project root are the clone.
+        let _in_clone = ambient(&clone);
+        assert_eq!(
+            crate::seat_clone::launcher_main(),
+            None,
+            "from inside the clone a cwd lookup has no host main"
+        );
+        let flags = crate::session::claude_contained_flags(host_main.as_deref()).unwrap();
+        let settings: serde_json::Value = serde_json::from_str(flags.last().unwrap()).unwrap();
+        let deny = entries(&settings, "denyWrite");
+        let allow = entries(&settings, "allowWrite");
+        assert!(allow.contains(&clone), "{settings}");
+        assert!(!deny.contains(&clone.join(".git")), "{settings}");
+        assert!(deny.contains(&fx.main.join(".git")), "{settings}");
+        assert!(allow.contains(&target), "{settings}");
+        assert_eq!(
+            settings["env"]["CARGO_TARGET_DIR"],
+            target.display().to_string(),
+            "{settings}"
+        );
+        let rw = crate::session::os_wrap_rw_paths(host_main.as_deref(), &clone).unwrap();
+        assert!(rw.contains(&target), "{rw:?}");
+
+        // The cwd-derived anchor (round 1) loses the clone and fails closed:
+        // the launch is refused, or the seat's own `.git` is denied and no
+        // target dir is granted.
+        if let Ok(flags) =
+            crate::session::claude_contained_flags(crate::seat_clone::launcher_main().as_deref())
+        {
+            let settings: serde_json::Value = serde_json::from_str(flags.last().unwrap()).unwrap();
+            assert!(
+                entries(&settings, "denyWrite").contains(&clone.join(".git")),
+                "{settings}"
+            );
+            assert!(
+                !entries(&settings, "allowWrite").contains(&target),
+                "{settings}"
+            );
+        }
+    }
+
     /// Nothing the seat can write makes a directory a host-recorded clone: not
     /// the `aida-seat-*` name plus marker on a main checkout, not a lease naming
     /// the main checkout itself, and not a directory inside a real clone.
@@ -589,8 +678,10 @@ mod linux {
         let sub = clone.join("sub");
         std::fs::create_dir_all(sub.join(".git")).unwrap();
         assert!(crate::seat_clone::host_recorded_clone(&fx.main, &sub).is_none());
-        let denied =
-            crate::contained_boundary::contained_main_checkout_git_deny_paths(&[sub.clone()]);
+        let denied = crate::contained_boundary::contained_main_checkout_git_deny_paths(
+            crate::seat_clone::launcher_main().as_deref(),
+            &[sub.clone()],
+        );
         assert!(denied.contains(&sub.join(".git")), "{denied:?}");
 
         // A forged clone: right name, marker, alternates, but no host lease.
@@ -605,8 +696,10 @@ mod linux {
         std::fs::create_dir_all(marker.parent().unwrap()).unwrap();
         std::fs::copy(clone.join(crate::seat_clone::MARKER_RELATIVE), &marker).unwrap();
         assert!(crate::seat_clone::host_recorded_clone(&fx.main, &forged).is_none());
-        let denied =
-            crate::contained_boundary::contained_main_checkout_git_deny_paths(&[forged.clone()]);
+        let denied = crate::contained_boundary::contained_main_checkout_git_deny_paths(
+            crate::seat_clone::launcher_main().as_deref(),
+            &[forged.clone()],
+        );
         assert!(denied.contains(&forged.join(".git")), "{denied:?}");
 
         // A `clone` lease naming the main checkout itself never exempts it.
@@ -622,8 +715,10 @@ mod linux {
         )
         .unwrap();
         assert!(crate::seat_clone::host_recorded_clone(&fx.main, &fx.main).is_none());
-        let denied =
-            crate::contained_boundary::contained_main_checkout_git_deny_paths(&[fx.main.clone()]);
+        let denied = crate::contained_boundary::contained_main_checkout_git_deny_paths(
+            crate::seat_clone::launcher_main().as_deref(),
+            &[fx.main.clone()],
+        );
         assert!(denied.contains(&fx.main.join(".git")), "{denied:?}");
 
         // A FORGED MAIN: the seat builds a repository in a directory it can
@@ -685,6 +780,26 @@ mod linux {
             crate::seat_clone::host_recorded_clone(&fx.main, &clone).is_none(),
             "a forged main is never host-recorded"
         );
+        // TASK-2032 round 2: even passed directly as the anchor, as a caller
+        // that wrongly took main from the seat would, the forged main (inside
+        // the seat's own target dir, which the seat writes) is refused.
+        // trace:TASK-2032 | ai:claude
+        assert!(!crate::seat_clone::plausible_host_main(
+            &fake.canonicalize().unwrap()
+        ));
+        assert!(
+            crate::seat_clone::host_recorded_clone(&fake, &clone).is_none(),
+            "a forged, seat-writable main passed as the anchor is refused"
+        );
+        assert!(
+            crate::seat_clone::recorded_clone_for(Some(&fake), &clone).is_none(),
+            "{fake:?}"
+        );
+        let denied = crate::contained_boundary::contained_main_checkout_git_deny_paths(
+            Some(&fake),
+            &[clone.clone()],
+        );
+        assert!(denied.contains(&clone.join(".git")), "{denied:?}");
         // TASK-2111: a tree whose `.git` directory resolves to a main other
         // than itself, and is not a host-recorded clone, refuses the
         // contained launch outright, so nothing is granted from the forgery.
@@ -692,7 +807,10 @@ mod linux {
         let refused = {
             let _ambient = ambient(&fx.main);
             let roots = crate::session::contained_session_write_roots_from(&clone);
-            crate::session::claude_contained_flags_for_roots(&roots)
+            crate::session::claude_contained_flags_for_roots(
+                crate::seat_clone::launcher_main().as_deref(),
+                &roots,
+            )
         }
         .expect_err("a forged-main seat clone must refuse the contained launch");
         assert!(
@@ -700,9 +818,12 @@ mod linux {
             "{refused:#}"
         );
         assert!(
-            !crate::session::os_wrap_rw_paths(&clone)
-                .unwrap_or_default()
-                .contains(&elsewhere),
+            !crate::session::os_wrap_rw_paths(
+                crate::seat_clone::launcher_main().as_deref(),
+                &clone
+            )
+            .unwrap_or_default()
+            .contains(&elsewhere),
             "os_wrap binds nothing from the forged lease"
         );
         std::fs::write(&marker_path, &marker).unwrap();
@@ -739,7 +860,11 @@ mod linux {
         let fx = fixture();
         let clone = launch_clone_seat(&fx);
         let _ambient = ambient(&fx.main);
-        let launcher = crate::session::claude_contained_flags_for(&fx.main).unwrap();
+        let launcher = crate::session::claude_contained_flags_for(
+            crate::seat_clone::launcher_main().as_deref(),
+            &fx.main,
+        )
+        .unwrap();
         let mut config = crate::agent_launch::AgentLaunchConfig {
             agent_type: "claude",
             binary: "claude",
@@ -814,10 +939,18 @@ mod linux {
         let _ambient = ambient(&fx.main);
         let _cwd = crate::session::contained_cwd_seam::pin(&fx.other_wt);
         let args = vec!["--name".to_string(), "seat".to_string()];
-        let (program, plain) =
-            crate::session::interactive_claude_program_and_args(false, args.clone()).unwrap();
+        let (program, plain) = crate::session::interactive_claude_program_and_args(
+            crate::seat_clone::launcher_main().as_deref(),
+            false,
+            args.clone(),
+        )
+        .unwrap();
         assert_eq!((program.as_str(), &plain), ("claude", &args));
-        match crate::session::interactive_claude_program_and_args(true, args.clone()) {
+        match crate::session::interactive_claude_program_and_args(
+            crate::seat_clone::launcher_main().as_deref(),
+            true,
+            args.clone(),
+        ) {
             Ok((program, wrapped)) => {
                 assert_eq!(program, "bwrap");
                 let at = wrapped
@@ -1212,10 +1345,22 @@ true"#;
         .unwrap();
         let _ambient = ambient(&fx.main);
         let _cwd = crate::session::contained_cwd_seam::pin(&fx.other_wt);
-        let plain =
-            crate::session::build_claude_resume_exec_command("sid-1", None, false, None).unwrap();
+        let plain = crate::session::build_claude_resume_exec_command(
+            crate::seat_clone::launcher_main().as_deref(),
+            "sid-1",
+            None,
+            false,
+            None,
+        )
+        .unwrap();
         assert_eq!(plain.get_program(), "claude");
-        match crate::session::build_claude_resume_exec_command("sid-1", None, true, None) {
+        match crate::session::build_claude_resume_exec_command(
+            crate::seat_clone::launcher_main().as_deref(),
+            "sid-1",
+            None,
+            true,
+            None,
+        ) {
             Ok(cmd) => {
                 assert_eq!(cmd.get_program(), "bwrap");
                 let args: Vec<String> = cmd
@@ -1263,7 +1408,11 @@ true"#;
         let config = crate::agent_launch::AgentLaunchConfig {
             agent_type: "claude",
             binary: "/usr/bin/true",
-            default_args: crate::session::claude_contained_flags_for(&fx.main).unwrap(),
+            default_args: crate::session::claude_contained_flags_for(
+                crate::seat_clone::launcher_main().as_deref(),
+                &fx.main,
+            )
+            .unwrap(),
             prompt_style: crate::agent_launch::AgentPromptStyle::Positional,
             contained: true,
         };

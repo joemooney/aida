@@ -86,6 +86,7 @@ pub(crate) fn handle_session_command(cmd: &SessionCommand) -> Result<()> {
                 maybe_show_faithful_launcher_notice();
             }
             session::new_session_for_vendor(
+                crate::seat_clone::launcher_main().as_deref(),
                 &vendor,
                 None,
                 title.clone(),
@@ -1594,7 +1595,10 @@ pub(crate) fn agent_resume_launch_config(
         // The child runs in `worktree`, so its write boundary is that
         // worktree — not the launcher's cwd (`tool_contained_flags` would
         // resolve the parent's git root). trace:BUG-2151 | ai:claude
-        config.default_args = session::claude_contained_flags_for(worktree)?;
+        config.default_args = session::claude_contained_flags_for(
+            crate::seat_clone::launcher_main().as_deref(),
+            worktree,
+        )?;
         config.contained = true;
     }
     config.default_args.extend(agent_resume_args(
@@ -2027,7 +2031,10 @@ pub(crate) fn rescope_contained_settings(
         return Ok(());
     }
     let roots = session::contained_session_write_roots_from(tree);
-    let flags = session::claude_contained_flags_for_roots(&roots)?;
+    let flags = session::claude_contained_flags_for_roots(
+        crate::seat_clone::launcher_main().as_deref(),
+        &roots,
+    )?;
     let settings = flags
         .last()
         .cloned()
@@ -2046,7 +2053,9 @@ pub(crate) fn tool_contained_flags(agent_type: &str) -> Result<Vec<String>> {
     Ok(match agent_type {
         "claude" => {
             let mut flags = Vec::new();
-            flags.extend(session::claude_contained_flags()?);
+            flags.extend(session::claude_contained_flags(
+                crate::seat_clone::launcher_main().as_deref(),
+            )?);
             flags
         }
         // trace:STORY-1124 | ai:codex
@@ -5830,6 +5839,7 @@ fn wrapped_agent_program_and_args(
 ) -> Result<(std::ffi::OsString, Vec<String>)> {
     if wrap_claude && config.agent_type == "claude" {
         let (prog, args) = crate::session::os_wrapped_program_and_args(
+            crate::seat_clone::launcher_main().as_deref(),
             &plan.launch_cwd,
             &binary.to_string_lossy(),
             all_args,
@@ -6314,7 +6324,10 @@ pub(crate) fn build_agent_new_bg_command(
     refuse_bg_under_os_wrap(config, &plan.launch_cwd)?;
     // trace:BUG-2218 TASK-2328 | ai:codex
     if is_contained_launch(config) {
-        crate::session::prepare_contained_mailbox_for_launch(&plan.launch_cwd)?;
+        crate::session::prepare_contained_mailbox_for_launch(
+            crate::seat_clone::launcher_main().as_deref(),
+            &plan.launch_cwd,
+        )?;
     }
     let mut command = std::process::Command::new(binary);
     command
@@ -6991,7 +7004,10 @@ fn run_agent_generation(
     // trace:TASK-864 | ai:claude
     // trace:BUG-2218 TASK-2328 | ai:codex
     if is_contained_launch(config) {
-        session::prepare_contained_mailbox_for_launch(&plan.launch_cwd)?;
+        session::prepare_contained_mailbox_for_launch(
+            crate::seat_clone::launcher_main().as_deref(),
+            &plan.launch_cwd,
+        )?;
     }
     let (program, exec_args) =
         resolved_agent_program_and_args(binary, config, plan, prompt_args, true)?;

@@ -3809,7 +3809,10 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         let (ceiling_key, ceiling_value) = crate::bg_wait_ceiling_env(Some(&self.project_root));
         // trace:BUG-2218 TASK-2328 | ai:codex
         if self.contained {
-            if let Err(error) = session::prepare_contained_mailbox_for_launch(&worktree) {
+            if let Err(error) = session::prepare_contained_mailbox_for_launch(
+                crate::seat_clone::launcher_main().as_deref(),
+                &worktree,
+            ) {
                 tee.stop();
                 eprintln!("CI-fix mailbox: {error:#}; leaving the CI failure standing");
                 return false;

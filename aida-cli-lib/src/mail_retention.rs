@@ -38,8 +38,9 @@ pub(crate) fn verified_clone_main(main: &Path, clone: &Path) -> Option<std::path
     aida_core::seat_clone_detect::note_host_main(main);
     let main = main.canonicalize().ok()?;
     // trace:TASK-2032 | ai:claude
-    let recorded = crate::seat_clone::host_recorded_clone(&main, clone)?;
-    (recorded.main == main).then_some(main)
+    // host_recorded_clone already requires the clone's main to be exactly
+    // `main`, so its answer is the binding.
+    crate::seat_clone::host_recorded_clone(&main, clone).map(|recorded| recorded.main)
 }
 
 /// Remove the linked worktree at `worktree` behind the barrier, for the CLI

@@ -95,6 +95,7 @@ fn run_contained(tree: &Path, home: &Path, script: &str) -> String {
     let script_path = tree.join("probe.sh");
     std::fs::write(&script_path, script).unwrap();
     let settings = crate::session::claude_contained_settings_json(
+        crate::seat_clone::launcher_main().as_deref(),
         &crate::contained_boundary::contained_write_roots(tree),
     )
     .unwrap();
@@ -209,7 +210,11 @@ fn bug_1982_main_git_denied_whatever_the_store_grant() {
     let roots = crate::contained_boundary::contained_write_roots(&worktree);
     for version in ["git version 2.43.0", "git version 2.39.5", "not a version"] {
         aida_core::git_ops::with_host_git_version(version, || {
-            let json = crate::session::claude_contained_settings_json(&roots).unwrap();
+            let json = crate::session::claude_contained_settings_json(
+                crate::seat_clone::launcher_main().as_deref(),
+                &roots,
+            )
+            .unwrap();
             let settings: serde_json::Value = serde_json::from_str(&json).unwrap();
             let (deny_write, deny) = denies(&settings);
             assert!(
@@ -329,9 +334,12 @@ fn bug_1982_unexpressible_main_git_deny_refuses_the_launch() {
     // writable to a linked-worktree session, so withholding grants is not
     // enough. The launch is refused and no settings (no flags) are produced.
     aida_core::git_ops::with_host_git_version("git version 2.43.0", || {
-        let err = crate::session::claude_contained_settings_json(&roots)
-            .expect_err("an unexpressible main git deny must refuse the launch")
-            .to_string();
+        let err = crate::session::claude_contained_settings_json(
+            crate::seat_clone::launcher_main().as_deref(),
+            &roots,
+        )
+        .expect_err("an unexpressible main git deny must refuse the launch")
+        .to_string();
         assert!(
             err.contains("refusing to launch a contained session"),
             "{err}"
@@ -341,13 +349,18 @@ fn bug_1982_unexpressible_main_git_deny_refuses_the_launch() {
             "{err}"
         );
         assert!(
-            crate::session::claude_contained_flags_for(&worktree).is_err(),
+            crate::session::claude_contained_flags_for(
+                crate::seat_clone::launcher_main().as_deref(),
+                &worktree
+            )
+            .is_err(),
             "no contained launch flags are built"
         );
     });
 
     // Second line of defence in the pure builder: no write grants.
     let json = crate::session::contained_settings_json_with_boundary(
+        crate::seat_clone::launcher_main().as_deref(),
         &[],
         false,
         &roots,
@@ -364,6 +377,7 @@ fn bug_1982_unexpressible_main_git_deny_refuses_the_launch() {
 
     // Mutation control: the same launch with an expressible main path grants.
     let json = crate::session::contained_settings_json_with_boundary(
+        crate::seat_clone::launcher_main().as_deref(),
         &[],
         false,
         &roots,
@@ -416,7 +430,11 @@ fn bug_1982_symlinked_checkout_denies_every_main_git_spelling() {
     // End to end: a session whose code root is the symlinked checkout.
     let roots = crate::contained_boundary::contained_write_roots(&link);
     aida_core::git_ops::with_host_git_version("git version 2.43.0", || {
-        let json = crate::session::claude_contained_settings_json(&roots).unwrap();
+        let json = crate::session::claude_contained_settings_json(
+            crate::seat_clone::launcher_main().as_deref(),
+            &roots,
+        )
+        .unwrap();
         let settings: serde_json::Value = serde_json::from_str(&json).unwrap();
         let (deny_write, deny) = denies(&settings);
         for spelling in [link.join(".git"), real.join(".git")] {
@@ -656,19 +674,30 @@ fn task_1641_fixture_requires_a_lease_to_keep_clone_git_writable() {
     crate::seat_clone::create(&main, &clone, "seat-1", "main").unwrap();
     let roots = crate::contained_boundary::contained_write_roots(&clone);
     assert!(
-        crate::contained_boundary::contained_main_checkout_git_deny_paths(&roots)
-            .contains(&clone.join(".git"))
+        crate::contained_boundary::contained_main_checkout_git_deny_paths(
+            crate::seat_clone::launcher_main().as_deref(),
+            &roots
+        )
+        .contains(&clone.join(".git"))
     );
     lease_contained_clone(&main, &clone);
     // trace:TASK-2032 | ai:claude
     let _launcher = crate::seat_clone::LauncherMainPin::new(&main);
     assert!(
-        !crate::contained_boundary::contained_main_checkout_git_deny_paths(&roots)
-            .contains(&clone.join(".git"))
+        !crate::contained_boundary::contained_main_checkout_git_deny_paths(
+            crate::seat_clone::launcher_main().as_deref(),
+            &roots
+        )
+        .contains(&clone.join(".git"))
     );
-    let settings: serde_json::Value =
-        serde_json::from_str(&crate::session::claude_contained_settings_json(&roots).unwrap())
-            .unwrap();
+    let settings: serde_json::Value = serde_json::from_str(
+        &crate::session::claude_contained_settings_json(
+            crate::seat_clone::launcher_main().as_deref(),
+            &roots,
+        )
+        .unwrap(),
+    )
+    .unwrap();
     let (write_denies, _) = denies(&settings);
     assert!(
         write_denies.contains(&format!("/{}", main.join(".git").display())),

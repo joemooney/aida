@@ -102,8 +102,16 @@ fn bug_2398_only_explicit_child_selector_and_sandbox_options() {
         .unwrap(),
         crate::session::agy_headless_args("fixture")
     );
-    let claude =
-        crate::session::claude_session_args(None, None, Some("hello"), None, false, None).unwrap();
+    let claude = crate::session::claude_session_args(
+        crate::seat_clone::launcher_main().as_deref(),
+        None,
+        None,
+        Some("hello"),
+        None,
+        false,
+        None,
+    )
+    .unwrap();
     assert!(!claude.join(" ").contains("shell_environment_policy"));
 }
 

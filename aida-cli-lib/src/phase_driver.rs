@@ -2240,7 +2240,10 @@ impl RealPhaseDriver {
         let (ceiling_key, ceiling_value) = crate::bg_wait_ceiling_env(Some(&self.project_root));
         // trace:BUG-2218 TASK-2328 | ai:codex
         if self.contained {
-            if let Err(error) = session::prepare_contained_mailbox_for_launch(&self.project_root) {
+            if let Err(error) = session::prepare_contained_mailbox_for_launch(
+                crate::seat_clone::launcher_main().as_deref(),
+                &self.project_root,
+            ) {
                 tee_handle.stop();
                 return Err(PhaseFailure::of(
                     FailureKind::Spawn,
@@ -2419,13 +2422,23 @@ pub(crate) fn contained_child_program_and_args(
     args: Vec<String>,
 ) -> anyhow::Result<(String, Vec<String>)> {
     if !contained {
-        return session::os_wrapped_program_and_args(child_cwd, program, args);
+        return session::os_wrapped_program_and_args(
+            crate::seat_clone::launcher_main().as_deref(),
+            child_cwd,
+            program,
+            args,
+        );
     }
     session::require_child_containment(vendor, contained, child)?;
     let root = contained_in.ok_or_else(|| {
         anyhow::anyhow!("[contained] no working directory to scope the {child} to — refusing to launch it uncontained")
     })?;
-    session::os_wrapped_program_and_args(root, program, args)
+    session::os_wrapped_program_and_args(
+        crate::seat_clone::launcher_main().as_deref(),
+        root,
+        program,
+        args,
+    )
 }
 
 // trace:BUG-2124 | ai:antigravity

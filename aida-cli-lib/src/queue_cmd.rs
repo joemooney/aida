@@ -11142,6 +11142,7 @@ pub(crate) fn deferred_interactive_launch_hint(
     match vendor {
         session::HeadlessVendor::Claude => {
             let mut args = match session::claude_session_args(
+                crate::seat_clone::launcher_main().as_deref(),
                 permission_mode,
                 None,
                 Some(prompt),
@@ -11555,6 +11556,7 @@ pub(crate) fn build_queue_work_claude_command(
     grant_id: Option<&str>,
 ) -> Result<std::process::Command> {
     session::build_claude_exec_command(
+        crate::seat_clone::launcher_main().as_deref(),
         posture.permission_mode.as_deref(),
         name,
         Some(prompt),
@@ -13636,6 +13638,10 @@ pub(crate) fn handle_queue_work(
                 applied_vars.join(", ").dimmed()
             );
         }
+        // TASK-2032: the host main, resolved once before the chdir into the
+        // seat and threaded explicitly into the launch below.
+        // trace:TASK-2032 | ai:claude
+        let host_main = crate::seat_clone::launcher_main();
         std::env::set_current_dir(&lease.worktree_path)
             .with_context(|| format!("failed to chdir into {}", lease.worktree_path.display()))?;
         // BUG-1918: the launched worker (exec'd or spawned below) carries its
@@ -13961,6 +13967,7 @@ pub(crate) fn handle_queue_work(
                     .cyan()
                 );
                 session::exec_claude_resume(
+                    host_main.as_deref(),
                     &id,
                     permission_mode.as_deref(),
                     contained,
@@ -14073,6 +14080,7 @@ pub(crate) fn handle_queue_work(
                     .cyan()
                 );
                 session::exec_claude_with_session(
+                    host_main.as_deref(),
                     permission_mode.as_deref(),
                     name.as_deref(),
                     &prompt,
