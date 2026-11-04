@@ -1,4 +1,11 @@
 - user_id: role:implementer
+  requirement_id: 01a1a50b-c5d6-7441-b192-89d4e403ca32
+  position: 181000
+  added_by: role:implementer
+  note: 'semantic conflict with #3331'
+  added_at: 2026-11-04T09:50:11.338632948Z
+  for_role: implementer
+- user_id: role:implementer
   requirement_id: 01a1a41f-d121-7d41-bbd4-68957257a18b
   position: 182000
   added_by: role:implementer
@@ -32,13 +39,6 @@
   added_by: role:implementer
   note: rework brief on spec
   added_at: 2026-11-04T08:02:03.446924048Z
-  for_role: implementer
-- user_id: role:implementer
-  requirement_id: 01a1a50b-c5d6-7441-b192-89d4e403ca32
-  position: 187000
-  added_by: role:implementer
-  note: rework brief on spec
-  added_at: 2026-11-04T08:01:55.408858306Z
   for_role: implementer
 - user_id: role:implementer
   requirement_id: 01a19db5-2e75-75f3-a290-1be07eaf1692
