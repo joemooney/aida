@@ -20,7 +20,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T07:26:01.071265913Z
-modified_at: 2026-11-04T05:52:46.007282401Z
+modified_at: 2026-11-04T06:39:32.193789453Z
 req_type: Task
 tags:
 - architecture
@@ -708,6 +708,13 @@ comments:
   created_at: 2026-11-04T01:44:14.368673269Z
   modified_at: 2026-11-04T01:44:14.368673269Z
   session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
+- id: 01a1a548-c561-7ac2-a3f7-154a5d18f364
+  author: joe
+  content: 'IMPLEMENTER (claude, 2026-11-03 23:40 MST): applied both 11-03 rulings. PR-3351 (branch spec-b6b1278890774ef993d2ebc327862470-001-2 = 78858c73525 cherry-picked onto current main + a95501b6dcb). It supersedes draft PR #3323: this lane''s lease branch is -001-2 and a seat cannot push to -001. (1) Gate ledger is reviewer-only: codex_native_write_paths takes the role; rescope_contained_settings passes plan.role; initial flags, headless drain children and exec_codex_session have no role and get no ledger. Contained Claude never had the ledger, so there was no drift to remove. Test task_2712_native_codex_implementer_gets_no_gate_ledger covers it. (2) N3 fallback: seat_clone::commit_pending runs git add -A and git commit in AIDA''s own bwrap job (clone rw, main .git ro, seat config replaced, hooks/fsmonitor off, no network, host identity from main, HEAD must be the lease branch, seat marker never staged). It is invoked by ''aida ship <SPEC> --from-seat <clone> --commit-pending <MSG>'' before the unchanged bundle/verify/trailer/push path. ''aida ship'' inside any native lane now refuses, with the host-commit recovery when in a clone. Live test task_2712_codex_sandbox_live_seat_commit_and_denials now asserts the direct commit inside Codex is denied and the host commit succeeds. New bwrap-gated e2e: task_2712_native_codex_seat_commit_ships_from_seat_without_seat_hooks. VERIFIED: cargo check -p aida-cli-lib --lib --tests is clean (0 warnings). untested=true: two ''cargo test'' lane jobs hit the runner''s 900s limit while compiling, and the AIDA_CARGO_TIMEOUT override was denied in this lane. Host probe to run: AIDA_REQUIRE_CODEX_SANDBOX_LIVE=1 AIDA_REQUIRE_BWRAP_LIVE=1 cargo test -p aida-cli-lib --lib task_2712_. Open gap: no supervisor auto-commit after the Codex child exits; the hand-off is the explicit --commit-pending command.'
+  created_at: 2026-11-04T06:39:32.193789453Z
+  modified_at: 2026-11-04T06:39:32.193789453Z
+  session_id: 01a1a51d9312
+  harness_version: 2.1.318 (Claude Code)
 history:
 - id: 01a1960f-6ca8-7313-8a94-63b0b98a4e44
   author: joe
