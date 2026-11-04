@@ -53,12 +53,12 @@ description: |-
   aida-core/src/db/cache_binding.rs:171: after TASK-1739, production code calls capture_with_excluded; capture() is only used by tests, so non-test builds emit a dead_code warning.
 
   Raised in review of PR-2746 (TASK-1739): https://github.com/joemooney/aida/pull/2746#issuecomment-6256684724
-status: InProgress
+status: Done
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-19T16:01:15.460127350Z
-modified_at: 2026-11-04T11:03:07.490661379Z
+modified_at: 2026-11-04T12:52:37.064562298Z
 req_type: Task
 tags:
 - cli
@@ -385,6 +385,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1a69e-64b7-7353-af02-1f3a5a4b29ff
+  author: joe
+  timestamp: 2026-11-04T12:52:40.759096482Z
+  session_id: 01a1a63a0f03
+  harness_version: 2.1.318 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 filed_at:
   code_sha: 6d590ed914dea5135a126f7dae6abb403adec66d
   branch: main
@@ -393,3 +402,7 @@ filed_at:
   aida_build_sha: 6d590ed914
   vendor: claude
   session: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+implementation_info:
+  implemented: true
+  implemented_at: 2026-11-04T12:52:37.064562298Z
+  implemented_by: joe
