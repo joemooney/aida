@@ -1,0 +1,48 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-2425",
+  "publishes": [
+    {
+      "at": "2026-11-04T01:08:11.613774254Z",
+      "closed_by": "queue-done"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-03T15:35:04.112749396Z",
+      "spec": "BUG-2425",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-03T19:38:54.036918962Z",
+      "spec": "BUG-2425",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-03T22:02:32.790353450Z",
+      "spec": "BUG-2425",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    }
+  ]
+}
