@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T18:43:54.866127851Z
-modified_at: 2026-11-04T19:26:19.799611043Z
+modified_at: 2026-11-04T19:26:24.063865571Z
 req_type: Bug
 tags:
 - area:train
@@ -51,6 +51,11 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a1a806-dbd7-7692-85a3-4c2f3b4abd96
+  author: joe
+  timestamp: 2026-11-04T19:26:24.215558076Z
+  session_id: 01a1a7f2ef8a
+  changes: []
 filed_at:
   code_sha: 6a331a8a5c91ca7485b695a076af44bdf9be3894
   branch: main
@@ -63,3 +68,6 @@ implementation_info:
   implemented: true
   implemented_at: 2026-11-04T19:26:19.799611043Z
   implemented_by: joe
+interface_changes:
+  cli:
+  - aida pr train accepts rework branches with unresolved suffix hints when title or commit trailers name a resolvable spec; members without a resolvable spec refuse
