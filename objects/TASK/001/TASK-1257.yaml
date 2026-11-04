@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-17T19:49:56.148171627Z
-modified_at: 2026-11-04T02:30:59.797738160Z
+modified_at: 2026-11-04T02:31:01.870325239Z
 req_type: Task
 tags:
 - followup-src:docs/plans/2026-09-16-story-1178-reconstitution-loop-v1.md
@@ -16,6 +16,13 @@ relationships:
 - rel_type: Child
   target_id: 01a0ada5-5fc2-70f0-b98c-53947dba5c67
   created_at: 2026-09-17T19:49:59.749967893Z
+comments:
+- id: 01a1a465-41ee-76b0-a2e6-ddd200803ce8
+  author: joe
+  content: 'OPERATOR RULING (2026-11-03 19:30 MST, relayed by advisor): regroup ruling 1: the regeneration / north-star research line does not continue. Rejected.'
+  created_at: 2026-11-04T02:31:01.870325239Z
+  modified_at: 2026-11-04T02:31:01.870325239Z
+  session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
 history:
 - id: 01a1a465-3a3f-7fc3-ba0b-3ea677cb5660
   author: joe
