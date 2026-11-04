@@ -26,12 +26,13 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-24T15:20:04.914684182Z
-modified_at: 2026-11-04T02:43:03.014639426Z
+modified_at: 2026-11-04T02:43:06.226097764Z
 req_type: Doc
 tags:
 - exposition
 - failure-learning
 - human
+- operator-held
 - telemetry
 relationships:
 - rel_type: References
@@ -81,3 +82,12 @@ history:
   - field_name: status
     old_value: Rejected
     new_value: Draft
+- id: 01a1a470-502b-7641-82a5-1de23d42e9a3
+  author: joe
+  timestamp: 2026-11-04T02:43:06.411418138Z
+  session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
+  changes: []
+deferred: true
+deferred_at: 2026-11-04T02:43:06.226097764Z
+deferred_until: the operator reopens the regeneration / north-star research line
+deferred_reason: 'OPERATOR RULING 2026-11-03 19:36 MST: the regeneration / north-star research line stays deferred (revised from reject).'
