@@ -29,7 +29,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T02:34:20.173245666Z
-modified_at: 2026-11-04T04:40:33.783207678Z
+modified_at: 2026-11-04T04:59:10.226014048Z
 req_type: Story
 comments:
 - id: 01a1a468-a682-7271-a707-298d622d86f1
@@ -82,6 +82,12 @@ comments:
   modified_at: 2026-11-04T04:40:33.783207678Z
   session_id: 01a1a4d64ff0
   harness_version: 2.1.318 (Claude Code)
+- id: 01a1a4ec-e212-7ad3-a8ec-6255af316f82
+  author: joe
+  content: 'ADVISOR SIGNOFF (2026-11-03 22:02 MST): sketch APPROVED as five PRs (S1-S5). Rulings: (1) Store the canonical string in deferred_until with no schema change. Reason: single user, and three backends untouched. (2) Route to aida human and never auto-lift an operator hold. (3) Yes: query: is limited to aida list''s existing filters plus count<op>n. (4) Yes, findings recur --until is the recurrence escalation. (5) A transient gh failure evaluates to Unknown, which is not false: skip it, report it, never un-defer on Unknown, and exit 0. The job exits non-zero only for an internal or parse error. This replaces the sketch''s ''non-zero when gh down'' line and matches STORY-2401''s Observed<T> semantics. If STORY-2401 slice 2 has merged by then, use its Observed type in the facts adapter; otherwise use a local tri-state and do not wait for it. DISPATCH: S1 now (condition module, aida condition check, help golden). S2 to S5 follow in order, each after its predecessor merges. Gate LIGHT per slice.'
+  created_at: 2026-11-04T04:59:10.226014048Z
+  modified_at: 2026-11-04T04:59:10.226014048Z
+  session_id: da1c0d85-1d45-4ce4-a292-5358644f65b9
 history:
 - id: 01a1a468-9c3a-76d2-ab8c-12bf6457966b
   author: joe
