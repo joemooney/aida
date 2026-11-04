@@ -16,12 +16,12 @@ description: |-
   1. When `--vendor` is omitted on `aida dispatch request take` or `impl`, `dispatch` resolves the project's configured `[agents] vendor` rather than hardcoding `DispatchVendor::Claude`.
   2. Launching a Codex implementer lane from `dispatch` detaches cleanly (integrating with STORY-2254) without blocking `dispatch tick` / `serve` to completion.
   3. Unit tests verify default vendor resolution and non-blocking launch behavior for `take` and `impl`.
-status: NeedsAttention
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T06:46:56.104025446Z
-modified_at: 2026-11-04T03:49:16.354252460Z
+modified_at: 2026-11-04T05:06:57.865740474Z
 req_type: Bug
 tags:
 - audit
@@ -300,6 +300,20 @@ history:
   session_id: 01a1a46074eb
   harness_version: 2.1.318 (Claude Code)
   changes: []
+- id: 01a1a4f4-04c4-73a3-8e54-621ad22af329
+  author: aida-auto-bump
+  timestamp: 2026-11-04T05:06:57.860349822Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Completed
+processing_record:
+- id: 01a1a4f4-04c9-7b50-89a0-fa1db65bddf4
+  timestamp: 2026-11-04T05:06:57.865736457Z
+  agent: aida
+  commit_sha: 8412b846311196b4e01f391dc123271ad5d030fd
+  summary: All 3 BUG-2390 acceptance criteria met at ab32b837 with tests; CI green on head (run 41769429715). Non-blocking follow-ups noted.
+  review_verdict: approved
 filed_at:
   code_sha: 6dc7d4977ac5e47c42ddfb26597fe3ec5fb70b60
   branch: main
@@ -308,17 +322,13 @@ filed_at:
   aida_build_sha: 962ca07af25
   vendor: antigravity
   session: 01a194b1bcfb
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-04T05:06:57.860343583Z
+  completion_sha: 8412b846311196b4e01f391dc123271ad5d030fd
 attention_reason:
   category: blocked-dependency
   detail: 'Finding 1 (BLOCKING, help golden): could not regenerate in this seat. Two lane-job runs of ''AIDA_UPDATE_SNAPSHOTS=1 cargo test --profile agent -p aida-cli-lib --lib -- help_surface_matches_golden_snapshot'' timed out at 900s, both while compiling aida-cli-lib (the runner treats the target as seeded, and no build slot was available), and setting AIDA_CARGO_TIMEOUT=3600 is permission-denied here. Per the finding, I did not hand-edit the snapshot. Operator: run that command on PR #3309 at b1e3842924e and commit cli_help_snapshot.txt. Findings 2 and 3 are fixed in b1e3842924e (pass_admission now leaves a Codex take/impl WaitingForServe on the tick; CODEX_LANE_NEEDS_GRANT names ''aida dispatch request take|impl'' plus ''aida dispatch serve''; new tests). Finding 4 is accepted per the ruling. untested=true: the new dispatch tests were not run either (same compile timeout).'
   lean: Operator regenerates the golden snapshot; no code change needed
   raised_by: implementer
   raised_at: 2026-11-04T02:21:52.637959953Z
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'Round-4 items 2 and 3 are fixed and tested (CODEX_LANE_NEEDS_GRANT remedy; tick leaves a Codex take/impl Pending, then serve runs it). The BLOCKING item 1 is still open: the help golden was never regenerated, so lib-0 stays red.'
-  recovery_hint: address the review findings, move BUG-2390 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-04T02:27:51.485525495Z
