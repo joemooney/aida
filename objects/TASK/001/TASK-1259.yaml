@@ -8,11 +8,10 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-17T19:50:15.101376618Z
-modified_at: 2026-11-04T02:41:43.898911487Z
+modified_at: 2026-11-04T02:43:56.824030027Z
 req_type: Task
 tags:
 - followup-src:docs/plans/2026-09-16-story-1178-reconstitution-loop-v1.md
-- operator-held
 relationships:
 - rel_type: Child
   target_id: 01a0ada5-5fc2-70f0-b98c-53947dba5c67
@@ -49,7 +48,8 @@ history:
   timestamp: 2026-11-04T02:41:41.398885499Z
   session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
   changes: []
-deferred: true
-deferred_at: 2026-11-04T02:41:41.211239572Z
-deferred_until: the operator reopens the regeneration / north-star research line
-deferred_reason: 'OPERATOR RULING 2026-11-03 19:36 MST: the regeneration / north-star research line stays deferred (revised from reject).'
+- id: 01a1a471-15fe-7ce0-996d-0a6f84c302f9
+  author: joe
+  timestamp: 2026-11-04T02:43:57.054255066Z
+  session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
+  changes: []
