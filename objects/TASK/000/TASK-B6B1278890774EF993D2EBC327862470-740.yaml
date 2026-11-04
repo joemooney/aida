@@ -14,7 +14,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-03T14:12:57.886227099Z
-modified_at: 2026-11-04T01:13:51.133887503Z
+modified_at: 2026-11-04T01:13:52.766535932Z
 req_type: Task
 tags:
 - carried-from:STORY-2336
@@ -61,16 +61,16 @@ history:
   timestamp: 2026-11-03T22:16:58.475934654Z
   session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
   changes: []
-- id: 01a1a41e-991a-7ca3-8cec-5516d0fb3d3d
+- id: 01a1a41e-9f7b-7a80-992f-46aad0efa501
   author: aida-auto-bump
-  timestamp: 2026-11-04T01:13:51.130735668Z
+  timestamp: 2026-11-04T01:13:52.763458316Z
   changes:
   - field_name: status
     old_value: Done
     new_value: Completed
 processing_record:
-- id: 01a1a41e-991d-7882-8b92-445bc240d323
-  timestamp: 2026-11-04T01:13:51.133871915Z
+- id: 01a1a41e-9f7e-7631-b18a-c7780114f9e5
+  timestamp: 2026-11-04T01:13:52.766520438Z
   agent: aida
   commit_sha: cd1ad8f4f7414b0be97a2d72d6232301a0f9d325
   summary: ship-ready eligibility now treats only CONFLICTING mergeable as a disqualification; UNKNOWN/absent maps to Some(false) (evidence unknown, keep prior observation), MERGEABLE to Some(true); regression test covers UNKNOWN, None, fresh-UNKNOWN and CONFLICTING; CI green at head (run 41720832381)
@@ -87,5 +87,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-11-03T21:20:11.836474265Z
   implemented_by: joe
-  completed_at: 2026-11-04T01:13:51.130729390Z
+  completed_at: 2026-11-04T01:13:52.763452125Z
   completion_sha: cd1ad8f4f7414b0be97a2d72d6232301a0f9d325
