@@ -1,5 +1,6 @@
 id: 01a1a473-2c55-7160-9769-a7ab46b93853
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-760
+agreed_id: TASK-2815
 title: 'Non-blocking (cosmetic): scripts/test-time-budget.toml story_2331 entry (90s) i…'
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on STORY-2331, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
@@ -20,6 +21,11 @@ tags:
 - finding-hash:dbc03d07
 - from-review:PR-3308
 - kind:carried-forward
+history:
+- id: 01a1a489-fa0d-7f12-bf58-ba83a7776069
+  author: joe
+  timestamp: 2026-11-04T03:11:08.301031698Z
+  changes: []
 filed_at:
   code_sha: 4671a4e53dcf6ac0f7f8fe8018f030ccd8a6723f
   branch: main
