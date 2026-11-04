@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-204
 agreed_id: BUG-2435
 title: 'os_wrap lanes bypass the cargo slot limiter: bwrap gives each lane a private /run/user, so every lane takes its own slot and host cargo ps shows them as QUEUED'
 description: 'Observed 2026-11-03 19:15 MST. Four AIDA_OS_WRAP=1 lanes each ran rustc on aida-cli-lib at once (5 rustc processes, load 10 on 6 cores), while host ''cargo ps'' showed ''slots 0/2 busy, 4 queued'' and earlier jobs as LOST. The queued wrapper (bash ~/.local/bin/cargo, pid 1901021) runs in mount namespace 4026533095, not the host''s 4026531832. It already has a cargo child, with its acquisition marker under /tmp/cargo-slots-0/acq.<pid>, so the slot lock it took is private to the bwrap. The jobs ledger (~/.local/state/cargo-slots/builds.jsonl) is shared, so the host sees an entry that never takes a host slot. Fix: the os_wrap profile binds the host slot directory (/run/user/<uid>/cargo-slots-<uid>) read-write, as BUG-2383''s lane job runner intends, or lane jobs acquire the slot on the host side before entering bwrap. Add a test that a wrapped job''s acquisition shows as busy in host cargo ps.'
-status: Done
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T02:15:29.023069877Z
-modified_at: 2026-11-04T05:53:47.120292069Z
+modified_at: 2026-11-04T06:14:26.590849715Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -69,6 +69,15 @@ history:
   timestamp: 2026-11-04T05:53:49.527342128Z
   session_id: da1c0d85-1d45-4ce4-a292-5358644f65b9
   changes: []
+- id: 01a1a531-cc1e-7d91-b970-811b360ea23d
+  author: aida-orchestrator
+  timestamp: 2026-11-04T06:14:26.590875032Z
+  session_id: 01a1a5304e6f
+  harness_version: 2.1.318 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: NeedsAttention
 filed_at:
   code_sha: 0754a362d797d2d9b246b4609456735b5486095d
   branch: main
@@ -81,3 +90,11 @@ implementation_info:
   implemented: true
   implemented_at: 2026-11-04T04:59:13.307896475Z
   implemented_by: joe
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: Fix is correct (nested bwrap userns as host uid/gid, cap-drop ALL; CI green at head), but the only test proving the job lands in the host slot dir is outside the forced-live bwrap CI gate, so CI can skip it silently
+  recovery_hint: address the review findings, move BUG-2435 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-11-04T06:14:26.590849715Z
