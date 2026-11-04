@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-25T12:05:27.587470098Z
-modified_at: 2026-11-04T01:40:09.323491538Z
+modified_at: 2026-11-04T01:40:11.313292776Z
 req_type: Task
 tags:
 - needs-sketch
@@ -94,6 +94,12 @@ comments:
   created_at: 2026-10-14T01:36:32.083198005Z
   modified_at: 2026-10-14T01:36:32.083198005Z
   session_id: 5740e215-8b31-4a71-aa61-528a3fbb8c6f
+- id: 01a1a436-b5b1-7421-bc29-78cc3e2de369
+  author: joe
+  content: 'ADVISOR REGROUP (2026-11-03): closed as obsolete/already fixed after verification in the regroup inventory: its revisit trigger (#2743, STORY-1688) merged; BUG-1693 completed; mandate (STORY-1700) and mail wake target the same stalls. Reopen if seat jobs sit unread again.'
+  created_at: 2026-11-04T01:40:11.313292776Z
+  modified_at: 2026-11-04T01:40:11.313292776Z
+  session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
 history:
 - id: 01a0def4-f1c5-7552-b525-532bdee87e94
   author: joe
