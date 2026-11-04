@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-03T17:38:07.427036611Z
-modified_at: 2026-11-04T01:13:41.482666168Z
+modified_at: 2026-11-04T01:13:43.106127148Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -52,16 +52,16 @@ history:
   timestamp: 2026-11-03T22:24:40.237317917Z
   session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
   changes: []
-- id: 01a1a41e-7367-7253-9b11-40defe351fd1
+- id: 01a1a41e-79bf-7ed2-8b3e-f7c3883bb4e1
   author: aida-auto-bump
-  timestamp: 2026-11-04T01:13:41.479544004Z
+  timestamp: 2026-11-04T01:13:43.103273855Z
   changes:
   - field_name: status
     old_value: Done
     new_value: Completed
 processing_record:
-- id: 01a1a41e-736a-72c3-9355-7f6d24c8596f
-  timestamp: 2026-11-04T01:13:41.482652143Z
+- id: 01a1a41e-79c2-7e50-929d-383311aca4c4
+  timestamp: 2026-11-04T01:13:43.106121262Z
   agent: aida
   commit_sha: 09309e9bfc07769ff58042e642250e6393944a3b
   summary: 'BUG-2430 both criteria met: rework brief resolves the open PR''s change-keyed verdict (newer of spec/PR key wins, newer approval clears) and an unreadable/ambiguous refusal refuses the launch; 5 targeted tests, PR CI green at head, mergeState CLEAN. Three non-blocking follow-ups filed as findings.'
@@ -78,5 +78,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-11-03T21:50:28.197457216Z
   implemented_by: joe
-  completed_at: 2026-11-04T01:13:41.479537380Z
+  completed_at: 2026-11-04T01:13:43.103268060Z
   completion_sha: 09309e9bfc07769ff58042e642250e6393944a3b
