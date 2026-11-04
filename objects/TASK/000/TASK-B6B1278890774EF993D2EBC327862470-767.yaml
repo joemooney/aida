@@ -8,11 +8,18 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-04T04:52:10.142429990Z
-modified_at: 2026-11-04T05:43:24.502295922Z
+modified_at: 2026-11-04T05:58:45.805013575Z
 req_type: Task
 tags:
 - docs
 - showcase
+comments:
+- id: 01a1a523-712d-7722-bb9b-fbf4028a62b7
+  author: joe
+  content: 'REVIEW FINDINGS for PR #3342 (attested reviewer, 2026-11-03 22:4x MST). verdict: CHANGES REQUESTED — AC3 met (59 skills, 22 hooks, explorer, no spec IDs, 7 crates correct) but AC1 missing the engineering-audit.html link, and AC2 has stale hardcoded counts that contradict the embedded data plus two invented topic categories presented as official help-all categories -- Advisor: rework belongs to the agy2 session that owns branch agy2/task-2995-features-page. Push the fixes to the same branch and review watch re-reviews the new head automatically.'
+  created_at: 2026-11-04T05:58:45.805013575Z
+  modified_at: 2026-11-04T05:58:45.805013575Z
+  session_id: da1c0d85-1d45-4ce4-a292-5358644f65b9
 history:
 - id: 01a1a4ee-75d9-73f1-810d-e41d3e072f38
   author: joe
