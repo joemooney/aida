@@ -4181,13 +4181,14 @@ fn bug_2390_codex_take_and_impl_launch_detached_and_report_acceptance() {
     assert!(!wt_root.join("impl-1917").exists());
 }
 
-/// BUG-2390 (review finding 4): the schedule `dispatch tick` holds no seat
-/// grant, and the detached Codex launch mints its worker's grant from one.
-/// A Codex take/impl claimed by the tick is refused with a named error
-/// before anything is launched.
+/// BUG-2390: the schedule `dispatch tick` holds no seat grant, and the
+/// detached Codex launch mints its worker's grant from one. The tick decides
+/// that at claim time and leaves a Codex take/impl `Pending` (waiting for
+/// serve) instead of claiming and refusing it, so a tick that wins the race
+/// with `dispatch serve` loses nothing; serve then runs both.
 // trace:BUG-2390 | ai:claude
 #[test]
-fn bug_2390_tick_refuses_codex_take_and_impl_without_a_grant() {
+fn bug_2390_tick_leaves_codex_take_and_impl_pending_for_serve() {
     let f = ExecFixture::new(&["implementer"]);
     write_agents_vendor(&f.root, "codex");
     f.start_mandate(&[Scope::ShipHeld, Scope::Dispatch], false);
@@ -4224,18 +4225,82 @@ fn bug_2390_tick_refuses_codex_take_and_impl_without_a_grant() {
     )
     .unwrap();
 
-    run_dispatch_tick_sync(&f.root, &f.mandate_dir, now).unwrap();
+    let tick = run_dispatch_tick_sync(&f.root, &f.mandate_dir, now).unwrap();
+    assert_eq!(tick.spawned, 0, "{tick:?}");
+    assert_eq!(tick.waiting_for_serve, 2, "{tick:?}");
     for id in [&take.request.id, &imp.request.id] {
         let (_, res) = load_pair(&f.root, id).unwrap();
-        assert_eq!(res.status, DispatchStatus::Refused, "{res:?}");
-        let reason = res.refusal_reason.as_deref().unwrap_or_default();
-        assert!(reason.starts_with(CODEX_LANE_NEEDS_GRANT), "{reason}");
-        assert!(res.spawned_session.is_none());
+        assert_eq!(res.status, DispatchStatus::Pending, "{res:?}");
+        assert!(res.claim_token().is_none(), "{res:?}");
     }
     assert!(
         !log.exists(),
         "no detached Codex launch may run from the tick"
     );
+
+    // `aida dispatch serve` then claims and runs both.
+    let pass = claim_and_dispatch_pass(&f.root, true, false, now).unwrap();
+    assert_eq!(pass.spawned, 2, "{pass:?}");
+    for id in [&take.request.id, &imp.request.id] {
+        let token = load_pair(&f.root, id)
+            .unwrap()
+            .1
+            .claim_token()
+            .map(str::to_string);
+        let res = execute_one_request_with_token(
+            &f.root,
+            &f.mandate_dir,
+            id,
+            true,
+            token.as_deref(),
+            now,
+        )
+        .unwrap();
+        assert_eq!(res.status, DispatchStatus::Done, "{res:?}");
+        assert_eq!(res.spawned_session.as_deref(), Some("att-2390"));
+    }
+    let calls = std::fs::read_to_string(&log).unwrap();
+    assert_eq!(calls.matches("ARGS=agent new codex").count(), 2, "{calls}");
+}
+
+/// BUG-2390: `aida dispatch run <id>` without `--via-serve` on a Codex lane
+/// is refused with a remedy that names real commands: resubmit, then run
+/// `aida dispatch serve` from a role-entered advisor terminal.
+// trace:BUG-2390 | ai:claude
+#[test]
+fn bug_2390_direct_run_refuses_codex_lane_naming_the_real_remedy() {
+    let f = ExecFixture::new(&["implementer"]);
+    write_agents_vendor(&f.root, "codex");
+    f.start_mandate(&[Scope::ShipHeld, Scope::Dispatch], false);
+    let now = Utc::now();
+    let log = f._tmp.path().join("codex-direct.log");
+    let _bins = install_test_bins(Some(fake_codex_bg_aida(&f, &log, true)), None);
+    let imp = submit_request(
+        &f.root,
+        &f.mandate_dir,
+        &f.principal,
+        &DispatchRequestVerb::Impl {
+            name: "impl-1917".into(),
+            branch: "codex/story-1917-s2".into(),
+            spec: "STORY-1917".into(),
+            brief: f.write_brief("impl.md", "Implement slice 2.\n"),
+            vendor: None,
+        },
+        now,
+    )
+    .unwrap();
+
+    let res = execute_one_request(&f.root, &f.mandate_dir, &imp.request.id, false, now).unwrap();
+    assert_eq!(res.status, DispatchStatus::Refused, "{res:?}");
+    let reason = res.refusal_reason.as_deref().unwrap_or_default();
+    assert!(reason.contains(CODEX_LANE_NEEDS_GRANT), "{reason}");
+    assert!(
+        reason.contains("aida dispatch request take|impl"),
+        "{reason}"
+    );
+    assert!(reason.contains("aida dispatch serve"), "{reason}");
+    assert!(!reason.contains("aida dispatch take "), "{reason}");
+    assert!(!log.exists(), "no detached Codex launch may run");
 }
 
 /// BUG-2390: a launcher that exits 0 without an `accepted:` line did not

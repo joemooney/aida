@@ -198,13 +198,26 @@ pub(crate) fn resolve_lane_vendor(
 // trace:BUG-2390 | ai:claude
 pub(crate) const CODEX_LANE_WORKTREE: &str = "at the directory you start in";
 
-/// The refusal for a Codex `take`/`impl` lane claimed by the cron/schedule
-/// `dispatch tick`: the tick holds no advisor seat grant, and the detached
-/// Codex launch mints its worker's grant from one that delegates
-/// `implementer`.
+/// True when `req` is a `take`/`impl` whose lane vendor resolves to Codex.
+/// Such a lane runs only under `aida dispatch serve`: the tick leaves it
+/// `Pending` (see [`pass_admission`]).
+// trace:BUG-2390 | ai:claude
+pub(crate) fn is_codex_lane(main_worktree: &Path, req: &DispatchRequest) -> bool {
+    let vendor = match req.action() {
+        DispatchVerb::Take { vendor, .. } | DispatchVerb::Impl { vendor, .. } => *vendor,
+        _ => return false,
+    };
+    resolve_lane_vendor(main_worktree, vendor) == DispatchVendor::Codex
+}
+
+/// The refusal for a Codex `take`/`impl` lane run outside `aida dispatch
+/// serve` (`aida dispatch run <id>` without `--via-serve`): only the serve
+/// seat holds the grant the detached Codex launch delegates `implementer`
+/// from. The request is refused terminally, so the remedy is to resubmit.
 // trace:BUG-2390 | ai:claude
 pub(crate) const CODEX_LANE_NEEDS_GRANT: &str =
-    "codex lanes need a delegated grant; run aida dispatch take from a role-entered terminal";
+    "codex lanes need a delegated grant; resubmit with `aida dispatch request take|impl` and run \
+     `aida dispatch serve` from a role-entered advisor terminal";
 
 /// Render the `take` or `impl` prompt wrapper from the embedded template in
 /// `aida-core/templates/dispatch/`.
@@ -1234,7 +1247,10 @@ pub(crate) fn claim_and_dispatch_pass(
         if res.status() != DispatchStatus::Pending {
             continue;
         }
-        let admission = match pass_admission(&inv, &req, via_serve, &mut caps) {
+        // trace:BUG-2390 | ai:claude — decide a Codex lane's serve-only
+        // routing at claim time, before any Running claim is written.
+        let codex_lane = !via_serve && is_codex_lane(main_worktree, &req);
+        let admission = match pass_admission(&inv, &req, via_serve, codex_lane, &mut caps) {
             PassAdmission::WaitingForServe => {
                 summary.waiting_for_serve += 1;
                 continue;
@@ -2883,15 +2899,16 @@ fn launch_implementer_lane(
     }
 }
 
-/// A Codex `take`/`impl` lane outside `aida dispatch serve` (the schedule
-/// tick, or `dispatch run` without `--via-serve`) is refused before anything
-/// is fetched or launched: it has no seat grant to delegate to the worker.
+/// A Codex `take`/`impl` lane outside `aida dispatch serve` is refused before
+/// anything is fetched or launched: it has no seat grant to delegate to the
+/// worker. The tick never reaches this (it leaves such a lane `Pending` at
+/// claim time); a direct `aida dispatch run <id>` without `--via-serve` does.
 // trace:BUG-2390 | ai:claude
 fn codex_lane_tick_refusal(req: &DispatchRequest, via_serve: bool) -> Option<RunnerOutcome> {
     (!via_serve).then(|| RunnerOutcome::Refused {
         reason: format!(
-            "{CODEX_LANE_NEEDS_GRANT}: the dispatch tick holds no seat grant, so this Codex {} \
-             lane must run under `aida dispatch serve` started there",
+            "this Codex {} lane ran outside `aida dispatch serve`, which holds no seat grant \
+             to delegate: {CODEX_LANE_NEEDS_GRANT}",
             req.action().verb_str()
         ),
     })
