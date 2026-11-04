@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T04:41:19.994753856Z
-modified_at: 2026-11-04T06:22:37.273887081Z
+modified_at: 2026-11-04T06:35:47.801469796Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -24,6 +24,12 @@ comments:
   modified_at: 2026-11-04T06:08:22.061774971Z
   session_id: 01a1a521a2b0
   harness_version: 2.1.318 (Claude Code)
+- id: 01a1a545-58d9-7e03-a68b-e48d161b9151
+  author: joe
+  content: 'ADVISOR REWORK BRIEF (2026-11-03 23:38 MST, PR #3349 head 3024c245). Review: design sound, refusal paths tested. BLOCKING (CI gates): the new test adds an unallowlisted /proc literal that trips the portability ratchet. Build the path through the existing proc helper used elsewhere in tests, or put the test behind cfg(target_os = "linux") with the ratchet''s sanctioned guard. Do not add an allowlist entry unless no helper fits, and give the reason if you do. Nothing else changes. Gate (LIGHT): one targeted cargo test filter covering the changed module, plus make check-ci-fast, then push to the same PR branch. The advisor re-reviews only the delta.'
+  created_at: 2026-11-04T06:35:47.801469796Z
+  modified_at: 2026-11-04T06:35:47.801469796Z
+  session_id: da1c0d85-1d45-4ce4-a292-5358644f65b9
 history:
 - id: 01a1a4ee-5eab-7123-a18a-eaae4aecb215
   author: joe
