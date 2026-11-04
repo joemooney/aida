@@ -301,30 +301,174 @@ fn an_unresolved_label_on_an_open_pull_request_refuses_execute() {
 
 // trace:STORY-2324 | ai:claude
 #[test]
-fn rollback_restores_v1_and_refuses_after_a_later_write() {
+fn rollback_unstamps_in_place_and_keeps_events_written_since() {
     let f = Fixture::new();
     let v1 = seed(&f);
+    let pr1_v1 = line("PR-1", 1, Some("BUG-2403"), "approved") + "\n";
+    f.write("gate-ledger/PR-1.jsonl", &pr1_v1);
+    let unbound_v1 = f.read("gate-ledger/by-spec/BUG-2403.jsonl");
     execute(&f.aida(), &f.plan(), "20261103T000000Z", "store-head").unwrap();
     assert_ne!(f.read("gate-ledger/PR-7.jsonl"), v1);
-    let done = rollback(&f.aida()).unwrap();
-    assert_eq!(done.restored, "gate-ledger.v1-20261103T000000Z");
-    assert_eq!(f.read("gate-ledger/PR-7.jsonl"), v1);
-    assert!(rollback(&f.aida()).is_err(), "one run, one rollback");
+    let report = |f: &Fixture| -> RunReport {
+        serde_json::from_str(&f.read("gate-ledger-migrations/20261103T000000Z.json")).unwrap()
+    };
+    assert_eq!(report(&f).state, RunState::Done);
 
-    let g = Fixture::new();
-    seed(&g);
-    execute(&g.aida(), &g.plan(), "20261103T000000Z", "store-head").unwrap();
-    let migrated = g.read("gate-ledger/PR-7.jsonl");
-    g.write(
-        "gate-ledger/PR-8.jsonl",
-        &(line("PR-8", 1, None, "approved") + "\n"),
+    // Written after the migration: a line on a stamped file and a new file.
+    let later = line("PR-1", 2, Some("BUG-2403"), "changes_requested") + "\n";
+    let migrated_pr1 = f.read("gate-ledger/PR-1.jsonl");
+    f.write("gate-ledger/PR-1.jsonl", &(migrated_pr1 + &later));
+    let pr8 = line("PR-8", 1, None, "approved") + "\n";
+    f.write("gate-ledger/PR-8.jsonl", &pr8);
+    // A run that died after its swap but before `done` was written is still
+    // rolled back: each file's own prefix says whether it was swapped.
+    let mut pending = report(&f);
+    pending.state = RunState::Pending;
+    f.write(
+        "gate-ledger-migrations/20261103T000000Z.json",
+        &serde_json::to_string(&pending).unwrap(),
     );
-    let err = rollback(&g.aida()).unwrap_err().to_string();
-    assert!(err.contains("PR-8.jsonl"), "{err}");
+
+    let done = rollback(&f.aida()).unwrap();
+    assert_eq!(done.stamp, "20261103T000000Z");
+    assert_eq!((done.files, done.kept_lines), (3, 1));
+    assert_eq!(f.read("gate-ledger/PR-7.jsonl"), v1);
     assert_eq!(
-        g.read("gate-ledger/PR-7.jsonl"),
-        migrated,
-        "nothing changed"
+        f.read("gate-ledger/PR-1.jsonl"),
+        pr1_v1 + &later,
+        "unstamped, and the later event kept"
+    );
+    assert_eq!(f.read("gate-ledger/by-spec/BUG-2403.jsonl"), unbound_v1);
+    assert_eq!(
+        f.read("gate-ledger/PR-8.jsonl"),
+        pr8,
+        "a later file untouched"
+    );
+    assert_eq!(report(&f).state, RunState::RolledBack);
+    assert!(rollback(&f.aida()).is_err(), "one run, one rollback");
+}
+
+// trace:STORY-2324 | ai:claude
+#[test]
+fn rollback_refuses_a_stamped_prefix_that_was_rewritten_and_changes_nothing() {
+    let f = Fixture::new();
+    seed(&f);
+    f.write(
+        "gate-ledger/PR-1.jsonl",
+        &(line("PR-1", 1, Some("BUG-2403"), "approved") + "\n"),
+    );
+    execute(&f.aida(), &f.plan(), "20261103T000000Z", "store-head").unwrap();
+    let pr7 = f.read("gate-ledger/PR-7.jsonl");
+    let edited = f
+        .read("gate-ledger/PR-1.jsonl")
+        .replace("approved", "rejected");
+    f.write("gate-ledger/PR-1.jsonl", &edited);
+    let err = rollback(&f.aida()).unwrap_err().to_string();
+    assert!(err.contains("PR-1.jsonl"), "{err}");
+    assert_eq!(f.read("gate-ledger/PR-7.jsonl"), pr7, "nothing changed");
+    assert_eq!(f.read("gate-ledger/PR-1.jsonl"), edited);
+}
+
+// trace:STORY-2324 | ai:claude
+#[test]
+fn a_writer_waits_out_the_swap_then_appends_to_v2() {
+    let f = Fixture::new();
+    seed(&f);
+    let pr1_v1 = line("PR-1", 1, Some("BUG-2403"), "approved") + "\n";
+    f.write("gate-ledger/PR-1.jsonl", &pr1_v1);
+    let root = f.dir.path().to_path_buf();
+
+    let lock = store::lock_ledger_exclusive(&root).unwrap();
+    let (tx, rx) = std::sync::mpsc::channel();
+    let writer_root = root.clone();
+    let writer = std::thread::spawn(move || {
+        let event = crate::gate::ledger::event::verdict_event(
+            &writer_root,
+            ChangeKey::pr(1),
+            &record("changes_requested", 40),
+            None,
+        );
+        let out = store::append(&writer_root, ChangeKey::pr(1), vec![event]);
+        let _ = tx.send(());
+        out
+    });
+    assert!(
+        rx.recv_timeout(std::time::Duration::from_millis(300))
+            .is_err(),
+        "the writer blocks while the migration holds the ledger"
+    );
+    let p = f.plan();
+    let v2_pr1 = p
+        .files
+        .iter()
+        .find(|x| x.rel == Path::new("PR-1.jsonl"))
+        .map(|x| String::from_utf8(x.v2.clone()).unwrap())
+        .unwrap();
+    execute(&f.aida(), &p, "20261103T000000Z", "store-head").unwrap();
+    assert_eq!(f.read("gate-ledger/PR-1.jsonl"), v2_pr1, "still blocked");
+    drop(lock);
+    let appended = writer.join().unwrap().unwrap();
+    assert!(!appended.is_empty());
+
+    let live = f.read("gate-ledger/PR-1.jsonl");
+    assert!(live.starts_with(&v2_pr1), "appended to the v2 file: {live}");
+    assert!(live.len() > v2_pr1.len());
+    assert!(live.ends_with("\n") && live.contains("changes_requested"));
+    assert_eq!(
+        f.read("gate-ledger.v1-20261103T000000Z/PR-1.jsonl"),
+        pr1_v1,
+        "the archive is v1 exactly"
+    );
+}
+
+// trace:STORY-2324 | ai:claude
+#[test]
+fn a_failed_swap_restores_v1_whether_or_not_the_ledger_path_is_occupied() {
+    for occupied in [false, true] {
+        let f = Fixture::new();
+        let v1 = seed(&f);
+        let archive = f.aida().join("gate-ledger.v1-20261103T000000Z");
+        std::fs::rename(f.ledger(), &archive).unwrap();
+        let v2 = f.aida().join("gate-ledger.v2");
+        std::fs::create_dir_all(&v2).unwrap();
+        std::fs::write(v2.join("PR-7.jsonl"), "v2").unwrap();
+        if occupied {
+            // Something recreated the ledger, non-empty: the rename fails.
+            f.write("gate-ledger/PR-9.jsonl", "stray\n");
+        } else {
+            // No ledger, and no v2 to move: the rename fails too.
+            std::fs::remove_dir_all(&v2).unwrap();
+        }
+        let err = swap_in(&f.aida(), &v2, &archive, "20261103T000000Z")
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("v1 was put back"), "{err}");
+        assert_eq!(f.read("gate-ledger/PR-7.jsonl"), v1, "occupied={occupied}");
+        assert!(!archive.exists());
+        let stray = f.aida().join("gate-ledger.stray-20261103T000000Z");
+        assert_eq!(stray.join("PR-9.jsonl").exists(), occupied, "{err}");
+    }
+}
+
+// trace:STORY-2324 | ai:claude
+#[test]
+fn a_run_that_stops_after_writing_its_report_marks_it_aborted() {
+    let f = Fixture::new();
+    seed(&f);
+    let p = f.plan();
+    // A write the plan did not see (as if the lock were bypassed): the run
+    // stops after writing its pending report and marks it aborted.
+    let raced = f.read("gate-ledger/PR-7.jsonl") + "\n" + &line("PR-7", 7, None, "approved");
+    f.write("gate-ledger/PR-7.jsonl", &raced);
+    assert!(execute(&f.aida(), &p, "20261103T000000Z", "store-head").is_err());
+    let report: RunReport =
+        serde_json::from_str(&f.read("gate-ledger-migrations/20261103T000000Z.json")).unwrap();
+    assert_eq!(report.state, RunState::Aborted);
+    assert!(report.note.unwrap().contains("changed while"));
+    assert!(report.files.contains_key("PR-7.jsonl"));
+    assert!(
+        rollback(&f.aida()).is_err(),
+        "an aborted run has nothing to roll back"
     );
 }
 

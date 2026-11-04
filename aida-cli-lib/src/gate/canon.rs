@@ -623,19 +623,26 @@ impl GateSpec {
     /// project at `start` uses. Ambiguous and unknown labels carry no key.
     // trace:STORY-2324 | ai:claude
     pub(crate) fn resolve(start: &Path, label: &str) -> Self {
-        let key = writer_snapshot(start).and_then(|snap| match snap.resolve_one(label) {
+        Self::resolve_in(writer_snapshot(start).as_deref(), label)
+    }
+
+    /// [`GateSpec::resolve`] over several labels against one snapshot,
+    /// located (and its HEAD probed) once.
+    // trace:STORY-2324 | ai:claude
+    pub(crate) fn resolve_all<S: AsRef<str>>(start: &Path, labels: &[S]) -> Vec<Self> {
+        let snap = writer_snapshot(start);
+        labels
+            .iter()
+            .map(|l| Self::resolve_in(snap.as_deref(), l.as_ref()))
+            .collect()
+    }
+
+    fn resolve_in(snap: Option<&Snapshot>, label: &str) -> Self {
+        let key = snap.and_then(|snap| match snap.resolve_one(label) {
             Resolution::Hit(k) => Some(k),
             Resolution::Unknown | Resolution::Ambiguous(_) => None,
         });
         Self::with_key(label, key)
-    }
-
-    /// [`GateSpec::resolve`] over several labels, one snapshot read.
-    pub(crate) fn resolve_all<S: AsRef<str>>(start: &Path, labels: &[S]) -> Vec<Self> {
-        labels
-            .iter()
-            .map(|l| Self::resolve(start, l.as_ref()))
-            .collect()
     }
 }
 

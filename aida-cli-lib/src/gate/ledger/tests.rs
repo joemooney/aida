@@ -2187,3 +2187,7 @@ fn verdicts_at_a_commit_keep_the_newest_record_per_key_in_ledger_order() {
     assert_eq!(got.len(), 1, "{got:?}");
     assert_eq!(got[0].kind, rv::VerdictKind::RequestChanges);
 }
+
+// trace:STORY-2324 | ai:claude — every writer stamps the canonical key.
+#[path = "story_2324_writer_tests.rs"]
+mod story_2324_writers;

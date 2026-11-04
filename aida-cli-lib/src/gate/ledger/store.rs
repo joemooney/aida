@@ -1,6 +1,6 @@
-//! Append and read one change's ledger file. Appends hold an exclusive
-//! `flock` on `<CHANGE>.lock` and write every new line in one `O_APPEND`
-//! write, so `seq` is monotonic and a reader never sees a reordered history.
+//! Append and read one change's ledger file. Appends hold the ledger-wide
+//! lock shared and an exclusive `flock` on `<CHANGE>.lock`, and write every
+//! new line in one `O_APPEND` write, so `seq` is monotonic and a reader never sees a reordered history.
 // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
 // mandate-gate
 
@@ -18,23 +18,88 @@ fn lock_file(root: &Path, change: ChangeKey) -> PathBuf {
     ledger_dir(root).join(format!("{}.lock", change.as_key()))
 }
 
-/// Run `f` under an exclusive lock on `path`, creating it if needed.
+/// `<root>/.aida/gate-ledger.lock`: the ledger-wide lock. It sits beside
+/// the ledger directory, not in it, so `aida gate migrate` swapping the
+/// directory never moves it.
+// trace:STORY-2324 | ai:claude
+pub(crate) fn ledger_lock_file(root: &Path) -> PathBuf {
+    root.join(".aida").join("gate-ledger.lock")
+}
+
+/// A held ledger-wide lock; released on drop.
+// trace:STORY-2324 | ai:claude
+pub(crate) struct LedgerLock {
+    file: std::fs::File,
+}
+
+impl Drop for LedgerLock {
+    fn drop(&mut self) {
+        let _ = fs2::FileExt::unlock(&self.file);
+    }
+}
+
+fn open_lock(path: &Path) -> std::io::Result<std::fs::File> {
+    if let Some(dir) = path.parent() {
+        std::fs::create_dir_all(dir)?;
+    }
+    std::fs::OpenOptions::new()
+        .create(true)
+        .truncate(false)
+        .write(true)
+        .open(path)
+}
+
+/// Take the ledger-wide lock exclusively: no writer appends, indexes or
+/// creates a ledger file until it drops. `aida gate migrate` holds it from
+/// its plan through its swap (and through a rollback).
+// trace:STORY-2324 | ai:claude
+pub(crate) fn lock_ledger_exclusive(root: &Path) -> std::io::Result<LedgerLock> {
+    use fs2::FileExt;
+    let file = open_lock(&ledger_lock_file(root))?;
+    file.lock_exclusive()?;
+    Ok(LedgerLock { file })
+}
+
+thread_local! {
+    /// How many [`with_lock`] frames this thread is inside: a nested writer
+    /// (an append indexing its spec) already holds the shared lock.
+    static SHARED_DEPTH: std::cell::Cell<u32> = const { std::cell::Cell::new(0) };
+}
+
+/// Run `f` under the ledger-wide lock of `root`'s ledger in shared mode and
+/// an exclusive lock on `path` (a per-change, per-spec or index lock under
+/// that ledger), creating both if needed. Every ledger writer comes through
+/// here, so none can write while `aida gate migrate` holds the ledger-wide
+/// lock exclusively; the per-path lock is opened only after the shared one
+/// is held, so a writer that waited out a swap locks the new tree's file.
+// trace:STORY-2324 | ai:claude
 pub(crate) fn with_lock<T>(
+    root: &Path,
     path: &Path,
     f: impl FnOnce() -> std::io::Result<T>,
 ) -> std::io::Result<T> {
     use fs2::FileExt;
-    if let Some(dir) = path.parent() {
-        std::fs::create_dir_all(dir)?;
+    let shared = if SHARED_DEPTH.with(|d| d.get()) == 0 {
+        let file = open_lock(&ledger_lock_file(root))?;
+        file.lock_shared()?;
+        Some(LedgerLock { file })
+    } else {
+        None
+    };
+    struct Depth;
+    impl Drop for Depth {
+        fn drop(&mut self) {
+            SHARED_DEPTH.with(|d| d.set(d.get().saturating_sub(1)));
+        }
     }
-    let file = std::fs::OpenOptions::new()
-        .create(true)
-        .truncate(false)
-        .write(true)
-        .open(path)?;
+    SHARED_DEPTH.with(|d| d.set(d.get() + 1));
+    let depth = Depth;
+    let file = open_lock(path)?;
     file.lock_exclusive()?;
     let out = f();
     let _ = FileExt::unlock(&file);
+    drop(depth);
+    drop(shared);
     out
 }
 
@@ -86,7 +151,7 @@ pub(crate) fn append(
     change: ChangeKey,
     events: Vec<GateEvent>,
 ) -> std::io::Result<Vec<GateEvent>> {
-    with_lock(&lock_file(root, change), || {
+    with_lock(root, &lock_file(root, change), || {
         append_locked(root, change, events, false)
     })
     .map_err(|e| named(&ledger_file(root, change), e))
@@ -111,7 +176,7 @@ fn named(file: &Path, e: std::io::Error) -> std::io::Error {
 /// import reads the legacy files before a writer changes them.
 // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
 pub(crate) fn import_legacy(root: &Path, change: ChangeKey) -> std::io::Result<()> {
-    with_lock(&lock_file(root, change), || {
+    with_lock(root, &lock_file(root, change), || {
         append_locked(root, change, Vec::new(), true).map(|_| ())
     })
 }
@@ -246,7 +311,7 @@ pub(crate) fn append_unbound(
         ));
     }
     let file = unbound_file(root, &spec);
-    with_lock(&file.with_extension("lock"), || {
+    with_lock(root, &file.with_extension("lock"), || {
         let existing = read_unbound(root, &spec);
         if existing.iter().any(|e| e.verdict_record() == Some(record)) {
             return Ok(Delivered::Unchanged);
@@ -302,7 +367,7 @@ pub(crate) fn bind_unbound(
     if unbound.is_empty() {
         return Ok(0);
     }
-    with_lock(&lock_file(root, change), || {
+    with_lock(root, &lock_file(root, change), || {
         let existing = read_file(root, change);
         let newest_bound = existing
             .iter()

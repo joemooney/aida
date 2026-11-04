@@ -146,15 +146,7 @@ pub(crate) fn pr_hold_handler(reason: Option<&str>) -> Result<()> {
     // confirm origin's tip matches before recording the hold or saying so.
     // trace:TASK-2793 | ai:claude
     let pushed_sha = push_and_verify_held_branch(&cwd, "origin", &branch)?;
-    let signal = punt::HoldSignal {
-        spec: spec.clone(),
-        branch: branch.clone(),
-        reason: reason.map(str::to_string),
-        // trace:STORY-2324 | ai:claude — E3: the held spec resolves once, here.
-        spec_key: crate::gate::canon::GateSpec::resolve(&project_root, &spec)
-            .key
-            .map(|k| k.0),
-    };
+    let signal = hold_signal(&project_root, &spec, &branch, reason);
 
     // Prefer the orchestrator-provisioned absolute path (handshake); fall back
     // to the conventional marker path under the main root for a standalone hold.
@@ -190,6 +182,24 @@ pub(crate) fn pr_hold_handler(reason: Option<&str>) -> Result<()> {
         noun,
     );
     Ok(())
+}
+
+/// The [`punt::HoldSignal`] `aida pr hold` records for `spec` on `branch`.
+/// The held spec resolves once, here, against the committed store of the
+/// project at `project_root` (STORY-2324 E3).
+// trace:STORY-2324 | ai:claude
+pub(crate) fn hold_signal(
+    project_root: &std::path::Path,
+    spec: &str,
+    branch: &str,
+    reason: Option<&str>,
+) -> punt::HoldSignal {
+    punt::HoldSignal {
+        spec: spec.to_string(),
+        branch: branch.to_string(),
+        reason: reason.map(str::to_string),
+        spec_key: crate::gate::canon::GateSpec::resolve(project_root, spec).key,
+    }
 }
 
 /// Push `branch` from `repo` to `remote` (setting upstream), then read the

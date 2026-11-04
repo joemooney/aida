@@ -21,10 +21,14 @@
 //!   read through today, so they are inventoried and reported here and left
 //!   in place; importing and removing them belongs with PR-C, which deletes
 //!   the read-through in the same change.
-//! - `--execute` builds `gate-ledger.v2/`, verifies it, moves v1 aside to
-//!   `gate-ledger.v1-<stamp>/` and moves v2 into place. If v1 changed while
-//!   the copy was made, the swap is undone. `--rollback` restores the
-//!   archived v1 tree, refusing when the live ledger was written since.
+//! - `--execute` takes the ledger-wide lock exclusively (every writer holds
+//!   it shared), then plans, builds `gate-ledger.v2/`, verifies it, writes
+//!   its report as `pending`, moves v1 aside to `gate-ledger.v1-<stamp>/`,
+//!   moves v2 into place and marks the report `done`. A failed swap puts
+//!   v1 back, setting aside anything found at the ledger's path.
+//!   `--rollback` takes the stamps off in place on the live tree (stamping
+//!   is reversible line by line), so events written since the migration
+//!   are kept.
 //!
 //! The planning and verification halves are pure over bytes and a resolver,
 //! so the tests drive them without a store or a forge.
@@ -468,7 +472,35 @@ pub(crate) struct Applied {
     pub report: Option<String>,
 }
 
+/// Where an executed run got to. The report is written `pending` before
+/// the swap, so a run that stopped part way is never mistaken for none.
+// trace:STORY-2324 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub(crate) enum RunState {
+    /// Written before the first rename; the swap may or may not have run.
+    Pending,
+    /// The v2 tree is in place.
+    Done,
+    /// The run stopped and put v1 back (or never moved it).
+    Aborted,
+    /// `--rollback` took this run's stamps off again.
+    RolledBack,
+}
+
+/// One file a stamp changed: the extents rollback needs to take the stamps
+/// off in place, whatever was appended after them.
+// trace:STORY-2324 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub(crate) struct StampedFile {
+    pub v1_len: u64,
+    pub v1_sha256: String,
+    pub v2_len: u64,
+    pub v2_sha256: String,
+}
+
 /// The record of one executed run, kept under `.aida/gate-ledger-migrations/`.
+// trace:STORY-2324 | ai:claude
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub(crate) struct RunReport {
     pub stamp: String,
@@ -476,15 +508,52 @@ pub(crate) struct RunReport {
     pub archive: String,
     pub store_head: String,
     pub stamped: usize,
-    /// Relative path -> SHA-256 of the v2 file put in place.
-    pub v2_sha256: BTreeMap<String, String>,
-    #[serde(default)]
-    pub rolled_back: bool,
+    pub state: RunState,
+    /// Why the run was aborted, or what a rollback kept.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub note: Option<String>,
+    /// Relative path -> extents, for every file a stamp changed.
+    pub files: BTreeMap<String, StampedFile>,
+}
+
+fn report_rel(stamp: &str) -> String {
+    format!("{REPORTS_DIR}/{stamp}.json")
+}
+
+/// Write `report` in place of its previous state, atomically.
+fn write_report(aida_dir: &Path, report: &RunReport) -> std::io::Result<()> {
+    let body = serde_json::to_string_pretty(report).map_err(std::io::Error::other)?;
+    let path = aida_dir.join(report_rel(&report.stamp));
+    if let Some(dir) = path.parent() {
+        std::fs::create_dir_all(dir)?;
+    }
+    let tmp = path.with_extension("json.tmp");
+    std::fs::write(&tmp, body)?;
+    std::fs::rename(&tmp, &path)
+}
+
+/// Mark `report` aborted (best effort: the error being returned matters
+/// more than the report saying so).
+fn abort_report(aida_dir: &Path, report: &mut RunReport, why: &str) {
+    report.state = RunState::Aborted;
+    report.note = Some(why.to_string());
+    if let Err(e) = write_report(aida_dir, report) {
+        eprintln!(
+            "warning: could not mark the migration report {} aborted: {e}",
+            report_rel(&report.stamp)
+        );
+    }
 }
 
 /// Write the plan's v2 tree, verify it, and swap it in for the ledger
-/// under `aida_dir`. `stamp` names the archive. Nothing changes when no
-/// line needs a stamp (a second run is a no-op).
+/// under `aida_dir`. `stamp` names the archive and the report. Nothing
+/// changes when no line needs a stamp (a second run is a no-op).
+///
+/// The caller holds the ledger-wide lock exclusively
+/// ([`super::store::lock_ledger_exclusive`]) from before it planned until
+/// this returns, so no writer appends between the plan and the swap. The
+/// report is written `pending` before the first rename and finalized after
+/// the swap (`done`) or on the way out of a failure (`aborted`).
 // trace:STORY-2324 | ai:claude
 pub(crate) fn execute(
     aida_dir: &Path,
@@ -505,10 +574,9 @@ pub(crate) fn execute(
     let v2 = aida_dir.join(V2_DIR);
     let archive_name = format!("{ARCHIVE_PREFIX}{stamp}");
     let archive = aida_dir.join(&archive_name);
-    if archive.exists() {
+    if archive.exists() || aida_dir.join(report_rel(stamp)).exists() {
         return Err(std::io::Error::other(format!(
-            "{} already exists",
-            archive.display()
+            "a migration stamped {stamp} already ran"
         )));
     }
     if std::fs::symlink_metadata(&v2).is_ok() {
@@ -532,53 +600,114 @@ pub(crate) fn execute(
             )))
         })?;
     }
-    std::fs::rename(&ledger, &archive).map_err(undo_v2)?;
-    // A writer that appended after the plan read v1 would lose its event:
-    // put v1 back and stop.
-    if let Err(why) = unchanged_since_plan(&archive, plan) {
-        let _ = std::fs::rename(&archive, &ledger);
-        return Err(undo_v2(std::io::Error::other(format!(
-            "the gate ledger changed while it was being migrated ({why}); nothing was swapped, \
-             run it again"
-        ))));
-    }
-    if let Err(e) = std::fs::rename(&v2, &ledger) {
-        if !ledger.exists() {
-            let _ = std::fs::rename(&archive, &ledger);
-        }
-        return Err(std::io::Error::other(format!(
-            "could not move {} into place ({e}); v1 is at {}",
-            v2.display(),
-            archive.display()
-        )));
-    }
-    let report = RunReport {
+    let mut report = RunReport {
         stamp: stamp.to_string(),
         archive: archive_name.clone(),
         store_head: store_head.to_string(),
         stamped: plan.stamped,
-        v2_sha256: plan
+        state: RunState::Pending,
+        note: None,
+        files: plan
             .files
             .iter()
-            .map(|f| (f.rel.to_string_lossy().to_string(), sha256_hex(&f.v2)))
+            .filter(|f| f.v1 != f.v2)
+            .map(|f| {
+                (
+                    f.rel.to_string_lossy().to_string(),
+                    StampedFile {
+                        v1_len: f.v1.len() as u64,
+                        v1_sha256: f.v1_sha256.clone(),
+                        v2_len: f.v2.len() as u64,
+                        v2_sha256: sha256_hex(&f.v2),
+                    },
+                )
+            })
             .collect(),
-        rolled_back: false,
     };
-    let report_rel = format!("{REPORTS_DIR}/{stamp}.json");
-    write_file(
-        &aida_dir.join(&report_rel),
-        serde_json::to_string_pretty(&report)
-            .map_err(std::io::Error::other)?
-            .as_bytes(),
-        None,
-    )?;
+    write_report(aida_dir, &report).map_err(undo_v2)?;
+    if let Err(e) = std::fs::rename(&ledger, &archive) {
+        abort_report(
+            aida_dir,
+            &mut report,
+            &format!("v1 could not be archived: {e}"),
+        );
+        return Err(undo_v2(e));
+    }
+    // Defence in depth under the lock: a writer that appended after the plan
+    // read v1 would lose its event, so put v1 back and stop.
+    if let Err(why) = unchanged_since_plan(&archive, plan) {
+        let restored = restore_v1(aida_dir, &archive, stamp);
+        let why = format!(
+            "the gate ledger changed while it was being migrated ({why}); nothing was swapped, \
+             run it again{}",
+            restored_note(&restored)
+        );
+        abort_report(aida_dir, &mut report, &why);
+        return Err(undo_v2(std::io::Error::other(why)));
+    }
+    if let Err(e) = swap_in(aida_dir, &v2, &archive, stamp) {
+        abort_report(aida_dir, &mut report, &e.to_string());
+        return Err(undo_v2(e));
+    }
+    report.state = RunState::Done;
+    write_report(aida_dir, &report)?;
     Ok(Applied {
         swapped: true,
         stamped: plan.stamped,
         files: plan.files.len(),
         archive: Some(archive_name),
-        report: Some(report_rel),
+        report: Some(report_rel(stamp)),
     })
+}
+
+/// Move the verified `v2` tree into place. When that rename fails, v1 goes
+/// back from `archive` whether or not something now sits at the ledger's
+/// path: whatever is found there is set aside (never deleted) first.
+// trace:STORY-2324 | ai:claude
+pub(crate) fn swap_in(
+    aida_dir: &Path,
+    v2: &Path,
+    archive: &Path,
+    stamp: &str,
+) -> std::io::Result<()> {
+    let ledger = aida_dir.join("gate-ledger");
+    let Err(e) = std::fs::rename(v2, &ledger) else {
+        return Ok(());
+    };
+    let restored = restore_v1(aida_dir, archive, stamp);
+    Err(std::io::Error::other(format!(
+        "could not move {} into place ({e}){}",
+        v2.display(),
+        restored_note(&restored)
+    )))
+}
+
+/// Put the archived v1 tree back at `.aida/gate-ledger`. Whatever sits at
+/// that path is moved to `gate-ledger.stray-<stamp>` first. Returns the
+/// stray's name, if one was set aside.
+// trace:STORY-2324 | ai:claude
+fn restore_v1(aida_dir: &Path, archive: &Path, stamp: &str) -> std::io::Result<Option<String>> {
+    let ledger = aida_dir.join("gate-ledger");
+    let mut stray = None;
+    if std::fs::symlink_metadata(&ledger).is_ok() {
+        let name = format!("gate-ledger.stray-{stamp}");
+        std::fs::rename(&ledger, aida_dir.join(&name))?;
+        stray = Some(name);
+    }
+    std::fs::rename(archive, &ledger)?;
+    Ok(stray)
+}
+
+fn restored_note(restored: &std::io::Result<Option<String>>) -> String {
+    match restored {
+        Ok(None) => "; v1 was put back".to_string(),
+        Ok(Some(stray)) => {
+            format!("; v1 was put back, and what stood in its place was moved to .aida/{stray}")
+        }
+        Err(e) => {
+            format!("; v1 could NOT be put back ({e}): it is in the archive the report names")
+        }
+    }
 }
 
 fn write_file(path: &Path, bytes: &[u8], mode: Option<u32>) -> std::io::Result<()> {
@@ -644,74 +773,136 @@ fn file_hashes(tree: &Path) -> std::io::Result<BTreeMap<String, String>> {
 /// What `--rollback` did.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
 pub(crate) struct RolledBack {
-    pub restored: String,
-    /// Where the migrated tree was moved, relative to `.aida/`.
-    pub set_aside: String,
+    /// The run whose stamps came off.
+    pub stamp: String,
+    /// Files whose stamps were taken off.
+    pub files: usize,
+    /// Lines appended after the migration, kept as written.
+    pub kept_lines: usize,
 }
 
-/// Restore the v1 tree the newest not-yet-rolled-back run archived. Refused
-/// when the live ledger was written since that run: restoring v1 would drop
-/// those events.
+/// One file's rollback, computed before anything is written.
+struct Unstamp {
+    rel: String,
+    bytes: Vec<u8>,
+    kept_lines: usize,
+}
+
+/// Take the newest run's stamps off in place, on the live tree. Stamping is
+/// reversible line by line, so every event written since the migration is
+/// kept. Each file the run changed must still start with the exact bytes it
+/// wrote; that prefix is unstamped line by line and must come back to the
+/// v1 bytes (length and SHA-256), and every line after it stays as written.
+/// A file that already starts with its v1 bytes was rolled back before and
+/// is skipped. Every file is checked before any is written. The caller holds
+/// the ledger-wide lock exclusively.
 // trace:STORY-2324 | ai:claude
 pub(crate) fn rollback(aida_dir: &Path) -> std::io::Result<RolledBack> {
     let reports_dir = aida_dir.join(REPORTS_DIR);
-    let mut reports: Vec<(PathBuf, RunReport)> = std::fs::read_dir(&reports_dir)
+    let mut reports: Vec<RunReport> = std::fs::read_dir(&reports_dir)
         .map(|rd| {
             rd.flatten()
                 .filter_map(|e| {
                     let body = std::fs::read_to_string(e.path()).ok()?;
-                    Some((e.path(), serde_json::from_str::<RunReport>(&body).ok()?))
+                    serde_json::from_str::<RunReport>(&body).ok()
                 })
                 .collect()
         })
         .unwrap_or_default();
-    reports.sort_by(|a, b| a.1.stamp.cmp(&b.1.stamp));
-    let Some((path, mut report)) = reports.into_iter().rev().find(|(_, r)| !r.rolled_back) else {
+    reports.sort_by(|a, b| a.stamp.cmp(&b.stamp));
+    let Some(mut report) = reports
+        .into_iter()
+        .rev()
+        .find(|r| matches!(r.state, RunState::Done | RunState::Pending))
+    else {
         return Err(std::io::Error::other(
             "no gate-ledger migration to roll back",
         ));
     };
     let ledger = aida_dir.join("gate-ledger");
-    let archive = aida_dir.join(&report.archive);
-    if !archive.is_dir() {
+    let mut work: Vec<Unstamp> = Vec::new();
+    let mut refused: Vec<String> = Vec::new();
+    for (rel, extents) in &report.files {
+        match unstamp_file(&ledger.join(rel), extents) {
+            Ok(Some((bytes, kept_lines))) => work.push(Unstamp {
+                rel: rel.clone(),
+                bytes,
+                kept_lines,
+            }),
+            Ok(None) => {}
+            Err(why) => refused.push(format!("{rel}: {why}")),
+        }
+    }
+    if !refused.is_empty() {
         return Err(std::io::Error::other(format!(
-            "the archived v1 tree {} is missing",
-            archive.display()
+            "the stamps of run {} cannot be taken off safely, so nothing was changed:\n  {}",
+            report.stamp,
+            refused.join("\n  ")
         )));
     }
-    let now = file_hashes(&ledger)?;
-    if now != report.v2_sha256 {
-        let changed: Vec<&String> = now
-            .keys()
-            .chain(report.v2_sha256.keys())
-            .collect::<BTreeSet<_>>()
-            .into_iter()
-            .filter(|k| now.get(*k) != report.v2_sha256.get(*k))
-            .collect();
-        return Err(std::io::Error::other(format!(
-            "the gate ledger was written after the migration ({}); restoring v1 would drop those \
-             events, so nothing was changed",
-            changed
-                .iter()
-                .map(|s| s.as_str())
-                .collect::<Vec<_>>()
-                .join(", ")
-        )));
+    for w in &work {
+        replace_file(&ledger.join(&w.rel), &w.bytes)?;
     }
-    let set_aside = format!("gate-ledger.v2-rolled-back-{}", report.stamp);
-    std::fs::rename(&ledger, aida_dir.join(&set_aside))?;
-    if let Err(e) = std::fs::rename(&archive, &ledger) {
-        let _ = std::fs::rename(aida_dir.join(&set_aside), &ledger);
-        return Err(e);
-    }
-    report.rolled_back = true;
-    std::fs::write(
-        &path,
-        serde_json::to_string_pretty(&report).map_err(std::io::Error::other)?,
-    )?;
+    let kept_lines = work.iter().map(|w| w.kept_lines).sum();
+    report.state = RunState::RolledBack;
+    report.note = Some(format!(
+        "unstamped {} file(s) in place; kept {kept_lines} line(s) written after the migration",
+        work.len()
+    ));
+    write_report(aida_dir, &report)?;
     Ok(RolledBack {
-        restored: report.archive,
-        set_aside,
+        stamp: report.stamp,
+        files: work.len(),
+        kept_lines,
+    })
+}
+
+/// `path` with the run's stamps taken off its prefix, and how many lines
+/// follow that prefix; `None` when it already starts with its v1 bytes.
+fn unstamp_file(path: &Path, extents: &StampedFile) -> Result<Option<(Vec<u8>, usize)>, String> {
+    let now = std::fs::read(path).map_err(|e| e.to_string())?;
+    let prefix = |len: u64| now.get(..usize::try_from(len).ok()?);
+    let Some(head) = prefix(extents.v2_len).filter(|p| sha256_hex(p) == extents.v2_sha256) else {
+        if prefix(extents.v1_len).is_some_and(|p| sha256_hex(p) == extents.v1_sha256) {
+            return Ok(None);
+        }
+        return Err("it no longer starts with the lines the migration wrote".to_string());
+    };
+    let tail = &now[head.len()..];
+    let mut v1 = Vec::with_capacity(head.len());
+    for line in head.split_inclusive(|b| *b == b'\n') {
+        let (body, nl) = split_nl(line);
+        match std::str::from_utf8(body).ok().and_then(unstamp) {
+            Some((_, original)) => v1.extend_from_slice(original.as_bytes()),
+            None => v1.extend_from_slice(body),
+        }
+        if nl {
+            v1.push(b'\n');
+        }
+    }
+    if v1.len() as u64 != extents.v1_len || sha256_hex(&v1) != extents.v1_sha256 {
+        return Err("its unstamped lines do not hash to the v1 file".to_string());
+    }
+    let kept_lines = tail
+        .split(|b| *b == b'\n')
+        .filter(|l| !l.is_empty())
+        .count();
+    v1.extend_from_slice(tail);
+    Ok(Some((v1, kept_lines)))
+}
+
+/// Replace `path` atomically with `bytes`, keeping its permissions.
+fn replace_file(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
+    let perms = std::fs::metadata(path)?.permissions();
+    let name = path
+        .file_name()
+        .map(|n| n.to_string_lossy().to_string())
+        .unwrap_or_default();
+    let tmp = path.with_file_name(format!(".{name}.rollback"));
+    std::fs::write(&tmp, bytes)?;
+    std::fs::set_permissions(&tmp, perms)?;
+    std::fs::rename(&tmp, path).inspect_err(|_| {
+        let _ = std::fs::remove_file(&tmp);
     })
 }
 
@@ -769,13 +960,16 @@ pub(crate) fn run(mode: RunMode, json: bool) -> anyhow::Result<()> {
         }
     }
     if mode == RunMode::Rollback {
+        // trace:STORY-2324 | ai:claude — no writer appends mid-rollback.
+        let _lock = super::store::lock_ledger_exclusive(&root)?;
         let done = rollback(&aida_dir)?;
         if json {
             println!("{}", serde_json::to_string_pretty(&done)?);
         } else {
             println!(
-                "restored .aida/gate-ledger from .aida/{}; the migrated tree is at .aida/{}",
-                done.restored, done.set_aside
+                "took the stamps of run {} off {} file(s) in place; kept {} line(s) written \
+                 since",
+                done.stamp, done.files, done.kept_lines
             );
         }
         return Ok(());
@@ -784,8 +978,16 @@ pub(crate) fn run(mode: RunMode, json: bool) -> anyhow::Result<()> {
         .map_err(|e| anyhow::anyhow!("{e}"))?
         .ok_or_else(|| anyhow::anyhow!("this project has no git-canonical requirements store"))?;
     let resolve = |label: &str| snapshot.resolve_one(label);
-    let plan = plan(&super::ledger_dir(&root), &aida_dir, &resolve)?;
+    // Asked before the lock is taken: writers wait while it is held.
     let open = open_prs(&main);
+    // trace:STORY-2324 | ai:claude — `--execute` holds the ledger-wide lock
+    // from its plan through its swap, so no writer appends in between.
+    let lock = if mode == RunMode::Execute {
+        Some(super::store::lock_ledger_exclusive(&root)?)
+    } else {
+        None
+    };
+    let plan = plan(&super::ledger_dir(&root), &aida_dir, &resolve)?;
     let applied = if mode == RunMode::Execute {
         if let Some(why) = open_pr_refusal(&plan, &open) {
             anyhow::bail!("{why}");
@@ -795,6 +997,7 @@ pub(crate) fn run(mode: RunMode, json: bool) -> anyhow::Result<()> {
     } else {
         None
     };
+    drop(lock);
     let blocking = open_pr_refusal(&plan, &open);
     if json {
         println!(

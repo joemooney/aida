@@ -411,7 +411,7 @@ pub struct HoldSignal {
     /// no requirement in the committed store.
     // trace:STORY-2324 | ai:claude
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub spec_key: Option<uuid::Uuid>,
+    pub spec_key: Option<crate::gate::canon::SpecKey>,
 }
 
 impl HoldSignal {
