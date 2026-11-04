@@ -14,7 +14,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T01:15:11.009301343Z
-modified_at: 2026-11-04T07:11:12.708672352Z
+modified_at: 2026-11-04T07:11:20.467427796Z
 req_type: Task
 tags:
 - carried-from:BUG-2426
@@ -53,6 +53,21 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: author_live fails closed and the parks()/since fixes are correct and tested, but list_leases_strict_all treats aida lock''s lock-only entries (lock-<slug>.toml, which do not parse as a SessionLease) as torn leases, so while any worktree lock exists the watcher never updates a dead author''s branch; CI also red at this head (unrelated deputy_shell flake). Triage reason: advisor rework brief on spec; review findings to address'
   created_at: 2026-11-04T07:11:12.708670819Z
   modified_at: 2026-11-04T07:11:12.708670819Z
+  session_id: da1c0d85-1d45-4ce4-a292-5358644f65b9
+- id: 01a1a565-e30a-79c2-bebf-60a945b39ed7
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #3341):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 7a628e7a7208
+    Recorded: 2026-11-04T06:07:54.462916815+00:00
+    Findings:
+    1. BLOCKING (regression, permanent fail-closed): leases.rs list_leases_strict_inner with any_unparseable_is_unknown=true returns Err for every OtherScope file. aida lock acquire writes lock-only entries named lock-<slug>.toml into .aida/sessions/ (worktree_lock.rs:154, LOCK_ONLY_PREFIX). A typical slug has no dot, so is_session_lease_file accepts the name. The body (scope/worktree_path/started_at/authorized_by/aida_lock_only) lacks the id/slug/owner/branch/hostname fields SessionLease requires, so it never parses, and its complete quoted scope makes it OtherScope. That means while any advisor worktree lock exists, update::author_live returns Err on every pass and every stale dead-author change is routed to the advisor instead of getting update-branch, which silently disables BUG-2426's update path. Fix: in the strict-all listing, skip (or validate with worktree_lock::parse_lock_only_entry) files with the lock- prefix, as dispatch.rs:1921 already does. A lock-only entry has no branch, so it cannot own one. Add a test that a lock-only entry next to a dead-author change still yields Ok(false) and the branch is updated.
+    2. Missing refusal-path test (TASK-2813 AC 'an unreadable lease dir -> liveness unknown'): only the torn-file path is tested. Add a #[cfg(unix)] test that makes the sessions dir unreadable (chmod 000, skipped when running as root) and asserts author_live is Err and the change is routed once, not updated.
+    3. CI must be green at the rework head: at 7a628e7a CI (lib-0) failed deputy_shell::tests::submit_wait_and_wait_return_the_jobs_exit_code (tests.rs:551 unwrap on submit), and Build failed only in its 'Require every CI lane' aggregator. The test is not touched by or coupled to this diff (deputy_shell does not use leases, status_prs or review_watch), and main CI was green at 76d65a8 and b557776, so this looks like a flake. If it recurs on the new head, file it separately; do not bundle a fix here.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-04T07:11:20.330213206Z
+  modified_at: 2026-11-04T07:11:20.330213206Z
   session_id: da1c0d85-1d45-4ce4-a292-5358644f65b9
 history:
 - id: 01a1a443-3db8-70c3-aad1-ac7901b84264
