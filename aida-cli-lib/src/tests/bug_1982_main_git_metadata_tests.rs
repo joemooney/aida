@@ -84,7 +84,7 @@ fn lease_contained_clone(main: &Path, clone: &Path) {
         crate::seat_clone::MainFor::Verified(_)
     ));
     assert!(
-        crate::seat_clone::host_recorded_clone(clone).is_some(),
+        crate::seat_clone::host_recorded_clone(main, clone).is_some(),
         "fixture must model a leased seat"
     );
 }
@@ -599,6 +599,8 @@ fn real_claude_contained_session_cannot_redirect_main_git_metadata() {
     ));
     crate::seat_clone::create(&main, &clone, "seat-1", "main").expect("create the seat clone");
     lease_contained_clone(&main, &clone);
+    // trace:TASK-2032 | ai:claude
+    let _launcher = crate::seat_clone::LauncherMainPin::new(&main);
     let head_before = run(&clone, "git", &["rev-parse", "HEAD"]);
     let clone_out = clone.join("probe.out");
     run_contained(&clone, &home, &probe_script(&clone, &metadata, &clone_out));
@@ -658,6 +660,8 @@ fn task_1641_fixture_requires_a_lease_to_keep_clone_git_writable() {
             .contains(&clone.join(".git"))
     );
     lease_contained_clone(&main, &clone);
+    // trace:TASK-2032 | ai:claude
+    let _launcher = crate::seat_clone::LauncherMainPin::new(&main);
     assert!(
         !crate::contained_boundary::contained_main_checkout_git_deny_paths(&roots)
             .contains(&clone.join(".git"))

@@ -483,13 +483,48 @@ mod linux {
 
     // ───────────────────────── host trust and settings (no sandbox) ─────────────
 
+    /// TASK-2032: the anchor is the launcher's main, not every main this
+    /// process ever resolved. A clone of a main the process has noted is not
+    /// host-recorded for a launcher whose own main is another checkout, and a
+    /// launcher running inside the clone has no main to anchor it at all.
+    // trace:TASK-2032 | ai:claude
+    #[test]
+    fn a_clone_is_recorded_only_for_its_own_launchers_main() {
+        let fx = fixture();
+        let clone = launch_clone_seat(&fx);
+        aida_core::seat_clone_detect::note_host_main(&fx.main);
+        let other = fx.root.join("other-main");
+        std::fs::create_dir_all(&other).unwrap();
+        git_ok(&other, &["init", "-q"]);
+        {
+            let _launcher = crate::seat_clone::LauncherMainPin::new(&other);
+            assert_eq!(
+                crate::seat_clone::launcher_main(),
+                Some(other.canonicalize().unwrap())
+            );
+            assert!(crate::seat_clone::launcher_recorded_clone(&clone).is_none());
+            assert!(crate::seat_clone::host_recorded_clone(&other, &clone).is_none());
+            let denied =
+                crate::contained_boundary::contained_main_checkout_git_deny_paths(&[clone.clone()]);
+            assert!(denied.contains(&clone.join(".git")), "{denied:?}");
+        }
+        let _launcher = crate::seat_clone::LauncherMainPin::new(&fx.main);
+        assert!(crate::seat_clone::launcher_recorded_clone(&clone).is_some());
+        let _inside = crate::seat_clone::LauncherMainPin::new(&clone);
+        assert_eq!(crate::seat_clone::launcher_main(), None);
+        assert!(crate::seat_clone::launcher_recorded_clone(&clone).is_none());
+    }
+
     /// The seat's own `.git` is exempt from the BUG-2012 main-checkout deny only
     /// because the HOST's lease vouches for the clone; main's `.git` stays denied.
     #[test]
     fn a_host_recorded_clone_keeps_its_own_git_writable_and_main_git_denied() {
         let fx = fixture();
         let clone = launch_clone_seat(&fx);
-        let recorded = crate::seat_clone::host_recorded_clone(&clone).expect("host-recorded clone");
+        // trace:TASK-2032 | ai:claude
+        let _launcher = crate::seat_clone::LauncherMainPin::new(&fx.main);
+        let recorded =
+            crate::seat_clone::host_recorded_clone(&fx.main, &clone).expect("host-recorded clone");
         assert_eq!(recorded.main, fx.main);
         let target = recorded.cargo_target_dir.clone().expect("target dir");
         assert_eq!(
@@ -547,11 +582,13 @@ mod linux {
     fn only_the_host_lease_makes_a_host_recorded_clone() {
         let fx = fixture();
         let clone = launch_clone_seat(&fx);
+        // trace:TASK-2032 | ai:claude
+        let _launcher = crate::seat_clone::LauncherMainPin::new(&fx.main);
 
         // A directory inside the clone is not the clone root.
         let sub = clone.join("sub");
         std::fs::create_dir_all(sub.join(".git")).unwrap();
-        assert!(crate::seat_clone::host_recorded_clone(&sub).is_none());
+        assert!(crate::seat_clone::host_recorded_clone(&fx.main, &sub).is_none());
         let denied =
             crate::contained_boundary::contained_main_checkout_git_deny_paths(&[sub.clone()]);
         assert!(denied.contains(&sub.join(".git")), "{denied:?}");
@@ -567,7 +604,7 @@ mod linux {
         let marker = forged.join(crate::seat_clone::MARKER_RELATIVE);
         std::fs::create_dir_all(marker.parent().unwrap()).unwrap();
         std::fs::copy(clone.join(crate::seat_clone::MARKER_RELATIVE), &marker).unwrap();
-        assert!(crate::seat_clone::host_recorded_clone(&forged).is_none());
+        assert!(crate::seat_clone::host_recorded_clone(&fx.main, &forged).is_none());
         let denied =
             crate::contained_boundary::contained_main_checkout_git_deny_paths(&[forged.clone()]);
         assert!(denied.contains(&forged.join(".git")), "{denied:?}");
@@ -584,7 +621,7 @@ mod linux {
             ),
         )
         .unwrap();
-        assert!(crate::seat_clone::host_recorded_clone(&fx.main).is_none());
+        assert!(crate::seat_clone::host_recorded_clone(&fx.main, &fx.main).is_none());
         let denied =
             crate::contained_boundary::contained_main_checkout_git_deny_paths(&[fx.main.clone()]);
         assert!(denied.contains(&fx.main.join(".git")), "{denied:?}");
@@ -594,7 +631,8 @@ mod linux {
         // at it and plants a `clone` lease there. main_for accepts it, since
         // every file it reads is the seat's, but no host process resolved that
         // main, so nothing is granted from it.
-        let recorded = crate::seat_clone::host_recorded_clone(&clone).expect("real clone");
+        let recorded =
+            crate::seat_clone::host_recorded_clone(&fx.main, &clone).expect("real clone");
         let target = recorded.cargo_target_dir.clone().expect("target dir");
         let fake = target.join("fake-main");
         std::fs::create_dir_all(&fake).unwrap();
@@ -644,7 +682,7 @@ mod linux {
             "the forgery satisfies every seat-writable check"
         );
         assert!(
-            crate::seat_clone::host_recorded_clone(&clone).is_none(),
+            crate::seat_clone::host_recorded_clone(&fx.main, &clone).is_none(),
             "a forged main is never host-recorded"
         );
         // TASK-2111: a tree whose `.git` directory resolves to a main other
@@ -669,13 +707,14 @@ mod linux {
         );
         std::fs::write(&marker_path, &marker).unwrap();
         std::fs::write(&alternates, real_alternates).unwrap();
-        assert!(crate::seat_clone::host_recorded_clone(&clone).is_some());
+        assert!(crate::seat_clone::host_recorded_clone(&fx.main, &clone).is_some());
 
         // A target dir that is a symlink grants nothing, nor does a lease that
         // records any other path for it.
         std::fs::remove_dir_all(&target).unwrap();
         std::os::unix::fs::symlink(&elsewhere, &target).unwrap();
-        let recorded = crate::seat_clone::host_recorded_clone(&clone).expect("still a clone");
+        let recorded =
+            crate::seat_clone::host_recorded_clone(&fx.main, &clone).expect("still a clone");
         assert_eq!(
             recorded.cargo_target_dir, None,
             "a symlinked target dir is refused"
@@ -1145,7 +1184,7 @@ true"#;
         )
         .unwrap();
         std::fs::write(crate_dir.join("src/main.rs"), "fn main() {}\n").unwrap();
-        let target = crate::seat_clone::host_recorded_clone(&clone)
+        let target = crate::seat_clone::host_recorded_clone(&fx.main, &clone)
             .and_then(|c| c.cargo_target_dir)
             .expect("target dir");
         for (layer, argv) in clone_layers(&fx, &clone) {

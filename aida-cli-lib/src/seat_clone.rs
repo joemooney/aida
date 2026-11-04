@@ -822,17 +822,32 @@ pub(crate) struct HostRecordedClone {
 ///
 /// The trust comes from the `clone` lease in `<main>/.aida/sessions`, which
 /// the host writes and which sits outside every root a contained seat may
-/// write. The main itself must be one THIS host process resolved
-/// ([`aida_core::seat_clone_detect::is_host_main`]): [`main_for`] reads main
-/// from the seat-writable marker, so without that anchor a seat could point
-/// its marker at a forged "main" in a directory it can write and plant a
-/// lease there. On top of that, `root` must be the clone root itself (not a
-/// directory inside one), be named `aida-seat-*`, and neither contain the
-/// main checkout nor sit inside it. The cargo target directory is accepted
-/// only at exactly `<main>/target/worktrees/<clone dir>`, as a real
-/// directory, never a symlink.
+/// write. `main` is the launcher's main checkout, passed in by the caller
+/// (usually [`launcher_main`]); the clone's marker must name exactly it.
+/// [`main_for`] reads main from the seat-writable marker, so without that
+/// anchor a seat could point its marker at a forged "main" in a directory it
+/// can write and plant a lease there. TASK-2032: the anchor is the one main
+/// this launch is for, not every main the process ever resolved, so a
+/// long-lived process does not widen it. `main` must itself be a checkout
+/// with a real `.git` directory that is not a seat clone. On top of that,
+/// `root` must be the clone root itself (not a directory inside one), be
+/// named `aida-seat-*`, and neither contain the main checkout nor sit inside
+/// it. The cargo target directory is accepted only at exactly
+/// `<main>/target/worktrees/<clone dir>`, as a real directory, never a
+/// symlink.
 // trace:BUG-2169 | ai:claude
-pub(crate) fn host_recorded_clone(root: &Path) -> Option<HostRecordedClone> {
+// trace:TASK-2032 | ai:claude
+pub(crate) fn host_recorded_clone(main: &Path, root: &Path) -> Option<HostRecordedClone> {
+    let launcher_main = main.canonicalize().ok()?;
+    if !aida_core::seat_clone_detect::has_real_git_dir(&launcher_main)
+        || seat_clone_root(&launcher_main).is_some()
+        || launcher_main
+            .file_name()
+            .and_then(|n| n.to_str())
+            .is_some_and(|n| n.starts_with(CLONE_DIR_PREFIX))
+    {
+        return None;
+    }
     let root = root.canonicalize().ok()?;
     if seat_clone_root(&root).as_deref() != Some(root.as_path()) {
         return None;
@@ -847,7 +862,7 @@ pub(crate) fn host_recorded_clone(root: &Path) -> Option<HostRecordedClone> {
     let MainFor::Verified(main) = main_for(&root) else {
         return None;
     };
-    if !aida_core::seat_clone_detect::is_host_main(&main) {
+    if main != launcher_main {
         return None;
     }
     if main.starts_with(&root) || root.starts_with(&main) {
@@ -871,6 +886,53 @@ pub(crate) fn host_recorded_clone(root: &Path) -> Option<HostRecordedClone> {
         main,
         cargo_target_dir,
     })
+}
+
+/// The launcher's main checkout: the main of the project this process runs
+/// in (its cwd, or a test's pinned project root), resolved by host git.
+/// `None` when the process itself runs inside a seat clone: a clone's main
+/// comes only from its seat-writable marker, so it can anchor nothing.
+// trace:TASK-2032 | ai:claude
+pub(crate) fn launcher_main() -> Option<PathBuf> {
+    let start = crate::find_project_root().ok()?;
+    if main_for(&start) != MainFor::NotAClone {
+        return None;
+    }
+    crate::main_worktree_root_from(&start).canonicalize().ok()
+}
+
+/// Test seam: pins this thread's project root (and so [`launcher_main`]) to
+/// `main` for the guard's lifetime, without the env lock an
+/// `AmbientGuard` holds, so a test may still take one beside it.
+// trace:TASK-2032 | ai:claude
+#[cfg(test)]
+pub(crate) struct LauncherMainPin(Option<crate::test_ambient::Ambient>);
+
+#[cfg(test)]
+impl LauncherMainPin {
+    pub(crate) fn new(main: &Path) -> Self {
+        Self(crate::test_ambient::replace(Some(
+            crate::test_ambient::Ambient {
+                project_root: main.to_path_buf(),
+                stdin_is_terminal: false,
+                stdout_is_terminal: false,
+                stderr_is_terminal: false,
+            },
+        )))
+    }
+}
+
+#[cfg(test)]
+impl Drop for LauncherMainPin {
+    fn drop(&mut self) {
+        crate::test_ambient::replace(self.0.take());
+    }
+}
+
+/// [`host_recorded_clone`] anchored to [`launcher_main`].
+// trace:TASK-2032 | ai:claude
+pub(crate) fn launcher_recorded_clone(root: &Path) -> Option<HostRecordedClone> {
+    host_recorded_clone(&launcher_main()?, root)
 }
 
 /// The extra paths a host-recorded clone seat writes beyond its own root: its

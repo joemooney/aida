@@ -54,7 +54,8 @@ pub(crate) struct FromSeatOptions {
 pub(crate) fn recorded_seat(main: &Path, clone: &Path) -> Result<HostRecordedClone> {
     aida_core::seat_clone_detect::note_host_main(main);
     let main = main.canonicalize().unwrap_or_else(|_| main.to_path_buf());
-    crate::seat_clone::host_recorded_clone(clone)
+    // trace:TASK-2032 | ai:claude
+    crate::seat_clone::host_recorded_clone(&main, clone)
         .filter(|seat| seat.main == main)
         .ok_or_else(|| {
             anyhow::anyhow!(

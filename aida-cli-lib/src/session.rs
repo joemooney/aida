@@ -4424,7 +4424,7 @@ pub(crate) fn claude_contained_settings_json(write_roots: &[PathBuf]) -> Result<
     // trace:BUG-2169 | ai:claude
     let clone = write_roots
         .first()
-        .and_then(|root| crate::seat_clone::host_recorded_clone(root));
+        .and_then(|root| crate::seat_clone::launcher_recorded_clone(root));
     let (mut store_paths, mut extra_deny) = (store_paths, main_git_deny);
     // TASK-2772: sandboxed Bash in a lane may write the cargo slot locks and
     // build log, so the LIGHT gate gets a build slot inside the sandbox. Never
@@ -4536,7 +4536,7 @@ pub(crate) fn verify_linked_worktree_main(worktree: &Path, main: &Path) -> Resul
         return Ok(());
     };
     if !meta.file_type().is_file() {
-        let recorded = crate::seat_clone::host_recorded_clone(worktree)
+        let recorded = crate::seat_clone::launcher_recorded_clone(worktree)
             .is_some_and(|clone| canon(&clone.main).is_some() && canon(&clone.main) == canon(main));
         if recorded {
             return Ok(());
@@ -5178,7 +5178,7 @@ pub(crate) fn bwrap_confinement_args_inner(
 // trace:STORY-612 | ai:claude
 // trace:BUG-2169 | ai:claude
 pub(crate) fn os_wrap_rw_paths(worktree_root: &Path) -> Result<Vec<PathBuf>> {
-    let mut rw_paths = match crate::seat_clone::host_recorded_clone(worktree_root) {
+    let mut rw_paths = match crate::seat_clone::launcher_recorded_clone(worktree_root) {
         Some(clone) => {
             let mut paths = crate::contained_boundary::contained_store_write_paths(&clone.main);
             paths.extend(crate::seat_clone::seat_extra_write_paths(&clone));
@@ -5305,7 +5305,7 @@ pub(crate) fn prepare_contained_mailbox_for_launch(worktree: &Path) -> Result<()
 /// Empty for any other tree.
 // trace:BUG-2169 | ai:claude
 pub(crate) fn os_wrap_seat_env_args(worktree_root: &Path) -> Vec<String> {
-    let Some(clone) = crate::seat_clone::host_recorded_clone(worktree_root) else {
+    let Some(clone) = crate::seat_clone::launcher_recorded_clone(worktree_root) else {
         return Vec::new();
     };
     crate::seat_clone::seat_build_env(&clone)
@@ -5410,7 +5410,7 @@ pub(crate) fn os_wrapped_program_and_args(
     // first-use slot read-only inside the wrapper. Create the validated slot
     // pair (0700) first; best-effort, it never widens the boundary.
     // trace:TASK-2772 | ai:claude
-    if crate::seat_clone::host_recorded_clone(worktree_root).is_none() {
+    if crate::seat_clone::launcher_recorded_clone(worktree_root).is_none() {
         for slot in crate::contained_boundary::lane_build_write_paths() {
             if rw_paths.contains(&slot) {
                 let _ = create_private_dir_all(&slot);
@@ -8792,13 +8792,24 @@ pub(crate) fn resume_lease_tree(target: &ResumeTarget) -> Option<PathBuf> {
         .worktree
         .clone()
         .or_else(|| crate::find_main_worktree_root().ok())?;
+    // TASK-2032: a transcript found in a seat clone resolves main from the
+    // clone's seat-writable marker, so only the launcher's main may then
+    // anchor the clone; a host-resolved main anchors itself.
+    // trace:TASK-2032 | ai:claude
+    let host_resolved = crate::seat_clone::main_for(&main) == crate::seat_clone::MainFor::NotAClone;
     let main = crate::main_worktree_root_from(&main);
+    let anchor = if host_resolved {
+        Some(main.clone())
+    } else {
+        crate::seat_clone::launcher_main()
+    };
     let (_, _, tree, _) = crate::orchestrator_leases::find_orchestrated_lease(&main, &target.id)?;
     if !tree.is_dir() {
         return None;
     }
     let canon = |p: &Path| std::fs::canonicalize(p).ok();
-    let tree_main = match crate::seat_clone::host_recorded_clone(&tree) {
+    let recorded = anchor.and_then(|anchor| crate::seat_clone::host_recorded_clone(&anchor, &tree));
+    let tree_main = match recorded {
         Some(clone) => clone.main,
         None => crate::main_worktree_root_from(&tree),
     };

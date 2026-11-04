@@ -36,8 +36,9 @@ pub(crate) fn retire_tree(
 /// main.
 pub(crate) fn verified_clone_main(main: &Path, clone: &Path) -> Option<std::path::PathBuf> {
     aida_core::seat_clone_detect::note_host_main(main);
-    let recorded = crate::seat_clone::host_recorded_clone(clone)?;
     let main = main.canonicalize().ok()?;
+    // trace:TASK-2032 | ai:claude
+    let recorded = crate::seat_clone::host_recorded_clone(&main, clone)?;
     (recorded.main == main).then_some(main)
 }
 

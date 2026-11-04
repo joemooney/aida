@@ -475,7 +475,8 @@ pub(crate) fn contained_main_checkout_git_deny_paths(write_roots: &[PathBuf]) ->
             continue;
         };
         // trace:BUG-2169 | ai:claude
-        if crate::seat_clone::host_recorded_clone(root).is_some() {
+        // trace:TASK-2032 | ai:claude
+        if crate::seat_clone::launcher_recorded_clone(root).is_some() {
             continue;
         }
         if meta.is_dir() || git_entry.is_dir() {
