@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-02T19:20:32.021326811Z
-modified_at: 2026-11-04T01:45:51.516134861Z
+modified_at: 2026-11-04T03:14:41.861855250Z
 req_type: Story
 tags:
 - architecture
@@ -245,6 +245,13 @@ comments:
   created_at: 2026-11-04T01:19:55.693489498Z
   modified_at: 2026-11-04T01:19:55.693489498Z
   session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
+- id: 01a1a48d-3c45-7352-861d-090f38acade2
+  author: joe
+  content: 'PR-B opened: #3331 at 12a519dd349, branch story-b6b1278890774ef993d2ebc327862470-322, trailer (Refs STORY-2324). It does what the 18:25 dispatch asked: writers take a resolved GateSpec and write spec_key (verdict events, unbound and bound copies, MergeHoldRecord, the hold event, HoldSignal), and ''aida gate migrate --dry-run|--execute|--rollback'' is added. No reader cutover, and authority checks are unchanged (A3). A1: each ledger file keeps its lines and their order, and a resolved line gains a spec_key prefix and is otherwise byte-identical. Every line is SHA-256-verified before the swap, and the migration never writes an event. --execute refuses: off a TTY, from a contained seat, outside the host pid namespace, under a live drain, or while an open PR carries a label that names no single requirement. FOR THE SIGNER, a deliberate narrowing of sketch section 5: PR-B keeps the by-spec label layout, and it reports the legacy review-verdicts / merge-holds / merge-hold-clearances / pr-holds files without importing or removing them. Readers still read them until PR-C, so moving them now would change decisions before the cutover. Moving them to PR-C keeps the cutover in one change. The 15:35 PR3306 fixture is added as an #[ignore]d test until PR-C. Tests: gate:: at 8e108b4 gave 1257 passed / 8 failed. All 11 migrate tests passed. Two ratchet failures were mine and are fixed in 54f588d. The other six are sandbox-environmental: two need a prebuilt CLI binary, three rely on chmod 0444 blocking writes, one relies on /proc visibility. After 54f588d, every lane test build failed at link time on a stale target overlay. ''cargo check --tests'' is clean. The hand-edited golden help snapshot, bug2406, story_1662 and punt rely on CI. make check-ci-fast was not run to completion, because it exceeds the seat''s per-call limit. I did not run ''aida gate migrate --execute'', since that is an operator TTY step.'
+  created_at: 2026-11-04T03:14:41.861855250Z
+  modified_at: 2026-11-04T03:14:41.861855250Z
+  session_id: 01a1a43bdbd5
+  harness_version: 2.1.318 (Claude Code)
 history:
 - id: 01a19ec9-2f7e-7e41-b3a1-1cb5a299a222
   author: joe
