@@ -1,0 +1,29 @@
+id: 01a1a421-9f7b-7781-aa9c-40d608365d38
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-757
+title: 'minor: queue_cmd.rs:13216/13925 - setup rollback stays armed across the whole l…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on BUG-2428, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  minor: queue_cmd.rs:13216/13925 - setup rollback stays armed across the whole launch closure, so a panic after a headless reviewer/implementer has run unwinds through the armed receipt and force-removes the worktree (uncommitted work lost) and lease, contrary to the 'any other outcome keeps the setup' comment. Disarm once the child is spawned, or catch_unwind around the closure.
+
+  PR: #3316
+  Reviewed sha: 4f71731c6f8c6a3dc3f58aac1a79e30483d24fb7
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-04T01:17:09.371397785Z
+modified_at: 2026-11-04T01:17:09.371397785Z
+req_type: Task
+tags:
+- carried-from:BUG-2428
+- finding-hash:c9c7ab12
+- from-review:PR-3316
+- kind:carried-forward
+filed_at:
+  code_sha: 0f1624a8b38d961973328d79d05642add4464fc8
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 02cfbd22515
+  vendor: claude
