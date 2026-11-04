@@ -814,6 +814,7 @@ fn typed_recusal_round_trip_and_label_update_preserve_routing() {
         verdict_ref: None,
         release_condition: None,
         spec: None,
+        spec_key: None,
         placed_by: None,
         absorbed: Vec::new(),
     };
@@ -856,6 +857,7 @@ fn recusal_requires_named_principal_and_malformed_json_stays_held() {
         verdict_ref: None,
         release_condition: None,
         spec: None,
+        spec_key: None,
         placed_by: None,
         absorbed: Vec::new(),
     };
@@ -1342,6 +1344,7 @@ fn routing_proposal_boundary_cannot_mutate_non_routing_fields_at_persistence() {
         verdict_ref: Some(vref),
         release_condition: Some("independent review".into()),
         spec: Some("STORY-1889".into()),
+        spec_key: None,
         placed_by: Some("advisor".into()),
         absorbed: vec![absorbed_rework.clone()],
     };

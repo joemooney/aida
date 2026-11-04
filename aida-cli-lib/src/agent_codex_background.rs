@@ -119,6 +119,11 @@ pub(crate) struct CodexBgRequest {
     pub name: Option<String>,
     pub description: Option<String>,
     pub no_mail_wake: bool,
+    /// Branch for the lane's fresh worktree (`--branch`); `None` derives it.
+    // trace:BUG-2390 | ai:claude
+    pub branch: Option<String>,
+    /// Fork point of a new `--branch` (`--base`).
+    pub base: Option<String>,
 }
 
 /// Refuse option combinations `--bg` does not support, before ANY
@@ -648,7 +653,20 @@ pub(crate) fn agent_new_codex_bg(mut req: CodexBgRequest) -> Result<()> {
         // This invocation's own lease write is not refused by its own,
         // already admitted, attempt.
         let _own = receipt::OwnAttemptScope::enter(&attempt);
-        prepare_agent_launch_attempt(&project_root, role, spec, "codex", name, cwd_ref, false)?
+        // trace:BUG-2390 | ai:claude — dispatch take/impl name the lane branch.
+        prepare_agent_launch_attempt_on_branch(
+            &project_root,
+            role,
+            spec,
+            "codex",
+            name,
+            cwd_ref,
+            false,
+            LaneBranch {
+                branch: req.branch.clone(),
+                base: req.base.clone(),
+            },
+        )?
     };
     let mut setup_receipt = setup_receipt;
     if let Some(setup) = setup_receipt.as_mut() {

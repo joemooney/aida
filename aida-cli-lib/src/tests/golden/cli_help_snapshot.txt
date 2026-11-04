@@ -17231,6 +17231,14 @@ Options:
           the work completed. Inspect with `aida agent launch-status <ATTEMPT>`. Needs a seat grant
           that delegates the role; never offers an inline grant
 
+      --branch <BRANCH>
+          Put the detached lane's worktree on BRANCH (only with `--bg`). An existing branch, local
+          or on origin, is checked out; a new one forks from `--base`
+
+      --base <REF>
+          Ref a new `--branch` forks from (only with `--bg`; default: the project's default branch).
+          Ignored when BRANCH already exists
+
   -h, --help
           Print help (see a summary with '-h')
 ===== aida agent new antigravity
@@ -27641,14 +27649,16 @@ and prints the checklist an agent answers for the rest
 Usage: aida gate [OPTIONS] <COMMAND>
 
 Commands:
-  list   List the shipped gates, their versions, and the lifecycle moment each one is a default for
-  show   Print one gate's checklist for an agent to follow
-  run    Run a gate over a spec: the deterministic tier first, then the checklist for what it cannot
-         decide. Advisory; never edits the spec
-  state  Diagnostic: one pull request's effective gate state (verdict, merge hold, execution mode,
-         decision) computed from the requirements it ships, identified once against the committed
-         store, and its gate ledger. Read-only: it decides nothing and changes nothing
-  help   Print this message or the help of the given subcommand(s)
+  list     List the shipped gates, their versions, and the lifecycle moment each one is a default
+           for
+  show     Print one gate's checklist for an agent to follow
+  run      Run a gate over a spec: the deterministic tier first, then the checklist for what it
+           cannot decide. Advisory; never edits the spec
+  state    Diagnostic: one pull request's effective gate state (verdict, merge hold, execution mode,
+           decision) computed from the requirements it ships, identified once against the committed
+           store, and its gate ledger. Read-only: it decides nothing and changes nothing
+  migrate  One-time rewrite that gives every gate-ledger event its requirement's canonical key
+  help     Print this message or the help of the given subcommand(s)
 
 Options:
       --format <FORMAT>
@@ -27769,6 +27779,41 @@ Options:
       --compare
           Also show what today's merge gates decide, column by column, and count where the two
           differ
+
+      --json
+          Emit JSON
+
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida gate migrate
+One-time rewrite that gives every gate-ledger event its requirement's canonical key
+
+Usage: aida gate migrate [OPTIONS]
+
+Options:
+      --dry-run
+          Plan and report; change nothing
+
+      --execute
+          Rewrite the ledger and keep the old one as an archive. Needs an interactive terminal in
+          the host shell, outside any sandbox, with no drain running
+
+      --rollback
+          Restore the ledger the last `--execute` archived (same rules)
 
       --json
           Emit JSON
@@ -47454,9 +47499,19 @@ Working on aida itself
         "help": "Skip the live-duplicate confirmation prompt while still checking for duplicates"
       },
       {
+        "name": "base",
+        "takes_value": true,
+        "help": "Ref a new `--branch` forks from (only with `--bg`; default: the project's default branch). Ignored when BRANCH already exists"
+      },
+      {
         "name": "bg",
         "takes_value": false,
         "help": "Launch a detached Codex implementer or reviewer for SPEC: a fresh `codex exec` worker under its own lease and child grant, in the trusted native sandbox (`[agents] contained` plus `[contained.vendors] codex = \"native\"`), supervised by AIDA after this command returns. Prints the attempt id; it reports \"accepted\" when the worker started, not when the work completed. Inspect with `aida agent launch-status <ATTEMPT>`. Needs a seat grant that delegates the role; never offers an inline grant"
+      },
+      {
+        "name": "branch",
+        "takes_value": true,
+        "help": "Put the detached lane's worktree on BRANCH (only with `--bg`). An existing branch, local or on origin, is checked out; a new one forks from `--base`"
       },
       {
         "name": "bypass-sandbox",
@@ -58297,6 +58352,52 @@ Working on aida itself
         "name": "json",
         "takes_value": false,
         "help": "Emit JSON"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "gate",
+      "migrate"
+    ],
+    "about": "One-time rewrite that gives every gate-ledger event its requirement's canonical key",
+    "flags": [
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "dry-run",
+        "takes_value": false,
+        "help": "Plan and report; change nothing"
+      },
+      {
+        "name": "execute",
+        "takes_value": false,
+        "help": "Rewrite the ledger and keep the old one as an archive. Needs an interactive terminal in the host shell, outside any sandbox, with no drain running"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "json",
+        "takes_value": false,
+        "help": "Emit JSON"
+      },
+      {
+        "name": "rollback",
+        "takes_value": false,
+        "help": "Restore the ledger the last `--execute` archived (same rules)"
       }
     ],
     "hidden": false

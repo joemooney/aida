@@ -19,8 +19,12 @@ fn real_git() -> PathBuf {
         .expect("real git on PATH")
 }
 
+/// Runs `git -C repo ARGS` with detached auto-maintenance off, so a fixture
+/// commit never leaves a background `git maintenance` behind (BUG-2191).
+// trace:TASK-2000 | ai:claude
 fn git(repo: &Path, args: &[&str]) -> String {
     let out = std::process::Command::new(real_git())
+        .args(["-c", "maintenance.auto=false", "-c", "gc.auto=0"])
         .arg("-C")
         .arg(repo)
         .args(args)
@@ -264,4 +268,86 @@ fn only_show_linkage_bounds_the_worktree_probe() {
             .any(|n| n == LINKAGE_WORKTREE_SCAN_INCOMPLETE_NOTE),
         "{show:?}"
     );
+}
+
+/// TASK-2000: MCP `show_requirement` renders linkage under the show deadline
+/// too. With `symbolic-ref` slower than the shipped-check budget the
+/// unbounded collector still reports the spec shipped, but the MCP section
+/// reports the state unknown (and says why) like the CLI show surfaces,
+/// instead of waiting out the slow default-branch resolution.
+// trace:TASK-2000 | ai:claude
+#[cfg(unix)]
+#[test]
+fn mcp_show_linkage_runs_under_the_show_deadline() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let tmp = tempfile::TempDir::new().unwrap();
+    let repo = shipped_repo(tmp.path());
+    let _path = slow_git_on_path(tmp.path(), &["symbolic-ref"], 1.5);
+
+    let md = crate::mcp::render_git_linkage_md(&repo, "TASK-7", false);
+    assert!(md.contains("- **State:** unknown ("), "{md}");
+    assert!(
+        md.contains(&format!("- **Incomplete:** {LINKAGE_SHIPPED_UNKNOWN_NOTE}")),
+        "{md}"
+    );
+    assert!(!md.contains("shipped (merged"), "{md}");
+}
+
+/// TASK-1999 (folded into TASK-2000): the bounded default-branch resolvers
+/// share one candidate walk with their unbounded twins, so with time to spare
+/// both agree on every repo shape: `origin/HEAD` set, `init.defaultBranch`
+/// naming a local-only branch, a master-only repo, and no candidate at all.
+// trace:TASK-2000 trace:TASK-1999 | ai:claude
+#[test]
+fn bounded_default_branch_resolvers_match_their_unbounded_twins() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let tmp = tempfile::TempDir::new().unwrap();
+    let init = |name: &str, branch: &str| -> PathBuf {
+        let repo = tmp.path().join(name);
+        std::fs::create_dir_all(&repo).unwrap();
+        git(
+            &repo,
+            &["init", &format!("--initial-branch={branch}"), "-q"],
+        );
+        git(&repo, &["config", "user.email", "t@example.com"]);
+        git(&repo, &["config", "user.name", "Test"]);
+        git(&repo, &["commit", "-q", "--allow-empty", "-m", "init"]);
+        repo
+    };
+
+    let with_origin_head = shipped_repo(tmp.path());
+    let trunk = init("trunk", "trunk");
+    git(&trunk, &["config", "init.defaultBranch", "trunk"]);
+    let master_only = init("master-only", "master");
+    git(&master_only, &["config", "init.defaultBranch", "master"]);
+    let none = init("none", "devel");
+    git(&none, &["config", "init.defaultBranch", "devel2"]);
+
+    let cases = [
+        (&with_origin_head, Some("origin/main")),
+        (&trunk, Some("trunk")),
+        (&master_only, Some("master")),
+        (&none, None),
+    ];
+    for (repo, want) in cases {
+        let far = Instant::now() + Duration::from_secs(30);
+        let unbounded = crate::resolve_default_branch_ref(repo);
+        assert_eq!(unbounded.as_deref(), want, "{}", repo.display());
+        assert_eq!(
+            crate::resolve_default_branch_ref_until(repo, far),
+            Ok(unbounded),
+            "{}",
+            repo.display()
+        );
+        assert_eq!(
+            crate::shipped_linkage::default_branch_refs_until(repo, far).ok(),
+            Some(crate::shipped_linkage::default_branch_refs(repo)),
+            "{}",
+            repo.display()
+        );
+    }
 }

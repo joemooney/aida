@@ -59,4 +59,30 @@ pub enum GateCommand {
         #[clap(long)]
         json: bool,
     },
+
+    /// One-time rewrite that gives every gate-ledger event its requirement's canonical key.
+    // trace:STORY-2324 | ai:claude
+    Migrate {
+        /// Plan and report; change nothing.
+        #[clap(
+            long,
+            conflicts_with_all = ["execute", "rollback"],
+            required_unless_present_any = ["execute", "rollback"]
+        )]
+        dry_run: bool,
+
+        /// Rewrite the ledger and keep the old one as an archive. Needs an
+        /// interactive terminal in the host shell, outside any sandbox, with
+        /// no drain running.
+        #[clap(long, conflicts_with = "rollback")]
+        execute: bool,
+
+        /// Restore the ledger the last `--execute` archived (same rules).
+        #[clap(long)]
+        rollback: bool,
+
+        /// Emit JSON.
+        #[clap(long)]
+        json: bool,
+    },
 }
