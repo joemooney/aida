@@ -2873,7 +2873,7 @@ pub(crate) fn bind_grant_to_pid(id: &str, pid: u32) -> Result<()> {
 // trace:TASK-2708 | ai:claude
 pub(crate) fn bind_contained_launch_worker(
     grant_id: &str,
-    receipt: &crate::containment::launch::ContainmentReceipt,
+    receipt: &crate::gate::kernel_deps::ContainmentReceipt,
 ) -> Result<()> {
     anyhow::ensure!(
         receipt.is_accepted(),
