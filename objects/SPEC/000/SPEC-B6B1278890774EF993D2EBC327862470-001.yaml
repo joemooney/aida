@@ -20,7 +20,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T07:26:01.071265913Z
-modified_at: 2026-11-04T12:00:49.019493247Z
+modified_at: 2026-11-04T12:47:02.094186338Z
 req_type: Task
 tags:
 - architecture
@@ -848,6 +848,12 @@ comments:
   created_at: 2026-11-04T11:53:28.782961171Z
   modified_at: 2026-11-04T11:53:28.782961171Z
   session_id: da1c0d85-1d45-4ce4-a292-5358644f65b9
+- id: 01a1a699-39ce-7f22-aeaf-6cd12bc3a0fc
+  author: joe
+  content: 'ADVISOR REWORK BRIEF (2026-11-04 05:52 MST), PR #3351 head 6d3cdaf1: approved, but CI ''Check formatting'' is red. Scope is FORMAT ONLY: run cargo fmt --all and commit the result. The rustfmt diffs are in aida-cli-lib/src/tests/agent_launcher_tests.rs (~2985), bug_home_038_seat_publish_tests.rs (~1029) and story_2254_codex_bg_supervisor_tests.rs (~1221). Make no logic changes. Gate: FASTTRACK (make check-ci-fast, no cargo). Push to the PR branch; the delta re-review is formatting-only.'
+  created_at: 2026-11-04T12:47:02.094186338Z
+  modified_at: 2026-11-04T12:47:02.094186338Z
+  session_id: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
 history:
 - id: 01a1960f-6ca8-7313-8a94-63b0b98a4e44
   author: joe
