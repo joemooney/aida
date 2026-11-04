@@ -6,12 +6,12 @@ description: |-
   Acceptance: (1) Migrate Claude to signed common wrapper, keep existing grants/CLI/MCP/headless/bg and containment regressions, no weakened floors/fallback. Vendor additions use data not new containment code. (2) Independent installed Linux evidence for all7 parent AC: actual Codex-only product/advisor/implementer/reviewer loop, interactive/headless/bg, allowed/denied network, protected writes, own grant recording, missing-kernel refusal and Claude parity. Missing evidence keeps parent open. (3) CLI/doctor/config/manual/trust reporting matches actual support and limits, publication only reviewed merged docs per owning publication task. No new unattended runs. Layers: remaining vendor migration, cross-surface integration/live evidence, public diagnostics/docs. Signed sliceD.
 
   All signed STORY2238 sketch C1-C12 and BUG2398 B1-B4 apply. Linux only, fakeHOME/synthetic tests, no global user settings or schedules. No partial backend may report AIDA containment applied or launch ordinary agents until all required protections are ready; named refusal, no fallback. STRICT independent review, operator merge floor. LIGHT one targeted test plus fast gates; shared infra or >10files adds touched-test/compile, fullsuiteCI only. Longcargo background, no slotbypass. Parent all7AC remain open until final installed-tool evidence; no slice alone completes parent.
-status: NeedsAttention
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T09:06:27.587006751Z
-modified_at: 2026-11-04T08:36:05.627746072Z
+modified_at: 2026-11-04T08:36:11.816746005Z
 req_type: Task
 tags:
 - architecture
@@ -138,6 +138,12 @@ comments:
   created_at: 2026-11-04T08:36:05.627746072Z
   modified_at: 2026-11-04T08:36:05.627746072Z
   session_id: da1c0d85-1d45-4ce4-a292-5358644f65b9
+- id: 01a1a5b3-93a8-7793-b6f1-488b75a271c1
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Facade delta (15e1dc65: ContainmentReceipt re-exported via gate/kernel_deps + FACADE_EXTERNAL_LEAVES entry) is correct, but merge c01127d brought BUG-2390 (#3309), which removed dispatch.rs''s prepare_launch call; the PR''s own spawn-path ratchet still expects it, so task_2708_every_codex_spawn_path_is_inventoried_and_guarded fails deterministically at this head. TASK-2708 AC (1)-(3) stay open by design (step-1 slice, Refs).. Triage reason: rework brief on spec'
+  created_at: 2026-11-04T08:36:11.816744311Z
+  modified_at: 2026-11-04T08:36:11.816744311Z
+  session_id: da1c0d85-1d45-4ce4-a292-5358644f65b9
 history:
 - id: 01a1965c-5ce8-7781-b88f-317b0b12bab5
   author: joe
@@ -256,6 +262,14 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1a5b3-93a8-7793-b6f1-4877ffc26f57
+  author: joe
+  timestamp: 2026-11-04T08:36:11.816730534Z
+  session_id: da1c0d85-1d45-4ce4-a292-5358644f65b9
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: 4ce0af750fcb68d4adf57496e4e002aefd8ace77
   branch: main
@@ -263,11 +277,3 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: 4ce0af750fc
   vendor: codex
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'Facade delta (15e1dc65: ContainmentReceipt re-exported via gate/kernel_deps + FACADE_EXTERNAL_LEAVES entry) is correct, but merge c01127d brought BUG-2390 (#3309), which removed dispatch.rs''s prepare_launch call; the PR''s own spawn-path ratchet still expects it, so task_2708_every_codex_spawn_path_is_inventoried_and_guarded fails deterministically at this head. TASK-2708 AC (1)-(3) stay open by design (step-1 slice, Refs).'
-  recovery_hint: address the review findings, move TASK-2708 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-04T08:24:29.564629687Z
