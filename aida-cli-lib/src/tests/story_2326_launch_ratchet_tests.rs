@@ -32,6 +32,7 @@ const LEDGER: &[(&str, usize, &str)] = &[
     ("aida-cli-lib/src/containment/supervisor.rs", 3, "STORY-2238: the containment supervisor, a permitted constructor module"),
     ("aida-cli-lib/src/criteria_red_run.rs", 1, "generic helper: runs a criteria command"),
     ("aida-cli-lib/src/deputy/worker.rs", 3, "generic helper: deputy job argv; pre_exec process group"),
+    ("aida-cli-lib/src/deputy_shell/runner.rs", 3, "not a vendor child: STORY-2338's script deputy runs bash under the operator's grant (the grant write), with a pre_exec process group (from main)"),
     ("aida-cli-lib/src/dev_build.rs", 2, "not a vendor child: the built aida binary smoke test"),
     ("aida-cli-lib/src/dev_cmd.rs", 1, "not a vendor child: resolved dev tool"),
     ("aida-cli-lib/src/dispatch.rs", 3, "slice B: dispatch implementer launch (Q5)"),
@@ -85,8 +86,9 @@ const LEDGER: &[(&str, usize, &str)] = &[
 /// `exec`/`pre_exec`; the sites were already there.) The merge of main
 /// brought in STORY-2254's detached Codex worker (+8, ledgered above). The
 /// merges after 0ff32132 brought in +3 (lane_job.rs, seat_target_overlay.rs,
-/// and codex_tool_env.rs's cfg(test) fn), all ledgered above.
-const CEILING: usize = 167;
+/// and codex_tool_env.rs's cfg(test) fn), all ledgered above. The rebase onto
+/// main 339203a5 brought in +3 (STORY-2338's deputy_shell/runner.rs), ledgered.
+const CEILING: usize = 170;
 
 fn rust_files(dir: &Path, out: &mut Vec<PathBuf>) {
     let Ok(entries) = std::fs::read_dir(dir) else {
@@ -232,6 +234,8 @@ const NON_VENDOR_SPELLINGS: &[&str] = &[
     "aida_exe_path",
     "crate::aida_bin::current_executable_path",
     "crate::aida_exe_path",
+    // The aida binary (BUG-2436's finished-lane `aida session end`, from main).
+    "crate::kernel::aida_exe_path",
     "crate::kernel::resolve_gh_binary_for_probe",
     "crate::pr_cmd::pr_ship_post_merge_aida_exe",
     "crate::resolve_aida_exe",
@@ -426,7 +430,10 @@ fn scanner_catches_every_mutant_spelling() {
         "fn f(c: &mut Command) { c.env(\"AIDA_HEADLESS\", \"1\"); }",
         "fn f() { Command::new(crate::aida_exe_path()); Command::new(&gh_bin); }",
         // Split so TASK-1262's raw-lookup ratchet does not count the fixture.
-        concat!("fn f() { Command::new(&real_git); Command::new(std::env::current_", "exe()?); }"),
+        concat!(
+            "fn f() { Command::new(&real_git); Command::new(std::env::current_",
+            "exe()?); }"
+        ),
         "fn f() { GitCommand::new(program); }",
     ];
     for src in clean {
