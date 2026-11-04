@@ -752,6 +752,17 @@ hermetic audit. `JSON not honoured` means unsupported and explicitly rejected.
 | `aida deputy pause` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida deputy resume` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida deputy ack` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
+| `aida deputy shell` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
+| `aida deputy shell run` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
+| `aida deputy shell submit` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
+| `aida deputy shell list` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
+| `aida deputy shell status` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
+| `aida deputy shell log` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
+| `aida deputy shell wait` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
+| `aida deputy shell cancel` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
+| `aida deputy shell pause` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
+| `aida deputy shell resume` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
+| `aida deputy shell ack` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida adoption` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida adoption status` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida adoption refresh` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |

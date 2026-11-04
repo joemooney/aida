@@ -1,0 +1,1421 @@
+//! Hermetic tests for the script deputy: every queue lives in a temp dir,
+//! the clock, grant verdicts, liveness and the refresh minter are injected,
+//! and the runner is driven in-process with test limits.
+// trace:STORY-2338 | ai:claude
+
+use super::attribution::{self, Probes};
+use super::runner::{self, RunnerConfig};
+use super::*;
+use crate::deputy::worker::{no_mandate_stop, GrantState};
+use crate::gate::seat_authority::{GrantCheck, GrantRejection, SeatGrant};
+use chrono::Duration as CDuration;
+use sha2::Digest;
+use std::collections::HashMap;
+use std::sync::atomic::{AtomicBool, AtomicI64, AtomicUsize, Ordering};
+use std::sync::Mutex;
+use std::time::Duration;
+
+const LIVE_PID: u32 = 4242;
+const LIVE_TOKEN: &str = "proc:4242@100";
+const RUNNER_GRANT: &str = "11111111-0000-4000-8000-000000000001";
+
+fn host() -> Host {
+    Host {
+        hostname: "testhost".into(),
+        boot_id: "boot-1".into(),
+    }
+}
+
+fn grant(id: &str, seat: &str, binding: &[&str]) -> SeatGrant {
+    let now = Utc::now();
+    SeatGrant {
+        id: id.into(),
+        principal: "op".into(),
+        subject: "op".into(),
+        session_id: "grant-session".into(),
+        seat: seat.into(),
+        tty_issued_at: now,
+        delegable_seats: vec![],
+        parent_grant_id: None,
+        issued_at: now,
+        expires_at: now + CDuration::hours(24),
+        revoked_at: None,
+        binding: binding.iter().map(|s| s.to_string()).collect(),
+        origin: None,
+        launch_capability: None,
+    }
+}
+
+fn key_token() -> String {
+    format!("key:{}", "ab".repeat(32))
+}
+
+/// The world the verdict sees: known grants, rejected ids, live pids, and
+/// per-session heartbeats, each from the registry row of one agent
+/// (`(session, agent, at)`).
+fn probes(
+    grants: &[SeatGrant],
+    rejected: &[(&str, GrantRejection)],
+    heartbeats: &[(&str, &str, DateTime<Utc>)],
+) -> Probes {
+    let mut table: HashMap<String, GrantCheck> = grants
+        .iter()
+        .map(|g| (g.id.clone(), GrantCheck::Valid(g.clone())))
+        .collect();
+    for (id, why) in rejected {
+        table.insert(
+            id.to_string(),
+            GrantCheck::Rejected {
+                id: id.to_string(),
+                seat: Some("advisor".into()),
+                reason: why.clone(),
+            },
+        );
+    }
+    let beats: HashMap<(String, String), DateTime<Utc>> = heartbeats
+        .iter()
+        .map(|(s, agent, t)| ((s.to_string(), agent.to_string()), *t))
+        .collect();
+    Probes {
+        grant: Arc::new(move |_root, id| {
+            table.get(id).cloned().unwrap_or(GrantCheck::Rejected {
+                id: id.to_string(),
+                seat: None,
+                reason: GrantRejection::Unreadable,
+            })
+        }),
+        alive: Arc::new(|pid, _start| pid == LIVE_PID),
+        heartbeat: Arc::new(move |_root, sid, g: &SeatGrant| {
+            beats.get(&(sid.to_string(), g.subject.clone())).copied()
+        }),
+        host: host(),
+    }
+}
+
+fn advisor() -> SeatGrant {
+    grant(
+        "22222222-0000-4000-8000-000000000002",
+        "advisor",
+        &[LIVE_TOKEN],
+    )
+}
+
+fn submitter(g: &SeatGrant, token: &str, root: &Path, session: &str) -> Submitter {
+    attribution::submitter_from(
+        g,
+        &[token.to_string()],
+        Some(session.into()),
+        LIVE_PID,
+        Some("100".into()),
+        root,
+        root,
+        host(),
+        None,
+    )
+}
+
+fn job(q: &Queue, script: &str, sub: Submitter) -> ShellJob {
+    ShellJob {
+        schema: SCHEMA,
+        id: crate::deputy::new_job_id(),
+        deputy: q.name.clone(),
+        created_at: Utc::now(),
+        sha256: script_digest(script),
+        script: script.into(),
+        source: None,
+        timeout_secs: 60,
+        spec: None,
+        submitter: sub,
+    }
+}
+
+struct Fixture {
+    dir: tempfile::TempDir,
+    q: Queue,
+}
+
+impl Fixture {
+    fn new(name: &str) -> Self {
+        let dir = tempfile::tempdir().unwrap();
+        let q = queue_in(&dir.path().join("deputy-shell"), name).unwrap();
+        q.ensure().unwrap();
+        Self { dir, q }
+    }
+    fn root(&self) -> &Path {
+        self.dir.path()
+    }
+    fn home(&self) -> PathBuf {
+        let h = self.dir.path().join("home");
+        std::fs::create_dir_all(&h).unwrap();
+        h
+    }
+    fn submit(&self, script: &str) -> ShellJob {
+        self.submit_as(
+            script,
+            submitter(&advisor(), LIVE_TOKEN, self.root(), "sess-a"),
+        )
+    }
+    fn submit_as(&self, script: &str, sub: Submitter) -> ShellJob {
+        let j = job(&self.q, script, sub);
+        self.q.submit(&j).unwrap();
+        j
+    }
+    fn cfg(&self, p: Probes) -> RunnerConfig {
+        RunnerConfig {
+            project_root: self.root().to_path_buf(),
+            grant_id: RUNNER_GRANT.into(),
+            grant: Arc::new(|_| GrantState::Valid {
+                expires_at: Some(Utc::now() + CDuration::hours(20)),
+            }),
+            mint: Arc::new(|| anyhow::bail!("no minter in this test")),
+            refresh: CDuration::hours(12),
+            submit_seats: vec!["advisor".into()],
+            keep_days: 30,
+            mandate: no_mandate_stop(),
+            probes: p,
+            clock: system_clock(),
+            poll: Duration::from_millis(20),
+            kill_grace: Duration::from_secs(1),
+            mail: false,
+            terminal: None,
+            job_home: self.home(),
+            bash: "bash".into(),
+            max_jobs: Some(1),
+            max_rounds: Some(2000),
+        }
+    }
+    fn default_cfg(&self) -> RunnerConfig {
+        self.cfg(probes(&[advisor()], &[], &[]))
+    }
+    fn transcript(&self, id: &str) -> String {
+        std::fs::read_to_string(self.q.transcript_path(id)).unwrap_or_default()
+    }
+    fn state(&self, id: &str) -> ShellState {
+        self.q.read_state(id).expect("state.json")
+    }
+}
+
+fn run(q: &Queue, cfg: &RunnerConfig) -> usize {
+    runner::run(q, cfg, &AtomicBool::new(false)).unwrap()
+}
+
+fn events(q: &Queue) -> Vec<String> {
+    q.read_audit().into_iter().map(|r| r.event).collect()
+}
+
+fn wait_until(what: &str, mut cond: impl FnMut() -> bool) {
+    let deadline = std::time::Instant::now() + Duration::from_secs(20);
+    while !cond() {
+        assert!(
+            std::time::Instant::now() < deadline,
+            "timed out waiting for {what}"
+        );
+        std::thread::sleep(Duration::from_millis(20));
+    }
+}
+
+#[cfg(unix)]
+fn mode(p: &Path) -> u32 {
+    use std::os::unix::fs::PermissionsExt;
+    std::fs::metadata(p).unwrap().permissions().mode() & 0o777
+}
+
+// ── 1. queue location, permissions, no /tmp ────────────────────────────────
+
+// trace:STORY-b6b1278890774ef993d2ebc327862470-334.acd7a7ee | ai:claude
+#[test]
+fn the_queue_lives_under_the_aida_home() {
+    let home = crate::gate::kernel_deps::aida_home_dir().unwrap();
+    assert_eq!(base_dir().unwrap(), home.join(".aida").join("deputy-shell"));
+    assert_eq!(
+        current_queue("2").unwrap().root,
+        home.join(".aida").join("deputy-shell").join("2")
+    );
+    assert!(queue_in(Path::new("/x"), "../up").is_err());
+}
+
+// trace:STORY-b6b1278890774ef993d2ebc327862470-334.acd7a7ee | ai:claude
+#[cfg(unix)]
+#[test]
+fn queue_dirs_are_0700_and_a_loose_or_linked_dir_stops_claiming() {
+    use std::os::unix::fs::PermissionsExt;
+    let f = Fixture::new("t");
+    for d in [
+        &f.q.base,
+        &f.q.root,
+        &f.q.incoming(),
+        &f.q.jobs(),
+        &f.q.acks(),
+    ] {
+        assert_eq!(mode(d), 0o700, "{}", d.display());
+    }
+    let loose = || std::fs::set_permissions(f.q.jobs(), std::fs::Permissions::from_mode(0o755));
+    let tight = || std::fs::set_permissions(f.q.jobs(), std::fs::Permissions::from_mode(0o700));
+    // A group/other bit at start: the runner refuses to start at all.
+    loose().unwrap();
+    assert!(f.q.check().is_err());
+    assert!(runner::run(&f.q, &f.default_cfg(), &AtomicBool::new(false)).is_err());
+    tight().unwrap();
+    // The same mid-run: it stops claiming, and never repairs the mode.
+    let q = f.q.clone();
+    let mut cfg = f.default_cfg();
+    cfg.max_rounds = Some(40);
+    let runner = std::thread::spawn(move || runner::run(&q, &cfg, &AtomicBool::new(false)));
+    wait_until("the runner to start", || f.q.runner_json().exists());
+    loose().unwrap();
+    let j = f.submit("touch ran");
+    assert_eq!(runner.join().unwrap().unwrap(), 0);
+    assert!(f.q.incoming_job(&j.id).exists(), "the job must stay queued");
+    assert_eq!(
+        mode(&f.q.jobs()),
+        0o755,
+        "the runner must not repair the queue"
+    );
+    tight().unwrap();
+    // incoming/ swapped for a symlink: refused too.
+    let real = f.root().join("elsewhere");
+    std::fs::rename(f.q.incoming(), &real).unwrap();
+    std::os::unix::fs::symlink(&real, f.q.incoming()).unwrap();
+    assert!(f.q.check().is_err());
+    assert!(f.q.check_incoming().is_err());
+    assert!(!f.home().join("ran").exists());
+}
+
+// trace:STORY-b6b1278890774ef993d2ebc327862470-334.acd7a7ee | ai:claude
+// trace:STORY-b6b1278890774ef993d2ebc327862470-334.ac4ceb56 | ai:claude
+#[test]
+fn the_deputy_source_names_no_tmp_path_and_no_legacy_runme_file() {
+    for (file, text) in [
+        ("mod.rs", include_str!("mod.rs")),
+        ("attribution.rs", include_str!("attribution.rs")),
+        ("runner.rs", include_str!("runner.rs")),
+        (
+            "deputy_shell_cmd.rs",
+            include_str!("../deputy_shell_cmd.rs"),
+        ),
+        (
+            "deputy_shell_cmd_args.rs",
+            include_str!("../deputy_shell_cmd_args.rs"),
+        ),
+    ] {
+        assert!(
+            !text.contains(concat!("/", "tmp")),
+            "{file} names a /tmp path"
+        );
+        assert!(
+            !text.contains(concat!("aida_", "runme")),
+            "{file} names the legacy file"
+        );
+    }
+}
+
+/// Removes the planted legacy file however the test ends.
+struct Planted(PathBuf);
+impl Drop for Planted {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_file(&self.0);
+    }
+}
+
+// trace:STORY-b6b1278890774ef993d2ebc327862470-334.acd7a7ee | ai:claude
+// trace:STORY-b6b1278890774ef993d2ebc327862470-334.ac4ceb56 | ai:claude
+#[cfg(unix)]
+#[test]
+fn a_planted_legacy_tmp_script_is_never_read_or_run() {
+    let name = format!("t{}", &uuid::Uuid::new_v4().simple().to_string()[..12]);
+    let f = Fixture::new(&name);
+    let marker = f.root().join("legacy-ran");
+    let legacy = PathBuf::from(format!("{}/aida_runme{name}.sh", concat!("/", "tmp")));
+    let body = format!("touch '{}'\n", marker.display());
+    if std::fs::write(&legacy, &body).is_err() {
+        eprintln!("skipping: cannot write {} here", legacy.display());
+        return;
+    }
+    let guard = Planted(legacy.clone());
+    let mut cfg = f.default_cfg();
+    cfg.max_rounds = Some(10);
+    assert_eq!(run(&f.q, &cfg), 0);
+    assert!(!marker.exists(), "the legacy script ran");
+    assert_eq!(
+        std::fs::read_to_string(&legacy).unwrap(),
+        body,
+        "it was touched"
+    );
+    drop(guard);
+    assert!(!legacy.exists(), "the drop guard removes the fixture");
+}
+
+// ── 2. the record, retention, role refresh ─────────────────────────────────
+
+// trace:STORY-b6b1278890774ef993d2ebc327862470-334.acf28460 | ai:claude
+#[cfg(unix)]
+#[test]
+fn a_job_records_who_what_when_and_its_transcript() {
+    let f = Fixture::new("t");
+    let j = f.submit("printf hi; exit 0");
+    assert_eq!(
+        f.q.locate(&j.id).unwrap().unwrap().state.state,
+        JobState::Queued
+    );
+    run(&f.q, &f.default_cfg());
+    let rec = f.q.read_job(&j.id).unwrap();
+    assert_eq!(rec, j);
+    let g = advisor();
+    assert_eq!(rec.submitter.grant_id.as_deref(), Some(g.id.as_str()));
+    assert_eq!(rec.submitter.seat, "advisor");
+    assert_eq!(rec.submitter.subject, g.subject);
+    assert_eq!(rec.submitter.principal, g.principal);
+    assert_eq!(rec.submitter.presenter_token.as_deref(), Some(LIVE_TOKEN));
+    let bytes = std::fs::read(f.q.script_path(&j.id)).unwrap();
+    assert_eq!(format!("{:x}", sha2::Sha256::digest(&bytes)), rec.sha256);
+    let s = f.state(&j.id);
+    assert_eq!(
+        (s.state, s.rc, s.reason.as_deref()),
+        (JobState::Done, Some(0), Some("ok"))
+    );
+    let (q_at, started, finished) = (s.queued_at, s.started_at.unwrap(), s.finished_at.unwrap());
+    assert!(q_at <= started && started <= finished);
+    assert_eq!(s.attribution.as_ref().unwrap().verdict, "ok");
+    assert!(f.transcript(&j.id).contains("hi"));
+    assert_eq!(
+        events(&f.q),
+        [
+            "runner-start",
+            "queued",
+            "claimed",
+            "started",
+            "finished",
+            "runner-stop"
+        ]
+    );
+    for p in [
+        f.q.job_json(&j.id),
+        f.q.state_path(&j.id),
+        f.q.script_path(&j.id),
+    ] {
+        assert_eq!(mode(&p), 0o600, "{}", p.display());
+    }
+}
+
+fn finished_job(f: &Fixture, days_ago: i64, now: DateTime<Utc>) -> String {
+    let j = job(
+        &f.q,
+        "true",
+        submitter(&advisor(), LIVE_TOKEN, f.root(), "s"),
+    );
+    let dir = f.q.job_dir(&j.id);
+    crate::deputy::create_private_dir(&dir).unwrap();
+    crate::deputy::write_private_new(&f.q.job_json(&j.id), &serde_json::to_vec(&j).unwrap())
+        .unwrap();
+    let mut s = ShellState::queued(now - CDuration::days(days_ago));
+    s.state = JobState::Done;
+    s.rc = Some(1);
+    s.finished_at = Some(now - CDuration::days(days_ago));
+    f.q.write_state(&j.id, &s).unwrap();
+    f.q.acknowledge(&j.id).unwrap();
+    j.id
+}
+
+// trace:STORY-b6b1278890774ef993d2ebc327862470-334.acf28460 | ai:claude
+#[test]
+fn retention_prunes_old_jobs_audits_them_and_never_truncates_the_audit() {
+    let f = Fixture::new("t");
+    let now = Utc::now();
+    let old = finished_job(&f, 31, now);
+    let kept = finished_job(&f, 29, now);
+    f.q.audit_event(now, "runner-start", None, "x", |_| {});
+    let before = std::fs::read_to_string(f.q.audit_path()).unwrap();
+    assert_eq!(f.q.prune(now, 30), 1);
+    assert!(!f.q.job_dir(&old).exists());
+    assert!(!f.q.acknowledged(&old));
+    assert!(f.q.job_dir(&kept).exists());
+    let after = std::fs::read_to_string(f.q.audit_path()).unwrap();
+    assert!(after.starts_with(&before), "earlier audit lines changed");
+    let pruned: Vec<_> =
+        f.q.read_audit()
+            .into_iter()
+            .filter(|r| r.event == "pruned")
+            .collect();
+    assert_eq!(pruned.len(), 1);
+    assert_eq!(pruned[0].job.as_deref(), Some(old.as_str()));
+    assert!(pruned[0].sha256.is_some() && pruned[0].rc == Some(1));
+}
+
+// trace:STORY-b6b1278890774ef993d2ebc327862470-334.acf28460 | ai:claude
+// trace:STORY-b6b1278890774ef993d2ebc327862470-334.Authority | ai:claude
+#[cfg(unix)]
+#[test]
+fn the_grant_is_refreshed_between_jobs_on_a_clock() {
+    let f = Fixture::new("t");
+    let offset = Arc::new(AtomicI64::new(0));
+    let first = f.submit("sleep 0.6; echo one");
+    let second = f.submit(&format!(
+        "echo \"grant=${}\"",
+        crate::gate::seat_authority::GRANT_ENV
+    ));
+    let mut cfg = f.default_cfg();
+    let o = Arc::clone(&offset);
+    cfg.clock = Arc::new(move || Utc::now() + CDuration::seconds(o.load(Ordering::SeqCst)));
+    let o = Arc::clone(&offset);
+    cfg.grant = Arc::new(move |_| GrantState::Valid {
+        expires_at: Some(
+            Utc::now() + CDuration::seconds(o.load(Ordering::SeqCst)) + CDuration::hours(20),
+        ),
+    });
+    cfg.refresh = CDuration::hours(1);
+    let minted = Arc::new(AtomicUsize::new(0));
+    let m = Arc::clone(&minted);
+    cfg.mint = Arc::new(move || {
+        m.fetch_add(1, Ordering::SeqCst);
+        Ok("33333333-0000-4000-8000-000000000003".into())
+    });
+    cfg.max_jobs = Some(2);
+    let q = f.q.clone();
+    let id = first.id.clone();
+    let bump = std::thread::spawn(move || {
+        wait_until("the first job to start", || {
+            q.read_state(&id)
+                .is_some_and(|s| s.state == JobState::Running)
+        });
+        offset.store(2 * 3600, Ordering::SeqCst); // crosses --refresh mid-job
+    });
+    run(&f.q, &cfg);
+    bump.join().unwrap();
+    assert_eq!(minted.load(Ordering::SeqCst), 1);
+    let first_state = f.state(&first.id);
+    assert_eq!(
+        first_state.rc,
+        Some(0),
+        "the job at the crossing was interrupted"
+    );
+    assert!(f.transcript(&first.id).contains("one"));
+    assert!(f.transcript(&second.id).contains("grant=33333333-"));
+    let ev = events(&f.q);
+    let refreshed = ev.iter().position(|e| e == "role-refreshed").unwrap();
+    let finished_first = ev.iter().position(|e| e == "finished").unwrap();
+    assert!(finished_first < refreshed, "refreshed mid-job: {ev:?}");
+}
+
+// trace:STORY-b6b1278890774ef993d2ebc327862470-334.acf28460 | ai:claude
+// trace:STORY-b6b1278890774ef993d2ebc327862470-334.Authority | ai:claude
+#[cfg(unix)]
+#[test]
+fn a_failed_refresh_stops_claiming() {
+    let f = Fixture::new("t");
+    let j = f.submit("touch ran");
+    let mut cfg = f.default_cfg();
+    // Under an hour left: the refresh is due at once, and it fails.
+    cfg.grant = Arc::new(|_| GrantState::Valid {
+        expires_at: Some(Utc::now() + CDuration::minutes(30)),
+    });
+    cfg.max_rounds = Some(10);
+    assert_eq!(run(&f.q, &cfg), 0);
+    assert!(f.q.incoming_job(&j.id).exists());
+    let ev = events(&f.q);
+    assert_eq!(
+        ev.iter().filter(|e| *e == "role-refresh-failed").count(),
+        1,
+        "{ev:?}"
+    );
+    assert!(!ev.contains(&"claimed".to_string()));
+}
+
+// ── 3. exit codes and states ───────────────────────────────────────────────
+
+// trace:STORY-b6b1278890774ef993d2ebc327862470-334.ac930a33 | ai:claude
+// trace:STORY-b6b1278890774ef993d2ebc327862470-334.ac4ceb56 | ai:claude
+#[cfg(unix)]
+#[test]
+fn submit_wait_and_wait_return_the_jobs_exit_code() {
+    let f = Fixture::new("t");
+    let script = f.root().join("seven.sh");
+    std::fs::write(&script, "exit 7\n").unwrap();
+    let q = f.q.clone();
+    let cfg = f.default_cfg();
+    let runner = std::thread::spawn(move || run(&q, &cfg));
+    let args = crate::deputy_shell_cmd::ShellSubmitArgs {
+        name: "t".into(),
+        file: script,
+        timeout: "1m".into(),
+        spec: None,
+        wait: true,
+    };
+    let mut out = Vec::new();
+    let rc = crate::deputy_shell_cmd::submit(
+        &f.q,
+        &args,
+        submitter(&advisor(), LIVE_TOKEN, f.root(), "sess-a"),
+        &["advisor".into()],
+        &mut out,
+    )
+    .unwrap();
+    runner.join().unwrap();
+    assert_eq!(rc, 7);
+    let id = String::from_utf8(out)
+        .unwrap()
+        .lines()
+        .next()
+        .unwrap()
+        .to_string();
+    let mut out = Vec::new();
+    assert_eq!(
+        crate::deputy_shell_cmd::wait(&f.q, &id, None, &mut out).unwrap(),
+        7
+    );
+}
+
+// trace:STORY-b6b1278890774ef993d2ebc327862470-334.Authority | ai:claude
+#[test]
+fn submit_refuses_a_seat_the_runner_does_not_allow() {
+    let f = Fixture::new("t");
+    let script = f.root().join("s.sh");
+    std::fs::write(&script, "true\n").unwrap();
+    let args = crate::deputy_shell_cmd::ShellSubmitArgs {
+        name: "t".into(),
+        file: script,
+        timeout: "1m".into(),
+        spec: None,
+        wait: false,
+    };
+    let imp = grant(
+        "44444444-0000-4000-8000-000000000004",
+        "implementer",
+        &[LIVE_TOKEN],
+    );
+    let err = crate::deputy_shell_cmd::submit(
+        &f.q,
+        &args,
+        submitter(&imp, LIVE_TOKEN, f.root(), "s"),
+        &["advisor".into()],
+        &mut Vec::new(),
+    )
+    .unwrap_err();
+    assert!(err.to_string().contains("may not submit"), "{err}");
+    assert!(f.q.queued_ids().is_empty());
+}
+
+// trace:STORY-b6b1278890774ef993d2ebc327862470-334.ac930a33 | ai:claude
+#[test]
+fn wait_on_a_job_nobody_runs_times_out_with_75() {
+    let f = Fixture::new("t");
+    let j = f.submit("true");
+    let mut out = Vec::new();
+    let rc = crate::deputy_shell_cmd::wait(&f.q, &j.id, Some(Duration::from_millis(100)), &mut out)
+        .unwrap();
+    assert_eq!(rc, RC_WAIT_TIMEOUT);
+    assert!(String::from_utf8(out).unwrap().contains("still queued"));
+}
+
+// trace:STORY-b6b1278890774ef993d2ebc327862470-334.ac930a33 | ai:claude
+#[cfg(unix)]
+#[test]
+fn status_tells_queued_running_done_and_cancelled_apart() {
+    let f = Fixture::new("t");
+    let fifo = f.root().join("gate.fifo");
+    let c = std::ffi::CString::new(fifo.to_str().unwrap()).unwrap();
+    // SAFETY: mkfifo on a path we own.
+    assert_eq!(unsafe { libc::mkfifo(c.as_ptr(), 0o600) }, 0);
+    let j = f.submit(&format!("read x < '{}'; exit 0", fifo.display()));
+    let status = |id: &str| {
+        let mut out = Vec::new();
+        crate::deputy_shell_cmd::status(&f.q, id, &mut out).unwrap();
+        String::from_utf8(out).unwrap()
+    };
+    assert!(status(&j.id).contains(": queued"));
+    let q = f.q.clone();
+    let cfg = f.default_cfg();
+    let runner = std::thread::spawn(move || run(&q, &cfg));
+    wait_until("running", || status(&j.id).contains(": running"));
+    std::fs::write(&fifo, "go\n").unwrap();
+    runner.join().unwrap();
+    assert!(status(&j.id).contains(": done"));
+
+    // Cancelled while queued: never runs.
+    let queued = f.submit("touch never");
+    f.q.request_cancel(&queued.id).unwrap();
+    run(&f.q, &f.default_cfg());
+    let s = f.state(&queued.id);
+    assert_eq!((s.state, s.rc), (JobState::Cancelled, Some(RC_CANCELLED)));
+    assert!(status(&queued.id).contains(": cancelled"));
+    assert!(!f.home().join("never").exists());
+
+    // Cancelled while running: its group is killed, rc 130.
+    let long = f.submit("sleep 30");
+    let q = f.q.clone();
+    let cfg = f.default_cfg();
+    let begun = std::time::Instant::now();
+    let runner = std::thread::spawn(move || run(&q, &cfg));
+    wait_until("the long job to run", || {
+        status(&long.id).contains(": running")
+    });
+    f.q.request_cancel(&long.id).unwrap();
+    runner.join().unwrap();
+    assert!(begun.elapsed() < Duration::from_secs(15));
+    let s = f.state(&long.id);
+    assert_eq!((s.state, s.rc), (JobState::Cancelled, Some(RC_CANCELLED)));
+    assert!(!s.failed(), "a cancellation is not a failure");
+}
+
+// ── 4. authority ───────────────────────────────────────────────────────────
+
+// trace:STORY-b6b1278890774ef993d2ebc327862470-334.Authority | ai:claude
+// trace:STORY-b6b1278890774ef993d2ebc327862470-334.ac4ceb56 | ai:claude
+#[cfg(unix)]
+#[test]
+fn every_unattributable_job_is_refused_with_its_code_and_never_runs() {
+    let f = Fixture::new("t");
+    let marks = f.root().join("marks");
+    std::fs::create_dir_all(&marks).unwrap();
+    let now = Utc::now();
+    let adv = advisor();
+    let dead = grant(
+        "55555555-0000-4000-8000-000000000005",
+        "advisor",
+        &["proc:9999@1"],
+    );
+    let imp = grant(
+        "66666666-0000-4000-8000-000000000006",
+        "implementer",
+        &[LIVE_TOKEN],
+    );
+    let key = key_token();
+    let keyed = grant(
+        "77777777-0000-4000-8000-000000000007",
+        "advisor",
+        &[key.as_str()],
+    );
+    // BUG-2419: LIVE_PID with a live start, but taken in another pid
+    // namespace: it names some other process here and must not pass as
+    // holder-live. // trace:STORY-2338 | ai:claude
+    let foreign_token = "proc:4242@pidns-4026532999/100";
+    let foreign = grant(
+        "abababab-0000-4000-8000-00000000000a",
+        "advisor",
+        &[foreign_token],
+    );
+    let expired = "88888888-0000-4000-8000-000000000008";
+    let revoked = "99999999-0000-4000-8000-000000000009";
+    let p = probes(
+        &[
+            adv.clone(),
+            dead.clone(),
+            imp.clone(),
+            keyed.clone(),
+            foreign.clone(),
+        ],
+        &[
+            (expired, GrantRejection::Expired { at: now }),
+            (revoked, GrantRejection::Revoked { at: now }),
+        ],
+        &[
+            ("fresh", "op", now - CDuration::minutes(1)),
+            ("stale", "op", now - CDuration::minutes(20)),
+            // Fresh, but the registry row is another agent's: it never
+            // vouches for this grant, whatever session the job names.
+            ("borrowed", "someone-else", now - CDuration::minutes(1)),
+        ],
+    );
+    let root = f.root().to_path_buf();
+    let base = || submitter(&adv, LIVE_TOKEN, &root, "s");
+    let script = |n: &str| format!("touch '{}/{n}'", marks.display());
+    let mut cases: Vec<(String, &str)> = Vec::new();
+    let mut add = |label: &str, sub: Submitter, want: &'static str| {
+        cases.push((f.submit_as(&script(label), sub).id, want));
+    };
+    let mut s = base();
+    s.grant_id = None;
+    add("no-grant", s, "refused:unattributed");
+    let mut s = base();
+    s.presenter_token = None;
+    add("no-token", s, "refused:unattributed");
+    let mut s = base();
+    s.grant_id = Some("12121212-0000-4000-8000-000000000012".into());
+    add("unknown-grant", s, "refused:grant");
+    let mut s = base();
+    s.grant_id = Some(expired.into());
+    add("expired", s, "refused:grant");
+    let mut s = base();
+    s.grant_id = Some(revoked.into());
+    add("revoked", s, "refused:grant");
+    add(
+        "dead-holder",
+        submitter(&dead, "proc:9999@1", &root, "s"),
+        "refused:not-live",
+    );
+    add(
+        "foreign-pid-ns",
+        submitter(&foreign, foreign_token, &root, "s"),
+        "refused:not-live",
+    );
+    let mut s = base();
+    s.host.boot_id = "boot-2".into();
+    add("foreign-boot", s, "refused:foreign-host");
+    add(
+        "seat",
+        submitter(&imp, LIVE_TOKEN, &root, "s"),
+        "refused:seat",
+    );
+    let mut s = base();
+    s.seat = "integrator".into();
+    add("seat-lie", s, "refused:grant");
+    add(
+        "key-stale",
+        submitter(&keyed, &key, &root, "stale"),
+        "refused:not-live",
+    );
+    add(
+        "key-borrowed-heartbeat",
+        submitter(&keyed, &key, &root, "borrowed"),
+        "refused:not-live",
+    );
+    let mut s = base();
+    s.presenter_token = Some("proc:7777@5".into());
+    add("token-not-bound", s, "refused:not-live");
+    // A sha256 that is not the script's, and an unknown field: refused:schema.
+    let mut bad_sha = job(&f.q, &script("bad-sha"), base());
+    bad_sha.sha256 = "0".repeat(64);
+    f.q.submit(&bad_sha).unwrap();
+    cases.push((bad_sha.id.clone(), "refused:schema"));
+    let extra = job(&f.q, &script("extra"), base());
+    let mut v = serde_json::to_value(&extra).unwrap();
+    v["capability"] = serde_json::json!("let me in");
+    crate::deputy::write_private_new(
+        &f.q.incoming_job(&extra.id),
+        &serde_json::to_vec(&v).unwrap(),
+    )
+    .unwrap();
+    cases.push((extra.id.clone(), "refused:schema"));
+    // A key-only grant with a fresh session heartbeat runs (Q5).
+    let ok = f.submit_as(
+        &script("key-fresh"),
+        submitter(&keyed, &key, &root, "fresh"),
+    );
+
+    let mut cfg = f.cfg(p);
+    cfg.max_jobs = Some(cases.len() + 1);
+    run(&f.q, &cfg);
+    for (id, want) in &cases {
+        let s = f.state(id);
+        assert_eq!(s.rc, Some(RC_REFUSED), "{id} {want}");
+        assert_eq!(s.reason.as_deref(), Some(*want), "{id}");
+        assert_eq!(s.state, JobState::Done);
+        assert!(
+            !f.q.script_path(id).exists(),
+            "{want}: script written before the verdict"
+        );
+        assert!(f.transcript(id).contains("did not run"));
+    }
+    let ran: Vec<_> = std::fs::read_dir(&marks)
+        .unwrap()
+        .flatten()
+        .map(|e| e.file_name().into_string().unwrap())
+        .collect();
+    assert_eq!(
+        ran,
+        vec!["key-fresh".to_string()],
+        "only the attributable job ran"
+    );
+    let s = f.state(&ok.id);
+    assert_eq!(s.rc, Some(0));
+    assert!(s
+        .attribution
+        .unwrap()
+        .checks
+        .contains(&"session-heartbeat".to_string()));
+}
+
+/// A registry row on disk, as the session's hooks write it.
+fn registry_row(root: &Path, id: &str, session: &str, key: Option<&str>, at: DateTime<Utc>) {
+    let dir = crate::agent_registry::agents_dir(root);
+    std::fs::create_dir_all(&dir).unwrap();
+    let mut row = toml::Table::new();
+    let mut put = |k: &str, v: toml::Value| {
+        row.insert(k.to_string(), v);
+    };
+    put("id", id.into());
+    put("agent_type", "claude".into());
+    put("pid", 1_593_772_i64.into());
+    put("name", id.into());
+    put("started_at", at.to_rfc3339().into());
+    put("last_active_at", at.to_rfc3339().into());
+    put("worktree_path", root.display().to_string().into());
+    put("source", "session-start-hook".into());
+    put("claude_session_id", session.into());
+    if let Some(k) = key {
+        put("grant_key", k.into());
+    }
+    let body = toml::to_string(&row).unwrap();
+    std::fs::write(dir.join(format!("{id}.toml")), body).unwrap();
+}
+
+/// Q5 for the DEFAULT submitter: a direct advisor grant (`aida role enter`)
+/// names the OS user as its subject, never a registry row's name, so the
+/// heartbeat must be tied to the grant by its session key. Uses the real
+/// [`attribution::session_heartbeat`] and the real hook writer.
+// trace:STORY-2338 | ai:claude
+#[test]
+fn key_only_direct_grant_is_vouched_by_its_own_sessions_recorded_key() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    let key = key_token();
+    let other_key = format!("key:{}", "cd".repeat(32));
+    let mut direct = grant("33333333-0000-4000-8000-000000000003", "advisor", &[&key]);
+    direct.subject = "joe".into();
+    direct.principal = "joe".into();
+    let now = Utc::now();
+
+    // The hook records the key it proved it holds; then the row vouches.
+    registry_row(
+        root,
+        "claude-1593772",
+        "sid-adv",
+        None,
+        now - CDuration::minutes(2),
+    );
+    assert_eq!(
+        attribution::session_heartbeat(root, "sid-adv", &direct),
+        None,
+        "a row that never proved the key does not vouch for a direct grant"
+    );
+    crate::agent_registry::record_grant_key(root, "claude-1593772", Some(&key));
+    assert!(attribution::session_heartbeat(root, "sid-adv", &direct).is_some());
+    // Another session's row, even holding the key, never vouches for this one.
+    assert_eq!(attribution::session_heartbeat(root, "sid-x", &direct), None);
+    // A row holding a key the grant does not carry never vouches.
+    registry_row(root, "claude-77", "sid-other", Some(&other_key), now);
+    assert_eq!(
+        attribution::session_heartbeat(root, "sid-other", &direct),
+        None
+    );
+    // Dropping the grant clears the key, and the row stops vouching.
+    crate::agent_registry::record_grant_key(root, "claude-1593772", None);
+    assert_eq!(
+        attribution::session_heartbeat(root, "sid-adv", &direct),
+        None
+    );
+    crate::agent_registry::record_grant_key(root, "claude-1593772", Some(&key));
+
+    // End to end through the verdict, no live process: the key-only
+    // submitter runs on its own session's heartbeat, and is refused on a
+    // session whose row holds another key.
+    let mut p = probes(std::slice::from_ref(&direct), &[], &[]);
+    p.heartbeat = Arc::new(attribution::session_heartbeat);
+    let as_job = |sub: Submitter| ShellJob {
+        schema: SCHEMA,
+        id: crate::deputy::new_job_id(),
+        deputy: "shell".into(),
+        created_at: now,
+        sha256: script_digest("true"),
+        script: "true".into(),
+        source: None,
+        timeout_secs: 60,
+        spec: None,
+        submitter: sub,
+    };
+    let ok = as_job(submitter(&direct, &key, root, "sid-adv"));
+    let checks = attribution::verdict(&ok, &["advisor".into()], &p, now).unwrap();
+    assert!(
+        checks.contains(&"session-heartbeat".to_string()),
+        "{checks:?}"
+    );
+    let borrowed = as_job(submitter(&direct, &key, root, "sid-other"));
+    assert_eq!(
+        attribution::verdict(&borrowed, &["advisor".into()], &p, now)
+            .unwrap_err()
+            .code,
+        "not-live"
+    );
+}
+
+// trace:STORY-b6b1278890774ef993d2ebc327862470-334.Authority | ai:claude
+// trace:STORY-b6b1278890774ef993d2ebc327862470-334.ac4ceb56 | ai:claude
+#[test]
+fn submit_side_capture_refuses_without_a_grant_and_inside_a_script_job() {
+    let dir = tempfile::tempdir().unwrap();
+    {
+        let _env = crate::test_env::EnvVarsGuard::set(&[(
+            JOB_ENV,
+            "0190f0aa-0000-7000-8000-000000000001",
+        )]);
+        let err = attribution::capture(dir.path()).unwrap_err();
+        assert!(
+            err.to_string().contains("inside a script-deputy job"),
+            "{err}"
+        );
+    }
+    let _env = crate::test_env::EnvVarsGuard::set(&[(crate::gate::seat_authority::GRANT_ENV, "")]);
+    let err = attribution::capture(dir.path()).unwrap_err();
+    assert!(
+        err.to_string()
+            .contains("needs a live session with a seat grant"),
+        "{err}"
+    );
+}
+
+// trace:STORY-b6b1278890774ef993d2ebc327862470-334.Authority | ai:claude
+#[test]
+fn neither_deputy_starts_inside_a_script_job() {
+    let _env =
+        crate::test_env::EnvVarsGuard::set(&[(JOB_ENV, "0190f0aa-0000-7000-8000-000000000001")]);
+    let h = crate::deputy_cmd::HumanTerminal::ambient();
+    assert!(h.in_deputy_job);
+    let why = h.refusal(true).unwrap();
+    assert!(why.contains("inside a deputy job"), "{why}");
+}
+
+// trace:STORY-b6b1278890774ef993d2ebc327862470-334.Authority | ai:claude
+#[cfg(unix)]
+#[test]
+fn an_exit_or_cd_in_a_job_moves_neither_the_loop_nor_the_next_job() {
+    let f = Fixture::new("t");
+    let a = f.submit("cd /; exit 3");
+    let b = f.submit(
+        "pwd; echo \"job=$AIDA_DEPUTY_SHELL_JOB\"; echo \"deputy-job=${AIDA_DEPUTY_JOB:-none}\"",
+    );
+    let mut cfg = f.default_cfg();
+    cfg.max_jobs = Some(2);
+    assert_eq!(run(&f.q, &cfg), 2);
+    assert_eq!(f.state(&a.id).rc, Some(3));
+    let out = f.transcript(&b.id);
+    let home = std::fs::canonicalize(f.home()).unwrap();
+    assert!(out.contains(home.to_str().unwrap()), "{out}");
+    assert!(out.contains(&format!("job={}", b.id)), "{out}");
+    assert!(
+        out.contains("deputy-job=none"),
+        "a script job must not carry the command-deputy marker: {out}"
+    );
+    assert_eq!(f.state(&b.id).rc, Some(0));
+}
+
+// trace:STORY-b6b1278890774ef993d2ebc327862470-334.ac930a33 | ai:claude
+#[cfg(unix)]
+#[test]
+fn a_timeout_kills_the_job_with_124() {
+    let f = Fixture::new("t");
+    let mut j = job(
+        &f.q,
+        "sleep 30",
+        submitter(&advisor(), LIVE_TOKEN, f.root(), "s"),
+    );
+    j.timeout_secs = 1;
+    f.q.submit(&j).unwrap();
+    run(&f.q, &f.default_cfg());
+    let s = f.state(&j.id);
+    assert_eq!(
+        (s.rc, s.reason.as_deref()),
+        (Some(RC_TIMEOUT), Some("timeout"))
+    );
+}
+
+// trace:STORY-b6b1278890774ef993d2ebc327862470-334.acf28460 | ai:claude
+#[cfg(unix)]
+#[test]
+fn a_job_left_running_by_a_dead_runner_is_orphaned_not_rerun() {
+    let f = Fixture::new("t");
+    let j = job(
+        &f.q,
+        "touch rerun",
+        submitter(&advisor(), LIVE_TOKEN, f.root(), "s"),
+    );
+    crate::deputy::create_private_dir(&f.q.job_dir(&j.id)).unwrap();
+    crate::deputy::write_private_new(&f.q.job_json(&j.id), &serde_json::to_vec(&j).unwrap())
+        .unwrap();
+    let mut s = ShellState::queued(Utc::now());
+    s.state = JobState::Running;
+    f.q.write_state(&j.id, &s).unwrap();
+    let mut cfg = f.default_cfg();
+    cfg.max_rounds = Some(3);
+    run(&f.q, &cfg);
+    let s = f.state(&j.id);
+    assert_eq!(
+        (s.state, s.rc, s.reason.as_deref()),
+        (JobState::Done, Some(RC_CANCELLED), Some("orphaned"))
+    );
+    assert!(!f.home().join("rerun").exists());
+}
+
+// trace:STORY-b6b1278890774ef993d2ebc327862470-334.Authority | ai:claude
+#[cfg(unix)]
+#[test]
+fn a_paused_deputy_claims_nothing() {
+    let f = Fixture::new("t");
+    let j = f.submit("true");
+    assert!(f.q.pause().unwrap());
+    let mut cfg = f.default_cfg();
+    cfg.max_rounds = Some(5);
+    assert_eq!(run(&f.q, &cfg), 0);
+    assert!(f.q.incoming_job(&j.id).exists());
+    assert!(events(&f.q).contains(&"paused".to_string()));
+    assert!(f.q.resume().unwrap());
+    run(&f.q, &f.default_cfg());
+    assert_eq!(f.state(&j.id).rc, Some(0));
+}
+
+// trace:STORY-b6b1278890774ef993d2ebc327862470-334.Authority | ai:claude
+#[cfg(unix)]
+#[test]
+fn a_second_runner_of_the_same_name_is_refused() {
+    let f = Fixture::new("t");
+    let _held = runner::acquire_lock(&f.q).unwrap();
+    assert!(runner::run(&f.q, &f.default_cfg(), &AtomicBool::new(false)).is_err());
+}
+
+// ── 5. aida awaiting ───────────────────────────────────────────────────────
+
+// trace:STORY-b6b1278890774ef993d2ebc327862470-334.acbdfb5a | ai:claude
+#[cfg(unix)]
+#[test]
+fn awaiting_lists_failed_script_jobs_beside_command_jobs_until_acked() {
+    let f = Fixture::new("t");
+    let other_root = f.root().join("other-project");
+    std::fs::create_dir_all(&other_root).unwrap();
+    let failed = f.submit("exit 4");
+    let elsewhere = f.submit_as(
+        "exit 5",
+        submitter(&advisor(), LIVE_TOKEN, &other_root, "sess-a"),
+    );
+    let fine = f.submit("exit 0");
+    let mut cfg = f.default_cfg();
+    cfg.max_jobs = Some(3);
+    run(&f.q, &cfg);
+    let base = f.q.base.clone();
+    let mine = unacked_failed_jobs_in(&base, f.root(), Some("sess-a"));
+    assert_eq!(mine.len(), 1, "{mine:?}");
+    assert_eq!(mine[0].id, failed.id);
+    assert_eq!(mine[0].kind, crate::deputy::DeputyKind::Script);
+    assert_eq!(mine[0].output, f.q.transcript_path(&failed.id));
+    assert!(unacked_failed_jobs_in(&base, f.root(), Some("sess-b")).is_empty());
+    assert_eq!(unacked_failed_jobs_in(&base, f.root(), None).len(), 1);
+    assert_eq!(
+        unacked_failed_jobs_in(&base, &other_root, None)[0].id,
+        elsewhere.id
+    );
+    let _ = fine;
+
+    let command = crate::deputy::FailedJob {
+        deputy: "default".into(),
+        id: "0190f0aa-0000-7000-8000-00000000abcd".into(),
+        requester_session: Some("sess-a".into()),
+        rc: 3,
+        reason: "exit".into(),
+        output: "/x/out/j.out".into(),
+        kind: crate::deputy::DeputyKind::Command,
+    };
+    let report = crate::awaiting_you::AwaitingReport {
+        deputy_failed: vec![command, mine[0].clone()],
+        ..Default::default()
+    };
+    let mut human = Vec::new();
+    report.render(true, &mut human).unwrap();
+    let human = String::from_utf8(human).unwrap();
+    assert!(human.contains("deputy command job"), "{human}");
+    assert!(human.contains("deputy script job"), "{human}");
+    assert!(
+        human.contains(&format!("aida deputy shell ack {} --name t", failed.id)),
+        "{human}"
+    );
+    assert!(human.contains("aida deputy ack 0190f0aa"), "{human}");
+    let json = report.to_json().to_string();
+    assert!(
+        json.contains("\"kind\":\"script\"") && json.contains("\"kind\":\"command\""),
+        "{json}"
+    );
+
+    // Another session may not silence it; its own session may.
+    let args = |ids: Vec<String>| crate::deputy_shell_cmd::ShellAckArgs {
+        ids,
+        all: false,
+        name: "t".into(),
+    };
+    let adv = advisor();
+    let actor = crate::deputy_shell_cmd::ack_actor(Some(&adv), Some("sess-a"));
+    assert_eq!(actor, "22222222 advisor");
+    assert!(crate::deputy_shell_cmd::ack(
+        &f.q,
+        f.root(),
+        &args(vec![failed.id.clone()]),
+        Some("sess-b"),
+        &actor,
+        &mut Vec::new()
+    )
+    .is_err());
+    crate::deputy_shell_cmd::ack(
+        &f.q,
+        f.root(),
+        &args(vec![failed.id.clone()]),
+        Some("sess-a"),
+        &actor,
+        &mut Vec::new(),
+    )
+    .unwrap();
+    assert!(unacked_failed_jobs_in(&base, f.root(), None).is_empty());
+    let acked: Vec<_> =
+        f.q.read_audit()
+            .into_iter()
+            .filter(|r| r.event == "acked")
+            .collect();
+    assert_eq!(acked.len(), 1);
+    assert_eq!(
+        acked[0].actor, "22222222 advisor",
+        "the AuditRow::actor form"
+    );
+    assert_eq!(
+        crate::deputy_shell_cmd::ack_actor(None, None),
+        OPERATOR_TTY,
+        "the operator's own shell"
+    );
+    assert_eq!(
+        crate::deputy_shell_cmd::ack_actor(None, Some("s")),
+        "- unattributed"
+    );
+}
+
+// ── 6. under a pty ─────────────────────────────────────────────────────────
+
+/// The runner drives a real terminal: a test pty stands in for the
+/// operator's, so the relay, raw mode and the job's own pty are all real.
+// trace:STORY-b6b1278890774ef993d2ebc327862470-334.ac4ceb56 | ai:claude
+#[cfg(target_os = "linux")]
+#[test]
+fn a_job_has_a_terminal_on_all_three_fds_and_its_output_reaches_both_sinks() {
+    use std::io::Read;
+    use std::os::fd::AsRawFd;
+    let f = Fixture::new("t");
+    let j = f.submit("test -t 0 && test -t 1 && test -t 2 && echo TTY-OK");
+    let (master, slave) = crate::deputy::worker::open_pty().unwrap();
+    let seen = Arc::new(Mutex::new(Vec::new()));
+    let sink = Arc::clone(&seen);
+    let mut operator = std::fs::File::from(master);
+    let reader = std::thread::spawn(move || {
+        let mut buf = [0u8; 1024];
+        while let Ok(n) = operator.read(&mut buf) {
+            if n == 0 {
+                break;
+            }
+            sink.lock().unwrap().extend_from_slice(&buf[..n]);
+        }
+    });
+    let mut cfg = f.default_cfg();
+    cfg.terminal = Some(runner::Terminal {
+        input: slave.as_raw_fd(),
+        output: slave.as_raw_fd(),
+    });
+    run(&f.q, &cfg);
+    assert_eq!(f.state(&j.id).rc, Some(0));
+    assert!(
+        f.transcript(&j.id).contains("TTY-OK"),
+        "{}",
+        f.transcript(&j.id)
+    );
+    wait_until("relayed output", || {
+        String::from_utf8_lossy(&seen.lock().unwrap()).contains("TTY-OK")
+    });
+    let shown = String::from_utf8_lossy(&seen.lock().unwrap()).to_string();
+    assert!(
+        shown.contains(&j.sha256),
+        "the script was not shown first: {shown}"
+    );
+    drop(slave);
+    let _ = reader.join();
+}
+
+// ── 7. help text ───────────────────────────────────────────────────────────
+
+fn squash(s: &str) -> String {
+    s.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+// trace:STORY-b6b1278890774ef993d2ebc327862470-334.Docs | ai:claude
+#[test]
+fn both_deputies_help_opens_with_the_same_two_kinds_paragraph() {
+    use clap::CommandFactory;
+    let mut cmd = crate::deputy_cmd::DeputyArgs::command();
+    let top = squash(&cmd.render_long_help().to_string());
+    let shell = squash(
+        &cmd.find_subcommand_mut("shell")
+            .unwrap()
+            .render_long_help()
+            .to_string(),
+    );
+    let start = top.find("Two kinds of deputy exist.").expect("deputy help");
+    let end = top[start..].find("cannot express.").unwrap() + start + "cannot express.".len();
+    let para = &top[start..end];
+    assert!(
+        shell.contains(para),
+        "deputy shell --help lacks the paragraph:\n{shell}"
+    );
+    assert!(shell.contains("counts as you at the keyboard"));
+    assert!(!top.contains("--allow-scripts"));
+}
+
+/// The advisor's standing orders route multi-step operator acts to
+/// `submit` and link the one deputies page, which exists.
+// trace:STORY-b6b1278890774ef993d2ebc327862470-334.Docs | ai:claude
+// trace:STORY-b6b1278890774ef993d2ebc327862470-334.acd7a7ee | ai:claude
+#[test]
+fn the_advisor_standing_orders_deputy_line_submits_and_links_the_page() {
+    let orders =
+        include_str!("../../../aida-core/templates/.aida/discipline/standing-orders/advisor.md");
+    let line = orders
+        .split("\n- ")
+        .find(|item| item.starts_with("Use the established deputies"))
+        .expect("the deputy line");
+    let line = squash(line);
+    assert!(
+        line.contains("aida deputy shell submit --file FILE --wait"),
+        "{line}"
+    );
+    assert!(
+        line.contains(
+            "[Deputies: command vs script](https://github.com/joemooney/aida/blob/main/docs/deputies.md)"
+        ),
+        "the link must resolve from the template master, the generated mirror and an installed project alike: {line}"
+    );
+    let page = include_str!("../../../docs/deputies.md");
+    assert!(page.starts_with("# Deputies: command vs script"));
+}
+
+// ── 8. who may submit, and the runner's own grant ──────────────────────────
+
+/// SECURITY: the tracked config file never widens who may submit. A
+/// committed `submit_seats` (any lane can merge one) is ignored; only the
+/// operator's `--allow-seat` at the terminal adds a seat.
+// trace:STORY-b6b1278890774ef993d2ebc327862470-334.Authority | ai:claude
+#[test]
+fn a_committed_submit_seats_entry_cannot_widen_the_submitters() {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::create_dir_all(dir.path().join(".aida")).unwrap();
+    std::fs::write(
+        // Spelled in two halves so the BUG-1723 scan, which reads this file
+        // as production source, does not count a test fixture as a reader.
+        dir.path().join(".aida").join(concat!("config", ".toml")),
+        "[deputy_shell]\nkeep_days = 7\nsubmit_seats = [\"advisor\", \"implementer\"]\n",
+    )
+    .unwrap();
+    let c = load_config(dir.path());
+    assert_eq!(c, ShellConfig { keep_days: 7 }, "only keep_days is read");
+    assert_eq!(default_submit_seats(), vec!["advisor".to_string()]);
+    assert_eq!(parse_config("not toml ["), ShellConfig::default());
+    // What `run` hands the runner without --allow-seat: the advisor alone.
+    let seats = crate::deputy_shell_cmd::submit_seats(&default_submit_seats(), &[]);
+    assert_eq!(seats, vec!["advisor".to_string()]);
+    // So an implementer's job is refused at submit and again at claim.
+    let f = Fixture::new("t");
+    let script = f.root().join("s.sh");
+    std::fs::write(&script, "true\n").unwrap();
+    let imp = grant(
+        "45454545-0000-4000-8000-000000000045",
+        "implementer",
+        &[LIVE_TOKEN],
+    );
+    let args = crate::deputy_shell_cmd::ShellSubmitArgs {
+        name: "t".into(),
+        file: script,
+        timeout: "1m".into(),
+        spec: None,
+        wait: false,
+    };
+    let sub = submitter(&imp, LIVE_TOKEN, f.root(), "s");
+    assert!(
+        crate::deputy_shell_cmd::submit(&f.q, &args, sub.clone(), &seats, &mut Vec::new()).is_err()
+    );
+    let refused = attribution::verdict(
+        &job(&f.q, "true", sub),
+        &seats,
+        &probes(&[imp.clone()], &[], &[]),
+        Utc::now(),
+    )
+    .unwrap_err();
+    assert_eq!(refused.reason(), "refused:seat");
+    // The operator's --allow-seat is the one widening.
+    assert_eq!(
+        crate::deputy_shell_cmd::submit_seats(
+            &default_submit_seats(),
+            &["implementer".into(), "advisor".into()]
+        ),
+        vec!["advisor".to_string(), "implementer".to_string()]
+    );
+}
+
+/// `run` refuses without a valid grant and under any seat but the
+/// advisor's; it starts under a valid advisor grant.
+// trace:STORY-b6b1278890774ef993d2ebc327862470-334.Authority | ai:claude
+#[test]
+fn run_refuses_without_a_grant_and_under_a_non_advisor_seat() {
+    use crate::deputy_shell_cmd::runner_grant;
+    let err = runner_grant(GrantCheck::Absent).unwrap_err().to_string();
+    assert!(err.contains("refuses to start"), "{err}");
+    assert!(err.contains("aida role enter advisor"), "{err}");
+    let err = runner_grant(GrantCheck::Rejected {
+        id: "88888888-0000-4000-8000-000000000008".into(),
+        seat: Some("advisor".into()),
+        reason: GrantRejection::Expired { at: Utc::now() },
+    })
+    .unwrap_err()
+    .to_string();
+    assert!(err.contains("refuses to start"), "{err}");
+    let imp = grant(
+        "66666666-0000-4000-8000-000000000006",
+        "implementer",
+        &[LIVE_TOKEN],
+    );
+    let err = runner_grant(GrantCheck::Valid(imp))
+        .unwrap_err()
+        .to_string();
+    assert!(
+        err.contains("runs under an advisor grant") && err.contains("holds a implementer grant"),
+        "{err}"
+    );
+    let adv = advisor();
+    assert_eq!(
+        runner_grant(GrantCheck::Valid(adv.clone())).unwrap().id,
+        adv.id
+    );
+}
+
+/// The real refresh minter refuses where `aida role enter` does: inside an
+/// AIDA-managed agent session it mints nothing.
+// trace:STORY-b6b1278890774ef993d2ebc327862470-334.Authority | ai:claude
+#[test]
+fn the_real_refresh_minter_refuses_an_agent_session() {
+    let dir = tempfile::tempdir().unwrap();
+    let _env = crate::test_env::EnvVarsGuard::set(&[("AIDA_AGENT_NAME", "drain-worker")]);
+    let err = crate::gate::seat_authority::issue_runner_refresh(
+        dir.path(),
+        RUNNER_SEAT,
+        vec!["implementer".into()],
+    )
+    .unwrap_err()
+    .to_string();
+    assert!(
+        err.contains("AIDA-managed agent sessions cannot issue"),
+        "{err}"
+    );
+}
+
+/// A job dir left by an interrupted claim (no state.json) takes the refusal
+/// for a colliding id, so `wait` returns 126 instead of "no script job".
+// trace:STORY-b6b1278890774ef993d2ebc327862470-334.ac930a33 | ai:claude
+#[cfg(unix)]
+#[test]
+fn an_id_collision_is_filed_as_a_refused_job_that_wait_returns() {
+    let f = Fixture::new("t");
+    let j = f.submit("touch collided");
+    crate::deputy::create_private_dir(&f.q.job_dir(&j.id)).unwrap();
+    let mut cfg = f.default_cfg();
+    cfg.max_rounds = Some(5);
+    run(&f.q, &cfg);
+    let s = f.state(&j.id);
+    assert_eq!(
+        (s.state, s.rc, s.reason.as_deref()),
+        (JobState::Done, Some(RC_REFUSED), Some("refused:schema"))
+    );
+    assert!(!f.home().join("collided").exists());
+    assert!(!f.q.incoming_job(&j.id).exists(), "filed aside");
+    let mut out = Vec::new();
+    assert_eq!(
+        crate::deputy_shell_cmd::wait(&f.q, &j.id, Some(Duration::from_secs(5)), &mut out).unwrap(),
+        RC_REFUSED
+    );
+    assert!(String::from_utf8(out).unwrap().contains("already in use"));
+}

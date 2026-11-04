@@ -859,6 +859,23 @@ pub(crate) fn grant_check_at(project_root: &Path, now: DateTime<Utc>) -> GrantCh
     )
 }
 
+/// [`grant_check_at`] for grant `id` instead of the one this process
+/// exports: the script deputy's runner keeps its current grant id in memory
+/// (it re-mints it between jobs) and checks it with the same verdict and the
+/// same presenter check.
+// trace:STORY-2338 | ai:claude
+pub(crate) fn grant_check_id(project_root: &Path, id: &str) -> GrantCheck {
+    with_presenter(
+        grant_check_for_at(
+            project_root,
+            id,
+            &crate::gate::kernel_deps::current_user_id(None),
+            Utc::now(),
+        ),
+        &presenter_tokens(),
+    )
+}
+
 /// BUG-1934 (SKETCH v2): a fresh grant secret: 32 random bytes, hex encoded
 /// (the session-key payload). Held in memory and in the keyring only.
 // trace:BUG-1934 | ai:claude
@@ -1798,6 +1815,29 @@ pub(crate) fn issue_direct(
         None,
     )?;
     Ok(IssuedGrant { grant, key_secret })
+}
+
+/// The script deputy's time-based grant refresh: the same direct issuance
+/// `aida role enter <seat> --delegate-seat …` performs (human-terminal check,
+/// roster, delegable subset, record), bound to the shell that started the
+/// runner and its terminal session. No session key is minted: nothing is
+/// eval'd, and the runner hands the new id to the jobs it starts itself.
+// trace:STORY-2338 | ai:claude
+pub(crate) fn issue_runner_refresh(
+    project_root: &Path,
+    seat: &str,
+    delegable_seats: Vec<String>,
+) -> Result<SeatGrant> {
+    require_direct_human()?;
+    let binding = direct_issue_binding(&presenter_source())?;
+    mint_direct(
+        project_root,
+        seat,
+        delegable_seats,
+        MAX_GRANT_AGE,
+        binding,
+        None,
+    )
 }
 
 /// The body every direct (human-issued) grant shares, `aida role enter` and
