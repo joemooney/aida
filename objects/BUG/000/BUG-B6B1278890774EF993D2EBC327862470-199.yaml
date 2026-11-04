@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-199
 agreed_id: BUG-2430
 title: Rework briefs omit the review findings when the verdict is keyed PR-N instead of the spec ID, so rework lanes work from stale rulings
 description: '2026-11-03 10:30: PR-3291 (STORY-2325 PR-B) and PR-3288 (STORY-2326 PR-A) got CHANGES REQUESTED verdicts that were recorded under the key PR-N (gate-ledger PR-3291.jsonl#2, 7 findings; PR-3288, 10 findings). ''aida review verdict STORY-2325'' reports none. ''aida queue work STORY-2325 --role implementer --no-human --force-claim'' then built a brief holding only an older ADVISOR RULING comment, with no ''ITEMS STILL OPEN'' block, and the lanes started work on round-1 instructions. STORY-2338 (verdict keyed by the spec) got its findings. Expected: the brief resolves the latest verdict through the gate ledger for the spec''s open PR (PR-N key or spec key, whichever is newer at the PR head), and refuses to launch a rework when a request-changes verdict exists but cannot be read. Workaround: post the findings as an ADVISOR RULING comment before relaunching.'
-status: Done
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-03T17:38:07.427036611Z
-modified_at: 2026-11-03T22:24:39.158889618Z
+modified_at: 2026-11-04T01:13:41.482666168Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -52,6 +52,20 @@ history:
   timestamp: 2026-11-03T22:24:40.237317917Z
   session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
   changes: []
+- id: 01a1a41e-7367-7253-9b11-40defe351fd1
+  author: aida-auto-bump
+  timestamp: 2026-11-04T01:13:41.479544004Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a1a41e-736a-72c3-9355-7f6d24c8596f
+  timestamp: 2026-11-04T01:13:41.482652143Z
+  agent: aida
+  commit_sha: 09309e9bfc07769ff58042e642250e6393944a3b
+  summary: 'BUG-2430 both criteria met: rework brief resolves the open PR''s change-keyed verdict (newer of spec/PR key wins, newer approval clears) and an unreadable/ambiguous refusal refuses the launch; 5 targeted tests, PR CI green at head, mergeState CLEAN. Three non-blocking follow-ups filed as findings.'
+  review_verdict: approved
 filed_at:
   code_sha: d32d909128fa7dec11860bf2092baaccd1040034
   branch: main
@@ -64,3 +78,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-11-03T21:50:28.197457216Z
   implemented_by: joe
+  completed_at: 2026-11-04T01:13:41.479537380Z
+  completion_sha: 09309e9bfc07769ff58042e642250e6393944a3b
