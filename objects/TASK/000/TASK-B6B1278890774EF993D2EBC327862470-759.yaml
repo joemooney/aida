@@ -1,0 +1,29 @@
+id: 01a1a421-cd4c-7b51-8d19-da15a3cd3b12
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-759
+title: 'cosmetic: tests/bug_2428_launch_rollback_tests.rs - the rollback tests are sour…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on BUG-2428, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  cosmetic: tests/bug_2428_launch_rollback_tests.rs - the rollback tests are source-order string matches plus error classification; no behavioral test drives handle_queue_work through a refused mint and asserts the worktree and lease are gone.
+
+  PR: #3316
+  Reviewed sha: 4f71731c6f8c6a3dc3f58aac1a79e30483d24fb7
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-04T01:17:21.100220587Z
+modified_at: 2026-11-04T01:17:21.100220587Z
+req_type: Task
+tags:
+- carried-from:BUG-2428
+- finding-hash:e555a37b
+- from-review:PR-3316
+- kind:carried-forward
+filed_at:
+  code_sha: 0f1624a8b38d961973328d79d05642add4464fc8
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 02cfbd22515
+  vendor: claude
