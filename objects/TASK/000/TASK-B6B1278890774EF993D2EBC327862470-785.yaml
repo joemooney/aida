@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T17:54:13.928308359Z
-modified_at: 2026-11-04T19:07:02.747858880Z
+modified_at: 2026-11-04T19:11:26.723315921Z
 req_type: Task
 tags:
 - area:containment
@@ -17,6 +17,13 @@ relationships:
 - rel_type: Child
   target_id: 01a1a736-e545-7881-9b39-de61a3c68b66
   created_at: 2026-11-04T17:54:36.362329277Z
+comments:
+- id: 01a1a7f9-2a03-7602-bf4e-434955f1fe84
+  author: joe
+  content: 'Implemented shared supported-vendor guidance in session.rs for the posture resolver and both contained-launch preflight refusals. Regression coverage checks agy with missing/aida/native policies, both launch preflights, and bubblewrap present/absent; agy remains refused and uncontained calls retain their behavior. Formatting and git diff --check pass; targeted Rust test is still compiling. Native lane git staging refused with read-only .git, as documented in docs/cli/04-git-lifecycle.md (TASK-2712): edits will be left pending for launcher post-exit commit and host publication. Suggested subject: [AI:codex] fix(session): name supported containment vendors (TASK-3047).'
+  created_at: 2026-11-04T19:11:26.723315921Z
+  modified_at: 2026-11-04T19:11:26.723315921Z
+  session_id: 01a1a7f47db0
 history:
 - id: 01a1a7b2-d51d-79b2-95a3-7c349b4cf48c
   author: joe
