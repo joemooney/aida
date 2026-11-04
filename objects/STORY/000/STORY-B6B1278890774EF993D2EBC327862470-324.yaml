@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-02T19:20:59.253007269Z
-modified_at: 2026-11-04T07:44:28.886922975Z
+modified_at: 2026-11-04T07:44:31.749385109Z
 req_type: Story
 tags:
 - architecture
@@ -451,6 +451,24 @@ comments:
   content: r8 rebase+push from recovered/story-2326-r8
   created_at: 2026-11-04T07:44:28.721671369Z
   modified_at: 2026-11-04T07:44:28.721671369Z
+  session_id: da1c0d85-1d45-4ce4-a292-5358644f65b9
+- id: 01a1a584-44f4-7160-9a7e-58a1bf7b7345
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #3288):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 91811ede2647
+    Recorded: 2026-11-04T02:12:06.400136199+00:00
+    Review comment: https://github.com/joemooney/aida/pull/3288#issuecomment-6620670101
+    Findings:
+    1. BLOCKER (CI, round-5 ruling 1 still open): at 40d90f8 'CI (lib-0)' (job 126336010414) and 'CI (lib-1)' fail in 'Run tests', and 'CI (gates)' fails. origin/main 0754a362 (run 41757116626) is green on all three, and shard durations match main, so this is not a timeout. The 91811ede run (41757393920) was still pending when this was recorded. The reviewer sandbox cannot fetch job logs (the blob host is denied), so read them on the host.
+    2. MAJOR (likely cause of the lib failure): launch_sites_outside_the_launcher_match_the_ledger asserts that the file->count map equals LEDGER exactly, but the merges after 0ff32132 (40ceef5, 40d90f8, 91811ede) never updated story_2326_launch_ratchet_tests.rs. New production sites from main: lane_job.rs:1300 Command::new(&program) and seat_target_overlay.rs:607 Command::new(&program) are in files with no LEDGER entry; codex_tool_env.rs now has 3 Command::new(child.get_program()) (lines 121, 244 and 338; line 244 is in a #[cfg(test)] fn, which production() does not skip), but LEDGER says 2. Ledger and classify each new site (lane_job is BUG-2383's sandboxed job runner, a cargo job and not a vendor child; the seat_target_overlay program), raise CEILING only by the merged-in count with a note, then re-run the story_2326 and bug_2398/bug_2395 filters on the merged tree.
+    3. MAJOR (gates): 'Help golden snapshot co-change guard' fails at 40d90f8 and passes on main. The PR touches no help surface, so this is probably the guard's merge-base/deepen=200 window reading main's help changes through the merge commits. Confirm from the gates log, then fix it (a rebase, or the guard's opt-out trailer if it is an artifact) rather than ignoring it.
+    4. PROCESS: rounds 6 and 7 gated on cargo check/build only, so a test-level regression from merging main was undetectable. The next round must run 'cargo test -p aida-cli-lib --lib -- story_2326 bug_2398 bug_2395' on the merged tree (host with a session keyring, so the keyring-gated contained forking and reviewer goldens actually run) and make check-ci-fast before pushing.
+    5. MINOR (disclosed, advisor-accepted, recorded for PR-C/A2): an uncontained parent's AIDA_AGENT_CMD still picks the program of a contained child, because resolve_agent_program runs at the site before resolve(), and spawn::aida_boundary only strips the env key. The fixture relies on this (golden_headless_and_lane_claude_paths_are_unchanged: a contained child runs the fake). Sketch L5 ('cannot redirect a contained child's program') stays open until the program is resolved inside the launcher.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-04T07:44:31.476585865Z
+  modified_at: 2026-11-04T07:44:31.476585865Z
   session_id: da1c0d85-1d45-4ce4-a292-5358644f65b9
 history:
 - id: 01a19ed2-a170-7d52-94f3-7c4ff46f38c4
