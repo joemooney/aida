@@ -1469,10 +1469,10 @@
           <text x="${padL + 23}" y="15" font-size="10" fill="var(--ink)">Merged PRs/MRs (2,421)</text>
           <rect x="${padL + 165}" y="6" width="10" height="10" fill="#8c9288" opacity="0.5" rx="2" />
           <text x="${padL + 180}" y="15" font-size="10" fill="var(--ink)">Total Main Commits (4,190)</text>
+          <line x1="${padL + 340}" y1="11" x2="${padL + 362}" y2="11" stroke="var(--blue)" stroke-dasharray="4 3" stroke-width="1.8" />
+          <text x="${padL + 367}" y="15" font-size="9.5" fill="var(--blue)" font-weight="600">Illustrative* Elite 8-Swe Squad (~150 PRs/mo)</text>
           ${bars}
           <line x1="${padL}" y1="${yElite}" x2="${W - padR}" y2="${yElite}" stroke="var(--blue)" stroke-dasharray="4 4" stroke-width="1.5" />
-          <rect x="${padL + 6}" y="${yElite - 19}" width="248" height="15" fill="var(--bg-elevated)" opacity="0.92" rx="2" />
-          <text x="${padL + 10}" y="${yElite - 8}" text-anchor="start" font-size="9.5" fill="var(--blue)" font-weight="600">Illustrative* Elite 8-Swe Squad (~150 PRs/mo)</text>
         </svg>`;
     } else {
       const cohorts = [
@@ -1742,12 +1742,12 @@
     document.getElementById('sim-out-churn-sub').textContent =
       projChurn < 8.5 ? 'Illustrative <8.5% band (assumed weights)' : (projChurn < 15 ? 'Illustrative <15% band (assumed weights)' : 'Baseline >15% band (assumed weights)');
     const churnBox = document.getElementById('sim-box-churn');
-    if (churnBox) churnBox.className = 'sim-box ' + (projChurn <= 10.0 ? 'state-good' : (projChurn <= 18.0 ? 'state-poor' : 'state-bad'));
+    if (churnBox) churnBox.className = 'sim-box ' + (projChurn < 10.5 ? 'state-good' : (projChurn < 15.0 ? 'state-poor' : 'state-bad'));
 
     document.getElementById('sim-out-bug').textContent = projBug.toFixed(1) + '%';
     document.getElementById('sim-out-bug-sub').textContent = `Illustrative ${(31.6 - projBug).toFixed(1)}% delta vs 31.6% baseline`;
     const bugBox = document.getElementById('sim-box-bug');
-    if (bugBox) bugBox.className = 'sim-box ' + (projBug <= 15.0 ? 'state-good' : (projBug <= 24.0 ? 'state-poor' : 'state-bad'));
+    if (bugBox) bugBox.className = 'sim-box ' + (projBug < 16.0 ? 'state-good' : (projBug < 24.0 ? 'state-poor' : 'state-bad'));
 
     document.getElementById('sim-out-pass').textContent = projPass.toFixed(1) + '%';
     document.getElementById('sim-out-pass-sub').textContent = `Illustrative multi-round share: ${(100 - projPass).toFixed(1)}%`;
