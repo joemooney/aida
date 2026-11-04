@@ -55,7 +55,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T15:54:06.715648703Z
-modified_at: 2026-11-04T02:31:37.262901611Z
+modified_at: 2026-11-04T02:31:38.636392244Z
 req_type: Task
 tags:
 - regen
@@ -98,6 +98,13 @@ relationships:
   target_id: 01a13f75-dff9-77b0-9228-dc3f1769a021
   created_at: 2026-10-19T15:55:46.103254079Z
   created_by: joe
+comments:
+- id: 01a1a465-d18c-7e42-b411-3408f0ac9420
+  author: joe
+  content: 'OPERATOR RULING (2026-11-03 19:30 MST, relayed by advisor): regroup ruling 1: the regeneration / north-star research line does not continue. Rejected.'
+  created_at: 2026-11-04T02:31:38.636392244Z
+  modified_at: 2026-11-04T02:31:38.636392244Z
+  session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
 history:
 - id: 01a154df-05cd-7ef1-8733-3a5f82cb6119
   author: joe
