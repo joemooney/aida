@@ -5,6 +5,10 @@
     {
       "at": "2026-11-04T01:08:17.879183573Z",
       "closed_by": "queue-done"
+    },
+    {
+      "at": "2026-11-04T01:14:32.693023278Z",
+      "closed_by": "auto-bump"
     }
   ],
   "events": [
@@ -18,6 +22,16 @@
         "actor": "joe",
         "from": "Needs Attention",
         "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-04T01:14:32.532597427Z",
+      "spec": "BUG-2426",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "0aec6d05bbde0e0772188aa352175766b9fe6cbd",
+        "pr": 3305,
+        "closed_by": "auto-bump"
       }
     }
   ]
