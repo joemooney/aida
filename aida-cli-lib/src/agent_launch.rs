@@ -7451,14 +7451,20 @@ pub(crate) static SESSION: crate::command_registry::CommandReg =
 
 // The read-only verbs stay open to guest stakeholders; every other verb is
 // gated as Session. An unparseable invocation is not treated as a read.
+// `session leases --prune-stale` is not a read: it releases stale leases,
+// including other clones' claims, so it takes the Session gate too.
 // trace:STORY-1728 | ai:claude
+// trace:TASK-1939 | ai:claude
 fn session_cli_policy(matches: &clap::ArgMatches) -> crate::command_registry::CmdPolicy {
     use crate::cli::SessionCommand;
     use crate::stakeholder_role::StakeholderAction;
     let read = <SessionArgs as clap::FromArgMatches>::from_arg_matches(matches).is_ok_and(|args| {
         matches!(
             args.inner,
-            SessionCommand::Leases { .. } | SessionCommand::Show { .. }
+            SessionCommand::Leases {
+                prune_stale: false,
+                ..
+            } | SessionCommand::Show { .. }
         )
     });
     crate::command_registry::CmdPolicy {
