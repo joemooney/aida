@@ -20,7 +20,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T07:26:01.071265913Z
-modified_at: 2026-11-04T06:50:44.767776558Z
+modified_at: 2026-11-04T06:52:13.426513020Z
 req_type: Task
 tags:
 - architecture
@@ -720,6 +720,12 @@ comments:
   modified_at: 2026-11-04T06:39:32.193789453Z
   session_id: 01a1a51d9312
   harness_version: 2.1.318 (Claude Code)
+- id: 01a1a554-62f2-7433-a802-753690b725d9
+  author: joe
+  content: 'ADVISOR REWORK BRIEF (2026-11-03 23:58 MST, PR #3351 head 4f245df5). The lane ran untested, and CI lib-0/lib-1 show three defects. (1) story_1728 help_surface_matches_golden_snapshot fails: regenerate the help golden for the new ship --commit-pending surface. (2) task_2712_native_codex_seat_commit_ships_from_seat_without_seat_hooks (bug_home_038_seat_publish_tests.rs:621) fails because the sandboxed stage passes the gitignored .aida/seat-clone.toml explicitly to git add (''paths are ignored''). Stage with git add -A (which respects .gitignore), or drop ignored paths from the list before adding. Never use -f. (3) task_2631_containment_tests::containment_native_headless_child_launches_without_aida_marker fails (it also failed on #3323): make the native headless child launch pass the no-marker assertion, or, if the assertion is now wrong under the host-commit design, update it with a one-line reason. Gate (LIGHT): cargo test -p aida-cli-lib --lib ''task_2712_|task_2631_containment|story_1728_command_registry'', plus make check-ci-fast, then push to the #3351 branch. #3323 is closed as superseded by #3351. After CI is green, the advisor runs the live Codex probe on the host.'
+  created_at: 2026-11-04T06:52:13.426513020Z
+  modified_at: 2026-11-04T06:52:13.426513020Z
+  session_id: da1c0d85-1d45-4ce4-a292-5358644f65b9
 history:
 - id: 01a1960f-6ca8-7313-8a94-63b0b98a4e44
   author: joe
