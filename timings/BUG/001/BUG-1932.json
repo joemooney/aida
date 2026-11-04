@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-1932",
+  "publishes": [
+    {
+      "at": "2026-11-04T01:38:40.383765135Z",
+      "closed_by": "edit"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-04T01:38:40.139073619Z",
+      "spec": "BUG-1932",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Completed"
+      }
+    },
+    {
+      "ts": "2026-11-04T01:38:40.197694733Z",
+      "spec": "BUG-1932",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "",
+        "closed_by": "edit"
+      }
+    }
+  ]
+}
