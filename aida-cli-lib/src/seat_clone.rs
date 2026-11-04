@@ -2317,10 +2317,39 @@ pub(crate) fn commit_pending(
             clone.display()
         )
     };
-    let mut add_args = vec![os("add"), os("-A")];
-    add_args.extend(pathspec);
-    run_commit_sandboxed(clone, main, &add_args, &identity)
-        .map_err(|failure| recovery("stage", failure))?;
+    // Stage everything `.gitignore`/`info/exclude` allow. No explicit marker
+    // exclude here: git refuses an add whose pathspec names an ignored path
+    // ("paths are ignored"), and the marker normally IS ignored. Never `-f`.
+    // trace:TASK-2712 | ai:claude
+    run_commit_sandboxed(
+        clone,
+        main,
+        &[os("add"), os("-A"), os("--"), os(".")],
+        &identity,
+    )
+    .map_err(|failure| recovery("stage", failure))?;
+    // Should the seat's exclude no longer ignore the marker, unstage it.
+    let staged_marker = probe_text(&[
+        os("diff"),
+        os("--cached"),
+        os("--name-only"),
+        os("--"),
+        os(aida_core::seat_clone_detect::MARKER_RELATIVE),
+    ])?;
+    if !staged_marker.is_empty() {
+        run_commit_sandboxed(
+            clone,
+            main,
+            &[
+                os("reset"),
+                os("-q"),
+                os("--"),
+                os(aida_core::seat_clone_detect::MARKER_RELATIVE),
+            ],
+            &identity,
+        )
+        .map_err(|failure| recovery("unstage the seat marker from", failure))?;
+    }
     run_commit_sandboxed(
         clone,
         main,

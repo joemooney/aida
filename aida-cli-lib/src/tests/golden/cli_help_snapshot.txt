@@ -15255,6 +15255,11 @@ Options:
           check its commit trailers, push it and open the PR. The seat's hooks never run. Never
           merges. With --dry-run, nothing is imported or pushed
 
+      --commit-pending <MSG>
+          With --from-seat: first commit the seat's uncommitted changes with this message, inside
+          AIDA's own sandbox with the seat's hooks off, on the seat's own branch. For a native Codex
+          seat, which cannot commit in its own sandbox. The message must carry the spec trailer
+
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
           compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
@@ -45656,6 +45661,11 @@ Working on aida itself
         "name": "canonical-ids",
         "takes_value": false,
         "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "commit-pending",
+        "takes_value": true,
+        "help": "With --from-seat: first commit the seat's uncommitted changes with this message, inside AIDA's own sandbox with the seat's hooks off, on the seat's own branch. For a native Codex seat, which cannot commit in its own sandbox. The message must carry the spec trailer"
       },
       {
         "name": "dry-run",

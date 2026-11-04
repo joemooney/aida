@@ -237,10 +237,15 @@ fn containment_native_headless_child_launches_without_aida_marker() {
         assert!(output.status.success());
         let text = String::from_utf8(output.stdout).unwrap();
         assert!(text.contains("posture=native\ncontained=unset\n"), "{text}");
+        // TASK-2712: the native posture is now followed by the contained
+        // write set (`--add-dir …`) before `exec`, so the two are asserted
+        // separately rather than as one contiguous run.
+        // trace:TASK-2712 | ai:claude
         assert!(
-            text.contains("--sandbox\nworkspace-write\n--ask-for-approval\nnever\nexec\n--json"),
+            text.contains("--sandbox\nworkspace-write\n--ask-for-approval\nnever\n"),
             "{text}"
         );
+        assert!(text.contains("\nexec\n--json"), "{text}");
         assert!(!text.contains("dangerously-bypass"), "{text}");
     }
     let args = session::headless_vendor_args_contained_in(
