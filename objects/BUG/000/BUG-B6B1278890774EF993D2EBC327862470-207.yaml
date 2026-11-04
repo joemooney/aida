@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-207
 agreed_id: BUG-2438
 title: pr train refuses a PR approved at its current head because an older-head spec-keyed refusal still counts
 description: 'Observed 2026-11-03 22:30 MST: train of #3330 (BUG-2194) ejected with ''train PR #3344 was not merged: train source has a refusing review''. The gate ledger .aida/gate-ledger/PR-3330.jsonl holds seq 3, a legacy-imported CHANGES REQUESTED keyed spec=BUG-2194 at head b7c8abb8, and seq 6, an APPROVED verdict from review watch at the current head a4f9ffd0 with spec=null. pr_train_verified.rs:312-323 iterates read_bodies() for every key (PR-3330 and BUG-2194). It refuses on any non-closed non-approving body without checking that the body''s reviewed head equals fresh.head, or patch-identity carry-over (STORY-2120). The newest verdict for key BUG-2194 is therefore the stale refusal. This blocks every PR whose earlier round requested changes before the ledger import. Acceptance: (1) The train source gate (and aida pr ship, if it shares the selection) uses the head-scoped effective verdict: a verdict whose head differs from the current head, and is not carried by patch identity, is superseded by a verdict at the current head under any of the PR''s keys. A refusal at the current head still refuses. (2) Regression test in the train tests: an old-head spec-keyed refusal plus a current-head PR-keyed approval lands, and a current-head refusal under any key ejects. (3) The review-watch collector stamps the canonical spec on the verdicts it collects, unless STORY-2324 PR-B (#3331) already does; in that case note it and skip.'
-status: NeedsAttention
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T05:32:54.614008505Z
-modified_at: 2026-11-04T08:01:31.429713511Z
+modified_at: 2026-11-04T08:01:51.843373070Z
 req_type: Bug
 tags:
 - kind:bug-spotted
@@ -25,6 +25,12 @@ comments:
   content: 'ADVISOR REWORK BRIEF (2026-11-04 01:05 MST, PR #3353 head ebc63b3e). Review: the design is sound and AC1/AC2 are implemented. BLOCKING: (1) CI lib-1 is red at head while main is green at base. Fix the failing test(s) this PR broke (read the lib-1 log). (2) AC3: STORY-2324 PR-B #3331 now stamps spec_key in ledger writers. Confirm the review-watch collector path goes through those writers once #3331 lands, and say so in a spec comment with the file:line. If it does not, stamp the spec in the collector here. Gate (LIGHT): one targeted cargo test filter plus make check-ci-fast, then push to the same PR branch. The advisor re-reviews only the delta.'
   created_at: 2026-11-04T08:01:31.429713511Z
   modified_at: 2026-11-04T08:01:31.429713511Z
+  session_id: da1c0d85-1d45-4ce4-a292-5358644f65b9
+- id: 01a1a594-24e3-7111-a392-37463a2b679e
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Train source gate fix is sound in design and AC1/AC2 are implemented, but CI lib-1 is red at the head (main green at the base) and AC3 (collector spec stamping, or a note that #3331 covers it) is unaddressed.. Triage reason: rework brief on spec'
+  created_at: 2026-11-04T08:01:51.843371630Z
+  modified_at: 2026-11-04T08:01:51.843371630Z
   session_id: da1c0d85-1d45-4ce4-a292-5358644f65b9
 history:
 - id: 01a1a529-3a0b-7851-9f12-63da9e5a1022
@@ -57,6 +63,14 @@ history:
   - field_name: status
     old_value: Done
     new_value: NeedsAttention
+- id: 01a1a594-24e3-7111-a392-3737f92e2fb6
+  author: joe
+  timestamp: 2026-11-04T08:01:51.843353228Z
+  session_id: da1c0d85-1d45-4ce4-a292-5358644f65b9
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: 906c8e605ef697df3a89df1b5aad96623a0ac353
   branch: main
@@ -69,11 +83,3 @@ implementation_info:
   implemented: true
   implemented_at: 2026-11-04T07:15:48.783558960Z
   implemented_by: joe
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'Train source gate fix is sound in design and AC1/AC2 are implemented, but CI lib-1 is red at the head (main green at the base) and AC3 (collector spec stamping, or a note that #3331 covers it) is unaddressed.'
-  recovery_hint: address the review findings, move BUG-2438 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-04T07:29:07.943725046Z
