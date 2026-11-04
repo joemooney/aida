@@ -8,7 +8,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-09-19T23:52:53.703891368Z
-modified_at: 2026-11-04T02:32:17.026560024Z
+modified_at: 2026-11-04T02:32:18.334115195Z
 req_type: Task
 tags:
 - credential
@@ -116,6 +116,12 @@ comments:
   created_at: 2026-09-20T16:40:45.756042774Z
   modified_at: 2026-09-20T16:40:45.756042774Z
   session_id: 01a079fe-4ad8-7ee0-8086-16d6a1b7f0e5
+- id: 01a1a466-6c9e-7833-bc6f-4f0f0d2e7fad
+  author: joe
+  content: 'OPERATOR RULING (2026-11-03 19:30 MST, relayed by advisor): regroup ruling 2: GitLab does not become canonical; keep the hourly hub bridge (work clone pushes GitLab, cron reconciles). Rejected.'
+  created_at: 2026-11-04T02:32:18.334115195Z
+  modified_at: 2026-11-04T02:32:18.334115195Z
+  session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
 history:
 - id: 01a1942b-5ca7-77b0-a810-c50bc55862a4
   author: aida-backfill-agreed-ids
