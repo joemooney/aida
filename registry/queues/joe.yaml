@@ -176,3 +176,9 @@
   added_at: 2026-11-04T06:02:38.418848315Z
   for_role: reviewer
   added_by_machine: imac
+- user_id: joe
+  requirement_id: 01a1a419-a9bf-7c20-841d-61c55290b261
+  position: 378000
+  added_by: joe
+  added_at: 2026-11-04T06:02:36.510335683Z
+  for_role: advisor
