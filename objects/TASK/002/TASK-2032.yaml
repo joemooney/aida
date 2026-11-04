@@ -11,7 +11,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-20T23:41:45.676543397Z
-modified_at: 2026-11-04T04:34:10.634314706Z
+modified_at: 2026-11-04T04:35:44.057562680Z
 req_type: Task
 tags:
 - contained
@@ -29,6 +29,12 @@ comments:
   content: 'ADVISOR REGROUP (2026-11-03): undeferred; revisit trigger met or still-live defect verified in the regroup inventory. Approved for dispatch, LIGHT gate.'
   created_at: 2026-11-04T01:43:19.454986578Z
   modified_at: 2026-11-04T01:43:19.454986578Z
+  session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
+- id: 01a1a4d7-6d39-70a1-b527-bb981bf62c5f
+  author: joe
+  content: 'ADVISOR RULING (PR-3336 round 1 at e0a1ce634d, 2026-11-03 21:37 MST): rework, all in this round. (1) BLOCKER: launcher_main() must not derive main from the process cwd. Capture the host-resolved main once, before session_start''s set_current_dir into the seat clone (session_start.rs:3568), and thread it explicitly into new_session_for_vendor and every boundary builder (claude_contained_settings_json, contained_main_checkout_git_deny_paths, os_wrap_rw_paths, os_wrapped_program_and_args). No global or cwd lookup below that point. (2) TEST: drive the contained boundary exactly as session start does: cwd and project root inside the clone, no LauncherMainPin. Assert the clone''s .git is writable and its target dir is granted. Keep the pinned tests but stop relying on them for this path. (3) AUTHORITY: add refusal tests that pass a forged, seat-writable main (git-inited under the clone''s target/worktrees) to host_recorded_clone and resume_lease_tree, and make resume_lease_tree anchor only on a lease-recorded host main, never on target.worktree. (4) COSMETIC, bundled: drop the now-redundant main-equality filters (ship_from_seat.rs:58, mail_retention.rs:42) and fix the note_host_main doc. Gate, through the lane job runner and cited: cargo test -p aida-cli-lib --lib -- task_2032 bug_2169 bug_1982 task_2053 plus check-ci-fast (umask 022).'
+  created_at: 2026-11-04T04:35:44.057562680Z
+  modified_at: 2026-11-04T04:35:44.057562680Z
   session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
 history:
 - id: 01a15cbb-fc05-7050-907c-e1e0d5b0996b
