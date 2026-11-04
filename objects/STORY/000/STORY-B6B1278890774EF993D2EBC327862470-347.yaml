@@ -11,7 +11,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-03T14:28:02.283438627Z
-modified_at: 2026-11-03T23:14:29.699247716Z
+modified_at: 2026-11-04T00:05:15.627036303Z
 req_type: Story
 relationships:
 - rel_type:
@@ -92,6 +92,13 @@ comments:
   created_at: 2026-11-03T23:06:18.787401532Z
   modified_at: 2026-11-03T23:06:18.787401532Z
   session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
+- id: 01a1a3df-cceb-7500-bdc1-bc7581bdfe82
+  author: joe
+  content: 'Round 2 (3f3e511c38d) addresses all 4 findings: audit row added; apply_until deadline per deletion in hygiene (SOFT_BUDGET) and disk guard (FLOOR_RECLAIM_BUDGET=60s); salvage aged from lease/activity/worktree mtimes, ''idle time unknown'' with no signal. make check-ci-fast green (36 gates), cargo check --tests clean. Targeted cargo test NOT run locally: the agent-profile test binary could not finish codegen within the 10-min per-call cap (3 attempts); new tests: story_2351_* in session_hygiene and task_1562 reclaim tests — CI will execute them. The audit row was inserted by hand in catalog order (after ''session reap''), not via the generator, since no built binary was available.'
+  created_at: 2026-11-04T00:05:15.627036303Z
+  modified_at: 2026-11-04T00:05:15.627036303Z
+  session_id: 01a1a3b1499a
+  harness_version: 2.1.317 (Claude Code)
 history:
 - id: 01a1a316-cb8a-7301-85a2-3b4f27c65f7a
   author: aida-session-start
