@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "spec": "CR-B6B1278890774EF993D2EBC327862470-002",
+  "publishes": [
+    {
+      "at": "2026-11-04T01:39:20.675690737Z",
+      "closed_by": "edit"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-04T01:39:20.490905879Z",
+      "spec": "CR-b6b1278890774ef993d2ebc327862470-002",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Approved",
+        "after": "Completed"
+      }
+    },
+    {
+      "ts": "2026-11-04T01:39:20.533005318Z",
+      "spec": "CR-b6b1278890774ef993d2ebc327862470-002",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "",
+        "closed_by": "edit"
+      }
+    }
+  ]
+}
