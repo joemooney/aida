@@ -40,6 +40,7 @@ pub(crate) static REGISTRY: &[&CommandReg] = &[
     &crate::comment_cmd::COMMENT,
     &crate::commit::COMMIT,
     &crate::compete_cmd::COMPETE,
+    &crate::condition_cmd::CONDITION,
     &crate::config_cmd::CONFIG,
     &crate::monitor_contract::CONTRACT,
     &crate::criteria::CRITERIA,

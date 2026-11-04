@@ -82,6 +82,8 @@ mod commit;
 mod compete;
 mod compete_cmd;
 mod complexity_calibration;
+// trace:STORY-2402 | ai:claude
+mod condition_cmd;
 mod config_cmd;
 mod spec_arg;
 // trace:BUG-1938 | ai:claude

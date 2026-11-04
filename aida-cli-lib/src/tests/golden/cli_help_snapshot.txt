@@ -75,7 +75,9 @@ Commands:
                 view but not filed away the way archive is
   undefer       Inverse of `aida defer` — clears the deferred flag (and its revisit trigger) so the
                 spec reappears in default `aida list` / `aida history` / `aida search` views
-  claim         Record a spec-scoped CLAIM so advisor-fanned work is visible to the
+  condition     Typed conditions: the machine-checkable form of "when does this come back" for
+                deferrals, relay handoffs and recurrence escalation
+  claim        Record a spec-scoped CLAIM so advisor-fanned work is visible to the
                 duplicate-dispatch gates
   unclaim       Inverse of `aida claim` — removes the caller's spec-scoped claim so a fresh `aida
                 queue work <spec>` / `aida edit <spec>` no longer sees it
@@ -3651,6 +3653,66 @@ Arguments:
           SPEC-ID or UUID to undefer
 
 Options:
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida condition
+Typed conditions: the machine-checkable form of "when does this come back" for deferrals, relay
+handoffs and recurrence escalation
+
+Usage: aida condition [OPTIONS] <COMMAND>
+
+Commands:
+  check  Evaluate a typed condition now: met, not met, unknown (a fact could not be read right now)
+         or manual (a person decides). Read-only
+  help   Print this message or the help of the given subcommand(s)
+
+Options:
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida condition check
+Evaluate a typed condition now: met, not met, unknown (a fact could not be read right now) or manual
+(a person decides). Read-only
+
+Usage: aida condition check [OPTIONS] <CONDITION>
+
+Arguments:
+  <CONDITION>
+          The condition: spec:<ID>=<status>, pr:<N>=merged, release:>=<version>, date:<YYYY-MM-DD>,
+          query:<key>=<value>[,...] count<op><n> (keys: tag, status, type, feature; counts
+          non-archived specs) or manual:<who>. Quote it when it contains a space or `>`
+
+Options:
+      --json
+          Emit JSON
+
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
           compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
@@ -30787,6 +30849,7 @@ Specs
   unarchive      Restore an archived requirement
   defer          Park a spec as primed/conditional work
   undefer        Restore a deferred spec to the active view
+  condition      Check a typed condition (deferral trigger) now
   lint           EARS-style requirement quality lens
 Work & autonomy
   queue          Personal work queue
@@ -34009,6 +34072,62 @@ Working on aida itself
         "name": "help",
         "takes_value": false,
         "help": "Print help (see more with '--help')"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "condition"
+    ],
+    "about": "Typed conditions: the machine-checkable form of \"when does this come back\" for deferrals, relay handoffs and recurrence escalation",
+    "flags": [
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "condition",
+      "check"
+    ],
+    "about": "Evaluate a typed condition now: met, not met, unknown (a fact could not be read right now) or manual (a person decides). Read-only",
+    "flags": [
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "json",
+        "takes_value": false,
+        "help": "Emit JSON"
       }
     ],
     "hidden": false
