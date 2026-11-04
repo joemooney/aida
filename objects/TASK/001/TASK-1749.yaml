@@ -25,12 +25,11 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-14T04:11:15.367292037Z
-modified_at: 2026-10-20T05:07:49.348417808Z
+modified_at: 2026-11-04T01:40:16.991956198Z
 req_type: Task
 tags:
 - arch-review-2026-10-13
 - architecture
-- operator-held
 - tech-debt
 comments:
 - id: 01a156ed-c69a-7932-9423-493f79d2b24f
@@ -102,10 +101,11 @@ history:
   timestamp: 2026-10-19T16:08:23.698968450Z
   session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
   changes: []
-deferred: true
-deferred_at: 2026-10-19T16:08:23.365917491Z
-deferred_until: STORY-1853, STORY-1690 and TASK-1945 have landed and the operator reopens architecture work
-deferred_reason: 'Advisor triage 2026-10-19: parked during the dev-cycle speed push. Operator ruled the architecture/crate-split work premature on 2026-10-18 (burndown speed first).'
+- id: 01a1a436-ccdc-70a3-8254-8db91d4c6abc
+  author: joe
+  timestamp: 2026-11-04T01:40:17.244337448Z
+  session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
+  changes: []
 execution_mode: guided
 filed_at:
   code_sha: 014a28d3f7621809d6a6ccc7c7972e42df00d972
