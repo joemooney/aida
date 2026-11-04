@@ -2,6 +2,7 @@
 //! A local pre-push hook commits a peer and dirties a tracked file before the
 //! push fails, so `rollback_commit_if_head_matches` must refuse the rebase.
 //! trace:BUG-2194 | ai:claude
+//! trace:BUG-2194.ac498808 BUG-2194.ac67e854 BUG-2194.ac0ab426 BUG-2194.ac727a60 | ai:claude
 use super::*;
 use std::collections::BTreeMap;
 use std::os::unix::fs::PermissionsExt;
