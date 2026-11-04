@@ -14,13 +14,20 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-04T06:35:36.753234110Z
-modified_at: 2026-11-04T06:35:36.753234110Z
+modified_at: 2026-11-04T11:04:24.401748803Z
 req_type: Task
 tags:
 - carried-from:TASK-2033
 - finding-hash:43892892
 - from-review:PR-3348
 - kind:carried-forward
+comments:
+- id: 01a1a63b-4451-7da0-a87f-c716a27fa741
+  author: joe
+  content: 'ADVISOR RULING (2026-11-04 03:56 MST, rule non-blocking findings once): folded into TASK-2829.'
+  created_at: 2026-11-04T11:04:24.401748803Z
+  modified_at: 2026-11-04T11:04:24.401748803Z
+  session_id: da1c0d85-1d45-4ce4-a292-5358644f65b9
 history:
 - id: 01a1a565-6e23-7210-a46e-97cd948ba05c
   author: joe
