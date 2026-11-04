@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T17:54:13.928308359Z
-modified_at: 2026-11-04T19:11:26.723315921Z
+modified_at: 2026-11-04T19:20:16.566146793Z
 req_type: Task
 tags:
 - area:containment
@@ -23,6 +23,12 @@ comments:
   content: 'Implemented shared supported-vendor guidance in session.rs for the posture resolver and both contained-launch preflight refusals. Regression coverage checks agy with missing/aida/native policies, both launch preflights, and bubblewrap present/absent; agy remains refused and uncontained calls retain their behavior. Formatting and git diff --check pass; targeted Rust test is still compiling. Native lane git staging refused with read-only .git, as documented in docs/cli/04-git-lifecycle.md (TASK-2712): edits will be left pending for launcher post-exit commit and host publication. Suggested subject: [AI:codex] fix(session): name supported containment vendors (TASK-3047).'
   created_at: 2026-11-04T19:11:26.723315921Z
   modified_at: 2026-11-04T19:11:26.723315921Z
+  session_id: 01a1a7f47db0
+- id: 01a1a801-3fb6-7be0-9461-448574c20fe6
+  author: joe
+  content: 'Validation complete: new targeted regression passed; compiled library test binary run with task_2631_containment_tests passed all 10 tests (including existing Claude/native Codex coverage); cargo fmt --all -- --check and git diff --check passed. Only session.rs and task_2631_containment_tests.rs changed. Native read-only .git prevents child staging/commit/push/PR, so pending changes are intentionally left for the documented launcher post-exit commit and host aida ship --from-seat publication. No aida pr ship or review record run.'
+  created_at: 2026-11-04T19:20:16.566146793Z
+  modified_at: 2026-11-04T19:20:16.566146793Z
   session_id: 01a1a7f47db0
 history:
 - id: 01a1a7b2-d51d-79b2-95a3-7c349b4cf48c
