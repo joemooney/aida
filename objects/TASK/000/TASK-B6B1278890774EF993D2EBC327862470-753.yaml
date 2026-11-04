@@ -9,12 +9,12 @@ description: |-
 
   PR: #3305
   Reviewed sha: af914bb0693fd92bdaf5cccd6b8f8888360ca7c2
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T01:15:11.009301343Z
-modified_at: 2026-11-04T06:15:03.545504954Z
+modified_at: 2026-11-04T07:11:12.708672352Z
 req_type: Task
 tags:
 - carried-from:BUG-2426
@@ -47,6 +47,12 @@ comments:
   content: 'ADVISOR REWORK BRIEF (2026-11-03 23:16 MST, PR #3341 head 7a628e7a). Review requested changes. BLOCKING: list_leases_strict_all treats aida lock''s lock-only entries (lock-<slug>.toml, which do not parse as a SessionLease) as torn leases, so while any worktree lock exists the watcher never updates a dead author''s branch. Skip lock-only entries by file name or kind before strict parsing, and add a test that a present lock-<slug>.toml leaves author_live and the update path working. The deputy_shell CI failure is an unrelated flake: re-run it, do not chase it. Rule each non-blocking finding in this push: fix it or say why not, in one line on this spec. Gate (LIGHT): one targeted cargo test filter covering the changed module, plus make check-ci-fast, then push to the same PR branch. The advisor re-reviews only the delta.'
   created_at: 2026-11-04T06:15:03.545504954Z
   modified_at: 2026-11-04T06:15:03.545504954Z
+  session_id: da1c0d85-1d45-4ce4-a292-5358644f65b9
+- id: 01a1a565-c544-7b32-a9a3-a73c5c670c84
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: author_live fails closed and the parks()/since fixes are correct and tested, but list_leases_strict_all treats aida lock''s lock-only entries (lock-<slug>.toml, which do not parse as a SessionLease) as torn leases, so while any worktree lock exists the watcher never updates a dead author''s branch; CI also red at this head (unrelated deputy_shell flake). Triage reason: advisor rework brief on spec; review findings to address'
+  created_at: 2026-11-04T07:11:12.708670819Z
+  modified_at: 2026-11-04T07:11:12.708670819Z
   session_id: da1c0d85-1d45-4ce4-a292-5358644f65b9
 history:
 - id: 01a1a443-3db8-70c3-aad1-ac7901b84264
@@ -98,6 +104,14 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1a565-c544-7b32-a9a3-a722ae411467
+  author: joe
+  timestamp: 2026-11-04T07:11:12.708649709Z
+  session_id: da1c0d85-1d45-4ce4-a292-5358644f65b9
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: 0f1624a8b38d961973328d79d05642add4464fc8
   branch: main
@@ -105,11 +119,3 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: 02cfbd22515
   vendor: claude
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: author_live fails closed and the parks()/since fixes are correct and tested, but list_leases_strict_all treats aida lock's lock-only entries (lock-<slug>.toml, which do not parse as a SessionLease) as torn leases, so while any worktree lock exists the watcher never updates a dead author's branch; CI also red at this head (unrelated deputy_shell flake)
-  recovery_hint: address the review findings, move TASK-2813 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-04T06:07:54.676161811Z
