@@ -2149,11 +2149,12 @@ fn run_checked_fetch_error_on_read_only_cargo_home_adds_the_note() {
     let tmp = tempfile::tempdir().unwrap();
     let ro = tmp.path().join("cargo-home");
     fs::create_dir(&ro).unwrap();
+    let original = fs::metadata(&ro).unwrap().permissions();
     fs::set_permissions(&ro, fs::Permissions::from_mode(0o555)).unwrap();
     let fetch = failing_run("error: failed to download `serde`", Some(ro.clone()));
     let plain = failing_run("error[E0308]: mismatched types", Some(ro.clone()));
     // Restore write access so the temporary directory can be removed.
-    fs::set_permissions(&ro, fs::Permissions::from_mode(0o755)).unwrap();
+    fs::set_permissions(&ro, original).unwrap();
 
     assert!(
         fetch.contains("CARGO_HOME is read-only here; new dependencies are fetched on the host"),
