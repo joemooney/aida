@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "spec": "STORY-2351",
+  "publishes": [
+    {
+      "at": "2026-11-04T01:54:14.560049820Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-03T23:06:18.673430262Z",
+      "spec": "STORY-2351",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-04T01:53:40.750164130Z",
+      "spec": "STORY-2351",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 3317
+      }
+    },
+    {
+      "ts": "2026-11-04T01:54:14.328086844Z",
+      "spec": "STORY-2351",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "4f048b58ca00a9a5ef5357553804481b4c2c072f",
+        "pr": 3317,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
