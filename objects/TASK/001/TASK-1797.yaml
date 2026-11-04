@@ -8,10 +8,17 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-16T14:21:29.287594158Z
-modified_at: 2026-10-21T05:48:45.128346147Z
+modified_at: 2026-11-04T02:45:28.392831981Z
 req_type: Task
 tags:
 - operator-held
+comments:
+- id: 01a1a472-7ac8-7060-adfd-8409de0300b4
+  author: joe
+  content: 'OPERATOR RULING (2026-11-03 19:37 MST, relayed by advisor): stays parked. A v* tag ruleset with an admin bypass protects nothing, because contained seats push with the operator''s GitHub token, which is admin. A ruleset with no bypass blocks the operator''s own release tags unless enforcement is toggled for each release. Real protection needs a distinct release identity (the release workflow token or a deploy key) that is the only allowed tag pusher. Revisit when a separate release identity exists.'
+  created_at: 2026-11-04T02:45:28.392831981Z
+  modified_at: 2026-11-04T02:45:28.392831981Z
+  session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
 history:
 - id: 01a15d01-40d1-7a43-adec-7707074a8246
   author: joe
