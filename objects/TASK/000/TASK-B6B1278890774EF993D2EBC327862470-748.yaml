@@ -7,12 +7,12 @@ description: |-
 
   non-blocking/minor: check-ci-gates.py run_gate stream_diagnostics swallows only BrokenPipeError; any other sink OSError (or a sys.stdout without .buffer) kills the reader thread, the child then blocks on a full pipe and child.wait() hangs. Catch OSError/ValueError like the Rust reader, which ignores all write errors.
   Reviewed sha: 830142d58d10db713961b42585a9604ff10a654d
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-03T18:44:43.902352640Z
-modified_at: 2026-11-04T08:58:30.729244941Z
+modified_at: 2026-11-04T09:24:39.691362087Z
 req_type: Task
 tags:
 - carried-from:TASK-2790
@@ -132,6 +132,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1a5df-f28b-7652-b34d-32d06b223bcf
+  author: aida-orchestrator
+  timestamp: 2026-11-04T09:24:39.691390691Z
+  session_id: 01a1a5d34166
+  harness_version: 2.1.318 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: da17908306fcefc7fc1e8bcf334e2d507c72cf1a
   branch: main
@@ -139,3 +148,11 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: c016e786454
   vendor: claude
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'Round-1 findings all addressed (cfg(unix) tests, progress via always+width, text-only sink drains), but CI gates is red from this PR: the Executable fixture ratchet rejects from_mode(0o755) at dev_build_tests.rs:2156.'
+  recovery_hint: address the review findings, move TASK-2802 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-11-04T09:24:39.691362087Z
