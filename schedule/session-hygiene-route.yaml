@@ -2,6 +2,6 @@ job: session-hygiene-route
 due_since: 2026-11-04T02:13:25.912207698Z
 due_reason: on CronJobFailed:session-hygiene
 due_failure:
-  trip_id: session-hygiene@2026-11-04T11:31:42.456022319Z
+  trip_id: session-hygiene@2026-11-04T12:36:57.696904429Z
   job: session-hygiene
   error: 'exit 1: '
