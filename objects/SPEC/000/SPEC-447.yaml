@@ -2,12 +2,12 @@ id: 01a1403f-ecb1-7412-bd8a-56dd869eb0b2
 spec_id: SPEC-447
 title: Investigate exact floating-rate validation across regen control and consensus JSON roundtrips
 description: TASK-1734 author self-check reproduced a serde_json roundtrip mismatch for the mathematically valid ratio1/11. Its optional display reader is now tolerant within8*f64::EPSILON and recomputes rates from counts. The strict scoring/control eligibility code still compares floating pass_rate with integer division exactly (e.g. regen/score/controls.rs::require_execution). Investigate whether valid committed control/consensus evidence can be refused after JSON persistence; cover1/11 and other representable ratios in real committed fixtures. If confirmed, design a bounded consistency check retaining integer-count and provenance validation, NaN/materially wrong rejection, and existing authority gates. Do not silently apply the display policy to strict gates. This is a separate investigation, not a claim of completed reproduction through a live control execution. Search of roundtrip/floating found no matching existing spec.
-status: InProgress
+status: Done
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-15T15:48:13.617378738Z
-modified_at: 2026-11-04T19:27:20.950241811Z
+modified_at: 2026-11-04T19:28:28.390982042Z
 req_type: Task
 tags:
 - from-implementer:TASK-1734
@@ -31,6 +31,11 @@ comments:
   content: 'Investigation complete: real committed JSON fixtures reproduce strict stub-control and ordinary-trial aggregate refusals for valid 1/11 and 43/44; both pass before text persistence. Exact-roundtrip fractions remain accepted. Scalar survey covers 131840 pairs (denominators 1..512): 13710 change, maximum one ULP. Added consensus committed fixtures for seven fractions plus wrong-rate/count/provenance and nonfinite refusals. Production eligibility unchanged; bounded repair proposal (finite in-range rates, exact count/endpoint validation, proposed <=2 interior ULPs, all authority gates retained) recorded in docs/plans/2026-11-04-spec-447-rate-roundtrip-investigation.md and draft follow-up SPEC-b6b1278890774ef993d2ebc327862470-011. Validation: both committed-fixture tests pass, all 18 consensus tests pass, 15 control tests pass. Two existing end-to-end tests fail setup due to hardcoded read-only /var/tmp in this sandbox; skipping those two passes all 15 admitted controls. Formatting and diff checks pass. Synthetic execution evidence in real temporary Git stores; no live confined execution claimed.'
   created_at: 2026-11-04T19:27:20.950231523Z
   modified_at: 2026-11-04T19:27:20.950231523Z
+- id: 01a1a808-c0e6-7742-a8c3-3bc3a7c0279c
+  author: mcp
+  content: 'Publication handoff: native Codex lane cannot write .git/index.lock (read-only filesystem), so no commit, push, or PR was created in-lane. Following TASK-2712 native_post_exit_spec/post_exit_seat_commit procedure, pending edits are left for the host-side exit commit. Desired subject: [AI:codex] test(regen): investigate committed fractional-rate refusals (SPEC-447). Prepared PR body: /tmp/spec-447-pr-body.md. Host/operator publication can use the documented aida ship --from-seat workflow from the main checkout. Queue done succeeded and canonical spec now reports Done with no queue membership; its session-manifest update warned and the store mutation was queued for host commit. Production gate repair remains the separate draft SPEC-b6b1278890774ef993d2ebc327862470-011. No ship/merge/review-record action taken.'
+  created_at: 2026-11-04T19:28:28.390972726Z
+  modified_at: 2026-11-04T19:28:28.390972726Z
 history:
 - id: 01a154db-eb1a-7e22-97df-21cd34a4604f
   author: joe
@@ -62,9 +67,36 @@ history:
   timestamp: 2026-11-04T19:11:40.141243864Z
   session_id: 01a1a7f8abc3
   changes: []
+- id: 01a1a808-4887-7f03-9b81-032cc023ca36
+  author: joe
+  timestamp: 2026-11-04T19:27:57.575702542Z
+  session_id: 01a1a7f8abc3
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
+- id: 01a1a808-4ef9-7882-b0e4-f4755631f39e
+  author: joe
+  timestamp: 2026-11-04T19:27:59.225261207Z
+  session_id: 01a1a7f8abc3
+  changes: []
+- id: 01a1a808-4fd0-7500-94a7-16e55060ac96
+  author: joe
+  timestamp: 2026-11-04T19:27:59.440436766Z
+  session_id: 01a1a7f8abc3
+  changes: []
 filed_at:
   code_sha: 3d85bbde84130b00330ac845d79ffdd4eb9bcce7
   branch: main
   dirty: false
   aida_version: 0.15.0
   aida_build_sha: 596a91dbc0
+implementation_info:
+  implemented: true
+  test_coverage_notes: |-
+    Committed fractional-rate fixtures: 2 passed
+    Consensus: 18 passed; controls: 15 passed, 2 blocked by read-only /var/tmp
+    cargo fmt --all -- --check and git diff --check passed
+  implemented_at: 2026-11-04T19:27:57.469200845Z
+  implemented_by: joe
+interface_changes: {}
