@@ -11,7 +11,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T09:06:27.587006751Z
-modified_at: 2026-11-04T07:18:11.061243910Z
+modified_at: 2026-11-04T07:50:32.634892435Z
 req_type: Task
 tags:
 - architecture
@@ -119,6 +119,13 @@ comments:
   created_at: 2026-11-04T07:12:01.258192030Z
   modified_at: 2026-11-04T07:12:01.258192030Z
   session_id: da1c0d85-1d45-4ce4-a292-5358644f65b9
+- id: 01a1a589-c7ba-7052-acdf-c0bf71530d3d
+  author: joe
+  content: 'IMPLEMENTER (claude, 2026-11-04 ~01:05 MST) — PR-3307 rework brief (21:58, STORY-1888 gate-facade ratchets) implemented, COMMITTED LOCALLY, NOT PUSHED (untested=true). Seat commit 15e1dc65bd3 on top of PR head 7a9a4ae4bfc (seat worktree aida-seat-aida-task-b6b1278890774ef993d2ebc327862470-658, local branch task-b6b1278890774ef993d2ebc327862470-658-2). Change (3 files, +17/-1): gate/kernel_deps.rs re-exports crate::containment::launch::ContainmentReceipt on the floor; gate/seat_authority.rs bind_contained_launch_worker now takes &crate::gate::kernel_deps::ContainmentReceipt (M3 API unchanged). kernel_deps.rs is itself in GATE_KERNELS, so the floor re-export still names an outside path for gate_kernels_reach_outside_only_through_listed_leaves; a floor re-export WITHOUT a leaf entry is therefore impossible, and FACADE_EXTERNAL_LEAVES gains one entry crate::containment::launch::ContainmentReceipt with its reason (same pattern as crate::home_dir). GATE NOT RUN: two lane jobs (j20261104T072002217-3-0, j20261104T073513393-3-0) of ''cargo test --profile agent -p aida-cli-lib --lib story_1888_gate_paths_tests'' both timed out after 900s while compiling aida-cli-lib (seed: overlay-stale; the runner picked the warm 900s budget) and the AIDA_CARGO_TIMEOUT=3600 override was refused by this session''s permission mode; make check-ci-fast cannot finish under the 60s tool cap (its first gate is a cargo check) and the chunked driver was refused. Per the round-4 ruling (do not push untested), the push is held. Next: a seat whose runner can grant the cold 3600s budget (or a refreshed seed) runs the story_1888 filter + check-ci-fast at 15e1dc65bd3 and pushes HEAD:task-b6b1278890774ef993d2ebc327862470-658.'
+  created_at: 2026-11-04T07:50:32.634892435Z
+  modified_at: 2026-11-04T07:50:32.634892435Z
+  session_id: 01a1a56c1d4c
+  harness_version: 2.1.318 (Claude Code)
 history:
 - id: 01a1965c-5ce8-7781-b88f-317b0b12bab5
   author: joe
