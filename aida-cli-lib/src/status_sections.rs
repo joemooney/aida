@@ -2353,7 +2353,9 @@ pub(crate) const KEYSTONE_TAG: &str = "needs-supervised-build";
 /// surface (c) the decision inbox depth (`aida questions`) and — when
 /// `home_offer = surface` — (d) the keystone set as "ready for `--zen`"
 /// (presence is useful in BOTH directions). When AWAY these accumulate quietly
-/// (the point of `away` is to NOT nag; the away line above already prints).
+/// (the point of `away` is to NOT nag; the away line above already prints) —
+/// unless `[presence] questions = always-surface`, which keeps (c) visible
+/// while away (TASK-1059).
 /// Display-only and advisory — changes no execution path. The away-side safety
 /// floor (keystone NOT offered for autonomous pickup) is already structural:
 /// `needs-supervised-build` is a parking tag, so the drain gate never picks it
@@ -2366,30 +2368,36 @@ pub(crate) fn print_status_presence_consumers(
     if cfg.consumers == presence::ConsumersMode::Off {
         return;
     }
-    // Quiet accumulation when away — the away line is the only presence noise.
-    if matches!(
-        presence::current_presence(chrono::Utc::now()),
-        presence::Presence::Away
-    ) {
-        return;
-    }
+    let presence_now = presence::current_presence(chrono::Utc::now());
 
     // (c) decision inbox — pending DecisionRequests awaiting the operator.
+    // `[presence] questions` (TASK-1059) decides whether the nudge shows while
+    // away: `quiet-when-away` (default) lets decisions accumulate quietly,
+    // `always-surface` nudges anyway. Never gates `aida questions list`.
     // TASK-1065: read the count from the `has_pending_decision` cache column so
     // the rich `aida status` path no longer needs a full `backend.load()` to
     // surface it. Matches the prior store-based predicate exactly (non-archived +
     // `decision_request.is_pending()`); see `pending_decision_request_count` for
     // the reference oracle. trace:TASK-1065 (supersedes TASK-1061)
-    let pending = backend.pending_decision_count().unwrap_or(0);
-    if pending > 0 {
-        println!(
-            "  {} {} decision{} await your call — {}",
-            "Decisions:".bold().yellow(),
-            pending,
-            if pending == 1 { "" } else { "s" },
-            "aida questions".cyan()
-        );
-        println!();
+    // trace:TASK-1059 | ai:claude
+    if presence::surface_questions(presence_now, &cfg) {
+        let pending = backend.pending_decision_count().unwrap_or(0);
+        if pending > 0 {
+            println!(
+                "  {} {} decision{} await your call — {}",
+                "Decisions:".bold().yellow(),
+                pending,
+                if pending == 1 { "" } else { "s" },
+                "aida questions".cyan()
+            );
+            println!();
+        }
+    }
+
+    // Quiet accumulation when away — the home-side keystone offer below never
+    // nags an absent operator.
+    if matches!(presence_now, presence::Presence::Away) {
+        return;
     }
 
     // (d) home_offer = surface: the keystone cohort, ready for the at-keyboard
