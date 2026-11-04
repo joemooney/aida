@@ -135,6 +135,9 @@ mod gate;
 // trace:STORY-B6B1278890774EF993D2EBC327862470-099 | ai:claude
 mod deputy;
 mod deputy_cmd;
+// trace:STORY-2338 | ai:claude
+mod deputy_shell;
+mod deputy_shell_cmd;
 mod gitlab_mirror_link;
 mod graph_cmd;
 mod help;

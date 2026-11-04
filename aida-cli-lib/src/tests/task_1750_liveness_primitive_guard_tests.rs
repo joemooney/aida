@@ -25,6 +25,11 @@ const ALLOWED: &[(&str, &str)] = &[
         "aida-cli-lib/src/exit_signal.rs",
         "a process-GROUP probe (kill(-pgid, 0)), not single-pid liveness",
     ),
+    // trace:STORY-2338 | ai:claude
+    (
+        "aida-cli-lib/src/deputy_shell/runner.rs",
+        "a process-GROUP probe (kill(-pgid, 0)), not single-pid liveness",
+    ),
 ];
 
 fn rust_files(dir: &Path, out: &mut Vec<PathBuf>) {

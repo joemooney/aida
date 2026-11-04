@@ -1483,10 +1483,12 @@ pub(crate) fn deputy_failed_toon_rows(items: &[crate::deputy::FailedJob]) -> Vec
             vec![
                 j.id.clone(),
                 j.deputy.clone(),
+                j.kind_label().to_string(),
                 j.requester_session.clone().unwrap_or_else(|| "-".into()),
                 j.rc.to_string(),
                 j.reason.clone(),
                 j.output.display().to_string(),
+                j.ack_command(),
             ]
         })
         .collect()
@@ -2299,7 +2301,16 @@ impl AwaitingReport {
             "{}",
             crate::toon::table_raw(
                 "deputy_failed",
-                &["job", "deputy", "requester", "rc", "reason", "log"],
+                &[
+                    "job",
+                    "deputy",
+                    "kind",
+                    "requester",
+                    "rc",
+                    "reason",
+                    "log",
+                    "ack"
+                ],
                 &deputy_failed_toon_rows(&self.deputy_failed),
             )
         );
@@ -2439,10 +2450,12 @@ impl AwaitingReport {
                 continue;
             }
             let short: String = job.id.chars().take(8).collect();
+            // trace:STORY-2338 | ai:claude
             writeln!(
                 w,
-                "  {} deputy job {} failed: rc {} ({}) — requested by {} — log {} — `{}`",
+                "  {} deputy {} {} failed: rc {} ({}) — requested by {} — log {} — `{}`",
                 crate::glyph(crate::glyphs::Glyph::Blocked).red(),
+                job.kind_label(),
                 short.bold(),
                 job.rc,
                 job.reason,
@@ -2450,7 +2463,7 @@ impl AwaitingReport {
                     .as_deref()
                     .unwrap_or("an unknown session"),
                 job.output.display(),
-                format!("aida deputy ack {}", job.id).cyan(),
+                job.ack_command().cyan(),
             )?;
             budget -= 1;
         }
@@ -3268,6 +3281,8 @@ impl AwaitingReport {
             "deputy_failed": self.deputy_failed.iter().map(|j| serde_json::json!({
                 "job": j.id,
                 "deputy": j.deputy,
+                "kind": j.kind,
+                "ack": j.ack_command(),
                 "requester_session": j.requester_session,
                 "rc": j.rc,
                 "reason": j.reason,
@@ -6026,6 +6041,7 @@ mod tests {
                     rc: 3,
                     reason: "exit".into(),
                     output: "spool/out/x.out".into(),
+                    kind: crate::deputy::DeputyKind::Command,
                 })
             }),
         ]

@@ -54,7 +54,6 @@ pub(crate) struct WorkerConfig {
     pub workers: usize,
     /// Canonical paths of executables other than `aida` that argv jobs may run.
     pub allow_exec: Vec<PathBuf>,
-    pub allow_scripts: bool,
     /// A terminal job silent this long shows as waiting on a prompt in
     /// `aida deputy status`. Display only: the job's own timeout governs.
     pub tty_idle: Duration,
@@ -536,7 +535,6 @@ fn refusal_remedy(reason: &str) -> Option<&'static str> {
         "exec-not-allowed" => {
             "run it through `aida`, or restart the deputy with `aida deputy --allow-exec <path>` naming the executable by path"
         }
-        "script-jobs-disabled" => "restart the deputy with `aida deputy --allow-scripts`",
         "bypass-flag" => "run the command yourself in your own terminal",
         "empty-argv" => "submit a command: `aida deputy submit -- <command> [args]`",
         "policy-unreadable" => "fix the deputy's policy file, then submit the job again",
@@ -584,31 +582,24 @@ fn refuse_duplicate(spool: &Spool, cfg: &WorkerConfig, id: &str, where_: &str) {
     eprintln!("deputy {}: refused job {id}: {reason}", cfg.name);
 }
 
-/// Q5: argv jobs may run `aida` or an executable the operator named at start;
-/// script bodies need `--allow-scripts`.
+/// Q5: argv jobs may run `aida` or an executable the operator named at start.
+/// Shell scripts are the script deputy's (`aida deputy shell`), not this one's.
+// trace:STORY-2338 | ai:claude
 pub(crate) fn authorize_exec(body: &JobBody, cfg: &WorkerConfig) -> Result<(), String> {
-    match body {
-        JobBody::Script(_) if cfg.allow_scripts => Ok(()),
-        JobBody::Script(_) => Err(
-            "refused:script-jobs-disabled (the operator did not start this deputy with --allow-scripts)"
-                .into(),
-        ),
-        JobBody::Argv(argv) => {
-            let Some(first) = argv.first() else {
-                return Err("refused:empty-argv".into());
-            };
-            if first == "aida" {
-                return Ok(());
-            }
-            let canon = std::fs::canonicalize(first).ok();
-            if canon.is_some_and(|c| cfg.allow_exec.contains(&c)) {
-                Ok(())
-            } else {
-                Err(format!(
-                    "refused:exec-not-allowed ({first} is not `aida` or an --allow-exec path)"
-                ))
-            }
-        }
+    let JobBody::Argv(argv) = body;
+    let Some(first) = argv.first() else {
+        return Err("refused:empty-argv".into());
+    };
+    if first == "aida" {
+        return Ok(());
+    }
+    let canon = std::fs::canonicalize(first).ok();
+    if canon.is_some_and(|c| cfg.allow_exec.contains(&c)) {
+        Ok(())
+    } else {
+        Err(format!(
+            "refused:exec-not-allowed ({first} is not `aida` or an --allow-exec path)"
+        ))
     }
 }
 
@@ -623,23 +614,14 @@ fn open_out(path: &Path) -> Result<std::fs::File> {
 }
 
 fn build_command(rec: &JobRecord, spool: &Spool, cfg: &WorkerConfig) -> Command {
-    let mut cmd = match &rec.body {
-        JobBody::Argv(argv) => {
-            let program = if argv[0] == "aida" {
-                cfg.aida_program.clone()
-            } else {
-                PathBuf::from(&argv[0])
-            };
-            let mut c = Command::new(program);
-            c.args(&argv[1..]);
-            c
-        }
-        JobBody::Script(body) => {
-            let mut c = Command::new("bash");
-            c.args(["--noprofile", "--norc", "-c", body]);
-            c
-        }
+    let JobBody::Argv(argv) = &rec.body;
+    let program = if argv[0] == "aida" {
+        cfg.aida_program.clone()
+    } else {
+        PathBuf::from(&argv[0])
     };
+    let mut cmd = Command::new(program);
+    cmd.args(&argv[1..]);
     cmd.env(JOB_ENV, &rec.id)
         .env(SPOOL_ENV, &spool.root)
         .env(
@@ -652,7 +634,7 @@ fn build_command(rec: &JobRecord, spool: &Spool, cfg: &WorkerConfig) -> Command 
 
 /// A pty pair: (master, slave). The slave becomes the job's controlling
 /// terminal.
-fn open_pty() -> Result<(OwnedFd, OwnedFd)> {
+pub(crate) fn open_pty() -> Result<(OwnedFd, OwnedFd)> {
     // SAFETY: plain libc calls on fds we own; every return is checked.
     unsafe {
         let master = libc::posix_openpt(libc::O_RDWR | libc::O_NOCTTY);
