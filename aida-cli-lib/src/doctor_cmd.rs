@@ -1769,6 +1769,8 @@ pub(crate) fn disk_headroom_light_report(project_root: &std::path::Path) -> Doct
             crate::disk_emergency::run_emergency(project_root, &emergency);
         },
         || disk_headroom_light_report_with(project_root, free, cargo_slot_dir()),
+        // trace:STORY-2351 | ai:claude
+        || floor_reclaim(project_root),
         |dev, _role| {
             let reclaimable = crate::disk_emergency::reclaimable_on(project_root, dev);
             // trace:STORY-1916.ac641c6e | ai:claude
@@ -1782,24 +1784,79 @@ pub(crate) fn disk_headroom_light_report(project_root: &std::path::Path) -> Doct
     )
 }
 
-/// The light report around its two expensive, injected halves: the
-/// emergency run and the stuck scan (a reclaim dry run: `gh`, the offline
-/// merge scan, a walk of every cache). Both run only in the substrate run
-/// (TASK-2264): a manual light check reports free space, the floor breach
+/// STORY-2351: the guard's own reclaim on a floor breach — exactly the
+/// `aida worktree reclaim --apply` the route used to ask the advisor to run,
+/// with every rail on (no live lease, no open PR, no cache touched in the
+/// last hour, no agent scratch). Returns the bytes freed.
+///
+/// It runs inside the `disk-headroom-guard` child, which the scheduler kills
+/// at [`crate::maintenance_schedule::SCHEDULED_COMMAND_TIMEOUT`]. A killed
+/// guard routes a timeout instead of the "freed X" evidence, so the survey
+/// and every deletion run against [`FLOOR_RECLAIM_BUDGET`]: once it passes,
+/// the remaining caches stay for the next guard run and the report still
+/// says what was freed.
+// trace:STORY-2351 | ai:claude
+fn floor_reclaim(project_root: &std::path::Path) -> u64 {
+    let deadline = std::time::Instant::now() + FLOOR_RECLAIM_BUDGET;
+    let opts = crate::worktree_reclaim::ReclaimOptions {
+        apply: true,
+        min_age_mins: 60,
+        target_pct: None,
+        include_live: false,
+        include_open_prs: false,
+        json: false,
+        scratch_age_days: crate::scratch_reclaim::DEFAULT_MIN_AGE_DAYS,
+        no_scratch: true,
+    };
+    let Ok(survey) = crate::worktree_reclaim::survey_from_env(project_root, &opts) else {
+        return 0;
+    };
+    let plan = crate::worktree_reclaim::plan(&survey);
+    crate::worktree_reclaim::apply_until(&plan, deadline, |p| std::fs::remove_dir_all(p))
+        .map(|done| done.freed_bytes)
+        .unwrap_or(0)
+}
+
+/// The floor reclaim's wall-clock budget: half the guard child's kill
+/// ceiling, leaving the re-probe, the stuck scan and the report time to run.
+// trace:STORY-2351 | ai:claude
+pub(crate) const FLOOR_RECLAIM_BUDGET: std::time::Duration = std::time::Duration::from_secs(60);
+
+/// A finding the guard's floor reclaim can act on (the project or build-cache
+/// filesystem below the floor; the Cargo slot tmpfs is not reclaimable here).
+// trace:STORY-2351 | ai:claude
+fn is_floor_finding(f: &DoctorFinding) -> bool {
+    f.id == disk_headroom_finding_id("project") || f.id == disk_headroom_finding_id("build-cache")
+}
+
+/// The light report around its expensive, injected halves: the emergency
+/// run, the floor reclaim and the stuck scan (a reclaim dry run: `gh`, the
+/// offline merge scan, a walk of every cache). All run only in the substrate
+/// run (TASK-2264): a manual light check reports free space, the floor breach
 /// and the status block, and stays cheap.
+///
+/// STORY-2351: on a floor breach the substrate run reclaims first and
+/// re-probes, so a breach the reclaim fixes never routes to the advisor, and
+/// one it does not fix routes saying what was already freed.
 // trace:STORY-1916 | ai:claude
+// trace:STORY-2351 | ai:claude
 fn disk_headroom_light_report_finish(
     project_root: &std::path::Path,
     cfg: Option<&toml::Value>,
     scheduled: bool,
     emergency_run: impl FnOnce(),
-    report: impl FnOnce() -> DoctorReport,
+    build_report: impl Fn() -> DoctorReport,
+    floor_reclaim: impl FnOnce() -> u64,
     stuck_scan: impl FnMut(u64, &str) -> (u64, Vec<(std::path::PathBuf, u64)>),
 ) -> DoctorReport {
     if scheduled {
         emergency_run();
     }
-    let mut report = report();
+    let mut report = build_report();
+    if scheduled && report.findings.iter().any(is_floor_finding) {
+        let freed = floor_reclaim();
+        report = report_after_floor_reclaim(build_report(), freed);
+    }
     let min_free_gib = disk_headroom_min_free_gib(cfg);
     if scheduled {
         escalate_stuck_floor(project_root, &mut report.findings, min_free_gib, stuck_scan);
@@ -1809,6 +1866,21 @@ fn disk_headroom_light_report_finish(
         min_free_gib,
         crate::disk_emergency::emergency_config(cfg),
     ));
+    report
+}
+
+/// The re-probed report after the guard's floor reclaim: a floor finding
+/// still standing says how much the guard already freed, so the routed item
+/// does not ask the advisor to repeat the reclaim.
+// trace:STORY-2351 | ai:claude
+fn report_after_floor_reclaim(mut report: DoctorReport, freed: u64) -> DoctorReport {
+    for f in report.findings.iter_mut().filter(|f| is_floor_finding(f)) {
+        f.summary = format!(
+            "{} (the guard already ran `aida worktree reclaim --apply` and freed {})",
+            f.summary,
+            crate::worktree_reclaim::human_bytes(freed)
+        );
+    }
     report
 }
 
