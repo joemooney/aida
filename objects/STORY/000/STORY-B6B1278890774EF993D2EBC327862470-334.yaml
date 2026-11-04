@@ -20,12 +20,12 @@ description: |-
   6. Hermetic tests for submit, run (under a pty), the rc propagation, refusing an unattributed job, and that no /tmp path is read.
   7. Docs: one page, 'Deputies: command vs script', linked from the advisor standing orders' deputy line.
   Architecture-sensitive (operator authority surface): sketch on this spec and advisor signoff before implementation.
-status: Approved
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-03T03:42:51.559496187Z
-modified_at: 2026-11-04T01:13:03.674901260Z
+modified_at: 2026-11-04T01:13:04.830703573Z
 req_type: Story
 tags:
 - area:deputy
@@ -459,6 +459,14 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
+- id: 01a1a41d-e43e-7260-af10-59572417465b
+  author: aida-loop-guard
+  timestamp: 2026-11-04T01:13:04.830698907Z
+  session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: NeedsAttention
 filed_at:
   code_sha: 553f7d5984c6083a9f2b47cfa358ce57c438843b
   branch: main
