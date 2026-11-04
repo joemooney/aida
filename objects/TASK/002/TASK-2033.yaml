@@ -6,12 +6,12 @@ description: |
   only_the_host_lease_makes_a_host_recorded_clone (bug_2169_contained_clone_bwrap_tests.rs) does not assert that fx.main/.git stays denied in both layers while the forged main is in place. Its comment says a lease recording any other cargo_target_dir path grants nothing, but no test covers a genuine-main lease naming a different cargo_target_dir.
 
   Raised in review of PR-2787: https://github.com/joemooney/aida/pull/2787#issuecomment-6304296951
-status: InProgress
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-20T23:41:49.112942354Z
-modified_at: 2026-11-04T06:02:34.993740550Z
+modified_at: 2026-11-04T06:35:14.104203674Z
 req_type: Task
 tags:
 - from-review:PR-2787
@@ -61,6 +61,20 @@ history:
   timestamp: 2026-11-04T06:02:36.233717857Z
   session_id: da1c0d85-1d45-4ce4-a292-5358644f65b9
   changes: []
+- id: 01a1a544-d533-7c40-a892-edb8abd5fc87
+  author: aida-auto-bump
+  timestamp: 2026-11-04T06:35:14.099663865Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1a544-d538-7471-aa91-1c4dec1e6e57
+  timestamp: 2026-11-04T06:35:14.104198982Z
+  agent: aida
+  commit_sha: 640afc1b6621b4b3eeb517c7c921477eea25629c
+  summary: 'Both TASK-2033 acceptance gaps closed: forged-main test now asserts main/.git stays denied (CC layer refuses; os_wrap binds nothing over it; live write probe fails); new test proves a genuine-main lease naming another cargo_target_dir grants nothing in either layer. Test-only; all CI green at head.'
+  review_verdict: approved
 filed_at:
   code_sha: 45025e7234009af5f935bde71591c6f0469de938
   branch: pr-2787
@@ -69,3 +83,7 @@ filed_at:
   aida_build_sha: 6657ffff6d
   vendor: claude
   session: 01a15baf707c
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-04T06:35:14.099658457Z
+  completion_sha: 640afc1b6621b4b3eeb517c7c921477eea25629c
