@@ -21,7 +21,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T06:46:56.104025446Z
-modified_at: 2026-11-04T02:21:52.637959953Z
+modified_at: 2026-11-04T02:27:51.485525495Z
 req_type: Bug
 tags:
 - audit
@@ -282,6 +282,12 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1a462-64c1-7991-bcc9-87a879edcc9b
+  author: joe
+  timestamp: 2026-11-04T02:27:54.177349331Z
+  session_id: 01a1a46074eb
+  harness_version: 2.1.318 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 6dc7d4977ac5e47c42ddfb26597fe3ec5fb70b60
   branch: main
@@ -296,3 +302,11 @@ attention_reason:
   lean: Operator regenerates the golden snapshot; no code change needed
   raised_by: implementer
   raised_at: 2026-11-04T02:21:52.637959953Z
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'Round-4 items 2 and 3 are fixed and tested (CODEX_LANE_NEEDS_GRANT remedy; tick leaves a Codex take/impl Pending, then serve runs it). The BLOCKING item 1 is still open: the help golden was never regenerated, so lib-0 stays red.'
+  recovery_hint: address the review findings, move BUG-2390 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-11-04T02:27:51.485525495Z
