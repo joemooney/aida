@@ -1,5 +1,6 @@
 id: 01a1a421-693c-7af3-a974-1a805f892848
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-755
+agreed_id: TASK-2810
 title: 'Non-blocking (cosmetic): review_watch.rs parks() lists ''a review of an earlier …'
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on BUG-2426, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
@@ -20,6 +21,11 @@ tags:
 - finding-hash:f8b7291a
 - from-review:PR-3305
 - kind:carried-forward
+history:
+- id: 01a1a443-3d64-7041-bb7e-e764e76a889f
+  author: joe
+  timestamp: 2026-11-04T01:53:52.484895110Z
+  changes: []
 filed_at:
   code_sha: 0f1624a8b38d961973328d79d05642add4464fc8
   branch: main
