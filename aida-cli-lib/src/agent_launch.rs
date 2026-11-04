@@ -1080,6 +1080,8 @@ pub(crate) fn agent_new_command_for_type(token: &str) -> Option<AgentNewCommand>
             rotate: false,
             bg: false,
             spec_positional: None,
+            branch: None,
+            base: None,
         }),
         "antigravity" => Some(AgentNewCommand::Antigravity {
             role: None,
@@ -1267,6 +1269,8 @@ pub(crate) fn dispatch_agent_new(cmd: &AgentNewCommand) -> Result<()> {
             grant_inline: _,
             bg: true,
             spec_positional,
+            branch,
+            base,
         } => {
             // trace:STORY-2254 | ai:claude
             let spec = match (spec.clone(), spec_positional.clone()) {
@@ -1299,6 +1303,8 @@ pub(crate) fn dispatch_agent_new(cmd: &AgentNewCommand) -> Result<()> {
                 name: name.clone(),
                 description: description.clone(),
                 no_mail_wake: *no_mail_wake,
+                branch: branch.clone(),
+                base: base.clone(),
             })
         }
         AgentNewCommand::Codex {
@@ -1330,6 +1336,8 @@ pub(crate) fn dispatch_agent_new(cmd: &AgentNewCommand) -> Result<()> {
             grant_inline: _,
             bg: false,
             spec_positional: _,
+            branch: _,
+            base: _,
         } => agent_new_codex_wake(
             role.clone(),
             spec.clone(),
@@ -4461,6 +4469,46 @@ fn prepare_agent_launch_attempt(
     AgentLaunchPlan,
     Option<crate::session_start::SessionStartReceipt>,
 )> {
+    prepare_agent_launch_attempt_on_branch(
+        project_root,
+        role,
+        spec,
+        agent_type,
+        custom_name,
+        explicit_cwd,
+        contained_seat,
+        LaneBranch::default(),
+    )
+}
+
+/// The branch a fresh spec lease's worktree is created on (`agent new codex
+/// --bg --branch/--base`). The default lets session setup derive the branch
+/// and fork it from the project's default branch.
+// trace:BUG-2390 | ai:claude
+#[derive(Debug, Clone, Default)]
+pub(crate) struct LaneBranch {
+    pub branch: Option<String>,
+    pub base: Option<String>,
+}
+
+/// [`prepare_agent_launch_attempt`] with an explicit lane branch/base for a
+/// freshly created lease. A lease that already owns the scope is re-entered
+/// as it is; its branch is not changed.
+// trace:BUG-2390 | ai:claude
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn prepare_agent_launch_attempt_on_branch(
+    project_root: &std::path::Path,
+    role: Option<String>,
+    spec: Option<String>,
+    agent_type: &str,
+    custom_name: Option<String>,
+    explicit_cwd: Option<&std::path::Path>,
+    contained_seat: bool,
+    lane_branch: LaneBranch,
+) -> Result<(
+    AgentLaunchPlan,
+    Option<crate::session_start::SessionStartReceipt>,
+)> {
     let mut guard = crate::agent_handle::LaunchReservationGuard::new(project_root);
     let prepared = prepare_agent_launch_attempt_inner(
         project_root,
@@ -4470,6 +4518,7 @@ fn prepare_agent_launch_attempt(
         custom_name,
         explicit_cwd,
         contained_seat,
+        &lane_branch,
     );
     if prepared.is_ok() {
         guard.disarm();
@@ -4477,7 +4526,31 @@ fn prepare_agent_launch_attempt(
     prepared
 }
 
+/// Refuse to re-enter a spec's existing lease for a launch that named a lane
+/// branch the lease is not on: re-entry keeps the lease's worktree and
+/// branch as they are, so the lane would silently work somewhere else.
+// trace:BUG-2390 | ai:claude
+pub(crate) fn ensure_reentered_lease_on_lane_branch(
+    lease: &crate::leases::SessionLease,
+    lane_branch: &LaneBranch,
+) -> Result<()> {
+    match lane_branch.branch.as_deref() {
+        Some(wanted) if wanted != lease.branch => anyhow::bail!(
+            "refusing to launch on branch `{wanted}`: {} already has a session ({}) in {} on \
+             branch `{}`, and re-entering it keeps that branch. End that session \
+             (`aida session end {}`) or launch without `--branch`.",
+            lease.scope,
+            lease.id,
+            lease.worktree_path.display(),
+            lease.branch,
+            lease.id
+        ),
+        _ => Ok(()),
+    }
+}
+
 // trace:BUG-2188 BUG-2168 | ai:codex
+#[allow(clippy::too_many_arguments)]
 fn prepare_agent_launch_attempt_inner(
     project_root: &std::path::Path,
     role: Option<String>,
@@ -4486,6 +4559,7 @@ fn prepare_agent_launch_attempt_inner(
     custom_name: Option<String>,
     explicit_cwd: Option<&std::path::Path>,
     contained_seat: bool,
+    lane_branch: &LaneBranch,
 ) -> Result<(
     AgentLaunchPlan,
     Option<crate::session_start::SessionStartReceipt>,
@@ -4581,6 +4655,8 @@ fn prepare_agent_launch_attempt_inner(
                 Some(&spec),
                 explicit_cwd,
             )? {
+                // trace:BUG-2390 | ai:claude
+                ensure_reentered_lease_on_lane_branch(&lease, lane_branch)?;
                 let plan_role = lease.role.clone().or(role);
                 let name = agent_registry::generate_or_validate_name(
                     project_root,
@@ -4626,8 +4702,9 @@ fn prepare_agent_launch_attempt_inner(
             let start_result = crate::gate::review_authority::as_launcher(|| {
                 crate::session_start::session_start_with_receipt(
                     &spec,
-                    /* branch */ None,
-                    /* base */ None,
+                    // trace:BUG-2390 | ai:claude
+                    lane_branch.branch.as_deref(),
+                    lane_branch.base.as_deref(),
                     /* reuse_branch */ false,
                     /* explicit_path */
                     requested_path.as_deref(),
@@ -4686,6 +4763,10 @@ fn prepare_agent_launch_attempt_inner(
                 .into_iter()
                 .find(|lease| lease.id == lease_id)
                 .context("session setup receipt's exact lease is no longer visible")?;
+            if !receipt.owns_setup() {
+                // trace:BUG-2390 | ai:claude
+                ensure_reentered_lease_on_lane_branch(&lease, lane_branch)?;
+            }
             let plan_role = lease.role.clone().or(role.clone());
             let name = prepared_name;
             let lease_id = Some(lease.id.clone());
@@ -7386,14 +7467,20 @@ pub(crate) static SESSION: crate::command_registry::CommandReg =
 
 // The read-only verbs stay open to guest stakeholders; every other verb is
 // gated as Session. An unparseable invocation is not treated as a read.
+// `session leases --prune-stale` is not a read: it releases stale leases,
+// including other clones' claims, so it takes the Session gate too.
 // trace:STORY-1728 | ai:claude
+// trace:TASK-1939 | ai:claude
 fn session_cli_policy(matches: &clap::ArgMatches) -> crate::command_registry::CmdPolicy {
     use crate::cli::SessionCommand;
     use crate::stakeholder_role::StakeholderAction;
     let read = <SessionArgs as clap::FromArgMatches>::from_arg_matches(matches).is_ok_and(|args| {
         matches!(
             args.inner,
-            SessionCommand::Leases { .. } | SessionCommand::Show { .. }
+            SessionCommand::Leases {
+                prune_stale: false,
+                ..
+            } | SessionCommand::Show { .. }
         )
     });
     crate::command_registry::CmdPolicy {

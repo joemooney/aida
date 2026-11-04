@@ -47,7 +47,47 @@ fn request(spec: Option<&str>, role: Option<&str>) -> CodexBgRequest {
         name: None,
         description: None,
         no_mail_wake: false,
+        branch: None,
+        base: None,
     }
+}
+
+/// BUG-2390: dispatch take/impl hand the lane branch to `--bg` through
+/// `--branch`/`--base`; both are `--bg`-only.
+// trace:BUG-2390 | ai:claude
+#[test]
+fn bug_2390_bg_accepts_branch_and_base() {
+    let branch_base = |args: &[&str]| {
+        let mut argv = vec!["aida", "agent", "new", "codex"];
+        argv.extend(args);
+        match parse(&argv).ok()? {
+            AgentCommand::New {
+                command:
+                    Some(AgentNewCommand::Codex {
+                        branch, base, bg, ..
+                    }),
+                ..
+            } => Some((branch, base, bg)),
+            _ => None,
+        }
+    };
+    assert_eq!(
+        branch_base(&[
+            "--role",
+            "implementer",
+            "--bg",
+            "TASK-12",
+            "--branch",
+            "feat/x",
+            "--base",
+            "origin/main"
+        ]),
+        Some((Some("feat/x".into()), Some("origin/main".into()), true))
+    );
+    assert_eq!(branch_base(&["--bg", "TASK-12"]), Some((None, None, true)));
+    // Without --bg the lane flags refuse at parse time.
+    assert!(branch_base(&["--spec", "TASK-12", "--branch", "feat/x"]).is_none());
+    assert!(branch_base(&["--spec", "TASK-12", "--base", "origin/main"]).is_none());
 }
 
 // trace:STORY-2254 | ai:claude

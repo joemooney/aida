@@ -318,6 +318,40 @@ pub(crate) fn settle_outcome(
 
 pub(crate) use crate::headless_background::{resume_log_path, SeatState, Unshipped};
 
+/// BUG-2436: whether a finished lane's lease is ended by its launcher: the
+/// run settled as `pr-opened`, the seat's tree is clean, and `origin` is at
+/// its `HEAD`. Nothing is left in the seat, and a live lease would only make
+/// the review watcher refuse the PR as owned by a live author. A punt, a
+/// hold, a stall, or a seat git cannot read keeps its lease.
+// trace:BUG-2436 | ai:claude
+pub(crate) fn finished_lease_ends(outcome: &Outcome, seat: &SeatState) -> bool {
+    matches!(outcome, Outcome::PrOpened { .. })
+        && seat.uncommitted == Some(0)
+        && seat.pushed_head().is_some()
+}
+
+/// BUG-2436: end a finished lane's lease the way the drain's phase 2 does,
+/// `aida session end <lease> --yes --skip-ci` from the main checkout, which
+/// releases the lease, returns the tree, and queues the PR's review. Best
+/// effort: a refusal (the seat changed since it was read, say) keeps the
+/// lease and is reported as a warning, and the run's result stands.
+// trace:BUG-2436 | ai:claude
+pub(crate) fn end_finished_lease(project_root: &Path, lease_id: &str) -> Result<()> {
+    use crate::process_retry::RetryEtxtbsy;
+    let main = crate::main_worktree_root_from(project_root);
+    let status = std::process::Command::new(crate::kernel::aida_exe_path())
+        .current_dir(&main)
+        .args(["session", "end", lease_id, "--yes", "--skip-ci"])
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .status_retrying_etxtbsy()
+        .with_context(|| format!("could not run `aida session end {lease_id}`"))?;
+    if !status.success() {
+        anyhow::bail!("`aida session end {lease_id} --yes --skip-ci` exited {status}");
+    }
+    Ok(())
+}
+
 /// The lease's worktree, or `project_root` when the lease cannot be read.
 fn lease_worktree(project_root: &Path, lease_id: &str) -> PathBuf {
     crate::list_leases(project_root)
@@ -756,6 +790,20 @@ pub(crate) fn run(launch: Launch<'_>) -> Result<()> {
     let seat = bg::SeatState::read(&worktree, launch.branch);
     let (outcome, unshipped) = settle_outcome(outcome, &launch_seat, &seat);
     let (line, code) = report(&outcome, status.code(), unshipped.as_ref());
+    // BUG-2436: end the finished lane's lease before the result line goes
+    // out, so whoever reads it can launch the review at once.
+    // trace:BUG-2436 | ai:claude
+    if finished_lease_ends(&outcome, &seat) {
+        if let Err(e) = end_finished_lease(launch.project_root, launch.lease_id) {
+            eprintln!(
+                "{} the PR is open but lease {} was kept: {e:#}. End it with \
+                 `aida session end {} --yes --skip-ci` so its review can start.",
+                "Warning:".yellow().bold(),
+                launch.lease_id,
+                launch.lease_id
+            );
+        }
+    }
     println!("{}", with_untested(line, &outcome, untested));
     if code == 0 {
         return Ok(());
@@ -886,3 +934,7 @@ fn lookup_pr_with(
 #[cfg(test)]
 #[path = "tests/story_1662_standalone_implementer_tests.rs"]
 mod story_1662_standalone_implementer_tests;
+
+#[cfg(test)]
+#[path = "tests/bug_2436_finished_lane_lease_tests.rs"]
+mod bug_2436_finished_lane_lease_tests;

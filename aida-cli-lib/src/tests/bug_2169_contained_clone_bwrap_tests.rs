@@ -826,6 +826,38 @@ mod linux {
             .contains(&elsewhere),
             "os_wrap binds nothing from the forged lease"
         );
+        // TASK-2033: while the forged main is in place, the real main's `.git`
+        // stays denied in both layers. The Claude Code layer refused above, so
+        // it grants nothing at all; os_wrap binds no path that is, holds or
+        // sits inside main's `.git`, and a live write probe there fails.
+        // trace:TASK-2033 | ai:claude
+        let main_git = fx.main.join(".git");
+        assert!(
+            crate::contained_boundary::contained_main_checkout_git_deny_paths(&[fx.main.clone()])
+                .contains(&main_git),
+            "main's .git is still a denied main checkout"
+        );
+        let rw = crate::session::os_wrap_rw_paths(&clone).unwrap_or_default();
+        assert!(
+            !rw.iter()
+                .any(|p| main_git.starts_with(p) || p.starts_with(&main_git)),
+            "os_wrap binds nothing over main's .git under a forged main: {rw:?}"
+        );
+        if bwrap_live() {
+            let ran = run_in(
+                &os_wrap_argv(&fx.main, &clone),
+                r#"touch "$MAIN/.git/FORGED" && echo WROTE
+echo '[core]' >> "$MAIN/.git/config" && echo CONFIG
+true"#,
+                &[("MAIN", &fx.main)],
+            );
+            assert!(
+                !ran.out.contains("WROTE") && !ran.out.contains("CONFIG"),
+                "os_wrap: {}",
+                ran.out
+            );
+            assert!(!main_git.join("FORGED").exists());
+        }
         std::fs::write(&marker_path, &marker).unwrap();
         std::fs::write(&alternates, real_alternates).unwrap();
         assert!(crate::seat_clone::host_recorded_clone(&fx.main, &clone).is_some());
@@ -848,6 +880,114 @@ mod linux {
         assert!(
             !entries(&settings, "allowWrite").contains(&elsewhere),
             "{settings}"
+        );
+    }
+
+    /// TASK-2033: the genuine main's own `clone` lease, edited to record a
+    /// `cargo_target_dir` other than `<main>/target/worktrees/<clone dir>`,
+    /// grants nothing in either layer: not a directory outside main, not a
+    /// sibling seat's target dir, and the seat's real target dir is dropped
+    /// too, since the lease no longer names it.
+    // trace:TASK-2033 | ai:claude
+    #[test]
+    fn a_genuine_main_lease_naming_another_cargo_target_dir_grants_nothing() {
+        let fx = fixture();
+        let clone = launch_clone_seat(&fx);
+        let recorded = crate::seat_clone::host_recorded_clone(&clone).expect("real clone");
+        let real_target = recorded.cargo_target_dir.clone().expect("target dir");
+        let lease = crate::list_leases(&fx.main)
+            .into_iter()
+            .find(|l| l.scope == "TASK-2169")
+            .expect("clone lease");
+        let lease_file = crate::lease_path(&fx.main, &lease.id);
+        let original = std::fs::read_to_string(&lease_file).unwrap();
+        assert!(
+            original
+                .lines()
+                .any(|l| l.trim_start().starts_with("cargo_target_dir")),
+            "{original}"
+        );
+
+        let outside = fx
+            .root
+            .join("elsewhere/worktrees")
+            .join(clone.file_name().unwrap());
+        let sibling = fx.main.join("target/worktrees/aida-seat-sibling");
+        for other in [&outside, &sibling] {
+            std::fs::create_dir_all(other).unwrap();
+            let edited: String = original
+                .lines()
+                .map(|l| {
+                    if l.trim_start().starts_with("cargo_target_dir") {
+                        format!(
+                            "cargo_target_dir = {}",
+                            aida_core::toml_quote::toml_string(&other.display().to_string())
+                        )
+                    } else {
+                        l.to_string()
+                    }
+                })
+                .collect::<Vec<_>>()
+                .join("\n")
+                + "\n";
+            std::fs::write(&lease_file, edited).unwrap();
+            assert_eq!(
+                crate::list_leases(&fx.main)
+                    .into_iter()
+                    .find(|l| l.id == lease.id)
+                    .and_then(|l| l.cargo_target_dir)
+                    .as_ref(),
+                Some(other),
+                "the edited lease is read back"
+            );
+
+            let recorded = crate::seat_clone::host_recorded_clone(&clone)
+                .expect("the genuine lease still records the clone");
+            assert_eq!(recorded.main, fx.main);
+            assert_eq!(
+                recorded.cargo_target_dir,
+                None,
+                "a lease naming {} grants no target dir",
+                other.display()
+            );
+
+            let settings = settings_for(&fx.main, &clone);
+            let allow = entries(&settings, "allowWrite");
+            for path in [other, &real_target] {
+                assert!(!allow.contains(path), "{}: {settings}", path.display());
+            }
+            assert!(
+                settings["env"].get("CARGO_TARGET_DIR").is_none(),
+                "{settings}"
+            );
+            let rw = crate::session::os_wrap_rw_paths(&clone).unwrap();
+            for path in [other, &real_target] {
+                assert!(
+                    !rw.iter().any(|p| path.starts_with(p)),
+                    "os_wrap binds {}: {rw:?}",
+                    path.display()
+                );
+            }
+
+            if bwrap_live() {
+                for (layer, argv) in clone_layers(&fx, &clone) {
+                    let ran = run_in(
+                        &argv,
+                        r#"touch "$OTHER/PROBE" && echo WROTE
+true"#,
+                        &[("OTHER", other.as_path())],
+                    );
+                    assert!(!ran.out.contains("WROTE"), "{layer}: {}", ran.out);
+                    assert!(!other.join("PROBE").exists(), "{layer}");
+                }
+            }
+        }
+
+        std::fs::write(&lease_file, original).unwrap();
+        assert_eq!(
+            crate::seat_clone::host_recorded_clone(&clone).and_then(|c| c.cargo_target_dir),
+            Some(real_target),
+            "restoring the lease restores the grant"
         );
     }
 
