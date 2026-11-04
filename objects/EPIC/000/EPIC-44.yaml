@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-14T21:58:18.737322494Z
-modified_at: 2026-10-13T02:44:34.823654445Z
+modified_at: 2026-11-04T02:31:53.598013045Z
 req_type: Epic
 tags:
 - canonical-hub
@@ -51,6 +51,9 @@ comments:
   created_at: 2026-10-13T02:44:34.823654445Z
   modified_at: 2026-10-13T02:44:34.823654445Z
   session_id: 6fd5497b-0c27-4e83-9725-0bf46198f394
-deferred: true
-deferred_at: 2026-09-07T02:14:33.922660586Z
-deferred_until: EPIC-35 GitLab MR-drain parity ships (PR lifecycle wired through the forge trait) — at that point gitlab-canonical becomes a config flip instead of a migration project
+history:
+- id: 01a1a466-0c8f-7e40-8118-12306c304a8c
+  author: joe
+  timestamp: 2026-11-04T02:31:53.743801072Z
+  session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
+  changes: []
