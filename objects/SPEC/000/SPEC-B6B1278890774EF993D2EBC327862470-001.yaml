@@ -20,7 +20,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T07:26:01.071265913Z
-modified_at: 2026-11-03T20:14:25.463330838Z
+modified_at: 2026-11-04T01:21:28.434694675Z
 req_type: Task
 tags:
 - architecture
@@ -694,6 +694,12 @@ comments:
   modified_at: 2026-11-03T20:14:25.463330838Z
   session_id: 01a1a2f94ef4
   harness_version: 2.1.317 (Claude Code)
+- id: 01a1a425-9372-7fb0-a280-cca8e0855a6c
+  author: joe
+  content: 'ADVISOR RULING (2026-11-03 18:32 MST) on the open question: narrow the gate-ledger grant to the reviewer role. Its only stated purpose is a reviewer''s merge hold, and an implementer has no reason to write verdict/hold events. Apply it in contained_write_set() for both vendors (if Claude implementers get it today, that is drift to remove in the same change) and add a test that an implementer''s Codex flags carry no gate-ledger --add-dir. Advisor opened the PR as a draft from the host and is running the N3 host probe now; results will be posted here.'
+  created_at: 2026-11-04T01:21:28.434694675Z
+  modified_at: 2026-11-04T01:21:28.434694675Z
+  session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
 history:
 - id: 01a1960f-6ca8-7313-8a94-63b0b98a4e44
   author: joe
