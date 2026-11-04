@@ -1,9 +1,8 @@
 - user_id: role:implementer
   requirement_id: 01a19600-3f6f-7672-b6b2-6611ff226175
-  position: 176000
+  position: 175000
   added_by: role:implementer
-  note: merge conflict
-  added_at: 2026-11-04T11:53:31.791091359Z
+  added_at: 2026-11-04T12:47:18.860187024Z
   for_role: implementer
 - user_id: role:implementer
   requirement_id: 01a1a421-9f7b-7781-aa9c-40d608365d38
