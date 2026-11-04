@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-203
 agreed_id: BUG-2434
 title: 'Headless implementer lanes run untested by default: the lane job runner requires [contained] os_wrap, which defaults off, so every lane result is untested=true'
 description: 'Observed 2026-11-03: lanes for STORY-2338 and STORY-2326 committed fixes and then could not compile (''lease names no lane job runner''; cargo capped at 60s per call). The STORY-2338 fix failed cargo check on the host (E0063) and was never pushed. Lane logs warn: ''the lane job runner needs [contained] os_wrap (jobs run only inside bubblewrap), so the implementer cannot run tests and its result says untested=true''. The warning is buried in a lane log, and nothing surfaces it to the advisor or operator. Fix options: (a) when bwrap is live on the host (doctor already probes it), the launcher sets os_wrap for implementer lanes, or the job runner runs unwrapped jobs under the launcher''s own containment; (b) at minimum, aida doctor and the advisor sweep flag it. Trial: the advisor launched STORY-2338 with AIDA_OS_WRAP=1 at 18:33 to test whether jobs then run.'
-status: NeedsAttention
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T01:35:35.019044810Z
-modified_at: 2026-11-04T06:15:01.413964300Z
+modified_at: 2026-11-04T07:10:23.787646996Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -28,6 +28,12 @@ comments:
   content: 'ADVISOR REWORK BRIEF (2026-11-03 23:16 MST, PR #3347 head 31ed7ef6). Review requested changes. (1) BLOCKING: the new process-global AIDA_OS_WRAP=1 default turns 11 tests red in lib-0/cli-0 (main is green at the base) and leaks past the implementer lane. Scope the default to the implementer lane''s own launch (set it on that child''s env or LaunchContext, never process-global), and leave tests and other roles unchanged. (2) Add the advisor-visible untested signal the spec comment asks for: a lane result line or lease field that marks a lane which ran without os_wrap. Rule each non-blocking finding in this push: fix it or say why not, in one line on this spec. Gate (LIGHT): one targeted cargo test filter covering the changed module, plus make check-ci-fast, then push to the same PR branch. The advisor re-reviews only the delta.'
   created_at: 2026-11-04T06:15:01.413964300Z
   modified_at: 2026-11-04T06:15:01.413964300Z
+  session_id: da1c0d85-1d45-4ce4-a292-5358644f65b9
+- id: 01a1a565-062b-76f1-8afc-279d038a4ac6
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: CI red (11 tests in lib-0/cli-0, main green at base) caused by the new process-global AIDA_OS_WRAP=1 default; the default also leaks past the implementer lane; the advisor-visible untested signal the spec comment asks for is missing.. Triage reason: advisor rework brief on spec; review findings to address'
+  created_at: 2026-11-04T07:10:23.787645447Z
+  modified_at: 2026-11-04T07:10:23.787645447Z
   session_id: da1c0d85-1d45-4ce4-a292-5358644f65b9
 history:
 - id: 01a1a4a6-15af-71f0-83e7-4c9b920f9b03
@@ -68,6 +74,14 @@ history:
   - field_name: status
     old_value: Done
     new_value: NeedsAttention
+- id: 01a1a565-062b-76f1-8afc-2785f106a8fc
+  author: joe
+  timestamp: 2026-11-04T07:10:23.787627025Z
+  session_id: da1c0d85-1d45-4ce4-a292-5358644f65b9
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: 0f1624a8b38d961973328d79d05642add4464fc8
   branch: main
@@ -80,11 +94,3 @@ implementation_info:
   implemented: true
   implemented_at: 2026-11-04T05:49:35.998674193Z
   implemented_by: joe
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: CI red (11 tests in lib-0/cli-0, main green at base) caused by the new process-global AIDA_OS_WRAP=1 default; the default also leaks past the implementer lane; the advisor-visible untested signal the spec comment asks for is missing.
-  recovery_hint: address the review findings, move BUG-2434 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-04T06:02:59.086165921Z
