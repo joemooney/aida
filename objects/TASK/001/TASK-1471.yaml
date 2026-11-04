@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-09-24T04:25:12.035374412Z
-modified_at: 2026-11-04T17:12:36.025002400Z
+modified_at: 2026-11-04T17:12:37.792977103Z
 req_type: Task
 relationships:
 - rel_type:
@@ -40,6 +40,21 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Section logic and unit tests are sound, but the reverse-link scan is gated on the cached in_degree, which a single-row write does not refresh, so a Doc just filed with ''aida doc add --about'' is hidden until a full cache rebuild. The run_show wiring also has no test.. No triage reason was given.'
   created_at: 2026-11-04T17:12:36.024989404Z
   modified_at: 2026-11-04T17:12:36.024989404Z
+  session_id: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
+- id: 01a1a78c-6224-73d1-acce-cbe65bbdc473
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (TASK-1471):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 4b0807520f13
+    Recorded: 2026-11-04T16:50:04.422403551+00:00
+    Findings:
+    1. aida-cli-lib/src/requirements_cli.rs:7447 gates the reverse (Doc -> spec) scan on 'degrees.in_degree > 0'. in_degree is a cache projection that single-row writes do not refresh: upsert_requirement_on (aida-core/src/db/cache.rs:3626-3645) keeps the target's prior in_degree, and 'aida doc add --about' (doc_cmd.rs:121-134) goes through update_requirement/upsert. Incremental pulls use the same upsert path. Repro: a spec with no inbound edges, then 'aida doc add --about SPEC', then 'aida show SPEC' shows no Documentation section until 'aida cache rebuild'. This is the main use case for AC1/AC4. Fix: drop the gate (the store has 7 Docs, so a typed list_summaries scan is cheap) or query reverse References edges directly. Do not rely on cached degree counts.
+    2. AC7 coverage is unit-level only (show_docs.rs tests feed collect_linked_docs hand-built candidates). No test drives run_show / 'aida show' end to end. Nothing proves (a) a reverse-linked Doc shows up in the human view right after 'aida doc add --about' without a cache rebuild, which would have caught finding 1, or (b) the JSON/TOON output is byte-unchanged when Docs are linked (AC5 is shown only by reading the code). Add a CLI-level test for direct and reverse links that covers both.
+    3. Minor: requirements_cli.rs:7440,7452-7455 swallow errors ('if let Ok(Some(..))' and 'list_summaries(..).unwrap_or_default()'). A cache or read failure then looks exactly like 'no linked Docs' and the section silently disappears. Print a dimmed warning or propagate the error, like the Relations block does with read_target(..)?.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-04T17:12:37.668564704Z
+  modified_at: 2026-11-04T17:12:37.668564704Z
   session_id: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
 history:
 - id: 01a1a438-4c50-72d0-87d7-ecde2738cbc4
