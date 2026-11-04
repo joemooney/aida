@@ -6607,6 +6607,40 @@ fn hooks_dir_outside_git_dir(repo: &Path, hooks: &Path) -> Option<PathBuf> {
     (!hooks.starts_with(&git_dir)).then_some(git_dir)
 }
 
+/// Write `content` to `path` as an AIDA hook the way the stale-hook refresh
+/// does: stage it beside `path` with `create_new` (never a bare write),
+/// flush it to disk, set 0755 and rename it over `path`, so git never runs
+/// a partial or non-executable hook. A staged file is removed on failure.
+// trace:TASK-1954 | ai:claude  trace:TASK-1760 | ai:claude
+pub fn write_hook_file(path: &Path, content: &[u8]) -> std::io::Result<()> {
+    use std::io::Write;
+    let dir = path.parent().unwrap_or_else(|| Path::new("."));
+    let name = path
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_else(|| "hook".into());
+    let stamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_nanos())
+        .unwrap_or(0);
+    let tmp = dir.join(format!(".{name}.aida-write-{stamp}-{}", std::process::id()));
+    let mut file = std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&tmp)?;
+    let staged = (|| {
+        file.write_all(content)?;
+        file.sync_all()?;
+        drop(file);
+        set_hook_mode(&tmp)?;
+        std::fs::rename(&tmp, path)
+    })();
+    if staged.is_err() {
+        let _ = std::fs::remove_file(&tmp);
+    }
+    staged
+}
+
 /// Set the mode every AIDA-written git hook gets: 0755, explicitly, not the
 /// mode the file happened to have nor what the umask leaves. Git silently
 /// skips a hook without an executable bit. No-op off Unix.
@@ -6796,7 +6830,7 @@ pub fn refresh_stale_aida_hooks(repo: &Path, dry_run: bool) -> Result<StaleHookR
             };
             match (template, &backup) {
                 (Some(template), Some(backup)) => {
-                    backup_and_replace_hook(&dir, name, &path, backup, template, stamp)
+                    backup_and_replace_hook(name, &path, backup, template)
                         .with_context(|| format!("refreshing the `{name}` hook{already}"))?
                 }
                 _ => set_hook_mode(&path).with_context(|| {
@@ -6820,14 +6854,7 @@ pub fn refresh_stale_aida_hooks(repo: &Path, dry_run: bool) -> Result<StaleHookR
 /// Copy `path` to `backup` (refusing to overwrite one), then write this
 /// build's hook beside it, flush it, set 0755 and rename it over `path`:
 /// git never sees a partial or non-executable hook.
-fn backup_and_replace_hook(
-    dir: &Path,
-    name: &str,
-    path: &Path,
-    backup: &Path,
-    template: &str,
-    stamp: u64,
-) -> Result<()> {
+fn backup_and_replace_hook(name: &str, path: &Path, backup: &Path, template: &str) -> Result<()> {
     let original = std::fs::read(path)?;
     {
         use std::io::Write;
@@ -6843,33 +6870,11 @@ fn backup_and_replace_hook(
         Path::new(&format!(".git/hooks/{name}")),
         template,
     );
-    // Staged with create_new (not a bare write: TASK-331's guard) and
-    // renamed over the hook.
-    let tmp = dir.join(format!(
-        ".{name}.aida-refresh-{stamp}-{}",
-        std::process::id()
-    ));
-    let mut file = std::fs::OpenOptions::new()
-        .write(true)
-        .create_new(true)
-        .open(&tmp)
-        .with_context(|| format!("staging {}", tmp.display()))?;
-    // Only a temp file this run created is cleaned up on failure.
+    // Staged with create_new (not a bare write: TASK-331's guard), fsynced
+    // and renamed over the hook; a staged file is cleaned up on failure.
     // trace:BUG-2003 trace:BUG-2009 | ai:claude
-    let staged = (|| {
-        use std::io::Write;
-        file.write_all(fresh.as_bytes())?;
-        file.sync_all()?;
-        drop(file);
-        set_hook_mode(&tmp)?;
-        std::fs::rename(&tmp, path)
-    })();
-    staged
-        .map_err(|e| {
-            let _ = std::fs::remove_file(&tmp);
-            e
-        })
-        .with_context(|| format!("replacing {}", path.display()))
+    // trace:TASK-1954 | ai:claude  trace:TASK-1760 | ai:claude
+    write_hook_file(path, fresh.as_bytes()).with_context(|| format!("replacing {}", path.display()))
 }
 
 /// What [`remove_shipped_aida_hooks`] removed, or would remove in a dry

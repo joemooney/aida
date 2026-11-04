@@ -1821,14 +1821,14 @@ fn complete_init_scaffolding(
         if let Some(parent) = full_path.parent() {
             std::fs::create_dir_all(parent)?;
         }
-        std::fs::write(&full_path, &artifact.content)?;
         // Hooks (and any executable shell-style scripts) need the exec
         // bit; without it git silently ignores commit-msg hooks and the
         // user gets a confusing "hook was ignored" warning on every
         // commit. trace:BUG-21 | ai:claude
         // trace:BUG-2009 | ai:claude
-        ensure_executable_if_hook(&artifact.path, &full_path)
-            .with_context(|| format!("making {} executable", full_path.display()))?;
+        // trace:TASK-1954 | ai:claude  trace:TASK-1760 | ai:claude
+        write_scaffold_artifact(&artifact.path, &full_path, &artifact.content)
+            .with_context(|| format!("writing {}", full_path.display()))?;
 
         if exists {
             updated_count += 1;
