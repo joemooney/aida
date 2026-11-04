@@ -1,0 +1,29 @@
+id: 01a1a82b-d518-7a42-bf62-ed3839f5e173
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-790
+title: 'minor: aliases() runs on the coverage-filtered list (pr_train_verified.rs:315).…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on BUG-2441, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  minor: aliases() runs on the coverage-filtered list (pr_train_verified.rs:315). If every resolved id is filtered out as uncovered (lease scope names the branch spec, title Refs another spec), the new ensure! at :559 refuses with 'train source has no resolvable spec', which is misleading because the specs resolve but are uncovered. That is the #3351 shape whenever a lease still scopes the original spec. Refusing is fail-closed, but the message should name the coverage filter.
+
+  PR: #3380
+  Reviewed sha: 0a67263e20851050e44973fe7ea37087654ee995
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-04T20:06:47.320329908Z
+modified_at: 2026-11-04T20:06:47.320329908Z
+req_type: Task
+tags:
+- carried-from:BUG-2441
+- finding-hash:c41b81a8
+- from-review:PR-3380
+- kind:carried-forward
+filed_at:
+  code_sha: 83ce565277a264e7468fc8b2e08e75dedc095284
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 1c51f44695c
+  vendor: claude
