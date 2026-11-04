@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-03T02:44:16.945490220Z
-modified_at: 2026-11-04T01:38:12.069034048Z
+modified_at: 2026-11-04T01:55:52.222208736Z
 req_type: Story
 tags:
 - from:SPIKE-708
@@ -103,6 +103,13 @@ comments:
   created_at: 2026-11-04T01:20:18.333056750Z
   modified_at: 2026-11-04T01:20:18.333056750Z
   session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
+- id: 01a1a445-111e-7760-a4e4-9f2b99ce03ce
+  author: joe
+  content: 'PR-3308 round 3 (dbe76c92880): reproduced the BUG-1796 fixture against the built binary, umask 022, on a branch updated from main (merged 0f1624a8b38). The CI contracts failure at 35768f7c was NOT a byte mismatch. The change at init_cmd.rs:4722 (ensure_store_tracked_runtime_gitignore + add .gitignore in handle_init_distributed_worktree) makes init commit a store .gitignore that ignores .aida/node.toml, .aida/store-write.lock and registry/blocks.lock (observed with ''git status --ignored'' right after init). So the fixture''s ''git -C .aida-store add -A'' stages nothing, and the plain ''git commit -m test: initialize store'' exits 1 (''nothing to commit, working tree clean'') under set -e before ''aida pull'' runs. Why main differs: on main those three per-clone files are untracked after init, the fixture''s add -A commits them, the pull''s own lock writes dirty them again, and pull_store_leg_locked (store_push_pull.rs:2453) commits them and prints ''Committed pending orphan changes before pull''. The main-side mechanism is inferred from code plus the observed ignore set; the PR side was observed. Fix: the fixture commits only when something is staged (git diff --cached --quiet ||). With that change the fixture passes and the observed pull output equals the expected bytes byte-for-byte (no Committed-pending line). The cmp check is unchanged. Gate: I could not run make check-ci-fast (about 90s) inside this lane''s 60s tool-call cap, so untested=true for that gate; the fixture itself was executed.'
+  created_at: 2026-11-04T01:55:52.222208736Z
+  modified_at: 2026-11-04T01:55:52.222208736Z
+  session_id: 01a1a434d272
+  harness_version: 2.1.318 (Claude Code)
 history:
 - id: 01a19f4b-61ed-7310-b584-0af8f83cd6a1
   author: joe
