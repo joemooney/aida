@@ -50,11 +50,12 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T20:12:52.425752547Z
-modified_at: 2026-11-04T02:44:36.408617821Z
+modified_at: 2026-11-04T02:44:39.645629242Z
 req_type: Story
 tags:
 - from:aida-host
 - groom:split
+- operator-held
 - regenerability
 relationships:
 - rel_type: Child
@@ -121,6 +122,15 @@ history:
   - field_name: status
     old_value: Rejected
     new_value: Draft
+- id: 01a1a471-bd34-7672-9bce-ed6a09aefc48
+  author: joe
+  timestamp: 2026-11-04T02:44:39.860638447Z
+  session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
+  changes: []
+deferred: true
+deferred_at: 2026-11-04T02:44:39.645629242Z
+deferred_until: the operator reopens the regeneration / north-star research line
+deferred_reason: 'OPERATOR RULING 2026-11-03 19:36 MST: the regeneration / north-star research line stays deferred (revised from reject).'
 filed_at:
   code_sha: 18428db14cad4164704357aa5006bb5482039c62
   branch: main
