@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T04:41:19.994753856Z
-modified_at: 2026-11-04T08:20:45.658868724Z
+modified_at: 2026-11-04T08:36:08.397418100Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -52,6 +52,12 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-04T07:11:05.055133106Z
   modified_at: 2026-11-04T07:11:05.055133106Z
+  session_id: da1c0d85-1d45-4ce4-a292-5358644f65b9
+- id: 01a1a5b3-864d-7443-ac64-c221966440ae
+  author: joe
+  content: 'ADVISOR REWORK BRIEF (2026-11-04 01:38 MST, PR #3349 head f5209209). Review: the portability fix is correct. BLOCKING: CI (rest) fails the ''Test time budget'' gate because the new self-binary test SHA-256-hashes the whole debug aida-core test binary under the 10 s touched-test limit. Make the marker check cheap: scan the binary for the marker with a bounded or streaming search that stops at the first match, or test the classifier against a small generated fixture file carrying the marker, keeping one current_exe smoke check that only reads a bounded prefix or uses the existing fast path. The test must finish well under 10 s in a debug build. Gate (LIGHT): one targeted cargo test filter plus make check-ci-fast, then push to the same PR branch. The advisor re-reviews only the delta.'
+  created_at: 2026-11-04T08:36:08.397418100Z
+  modified_at: 2026-11-04T08:36:08.397418100Z
   session_id: da1c0d85-1d45-4ce4-a292-5358644f65b9
 history:
 - id: 01a1a4ee-5eab-7123-a18a-eaae4aecb215
