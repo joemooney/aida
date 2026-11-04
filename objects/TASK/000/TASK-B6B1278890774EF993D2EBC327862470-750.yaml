@@ -7,12 +7,12 @@ description: |-
 
   [minor, non-blocking] maintenance_schedule.rs:2120-2142 mandate_renewal_job is synthetic (not in the registry); render_due_jobs_block tells seats to report each job with 'aida schedule done <job>', but done_as (maintenance_schedule.rs:1595) bails 'no scheduled job named mandate-renewal'. Either exempt it from that instruction or accept it in done_as.
   Reviewed sha: 9d8dddad6598a23e7fb84965bb227da8d2d27125
-status: InProgress
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-03T20:04:11.862400344Z
-modified_at: 2026-11-04T03:36:53.149401883Z
+modified_at: 2026-11-04T04:13:29.078298437Z
 req_type: Task
 tags:
 - carried-from:STORY-2346
@@ -63,6 +63,20 @@ history:
   timestamp: 2026-11-04T03:36:54.630133637Z
   session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
   changes: []
+- id: 01a1a4c3-0e4c-75b0-a3e3-bbef90b2bd5d
+  author: aida-auto-bump
+  timestamp: 2026-11-04T04:13:29.036130767Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1a4c3-0e76-73f3-a590-9cd51ad0b7d2
+  timestamp: 2026-11-04T04:13:29.078293879Z
+  agent: aida
+  commit_sha: b59a10992f355e141ac661815d70aa51af382041
+  summary: done_as accepts the synthetic mandate-renewal job as a no-op acknowledgement (no ledger write) before the registry lookup; the name is shared via the MANDATE_RENEWAL_JOB const; the new test covers advisor/headless/no-seat callers, no ledger written, and an unknown job still refused; all PR CI green at be52a0b.
+  review_verdict: approved
 filed_at:
   code_sha: b8f4eaa715bee567834972cffbc3bed2cdb71dc6
   branch: main
@@ -70,3 +84,7 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: da17908306f
   vendor: claude
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-04T04:13:29.036124062Z
+  completion_sha: b59a10992f355e141ac661815d70aa51af382041
