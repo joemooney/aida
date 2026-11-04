@@ -14,7 +14,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T01:17:09.371397785Z
-modified_at: 2026-11-04T08:42:19.941557494Z
+modified_at: 2026-11-04T08:53:42.273157535Z
 req_type: Task
 tags:
 - carried-from:BUG-2428
@@ -70,6 +70,18 @@ comments:
   created_at: 2026-11-04T07:11:29.486708891Z
   modified_at: 2026-11-04T07:11:29.486708891Z
   session_id: da1c0d85-1d45-4ce4-a292-5358644f65b9
+- id: 01a1a5c3-9b01-7e22-abb0-7dcb6153314c
+  author: joe
+  content: |-
+    Rework on PR #3343 (advisor brief 2026-11-04), one line per finding:
+    1 (major, TASK-1337 test) FIXED: kept the rollback for a guided exec failure on an owned setup. Rewrote the test as task_1337_post_setup_launch_error_rolls_back_the_owned_setup: it asserts the 'no agent was launched: rolled back' line, no lease and no worktree, all through 'aida queue work'. The manual continuation stays live for post-agent failures and re-entered (unowned) leases, so it is not dead code.
+    2 (major, portability) FIXED: the /tmp literal is now '<worktree>'. The bug-2383-lane-fixture panic in the gates log is the intentional fixture output from bug_2383_seat_target_overlay_tests, not a failing gate.
+    3 (minor, failed codex spawn) FIXED: review_watch::reviewer_status_on_spawn now counts a spawn only after it returns a child, and AgentLaunchMark::started() reads that count. Every reviewer arm and the implementer resume therefore lose their pre-call mark, so ENOENT/EACCES or a pre-spawn helper error rolls back. New test: a_failed_codex_spawn_rolls_back_the_worktree_and_lease, plus a kept-setup counterpart. standalone_implementer::run and exec_vendor_headless keep their pre-call mark: they spawn through agent_launch on a lane loop, and counting there is the unsafe direction (a missed count would remove a live agent's tree).
+    4 (minor, end-to-end test) FIXED by finding 1's rewrite.
+  created_at: 2026-11-04T08:53:42.273157535Z
+  modified_at: 2026-11-04T08:53:42.273157535Z
+  session_id: 01a1a5b9285d
+  harness_version: 2.1.318 (Claude Code)
 history:
 - id: 01a1a443-3d11-7700-8298-3f5783f310c6
   author: joe
