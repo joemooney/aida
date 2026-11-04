@@ -7,12 +7,12 @@ description: |-
 
   non-blocking/minor: check-ci-gates.py run_gate stream_diagnostics swallows only BrokenPipeError; any other sink OSError (or a sys.stdout without .buffer) kills the reader thread, the child then blocks on a full pipe and child.wait() hangs. Catch OSError/ValueError like the Rust reader, which ignores all write errors.
   Reviewed sha: 830142d58d10db713961b42585a9604ff10a654d
-status: Draft
+status: Approved
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-03T18:44:43.902352640Z
-modified_at: 2026-11-04T01:18:20.525718833Z
+modified_at: 2026-11-04T01:18:36.091319100Z
 req_type: Task
 tags:
 - carried-from:TASK-2790
@@ -50,6 +50,14 @@ history:
   timestamp: 2026-11-04T01:18:24.787315620Z
   session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
   changes: []
+- id: 01a1a422-f23b-7ad0-8d98-95c9cce5712c
+  author: joe
+  timestamp: 2026-11-04T01:18:36.091316801Z
+  session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: da17908306fcefc7fc1e8bcf334e2d507c72cf1a
   branch: main
