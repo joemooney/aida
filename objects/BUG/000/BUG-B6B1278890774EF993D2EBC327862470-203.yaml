@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T01:35:35.019044810Z
-modified_at: 2026-11-04T07:21:24.421438534Z
+modified_at: 2026-11-04T07:29:32.835144431Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -51,6 +51,19 @@ comments:
   created_at: 2026-11-04T07:10:40.876418599Z
   modified_at: 2026-11-04T07:10:40.876418599Z
   session_id: da1c0d85-1d45-4ce4-a292-5358644f65b9
+- id: 01a1a576-8ea3-7ce3-b3b7-8c3f2cf68765
+  author: joe
+  content: |-
+    REWORK RULINGS (PR #3347 delta on 31ed7ef6):
+    F1 (CI red) FIXED: no env mutation any more. The lane default lives on the lane's own job runner (lane_job::Sandbox::BwrapDefaultOn); the seat launch and every other launch keep their own os_wrap resolution, so the 11 fixtures run their mock vendor unwrapped exactly as on main. Tests unchanged.
+    F2 (leak / set_var unsound) FIXED: std::env::set_var removed; implementer_lane_os_wrap is pure with the bwrap probe injected; lane_job_wrapped_program_and_args takes the lane's decision as a parameter. Test asserts a later launch is unwrapped and a second lane still reads DefaultOn, not a leaked Explicit(true).
+    F3 (advisor-visible signal) FIXED: offer records an os-wrap-off marker in the host-only results dir; the standalone result line and the drain phase warning append os_wrap=off after untested=true.
+    F4 (offer-level test) FIXED: offer_with(probe) drives offer end to end with the probe injected, on any host.
+    Scope note: under the default the seat itself is NOT bwrap-wrapped (only its jobs, each in the BUG-2383 job profile). Wrapping the seat by default is what broke the fixtures and changes every implementer's launch profile; operators who want that keep AIDA_OS_WRAP=1 / config os_wrap=true.
+  created_at: 2026-11-04T07:29:32.835144431Z
+  modified_at: 2026-11-04T07:29:32.835144431Z
+  session_id: 01a1a56ee3a1
+  harness_version: 2.1.318 (Claude Code)
 history:
 - id: 01a1a4a6-15af-71f0-83e7-4c9b920f9b03
   author: joe
