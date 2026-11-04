@@ -16,12 +16,12 @@ description: |-
   1. When `--vendor` is omitted on `aida dispatch request take` or `impl`, `dispatch` resolves the project's configured `[agents] vendor` rather than hardcoding `DispatchVendor::Claude`.
   2. Launching a Codex implementer lane from `dispatch` detaches cleanly (integrating with STORY-2254) without blocking `dispatch tick` / `serve` to completion.
   3. Unit tests verify default vendor resolution and non-blocking launch behavior for `take` and `impl`.
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T06:46:56.104025446Z
-modified_at: 2026-11-04T01:50:07.582097121Z
+modified_at: 2026-11-04T02:21:52.637959953Z
 req_type: Bug
 tags:
 - audit
@@ -273,6 +273,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1a45c-e07d-78d3-ba2e-ce4fed48fba2
+  author: joe
+  timestamp: 2026-11-04T02:21:52.637987388Z
+  session_id: 01a1a43fc371
+  harness_version: 2.1.318 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 6dc7d4977ac5e47c42ddfb26597fe3ec5fb70b60
   branch: main
@@ -281,3 +290,9 @@ filed_at:
   aida_build_sha: 962ca07af25
   vendor: antigravity
   session: 01a194b1bcfb
+attention_reason:
+  category: blocked-dependency
+  detail: 'Finding 1 (BLOCKING, help golden): could not regenerate in this seat. Two lane-job runs of ''AIDA_UPDATE_SNAPSHOTS=1 cargo test --profile agent -p aida-cli-lib --lib -- help_surface_matches_golden_snapshot'' timed out at 900s, both while compiling aida-cli-lib (the runner treats the target as seeded, and no build slot was available), and setting AIDA_CARGO_TIMEOUT=3600 is permission-denied here. Per the finding, I did not hand-edit the snapshot. Operator: run that command on PR #3309 at b1e3842924e and commit cli_help_snapshot.txt. Findings 2 and 3 are fixed in b1e3842924e (pass_admission now leaves a Codex take/impl WaitingForServe on the tick; CODEX_LANE_NEEDS_GRANT names ''aida dispatch request take|impl'' plus ''aida dispatch serve''; new tests). Finding 4 is accepted per the ruling. untested=true: the new dispatch tests were not run either (same compile timeout).'
+  lean: Operator regenerates the golden snapshot; no code change needed
+  raised_by: implementer
+  raised_at: 2026-11-04T02:21:52.637959953Z
