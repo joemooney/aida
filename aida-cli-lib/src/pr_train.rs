@@ -1834,9 +1834,43 @@ pub(crate) fn train_pr_body(train: &Built) -> String {
 }
 
 /// BUG-2433: forge reads, `MERGED_RECHECK_PAUSE_SECS` apart, before a
-/// merge-call error is judged against main's tree instead.
+/// merge-call error is judged.
 const MERGED_RECHECK_READS: u32 = 3;
 const MERGED_RECHECK_PAUSE_SECS: u64 = 3;
+
+/// BUG-2433: marks a train merge error raised by (or after) an issued forge
+/// merge call, the only kind that can hide a merge that took effect. Errors
+/// without it (pre-merge refusals) are never re-read.
+// trace:BUG-2433 | ai:claude
+#[derive(Debug)]
+pub(crate) struct ForgeMergeCallFailed;
+
+impl std::fmt::Display for ForgeMergeCallFailed {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("the forge merge call failed")
+    }
+}
+
+/// BUG-2433: did this merge error come from an issued forge merge call?
+// trace:BUG-2433 | ai:claude
+pub(crate) fn is_forge_merge_call_error(e: &anyhow::Error) -> bool {
+    e.downcast_ref::<ForgeMergeCallFailed>().is_some()
+}
+
+/// BUG-2433: what the re-reads after a failed merge call prove.
+// trace:BUG-2433 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub(crate) enum MergeErrorVerdict {
+    /// The train landed at its tested tip: the forge says merged there, or
+    /// the forge never answered and main carries the tip's tree.
+    Landed,
+    /// Not landed, or not provably: the error stands.
+    #[default]
+    NotLanded,
+    /// The forge still reports the PR open, yet main carries the tip's
+    /// tree. Fail closed: not landed; the advisor reconciles it.
+    OpenButOnMain,
+}
 
 /// BUG-2433: what a train PR's (state, head) says after its merge call
 /// errored. `Some(true)` = merged at the pinned `tip`; `Some(false)` = it
@@ -1851,6 +1885,48 @@ pub(crate) fn merged_at_tip(
         (crate::forge::ChangeState::Merged, head) => Some(head == tip),
         (crate::forge::ChangeState::Closed, _) => Some(false),
         (crate::forge::ChangeState::Open, _) => None,
+    }
+}
+
+/// BUG-2433: main carries the train's tested tree: it moved off the tested
+/// base, and its tree equals the tip's (a rebase merge rewrites the commits
+/// but lands the tested tree). An unreadable tree proves nothing.
+// trace:BUG-2433 | ai:claude
+pub(crate) fn main_carries_tip(
+    main: &str,
+    base: &str,
+    main_tree: Option<&str>,
+    tip_tree: Option<&str>,
+) -> bool {
+    main != base && main_tree.is_some() && main_tree == tip_tree
+}
+
+/// BUG-2433: judge a failed merge call from up to `reads` forge reads
+/// (`read(attempt)`; `None` = unreadable or transient) and, only when the
+/// forge gave no definite answer, main's tree (`on_main`). A definite forge
+/// answer (merged or closed) wins. Fail closed: main's tree counts as proof
+/// only when EVERY read was unreadable. A forge that answered open is never
+/// overridden by main; open-but-on-main is a contradiction, not a landing.
+// trace:BUG-2433 | ai:claude
+pub(crate) fn judge_merge_error(
+    reads: u32,
+    tip: &str,
+    mut read: impl FnMut(u32) -> Option<(crate::forge::ChangeState, String)>,
+    on_main: impl FnOnce() -> bool,
+) -> MergeErrorVerdict {
+    let mut forge_answered_open = false;
+    for attempt in 0..reads {
+        let meta = read(attempt);
+        match merged_at_tip(meta.as_ref().map(|(s, h)| (s, h.as_str())), tip) {
+            Some(true) => return MergeErrorVerdict::Landed,
+            Some(false) => return MergeErrorVerdict::NotLanded,
+            None => forge_answered_open |= meta.is_some(),
+        }
+    }
+    match (forge_answered_open, on_main()) {
+        (false, true) => MergeErrorVerdict::Landed,
+        (true, true) => MergeErrorVerdict::OpenButOnMain,
+        (_, false) => MergeErrorVerdict::NotLanded,
     }
 }
 
@@ -1920,13 +1996,17 @@ pub(crate) trait TrainForge {
     ) -> Result<()> {
         self.merge(change, &train.tip)
     }
-    /// BUG-2433: the merge call errored; did the forge merge `change` at
-    /// `train`'s tested tip anyway? A transient API error can arrive after
-    /// the merge took effect. `false` (the default) when it cannot tell, so
-    /// an unproven merge still stops the run.
+    /// BUG-2433: the forge merge call errored; did the forge merge `change`
+    /// at `train`'s tested tip anyway? A transient API error can arrive after
+    /// the merge took effect. `NotLanded` (the default) when it cannot tell,
+    /// so an unproven merge still stops the run.
     // trace:BUG-2433 | ai:claude
-    fn merged_despite_error(&mut self, _change: &crate::forge::ChangeRef, _train: &Built) -> bool {
-        false
+    fn merged_despite_error(
+        &mut self,
+        _change: &crate::forge::ChangeRef,
+        _train: &Built,
+    ) -> MergeErrorVerdict {
+        MergeErrorVerdict::NotLanded
     }
 
     /// The commits main received for `cars` between `base` and `main`.
@@ -2279,43 +2359,50 @@ impl TrainForge for LiveTrainForge<'_> {
     }
 
     // trace:BUG-2433 | ai:claude
-    fn merged_despite_error(&mut self, change: &crate::forge::ChangeRef, train: &Built) -> bool {
+    fn merged_despite_error(
+        &mut self,
+        change: &crate::forge::ChangeRef,
+        train: &Built,
+    ) -> MergeErrorVerdict {
         // The forge's own answer first, a few reads apart: the error can
-        // race the state the merge wrote.
-        for attempt in 0..MERGED_RECHECK_READS {
+        // race the state the merge wrote. Main's tree is consulted only when
+        // the forge gave no definite answer; whether it may prove a landing
+        // (every read unreadable) or only flag a contradiction (the forge
+        // said open) is `judge_merge_error`'s call.
+        let forge = self.forge;
+        let read = |attempt: u32| {
             if attempt > 0 {
                 std::thread::sleep(std::time::Duration::from_secs(MERGED_RECHECK_PAUSE_SECS));
             }
-            let meta = self
-                .forge
+            forge
                 .change_metadata(change.id, &mut crate::network_retry::NoopSink)
-                .ok();
-            match merged_at_tip(
-                meta.as_ref().map(|m| (&m.state, m.head_sha.as_str())),
-                &train.tip,
-            ) {
-                Some(answer) => return answer,
-                None => continue,
-            }
-        }
-        // The forge never answered: main itself is the evidence. A rebase
-        // merge rewrites the commits but lands the tested tree.
-        let Ok(main) = self.fetch_main() else {
-            return false;
+                .ok()
+                .map(|m| (m.state, m.head_sha))
         };
-        let tree = |rev: &str| {
-            git(
-                &self.main_worktree,
-                &[
-                    "rev-parse",
-                    "--verify",
-                    "--quiet",
-                    &format!("{rev}^{{tree}}"),
-                ],
+        let on_main = || {
+            let Ok(main) = self.fetch_main() else {
+                return false;
+            };
+            let tree = |rev: &str| {
+                git(
+                    &self.main_worktree,
+                    &[
+                        "rev-parse",
+                        "--verify",
+                        "--quiet",
+                        &format!("{rev}^{{tree}}"),
+                    ],
+                )
+                .ok()
+            };
+            main_carries_tip(
+                &main,
+                &train.base,
+                tree(&main).as_deref(),
+                tree(&train.tip).as_deref(),
             )
-            .ok()
         };
-        main != train.base && tree(&main).is_some() && tree(&main) == tree(&train.tip)
+        judge_merge_error(MERGED_RECHECK_READS, &train.tip, read, on_main)
     }
 
     fn merge(&mut self, change: &crate::forge::ChangeRef, tip: &str) -> Result<()> {
@@ -2787,12 +2874,19 @@ impl Rails for ForgeRails<'_> {
             .merge_verified(&change, &checked, _lease.as_ref())
             .with_context(|| format!("train PR #{} was not merged", change.id))
         {
-            // BUG-2433: the error may have come after the merge took effect
-            // (GitHub answered a GraphQL error but rebase-merged the train).
-            // Re-read before deciding: a merged train takes the landed path,
-            // so its members close with pointers instead of being ejected.
+            // BUG-2433: an error from the forge merge call itself may have
+            // come after the merge took effect (GitHub answered a GraphQL
+            // error but rebase-merged the train). Re-read before deciding: a
+            // merged train takes the landed path, so its members close with
+            // pointers instead of being ejected. A pre-merge refusal never
+            // reached the forge, so it surfaces at once.
             // trace:BUG-2433 | ai:claude
-            if self.ports.merged_despite_error(&change, &checked) {
+            let verdict = if is_forge_merge_call_error(&e) {
+                self.ports.merged_despite_error(&change, &checked)
+            } else {
+                MergeErrorVerdict::NotLanded
+            };
+            if verdict == MergeErrorVerdict::Landed {
                 self.warn(format!(
                     "the merge call for train PR #{} reported an error ({e:#}), but the forge \
                      merged it at the tested head; the train landed",
@@ -2803,6 +2897,14 @@ impl Rails for ForgeRails<'_> {
                 let rearm = self.rearm_released(&released);
                 if !rearm.is_empty() {
                     self.warn(format!("the merge failed after the hold release.{rearm}"));
+                }
+                if verdict == MergeErrorVerdict::OpenButOnMain {
+                    return Err(e.context(format!(
+                        "the forge still reports train PR #{} open, yet main carries its \
+                         tested tree: the two disagree, so the train is not counted as \
+                         landed and its members stay open for the advisor to reconcile",
+                        change.id
+                    )));
                 }
                 return Err(e);
             }

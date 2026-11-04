@@ -1175,8 +1175,11 @@ struct FakeForge {
     /// Fail the open with this number (1-based), or every merge.
     open_fails_at: Option<u64>,
     merge_fails: bool,
-    /// BUG-2433: the failing merge call took effect on the forge anyway.
-    merged_despite_error: bool,
+    /// BUG-2433: what the re-reads after a failed merge call prove, how often
+    /// they ran, and a refusal raised before any forge merge call.
+    after_merge_error: MergeErrorVerdict,
+    rechecks: usize,
+    merge_refused: bool,
     ci_unreadable: bool,
     // trace:BUG-2423 | ai:codex
     ci_states: Option<VecDeque<TrainCiReadiness>>,
@@ -1290,18 +1293,27 @@ impl TrainForge for FakeForge {
         self.retired.push((change.id, why.to_string()));
     }
     fn merge(&mut self, change: &crate::forge::ChangeRef, tip: &str) -> Result<()> {
+        // trace:BUG-2433 | ai:claude
+        if self.merge_refused {
+            anyhow::bail!("train is under review");
+        }
         if self.merge_fails {
-            anyhow::bail!("gh pr merge: HTTP 502");
+            return Err(anyhow::anyhow!("gh pr merge: HTTP 502").context(ForgeMergeCallFailed));
         }
         self.merged.push((change.id, tip.to_string()));
         Ok(())
     }
     // trace:BUG-2433 | ai:claude
-    fn merged_despite_error(&mut self, change: &crate::forge::ChangeRef, train: &Built) -> bool {
-        if self.merged_despite_error {
+    fn merged_despite_error(
+        &mut self,
+        change: &crate::forge::ChangeRef,
+        train: &Built,
+    ) -> MergeErrorVerdict {
+        self.rechecks += 1;
+        if self.after_merge_error == MergeErrorVerdict::Landed {
             self.merged.push((change.id, train.tip.clone()));
         }
-        self.merged_despite_error
+        self.after_merge_error
     }
     fn landed(&mut self, _base: &str, _main: &str, cars: &[Car]) -> Vec<Option<String>> {
         cars.iter()
@@ -1962,7 +1974,7 @@ fn bug_2214_main_moving_after_the_release_rearms_then_lands_on_rebuild() {
 fn bug_2433_a_merge_error_after_the_forge_merged_lands_every_member() {
     let mut f = FakeForge::mains(&["m0"]);
     f.merge_fails = true;
-    f.merged_despite_error = true;
+    f.after_merge_error = MergeErrorVerdict::Landed;
     f.on_main = vec![
         ("Lcar1".into(), "m0".into()),
         ("Lcar2".into(), "Lcar1".into()),
@@ -1971,8 +1983,13 @@ fn bug_2433_a_merge_error_after_the_forge_merged_lands_every_member() {
     let out = drive(&mut rails, fms(&[1, 2])).unwrap();
     assert!(out.error.is_none(), "{:?}", out.error);
     assert!(out.ejected.is_empty(), "{:?}", out.ejected);
+    // drive() records each car's built commit; the rails record what main got.
     assert_eq!(
         out.landed,
+        vec![(1, "car1".to_string()), (2, "car2".to_string())]
+    );
+    assert_eq!(
+        rails.landed_on_main,
         vec![(1, "Lcar1".to_string()), (2, "Lcar2".to_string())]
     );
     assert!(
@@ -1996,7 +2013,7 @@ fn bug_2433_a_merged_hold_release_is_not_rearmed() {
     f.gates.insert(7, Ok(covered.clone()));
     f.gate_green = true;
     f.merge_fails = true;
-    f.merged_despite_error = true;
+    f.after_merge_error = MergeErrorVerdict::Landed;
     f.on_main = vec![("Lcar7".into(), "base".into())];
     let mut rails = ForgeRails::new(&mut f, "s".into());
     let out = drive(&mut rails, vec![covered]).unwrap();
@@ -2020,6 +2037,126 @@ fn bug_2433_merged_at_tip_reads_the_post_error_state() {
     assert_eq!(merged_at_tip(Some((&Closed, "tip")), "tip"), Some(false));
     assert_eq!(merged_at_tip(Some((&Open, "tip")), "tip"), None);
     assert_eq!(merged_at_tip(None, "tip"), None);
+}
+
+// trace:BUG-2433 | ai:claude
+#[test]
+fn bug_2433_main_carries_tip_needs_a_moved_main_with_the_tip_tree() {
+    // The forge-silent proof: main moved off the base and holds the tip tree.
+    assert!(main_carries_tip("m1", "m0", Some("T"), Some("T")));
+    // Main never moved: nothing landed, whatever the trees say.
+    assert!(!main_carries_tip("m0", "m0", Some("T"), Some("T")));
+    // Main moved, but to a different tree.
+    assert!(!main_carries_tip("m1", "m0", Some("T"), Some("U")));
+    // An unreadable tree proves nothing, even on both sides.
+    assert!(!main_carries_tip("m1", "m0", None, None));
+    assert!(!main_carries_tip("m1", "m0", None, Some("T")));
+}
+
+/// BUG-2433: run `judge_merge_error` over scripted reads; report the verdict,
+/// how many reads it took, and whether main was consulted.
+fn judge(
+    script: Vec<Option<(crate::forge::ChangeState, &str)>>,
+    on_main: bool,
+) -> (MergeErrorVerdict, u32, bool) {
+    let mut reads = 0;
+    let mut consulted = false;
+    let verdict = judge_merge_error(
+        3,
+        "tip",
+        |attempt| {
+            reads += 1;
+            script[attempt as usize].map(|(s, h)| (s, h.to_string()))
+        },
+        || {
+            consulted = true;
+            on_main
+        },
+    );
+    (verdict, reads, consulted)
+}
+
+// trace:BUG-2433 | ai:claude
+#[test]
+fn bug_2433_judge_merge_error_trusts_the_forge_and_fails_closed() {
+    use crate::forge::ChangeState::*;
+    use MergeErrorVerdict::*;
+    // A definite forge answer stops the reads; main is never consulted.
+    assert_eq!(
+        judge(vec![None, Some((Merged, "tip")), None], false),
+        (Landed, 2, false)
+    );
+    assert_eq!(
+        judge(vec![Some((Merged, "other")), None, None], true),
+        (NotLanded, 1, false)
+    );
+    assert_eq!(
+        judge(vec![Some((Closed, "tip")), None, None], true),
+        (NotLanded, 1, false)
+    );
+    // Forge silent on every read: main's tree is the evidence.
+    assert_eq!(judge(vec![None, None, None], true), (Landed, 3, true));
+    assert_eq!(judge(vec![None, None, None], false), (NotLanded, 3, true));
+    // The forge answered open: main never overrides it. A matching tree is
+    // a contradiction for the advisor, not a landing.
+    assert_eq!(
+        judge(vec![Some((Open, "tip")); 3], true),
+        (OpenButOnMain, 3, true)
+    );
+    assert_eq!(
+        judge(vec![None, Some((Open, "tip")), None], true),
+        (OpenButOnMain, 3, true)
+    );
+    assert_eq!(
+        judge(vec![Some((Open, "tip")); 3], false),
+        (NotLanded, 3, true)
+    );
+}
+
+// trace:BUG-2433 | ai:claude
+#[test]
+fn bug_2433_open_but_on_main_is_reported_and_not_landed() {
+    let mut f = FakeForge::mains(&["m0"]);
+    f.merge_fails = true;
+    f.after_merge_error = MergeErrorVerdict::OpenButOnMain;
+    let mut rails = ForgeRails::new(&mut f, "t".into());
+    let out = drive(&mut rails, fms(&[1, 2])).unwrap();
+    let error = out.error.clone().expect("the contradiction stops the run");
+    assert!(
+        error.contains("still reports train PR") && error.contains("advisor"),
+        "{error}"
+    );
+    assert!(out.landed.is_empty(), "{:?}", out.landed);
+    drop(rails);
+    assert!(f.landed_members.is_empty(), "members stay open");
+}
+
+// trace:BUG-2433 | ai:claude
+#[test]
+fn bug_2433_a_pre_merge_refusal_surfaces_without_rereads() {
+    let mut f = FakeForge::mains(&["m0"]);
+    f.merge_refused = true;
+    f.after_merge_error = MergeErrorVerdict::Landed;
+    let mut rails = ForgeRails::new(&mut f, "t".into());
+    let out = drive(&mut rails, fms(&[1])).unwrap();
+    let error = out.error.clone().expect("the refusal stops the run");
+    assert!(error.contains("under review"), "{error}");
+    assert!(out.landed.is_empty(), "{:?}", out.landed);
+    drop(rails);
+    assert_eq!(
+        f.rechecks, 0,
+        "a refusal before the merge call is not re-read"
+    );
+}
+
+// trace:BUG-2433 | ai:claude
+#[test]
+fn bug_2433_the_forge_merge_call_marker_survives_context() {
+    let tagged = anyhow::anyhow!("HTTP 502")
+        .context(ForgeMergeCallFailed)
+        .context("train PR #9 was not merged");
+    assert!(is_forge_merge_call_error(&tagged));
+    assert!(!is_forge_merge_call_error(&anyhow::anyhow!("lease lost")));
 }
 
 // trace:BUG-2214.ac2ec1b2 | ai:claude
