@@ -9,12 +9,12 @@ description: |-
 
   PR: #3316
   Reviewed sha: 4f71731c6f8c6a3dc3f58aac1a79e30483d24fb7
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T01:17:09.371397785Z
-modified_at: 2026-11-04T06:15:05.473708667Z
+modified_at: 2026-11-04T07:11:26.667827596Z
 req_type: Task
 tags:
 - carried-from:BUG-2428
@@ -47,6 +47,12 @@ comments:
   content: 'ADVISOR REWORK BRIEF (2026-11-03 23:16 MST, PR #3343 head 33fe8a2c). Review requested changes. (1) BLOCKING: CI is red from this PR on two gates, including the bug-2383-lane-fixture lib test (cargo test -p bug-2383-lane-fixture --lib). Fix both. (2) BLOCKING: the ''failed codex spawn'' pre-agent case still keeps the setup. Route it through run_pickup_launch/AgentLaunchMark like the other pre-agent failures, and add a test for it. Rule each non-blocking finding in this push: fix it or say why not, in one line on this spec. Gate (LIGHT): one targeted cargo test filter covering the changed module, plus make check-ci-fast, then push to the same PR branch. The advisor re-reviews only the delta.'
   created_at: 2026-11-04T06:15:05.473708667Z
   modified_at: 2026-11-04T06:15:05.473708667Z
+  session_id: da1c0d85-1d45-4ce4-a292-5358644f65b9
+- id: 01a1a565-fbcb-7371-8c04-a54b1491d7c3
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Rollback kernel (run_pickup_launch + AgentLaunchMark, panic disarm) is sound and behaviorally tested, but CI is red from this PR on two gates and the ''failed codex spawn'' pre-agent case still keeps the setup.. Triage reason: advisor rework brief on spec; review findings to address'
+  created_at: 2026-11-04T07:11:26.667826044Z
+  modified_at: 2026-11-04T07:11:26.667826044Z
   session_id: da1c0d85-1d45-4ce4-a292-5358644f65b9
 history:
 - id: 01a1a443-3d11-7700-8298-3f5783f310c6
@@ -92,6 +98,14 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1a565-fbcb-7371-8c04-a53b38bbdb32
+  author: joe
+  timestamp: 2026-11-04T07:11:26.667805059Z
+  session_id: da1c0d85-1d45-4ce4-a292-5358644f65b9
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: 0f1624a8b38d961973328d79d05642add4464fc8
   branch: main
@@ -99,11 +113,3 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: 02cfbd22515
   vendor: claude
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: Rollback kernel (run_pickup_launch + AgentLaunchMark, panic disarm) is sound and behaviorally tested, but CI is red from this PR on two gates and the 'failed codex spawn' pre-agent case still keeps the setup.
-  recovery_hint: address the review findings, move TASK-2807 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-04T06:01:07.644094702Z
