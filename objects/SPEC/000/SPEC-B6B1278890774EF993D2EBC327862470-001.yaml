@@ -20,7 +20,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T07:26:01.071265913Z
-modified_at: 2026-11-04T17:51:06.249508623Z
+modified_at: 2026-11-04T17:51:10.097640571Z
 req_type: Task
 tags:
 - architecture
@@ -877,6 +877,21 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: PR-1 scope of TASK-2712 (round-3 ruling: F3 lane-level post-exit tests, F4 Refs salvage trailer on non-zero exit, F5 index restore only while HEAD unmoved) is implemented and tested, but CI ''gates'' is red at this head on the trace/doc-header stranding gate caused by this PR (agent_launch.rs launch_wants_seat_clone). One comment-only move fixes it. ACs: ac6e55fd not-applicable-because split to PR-2 by advisor ruling 2026-11-04 02:36 (agent-new lanes now host-commit after exit: task_2712_bg_lane_* / task_2712_foreground_lane_commits_pending_work_after_exit); ac774e2b verified for this slice (signed rulings on spec; bwrap host commit hooks off, host identity, no danger-full-access; task_2712_native_codex_seat_commit_ships_from_seat_without_seat_hooks, bwrap-gated); acca6182 verified for this slice by round-3 refusal tests (foreign/unrecorded clone, ended lease, live owner, symlink) plus task_2712_index_restore_only_while_head_unmoved; ac97960f unverified (host live probe F7 is the advisor''s step after CI green). Squash title ''(Refs TASK-2712)'' correctly avoids completing the spec.. No triage reason was given.'
   created_at: 2026-11-04T17:51:06.249507008Z
   modified_at: 2026-11-04T17:51:06.249507008Z
+  session_id: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
+- id: 01a1a7af-aaa9-7231-8f27-8a1d59d10aa9
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #3351):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 71ab14d63e5f
+    Recorded: 2026-11-04T17:38:56.042611548+00:00
+    Findings:
+    1. BLOCKING, CI red: 'CI (gates)' step 'Trace/doc-header stranding gate' (scripts/check-trace-headers.py) fails at 71ab14d63e5: aida-cli-lib/src/agent_launch.rs:6533-6539 'fn launch_wants_seat_clone sits below a doc/trace header whose leading trace run ... shares no spec id' (BUG-1550). Commit e6ba0ca71e0 inserted launch_wants_seat_clone between the '// trace:BUG-2006 | ai:antigravity' + '// trace:BUG-2124 | ai:antigravity' lines and the fn they belong to, is_contained_launch (main has them directly above is_contained_launch; main passes the gate). Fix: move those two trace lines down to directly above 'pub(crate) fn is_contained_launch' (comment-only; do not add an ALLOW_LIST entry). Reproduce with 'python3 scripts/check-trace-headers.py'. Earlier rounds masked it because the gates job failed first on rustfmt and then on the executable-fixture ratchet. Run make check-ci-fast before the push.
+    2. CI state at record time: CI (lib-1) still in_progress about 35 minutes into run 41875254298 (it passed at 29cdc258); lib-0, cli-0, cli-1, rest and contracts are green. Re-check lib-1 at the rework head. merge-hold-gate red is the expected supervised-spec hold, not a code defect.
+    3. Non-blocking test-coverage note: the lane-level post-exit tests (story_2254 post_exit_case, agent_launcher task_2712_foreground_lane_*) replace the whole post-exit step through the with_post_exit_step seam, so at lane level they do not exercise post_exit_commit's host_recorded_clone/NotASeat gate or commit_seat_pending. Those are covered at unit level (task_2712_lane_post_exit_commits_pending_seat_work, NotASeat assertion). Acceptable for PR-1; PR-2's host publication step should drive the real post_exit_commit end to end in a recorded seat clone.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-04T17:51:09.993814344Z
+  modified_at: 2026-11-04T17:51:09.993814344Z
   session_id: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
 history:
 - id: 01a1960f-6ca8-7313-8a94-63b0b98a4e44
