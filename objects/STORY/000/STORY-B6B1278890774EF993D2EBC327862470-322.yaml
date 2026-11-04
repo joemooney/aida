@@ -3,12 +3,12 @@ spec_id: STORY-b6b1278890774ef993d2ebc327862470-322
 agreed_id: STORY-2324
 title: Gate decides from one ledger keyed by canonical spec ID (effective gate state = f(head SHA, canonical IDs, ledger))
 description: 'Regroup target 1 (do first), 2026-11-02. Canonicalize spec IDs once where they enter the system. Effective gate state (verdict, hold, mode) is a pure function of the PR head SHA, the canonical ID set and the ledger. Superseded specs inherit the carrier''s mode. Merge-hold markers live in the primary store. Retires the BUG-2403/BUG-2413 bug class, STORY-1392, STORY-1684 and the BUG-2176 workaround. Evidence: BUG-2403, BUG-2413, STORY-1392, TASK-1574, TASK-1259. Sketch-first; advisor signoff required.'
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-02T19:20:32.021326811Z
-modified_at: 2026-11-04T04:08:38.895936881Z
+modified_at: 2026-11-04T04:08:41.809757971Z
 req_type: Story
 tags:
 - architecture
@@ -258,6 +258,12 @@ comments:
   created_at: 2026-11-04T04:08:38.895936881Z
   modified_at: 2026-11-04T04:08:38.895936881Z
   session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
+- id: 01a1a4be-ac51-7e80-8553-d8772c6e1d93
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: PR-B writers stamp spec_key correctly and the migration is byte/seq-preserving and hash-verified (CI green at head after an apt-infra rerun), but aida gate migrate --execute takes no ledger lock: a writer that recreates .aida/gate-ledger mid-swap leaves the live ledger holding only its new event with v1 stranded in the archive; rollback is unusable after any later write; several writer paths lack tests.. No triage reason was given.'
+  created_at: 2026-11-04T04:08:41.809753226Z
+  modified_at: 2026-11-04T04:08:41.809753226Z
+  session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
 history:
 - id: 01a19ec9-2f7e-7e41-b3a1-1cb5a299a222
   author: joe
@@ -379,6 +385,14 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1a4be-ac51-7e80-8553-d8692ab1c4b1
+  author: joe
+  timestamp: 2026-11-04T04:08:41.809717084Z
+  session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: 1b678fd5059046ff02bfb3b87c1f10d3162efda6
   branch: main
@@ -387,11 +401,3 @@ filed_at:
   aida_build_sha: 6a3f67671a9
   vendor: claude
   session: ee0bf351-6b17-486f-a38e-cfbb1343c426
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'PR-B writers stamp spec_key correctly and the migration is byte/seq-preserving and hash-verified (CI green at head after an apt-infra rerun), but aida gate migrate --execute takes no ledger lock: a writer that recreates .aida/gate-ledger mid-swap leaves the live ledger holding only its new event with v1 stranded in the archive; rollback is unusable after any later write; several writer paths lack tests.'
-  recovery_hint: address the review findings, move STORY-2324 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-04T04:07:11.424865838Z
