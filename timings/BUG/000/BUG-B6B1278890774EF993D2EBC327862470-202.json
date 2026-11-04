@@ -1,0 +1,86 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-B6B1278890774EF993D2EBC327862470-202",
+  "publishes": [
+    {
+      "at": "2026-11-04T08:20:51.392440003Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-04T01:18:59.829422138Z",
+      "spec": "BUG-b6b1278890774ef993d2ebc327862470-202",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-04T01:22:33.416197485Z",
+      "spec": "BUG-b6b1278890774ef993d2ebc327862470-202",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-11-04T03:05:52.766754639Z",
+      "spec": "BUG-B6B1278890774EF993D2EBC327862470-202",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "BUG-B6B1278890774EF993D2EBC327862470-202",
+        "branch": "origin/bug-b6b1278890774ef993d2ebc327862470-202",
+        "first_seen": "2026-11-04T03:05:52.766729544+00:00"
+      }
+    },
+    {
+      "ts": "2026-11-04T03:58:42.327063835Z",
+      "spec": "BUG-b6b1278890774ef993d2ebc327862470-202",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "edit",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-04T03:58:42.395975348Z",
+      "spec": "BUG-b6b1278890774ef993d2ebc327862470-202",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Needs Attention",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-04T06:42:04.357913708Z",
+      "spec": "BUG-b6b1278890774ef993d2ebc327862470-202",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-11-04T08:20:51.224606426Z",
+      "spec": "BUG-b6b1278890774ef993d2ebc327862470-202",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "8c28911d6d6b58dc14b3aaec85ccade018618b50",
+        "pr": 3324,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
