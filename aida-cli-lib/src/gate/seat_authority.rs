@@ -2826,14 +2826,23 @@ pub(crate) fn bind_grant_to_pid(id: &str, pid: u32) -> Result<()> {
 /// the vendor under bubblewrap, so the worker named in the containment
 /// receipt is no longer the launcher's direct descendant; this is the same
 /// post-spawn stamp a detached worker gets ([`bind_grant_to_pid`]), kept in
-/// this module so grant binding has one owner. An empty `grant_id` (a launch
-/// that holds no child grant) binds nothing.
+/// this module so grant binding has one owner. The pid comes only from an
+/// accepted receipt: an unaccepted receipt binds nothing and is refused, so a
+/// caller cannot bind a grant to a pid it merely asserts. An empty `grant_id`
+/// (a launch that holds no child grant) binds nothing.
 // trace:TASK-2708 | ai:claude
-pub(crate) fn bind_contained_launch_worker(grant_id: &str, worker_pid: u32) -> Result<()> {
+pub(crate) fn bind_contained_launch_worker(
+    grant_id: &str,
+    receipt: &crate::containment::launch::ContainmentReceipt,
+) -> Result<()> {
+    anyhow::ensure!(
+        receipt.is_accepted(),
+        "refusing to bind a session grant to a contained worker: its containment receipt was not accepted"
+    );
     if grant_id.is_empty() {
         return Ok(());
     }
-    bind_grant_to_pid(grant_id, worker_pid)
+    bind_grant_to_pid(grant_id, receipt.worker_pid())
 }
 
 /// Token-level core of [`bind_grant_to_pid`].

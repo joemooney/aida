@@ -42,20 +42,34 @@ fn task_2707_directory_leaf_refuses_session_grants() {
 fn live_required() -> bool {
     std::env::var("AIDA_REQUIRE_CODEX_CONTAINMENT_LIVE").as_deref() == Ok("1")
 }
-fn skip(reason: &str) -> bool {
-    assert!(!live_required(), "required-live contained launch: {reason}");
+/// The installed-Codex native-composition test has its own opt-in: the
+/// required-live CI gate installs bwrap but not Codex, so that gate must
+/// neither run it as required nor count it. An operator lane with Codex
+/// installed sets this to make its skip a failure.
+// trace:TASK-2708 | ai:claude
+fn installed_codex_required() -> bool {
+    std::env::var("AIDA_REQUIRE_CODEX_INSTALLED_LIVE").as_deref() == Ok("1")
+}
+fn skip_under(required: bool, reason: &str) -> bool {
+    assert!(!required, "required-live contained launch: {reason}");
     eprintln!("SKIP: {reason}");
     false
 }
+fn skip(reason: &str) -> bool {
+    skip_under(live_required(), reason)
+}
 fn live_available() -> bool {
+    live_available_under(live_required())
+}
+fn live_available_under(required: bool) -> bool {
     if !Path::new("/usr/bin/bwrap").exists() {
-        return skip("/usr/bin/bwrap unavailable");
+        return skip_under(required, "/usr/bin/bwrap unavailable");
     }
     // trace:TASK-2708 | ai:claude — the same kernel gate the helper applies
     // (x86_64, Landlock ABI 1..=8, seccomp notification): CI enables
     // bwrap+userns in every shard, so a newer kernel must skip, not fail.
     if let Err(error) = host_prerequisites() {
-        return skip(&format!("{error:#}"));
+        return skip_under(required, &format!("{error:#}"));
     }
     let result = Command::new("/usr/bin/bwrap")
         .args(["--unshare-all", "--ro-bind", "/", "/", "--", "/bin/true"])
@@ -67,7 +81,7 @@ fn live_available() -> bool {
             err.contains("namespace") || err.contains("Operation not permitted"),
             "unexpected bwrap failure: {err}"
         );
-        return skip(&format!("userns unavailable: {err}"));
+        return skip_under(required, &format!("userns unavailable: {err}"));
     }
     true
 }
@@ -418,7 +432,8 @@ fn task_2707_exact_environment_selection_excludes_explicit_tokens() {
 }
 #[test]
 fn task_2707_native_composition_companion_empty_grant_and_generated_profile() {
-    if !live_available() {
+    // trace:TASK-2708 | ai:claude — its own opt-in, never the required-live gate.
+    if !live_available_under(installed_codex_required()) {
         return;
     }
     let mut plan = fixture("print('placeholder')", "print('placeholder')");
@@ -452,7 +467,10 @@ fn task_2707_native_composition_companion_empty_grant_and_generated_profile() {
     env.insert("CODEX_HOME".into(), home.to_string_lossy().into_owned());
     // trace:TASK-2708 | ai:claude — CI installs bwrap but not Codex.
     let Ok(program) = resolve_program(&Command::new("codex"), &env) else {
-        skip("installed Codex unavailable for native composition");
+        skip_under(
+            installed_codex_required(),
+            "installed Codex unavailable for native composition",
+        );
         return;
     };
     let check = r#"
@@ -527,6 +545,70 @@ fn task_2707_no_deserialized_receipt_grants_applied_credit() {
         true,
         Some(&receipt)
     ));
+}
+/// M5: a relocated CODEX_HOME and CODEX_SQLITE_HOME are masked as well as the
+/// default `~/.codex`/`~/.claude`; the default layout masks exactly those two;
+/// a symlinked relocation onto the default is masked once; absent paths are
+/// skipped (bwrap needs a mount target).
+// trace:TASK-2708 | ai:claude
+#[test]
+fn task_2708_relocated_codex_home_and_sqlite_home_are_masked() {
+    let tmp = tempfile::tempdir().unwrap();
+    let host = tmp.path().join("home");
+    for name in [".codex", ".claude"] {
+        std::fs::create_dir_all(host.join(name)).unwrap();
+    }
+    let relocated = tmp.path().join("elsewhere/codex");
+    let sqlite = tmp.path().join("elsewhere/sqlite");
+    std::fs::create_dir_all(&relocated).unwrap();
+    std::fs::create_dir_all(&sqlite).unwrap();
+    let canon = |p: &Path| std::fs::canonicalize(p).unwrap();
+
+    let masks = host_vendor_state_masks(&host, &relocated, Some(&sqlite));
+    assert_eq!(
+        masks,
+        vec![
+            canon(&host.join(".codex")),
+            canon(&host.join(".claude")),
+            canon(&relocated),
+            canon(&sqlite),
+        ]
+    );
+
+    let default = host_vendor_state_masks(&host, &host.join(".codex"), None);
+    assert_eq!(
+        default,
+        vec![canon(&host.join(".codex")), canon(&host.join(".claude"))]
+    );
+
+    let link = tmp.path().join("link-to-default");
+    std::os::unix::fs::symlink(host.join(".codex"), &link).unwrap();
+    assert_eq!(host_vendor_state_masks(&host, &link, None), default);
+
+    let missing = tmp.path().join("never-created");
+    assert_eq!(
+        host_vendor_state_masks(&host, &missing, Some(&missing)),
+        default
+    );
+}
+/// M3: grant binding derives the pid from the receipt and refuses one that
+/// was never accepted — a deserialized receipt names a pid (1) it never
+/// proved, and binding to it would let a caller aim a grant at any process.
+// trace:TASK-2708 | ai:claude
+#[test]
+fn task_2708_bind_contained_launch_worker_refuses_unaccepted_receipt() {
+    let receipt: ContainmentReceipt = serde_json::from_value(serde_json::json!({"version":1,"posture":"aida","worker_pid":1,
+        "worker_start":"fake","wrapper_pid":2,"namespaces":{},"uid_map_identity":true,"seat_preflight":true,
+        "broker":"seccomp_notify_addfd","relay_port":3128,"policy_sha":"fake","keyring":"isolated_child_only"})).unwrap();
+    assert!(!receipt.is_accepted());
+    // Refused before the grant id is considered: a grant-less launch holding
+    // an unaccepted receipt is still a refused launch, not a silent no-op.
+    for grant_id in ["", "00000000-0000-4000-8000-000000000000"] {
+        let error = crate::gate::seat_authority::bind_contained_launch_worker(grant_id, &receipt)
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("receipt was not accepted"), "{error}");
+    }
 }
 #[cfg(target_os = "linux")]
 #[test]

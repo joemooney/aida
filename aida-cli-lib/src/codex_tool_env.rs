@@ -116,7 +116,9 @@ pub(crate) fn refuse_unwired_aida_posture(child: &Command) -> Result<()> {
 /// stamp proves a non-AIDA posture (`native`/`none`, which the launcher only
 /// writes after resolving the posture itself), and any error loading the
 /// trusted policy refuses. `Ok(None)` from the resolver means there is no
-/// project, so no trusted policy can select `aida`.
+/// project, so no trusted policy can select `aida`. For a resolved root, a
+/// trusted sha with no config at it is "no policy", but an unresolvable
+/// trusted sha refuses on the same stamp rule as an unresolvable root.
 // trace:TASK-2708 | ai:claude
 pub(crate) fn refuse_unwired_aida_posture_with(
     child: &Command,
@@ -150,10 +152,25 @@ pub(crate) fn refuse_unwired_aida_posture_with(
     let Some(root) = root else {
         return Ok(());
     };
-    let trusted = crate::agent_config::load_contained_vendor(&root, "codex").map_err(|error| {
+    // trace:TASK-2708 | ai:claude — "no config at the trusted sha" is a real
+    // answer (no policy can select `aida`); "the trusted sha cannot be
+    // resolved" (a non-repo root, no default branch) is no answer at all, so it
+    // refuses unless the child's own stamp proves a non-AIDA posture.
+    let Some(sha) = crate::trusted_config::trusted_default_branch_sha(&root) else {
+        anyhow::ensure!(
+            matches!(stamp, Some("native" | "none")),
+            "{UNWIRED_AIDA_POSTURE}: the trusted default branch of {} cannot be resolved, so \
+             the trusted Codex containment policy cannot be checked; refusing to launch Codex",
+            root.display()
+        );
+        return Ok(());
+    };
+    let body = crate::trusted_config::read_config_at_sha(&root, &sha);
+    let trusted = crate::agent_config::contained_vendor_in_trusted_body(body.as_deref(), "codex")
+        .map_err(|error| {
         error.context(format!(
             "{UNWIRED_AIDA_POSTURE}: the trusted Codex containment policy could not be \
-             loaded; refusing to launch Codex"
+                 loaded; refusing to launch Codex"
         ))
     })?;
     anyhow::ensure!(

@@ -327,6 +327,35 @@ fn refuse_chatgpt(home: &Path) -> Result<()> {
     );
     Ok(())
 }
+/// Host vendor state the sandbox must see as an empty read-only view: the
+/// default `~/.codex` and `~/.claude`, plus the resolved Codex home and
+/// `CODEX_SQLITE_HOME` when an operator relocated them (else the relocated
+/// credentials and thread database stay readable to the contained worker).
+/// Only existing paths (bwrap needs a mount target), each once, compared by
+/// canonical path so a symlinked relocation onto the default is not doubled.
+// trace:TASK-2708 | ai:claude
+fn host_vendor_state_masks(
+    host_home: &Path,
+    codex_home: &Path,
+    sqlite_home: Option<&Path>,
+) -> Vec<PathBuf> {
+    let mut masks: Vec<PathBuf> = Vec::new();
+    let candidates = [
+        Some(host_home.join(".codex")),
+        Some(host_home.join(".claude")),
+        Some(codex_home.to_path_buf()),
+        sqlite_home.map(Path::to_path_buf),
+    ];
+    for p in candidates.into_iter().flatten() {
+        let Ok(canonical) = std::fs::canonicalize(&p) else {
+            continue;
+        };
+        if !masks.contains(&canonical) {
+            masks.push(canonical);
+        }
+    }
+    masks
+}
 /// The host kernel prerequisites `contained_host.py::host_contained` checks
 /// first (x86_64 broker, Landlock ABI 1..=8, seccomp user notification),
 /// checked here BEFORE any lane state exists so an unsupported host gets the
@@ -496,15 +525,17 @@ impl PreparedLaunch {
         // Mask host vendor credentials/daemon endpoints with launch-owned empty RO views.
         let empty = state.path().join("empty");
         ensure_dir(&empty)?;
-        for p in [host_home.join(".codex"), host_home.join(".claude")] {
-            if p.exists() {
-                let file = File::open(&empty)?;
-                profile.mounts.push(Mount {
-                    file,
-                    path: p,
-                    writable: false,
-                });
-            }
+        // trace:TASK-2708 | ai:claude — including a relocated CODEX_HOME /
+        // CODEX_SQLITE_HOME, which the default-path masks alone would leave
+        // readable inside the sandbox.
+        let sqlite_home = std::env::var_os("CODEX_SQLITE_HOME").map(PathBuf::from);
+        for p in host_vendor_state_masks(&host_home, &codex_home, sqlite_home.as_deref()) {
+            let file = File::open(&empty)?;
+            profile.mounts.push(Mount {
+                file,
+                path: p,
+                writable: false,
+            });
         }
         // Read-only parents prevent absent-name creation as well as overwrites.
         for base in [&root, &main] {
@@ -841,6 +872,8 @@ impl Drop for ContainedChild {
     }
 }
 
+// trace:TASK-2708 | ai:claude — under tests/, which the TASK-1752 grant-env
+// ratchet skips; the #[cfg(test)] gate is what keeps that skip honest.
 #[cfg(test)]
-#[path = "launch_tests.rs"]
+#[path = "tests/launch_tests.rs"]
 mod tests;

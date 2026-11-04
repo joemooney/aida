@@ -2042,9 +2042,8 @@ fn spawn_vendor_headless_forking(
         &headless_worktree_root(),
         seat.as_str(),
         &crate::current_user_id(None),
-        containment_applied(vendor, contained, None)
-            || (vendor == HeadlessVendor::Codex
-                && containment_posture(vendor, contained)? == ContainmentPosture::Aida),
+        // trace:TASK-2708 | ai:claude
+        sandboxed_child_grant(vendor, contained)?,
     )?;
     let mut cmd = Command::new(program);
     cmd.args(args)
@@ -2109,7 +2108,7 @@ fn spawn_vendor_headless_forking(
             // trace:TASK-2708 | ai:claude
             crate::gate::seat_authority::bind_contained_launch_worker(
                 &child_grant.id,
-                run.receipt().worker_pid(),
+                run.receipt(),
             )?;
             run.release()?;
             run.child
@@ -3178,6 +3177,18 @@ pub fn containment_applied(
         Evidence::Receipt(receipt) => receipt.is_accepted(),
         Evidence::None => false,
     }
+}
+
+/// Whether a launch child's grant is minted (and its key preflighted) as a
+/// sandboxed grant. A Codex child under the `aida` posture is credited before
+/// its receipt exists, since the receipt is only produced at spawn; every mint
+/// and preflight site asks this one question so they cannot disagree.
+/// Only Codex consults the posture, so other vendors never fail here.
+// trace:TASK-2708 | ai:claude
+pub fn sandboxed_child_grant(vendor: HeadlessVendor, contained: bool) -> Result<bool> {
+    Ok(containment_applied(vendor, contained, None)
+        || (vendor == HeadlessVendor::Codex
+            && containment_posture(vendor, contained)? == ContainmentPosture::Aida))
 }
 
 /// Effective launch boundary. Native never grants AIDA containment authority.
@@ -6624,7 +6635,8 @@ fn run_vendor_headless_child(
                 worker,
             );
             registered = true;
-            crate::gate::seat_authority::bind_contained_launch_worker(grant_env, worker)?;
+            // trace:TASK-2708 | ai:claude
+            crate::gate::seat_authority::bind_contained_launch_worker(grant_env, run.receipt())?;
             run.release()?;
             crate::headless_linger::wait_reaping_after_result_holding(
                 &mut run.child,
@@ -7379,9 +7391,7 @@ pub(crate) fn spawn_vendor_headless_resume_granted(
     let (ceiling_key, ceiling_value) = crate::bg_wait_ceiling_env(Some(cwd));
     // trace:TASK-2708 | ai:claude — hoisted so the shared argv builder stays
     // beside the headless env stamp below.
-    let sandboxed_grant = containment_applied(vendor, contained, None)
-        || (vendor == HeadlessVendor::Codex
-            && containment_posture(vendor, contained)? == ContainmentPosture::Aida);
+    let sandboxed_grant = sandboxed_child_grant(vendor, contained)?;
     // Same order as the Claude resume path: the argv comes from the shared
     // headless builder right beside the launch (BUG-342 ratchet).
     // trace:BUG-2386 | ai:claude
@@ -12921,6 +12931,21 @@ mod tests {
         assert!(!containment_applied(HeadlessVendor::Codex, false, None));
         assert!(!containment_applied(HeadlessVendor::Agy, true, None));
         assert!(!containment_applied(HeadlessVendor::Agy, false, None));
+    }
+
+    /// M2: the one mint/preflight question. Claude credits as before; only
+    /// Codex consults the posture, so Agy never fails here; contained Codex
+    /// with no trusted opt-in fails closed instead of minting an unsandboxed
+    /// grant. (The `aida` posture arm runs under the TASK-2708 policy tests.)
+    // trace:TASK-2708 | ai:claude
+    #[test]
+    fn task_2708_sandboxed_child_grant_is_the_one_mint_question() {
+        assert!(sandboxed_child_grant(HeadlessVendor::Claude, true).unwrap());
+        assert!(!sandboxed_child_grant(HeadlessVendor::Claude, false).unwrap());
+        assert!(!sandboxed_child_grant(HeadlessVendor::Codex, false).unwrap());
+        assert!(!sandboxed_child_grant(HeadlessVendor::Agy, true).unwrap());
+        assert!(!sandboxed_child_grant(HeadlessVendor::Agy, false).unwrap());
+        assert!(sandboxed_child_grant(HeadlessVendor::Codex, true).is_err());
     }
 
     // trace:BUG-2006 | ai:antigravity

@@ -611,7 +611,8 @@ pub(crate) fn handle_burndown_run(
                 &project_root,
                 "implementer",
                 &current_user_id(None),
-                session::containment_applied(vendor, contained, None),
+                // trace:TASK-2708 | ai:claude
+                session::sandboxed_child_grant(vendor, contained)?,
             )?;
             if let crate::gate::seat_authority::HeadlessChildGrant::Baseline { cause } =
                 &child_grant
@@ -2111,7 +2112,8 @@ pub(crate) fn run_burndown_verbose(
         &project_root,
         "implementer",
         &current_user_id(None),
-        session::containment_applied(vendor, contained, None),
+        // trace:TASK-2708 | ai:claude
+        session::sandboxed_child_grant(vendor, contained)?,
     )?;
     if let crate::gate::seat_authority::HeadlessChildGrant::Baseline { cause } = &child_grant {
         eprintln!(

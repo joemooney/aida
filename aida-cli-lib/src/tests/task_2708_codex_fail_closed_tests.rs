@@ -328,6 +328,79 @@ fn task_2708_trusted_policy_load_error_refuses_unwired_codex() {
     }
 }
 
+/// M1: a named root whose trusted sha cannot be resolved (not a git
+/// repository) is NOT "no policy": it refuses by name unless the child's own
+/// stamp proves a non-AIDA posture, whether the root is named by env or cwd.
+// trace:TASK-2708 | ai:claude
+#[test]
+fn task_2708_non_repo_named_root_refuses_unless_stamp_proves_non_aida() {
+    let root = tempfile::tempdir().unwrap();
+    assert!(crate::trusted_config::trusted_default_branch_sha(root.path()).is_none());
+    for stamp in [
+        None,
+        Some("aida"),
+        Some("bogus"),
+        Some("none"),
+        Some("native"),
+    ] {
+        for via_env in [true, false] {
+            let mut cmd = Command::new("codex");
+            if via_env {
+                cmd.env("AIDA_PROJECT_ROOT", root.path());
+            } else {
+                cmd.current_dir(root.path());
+            }
+            if let Some(stamp) = stamp {
+                cmd.env("AIDA_CONTAINMENT_POSTURE", stamp);
+            }
+            let result = refuse_unwired_aida_posture(&cmd);
+            assert_eq!(
+                result.is_ok(),
+                matches!(stamp, Some("none" | "native")),
+                "stamp {stamp:?} via_env {via_env}: {result:?}"
+            );
+            if let Err(error) = result {
+                assert!(error.to_string().contains(UNWIRED_AIDA_POSTURE), "{error}");
+            }
+        }
+    }
+}
+
+/// M1 positive control: a repository whose trusted sha resolves but carries
+/// no `.aida/config.toml` there is a real "no policy" answer, so an
+/// unstamped child passes the guard.
+// trace:TASK-2708 | ai:claude
+#[test]
+fn task_2708_no_config_at_trusted_sha_admits_unstamped_codex() {
+    let root = tempfile::tempdir().unwrap();
+    std::fs::write(root.path().join("README"), "no aida config here").unwrap();
+    for args in [
+        vec!["init", "-q", "-b", "main"],
+        vec!["config", "user.name", "task-2708"],
+        vec!["config", "user.email", "task-2708@example.invalid"],
+        vec!["add", "README"],
+        vec!["commit", "-q", "-m", "no config"],
+        vec!["update-ref", "refs/remotes/origin/main", "HEAD"],
+        vec![
+            "symbolic-ref",
+            "refs/remotes/origin/HEAD",
+            "refs/remotes/origin/main",
+        ],
+    ] {
+        let out = crate::test_git::git_command()
+            .arg("-C")
+            .arg(root.path())
+            .args(&args)
+            .output()
+            .unwrap();
+        assert!(out.status.success(), "git {args:?}");
+    }
+    assert!(crate::trusted_config::trusted_default_branch_sha(root.path()).is_some());
+    let mut cmd = Command::new("codex");
+    cmd.env("AIDA_PROJECT_ROOT", root.path());
+    refuse_unwired_aida_posture(&cmd).unwrap();
+}
+
 /// Fail closed: when the child names no project and the main worktree cannot
 /// be resolved, only a stamp proving a non-AIDA posture admits the launch.
 // trace:TASK-2708 | ai:claude

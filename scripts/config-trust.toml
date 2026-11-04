@@ -951,14 +951,6 @@ inspection = "policy"
 channels = ["other-file", "write", "trusted"]
 sites = 1
 
-# Test-only sibling of launch.rs (mounted under #[cfg(test)] via #[path], so
-# the line scanner sees it): composes the same private per-launch Codex
-# config.toml in a tempdir. Never the project config.
-# trace:TASK-2708 | ai:claude
-[readers."aida-cli-lib/src/containment/launch_tests.rs"]
-channels = ["other-file"]
-sites = 1
-
 [keys.trusted.contained]
 allowed_hosts = "policy"
 read_allowlist = "policy"
