@@ -1,0 +1,29 @@
+id: 01a1a4d5-7933-7be2-93fa-5d15150bf109
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-763
+title: 'cosmetic: stranded_commits.rs:297-298 comment ''pins its dangling ancestors with…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-1595, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  cosmetic: stranded_commits.rs:297-298 comment 'pins its dangling ancestors with it' is false when a (worktree,spec) group holds non-linear commits (two separate reset-aways); heal pins only the newest, the rest need a second --heal pass (docs say 'pins each dangling commit').
+
+  PR: #3332
+  Reviewed sha: 8b6a91bed225a9fd060e6a67834c68516c55fbf7
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-04T04:33:36.051997360Z
+modified_at: 2026-11-04T04:33:36.051997360Z
+req_type: Task
+tags:
+- carried-from:TASK-1595
+- finding-hash:e1cc7f18
+- from-review:PR-3332
+- kind:carried-forward
+filed_at:
+  code_sha: b5577764ec0466133c191b7e51d62c40ea3a2c83
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 76d65a8b0d8
+  vendor: claude
