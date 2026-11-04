@@ -1,4 +1,11 @@
 - user_id: role:implementer
+  requirement_id: 01a1a457-05ff-7e23-aa80-01d1bca1952e
+  position: 199000
+  added_by: role:implementer
+  note: advisor rework brief on spec; review findings to address
+  added_at: 2026-11-04T07:10:55.375575797Z
+  for_role: implementer
+- user_id: role:implementer
   requirement_id: 01a1a432-7e6b-7873-89c5-e83d7181ed30
   position: 200000
   added_by: role:implementer
