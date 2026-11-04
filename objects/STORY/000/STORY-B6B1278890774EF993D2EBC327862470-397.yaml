@@ -1,0 +1,35 @@
+id: 01a1a810-7117-7170-a1fb-a07d27e36da1
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-397
+agreed_id: STORY-2469
+title: 'Review PR-3373: [AI:claude] fix(dispatch): Codex take re-enters the worktree already on the PR branch (TASK-2823) (TASK-2822)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a1a680`) for branch `task-b6b1278890774ef993d2ebc327862470-768`.
+
+  - PR: <https://github.com/joemooney/aida/pull/3373>
+  - Branch: `task-b6b1278890774ef993d2ebc327862470-768` → `main`
+
+  ## Covers
+
+  - TASK-2823
+  - TASK-2822
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 3373` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-04T19:36:52.247463035Z
+modified_at: 2026-11-04T19:36:52.247463035Z
+req_type: Story
+filed_at:
+  code_sha: 1c51f44695cfa1ac8fcfc24583bd6e95c6797093
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: e44c9e595a7
+  vendor: claude
+  session: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
