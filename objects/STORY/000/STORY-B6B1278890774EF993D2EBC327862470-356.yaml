@@ -17,12 +17,12 @@ description: |
   - Generate a structured review prompt with `aida review prompt --pr 3317` and verify each spec's acceptance criteria.
   - Approve and merge, or request changes by spec id.
   - Mark this story `completed` once the PR is merged.
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-03T21:48:34.768627497Z
-modified_at: 2026-11-03T21:48:46.398002799Z
+modified_at: 2026-11-04T01:54:11.137601381Z
 req_type: Story
 relationships:
 - rel_type:
@@ -30,12 +30,25 @@ relationships:
   target_id: 01a1a1cf-566b-7f73-b24b-4b03b2e82170
   created_at: 2026-11-03T21:48:46.397999267Z
   created_by: joe
+comments:
+- id: 01a1a443-8641-71b2-a7bd-38263f1c6044
+  author: aida-auto-bump
+  content: 'Auto-completed: PR #3317 merged without a reviewer session (self-merge or orchestrator skipped phase 3).'
+  created_at: 2026-11-04T01:54:11.137597444Z
+  modified_at: 2026-11-04T01:54:11.137597444Z
 history:
 - id: 01a1a362-dbe6-7aa2-91a7-972cbdadc707
   author: joe
   timestamp: 2026-11-03T21:48:47.462332348Z
   session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
   changes: []
+- id: 01a1a443-8641-71b2-a7bd-381bad7979f7
+  author: aida-auto-bump
+  timestamp: 2026-11-04T01:54:11.137585483Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
 filed_at:
   code_sha: 0ddf5ca5930ec7e4de1fa612d149c3a22c85b867
   branch: codex/task-2347-receipt-scan
@@ -44,3 +57,7 @@ filed_at:
   aida_build_sha: 34c0d8e4173
   vendor: claude
   session: 04f971d5-7365-46ed-b777-d4ff41d730ed
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-04T01:54:11.137580396Z
+  completion_sha: 4f048b58ca00a9a5ef5357553804481b4c2c072f
