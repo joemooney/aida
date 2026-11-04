@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T05:32:54.614008505Z
-modified_at: 2026-11-04T08:01:51.843373070Z
+modified_at: 2026-11-04T08:01:54.684155881Z
 req_type: Bug
 tags:
 - kind:bug-spotted
@@ -31,6 +31,22 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Train source gate fix is sound in design and AC1/AC2 are implemented, but CI lib-1 is red at the head (main green at the base) and AC3 (collector spec stamping, or a note that #3331 covers it) is unaddressed.. Triage reason: rework brief on spec'
   created_at: 2026-11-04T08:01:51.843371630Z
   modified_at: 2026-11-04T08:01:51.843371630Z
+  session_id: da1c0d85-1d45-4ce4-a292-5358644f65b9
+- id: 01a1a594-2f42-7741-85e4-116f9df6d259
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2438):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: ebc63b3ef7a4
+    Recorded: 2026-11-04T07:29:07.486865720+00:00
+    Findings:
+    1. CI (lib-1) and Build (ubuntu-latest) FAILED at ebc63b3ef7a (run 41791013957, step 'Run tests'); main's lib-1 at base 339203a is green, so treat as PR-caused until shown otherwise. Reviewer could not read the failing test name (log/artifact hosts sandbox-denied): identify the failing aida-cli-lib unit test (likely in tests::bug2406_train_tests, e.g. the new bug2438_* cases or an existing bug2406_* case affected by the supersession rule) and fix it.
+    2. AC3 unaddressed: the spec requires the review-watch collector to stamp the canonical spec on collected verdicts, or, if STORY-2324 PR-B (#3331) already does, a note saying so. The PR neither changes the collector (gate/review_verdict.rs collect_standalone_verdict -> ledger::record_collected_verdict records the PR-keyed event with spec None) nor notes the skip. #3331 is still OPEN and stamps spec_key only on per-spec records, so confirm whether it covers the PR-keyed collected event, then implement or add the note (spec comment / PR body).
+    3. pr_train_verified.rs:343-348: is_superseded treats any non-empty reviewed_sha that is not same_reviewed_sha(head) as an older head, so a refusal with a malformed or short reviewed_sha (non-hex like 'HEAD', or <7 hex chars that prefix the current head) is silently superseded instead of counted. Only supersede when reviewed_sha is a well-formed SHA (>=7 hex) that names a different commit; otherwise keep it counting (fail closed), and add a test.
+    4. Refusal-path test gap: no test proves that with NO current-head verdict an older-head refusal still refuses (the comment at pr_train_verified.rs:322-324 claims it). Add a train test: old-head spec-keyed refusal + old-head approval only -> merge_verified errs and no transport call.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-04T08:01:54.498969202Z
+  modified_at: 2026-11-04T08:01:54.498969202Z
   session_id: da1c0d85-1d45-4ce4-a292-5358644f65b9
 history:
 - id: 01a1a529-3a0b-7851-9f12-63da9e5a1022
