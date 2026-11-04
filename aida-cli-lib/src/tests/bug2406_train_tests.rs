@@ -654,13 +654,14 @@ fn bug2438_ledger(f: &Fixture, refusal_sha: &str, approval: &Value) -> &'static 
         "recorded_by":"fixture earlier-round reviewer"});
     let canonical = "BUG-b6b1278890774ef993d2ebc327862470-173";
     for (record, spec) in [(&stale, Some(canonical)), (approval, None)] {
+        let spec = spec.map(|key| ledger::GateSpec::with_key(key, None));
         ledger::store::append_one(
             f.root(),
             ledger::event::verdict_event(
                 f.root(),
                 ledger::ChangeKey::pr(11),
                 record.as_object().unwrap(),
-                spec,
+                spec.as_ref(),
             ),
         )
         .unwrap();
