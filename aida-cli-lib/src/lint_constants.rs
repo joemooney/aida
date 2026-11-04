@@ -7,8 +7,10 @@
 //! integer/float literal inside a traced region is checked
 //! against the owning specs: it is explained when its normalized value
 //! appears in a spec's description or in a decision linked to that spec.
-//! Only 0, 1 and literals on a line carrying `// arbitrary` are exempt.
-//! Report-only: nothing here writes to the store.
+//! Only 0, 1 and literals on a line carrying `// arbitrary` are exempt;
+//! test-only code (`#[cfg(test)]` modules/items, `#[test]` fns) is not
+//! scanned, as SPIKE-47 skips `tests/` files, and neither are tuple indices
+//! (`t.2`, `p.1.1`). Report-only: nothing here writes to the store.
 // trace:TASK-1785 | ai:claude
 
 use std::collections::{BTreeSet, HashMap, HashSet};
@@ -102,24 +104,60 @@ pub(crate) fn normalize_rust_literal(lit: &syn::Lit) -> Option<String> {
     }
 }
 
+/// The hyphen-joined run of digit groups around `start..end` (`30-60`,
+/// `2026-10-15`): its start offset and how many groups it has.
+fn hyphen_run(bytes: &[u8], start: usize, end: usize) -> (usize, usize) {
+    let mut left = start;
+    let mut groups = 1;
+    while left >= 2 && bytes[left - 1] == b'-' && bytes[left - 2].is_ascii_digit() {
+        left -= 1;
+        while left > 0 && bytes[left - 1].is_ascii_digit() {
+            left -= 1;
+        }
+        groups += 1;
+    }
+    let mut right = end;
+    while right + 1 < bytes.len() && bytes[right] == b'-' && bytes[right + 1].is_ascii_digit() {
+        right += 1;
+        while right < bytes.len() && bytes[right].is_ascii_digit() {
+            right += 1;
+        }
+        groups += 1;
+    }
+    (left, groups)
+}
+
 /// Every number mentioned in free text, normalized the same way as literals.
 /// A number glued to an identifier or id (`TASK-1785`, `sha256`, `#12`), or
 /// part of a version, date or time (`v0.15.0`, `2026-10-15`, `08:38`) is not
-/// a mention; a trailing unit (`50MB`, `15s`) is. A comma group reads as one
-/// thousands-separated number (`1,600`, `100,000,000`) when every later group
-/// has three digits and the first is shorter or a later group is `000`;
-/// otherwise as a list (`100,200,300`). PURE.
+/// a mention; a trailing unit (`50MB`, `15s`), a negative (`-15`, by its
+/// magnitude, as a Rust `-15` is `-` then `15`) and both ends of a range
+/// (`30-60 s`) are. A comma group reads as one thousands-separated number
+/// (`1,600`, `100,000,000`) when every later group has three digits and the
+/// first is shorter or a later group is `000`; otherwise as a list
+/// (`100,200,300`). Three or more groups with a short first group and no
+/// `000` (`64,128,256`) are ambiguous, so both readings count. PURE.
+// trace:TASK-1954 | ai:claude — TASK-1812 (4)(5)
 pub(crate) fn numbers_in_text(text: &str) -> HashSet<String> {
     let bytes = text.as_bytes();
+    let id_char = |b: u8| b.is_ascii_alphanumeric() || b"-._:#".contains(&b);
     let mut out = HashSet::new();
     for m in TEXT_NUMBER_RE.find_iter(text) {
+        let (run_start, run_groups) = hyphen_run(bytes, m.start(), m.end());
+        // A two-group hyphen run not glued to an id is a range: both ends count.
+        let range = run_groups == 2 && !run_start.checked_sub(1).is_some_and(|i| id_char(bytes[i]));
         let before = m.start().checked_sub(1).map(|i| bytes[i]);
-        if before.is_some_and(|b| b.is_ascii_alphanumeric() || b"-._:#".contains(&b)) {
+        let negative =
+            before == Some(b'-') && !m.start().checked_sub(2).is_some_and(|i| id_char(bytes[i]));
+        if before.is_some_and(id_char) && !negative && !(range && before == Some(b'-')) {
             continue;
         }
         let after = bytes.get(m.end()).copied();
         let after_digit = bytes.get(m.end() + 1).is_some_and(u8::is_ascii_digit);
-        if after.is_some_and(|b| b"-:.".contains(&b)) && after_digit {
+        if after.is_some_and(|b| b"-:.".contains(&b))
+            && after_digit
+            && !(range && after == Some(b'-'))
+        {
             continue;
         }
         let raw = m.as_str().to_ascii_lowercase();
@@ -131,16 +169,19 @@ pub(crate) fn numbers_in_text(text: &str) -> HashSet<String> {
             continue;
         }
         let groups: Vec<&str> = raw.split(',').collect();
-        let thousands = groups.len() == 1
-            || (groups[1..]
-                .iter()
-                .all(|g| g.split('.').next().is_some_and(|d| d.len() == 3))
-                && (groups[0].len() < 3 || groups[1..].iter().any(|g| g.starts_with("000"))));
-        let parts = if thousands {
-            vec![raw.replace(',', "")]
-        } else {
-            groups.iter().map(|g| g.to_string()).collect()
-        };
+        let grouped = groups[1..]
+            .iter()
+            .all(|g| g.split('.').next().is_some_and(|d| d.len() == 3));
+        let has_000 = groups[1..].iter().any(|g| g.starts_with("000"));
+        let thousands = groups.len() == 1 || (grouped && (groups[0].len() < 3 || has_000));
+        let ambiguous = thousands && groups.len() >= 3 && !has_000;
+        let mut parts = Vec::new();
+        if thousands {
+            parts.push(raw.replace(',', ""));
+        }
+        if !thousands || ambiguous {
+            parts.extend(groups.iter().map(|g| g.to_string()));
+        }
         for part in parts {
             let digits = part.replace('_', "");
             out.extend(normalize_number(&digits, 10, digits.contains('.')));
@@ -156,15 +197,40 @@ fn is_arbitrary_marker(comment: &str) -> bool {
 }
 
 /// Collect every literal token, macro bodies included (syn does not parse
-/// macro arguments, so walk the raw token stream).
+/// macro arguments, so walk the raw token stream). A literal right after a
+/// lone `.` is a tuple index (`t.2`, `p.1.1` lexes as `p` `.` `1.1`), not a
+/// constant, and is skipped; `..`/`..=` range bounds are kept.
+// trace:TASK-1954 | ai:claude — TASK-1812 (2)
 fn literal_tokens(stream: proc_macro2::TokenStream, out: &mut Vec<proc_macro2::Literal>) {
-    for tree in stream {
+    let is_dot = |t: Option<&proc_macro2::TokenTree>| matches!(t, Some(proc_macro2::TokenTree::Punct(p)) if p.as_char() == '.');
+    let trees: Vec<proc_macro2::TokenTree> = stream.into_iter().collect();
+    for (i, tree) in trees.iter().enumerate() {
         match tree {
             proc_macro2::TokenTree::Group(g) => literal_tokens(g.stream(), out),
-            proc_macro2::TokenTree::Literal(l) => out.push(l),
+            proc_macro2::TokenTree::Literal(l) => {
+                let prev = i.checked_sub(1).and_then(|j| trees.get(j));
+                let prev2 = i.checked_sub(2).and_then(|j| trees.get(j));
+                if is_dot(prev) && !is_dot(prev2) {
+                    continue;
+                }
+                out.push(l.clone());
+            }
             _ => {}
         }
     }
+}
+
+/// Refuse a `--path` that names a file other than Rust source: the scanners
+/// only parse `.rs`, and a parse failure would misreport it.
+// trace:TASK-1954 | ai:claude — TASK-1812 (6), TASK-1916 (3)
+pub(crate) fn ensure_rust_path(target: &std::path::Path, command: &str) -> Result<()> {
+    if target.is_file() && target.extension().and_then(|e| e.to_str()) != Some("rs") {
+        anyhow::bail!(
+            "{} is not a Rust source file; {command} scans .rs files only",
+            target.display()
+        );
+    }
+    Ok(())
 }
 
 /// The PURE core: every numeric literal inside a traced region of one Rust
@@ -182,7 +248,8 @@ pub(crate) fn scan_rust_source(text: &str) -> Option<Vec<TracedLiteral>> {
     for token in tokens {
         let line0 = token.span().start().line.saturating_sub(1);
         let specs = traced.specs_at(line0);
-        if specs.is_empty() {
+        // trace:TASK-1954 | ai:claude — TASK-1812: test-only code is exempt.
+        if specs.is_empty() || traced.in_test(line0) {
             continue;
         }
         let lit = syn::Lit::new(token.clone());
@@ -306,6 +373,7 @@ pub(crate) fn handle_lint_constants(
         None => project_root.clone(),
     };
     anyhow::ensure!(target.exists(), "{} does not exist", target.display());
+    ensure_rust_path(&target, "lint constants")?;
 
     let mut files = Vec::new();
     if target.is_file() {
@@ -427,7 +495,7 @@ mod tests {
 
     // The signed acceptance fixture: spec mentions 15; code has 15, 40 and a
     // marked 7 -> only 40 is flagged.
-    // trace:TASK-1785.Fixture | ai:claude
+    // trace:TASK-1785.ac0ead8d | ai:claude
     #[test]
     fn only_the_unmentioned_literal_is_flagged() {
         let src = "\
@@ -660,5 +728,51 @@ fn f() -> u32 { 40 }
         assert!(nums.contains("40"));
         assert!(!nums.contains("77"));
         assert!(explaining_numbers(&store, "STORY-404").is_none());
+    }
+
+    // trace:TASK-1954 | ai:claude — TASK-1812 (4)(5)
+    #[test]
+    fn text_numbers_take_ranges_negatives_and_ambiguous_lists() {
+        let nums = numbers_in_text("wait 30-60 s, offset -15, sizes 64,128,256, on 2026-10-15");
+        for v in ["30", "60", "15", "64", "128", "256", "64128256"] {
+            assert!(nums.contains(v), "missing {v} in {nums:?}");
+        }
+        for v in ["2026", "10"] {
+            assert!(!nums.contains(v), "date part {v} in {nums:?}");
+        }
+        assert!(numbers_in_text("ADR-54 x-15 TASK-30-60").is_empty());
+    }
+
+    // trace:TASK-1954 | ai:claude — TASK-1812 (main, 2, 7)
+    #[test]
+    fn test_code_and_tuple_indices_skipped_trait_and_enum_covered() {
+        let src = "\
+// trace:STORY-1 | ai:claude
+fn f(t: (u8, (u8, u8))) -> u8 { t.0 + t.1.1 + [7u8; 3][0..2].len() as u8 }
+// trace:STORY-1 | ai:claude
+trait T { fn d(&self) -> u32 { 40 } }
+// trace:STORY-1 | ai:claude
+enum E { A = 41 }
+#[cfg(test)]
+mod tests {
+    // trace:STORY-1 | ai:claude
+    fn g() -> u32 { 99 }
+}
+";
+        assert_eq!(values(src), vec!["7", "3", "0", "2", "40", "41"]);
+    }
+
+    // trace:TASK-1954 | ai:claude — TASK-1812 (6)
+    #[test]
+    fn non_rust_path_is_refused() {
+        let dir = tempfile::tempdir().unwrap();
+        let md = dir.path().join("notes.md");
+        std::fs::write(&md, "40").unwrap();
+        let err = ensure_rust_path(&md, "lint constants").unwrap_err();
+        assert!(err.to_string().contains("not a Rust source file"), "{err}");
+        let rs = dir.path().join("lib.rs");
+        std::fs::write(&rs, "").unwrap();
+        assert!(ensure_rust_path(&rs, "lint constants").is_ok());
+        assert!(ensure_rust_path(dir.path(), "lint constants").is_ok());
     }
 }
