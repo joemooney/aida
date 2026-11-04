@@ -14,13 +14,20 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-04T01:17:09.371397785Z
-modified_at: 2026-11-04T01:17:09.371397785Z
+modified_at: 2026-11-04T04:18:07.498514169Z
 req_type: Task
 tags:
 - carried-from:BUG-2428
 - finding-hash:c9c7ab12
 - from-review:PR-3316
 - kind:carried-forward
+comments:
+- id: 01a1a4c7-4e0a-7120-b29f-b66751d9d581
+  author: joe
+  content: 'ADVISOR RULING (2026-11-03 21:20 MST): bundle and fix. One lane covers the BUG-2428 launch-rollback follow-ups: (1) this finding: disarm the setup rollback once the child is spawned (or catch_unwind around the closure), so a panic after the agent ran never removes the worktree or lease; (2) TASK-2808: roll back on every pre-agent refusal (reviewer_launch_context refusal, lease-lookup miss, chdir failure, a failed codex spawn), not only ChildGrantRefused; (3) TASK-2811: add a behavioral test that drives handle_queue_work through a refused mint and asserts the worktree and lease are gone, plus one where a post-spawn panic keeps them. Gate: LIGHT.'
+  created_at: 2026-11-04T04:18:07.498514169Z
+  modified_at: 2026-11-04T04:18:07.498514169Z
+  session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
 history:
 - id: 01a1a443-3d11-7700-8298-3f5783f310c6
   author: joe
