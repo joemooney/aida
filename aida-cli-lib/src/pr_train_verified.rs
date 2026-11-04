@@ -259,6 +259,8 @@ fn collect(
     );
     let mut sources = Vec::new();
     let mut mapped = Vec::new();
+    // trace:BUG-2438 | ai:claude
+    let mut superseded = Vec::new();
     let mut all_specs = Vec::new();
     for car in &train.cars {
         if let Some(cover) = &car.member.release {
@@ -333,17 +335,24 @@ fn collect(
             .iter()
             .any(|(_, _, v)| !v.is_closed() && reviewed_at_head(v));
         let mut originals = Vec::new();
+        let mut superseded_here = Vec::new();
         for (key, record, verdict) in verdicts {
             if verdict.is_closed() {
                 continue;
             }
-            let superseded = at_head
+            let is_superseded = at_head
                 && verdict
                     .reviewed_sha
                     .as_deref()
                     .is_some_and(|sha| !sha.trim().is_empty())
                 && !reviewed_at_head(&verdict);
-            if superseded {
+            if is_superseded {
+                // Covered by this car's current-head verdict, so the train's
+                // own exact-tip corpus gate must not re-weigh it either.
+                superseded_here.push(json!({"key": key, "record": record}));
+                if !superseded.contains(&(key.clone(), record.clone())) {
+                    superseded.push((key.clone(), record.clone()));
+                }
                 continue;
             }
             anyhow::ensure!(
@@ -374,7 +383,7 @@ fn collect(
             !originals.is_empty(),
             "train car has no original authorized approval"
         );
-        sources.push(json!({"pr": fresh.pr, "head": fresh.head, "branch": source.head_ref, "specs": ids, "originals": originals, "metadata":metadata, "policy_specs":policy_specs}));
+        sources.push(json!({"pr": fresh.pr, "head": fresh.head, "branch": source.head_ref, "specs": ids, "originals": originals, "superseded": superseded_here, "metadata":metadata, "policy_specs":policy_specs}));
         all_specs.extend(ids);
     }
     all_specs.sort();
@@ -402,6 +411,14 @@ fn collect(
             train_key,
             Value::Object(event.verdict_record().unwrap().clone()),
         ));
+    }
+    // Superseded bodies join the mapped set only after the train-key binding
+    // above, so an older-head refusal can never be the M1 copy it binds.
+    // trace:BUG-2438 | ai:claude
+    for entry in superseded {
+        if !mapped.contains(&entry) {
+            mapped.push(entry);
+        }
     }
     anyhow::ensure!(
         live.fetch_main()? == train.base,

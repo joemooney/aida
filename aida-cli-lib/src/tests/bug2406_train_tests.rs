@@ -637,9 +637,10 @@ fn bug2406_new_refusal_refuses(key: &str) {
     assert!(calls(f.root()).is_empty(), "{key}");
 }
 
-/// BUG-2438: an earlier round's refusal, keyed by the spec and reviewed at an
-/// older head (the legacy-imported shape), is superseded by the PR-keyed
-/// approval at the current head. The train lands.
+/// BUG-2438: an earlier round's refusal, stamped with the spec and reviewed at
+/// an older head, is superseded by the PR's approval at the current head
+/// (recorded with no spec, so the spec key's newest verdict is still the old
+/// refusal). The train lands.
 // trace:BUG-2438 | ai:claude
 #[test]
 fn bug2438_old_head_spec_keyed_refusal_is_superseded_by_current_head_approval() {
@@ -652,13 +653,37 @@ fn bug2438_old_head_spec_keyed_refusal_is_superseded_by_current_head_approval() 
     let stale = json!({"verdict":"request-changes", "reviewed_sha":old_head,
         "reviewed_branch":"source/BUG-2400", "recorded_at":earlier,
         "recorded_by":"fixture earlier-round reviewer"});
-    ledger::store::append_unbound(f.root(), "BUG-2400", stale.as_object().unwrap()).unwrap();
+    // The incident's PR-3330 ledger: an earlier spec-stamped refusal, then
+    // the current-head approval recorded with no spec (review watch).
+    let canonical = "BUG-b6b1278890774ef993d2ebc327862470-173";
+    for (record, spec) in [(&stale, Some(canonical)), (&f.records[0], None)] {
+        ledger::store::append_one(
+            f.root(),
+            ledger::event::verdict_event(
+                f.root(),
+                ledger::ChangeKey::pr(11),
+                record.as_object().unwrap(),
+                spec,
+            ),
+        )
+        .unwrap();
+    }
+    let by_spec = ledger::project::newest_verdict(f.root(), canonical).unwrap();
+    assert_eq!(
+        by_spec["verdict"],
+        json!("request-changes"),
+        "spec key still names the old refusal"
+    );
+    assert_eq!(
+        ledger::project::newest_verdict(f.root(), "PR-11").unwrap(),
+        *f.records[0].as_object().unwrap()
+    );
     let forge = GitHubForge::new(f.root());
     let mut live = f.live(&forge);
     let (train, change) = f.opened(&mut live);
     let lease = live.lease(change.id).unwrap();
     live.merge_verified(&change, &train, lease.as_ref())
-        .unwrap();
+        .unwrap_or_else(|e| panic!("train must land: {e:?}"));
     let transport = calls(f.root());
     assert_eq!(transport.len(), 1, "the train merges once");
     assert!(transport[0].contains(&format!("--match-head-commit {}", train.tip)));
