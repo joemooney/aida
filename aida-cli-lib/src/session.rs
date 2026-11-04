@@ -12593,6 +12593,12 @@ mod tests {
     #[test]
     #[cfg(unix)]
     fn interactive_reviewer_and_resume_inherit_parent_before_spawn() {
+        // A contained parent refuses the `AIDA_AGENT_CMD` seam (STORY-2326),
+        // so the fake is the `claude` on PATH, in its own process.
+        // trace:STORY-2326 | ai:claude
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
         let tmp = tempfile::tempdir().unwrap();
         let fake = tmp.path().join("fake-claude");
         let capture = tmp.path().join("capture");
@@ -12603,12 +12609,14 @@ mod tests {
                 capture.display()
             ),
         );
+        let path = path_with_fake_claude(tmp.path(), &fake);
         let _ambient = crate::test_env::AmbientGuard::hermetic_with_seat_and(
             tmp.path(),
             "advisor",
             &["reviewer"],
             &[
-                ("AIDA_AGENT_CMD", Some(fake.to_str().unwrap())),
+                ("AIDA_AGENT_CMD", None),
+                ("PATH", path.to_str()),
                 ("AIDA_CONTAINED", Some("1")),
                 ("AIDA_OS_WRAP", Some("0")),
             ],
@@ -12652,9 +12660,24 @@ mod tests {
         .is_err());
     }
 
+    /// A PATH whose first entry holds `fake` as `claude`.
+    // trace:STORY-2326 | ai:claude
+    fn path_with_fake_claude(dir: &std::path::Path, fake: &std::path::Path) -> std::ffi::OsString {
+        let bin = dir.join("fake-bin");
+        std::fs::create_dir_all(&bin).unwrap();
+        std::fs::copy(fake, bin.join("claude")).unwrap();
+        std::env::join_paths(std::iter::once(bin).chain(std::env::split_paths(
+            &std::env::var_os("PATH").unwrap_or_default(),
+        )))
+        .unwrap()
+    }
+
     // trace:BUG-2006 | ai:antigravity
     #[test]
     fn spawn_vendor_headless_with_seat_preserves_parent_containment() {
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
         let tmp = tempfile::tempdir().unwrap();
         let project = tmp.path().join("project");
         std::fs::create_dir_all(project.join(".aida-store")).unwrap();
@@ -12677,14 +12700,18 @@ mod tests {
         };
 
         // trace:BUG-2172 | ai:codex
-        // 1. Caller passes false, but contained parent must win.
+        // 1. Caller passes false, but contained parent must win. A contained
+        // parent refuses `AIDA_AGENT_CMD` (STORY-2326): the fake is on PATH.
+        // trace:STORY-2326 | ai:claude
         {
+            let path = path_with_fake_claude(tmp.path(), &fake);
             let _ambient = crate::test_env::AmbientGuard::hermetic_with_seat_and(
                 &project,
                 "advisor",
                 &["implementer"],
                 &[
-                    ("AIDA_AGENT_CMD", Some(fake.to_str().unwrap())),
+                    ("AIDA_AGENT_CMD", None),
+                    ("PATH", path.to_str()),
                     ("AIDA_OS_WRAP", Some("0")),
                     ("AIDA_CONTAINED", Some("1")),
                 ],

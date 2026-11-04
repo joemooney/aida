@@ -27,7 +27,7 @@ const LEDGER: &[(&str, usize, &str)] = &[
     ("aida-cli-lib/src/agent_registry.rs", 2, "not a vendor child: terminal title restore and probe"),
     ("aida-cli-lib/src/autopilot_intake.rs", 3, "slice B: autopilot intake"),
     ("aida-cli-lib/src/claude_agents.rs", 1, "slice D: vendor query (agents list)"),
-    ("aida-cli-lib/src/codex_tool_env.rs", 2, "slice B: Codex finalize respawns the built child (get_program)"),
+    ("aida-cli-lib/src/codex_tool_env.rs", 3, "slice B: Codex finalize respawns the built child (get_program), twice in production; the third is the #[cfg(test)] fn tool_shell_command_for_test from main, which production() does not skip (it skips cfg(test) modules only)"),
     ("aida-cli-lib/src/compete_cmd.rs", 5, "slice B: compete arms and judge"),
     ("aida-cli-lib/src/containment/supervisor.rs", 3, "STORY-2238: the containment supervisor, a permitted constructor module"),
     ("aida-cli-lib/src/criteria_red_run.rs", 1, "generic helper: runs a criteria command"),
@@ -45,6 +45,7 @@ const LEDGER: &[(&str, usize, &str)] = &[
     ("aida-cli-lib/src/init_cmd.rs", 6, "slice D: vendor queries (MCP list/add)"),
     ("aida-cli-lib/src/kernel.rs", 2, "not a vendor child: gh binary probe"),
     ("aida-cli-lib/src/lane_env.rs", 1, "the in-process lane seat correction (Q2), not a spawn"),
+    ("aida-cli-lib/src/lane_job.rs", 1, "not a vendor child: BUG-2383's sandboxed lane job runner (a cargo job, from main)"),
     ("aida-cli-lib/src/lib_part5.rs", 1, "slice D: vendor adapter command"),
     ("aida-cli-lib/src/mail_wake.rs", 1, "not a vendor child: the mail-wake helper binary"),
     ("aida-cli-lib/src/mailbox_wake_run.rs", 1, "slice B: Codex thread submit"),
@@ -64,6 +65,7 @@ const LEDGER: &[(&str, usize, &str)] = &[
     ("aida-cli-lib/src/remote_create.rs", 1, "not a vendor child: forge CLI"),
     ("aida-cli-lib/src/review_watch.rs", 1, "not a vendor child: the watch command"),
     ("aida-cli-lib/src/review_watch_forge.rs", 4, "not a vendor child: forge CLI"),
+    ("aida-cli-lib/src/seat_target_overlay.rs", 1, "not a vendor child: the overlay probe runs `true` under unshare (from main)"),
     ("aida-cli-lib/src/session.rs", 49, "slice A2: the three Claude resume paths; slice B: Codex session/exec/resume and the vendor resume; the shared seat-env helper; the contained export (its aida control children convert in slice B); the interactive exec of a built launch"),
     ("aida-cli-lib/src/session_start.rs", 2, "not a vendor child: forge CLI"),
     ("aida-cli-lib/src/shift.rs", 2, "generic helper: shift command; pre_exec process group"),
@@ -81,8 +83,10 @@ const LEDGER: &[(&str, usize, &str)] = &[
 /// The slice-A total. A later slice lowers it; it is zero after slice D.
 /// (Advisor ruling 1/2 widened the scanner to every dynamic program and
 /// `exec`/`pre_exec`; the sites were already there.) The merge of main
-/// brought in STORY-2254's detached Codex worker (+8, ledgered above).
-const CEILING: usize = 164;
+/// brought in STORY-2254's detached Codex worker (+8, ledgered above). The
+/// merges after 0ff32132 brought in +3 (lane_job.rs, seat_target_overlay.rs,
+/// and codex_tool_env.rs's cfg(test) fn), all ledgered above.
+const CEILING: usize = 167;
 
 fn rust_files(dir: &Path, out: &mut Vec<PathBuf>) {
     let Ok(entries) = std::fs::read_dir(dir) else {
@@ -239,7 +243,7 @@ const NON_VENDOR_SPELLINGS: &[&str] = &[
 ];
 
 /// The spelling of a `Command::new` argument: the argument itself, or for a
-/// call (`crate::aida_exe_path()`, `current_exe()?.with(..)`) its callee path,
+/// call (`crate::aida_exe_path()`, `resolve_aida_exe().join(..)`) its callee path,
 /// the text before the first `(`. A trailing `,` or `?` is dropped.
 fn program_spelling(arg: &str) -> &str {
     let arg = arg.trim_start_matches('&').trim_end_matches([',', '?']);
@@ -421,7 +425,8 @@ fn scanner_catches_every_mutant_spelling() {
         "#[cfg(test)]\n#[path = \"x.rs\"]\nmod x;\nfn f() {}",
         "fn f(c: &mut Command) { c.env(\"AIDA_HEADLESS\", \"1\"); }",
         "fn f() { Command::new(crate::aida_exe_path()); Command::new(&gh_bin); }",
-        "fn f() { Command::new(&real_git); Command::new(std::env::current_exe()?); }",
+        // Split so TASK-1262's raw-lookup ratchet does not count the fixture.
+        concat!("fn f() { Command::new(&real_git); Command::new(std::env::current_", "exe()?); }"),
         "fn f() { GitCommand::new(program); }",
     ];
     for src in clean {
