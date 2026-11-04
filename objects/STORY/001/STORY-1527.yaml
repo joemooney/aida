@@ -10,12 +10,12 @@ description: |-
   2. The .ACn test-tracing convention is documented in the capture discipline (where trace comments are documented) with one worked example.
   3. aida-monitor (or a successor subject) reaches readiness through normal development, tracked by the coverage report's criterion-to-test share.
   4. When readiness is met, the north-star check is re-run for the real delta and the null snapshot superseded.
-status: Rejected
+status: Draft
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-06T03:58:29.391669890Z
-modified_at: 2026-11-04T02:45:06.671460154Z
+modified_at: 2026-11-04T02:45:08.299819800Z
 req_type: Story
 relationships:
 - rel_type: Blocks
@@ -64,6 +64,14 @@ history:
   timestamp: 2026-11-04T02:45:06.798268608Z
   session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
   changes: []
+- id: 01a1a472-2c4b-76e0-9222-3e3fd1797176
+  author: joe
+  timestamp: 2026-11-04T02:45:08.299811141Z
+  session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
+  changes:
+  - field_name: status
+    old_value: Rejected
+    new_value: Draft
 filed_at:
   code_sha: dafb66432e7a58201cbdd274f131702e1fbbc90d
   branch: main
