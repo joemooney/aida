@@ -20,7 +20,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T07:26:01.071265913Z
-modified_at: 2026-11-04T01:21:28.434694675Z
+modified_at: 2026-11-04T01:44:14.368673269Z
 req_type: Task
 tags:
 - architecture
@@ -699,6 +699,14 @@ comments:
   content: 'ADVISOR RULING (2026-11-03 18:32 MST) on the open question: narrow the gate-ledger grant to the reviewer role. Its only stated purpose is a reviewer''s merge hold, and an implementer has no reason to write verdict/hold events. Apply it in contained_write_set() for both vendors (if Claude implementers get it today, that is drift to remove in the same change) and add a test that an implementer''s Codex flags carry no gate-ledger --add-dir. Advisor opened the PR as a draft from the host and is running the N3 host probe now; results will be posted here.'
   created_at: 2026-11-04T01:21:28.434694675Z
   modified_at: 2026-11-04T01:21:28.434694675Z
+  session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
+- id: 01a1a43a-6b20-7442-8222-288074ef5c19
+  author: joe
+  content: |-
+    ADVISOR N3 RESULT (host, 2026-11-03 18:45 MST, branch head 78858c73525, AIDA_REQUIRE_CODEX_SANDBOX_LIVE=1 AIDA_REQUIRE_BWRAP_LIVE=1 cargo test -p aida-cli-lib --lib task_2712_): 3 passed, 2 FAILED. (1) task_2712_codex_sandbox_live_seat_commit_and_denials: 'fatal: Unable to create <seat>/.git/index.lock: Read-only file system'. Codex 0.166 re-protects <clone>/.git at runtime despite the --add-dir grant, so the N3 premise is FALSE. (2) task_2712_native_codex_seat_commit_ships_from_seat_without_seat_hooks (bug_home_038_seat_publish_tests.rs:527): ship refuses 'cannot publish from <tmp>/aida-seat-aida-native ... only a seat clone the host recorded gets its own writable .git'; the fixture's clone is not host-recorded, so fix the fixture or the record lookup.
+    ADVISOR RULING: apply the 11:25 ruling's fallback now. Native Codex lanes commit through the host: git index/commit/ref writes for the seat clone run via run_sandboxed (AIDA's own bwrap job with <clone>/.git writable, hooks off), invoked by ship --from-seat / the lane's commit step. Do not try to defeat Codex's .git protection. Keep N1/N2/N4, apply the gate-ledger reviewer-only ruling (18:32), and convert the live test to assert the fallback path (commit via run_sandboxed succeeds; direct git commit inside Codex is denied). Push to spec-b6b1278890774ef993d2ebc327862470-001 (draft PR #3323). The advisor re-runs the live probe on the host after the push; lanes cannot nest the Codex sandbox.
+  created_at: 2026-11-04T01:44:14.368673269Z
+  modified_at: 2026-11-04T01:44:14.368673269Z
   session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
 history:
 - id: 01a1960f-6ca8-7313-8a94-63b0b98a4e44
