@@ -1,5 +1,6 @@
 id: 01a1a802-8385-7a30-9033-a106ad47c4f0
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-788
+agreed_id: TASK-2841
 title: Train fixture approval receipts intermittently fail under parallel tests
 description: 'While validating BUG-2441, cargo test -p aida-cli-lib --lib bug2406 -- --nocapture ran 54 tests: 49 passed, including all five BUG-2441 regressions; five existing forged-build tests (message/order/patch/source/tip) failed during Fixture::opened_on at live.gate(11), before reaching the forged-build assertion or the changed verified collect path. Refusal said the fixture independent human receipt did not re-validate. Each test already uses run_path_isolated_test. A serial rerun is in progress to determine repeatability. Investigate fixture receipt/setup behavior under parallel load; cause is not established.'
 status: Draft
@@ -23,6 +24,11 @@ comments:
   created_at: 2026-11-04T19:25:46.898944310Z
   modified_at: 2026-11-04T19:25:46.898944310Z
   session_id: 01a1a7f2ef8a
+history:
+- id: 01a1a82b-86be-7da0-aa37-ff792cf599f6
+  author: joe
+  timestamp: 2026-11-04T20:06:27.262392208Z
+  changes: []
 filed_at:
   aida_version: 0.16.0
   aida_build_sha: e44c9e595a7
