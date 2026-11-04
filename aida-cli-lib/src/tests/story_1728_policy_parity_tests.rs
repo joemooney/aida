@@ -9,6 +9,10 @@
 //! which matched top-level commands only, so every verb of a listed command is
 //! a write. The fixture must never be regenerated from a branch: the registry
 //! is what it checks.
+//!
+//! Rows corrected by hand after capture, each a deliberate policy change:
+//! - `session leases --prune-stale`: Read → Session. It releases stale
+//!   leases, including other clones' claims (TASK-1939).
 // trace:STORY-1728 | ai:claude
 
 use super::*;

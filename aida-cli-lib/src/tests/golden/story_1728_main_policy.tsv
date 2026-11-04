@@ -1700,7 +1700,7 @@ session harness-worktree-release --agent-id TASK-1	Session	false	false	true
 session leases	Read	false	false	true
 session leases --all	Read	false	false	true
 session leases --json	Read	false	false	true
-session leases --prune-stale	Read	false	false	true
+session leases --prune-stale	Session	false	false	true
 session leases --verbose	Read	false	false	true
 session leases --yes	Read	false	false	true
 session manifest mark-completed --session TASK-1 TASK-1	Session	false	false	true

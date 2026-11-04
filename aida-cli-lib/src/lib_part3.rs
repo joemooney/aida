@@ -1821,8 +1821,8 @@ impl OrchestratorBadge {
 /// trace:BUG-380 | ai:claude
 pub(crate) fn resolve_default_branch_ref(project_root: &std::path::Path) -> Option<String> {
     use std::process::Command as PCmd;
-    let git = |args: &[&str]| -> Option<String> {
-        PCmd::new("git")
+    let git = |args: &[&str]| -> std::result::Result<Option<String>, std::convert::Infallible> {
+        Ok(PCmd::new("git")
             .arg("-C")
             .arg(project_root)
             .args(args)
@@ -1830,20 +1830,36 @@ pub(crate) fn resolve_default_branch_ref(project_root: &std::path::Path) -> Opti
             .ok()
             .filter(|o| o.status.success())
             .map(|o| String::from_utf8_lossy(&o.stdout).trim_end().to_string())
-            .filter(|s| !s.is_empty())
+            .filter(|s| !s.is_empty()))
     };
+    match walk_default_branch_candidates(git) {
+        Ok(resolved) => resolved,
+        Err(never) => match never {},
+    }
+}
 
+/// The one default-branch candidate walk behind [`resolve_default_branch_ref`]
+/// and [`resolve_default_branch_ref_until`]: `origin/HEAD`, then
+/// `init.defaultBranch`, then `main` / `master`, each tried as `origin/<name>`
+/// before `<name>`. `git` runs one git call and yields its trimmed, non-empty
+/// stdout (`Ok(None)` on failure); an `Err` from it (the bounded twin's
+/// deadline) stops the walk. Keeping the order here keeps show and the gates
+/// agreeing on the default branch.
+// trace:TASK-2000 trace:TASK-1999 | ai:claude
+fn walk_default_branch_candidates<E>(
+    mut git: impl FnMut(&[&str]) -> std::result::Result<Option<String>, E>,
+) -> std::result::Result<Option<String>, E> {
     if let Some(short) = git(&[
         "symbolic-ref",
         "--quiet",
         "--short",
         "refs/remotes/origin/HEAD",
-    ]) {
-        return Some(short);
+    ])? {
+        return Ok(Some(short));
     }
 
     let mut candidates: Vec<String> = Vec::new();
-    if let Some(cfg) = git(&["config", "--get", "init.defaultBranch"]) {
+    if let Some(cfg) = git(&["config", "--get", "init.defaultBranch"])? {
         candidates.push(cfg);
     }
     for lit in ["main", "master"] {
@@ -1854,14 +1870,14 @@ pub(crate) fn resolve_default_branch_ref(project_root: &std::path::Path) -> Opti
 
     for name in candidates {
         let origin = format!("origin/{}", name);
-        if git(&["rev-parse", "--verify", "--quiet", &origin]).is_some() {
-            return Some(origin);
+        if git(&["rev-parse", "--verify", "--quiet", &origin])?.is_some() {
+            return Ok(Some(origin));
         }
-        if git(&["rev-parse", "--verify", "--quiet", &name]).is_some() {
-            return Some(name);
+        if git(&["rev-parse", "--verify", "--quiet", &name])?.is_some() {
+            return Ok(Some(name));
         }
     }
-    None
+    Ok(None)
 }
 
 /// BUG-1993: resolving the default branch hit the caller's deadline before git
@@ -1900,35 +1916,7 @@ pub(crate) fn resolve_default_branch_ref_until(
         }
     };
 
-    if let Some(short) = git(&[
-        "symbolic-ref",
-        "--quiet",
-        "--short",
-        "refs/remotes/origin/HEAD",
-    ])? {
-        return Ok(Some(short));
-    }
-
-    let mut candidates: Vec<String> = Vec::new();
-    if let Some(cfg) = git(&["config", "--get", "init.defaultBranch"])? {
-        candidates.push(cfg);
-    }
-    for lit in ["main", "master"] {
-        if !candidates.iter().any(|c| c == lit) {
-            candidates.push(lit.to_string());
-        }
-    }
-
-    for name in candidates {
-        let origin = format!("origin/{}", name);
-        if git(&["rev-parse", "--verify", "--quiet", &origin])?.is_some() {
-            return Ok(Some(origin));
-        }
-        if git(&["rev-parse", "--verify", "--quiet", &name])?.is_some() {
-            return Ok(Some(name));
-        }
-    }
-    Ok(None)
+    walk_default_branch_candidates(git)
 }
 
 // ============================================================================
