@@ -220,6 +220,89 @@ fn task2813_torn_lease_file_makes_liveness_unknown_not_dead() {
     assert_eq!(advisor_mail(temp.path()).len(), 1, "routed once");
 }
 
+/// Write an `aida lock` lock-only entry (`lock-<slug>.toml`) as
+/// `worktree_lock::acquire` does; it is not a session lease.
+fn write_lock_only_entry(root: &Path) -> std::path::PathBuf {
+    let entry = crate::worktree_lock::LockOnlyEntry {
+        scope: "aida:lock:wt".into(),
+        worktree_path: root.display().to_string(),
+        started_at: "2026-11-03T00:00:00Z".into(),
+        authorized_by: "advisor".into(),
+        aida_lock_only: true,
+    };
+    let dir = crate::leases::leases_dir(root);
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join(format!("{}wt.toml", crate::worktree_lock::LOCK_ONLY_PREFIX));
+    std::fs::write(&path, toml::to_string_pretty(&entry).unwrap()).unwrap();
+    path
+}
+
+// TASK-2813 rework: an `aida lock` lock-only entry names no branch and so
+// owns none. Its presence leaves a dead author's change on the update path.
+#[test]
+fn task2813_lock_only_entry_does_not_block_the_update_path() {
+    let (temp, store) = fixture();
+    let lock = write_lock_only_entry(temp.path());
+    let stale = change(1, true);
+    assert_eq!(update::author_live(temp.path(), &stale), Ok(false));
+    notify(temp.path(), &store, &stale);
+    let updates = Cell::new(0);
+    let live = |c: &forge::Change| update::author_live(temp.path(), c);
+    let forge_ok = |_: &forge::Change| -> std::result::Result<(), update::UpdateFailure> {
+        updates.set(updates.get() + 1);
+        Ok(())
+    };
+    let Some(Action::Skip(reason)) = pass(temp.path(), &store, &stale, &live, &forge_ok) else {
+        panic!("skip expected")
+    };
+    assert_eq!(updates.get(), 1, "the dead author's branch is updated");
+    assert!(reason.starts_with(update::STALE_UPDATED), "{reason}");
+    assert!(advisor_mail(temp.path()).is_empty());
+    // A corrupt lock-named file is not provably a lock entry: still unknown.
+    std::fs::write(&lock, "scope = \"aida:lock:wt\"\nworktree_pa").unwrap();
+    assert!(update::author_live(temp.path(), &stale).is_err());
+}
+
+// TASK-2813: an unreadable lease directory makes liveness unknown: the
+// branch is not updated and the change is routed once.
+#[cfg(unix)]
+#[test]
+fn task2813_unreadable_lease_dir_makes_liveness_unknown() {
+    use std::os::unix::fs::PermissionsExt;
+    // SAFETY: geteuid never fails and has no preconditions.
+    if unsafe { libc::geteuid() } == 0 {
+        eprintln!("skipped: root ignores directory permissions");
+        return;
+    }
+    let (temp, store) = fixture();
+    write_live_lease(temp.path());
+    let dir = crate::leases::leases_dir(temp.path());
+    std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o000)).unwrap();
+    let mut stale = change(1, true);
+    stale.head_branch = Some("other-branch".into());
+    let probe = update::author_live(temp.path(), &stale);
+    notify(temp.path(), &store, &stale);
+    let live = |c: &forge::Change| update::author_live(temp.path(), c);
+    let mut reasons = Vec::new();
+    for _ in 0..2 {
+        if let Some(Action::Skip(reason)) = pass(temp.path(), &store, &stale, &live, &never) {
+            reasons.push(reason);
+        }
+    }
+    let mail = advisor_mail(temp.path()).len();
+    std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o755)).unwrap();
+    assert!(probe.is_err(), "{probe:?}");
+    assert_eq!(reasons.len(), 2, "{reasons:?}");
+    for reason in &reasons {
+        assert!(
+            reason.contains("cannot read the session leases"),
+            "{reason}"
+        );
+        assert!(reason.contains("routed to the advisor"), "{reason}");
+    }
+    assert_eq!(mail, 1, "routed once");
+}
+
 // AC2: when liveness cannot be judged (no branch reported), the branch is
 // not updated but the change is routed to the advisor, exactly once.
 #[test]

@@ -2156,6 +2156,17 @@ fn list_leases_strict_inner(
         if !is_session_lease_file(name) {
             continue;
         }
+        // An `aida lock` lock-only entry is not a session lease and names no
+        // branch, so it cannot own one: skip it. One that does not parse as a
+        // lock entry falls through and still fails closed.
+        // trace:TASK-2813 | ai:claude
+        if any_unparseable_is_unknown
+            && name.starts_with(crate::worktree_lock::LOCK_ONLY_PREFIX)
+            && std::fs::read_to_string(&p)
+                .is_ok_and(|body| crate::worktree_lock::parse_lock_only_entry(&body).is_ok())
+        {
+            continue;
+        }
         let label = p.display().to_string();
         match read_lease_file_for_gate(&label, || std::fs::read_to_string(&p), spec_ids) {
             LeaseFileRead::Lease(lease) => out.push(*lease),
