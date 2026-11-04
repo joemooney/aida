@@ -3694,6 +3694,7 @@ mod tests {
             verdict_ref: None,
             release_condition: None,
             spec: None,
+            spec_key: None,
             placed_by: None,
             absorbed: Vec::new(),
         }

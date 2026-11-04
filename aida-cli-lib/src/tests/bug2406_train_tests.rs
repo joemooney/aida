@@ -193,11 +193,17 @@ impl Fixture {
             let obj = record.as_object().unwrap().clone();
             ledger::store::append_one(
                 root,
-                ledger::event::verdict_event(root, ledger::ChangeKey::pr(n), &obj, Some(canonical)),
+                ledger::event::verdict_event(
+                    root,
+                    ledger::ChangeKey::pr(n),
+                    &obj,
+                    Some(&ledger::GateSpec::with_key(canonical, None)),
+                ),
             )
             .unwrap();
             if bound {
-                ledger::store::append_unbound(root, alias, &obj).unwrap();
+                ledger::store::append_unbound(root, &ledger::GateSpec::with_key(alias, None), &obj)
+                    .unwrap();
             }
             records.push(record);
             prs.insert(
@@ -612,7 +618,7 @@ fn bug2406_new_refusal_refuses(key: &str) {
                 f.root(),
                 ledger::ChangeKey::pr(77),
                 record.as_object().unwrap(),
-                Some("UNRELATED-1"),
+                Some(&ledger::GateSpec::with_key("UNRELATED-1", None)),
             ),
         )
         .unwrap();
@@ -924,7 +930,7 @@ fn bug2406_sealed_context_refuses(fault: &str) {
                     f.root(),
                     ledger::ChangeKey::pr(77),
                     &record,
-                    Some(spec),
+                    Some(&ledger::GateSpec::with_key(spec, None)),
                 ),
             )
             .unwrap();
@@ -1016,7 +1022,10 @@ fn bug2406_source_grant_is_validated_at_original_recording_time() {
             f.root(),
             ledger::ChangeKey::pr(11),
             record.as_object().unwrap(),
-            Some("BUG-B6B1278890774EF993D2EBC327862470-173"),
+            Some(&ledger::GateSpec::with_key(
+                "BUG-B6B1278890774EF993D2EBC327862470-173",
+                None,
+            )),
         ),
     )
     .unwrap();
@@ -1047,6 +1056,7 @@ fn hold_on(pr: u64, head: &str) -> crate::gate::merge_hold_core::MergeHoldRecord
         verdict_ref: None,
         release_condition: None,
         spec: None,
+        spec_key: None,
         placed_by: Some("fixture reviewer".into()),
         absorbed: vec![],
     }
