@@ -18,13 +18,14 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T18:35:14.072123334Z
-modified_at: 2026-11-04T02:31:27.663591873Z
+modified_at: 2026-11-04T02:41:34.430667453Z
 req_type: Task
 tags:
 - aida-monitor
 - from-spike:SPIKE-86
 - measurement
 - north-star
+- operator-held
 - plan:night
 - reconstitution
 relationships:
@@ -253,4 +254,13 @@ history:
   - field_name: status
     old_value: Approved
     new_value: Rejected
+- id: 01a1a46e-e979-7202-a21d-62465fcc7891
+  author: joe
+  timestamp: 2026-11-04T02:41:34.585195878Z
+  session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
+  changes: []
+deferred: true
+deferred_at: 2026-11-04T02:41:34.430667453Z
+deferred_until: the operator reopens the regeneration / north-star research line
+deferred_reason: 'OPERATOR RULING 2026-11-03 19:36 MST: the regeneration / north-star research line stays deferred (revised from reject).'
 execution_mode: drive
