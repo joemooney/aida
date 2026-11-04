@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T15:44:00.054377754Z
-modified_at: 2026-11-04T15:57:59.655633471Z
+modified_at: 2026-11-04T16:15:42.618365534Z
 req_type: Bug
 tags:
 - area:containment
@@ -19,6 +19,11 @@ comments:
   content: 'Implementation sketch: retain the requested outer bubblewrap boundary for every vendor and emit its explicit `--` command separator immediately before the executable. Do not bypass wrapping for Codex native posture: STORY-2460''s policy/proof ruling does not itself establish conformance or authorize removing an existing requested boundary. Add a regression that builds actual os_wrapped_program_and_args output and passes it through codex_tool_env::prepare_launch, checking wrapper prefix, metadata insertion, and unchanged vendor args. This is the acceptance-listed argv repair, with no new containment posture or policy.'
   created_at: 2026-11-04T15:57:59.655619680Z
   modified_at: 2026-11-04T15:57:59.655619680Z
+- id: 01a1a758-461a-7182-a722-94ffc6409575
+  author: mcp
+  content: 'Implemented explicit bubblewrap `--` executable separator for all vendors in commit 8400b51da91. Added regression in existing Codex adapter tests that constructs production wrapped argv, calls prepare_launch, and verifies prefix/executable, cwd, metadata insertion and original arguments for env/config-enabled wrapping. Validation: final adapter run 17 passed, including new regression and production launch inventory ratchet; BUG-2434 lane-default suite 9 passed; cargo fmt --all -- --check and git diff HEAD --check passed. Four existing real/process fixtures require an unbuilt matching target/agent/aida binary and were explicitly excluded after the initial run reported that prerequisite. No live model/conformance run claimed. Retains outer wrapper and native posture; no containment-policy change.'
+  created_at: 2026-11-04T16:15:42.618357502Z
+  modified_at: 2026-11-04T16:15:42.618357502Z
 history:
 - id: 01a1a73b-7503-7232-9ec9-cb44ced95ccf
   author: joe
