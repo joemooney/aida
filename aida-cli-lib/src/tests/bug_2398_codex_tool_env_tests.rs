@@ -1402,12 +1402,9 @@ fn bug_2398_codex_advisor_consult_delegates_own_child_and_refuses_without_delega
     let project = tmp.path().join("project");
     std::fs::create_dir_all(home.join(".aida")).unwrap();
     std::fs::create_dir_all(&project).unwrap();
-    assert!(Command::new("git")
-        .args(["init", "-q"])
-        .current_dir(&project)
-        .status()
-        .unwrap()
-        .success());
+    // trace:TASK-2708 | ai:claude — a real project (a resolvable default
+    // branch): the finalizer refuses a root whose trusted sha cannot resolve.
+    crate::test_git::commit_fixture(&project);
     let capture = tmp.path().join("advisor-grant.txt");
     let fake = tmp.path().join("fake-codex");
     crate::test_exec::write_executable(
@@ -1693,6 +1690,9 @@ fn bug_2395_hook_under_prepared_codex_launch_sees_seat_role() {
         "purpose = \"Lane fixture purpose\"\n",
     )
     .unwrap();
+    // trace:TASK-2708 | ai:claude — a real project: the finalizer refuses a
+    // root whose trusted default branch cannot be resolved.
+    crate::test_git::commit_fixture(&project);
 
     let mut cmd = Command::new("codex");
     cmd.args(["exec", "--", "prompt"])
@@ -1744,6 +1744,9 @@ fn bug_2395_hook_under_prepared_codex_launch_sees_seat_role() {
 #[test]
 fn bug_2416_guided_codex_launch_is_finalized_by_prepare_launch() {
     let tmp = tempfile::TempDir::new().unwrap();
+    // trace:TASK-2708 | ai:claude — a real project: the finalizer refuses a
+    // root whose trusted default branch cannot be resolved.
+    crate::test_git::commit_fixture(tmp.path());
     let launch = crate::session::GuidedSessionLaunch {
         program: "codex",
         prompt: "guided prompt".into(),

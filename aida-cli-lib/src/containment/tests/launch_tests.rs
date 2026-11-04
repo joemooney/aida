@@ -44,8 +44,9 @@ fn live_required() -> bool {
 }
 /// The installed-Codex native-composition test has its own opt-in: the
 /// required-live CI gate installs bwrap but not Codex, so that gate must
-/// neither run it as required nor count it. An operator lane with Codex
-/// installed sets this to make its skip a failure.
+/// neither run it as required nor count it, and a host that merely happens
+/// to have Codex installed does not run it either. Only an operator lane that
+/// sets this runs it, and then any missing prerequisite is a failure.
 // trace:TASK-2708 | ai:claude
 fn installed_codex_required() -> bool {
     std::env::var("AIDA_REQUIRE_CODEX_INSTALLED_LIVE").as_deref() == Ok("1")
@@ -433,7 +434,14 @@ fn task_2707_exact_environment_selection_excludes_explicit_tokens() {
 #[test]
 fn task_2707_native_composition_companion_empty_grant_and_generated_profile() {
     // trace:TASK-2708 | ai:claude — its own opt-in, never the required-live gate.
-    if !live_available_under(installed_codex_required()) {
+    if !installed_codex_required() {
+        eprintln!(
+            "SKIP: installed-Codex native composition is opt-in \
+             (AIDA_REQUIRE_CODEX_INSTALLED_LIVE=1)"
+        );
+        return;
+    }
+    if !live_available_under(true) {
         return;
     }
     let mut plan = fixture("print('placeholder')", "print('placeholder')");
@@ -467,10 +475,7 @@ fn task_2707_native_composition_companion_empty_grant_and_generated_profile() {
     env.insert("CODEX_HOME".into(), home.to_string_lossy().into_owned());
     // trace:TASK-2708 | ai:claude — CI installs bwrap but not Codex.
     let Ok(program) = resolve_program(&Command::new("codex"), &env) else {
-        skip_under(
-            installed_codex_required(),
-            "installed Codex unavailable for native composition",
-        );
+        skip_under(true, "installed Codex unavailable for native composition");
         return;
     };
     let check = r#"
