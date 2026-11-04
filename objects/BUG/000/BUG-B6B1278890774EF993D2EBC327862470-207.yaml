@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T05:32:54.614008505Z
-modified_at: 2026-11-04T08:09:43.798333709Z
+modified_at: 2026-11-04T08:19:11.897984220Z
 req_type: Bug
 tags:
 - kind:bug-spotted
@@ -48,6 +48,13 @@ comments:
   created_at: 2026-11-04T08:01:54.498969202Z
   modified_at: 2026-11-04T08:01:54.498969202Z
   session_id: da1c0d85-1d45-4ce4-a292-5358644f65b9
+- id: 01a1a5a4-0399-7e90-90de-84359236a482
+  author: joe
+  content: 'AC3 (PR #3353): no collector change here; STORY-2324 PR-B (#3331, head 48a0c50c2c0e) covers it. At that head, the review-watch collector collect_standalone_verdict resolves each credited spec to a GateSpec (aida-cli-lib/src/gate/review_verdict.rs:2592-2609) and calls ledger::record_collected_verdict, which writes one event per spec through event::verdict_event(..., Some(spec)) (aida-cli-lib/src/gate/ledger/mod.rs:259-262). That writer stamps event.spec and event.spec_key (aida-cli-lib/src/gate/ledger/event.rs:211-215). So once #3331 lands, a collected current-head approval updates the canonical spec key''s newest verdict. Only the PR-keyed event (mod.rs:259, spec None) stays unstamped, by design, and #3353''s head-scoped supersession in pr_train_verified handles that event. Credited specs come from the PR title/branch/body (queue_cmd.rs:14560 review_calibration_spec_ids). A PR that credits no spec gets no spec-keyed record, so there is nothing to stamp.'
+  created_at: 2026-11-04T08:19:11.897984220Z
+  modified_at: 2026-11-04T08:19:11.897984220Z
+  session_id: 01a1a59b4f30
+  harness_version: 2.1.318 (Claude Code)
 history:
 - id: 01a1a529-3a0b-7851-9f12-63da9e5a1022
   author: aida-session-start
