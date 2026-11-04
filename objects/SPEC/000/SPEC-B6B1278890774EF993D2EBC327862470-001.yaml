@@ -15,12 +15,12 @@ description: |
   4. Add decisive synthetic native-boundary/host-channel tests and actual host smoke evidence. Preserve source/publication byte identity and real Git/forge refusals. Tests fake HOME/store/credentials only, never user data or actual live store. No new timers/unattended run enablement. Independent strict review and normal merge floors required. This does not grant permission to bypass native SDK protections.
 
   Architecture/sketch-first; serialize touched launcher/authority code after BUG2398. Reuse signed contained C8/C9 primitives where appropriate but do not block native delivery behind an unrelated full backend or silently treat contained-only success as native proof. A precise design dependency may be added after independent sketch judgment. LIGHT one targeted regression plus fast; >10files/sharedinfra adds required touched/compile, longcargo background, normal slots. No blind broad rebuilds.
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T07:26:01.071265913Z
-modified_at: 2026-11-04T17:51:03.848495415Z
+modified_at: 2026-11-04T17:51:06.249508623Z
 req_type: Task
 tags:
 - architecture
@@ -872,6 +872,12 @@ comments:
   created_at: 2026-11-04T17:51:03.848495415Z
   modified_at: 2026-11-04T17:51:03.848495415Z
   session_id: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
+- id: 01a1a7af-9c09-71e1-bd51-b6bde302de6f
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: PR-1 scope of TASK-2712 (round-3 ruling: F3 lane-level post-exit tests, F4 Refs salvage trailer on non-zero exit, F5 index restore only while HEAD unmoved) is implemented and tested, but CI ''gates'' is red at this head on the trace/doc-header stranding gate caused by this PR (agent_launch.rs launch_wants_seat_clone). One comment-only move fixes it. ACs: ac6e55fd not-applicable-because split to PR-2 by advisor ruling 2026-11-04 02:36 (agent-new lanes now host-commit after exit: task_2712_bg_lane_* / task_2712_foreground_lane_commits_pending_work_after_exit); ac774e2b verified for this slice (signed rulings on spec; bwrap host commit hooks off, host identity, no danger-full-access; task_2712_native_codex_seat_commit_ships_from_seat_without_seat_hooks, bwrap-gated); acca6182 verified for this slice by round-3 refusal tests (foreign/unrecorded clone, ended lease, live owner, symlink) plus task_2712_index_restore_only_while_head_unmoved; ac97960f unverified (host live probe F7 is the advisor''s step after CI green). Squash title ''(Refs TASK-2712)'' correctly avoids completing the spec.. No triage reason was given.'
+  created_at: 2026-11-04T17:51:06.249507008Z
+  modified_at: 2026-11-04T17:51:06.249507008Z
+  session_id: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
 history:
 - id: 01a1960f-6ca8-7313-8a94-63b0b98a4e44
   author: joe
@@ -1107,14 +1113,14 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1a7af-9c09-71e1-bd51-b6a88f151790
+  author: joe
+  timestamp: 2026-11-04T17:51:06.249498401Z
+  session_id: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   aida_version: 0.16.0
   aida_build_sha: 53c89700b4d
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'PR-1 scope of TASK-2712 (round-3 ruling: F3 lane-level post-exit tests, F4 Refs salvage trailer on non-zero exit, F5 index restore only while HEAD unmoved) is implemented and tested, but CI ''gates'' is red at this head on the trace/doc-header stranding gate caused by this PR (agent_launch.rs launch_wants_seat_clone). One comment-only move fixes it. ACs: ac6e55fd not-applicable-because split to PR-2 by advisor ruling 2026-11-04 02:36 (agent-new lanes now host-commit after exit: task_2712_bg_lane_* / task_2712_foreground_lane_commits_pending_work_after_exit); ac774e2b verified for this slice (signed rulings on spec; bwrap host commit hooks off, host identity, no danger-full-access; task_2712_native_codex_seat_commit_ships_from_seat_without_seat_hooks, bwrap-gated); acca6182 verified for this slice by round-3 refusal tests (foreign/unrecorded clone, ended lease, live owner, symlink) plus task_2712_index_restore_only_while_head_unmoved; ac97960f unverified (host live probe F7 is the advisor''s step after CI green). Squash title ''(Refs TASK-2712)'' correctly avoids completing the spec.'
-  recovery_hint: address the review findings, move TASK-2712 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-04T17:38:56.910970480Z
