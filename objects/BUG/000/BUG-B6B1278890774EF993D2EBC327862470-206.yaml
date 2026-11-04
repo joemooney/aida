@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-206
 agreed_id: BUG-2437
 title: 'Every dev promote deactivates mail retention for hours: writers running a replaced binary count as ''not known to take a write permit'' even when that build already took permits'
 description: 'Observed 2026-11-03 21:40 MST. After promoting b5577764ec0, ''aida mailbox retention activate'' refused: ''not every mail writer is known to take a write permit''. The listed writers were running lanes, a reviewer, a lane job and the operator''s command deputy, all running 0f1624a8b38. That build had itself recorded the previous activation, so it does take permits. Their /proc exe reads ''(deleted)'', so the check cannot identify their build and treats them as unknown. Until every lane turns over and the operator restarts the deputy, retention stays off and ''session end'' refuses for any session whose mailbox holds mail. That breaks lease cleanup between promotes. Fix: each writer records its build id at startup (for example in a pid-keyed runtime file, or the lease), and activation accepts any writer whose recorded build is at or after the permit-capable build. Alternatively, promote keeps the activation when the new build''s permit protocol is unchanged.'
-status: InProgress
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T04:41:19.994753856Z
-modified_at: 2026-11-04T11:35:17.204930768Z
+modified_at: 2026-11-04T13:06:44.452628927Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -166,6 +166,20 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1a6ab-445e-71b3-ac3c-0227c084a3f4
+  author: aida-auto-bump
+  timestamp: 2026-11-04T13:06:44.446114487Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1a6ab-4464-77c0-9bac-fb7b0380680d
+  timestamp: 2026-11-04T13:06:44.452624745Z
+  agent: aida
+  commit_sha: c19294416a9bc68dab12b910c0566ad80a7cc995
+  summary: 'Permit-protocol marker admits replaced/older writers that carry it; unmarked/unreadable writers and a promoted exe without the marker still refuse (classify + fill_digests tests). Round-2 blocker fixed: marker-only scan stops at first hit and hashes nothing; CI (rest) time budget and all 7 CI jobs green at b82f920. Doc findings (#2, #3) and perf (#4) addressed. Merge-hold-gate red is the supervised hold, not a defect.'
+  review_verdict: approved
 filed_at:
   code_sha: b5577764ec0466133c191b7e51d62c40ea3a2c83
   branch: main
@@ -178,3 +192,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-11-04T06:07:54.808336942Z
   implemented_by: joe
+  completed_at: 2026-11-04T13:06:44.446107338Z
+  completion_sha: c19294416a9bc68dab12b910c0566ad80a7cc995
