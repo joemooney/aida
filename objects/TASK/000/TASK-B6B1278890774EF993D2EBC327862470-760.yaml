@@ -14,13 +14,20 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-04T02:46:13.845914003Z
-modified_at: 2026-11-04T02:46:13.845914003Z
+modified_at: 2026-11-04T04:19:08.016274833Z
 req_type: Task
 tags:
 - carried-from:STORY-2331
 - finding-hash:dbc03d07
 - from-review:PR-3308
 - kind:carried-forward
+comments:
+- id: 01a1a4c8-3a70-7f63-8111-22798753acc5
+  author: joe
+  content: 'ADVISOR RULING (2026-11-03 21:20 MST): folded into TASK-2020. TASK-2020 recalibrates per-test budgets from measured runs; include story_2331 from the test-timings-cli-1 artifact of run 41757527185.'
+  created_at: 2026-11-04T04:19:08.016274833Z
+  modified_at: 2026-11-04T04:19:08.016274833Z
+  session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
 history:
 - id: 01a1a489-fa0d-7f12-bf58-ba83a7776069
   author: joe
