@@ -19,7 +19,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T01:55:24.499361019Z
-modified_at: 2026-10-19T15:50:26.419986701Z
+modified_at: 2026-11-04T02:32:38.332656521Z
 req_type: Story
 tags:
 - lanes
@@ -95,6 +95,12 @@ comments:
   created_at: 2026-10-11T07:02:01.432574607Z
   modified_at: 2026-10-11T07:02:01.432574607Z
   session_id: acdb011f-c2d9-4682-b4b1-08b1c979881c
+- id: 01a1a466-babc-77b0-aaf4-c7099ab7c4e5
+  author: joe
+  content: 'OPERATOR RULING (2026-11-03 19:30 MST, relayed by advisor): regroup ruling 3: stays deferred until the merge train is the default ship path; feature lanes are trains to a lane branch.'
+  created_at: 2026-11-04T02:32:38.332656521Z
+  modified_at: 2026-11-04T02:32:38.332656521Z
+  session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
 history:
 - id: 01a154db-6470-7da2-bc6a-60d7253b685a
   author: joe
