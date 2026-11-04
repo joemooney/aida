@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-204
 agreed_id: BUG-2435
 title: 'os_wrap lanes bypass the cargo slot limiter: bwrap gives each lane a private /run/user, so every lane takes its own slot and host cargo ps shows them as QUEUED'
 description: 'Observed 2026-11-03 19:15 MST. Four AIDA_OS_WRAP=1 lanes each ran rustc on aida-cli-lib at once (5 rustc processes, load 10 on 6 cores), while host ''cargo ps'' showed ''slots 0/2 busy, 4 queued'' and earlier jobs as LOST. The queued wrapper (bash ~/.local/bin/cargo, pid 1901021) runs in mount namespace 4026533095, not the host''s 4026531832. It already has a cargo child, with its acquisition marker under /tmp/cargo-slots-0/acq.<pid>, so the slot lock it took is private to the bwrap. The jobs ledger (~/.local/state/cargo-slots/builds.jsonl) is shared, so the host sees an entry that never takes a host slot. Fix: the os_wrap profile binds the host slot directory (/run/user/<uid>/cargo-slots-<uid>) read-write, as BUG-2383''s lane job runner intends, or lane jobs acquire the slot on the host side before entering bwrap. Add a test that a wrapped job''s acquisition shows as busy in host cargo ps.'
-status: InProgress
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T02:15:29.023069877Z
-modified_at: 2026-11-04T07:53:36.325567587Z
+modified_at: 2026-11-04T09:16:19.075749153Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -120,6 +120,20 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1a5d8-4efd-7dc3-9b20-49a754f822e7
+  author: aida-auto-bump
+  timestamp: 2026-11-04T09:16:19.069092668Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1a5d8-4f03-72d0-b8e8-a79bb43e152d
+  timestamp: 2026-11-04T09:16:19.075744031Z
+  agent: aida
+  commit_sha: 1c3f4de38499ff1611c1eae7497aa6153393db98
+  summary: 'Round-1 blocker fixed: bug_2435_bwrap_ joins the forced-live bwrap gate filter and both count regexes; gates job ''Live bwrap OS-wrap confinement gate'' passed at c5996cc (no-skip + ran==expected enforced). Fix (nested bwrap --unshare-user --uid/--gid host, --cap-drop ALL) is correct; overlay_wrapped is the only production wrap caller. merge-hold-gate failure is the supervised-spec hold, not a code defect.'
+  review_verdict: approved
 filed_at:
   code_sha: 0754a362d797d2d9b246b4609456735b5486095d
   branch: main
@@ -132,3 +146,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-11-04T04:59:13.307896475Z
   implemented_by: joe
+  completed_at: 2026-11-04T09:16:19.069086034Z
+  completion_sha: 1c3f4de38499ff1611c1eae7497aa6153393db98
