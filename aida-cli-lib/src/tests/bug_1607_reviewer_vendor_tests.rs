@@ -142,6 +142,7 @@ fn run_standalone_reviewer_with_codex_only_project_launches_codex_after_worktree
         &verdict_path,
         false,
         launch_vendor,
+        &crate::queue_cmd::AgentLaunchMark::default(),
     );
     // BUG-2149: the mock records no verdict, so the launch reports that —
     // but it must have got as far as spawning the vendor.

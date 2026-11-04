@@ -13383,7 +13383,7 @@ pub(crate) fn handle_queue_work(
             adopt_orphan.is_some(),
         )
     };
-    let mut setup_receipt = if no_launch {
+    let setup_receipt = if no_launch {
         start()?
     } else {
         crate::gate::review_authority::as_launcher(start)?
@@ -13392,7 +13392,9 @@ pub(crate) fn handle_queue_work(
     // The lease this pickup minted, for the refused-delegation release below.
     let mut minted_lease_id: Option<String> = None;
     // trace:TASK-1337 | ai:codex
-    let setup_result = (|| -> Result<()> {
+    // TASK-2807: the setup rollback stays armed only until `agent` marks a
+    // call that can start an agent. trace:TASK-2807 | ai:claude
+    let launch_agent = |agent: &AgentLaunchMark| -> Result<()> {
         // Look up the lease we just minted: by scope, by owner=us, freshest.
         let lease = list_leases(&project_root)
         .into_iter()
@@ -13709,6 +13711,7 @@ pub(crate) fn handle_queue_work(
                 &verdict_path,
                 contained,
                 launch_vendor,
+                agent,
             );
         }
         // trace:TASK-1594 | ai:claude
@@ -13774,6 +13777,9 @@ pub(crate) fn handle_queue_work(
                     crate::gate::seat_authority::current_grant_id().as_deref(),
                 );
                 eprintln!();
+                // TASK-2807: from here an implementer can have run.
+                // trace:TASK-2807 | ai:claude
+                agent.starting();
                 return crate::standalone_implementer::run(crate::standalone_implementer::Launch {
                     project_root: &project_root,
                     vendor: launch_vendor,
@@ -13931,6 +13937,8 @@ pub(crate) fn handle_queue_work(
                             Some(lease.scope.as_str()),
                         )?,
                     };
+                    // trace:TASK-2807 | ai:claude
+                    agent.starting();
                     let status = session::spawn_vendor_headless_resume(
                         &session::HeadlessResume {
                             vendor,
@@ -14044,6 +14052,9 @@ pub(crate) fn handle_queue_work(
                     let child_grant = headless_child_grant
                         .as_ref()
                         .expect("BUG-2139: a fresh headless launch minted its child authority");
+                    // `exec_vendor_headless` spawns and waits (it is not an
+                    // exec). trace:TASK-2807 | ai:claude
+                    agent.starting();
                     return session::exec_vendor_headless(
                         headless_vendor,
                         &prompt,
@@ -14083,25 +14094,21 @@ pub(crate) fn handle_queue_work(
                 )
             }
         }
-    })();
-    // BUG-2428: a launch refused at its child grant launched nobody. Roll back
-    // everything this invocation's setup created (worktree, branch, lease,
-    // claim and status write), so neither the tree nor the lease blocks the
-    // next attempt with "held by worktree ... before pickup setup". Any other
-    // outcome keeps the setup: the agent ran, or the manual continuation
-    // below needs the tree.
-    // trace:BUG-2428 | ai:claude
-    if launch_refused_before_agent(&setup_result) && setup_receipt.owns_setup() {
-        // The launcher may have entered the tree; leave it before removal.
-        let _ = std::env::set_current_dir(&project_root);
-        drop(setup_receipt);
+    };
+    let (setup_result, rolled_back) = run_pickup_launch(&project_root, setup_receipt, launch_agent);
+    // BUG-2428 / TASK-2807: a launch that failed before any agent could start
+    // launched nobody, so `run_pickup_launch` rolled back everything this
+    // invocation's setup created (worktree, branch, lease, claim and status
+    // write), and neither the tree nor the lease blocks the next attempt with
+    // "held by worktree ... before pickup setup". Any other outcome kept it.
+    // trace:BUG-2428 TASK-2807 | ai:claude
+    if rolled_back {
         eprintln!(
             "  no agent was launched: rolled back the {} pickup setup (worktree, lease, claim; anything kept is named above)",
             plan.scope
         );
         return setup_result;
     }
-    setup_receipt.disarm();
     // Advisor comment 35: a reviewer launch refused at child-seat delegation
     // launched nobody, so its PR-N lease would only block the next pickup
     // until --force-claim. Release it. (A setup this invocation owned was
@@ -14186,13 +14193,91 @@ pub(crate) fn end_finished_review(
 }
 
 /// BUG-2428: whether a pickup's launch failed before any agent process
-/// started, so the setup it created serves nothing and is rolled back. A
-/// refused child grant is minted before the worker is spawned or exec'd.
-// trace:BUG-2428 | ai:claude
-pub(crate) fn launch_refused_before_agent(setup_result: &Result<()>) -> bool {
-    setup_result
-        .as_ref()
-        .is_err_and(crate::gate::seat_authority::ChildGrantRefused::is_in)
+/// started, so the setup it created serves nothing and is rolled back.
+/// `agent_started` is whether the launch reached a call that can start one
+/// ([`AgentLaunchMark`]): any error before that is a pre-agent refusal (a
+/// watch-launch refusal, a lease-lookup miss, a failed chdir, a failed exec).
+/// A refused child grant is minted before its worker spawns, so it is one
+/// wherever it surfaces.
+// trace:BUG-2428 TASK-2807 | ai:claude
+pub(crate) fn launch_refused_before_agent(setup_result: &Result<()>, agent_started: bool) -> bool {
+    setup_result.as_ref().is_err_and(|err| {
+        !agent_started || crate::gate::seat_authority::ChildGrantRefused::is_in(err)
+    })
+}
+
+/// TASK-2807: set by a pickup's launch immediately before it calls anything
+/// that can start an agent process (a spawn-and-wait runner). An `exec` is
+/// not marked: it either replaces this process (no rollback runs) or fails,
+/// which launched nobody.
+// trace:TASK-2807 | ai:claude
+#[derive(Default)]
+pub(crate) struct AgentLaunchMark(std::cell::Cell<bool>);
+
+impl AgentLaunchMark {
+    pub(crate) fn starting(&self) {
+        self.0.set(true);
+    }
+    pub(crate) fn started(&self) -> bool {
+        self.0.get()
+    }
+}
+
+/// TASK-2807: run a pickup's launch with its setup rollback armed only until
+/// an agent can start. A launch that fails before that (or a refused child
+/// grant) rolls back the setup `receipt` owns — worktree, branch, lease,
+/// claim — and returns `(result, true)`. Any other outcome keeps the setup.
+/// A panic is caught only to decide the same way (after the mark the receipt
+/// is disarmed, so the agent's tree and lease survive the unwind) and is
+/// then resumed.
+// trace:TASK-2807 | ai:claude
+pub(crate) fn run_pickup_launch(
+    project_root: &std::path::Path,
+    mut receipt: crate::session_start::SessionStartReceipt,
+    launch: impl FnOnce(&AgentLaunchMark) -> Result<()>,
+) -> (Result<()>, bool) {
+    let mark = AgentLaunchMark::default();
+    let result = match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| launch(&mark))) {
+        Ok(result) => result,
+        Err(panic) => {
+            if mark.started() {
+                receipt.disarm();
+            } else if receipt.owns_setup() {
+                leave_setup_tree(project_root, &receipt);
+            }
+            drop(receipt);
+            std::panic::resume_unwind(panic);
+        }
+    };
+    if launch_refused_before_agent(&result, mark.started()) && receipt.owns_setup() {
+        leave_setup_tree(project_root, &receipt);
+        drop(receipt);
+        return (result, true);
+    }
+    receipt.disarm();
+    (result, false)
+}
+
+/// The launcher may have entered the setup's tree (the launch `chdir`s into
+/// it); leave it for `project_root` before the rollback removes it. A
+/// process already elsewhere stays where it is.
+// trace:BUG-2428 TASK-2807 | ai:claude
+fn leave_setup_tree(
+    project_root: &std::path::Path,
+    receipt: &crate::session_start::SessionStartReceipt,
+) {
+    let Some(tree) = receipt.lease_id.as_deref().and_then(|id| {
+        list_leases(project_root)
+            .into_iter()
+            .find(|l| l.id == id)
+            .map(|l| l.worktree_path)
+    }) else {
+        return;
+    };
+    let tree = std::fs::canonicalize(&tree).unwrap_or(tree);
+    if std::env::current_dir().is_ok_and(|cwd| cwd.starts_with(&tree)) {
+        let _ = std::env::set_current_dir(project_root);
+    }
 }
 
 /// Advisor comment 35: whether a failed pickup's lease is released — only a
@@ -14268,6 +14353,10 @@ pub(crate) fn run_standalone_reviewer(
     // codex-routed standalone reviewer actually launches `codex`.
     // trace:BUG-1607 | ai:claude
     launch_vendor: session::HeadlessVendor,
+    // TASK-2807: marked just before each arm spawns the reviewer, so the
+    // pickup's setup rollback is disarmed once a reviewer can have run.
+    // trace:TASK-2807 | ai:claude
+    agent: &AgentLaunchMark,
 ) -> Result<()> {
     // Watch context only restricts an ordinary attested launch; it cannot
     // authorize a verdict or a reviewer seat. trace:TASK-1993 | ai:codex
@@ -14345,6 +14434,7 @@ pub(crate) fn run_standalone_reviewer(
                 // BUG-2386: resume on the recorded vendor. trace:BUG-2386 | ai:claude
                 let (vendor, resume_id) =
                     crate::codex_resume::recorded_resume(project_root, &id, Some(scope))?;
+                agent.starting();
                 let (status, grant) = session::spawn_vendor_headless_resume_granted(
                     &session::HeadlessResume {
                         vendor,
@@ -14414,6 +14504,7 @@ pub(crate) fn run_standalone_reviewer(
                         )
                         .cyan()
                     );
+                    agent.starting();
                     let status = crate::review_watch::reviewer_status(&mut cmd)
                         .context("failed to spawn codex")?;
                     (status, None, Some(grant.id))
@@ -14438,6 +14529,7 @@ pub(crate) fn run_standalone_reviewer(
                         &crate::current_user_id(None),
                         contained || session::aida_contained_env()?,
                     )?;
+                    agent.starting();
                     (
                         session::spawn_claude_resume_with_grant(
                             &id,
@@ -14486,6 +14578,7 @@ pub(crate) fn run_standalone_reviewer(
                 // trace:TASK-307 | ai:claude
                 let tee_opts =
                     headless_tee::TeeOptions::from_env_and_flag(false).with_label("reviewer");
+                agent.starting();
                 let (status, grant) = session::spawn_vendor_headless_with_seat_granted(
                     launch_vendor,
                     aida_core::agents_config::AgentSeat::Reviewer,
@@ -14538,6 +14631,7 @@ pub(crate) fn run_standalone_reviewer(
                     )
                     .cyan()
                 );
+                agent.starting();
                 let (status, grant) =
                     session::spawn_reviewer_launch_plan_granted(&plan, project_root)?;
                 (status, None, Some(grant))
