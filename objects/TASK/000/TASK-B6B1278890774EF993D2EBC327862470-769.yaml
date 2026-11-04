@@ -1,0 +1,29 @@
+id: 01a1a4f4-ad77-70b0-81aa-4faddd6a3ced
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-769
+title: 'minor (non-blocking): ensure_reentered_lease_on_lane_branch (agent_launch.rs:45…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on BUG-2390, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  minor (non-blocking): ensure_reentered_lease_on_lane_branch (agent_launch.rs:4524) refusal path, which stops a lane from silently re-entering a lease on a different branch, has no test; only happy paths of --branch/--base are covered (bug_2390_bg_accepts_branch_and_base is a clap parse test).
+
+  PR: #3309
+  Reviewed sha: ab32b837e129dbdda363b217f5a11564141250e0
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-04T05:07:41.047630384Z
+modified_at: 2026-11-04T05:07:41.047630384Z
+req_type: Task
+tags:
+- carried-from:BUG-2390
+- finding-hash:2d3798b0
+- from-review:PR-3309
+- kind:carried-forward
+filed_at:
+  code_sha: 906c8e605ef697df3a89df1b5aad96623a0ac353
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: b5577764ec0
+  vendor: claude
