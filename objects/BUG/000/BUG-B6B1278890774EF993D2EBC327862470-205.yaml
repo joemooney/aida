@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-205
 agreed_id: BUG-2436
 title: Finished headless implementer lanes keep their lease after pr-opened + queue done, so the review watcher refuses their PR until an advisor ends the lease by hand
 description: 'Observed 2026-11-03 20:30-20:40 MST, five times in one evening. PR-3324 (BUG-2433), PR-3326 (TASK-2802), PR-3327 (TASK-2805) and PR-3330 (BUG-2194) each logged ''review of this head exited without completing (queue work exited 1: help: aida session end <lease> --force)'' or ''the author''s session ... is live and owns the merge'', after the lane had already logged ''queue done succeeded ... My turn is over'' and ''implementer: pr-opened pr=N''. Every lease was clean and pushed, and end-finished.sh deleted each one without loss. The reviews then waited about 1.5h until the advisor noticed. BUG-2224 fixed one cause (copied tags); this is the general case. Fix: the headless launcher ends the implementer lease once the lane exits after pr-opened, with the tree clean and HEAD on origin. Or the watcher treats a lease whose process is gone and whose tree is clean and pushed as finished, and proceeds. Relates to STORY-2351 (hygiene job) and STORY-2325 (ownership).'
-status: Done
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T03:41:33.569103017Z
-modified_at: 2026-11-04T04:33:30.980028876Z
+modified_at: 2026-11-04T05:07:00.778948873Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -52,6 +52,20 @@ history:
   timestamp: 2026-11-04T04:33:50.439038971Z
   session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
   changes: []
+- id: 01a1a4f4-1027-7143-a8bb-772d8f3ef5a5
+  author: aida-auto-bump
+  timestamp: 2026-11-04T05:07:00.775158509Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a1a4f4-102a-7450-94f4-d816cf1f681c
+  timestamp: 2026-11-04T05:07:00.778944477Z
+  agent: aida
+  commit_sha: 906c8e605ef697df3a89df1b5aad96623a0ac353
+  summary: Standalone launcher ends a finished lane's lease (pr-opened + clean tree + HEAD on origin) via the same 'session end --yes --skip-ci' the drain phase 2 uses (phase_driver.rs:2530); punt/hold/stall/dirty/unpushed/unknown-origin keep the lease (table test); a refusal warns and keeps the lease (unit test). Caller returns run() directly, so the lease is not used after it ends. CI green on lib-0/1, cli-0/1, rest, contracts, merge-hold-gate; 'gates' still running at record time.
+  review_verdict: approved
 filed_at:
   code_sha: 76d65a8b0d8f2458d0e0803ee1c05e329d76ccff
   branch: main
@@ -64,3 +78,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-11-04T04:28:39.846955734Z
   implemented_by: joe
+  completed_at: 2026-11-04T05:07:00.775151671Z
+  completion_sha: 906c8e605ef697df3a89df1b5aad96623a0ac353
