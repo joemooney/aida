@@ -1,0 +1,23 @@
+id: 01a1a50b-c5d6-7441-b192-89d4e403ca32
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-207
+agreed_id: BUG-2438
+title: pr train refuses a PR approved at its current head because an older-head spec-keyed refusal still counts
+description: 'Observed 2026-11-03 22:30 MST: train of #3330 (BUG-2194) ejected with ''train PR #3344 was not merged: train source has a refusing review''. The gate ledger .aida/gate-ledger/PR-3330.jsonl holds seq 3, a legacy-imported CHANGES REQUESTED keyed spec=BUG-2194 at head b7c8abb8, and seq 6, an APPROVED verdict from review watch at the current head a4f9ffd0 with spec=null. pr_train_verified.rs:312-323 iterates read_bodies() for every key (PR-3330 and BUG-2194). It refuses on any non-closed non-approving body without checking that the body''s reviewed head equals fresh.head, or patch-identity carry-over (STORY-2120). The newest verdict for key BUG-2194 is therefore the stale refusal. This blocks every PR whose earlier round requested changes before the ledger import. Acceptance: (1) The train source gate (and aida pr ship, if it shares the selection) uses the head-scoped effective verdict: a verdict whose head differs from the current head, and is not carried by patch identity, is superseded by a verdict at the current head under any of the PR''s keys. A refusal at the current head still refuses. (2) Regression test in the train tests: an old-head spec-keyed refusal plus a current-head PR-keyed approval lands, and a current-head refusal under any key ejects. (3) The review-watch collector stamps the canonical spec on the verdicts it collects, unless STORY-2324 PR-B (#3331) already does; in that case note it and skip.'
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-04T05:32:54.614008505Z
+modified_at: 2026-11-04T05:32:54.614008505Z
+req_type: Bug
+tags:
+- kind:bug-spotted
+- severity:major
+filed_at:
+  code_sha: 906c8e605ef697df3a89df1b5aad96623a0ac353
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: b5577764ec0
+  vendor: claude
+  session: da1c0d85-1d45-4ce4-a292-5358644f65b9
