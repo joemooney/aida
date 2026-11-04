@@ -2123,6 +2123,10 @@ Run by: anyone, when: you want to see what's pending (read-only).
 List the decision inbox — every spec with a recorded DecisionRequest, pending ones first. The pure
 read; never prompts (scripting/scanning).
 
+Always shows the full inbox, home or away. Presence only shapes the proactive nudge in `aida
+status`: while away, pending decisions accumulate quietly unless `[presence] questions =
+"always-surface"` (default `"quiet-when-away"`) in `.aida/config.toml`.
+
 Usage: aida questions list [OPTIONS]
 
 Options:
@@ -18032,7 +18036,8 @@ win and integrity gates (the kickoff scope-ack, CI, merge-on-green) always apply
 `[presence]` in `.aida/config.toml`: consumers  = "on" | "off"            (master switch; default
 on) away_drain = "headless-both"         (default) | "headless-escalate-defaults" | "headless-park"
 escalation = "defaults" | "park"     (punt handling; unset = derive from away_drain) home_offer =
-"surface" | "dont-block" (home-side; default surface)
+"surface" | "dont-block" (home-side; default surface) questions  = "quiet-when-away" |
+"always-surface" (decision-inbox nudge in `aida status` while away; default quiet-when-away)
 
 Hidden alias for `aida presence away` (kept for muscle memory).
 

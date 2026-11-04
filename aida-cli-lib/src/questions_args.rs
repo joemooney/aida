@@ -17,6 +17,12 @@ pub enum QuestionsCommand {
     ///
     /// List the decision inbox — every spec with a recorded DecisionRequest,
     /// pending ones first. The pure read; never prompts (scripting/scanning).
+    ///
+    /// Always shows the full inbox, home or away. Presence only shapes the
+    /// proactive nudge in `aida status`: while away, pending decisions
+    /// accumulate quietly unless `[presence] questions = "always-surface"`
+    /// (default `"quiet-when-away"`) in `.aida/config.toml`.
+    // trace:TASK-1059 | ai:claude
     List,
 
     /// Run by: advisor / automation, when: detecting which specs need a human

@@ -5637,6 +5637,11 @@ pub(crate) fn os_wrapped_program_and_args(
         full.push(managed_path.to_string_lossy().into_owned());
         full.push("/etc/claude-code/managed-settings.json".to_string());
     }
+    // Pin the executable boundary for bwrap and the Codex child-env adapter.
+    // Keep this separator for every vendor, including native Codex launches
+    // when an outer OS wrapper was requested.
+    // trace:BUG-2440 | ai:codex
+    full.push("--".to_string());
     full.push(program.to_string());
     full.extend(claude_args);
     Ok(("bwrap".to_string(), full))
