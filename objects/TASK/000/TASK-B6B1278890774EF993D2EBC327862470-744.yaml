@@ -12,7 +12,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-03T17:40:41.186637978Z
-modified_at: 2026-11-04T01:13:56.617583235Z
+modified_at: 2026-11-04T01:13:58.321174324Z
 req_type: Task
 tags:
 - carried-from:STORY-2254
@@ -65,16 +65,16 @@ history:
   timestamp: 2026-11-03T22:19:53.453420779Z
   session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
   changes: []
-- id: 01a1a41e-ae86-7b31-9963-31f5c06acff7
+- id: 01a1a41e-b52e-7aa3-bee6-b307fae34805
   author: aida-auto-bump
-  timestamp: 2026-11-04T01:13:56.614399878Z
+  timestamp: 2026-11-04T01:13:58.318080491Z
   changes:
   - field_name: status
     old_value: Done
     new_value: Completed
 processing_record:
-- id: 01a1a41e-ae89-7811-8c54-21f46a7d35d8
-  timestamp: 2026-11-04T01:13:56.617579120Z
+- id: 01a1a41e-b531-7c92-97bd-d174a22e96b8
+  timestamp: 2026-11-04T01:13:58.321169901Z
   agent: aida
   commit_sha: bf22fdd2741d62a7bb312b6be26fbe72926afd69
   summary: 'All four TASK-2799 fixes present and tested: accept_detached_launch_child compares author_process_token (both sides qualified), stamp_lease_detached_worker_at sets/removes active_pid_ns like stamp_lease_active_pid_at, record_detached_worker_strict records author_process_token, with_pid_namespace tests cover stamp/record and accept; CI green at head.'
@@ -90,5 +90,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-11-03T21:36:33.650709470Z
   implemented_by: joe
-  completed_at: 2026-11-04T01:13:56.614394100Z
+  completed_at: 2026-11-04T01:13:58.318074756Z
   completion_sha: bf22fdd2741d62a7bb312b6be26fbe72926afd69
