@@ -1729,7 +1729,8 @@ pub(crate) struct ClaimAdmission {
 // trace:STORY-1889 trace:STORY-1917 | ai:claude
 #[derive(Debug, PartialEq, Eq)]
 pub(crate) enum PassAdmission {
-    /// `review`, `flow` and `train` run only under `aida dispatch serve`.
+    /// `review`, `flow`, `train`, and a Codex `take`/`impl` lane run only
+    /// under `aida dispatch serve`.
     WaitingForServe,
     /// A recovery fence reserves the target, or the verb's cap is full.
     Skip,
@@ -1738,14 +1739,19 @@ pub(crate) enum PassAdmission {
 }
 
 /// Claim admission for one `Pending` record on a tick or serve pass.
-// trace:STORY-1889 trace:STORY-1917 trace:TASK-2344 | ai:claude
+/// `codex_lane` is true when the record is a `take`/`impl` whose lane vendor
+/// resolves to Codex: its detached launch mints the worker's grant from the
+/// serve seat's, so the tick leaves it `Pending` rather than claiming and
+/// refusing it (which would lose the request whenever the tick won the race).
+// trace:STORY-1889 trace:STORY-1917 trace:TASK-2344 trace:BUG-2390 | ai:claude
 pub(crate) fn pass_admission(
     inv: &DispatchInventory,
     req: &DispatchRequest,
     via_serve: bool,
+    codex_lane: bool,
     caps: &mut ClaimCaps,
 ) -> PassAdmission {
-    if req.action.requires_serve() && !via_serve {
+    if (req.action.requires_serve() || codex_lane) && !via_serve {
         return PassAdmission::WaitingForServe;
     }
     if inv
