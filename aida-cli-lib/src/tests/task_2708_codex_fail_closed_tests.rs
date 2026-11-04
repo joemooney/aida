@@ -35,7 +35,10 @@ const CODEX_SPAWN_PATHS: &[(&str, &str, Guard)] = &[
         "build_compete_arm_command",
         Guard::Finalizer,
     ),
-    ("dispatch.rs", "launch_implementer_lane", Guard::Finalizer),
+    // dispatch.rs take/impl Codex lanes (BUG-2390) spawn no Codex directly:
+    // `build_codex_lane_command` runs `aida agent new codex --bg`, whose
+    // worker is `agent_codex_background.rs::build_worker_exec` above. Pinned
+    // by `DISPATCH_CODEX_LANE` below.
     // Phase-driver advisor consult.
     ("phase_driver.rs", "spawn_advisor_session", Guard::Finalizer),
     // Phase-driver CI-fix child.
@@ -74,6 +77,10 @@ const CODEX_SPAWN_PATHS: &[(&str, &str, Guard)] = &[
         Guard::Finalizer,
     ),
 ];
+
+/// The dispatch take/impl Codex lane builder (BUG-2390): a detached `aida
+/// agent new codex --bg` launch, guarded by `build_worker_exec`'s finalizer.
+const DISPATCH_CODEX_LANE: &str = "build_codex_lane_command";
 
 const FINALIZER_CALL: &str = "crate::codex_tool_env::prepare_launch(";
 const RECEIPT_CALL: &str = "crate::containment::launch::PreparedLaunch::prepare(";
@@ -178,6 +185,23 @@ fn task_2708_every_codex_spawn_path_is_inventoried_and_guarded() {
             );
         }
     }
+    // Dispatch's Codex lane is the detached `aida agent new codex --bg`
+    // launch (finalized in build_worker_exec), never a direct Codex spawn.
+    let dispatch = include_str!("../dispatch.rs");
+    let lane = fn_body(dispatch, DISPATCH_CODEX_LANE);
+    for arg in ["\"agent\"", "\"new\"", "\"codex\"", "\"--bg\""] {
+        assert!(
+            lane.contains(arg),
+            "dispatch.rs::{DISPATCH_CODEX_LANE} no longer routes through `aida agent new codex --bg`"
+        );
+    }
+    assert!(
+        fn_body(dispatch, "build_implementer_launch_command").contains(
+            "DispatchVendor::Codex => {\n            unreachable!("
+        ),
+        "dispatch.rs::build_implementer_launch_command grew a direct Codex arm: \
+         finalize it through prepare_launch and record it in CODEX_SPAWN_PATHS"
+    );
     // The refusal is the finalizer's first statement, before any rebuild.
     let finalizer = fn_body(include_str!("../codex_tool_env.rs"), "prepare_launch");
     assert!(finalizer
