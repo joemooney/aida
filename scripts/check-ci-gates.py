@@ -520,6 +520,18 @@ def cargo_home_read_only_note(env: dict[str, str]) -> str | None:
 CARGO_FETCH_ERRORS = (b"read-only file system", b"failed to download", b"failed to update registry")
 
 
+# trace:TASK-2802 | ai:claude
+CARGO_TTY_ENV = {"CARGO_TERM_COLOR": "always", "CARGO_TERM_PROGRESS_WHEN": "auto"}
+
+
+def cargo_tty_env(env: dict[str, str], parent_is_tty: bool) -> dict[str, str]:
+    """TASK-2802: the gate env plus cargo's terminal settings when the parent
+    stream is a TTY; values already in `env` are left alone."""
+    if not parent_is_tty:
+        return env
+    return {**CARGO_TTY_ENV, **env}
+
+
 def run_gate(root: Path, name: str, command: str, env: dict[str, str]) -> tuple[bool, float, bool]:
     started = time.monotonic()
     # Preserve both streams and retain only an overlap for split error markers.
@@ -530,13 +542,22 @@ def run_gate(root: Path, name: str, command: str, env: dict[str, str]) -> tuple[
             try:
                 sink.buffer.write(chunk)
                 sink.buffer.flush()
-            except BrokenPipeError:
-                pass  # Drain the child even when the caller's sink went away.
+            # trace:TASK-2802 | ai:claude
+            except (OSError, ValueError):
+                # Drain the child even when the caller's sink went away (a
+                # broken pipe, a closed file, a full disk), like the Rust reader.
+                pass
             evidence = tail + chunk.lower()
             fetch_error |= any(marker in evidence for marker in CARGO_FETCH_ERRORS)
             tail = evidence[-64:]
         return fetch_error
 
+    # Piped streams hide the terminal from cargo, which then drops colour; keep
+    # it when our own stderr is a terminal, unless the caller already chose.
+    # trace:TASK-2802 | ai:claude
+    env = cargo_tty_env(env, sys.stderr.isatty())
+    # The reads below finish at EOF, not at the child's exit: a grandchild that
+    # inherits a pipe and outlives the gate keeps its result() blocked.
     with subprocess.Popen(
         [*CI_SHELL_ARGV, command], cwd=root, env=env,
         stdout=subprocess.PIPE, stderr=subprocess.PIPE,

@@ -2124,3 +2124,69 @@ fn cargo_diagnostics_detect_marker_split_across_reads() {
     assert!(stream_cargo_diagnostics(message.as_bytes(), &mut output).unwrap());
     assert_eq!(output, message.as_bytes());
 }
+
+/// A failing command whose stderr carries `stderr_line`, run with an injected
+/// cargo home and no sccache problem.
+fn failing_run(stderr_line: &str, cargo_home: Option<PathBuf>) -> String {
+    let mut cmd = Command::new("sh");
+    cmd.args(["-c", &format!("echo '{stderr_line}' >&2; exit 101")]);
+    run_checked_in(&mut cmd, "cargo build", cargo_home, || None)
+        .unwrap_err()
+        .to_string()
+}
+
+// trace:TASK-2802 | ai:claude
+#[test]
+fn run_checked_fetch_error_on_read_only_cargo_home_adds_the_note() {
+    // SAFETY: geteuid never fails and has no preconditions.
+    if unsafe { libc::geteuid() } == 0 {
+        eprintln!("SKIP (root ignores directory write bits)");
+        return;
+    }
+    use std::os::unix::fs::PermissionsExt;
+    let tmp = tempfile::tempdir().unwrap();
+    let ro = tmp.path().join("cargo-home");
+    fs::create_dir(&ro).unwrap();
+    fs::set_permissions(&ro, fs::Permissions::from_mode(0o555)).unwrap();
+    let fetch = failing_run("error: failed to download `serde`", Some(ro.clone()));
+    let plain = failing_run("error[E0308]: mismatched types", Some(ro.clone()));
+    // Restore write access so the temporary directory can be removed.
+    fs::set_permissions(&ro, fs::Permissions::from_mode(0o755)).unwrap();
+
+    assert!(
+        fetch.contains("CARGO_HOME is read-only here; new dependencies are fetched on the host"),
+        "{fetch}"
+    );
+    // An ordinary compile failure is not blamed on the read-only home.
+    assert_eq!(plain, "cargo build exited with exit status: 101");
+}
+
+// trace:TASK-2802 | ai:claude
+#[test]
+fn run_checked_fetch_error_on_writable_or_unknown_cargo_home_stays_plain() {
+    let tmp = tempfile::tempdir().unwrap();
+    let writable = failing_run(
+        "error: failed to download `serde`",
+        Some(tmp.path().to_path_buf()),
+    );
+    assert_eq!(writable, "cargo build exited with exit status: 101");
+    let unknown = failing_run("error: failed to download `serde`", None);
+    assert_eq!(unknown, "cargo build exited with exit status: 101");
+}
+
+// trace:TASK-2802 | ai:claude
+#[test]
+fn cargo_tty_env_is_set_only_for_a_terminal_and_never_overrides() {
+    let mut piped = Command::new("cargo");
+    inherit_cargo_tty_env(&mut piped, false);
+    assert_eq!(piped.get_envs().count(), 0);
+
+    let mut explicit = Command::new("cargo");
+    explicit.env("CARGO_TERM_COLOR", "never");
+    inherit_cargo_tty_env(&mut explicit, true);
+    let color = explicit
+        .get_envs()
+        .find(|(k, _)| *k == "CARGO_TERM_COLOR")
+        .and_then(|(_, v)| v);
+    assert_eq!(color, Some(std::ffi::OsStr::new("never")));
+}

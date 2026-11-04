@@ -15,6 +15,7 @@ import importlib.util
 import os
 import sys
 import tempfile
+import threading
 import time
 import unittest
 from pathlib import Path
@@ -378,6 +379,37 @@ class TestTask2790FailureHints(unittest.TestCase):
         self.assertTrue(passed)
         self.assertTrue(evidence)
         self.assertIn(b"failed to download", stdout.buffer.getvalue())
+
+    # trace:TASK-2802 | ai:claude
+    def test_gate_keeps_draining_when_the_sink_is_closed(self):
+        closed = io.TextIOWrapper(io.BytesIO(), write_through=True)
+        closed.close()  # writes now raise ValueError, not BrokenPipeError
+        # Enough output to fill the pipe, so a reader that stopped would hang.
+        command = "head -c 200000 /dev/zero | tr '\\0' x; echo 'failed to download'; exit 0"
+        result = []
+
+        def run():
+            result.append(check_ci.run_gate(REPO, "fixture", command, dict(os.environ)))
+
+        with mock.patch.object(check_ci.sys, "stdout", closed):
+            # A reader that gives up leaves the child blocked on a full pipe;
+            # bound the wait so that regression fails instead of hanging.
+            worker = threading.Thread(target=run, daemon=True)
+            worker.start()
+            worker.join(30)
+        self.assertFalse(worker.is_alive(), "run_gate hung: a reader stopped draining")
+        passed, _, evidence = result[0]
+        self.assertTrue(passed)
+        self.assertTrue(evidence)
+
+    # trace:TASK-2802 | ai:claude
+    def test_cargo_tty_env_only_for_a_terminal_and_never_overrides(self):
+        base = {"PATH": "/bin", "CARGO_TERM_COLOR": "never"}
+        self.assertIs(check_ci.cargo_tty_env(base, False), base)
+        tty = check_ci.cargo_tty_env(base, True)
+        self.assertEqual(tty["CARGO_TERM_COLOR"], "never")
+        self.assertEqual(tty["CARGO_TERM_PROGRESS_WHEN"], "auto")
+        self.assertEqual(check_ci.cargo_tty_env({}, True)["CARGO_TERM_COLOR"], "always")
 
     def test_start_path_uses_repo_config_from_an_unrelated_cwd(self):
         with tempfile.TemporaryDirectory() as td:
