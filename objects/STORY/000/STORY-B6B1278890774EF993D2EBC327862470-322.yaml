@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-02T19:20:32.021326811Z
-modified_at: 2026-11-03T22:31:36.402494129Z
+modified_at: 2026-11-04T01:19:55.693489498Z
 req_type: Story
 tags:
 - architecture
@@ -238,6 +238,12 @@ comments:
   content: 'ADVISOR NOTE (15:35): live evidence for this story. Train #3321 for PR #3306 stopped with ''train source has a refusing review''. The approval at head 3d1d4673 is keyed PR-3306, but a stale round-1 RequestChanges keyed BUG-2427 (at a2b504db, superseded) was treated as live. The effective gate state must be keyed by the canonical spec plus the head SHA, and must ignore verdicts at superseded heads. Same root cause as BUG-2430.'
   created_at: 2026-11-03T22:31:36.402494129Z
   modified_at: 2026-11-03T22:31:36.402494129Z
+  session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
+- id: 01a1a424-292d-7f03-8265-4ad9d14b3187
+  author: joe
+  content: 'ADVISOR DISPATCH (2026-11-03 18:25 MST): PR-B now, per the 17:40 signoff (slice plan section 9). Scope exactly: writers (E2/E3: record_verdict_at, record_collected_verdict, bind_specs, MergeHoldRecord.spec, the pr-hold signal) take SpecKey and write spec_key; add ''aida gate migrate [--dry-run|--execute]'' with the section-8 migration tests (hash-preserved bodies, idempotent, unresolvable label reported and kept, --execute refuses under a drain lock or from a contained seat, rollback restores v1). Binding: A1 (preserve per-file seq order, hash-verify every v1 body, never synthesize an approval; legacy verdicts are authority only if today''s authority stage accepts them) and A3 (receipt/grant/independence/solo checks byte-for-byte unchanged). No reader cutover (that is PR-C). Fold in the 15:35 evidence: include a fixture where a superseded-head RequestChanges keyed by another label must not count once PR-C reads by SpecKey + head (test can be #[ignore]d until PR-C if it needs the reader). Trailer: (Refs STORY-2324); ship --from-seat now accepts Refs trailers (BUG-2431 merged). Gate: LIGHT, umask 022. Do NOT run ''aida gate migrate --execute'' (operator TTY).'
+  created_at: 2026-11-04T01:19:55.693489498Z
+  modified_at: 2026-11-04T01:19:55.693489498Z
   session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
 history:
 - id: 01a19ec9-2f7e-7e41-b3a1-1cb5a299a222
