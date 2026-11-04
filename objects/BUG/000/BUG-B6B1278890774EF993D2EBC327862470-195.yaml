@@ -6,12 +6,12 @@ description: |-
   2026-11-03 08:06: five open PRs (#3192 #3273 #3288 #3291 #3297) showed only 'stale overlapping head already notified' in aida review watch. The watcher sends a one-time notice to the PR author and then skips the PR (review_watch.rs:1134). The authors are headless lanes that have exited, so nobody updates the branch and nothing is reviewed. Releasing with --release does not help. The advisor saw it only by reading the watcher log; aida awaiting does not list it.
 
   Acceptance: (1) when the author is not a live session (no live lease or mail-reachable seat), the watcher runs 'gh pr update-branch' itself for a branch that merges cleanly, and reviews the new head on the next tick. (2) On conflicts, or when it cannot update, it routes the PR to the advisor as an awaiting item: 'PR-N behind main with overlap; update-branch conflicts'. (3) aida awaiting lists every PR the watcher is skipping, with the reason. (4) A test with a fake forge: an overlapping stale head and a dead author lead to update-branch being invoked and the PR reviewed on the next tick.
-status: Done
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-03T15:10:46.366604771Z
-modified_at: 2026-11-04T01:08:17.124656988Z
+modified_at: 2026-11-04T01:13:34.857484830Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -116,6 +116,20 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a1a41e-5986-7562-9f4d-43c897c74f06
+  author: aida-auto-bump
+  timestamp: 2026-11-04T01:13:34.854393068Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a1a41e-5989-79f1-950d-9405151faecd
+  timestamp: 2026-11-04T01:13:34.857480866Z
+  agent: aida
+  commit_sha: 0aec6d05bbde0e0772188aa352175766b9fe6cbd
+  summary: 'Round 3: all four round-2 findings fixed with unit tests (unknown-branch routes once, transient retried once then routed with ''may be transient'', accepted-but-no-new-head routed after 30 min, GitLab fixture fixed); AC1-AC4 met; PR CI test jobs all green at af914bb (only merge-hold-gate red, which is the supervised hold, not code).'
+  review_verdict: approved
 filed_at:
   code_sha: 493f3ae1c526c7ab19f208112d426aecbf33c8b5
   branch: main
@@ -128,3 +142,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-11-03T17:22:39.174086315Z
   implemented_by: joe
+  completed_at: 2026-11-04T01:13:34.854387333Z
+  completion_sha: 0aec6d05bbde0e0772188aa352175766b9fe6cbd
