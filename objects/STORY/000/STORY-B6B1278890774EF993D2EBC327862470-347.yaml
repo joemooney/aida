@@ -6,12 +6,12 @@ description: |-
   2026-11-03: aida ps had piled up about 51 stale, 9 orphaned and 28 salvageable rows. The disk reached 99% (11 GB free), which blocked every lane's cargo runs, and 305.7 GiB was reclaimable. Nothing runs session reap, agent gc or worktree reclaim on a schedule; they wait for an advisor sweep.
 
   Acceptance: (1) an hourly project-scope scheduled job runs 'aida session reap --yes' (finished + merged + exited only), 'aida agent gc', and 'aida worktree reclaim --apply' limited to caches idle more than 24h. (2) It never touches salvageable (uncommitted) trees, live leases or a foreign pidns. (3) Its summary routes to the advisor only when it hits something it must keep (for example retention not activated, or salvageable work older than 24h), naming the act needed. (4) The disk-headroom guard runs reclaim itself before routing to the advisor.
-status: InProgress
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-03T14:28:02.283438627Z
-modified_at: 2026-11-04T00:05:15.627036303Z
+modified_at: 2026-11-04T01:54:03.919930942Z
 req_type: Story
 relationships:
 - rel_type:
@@ -145,6 +145,20 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1a443-69ef-70a1-826d-418e36fe6042
+  author: aida-auto-bump
+  timestamp: 2026-11-04T01:54:03.887266613Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1a443-6a0f-7581-a443-f005e13cdc14
+  timestamp: 2026-11-04T01:54:03.919925519Z
+  agent: aida
+  commit_sha: 4f048b58ca00a9a5ef5357553804481b4c2c072f
+  summary: AC1-AC4 met and unit-tested (session_hygiene keep_items/reclaim_options/route_line, apply_until deadline, guard reclaim-before-route, hourly job + route config pinned); all 4 round-1 findings fixed in 3f3e511 (audit row, per-deletion deadline in hygiene and guard, salvage aged from activity mtimes); every CI job green at ba38ee0 except the human-gated merge-hold-gate
+  review_verdict: approved
 filed_at:
   code_sha: 493f3ae1c526c7ab19f208112d426aecbf33c8b5
   branch: main
@@ -157,3 +171,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-11-03T21:44:25.592290105Z
   implemented_by: joe
+  completed_at: 2026-11-04T01:54:03.887259343Z
+  completion_sha: 4f048b58ca00a9a5ef5357553804481b4c2c072f
