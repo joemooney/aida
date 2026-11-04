@@ -1833,6 +1833,27 @@ pub(crate) fn train_pr_body(train: &Built) -> String {
     s
 }
 
+/// BUG-2433: forge reads, `MERGED_RECHECK_PAUSE_SECS` apart, before a
+/// merge-call error is judged against main's tree instead.
+const MERGED_RECHECK_READS: u32 = 3;
+const MERGED_RECHECK_PAUSE_SECS: u64 = 3;
+
+/// BUG-2433: what a train PR's (state, head) says after its merge call
+/// errored. `Some(true)` = merged at the pinned `tip`; `Some(false)` = it
+/// will not land (closed, or merged at another head); `None` = not yet
+/// known (still open, or unreadable), so read again.
+// trace:BUG-2433 | ai:claude
+pub(crate) fn merged_at_tip(
+    meta: Option<(&crate::forge::ChangeState, &str)>,
+    tip: &str,
+) -> Option<bool> {
+    match meta? {
+        (crate::forge::ChangeState::Merged, head) => Some(head == tip),
+        (crate::forge::ChangeState::Closed, _) => Some(false),
+        (crate::forge::ChangeState::Open, _) => None,
+    }
+}
+
 /// The side effects the live train needs, so [`ForgeRails`]' test and land
 /// logic is testable against a fake forge.
 // trace:STORY-1690 | ai:claude
@@ -1898,6 +1919,14 @@ pub(crate) trait TrainForge {
         _lease: &dyn std::any::Any,
     ) -> Result<()> {
         self.merge(change, &train.tip)
+    }
+    /// BUG-2433: the merge call errored; did the forge merge `change` at
+    /// `train`'s tested tip anyway? A transient API error can arrive after
+    /// the merge took effect. `false` (the default) when it cannot tell, so
+    /// an unproven merge still stops the run.
+    // trace:BUG-2433 | ai:claude
+    fn merged_despite_error(&mut self, _change: &crate::forge::ChangeRef, _train: &Built) -> bool {
+        false
     }
 
     /// The commits main received for `cars` between `base` and `main`.
@@ -2247,6 +2276,46 @@ impl TrainForge for LiveTrainForge<'_> {
         lease: &dyn std::any::Any,
     ) -> Result<()> {
         verified::merge(self, change, train, lease)
+    }
+
+    // trace:BUG-2433 | ai:claude
+    fn merged_despite_error(&mut self, change: &crate::forge::ChangeRef, train: &Built) -> bool {
+        // The forge's own answer first, a few reads apart: the error can
+        // race the state the merge wrote.
+        for attempt in 0..MERGED_RECHECK_READS {
+            if attempt > 0 {
+                std::thread::sleep(std::time::Duration::from_secs(MERGED_RECHECK_PAUSE_SECS));
+            }
+            let meta = self
+                .forge
+                .change_metadata(change.id, &mut crate::network_retry::NoopSink)
+                .ok();
+            match merged_at_tip(
+                meta.as_ref().map(|m| (&m.state, m.head_sha.as_str())),
+                &train.tip,
+            ) {
+                Some(answer) => return answer,
+                None => continue,
+            }
+        }
+        // The forge never answered: main itself is the evidence. A rebase
+        // merge rewrites the commits but lands the tested tree.
+        let Ok(main) = self.fetch_main() else {
+            return false;
+        };
+        let tree = |rev: &str| {
+            git(
+                &self.main_worktree,
+                &[
+                    "rev-parse",
+                    "--verify",
+                    "--quiet",
+                    &format!("{rev}^{{tree}}"),
+                ],
+            )
+            .ok()
+        };
+        main != train.base && tree(&main).is_some() && tree(&main) == tree(&train.tip)
     }
 
     fn merge(&mut self, change: &crate::forge::ChangeRef, tip: &str) -> Result<()> {
@@ -2718,12 +2787,25 @@ impl Rails for ForgeRails<'_> {
             .merge_verified(&change, &checked, _lease.as_ref())
             .with_context(|| format!("train PR #{} was not merged", change.id))
         {
-            // trace:BUG-2214 | ai:claude
-            let rearm = self.rearm_released(&released);
-            if !rearm.is_empty() {
-                self.warn(format!("the merge failed after the hold release.{rearm}"));
+            // BUG-2433: the error may have come after the merge took effect
+            // (GitHub answered a GraphQL error but rebase-merged the train).
+            // Re-read before deciding: a merged train takes the landed path,
+            // so its members close with pointers instead of being ejected.
+            // trace:BUG-2433 | ai:claude
+            if self.ports.merged_despite_error(&change, &checked) {
+                self.warn(format!(
+                    "the merge call for train PR #{} reported an error ({e:#}), but the forge \
+                     merged it at the tested head; the train landed",
+                    change.id
+                ));
+            } else {
+                // trace:BUG-2214 | ai:claude
+                let rearm = self.rearm_released(&released);
+                if !rearm.is_empty() {
+                    self.warn(format!("the merge failed after the hold release.{rearm}"));
+                }
+                return Err(e);
             }
-            return Err(e);
         }
         self.live.retain(|c| c.id != change.id);
         let main = match self.ports.fetch_main() {

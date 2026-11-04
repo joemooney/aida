@@ -1175,6 +1175,8 @@ struct FakeForge {
     /// Fail the open with this number (1-based), or every merge.
     open_fails_at: Option<u64>,
     merge_fails: bool,
+    /// BUG-2433: the failing merge call took effect on the forge anyway.
+    merged_despite_error: bool,
     ci_unreadable: bool,
     // trace:BUG-2423 | ai:codex
     ci_states: Option<VecDeque<TrainCiReadiness>>,
@@ -1293,6 +1295,13 @@ impl TrainForge for FakeForge {
         }
         self.merged.push((change.id, tip.to_string()));
         Ok(())
+    }
+    // trace:BUG-2433 | ai:claude
+    fn merged_despite_error(&mut self, change: &crate::forge::ChangeRef, train: &Built) -> bool {
+        if self.merged_despite_error {
+            self.merged.push((change.id, train.tip.clone()));
+        }
+        self.merged_despite_error
     }
     fn landed(&mut self, _base: &str, _main: &str, cars: &[Car]) -> Vec<Option<String>> {
         cars.iter()
@@ -1946,6 +1955,71 @@ fn bug_2214_main_moving_after_the_release_rearms_then_lands_on_rebuild() {
     );
     assert_eq!(f.released, [7, 7], "released, re-armed, released again");
     assert_eq!(f.rearmed, [7]);
+}
+
+// trace:BUG-2433 | ai:claude
+#[test]
+fn bug_2433_a_merge_error_after_the_forge_merged_lands_every_member() {
+    let mut f = FakeForge::mains(&["m0"]);
+    f.merge_fails = true;
+    f.merged_despite_error = true;
+    f.on_main = vec![
+        ("Lcar1".into(), "m0".into()),
+        ("Lcar2".into(), "Lcar1".into()),
+    ];
+    let mut rails = ForgeRails::new(&mut f, "t".into());
+    let out = drive(&mut rails, fms(&[1, 2])).unwrap();
+    assert!(out.error.is_none(), "{:?}", out.error);
+    assert!(out.ejected.is_empty(), "{:?}", out.ejected);
+    assert_eq!(
+        out.landed,
+        vec![(1, "Lcar1".to_string()), (2, "Lcar2".to_string())]
+    );
+    assert!(
+        rails
+            .warnings
+            .iter()
+            .any(|w| w.contains("HTTP 502") && w.contains("landed")),
+        "{:?}",
+        rails.warnings
+    );
+    drop(rails);
+    assert_eq!(f.landed_members, vec![1, 2], "members close with pointers");
+    assert!(f.retired.is_empty(), "{:?}", f.retired);
+}
+
+// trace:BUG-2433 | ai:claude
+#[test]
+fn bug_2433_a_merged_hold_release_is_not_rearmed() {
+    let covered = covered_member(7);
+    let mut f = FakeForge::mains(&["base"]);
+    f.gates.insert(7, Ok(covered.clone()));
+    f.gate_green = true;
+    f.merge_fails = true;
+    f.merged_despite_error = true;
+    f.on_main = vec![("Lcar7".into(), "base".into())];
+    let mut rails = ForgeRails::new(&mut f, "s".into());
+    let out = drive(&mut rails, vec![covered]).unwrap();
+    assert!(out.error.is_none(), "{:?}", out.error);
+    assert_eq!(
+        out.landed.iter().map(|(pr, _)| *pr).collect::<Vec<_>>(),
+        [7]
+    );
+    assert!(
+        f.rearmed.is_empty(),
+        "a landed member's hold stays released"
+    );
+}
+
+// trace:BUG-2433 | ai:claude
+#[test]
+fn bug_2433_merged_at_tip_reads_the_post_error_state() {
+    use crate::forge::ChangeState::*;
+    assert_eq!(merged_at_tip(Some((&Merged, "tip")), "tip"), Some(true));
+    assert_eq!(merged_at_tip(Some((&Merged, "other")), "tip"), Some(false));
+    assert_eq!(merged_at_tip(Some((&Closed, "tip")), "tip"), Some(false));
+    assert_eq!(merged_at_tip(Some((&Open, "tip")), "tip"), None);
+    assert_eq!(merged_at_tip(None, "tip"), None);
 }
 
 // trace:BUG-2214.ac2ec1b2 | ai:claude
