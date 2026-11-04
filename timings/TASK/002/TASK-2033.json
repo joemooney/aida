@@ -1,0 +1,62 @@
+{
+  "schema_version": 1,
+  "spec": "TASK-2033",
+  "publishes": [
+    {
+      "at": "2026-11-04T06:35:28.202300496Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-04T01:43:37.369562436Z",
+      "spec": "TASK-2033",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-04T05:15:57.312068848Z",
+      "spec": "TASK-2033",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-11-04T06:15:50.521260550Z",
+      "spec": "TASK-2033",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "TASK-2033",
+        "branch": "origin/task-2033",
+        "first_seen": "2026-11-04T06:15:50.520924813+00:00"
+      }
+    },
+    {
+      "ts": "2026-11-04T06:34:29.370142295Z",
+      "spec": "TASK-2033",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 3348
+      }
+    },
+    {
+      "ts": "2026-11-04T06:35:27.953349896Z",
+      "spec": "TASK-2033",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "640afc1b6621b4b3eeb517c7c921477eea25629c",
+        "pr": 3348,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
