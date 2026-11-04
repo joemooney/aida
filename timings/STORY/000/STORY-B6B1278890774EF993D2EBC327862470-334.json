@@ -1,0 +1,99 @@
+{
+  "schema_version": 1,
+  "spec": "STORY-B6B1278890774EF993D2EBC327862470-334",
+  "publishes": [
+    {
+      "at": "2026-11-04T03:11:23.139065427Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-03T15:12:06.510967376Z",
+      "spec": "STORY-b6b1278890774ef993d2ebc327862470-334",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-11-03T17:27:32.411036682Z",
+      "spec": "STORY-b6b1278890774ef993d2ebc327862470-334",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-11-03T21:23:36.973211660Z",
+      "spec": "STORY-b6b1278890774ef993d2ebc327862470-334",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-11-03T22:18:58.197329029Z",
+      "spec": "STORY-b6b1278890774ef993d2ebc327862470-334",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-11-04T01:20:16.793499770Z",
+      "spec": "STORY-b6b1278890774ef993d2ebc327862470-334",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "edit",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-04T01:20:16.808048598Z",
+      "spec": "STORY-b6b1278890774ef993d2ebc327862470-334",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Needs Attention",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-04T01:33:20.452245942Z",
+      "spec": "STORY-b6b1278890774ef993d2ebc327862470-334",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-11-04T03:11:22.955147957Z",
+      "spec": "STORY-b6b1278890774ef993d2ebc327862470-334",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "76d65a8b0d8f2458d0e0803ee1c05e329d76ccff",
+        "pr": 3287,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
