@@ -1,0 +1,34 @@
+id: 01a1a4d4-ecb3-7f52-9d13-f95f4fbbea81
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-377
+agreed_id: STORY-2421
+title: 'Review PR-3337: [AI:claude] fix(standalone): a finished implementer lane ends its own lease once its PR is open, clean and pushed (BUG-2436)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a1a4b1`) for branch `bug-b6b1278890774ef993d2ebc327862470-205`.
+
+  - PR: <https://github.com/joemooney/aida/pull/3337>
+  - Branch: `bug-b6b1278890774ef993d2ebc327862470-205` → `main`
+
+  ## Covers
+
+  - BUG-2436
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 3337` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-04T04:33:00.083360544Z
+modified_at: 2026-11-04T04:33:00.083360544Z
+req_type: Story
+filed_at:
+  code_sha: b5577764ec0466133c191b7e51d62c40ea3a2c83
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 76d65a8b0d8
+  vendor: claude
+  session: 04f971d5-7365-46ed-b777-d4ff41d730ed
