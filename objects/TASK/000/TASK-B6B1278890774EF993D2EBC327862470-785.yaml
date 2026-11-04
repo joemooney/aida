@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T17:54:13.928308359Z
-modified_at: 2026-11-04T19:20:19.183655283Z
+modified_at: 2026-11-04T19:20:25.835618904Z
 req_type: Task
 tags:
 - area:containment
@@ -56,6 +56,11 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a1a801-647c-7a71-8687-b9f81be5be1d
+  author: joe
+  timestamp: 2026-11-04T19:20:25.980497642Z
+  session_id: 01a1a7f47db0
+  changes: []
 filed_at:
   code_sha: 6a331a8a5c91ca7485b695a076af44bdf9be3894
   branch: main
@@ -68,3 +73,6 @@ implementation_info:
   implemented: true
   implemented_at: 2026-11-04T19:20:19.183655283Z
   implemented_by: joe
+interface_changes:
+  cli:
+  - Contained vendor refusals name supported Claude aida and trusted opt-in Codex native settings; agy remains refused.
