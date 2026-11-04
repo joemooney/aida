@@ -76,7 +76,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T20:12:30.005895096Z
-modified_at: 2026-11-04T02:41:27.072386265Z
+modified_at: 2026-11-04T02:41:29.505438728Z
 req_type: Story
 tags:
 - from:aida-host
@@ -117,6 +117,12 @@ comments:
   content: 'OPERATOR RULING (2026-11-03 19:30 MST, relayed by advisor): regroup ruling 1: the regeneration / north-star research line does not continue. Rejected.'
   created_at: 2026-11-04T02:30:30.014840427Z
   modified_at: 2026-11-04T02:30:30.014840427Z
+  session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
+- id: 01a1a46e-d5a1-7243-aaaa-1d24f3afe517
+  author: joe
+  content: 'OPERATOR RULING (2026-11-03 19:36, relayed): revised from rejected to deferred; status restored to approved.'
+  created_at: 2026-11-04T02:41:29.505438728Z
+  modified_at: 2026-11-04T02:41:29.505438728Z
   session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
 history:
 - id: 01a130a2-cbc4-7be3-8d67-334f77826cb8
