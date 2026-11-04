@@ -3,12 +3,12 @@ spec_id: STORY-b6b1278890774ef993d2ebc327862470-329
 agreed_id: STORY-2331
 title: 'Regression test: a pool grant round-trips an air gap by git bundle (two bare hubs)'
 description: 'From SPIKE-708 (direct root-to-inside workflow, which the advisor ruled the supported model on 2026-11-02). One hermetic integration test: two bare hubs, bundle-only in and out; two inside clones with an observed claim collision and a retry into disjoint ranges; a divergent outside claim; a disjoint union on return; an overlap refusal with refs/HEAD/status unchanged; an ordinary clean bundle pull; and final-slot and exhaustion coverage (depends on the final-slot bug). Also assert that a root block claim leaves no untracked registry/blocks.lock that makes the store dirty and refuses reconcile (Q4). If it does, fix the sidecar''s placement or ignore rule in this story without weakening the lock. Document the supported boundary (direct root-to-hub grants; recursive delegation and pool replenishment are not supported) in the storage docs.'
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-03T02:44:16.945490220Z
-modified_at: 2026-11-04T01:12:38.974347601Z
+modified_at: 2026-11-04T01:12:54.934203640Z
 req_type: Story
 tags:
 - from:SPIKE-708
@@ -90,6 +90,12 @@ comments:
   content: 'ADVISOR RULING (PR-3308 round 3, 2026-11-03 18:15 MST): rework. Blocking: CI contracts ''Run normal two-remote pull byte identical fixture'' still fails at 35768f7c. The expected bytes in tests/test_bug_1796_normal_two_remote_pull_byte_identical.sh:74-84 were inferred and the inference is wrong. REPRODUCE, do not infer: run that fixture script locally against your built binary (umask 022), capture the actual pull output, and set the expected bytes from it; then explain in the spec comment which line init_cmd.rs:4722 changed and why main''s output differs. Update-branch onto current main first. Nothing else is open: findings 1 and 4 resolved. Gate: LIGHT (that fixture + check-ci-fast).'
   created_at: 2026-11-04T01:12:38.974347601Z
   modified_at: 2026-11-04T01:12:38.974347601Z
+  session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
+- id: 01a1a41d-bd96-7692-b0cc-d69c8a6875c2
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was punted on: blocked-dependency: Round 3 finding 1 (BUG-1796 fixture bytes) cannot be reproduced in this seat, and the ruling forbids inferring them again. Blockers: (1) no lane job runner on this lease (aida lane job run refuses: ''names no lane job runner''); (2) the seat target is cold and a foreground cargo build of aida-cli-lib does not finish within the 60s tool cap, and further retries were denied; (3) CI job logs (job 126215861879) are blocked by the sandbox (results-receiver.actions.githubusercontent.com and *.blob.core.windows.net denied), so the diff the fixture prints on failure cannot be read; (4) running the fixture with an overridden CARGO_TARGET_DIR/AIDA_CI_PREBUILT_CLI, or reproducing its steps by hand in TMPDIR, was denied. Code reading: the pull''s pre-commit (store_push_pull.rs:2448) fires when the store has pending changes. The store write lock is <store>/.aida/store-write.lock, which the PR''s init .gitignore now ignores via ''.aida/*.lock'', so the ''Committed pending orphan changes'' line should drop. CI says otherwise, so some other file or output line differs, and only the real diff can say which. Nothing was pushed this round. Finding 2 (the aggregate lane) depends on finding 1.. No triage reason was given.'
+  created_at: 2026-11-04T01:12:54.934202266Z
+  modified_at: 2026-11-04T01:12:54.934202266Z
   session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
 history:
 - id: 01a19f4b-61ed-7310-b584-0af8f83cd6a1
@@ -175,6 +181,14 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1a41d-bd96-7692-b0cc-d682fb1910fb
+  author: joe
+  timestamp: 2026-11-04T01:12:54.934194394Z
+  session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: 553f7d5984c6083a9f2b47cfa358ce57c438843b
   branch: main
@@ -187,9 +201,3 @@ implementation_info:
   implemented: true
   implemented_at: 2026-11-03T19:19:28.879161279Z
   implemented_by: joe
-attention_reason:
-  category: blocked-dependency
-  detail: 'Round 3 finding 1 (BUG-1796 fixture bytes) cannot be reproduced in this seat, and the ruling forbids inferring them again. Blockers: (1) no lane job runner on this lease (aida lane job run refuses: ''names no lane job runner''); (2) the seat target is cold and a foreground cargo build of aida-cli-lib does not finish within the 60s tool cap, and further retries were denied; (3) CI job logs (job 126215861879) are blocked by the sandbox (results-receiver.actions.githubusercontent.com and *.blob.core.windows.net denied), so the diff the fixture prints on failure cannot be read; (4) running the fixture with an overridden CARGO_TARGET_DIR/AIDA_CI_PREBUILT_CLI, or reproducing its steps by hand in TMPDIR, was denied. Code reading: the pull''s pre-commit (store_push_pull.rs:2448) fires when the store has pending changes. The store write lock is <store>/.aida/store-write.lock, which the PR''s init .gitignore now ignores via ''.aida/*.lock'', so the ''Committed pending orphan changes'' line should drop. CI says otherwise, so some other file or output line differs, and only the real diff can say which. Nothing was pushed this round. Finding 2 (the aggregate lane) depends on finding 1.'
-  lean: Relaunch with a lane job runner (aida queue work STORY-2331 --no-human) or let the seat read CI logs. Run the fixture against the PR binary, then set the expected heredoc to the observed bytes. If the store is still dirty, find the file with git -C .aida-store status --porcelain before the pull.
-  raised_by: implementer
-  raised_at: 2026-11-03T22:16:05.759845464Z
