@@ -66,9 +66,9 @@ impl UpdateFailure {
 }
 
 /// Whether the change's author still has a live session on its branch:
-/// `Some(true)` a live lease holds the branch, `Some(false)` none does,
-/// `None` the branch is unknown so liveness cannot be judged.
-pub(super) type Liveness<'a> = &'a dyn Fn(&forge::Change) -> Option<bool>;
+/// `Ok(true)` a live lease holds the branch, `Ok(false)` none does, `Err`
+/// liveness cannot be judged (the sentence says why).
+pub(super) type Liveness<'a> = &'a dyn Fn(&forge::Change) -> std::result::Result<bool, String>;
 /// Ask the forge to bring the change's branch up to date with its base.
 pub(super) type Updater<'a> = &'a dyn Fn(&forge::Change) -> std::result::Result<(), UpdateFailure>;
 
@@ -76,14 +76,23 @@ pub(super) type Updater<'a> = &'a dyn Fn(&forge::Change) -> std::result::Result<
 /// head before the change is routed to the advisor.
 pub(super) const UPDATE_WAIT_MINUTES: i64 = 30;
 
-/// The skip cause, and the advisor-mail sentence, when the forge did not
-/// report the change's branch.
-const UNKNOWN_BRANCH: &str = "the forge did not report the change's branch, so the watcher cannot tell whether its author is live and did not update it";
+/// The liveness-unknown cause when the forge did not report the change's
+/// branch.
+const UNKNOWN_BRANCH: &str = "the forge did not report the change's branch";
 
 /// A live lease (live active or creator process) holds the change's branch.
-pub(super) fn author_live(root: &Path, change: &forge::Change) -> Option<bool> {
-    let branch = change.head_branch.as_deref()?;
-    Some(crate::status_prs::live_owned_branches(root).contains(branch))
+/// Fails closed: an unreadable lease directory or a torn lease file makes
+/// liveness unknown (the change is routed), never "no live author" (which
+/// would update a branch a live lane may own).
+// trace:TASK-2813 | ai:claude
+pub(super) fn author_live(
+    root: &Path,
+    change: &forge::Change,
+) -> std::result::Result<bool, String> {
+    let branch = change.head_branch.as_deref().ok_or(UNKNOWN_BRANCH)?;
+    crate::status_prs::live_owned_branches_strict(root)
+        .map(|owned| owned.contains(branch))
+        .map_err(|why| format!("the watcher cannot read the session leases ({why})"))
 }
 
 /// `gh pr update-branch`, pinned to the watcher's repository like discovery.
@@ -196,7 +205,7 @@ pub(super) fn follow_up(
             }
         }
         pending => match live(change) {
-            Some(true) => {
+            Ok(true) => {
                 return Ok(Some(format!(
                     "{STALE_NOTIFIED}; the author's session on `{}` is live and owns the merge",
                     change.head_branch.as_deref().unwrap_or("?")
@@ -204,26 +213,35 @@ pub(super) fn follow_up(
             }
             // Liveness cannot be judged: leave the branch alone, but route
             // the change rather than park it with nobody acting.
-            None => {
+            Err(why) => {
+                let why = bounded_diagnostic(&why);
+                let cause = format!(
+                    "{why}, so the watcher cannot tell whether its author is live and did not update it"
+                );
+                let mut chars = cause.chars();
+                let situation = match chars.next() {
+                    Some(first) => format!("{}{}.", first.to_uppercase(), chars.as_str()),
+                    None => String::new(),
+                };
                 let route = routed(
                     store,
                     &key,
                     change,
                     "the watcher cannot judge its author",
-                    "The forge did not report the change's branch, so the watcher cannot tell whether its author is live and did not update it.",
+                    &situation,
                 );
                 (
                     BranchUpdate {
                         head: change.head.clone(),
                         at: now,
-                        refused: Some(UNKNOWN_BRANCH.into()),
+                        refused: Some(cause),
                         retry: false,
                         route: Some(route),
                     },
                     true,
                 )
             }
-            Some(false) => (
+            Ok(false) => (
                 attempt(store, &key, change, update, pending.is_some(), now),
                 true,
             ),
