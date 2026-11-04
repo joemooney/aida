@@ -1,0 +1,29 @@
+id: 01a1a41f-d121-7d41-bbd4-68957257a18b
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-753
+title: 'Non-blocking (minor, fail-open): update::author_live relies on status_prs::live…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on BUG-2426, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  Non-blocking (minor, fail-open): update::author_live relies on status_prs::live_owned_branches -> leases::list_leases, which silently drops an unreadable lease dir or an unparseable (torn-write) lease file. Either error makes a live author look dead, so the watcher runs gh pr update-branch on a branch a live lane owns (non-destructive merge commit, but the lane's next push is rejected). Use list_leases_strict (or treat a read error as liveness unknown -> route) and add a test of the real author_live with a live lease (current tests inject the liveness closure).
+
+  PR: #3305
+  Reviewed sha: af914bb0693fd92bdaf5cccd6b8f8888360ca7c2
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-04T01:15:11.009301343Z
+modified_at: 2026-11-04T01:15:11.009301343Z
+req_type: Task
+tags:
+- carried-from:BUG-2426
+- finding-hash:70c07357
+- from-review:PR-3305
+- kind:carried-forward
+filed_at:
+  code_sha: 0f1624a8b38d961973328d79d05642add4464fc8
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 02cfbd22515
+  vendor: claude
