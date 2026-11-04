@@ -14,13 +14,20 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-04T05:07:43.803259195Z
-modified_at: 2026-11-04T05:07:43.803259195Z
+modified_at: 2026-11-04T10:52:27.733286865Z
 req_type: Task
 tags:
 - carried-from:BUG-2390
 - finding-hash:a0589fa4
 - from-review:PR-3309
 - kind:carried-forward
+comments:
+- id: 01a1a630-54d5-79f1-97b5-9d79b6c7f8e4
+  author: joe
+  content: 'ADVISOR RULING (2026-11-04 03:56 MST, rule non-blocking findings once): Accepted: derived lane names are cosmetic; the occupancy probe failing open only means no name-collision check for Codex impl lanes.'
+  created_at: 2026-11-04T10:52:27.733286865Z
+  modified_at: 2026-11-04T10:52:27.733286865Z
+  session_id: da1c0d85-1d45-4ce4-a292-5358644f65b9
 history:
 - id: 01a1a544-4881-73c1-aaa9-a304ee71c5c1
   author: joe
