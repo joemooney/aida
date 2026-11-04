@@ -5083,22 +5083,27 @@ pub(crate) fn lane_os_wrap(explicit: Option<bool>, bwrap_live: bool) -> LaneOsWr
     }
 }
 
-/// Apply [`lane_os_wrap`] for a headless implementer lane at `seat`: on
-/// [`LaneOsWrap::DefaultOn`] set `AIDA_OS_WRAP=1` in this launcher process,
-/// so the seat it is about to launch and the lane job runner it serves both
-/// see os_wrap on, exactly as an operator's `AIDA_OS_WRAP=1` would. Call it
-/// before the seat is spawned and before any runner thread starts.
-// trace:BUG-2434 | ai:claude
-pub(crate) fn default_os_wrap_for_implementer_lane(seat: &Path) -> LaneOsWrap {
-    let explicit = os_wrap_explicit(seat);
-    let decision = lane_os_wrap(
-        explicit,
-        explicit.is_none() && bwrap_availability() == BwrapAvailability::Ok,
-    );
-    if decision == LaneOsWrap::DefaultOn {
-        std::env::set_var("AIDA_OS_WRAP", "1");
+impl LaneOsWrap {
+    /// Whether the lane's jobs may run (each inside its own bubblewrap
+    /// profile). trace:BUG-2434 | ai:claude
+    pub(crate) fn on(self) -> bool {
+        matches!(self, LaneOsWrap::Explicit(true) | LaneOsWrap::DefaultOn)
     }
-    decision
+}
+
+/// Resolve [`lane_os_wrap`] for a headless implementer lane at `seat`.
+/// `bwrap_live` is the host probe, asked only when nobody chose a value (the
+/// launcher passes [`bwrap_availability`]; tests inject it). Mutates nothing:
+/// the decision travels on the lane's own job runner
+/// ([`crate::lane_job::Sandbox::BwrapDefaultOn`]), never through this
+/// process's environment, so no other launch in the process inherits it.
+// trace:BUG-2434 | ai:claude
+pub(crate) fn implementer_lane_os_wrap(
+    seat: &Path,
+    bwrap_live: impl FnOnce() -> bool,
+) -> LaneOsWrap {
+    let explicit = os_wrap_explicit(seat);
+    lane_os_wrap(explicit, explicit.is_none() && bwrap_live())
 }
 
 /// Parse the `AIDA_OS_WRAP` per-host override. Returns `Some(true)`/`Some(false)`
@@ -5521,15 +5526,19 @@ pub(crate) fn os_wrapped_program_and_args(
 /// the store, the mailbox): the filesystem is read-only except `seat` and the
 /// `rw` paths the caller names (the seat's cargo target and the slot
 /// limiter's state; never cargo home). Fails closed, with the remediation, when `[contained]
-/// os_wrap` is off for the seat or bubblewrap cannot run.
+/// os_wrap` is off for the seat or bubblewrap cannot run. `os_wrap_on` is the
+/// lane's own decision (the seat's setting, or the BUG-2434 lane default),
+/// passed in rather than read back from this process's environment.
 // trace:BUG-2383 | ai:claude
+// trace:BUG-2434 | ai:claude
 pub(crate) fn lane_job_wrapped_program_and_args(
     seat: &Path,
+    os_wrap_on: bool,
     rw: &[PathBuf],
     program: &str,
     args: Vec<String>,
 ) -> Result<(String, Vec<String>)> {
-    if !os_wrap_enabled(seat) {
+    if !os_wrap_on {
         anyhow::bail!(
             "a lane job runs only inside bubblewrap, and `[contained] os_wrap` is off for this \
              seat. Turn it on (`[contained] os_wrap = true` in .aida/config.toml, or \

@@ -366,26 +366,44 @@ pub(crate) const UNTESTED_MARKER: &str = "untested";
 /// The lane job runner for `lease_id`'s seat at `seat`, when it can be
 /// offered: its directories are ready and `[contained] os_wrap` is on (a job
 /// runs only inside bubblewrap, so with it off the runner would refuse every
-/// job). An unset os_wrap is turned on first when bubblewrap works here
-/// (BUG-2434). Otherwise warns why and returns `None`; the lane then reports
-/// `untested=true`. Shared by the standalone implementer and the drain's
-/// phase-1 implementer.
+/// job). An unset os_wrap defaults on for this lane's runner when bubblewrap
+/// works here (BUG-2434). Otherwise warns why and returns `None`; the lane
+/// then reports `untested=true` and records [`OS_WRAP_OFF_MARKER`]. Shared by
+/// the standalone implementer and the drain's phase-1 implementer.
 // trace:BUG-2383 | ai:claude
 pub(crate) fn offer(main_root: &Path, seat: &Path, lease_id: &str) -> Option<LaneJobs> {
+    offer_with(main_root, seat, lease_id, || {
+        crate::session::bwrap_availability() == crate::session::BwrapAvailability::Ok
+    })
+}
+
+/// [`offer`] with the host's bubblewrap probe injected. The lane default is
+/// scoped to the returned runner ([`Sandbox::BwrapDefaultOn`]): nothing here
+/// touches this process's environment, so the seat launch itself and every
+/// other launch in the process keep their own os_wrap resolution.
+// trace:BUG-2434 | ai:claude
+pub(crate) fn offer_with(
+    main_root: &Path,
+    seat: &Path,
+    lease_id: &str,
+    bwrap_live: impl FnOnce() -> bool,
+) -> Option<LaneJobs> {
     use colored::Colorize;
-    // BUG-2434: a host that never chose os_wrap but has working bubblewrap
-    // gets it on for this lane, so its tests can run. trace:BUG-2434 | ai:claude
-    let os_wrap = crate::session::default_os_wrap_for_implementer_lane(seat);
+    let os_wrap = crate::session::implementer_lane_os_wrap(seat, bwrap_live);
+    record_os_wrap_off(main_root, lease_id, !os_wrap.on());
     if os_wrap == crate::session::LaneOsWrap::DefaultOn {
         eprintln!(
-            "  {} bubblewrap works on this host, so this lane runs with `[contained] os_wrap` on \
-             and its tests can run (AIDA_OS_WRAP=0 opts out)",
+            "  {} bubblewrap works on this host, so this lane's test runner is on and runs \
+             each job inside bubblewrap (AIDA_OS_WRAP=0 opts out)",
             crate::glyph(crate::glyphs::Glyph::InfoAlt).cyan()
         );
     }
-    let lane_jobs = LaneJobs::for_lease(main_root, seat, lease_id);
+    let mut lane_jobs = LaneJobs::for_lease(main_root, seat, lease_id);
+    if os_wrap == crate::session::LaneOsWrap::DefaultOn {
+        lane_jobs.sandbox = Sandbox::BwrapDefaultOn;
+    }
     match lane_jobs.prepare() {
-        Ok(()) if !crate::session::os_wrap_enabled(seat) => {
+        Ok(()) if !os_wrap.on() => {
             eprintln!(
                 "{} {}",
                 "Warning:".yellow().bold(),
@@ -421,6 +439,33 @@ pub(crate) fn no_runner_reason(os_wrap: crate::session::LaneOsWrap) -> String {
     )
 }
 
+/// The marker a lane's launcher leaves in its results directory when the
+/// lane ran without `[contained] os_wrap`, so it had no job runner at all
+/// (BUG-2434): the advisor-visible cause behind its `untested=true`.
+pub(crate) const OS_WRAP_OFF_MARKER: &str = "os-wrap-off";
+
+/// Record whether `lease_id`'s lane runs without os_wrap; a lane that has it
+/// clears a stale marker from an earlier round. trace:BUG-2434 | ai:claude
+pub(crate) fn record_os_wrap_off(main_root: &Path, lease_id: &str, off: bool) {
+    let dir = results_dir(main_root, lease_id);
+    let marker = dir.join(OS_WRAP_OFF_MARKER);
+    if off {
+        if std::fs::create_dir_all(&dir).is_ok() {
+            let _ = std::fs::write(&marker, "os_wrap=off\n");
+        }
+    } else {
+        let _ = std::fs::remove_file(&marker);
+    }
+}
+
+/// Whether `lease_id`'s lane ran without os_wrap (no job runner).
+// trace:BUG-2434 | ai:claude
+pub(crate) fn lane_ran_without_os_wrap(main_root: &Path, lease_id: &str) -> bool {
+    results_dir(main_root, lease_id)
+        .join(OS_WRAP_OFF_MARKER)
+        .exists()
+}
+
 /// Record whether `lease_id`'s lane ran a local test: leave
 /// explicit true/false evidence in [`UNTESTED_MARKER`]. Missing evidence is untested.
 // trace:BUG-2383 | ai:claude
@@ -446,14 +491,33 @@ pub(crate) fn lane_was_untested(main_root: &Path, lease_id: &str) -> bool {
 
 /// Phase output fails closed on absent/unreadable evidence or lease discovery.
 // trace:BUG-2383 | ai:codex
-pub(crate) fn phase_test_warning(main_root: &Path, lease: Option<&str>) -> Option<&'static str> {
+/// BUG-2434: a lane that ran without os_wrap says so, so the advisor reading
+/// the phase output sees why it had no test runner.
+// trace:BUG-2434 | ai:claude
+pub(crate) fn phase_test_warning(main_root: &Path, lease: Option<&str>) -> Option<String> {
     if lease
         .map(|lease| lane_was_untested(main_root, lease))
         .unwrap_or(true)
     {
-        Some("the implementer has no completed local test evidence (untested=true); its push reaches CI untested")
+        let line = "the implementer has no completed local test evidence (untested=true); its push reaches CI untested";
+        Some(with_os_wrap_off(
+            line.to_string(),
+            lease.is_some_and(|lease| lane_ran_without_os_wrap(main_root, lease)),
+        ))
     } else {
         None
+    }
+}
+
+/// Append the advisor-visible `os_wrap=off` token to a lane's result or
+/// phase line when the lane ran without os_wrap, so no job runner existed:
+/// the fix is the host's bubblewrap or its os_wrap setting, not the lane.
+// trace:BUG-2434 | ai:claude
+pub(crate) fn with_os_wrap_off(line: String, off: bool) -> String {
+    if off {
+        format!("{line} os_wrap=off")
+    } else {
+        line
     }
 }
 
@@ -552,8 +616,13 @@ pub(crate) fn runs_tests(job: &JobRequest) -> bool {
 /// How a job is sandboxed.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Sandbox {
-    /// The job's own bubblewrap profile; refused when it cannot run.
+    /// The job's own bubblewrap profile; refused when it cannot run or the
+    /// seat's `[contained] os_wrap` is off.
     Bwrap,
+    /// The same profile for a lane whose unset os_wrap defaulted on because
+    /// bubblewrap works here (BUG-2434). The default lives on this runner
+    /// only, never in the process environment. trace:BUG-2434 | ai:claude
+    BwrapDefaultOn,
     /// Tests only: run the fixture program directly.
     #[cfg(test)]
     TestUnwrapped,
@@ -1289,18 +1358,23 @@ fn run_one(
         }
     }
     let (program, args, how_wrapped) = match lane.sandbox {
-        Sandbox::Bwrap => match crate::session::lane_job_wrapped_program_and_args(
-            &lane.seat,
-            &lane.sandbox_rw_paths(&env),
-            &cargo.to_string_lossy(),
-            args,
-        ) {
-            Ok((program, args)) => match overlay_wrapped(seed, program, args) {
-                Ok((program, args, how)) => (program, args, how),
-                Err(why) => return refuse(&why),
-            },
-            Err(e) => return refuse(&format!("{e:#}")),
-        },
+        // trace:BUG-2434 | ai:claude
+        Sandbox::Bwrap | Sandbox::BwrapDefaultOn => {
+            match crate::session::lane_job_wrapped_program_and_args(
+                &lane.seat,
+                lane.sandbox == Sandbox::BwrapDefaultOn
+                    || crate::session::os_wrap_enabled(&lane.seat),
+                &lane.sandbox_rw_paths(&env),
+                &cargo.to_string_lossy(),
+                args,
+            ) {
+                Ok((program, args)) => match overlay_wrapped(seed, program, args) {
+                    Ok((program, args, how)) => (program, args, how),
+                    Err(why) => return refuse(&why),
+                },
+                Err(e) => return refuse(&format!("{e:#}")),
+            }
+        }
         #[cfg(test)]
         Sandbox::TestUnwrapped => (
             cargo.to_string_lossy().into_owned(),

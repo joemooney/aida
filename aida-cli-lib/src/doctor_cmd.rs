@@ -8155,8 +8155,8 @@ fn render_doctor_bwrap_row() {
 /// lanes' local tests. trace:BUG-2434 | ai:claude
 pub(crate) fn doctor_lane_tests_note(bwrap_live: bool) -> &'static str {
     if bwrap_live {
-        "Headless implementer lanes turn it on by themselves when os_wrap is unset, so they \
-         can run their tests (AIDA_OS_WRAP=0 opts out)."
+        "Headless implementer lanes use it for their test runner when os_wrap is unset, so \
+         they can run their tests (AIDA_OS_WRAP=0 opts out)."
     } else {
         "Until bubblewrap works here, headless implementer lanes cannot run local tests: \
          every lane result says untested=true."
