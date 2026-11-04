@@ -14,13 +14,20 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-04T01:17:21.100220587Z
-modified_at: 2026-11-04T01:17:21.100220587Z
+modified_at: 2026-11-04T04:18:25.674805573Z
 req_type: Task
 tags:
 - carried-from:BUG-2428
 - finding-hash:e555a37b
 - from-review:PR-3316
 - kind:carried-forward
+comments:
+- id: 01a1a4c7-950a-7070-bcda-81d164ea2254
+  author: joe
+  content: 'ADVISOR RULING (2026-11-03 21:20 MST): folded into TASK-2807. Behavioral rollback test.'
+  created_at: 2026-11-04T04:18:25.674805573Z
+  modified_at: 2026-11-04T04:18:25.674805573Z
+  session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
 history:
 - id: 01a1a443-3d8a-7e12-af70-10356a0cdb90
   author: joe
