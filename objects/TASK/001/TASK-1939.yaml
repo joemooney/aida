@@ -6,12 +6,12 @@ description: |
   This is pre-existing on main (a27fe3fc76) and carried over unchanged by STORY-1728. golden/story_1728_main_policy.tsv records 'session leases --prune-stale --yes' as Read, but it releases stale leases, a cross-clone mutation. 'status --cleanup' (doctor heal) is also Read. A guest seat may run both. Decide whether these should be Write.
 
   Raised in review of PR-2751: https://github.com/joemooney/aida/pull/2751#issuecomment-6263625639
-status: Done
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-19T09:05:27.859220245Z
-modified_at: 2026-11-04T05:53:45.981792711Z
+modified_at: 2026-11-04T06:35:08.669880919Z
 req_type: Task
 tags:
 - from-review:PR-2751
@@ -69,6 +69,20 @@ history:
   timestamp: 2026-11-04T05:53:47.175539034Z
   session_id: da1c0d85-1d45-4ce4-a292-5358644f65b9
   changes: []
+- id: 01a1a544-bfcd-7172-bf0d-4c1eda602fde
+  author: aida-auto-bump
+  timestamp: 2026-11-04T06:35:08.621567573Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a1a544-bffd-71e2-8fe4-353a0b3472cc
+  timestamp: 2026-11-04T06:35:08.669875116Z
+  agent: aida
+  commit_sha: 5c28afbf4a0f7a78a7c1397c0c42fa146fc5325f
+  summary: session leases --prune-stale now takes the Session gate (guest/requester refused, tested); status --cleanup verified read-only (status_cmd.rs:482-491 renders report and returns) and correctly stays Read; golden row hand-corrected with documented rationale; CI green at head.
+  review_verdict: approved
 filed_at:
   code_sha: a2e163b106ce19a23c6620b69167d66b53e05694
   branch: pr-2751
@@ -81,3 +95,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-11-04T05:15:18.659837010Z
   implemented_by: joe
+  completed_at: 2026-11-04T06:35:08.621562850Z
+  completion_sha: 5c28afbf4a0f7a78a7c1397c0c42fa146fc5325f
