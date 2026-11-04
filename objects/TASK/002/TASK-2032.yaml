@@ -11,7 +11,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-20T23:41:45.676543397Z
-modified_at: 2026-11-04T05:09:02.767874008Z
+modified_at: 2026-11-04T05:53:46.745489190Z
 req_type: Task
 tags:
 - contained
@@ -42,6 +42,13 @@ comments:
   created_at: 2026-11-04T04:36:18.710075796Z
   modified_at: 2026-11-04T04:36:18.710075796Z
   session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
+- id: 01a1a51e-e0f9-7d42-a986-60c3bf8b83b1
+  author: joe
+  content: 'Round 2 pushed as dd775f1689c on PR-3336. Host main is resolved once before the seat chdir (session start, queue work) and threaded as an explicit host_main argument through every boundary builder; launcher_recorded_clone has been removed. host_recorded_clone and resume_lease_tree now refuse a forged main (plausible_host_main), and resume no longer anchors on target.worktree. Fixed the CI flake: the main guard no longer reads HOST_MAINS. New tests cover a launch from inside the clone and forged-main refusal. The redundant filters are gone and the note_host_main doc is updated. Verification: cargo check --tests passes (lane job). The test run was not executed: the lane cargo test timed out twice at the 900s default while compiling the aida-cli-lib test binary (overlay-stale seed), and the AIDA_CARGO_TIMEOUT override and make check-ci-fast are both refused by this seat''s permissions. untested=true.'
+  created_at: 2026-11-04T05:53:46.745489190Z
+  modified_at: 2026-11-04T05:53:46.745489190Z
+  session_id: 01a1a4f5aa44
+  harness_version: 2.1.318 (Claude Code)
 history:
 - id: 01a15cbb-fc05-7050-907c-e1e0d5b0996b
   author: joe
