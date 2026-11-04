@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T12:51:07.563355298Z
-modified_at: 2026-11-04T16:09:09.149369435Z
+modified_at: 2026-11-04T16:21:42.470117129Z
 req_type: Bug
 tags:
 - area:compete
@@ -24,6 +24,11 @@ comments:
   content: 'Implementation and regression coverage are written in the assigned checkout. Git staging is blocked by the launch sandbox: `git add aida-cli-lib/src/compete_cmd.rs docs/cli/03-work-autonomy.md` refuses creating `.git/index.lock` with Read-only file system. The managed profile explicitly mounts the checkout''s .git read-only, approvals are disabled. Cannot commit/push/open a PR within this launch. Continuing targeted Rust validation; will leave the changes ready for host commit/PR. Installed Codex accepts `--sandbox workspace-write --ask-for-approval never exec --help`.'
   created_at: 2026-11-04T16:09:09.149359307Z
   modified_at: 2026-11-04T16:09:09.149359307Z
+- id: 01a1a75d-c3c6-7091-96c8-384f2390fc05
+  author: mcp
+  content: 'Implementation ready locally; targeted `cargo test -p aida-cli-lib compete_cmd::containment_tests --lib -- --test-threads=1` passes all 7 tests. New coverage verifies native Codex argv and dry-run/runtime tool-shell override parity, read-only Codex judges, absence of Claude-only flags/settings/OS wrapper for Codex, and Claude/Codex child termination after parent SIGTERM and SIGKILL. Existing containment fixture now pins a temporary git repository instead of resolving the live launch checkout. `cargo fmt --all -- --check`, `git diff --check`, and installed Codex `--sandbox workspace-write --ask-for-approval never exec --help` pass. Changes: aida-cli-lib/src/compete_cmd.rs; docs/cli/03-work-autonomy.md. Cannot commit/push/open PR: managed profile makes .git read-only, git add refuses .git/index.lock. Leaving In Progress/queued (not queue done without publishing). Handoff: /tmp/BUG-2439-handoff.md; patch /tmp/BUG-2439.patch; draft PR body /tmp/BUG-2439-pr-body.md; test log /tmp/bug2439-tests-rerun.log. Suggested commit: [AI:codex] fix(compete): use vendor-specific argv and bind child lifetime (BUG-2439).'
+  created_at: 2026-11-04T16:21:42.470110679Z
+  modified_at: 2026-11-04T16:21:42.470110679Z
 history:
 - id: 01a1a69d-4a2d-7292-9de1-00c519ffe27a
   author: joe
