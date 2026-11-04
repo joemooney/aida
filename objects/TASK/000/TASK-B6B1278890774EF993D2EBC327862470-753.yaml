@@ -14,7 +14,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T01:15:11.009301343Z
-modified_at: 2026-11-04T08:18:20.602631175Z
+modified_at: 2026-11-04T08:38:38.854555296Z
 req_type: Task
 tags:
 - carried-from:BUG-2426
@@ -69,6 +69,13 @@ comments:
   created_at: 2026-11-04T07:11:20.330213206Z
   modified_at: 2026-11-04T07:11:20.330213206Z
   session_id: da1c0d85-1d45-4ce4-a292-5358644f65b9
+- id: 01a1a5b5-d206-7940-bb9d-226897214e6e
+  author: joe
+  content: 'Rework (PR #3341, cb77ea2a): F1 BLOCKING fixed: list_leases_strict_all skips lock-<slug>.toml entries that parse as aida lock entries (no branch, so they own none); a corrupt one still fails closed; test task2813_lock_only_entry_does_not_block_the_update_path. F2 fixed: added #[cfg(unix)] task2813_unreadable_lease_dir_makes_liveness_unknown (chmod 000, skipped as root): Err, routed once, not updated. F3 not fixed here: deputy_shell flake is unrelated to this diff; CI re-runs on the new head, and if it recurs it gets filed separately.'
+  created_at: 2026-11-04T08:38:38.854555296Z
+  modified_at: 2026-11-04T08:38:38.854555296Z
+  session_id: 01a1a5a32e67
+  harness_version: 2.1.318 (Claude Code)
 history:
 - id: 01a1a443-3db8-70c3-aad1-ac7901b84264
   author: joe
