@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T12:51:07.563355298Z
-modified_at: 2026-11-04T20:00:49.095793592Z
+modified_at: 2026-11-04T20:50:09.136366795Z
 req_type: Bug
 tags:
 - area:compete
@@ -54,6 +54,12 @@ comments:
   modified_at: 2026-11-04T19:27:17.986569340Z
   session_id: 01a1a8069579
   harness_version: 2.1.318 (Claude Code)
+- id: 01a1a853-8870-7cb2-8935-e007dbc2aba2
+  author: joe
+  content: 'ADVISOR REWORK BRIEF (2026-11-04 14:15 MST), PR #3382 head 674e710d, CI red: (1) compete_cmd.rs:1570 codex_compete_native_argv_matches_preview_and_runs: the expected argv has ''exec'' right after ''--ask-for-approval never'', but production emits ''--add-dir'' there. Decide which order is correct for ''codex exec'', and make the preview, the real argv and the test agree; the test must pin the real launch argv. (2) orchestrator_leases::resolve_aida_exe_tests::no_cli_source_outside_the_resolver_uses_raw_current_executable_lookup: compete code calls std::env::current_exe (or equivalent) directly. Route it through the shared aida-exe resolver. Gate: cargo test -p aida-cli-lib --lib compete_cmd plus resolve_aida_exe, then make check-ci-fast. Codex lane: leave the edits in the tree; the advisor publishes them with aida ship --from-seat.'
+  created_at: 2026-11-04T20:50:09.136366795Z
+  modified_at: 2026-11-04T20:50:09.136366795Z
+  session_id: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
 history:
 - id: 01a1a69d-4a2d-7292-9de1-00c519ffe27a
   author: joe
