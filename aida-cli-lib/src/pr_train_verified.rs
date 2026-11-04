@@ -299,7 +299,13 @@ fn collect(
         let metadata = json!({"state":format!("{:?}",source.state), "title":source.title,
             "author":source.author,"base":source.base_ref,"branch":source.head_ref,"head":source.head_sha,
             "draft":source.is_draft,"cross_repository":source.is_cross_repository,"repository":source.head_repo});
-        let ids = member_spec_ids(&source.head_ref, &source.title, &fresh.subject, &fresh.body);
+        let ids = resolved_member_spec_ids(
+            &live.project_root,
+            &source.head_ref,
+            &source.title,
+            &fresh.subject,
+            &fresh.body,
+        )?;
         let covered = crate::gate::trailer_coverage::covered_gate_ids(
             &live.project_root,
             &source.head_ref,
@@ -509,10 +515,48 @@ fn verify_structure(repo: &Path, train: &Built) -> Result<Vec<Value>> {
     Ok(proof)
 }
 
-fn aliases(root: &Path, ids: &[String]) -> Result<Vec<String>> {
-    if ids.is_empty() {
-        return Ok(Vec::new());
+/// Branch names are hints: queue-work may append a rework suffix which the
+/// broad ID parser includes. Only discard an unresolved branch-only hint when
+/// explicit metadata supplies a resolvable spec. Ambiguous lookups still refuse,
+/// and explicit unknown IDs remain inputs to the strict alias check below.
+// trace:BUG-2441 | ai:codex
+fn resolved_member_spec_ids(
+    root: &Path,
+    head_ref: &str,
+    title: &str,
+    subject: &str,
+    body: &str,
+) -> Result<Vec<String>> {
+    let ids = member_spec_ids(head_ref, title, subject, body);
+    let explicit = member_spec_ids("", title, subject, body);
+    let store =
+        crate::load_store_for_lookup(root).context("cannot resolve train source spec hints")?;
+    let mut explicit_resolves = false;
+    for id in &explicit {
+        explicit_resolves |= store
+            .get_requirement_unambiguous(id)
+            .map_err(anyhow::Error::msg)?
+            .is_some();
     }
+    let mut out = Vec::new();
+    for id in ids {
+        if explicit_resolves
+            && !explicit.contains(&id)
+            && store
+                .get_requirement_unambiguous(&id)
+                .map_err(anyhow::Error::msg)?
+                .is_none()
+        {
+            continue;
+        }
+        out.push(id);
+    }
+    Ok(out)
+}
+
+fn aliases(root: &Path, ids: &[String]) -> Result<Vec<String>> {
+    // trace:BUG-2441 | ai:codex
+    anyhow::ensure!(!ids.is_empty(), "train source has no resolvable spec");
     let store =
         crate::load_store_for_lookup(root).context("cannot resolve train source spec aliases")?;
     let mut out = ids.to_vec();
