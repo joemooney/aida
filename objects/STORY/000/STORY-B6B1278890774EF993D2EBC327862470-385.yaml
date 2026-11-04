@@ -1,0 +1,34 @@
+id: 01a1a530-dedd-7d70-ad93-efbdb1826fbc
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-385
+agreed_id: STORY-2442
+title: 'Review PR-3349: [AI:claude] fix(mailbox): writers on a replaced or older binary that carries the write-permit protocol marker count as admitting, so a dev promote no longer turns retention off (BUG-24'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a1a521`) for branch `bug-b6b1278890774ef993d2ebc327862470-206`.
+
+  - PR: <https://github.com/joemooney/aida/pull/3349>
+  - Branch: `bug-b6b1278890774ef993d2ebc327862470-206` → `main`
+
+  ## Covers
+
+  - BUG-2437
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 3349` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-04T06:13:25.853262423Z
+modified_at: 2026-11-04T06:13:25.853262423Z
+req_type: Story
+filed_at:
+  code_sha: 906c8e605ef697df3a89df1b5aad96623a0ac353
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 906c8e605ef
+  vendor: claude
+  session: da1c0d85-1d45-4ce4-a292-5358644f65b9
