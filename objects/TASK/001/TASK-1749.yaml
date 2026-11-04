@@ -20,12 +20,12 @@ description: |-
 
   ## Effort
   Large (3-4 slices). Payoff: removes the class behind BUG-2006, BUG-2007 and future contained/seat fail-opens.
-status: Approved
+status: Superseded
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-14T04:11:15.367292037Z
-modified_at: 2026-11-04T01:40:18.944556081Z
+modified_at: 2026-11-04T01:40:21.389059869Z
 req_type: Task
 tags:
 - arch-review-2026-10-13
@@ -112,6 +112,14 @@ history:
   timestamp: 2026-11-04T01:40:17.244337448Z
   session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
   changes: []
+- id: 01a1a436-dd0d-7071-8f54-ba98c5bf609b
+  author: joe
+  timestamp: 2026-11-04T01:40:21.389056844Z
+  session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Superseded
 execution_mode: guided
 filed_at:
   code_sha: 014a28d3f7621809d6a6ccc7c7972e42df00d972
