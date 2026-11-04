@@ -1,0 +1,36 @@
+id: 01a1a522-7bca-78a0-98a7-65e34e3b675b
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-382
+agreed_id: STORY-2437
+title: 'Review PR-3341: [AI:claude] fix(review-watch): author_live fails closed on unreadable or torn leases; supersede-in-flight is not parked; since is since-parked (TASK-2813) (TASK-2810) (TASK-2814)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a1a4d2`) for branch `task-b6b1278890774ef993d2ebc327862470-753`.
+
+  - PR: <https://github.com/joemooney/aida/pull/3341>
+  - Branch: `task-b6b1278890774ef993d2ebc327862470-753` → `main`
+
+  ## Covers
+
+  - TASK-2813
+  - TASK-2810
+  - TASK-2814
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 3341` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-04T05:57:42.986551167Z
+modified_at: 2026-11-04T05:57:42.986551167Z
+req_type: Story
+filed_at:
+  code_sha: 906c8e605ef697df3a89df1b5aad96623a0ac353
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 906c8e605ef
+  vendor: claude
+  session: da1c0d85-1d45-4ce4-a292-5358644f65b9
