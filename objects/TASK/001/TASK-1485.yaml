@@ -23,7 +23,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-24T15:09:38.693878746Z
-modified_at: 2026-09-24T17:15:32.280348712Z
+modified_at: 2026-11-04T02:31:43.087508983Z
 req_type: Task
 comments:
 - id: 01a0d46a-5038-7cc2-b829-eeb079f97c9e
@@ -32,6 +32,9 @@ comments:
   created_at: 2026-09-24T17:15:32.280348712Z
   modified_at: 2026-09-24T17:15:32.280348712Z
   session_id: 67239b78-62f2-41d8-9600-1eea416800a6
-deferred: true
-deferred_at: 2026-09-24T17:15:29.289812613Z
-deferred_until: a design sketch for the failure-learning event model (record vs later avoidability judgment, storage location outside the canonical store, and correlation keys) is written on the spec and signed off by the advisor. Architecture-class change per CLAUDE.md. Revisit once TASK-1481 and TASK-1484 have shipped the lower-level telemetry it builds on.
+history:
+- id: 01a1a465-e36f-7250-a2d5-330a165ef490
+  author: joe
+  timestamp: 2026-11-04T02:31:43.215468249Z
+  session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
+  changes: []
