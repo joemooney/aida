@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T05:32:54.614008505Z
-modified_at: 2026-11-04T10:12:01.229065245Z
+modified_at: 2026-11-04T10:19:38.239220628Z
 req_type: Bug
 tags:
 - kind:bug-spotted
@@ -67,6 +67,13 @@ comments:
   created_at: 2026-11-04T09:50:08.638304656Z
   modified_at: 2026-11-04T09:50:08.638304656Z
   session_id: da1c0d85-1d45-4ce4-a292-5358644f65b9
+- id: 01a1a612-477f-7352-8d43-dcbdfd505494
+  author: joe
+  content: 'AC3 is satisfied by STORY-2324 PR-B (#3331, merged as e51705844b6), so it is skipped here as the acceptance allows. The review-watch collector, collect_standalone_verdict (aida-cli-lib/src/gate/review_verdict.rs:2477), resolves each credited label once through GateSpec::resolve (review_verdict.rs:2603) and calls ledger::record_collected_verdict at review_verdict.rs:2609. That function (gate/ledger/mod.rs:243) writes each per-spec body via event::verdict_event(..., Some(spec)), which stamps spec_key. The PR-keyed aggregate event is still written with None, the same as before. Rework for the train ejection: merged origin/main and changed the bug2438_ledger fixture to pass GateSpec::with_key(..) (ab7108bd906). No logic change.'
+  created_at: 2026-11-04T10:19:38.239220628Z
+  modified_at: 2026-11-04T10:19:38.239220628Z
+  session_id: 01a1a60b4422
+  harness_version: 2.1.318 (Claude Code)
 history:
 - id: 01a1a529-3a0b-7851-9f12-63da9e5a1022
   author: aida-session-start
