@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-785
 agreed_id: TASK-3047
 title: 'STORY-2460 S3: fix the vendor containment refusal so it names the supported vendors instead of ''fix [contained.vendors]'''
 description: 'Acceptance 4 of STORY-2460. session.rs vendor_containment_posture and the two ''cannot run a contained session'' messages (~3873, ~3913) tell agy users to ''fix [contained.vendors]'', but no value works for agy. Name what is supported: claude = aida, codex = native (explicit trusted opt-in). Add a regression test pinning the refusal text and that agy still fails closed. Small; independent of S1.'
-status: InProgress
+status: Done
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T17:54:13.928308359Z
-modified_at: 2026-11-04T19:20:16.566146793Z
+modified_at: 2026-11-04T19:20:19.183655283Z
 req_type: Task
 tags:
 - area:containment
@@ -48,6 +48,14 @@ history:
   timestamp: 2026-11-04T19:07:02.831371757Z
   session_id: 01a1a7f47db0
   changes: []
+- id: 01a1a801-50c9-7782-b9a2-b27486c0288e
+  author: joe
+  timestamp: 2026-11-04T19:20:20.937970459Z
+  session_id: 01a1a7f47db0
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 filed_at:
   code_sha: 6a331a8a5c91ca7485b695a076af44bdf9be3894
   branch: main
@@ -56,3 +64,7 @@ filed_at:
   aida_build_sha: e422daaa1a4
   vendor: claude
   session: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
+implementation_info:
+  implemented: true
+  implemented_at: 2026-11-04T19:20:19.183655283Z
+  implemented_by: joe
