@@ -1,0 +1,29 @@
+id: 01a1a7ad-6a79-7300-8ac7-8fd857a25729
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-783
+title: 'non-blocking/minor: AC#2 wiring in print_status_presence_consumers (status_sect…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-1059, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  non-blocking/minor: AC#2 wiring in print_status_presence_consumers (status_sections.rs:2371-2401) is only covered via the pure surface_questions test; no test drives the status section under away+always-surface vs away+quiet.
+
+  PR: #3371
+  Reviewed sha: ec7fb0841a6690613b357d61188f8428e054dae3
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-04T17:48:42.489172581Z
+modified_at: 2026-11-04T17:48:42.489172581Z
+req_type: Task
+tags:
+- carried-from:TASK-1059
+- finding-hash:a70f1f82
+- from-review:PR-3371
+- kind:carried-forward
+filed_at:
+  code_sha: 6a331a8a5c91ca7485b695a076af44bdf9be3894
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: e422daaa1a4
+  vendor: claude
