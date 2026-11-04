@@ -1,0 +1,46 @@
+{
+  "schema_version": 1,
+  "spec": "TASK-2807",
+  "publishes": [
+    {
+      "at": "2026-11-04T16:35:01.050708095Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-04T07:11:27.762053234Z",
+      "spec": "TASK-2807",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-04T10:14:22.045049691Z",
+      "spec": "TASK-2807",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-04T16:35:00.907349338Z",
+      "spec": "TASK-2807",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "b06c9da01c8bb577e9953fa0a27d13ceaa8fcc26",
+        "pr": 3343,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
