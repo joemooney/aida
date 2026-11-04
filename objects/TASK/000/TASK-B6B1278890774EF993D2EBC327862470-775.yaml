@@ -1,0 +1,29 @@
+id: 01a1a5c1-caf6-7f81-b3d9-3a8eb77d3bc4
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-775
+title: 'Non-blocking (cosmetic): the PR body Validation section (''7 passed'' via the lan…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on BUG-2434, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  Non-blocking (cosmetic): the PR body Validation section ('7 passed' via the lane runner) is stale. The spec's 07:56 comment says the targeted run timed out and the lane was untested; the real evidence is CI at a9a34372.
+
+  PR: #3347
+  Reviewed sha: a9a34372f943c539034600a58952b900a9e2362f
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-04T08:51:43.478621612Z
+modified_at: 2026-11-04T08:51:43.478621612Z
+req_type: Task
+tags:
+- carried-from:BUG-2434
+- finding-hash:bea01fec
+- from-review:PR-3347
+- kind:carried-forward
+filed_at:
+  code_sha: 4280b671a2daf0b9357a0940c8f26b78b0eb8ca3
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 339203a5453
+  vendor: claude
