@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-03T07:21:01.822528019Z
-modified_at: 2026-11-04T07:04:11.249898711Z
+modified_at: 2026-11-04T12:47:09.054926526Z
 req_type: Story
 tags:
 - area:deputy
@@ -121,6 +121,12 @@ comments:
   modified_at: 2026-11-04T07:04:05.857615334Z
   session_id: 01a1a5252b52
   harness_version: 2.1.318 (Claude Code)
+- id: 01a1a699-54fe-7561-8316-cfc9bf03df9b
+  author: joe
+  content: 'ADVISOR RULING (2026-11-04 05:52 MST): the ruling-(B) implementation (local commit d12c6fef624, worktree aida-seat-aida-story-...-339) is accepted for gating. Resume that worktree: do not re-implement. Run the LIGHT gate through the lane job runner (cargo test -p aida-cli-lib --lib deputy_shell, then make check-ci-fast with umask 022), cite the result here, rebase onto origin/main if needed, and ship the PR. If a test fails, fix it within the existing scope only.'
+  created_at: 2026-11-04T12:47:09.054926526Z
+  modified_at: 2026-11-04T12:47:09.054926526Z
+  session_id: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
 history:
 - id: 01a1a2a3-f27f-7463-9a97-0b8c7a670b77
   author: joe
