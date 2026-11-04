@@ -12,12 +12,10 @@ use crate::gate::canon::SpecKey;
 fn project_with_one_requirement(tmp: &Path) -> (PathBuf, SpecKey) {
     let project = tmp.join("primary");
     let store = project.join(".aida-store");
-    std::fs::create_dir_all(project.join(".aida")).unwrap();
-    std::fs::write(
-        project.join(".aida").join("config.toml"),
+    crate::test_env::write_project_config_fixture(
+        &project,
         "[deployment]\nstore_path = \".aida-store\"\n",
-    )
-    .unwrap();
+    );
     let mut req = aida_core::Requirement::new("fixture".into(), "fixture".into());
     req.spec_id = Some("STORY-1".into());
     let object = store.join("objects/STORY/000/STORY-1.yaml");
@@ -51,7 +49,7 @@ fn project_with_one_requirement(tmp: &Path) -> (PathBuf, SpecKey) {
 }
 
 /// `hold::append` (the event and its hold record), the `aida pr hold`
-/// signal, and `record_verdict_at` (unbound, then change-bound) each carry
+/// signal, and `record_verdict_at` (spec-keyed, then change-keyed) each carry
 /// the requirement's UUID.
 #[test]
 fn hold_signal_and_record_verdict_at_stamp_the_requirement_uuid() {
@@ -95,12 +93,17 @@ fn hold_signal_and_record_verdict_at_stamp_the_requirement_uuid() {
     let json = serde_json::to_string(&signal).unwrap();
     assert!(json.contains(&key.to_string()), "{json}");
 
-    // record_verdict_at, spec-keyed path: no change yet, so the unbound entry.
+    // record_verdict_at, spec-keyed path: the hold above already indexes
+    // STORY-1 to PR-41, so the verdict binds there rather than going unbound.
     let rec = record("approved", &ts(1), None);
     record_verdict_at(&rv::verdict_path(&project, "STORY-1"), &rec, None).unwrap();
-    let unbound = store::read_unbound(&project, "STORY-1");
-    assert_eq!(unbound.len(), 1);
-    assert_eq!(unbound[0].spec_key, Some(key));
+    assert!(store::read_unbound(&project, "STORY-1").is_empty());
+    let on_41: Vec<GateEvent> = store::read_file(&project, ChangeKey::pr(41))
+        .into_iter()
+        .filter(|e| e.verdict_record().is_some())
+        .collect();
+    assert_eq!(on_41.len(), 1, "{on_41:?}");
+    assert_eq!(on_41[0].spec_key, Some(key));
 
     // record_verdict_at, change-keyed path with the credited spec.
     let rec = record("request-changes", &ts(2), None);
