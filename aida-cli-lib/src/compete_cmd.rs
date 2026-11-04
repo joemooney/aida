@@ -217,20 +217,11 @@ pub(crate) fn handle_compete_command(
         if dry_run {
             // Preview vendor posture without preparing settings or an OS wrapper:
             // both operational helpers can write artifacts in an existing tree.
-            let actual_args = compete_arm_argv(
+            let actual_args = compete_preview_argv(
                 &argv,
                 vendor,
                 session::drain_contained(&project_root)?,
-                || {
-                    Ok(vec![
-                        "--setting-sources".into(),
-                        "project".into(),
-                        // A JSON stand-in: the headless posture edits it.
-                        // trace:BUG-B6B1278890774EF993D2EBC327862470-050 | ai:claude
-                        "--settings".into(),
-                        "{}".into(),
-                    ])
-                },
+                &compete_worktree_dir(&project_root, &branch),
             )?;
             println!(
                 "  {}: would create worktree on `{}` and run vendor argv (settings/OS wrapper resolved at launch): {} {}",
@@ -1123,13 +1114,15 @@ pub(crate) fn build_compete_arm_command(
     let args = compete_arm_argv(argv, vendor, contained, || {
         session::claude_contained_flags_for(worktree_dir)
     })?;
-    let (program, args) = if contained {
+    let actually_contained =
+        headless_vendor.is_some_and(|v| session::containment_applied(v, contained));
+    let (program, args) = if actually_contained {
         session::os_wrapped_program_and_args(worktree_dir, command, args)?
     } else {
         (command.to_string(), args)
     };
     // trace:BUG-2218 TASK-2328 | ai:codex
-    if contained {
+    if actually_contained {
         session::prepare_contained_mailbox_for_launch(worktree_dir)?;
     }
     let mut cmd = std::process::Command::new(program);
@@ -1147,12 +1140,70 @@ pub(crate) fn build_compete_arm_command(
     if vendor == "codex" {
         // Compete arms and judges do not receive a delegated seat.
         // trace:BUG-2398 | ai:codex
-        cmd.env(crate::gate::seat_authority::GRANT_ENV, "")
-            .env("AIDA_PROJECT_ROOT", worktree_dir)
-            .env("AIDA_AGENT_TYPE", "codex");
+        compete_codex_environment(&mut cmd, worktree_dir);
         crate::codex_tool_env::prepare_launch(&mut cmd)?;
     }
+    // Finalize after the Codex adapter, which rebuilds the Command.
+    bind_compete_child_to_parent(&mut cmd);
     Ok(cmd)
+}
+
+// trace:BUG-2439 | ai:codex
+fn compete_codex_environment(cmd: &mut std::process::Command, worktree: &std::path::Path) {
+    cmd.env(crate::gate::seat_authority::GRANT_ENV, "")
+        .env("AIDA_PROJECT_ROOT", worktree)
+        .env("AIDA_AGENT_TYPE", "codex");
+}
+
+/// Preview the same Codex tool-shell overrides without probing or spawning.
+// trace:BUG-2439 | ai:codex
+fn compete_preview_argv(
+    argv: &[String],
+    vendor: &str,
+    contained: bool,
+    worktree: &std::path::Path,
+) -> Result<Vec<String>> {
+    let args = compete_arm_argv(argv, vendor, contained, || {
+        Ok(vec![
+            "--setting-sources".into(),
+            "project".into(),
+            "--settings".into(),
+            "{}".into(),
+        ])
+    })?;
+    if vendor == "codex" {
+        let mut cmd = std::process::Command::new("codex");
+        compete_codex_environment(&mut cmd, worktree);
+        let mut overrides = crate::codex_tool_env::codex_tool_env_overrides(&cmd)?;
+        overrides.extend(args);
+        Ok(overrides)
+    } else {
+        Ok(args)
+    }
+}
+
+/// Arm and judge processes must die even if compete is killed without cleanup.
+/// Arm before exec and recheck the parent to close the fork/prctl race.
+// trace:BUG-2439 | ai:codex
+fn bind_compete_child_to_parent(cmd: &mut std::process::Command) {
+    #[cfg(target_os = "linux")]
+    {
+        use std::os::unix::process::CommandExt;
+        let parent = std::process::id() as libc::pid_t;
+        // SAFETY: the post-fork closure uses only async-signal-safe syscalls,
+        // allocates nothing, and changes only the child process's death signal.
+        unsafe {
+            cmd.pre_exec(move || {
+                if libc::prctl(libc::PR_SET_PDEATHSIG, libc::SIGKILL) < 0 {
+                    return Err(std::io::Error::last_os_error());
+                }
+                if libc::getppid() != parent {
+                    return Err(std::io::Error::from_raw_os_error(libc::ECHILD));
+                }
+                Ok(())
+            });
+        }
+    }
 }
 
 /// Shared posture composition; only launch supplies an operational settings builder.
@@ -1183,15 +1234,25 @@ fn compete_arm_argv(
     // Generated argv ends with the prompt. Never parse flags inside it.
     let split = argv.len().saturating_sub(1);
     let (template, _) = crate::agent_launch::split_posture_flags(vendor, argv[..split].to_vec());
-    let flags = contained_flags()?;
-    let (mut args, trailing) = if claude {
-        (session::headless_claude_posture(flags)?, Vec::new())
+    // Codex uses its native sandbox, never Claude's permission/settings flags.
+    // Global approval flags must precede `exec`. Keep judges read-only.
+    // trace:BUG-2439 | ai:codex
+    let mut args = if parsed == session::HeadlessVendor::Codex {
+        let mut flags = crate::tool_contained_flags("codex")?;
+        if argv[..split]
+            .windows(2)
+            .any(|pair| pair == ["--sandbox", "read-only"])
+        {
+            flags[1] = "read-only".into();
+        }
+        flags
     } else {
-        (Vec::new(), flags)
+        session::headless_claude_posture(contained_flags()?)?
     };
     args.extend(template);
-    args.extend(["--permission-mode".to_string(), "dontAsk".to_string()]);
-    args.extend(trailing);
+    if claude {
+        args.extend(["--permission-mode".to_string(), "dontAsk".to_string()]);
+    }
     args.extend_from_slice(&argv[split..]);
     Ok(args)
 }
@@ -1282,10 +1343,21 @@ mod containment_tests {
     #[test]
     fn compete_children_inherit_containment_and_replace_bypass_argv() {
         let dir = tempfile::tempdir().unwrap();
-        let _env = crate::test_env::EnvVarsGuard::apply(&[
-            ("AIDA_CONTAINED", Some("1")),
-            ("AIDA_OS_WRAP", Some("0")),
-        ]);
+        // Keep the session constructor out of the launching seat clone.
+        // trace:BUG-2439 | ai:codex
+        assert!(crate::test_git::git_command()
+            .args(["init", "-q"])
+            .arg(dir.path())
+            .status()
+            .unwrap()
+            .success());
+        let _ambient = crate::test_env::AmbientGuard::hermetic_with_seat_and(
+            dir.path(),
+            "implementer",
+            &[],
+            &[("AIDA_CONTAINED", Some("1")), ("AIDA_OS_WRAP", Some("0"))],
+        );
+        let _cwd = session::contained_cwd_seam::pin(dir.path());
         let prompt = "preserve --permission-mode in prompt";
         let (bin, argv) = compete::judge_command(compete::JudgeVendor::Claude, None, prompt);
         let judge =
@@ -1446,6 +1518,201 @@ mod containment_tests {
             Some(compete::JudgeVendor::Claude)
         )
         .is_ok());
+    }
+
+    // trace:BUG-2439 | ai:codex
+    #[test]
+    fn codex_compete_native_argv_matches_preview_and_runs() {
+        let root = tempfile::tempdir().unwrap();
+        let mut ambient = crate::test_env::AmbientGuard::hermetic_with_seat_and(
+            root.path(),
+            "implementer",
+            &[],
+            &[("AIDA_CONTAINED", Some("1")), ("AIDA_OS_WRAP", Some("1"))],
+        );
+        let _cwd = session::contained_cwd_seam::pin(root.path());
+        std::fs::create_dir_all(root.path().join(".aida")).unwrap();
+        std::fs::write(
+            root.path().join(".aida/config.toml"),
+            "[contained]\nenable = false\n[contained.vendors]\ncodex = \"native\"\n",
+        )
+        .unwrap();
+        for args in [
+            vec!["init", "-q", "-b", "main"],
+            vec!["add", ".aida/config.toml"],
+            vec!["commit", "-qm", "trusted native policy"],
+            vec!["update-ref", "refs/remotes/origin/main", "HEAD"],
+            vec![
+                "symbolic-ref",
+                "refs/remotes/origin/HEAD",
+                "refs/remotes/origin/main",
+            ],
+        ] {
+            let output = crate::test_git::git_command()
+                .current_dir(root.path())
+                .args(args)
+                .env("GIT_AUTHOR_NAME", "test")
+                .env("GIT_AUTHOR_EMAIL", "test@example.com")
+                .env("GIT_COMMITTER_NAME", "test")
+                .env("GIT_COMMITTER_EMAIL", "test@example.com")
+                .output()
+                .unwrap();
+            assert!(output.status.success(), "{output:?}");
+        }
+        let fake = root.path().join("fake-codex");
+        crate::test_exec::write_executable(&fake, "#!/bin/sh\nprintf '%s\\n' \"$@\"\n");
+        let prompt = "preserve --permission-mode --sandbox read-only inside prompt";
+        let adapter = compete::vendor_adapter("codex").unwrap();
+        let argv = compete::headless_argv(&adapter, prompt).unwrap();
+        // The Claude settings builder must never run for native Codex.
+        let posture =
+            compete_arm_argv(&argv, "codex", true, || panic!("Claude settings for Codex")).unwrap();
+        assert_eq!(
+            &posture[..5],
+            [
+                "--sandbox",
+                "workspace-write",
+                "--ask-for-approval",
+                "never",
+                "exec"
+            ]
+        );
+        for contained in [false, true] {
+            ambient.set_key("AIDA_CONTAINED", if contained { "1" } else { "0" });
+            let preview = compete_preview_argv(&argv, "codex", contained, root.path()).unwrap();
+            let mut cmd = build_compete_arm_command(
+                root.path(),
+                root.path(),
+                fake.to_str().unwrap(),
+                &argv,
+                "codex",
+            )
+            .unwrap();
+            assert_eq!(
+                cmd.get_program(),
+                fake.as_os_str(),
+                "native Codex must not use the Claude OS wrapper"
+            );
+            let actual: Vec<_> = cmd
+                .get_args()
+                .map(|a| a.to_str().unwrap().to_owned())
+                .collect();
+            assert_eq!(actual, preview);
+            let out = cmd.output().unwrap();
+            assert!(out.status.success());
+            assert_eq!(
+                String::from_utf8(out.stdout).unwrap(),
+                format!("{}\n", actual.join("\n"))
+            );
+            assert_eq!(actual.last().unwrap(), prompt);
+            assert!(!actual.iter().any(|a| matches!(
+                a.as_str(),
+                "--permission-mode" | "--settings" | "--setting-sources"
+            )));
+        }
+        let (_, argv) = compete::judge_command(compete::JudgeVendor::Codex, None, prompt);
+        let cmd = build_compete_judge_command(
+            root.path(),
+            fake.to_str().unwrap(),
+            &argv,
+            compete::JudgeVendor::Codex,
+        )
+        .unwrap();
+        let args: Vec<_> = cmd
+            .get_args()
+            .map(|a| a.to_string_lossy().into_owned())
+            .collect();
+        assert!(args.windows(2).any(|p| p == ["--sandbox", "read-only"]));
+        assert!(!args
+            .iter()
+            .any(|a| a == "workspace-write" || a.contains("dangerously")));
+        assert!(!root
+            .path()
+            .join(".aida/contained-managed-settings.json")
+            .exists());
+    }
+
+    // A separate parent process exercises real parent death, including SIGKILL
+    // (which cannot run a Drop guard or signal handler).
+    // trace:BUG-2439 | ai:codex
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn compete_vendor_dies_with_parent() {
+        use std::time::{Duration, Instant};
+        if let Ok(dir) = std::env::var("AIDA_TEST_COMPETE_PARENT") {
+            let root = std::path::Path::new(&dir);
+            let _ambient = crate::test_env::AmbientGuard::hermetic_with_seat_and(
+                root,
+                "implementer",
+                &[],
+                &[("AIDA_CONTAINED", Some("0")), ("AIDA_OS_WRAP", Some("0"))],
+            );
+            std::fs::create_dir_all(root.join(".aida")).unwrap();
+            std::fs::write(
+                root.join(".aida/config.toml"),
+                "[contained]\nenable = false\n",
+            )
+            .unwrap();
+            let vendor = std::env::var("AIDA_TEST_COMPETE_VENDOR").unwrap();
+            let fake = root.join("vendor");
+            crate::test_exec::write_executable(&fake, "#!/bin/sh\nexec /bin/sleep 30\n");
+            let adapter = compete::vendor_adapter(&vendor).unwrap();
+            let argv = compete::headless_argv(&adapter, "prompt").unwrap();
+            let mut cmd =
+                build_compete_arm_command(root, root, fake.to_str().unwrap(), &argv, &vendor)
+                    .unwrap();
+            let mut child = cmd
+                .stdin(std::process::Stdio::null())
+                .stdout(std::process::Stdio::null())
+                .stderr(std::process::Stdio::null())
+                .spawn()
+                .unwrap();
+            std::fs::write(root.join("pid.tmp"), child.id().to_string()).unwrap();
+            std::fs::rename(root.join("pid.tmp"), root.join("pid")).unwrap();
+            let _ = child.wait();
+            return;
+        }
+        let name = std::thread::current().name().unwrap().to_owned();
+        for vendor in ["claude", "codex"] {
+            for signal in [libc::SIGTERM, libc::SIGKILL] {
+                let root = tempfile::tempdir().unwrap();
+                let mut parent = std::process::Command::new(std::env::current_exe().unwrap())
+                    .args(["--exact", &name, "--nocapture"])
+                    .env("AIDA_TEST_COMPETE_PARENT", root.path())
+                    .env("AIDA_TEST_COMPETE_VENDOR", vendor)
+                    .stdout(std::process::Stdio::null())
+                    .stderr(std::process::Stdio::null())
+                    .spawn()
+                    .unwrap();
+                let deadline = Instant::now() + Duration::from_secs(5);
+                while !root.path().join("pid").exists() && Instant::now() < deadline {
+                    std::thread::sleep(Duration::from_millis(10));
+                }
+                // Always terminate/reap the helper, even if setup timed out.
+                unsafe {
+                    libc::kill(parent.id() as i32, signal);
+                }
+                parent.wait().unwrap();
+                let pid = std::fs::read_to_string(root.path().join("pid"))
+                    .expect("parent published vendor pid");
+                let stat = format!("/proc/{}/stat", pid.trim());
+                let deadline = Instant::now() + Duration::from_secs(5);
+                loop {
+                    let live = std::fs::read_to_string(&stat)
+                        .is_ok_and(|s| !s.rsplit_once(") ").unwrap().1.starts_with('Z'));
+                    if !live {
+                        break;
+                    }
+                    if Instant::now() >= deadline {
+                        unsafe {
+                            libc::kill(pid.trim().parse().unwrap(), libc::SIGKILL);
+                        }
+                        panic!("{vendor} survived parent signal {signal}");
+                    }
+                    std::thread::sleep(Duration::from_millis(10));
+                }
+            }
+        }
     }
 
     #[test]
