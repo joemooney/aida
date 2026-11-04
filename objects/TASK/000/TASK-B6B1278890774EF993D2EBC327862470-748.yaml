@@ -12,13 +12,20 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-03T18:44:43.902352640Z
-modified_at: 2026-11-03T18:44:43.902352640Z
+modified_at: 2026-11-04T01:15:51.656024088Z
 req_type: Task
 tags:
 - carried-from:TASK-2790
 - finding-hash:883e2f08
 - from-review:TASK-2790
 - kind:carried-forward
+comments:
+- id: 01a1a420-6fe8-7ff1-bb77-d28c8010cf82
+  author: joe
+  content: 'ADVISOR RULING (2026-11-03): bundle. TASK-2803 and TASK-2804 are folded into this task as one ''pipe streaming hardening'' slice of the TASK-2790 follow-ups. Scope: (1) check-ci-gates.py stream_diagnostics catches OSError and ValueError (not only BrokenPipeError) and keeps draining, like the Rust reader; (2) when the parent stream is a TTY, set CARGO_TERM_COLOR=always and CARGO_TERM_PROGRESS_WHEN=auto for cargo children in dev_build.rs run_checked and check-ci-gates.py run_gate (TASK-2803); (3) a unit test for run_checked''s fetch_error branch, and a code comment on the EOF-vs-exit wait recording the inherited-stderr hang hazard (TASK-2804). Gate: LIGHT.'
+  created_at: 2026-11-04T01:15:51.656024088Z
+  modified_at: 2026-11-04T01:15:51.656024088Z
+  session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
 history:
 - id: 01a1a2c0-afc1-7270-9cfc-ad60e57cfdba
   author: joe
