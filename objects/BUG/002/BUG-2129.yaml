@@ -17,12 +17,17 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-14T19:22:03.589371187Z
-modified_at: 2026-10-19T16:09:44.154532978Z
+modified_at: 2026-11-04T19:30:46.637405998Z
 req_type: Bug
 relationships:
 - rel_type: SupersededBy
   target_id: 01a154e5-4ac4-7cc2-9d6e-f90cc88f6d08
   created_at: 2026-10-19T16:09:44.154528710Z
+  created_by: joe
+- rel_type:
+    custom: implemented-by
+  target_id: 01a1a807-b79e-7931-abe7-ad13d189b367
+  created_at: 2026-11-04T19:30:46.637402460Z
   created_by: joe
 comments:
 - id: 01a154ec-f7bc-78a3-a7bd-7456e3ac2abf
@@ -44,6 +49,11 @@ history:
   author: joe
   timestamp: 2026-10-19T16:09:45.108969334Z
   session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+  changes: []
+- id: 01a1a80a-e134-7b70-be91-55403b5612de
+  author: joe
+  timestamp: 2026-11-04T19:30:47.732574162Z
+  session_id: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
   changes: []
 filed_at:
   code_sha: 84a49427860777b88d91ea6fc95c52122da6134b
