@@ -9253,7 +9253,9 @@ const STORE_RUNTIME_GITIGNORE_PATTERNS: &[&str] = &[
     "registry/*.lock",
 ];
 
-fn ensure_store_tracked_runtime_gitignore(store_worktree: &std::path::Path) -> Result<bool> {
+pub(crate) fn ensure_store_tracked_runtime_gitignore(
+    store_worktree: &std::path::Path,
+) -> Result<bool> {
     ensure_store_tracked_runtime_gitignore_with_patterns(
         store_worktree,
         aida_core::fs_atomic::STORE_STAGING_IGNORE_PATTERNS,
