@@ -8,6 +8,6 @@ note: 'Inspected routed failure: c7170b4 compiled and smoke-tested successfully;
 due_since: 2026-11-03T20:23:47.691877353Z
 due_reason: on CronJobFailed:dev-autopromote
 due_failure:
-  trip_id: dev-autopromote@2026-11-04T02:53:26.538200767Z
+  trip_id: dev-autopromote@2026-11-04T07:55:59.410531309Z
   job: dev-autopromote
-  error: 'exit 1: build of 0754a362d797d2d9b246b4609456735b5486095d failed; log /home/joe/.aida/dev-autopromote/20261104T023059Z-0754a362d797.log; tail:     Blocking waiting for file lock on build directory |     Finished `agent` profile [optimized] target(s) in 13m 44s | error: "another `aida dev build` or `aida dev rollback` is updating /home/joe/.local/share/aida/live right now; retry when it finishes. Nothing was changed." | help: aida dev build'
+  error: 'exit 1: build of 339203a545383519533c76aebfa399175bafca0b failed; log /home/joe/.aida/dev-autopromote/20261104T073303Z-339203a54538.log; tail:     Blocking waiting for file lock on build directory |     Finished `agent` profile [optimized] target(s) in 2m 23s | error: "another `aida dev build` or `aida dev rollback` is updating /home/joe/.local/share/aida/live right now; retry when it finishes. Nothing was changed." | help: aida dev build'
