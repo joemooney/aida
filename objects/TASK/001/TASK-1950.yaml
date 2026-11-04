@@ -55,10 +55,9 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T15:54:06.715648703Z
-modified_at: 2026-10-21T04:33:23.830891156Z
+modified_at: 2026-11-04T02:31:37.262901611Z
 req_type: Task
 tags:
-- operator-held
 - regen
 - relay
 - sweep
@@ -158,10 +157,11 @@ history:
   timestamp: 2026-10-21T04:33:24.286533877Z
   session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
   changes: []
-deferred: true
-deferred_at: 2026-10-21T04:33:23.830891156Z
-deferred_until: 'Regen scorer / relay_stall P3 nits, off the active path. Revisit when the next regen experiment runs or PR #2745 (TASK-0446) merges.'
-deferred_reason: 'Advisor triage 2026-10-20 21:30: valid but not needed on the current path'
+- id: 01a1a465-ccbe-7902-9d8f-57700f05dcff
+  author: joe
+  timestamp: 2026-11-04T02:31:37.406989826Z
+  session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
+  changes: []
 filed_at:
   code_sha: 6d590ed914dea5135a126f7dae6abb403adec66d
   branch: main
