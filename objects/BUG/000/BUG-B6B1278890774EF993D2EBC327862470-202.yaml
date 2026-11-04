@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-202
 agreed_id: BUG-2433
 title: aida pr train ejects every member when gh pr merge returns a transient error though GitHub merged the train PR
 description: 'Observed 2026-11-03 23:32Z, train #3322 (10 members). gh pr merge for the train PR returned ''GraphQL: Something went wrong while executing your query'' but GitHub had rebase-merged it: origin/main''s tree equals the train head and all 10 member commits are on main. The train reported ''0 landed, 10 ejected'', exited 1, and left all 10 member PRs open with merge-hold-cleared labels; BUG-2425/BUG-2426 stayed in-progress. Fix: after any merge-call error, re-read the train PR state (and/or compare origin/main to the pinned head) before deciding; if MERGED, proceed with the landed path (close members with commit pointers, complete specs). The advisor closed the members by hand.'
-status: Done
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T01:08:27.711738671Z
-modified_at: 2026-11-04T03:34:42.533730534Z
+modified_at: 2026-11-04T03:57:15.112988298Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -46,6 +46,15 @@ history:
   timestamp: 2026-11-04T03:34:43.899358401Z
   session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
   changes: []
+- id: 01a1a4b4-31e8-7d60-ae6e-34f253068e14
+  author: aida-orchestrator
+  timestamp: 2026-11-04T03:57:15.113011531Z
+  session_id: 01a1a4a5e4d3
+  harness_version: 2.1.318 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: NeedsAttention
 filed_at:
   code_sha: 0f1624a8b38d961973328d79d05642add4464fc8
   branch: main
@@ -58,3 +67,11 @@ implementation_info:
   implemented: true
   implemented_at: 2026-11-04T01:31:40.290522363Z
   implemented_by: joe
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'Fix logic is sound (post-error re-read of train PR state, main-tree fallback, landed path keeps released holds), but CI lib-1 is red at both heads: the new landed-path test asserts the wrong Outcome.landed values.'
+  recovery_hint: address the review findings, move BUG-2433 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-11-04T03:57:15.112988298Z
