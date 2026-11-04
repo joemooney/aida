@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "spec": "TASK-2000",
+  "publishes": [
+    {
+      "at": "2026-11-04T04:15:30.407014135Z",
+      "closed_by": "queue-done"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-04T03:23:56.984420056Z",
+      "spec": "TASK-2000",
+      "seat": "implementer",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "In Progress",
+        "after": "In Progress"
+      }
+    }
+  ]
+}

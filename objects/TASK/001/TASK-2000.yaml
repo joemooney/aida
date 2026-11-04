@@ -6,12 +6,12 @@ description: |
   PR-2772 (BUG-1993) puts the CLI `aida show` surfaces (human, card, json, TOON) under SHOW_LINKAGE_DEADLINE (4 s) via collect_git_linkage_until, but the MCP show_requirement tool (the "mcp x2" callers listed in the PR body) still calls the unbounded collect_git_linkage. It is the same user-facing "show" operation, so on a loaded host an MCP show can still exceed the 5 s ceiling the spec was about, through unbounded resolve_default_branch_ref, worktree list, and an unclipped per-call budget sum. Decide whether MCP show should use collect_git_linkage_until (rendering unknowns the same way) and add a shim test if so.
 
   Raised in review of PR-2772: https://github.com/joemooney/aida/pull/2772
-status: InProgress
+status: Done
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-20T10:24:36.954851539Z
-modified_at: 2026-11-04T03:23:56.623063932Z
+modified_at: 2026-11-04T04:15:30.060837374Z
 req_type: Task
 tags:
 - from-review:PR-2772
@@ -76,6 +76,15 @@ history:
   session_id: 01a1a495537d
   harness_version: 2.1.318 (Claude Code)
   changes: []
+- id: 01a1a4c4-e793-7a53-9433-4b38f008efd5
+  author: joe
+  timestamp: 2026-11-04T04:15:30.195973782Z
+  session_id: 01a1a495537d
+  harness_version: 2.1.318 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 filed_at:
   code_sha: 42481f97c70e50a200eb225059c8f303788e8b18
   branch: pr-2772
@@ -84,3 +93,7 @@ filed_at:
   aida_build_sha: 419579e7c4
   vendor: claude
   session: 01a158cbc5b8
+implementation_info:
+  implemented: true
+  implemented_at: 2026-11-04T04:15:30.060837374Z
+  implemented_by: joe
