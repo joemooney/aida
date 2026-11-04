@@ -1,5 +1,6 @@
 id: 01a1a5c1-bfb3-7900-80e4-0ef9cb2cfa7a
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-774
+agreed_id: TASK-2827
 title: 'Non-blocking: aida ps / awaiting still do not surface an untested or os_wrap=of…'
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on BUG-2434, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
@@ -20,6 +21,11 @@ tags:
 - finding-hash:40a03190
 - from-review:PR-3347
 - kind:carried-forward
+history:
+- id: 01a1a5d8-1f22-7f43-90b5-bf230c26b2c8
+  author: joe
+  timestamp: 2026-11-04T09:16:06.818059546Z
+  changes: []
 filed_at:
   code_sha: 4280b671a2daf0b9357a0940c8f26b78b0eb8ca3
   branch: main
