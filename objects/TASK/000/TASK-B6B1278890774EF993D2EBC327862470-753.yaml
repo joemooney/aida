@@ -14,7 +14,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T01:15:11.009301343Z
-modified_at: 2026-11-04T06:07:54.676161811Z
+modified_at: 2026-11-04T06:15:03.545504954Z
 req_type: Task
 tags:
 - carried-from:BUG-2426
@@ -42,6 +42,12 @@ comments:
   created_at: 2026-11-04T04:18:37.894262765Z
   modified_at: 2026-11-04T04:18:37.894262765Z
   session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
+- id: 01a1a532-5c79-7a83-bae2-8ea400f2b2ec
+  author: joe
+  content: 'ADVISOR REWORK BRIEF (2026-11-03 23:16 MST, PR #3341 head 7a628e7a). Review requested changes. BLOCKING: list_leases_strict_all treats aida lock''s lock-only entries (lock-<slug>.toml, which do not parse as a SessionLease) as torn leases, so while any worktree lock exists the watcher never updates a dead author''s branch. Skip lock-only entries by file name or kind before strict parsing, and add a test that a present lock-<slug>.toml leaves author_live and the update path working. The deputy_shell CI failure is an unrelated flake: re-run it, do not chase it. Rule each non-blocking finding in this push: fix it or say why not, in one line on this spec. Gate (LIGHT): one targeted cargo test filter covering the changed module, plus make check-ci-fast, then push to the same PR branch. The advisor re-reviews only the delta.'
+  created_at: 2026-11-04T06:15:03.545504954Z
+  modified_at: 2026-11-04T06:15:03.545504954Z
+  session_id: da1c0d85-1d45-4ce4-a292-5358644f65b9
 history:
 - id: 01a1a443-3db8-70c3-aad1-ac7901b84264
   author: joe
