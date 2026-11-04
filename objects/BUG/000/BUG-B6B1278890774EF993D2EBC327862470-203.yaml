@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T01:35:35.019044810Z
-modified_at: 2026-11-04T07:10:23.787646996Z
+modified_at: 2026-11-04T07:10:41.001916610Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -34,6 +34,22 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: CI red (11 tests in lib-0/cli-0, main green at base) caused by the new process-global AIDA_OS_WRAP=1 default; the default also leaks past the implementer lane; the advisor-visible untested signal the spec comment asks for is missing.. Triage reason: advisor rework brief on spec; review findings to address'
   created_at: 2026-11-04T07:10:23.787645447Z
   modified_at: 2026-11-04T07:10:23.787645447Z
+  session_id: da1c0d85-1d45-4ce4-a292-5358644f65b9
+- id: 01a1a565-48ec-7763-a73d-9b20f84b6da1
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2434):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 31ed7ef690fc
+    Recorded: 2026-11-04T06:02:58.478405191+00:00
+    Findings:
+    1. CI red, caused by this PR (main green at 906c8e605e): lib-0 fails bug_044_headless_background_tests (a_rework_round_parked_on_its_old_pr_head_is_resumed, a_rework_round_that_committed_but_did_not_push_is_not_shipped, a_pushed_rework_round_is_shipped_while_the_forge_lags, a_run_parked_on_its_own_build_is_waited_for_and_resumed, a_run_that_did_not_park_is_not_resumed, a_run_that_keeps_parking_is_resumed_a_bounded_number_of_times) and story_1662_standalone_implementer_tests::stub_vendor_that_punts_exits_32_as_a_live_implementer_lane_with_no_grant_leaked; cli-0 fails bug_2139_headless_child_grant (contained_/uncontained_fresh_headless_child_gets_its_own_implementer_grant, launcher_that_cannot_delegate_implementer_gets_a_baseline_child) and story_1662_queue_work_wiring::punting_child_exits_32_through_queue_work_with_authority_recorded. Mechanism: these fixtures unset AIDA_OS_WRAP (e.g. bug_044_headless_background_tests.rs:589). On CI bwrap works, so lane_job::offer -> default_os_wrap_for_implementer_lane (session.rs:5092) sets AIDA_OS_WRAP=1, and os_wrapped_program_and_args (session.rs:5431) then runs the mock vendor inside bubblewrap, where it cannot write the fixture's count/args/env files outside the worktree. Fix: either pin AIDA_OS_WRAP=0 in fixtures that do not test os_wrap, or make the default injectable, so tests do not depend on host bwrap. Do not weaken those tests' assertions.
+    2. The default leaks past the implementer lane. default_os_wrap_for_implementer_lane calls std::env::set_var("AIDA_OS_WRAP","1") process-wide (session.rs:5099) and never restores it. offer is also the drain's phase-1 hook (session.rs:6033, with_implementer_jobs), so in a drain or --auto-complete process every later launch in that process inherits os_wrap on: the phase-3 reviewer, later queue items, and refuse_bg_under_os_wrap (agent_launch.rs:6485) for a contained --bg launch. After the first lane, os_wrap_explicit also reads the leaked value as Some(true), so later lanes report Explicit(true), not DefaultOn, and no_runner_reason misattributes the cause. Scope the default to the implementer seat's spawn and its runner: pass it through the child's env and the lane job runner's wrap decision, not the launcher's global environment, or restore the env var once the lane ends. Add a test that a launch after the lane does not inherit os_wrap. set_var after threads exist is also unsound; the doc comment's 'call before any runner thread starts' is not enforced, and in the drain the process already runs threads.
+    3. Spec gap (BUG-2434 description option (b) and advisor comment 2026-11-04T01:51): 'the untested warning reaches the advisor (awaiting/ps), not just the lane log'. The PR still prints the no-runner warning only to the lane's stderr (lane_job.rs:389-393). Only aida doctor gained a note. Neither aida ps / awaiting nor the advisor sweep surfaces a lane that ran with no job runner. Implement it, or get the advisor to narrow the spec explicitly.
+    4. Test gap: no test drives lane_job::offer end to end to show that, with os_wrap unset and bwrap live, a runner is offered (Some) and the seat launch is wrapped. bug_2434_lane_os_wrap_tests.rs covers only the pure lane_os_wrap decision, string contents, and env mutation. an_unset_os_wrap_is_turned_on_exactly_when_bwrap_works branches on the host's bwrap, so on a host without bwrap it never exercises DefaultOn. Add an offer-level test with the bwrap probe injected.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-04T07:10:40.876418599Z
+  modified_at: 2026-11-04T07:10:40.876418599Z
   session_id: da1c0d85-1d45-4ce4-a292-5358644f65b9
 history:
 - id: 01a1a4a6-15af-71f0-83e7-4c9b920f9b03
