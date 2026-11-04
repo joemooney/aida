@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-1519",
+  "publishes": [
+    {
+      "at": "2026-11-04T01:38:28.155004157Z",
+      "closed_by": "edit"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-04T01:38:27.875190077Z",
+      "spec": "BUG-1519",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Completed"
+      }
+    },
+    {
+      "ts": "2026-11-04T01:38:27.978558148Z",
+      "spec": "BUG-1519",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "",
+        "closed_by": "edit"
+      }
+    }
+  ]
+}
