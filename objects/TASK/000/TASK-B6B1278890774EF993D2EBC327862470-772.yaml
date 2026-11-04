@@ -1,5 +1,6 @@
 id: 01a1a545-2db1-70b2-ab6b-5e83dc83edf3
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-772
+agreed_id: TASK-2825
 title: 'non-blocking/minor: the new live probes (lines 686, 815) live in tests not name…'
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on TASK-2033, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
@@ -20,6 +21,11 @@ tags:
 - finding-hash:43892892
 - from-review:PR-3348
 - kind:carried-forward
+history:
+- id: 01a1a565-6e23-7210-a46e-97cd948ba05c
+  author: joe
+  timestamp: 2026-11-04T07:10:50.403766547Z
+  changes: []
 filed_at:
   code_sha: 640afc1b6621b4b3eeb517c7c921477eea25629c
   branch: main

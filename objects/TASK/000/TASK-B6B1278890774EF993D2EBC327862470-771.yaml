@@ -1,5 +1,6 @@
 id: 01a1a545-1ef2-72c2-8098-a3a8adf666b3
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-771
+agreed_id: TASK-2826
 title: 'non-blocking/minor: bug_2169_contained_clone_bwrap_tests.rs:676 contained_main_…'
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on TASK-2033, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
@@ -20,6 +21,11 @@ tags:
 - finding-hash:fada6df9
 - from-review:PR-3348
 - kind:carried-forward
+history:
+- id: 01a1a565-6e3a-7a40-b7ed-755440d0fc92
+  author: joe
+  timestamp: 2026-11-04T07:10:50.426289199Z
+  changes: []
 filed_at:
   code_sha: 640afc1b6621b4b3eeb517c7c921477eea25629c
   branch: main
