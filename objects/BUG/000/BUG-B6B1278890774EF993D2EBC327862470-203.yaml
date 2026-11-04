@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T01:35:35.019044810Z
-modified_at: 2026-11-04T06:02:59.086165921Z
+modified_at: 2026-11-04T06:15:01.413964300Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -23,6 +23,12 @@ comments:
   created_at: 2026-11-04T01:51:06.341491627Z
   modified_at: 2026-11-04T01:51:06.341491627Z
   session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
+- id: 01a1a532-5425-7872-8065-545322f6754f
+  author: joe
+  content: 'ADVISOR REWORK BRIEF (2026-11-03 23:16 MST, PR #3347 head 31ed7ef6). Review requested changes. (1) BLOCKING: the new process-global AIDA_OS_WRAP=1 default turns 11 tests red in lib-0/cli-0 (main is green at the base) and leaks past the implementer lane. Scope the default to the implementer lane''s own launch (set it on that child''s env or LaunchContext, never process-global), and leave tests and other roles unchanged. (2) Add the advisor-visible untested signal the spec comment asks for: a lane result line or lease field that marks a lane which ran without os_wrap. Rule each non-blocking finding in this push: fix it or say why not, in one line on this spec. Gate (LIGHT): one targeted cargo test filter covering the changed module, plus make check-ci-fast, then push to the same PR branch. The advisor re-reviews only the delta.'
+  created_at: 2026-11-04T06:15:01.413964300Z
+  modified_at: 2026-11-04T06:15:01.413964300Z
+  session_id: da1c0d85-1d45-4ce4-a292-5358644f65b9
 history:
 - id: 01a1a4a6-15af-71f0-83e7-4c9b920f9b03
   author: joe
