@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-03T07:21:01.822528019Z
-modified_at: 2026-11-03T21:15:48.708131446Z
+modified_at: 2026-11-04T03:12:29.325525531Z
 req_type: Story
 tags:
 - area:deputy
@@ -59,6 +59,12 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was punted on: design-fork: Architecture-sensitive spec (needs sketch + advisor signoff) with no signoff yet. It also builds on STORY-2338''s grant attribution, and that is still unmerged (PR #3287 OPEN). SKETCH v1 is posted as a comment with open decisions Q1 (offline submit: refuse vs keep the file queue), Q2 (attestation marker: runner-only accepted/ dir vs HMAC; does the same-uid residual remain acceptable?), Q3 (which seats get a sandbox unix-socket rule), and Q4 (binding granularity, which depends on #3287).. No triage reason was given.'
   created_at: 2026-11-03T21:15:48.708127059Z
   modified_at: 2026-11-03T21:15:48.708127059Z
+  session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
+- id: 01a1a48b-368d-7ad0-b77d-df27a2fc8528
+  author: joe
+  content: 'ADVISOR DISPATCH (2026-11-03 20:13 MST): STORY-2338 (#3287) has merged, which unblocks this story. Implement per the 14:20 signoff (Q1 a, Q2 a: accepted/ directory, Q3 advisor and implementer seats, Q4 launcher pid). Build on main''s deputy_shell. Any pid/namespace check goes through the BUG-2419 (pid, ns, start) binding rules, and never compares tokens across pid namespaces. Gate: LIGHT through the lane job runner: cargo test -p aida-cli-lib --lib deputy_shell plus check-ci-fast (umask 022), cited in the spec comment. Do not push untested.'
+  created_at: 2026-11-04T03:12:29.325525531Z
+  modified_at: 2026-11-04T03:12:29.325525531Z
   session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
 history:
 - id: 01a1a2a3-f27f-7463-9a97-0b8c7a670b77
