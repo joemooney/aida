@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-02T19:20:32.021326811Z
-modified_at: 2026-11-04T05:17:47.902725906Z
+modified_at: 2026-11-04T05:32:37.651632048Z
 req_type: Story
 tags:
 - architecture
@@ -264,6 +264,13 @@ comments:
   created_at: 2026-11-04T04:08:41.809753226Z
   modified_at: 2026-11-04T04:08:41.809753226Z
   session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
+- id: 01a1a50b-8393-7b72-9c6c-2f9046f203e1
+  author: joe
+  content: 'AC AMENDMENT (PR-B round 2, per the advisor ruling of 2026-11-04 04:08 UTC). Sketch section 8''s migration test ''Rollback restores v1'', and section 5''s tar-restore rollback, now read: ''aida gate migrate --rollback takes the migration''s spec_key stamps off IN PLACE on the live ledger tree. Stamping is reversible line by line, so every event written after the migration is kept. Each file the run changed must still start with the exact bytes the run wrote (length plus SHA-256), and its unstamped prefix must hash back to the v1 file. Otherwise rollback refuses and changes nothing. The archived gate-ledger.v1-<stamp>/ tree is kept, not restored.'' Also binding from the same ruling: --execute and --rollback hold the ledger-wide lock (.aida/gate-ledger.lock) exclusively from the plan through the swap, and every ledger writer (store::with_lock) holds it shared. The run report is written as ''pending'' before the swap and finalized as done or aborted afterwards.'
+  created_at: 2026-11-04T05:32:37.651632048Z
+  modified_at: 2026-11-04T05:32:37.651632048Z
+  session_id: 01a1a4fde763
+  harness_version: 2.1.318 (Claude Code)
 history:
 - id: 01a19ec9-2f7e-7e41-b3a1-1cb5a299a222
   author: joe
