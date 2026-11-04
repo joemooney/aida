@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-766
 agreed_id: TASK-2994
 title: 'Showcase: engineering-audit visual palette, chart label layout, what-if state colors, and framework tooltips'
 description: 'Update docs/showcase/engineering-audit.html and docs/reports/2026-11-01-aida-industry-engineering-audit.html visual styling and tooltips without altering TASK-2709 AC2 proxy/unmeasured distinctions. Acceptance: (1) docs/showcase/engineering-audit.html and docs/reports/2026-11-01-aida-industry-engineering-audit.html remain in sync; python3 docs/showcase/build.py --check and tests/test_showcase_build.py + tests/test_showcase_publish.py pass with no external runtime dependencies. (2) All TASK-2709 AC2 measured/proxy/unmeasured labels, methodology notes, and dora.dev caveats from main (1b678fd5059) are preserved verbatim. (3) Uses blue (--blue / --blue-soft) for .spec-tier.active (AIDA POSITION and TOTAL PHYSICAL LINES) and section subheaders; uses green (--emerald / --emerald-mid / --emerald-light) for .tab-btn.active, Merged PRs/MRs, and AIDA velocity/sizing bars with unclipped right-edge labels (padR=168) and non-overlapping 150 PRs/mo reference text; colors What-If Explorer baseline cards red/amber/grey and target scenario green; and adds factual hover tooltips on DORA, GitClear, and LinearB in the hero meta-strip.'
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-04T04:51:58.350086137Z
-modified_at: 2026-11-04T16:07:17.789758696Z
+modified_at: 2026-11-04T16:34:56.618487128Z
 req_type: Task
 tags:
 - docs
@@ -47,6 +47,20 @@ history:
   session_id: 01a1a518536d
   harness_version: 2.1.318 (Claude Code)
   changes: []
+- id: 01a1a769-e1e6-7112-8f8f-fa4a754e44f9
+  author: aida-auto-bump
+  timestamp: 2026-11-04T16:34:56.614702794Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 01a1a769-e1ea-7c30-9d54-b8e945f576ff
+  timestamp: 2026-11-04T16:34:56.618484824Z
+  agent: aida
+  commit_sha: e422daaa1a43d53b3cd801f51edf709f1adec89b
+  summary: 'All TASK-2994 AC pass at 4e1a687: files in sync (only relative asset paths differ), CI gates job (build.py --check + showcase tests) green, no AC2 prose removed, blue/green palette applied, padR=168, 150 PRs/mo label moved to legend row (no plot overlap), What-If baseline red/red/amber/grey and target preset (14.0/18.0) computes all-green (churn 9.9, bug 15.5, pass 87.8, +67 PRs/mo), DORA/GitClear/LinearB tooltips factual. Prior round''s two findings fixed. merge-hold-gate red is the supervised-review hold, not a defect.'
+  review_verdict: approved
 filed_at:
   code_sha: 6dcf370f9d3e6fc593ef2c22489665b702a248fc
   branch: agy2/audit-polish
@@ -54,11 +68,7 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: b5577764ec0
   vendor: antigravity
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: AC1/AC2 pass and most of AC3 lands, but the What-If target scenario does not render all-green, and the 150 PRs/mo label backdrop now covers chart data
-  recovery_hint: address the review findings, move TASK-2994 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-04T05:48:12.036194634Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-04T16:34:56.614696981Z
+  completion_sha: e422daaa1a43d53b3cd801f51edf709f1adec89b
