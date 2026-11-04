@@ -2,6 +2,6 @@ job: session-hygiene-route
 due_since: 2026-11-04T02:13:25.912207698Z
 due_reason: on CronJobFailed:session-hygiene
 due_failure:
-  trip_id: session-hygiene@2026-11-04T09:22:15.267596407Z
+  trip_id: session-hygiene@2026-11-04T10:26:33.016908413Z
   job: session-hygiene
-  error: 'exit 1: '
+  error: 'exit 124: timed out: session hygiene did not complete within 300s (killed)'

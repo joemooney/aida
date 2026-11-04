@@ -11,7 +11,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-20T23:41:45.676543397Z
-modified_at: 2026-11-04T09:47:04.425382697Z
+modified_at: 2026-11-04T10:49:03.739688432Z
 req_type: Task
 tags:
 - contained
@@ -78,6 +78,13 @@ comments:
   created_at: 2026-11-04T08:02:01.491690337Z
   modified_at: 2026-11-04T08:02:01.491690337Z
   session_id: da1c0d85-1d45-4ce4-a292-5358644f65b9
+- id: 01a1a62d-37fb-7ea0-87d4-5ff0e35340f3
+  author: joe
+  content: 'Round 3 (f4b0cb89, PR #3336): every queue-work launch arm after the chdir now takes the host main resolved before it (standalone reviewer, standalone implementer via Launch.host_main, headless exec + resume, reviewer plan via ReviewerLaunchPlan.host_main; codex arm resolves none). All session.rs boundary builders take host_main explicitly. Source ratchet tests/task_2032_launcher_main_ratchet_tests.rs allowlists launcher_main() callers (entry points only) and checks session_start/queue work resolve it before their chdir. Table test task_2032_every_queue_work_launch_arm_keeps_the_clone_boundary builds each arm from inside the clone with no LauncherMainPin. Also fixes the merged TASK-2033 test signatures (the d71c4552 CI compile failure). Verification: targeted lane test runs timed out at 900s twice under build-slot contention (untested=true locally); static fast gates run individually (rustfmt, trace headers, glyph lint, fixture ratchets) OK; full check-ci-fast not runnable inside the 60s tool cap. Relying on PR CI at f4b0cb89.'
+  created_at: 2026-11-04T10:49:03.739688432Z
+  modified_at: 2026-11-04T10:49:03.739688432Z
+  session_id: 01a1a5f46f78
+  harness_version: 2.1.318 (Claude Code)
 history:
 - id: 01a15cbb-fc05-7050-907c-e1e0d5b0996b
   author: joe
