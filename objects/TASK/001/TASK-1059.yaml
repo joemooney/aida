@@ -23,12 +23,12 @@ description: |-
   4. Documented in the away/home/presence and questions --help, alongside the (a)/(d) knobs.
 
   Related: TASK-769 (the sibling decouple-escalation-from-away_drain slice for consumer b); STORY-561 (the presence design); the stale-header fix in presence.rs already names this gap.
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-30T16:58:24.316766298Z
-modified_at: 2026-11-04T01:41:39.638244464Z
+modified_at: 2026-11-04T01:41:41.839988030Z
 req_type: Task
 tags:
 - aida:presence
@@ -61,3 +61,11 @@ history:
   timestamp: 2026-11-04T01:41:37.548614792Z
   session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
   changes: []
+- id: 01a1a438-174f-7682-a43c-240cf30f0d6c
+  author: joe
+  timestamp: 2026-11-04T01:41:41.839984109Z
+  session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
