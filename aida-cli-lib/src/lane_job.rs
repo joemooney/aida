@@ -1388,7 +1388,9 @@ fn overlay_wrapped(
 ) -> std::result::Result<(String, Vec<String>, &'static str), String> {
     #[cfg(unix)]
     if let Some(overlay) = &seed.overlay {
-        let (program, args) = crate::seat_target_overlay::wrap("unshare", overlay, &program, args)?;
+        // trace:BUG-2435 | ai:claude
+        let (program, args) =
+            crate::seat_target_overlay::wrap_lane_job("unshare", overlay, &program, args)?;
         return Ok((
             program,
             args,

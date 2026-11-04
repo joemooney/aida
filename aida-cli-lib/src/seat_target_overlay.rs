@@ -599,6 +599,49 @@ pub(crate) fn wrap(
     Ok((unshare.to_string(), full))
 }
 
+/// The bwrap options that give a lane job back the host's own uid and gid,
+/// with no capabilities.
+///
+/// `unshare -Urm` maps the launcher's user to root so the overlay can be
+/// mounted, and the lane-job bwrap inherits that: run as uid 0 it makes no
+/// user namespace of its own and keeps every capability. A job then sees
+/// `id -u` = 0, so the host cargo wrapper looks for its slot locks under
+/// `cargo-slots-0` rather than the `cargo-slots-<uid>` directory the sandbox
+/// binds, finds it missing and queues on a private copy under the job's
+/// tmpfs: every lane took a slot of its own while host `cargo ps` showed
+/// them all as queued (BUG-2435). A nested user namespace mapped to the host
+/// ids puts the job back on the host's slot directory, and `--cap-drop ALL`
+/// keeps it from remounting the read-only binds it runs under.
+// trace:BUG-2435 | ai:claude
+pub(crate) fn host_ids_bwrap_args(uid: u32, gid: u32) -> Vec<String> {
+    vec![
+        "--unshare-user".to_string(),
+        "--uid".into(),
+        uid.to_string(),
+        "--gid".into(),
+        gid.to_string(),
+        "--cap-drop".into(),
+        "ALL".into(),
+    ]
+}
+
+/// [`wrap`] for the lane-job bubblewrap `bwrap bwrap_args`: the job runs on
+/// the overlay with the launcher's own uid and gid ([`host_ids_bwrap_args`]).
+// trace:BUG-2435 | ai:claude
+#[cfg(unix)]
+pub(crate) fn wrap_lane_job(
+    unshare: &str,
+    ov: &LaneOverlay,
+    bwrap: &str,
+    bwrap_args: Vec<String>,
+) -> Result<(String, Vec<String>), String> {
+    // SAFETY: getuid and getgid have no preconditions and cannot fail.
+    let (uid, gid) = unsafe { (libc::getuid(), libc::getgid()) };
+    let mut args = host_ids_bwrap_args(uid, gid);
+    args.extend(bwrap_args);
+    wrap(unshare, ov, bwrap, args)
+}
+
 /// Mount the overlay once in a throwaway namespace and run `true`, so a host
 /// that refuses unprivileged user namespaces or overlay mounts falls back to
 /// cold before the first job. `Err` is the reason.
