@@ -19,8 +19,12 @@ fn real_git() -> PathBuf {
         .expect("real git on PATH")
 }
 
+/// Runs `git -C repo ARGS` with detached auto-maintenance off, so a fixture
+/// commit never leaves a background `git maintenance` behind (BUG-2191).
+// trace:TASK-2000 | ai:claude
 fn git(repo: &Path, args: &[&str]) -> String {
     let out = std::process::Command::new(real_git())
+        .args(["-c", "maintenance.auto=false", "-c", "gc.auto=0"])
         .arg("-C")
         .arg(repo)
         .args(args)
@@ -298,6 +302,9 @@ fn mcp_show_linkage_runs_under_the_show_deadline() {
 // trace:TASK-2000 trace:TASK-1999 | ai:claude
 #[test]
 fn bounded_default_branch_resolvers_match_their_unbounded_twins() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
     let tmp = tempfile::TempDir::new().unwrap();
     let init = |name: &str, branch: &str| -> PathBuf {
         let repo = tmp.path().join(name);
