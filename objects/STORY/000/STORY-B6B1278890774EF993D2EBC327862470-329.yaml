@@ -3,12 +3,12 @@ spec_id: STORY-b6b1278890774ef993d2ebc327862470-329
 agreed_id: STORY-2331
 title: 'Regression test: a pool grant round-trips an air gap by git bundle (two bare hubs)'
 description: 'From SPIKE-708 (direct root-to-inside workflow, which the advisor ruled the supported model on 2026-11-02). One hermetic integration test: two bare hubs, bundle-only in and out; two inside clones with an observed claim collision and a retry into disjoint ranges; a divergent outside claim; a disjoint union on return; an overlap refusal with refs/HEAD/status unchanged; an ordinary clean bundle pull; and final-slot and exhaustion coverage (depends on the final-slot bug). Also assert that a root block claim leaves no untracked registry/blocks.lock that makes the store dirty and refuses reconcile (Q4). If it does, fix the sidecar''s placement or ignore rule in this story without weakening the lock. Document the supported boundary (direct root-to-hub grants; recursive delegation and pool replenishment are not supported) in the storage docs.'
-status: Approved
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-03T02:44:16.945490220Z
-modified_at: 2026-11-04T01:12:54.934203640Z
+modified_at: 2026-11-04T01:12:56.022230010Z
 req_type: Story
 tags:
 - from:SPIKE-708
@@ -189,6 +189,14 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
+- id: 01a1a41d-c1d6-7bd0-91f7-dead48280bfd
+  author: aida-loop-guard
+  timestamp: 2026-11-04T01:12:56.022229104Z
+  session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: NeedsAttention
 filed_at:
   code_sha: 553f7d5984c6083a9f2b47cfa358ce57c438843b
   branch: main
