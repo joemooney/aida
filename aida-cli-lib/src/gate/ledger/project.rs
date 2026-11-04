@@ -135,7 +135,7 @@ pub(crate) fn index_spec(root: &Path, spec: &str, change: ChangeKey) -> std::io:
     let Some(path) = index_file(root, spec) else {
         return Ok(());
     };
-    store::with_lock(&path.with_extension("lock"), || {
+    store::with_lock(root, &path.with_extension("lock"), || {
         let mut index: SpecIndex = std::fs::read(&path)
             .ok()
             .and_then(|b| serde_json::from_slice(&b).ok())

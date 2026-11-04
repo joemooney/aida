@@ -90,7 +90,7 @@ pub(crate) const SHIPPED_SCAN_BUDGET: std::time::Duration = std::time::Duration:
 
 /// BUG-1993: the scan deadline passed before a git call finished.
 #[derive(Debug)]
-struct ScanTimedOut;
+pub(crate) struct ScanTimedOut;
 
 /// [`git_out`], bounded by the scan `deadline`. `Ok(None)` is a git error or
 /// non-zero exit, as with `git_out`; `Err` means the deadline passed, either
@@ -154,18 +154,14 @@ fn ref_exists_until(
 /// local form of that name, keeping only the refs that exist.
 // trace:STORY-1649 | ai:claude
 pub(crate) fn default_branch_refs(project_root: &std::path::Path) -> DefaultBranchRefs {
-    let Some(resolved) = resolve_default_branch_ref(project_root) else {
-        return DefaultBranchRefs::default();
-    };
-    let name = resolved
-        .strip_prefix("origin/")
-        .unwrap_or(resolved.as_str())
-        .to_string();
-    let remote_short = format!("origin/{name}");
-    let remote =
-        ref_exists(project_root, &format!("refs/remotes/{remote_short}")).then_some(remote_short);
-    let local = ref_exists(project_root, &format!("refs/heads/{name}")).then_some(name);
-    DefaultBranchRefs { remote, local }
+    let expanded = expand_default_branch_refs(
+        Ok::<_, std::convert::Infallible>(resolve_default_branch_ref(project_root)),
+        |full_ref| Ok(ref_exists(project_root, full_ref)),
+    );
+    match expanded {
+        Ok(refs) => refs,
+        Err(never) => match never {},
+    }
 }
 
 // trace:BUG-1993 | ai:antigravity
@@ -173,9 +169,22 @@ pub(crate) fn default_branch_refs_until(
     project_root: &std::path::Path,
     deadline: std::time::Instant,
 ) -> std::result::Result<DefaultBranchRefs, ScanTimedOut> {
-    let Some(resolved) =
-        resolve_default_branch_ref_until(project_root, deadline).map_err(|_| ScanTimedOut)?
-    else {
+    expand_default_branch_refs(
+        resolve_default_branch_ref_until(project_root, deadline).map_err(|_| ScanTimedOut),
+        |full_ref| ref_exists_until(project_root, full_ref, deadline),
+    )
+}
+
+/// The one expansion of a resolved default branch into its existing remote
+/// and local refs, shared by [`default_branch_refs`] and its bounded twin so
+/// the two cannot drift. `exists` checks one full ref; an `Err` from it or
+/// from `resolved` (the bounded twin's deadline) passes straight through.
+// trace:TASK-2000 trace:TASK-1999 | ai:claude
+fn expand_default_branch_refs<E>(
+    resolved: std::result::Result<Option<String>, E>,
+    mut exists: impl FnMut(&str) -> std::result::Result<bool, E>,
+) -> std::result::Result<DefaultBranchRefs, E> {
+    let Some(resolved) = resolved? else {
         return Ok(DefaultBranchRefs::default());
     };
     let name = resolved
@@ -183,14 +192,8 @@ pub(crate) fn default_branch_refs_until(
         .unwrap_or(resolved.as_str())
         .to_string();
     let remote_short = format!("origin/{name}");
-    let remote = ref_exists_until(
-        project_root,
-        &format!("refs/remotes/{remote_short}"),
-        deadline,
-    )?
-    .then_some(remote_short);
-    let local =
-        ref_exists_until(project_root, &format!("refs/heads/{name}"), deadline)?.then_some(name);
+    let remote = exists(&format!("refs/remotes/{remote_short}"))?.then_some(remote_short);
+    let local = exists(&format!("refs/heads/{name}"))?.then_some(name);
     Ok(DefaultBranchRefs { remote, local })
 }
 

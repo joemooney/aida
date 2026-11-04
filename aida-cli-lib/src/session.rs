@@ -5124,13 +5124,68 @@ fn destructive_command_deny_rules() -> Vec<&'static str> {
 /// an unrecognized value is ignored (falls through to config).
 /// trace:TASK-876 | ai:claude
 pub(crate) fn os_wrap_enabled(worktree_root: &Path) -> bool {
+    os_wrap_explicit(worktree_root).unwrap_or(false)
+}
+
+/// The `[contained] os_wrap` value someone actually chose: the `AIDA_OS_WRAP`
+/// override, else the config key. `None` when neither says anything, which is
+/// what lets a headless implementer lane default it on
+/// ([`default_os_wrap_for_implementer_lane`]). trace:BUG-2434 | ai:claude
+pub(crate) fn os_wrap_explicit(worktree_root: &Path) -> Option<bool> {
     if let Some(over) = os_wrap_env_override() {
-        return over;
+        return Some(over);
     }
     let cfg = crate::read_project_config_value(worktree_root);
-    crate::config_lookup(cfg.as_ref(), "contained", "os_wrap")
-        .and_then(|v| v.as_bool())
-        .unwrap_or(false)
+    crate::config_lookup(cfg.as_ref(), "contained", "os_wrap").and_then(|v| v.as_bool())
+}
+
+/// How a headless implementer lane's `[contained] os_wrap` resolves.
+// trace:BUG-2434 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum LaneOsWrap {
+    /// Set by `AIDA_OS_WRAP` or the config: honoured as given.
+    Explicit(bool),
+    /// Unset, and bubblewrap works on this host: the lane turns it on.
+    DefaultOn,
+    /// Unset, and bubblewrap does not work here: it stays off.
+    Unavailable,
+}
+
+/// BUG-2434: decide a headless implementer lane's os_wrap. The lane job
+/// runner runs a job only inside bubblewrap and only with os_wrap on, and
+/// os_wrap is opt-in, so on a host that never opted in every lane reported
+/// `untested=true`. When nobody chose a value and bubblewrap works here, the
+/// lane defaults it on; an explicit choice, either way, wins. Pure.
+// trace:BUG-2434 | ai:claude
+pub(crate) fn lane_os_wrap(explicit: Option<bool>, bwrap_live: bool) -> LaneOsWrap {
+    match explicit {
+        Some(on) => LaneOsWrap::Explicit(on),
+        None if bwrap_live => LaneOsWrap::DefaultOn,
+        None => LaneOsWrap::Unavailable,
+    }
+}
+
+impl LaneOsWrap {
+    /// Whether the lane's jobs may run (each inside its own bubblewrap
+    /// profile). trace:BUG-2434 | ai:claude
+    pub(crate) fn on(self) -> bool {
+        matches!(self, LaneOsWrap::Explicit(true) | LaneOsWrap::DefaultOn)
+    }
+}
+
+/// Resolve [`lane_os_wrap`] for a headless implementer lane at `seat`.
+/// `bwrap_live` is the host probe, asked only when nobody chose a value (the
+/// launcher passes [`bwrap_availability`]; tests inject it). Mutates nothing:
+/// the decision travels on the lane's own job runner
+/// ([`crate::lane_job::Sandbox::BwrapDefaultOn`]), never through this
+/// process's environment, so no other launch in the process inherits it.
+// trace:BUG-2434 | ai:claude
+pub(crate) fn implementer_lane_os_wrap(
+    seat: &Path,
+    bwrap_live: impl FnOnce() -> bool,
+) -> LaneOsWrap {
+    let explicit = os_wrap_explicit(seat);
+    lane_os_wrap(explicit, explicit.is_none() && bwrap_live())
 }
 
 /// Parse the `AIDA_OS_WRAP` per-host override. Returns `Some(true)`/`Some(false)`
@@ -5553,15 +5608,19 @@ pub(crate) fn os_wrapped_program_and_args(
 /// the store, the mailbox): the filesystem is read-only except `seat` and the
 /// `rw` paths the caller names (the seat's cargo target and the slot
 /// limiter's state; never cargo home). Fails closed, with the remediation, when `[contained]
-/// os_wrap` is off for the seat or bubblewrap cannot run.
+/// os_wrap` is off for the seat or bubblewrap cannot run. `os_wrap_on` is the
+/// lane's own decision (the seat's setting, or the BUG-2434 lane default),
+/// passed in rather than read back from this process's environment.
 // trace:BUG-2383 | ai:claude
+// trace:BUG-2434 | ai:claude
 pub(crate) fn lane_job_wrapped_program_and_args(
     seat: &Path,
+    os_wrap_on: bool,
     rw: &[PathBuf],
     program: &str,
     args: Vec<String>,
 ) -> Result<(String, Vec<String>)> {
-    if !os_wrap_enabled(seat) {
+    if !os_wrap_on {
         anyhow::bail!(
             "a lane job runs only inside bubblewrap, and `[contained] os_wrap` is off for this \
              seat. Turn it on (`[contained] os_wrap = true` in .aida/config.toml, or \
