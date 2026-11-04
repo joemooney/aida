@@ -1,0 +1,22 @@
+id: 01a1a4e6-791e-7941-8078-89f2a342722e
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-767
+agreed_id: TASK-2995
+title: 'Showcase: add interactive CLI command, skill, and hook explorer page (features.html)'
+description: 'Add docs/showcase/features.html exposing AIDA''s CLI command surface, workspace crate topology, skill templates, and hook templates. Acceptance: (1) docs/showcase/features.html is linked from docs/showcase/index.html and docs/showcase/engineering-audit.html; python3 docs/showcase/build.py --check and tests/test_showcase_build.py + tests/test_showcase_publish.py pass with zero broken relative links or external runtime dependencies. (2) Accurately reflects the repository without fabricating nonexistent crates on command badges or making unsourced third-party competitor claims: documents the 7 actual Cargo.toml workspace crates (aida-core, aida-cli, aida-cli-lib, aida-crate, aida-server, aida-generate-types, aida-tui), groups all 163 CLI command families (752 routes from aida commands --json --flags --hidden) by their official aida help-all topic categories and actual owning crate, and describes the proposed aida-cli-lib domain split in an explicitly labelled Planned Decomposition section. (3) Includes the interactive aida commands explorer, the 59 skill templates under aida-core/templates/skills/, and all 22 hook templates under aida-core/templates/hooks/, with no internal spec IDs in public prose.'
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-04T04:52:10.142429990Z
+modified_at: 2026-11-04T04:52:10.142429990Z
+req_type: Task
+tags:
+- docs
+- showcase
+filed_at:
+  code_sha: 6dcf370f9d3e6fc593ef2c22489665b702a248fc
+  branch: agy2/audit-polish
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: b5577764ec0
+  vendor: antigravity
