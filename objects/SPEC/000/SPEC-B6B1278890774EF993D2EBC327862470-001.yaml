@@ -20,7 +20,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T07:26:01.071265913Z
-modified_at: 2026-11-04T11:53:27.960171086Z
+modified_at: 2026-11-04T11:53:28.959830316Z
 req_type: Task
 tags:
 - architecture
@@ -841,6 +841,12 @@ comments:
   content: 'ADVISOR REWORK BRIEF (2026-11-04 04:56 MST, PR #3351 head eec3844b): the PR conflicts with main after #3288 (LaunchContext/spawn_agent) and #3326. Merge origin/main and resolve, keeping main''s launch structure and routing this PR''s post-exit seat-commit hooks through spawn_agent/LaunchContext where main moved the code. No other change; the round-3 scope ruling (02:36) stands. Gate: cargo test -p aida-cli-lib --lib task_2712_ plus make check-ci-fast. If the local run times out, PUSH ANYWAY and say so: CI''s shards are the gate.'
   created_at: 2026-11-04T11:53:25.469178145Z
   modified_at: 2026-11-04T11:53:25.469178145Z
+  session_id: da1c0d85-1d45-4ce4-a292-5358644f65b9
+- id: 01a1a668-31ce-76f1-b94e-38f13d1495ac
+  author: joe
+  content: merge conflict
+  created_at: 2026-11-04T11:53:28.782961171Z
+  modified_at: 2026-11-04T11:53:28.782961171Z
   session_id: da1c0d85-1d45-4ce4-a292-5358644f65b9
 history:
 - id: 01a1960f-6ca8-7313-8a94-63b0b98a4e44
