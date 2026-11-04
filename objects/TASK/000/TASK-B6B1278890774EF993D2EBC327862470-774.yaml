@@ -14,13 +14,20 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-04T08:51:40.595553179Z
-modified_at: 2026-11-04T08:51:40.595553179Z
+modified_at: 2026-11-04T10:57:46.130889991Z
 req_type: Task
 tags:
 - carried-from:BUG-2434
 - finding-hash:40a03190
 - from-review:PR-3347
 - kind:carried-forward
+comments:
+- id: 01a1a635-3092-74e1-8791-bda4793a43fb
+  author: joe
+  content: 'ADVISOR RULING (2026-11-04 03:56 MST, rule non-blocking findings once): Accepted: BUG-2434 made os_wrap the default, so untested lanes are now the exception and the standalone result line already flags them.'
+  created_at: 2026-11-04T10:57:46.130889991Z
+  modified_at: 2026-11-04T10:57:46.130889991Z
+  session_id: da1c0d85-1d45-4ce4-a292-5358644f65b9
 history:
 - id: 01a1a5d8-1f22-7f43-90b5-bf230c26b2c8
   author: joe
