@@ -104,7 +104,7 @@ fn a_pass_leaves_serve_verbs_fenced_targets_and_full_caps_pending() {
     let inv = DispatchInventory::default();
     let rev = request(ID, review(5));
     assert_eq!(
-        pass_admission(&inv, &rev, false, &mut caps),
+        pass_admission(&inv, &rev, false, false, &mut caps),
         PassAdmission::WaitingForServe
     );
     let fenced = request(ID, take(6));
@@ -113,17 +113,17 @@ fn a_pass_leaves_serve_verbs_fenced_targets_and_full_caps_pending() {
         ..Default::default()
     };
     assert_eq!(
-        pass_admission(&inv_fenced, &fenced, false, &mut caps),
+        pass_admission(&inv_fenced, &fenced, false, false, &mut caps),
         PassAdmission::Skip
     );
     for _ in 0..MAX_CONCURRENT_REVIEWS {
         assert!(matches!(
-            pass_admission(&inv, &rev, true, &mut caps),
+            pass_admission(&inv, &rev, true, false, &mut caps),
             PassAdmission::Claim(_)
         ));
     }
     assert_eq!(
-        pass_admission(&inv, &rev, true, &mut caps),
+        pass_admission(&inv, &rev, true, false, &mut caps),
         PassAdmission::Skip
     );
 }
