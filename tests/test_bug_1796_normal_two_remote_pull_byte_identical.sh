@@ -52,7 +52,11 @@ git -C "$project" remote set-url origin ../remote.git
 git -C "$project/.aida-store" config user.email test@example.com
 git -C "$project/.aida-store" config user.name 'BUG-1796 test'
 git -C "$project/.aida-store" add -A
-git -C "$project/.aida-store" commit --quiet -m 'test: initialize store'
+# `aida init` now commits a store whose per-clone runtime files are ignored
+# by its tracked .gitignore, so there may be nothing left to commit here.
+# trace:STORY-B6B1278890774EF993D2EBC327862470-329 | ai:claude
+git -C "$project/.aida-store" diff --cached --quiet ||
+    git -C "$project/.aida-store" commit --quiet -m 'test: initialize store'
 git -C "$project/.aida-store" push origin aida-store >/dev/null 2>&1
 
 actual="$tmp/actual-output"
@@ -66,10 +70,12 @@ else
 fi
 
 expected="$tmp/expected-output"
-# No "Committed pending orphan changes before pull" line: `aida init` now
-# writes the store's tracked runtime/staging .gitignore, so the per-clone
-# runtime files the pull's store leg used to find pending (and commit onto
-# the orphan branch) are ignored and the store is clean at pull time.
+# No "Committed pending orphan changes before pull" line (reproduced against
+# the built binary, not inferred): `aida init` now commits the store's tracked
+# runtime/staging .gitignore, so .aida/node.toml, .aida/store-write.lock and
+# registry/blocks.lock are ignored. Before, the `add -A` above tracked them,
+# the pull's own lock writes then dirtied them, and the store leg committed
+# them. Now nothing the pull writes is tracked, so the store is clean.
 # trace:STORY-B6B1278890774EF993D2EBC327862470-329 | ai:claude
 cat >"$expected" <<'EXPECTED'
 Pulling code main ← origin
