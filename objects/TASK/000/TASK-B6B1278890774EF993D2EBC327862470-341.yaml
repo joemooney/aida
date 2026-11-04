@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-341
 agreed_id: TASK-170
 title: Provision nightly GitLab forge credential
 description: TASK-1273 wired the nightly job to repository secret AIDA_GITLAB_TOKEN, but this headless session cannot ask the operator to provision or authorize that credential. Add a project-create-capable token for gitlab.joemooney.com to GitHub Actions secrets; until then the job reports a notice and skips.
-status: Approved
+status: Rejected
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-09-19T23:52:53.703891368Z
-modified_at: 2026-11-04T02:32:18.334115195Z
+modified_at: 2026-11-04T02:32:19.736203685Z
 req_type: Task
 tags:
 - credential
@@ -136,4 +136,12 @@ history:
   timestamp: 2026-11-04T02:32:17.158308371Z
   session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
   changes: []
+- id: 01a1a466-7218-7552-bbff-aabbb1a79186
+  author: joe
+  timestamp: 2026-11-04T02:32:19.736199145Z
+  session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Rejected
 execution_mode: operator
