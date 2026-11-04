@@ -7,12 +7,12 @@ description: |-
 
   cosmetic (non-blocking): ProcEntry::token (gate/review_authority.rs:483) has no callers left; delete it or route author_token through it.
   Reviewed sha: 21ba1f4436fb1148802957b5e459d40edbdeebdc
-status: Done
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-03T16:46:04.867318285Z
-modified_at: 2026-11-03T22:18:25.235581827Z
+modified_at: 2026-11-04T01:13:54.369369373Z
 req_type: Task
 tags:
 - carried-from:BUG-2419
@@ -59,6 +59,20 @@ history:
   timestamp: 2026-11-03T22:18:26.327705013Z
   session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
   changes: []
+- id: 01a1a41e-a5be-7360-8df9-484ff9ca2ff9
+  author: aida-auto-bump
+  timestamp: 2026-11-04T01:13:54.366147501Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a1a41e-a5c1-7323-ade3-a682611ae3c5
+  timestamp: 2026-11-04T01:13:54.369365371Z
+  agent: aida
+  commit_sha: 29660457166fd90eb98d7f9e13d887c885a28cd9
+  summary: Deletes the uncalled ProcEntry::token [REDACTED] the carried-forward finding; author_token is now the sole constructor, process_token keeps its other callers (lines 262/270/1065); doc comment updated and traced; all PR CI green at head.
+  review_verdict: approved
 filed_at:
   code_sha: 1fc6b8bdc6dd4337e4d9d82e9740568bdf5d9830
   branch: main
@@ -70,3 +84,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-11-03T21:31:15.839253051Z
   implemented_by: joe
+  completed_at: 2026-11-04T01:13:54.366141486Z
+  completion_sha: 29660457166fd90eb98d7f9e13d887c885a28cd9
