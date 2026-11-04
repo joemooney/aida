@@ -12,12 +12,12 @@ description: |
   REVISIT TRIGGER: a downstream project configures a guard set with no binary-dependent guard, or someone reports preflight build cost. Until one of those happens this costs nothing here, because every guard this repo configures needs the binary anyway — so the wasted build is hypothetical in the only project currently running it.
 
   NOT IN SCOPE, and worth stating so a future reader does not fold them back in: TASK-1289's publication-boundary design problem, the fail-open where a skipped guard permits publication, and BUG-1420's shell-semantics mismatch. All three are correctness defects in the same file. This is the only one of the four that is not.
-status: InProgress
+status: Done
 priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-09-20T06:22:03.284699808Z
-modified_at: 2026-11-04T11:00:12.539185128Z
+modified_at: 2026-11-04T11:54:45.235435169Z
 req_type: Task
 tags:
 - from:session-0919
@@ -56,3 +56,16 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1a669-5d17-7821-a7a0-52e892083f0a
+  author: joe
+  timestamp: 2026-11-04T11:54:45.399537183Z
+  session_id: 01a1a637647a
+  harness_version: 2.1.318 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
+implementation_info:
+  implemented: true
+  implemented_at: 2026-11-04T11:54:45.235435169Z
+  implemented_by: joe
