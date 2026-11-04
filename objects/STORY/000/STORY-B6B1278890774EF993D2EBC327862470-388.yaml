@@ -1,0 +1,40 @@
+id: 01a1a736-e545-7881-9b39-de61a3c68b66
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-388
+agreed_id: STORY-2460
+title: 'Contained agy implementer lanes: a [contained.vendors] posture for Antigravity'
+description: |
+  Operator request (2026-11-04 08:38 MST): run agy (Antigravity) as an unattended contained implementer lane, so lane work can be spread across vendors as Claude tokens run short, and so vendors can be compared on quality (see BUG-2439, aida compete).
+
+  Today `vendor_containment_posture` (aida-cli-lib/src/session.rs:3209) accepts only claude+"aida" and codex+"native". agy is refused under both values, so `aida queue work SPEC --vendor agy --no-human` with AIDA_OS_WRAP=1 fails: "the `agy` vendor cannot run a contained session". No `[contained.vendors]` setting can opt agy in.
+
+  Design fork (needs a sketch and advisor signoff; it is a security boundary):
+  (A) "aida" posture for agy: launch agy inside AIDA's own OS wrapper (bwrap and seccomp, the same boundary Claude uses), with an agy-specific settings and permission mapping.
+  (B) "native" posture for agy: only if Antigravity ships a real sandbox, which TASK-2584 evaluated for Codex.
+  The sketch must also cover agy auth and network hosts (the allowed_hosts additions) and agy's headless argv (BUG-1686).
+
+  Acceptance:
+  1. `[contained.vendors] agy = "<posture>"` in trusted origin/main config lets `aida queue work SPEC --role implementer --no-human --vendor agy` launch contained, and the posture is visible in `aida ps`/doctor.
+  2. Without the opt-in, agy is still refused (fail closed). A regression test pins both the refusal and the accepted posture.
+  3. A contained agy lane cannot write outside its worktree or reach hosts outside allowed_hosts (one negative test each).
+  4. The refusal message stops telling agy users to "fix [contained.vendors]" until a value actually works; it names the supported vendors.
+  5. One real agy lane completes a small spec end to end (PR opened), and the result is cited on this story.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-04T15:39:15.141070572Z
+modified_at: 2026-11-04T15:39:15.141070572Z
+req_type: Story
+tags:
+- area:containment
+- needs-sketch
+- security
+- vendor:agy
+filed_at:
+  code_sha: c19294416a9bc68dab12b910c0566ad80a7cc995
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: c19294416a9
+  vendor: claude
+  session: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
