@@ -901,13 +901,89 @@ fn top_level(text: &str) -> String {
     out
 }
 
+/// Each arm's pattern (guard included) in a match block's `body`. An arm's
+/// expression ends at a top-level `,`, or at a closed `{…}` block that no
+/// `else`, `.`, `?` or `,` continues. trace:TASK-1954 trace:TASK-1982 | ai:claude
+fn match_arm_patterns(body: &str) -> Vec<&str> {
+    let bytes = body.as_bytes();
+    let mut out = Vec::new();
+    let mut at = 0;
+    while at < bytes.len() {
+        let start = at;
+        let mut depth = 0i32;
+        let mut arrow = None;
+        while at < bytes.len() {
+            match bytes[at] {
+                b'{' | b'(' | b'[' => depth += 1,
+                b'}' | b')' | b']' => depth -= 1,
+                b'=' if depth == 0 && bytes.get(at + 1) == Some(&b'>') => {
+                    arrow = Some(at);
+                    break;
+                }
+                _ => {}
+            }
+            at += 1;
+        }
+        let Some(arrow) = arrow else { break };
+        out.push(&body[start..arrow]);
+        at = arrow + 2;
+        let mut depth = 0i32;
+        while at < bytes.len() {
+            match bytes[at] {
+                b'{' | b'(' | b'[' => depth += 1,
+                b'}' | b')' | b']' => {
+                    depth -= 1;
+                    if depth == 0 && bytes[at] == b'}' {
+                        let rest = body[at + 1..].trim_start();
+                        let continued =
+                            rest.starts_with("else") || rest.starts_with(['.', '?', ',']);
+                        if !continued {
+                            at += 1;
+                            break;
+                        }
+                    }
+                }
+                b',' if depth == 0 => {
+                    at += 1;
+                    break;
+                }
+                _ => {}
+            }
+            at += 1;
+        }
+    }
+    out
+}
+
+// The arm splitter behind the hot-file guard reads only arm patterns, so an
+// `else if` inside an unbraced arm body and a lowercase guard ident are not
+// mistaken for a catch-all arm. trace:TASK-1954 trace:TASK-1982 | ai:claude
+#[test]
+fn match_arm_patterns_reads_patterns_not_bodies_or_guards() {
+    let body = "
+        X::A if verbose => run(),
+        X::B => if a { 1 } else if b { 2 } else { 3 }
+        X::C => { other => 1, },
+        X::D(x) => x.go()?,
+    ";
+    let patterns: Vec<_> = match_arm_patterns(body).iter().map(|p| p.trim()).collect();
+    assert_eq!(patterns, ["X::A if verbose", "X::B", "X::C", "X::D(x)"]);
+    let with_wildcard = "X::A => 1, _ if late => 2, other => 3";
+    let patterns: Vec<_> = match_arm_patterns(with_wildcard)
+        .iter()
+        .map(|p| p.trim())
+        .collect();
+    assert_eq!(patterns, ["X::A", "_ if late", "other"]);
+}
+
 // Criterion 4, enforced: no hot file holds a per-verb dispatcher for a
 // command's subcommand enum (a fn taking one, or a match over its variants
 // with no catch-all arm), or a `{ … }` or tuple pattern over a command's clap
 // type or variant without `..`. Any of these means a new flag or verb on
 // that command must edit the hot file. Renaming imports (`use X as Y`) are
-// followed, and a glob import of a command's verbs is refused outright,
-// since bare variants would slip past every check.
+// followed, and any import of a command's verbs (glob, `{A, B}` group, or a
+// single variant) is refused outright, since bare variants would slip past
+// every check.
 // trace:STORY-1728.ac245f28 | ai:claude
 #[test]
 fn adding_a_flag_to_a_command_cannot_require_a_hot_file_edit() {
@@ -922,10 +998,17 @@ fn adding_a_flag_to_a_command_cannot_require_a_hot_file_edit() {
     let comment = regex::Regex::new(r"//[^\n]*").unwrap();
     let use_item = regex::Regex::new(r"\buse\s+[^;]*;").unwrap();
     let rename = regex::Regex::new(r"\b(\w+)\s+as\s+(\w+)\b").unwrap();
-    let glob = regex::Regex::new(r"\b(\w+)::\*").unwrap();
     let fn_open = regex::Regex::new(r"\bfn\s+(\w+)\s*(<[^>]*>)?\s*\(").unwrap();
     let param_type = regex::Regex::new(r":\s*&?(?:mut\s+)?(?:[\w:]*::)?(\w+)").unwrap();
-    let catch_all = regex::Regex::new(r"(^|[,\s])(_|[a-z]\w*)\s*(=>|if\s)").unwrap();
+    // A whole arm pattern that is `_` or a binding, optionally guarded.
+    let catch_all = regex::Regex::new(
+        r"(?s)^\s*\|?\s*(?:ref\s+)?(?:mut\s+)?(_|[a-z_]\w*)\s*(?:@\s*_\s*)?(?:if\b.*)?$",
+    )
+    .unwrap();
+    // Any import that names a command enum's variants: a glob, a `{…}`
+    // group (other than `{self}`), or a single variant. trace:TASK-1954
+    // trace:TASK-1983 | ai:claude
+    let verb_import = regex::Regex::new(r"\b(\w+)::(\*|\{[^}]*\}|[A-Z]\w*)").unwrap();
     let arm_follow = regex::Regex::new(r"^\s*(=>|\||if\s)").unwrap();
     let match_kw = regex::Regex::new(r"\bmatch\b").unwrap();
     let mut violations = Vec::new();
@@ -962,10 +1045,14 @@ fn adding_a_flag_to_a_command_cannot_require_a_hot_file_edit() {
                     }
                 }
             }
-            for caps in glob.captures_iter(item.as_str()) {
-                if enums.contains(&caps[1].to_string()) {
+        }
+        // After every rename is known, so `use X as Y; use Y::A;` is caught.
+        for item in use_item.find_iter(&text) {
+            for caps in verb_import.captures_iter(item.as_str()) {
+                let group = caps[2].trim_matches(['{', '}']).trim();
+                if enums.contains(&caps[1].to_string()) && group != "self" {
                     violations.push(format!(
-                        "{name}:{} glob-imports `{}` verbs; name them through the enum",
+                        "{name}:{} imports `{}` verbs; name them through the enum",
                         line_of(item.start()),
                         &caps[1]
                     ));
@@ -1042,8 +1129,16 @@ fn adding_a_flag_to_a_command_cannot_require_a_hot_file_edit() {
             if !match_kw.is_match(head) || !seen_blocks.insert(open) {
                 continue;
             }
-            let arms = top_level(&text[open + 1..close_of(bytes, open + 1) - 1]);
-            if !catch_all.is_match(&arms) {
+            // Judge each arm's own pattern, so an `else if` in an arm body or
+            // a lowercase guard (`X::A if verbose =>`) is not read as a
+            // catch-all. trace:TASK-1954 trace:TASK-1982 | ai:claude
+            let block = &text[open + 1..close_of(bytes, open + 1) - 1];
+            let caught = match_arm_patterns(block).iter().any(|pattern| {
+                catch_all
+                    .captures(pattern)
+                    .is_some_and(|caps| !matches!(&caps[1], "true" | "false"))
+            });
+            if !caught {
                 violations.push(format!(
                     "{name}:{} matches every `{}` verb with no catch-all arm",
                     line_of(found.start()),
