@@ -1517,10 +1517,20 @@ fn task_1337_post_setup_launch_error_rolls_back_the_owned_setup() {
         !text.contains(&format!("aida worktree enter {spec}")),
         "a rolled-back setup offers no tree to enter: {text}"
     );
-    // The lease is gone ...
+    // The lease is gone (lease files only, not their sidecars) ...
     let sessions = repo.join(".aida/sessions");
-    let leases: Vec<_> = std::fs::read_dir(&sessions)
-        .map(|dir| dir.flatten().map(|e| e.path()).collect())
+    let leases: Vec<std::path::PathBuf> = std::fs::read_dir(&sessions)
+        .map(|dir| {
+            dir.flatten()
+                .map(|e| e.path())
+                .filter(|p| {
+                    let name = p.file_name().and_then(|n| n.to_str()).unwrap_or("");
+                    name.ends_with(".toml")
+                        && !name.ends_with(".manifest.toml")
+                        && !name.ends_with(".activity.toml")
+                })
+                .collect()
+        })
         .unwrap_or_default();
     assert!(
         leases.iter().all(|p| !std::fs::read_to_string(p)
