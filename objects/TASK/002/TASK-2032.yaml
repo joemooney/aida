@@ -6,12 +6,12 @@ description: |
   seat_clone_detect::is_host_main (aida-core/src/seat_clone_detect.rs:92) checks against a process-wide HOST_MAINS set: every non-clone main ever resolved via main_worktree_root_from (worktree_gc.rs:758), plus the cwd git root. It does not check the launcher's main. No host path that resolves a seat-chosen dir was found, but a long-lived process widens the set. Pass the launcher's main into host_recorded_clone explicitly.
 
   Raised in review of PR-2787: https://github.com/joemooney/aida/pull/2787#issuecomment-6304296951
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-20T23:41:45.676543397Z
-modified_at: 2026-11-04T16:03:08.053957734Z
+modified_at: 2026-11-04T18:58:14.978952569Z
 req_type: Task
 tags:
 - contained
@@ -97,6 +97,12 @@ comments:
   created_at: 2026-11-04T11:14:41.020968281Z
   modified_at: 2026-11-04T11:14:41.020968281Z
   session_id: da1c0d85-1d45-4ce4-a292-5358644f65b9
+- id: 01a1a7ed-1542-74d0-af2b-898511855bab
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was punted on: blocked-dependency: PR #3336 mandatory main-merge blocked before any code changes: git fetch origin main && git merge origin/main failed with cannot open .git/FETCH_HEAD: Read-only file system. This Codex session mounts the clone .git read-only and approvals are disabled. Approved deputy fallback job 01a1a74c-8e74-7bb3-90ff-45d4557ebc56 refused git fetch with exit 126, exec-not-allowed (git is not aida or an --allow-exec path). No findings disputed; merge resolution, light gate, merge commit and push remain unperformed. Resume with Git metadata writes permitted or an operator-approved Git executor.. No triage reason was given.'
+  created_at: 2026-11-04T18:58:14.978949111Z
+  modified_at: 2026-11-04T18:58:14.978949111Z
+  session_id: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
 history:
 - id: 01a15cbb-fc05-7050-907c-e1e0d5b0996b
   author: joe
@@ -214,6 +220,14 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1a7ed-1542-74d0-af2b-8973872b9a46
+  author: joe
+  timestamp: 2026-11-04T18:58:14.978928325Z
+  session_id: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: 45025e7234009af5f935bde71591c6f0469de938
   branch: pr-2787
@@ -226,8 +240,3 @@ implementation_info:
   implemented: true
   implemented_at: 2026-11-04T04:25:29.357042790Z
   implemented_by: joe
-attention_reason:
-  category: blocked-dependency
-  detail: 'PR #3336 mandatory main-merge blocked before any code changes: git fetch origin main && git merge origin/main failed with cannot open .git/FETCH_HEAD: Read-only file system. This Codex session mounts the clone .git read-only and approvals are disabled. Approved deputy fallback job 01a1a74c-8e74-7bb3-90ff-45d4557ebc56 refused git fetch with exit 126, exec-not-allowed (git is not aida or an --allow-exec path). No findings disputed; merge resolution, light gate, merge commit and push remain unperformed. Resume with Git metadata writes permitted or an operator-approved Git executor.'
-  raised_by: implementer
-  raised_at: 2026-11-04T16:03:08.053957734Z
