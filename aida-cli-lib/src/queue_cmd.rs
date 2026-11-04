@@ -13711,7 +13711,6 @@ pub(crate) fn handle_queue_work(
                 &verdict_path,
                 contained,
                 launch_vendor,
-                agent,
             );
         }
         // trace:TASK-1594 | ai:claude
@@ -13937,8 +13936,8 @@ pub(crate) fn handle_queue_work(
                             Some(lease.scope.as_str()),
                         )?,
                     };
-                    // trace:TASK-2807 | ai:claude
-                    agent.starting();
+                    // Counted by `AgentLaunchMark` once the child spawned:
+                    // a failed spawn launched nobody. trace:TASK-2807 | ai:claude
                     let status = session::spawn_vendor_headless_resume(
                         &session::HeadlessResume {
                             vendor,
@@ -14206,20 +14205,34 @@ pub(crate) fn launch_refused_before_agent(setup_result: &Result<()>, agent_start
     })
 }
 
-/// TASK-2807: set by a pickup's launch immediately before it calls anything
-/// that can start an agent process (a spawn-and-wait runner). An `exec` is
-/// not marked: it either replaces this process (no rollback runs) or fails,
-/// which launched nobody.
+/// TASK-2807: whether a pickup's launch can have started an agent. A spawn
+/// through `review_watch::reviewer_status_on_spawn` (every reviewer and
+/// resume runner) counts only once it returned a child, so a spawn that
+/// failed (ENOENT, EACCES, a pre-spawn helper error) launched nobody. A
+/// runner that spawns elsewhere is marked with [`Self::starting`] before
+/// the call. An `exec` is not marked: it either replaces this process (no
+/// rollback runs) or fails, which launched nobody.
 // trace:TASK-2807 | ai:claude
-#[derive(Default)]
-pub(crate) struct AgentLaunchMark(std::cell::Cell<bool>);
+pub(crate) struct AgentLaunchMark {
+    marked: std::cell::Cell<bool>,
+    spawns_at_start: u64,
+}
+
+impl Default for AgentLaunchMark {
+    fn default() -> Self {
+        Self {
+            marked: std::cell::Cell::new(false),
+            spawns_at_start: crate::review_watch::agent_spawn_count(),
+        }
+    }
+}
 
 impl AgentLaunchMark {
     pub(crate) fn starting(&self) {
-        self.0.set(true);
+        self.marked.set(true);
     }
     pub(crate) fn started(&self) -> bool {
-        self.0.get()
+        self.marked.get() || crate::review_watch::agent_spawn_count() != self.spawns_at_start
     }
 }
 
@@ -14353,11 +14366,11 @@ pub(crate) fn run_standalone_reviewer(
     // codex-routed standalone reviewer actually launches `codex`.
     // trace:BUG-1607 | ai:claude
     launch_vendor: session::HeadlessVendor,
-    // TASK-2807: marked just before each arm spawns the reviewer, so the
-    // pickup's setup rollback is disarmed once a reviewer can have run.
-    // trace:TASK-2807 | ai:claude
-    agent: &AgentLaunchMark,
 ) -> Result<()> {
+    // TASK-2807: every arm spawns through `reviewer_status_on_spawn`, which
+    // `AgentLaunchMark` counts only once a child exists, so a reviewer spawn
+    // that fails (a missing `codex`) rolls the pickup's setup back and one
+    // that ran keeps it. trace:TASK-2807 | ai:claude
     // Watch context only restricts an ordinary attested launch; it cannot
     // authorize a verdict or a reviewer seat. trace:TASK-1993 | ai:codex
     // Every arm below (fresh or resume, headless or interactive) refuses a
@@ -14434,7 +14447,6 @@ pub(crate) fn run_standalone_reviewer(
                 // BUG-2386: resume on the recorded vendor. trace:BUG-2386 | ai:claude
                 let (vendor, resume_id) =
                     crate::codex_resume::recorded_resume(project_root, &id, Some(scope))?;
-                agent.starting();
                 let (status, grant) = session::spawn_vendor_headless_resume_granted(
                     &session::HeadlessResume {
                         vendor,
@@ -14504,7 +14516,6 @@ pub(crate) fn run_standalone_reviewer(
                         )
                         .cyan()
                     );
-                    agent.starting();
                     let status = crate::review_watch::reviewer_status(&mut cmd)
                         .context("failed to spawn codex")?;
                     (status, None, Some(grant.id))
@@ -14529,7 +14540,6 @@ pub(crate) fn run_standalone_reviewer(
                         &crate::current_user_id(None),
                         contained || session::aida_contained_env()?,
                     )?;
-                    agent.starting();
                     (
                         session::spawn_claude_resume_with_grant(
                             &id,
@@ -14578,7 +14588,6 @@ pub(crate) fn run_standalone_reviewer(
                 // trace:TASK-307 | ai:claude
                 let tee_opts =
                     headless_tee::TeeOptions::from_env_and_flag(false).with_label("reviewer");
-                agent.starting();
                 let (status, grant) = session::spawn_vendor_headless_with_seat_granted(
                     launch_vendor,
                     aida_core::agents_config::AgentSeat::Reviewer,
@@ -14631,7 +14640,6 @@ pub(crate) fn run_standalone_reviewer(
                     )
                     .cyan()
                 );
-                agent.starting();
                 let (status, grant) =
                     session::spawn_reviewer_launch_plan_granted(&plan, project_root)?;
                 (status, None, Some(grant))

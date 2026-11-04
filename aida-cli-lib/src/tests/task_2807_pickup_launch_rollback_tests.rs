@@ -109,6 +109,58 @@ fn any_pre_agent_failure_rolls_back_the_worktree_and_lease() {
     assert_gone(&fx.main, &tree, scope);
 }
 
+/// The reviewer's codex arm: `reviewer_status` on a `codex` that cannot be
+/// spawned. The failed spawn launched nobody, so the setup is rolled back.
+fn spawn_reviewer(program: &Path) -> anyhow::Result<std::process::ExitStatus> {
+    use anyhow::Context as _;
+    crate::review_watch::reviewer_status(&mut std::process::Command::new(program))
+        .context("failed to spawn codex")
+}
+
+/// TASK-2808: a failed codex spawn (no child process) rolls back.
+#[test]
+fn a_failed_codex_spawn_rolls_back_the_worktree_and_lease() {
+    let fx = fixture();
+    let _ambient = crate::test_env::AmbientGuard::hermetic_with_seat(&fx.main, "implementer", &[]);
+    let scope = "TASK-928076";
+    let receipt = launching_setup(scope);
+    let (_, tree) = lease_tree(&fx.main, scope).expect("setup minted a lease");
+    let missing = fx.main.join("no-such-bin").join("codex");
+
+    let (result, rolled_back) = run_pickup_launch(&fx.main, receipt, |_agent| {
+        spawn_reviewer(&missing)?;
+        unreachable!("the spawn fails");
+    });
+
+    let err = result.unwrap_err();
+    assert!(
+        format!("{err:#}").contains("failed to spawn codex"),
+        "{err:#}"
+    );
+    assert!(rolled_back);
+    assert_gone(&fx.main, &tree, scope);
+}
+
+/// A reviewer that spawned and then failed (no verdict) can have run: kept.
+#[test]
+fn a_spawned_reviewer_that_fails_keeps_the_worktree_and_lease() {
+    let fx = fixture();
+    let _ambient = crate::test_env::AmbientGuard::hermetic_with_seat(&fx.main, "implementer", &[]);
+    let scope = "TASK-928077";
+    let receipt = launching_setup(scope);
+    let (lease_id, tree) = lease_tree(&fx.main, scope).expect("setup minted a lease");
+
+    let (result, rolled_back) = run_pickup_launch(&fx.main, receipt, |_agent| {
+        spawn_reviewer(Path::new("true"))?;
+        std::fs::write(tree.join("agent-work.txt"), "uncommitted\n").unwrap();
+        anyhow::bail!("the reviewer exited without a verdict")
+    });
+
+    assert!(result.is_err());
+    assert!(!rolled_back);
+    assert_kept(&fx.main, &tree, scope, &lease_id);
+}
+
 /// An error after an agent can have run (an implementer that punted, a
 /// reviewer with no verdict) keeps its tree and lease.
 #[test]

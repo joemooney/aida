@@ -189,7 +189,6 @@ fn contained_launch_refused_on(launch: QueueWorkLaunch, no_human: bool, errno: i
         &verdict_path,
         true,
         session::HeadlessVendor::Claude,
-        &crate::queue_cmd::AgentLaunchMark::default(),
     );
     crate::grant_keyring::FORCE_INSTALL_ERRNO.with(|e| e.set(None));
     let err = result.expect_err("a contained reviewer without a keyring key must be refused");

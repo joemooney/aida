@@ -1468,8 +1468,13 @@ fn task_1337_held_branch_refuses_before_any_pickup_mutation() {
     assert_pickup_unstarted(&repo, &home, &spec);
 }
 
+/// TASK-1337 originally kept the setup of a guided launch whose exec failed
+/// and printed a manual continuation. TASK-2808 retired that for a setup the
+/// pickup owns: the failed exec launched nobody, so `aida queue work` rolls
+/// back the worktree and lease (re-running the pickup is the continuation).
+/// trace:TASK-1337 TASK-2808 TASK-2811 | ai:claude
 #[test]
-fn task_1337_post_setup_launch_error_prints_manual_guided_continuation() {
+fn task_1337_post_setup_launch_error_rolls_back_the_owned_setup() {
     use std::os::unix::fs::PermissionsExt;
     let base = tempfile::tempdir().unwrap();
     let (repo, home, spec) = init_codex_only_project(base.path());
@@ -1503,18 +1508,36 @@ fn task_1337_post_setup_launch_error_prints_manual_guided_continuation() {
     );
     assert!(!output.status.success(), "{text}");
     assert!(
-        text.contains(&format!("aida worktree enter {spec}")),
-        "{text}"
-    );
-    // BUG-2396: the continuation follows the configured vendor, so a
-    // codex-only project is told to relaunch Codex, not Claude.
-    // trace:BUG-2396 | ai:claude
-    assert!(
-        text.contains(&format!("codex '$aida-guided-implement {spec}'")),
+        text.contains(&format!(
+            "no agent was launched: rolled back the {spec} pickup setup"
+        )),
         "{text}"
     );
     assert!(
-        repo.join(".aida/sessions").exists(),
-        "setup should have succeeded before launch failed"
+        !text.contains(&format!("aida worktree enter {spec}")),
+        "a rolled-back setup offers no tree to enter: {text}"
+    );
+    // The lease is gone ...
+    let sessions = repo.join(".aida/sessions");
+    let leases: Vec<_> = std::fs::read_dir(&sessions)
+        .map(|dir| dir.flatten().map(|e| e.path()).collect())
+        .unwrap_or_default();
+    assert!(
+        leases.iter().all(|p| !std::fs::read_to_string(p)
+            .unwrap_or_default()
+            .contains(spec.as_str())),
+        "the lease is removed: {leases:?}"
+    );
+    // ... and so is the worktree: only the main checkout remains.
+    let worktrees = Command::new("git")
+        .current_dir(&repo)
+        .args(["worktree", "list", "--porcelain"])
+        .output()
+        .unwrap();
+    let worktrees = String::from_utf8_lossy(&worktrees.stdout);
+    assert_eq!(
+        worktrees.matches("worktree ").count(),
+        1,
+        "the worktree is removed: {worktrees}"
     );
 }

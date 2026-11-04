@@ -40,8 +40,9 @@ fn a_refused_child_grant_is_a_launch_refused_before_any_agent() {
 fn any_failure_before_an_agent_can_start_is_a_pre_agent_refusal() {
     for why in [
         "session_start completed but no lease for scope `TASK-1` is visible",
-        "failed to chdir into /tmp/aida-task-1",
+        "failed to chdir into <worktree>",
         "failed to exec codex: No such file or directory",
+        "failed to spawn codex: No such file or directory",
         "a watch launch refused: the PR head moved",
     ] {
         assert!(
@@ -97,8 +98,10 @@ fn a_launching_pickup_runs_its_launch_under_the_rollback() {
     );
 }
 
-/// TASK-2807: every spawn-and-wait launch inside the closure is marked first;
-/// the bare execs are not (a failed exec launched nobody).
+/// TASK-2807: the implementer runners that spawn outside
+/// `reviewer_status_on_spawn` are marked first; the resume and reviewer
+/// runners are counted at their spawn (a failed spawn launched nobody), and
+/// the bare execs are not marked (a failed exec launched nobody).
 #[test]
 fn every_spawning_launch_is_marked_and_no_exec_is() {
     let work = handle_queue_work_source();
@@ -111,7 +114,6 @@ fn every_spawning_launch_is_marked_and_no_exec_is() {
     let body = &work[start..end];
     for runner in [
         "crate::standalone_implementer::run(",
-        "session::spawn_vendor_headless_resume(",
         "session::exec_vendor_headless(",
     ] {
         let at = body.find(runner).unwrap_or_else(|| panic!("{runner}"));
@@ -121,8 +123,28 @@ fn every_spawning_launch_is_marked_and_no_exec_is() {
             "{runner} is marked in its own block"
         );
     }
-    // The standalone reviewer marks its own spawns.
-    assert!(body.contains("launch_vendor,\n                agent,\n            );"));
+    // Counted at the spawn, not pre-marked: a failed spawn rolls back.
+    let resume = body
+        .find("session::spawn_vendor_headless_resume(")
+        .expect("the implementer resume");
+    let last_mark = body[..resume]
+        .rfind("agent.starting();")
+        .expect("an earlier arm's mark");
+    assert!(
+        body[last_mark..resume].contains('}'),
+        "the resume is not pre-marked"
+    );
+    let reviewer = include_str!("../queue_cmd.rs")
+        .split_once("pub(crate) fn run_standalone_reviewer(")
+        .expect("run_standalone_reviewer exists")
+        .1
+        .split_once("\n}\n")
+        .expect("run_standalone_reviewer ends")
+        .0;
+    assert!(
+        !reviewer.contains("agent.starting()"),
+        "the reviewer is counted at its spawn"
+    );
     for exec in [
         "session::exec_codex_resume(",
         "session::exec_codex_session(",

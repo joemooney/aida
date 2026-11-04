@@ -196,7 +196,6 @@ fn run_mock_reviewer_in(
         &verdict_path,
         false,
         launch_vendor,
-        &crate::queue_cmd::AgentLaunchMark::default(),
     );
     crate::session::set_headless_vendor_override(None);
     (result, project)

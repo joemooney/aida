@@ -3239,7 +3239,6 @@ fn bug_2185_standalone_reviewer_commits_child_store_writes_on_its_error_exit() {
         &tmp.path().join("verdict.json"),
         false,
         launch_vendor,
-        &crate::queue_cmd::AgentLaunchMark::default(),
     );
     let e = result.expect_err("the mock records no verdict");
     assert!(
