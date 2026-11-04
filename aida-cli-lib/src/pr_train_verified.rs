@@ -340,12 +340,16 @@ fn collect(
             if verdict.is_closed() {
                 continue;
             }
+            // Only a well-formed SHA (>= 7 hex) naming a different commit is
+            // an older head; a malformed or too-short one keeps counting, so
+            // the refusal it carries fails closed.
             let is_superseded = at_head
-                && verdict
-                    .reviewed_sha
-                    .as_deref()
-                    .is_some_and(|sha| !sha.trim().is_empty())
-                && !reviewed_at_head(&verdict);
+                && verdict.reviewed_sha.as_deref().is_some_and(|sha| {
+                    let sha = sha.trim();
+                    sha.len() >= 7
+                        && sha.bytes().all(|c| c.is_ascii_hexdigit())
+                        && !rv::same_reviewed_sha(sha, &fresh.head)
+                });
             if is_superseded {
                 // Covered by this car's current-head verdict, so the train's
                 // own exact-tip corpus gate must not re-weigh it either.
