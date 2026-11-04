@@ -406,6 +406,12 @@ pub struct HoldSignal {
     /// Why the PR is held — the manual gate the operator is running first.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub reason: Option<String>,
+    /// STORY-2324 PR-B: the canonical key (requirement UUID) `spec`
+    /// resolved to when the signal was written (E3). `None` when it named
+    /// no requirement in the committed store.
+    // trace:STORY-2324 | ai:claude
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub spec_key: Option<crate::gate::canon::SpecKey>,
 }
 
 impl HoldSignal {
@@ -1181,6 +1187,7 @@ mod tests {
             spec: "STORY-306".to_string(),
             branch: "story-306".to_string(),
             reason: Some("SPIKE-7 smoke before merge".to_string()),
+            spec_key: None,
         };
         write_hold_signal(&path, &signal).unwrap();
         assert_eq!(read_hold_signal(&path), Some(signal.clone()));
@@ -1199,6 +1206,7 @@ mod tests {
             spec: "STORY-306".to_string(),
             branch: "story-306".to_string(),
             reason: None,
+            spec_key: None,
         };
         let summary = signal.summary();
         assert!(summary.contains("PR held on `story-306`"), "{summary}");

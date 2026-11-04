@@ -1517,3 +1517,14 @@ pub(crate) fn home_fixture_storage(root: impl AsRef<Path>) -> aida_core::Storage
     home_fixture_backend(root).expect("temporary synthetic HOME store");
     aida_core::Storage::new(root)
 }
+
+/// Write a fixture project's `.aida` config under `project` (a temp dir)
+/// through the adoption write guard, so a fixture names no config path
+/// literal of its own (BUG-1723's site inventory stays production-only).
+// trace:STORY-2324 | ai:claude
+#[cfg(unix)]
+pub(crate) fn write_project_config_fixture(project: &Path, content: &str) {
+    let path = project.join(aida_core::adoption_projection::CONFIG);
+    std::fs::create_dir_all(path.parent().expect("config has a parent dir")).unwrap();
+    aida_core::write_config_atomic(&path, content).unwrap();
+}

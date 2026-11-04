@@ -211,6 +211,135 @@ fn task_2708_every_codex_spawn_path_is_inventoried_and_guarded() {
         .starts_with("refuse_unwired_aida_posture(child)?;"));
 }
 
+/// How a `crate::launch::spawn_agent` builder (STORY-2326) reaches a Codex
+/// guard. `spawn_agent` only constructs the child `Command` (it never spawns),
+/// so each builder is closed by the inventoried spawn path that finalizes it.
+#[derive(Debug, Clone, Copy)]
+enum SpawnAgentGuard {
+    /// The builder is itself a `CODEX_SPAWN_PATHS` entry.
+    Itself,
+    /// Finalized by the `CODEX_SPAWN_PATHS` entry `(file, fn)`.
+    FinalizedBy(&'static str, &'static str),
+    /// Builds Claude only (an `interactive_claude_context`).
+    ClaudeOnly,
+}
+
+/// EVERY production `crate::launch::spawn_agent(` call site, by enclosing
+/// function. A new call site fails the count check below until it is audited
+/// and recorded here.
+const SPAWN_AGENT_BUILDERS: &[(&str, &str, SpawnAgentGuard)] = &[
+    (
+        "agent_launch.rs",
+        "build_agent_new_bg_command",
+        SpawnAgentGuard::FinalizedBy("agent_launch.rs", "agent_new_bg_dispatch"),
+    ),
+    (
+        "agent_launch.rs",
+        "run_agent_generation",
+        SpawnAgentGuard::Itself,
+    ),
+    (
+        "session.rs",
+        "build_claude_exec_command",
+        SpawnAgentGuard::ClaudeOnly,
+    ),
+    (
+        "session.rs",
+        "build_run_claude_session_command",
+        SpawnAgentGuard::ClaudeOnly,
+    ),
+    (
+        "session.rs",
+        "spawn_vendor_headless_forking",
+        SpawnAgentGuard::Itself,
+    ),
+    // `aida questions clarify` advisor: run through
+    // `coordinator_status_with_handle_guard`, which finalizes.
+    (
+        "session.rs",
+        "build_advisor_interactive_command",
+        SpawnAgentGuard::FinalizedBy("session.rs", "finalize_coordinator_launch"),
+    ),
+    (
+        "session.rs",
+        "spawn_reviewer_launch_plan_granted",
+        SpawnAgentGuard::Itself,
+    ),
+    // Coordinators (burndown, autopilot intake) finalize through
+    // `finalize_coordinator_launch`; the drain's exec path through
+    // `run_vendor_headless_child`'s receipt boundary.
+    (
+        "session.rs",
+        "build_coordinator_headless_command_inner",
+        SpawnAgentGuard::FinalizedBy("session.rs", "run_vendor_headless_child"),
+    ),
+];
+
+const SPAWN_AGENT_CALL: &str = "crate::launch::spawn_agent(";
+
+// trace:TASK-2708 | ai:claude
+#[test]
+fn task_2708_every_spawn_agent_builder_is_inventoried_and_guarded() {
+    let src = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+    let mut files = Vec::new();
+    sources(&src, &mut files);
+    let mut found = std::collections::BTreeMap::<String, usize>::new();
+    for path in files {
+        let n = std::fs::read_to_string(&path)
+            .unwrap()
+            .matches(SPAWN_AGENT_CALL)
+            .count();
+        if n > 0 {
+            let rel = path.strip_prefix(&src).unwrap().to_string_lossy();
+            found.insert(rel.into_owned(), n);
+        }
+    }
+    let mut expected = std::collections::BTreeMap::<String, usize>::new();
+    for (file, _, _) in SPAWN_AGENT_BUILDERS {
+        *expected.entry((*file).to_string()).or_default() += 1;
+    }
+    assert_eq!(
+        found, expected,
+        "a spawn_agent call site was added or removed: audit it for the Codex AIDA \
+         posture and record it in SPAWN_AGENT_BUILDERS"
+    );
+    let inventoried = |file: &str, name: &str| {
+        CODEX_SPAWN_PATHS
+            .iter()
+            .any(|(f, n, _)| *f == file && *n == name)
+    };
+    for (file, name, guard) in SPAWN_AGENT_BUILDERS {
+        let text = std::fs::read_to_string(src.join(file)).unwrap();
+        let body = fn_body(&text, name);
+        assert!(
+            body.contains(SPAWN_AGENT_CALL),
+            "{file}::{name} no longer builds through spawn_agent"
+        );
+        match guard {
+            SpawnAgentGuard::Itself => assert!(
+                inventoried(file, name),
+                "{file}::{name} is not a CODEX_SPAWN_PATHS entry"
+            ),
+            SpawnAgentGuard::FinalizedBy(f, n) => assert!(
+                inventoried(f, n),
+                "{file}::{name}: its finalizer {f}::{n} is not a CODEX_SPAWN_PATHS entry"
+            ),
+            SpawnAgentGuard::ClaudeOnly => assert!(
+                body.contains("interactive_claude_context("),
+                "{file}::{name} no longer builds a Claude-only context"
+            ),
+        }
+    }
+    // spawn_agent constructs; it never spawns or execs a child itself.
+    let spawn = fn_body(include_str!("../launch/spawn.rs"), "spawn_agent");
+    for forbidden in [".spawn()", ".exec()", ".status()", ".output()"] {
+        assert!(
+            !spawn.contains(forbidden),
+            "launch::spawn_agent must only construct the child Command ({forbidden})"
+        );
+    }
+}
+
 fn trusted_policy(root: &Path, codex: &str) {
     std::fs::create_dir_all(root.join(".aida")).unwrap();
     std::fs::write(
