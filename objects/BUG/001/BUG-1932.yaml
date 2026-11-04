@@ -8,12 +8,12 @@ description: |-
   Gaps: (1) nothing surfaced the divergence (doctor/awaiting were silent); (2) whichever path mirrors the store to the second forge dropped non-fast-forward rejections silently; (3) a node can register against a non-canonical forge and fork the registry.
 
   Want: aida doctor (or awaiting) reports store divergence across configured forges; the store mirror push surfaces non-ff rejections; registration targets the canonical store remote.
-status: Draft
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T00:05:24.430788370Z
-modified_at: 2026-11-04T01:38:35.198447987Z
+modified_at: 2026-11-04T01:38:37.238013072Z
 req_type: Bug
 tags:
 - forge
@@ -82,6 +82,14 @@ history:
   timestamp: 2026-11-04T01:38:33.760810338Z
   session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
   changes: []
+- id: 01a1a435-4635-7271-ac9a-e77c20d4423f
+  author: joe
+  timestamp: 2026-11-04T01:38:37.238010331Z
+  session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Completed
 filed_at:
   code_sha: 9822c16ccf747f9e94a9eba9edd547dfb9eea1bb
   branch: main
@@ -90,3 +98,6 @@ filed_at:
   aida_build_sha: fe6723558e
   vendor: antigravity
   session: d1ebc976-deb4-4770-b036-20a1547772ad
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-04T01:38:37.237991311Z
