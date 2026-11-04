@@ -5,7 +5,6 @@
 //! trace:BUG-2194.ac498808 BUG-2194.ac67e854 BUG-2194.ac0ab426 BUG-2194.ac727a60 | ai:claude
 use super::*;
 use std::collections::BTreeMap;
-use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 
 fn git_test(repo: &Path, args: &[&str]) -> String {
@@ -126,7 +125,7 @@ fn arm(fx: &Fixture, failure: Failure) -> String {
         Failure::Errored => "exit 1\n",
     };
     let pre_push = fx.store.join(".git/hooks/pre-push");
-    std::fs::write(
+    crate::test_exec::write_executable(
         &pre_push,
         format!(
             "#!/bin/sh\nset -eu\necho peer > peer.txt\n\
@@ -135,13 +134,13 @@ fn arm(fx: &Fixture, failure: Failure) -> String {
              echo dirty > seed.txt\ngit rev-parse HEAD > .git/peer-head\n\
              echo reached >> .git/push-count\n{exit}"
         ),
-    )
-    .unwrap();
-    std::fs::set_permissions(&pre_push, std::fs::Permissions::from_mode(0o755)).unwrap();
+    );
     if matches!(failure, Failure::Rejected) {
         let reject = fx.bare.join("hooks/pre-receive");
-        std::fs::write(&reject, "#!/bin/sh\necho bug-2194-refusal >&2\nexit 1\n").unwrap();
-        std::fs::set_permissions(&reject, std::fs::Permissions::from_mode(0o755)).unwrap();
+        crate::test_exec::write_executable(
+            &reject,
+            "#!/bin/sh\necho bug-2194-refusal >&2\nexit 1\n",
+        );
     }
     git_test(
         &fx.bare,
