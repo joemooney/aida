@@ -960,9 +960,8 @@ fn task_2712_failed_commit_after_add_restores_the_index() {
     }
     let result =
         crate::seat_clone::commit_pending(&fx.main, &clone, "restore", "fix: restore (BUG-1)");
-    std::fs::set_permissions(&heads, std::fs::Permissions::from_mode(0o755)).unwrap();
-    if logs.is_dir() {
-        std::fs::set_permissions(&logs, std::fs::Permissions::from_mode(0o755)).unwrap();
+    for locked_dir in [&heads, &logs].into_iter().filter(|dir| dir.is_dir()) {
+        crate::test_exec::mark_executable(&locked_dir);
     }
     let err = format!("{:#}", result.unwrap_err());
     assert!(err.contains("could not commit"), "{err}");
