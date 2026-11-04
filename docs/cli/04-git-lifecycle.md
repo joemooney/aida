@@ -98,6 +98,21 @@ clone's git config and hooks, checks commit trailers, pushes, and opens the
 PR. It never merges; `--dry-run` imports and pushes nothing.
 <!-- trace:BUG-B6B1278890774EF993D2EBC327862470-038 | ai:claude -->
 
+A native Codex seat cannot commit: Codex keeps the clone's `.git` read-only
+inside its sandbox, and `aida ship` there refuses with the way out. The seat
+leaves its edits uncommitted. When an implementer lane's Codex process exits,
+the launcher commits that pending work in the seat clone. An operator can also
+commit and publish it with
+`aida ship <SPEC> --from-seat <clone> --commit-pending '<subject> (<SPEC>)'`.
+Either way the commit runs inside AIDA's own sandbox on the seat's leased
+branch, with the seat's hooks and config off and the host's git identity.
+Before anything is committed, the message's spec trailer and an explicit
+`<SPEC>` are checked (under `--dry-run` too). It is also refused for a clone
+this checkout did not record, an ended lease, a lease another live process
+still holds, or a symlinked or replaced clone path. If the commit fails after
+staging, the index is put back as it was.
+<!-- trace:TASK-2712 | ai:claude -->
+
 ---
 
 ### `aida pr`
