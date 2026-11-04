@@ -14,7 +14,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T01:15:11.009301343Z
-modified_at: 2026-11-04T09:07:23.352276607Z
+modified_at: 2026-11-04T09:31:26.915828181Z
 req_type: Task
 tags:
 - carried-from:BUG-2426
@@ -76,6 +76,12 @@ comments:
   modified_at: 2026-11-04T08:38:38.854555296Z
   session_id: 01a1a5a32e67
   harness_version: 2.1.318 (Claude Code)
+- id: 01a1a5e6-2943-7830-8c48-7754b0d1acef
+  author: joe
+  content: 'ADVISOR REWORK BRIEF (2026-11-04 02:36 MST, PR #3341 head cb77ea2a). All acceptance is met and lib shards are green. BLOCKING only: CI (gates) fails the Executable fixture ratchet on the new test''s Permissions::from_mode(0o755) directory restore. Use the sanctioned fixture helper the ratchet names (the same one other tests use to restore modes), or restore via the fixture guard type. No other change. Gate: make check-ci-fast (FASTTRACK, no cargo needed beyond the one test filter), then push.'
+  created_at: 2026-11-04T09:31:26.915828181Z
+  modified_at: 2026-11-04T09:31:26.915828181Z
+  session_id: da1c0d85-1d45-4ce4-a292-5358644f65b9
 history:
 - id: 01a1a443-3db8-70c3-aad1-ac7901b84264
   author: joe
