@@ -569,6 +569,12 @@ fixture_case!(
     bug2406_new_refusal_refuses,
     "PR-77"
 );
+// trace:BUG-2438 | ai:claude — a current-head refusal under the PR key ejects.
+fixture_case!(
+    bug2438_current_head_refusal_refuses_pr_11,
+    bug2406_new_refusal_refuses,
+    "PR-11"
+);
 fixture_case!(
     bug2406_new_refusal_refuses_unrelated,
     bug2406_new_refusal_refuses,
@@ -629,6 +635,33 @@ fn bug2406_new_refusal_refuses(key: &str) {
         "{key}"
     );
     assert!(calls(f.root()).is_empty(), "{key}");
+}
+
+/// BUG-2438: an earlier round's refusal, keyed by the spec and reviewed at an
+/// older head (the legacy-imported shape), is superseded by the PR-keyed
+/// approval at the current head. The train lands.
+// trace:BUG-2438 | ai:claude
+#[test]
+fn bug2438_old_head_spec_keyed_refusal_is_superseded_by_current_head_approval() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let f = Fixture::new(false);
+    let old_head = g(f.root(), &["rev-parse", "main"]);
+    let earlier = (chrono::Utc::now() - chrono::Duration::hours(1)).to_rfc3339();
+    let stale = json!({"verdict":"request-changes", "reviewed_sha":old_head,
+        "reviewed_branch":"source/BUG-2400", "recorded_at":earlier,
+        "recorded_by":"fixture earlier-round reviewer"});
+    ledger::store::append_unbound(f.root(), "BUG-2400", stale.as_object().unwrap()).unwrap();
+    let forge = GitHubForge::new(f.root());
+    let mut live = f.live(&forge);
+    let (train, change) = f.opened(&mut live);
+    let lease = live.lease(change.id).unwrap();
+    live.merge_verified(&change, &train, lease.as_ref())
+        .unwrap();
+    let transport = calls(f.root());
+    assert_eq!(transport.len(), 1, "the train merges once");
+    assert!(transport[0].contains(&format!("--match-head-commit {}", train.tip)));
 }
 
 #[test]

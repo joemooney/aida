@@ -310,11 +310,40 @@ fn collect(
             Some(&live.base),
             || Some(fresh.head.clone()),
         )?;
-        let mut originals = Vec::new();
+        let mut verdicts = Vec::new();
         for (key, record) in &bodies {
             let body = serde_json::to_string(record)?;
             let verdict = rv::parse_recorded_verdict(&body).context("unparseable source review")?;
+            verdicts.push((key, record, verdict));
+        }
+        // Head-scoped effective verdict, the same reading the corpus gate
+        // above applies: once any of the PR's keys holds a verdict reviewed
+        // at the current head, a verdict reviewed at an older head is
+        // superseded (it is a past round, not the standing decision). With
+        // no current-head verdict every body still counts, so an off-head
+        // approval stands only as the patch-identity carry-over the corpus
+        // gate proved, and a refusal at the current head always refuses.
+        // trace:BUG-2438 | ai:claude
+        let reviewed_at_head = |v: &rv::RecordedVerdict| {
+            v.reviewed_sha
+                .as_deref()
+                .is_some_and(|sha| rv::same_reviewed_sha(sha, &fresh.head))
+        };
+        let at_head = verdicts
+            .iter()
+            .any(|(_, _, v)| !v.is_closed() && reviewed_at_head(v));
+        let mut originals = Vec::new();
+        for (key, record, verdict) in verdicts {
             if verdict.is_closed() {
+                continue;
+            }
+            let superseded = at_head
+                && verdict
+                    .reviewed_sha
+                    .as_deref()
+                    .is_some_and(|sha| !sha.trim().is_empty())
+                && !reviewed_at_head(&verdict);
+            if superseded {
                 continue;
             }
             anyhow::ensure!(
