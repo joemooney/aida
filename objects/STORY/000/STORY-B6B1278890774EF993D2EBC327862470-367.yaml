@@ -24,7 +24,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T02:34:05.889367844Z
-modified_at: 2026-11-04T03:38:01.401532306Z
+modified_at: 2026-11-04T03:41:14.935143234Z
 req_type: Story
 comments:
 - id: 01a1a468-8b42-7db0-844b-20336f857370
@@ -88,6 +88,12 @@ comments:
   modified_at: 2026-11-04T03:38:01.401532306Z
   session_id: 01a1a49fd9f3
   harness_version: 2.1.318 (Claude Code)
+- id: 01a1a4a5-8b37-7dc0-a46a-c8e8b00c9580
+  author: joe
+  content: 'ADVISOR EVIDENCE (20:41): review watch treats a single ''git fetch failed or exceeded 30 seconds'' (host under load, PR-3326) as a terminal review exit: ''not relaunched: push a new head''. Same class: a transient read becomes a destructive decision. The watcher should retry transient fetch failures with backoff before recording an attempt.'
+  created_at: 2026-11-04T03:41:14.935143234Z
+  modified_at: 2026-11-04T03:41:14.935143234Z
+  session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
 history:
 - id: 01a1a468-8096-78c1-952c-5aad63c7704e
   author: joe
