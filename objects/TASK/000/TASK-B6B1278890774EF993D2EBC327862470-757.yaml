@@ -14,7 +14,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T01:17:09.371397785Z
-modified_at: 2026-11-04T07:11:26.667827596Z
+modified_at: 2026-11-04T07:11:29.656443852Z
 req_type: Task
 tags:
 - carried-from:BUG-2428
@@ -53,6 +53,22 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Rollback kernel (run_pickup_launch + AgentLaunchMark, panic disarm) is sound and behaviorally tested, but CI is red from this PR on two gates and the ''failed codex spawn'' pre-agent case still keeps the setup.. Triage reason: advisor rework brief on spec; review findings to address'
   created_at: 2026-11-04T07:11:26.667826044Z
   modified_at: 2026-11-04T07:11:26.667826044Z
+  session_id: da1c0d85-1d45-4ce4-a292-5358644f65b9
+- id: 01a1a566-06ce-71b1-8067-a72b9c8f26d2
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #3343):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 33fe8a2caa3a
+    Recorded: 2026-11-04T06:01:07.572336859+00:00
+    Findings:
+    1. major: CI (cli-0) red from this PR - aida-cli/tests/queue_work_dry_run.rs:1505 task_1337_post_setup_launch_error_prints_manual_guided_continuation. A guided launch whose exec fails (codex with missing interpreter) is now unmarked, so run_pickup_launch rolls back and handle_queue_work returns early at queue_cmd.rs:14104 (if rolled_back) before queue_work_manual_continuation, so 'aida worktree enter <spec>' and the codex continuation never print. The TASK-1337 continuation is now unreachable for any owned setup. Resolve the conflict deliberately: either keep the setup (and the continuation) for an interactive/guided exec failure, or retire the continuation and rewrite the TASK-1337 test to assert the rollback (no worktree, no lease, the 'no agent was launched: rolled back' line). If the latter, also drop/adjust the now-dead manual-continuation branch for owned setups.
+    2. major: CI (gates) red from this PR - 'Check Rust test portability ratchet' (the lane_fixture_fails line in the summary is the bug_2383 test's intentional fixture output, not the failure). scripts/check-portability.sh flags aida-cli-lib/src/tests/bug_2428_launch_rollback_tests.rs:43 tmp literal "failed to chdir into /tmp/aida-task-1". Use a non-/tmp path in the message string (e.g. 'failed to chdir into <worktree>'). Build (ubuntu-latest) fails only on 'Require every CI lane', the aggregate of these two.
+    3. minor: TASK-2808 acceptance names 'a failed codex spawn' as a pre-agent failure that must roll back, but run_standalone_reviewer calls agent.starting() before crate::review_watch::reviewer_status(&mut cmd).context("failed to spawn codex") (queue_cmd.rs ~14507), and likewise marks before spawn_vendor_headless_*_granted / spawn_reviewer_launch_plan_granted / standalone_implementer::run / exec_vendor_headless. A spawn that fails before a child process exists (ENOENT, EACCES, pre-spawn helper error other than ChildGrantRefused) is classified post-agent and keeps the worktree and lease. Either mark after a successful spawn (e.g. distinguish a spawn error from a waited exit status) or treat a spawn io::Error as pre-agent; add a test for the reviewer codex spawn failure.
+    4. minor: TASK-2811 asks for a behavioral test that drives handle_queue_work through a refused mint. task_2807_pickup_launch_rollback_tests.rs drives the extracted run_pickup_launch with a real setup (good), and handle_queue_work's use of it is only proven by the source-order test in bug_2428_launch_rollback_tests.rs. Rewriting the queue_work_dry_run TASK-1337 test (finding 1) to assert worktree+lease removal end to end through 'aida queue work' would close this.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-04T07:11:29.486708891Z
+  modified_at: 2026-11-04T07:11:29.486708891Z
   session_id: da1c0d85-1d45-4ce4-a292-5358644f65b9
 history:
 - id: 01a1a443-3d11-7700-8298-3f5783f310c6
