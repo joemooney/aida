@@ -315,6 +315,14 @@ pub(crate) fn handle_session_command(cmd: &SessionCommand) -> Result<()> {
             release_unknown_owner: *release_unknown_owner,
             release_protected: true,
         }),
+        // trace:STORY-2351 | ai:claude
+        SessionCommand::Hygiene {
+            dry_run,
+            idle_hours,
+        } => crate::session_hygiene::run(&crate::session_hygiene::HygieneOptions {
+            dry_run: *dry_run,
+            idle_hours: *idle_hours,
+        }),
         SessionCommand::Manifest { cmd } => session_manifest_dispatch(cmd),
         // trace:TASK-1607 | ai:claude
         SessionCommand::Seat { cmd } => seat_occupancy::cmd::dispatch(cmd),
@@ -7559,6 +7567,7 @@ mod task_1806_launch_mandate_tests {
             ended_at: None,
             spec_status_at_end: None,
             mail_wake: None,
+            grant_key: None,
             resumed_from: None,
         };
         agent_registry::write_entry(&project, &stale).unwrap();

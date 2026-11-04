@@ -2762,7 +2762,25 @@ enabled = true
 # name = "disk-headroom-guard-route"
 # seats = ["advisor"]
 # on = ["CronJobFailed:disk-headroom-guard"]
-# prompt = "Free disk space dropped below the configured floor. Reclaim stale worktree build caches with `aida worktree reclaim` (dry run by default; `--apply` deletes), remove finished worktrees with `aida session reap`, or raise [doctor.disk_headroom] min_free_gib deliberately. Note `cargo clean` is NOT the reclaim for this: inside a worktree it clears the shared CARGO_TARGET_DIR, which points at the main checkout, so it deletes the live cache and leaves the stale ones."
+# prompt = "Free disk space is still below the configured floor after the guard ran `aida worktree reclaim --apply` itself (the routed evidence says how much it freed). Do not just repeat that reclaim: remove finished worktrees with `aida session reap`, or raise [doctor.disk_headroom] min_free_gib deliberately. Note `cargo clean` is NOT the reclaim for this: inside a worktree it clears the shared CARGO_TARGET_DIR, which points at the main checkout, so it deletes the live cache and leaves the stale ones."
+# enabled = false
+#
+# Hourly hygiene pass: reaps finished + merged + exited sessions, gcs dead
+# agent-registry rows, and deletes worktree caches idle 24h+ (no live lease,
+# no open PR, never uncommitted work). Silent when clean; routes only what it
+# had to keep, naming the act needed. trace:STORY-2351 | ai:claude
+#
+# [[schedule.jobs]]
+# name = "session-hygiene"
+# command = "session hygiene"
+# every = "1h"
+# enabled = false
+#
+# [[schedule.jobs]]
+# name = "session-hygiene-route"
+# seats = ["advisor"]
+# on = ["CronJobFailed:session-hygiene"]
+# prompt = "The hourly hygiene pass kept something it must not touch on its own. The routed trip evidence names each item and the act it needs. Never force-reap or delete a dirty worktree to clear it."
 # enabled = false
 #
 # Runaway-seat watchdog: trips on a seat woken far too often, spending far
@@ -2853,6 +2871,8 @@ mod story_1226_init_schedule_section_tests {
             "stranded-branches-guard-route",
             "disk-headroom-guard",
             "disk-headroom-guard-route",
+            "session-hygiene",
+            "session-hygiene-route",
             "watchdog",
             "watchdog-route",
         ] {
@@ -4714,6 +4734,13 @@ pub(crate) fn handle_init_distributed_worktree(
     std::fs::write(store_path.join("objects/.gitkeep"), "")?;
     git_ops::add(&store_path, &["objects/.gitkeep"])?;
     git_ops::add(&store_path, &["objects"])?;
+    // The store's tracked runtime and staging ignores, the set `aida doctor`
+    // heals older stores to: without them the agreed-ID dispense lock
+    // (`registry/blocks.lock`) a block claim leaves behind dirties the store
+    // and `aida remote reconcile --execute` refuses it (SPIKE-708 Q4).
+    // trace:STORY-B6B1278890774EF993D2EBC327862470-329 | ai:claude
+    crate::doctor_cmd::ensure_store_tracked_runtime_gitignore(&store_path)?;
+    git_ops::add(&store_path, &[".gitignore"])?;
     if roster_seeded {
         let _ = git_ops::add(&store_path, &["registry"]);
         println!(

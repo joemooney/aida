@@ -70,7 +70,7 @@ pub(crate) enum TtyDecision {
 }
 
 impl Policy {
-    /// Decide whether `body` runs on a terminal. Script-form jobs never do.
+    /// Decide whether `body` runs on a terminal.
     /// `grant_expires_at` caps every entry: a TTL never outlives the grant.
     pub(crate) fn decide(
         &self,
@@ -78,9 +78,7 @@ impl Policy {
         now: DateTime<Utc>,
         grant_expires_at: Option<DateTime<Utc>>,
     ) -> TtyDecision {
-        let JobBody::Argv(argv) = body else {
-            return TtyDecision::NoTty;
-        };
+        let JobBody::Argv(argv) = body;
         let Some(entry) = self
             .entries
             .iter()

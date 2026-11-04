@@ -92,6 +92,14 @@ sites = 1
 channels = ["worktree", "write"]
 sites = 2
 
+# STORY-2338: the script deputy's retention knob from the main checkout's
+# copy. Policy only: who may submit is NOT read from here (a merged PR must
+# not widen the seats whose scripts run as the operator); only the operator's
+# `--allow-seat` at the terminal widens it.
+[readers."aida-cli-lib/src/deputy_shell/mod.rs"]
+channels = ["worktree"]
+sites = 1
+
 [readers."aida-cli-lib/src/dispatch_routing_config.rs"]
 channels = ["worktree"]
 sites = 1
@@ -476,6 +484,9 @@ sites = 1
 store_path = "location"
 mode = "policy"            # distributed-mode detection line scan
 use_agreed_blocks = "policy"
+
+[keys.worktree.deputy_shell]
+keep_days = "policy" # STORY-2338 retention
 
 [keys.worktree.awaiting]
 idle_in_progress_hours = "policy" # STORY-1680
