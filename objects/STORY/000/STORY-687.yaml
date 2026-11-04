@@ -8,12 +8,11 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-26T04:48:22.419720981Z
-modified_at: 2026-11-04T02:32:59.337829461Z
+modified_at: 2026-11-04T02:33:39.637727317Z
 req_type: Story
 tags:
 - cockpit
 - collaboration
-- deferred:cockpit-phase2
 - tui
 relationships:
 - rel_type: Child
@@ -26,3 +25,9 @@ comments:
   created_at: 2026-11-04T02:32:59.337829461Z
   modified_at: 2026-11-04T02:32:59.337829461Z
   session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
+history:
+- id: 01a1a467-aa92-7182-88a0-7e3113adb648
+  author: joe
+  timestamp: 2026-11-04T02:33:39.730826976Z
+  session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
+  changes: []
