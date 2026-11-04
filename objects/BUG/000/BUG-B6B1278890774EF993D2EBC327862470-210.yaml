@@ -1,0 +1,22 @@
+id: 01a1a7df-f572-73d2-ae03-746ce8708255
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-210
+agreed_id: BUG-2441
+title: 'aida pr train ejects a PR whose rework branch has a -N suffix: member_spec_ids yields SPEC-...-001-2 and aliases() refuses it as unresolved'
+description: 'Observed 2026-11-04 11:40 MST: aida pr train 3351 ejected it with ''train PR #3378 was not merged: unresolved train source spec SPEC-B6B1278890774EF993D2EBC327862470-001-2''. #3351''s head branch is spec-b6b1278890774ef993d2ebc327862470-001-2, a queue-work rework branch with a -2 suffix. In pr_train_verified.rs (~302) member_spec_ids(head_ref, ...) derives SPEC-...-001-2 from the branch, and aliases() (~523) hard-fails on any id the store cannot resolve. The PR title carries (Refs TASK-2712), which resolves. Acceptance: (1) the branch-derived id strips queue-work''s -N rework suffix, or an unresolvable branch-derived id is dropped when the title or trailers supply a resolvable spec; (2) a regression test trains a member whose branch is <spec-slug>-2; (3) a member with NO resolvable spec still refuses (fail closed).'
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-04T18:43:54.866127851Z
+modified_at: 2026-11-04T18:43:54.866127851Z
+req_type: Bug
+tags:
+- area:train
+filed_at:
+  code_sha: 6a331a8a5c91ca7485b695a076af44bdf9be3894
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 6a331a8a5c9
+  vendor: claude
+  session: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
