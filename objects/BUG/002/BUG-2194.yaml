@@ -17,7 +17,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-20T18:10:31.087634134Z
-modified_at: 2026-11-04T04:35:07.075368031Z
+modified_at: 2026-11-04T05:33:37.392746668Z
 req_type: Bug
 tags:
 - from-implementer:TASK-1981
@@ -79,6 +79,12 @@ comments:
   modified_at: 2026-11-04T04:35:07.075368031Z
   session_id: 01a1a4c67f0b
   harness_version: 2.1.318 (Claude Code)
+- id: 01a1a50c-6cf0-7391-b953-8d64cc953965
+  author: joe
+  content: 'ADVISOR (22:36 MST): PR #3330 is APPROVED at head a4f9ffd0 with CI green, but the train ejected it: ''train source has a refusing review''. The round-1 refusal at b7c8abb8 still counts under key BUG-2194, because the round-2 approval was collected with spec=null. Blocked on BUG-2438. Re-train once BUG-2438 merges. Nothing to change in this PR.'
+  created_at: 2026-11-04T05:33:37.392746668Z
+  modified_at: 2026-11-04T05:33:37.392746668Z
+  session_id: da1c0d85-1d45-4ce4-a292-5358644f65b9
 history:
 - id: 01a15cbb-4740-7a70-afb8-6dedec1b643f
   author: joe
