@@ -55,9 +55,10 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T15:54:06.715648703Z
-modified_at: 2026-11-04T02:42:51.347464148Z
+modified_at: 2026-11-04T02:42:56.521879021Z
 req_type: Task
 tags:
+- operator-held
 - regen
 - relay
 - sweep
@@ -201,6 +202,15 @@ history:
   - field_name: status
     old_value: Rejected
     new_value: Approved
+- id: 01a1a470-2a07-7953-9df6-f3434f2eb3be
+  author: joe
+  timestamp: 2026-11-04T02:42:56.647603595Z
+  session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
+  changes: []
+deferred: true
+deferred_at: 2026-11-04T02:42:56.521879021Z
+deferred_until: the operator reopens the regeneration / north-star research line
+deferred_reason: 'OPERATOR RULING 2026-11-03 19:36 MST: the regeneration / north-star research line stays deferred (revised from reject).'
 filed_at:
   code_sha: 6d590ed914dea5135a126f7dae6abb403adec66d
   branch: main
