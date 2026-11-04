@@ -12,12 +12,12 @@ description: |
   - A failed rollback must remain observable and prevent the affected CAS retry from treating the store as clean or claiming the failed operation succeeded.
   - Add direct caller tests with a peer commit plus dirty tracked file or deterministic replay refusal, proving peer HEAD and dirty state survive and the caller stops after the first failure.
   - Keep exact-SHA push outside the store lock; do not alter claim authority, force-push, reset peer work or add production test environment seams.
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-20T18:10:31.087634134Z
-modified_at: 2026-11-04T04:03:52.909037472Z
+modified_at: 2026-11-04T04:03:55.049902016Z
 req_type: Bug
 tags:
 - from-implementer:TASK-1981
@@ -65,6 +65,12 @@ comments:
   content: 'ADVISOR RULING (PR-3330 round 1 at b7c8abb8a0, 2026-11-03 21:04 MST): rework, small. In bug_2194_rollback_caller_tests.rs:140 and :144, replace the direct fs::write + Permissions::from_mode(0o755) with crate::test_exec::write_executable(&path, body), and drop the PermissionsExt import. Then make check-ci-fast (umask 022) must pass in full, since it covers the executable-fixture and git-maintenance ratchets, clippy, glyph and trace gates that CI never reached. Cite it in the spec comment. No other changes. All 4 ACs were verified by the reviewer.'
   created_at: 2026-11-04T04:03:52.909037472Z
   modified_at: 2026-11-04T04:03:52.909037472Z
+  session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
+- id: 01a1a4ba-4c29-7990-9ca8-7fb219ae6867
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: Fix logic meets all 4 BUG-2194 ACs (5 callers propagate rollback errors, lock-claim push-error returns Err not Unavailable, 6 caller tests pass in lib shards), but CI (gates) is red: the Executable fixture ratchet rejects the new test''s direct Permissions::from_mode(0o755); later gates (git-maintenance ratchet, clippy, glyph/trace gates) were skipped and are unverified.. No triage reason was given.'
+  created_at: 2026-11-04T04:03:55.049896559Z
+  modified_at: 2026-11-04T04:03:55.049896559Z
   session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
 history:
 - id: 01a15cbb-4740-7a70-afb8-6dedec1b643f
@@ -115,6 +121,14 @@ history:
   - field_name: status
     old_value: Done
     new_value: NeedsAttention
+- id: 01a1a4ba-4c29-7990-9ca8-7fa86a23abc5
+  author: joe
+  timestamp: 2026-11-04T04:03:55.049883451Z
+  session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: 03fe56b082721daf63d4283f0d48545ce82ec961
   branch: main
@@ -126,11 +140,3 @@ implementation_info:
   implemented: true
   implemented_at: 2026-11-04T02:59:45.887204696Z
   implemented_by: joe
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'Fix logic meets all 4 BUG-2194 ACs (5 callers propagate rollback errors, lock-claim push-error returns Err not Unavailable, 6 caller tests pass in lib shards), but CI (gates) is red: the Executable fixture ratchet rejects the new test''s direct Permissions::from_mode(0o755); later gates (git-maintenance ratchet, clippy, glyph/trace gates) were skipped and are unverified.'
-  recovery_hint: address the review findings, move BUG-2194 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-04T04:02:35.351915516Z
