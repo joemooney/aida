@@ -3,12 +3,12 @@ spec_id: STORY-b6b1278890774ef993d2ebc327862470-339
 agreed_id: STORY-2343
 title: 'Kernel-attested submit for the script deputy: a SO_PEERCRED socket instead of the file queue''s same-uid residual'
 description: 'Follow-up to STORY-2338 (advisor ruling Q6: later, filed by the implementer). The script deputy (aida deputy shell) attributes a job from the submitter''s validated grant record and re-checks it at claim, but a same-uid, uncontained process can still write incoming/<id>.job naming a live session''s grant (grant records are readable by the user). Close that residual with kernel-attested submission: the runner listens on a unix socket in its 0700 queue; submit connects, the runner reads SO_PEERCRED (pid, uid) and checks the peer pid''s ancestry/session against the grant''s binding before accepting the job. Needs: a live runner at submit time (or a defined fallback), a sandbox socket rule for the advisor seat, and a decision on whether the file queue stays for offline submits. Acceptance: (1) a job submitted over the socket records the kernel-reported peer and is refused when the peer does not run under the named grant''s binding; (2) a forged incoming/ file is refused, or the file path is removed; (3) hermetic tests for both. Architecture-sensitive: sketch + advisor signoff first.'
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-03T07:21:01.822528019Z
-modified_at: 2026-11-04T03:17:08.427542576Z
+modified_at: 2026-11-04T03:20:23.127505291Z
 req_type: Story
 tags:
 - area:deputy
@@ -66,6 +66,25 @@ comments:
   created_at: 2026-11-04T03:12:29.325525531Z
   modified_at: 2026-11-04T03:12:29.325525531Z
   session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
+- id: 01a1a492-4e19-76f3-9812-41b16dd32038
+  author: joe
+  content: |-
+    ## Implementer finding: the Q3 sandbox socket rule cannot be scoped to one path on Linux (punted, no code written)
+
+    **Evidence.** Inside this seat's Claude Code sandbox (Linux, bubblewrap and seccomp), `socket(AF_UNIX, SOCK_SEQPACKET)` fails with **EPERM** when the socket is created, before any bind or connect. The test was python3 creating a socket under $TMPDIR. The seccomp filter blocks creating AF_UNIX sockets at all. Seccomp cannot see paths, so there is no rule of the form "allow only `<spool>/submit.sock`". The path-list setting `sandbox.network.allowUnixSockets` is honoured only on macOS. On Linux the only switch is `sandbox.network.allowAllUnixSockets: true`. That lets the seat connect to EVERY unix socket its read-only filesystem view can reach: docker.sock, the user D-Bus, ssh-agent, gpg-agent, systemd --user.
+
+    **Why this changes the 14:20 ruling.** Q3 assumed a narrow per-seat rule. On Linux the real choice is between these options:
+    - (A) Give the advisor and implementer contained seats `allowAllUnixSockets: true`, the literal Q3. This is a large widening: a contained lane could drive docker or ssh-agent.
+    - (B) Give no seat sandbox a socket rule. Only unsandboxed processes submit over the socket: the operator shell, a host-run agent, or an `aida deputy shell submit` the operator adds to sandbox `excludedCommands`. That excluded command still runs as a descendant of the claude process, so the SO_PEERCRED ancestry walk still reaches the grant's binding. With Q1 (a) and Q2 (a), a sandboxed advisor can then no longer submit until the operator opts in. Today's documented route, adding `~/.aida/deputy-shell/*/incoming` to the sandbox write allowlist with the heartbeat check, goes away.
+    - (C) Keep the heartbeat-attested file path only for key-only, sandboxed submitters, and make the socket mandatory for everyone else. Writing `incoming/` would still need a sandbox write rule. The same-uid forgery residual stays for that path, so acceptance (2) is only partly met.
+
+    Points that still hold: SO_PEERCRED reports a host pid even for a bubblewrap-contained peer, so the ancestry walk works from the host runner. Q4 (launcher pid), compared as BUG-2419 tokens, is implementable as sketched.
+
+    **Lean: (B).** It closes the residual completely and adds no sandbox widening. The cost is that a sandboxed advisor needs one explicit `excludedCommands` opt-in, which docs/deputies.md would document in place of the incoming-allowlist section.
+  created_at: 2026-11-04T03:20:14.105241307Z
+  modified_at: 2026-11-04T03:20:14.105241307Z
+  session_id: 01a1a48f6ec8
+  harness_version: 2.1.318 (Claude Code)
 history:
 - id: 01a1a2a3-f27f-7463-9a97-0b8c7a670b77
   author: joe
@@ -106,6 +125,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1a492-7157-7bb3-9988-a943a595f340
+  author: joe
+  timestamp: 2026-11-04T03:20:23.127527806Z
+  session_id: 01a1a48f6ec8
+  harness_version: 2.1.318 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: cfee54e5aabfce342a2e385a63dc2deb7d3c1d96
   branch: story-2338-sketch
@@ -114,3 +142,9 @@ filed_at:
   aida_build_sha: cfee54e5aab
   vendor: claude
   session: bb607549-3128-4075-9764-5206b7a40790
+attention_reason:
+  category: design-fork
+  detail: 'Q3 as ruled (a socket rule just for the advisor and implementer seats) is not possible on Linux. In this Claude Code sandbox, seccomp blocks socket(AF_UNIX) with EPERM, and the path-scoped allowUnixSockets works only on macOS. The only Linux switch is allowAllUnixSockets, which exposes docker.sock, D-Bus and ssh-agent to contained seats. Pick one: (A) allowAllUnixSockets for advisor and implementer seats; (B) no sandbox socket rule: only unsandboxed or excludedCommands submitters use the socket, and sandboxed advisors lose submit until the operator opts in; (C) keep the heartbeat file path for sandboxed submitters, which keeps the residual. The evidence and the trade-offs are in the latest spec comment. No code was written.'
+  lean: '(B): no seat sandbox gets a unix-socket rule. Submit goes only over the socket, Q1a and Q2a as ruled. A sandboxed advisor reaches the socket through an operator-added excludedCommands entry for ''aida deputy shell submit'', which still descends from claude, so the SO_PEERCRED ancestry walk attests it. Document this in docs/deputies.md in place of the incoming-allowlist section.'
+  raised_by: implementer
+  raised_at: 2026-11-04T03:20:23.127505291Z
