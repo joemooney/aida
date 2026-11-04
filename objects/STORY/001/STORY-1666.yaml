@@ -62,12 +62,12 @@ description: |
   ## Evidence
 
   Source: the aida-host regenerability pilot (EPIC-20 in /home/joe/ai/aida-host), feedback file docs/regeneration/aida-feedback.md at commit f2b8d2d; results in docs/regeneration/results-2026-10-11.md. Headline numbers: a blind agent rebuilt the 1,600-line system from the curated store at 93.9-95.5% of discriminating oracle checks (3 replicates), 22.7% without the 3 contract rows, 11.4% from the store as it stood before regenerability work; an AfterVibe Prompt A.1 spec distilled from the transcript reached 97.7%.
-status: Rejected
+status: Draft
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T20:12:14.771299093Z
-modified_at: 2026-11-04T02:43:11.838196076Z
+modified_at: 2026-11-04T02:43:14.851650763Z
 req_type: Story
 tags:
 - from:aida-host
@@ -134,6 +134,14 @@ history:
   timestamp: 2026-11-04T02:43:12.087300595Z
   session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
   changes: []
+- id: 01a1a470-7123-71c3-aa15-fa7eead88779
+  author: joe
+  timestamp: 2026-11-04T02:43:14.851646798Z
+  session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
+  changes:
+  - field_name: status
+    old_value: Rejected
+    new_value: Draft
 filed_at:
   code_sha: 18428db14cad4164704357aa5006bb5482039c62
   branch: main
