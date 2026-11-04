@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T05:32:54.614008505Z
-modified_at: 2026-11-04T10:19:38.239220628Z
+modified_at: 2026-11-04T11:14:06.286977530Z
 req_type: Bug
 tags:
 - kind:bug-spotted
@@ -74,6 +74,12 @@ comments:
   modified_at: 2026-11-04T10:19:38.239220628Z
   session_id: 01a1a60b4422
   harness_version: 2.1.318 (Claude Code)
+- id: 01a1a644-254e-73e0-b39d-b8ff8990fe98
+  author: joe
+  content: 'ADVISOR (04:15 MST): the lane committed the conflict fix (ab7108bd: merge origin/main + GateSpec via the canon constructor) but held it back as untested. I pushed it as a fast-forward of #3353; CI gates the ship and review covers the delta.'
+  created_at: 2026-11-04T11:14:06.286977530Z
+  modified_at: 2026-11-04T11:14:06.286977530Z
+  session_id: da1c0d85-1d45-4ce4-a292-5358644f65b9
 history:
 - id: 01a1a529-3a0b-7851-9f12-63da9e5a1022
   author: aida-session-start
