@@ -6,12 +6,12 @@ description: |-
   Acceptance: (1) Migrate Claude to signed common wrapper, keep existing grants/CLI/MCP/headless/bg and containment regressions, no weakened floors/fallback. Vendor additions use data not new containment code. (2) Independent installed Linux evidence for all7 parent AC: actual Codex-only product/advisor/implementer/reviewer loop, interactive/headless/bg, allowed/denied network, protected writes, own grant recording, missing-kernel refusal and Claude parity. Missing evidence keeps parent open. (3) CLI/doctor/config/manual/trust reporting matches actual support and limits, publication only reviewed merged docs per owning publication task. No new unattended runs. Layers: remaining vendor migration, cross-surface integration/live evidence, public diagnostics/docs. Signed sliceD.
 
   All signed STORY2238 sketch C1-C12 and BUG2398 B1-B4 apply. Linux only, fakeHOME/synthetic tests, no global user settings or schedules. No partial backend may report AIDA containment applied or launch ordinary agents until all required protections are ready; named refusal, no fallback. STRICT independent review, operator merge floor. LIGHT one targeted test plus fast gates; shared infra or >10files adds touched-test/compile, fullsuiteCI only. Longcargo background, no slotbypass. Parent all7AC remain open until final installed-tool evidence; no slice alone completes parent.
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T09:06:27.587006751Z
-modified_at: 2026-11-04T12:27:54.631849954Z
+modified_at: 2026-11-04T13:01:01.022591138Z
 req_type: Task
 tags:
 - architecture
@@ -324,6 +324,15 @@ history:
   session_id: 01a1a687655d
   harness_version: 2.1.318 (Claude Code)
   changes: []
+- id: 01a1a6a6-06de-7371-b9cd-dbcb4aafa65a
+  author: aida-orchestrator
+  timestamp: 2026-11-04T13:01:01.022616897Z
+  session_id: 01a1a698b441
+  harness_version: 2.1.318 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 4ce0af750fcb68d4adf57496e4e002aefd8ace77
   branch: main
@@ -331,3 +340,11 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: 4ce0af750fc
   vendor: codex
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'Merge resolution onto #3288 LaunchContext/spawn_agent is faithful and the Codex fail-closed design holds, but CI is red at b33ef636 (lib-0, lib-1, gates; main bdb437c is green): main''s STORY-2326 launch ledger ratchet does not list the new contained-launch constructor sites, and the task_2708 test file has rustfmt drift. TASK-2708 AC (1)-(3) stay open by design (Refs slice).'
+  recovery_hint: address the review findings, move TASK-2708 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-11-04T13:01:01.022591138Z
