@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-204
 agreed_id: BUG-2435
 title: 'os_wrap lanes bypass the cargo slot limiter: bwrap gives each lane a private /run/user, so every lane takes its own slot and host cargo ps shows them as QUEUED'
 description: 'Observed 2026-11-03 19:15 MST. Four AIDA_OS_WRAP=1 lanes each ran rustc on aida-cli-lib at once (5 rustc processes, load 10 on 6 cores), while host ''cargo ps'' showed ''slots 0/2 busy, 4 queued'' and earlier jobs as LOST. The queued wrapper (bash ~/.local/bin/cargo, pid 1901021) runs in mount namespace 4026533095, not the host''s 4026531832. It already has a cargo child, with its acquisition marker under /tmp/cargo-slots-0/acq.<pid>, so the slot lock it took is private to the bwrap. The jobs ledger (~/.local/state/cargo-slots/builds.jsonl) is shared, so the host sees an entry that never takes a host slot. Fix: the os_wrap profile binds the host slot directory (/run/user/<uid>/cargo-slots-<uid>) read-write, as BUG-2383''s lane job runner intends, or lane jobs acquire the slot on the host side before entering bwrap. Add a test that a wrapped job''s acquisition shows as busy in host cargo ps.'
-status: Approved
+status: InProgress
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T02:15:29.023069877Z
-modified_at: 2026-11-04T07:10:54.786320842Z
+modified_at: 2026-11-04T07:53:36.325567587Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -113,6 +113,13 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
+- id: 01a1a58c-9545-7483-b37b-17c6e028b0e3
+  author: aida-session-start
+  timestamp: 2026-11-04T07:53:36.325563615Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 0754a362d797d2d9b246b4609456735b5486095d
   branch: main
