@@ -20,7 +20,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T07:26:01.071265913Z
-modified_at: 2026-11-04T09:29:20.302343964Z
+modified_at: 2026-11-04T09:31:24.783353635Z
 req_type: Task
 tags:
 - architecture
@@ -798,6 +798,12 @@ comments:
   modified_at: 2026-11-04T09:21:30.511363684Z
   session_id: 01a1a5ab1ad3
   harness_version: 2.1.318 (Claude Code)
+- id: 01a1a5e6-20ef-7a73-b2eb-d7ef79486afc
+  author: joe
+  content: 'ADVISOR RULING + REWORK BRIEF (2026-11-04 02:36 MST, PR #3351 head 653b6508, round 3). SCOPE SPLIT to stop the round growth: #3351 becomes PR-1 of TASK-2712. Retitle its trailers to (Refs TASK-2712) so it does not complete the spec. PR-1 (this PR) fixes only: F3, a lane-level test driving supervise_until_exit -> post_exit_seat_commit (background) and run_tracked_agent_after_spawn -> native_post_exit_spec (foreground) with a fake child that leaves pending work; F4, salvage commits use ''(Refs SPEC)'', and only a clean child exit (status 0) commits with a completing trailer; F5, restore the index only when HEAD did not move. Accepted, no change: F6, because the post-exit step runs after the agent has exited, so only a same-uid host process could swap the path, which is outside the containment threat model; F8, because STORY-2326''s exact-count spawn-site ledger already catches a new Codex spawn path. F7 is the advisor''s live host probe after CI is green. PR-2 (a new PR on the same spec, after PR-1 merges) completes ac6e55fd: route ''queue work --vendor codex'' (exec_codex_session) and headless --no-human Codex implementers through the same host-recorded seat clone + post-exit step, then add a host-side publication step after the post-exit commit (push + PR via ship_from_seat::run, no operator). Gate (LIGHT): cargo test -p aida-cli-lib --lib task_2712_ plus make check-ci-fast, then push to #3351.'
+  created_at: 2026-11-04T09:31:24.783353635Z
+  modified_at: 2026-11-04T09:31:24.783353635Z
+  session_id: da1c0d85-1d45-4ce4-a292-5358644f65b9
 history:
 - id: 01a1960f-6ca8-7313-8a94-63b0b98a4e44
   author: joe
