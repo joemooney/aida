@@ -24,12 +24,12 @@ description: |
   7. TASK: status-claim honesty in advisor-role.md and the seat skills. A progress claim names its state (actively watching / delegated / paused) and cites `aida ps` or `aida integrate`. Never say "still working" after the turn has ended.
 
   Plan: docs/plans/2026-09-22-seat-wake-cross-harness.md
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-23T04:44:59.122261809Z
-modified_at: 2026-11-04T01:39:13.201065777Z
+modified_at: 2026-11-04T01:39:15.788432825Z
 req_type: ChangeRequest
 tags:
 - cross-vendor
@@ -166,6 +166,17 @@ history:
   timestamp: 2026-11-04T01:39:11.664240686Z
   session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
   changes: []
+- id: 01a1a435-dccc-7730-9e4e-576660abfe37
+  author: joe
+  timestamp: 2026-11-04T01:39:15.788430312Z
+  session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-04T01:39:15.788410903Z
 decision_request:
   question: Allow idle agent seats to self-resume via held Stop hooks (CR-7)?
   choices:
