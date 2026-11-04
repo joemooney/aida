@@ -1,0 +1,65 @@
+{
+  "schema_version": 1,
+  "spec": "TASK-B6B1278890774EF993D2EBC327862470-757",
+  "publishes": [
+    {
+      "at": "2026-11-04T16:35:02.369265790Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-04T04:18:11.395383543Z",
+      "spec": "TASK-b6b1278890774ef993d2ebc327862470-757",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-04T04:27:47.505998818Z",
+      "spec": "TASK-b6b1278890774ef993d2ebc327862470-757",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-11-04T08:42:20.673962297Z",
+      "spec": "TASK-b6b1278890774ef993d2ebc327862470-757",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-11-04T11:57:59.272369704Z",
+      "spec": "TASK-b6b1278890774ef993d2ebc327862470-757",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-11-04T16:35:02.212605844Z",
+      "spec": "TASK-b6b1278890774ef993d2ebc327862470-757",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "b06c9da01c8bb577e9953fa0a27d13ceaa8fcc26",
+        "pr": 3343,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
