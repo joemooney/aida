@@ -1,4 +1,11 @@
 - user_id: role:implementer
+  requirement_id: 01a1965c-3483-70e3-af35-1caaf7df3f96
+  position: 185000
+  added_by: role:implementer
+  note: rework brief on spec
+  added_at: 2026-11-04T08:36:15.037609765Z
+  for_role: implementer
+- user_id: role:implementer
   requirement_id: 01a15bb1-414c-7890-aedc-951a3e038991
   position: 186000
   added_by: role:implementer
@@ -39,13 +46,6 @@
   added_by: role:implementer
   note: advisor rework brief on spec; review findings to address
   added_at: 2026-11-04T07:12:15.036966134Z
-  for_role: implementer
-- user_id: role:implementer
-  requirement_id: 01a1965c-3483-70e3-af35-1caaf7df3f96
-  position: 192000
-  added_by: role:implementer
-  note: advisor rework brief on spec; review findings to address
-  added_at: 2026-11-04T07:12:07.002190294Z
   for_role: implementer
 - user_id: role:implementer
   requirement_id: 01a1a2ba-58fe-77c2-83f3-359717dd8d38
