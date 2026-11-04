@@ -9,13 +9,13 @@ note: 'Ruled environmental: the 24h window covers the disk at 99% (11 GB free) a
 due_since: 2026-11-03T19:32:24.468360180Z
 due_reason: on CronJobFailed:performance-guard
 due_failure:
-  trip_id: performance-guard@2026-11-03T19:28:15.618345851Z
+  trip_id: performance-guard@2026-11-04T01:39:43.729742950Z
   performance:
   - command: show
     budget_ms: 2000
     over_budget: 13
-    denominator: 217
-    proportion_millipercent: 5991
+    denominator: 184
+    proportion_millipercent: 7065
     tolerated_millipercent: 10000
     window_hours: 24
     worst_ms: 5226
