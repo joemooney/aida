@@ -150,6 +150,8 @@ mod lane_env;
 // trace:BUG-2383 | ai:claude — the lane job runner and `aida lane job`.
 mod lane_cmd;
 mod lane_job;
+// One agent launcher. trace:STORY-2326 | ai:claude
+mod launch;
 mod leases;
 mod live_work;
 pub(crate) use live_work::try_auto_queue_pr_review;
