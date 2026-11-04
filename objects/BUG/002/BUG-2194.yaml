@@ -12,12 +12,12 @@ description: |
   - A failed rollback must remain observable and prevent the affected CAS retry from treating the store as clean or claiming the failed operation succeeded.
   - Add direct caller tests with a peer commit plus dirty tracked file or deterministic replay refusal, proving peer HEAD and dirty state survive and the caller stops after the first failure.
   - Keep exact-SHA push outside the store lock; do not alter claim authority, force-push, reset peer work or add production test environment seams.
-status: Done
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-20T18:10:31.087634134Z
-modified_at: 2026-11-04T03:40:46.820386387Z
+modified_at: 2026-11-04T04:02:35.351915516Z
 req_type: Bug
 tags:
 - from-implementer:TASK-1981
@@ -100,6 +100,15 @@ history:
   timestamp: 2026-11-04T03:40:48.354358438Z
   session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
   changes: []
+- id: 01a1a4b9-14d7-7171-9a5c-8a5d4e5aee84
+  author: aida-orchestrator
+  timestamp: 2026-11-04T04:02:35.351938540Z
+  session_id: 01a1a4b77e33
+  harness_version: 2.1.318 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: NeedsAttention
 filed_at:
   code_sha: 03fe56b082721daf63d4283f0d48545ce82ec961
   branch: main
@@ -111,3 +120,11 @@ implementation_info:
   implemented: true
   implemented_at: 2026-11-04T02:59:45.887204696Z
   implemented_by: joe
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'Fix logic meets all 4 BUG-2194 ACs (5 callers propagate rollback errors, lock-claim push-error returns Err not Unavailable, 6 caller tests pass in lib shards), but CI (gates) is red: the Executable fixture ratchet rejects the new test''s direct Permissions::from_mode(0o755); later gates (git-maintenance ratchet, clippy, glyph/trace gates) were skipped and are unverified.'
+  recovery_hint: address the review findings, move BUG-2194 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-11-04T04:02:35.351915516Z
