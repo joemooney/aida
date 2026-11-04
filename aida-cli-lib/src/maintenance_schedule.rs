@@ -1585,6 +1585,14 @@ fn done_as(
     seat: std::result::Result<Option<&str>, &str>,
     headless: bool,
 ) -> Result<()> {
+    // The mandate-renewal job is synthesized from the live mandate, not the
+    // registry, and clears itself once the mandate is renewed; reporting it
+    // is an acknowledgement with nothing to ledger.
+    // trace:TASK-2805 | ai:claude
+    if job == MANDATE_RENEWAL_JOB {
+        println!("✓ {job} acknowledged — it clears once the operator runs `aida mandate renew`");
+        return Ok(());
+    }
     let config = load_registry(project_root)?;
     let store = store_root(project_root);
     let task = config
@@ -2116,6 +2124,10 @@ fn collect_due(project_root: &Path, seat: Option<&str>, include_substrate: bool)
     due
 }
 
+/// Name of the synthetic due job raised before the mandate expires.
+// trace:TASK-2805 | ai:claude
+const MANDATE_RENEWAL_JOB: &str = "mandate-renewal";
+
 // trace:STORY-2346 | ai:codex
 pub(crate) fn mandate_renewal_job(
     state: &crate::gate::mandate::MandateState,
@@ -2127,7 +2139,7 @@ pub(crate) fn mandate_renewal_job(
     }
     let prompt = crate::mandate::expiry_warning(state, now)?;
     Some(DueJob {
-        name: "mandate-renewal".into(),
+        name: MANDATE_RENEWAL_JOB.into(),
         kind: JobKind::Seat,
         seats: vec!["advisor".into(), "operator".into()],
         schedule: "before mandate expiry".into(),
@@ -7641,6 +7653,27 @@ enabled = true
                 .due_since
                 .is_none());
         }
+    }
+
+    // The DUE JOBS block tells seats to report every listed job with
+    // `aida schedule done <job>`; the synthetic mandate-renewal job is not in
+    // the registry, so it must be accepted as a no-op acknowledgement.
+    // trace:TASK-2805 | ai:claude
+    #[test]
+    fn schedule_done_accepts_synthetic_mandate_renewal_job() {
+        let tmp = tempfile::tempdir().unwrap();
+        for (seat, headless) in [
+            (Some("advisor"), false),
+            (Some("advisor"), true),
+            (None, false),
+        ] {
+            done_as(tmp.path(), MANDATE_RENEWAL_JOB, None, Ok(seat), headless).unwrap();
+        }
+        let store = store_root(tmp.path());
+        assert!(schedule_ledger::load(&store, MANDATE_RENEWAL_JOB).is_none());
+        // An unknown job is still refused.
+        let err = done_as(tmp.path(), "no-such-job", None, Ok(None), false).unwrap_err();
+        assert!(err.to_string().contains("no scheduled job"), "{err}");
     }
 
     fn write_role_lease(root: &Path, worktree: &Path, role: &str) {
