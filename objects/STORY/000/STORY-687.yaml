@@ -3,12 +3,12 @@ spec_id: STORY-687
 agreed_id: STORY-687
 title: 'Cross-human collaboration: request commentary from another human/role on an item'
 description: 'Beyond the role mailbox: a primitive to request commentary/review from another HUMAN user (or role) on a specific item — e.g. something for human review, advisor-analyzed, or product-propositioned that the operator wants a second human to weigh in on. New state (review-requested + who) distinct from the role queue. Deferred: lighter-path choice (single-user cockpit first); revisit once the single-user board proves out or the operator hits a concrete multi-human handoff.'
-status: Approved
+status: Rejected
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-26T04:48:22.419720981Z
-modified_at: 2026-11-04T02:33:39.637727317Z
+modified_at: 2026-11-04T02:33:41.120850231Z
 req_type: Story
 tags:
 - cockpit
@@ -31,3 +31,11 @@ history:
   timestamp: 2026-11-04T02:33:39.730826976Z
   session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
   changes: []
+- id: 01a1a467-b000-7d12-aff0-86fd29d7487f
+  author: joe
+  timestamp: 2026-11-04T02:33:41.120847907Z
+  session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Rejected
