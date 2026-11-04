@@ -120,10 +120,11 @@ pub(crate) struct Requester {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "snake_case")]
 pub(crate) enum JobBody {
-    /// Exec'd directly, no shell. The only form that may get a terminal.
+    /// Exec'd directly, no shell. A whole shell script is a job for the
+    /// script deputy (`aida deputy shell`), never this one: a `script` body
+    /// no longer parses, so it is refused as malformed at claim.
+    // trace:STORY-2338 | ai:claude
     Argv(Vec<String>),
-    /// Run by `bash --noprofile --norc -c`; needs `--allow-scripts`.
-    Script(String),
 }
 
 impl JobBody {
@@ -133,13 +134,8 @@ impl JobBody {
     }
 
     pub(crate) fn summary(&self) -> String {
-        match self {
-            Self::Argv(argv) => argv.join(" "),
-            Self::Script(body) => {
-                let first = body.lines().next().unwrap_or("").trim();
-                format!("script: {first}")
-            }
-        }
+        let Self::Argv(argv) = self;
+        argv.join(" ")
     }
 }
 
@@ -208,6 +204,44 @@ pub(crate) struct FailedJob {
     pub rc: i32,
     pub reason: String,
     pub output: PathBuf,
+    /// Which deputy ran it: the ack command differs.
+    // trace:STORY-2338 | ai:claude
+    #[serde(default)]
+    pub kind: DeputyKind,
+}
+
+/// The two deputies: `aida deputy` (single commands) and `aida deputy shell`
+/// (whole scripts at the operator's terminal).
+// trace:STORY-2338 | ai:claude
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub(crate) enum DeputyKind {
+    #[default]
+    Command,
+    Script,
+}
+
+impl FailedJob {
+    /// "command job" or "script job".
+    pub(crate) fn kind_label(&self) -> &'static str {
+        match self.kind {
+            DeputyKind::Command => "command job",
+            DeputyKind::Script => "script job",
+        }
+    }
+
+    /// The command that acknowledges this failure.
+    pub(crate) fn ack_command(&self) -> String {
+        let name = if self.deputy == DEFAULT_NAME {
+            String::new()
+        } else {
+            format!(" --name {}", self.deputy)
+        };
+        match self.kind {
+            DeputyKind::Command => format!("aida deputy ack {}{name}", self.id),
+            DeputyKind::Script => format!("aida deputy shell ack {}{name}", self.id),
+        }
+    }
 }
 
 /// Failed jobs under every deputy of `main_root` that nobody acknowledged,
@@ -254,6 +288,7 @@ pub(crate) fn unacked_failed_jobs(main_root: &Path, session: Option<&str>) -> Ve
                 rc: res.rc,
                 reason: res.reason,
                 output: res.output,
+                kind: DeputyKind::Command,
             });
         }
     }
@@ -279,8 +314,6 @@ pub(crate) fn mail_result(
     }) else {
         return Ok(false);
     };
-    let short: String = res.id.chars().take(8).collect();
-    let outcome = if res.rc == 0 { "done" } else { "FAILED" };
     let mut body = format!(
         "Deputy {deputy:?} finished job {id}: rc {rc} ({reason}).\n",
         id = res.id,
@@ -298,13 +331,39 @@ pub(crate) fn mail_result(
             res.id
         ));
     }
+    mail_job_result(
+        project_root,
+        &format!("deputy:{deputy}"),
+        &to,
+        &res.id,
+        "job",
+        res.rc,
+        body,
+    )?;
+    Ok(true)
+}
+
+/// Send one deputy result mail from `from` to `to`. Shared by both deputies
+/// (`what` is "job" or "script job"); one message per job id, so a retry
+/// never duplicates it.
+// trace:STORY-2338 | ai:claude
+pub(crate) fn mail_job_result(
+    project_root: &Path,
+    from: &str,
+    to: &str,
+    id: &str,
+    what: &str,
+    rc: i32,
+    body: String,
+) -> Result<()> {
+    let short: String = id.chars().take(8).collect();
+    let outcome = if rc == 0 { "done" } else { "FAILED" };
     let msg = aida_core::mailbox::Message {
-        subject: Some(format!("deputy job {short} {outcome}: rc {}", res.rc)),
-        // One message per job result, so a retry never duplicates it.
-        id: format!("deputy-{deputy}-{}", res.id),
-        thread_id: format!("deputy-{}", res.id),
-        from: format!("deputy:{deputy}"),
-        to: aida_core::mailbox::Recipient::Agent(to),
+        subject: Some(format!("deputy {what} {short} {outcome}: rc {rc}")),
+        id: format!("{}-{id}", from.replace(':', "-")),
+        thread_id: format!("deputy-{id}"),
+        from: from.to_string(),
+        to: aida_core::mailbox::Recipient::Agent(to.to_string()),
         timestamp: Utc::now().timestamp_millis(),
         in_reply_to: None,
         body,
@@ -318,7 +377,7 @@ pub(crate) fn mail_result(
         relayed_from: None,
     };
     crate::mailbox_store::write_message(project_root, &msg)?;
-    Ok(true)
+    Ok(())
 }
 
 /// rc for a timed-out job (as `timeout(1)`).

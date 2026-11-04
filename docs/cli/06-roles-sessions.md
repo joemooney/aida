@@ -484,8 +484,8 @@ Start it once in your terminal, from your shell: `aida deputy [--name N] [--work
 Sessions submit work with `aida deputy submit -- <command…>`, which prints a job id. Add `--wait` to wait for the job, print its output and the path of its output file, and exit with its exit code; `aida deputy status <id>`, `aida deputy log <id> [--follow]`, `aida deputy cancel <id>` and `aida deputy list` do the rest. `--serial ship` runs jobs of one class one at a time while others run in parallel. `--timeout` (default 30m) stops a job that runs too long.
 
 - **Spool.** Jobs are submitted to `.aida/deputy/incoming/<name>/` in the main checkout; everything else lives in `.aida/deputy/<name>/`. Both must be owned by you with no group or other access. A sandboxed agent session may write only the `incoming` directory (to submit or cancel); the running jobs, results, ledger and terminal entries stay out of its reach. Each job is its own file, so two submits never overwrite each other. A job file not owned by you, writable by others, linked, or edited after submit is refused and logged.
-- **What runs.** By default only `aida` commands run. `--allow-exec PATH` adds an executable; `--allow-scripts` allows shell-script jobs (`submit -f FILE` or `--script`). Each job runs as its own process, so an `exit` in one job does not stop the deputy.
-- **Terminal.** A job runs on a terminal only if its command matches an entry you set at your terminal: `aida deputy --allow-tty 'aida merge-hold clear' --ttl 8h` at start, or `aida deputy allow '<prefix>' [--ttl D] [--single-use]` later (`aida deputy deny`, `aida deputy policy`). An entry never outlasts your grant. A single-use entry is spent only once the deputy has recorded its use; if it cannot, the job runs without a terminal and the entry stays unused. Every other job runs with no terminal, so a command that needs a person at the keyboard refuses it. Script jobs never get a terminal, and neither does a command carrying a gate-bypass flag (force, no-verify, admin, yes-i-know, override-stale-approval). A terminal job that prints nothing for `--tty-idle` (default 10s) shows as waiting on a prompt in `aida deputy status` and `list`; it keeps running until it ends or its `--timeout` stops it.
+- **What runs.** By default only `aida` commands run. `--allow-exec PATH` adds an executable. Shell scripts are the script deputy's (`aida deputy shell`, below). Each job runs as its own process, so an `exit` in one job does not stop the deputy.
+- **Terminal.** A job runs on a terminal only if its command matches an entry you set at your terminal: `aida deputy --allow-tty 'aida merge-hold clear' --ttl 8h` at start, or `aida deputy allow '<prefix>' [--ttl D] [--single-use]` later (`aida deputy deny`, `aida deputy policy`). An entry never outlasts your grant. A single-use entry is spent only once the deputy has recorded its use; if it cannot, the job runs without a terminal and the entry stays unused. Every other job runs with no terminal, so a command that needs a person at the keyboard refuses it. A command carrying a gate-bypass flag never gets one (force, no-verify, admin, yes-i-know, override-stale-approval). A terminal job that prints nothing for `--tty-idle` (default 10s) shows as waiting on a prompt in `aida deputy status` and `list`; it keeps running until it ends or its `--timeout` stops it.
 - **Results and audit.** Output goes to `out/<id>.out` and the result to `done/` or `failed/`. `deputy.ledger` records who submitted each job, its command digest, whether it ran on a terminal, and its exit code. When a job ends, the session that submitted it gets mail with the exit code and the output path.
 - **Failed jobs.** `aida awaiting` lists each failed job (id, submitting session, exit code, output path) to the session that submitted it, and every failed job in your own shell, until it is acknowledged with `aida deputy ack <id>` (or `aida deputy ack --all`).
 - **Pause.** `aida deputy pause` stops the deputy taking new jobs; jobs already running finish. `aida deputy resume`, at your terminal only, lets it take jobs again. `aida deputy list` shows when it is paused.
@@ -494,6 +494,21 @@ Sessions submit work with `aida deputy submit -- <command…>`, which prints a j
 
 `aida runloop` is an alias.
 <!-- trace:STORY-B6B1278890774EF993D2EBC327862470-099 | ai:claude -->
+
+### `aida deputy shell`
+
+**One line** — the script deputy: runs whole bash scripts that advisor sessions submit, one at a time, in your terminal and as you. See [Deputies: command vs script](../deputies.md) for when to use it instead of `aida deputy`.
+
+Start it in your terminal, through the `aida()` shell function, holding an advisor grant: `aida deputy shell run [--name N] [--allow-seat SEAT] [--refresh 12h] [--keep-days D] [--keep-after-mandate]`. It refuses where `aida deputy` refuses, and without an advisor grant. Every job it runs counts as you at the keyboard.
+
+Advisor sessions submit with `aida deputy shell submit [--name N] --file FILE [--timeout 2h] [--spec ID] [--wait]`; `--wait` exits with the script's exit code. `aida deputy shell status <id>`, `wait <id> [--timeout D]` (75 when only the wait gives up), `log <id> [--follow]`, `list [--state S]`, `cancel <id>`, `pause`, `resume` (your terminal only) and `ack <id> | --all` do the rest.
+
+- **Queue.** `~/.aida/deputy-shell/<name>/`, 0700 and checked at every scan. A submitter writes only `incoming/`.
+- **Before a job runs.** It is refused (exit code 126) unless its submitter resolves to a live session with a valid, allow-listed grant on this machine; the reason names the failed check (`unattributed`, `foreign-host`, `grant`, `seat`, `not-live`, `schema`). The script is shown on your terminal first.
+- **How it runs.** `bash --noprofile --norc script.sh` in its own session on a fresh terminal, from your home directory, with your terminal relayed to it and its output copied to a transcript. A timeout records 124; a cancel 130; a job left running by a dead runner is recorded as orphaned and never re-run.
+- **Records.** `jobs/<id>/` keeps the script, its sha256, the submitter, timestamps, exit code and transcript for 30 days; `audit.jsonl` records every step and is never truncated. Failed script jobs show in `aida awaiting` beside failed command jobs.
+- **Grant.** Between jobs the runner re-mints its advisor grant every `--refresh`, or when less than an hour is left. If that fails it claims nothing more and exits when the grant expires.
+<!-- trace:STORY-2338 | ai:claude -->
 
 ### `aida driver`
 

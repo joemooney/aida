@@ -1204,10 +1204,15 @@ pub(crate) fn collect_awaiting_report_with_mail_facts(
         let session = std::env::var("AIDA_SESSION_ID")
             .ok()
             .filter(|s| !s.trim().is_empty());
-        crate::deputy::unacked_failed_jobs(
-            &main_worktree_root_from(project_root),
+        let main = main_worktree_root_from(project_root);
+        let mut jobs = crate::deputy::unacked_failed_jobs(&main, session.as_deref());
+        // Script-deputy failures sit beside the command deputy's, labelled.
+        // trace:STORY-2338 | ai:claude
+        jobs.extend(crate::deputy_shell::unacked_failed_jobs(
+            &main,
             session.as_deref(),
-        )
+        ));
+        jobs
     };
 
     awaiting_you::AwaitingReport {
@@ -1275,6 +1280,12 @@ pub(crate) fn notice_hook_session(
             // trace:STORY-HOME-096 | ai:claude
             if let Ok(entry) = entry {
                 arm_launch_mail_wake(&project_root, &entry);
+                // trace:STORY-2338 | ai:claude
+                agent_registry::record_grant_key(
+                    &project_root,
+                    &entry.id,
+                    agent_registry::held_grant_key().as_deref(),
+                );
             }
             // Hooks run outside the command sandbox, so this is where dead
             // rows get ended before a sandboxed sender counts them as
@@ -4000,6 +4011,7 @@ mod task_2253_agy_session_start_gc_tests {
             ended_at: None,
             spec_status_at_end: None,
             mail_wake: None,
+            grant_key: None,
             resumed_from: None,
         }
     }

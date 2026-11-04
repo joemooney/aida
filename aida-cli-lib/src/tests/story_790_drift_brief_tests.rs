@@ -38,6 +38,7 @@ fn ended_entry(
         resumed_from: None,
         spec_status_at_end: spec_status_at_end.map(str::to_string),
         mail_wake: None,
+        grant_key: None,
     }
 }
 

@@ -281,6 +281,28 @@ fn claim_floor(
     }
 }
 
+/// A delegated claim refused because the pool the root granted the clone's
+/// hub has no free IDs left. Nothing was written when it is returned.
+// trace:STORY-B6B1278890774EF993D2EBC327862470-329 | ai:claude
+#[derive(Debug)]
+pub(crate) struct PoolExhausted {
+    hub: String,
+    typ: String,
+    range: (u32, u32),
+}
+
+impl std::fmt::Display for PoolExhausted {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "hub `{}`'s {} pool ({}-{}) is exhausted; the allocation root grants hubs their pools",
+            self.hub, self.typ, self.range.0, self.range.1
+        )
+    }
+}
+
+impl std::error::Error for PoolExhausted {}
+
 /// Append a new `type_prefix` claim of `size` IDs for `node_id` to
 /// `registry` and return it. A delegated clone (its hub holds a pool the
 /// root granted) carves the block from that pool's free space; every other
@@ -309,11 +331,11 @@ fn place_claim(
         })?;
         let (start, end) = lineage::carve_block(pool, &pools.pools, &registry.blocks, size)
             .ok_or_else(|| {
-                anyhow::anyhow!(
-                    "hub `{hub}`'s {typ} pool ({}-{}) is exhausted; the allocation root grants hubs their pools",
-                    pool.range_start,
-                    pool.range_end
-                )
+                anyhow::Error::new(PoolExhausted {
+                    hub: hub.to_string(),
+                    typ: typ.clone(),
+                    range: (pool.range_start, pool.range_end),
+                })
             })?;
         let block = aida_core::AgreedIdBlock {
             node_id,
@@ -1372,7 +1394,7 @@ pub(crate) fn ensure_block_capacity(
     let size = cfg.size_for(&effective_prefix);
     let email = aida_core::git_ops::git_config_get("user.email").ok();
     let hn = hostname();
-    let label = auto_allocate_block_inner(
+    let label = match auto_allocate_block_inner(
         store_path,
         node_id,
         &hn,
@@ -1380,7 +1402,15 @@ pub(crate) fn ensure_block_capacity(
         &effective_prefix,
         size,
         BlockClaimReason::OnThresholdCross,
-    )?
+    ) {
+        Ok(label) => label,
+        // The hub's granted pool is spent: there is nothing to refill from,
+        // and nothing was written. The held block is still the hub's and
+        // keeps dispensing; once it runs out, add issues node-local IDs.
+        // trace:STORY-B6B1278890774EF993D2EBC327862470-329 | ai:claude
+        Err(e) if e.downcast_ref::<PoolExhausted>().is_some() => return Ok(None),
+        Err(e) => return Err(e),
+    }
     .ok_or_else(|| anyhow::anyhow!("inner allocator returned None on OnThresholdCross"))?;
 
     // Re-load to compute new_remaining off the persisted registry —

@@ -132,12 +132,16 @@ pub(crate) fn deputy_tty_marker_path(spool: &std::path::Path, job: &str) -> std:
 /// What it guarantees: a job, or any child that keeps the job environment
 /// (every `aida` command does), cannot use a terminal it found some other way
 /// (`script(1)`, a pty helper) to pass the floor. What it does NOT guarantee:
-/// a job that can clear its own environment escapes this check. A script job
-/// (only with `--allow-scripts`) or an `--allow-exec` program can run
-/// `env -u AIDA_DEPUTY_JOB script …`. Against those, the boundary is the
-/// operator's start-time choice to allow them; the deputy still never hands
-/// them its terminal.
+/// a job that can clear its own environment escapes this check. The command
+/// deputy runs no shell scripts (those belong to the script deputy, `aida
+/// deputy shell`), so only an `--allow-exec` program could run
+/// `env -u AIDA_DEPUTY_JOB script …`. Against that, the boundary is the
+/// operator's start-time choice to name the program; the deputy still never
+/// hands it its terminal. The script deputy deliberately sets no
+/// `AIDA_DEPUTY_JOB`: each of its jobs is the operator at their own terminal,
+/// a consent the operator gives by starting it there.
 // trace:STORY-B6B1278890774EF993D2EBC327862470-099 | ai:claude
+// trace:STORY-2338 | ai:claude
 pub(crate) fn deputy_job_floor_authorized() -> bool {
     let job = std::env::var(DEPUTY_JOB_ENV).ok();
     let spool = std::env::var(DEPUTY_SPOOL_ENV).ok();

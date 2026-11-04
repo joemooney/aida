@@ -510,6 +510,16 @@ const LAUNCH_INVENTORY: &[(&str, usize, Finalization)] = &[
             "cfg(test) synthetic selector proving the probe's env_clear forwards none",
         ),
     ),
+    // trace:STORY-2338 | ai:claude — the script deputy hands each job the
+    // operator's own (refreshed) grant; the child is `bash` running the
+    // submitted script, never a Codex agent.
+    (
+        "deputy_shell/runner.rs",
+        1,
+        Finalization::NotACodexLaunch(
+            "bash running a script-deputy job under the operator's grant; no agent vendor",
+        ),
+    ),
     // trace:BUG-2390 | ai:claude — the one marker is the Claude/Agy
     // implementer builder blanking the grant (Boundary B). A Codex take/impl
     // lane runs `aida agent new codex --bg`, a separate aida process that

@@ -329,6 +329,59 @@ agreed IDs from it, and later refills claim from the same pool. When the pool
 runs out, claims are refused; growing a hub's pool is not available yet. A clone whose
 upstream reaches a hub with no grant is told to ask the root for one.
 
+#### Across an air gap: grants and claims by git bundle
+
+<!-- trace:STORY-B6B1278890774EF993D2EBC327862470-329 | ai:claude -->
+
+A hub on an isolated network never needs to reach the outside hub. The
+supported workflow is a **direct grant from the root to that hub**, carried
+both ways by `git bundle`:
+
+```bash
+# Outside, on the root clone, after `aida node hub add inside --url <inside-url>`
+# and pushing the declaration and the store:
+git bundle create grant.bundle main aida-store
+
+# Inside, into the inside hub's bare repository:
+git --git-dir inside.git fetch grant.bundle \
+  refs/heads/main:refs/heads/main refs/heads/aida-store:refs/heads/aida-store
+```
+
+Clones of the inside hub then run `aida node upstream origin` and claim as
+above. The inside hub orders their claims: when two clones claim at once, one
+push is rejected and that clone retries into a disjoint range. When the inside
+pool is spent, further claims are refused, but `aida add` does not stop: each
+block keeps dispensing to its last ID, and after that the clone issues
+node-local IDs and says why.
+
+To bring the work out, bundle the inside store and reconcile it on the root:
+
+```bash
+# Inside:
+git --git-dir inside.git bundle create return.bundle aida-store
+# Outside, on the root clone:
+git remote add arrival return.bundle
+aida remote push-hubs origin        # read the bundle, never push to it
+aida remote reconcile --execute --yes
+```
+
+Reconcile unions the inside claims with claims the root made meanwhile. A
+returned claim that overlaps another refuses the reconcile, and the store, its
+refs and the hubs are left as they were. A clone can also take the bundle as an
+ordinary `aida db sync --pull` source.
+
+Only this one level is supported. A hub cannot grant part of its pool to
+another hub or team (recursive delegation), and an exhausted hub pool cannot
+be topped up (replenishment); neither is available. A stale or forged block
+that appears only in carried-in history is still never spendable: the claim
+must be on the inside hub's own store ref.
+
+<!-- Proved by aida-cli/tests/story_164_single_hub.rs
+a_claim_only_in_an_imported_store_is_never_spendable (a hub-stamped claim
+merged in from a store that is not the hub is refused; add falls back to a
+node-local ID) and a_claim_not_on_the_hub_ref_is_never_spendable.
+trace:STORY-B6B1278890774EF993D2EBC327862470-329 | ai:claude -->
+
 ### Clone-local allocation authority
 
 <!-- trace:BUG-2017 | ai:codex -->

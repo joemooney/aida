@@ -148,6 +148,24 @@ pub(crate) struct AgentRegistryEntry {
     // trace:STORY-HOME-096 | ai:claude
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) mail_wake: Option<MailWake>,
+    /// The `key:` binding token of the seat grant this session holds the
+    /// session key for, recorded by its own hooks only after proving
+    /// possession. A key-only (sandboxed) submitter's heartbeat vouches for
+    /// a grant only when this token is one of that grant's bindings, since a
+    /// directly issued grant's subject is the OS user, not this row's name.
+    // trace:STORY-2338 | ai:claude
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) grant_key: Option<String>,
+}
+
+/// The `key:` token of the seat grant this process exports AND holds the
+/// session key for, or `None`. Possession is the proof: the token is only
+/// returned when the keyring secret hashes to one of the grant's bindings.
+// trace:STORY-2338 | ai:claude
+pub(crate) fn held_grant_key() -> Option<String> {
+    let id = crate::gate::seat_authority::current_grant_id()?;
+    let grant = crate::gate::seat_authority::read_grant(&id).ok()?;
+    crate::gate::seat_authority::possession_token(&grant)
 }
 
 /// A registry row's mail-wake state. Only `armed` rows are watched; a
@@ -771,6 +789,7 @@ pub(crate) fn touch_mcp_agent(
         ended_at: None,
         spec_status_at_end: None,
         mail_wake: None,
+        grant_key: None,
         resumed_from: None,
     });
 
@@ -932,6 +951,7 @@ fn touch_session_start_agent_for(
             ended_at: None,
             spec_status_at_end: None,
             mail_wake: None,
+            grant_key: None,
             resumed_from: None,
         });
 
@@ -1023,7 +1043,35 @@ pub(crate) fn heartbeat_session_agent(
     let Some(pid) = session_start_agent_pid(std::process::id(), &detect_agent_type()) else {
         return Ok(Heartbeat::NoAgentProcess);
     };
-    heartbeat_session_agent_for(project_root, worktree_root, session_id, binary, pid)
+    let beat = heartbeat_session_agent_for(project_root, worktree_root, session_id, binary, pid)?;
+    let id = agent_id(&detect_agent_type(), pid);
+    record_grant_key(project_root, &id, held_grant_key().as_deref());
+    Ok(beat)
+}
+
+/// Record on live registry row `id` the `key:` token its session proved it
+/// holds (see [`AgentRegistryEntry::grant_key`]), replacing a stale one.
+/// `None` clears it, so a session that dropped its grant stops vouching.
+/// Fail-open: a hook never blocks on it.
+// trace:STORY-2338 | ai:claude
+pub(crate) fn record_grant_key(project_root: &Path, id: &str, key: Option<&str>) {
+    let path = registry_path(project_root, id);
+    let read = |path: &Path| {
+        std::fs::read_to_string(path)
+            .ok()
+            .and_then(|body| toml::from_str::<AgentRegistryEntry>(&body).ok())
+    };
+    let key = key.filter(|k| k.starts_with("key:")).map(str::to_string);
+    if read(&path).is_none_or(|row| row.grant_key == key) {
+        return;
+    }
+    let Ok(_lock) = crate::agent_handle::lock_namespace(project_root) else {
+        return;
+    };
+    if let Some(mut row) = read(&path).filter(|row| row.ended_at.is_none()) {
+        row.grant_key = key;
+        let _ = write_entry_locked(project_root, &row);
+    }
 }
 
 /// [`heartbeat_session_agent`] for the agent process `pid`.
@@ -1362,6 +1410,7 @@ fn register_spawned_agent_as(
         ended_at: None,
         spec_status_at_end: None,
         mail_wake: None,
+        grant_key: None,
         resumed_from,
     };
     write_entry_locked(project_root, &entry)?;
@@ -1410,6 +1459,7 @@ pub(crate) fn register_role_enter_agent(
         ended_at: None,
         spec_status_at_end: None,
         mail_wake: None,
+        grant_key: None,
         resumed_from: None,
     };
     write_entry(project_root, &entry)?;
@@ -1579,6 +1629,7 @@ pub(crate) fn register_existing_agent(
         ended_at: None,
         spec_status_at_end: None,
         mail_wake: None,
+        grant_key: None,
         resumed_from: None,
     };
     write_entry(project_root, &entry)?;
@@ -3466,6 +3517,7 @@ mod tests {
             ended_at: None,
             spec_status_at_end: None,
             mail_wake: None,
+            grant_key: None,
             resumed_from: None,
         }
     }
