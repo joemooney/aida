@@ -8,12 +8,12 @@ description: |-
   The lease records carry pidns/boot (the BUG-2417/BUG-2419 identity work). The ps liveness judge should compare the reader's pid namespace with each lease's pidns.
 
   Acceptance: (1) when they differ, the row's live column is 'unknown (foreign pidns)', not dead/stale, and the session is not moved to stale_hidden or orphaned on that basis. (2) A header line says 'liveness: partial, running in pid namespace X; N leases from host namespace Y cannot be probed; run outside the sandbox'. (3) The same rule applies to every reap/gc/orphan path that probes pids (aida agent gc, review watch stale release, session reap): a foreign pidns is never evidence of death. (4) A test with a fake lease that has a different pidns and a pid that does not exist in the test's namespace: ps shows unknown, and gc refuses to reap.
-status: InProgress
+status: Done
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-03T13:53:28.187901734Z
-modified_at: 2026-11-03T22:07:01.724295824Z
+modified_at: 2026-11-04T01:08:10.896010698Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -231,6 +231,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1a419-686f-7780-a4c1-5fc07b66fe50
+  author: joe
+  timestamp: 2026-11-04T01:08:10.991199377Z
+  session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 filed_at:
   code_sha: 6c587ee595ce70f5fcc48480cfdddc8246cf158c
   branch: main
@@ -239,3 +247,7 @@ filed_at:
   aida_build_sha: 6c587ee595c
   vendor: claude
   session: f5eddefe-032d-4760-94ba-3a318cf3d1d1
+implementation_info:
+  implemented: true
+  implemented_at: 2026-11-04T01:08:10.896010698Z
+  implemented_by: joe
