@@ -14,7 +14,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T01:17:09.371397785Z
-modified_at: 2026-11-04T10:14:24.086744618Z
+modified_at: 2026-11-04T11:37:18.660729254Z
 req_type: Task
 tags:
 - carried-from:BUG-2428
@@ -114,6 +114,12 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-04T10:14:23.940868454Z
   modified_at: 2026-11-04T10:14:23.940868454Z
+  session_id: da1c0d85-1d45-4ce4-a292-5358644f65b9
+- id: 01a1a659-63c4-7381-980a-9fb6a47504c5
+  author: joe
+  content: lane went dormant without committing
+  created_at: 2026-11-04T11:37:18.532402586Z
+  modified_at: 2026-11-04T11:37:18.532402586Z
   session_id: da1c0d85-1d45-4ce4-a292-5358644f65b9
 history:
 - id: 01a1a443-3d11-7700-8298-3f5783f310c6
