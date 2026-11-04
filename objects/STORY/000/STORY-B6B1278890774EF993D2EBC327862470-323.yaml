@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-02T19:20:50.092491662Z
-modified_at: 2026-11-03T18:42:09.169345351Z
+modified_at: 2026-11-04T02:34:47.712236232Z
 req_type: Story
 tags:
 - architecture
@@ -279,6 +279,12 @@ comments:
   content: 'ADVISOR RULING (round 4, PR #3291 at 0b518ac9): the round-3 fixes are pushed and await review, but the PR now conflicts with main. This round only: merge origin/main into story-2325-prb and resolve the conflicts so that the round-3 behavior is preserved. Make no other changes. LIGHT gate: one targeted cargo test -p aida-cli-lib --lib ownership plus make check-ci-fast. Push, then stop.'
   created_at: 2026-11-03T18:37:19.896259256Z
   modified_at: 2026-11-03T18:37:19.896259256Z
+  session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
+- id: 01a1a468-b420-7950-b9db-6227397b8553
+  author: joe
+  content: 'OPERATOR RULING (2026-11-03 19:30, relayed): regroup R6 (one transactional coordination store) is decided LATER. PR-B proceeds on the current storage. Also: consume a shared process-identity primitive (regroup R3) rather than adding your own pid/start-time checks, where one exists.'
+  created_at: 2026-11-04T02:34:47.712236232Z
+  modified_at: 2026-11-04T02:34:47.712236232Z
   session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
 history:
 - id: 01a19ed2-508b-7401-9865-70193fa0d0af
