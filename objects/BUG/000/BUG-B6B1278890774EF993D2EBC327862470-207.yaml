@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T05:32:54.614008505Z
-modified_at: 2026-11-04T07:29:07.943725046Z
+modified_at: 2026-11-04T08:01:31.429713511Z
 req_type: Bug
 tags:
 - kind:bug-spotted
@@ -19,6 +19,13 @@ relationships:
   target_id: 01a1a56d-929d-72f3-8299-e53d1b788fed
   created_at: 2026-11-04T07:19:54.904989364Z
   created_by: joe
+comments:
+- id: 01a1a593-d525-7c40-92c0-b85980e1c1b2
+  author: joe
+  content: 'ADVISOR REWORK BRIEF (2026-11-04 01:05 MST, PR #3353 head ebc63b3e). Review: the design is sound and AC1/AC2 are implemented. BLOCKING: (1) CI lib-1 is red at head while main is green at base. Fix the failing test(s) this PR broke (read the lib-1 log). (2) AC3: STORY-2324 PR-B #3331 now stamps spec_key in ledger writers. Confirm the review-watch collector path goes through those writers once #3331 lands, and say so in a spec comment with the file:line. If it does not, stamp the spec in the collector here. Gate (LIGHT): one targeted cargo test filter plus make check-ci-fast, then push to the same PR branch. The advisor re-reviews only the delta.'
+  created_at: 2026-11-04T08:01:31.429713511Z
+  modified_at: 2026-11-04T08:01:31.429713511Z
+  session_id: da1c0d85-1d45-4ce4-a292-5358644f65b9
 history:
 - id: 01a1a529-3a0b-7851-9f12-63da9e5a1022
   author: aida-session-start
