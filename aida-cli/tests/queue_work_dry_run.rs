@@ -1538,16 +1538,51 @@ fn task_1337_post_setup_launch_error_rolls_back_the_owned_setup() {
             .contains(spec.as_str())),
         "the lease is removed: {leases:?}"
     );
-    // ... and so is the worktree: only the main checkout remains.
+    // ... and so is the worktree. The pool owns a tree it handed out
+    // (STORY-714: a pooled tree is reset and idled, never removed), so the
+    // rollback returns it: any tree besides the main checkout is a pool
+    // entry on a detached HEAD (the pickup branch is gone) with no lease.
+    // trace:TASK-2811 | ai:claude
     let worktrees = Command::new("git")
         .current_dir(&repo)
         .args(["worktree", "list", "--porcelain"])
         .output()
         .unwrap();
     let worktrees = String::from_utf8_lossy(&worktrees.stdout);
-    assert_eq!(
-        worktrees.matches("worktree ").count(),
-        1,
-        "the worktree is removed: {worktrees}"
-    );
+    let main = std::fs::canonicalize(&repo).unwrap();
+    let pool = aida_core::worktree_pool::read_state(&repo).unwrap();
+    for block in worktrees.split("\n\n").filter(|b| !b.trim().is_empty()) {
+        let path = block
+            .lines()
+            .find_map(|l| l.strip_prefix("worktree "))
+            .map(std::path::PathBuf::from)
+            .unwrap();
+        // The main checkout and the requirement store's own worktree are
+        // not the pickup's.
+        if std::fs::canonicalize(&path).unwrap_or_else(|_| path.clone()) == main
+            || block.lines().any(|l| l == "branch refs/heads/aida-store")
+        {
+            continue;
+        }
+        assert!(
+            aida_core::worktree_pool::is_pool_worktree(&repo, &path),
+            "a tree this setup created is removed: {worktrees}"
+        );
+        assert!(
+            block.lines().any(|l| l == "detached"),
+            "a pooled tree is returned on a detached base: {worktrees}"
+        );
+        let entry = pool
+            .entries
+            .iter()
+            .find(|e| {
+                std::fs::canonicalize(&e.path).unwrap_or_else(|_| e.path.clone())
+                    == std::fs::canonicalize(&path).unwrap_or_else(|_| path.clone())
+            })
+            .unwrap();
+        assert!(
+            !entry.leased && entry.lease_holder.is_none(),
+            "a pooled tree is returned idle: {entry:?}"
+        );
+    }
 }
