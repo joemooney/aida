@@ -3,12 +3,12 @@ spec_id: STORY-1468
 agreed_id: STORY-1468
 title: Capture originating user prompt when opening a feature requirement
 description: 'When an LLM chat turns a user request into a new AIDA requirement, preserve the originating user prompt as requirement provenance so future agents and reviewers can understand why the spec exists. The provenance should be clearly labeled and separate from the normalized title, description, and acceptance criteria. It must be stored in the AIDA substrate (not a parallel PROMPT_HISTORY file), remain available through normal requirement inspection/history, and not leak into ordinary end-user CLI output. Because prompts may contain secrets or private context, define a safe redaction/opt-out path and avoid silently copying credentials into the requirement store. Acceptance: a newly opened feature spec can be traced back to its originating prompt; later edits preserve the original prompt separately from derived product text; provenance is excluded or summarized in user-facing views unless explicitly requested; and tests cover absent, redacted, and captured provenance.'
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-09-24T00:32:52.190913727Z
-modified_at: 2026-11-04T12:47:16.989351320Z
+modified_at: 2026-11-04T12:48:16.653817878Z
 req_type: Story
 comments:
 - id: 01a0d0d5-7dfa-7e41-80d5-f47b293e4316
@@ -49,3 +49,18 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1a69a-5d0d-7920-94b9-59beef18c6b9
+  author: joe
+  timestamp: 2026-11-04T12:48:16.653834878Z
+  session_id: 01a1a69964ce
+  harness_version: 2.1.318 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
+attention_reason:
+  category: design-fork
+  detail: 'Storage location conflicts between the spec''s own records, and the choice is a data-model/store-layout decision that needs an architecture sketch + advisor signoff (repo rule) before code. (1) CR-8 reserved a slot for the originating prompt INSIDE FilingProvenance (aida-core/src/models.rs:699, provenance.rs:886) and the 2026-09-24 proxy decision says ''one field of CR-8''s provenance struct''. (2) The 2026-09-24 product decision says captured prompts live in a SEPARATE provenance/artifact location, not the requirement body, and normal views AND agent context must not include it. filed_at is serialized into the requirement YAML and rendered by aida show (requirements_cli.rs:6617/6997/7269/7728) and MCP output, so option (1) puts the prompt in every agent-context read unless each projection filters it. Option (2) adds a new .aida-store artifact path that the git/sqlite/postgres backends, archive/merge and retention must all handle. Also unspecified: the opt-in surface (config key name; whether the flag is aida add --origin-prompt / --origin-prompt-stdin plus an MCP add_requirement param, or hook-based auto-capture from UserPromptSubmit), redaction semantics (reuse an existing secret scrubber and refuse vs. mask), and retention.'
+  lean: 'Separate artifact: .aida-store/provenance/<SPEC-ID>.prompt.yaml, write-once, reached only through an explicit aida show <ID> --origin-prompt (and an MCP flag); filed_at gets just a has_origin_prompt: bool marker. Opt-in: config key intake.capture_origin_prompt (default false) AND an explicit aida add --origin-prompt-stdin / MCP originating_prompt param. The prompt is ignored with a one-line notice when the policy is off. Redaction: run the existing secret-pattern scrubber and store [REDACTED:<kind>] markers with a redacted: true flag; never store raw matches. Tests: absent / redacted / captured, plus an edit-preserves-prompt test. Implement after an advisor-signed sketch, probably split into store-artifact + intake-surface slices.'
+  raised_by: implementer
+  raised_at: 2026-11-04T12:48:16.653817878Z
