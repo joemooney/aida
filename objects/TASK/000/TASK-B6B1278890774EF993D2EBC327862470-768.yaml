@@ -14,7 +14,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-04T05:07:38.080379297Z
-modified_at: 2026-11-04T11:04:19.245292559Z
+modified_at: 2026-11-04T11:04:54.812766539Z
 req_type: Task
 tags:
 - carried-from:BUG-2390
@@ -26,6 +26,13 @@ relationships:
   target_id: 01a1a4f4-ad77-70b0-81aa-4faddd6a3ced
   created_at: 2026-11-04T11:04:19.245285919Z
   created_by: joe
+comments:
+- id: 01a1a63b-bb1c-7e02-a7af-c1385e551ca2
+  author: joe
+  content: 'ADVISOR RULING (2026-11-04 03:56 MST, rule non-blocking findings once): APPROVED as a bug fix: Codex take must reuse a worktree that already has the PR branch checked out (find_worktree_for_branch, as the Claude path does at dispatch.rs:2652-2683), instead of a git worktree add that git refuses. Also folded in TASK-2822: add a test for the ensure_reentered_lease_on_lane_branch refusal (agent_launch.rs:4524). Gate LIGHT.'
+  created_at: 2026-11-04T11:04:54.812766539Z
+  modified_at: 2026-11-04T11:04:54.812766539Z
+  session_id: da1c0d85-1d45-4ce4-a292-5358644f65b9
 history:
 - id: 01a1a544-4897-7732-9908-dab25ca6f67e
   author: joe
