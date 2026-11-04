@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-02T19:20:59.253007269Z
-modified_at: 2026-11-04T01:55:57.149642122Z
+modified_at: 2026-11-04T02:12:07.332244149Z
 req_type: Story
 tags:
 - architecture
@@ -550,6 +550,12 @@ history:
   timestamp: 2026-11-04T01:40:30.363727673Z
   session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
   changes: []
+- id: 01a1a453-f297-7b11-a308-cea0658c0f70
+  author: joe
+  timestamp: 2026-11-04T02:12:07.447643326Z
+  session_id: 01a1a4477b05
+  harness_version: 2.1.318 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 1b678fd5059046ff02bfb3b87c1f10d3162efda6
   branch: main
@@ -558,3 +564,11 @@ filed_at:
   aida_build_sha: 6a3f67671a9
   vendor: claude
   session: ee0bf351-6b17-486f-a38e-cfbb1343c426
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'PR-A design and round-3/5 fixes are sound on reading, but CI is red after the main merges: lib-0, lib-1 and gates fail at 40d90f8 (main 0754a362 is green on all three), and the exact-count STORY-2326 ledger was never updated for the new spawn sites main brought in.'
+  recovery_hint: address the review findings, move STORY-2326 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-11-04T02:12:07.332244149Z

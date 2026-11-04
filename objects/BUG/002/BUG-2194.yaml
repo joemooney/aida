@@ -17,7 +17,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-20T18:10:31.087634134Z
-modified_at: 2026-11-04T01:58:10.155538578Z
+modified_at: 2026-11-04T02:00:34.167602617Z
 req_type: Bug
 tags:
 - from-implementer:TASK-1981
@@ -28,6 +28,32 @@ comments:
   created_at: 2026-11-04T01:41:03.151910050Z
   modified_at: 2026-11-04T01:41:03.151910050Z
   session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
+- id: 01a1a449-5e77-7713-ad3f-b651182c910a
+  author: joe
+  content: |-
+    ## Implementer approach
+
+    Scope note: coordination `acquire_claim` (~840/848 in the audit) already propagates via `drop_unpushed_claim_commit` (TASK-2069/BUG-2188); left as reviewed. Remaining discarded Results: db_block claim + auto_allocate_block_inner, schedule_ledger write_cas_opts + write_batch_cas_opts, coordination acquire_lock_claim (rejected + push-error paths).
+
+    Policy: on a rejected push, a rollback error is propagated (with caller context) and the retry loop stops. schedule_ledger push-*error* offline policy (keep local commit, Ok) is unchanged: no rollback runs there. acquire_lock_claim push-error: Unavailable (proceed local-only) is returned only when the rollback succeeded; a failed rollback returns Err so the drain/solo lock is not treated as cleanly unavailable.
+
+    ### Acceptance criteria as tests
+    - **Unit (caller-level):** new `aida-cli-lib/src/tests/bug_2194_rollback_caller_tests.rs` — for each of the 5 callers, a bare origin with a rejecting pre-receive plus a local pre-push that commits a peer and dirties a tracked file; assert the caller returns the `failed without conflict` error, HEAD == peer, dirty bytes survive, origin unchanged, pre-push reached exactly once (stopped after first failure), no rebase state.
+    - **Unit:** acquire_lock_claim push-error variant (pre-push exits 1 after peer+dirty) returns Err, not Unavailable.
+    - Offline-policy preservation is covered by existing schedule ledger tests (unchanged code path).
+
+    ### Expected files
+    - `aida-cli-lib/src/db_block.rs`
+    - `aida-cli-lib/src/schedule_ledger.rs`
+    - `aida-cli-lib/src/coordination.rs`
+    - `aida-cli-lib/src/tests/bug_2194_rollback_caller_tests.rs`
+
+    ### Ambiguities / conflicts as questions
+    - None blocking; acquire_claim intentionally left on its reviewed warn-and-Unavailable policy.
+  created_at: 2026-11-04T02:00:34.167602617Z
+  modified_at: 2026-11-04T02:00:34.167602617Z
+  session_id: 01a1a447237c
+  harness_version: 2.1.318 (Claude Code)
 history:
 - id: 01a15cbb-4740-7a70-afb8-6dedec1b643f
   author: joe
