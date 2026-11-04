@@ -1,0 +1,29 @@
+id: 01a1a421-bd28-7651-b4b9-72705fc34901
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-758
+title: 'minor: queue_cmd.rs:14029 - only ChildGrantRefused triggers rollback; other pre…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on BUG-2428, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  minor: queue_cmd.rs:14029 - only ChildGrantRefused triggers rollback; other pre-agent refusals (watch reviewer_launch_context refusal at queue_cmd.rs:13518, lease-lookup miss, chdir failure, 'failed to spawn codex') still leave worktree+lease, though the spec's Expected covers any launch that fails before the agent starts. Pre-existing behavior, not a regression.
+
+  PR: #3316
+  Reviewed sha: 4f71731c6f8c6a3dc3f58aac1a79e30483d24fb7
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-04T01:17:16.968835384Z
+modified_at: 2026-11-04T01:17:16.968835384Z
+req_type: Task
+tags:
+- carried-from:BUG-2428
+- finding-hash:e03e6236
+- from-review:PR-3316
+- kind:carried-forward
+filed_at:
+  code_sha: 0f1624a8b38d961973328d79d05642add4464fc8
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 02cfbd22515
+  vendor: claude
