@@ -22,6 +22,7 @@ const DEAD_PID: u32 = 999_999_999;
 
 fn lease(id: &str, scope: &str, worktree: PathBuf, branch: &str) -> SessionLease {
     SessionLease {
+        pid_namespace: crate::agent_registry::current_pid_namespace(),
         tree_kind: Default::default(),
         id: id.to_string(),
         scope: scope.to_string(),
