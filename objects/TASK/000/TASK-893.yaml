@@ -15,7 +15,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-25T07:05:08.198553641Z
-modified_at: 2026-07-20T04:46:36.222609208Z
+modified_at: 2026-11-04T02:33:23.987528664Z
 req_type: Task
 tags:
 - codex
@@ -23,6 +23,13 @@ tags:
 - parent:EPIC-0419
 - statusline
 - watch
+comments:
+- id: 01a1a467-6d13-7153-95b8-cfb4f14efc65
+  author: joe
+  content: 'OPERATOR RULING (2026-11-03 19:30 MST, relayed by advisor): regroup rulings 6/8: stays parked on its named external trigger.'
+  created_at: 2026-11-04T02:33:23.987528664Z
+  modified_at: 2026-11-04T02:33:23.987528664Z
+  session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
 history:
 - id: 01a192ac-17ee-79d2-b225-21d52db62ccc
   author: joe
