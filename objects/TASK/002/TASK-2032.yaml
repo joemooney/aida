@@ -11,7 +11,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-20T23:41:45.676543397Z
-modified_at: 2026-11-04T06:58:28.027421504Z
+modified_at: 2026-11-04T08:01:33.079569448Z
 req_type: Task
 tags:
 - contained
@@ -49,6 +49,12 @@ comments:
   modified_at: 2026-11-04T05:53:46.745489190Z
   session_id: 01a1a4f5aa44
   harness_version: 2.1.318 (Claude Code)
+- id: 01a1a593-db97-7fa2-93c8-4d635c72b040
+  author: joe
+  content: 'ADVISOR REWORK BRIEF (2026-11-04 01:05 MST, PR #3336 head d71c4552). Round 2: session start and the claude exec/resume arms are right. BLOCKING: queue work''s other post-chdir launch arms (codex and any agent-new or contained arm) still build the boundary from the cwd-derived launcher_main(). Thread the pinned launcher main through every arm, delete or privatize the cwd-derived fallback so no caller can reach it, and add a test per arm, or one table test across arms, proving a contained seat clone keeps clone recognition. Gate (LIGHT): one targeted cargo test filter plus make check-ci-fast, then push to the same PR branch. The advisor re-reviews only the delta.'
+  created_at: 2026-11-04T08:01:33.079569448Z
+  modified_at: 2026-11-04T08:01:33.079569448Z
+  session_id: da1c0d85-1d45-4ce4-a292-5358644f65b9
 history:
 - id: 01a15cbb-fc05-7050-907c-e1e0d5b0996b
   author: joe
