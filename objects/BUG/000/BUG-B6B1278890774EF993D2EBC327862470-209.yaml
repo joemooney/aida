@@ -8,11 +8,17 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T15:44:00.054377754Z
-modified_at: 2026-11-04T15:56:28.767256131Z
+modified_at: 2026-11-04T15:57:59.655633471Z
 req_type: Bug
 tags:
 - area:containment
 - vendor:codex
+comments:
+- id: 01a1a748-0de7-7240-9cbc-a6468c0e4e93
+  author: mcp
+  content: 'Implementation sketch: retain the requested outer bubblewrap boundary for every vendor and emit its explicit `--` command separator immediately before the executable. Do not bypass wrapping for Codex native posture: STORY-2460''s policy/proof ruling does not itself establish conformance or authorize removing an existing requested boundary. Add a regression that builds actual os_wrapped_program_and_args output and passes it through codex_tool_env::prepare_launch, checking wrapper prefix, metadata insertion, and unchanged vendor args. This is the acceptance-listed argv repair, with no new containment posture or policy.'
+  created_at: 2026-11-04T15:57:59.655619680Z
+  modified_at: 2026-11-04T15:57:59.655619680Z
 history:
 - id: 01a1a73b-7503-7232-9ec9-cb44ced95ccf
   author: joe
