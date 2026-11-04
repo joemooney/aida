@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-206
 agreed_id: BUG-2437
 title: 'Every dev promote deactivates mail retention for hours: writers running a replaced binary count as ''not known to take a write permit'' even when that build already took permits'
 description: 'Observed 2026-11-03 21:40 MST. After promoting b5577764ec0, ''aida mailbox retention activate'' refused: ''not every mail writer is known to take a write permit''. The listed writers were running lanes, a reviewer, a lane job and the operator''s command deputy, all running 0f1624a8b38. That build had itself recorded the previous activation, so it does take permits. Their /proc exe reads ''(deleted)'', so the check cannot identify their build and treats them as unknown. Until every lane turns over and the operator restarts the deputy, retention stays off and ''session end'' refuses for any session whose mailbox holds mail. That breaks lease cleanup between promotes. Fix: each writer records its build id at startup (for example in a pid-keyed runtime file, or the lease), and activation accepts any writer whose recorded build is at or after the permit-capable build. Alternatively, promote keeps the activation when the new build''s permit protocol is unchanged.'
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T04:41:19.994753856Z
-modified_at: 2026-11-04T06:35:47.801469796Z
+modified_at: 2026-11-04T07:10:59.685395460Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -29,6 +29,12 @@ comments:
   content: 'ADVISOR REWORK BRIEF (2026-11-03 23:38 MST, PR #3349 head 3024c245). Review: design sound, refusal paths tested. BLOCKING (CI gates): the new test adds an unallowlisted /proc literal that trips the portability ratchet. Build the path through the existing proc helper used elsewhere in tests, or put the test behind cfg(target_os = "linux") with the ratchet''s sanctioned guard. Do not add an allowlist entry unless no helper fits, and give the reason if you do. Nothing else changes. Gate (LIGHT): one targeted cargo test filter covering the changed module, plus make check-ci-fast, then push to the same PR branch. The advisor re-reviews only the delta.'
   created_at: 2026-11-04T06:35:47.801469796Z
   modified_at: 2026-11-04T06:35:47.801469796Z
+  session_id: da1c0d85-1d45-4ce4-a292-5358644f65b9
+- id: 01a1a565-9265-7a21-9206-9c0987f6c0e2
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Marker design is sound and the refusal paths are tested, but CI gates are red: the new test adds an unallowlisted /proc literal that trips the portability ratchet. Triage reason: advisor rework brief on spec; review findings to address'
+  created_at: 2026-11-04T07:10:59.685394092Z
+  modified_at: 2026-11-04T07:10:59.685394092Z
   session_id: da1c0d85-1d45-4ce4-a292-5358644f65b9
 history:
 - id: 01a1a4ee-5eab-7123-a18a-eaae4aecb215
@@ -69,6 +75,14 @@ history:
   - field_name: status
     old_value: Done
     new_value: NeedsAttention
+- id: 01a1a565-9265-7a21-9206-9bf18addd0db
+  author: joe
+  timestamp: 2026-11-04T07:10:59.685367537Z
+  session_id: da1c0d85-1d45-4ce4-a292-5358644f65b9
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: b5577764ec0466133c191b7e51d62c40ea3a2c83
   branch: main
@@ -81,11 +95,3 @@ implementation_info:
   implemented: true
   implemented_at: 2026-11-04T06:07:54.808336942Z
   implemented_by: joe
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'Marker design is sound and the refusal paths are tested, but CI gates are red: the new test adds an unallowlisted /proc literal that trips the portability ratchet'
-  recovery_hint: address the review findings, move BUG-2437 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-04T06:22:37.273887081Z
