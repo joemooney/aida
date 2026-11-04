@@ -517,7 +517,15 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         // After the BUG-2180 commit above this sweeps only what it left (older
         // dirt, deletions) and fails loudly on an embedded-repo plant.
         // trace:BUG-2140 | ai:antigravity
-        self.commit_contained_child_store_changes("implementer phase")?;
+        // TASK-1625: on a watchdog trip the commit is best-effort, as in the
+        // reviewer phase, so a store-commit refusal cannot preempt the
+        // shelvable BUG-420 Watchdog failure (and its BUG-1299 hint) below.
+        // trace:TASK-1954 trace:TASK-1625 | ai:claude
+        if matches!(outcome, exit_signal::ExitOutcome::WatchdogTripped(_)) {
+            let _ = self.commit_contained_child_store_changes("implementer phase");
+        } else {
+            self.commit_contained_child_store_changes("implementer phase")?;
+        }
         // BUG-2383 AC3: a headless implementer that ran no local test to
         // completion says so in phase 1's result, as a standalone lane does.
         // trace:BUG-2383 | ai:claude
