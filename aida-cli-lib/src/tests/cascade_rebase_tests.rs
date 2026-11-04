@@ -71,6 +71,7 @@ fn write_fake_lease(project_root: &std::path::Path, branch: &str, worktree: &std
     let leases = project_root.join(".aida").join("sessions");
     std::fs::create_dir_all(&leases).unwrap();
     let lease = SessionLease {
+        pid_namespace: crate::agent_registry::current_pid_namespace(),
         tree_kind: Default::default(),
         id: format!("lease-{branch}"),
         scope: branch.to_string(),
