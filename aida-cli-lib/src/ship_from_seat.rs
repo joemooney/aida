@@ -74,6 +74,14 @@ pub(crate) fn recorded_seat(main: &Path, clone: &Path) -> Result<HostRecordedClo
 /// lease, never from the clone. The branch must be a plain branch name.
 // trace:BUG-HOME-038 | ai:claude
 fn lease_branch(seat: &HostRecordedClone) -> Result<(String, String)> {
+    let lease = seat_lease(seat)?;
+    Ok((lease.branch, lease.scope))
+}
+
+/// `seat`'s `clone` lease, read host-side, with its branch validated as a
+/// plain branch name. An ended lease is gone, so it is refused here.
+// trace:BUG-HOME-038 trace:TASK-2712 | ai:claude
+fn seat_lease(seat: &HostRecordedClone) -> Result<crate::SessionLease> {
     let lease = crate::list_leases(&seat.main)
         .into_iter()
         .find(|lease| {
@@ -95,7 +103,206 @@ fn lease_branch(seat: &HostRecordedClone) -> Result<(String, String)> {
             lease.branch.escape_debug()
         );
     }
-    Ok((lease.branch, lease.scope))
+    Ok(lease)
+}
+
+/// TASK-2712: what a host commit of a seat's pending work has checked before
+/// any git runs, and the clone identity it must still have when it commits.
+// trace:TASK-2712 | ai:claude
+pub(crate) struct PendingCommit {
+    pub(crate) seat: HostRecordedClone,
+    pub(crate) branch: String,
+    /// `(device, inode)` of the clone root when it was checked.
+    pub(crate) pinned: (u64, u64),
+}
+
+/// TASK-2712: every refusal a host commit of `clone`'s pending work runs
+/// BEFORE git touches the clone, so a refusal leaves nothing committed:
+///
+/// - `clone` itself is a symbolic link (only the real clone path is named);
+/// - `clone` is not a seat clone `main` recorded (a foreign clone, a path
+///   with no `clone` lease) or its lease has ended;
+/// - the lease's worker is a live process other than this one (a competing
+///   owner may still be writing);
+/// - `message` has no `(SPEC-ID)` / `(Refs SPEC-ID)` trailer, names a spec
+///   that does not resolve, or does not name `explicit_spec`.
+// trace:TASK-2712 | ai:claude
+pub(crate) fn pending_commit_preflight(
+    main: &Path,
+    clone: &Path,
+    explicit_spec: Option<&str>,
+    message: &str,
+) -> Result<PendingCommit> {
+    let meta = std::fs::symlink_metadata(clone)
+        .with_context(|| format!("could not read the seat path {}", clone.display()))?;
+    anyhow::ensure!(
+        !meta.file_type().is_symlink(),
+        "refusing to commit the seat's pending work: {} is a symbolic link; name the seat \
+         clone itself. Nothing was committed",
+        clone.display()
+    );
+    let seat = recorded_seat(main, clone)?;
+    let lease = seat_lease(&seat).map_err(|e| {
+        anyhow::anyhow!(
+            "refusing to commit the seat's pending work: {e:#} (an ended lease no longer \
+             vouches for the clone). Nothing was committed"
+        )
+    })?;
+    if let Some(pid) = lease.active_pid {
+        let own = crate::agent_launch::agent_codex_background::own_process_chain();
+        anyhow::ensure!(
+            own.contains(&pid)
+                || !aida_core::liveness::process_identity_is_alive(
+                    pid,
+                    lease.active_pid_start_time.as_deref()
+                ),
+            "refusing to commit the seat's pending work in {}: its lease is held by live \
+             process {pid}, which may still be writing. Let that lane finish (or end its \
+             lease), then rerun. Nothing was committed",
+            seat.root.display()
+        );
+    }
+    pending_message_check(&seat.main, message, explicit_spec)?;
+    let pinned = crate::seat_clone::dir_identity(&seat.root)?;
+    Ok(PendingCommit {
+        branch: lease.branch,
+        seat,
+        pinned,
+    })
+}
+
+/// TASK-2712: the STORY-469 trailer rules applied to a commit message that
+/// does not exist yet, against `main`'s store: [`seat_trailer_check`] and
+/// [`explicit_spec_check`] on the message's subject.
+// trace:TASK-2712 | ai:claude
+pub(crate) fn pending_message_check(
+    main: &Path,
+    message: &str,
+    explicit_spec: Option<&str>,
+) -> Result<()> {
+    let subject = message.lines().next().unwrap_or("").trim().to_string();
+    anyhow::ensure!(
+        !subject.is_empty(),
+        "refusing to commit the seat's pending work with an empty message"
+    );
+    let store = crate::load_store_for_lookup(main);
+    let commits = vec![("(pending)".to_string(), subject)];
+    let trailer_ids = trailer_ids_checked(&commits, |id| {
+        crate::trace::resolve_spec_in_store(store.as_ref(), id)
+    })
+    .map_err(|e| anyhow::anyhow!("{e:#}. Nothing was committed"))?;
+    if let Some(explicit) = explicit_spec {
+        explicit_spec_check(explicit, &trailer_ids)
+            .map_err(|e| anyhow::anyhow!("{e:#}. Nothing was committed"))?;
+    }
+    Ok(())
+}
+
+/// TASK-2712: commit `clone`'s pending work with `message` through `commit`,
+/// after [`pending_commit_preflight`], and only while the clone root is still
+/// the directory that was checked (a replaced path is refused).
+// trace:TASK-2712 | ai:claude
+pub(crate) fn commit_seat_pending(
+    main: &Path,
+    clone: &Path,
+    explicit_spec: Option<&str>,
+    message: &str,
+    commit: &dyn Fn(&Path, &Path, &str, &str) -> Result<Option<String>>,
+) -> Result<Option<String>> {
+    let plan = pending_commit_preflight(main, clone, explicit_spec, message)?;
+    commit_planned(&plan, message, commit)
+}
+
+fn commit_planned(
+    plan: &PendingCommit,
+    message: &str,
+    commit: &dyn Fn(&Path, &Path, &str, &str) -> Result<Option<String>>,
+) -> Result<Option<String>> {
+    crate::seat_clone::ensure_dir_identity(&plan.seat.root, plan.pinned)?;
+    commit(&plan.seat.main, &plan.seat.root, &plan.branch, message)
+}
+
+/// TASK-2712: what the lane's post-exit step did with a seat's pending work.
+// trace:TASK-2712 | ai:claude
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) enum PostExitCommit {
+    /// The tree is not a seat clone this checkout recorded: nothing to do.
+    NotASeat,
+    /// The seat had nothing pending.
+    Clean,
+    /// The host committed the pending work as this commit.
+    Committed(String),
+    /// The commit was refused or failed; the work stays uncommitted.
+    Failed(String),
+}
+
+/// The message the host commits a native lane's leftover work with.
+// trace:TASK-2712 | ai:claude
+pub(crate) fn post_exit_message(spec: &str, lane: &str) -> String {
+    format!(
+        "[AI:codex] chore(seat): work native Codex lane {lane} left uncommitted ({})",
+        aida_core::node_alias::display_spec_id(spec)
+    )
+}
+
+/// TASK-2712 (advisor ruling F1): after a native Codex implementer's child
+/// exits, the lane's own host-side step commits whatever it left pending in
+/// its seat clone, with every [`pending_commit_preflight`] refusal, through
+/// `commit` ([`crate::seat_clone::commit_pending`] in production: AIDA's own
+/// bwrap job, hooks off, the host's identity). A tree that is not a recorded
+/// seat clone is left alone. Publication stays a separate, gated step
+/// (`aida ship --from-seat`).
+// trace:TASK-2712 | ai:claude
+pub(crate) fn post_exit_commit(
+    main: &Path,
+    tree: &Path,
+    spec: &str,
+    lane: &str,
+    commit: &dyn Fn(&Path, &Path, &str, &str) -> Result<Option<String>>,
+) -> PostExitCommit {
+    let main = crate::main_worktree_root_from(main);
+    aida_core::seat_clone_detect::note_host_main(&main);
+    if crate::seat_clone::host_recorded_clone(tree).is_none() {
+        return PostExitCommit::NotASeat;
+    }
+    match commit_seat_pending(
+        &main,
+        tree,
+        Some(spec),
+        &post_exit_message(spec, lane),
+        commit,
+    ) {
+        Ok(Some(tip)) => PostExitCommit::Committed(tip),
+        Ok(None) => PostExitCommit::Clean,
+        Err(e) => PostExitCommit::Failed(format!("{e:#}")),
+    }
+}
+
+/// [`post_exit_commit`] with the production commit, reported on stderr.
+// trace:TASK-2712 | ai:claude
+pub(crate) fn post_exit_commit_reported(
+    main: &Path,
+    tree: &Path,
+    spec: &str,
+    lane: &str,
+) -> PostExitCommit {
+    let outcome = post_exit_commit(main, tree, spec, lane, &crate::seat_clone::commit_pending);
+    match &outcome {
+        PostExitCommit::Committed(tip) => eprintln!(
+            "  committed the work lane {lane} left pending in {} as {tip} (host, hooks off). \
+             Publish it with `aida ship --from-seat {}`",
+            tree.display(),
+            tree.display()
+        ),
+        PostExitCommit::Failed(why) => eprintln!(
+            "  {} could not commit the work lane {lane} left pending in {}: {why}. The work \
+             is still there, uncommitted",
+            "warning:".yellow().bold(),
+            tree.display()
+        ),
+        PostExitCommit::NotASeat | PostExitCommit::Clean => {}
+    }
+    outcome
 }
 
 /// The one head `git bundle list-heads` printed, when it is exactly
@@ -390,7 +597,7 @@ pub(crate) fn import_seat_branch(
 /// `range` has nothing to publish. Returns every named ID. Accepting `Refs`
 /// here never completes the spec: merge-time completion still skips `Refs`.
 // trace:BUG-HOME-038 trace:STORY-469 trace:BUG-2431 | ai:claude
-pub(crate) fn seat_trailer_check<F>(repo: &Path, range: &str, mut resolve: F) -> Result<Vec<String>>
+pub(crate) fn seat_trailer_check<F>(repo: &Path, range: &str, resolve: F) -> Result<Vec<String>>
 where
     F: FnMut(&str) -> crate::trace::SpecResolution,
 {
@@ -398,9 +605,19 @@ where
     if commits.is_empty() {
         anyhow::bail!("refusing to publish: the seat branch adds no commit ({range})");
     }
+    trailer_ids_checked(&commits, resolve)
+}
+
+/// [`seat_trailer_check`]'s rules on `(sha, subject)` pairs: some subject
+/// names a spec, and every named ID resolves to a live spec.
+// trace:BUG-HOME-038 trace:BUG-2431 trace:TASK-2712 | ai:claude
+fn trailer_ids_checked<F>(commits: &[(String, String)], mut resolve: F) -> Result<Vec<String>>
+where
+    F: FnMut(&str) -> crate::trace::SpecResolution,
+{
     let mut trailer_ids: Vec<String> = Vec::new();
     let mut refs_only: Vec<(&String, &String, String)> = Vec::new();
-    for (sha, subject) in &commits {
+    for (sha, subject) in commits {
         let completing = crate::extract_spec_ids_from_commit(subject);
         for id in crate::pr_ship::extract_authorship_spec_ids_from_subject(subject) {
             if !completing
@@ -415,11 +632,12 @@ where
     }
     if trailer_ids.is_empty() {
         anyhow::bail!(
-            "refusing to publish: no seat commit carries a `(SPEC-ID)` or `(Refs SPEC-ID)` \
-             trailer. Amend the commit inside the seat, then publish again"
+            "refusing to publish: no seat commit (or `--commit-pending` message) carries a \
+             `(SPEC-ID)` or `(Refs SPEC-ID)` trailer. Fix the message, or amend the commit \
+             inside the seat, then publish again"
         );
     }
-    let mut violations = crate::trace::validate_trailer_references(&commits, &mut resolve);
+    let mut violations = crate::trace::validate_trailer_references(commits, &mut resolve);
     // The STORY-469 guard reads completing trailers only; a `Refs` ID must
     // name a live spec too. // trace:BUG-2431 | ai:claude
     for (sha, subject, id) in refs_only {
@@ -549,14 +767,21 @@ pub(crate) fn run_from(cwd: &Path, opts: FromSeatOptions, deps: &Deps<'_>) -> Re
     }
 
     // TASK-2712: the host commits a native Codex seat's pending work first,
-    // in AIDA's own sandbox with the seat's hooks off. The trailer check
-    // below then judges that commit like any other seat commit.
+    // in AIDA's own sandbox with the seat's hooks off. Every refusal (seat,
+    // lease, live owner, the message's trailer and the explicit spec) runs
+    // BEFORE the commit, a dry run included, so a refused message leaves
+    // nothing committed. The trailer check below then judges the commit like
+    // any other seat commit.
     // trace:TASK-2712 | ai:claude
     if let Some(message) = &opts.commit_pending {
+        let plan = pending_commit_preflight(&main, &opts.clone, opts.spec.as_deref(), message)?;
         if opts.dry_run {
-            eprintln!("  dry run: would commit the seat's pending work first; committed nothing");
+            eprintln!(
+                "  dry run: the message and seat checks pass; would commit the seat's pending \
+                 work first; committed nothing"
+            );
         } else {
-            match (deps.commit)(&main, &seat.root, &branch, message)? {
+            match commit_planned(&plan, message, deps.commit)? {
                 Some(tip) => eprintln!("  committed the seat's pending work as {tip} (hooks off)"),
                 None => eprintln!("  the seat had no pending work to commit"),
             }

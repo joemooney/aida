@@ -161,6 +161,11 @@ pub(crate) fn validate_request(req: &CodexBgRequest) -> Result<()> {
 /// Bypass, raw sandbox or approval overrides are refused outright, never
 /// silently dropped: they would weaken the requested native posture.
 pub(crate) fn refuse_posture_overrides(args: &[String]) -> Result<()> {
+    // TASK-2712: a write root outside AIDA's own `--add-dir` run (e.g. a
+    // passthrough `--add-dir /`) widens the native sandbox.
+    // trace:TASK-2712 | ai:claude
+    crate::codex_native_sandbox::refuse_foreign_add_dir(args)
+        .map_err(|e| anyhow::anyhow!("`--bg` {e:#}"))?;
     let mut i = 0;
     while i < args.len() {
         let arg = args[i].as_str();
@@ -1695,6 +1700,20 @@ pub(crate) fn supervise_until_exit(
     if let Some(why) = exit_occupancy(dir, &init.project_root, attempt) {
         problems.push(why);
     }
+    // TASK-2712 (advisor ruling F1): the native child cannot commit (Codex
+    // keeps `<clone>/.git` read-only), so this host-side post-exit step
+    // commits what an implementer lane left pending in its seat clone. Only
+    // once the exit scan proved nothing of the lane still runs (no writer
+    // races the commit). A refused or failed commit leaves the work
+    // uncommitted and is reported; it does not hold the scope.
+    // trace:TASK-2712 | ai:claude
+    let failure = match post_exit_seat_commit(init, problems.is_empty()) {
+        Some(note) => Some(match failure {
+            Some(why) => format!("{why}; {note}"),
+            None => note,
+        }),
+        None => failure,
+    };
     let uncertain = terminal.unknown.is_some() || !problems.is_empty();
     let me = me.clone();
     receipt::compare_update(
@@ -1721,6 +1740,35 @@ pub(crate) fn supervise_until_exit(
         },
     )?;
     Ok(())
+}
+
+/// TASK-2712: the detached lane's post-exit commit of its seat's pending
+/// work ([`crate::ship_from_seat::post_exit_commit_reported`]), for an
+/// implementer lane whose exit scan came back clear. A note for the
+/// receipt when the commit was refused or failed; `None` otherwise.
+// trace:TASK-2712 | ai:claude
+fn post_exit_seat_commit(init: &SupervisorInit, exit_clear: bool) -> Option<String> {
+    if aida_core::team::canonical_role(&init.role) != "implementer" {
+        return None;
+    }
+    if !exit_clear {
+        return crate::seat_clone::host_recorded_clone(&init.worker.cwd).map(|_| {
+            "the lane's pending seat work was not committed: the exit scan could not prove \
+             the lane over"
+                .to_string()
+        });
+    }
+    match crate::ship_from_seat::post_exit_commit_reported(
+        &init.project_root,
+        &init.worker.cwd,
+        &init.spec,
+        &init.agent_name,
+    ) {
+        crate::ship_from_seat::PostExitCommit::Failed(why) => Some(format!(
+            "the lane's pending seat work was not committed: {why}"
+        )),
+        _ => None,
+    }
 }
 
 /// How long the normal exit waits for signalled work to leave before it

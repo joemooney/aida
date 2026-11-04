@@ -1039,6 +1039,9 @@ pub(crate) fn probe_sandbox_args(
 /// cleared environment. Main's `.git` stays read-only and `repo_config`
 /// stays bound read-only over the clone's own config, so no seat-written
 /// config, hook, filter or fsmonitor runs, and there is still no network.
+/// When the clone's read-only bind cannot be found (the probe sandbox's
+/// shape changed), this is an error: a commit sandbox that silently kept the
+/// clone read-only would fail later with a misleading git error.
 // trace:TASK-2712 | ai:claude
 pub(crate) fn commit_sandbox_args(
     clone: &Path,
@@ -1046,18 +1049,65 @@ pub(crate) fn commit_sandbox_args(
     read_allowlist: &[String],
     repo_config: &Path,
     identity: &[(&'static str, std::ffi::OsString)],
-) -> Vec<std::ffi::OsString> {
-    let mut args = sandbox_args(clone, main, read_allowlist, repo_config, identity);
-    // The clone's bind is the first `--ro-bind <clone> <clone>` after the
-    // `/tmp` mount; turn exactly that one into a writable bind.
+) -> Result<Vec<std::ffi::OsString>> {
+    let args = sandbox_args(clone, main, read_allowlist, repo_config, identity);
+    writable_clone_bind(args, clone)
+}
+
+/// `args` with the clone's `--ro-bind <clone> <clone>` turned into a
+/// writable `--bind`: exactly one such bind must exist.
+// trace:TASK-2712 | ai:claude
+pub(crate) fn writable_clone_bind(
+    mut args: Vec<std::ffi::OsString>,
+    clone: &Path,
+) -> Result<Vec<std::ffi::OsString>> {
     let clone_os = clone.as_os_str();
-    if let Some(at) = args
+    let binds: Vec<usize> = args
         .windows(3)
-        .position(|w| w[0] == "--ro-bind" && w[1] == *clone_os && w[2] == *clone_os)
-    {
-        args[at] = "--bind".into();
-    }
-    args
+        .enumerate()
+        .filter(|(_, w)| w[0] == "--ro-bind" && w[1] == *clone_os && w[2] == *clone_os)
+        .map(|(at, _)| at)
+        .collect();
+    anyhow::ensure!(
+        binds.len() == 1,
+        "refusing to commit the seat's pending work: the commit sandbox found {} read-only \
+         binds of {} (expected exactly one), so it cannot make the clone writable. Nothing \
+         was committed",
+        binds.len(),
+        clone.display()
+    );
+    args[binds[0]] = "--bind".into();
+    Ok(args)
+}
+
+/// TASK-2712: `(device, inode)` of `dir`, which must be a real directory
+/// (never a symbolic link).
+// trace:TASK-2712 | ai:claude
+pub(crate) fn dir_identity(dir: &Path) -> Result<(u64, u64)> {
+    use std::os::unix::fs::MetadataExt as _;
+    let meta = std::fs::symlink_metadata(dir)
+        .with_context(|| format!("could not read the seat clone {}", dir.display()))?;
+    anyhow::ensure!(
+        meta.file_type().is_dir(),
+        "refusing to commit the seat's pending work: {} is not a directory (a symbolic link \
+         or a replaced path). Nothing was committed",
+        dir.display()
+    );
+    Ok((meta.dev(), meta.ino()))
+}
+
+/// TASK-2712: refuse when `dir` is no longer the directory pinned as
+/// `pinned` (it was replaced or swapped for a symbolic link since it was
+/// checked).
+// trace:TASK-2712 | ai:claude
+pub(crate) fn ensure_dir_identity(dir: &Path, pinned: (u64, u64)) -> Result<()> {
+    anyhow::ensure!(
+        dir_identity(dir)? == pinned,
+        "refusing to commit the seat's pending work: {} was replaced after it was checked. \
+         Nothing was committed",
+        dir.display()
+    );
+    Ok(())
 }
 
 // trace:TASK-2053 trace:TASK-2712 | ai:claude
@@ -1221,6 +1271,7 @@ fn run_sandboxed_as(
         None => probe_sandbox_args(clone, main, &read_allowlist, repo_config.path()),
         Some(identity) => {
             commit_sandbox_args(clone, main, &read_allowlist, repo_config.path(), identity)
+                .map_err(|e| failed(format!("{e:#}")))?
         }
     };
     let mut cmd = std::process::Command::new("bwrap");
@@ -2237,8 +2288,13 @@ fn salvage_capped(main: &Path, clone: &Path, cap: u64) -> Result<PathBuf> {
 /// `.git` read-only, the clone's config replaced, hooks and fsmonitor off, no
 /// network). The clone's HEAD must be the lease's `branch`. The identity is
 /// the host's own `user.name`/`user.email` from MAIN's config, never the
-/// seat's. `Ok(None)` when there is nothing to commit; `Ok(Some(tip))` with
-/// the new commit otherwise. On a failure the working tree is untouched.
+/// seat's, read before any sandbox runs. `Ok(None)` when there is nothing to
+/// commit; `Ok(Some(tip))` with the new commit otherwise. The clone root is
+/// pinned (device and inode) at the start and re-checked before staging and
+/// before committing, so a path replaced mid-run is refused. On a failure
+/// the working tree is untouched, and a failure after staging restores the
+/// index to the exact tree it held before (`git write-tree` snapshot, then
+/// `git read-tree`), so nothing is left staged.
 // trace:TASK-2712 | ai:claude
 pub(crate) fn commit_pending(
     main: &Path,
@@ -2250,6 +2306,23 @@ pub(crate) fn commit_pending(
         !message.trim().is_empty(),
         "refusing to commit the seat's pending work with an empty message"
     );
+    let pinned = dir_identity(clone)?;
+    let read_identity = |key: &str| -> Result<String> {
+        let mut cmd = git(main);
+        cmd.args(["config", "--get", key]);
+        run(cmd, &format!("read the host's {key}"))
+            .ok()
+            .map(|v| v.trim().to_string())
+            .filter(|v| !v.is_empty())
+            .with_context(|| {
+                format!(
+                    "refusing to commit the seat's pending work: the main checkout has no \
+                     `{key}`. Set it with `git config {key} …` in {}; nothing was committed",
+                    main.display()
+                )
+            })
+    };
+    let (name, email) = (read_identity("user.name")?, read_identity("user.email")?);
     let os = |s: &'static str| -> &'static std::ffi::OsStr { s.as_ref() };
     let probe_text = |args: &[&std::ffi::OsStr]| {
         run_sandboxed(clone, main, "git", args, PROBE_OUTPUT_CAP)
@@ -2286,22 +2359,6 @@ pub(crate) fn commit_pending(
     if status.is_empty() {
         return Ok(None);
     }
-    let read_identity = |key: &str| -> Result<String> {
-        let mut cmd = git(main);
-        cmd.args(["config", "--get", key]);
-        run(cmd, &format!("read the host's {key}"))
-            .ok()
-            .map(|v| v.trim().to_string())
-            .filter(|v| !v.is_empty())
-            .with_context(|| {
-                format!(
-                    "refusing to commit the seat's pending work: the main checkout has no \
-                     `{key}`. Set it with `git config {key} …` in {}; nothing was committed",
-                    main.display()
-                )
-            })
-    };
-    let (name, email) = (read_identity("user.name")?, read_identity("user.email")?);
     let identity: [(&'static str, std::ffi::OsString); 4] = [
         ("GIT_AUTHOR_NAME", name.clone().into()),
         ("GIT_AUTHOR_EMAIL", email.clone().into()),
@@ -2317,54 +2374,92 @@ pub(crate) fn commit_pending(
             clone.display()
         )
     };
-    // Stage everything `.gitignore`/`info/exclude` allow. No explicit marker
-    // exclude here: git refuses an add whose pathspec names an ignored path
-    // ("paths are ignored"), and the marker normally IS ignored. Never `-f`.
-    // trace:TASK-2712 | ai:claude
-    run_commit_sandboxed(
-        clone,
-        main,
-        &[os("add"), os("-A"), os("--"), os(".")],
-        &identity,
-    )
-    .map_err(|failure| recovery("stage", failure))?;
-    // Should the seat's exclude no longer ignore the marker, unstage it.
-    let staged_marker = probe_text(&[
-        os("diff"),
-        os("--cached"),
-        os("--name-only"),
-        os("--"),
-        os(aida_core::seat_clone_detect::MARKER_RELATIVE),
-    ])?;
-    if !staged_marker.is_empty() {
+    // The index as it is now, so a failure after staging can put it back.
+    ensure_dir_identity(clone, pinned)?;
+    let index_tree = run_commit_sandboxed(clone, main, &[os("write-tree")], &identity)
+        .map(|out| String::from_utf8_lossy(&out).trim().to_string())
+        .map_err(|failure| recovery("snapshot the index before staging", failure))?;
+    anyhow::ensure!(
+        index_tree.len() >= 40 && index_tree.bytes().all(|b| b.is_ascii_hexdigit()),
+        "refusing to commit the seat's pending work: `git write-tree` in {} printed `{}`, not \
+         a tree id. Nothing was committed",
+        clone.display(),
+        index_tree.escape_debug()
+    );
+    let staged = (|| -> Result<String> {
+        // Stage everything `.gitignore`/`info/exclude` allow. No explicit
+        // marker exclude here: git refuses an add whose pathspec names an
+        // ignored path ("paths are ignored"), and the marker normally IS
+        // ignored. Never `-f`.
+        // trace:TASK-2712 | ai:claude
+        run_commit_sandboxed(
+            clone,
+            main,
+            &[os("add"), os("-A"), os("--"), os(".")],
+            &identity,
+        )
+        .map_err(|failure| recovery("stage", failure))?;
+        // Should the seat's exclude no longer ignore the marker, unstage it.
+        let staged_marker = probe_text(&[
+            os("diff"),
+            os("--cached"),
+            os("--name-only"),
+            os("--"),
+            os(aida_core::seat_clone_detect::MARKER_RELATIVE),
+        ])?;
+        if !staged_marker.is_empty() {
+            run_commit_sandboxed(
+                clone,
+                main,
+                &[
+                    os("reset"),
+                    os("-q"),
+                    os("--"),
+                    os(aida_core::seat_clone_detect::MARKER_RELATIVE),
+                ],
+                &identity,
+            )
+            .map_err(|failure| recovery("unstage the seat marker from", failure))?;
+        }
+        ensure_dir_identity(clone, pinned)?;
         run_commit_sandboxed(
             clone,
             main,
             &[
-                os("reset"),
+                os("commit"),
+                os("--no-verify"),
                 os("-q"),
-                os("--"),
-                os(aida_core::seat_clone_detect::MARKER_RELATIVE),
+                os("-m"),
+                message.as_ref(),
             ],
             &identity,
         )
-        .map_err(|failure| recovery("unstage the seat marker from", failure))?;
+        .map_err(|failure| recovery("commit", failure))?;
+        probe_text(&[os("rev-parse"), os("--verify"), os("HEAD")])
+    })();
+    match staged {
+        Ok(tip) => Ok(Some(tip)),
+        Err(error) => {
+            // Put the index back exactly; never touch the working tree.
+            let restored = ensure_dir_identity(clone, pinned).is_ok()
+                && run_commit_sandboxed(
+                    clone,
+                    main,
+                    &[os("read-tree"), index_tree.as_ref()],
+                    &identity,
+                )
+                .is_ok();
+            if restored {
+                Err(error)
+            } else {
+                Err(error.context(format!(
+                    "the index of {} could not be restored to tree {index_tree}; restore it \
+                     with `git read-tree {index_tree}` in the seat",
+                    clone.display()
+                )))
+            }
+        }
     }
-    run_commit_sandboxed(
-        clone,
-        main,
-        &[
-            os("commit"),
-            os("--no-verify"),
-            os("-q"),
-            os("-m"),
-            message.as_ref(),
-        ],
-        &identity,
-    )
-    .map_err(|failure| recovery("commit", failure))?;
-    let tip = probe_text(&[os("rev-parse"), os("--verify"), os("HEAD")])?;
-    Ok(Some(tip))
 }
 
 /// A bundle of `refs/heads/<branch>` alone, made by git inside the probe

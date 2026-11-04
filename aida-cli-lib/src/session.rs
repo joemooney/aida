@@ -2028,7 +2028,7 @@ fn spawn_vendor_headless_forking(
     // every headless phase behaves identically whoever launched it.
     // trace:TASK-1169 | ai:claude
     let (ceiling_key, ceiling_value) = crate::bg_wait_ceiling_env(Some(&headless_worktree_root()));
-    let (program, args) = compose_headless_command_forking(
+    let (program, mut args) = compose_headless_command_forking(
         vendor,
         prompt,
         session_id,
@@ -2037,6 +2037,9 @@ fn spawn_vendor_headless_forking(
         tuning.effort.as_deref(),
         fork_thread,
     )?;
+    // TASK-2712: the headless reviewer (and every other seat) gets the write
+    // set of its own seat role. trace:TASK-2712 | ai:claude
+    rescope_native_codex_for_seat(vendor, &mut args, &headless_worktree_root(), seat.as_str())?;
     // trace:BUG-b6b1278890774ef993d2ebc327862470-045 | ai:claude
     let child_grant = crate::gate::seat_authority::issue_launch_child(
         &headless_worktree_root(),
@@ -2667,18 +2670,19 @@ pub fn exec_codex_session(
     read_only: bool,
     model: Option<&str>,
     grant_id: Option<&str>,
+    role: Option<&str>,
 ) -> Result<()> {
     // trace:TASK-2631 | ai:codex
     let requested = drain_contained(&headless_worktree_root())?;
     let posture = containment_posture(HeadlessVendor::Codex, requested)?;
     let mut cmd = if posture == ContainmentPosture::Native {
         let mut cmd = std::process::Command::new("codex");
-        // TASK-2712: the write set of the lane's own tree. No role is known
-        // here, so no gate ledger (reviewer only).
+        // TASK-2712: the write set of the lane's own tree and role (the gate
+        // ledger only for a reviewer).
         // trace:TASK-2712 | ai:claude
         let mut args = crate::codex_native_sandbox::codex_native_sandbox_flags_in(
             &headless_worktree_root(),
-            None,
+            role,
         )?;
         args.extend(codex_session_args(initial_prompt, false, model));
         // trace:BUG-2394 | ai:claude — a plan lane narrows the native sandbox.
@@ -2738,6 +2742,15 @@ pub fn exec_codex_session(
     }
 }
 
+/// TASK-2712: the lane a native Codex launch writes for: its own tree and its
+/// role (`None` when unknown: no gate ledger).
+// trace:TASK-2712 | ai:claude
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct CodexLane<'a> {
+    pub(crate) tree: &'a Path,
+    pub(crate) role: Option<&'a str>,
+}
+
 /// BUG-2386: an interactive `codex resume <thread>` on the posture a fresh
 /// interactive Codex launch resolves ([`exec_codex_session`]): a contained
 /// request (the parent's `AIDA_CONTAINED` or the `[agents] contained` knob)
@@ -2747,6 +2760,8 @@ pub fn exec_codex_session(
 /// `queue work --sandbox`), OR-ed with the parent env and the knob so a
 /// flag-only request is never dropped. `read_only` keeps a plan lane's
 /// read-only sandbox (BUG-2394) on the resumed thread; it wins over bypass.
+/// `lane` is the RESUMED lane's own tree and role, whose write set a native
+/// resume gets (TASK-2712 F8), never this process's cwd.
 // trace:BUG-2386 | ai:claude
 pub(crate) fn build_codex_resume_command(
     thread_id: &str,
@@ -2754,6 +2769,7 @@ pub(crate) fn build_codex_resume_command(
     read_only: bool,
     grant_id: Option<&str>,
     contained: bool,
+    lane: CodexLane<'_>,
 ) -> Result<std::process::Command> {
     let requested = contained || drain_contained(&headless_worktree_root())?;
     require_vendor_containment(HeadlessVendor::Codex, requested, "resumed codex session")?;
@@ -2763,7 +2779,7 @@ pub(crate) fn build_codex_resume_command(
         std::process::Command::new(resolve_agent_program(HeadlessVendor::Codex.program()));
     cmd.args(codex_interactive_resume_args(
         thread_id,
-        native,
+        native.then_some(lane),
         bypass && !native,
         read_only,
     )?);
@@ -2792,8 +2808,10 @@ pub fn exec_codex_resume(
     read_only: bool,
     grant_id: Option<&str>,
     contained: bool,
+    lane: CodexLane<'_>,
 ) -> Result<()> {
-    let mut cmd = build_codex_resume_command(thread_id, bypass, read_only, grant_id, contained)?;
+    let mut cmd =
+        build_codex_resume_command(thread_id, bypass, read_only, grant_id, contained, lane)?;
     finalize_codex_resume(&mut cmd, &headless_worktree_root())?;
     #[cfg(unix)]
     {
@@ -2908,7 +2926,13 @@ pub(crate) fn interactive_reviewer_launch_plan(
                 program: resolve_agent_program(vendor.program()),
                 // trace:TASK-2631 | ai:codex
                 args: if contained {
-                    let mut args = crate::tool_contained_flags("codex")?;
+                    // TASK-2712 F2: a reviewer's write set (gate ledger
+                    // included) for the tree it launches in.
+                    // trace:TASK-2712 | ai:claude
+                    let mut args = crate::codex_native_sandbox::codex_native_sandbox_flags_in(
+                        &headless_worktree_root(),
+                        Some("reviewer"),
+                    )?;
                     args.extend(codex_session_args(prompt, false, None));
                     args
                 } else {
@@ -4025,10 +4049,13 @@ pub(crate) fn codex_resume_exec_args(
 /// Codex's bypass flag, as a fresh interactive launch does (BUG-743).
 /// `read_only` (a plan lane, BUG-2394) forces Codex's read-only sandbox over
 /// either posture, exactly as a fresh plan-only launch does.
-// trace:BUG-2386 | ai:claude
+/// `native` is the resumed lane (its own tree and role) when the resume is
+/// native-contained: its write set comes from that lane, never this
+/// process's cwd (TASK-2712 F8).
+// trace:BUG-2386 trace:TASK-2712 | ai:claude
 pub(crate) fn codex_interactive_resume_args(
     thread_id: &str,
-    native_contained: bool,
+    native: Option<CodexLane<'_>>,
     bypass: bool,
     read_only: bool,
 ) -> Result<Vec<String>> {
@@ -4036,8 +4063,8 @@ pub(crate) fn codex_interactive_resume_args(
         crate::codex_resume::valid_thread_id(thread_id),
         "refusing to resume `{thread_id}`: not a Codex thread id"
     );
-    let mut args = if native_contained {
-        crate::tool_contained_flags("codex")?
+    let mut args = if let Some(lane) = native {
+        crate::codex_native_sandbox::codex_native_sandbox_flags_in(lane.tree, lane.role)?
     } else if bypass {
         vec!["--dangerously-bypass-approvals-and-sandbox".to_string()]
     } else {
@@ -5835,8 +5862,31 @@ pub(crate) fn coordinator_headless_preview(
         tuning.effort.as_deref(),
         false,
     )?;
+    // trace:TASK-2712 | ai:claude
+    rescope_native_codex_for_seat(vendor, &mut args, &root, seat.as_str())?;
     adapt_coordinator_args(vendor, &mut args, Some(mode), contained, stream);
     Ok((program, args))
+}
+
+/// TASK-2712 (advisor ruling F2): a composed native Codex argv's write set
+/// re-derived for the lane's own `tree` and `seat` role, through the one
+/// role-aware helper, so a reviewer seat gets the gate ledger and every other
+/// seat does not. Other vendors and non-native argv are left alone.
+// trace:TASK-2712 | ai:claude
+pub(crate) fn rescope_native_codex_for_seat(
+    vendor: HeadlessVendor,
+    args: &mut Vec<String>,
+    tree: &Path,
+    seat: &str,
+) -> Result<()> {
+    if vendor != HeadlessVendor::Codex {
+        return Ok(());
+    }
+    crate::codex_native_sandbox::rescope_codex_native_flags(
+        args,
+        tree,
+        Some(&crate::canonical_role_name(seat)),
+    )
 }
 
 /// The permission mode a headless coordinator launches with. Claude resolves
@@ -5969,6 +6019,8 @@ fn build_coordinator_headless_command_inner(
     let contained = aida_contained_env()? || contained;
     let (program, mut args) =
         compose_headless_command_for(vendor, prompt, session_id, contained, model, effort, resume)?;
+    // trace:TASK-2712 | ai:claude
+    rescope_native_codex_for_seat(vendor, &mut args, &headless_worktree_root(), seat)?;
     adapt_coordinator_args(vendor, &mut args, mode, contained, stream);
     // TASK-1169 / ADR-22: same bounded ceiling as the spawn path — the exec
     // path is the `--no-human` phase-1 implementer, which must not diverge.
@@ -7317,14 +7369,20 @@ pub(crate) fn spawn_vendor_headless_resume_granted(
         cwd,
         &resolve_agent_program(vendor.program()),
         codex_resume_exec_args(
-            headless_vendor_args_contained_in(
-                vendor,
-                &effective_prompt,
-                target.session_id,
-                contained.then_some(cwd),
-                tuning.model.as_deref(),
-                tuning.effort.as_deref(),
-            )?,
+            {
+                let mut args = headless_vendor_args_contained_in(
+                    vendor,
+                    &effective_prompt,
+                    target.session_id,
+                    contained.then_some(cwd),
+                    tuning.model.as_deref(),
+                    tuning.effort.as_deref(),
+                )?;
+                // TASK-2712 F2/F8: the resumed lane's own tree and seat role.
+                // trace:TASK-2712 | ai:claude
+                rescope_native_codex_for_seat(vendor, &mut args, cwd, seat)?;
+                args
+            },
             target.resume_id,
         )?,
     )?;
@@ -8761,8 +8819,24 @@ pub(crate) fn codex_session_resume_command(
     target: &ResumeTarget,
     contained: bool,
 ) -> Result<std::process::Command> {
-    let mut cmd = build_codex_resume_command(&target.id, false, false, None, contained)?;
-    if let Some(cwd) = codex_resume_cwd(target) {
+    // TASK-2712 F8: the write set of the resumed session's own tree (the
+    // process cwd only when that tree is unknown). No role is recorded for
+    // a session resume, so no gate ledger.
+    // trace:TASK-2712 | ai:claude
+    let cwd = codex_resume_cwd(target);
+    let tree = cwd.clone().unwrap_or_else(headless_worktree_root);
+    let mut cmd = build_codex_resume_command(
+        &target.id,
+        false,
+        false,
+        None,
+        contained,
+        CodexLane {
+            tree: &tree,
+            role: None,
+        },
+    )?;
+    if let Some(cwd) = cwd {
         cmd.current_dir(cwd);
     }
     finalize_codex_resume(&mut cmd, &headless_worktree_root())?;
@@ -11853,33 +11927,40 @@ mod tests {
     // trace:BUG-2386 | ai:claude
     #[test]
     fn codex_interactive_resume_argv_per_posture() {
+        let tmp = tempfile::tempdir().unwrap();
+        let lane = || {
+            Some(CodexLane {
+                tree: tmp.path(),
+                role: None,
+            })
+        };
         assert_eq!(
-            codex_interactive_resume_args("t-1", false, false, false).unwrap(),
+            codex_interactive_resume_args("t-1", None, false, false).unwrap(),
             ["resume", "t-1"]
         );
         assert_eq!(
-            codex_interactive_resume_args("t-1", false, true, false).unwrap(),
+            codex_interactive_resume_args("t-1", None, true, false).unwrap(),
             [
                 "--dangerously-bypass-approvals-and-sandbox",
                 "resume",
                 "t-1"
             ]
         );
-        let native = codex_interactive_resume_args("t-1", true, true, false).unwrap();
+        let native = codex_interactive_resume_args("t-1", lane(), true, false).unwrap();
         assert!(
             !native.iter().any(|a| a.contains("dangerously")),
             "a contained resume never carries the bypass: {native:?}"
         );
         assert_eq!(&native[native.len() - 2..], ["resume", "t-1"]);
         assert!(native.iter().any(|a| a == "workspace-write"), "{native:?}");
-        assert!(codex_interactive_resume_args("-x", false, false, false).is_err());
+        assert!(codex_interactive_resume_args("-x", None, false, false).is_err());
         // BUG-2394: a plan-only resume keeps the read-only sandbox and never
         // the bypass, on either posture. trace:BUG-2394 | ai:claude
         assert_eq!(
-            codex_interactive_resume_args("t-1", false, true, true).unwrap(),
+            codex_interactive_resume_args("t-1", None, true, true).unwrap(),
             ["--sandbox", "read-only", "resume", "t-1"]
         );
-        let plan_native = codex_interactive_resume_args("t-1", true, false, true).unwrap();
+        let plan_native = codex_interactive_resume_args("t-1", lane(), false, true).unwrap();
         assert_eq!(&plan_native[..2], ["--sandbox", "read-only"]);
         assert_eq!(
             plan_native.iter().filter(|a| *a == "--sandbox").count(),

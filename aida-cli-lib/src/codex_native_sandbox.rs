@@ -20,20 +20,27 @@
 //!   write verdict or hold events and does not get it (advisor ruling
 //!   2026-11-03 18:32). A launch whose role is not known does not get it
 //!   either. A contained Claude lane never gets it, so there is no Claude
-//!   drift to remove;
-//! - `<clone>/.git`, ONLY when the tree is a seat clone the host recorded.
-//!   The main `.git`, the common git directory and a linked worktree's git
-//!   directory are never granted.
+//!   drift to remove. Every Codex spawn path (agent new, `--bg`, headless,
+//!   `exec_codex_session`, the interactive reviewer, and resume) gets its
+//!   flags from ONE role-aware helper, [`codex_native_sandbox_flags_in`],
+//!   with the lane's own tree and role.
 //!
-//! Each grant is one `--add-dir <path>` after the posture flags.
+//! Each grant is one `--add-dir <path>` directly after the posture flags. A
+//! user `--add-dir` is never passed through: the agents.toml / `--extra-flag`
+//! passthrough refuses it ([`refuse_user_add_dir`]), the `--bg` override
+//! check refuses one outside AIDA's own run ([`refuse_foreign_add_dir`]), and
+//! a rescope strips every `--add-dir` before it re-derives the set.
 //!
-//! Codex 0.166 re-protects `<clone>/.git` at run time despite that grant (the
-//! N3 host probe, 2026-11-03 18:45), so a native lane still cannot run `git
-//! add` or `git commit`. AIDA does not try to defeat that protection. Per the
-//! advisor's fallback ruling, the HOST commits a native seat's pending work:
-//! `aida ship --from-seat <clone> --commit-pending <MSG>` runs `git add` and
-//! `git commit` for the clone inside AIDA's own bwrap job, with the clone
-//! writable and hooks off ([`crate::seat_clone::commit_pending`]), then
+//! No `.git` is ever granted. Codex 0.166 re-protects `<clone>/.git` at run
+//! time even when it is named (the N3 host probe, 2026-11-03 18:45), so that
+//! grant was inert and is gone; the main `.git`, the common git directory
+//! and a linked worktree's git directory were never granted. AIDA does not
+//! try to defeat that protection. Per the advisor's rulings, the HOST commits
+//! a native seat's pending work, in AIDA's own bwrap job with the clone
+//! writable and hooks off ([`crate::seat_clone::commit_pending`]): the lane's
+//! own post-exit step does it when the child exits
+//! ([`crate::ship_from_seat::post_exit_commit`]), and an operator can do it
+//! with `aida ship --from-seat <clone> --commit-pending <MSG>`, which then
 //! publishes through the unchanged `ship --from-seat` path (N2). `aida ship`
 //! inside a native lane refuses up front with [`refuse_native_publication`]'s
 //! named error and that recovery.
@@ -80,9 +87,8 @@ pub(crate) fn codex_native_write_paths(
         let main = crate::main_worktree_root_from(first);
         paths.extend(crate::contained_boundary::contained_gate_ledger_write_paths(&main)?);
     }
-    if let Some(clone) = &set.clone {
-        paths.push(clone.root.join(".git"));
-    }
+    // No `.git` grant: Codex re-protects every `.git` at run time, so one
+    // would be inert (the host commits a seat's work instead).
     let mut out: Vec<PathBuf> = Vec::new();
     for path in paths {
         if set.deny_paths.iter().any(|deny| path.starts_with(deny)) {
@@ -115,8 +121,10 @@ pub(crate) fn codex_native_sandbox_flags_for_roots(
     Ok(flags)
 }
 
+/// THE role-aware helper every native Codex spawn path uses:
 /// [`codex_native_sandbox_flags_for_roots`] for the lane in `role` that runs
-/// in `tree`.
+/// in `tree`. Pass the lane's own tree (never the launcher's cwd when they
+/// differ) and its role (`None` when it is not known: no gate ledger).
 // trace:TASK-2712 | ai:claude
 pub(crate) fn codex_native_sandbox_flags_in(
     tree: &Path,
@@ -150,25 +158,99 @@ fn native_posture_at(args: &[String]) -> Option<usize> {
 }
 
 /// Re-derive the write set of a native Codex launch whose tree and role are
-/// now known to be `tree` and `role`: the posture and the `--add-dir` run
-/// directly after it (what [`codex_native_sandbox_flags_for_roots`] emitted)
-/// are replaced with the set for `tree` and `role`. Arguments without the
-/// native posture are left alone.
+/// now known to be `tree` and `role`: EVERY `--add-dir` in `args` (AIDA's
+/// own run and any other, wherever it sits) is removed, and the posture is
+/// replaced with the posture plus the set for `tree` and `role`. Arguments
+/// without the native posture are left alone.
 // trace:TASK-2712 | ai:claude
 pub(crate) fn rescope_codex_native_flags(
     args: &mut Vec<String>,
     tree: &Path,
     role: Option<&str>,
 ) -> Result<()> {
+    if native_posture_at(args).is_none() {
+        return Ok(());
+    }
+    *args = strip_add_dirs(std::mem::take(args));
     let Some(start) = native_posture_at(args) else {
         return Ok(());
     };
-    let mut end = start + CODEX_NATIVE_POSTURE.len();
-    while end + 1 < args.len() && args[end] == "--add-dir" {
-        end += 2;
-    }
     let fresh = codex_native_sandbox_flags_in(tree, role)?;
-    args.splice(start..end, fresh);
+    args.splice(start..start + CODEX_NATIVE_POSTURE.len(), fresh);
+    Ok(())
+}
+
+/// `args` without any `--add-dir <path>` or `--add-dir=<path>`.
+// trace:TASK-2712 | ai:claude
+pub(crate) fn strip_add_dirs(args: Vec<String>) -> Vec<String> {
+    let mut out = Vec::with_capacity(args.len());
+    let mut iter = args.into_iter();
+    while let Some(arg) = iter.next() {
+        if arg == "--add-dir" {
+            iter.next();
+            continue;
+        }
+        if arg.starts_with("--add-dir=") {
+            continue;
+        }
+        out.push(arg);
+    }
+    out
+}
+
+/// Whether `arg` is a Codex `--add-dir` flag, in either spelling.
+// trace:TASK-2712 | ai:claude
+pub(crate) fn is_add_dir(arg: &str) -> bool {
+    arg == "--add-dir" || arg.starts_with("--add-dir=")
+}
+
+/// A user-supplied flag list (agents.toml `default_flags`, `--extra-flag`)
+/// must not name a write root: the native write set is AIDA's alone.
+// trace:TASK-2712 | ai:claude
+pub(crate) fn refuse_user_add_dir(flags: &[String], source: &str) -> Result<()> {
+    if let Some(flag) = flags.iter().find(|f| is_add_dir(f)) {
+        anyhow::bail!(
+            "native sandbox, not AIDA-contained: {source} passes `{flag}`, a write root \
+             outside AIDA's own write set. Remove it; AIDA grants the lane's write set itself"
+        );
+    }
+    Ok(())
+}
+
+/// Every `--add-dir` in `args` must sit in the one `--add-dir <path>` run
+/// directly after the native posture (the run AIDA's helper emits); any
+/// other one, or a `--add-dir=<path>` spelling, is foreign and refused.
+// trace:TASK-2712 | ai:claude
+pub(crate) fn refuse_foreign_add_dir(args: &[String]) -> Result<()> {
+    let mut own = std::collections::HashSet::new();
+    if let Some(start) = native_posture_at(args) {
+        let mut at = start + CODEX_NATIVE_POSTURE.len();
+        while at + 1 < args.len() && args[at] == "--add-dir" {
+            // AIDA's own grants are absolute directories, never `/` itself.
+            let path = Path::new(&args[at + 1]);
+            if !path.is_absolute() || path.parent().is_none() {
+                break;
+            }
+            own.insert(at);
+            at += 2;
+        }
+    }
+    let mut i = 0;
+    while i < args.len() {
+        if is_add_dir(&args[i]) && !own.contains(&i) {
+            let path = if args[i] == "--add-dir" {
+                args.get(i + 1).map(String::as_str).unwrap_or("")
+            } else {
+                ""
+            };
+            anyhow::bail!(
+                "refusing `{} {path}`: a write root outside AIDA's own native write set. A \
+                 native Codex lane writes only its workspace plus the set AIDA grants",
+                args[i]
+            );
+        }
+        i += if own.contains(&i) { 2 } else { 1 };
+    }
     Ok(())
 }
 
@@ -190,9 +272,9 @@ pub(crate) fn refuse_native_publication(posture: Option<&str>, tree: &Path) -> R
         anyhow::bail!(
             "native Codex sandbox: cannot commit or publish from {clone}. Codex keeps this \
              seat's git directory read-only. Your edits are untouched: leave them uncommitted \
-             and hand off, so the host commits them (hooks off) and publishes. From the main \
-             checkout: `aida ship <SPEC> --from-seat {clone} --commit-pending \
-             '<type(scope): summary> (<SPEC>)'`",
+             and end your turn; the lane's host-side exit step commits them (hooks off). An \
+             operator can also commit and publish them from the main checkout: `aida ship \
+             <SPEC> --from-seat {clone} --commit-pending '<type(scope): summary> (<SPEC>)'`",
             clone = clone.display()
         );
     }

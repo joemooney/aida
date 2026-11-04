@@ -653,6 +653,395 @@ fn task_2712_native_codex_seat_commit_ships_from_seat_without_seat_hooks() {
     );
 }
 
+/// A leased seat clone on `branch` with one uncommitted file (the shape a
+/// native Codex lane leaves behind).
+// trace:TASK-2712 | ai:claude
+fn seat_with_pending(fx: &Fixture, name: &str, id: &str, branch: &str) -> PathBuf {
+    let clone = super::s4_host_git_tests::leased_clone_on(fx, name, id, branch);
+    std::fs::write(clone.join(format!("{name}.txt")), "pending\n").unwrap();
+    clone
+}
+
+/// A commit step that must never run.
+// trace:TASK-2712 | ai:claude
+fn commit_never(_: &Path, _: &Path, _: &str, _: &str) -> anyhow::Result<Option<String>> {
+    panic!("the commit step ran although a refusal was due")
+}
+
+/// A commit step without bwrap: test git commits the clone's pending work
+/// (hooks off) with the host's message, as the sandboxed commit would.
+// trace:TASK-2712 | ai:claude
+fn test_commit(
+    _: &Path,
+    clone: &Path,
+    branch: &str,
+    message: &str,
+) -> anyhow::Result<Option<String>> {
+    assert_eq!(
+        git_ok(clone, &["symbolic-ref", "--short", "HEAD"]),
+        branch,
+        "committed on the lease's branch"
+    );
+    if git_ok(clone, &["status", "--porcelain"]).is_empty() {
+        return Ok(None);
+    }
+    git_ok(clone, &["add", "-A"]);
+    git_ok(
+        clone,
+        &[
+            "-c",
+            "core.hooksPath=/dev/null",
+            "-c",
+            "user.name=Host",
+            "-c",
+            "user.email=host@example.com",
+            "commit",
+            "-qm",
+            message,
+        ],
+    );
+    Ok(Some(git_ok(clone, &["rev-parse", "HEAD"])))
+}
+
+/// Advisor F3: `--commit-pending` validates the message's trailer and the
+/// explicit spec BEFORE it commits, in a real run and in a dry run alike, so
+/// a refused message leaves nothing committed and the seat is not stuck.
+// trace:TASK-2712 | ai:claude
+#[test]
+fn task_2712_commit_pending_refuses_a_bad_message_before_committing() {
+    let fx = fixture();
+    let clone = seat_with_pending(&fx, "badmsg", "c0ffee271210", "bad-msg");
+    let base = git_ok(&clone, &["rev-parse", "HEAD"]);
+    let deps = crate::ship_from_seat::Deps {
+        bundle: &|_, _, _| panic!("bundled after a refused message"),
+        commit: &commit_never,
+        forge: &|_| panic!("forge reached after a refused message"),
+        after_open: &|_, _| {},
+    };
+    for dry_run in [false, true] {
+        // No trailer at all.
+        let mut run = opts(&clone, dry_run, false);
+        run.commit_pending = Some("fix: no trailer".into());
+        let err = format!(
+            "{:#}",
+            crate::ship_from_seat::run_from(&fx.main, run, &deps).unwrap_err()
+        );
+        assert!(err.contains("trailer"), "{err}");
+        assert!(err.contains("Nothing was committed"), "{err}");
+        // A trailer naming another spec than the explicit one.
+        let mut run = opts(&clone, dry_run, false);
+        run.commit_pending = Some("fix: other (BUG-2)".into());
+        let err = format!(
+            "{:#}",
+            crate::ship_from_seat::run_from(&fx.main, run, &deps).unwrap_err()
+        );
+        assert!(err.contains("BUG-1"), "{err}");
+        assert!(err.contains("Nothing was committed"), "{err}");
+    }
+    assert_eq!(git_ok(&clone, &["rev-parse", "HEAD"]), base);
+    assert!(!git_ok(&clone, &["status", "--porcelain"]).is_empty());
+    // A good message passes the checks; the dry run still commits nothing.
+    let mut run = opts(&clone, true, false);
+    run.commit_pending = Some("fix: pending (BUG-1)".into());
+    let dry_deps = crate::ship_from_seat::Deps {
+        bundle: &test_bundle,
+        commit: &commit_never,
+        forge: &|_| panic!("forge reached in a dry run"),
+        after_open: &|_, _| {},
+    };
+    // The bundle of a branch with no new commit is refused after the
+    // checks; the point is that the commit step never ran.
+    let _ = crate::ship_from_seat::run_from(&fx.main, run, &dry_deps);
+    assert_eq!(git_ok(&clone, &["rev-parse", "HEAD"]), base);
+}
+
+/// Advisor F6: every refusal of the host commit channel fires before git
+/// touches the clone: a path with no `clone` lease, another checkout's
+/// directory, a symbolic link to a recorded clone, an ended lease, and a
+/// lease whose worker is another live process. The commit step never runs.
+// trace:TASK-2712 | ai:claude
+#[cfg(unix)]
+#[test]
+fn task_2712_commit_pending_refusals_commit_nothing() {
+    let fx = fixture();
+    let message = "fix: pending (BUG-1)";
+    let refused = |clone: &Path, want: &str| {
+        let err = format!(
+            "{:#}",
+            crate::ship_from_seat::commit_seat_pending(
+                &fx.main,
+                clone,
+                Some("BUG-1"),
+                message,
+                &commit_never
+            )
+            .unwrap_err()
+        );
+        assert!(err.contains(want), "{}: {err}", clone.display());
+    };
+
+    // Not host-recorded: an `aida-seat-*` clone without a lease, and a
+    // foreign directory.
+    let forged = fx.root.join(format!("{CLONE_DIR_PREFIX}aida-forged2712"));
+    create(&fx.main, &forged, "forged", "origin/main").unwrap();
+    std::fs::write(forged.join("x.txt"), "x\n").unwrap();
+    refused(&forged, "not a seat clone this checkout recorded");
+    refused(&fx.origin, "not a seat clone this checkout recorded");
+
+    // A symbolic link to a recorded clone.
+    let clone = seat_with_pending(&fx, "linked", "c0ffee271211", "linked");
+    let link = fx.root.join("seat-link");
+    std::os::unix::fs::symlink(&clone, &link).unwrap();
+    refused(&link, "symbolic link");
+
+    // A lease held by another live process (a competing owner).
+    let lease = crate::lease_path(&fx.main, "c0ffee271211");
+    let text = std::fs::read_to_string(&lease).unwrap();
+    let mut owner = std::process::Command::new("sleep")
+        .arg("30")
+        .spawn()
+        .unwrap();
+    let start = aida_core::liveness::process_start_identity(owner.id()).unwrap();
+    std::fs::write(
+        &lease,
+        format!(
+            "{text}active_pid = {}\nactive_pid_start_time = {}\n",
+            owner.id(),
+            aida_core::toml_quote::toml_string(&start)
+        ),
+    )
+    .unwrap();
+    refused(&clone, "held by live process");
+    let _ = owner.kill();
+    let _ = owner.wait();
+    // Once that owner is gone, the same lease no longer refuses.
+    assert!(crate::ship_from_seat::pending_commit_preflight(
+        &fx.main,
+        &clone,
+        Some("BUG-1"),
+        message
+    )
+    .is_ok());
+
+    // An ended lease no longer vouches for the clone.
+    std::fs::remove_file(&lease).unwrap();
+    refused(&clone, "not a seat clone this checkout recorded");
+    assert!(!git_ok(&clone, &["status", "--porcelain"]).is_empty());
+}
+
+/// Advisor F6: a clone path replaced (or swapped for a symbolic link) after
+/// it was checked is refused by the identity pin the commit re-checks.
+// trace:TASK-2712 | ai:claude
+#[cfg(unix)]
+#[test]
+fn task_2712_replaced_clone_path_is_refused() {
+    let tmp = tempfile::tempdir().unwrap();
+    let dir = tmp.path().join("aida-seat-x");
+    std::fs::create_dir(&dir).unwrap();
+    let pinned = crate::seat_clone::dir_identity(&dir).unwrap();
+    crate::seat_clone::ensure_dir_identity(&dir, pinned).unwrap();
+    std::fs::rename(&dir, tmp.path().join("moved")).unwrap();
+    std::fs::create_dir(&dir).unwrap();
+    let err = crate::seat_clone::ensure_dir_identity(&dir, pinned)
+        .unwrap_err()
+        .to_string();
+    assert!(err.contains("replaced"), "{err}");
+    std::fs::remove_dir(&dir).unwrap();
+    std::os::unix::fs::symlink(tmp.path().join("moved"), &dir).unwrap();
+    let err = crate::seat_clone::ensure_dir_identity(&dir, pinned)
+        .unwrap_err()
+        .to_string();
+    assert!(err.contains("not a directory"), "{err}");
+}
+
+/// Advisor F6: the commit sandbox fails LOUDLY when it cannot find exactly
+/// one read-only bind of the clone to make writable, instead of running
+/// with the clone silently read-only.
+// trace:TASK-2712 | ai:claude
+#[test]
+fn task_2712_commit_sandbox_bind_miss_fails_loudly() {
+    let clone = Path::new("/seats/aida-seat-x");
+    let os = |v: &[&str]| -> Vec<std::ffi::OsString> {
+        v.iter().map(|s| std::ffi::OsString::from(*s)).collect()
+    };
+    let ok = crate::seat_clone::writable_clone_bind(
+        os(&[
+            "--ro-bind",
+            "/",
+            "/",
+            "--ro-bind",
+            "/seats/aida-seat-x",
+            "/seats/aida-seat-x",
+        ]),
+        clone,
+    )
+    .unwrap();
+    assert_eq!(ok[3], "--bind");
+    assert_eq!(ok[0], "--ro-bind");
+    for args in [
+        os(&["--ro-bind", "/", "/"]),
+        os(&[
+            "--ro-bind",
+            "/seats/aida-seat-x",
+            "/seats/aida-seat-x",
+            "--ro-bind",
+            "/seats/aida-seat-x",
+            "/seats/aida-seat-x",
+        ]),
+    ] {
+        let err = crate::seat_clone::writable_clone_bind(args, clone)
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("cannot make the clone writable"), "{err}");
+    }
+    // The production commit sandbox does find its bind.
+    let tmp = tempfile::tempdir().unwrap();
+    let real = tmp.path().join("aida-seat-y");
+    let main = tmp.path().join("main");
+    std::fs::create_dir_all(real.join(".git")).unwrap();
+    std::fs::create_dir_all(main.join(".git")).unwrap();
+    let args =
+        crate::seat_clone::commit_sandbox_args(&real, &main, &[], &tmp.path().join("cfg"), &[])
+            .unwrap();
+    let real_os = real.as_os_str();
+    assert!(args
+        .windows(3)
+        .any(|w| w[0] == "--bind" && w[1] == *real_os && w[2] == *real_os));
+}
+
+/// Advisor F6: a main checkout without the host's `user.name`/`user.email`
+/// is refused before any sandbox runs; nothing is committed.
+// trace:TASK-2712 | ai:claude
+#[test]
+fn task_2712_commit_pending_without_host_identity_commits_nothing() {
+    let fx = fixture();
+    let clone = seat_with_pending(&fx, "noident", "c0ffee271212", "no-ident");
+    let base = git_ok(&clone, &["rev-parse", "HEAD"]);
+    let _global = crate::test_env::EnvVarsGuard::set(&[
+        ("GIT_CONFIG_GLOBAL", "/dev/null"),
+        ("GIT_CONFIG_NOSYSTEM", "1"),
+    ]);
+    for key in ["user.name", "user.email"] {
+        let _ = crate::test_git::git_command()
+            .arg("-C")
+            .arg(&fx.main)
+            .args(["config", "--unset-all", key])
+            .output();
+    }
+    let err = crate::seat_clone::commit_pending(&fx.main, &clone, "no-ident", "fix: x (BUG-1)")
+        .unwrap_err()
+        .to_string();
+    assert!(err.contains("user.name"), "{err}");
+    assert!(err.contains("nothing was committed"), "{err}");
+    assert_eq!(git_ok(&clone, &["rev-parse", "HEAD"]), base);
+}
+
+/// Advisor F6, where bwrap runs: `git add` succeeds, then the commit fails
+/// (the branch's ref cannot be written); the index is restored to its prior
+/// tree, so nothing is left staged, and the working tree keeps the work.
+// trace:TASK-2712 | ai:claude
+#[cfg(target_os = "linux")]
+#[test]
+fn task_2712_failed_commit_after_add_restores_the_index() {
+    use std::os::unix::fs::PermissionsExt as _;
+    if !bwrap_live_or_skip() {
+        return;
+    }
+    let fx = fixture();
+    let clone = seat_with_pending(&fx, "restore", "c0ffee271213", "restore");
+    git_ok(&fx.main, &["config", "user.name", "Host Operator"]);
+    git_ok(&fx.main, &["config", "user.email", "host@example.com"]);
+    let base = git_ok(&clone, &["rev-parse", "HEAD"]);
+    let heads = clone.join(".git/refs/heads");
+    std::fs::set_permissions(&heads, std::fs::Permissions::from_mode(0o555)).unwrap();
+    let logs = clone.join(".git/logs/refs/heads");
+    if logs.is_dir() {
+        std::fs::set_permissions(&logs, std::fs::Permissions::from_mode(0o555)).unwrap();
+    }
+    let result =
+        crate::seat_clone::commit_pending(&fx.main, &clone, "restore", "fix: restore (BUG-1)");
+    std::fs::set_permissions(&heads, std::fs::Permissions::from_mode(0o755)).unwrap();
+    if logs.is_dir() {
+        std::fs::set_permissions(&logs, std::fs::Permissions::from_mode(0o755)).unwrap();
+    }
+    let err = format!("{:#}", result.unwrap_err());
+    assert!(err.contains("could not commit"), "{err}");
+    assert_eq!(git_ok(&clone, &["rev-parse", "HEAD"]), base);
+    assert_eq!(
+        git_ok(&clone, &["diff", "--cached", "--name-only"]),
+        "",
+        "the index was left staged"
+    );
+    assert!(clone.join("restore.txt").exists(), "the work is kept");
+}
+
+/// Advisor F1: the lane's own post-exit step commits what a native child
+/// left pending in its seat clone, with the spec's trailer, through the
+/// commit step; a tree that is not a recorded seat clone is left alone, and
+/// a clean seat commits nothing.
+// trace:TASK-2712 | ai:claude
+#[test]
+fn task_2712_lane_post_exit_commits_pending_seat_work() {
+    use crate::ship_from_seat::{post_exit_commit, post_exit_message, PostExitCommit};
+    let fx = fixture();
+    let clone = seat_with_pending(&fx, "postexit", "c0ffee271214", "post-exit");
+    let base = git_ok(&clone, &["rev-parse", "HEAD"]);
+    let outcome = post_exit_commit(&fx.main, &clone, "BUG-1", "lane-7", &test_commit);
+    let tip = git_ok(&clone, &["rev-parse", "HEAD"]);
+    assert_ne!(tip, base, "the host made no commit");
+    assert_eq!(outcome, PostExitCommit::Committed(tip));
+    let subject = git_ok(&clone, &["log", "-1", "--format=%s"]);
+    assert_eq!(subject, post_exit_message("BUG-1", "lane-7"));
+    assert!(subject.ends_with("(BUG-1)"), "{subject}");
+    assert_eq!(git_ok(&clone, &["status", "--porcelain"]), "");
+    // Nothing pending now.
+    assert_eq!(
+        post_exit_commit(&fx.main, &clone, "BUG-1", "lane-7", &test_commit),
+        PostExitCommit::Clean
+    );
+    // Not a seat clone: untouched, the commit step never runs.
+    assert_eq!(
+        post_exit_commit(&fx.main, &fx.main, "BUG-1", "lane-7", &commit_never),
+        PostExitCommit::NotASeat
+    );
+}
+
+/// Advisor F1 end to end where bwrap runs: the post-exit step with the
+/// production commit (AIDA's own sandbox, hooks off, the host's identity).
+// trace:TASK-2712 | ai:claude
+#[cfg(target_os = "linux")]
+#[test]
+fn task_2712_lane_post_exit_commit_runs_the_sandboxed_host_commit() {
+    if !bwrap_live_or_skip() {
+        return;
+    }
+    let fx = fixture();
+    let clone = seat_with_pending(&fx, "postlive", "c0ffee271215", "post-live");
+    git_ok(&fx.main, &["config", "user.name", "Host Operator"]);
+    git_ok(&fx.main, &["config", "user.email", "host@example.com"]);
+    let sentinel = fx.root.join("hook-ran");
+    plant_hooks(&clone, &sentinel, &fx.root);
+    let base = git_ok(&clone, &["rev-parse", "HEAD"]);
+    let outcome = crate::ship_from_seat::post_exit_commit(
+        &fx.main,
+        &clone,
+        "BUG-1",
+        "lane-8",
+        &crate::seat_clone::commit_pending,
+    );
+    let tip = git_ok(&clone, &["rev-parse", "HEAD"]);
+    assert_ne!(tip, base, "{outcome:?}");
+    assert_eq!(
+        outcome,
+        crate::ship_from_seat::PostExitCommit::Committed(tip)
+    );
+    assert_eq!(
+        git_ok(&clone, &["log", "-1", "--format=%an <%ae>"]),
+        "Host Operator <host@example.com>"
+    );
+    assert!(!sentinel.exists(), "a seat hook ran");
+}
+
 /// Review finding 2: a failed open-PR lookup after the push is reported as
 /// an error, and no (possibly duplicate) PR is opened.
 #[test]

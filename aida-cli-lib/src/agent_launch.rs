@@ -6845,10 +6845,42 @@ fn run_tracked_agent_after_spawn(
         )?
         .status
     };
+    // TASK-2712 (advisor ruling F1): the launcher's own post-exit step
+    // commits what a native Codex implementer left pending in its seat
+    // clone, whatever the child's exit status (its work is kept either way).
+    // trace:TASK-2712 | ai:claude
+    if let Some(spec) = native_post_exit_spec(config, plan) {
+        crate::ship_from_seat::post_exit_commit_reported(
+            &plan.project_root,
+            &plan.launch_cwd,
+            spec,
+            &plan.name,
+        );
+    }
     if !status.success() {
         std::process::exit(status.code().unwrap_or(1));
     }
     Ok(())
+}
+
+/// TASK-2712: the spec whose seat a foreground launch's post-exit step
+/// commits for: a native Codex implementer with a spec. `None` otherwise.
+// trace:TASK-2712 | ai:claude
+pub(crate) fn native_post_exit_spec<'a>(
+    config: &AgentLaunchConfig,
+    plan: &'a AgentLaunchPlan,
+) -> Option<&'a str> {
+    let native = config.agent_type == "codex"
+        && crate::codex_native_sandbox::carries_native_posture(&config.default_args);
+    let implementer = plan
+        .role
+        .as_deref()
+        .is_some_and(|role| aida_core::team::canonical_role(role) == "implementer");
+    if native && implementer {
+        plan.current_spec.as_deref()
+    } else {
+        None
+    }
 }
 
 /// The rotation generation a supervised child runs as, and the fresh

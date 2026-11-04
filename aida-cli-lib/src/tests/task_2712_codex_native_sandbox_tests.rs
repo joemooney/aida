@@ -63,6 +63,118 @@ fn rescope_replaces_only_the_emitted_add_dir_run() {
     assert_eq!(other, before);
 }
 
+/// Advisor F7: a rescope strips EVERY `--add-dir`, not only the run after
+/// the posture: a user `--add-dir` elsewhere (either spelling) is gone.
+// trace:TASK-2712 | ai:claude
+#[test]
+fn rescope_strips_every_user_add_dir() {
+    let tmp = tempfile::tempdir().unwrap();
+    let mut args = s(&[
+        "--add-dir",
+        "/early",
+        "--sandbox",
+        "workspace-write",
+        "--ask-for-approval",
+        "never",
+        "--add-dir",
+        "/old/main/.aida-store",
+        "--model",
+        "m",
+        "--add-dir",
+        "/",
+        "--add-dir=/etc",
+    ]);
+    rescope_codex_native_flags(&mut args, tmp.path(), Some("reviewer")).unwrap();
+    assert_eq!(
+        args,
+        s(&[
+            "--sandbox",
+            "workspace-write",
+            "--ask-for-approval",
+            "never",
+            "--model",
+            "m",
+        ])
+    );
+}
+
+/// Advisor F7: the `--bg` override check refuses a foreign `--add-dir`
+/// (outside AIDA's own run, `=`-spelled, `/` itself, or with no native
+/// posture at all) and accepts AIDA's own run.
+// trace:TASK-2712 | ai:claude
+#[test]
+fn foreign_add_dir_is_refused_and_the_own_run_is_accepted() {
+    let posture = s(&CODEX_NATIVE_POSTURE);
+    let mut own = posture.clone();
+    own.extend(s(&[
+        "--add-dir",
+        "/m/.aida-store",
+        "--add-dir",
+        "/m/.aida/cache-db",
+    ]));
+    refuse_foreign_add_dir(&own).unwrap();
+    crate::agent_launch::agent_codex_background::refuse_posture_overrides(&own).unwrap();
+
+    let mut cases: Vec<Vec<String>> = Vec::new();
+    let mut later = own.clone();
+    later.extend(s(&["--model", "m", "--add-dir", "/"]));
+    cases.push(later);
+    let mut adjacent_root = own.clone();
+    adjacent_root.extend(s(&["--add-dir", "/"]));
+    cases.push(adjacent_root);
+    let mut relative = posture.clone();
+    relative.extend(s(&["--add-dir", "etc"]));
+    cases.push(relative);
+    let mut equals = own.clone();
+    equals.push("--add-dir=/etc".into());
+    cases.push(equals);
+    cases.push(s(&["--add-dir", "/m/.aida-store", "exec", "p"]));
+    for args in cases {
+        let err = refuse_foreign_add_dir(&args).unwrap_err().to_string();
+        assert!(err.contains("outside AIDA's own"), "{args:?}: {err}");
+        let err = crate::agent_launch::agent_codex_background::refuse_posture_overrides(&args)
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("--bg"), "{args:?}: {err}");
+    }
+}
+
+/// Advisor F7: the agents.toml / `--extra-flag` passthrough never forwards
+/// a write root.
+// trace:TASK-2712 | ai:claude
+#[test]
+fn user_passthrough_add_dir_is_refused() {
+    refuse_user_add_dir(&s(&["--model", "m"]), "--extra-flag").unwrap();
+    for flags in [
+        s(&["--add-dir", "/"]),
+        s(&["--model", "m", "--add-dir=/home"]),
+    ] {
+        let err = refuse_user_add_dir(&flags, "[agents.codex] default_flags")
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("default_flags"), "{err}");
+        assert!(err.contains("outside AIDA's own write set"), "{err}");
+    }
+}
+
+/// Advisor F8: a native resume takes the write set of the RESUMED lane's
+/// tree, not this process's cwd: a lane outside git gets the bare posture
+/// even though this test process runs inside a git checkout.
+// trace:TASK-2712 | ai:claude
+#[test]
+fn a_native_resume_uses_the_resumed_lanes_tree() {
+    let tmp = tempfile::tempdir().unwrap();
+    let lane = crate::session::CodexLane {
+        tree: tmp.path(),
+        role: Some("reviewer"),
+    };
+    let args =
+        crate::session::codex_interactive_resume_args("t-1", Some(lane), false, false).unwrap();
+    let mut want = s(&CODEX_NATIVE_POSTURE);
+    want.extend(s(&["resume", "t-1"]));
+    assert_eq!(args, want);
+}
+
 /// A plan lane (BUG-2394 read-only) drops the write set with the posture.
 #[test]
 fn a_read_only_plan_lane_drops_every_add_dir() {
@@ -208,4 +320,77 @@ fn every_codex_spawn_path_gets_the_shared_write_set() {
         2,
         "both agent-new paths must rescope with the plan's role"
     );
+
+    // Advisor F2: every reviewer-capable Codex path passes the lane's role
+    // to the one helper: headless spawns and coordinators by seat,
+    // `exec_codex_session` and the queue-work resume by the lane's role, the
+    // interactive reviewer plan and the reviewer resume as `reviewer`.
+    let session: String = production_source("session.rs").split_whitespace().collect();
+    assert!(
+        session.contains(
+            "rescope_native_codex_for_seat(vendor,&mutargs,&headless_worktree_root(),seat.as_str())?"
+        ),
+        "the headless spawn must rescope by its seat"
+    );
+    assert!(
+        session.contains("rescope_native_codex_for_seat(vendor,&mutargs,cwd,seat)?"),
+        "the headless resume must rescope by its seat, in the resumed tree"
+    );
+    assert!(
+        session.contains(
+            "crate::codex_native_sandbox::codex_native_sandbox_flags_in(&headless_worktree_root(),Some(\"reviewer\"),)?"
+        ),
+        "the interactive reviewer plan must ask for the reviewer write set"
+    );
+    assert!(
+        session.contains(
+            "crate::codex_native_sandbox::codex_native_sandbox_flags_in(&headless_worktree_root(),role,)?"
+        ),
+        "exec_codex_session must pass its role"
+    );
+    assert_eq!(
+        session
+            .matches("crate::tool_contained_flags(\"codex\")")
+            .count(),
+        2,
+        "only headless_vendor_args (rescoped by seat) and the interactive session config \
+         (rescoped by agent new) may take the cwd-resolved, role-less set"
+    );
+    let queue: String = production_source("queue_cmd.rs")
+        .split_whitespace()
+        .collect();
+    assert!(queue.contains("child_grant_id.as_deref(),Some(&crate::canonical_role_name(&role)),);"));
+    assert!(queue.contains("role:Some(\"reviewer\"),},)?;"));
+}
+
+/// Advisor F2: a composed native Codex argv rescoped by seat. Outside git
+/// (no write roots) the posture survives and nothing else is granted; a
+/// non-Codex argv is untouched. The ledger itself is asserted against a real
+/// seat clone beside the BUG-2169 fixture.
+// trace:TASK-2712 | ai:claude
+#[test]
+fn rescope_by_seat_touches_only_native_codex() {
+    let tmp = tempfile::tempdir().unwrap();
+    let mut codex = s(&CODEX_NATIVE_POSTURE);
+    codex.extend(s(&["--add-dir", "/x", "exec", "p"]));
+    crate::session::rescope_native_codex_for_seat(
+        crate::session::HeadlessVendor::Codex,
+        &mut codex,
+        tmp.path(),
+        "reviewer",
+    )
+    .unwrap();
+    let mut want = s(&CODEX_NATIVE_POSTURE);
+    want.extend(s(&["exec", "p"]));
+    assert_eq!(codex, want);
+    let mut claude = s(&["--add-dir", "/x", "-p"]);
+    let before = claude.clone();
+    crate::session::rescope_native_codex_for_seat(
+        crate::session::HeadlessVendor::Claude,
+        &mut claude,
+        tmp.path(),
+        "reviewer",
+    )
+    .unwrap();
+    assert_eq!(claude, before);
 }
