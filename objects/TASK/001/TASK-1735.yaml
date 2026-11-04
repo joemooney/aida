@@ -3,12 +3,12 @@ spec_id: TASK-1735
 agreed_id: TASK-1735
 title: Decide where GitLab CI runs before the canonical-hub flip
 description: 'Prerequisite for EPIC-44, from the operator decision on 2026-10-12. GitLab CE and gitlab-runner (docker executor, concurrent=2) both run on the 6-core dev box. If GitLab becomes canonical, every MR pipeline is a full Rust workspace build competing with agent builds and aida dev build, which is the load behind today''s parallel-load flakes. Choose one: (a) a runner on another machine; (b) limit the local runner to concurrent=1 with CPU limits and accept slower pipelines; (c) keep GitHub Actions as CI on the mirror. Also port the PR-only gates (trace, coverage, doc-intent) to CI_MERGE_REQUEST_* and authenticate glab to gitlab.joemooney.com. Done when: a recorded decision, plus a GitLab MR pipeline running the full gate set without degrading local build times.'
-status: Draft
+status: Rejected
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-13T02:44:47.629375520Z
-modified_at: 2026-11-04T02:32:13.287629426Z
+modified_at: 2026-11-04T02:32:14.739071899Z
 req_type: Task
 tags:
 - canonical-hub
@@ -36,6 +36,14 @@ history:
   timestamp: 2026-11-04T02:32:12.057815428Z
   session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
   changes: []
+- id: 01a1a466-5e93-73b2-bfb5-c4308180b7cc
+  author: joe
+  timestamp: 2026-11-04T02:32:14.739069803Z
+  session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Rejected
 filed_at:
   code_sha: 6dfba7ac1c808da98f75e148d486a21f2a0bea3a
   branch: main
