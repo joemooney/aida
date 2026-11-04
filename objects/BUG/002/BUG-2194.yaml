@@ -12,12 +12,12 @@ description: |
   - A failed rollback must remain observable and prevent the affected CAS retry from treating the store as clean or claiming the failed operation succeeded.
   - Add direct caller tests with a peer commit plus dirty tracked file or deterministic replay refusal, proving peer HEAD and dirty state survive and the caller stops after the first failure.
   - Keep exact-SHA push outside the store lock; do not alter claim authority, force-push, reset peer work or add production test environment seams.
-status: Approved
+status: InProgress
 priority: Medium
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-20T18:10:31.087634134Z
-modified_at: 2026-11-04T01:41:05.462170685Z
+modified_at: 2026-11-04T01:58:10.155538578Z
 req_type: Bug
 tags:
 - from-implementer:TASK-1981
@@ -47,6 +47,13 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a1a447-2beb-71f0-9be6-47cc71820fe1
+  author: aida-session-start
+  timestamp: 2026-11-04T01:58:10.155535143Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 03fe56b082721daf63d4283f0d48545ce82ec961
   branch: main
