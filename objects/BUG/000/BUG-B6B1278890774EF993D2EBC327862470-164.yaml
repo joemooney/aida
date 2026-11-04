@@ -21,7 +21,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T06:46:56.104025446Z
-modified_at: 2026-11-04T02:27:51.485525495Z
+modified_at: 2026-11-04T02:58:44.742876700Z
 req_type: Bug
 tags:
 - audit
@@ -155,6 +155,12 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: AC1 and the occupancy fix verified; AC2 serve path verified only with a fake aida; CI lib-0 still red because the help golden was never regenerated (round-2 finding 2 open).. No triage reason was given.'
   created_at: 2026-11-04T01:37:07.992332709Z
   modified_at: 2026-11-04T01:37:07.992332709Z
+  session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
+- id: 01a1a47e-a186-78c3-a7ea-7952fbc6f710
+  author: joe
+  content: 'ADVISOR (19:59): round-4 item 1 done on the host. The lane''s two regeneration runs timed out compiling (oversubscription, BUG-2435). The advisor ran AIDA_UPDATE_SNAPSHOTS=1 cargo test --profile agent -p aida-cli-lib --lib help_surface_matches_golden_snapshot at ab860d70982, then re-ran it without the env var: ok. Diff: +10 lines, the ''base'' and ''branch'' catalog rows only. Pushed as a separate regeneration commit. Items 2 and 3 were verified fixed by the round-5 review; ready for the delta review.'
+  created_at: 2026-11-04T02:58:44.742876700Z
+  modified_at: 2026-11-04T02:58:44.742876700Z
   session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
 history:
 - id: 01a195dc-94a3-73e2-8979-5b3cd7a026e1
