@@ -1,0 +1,74 @@
+{
+  "schema_version": 1,
+  "spec": "TASK-B6B1278890774EF993D2EBC327862470-776",
+  "publishes": [
+    {
+      "at": "2026-11-04T21:42:51.290989694Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-04T11:05:09.698720265Z",
+      "spec": "TASK-b6b1278890774ef993d2ebc327862470-776",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-04T12:50:22.209490305Z",
+      "spec": "TASK-b6b1278890774ef993d2ebc327862470-776",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-11-04T13:18:52.296203454Z",
+      "spec": "TASK-B6B1278890774EF993D2EBC327862470-776",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "TASK-B6B1278890774EF993D2EBC327862470-776",
+        "branch": "origin/task-b6b1278890774ef993d2ebc327862470-776",
+        "first_seen": "2026-11-04T13:18:52.296172552+00:00"
+      }
+    },
+    {
+      "ts": "2026-11-04T19:30:39.212075871Z",
+      "spec": "TASK-b6b1278890774ef993d2ebc327862470-776",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-11-04T21:01:59.875947677Z",
+      "spec": "TASK-B6B1278890774EF993D2EBC327862470-776",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "TASK-B6B1278890774EF993D2EBC327862470-776",
+        "branch": "origin/task-b6b1278890774ef993d2ebc327862470-776-2",
+        "first_seen": "2026-11-04T21:01:59.875883080+00:00"
+      }
+    },
+    {
+      "ts": "2026-11-04T21:42:51.136715513Z",
+      "spec": "TASK-b6b1278890774ef993d2ebc327862470-776",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "47e9f216d38bf2bb6c503baeebfcca728604bd57",
+        "pr": 3385,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
