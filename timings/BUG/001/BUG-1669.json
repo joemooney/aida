@@ -1,0 +1,72 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-1669",
+  "publishes": [
+    {
+      "at": "2026-11-04T01:39:05.710417536Z",
+      "closed_by": "edit"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-09-26T19:09:13.937141648Z",
+      "spec": "BUG-1669",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-03T15:56:12.254932203Z",
+      "spec": "BUG-1669",
+      "seat": "product",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-03T18:50:04.712730537Z",
+      "spec": "BUG-1669",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "In Progress",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-05T04:15:05.527212668Z",
+      "spec": "BUG-1669",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Approved",
+        "after": "Draft"
+      }
+    },
+    {
+      "ts": "2026-11-04T01:39:05.468395949Z",
+      "spec": "BUG-1669",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Completed"
+      }
+    },
+    {
+      "ts": "2026-11-04T01:39:05.535065785Z",
+      "spec": "BUG-1669",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "",
+        "closed_by": "edit"
+      }
+    }
+  ]
+}
