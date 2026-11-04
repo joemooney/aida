@@ -1,0 +1,18 @@
+id: 01a1a753-8703-77a3-98cd-65a508fadb4f
+spec_id: SPEC-b6b1278890774ef993d2ebc327862470-009
+title: Standalone Codex implementer cannot commit because launch mounts .git read-only
+description: BUG-2439 standalone launch checkout /home/joe/ai/aida-worktrees/aida-seat-aida-bug-b6b1278890774ef993d2ebc327862470-208 can edit source, but its managed permission profile explicitly mounts checkout/.git read-only. `git add aida-cli-lib/src/compete_cmd.rs docs/cli/03-work-autonomy.md` fails creating .git/index.lock (Read-only file system). Approval policy is never. This prevents the assigned commit/push/open-PR workflow. AIDA CLI mutations also refuse the linked cache outside writable scope, though MCP comments work. Provide an authorized host-side publish path or correct the implementer launch policy; do not widen source-controlled git authority blindly. BUG-2439 changes are left in its checkout for host handoff; targeted validation is running.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-04T16:10:31.555282571Z
+modified_at: 2026-11-04T16:10:31.555282571Z
+req_type: Task
+tags:
+- from-implementer:BUG-2439
+- kind:bug-spotted
+- severity:major
+filed_at:
+  aida_version: 0.16.0
+  aida_build_sha: c19294416a9
