@@ -25,7 +25,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-03T03:42:51.559496187Z
-modified_at: 2026-11-03T22:22:54.751960171Z
+modified_at: 2026-11-04T01:12:40.667645214Z
 req_type: Story
 tags:
 - area:deputy
@@ -315,6 +315,12 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-03T22:02:47.212851064Z
   modified_at: 2026-11-03T22:02:47.212851064Z
+  session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
+- id: 01a1a41d-85db-7633-91c1-62d32ced5b6e
+  author: joe
+  content: 'ADVISOR RULING (PR-3287 round 5, 2026-11-03 18:15 MST): rework, compile fix only. Blocking: aida-cli-lib/src/deputy_shell/attribution.rs:279-282 destructures seat_authority::binding_process as (pid, start); since BUG-2419 it returns Option<(u32, Option<&str>, &str)>. Destructure (pid, ns, start) and keep BUG-2419''s rule: never compare process tokens across pid namespaces (probe only a token whose ns matches ours or is None, as the other BUG-2419 callers do). Merge current origin/main first. Required before push and cited in the spec comment: ''cargo build -p aida-cli --bin aida'' and ''cargo test -p aida-cli-lib --lib deputy_shell'' on the merged tree, plus check-ci-fast (umask 022). No other scope.'
+  created_at: 2026-11-04T01:12:40.667645214Z
+  modified_at: 2026-11-04T01:12:40.667645214Z
   session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
 history:
 - id: 01a19f81-3898-7250-96f4-65372d1968ea
