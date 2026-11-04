@@ -58,7 +58,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-19T16:01:15.460127350Z
-modified_at: 2026-11-04T12:57:42.241415884Z
+modified_at: 2026-11-04T16:43:43.988480926Z
 req_type: Task
 tags:
 - cli
@@ -254,6 +254,12 @@ comments:
   created_at: 2026-11-04T01:42:47.820646826Z
   modified_at: 2026-11-04T01:42:47.820646826Z
   session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
+- id: 01a1a771-edf4-7d50-9340-00cb267fc905
+  author: joe
+  content: 'ADVISOR REWORK BRIEF (2026-11-04 09:20 MST), PR #3372 head 03265fbb, review verdict request-changes. Bundle ALL of these into this PR, per the ruled-once rule, so no follow-up PRs: (1) [major] TASK-1983 fail-open: story_1728_command_registry_tests.rs:1011 verb_import matches leftmost and non-overlapping, so on a qualified path the preceding segment is consumed and the check passes open. Make it anchor on each path segment. (2) Extract that check into a helper and unit-test each import shape, with and without a crate::/super:: prefix, plus {self} allowed. (3) cache_binding.rs:404-416: move the new test so the ''/// A1 (TASK-1739)'' doc reattaches to holder_rebinds. (4) Add trace:BUG-2129.acbd0e82 and trace:BUG-2129.ac086007 on the BUG-2129 test. (5) Add a test for TASK-1625''s watchdog-trip best-effort commit in the implementer phase. Gate: LIGHT (cargo test -p aida-cli-lib --lib story_1728 plus the touched modules'' filters, then make check-ci-fast). Push to the PR branch; the delta re-review follows.'
+  created_at: 2026-11-04T16:43:43.988480926Z
+  modified_at: 2026-11-04T16:43:43.988480926Z
+  session_id: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
 history:
 - id: 01a154e5-8be2-7ad1-b92b-8f8f1d3f7bcf
   author: joe
