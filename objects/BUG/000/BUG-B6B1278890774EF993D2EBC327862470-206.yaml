@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T04:41:19.994753856Z
-modified_at: 2026-11-04T08:36:18.720812754Z
+modified_at: 2026-11-04T08:36:21.398472836Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -64,6 +64,23 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Portability-ratchet fix is correct (current_exe, no allowlist), but CI (rest) is now red at ''Test time budget''. The likely cause is the new self-binary test, which SHA-256-hashes the whole debug aida-core test binary under the strict 10 s touched-test limit. Marker design and classify refusal paths are otherwise sound.. Triage reason: rework brief on spec'
   created_at: 2026-11-04T08:36:18.720810866Z
   modified_at: 2026-11-04T08:36:18.720810866Z
+  session_id: da1c0d85-1d45-4ce4-a292-5358644f65b9
+- id: 01a1a5b3-b86a-7653-8927-d21ed77383c8
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2437):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: f5209209c0e7
+    Recorded: 2026-11-04T08:20:45.055690227+00:00
+    Findings:
+    1. BLOCKING (CI red): CI (rest) job 126463259495 (run 41796976856) fails at step 'Test time budget'. In the last 16 completed CI runs on other branches and main the rest shard passed. Here 'Run tests' took 8m19s, against 6m13s at 3024c245, where the same test passed. Most likely culprit: activation.rs a_binary_that_links_admission_carries_the_permit_marker. It calls inspect_file(current_exe()), and inspect_reader hashes the entire unoptimised all-features aida-core test binary and keeps reading after the marker is found. activation.rs is a touched file, so its tests are held to the strict 10 s default_limit. The reviewer sandbox blocks the log and artifact host, so first confirm the over-budget test name from the test-timings-rest artifact or the step log. Fix: give marker-only reads (this test, deleted writers, the promoted exe) a scan that stops at the first hit and does not hash (this also resolves finding 4 of round 1). Do not just add a budget entry unless the reason is stated.
+    2. minor (carried from round 1 #2, not yet addressed): a_binary_that_links_admission_carries_the_permit_marker cannot fail. Any binary linking activation.rs carries WRITE_PERMIT_MARKER through inspect_reader and the tests, so it passes even without the black_box in mod.rs admit_resolved. For the same reason, the WRITE_PERMIT_MARKER doc claim that 'a build without admission does not' carry it is inaccurate. Reword the doc, or drop or replace the test.
+    3. minor (carried from round 1 #3): the fresh_scan_admits doc (activation.rs:242-245) still says 'any writer of another build ... still refuses'. classify now admits another or replaced build that carries the marker. Update the comment so the retirement path's real admission rule is documented.
+    4. minor (carried from round 1 #4): fill_digests now reads and hashes every distinct replaced (deleted) writer binary in full, including inside fresh_scan_admits on the retirement path. A deleted binary's digest never admits, so stop at the marker. rerecord_for_promoted_build also reads the promoted exe twice (inspect_file, then digest_file in fill_digests).
+    5. minor (carried from round 1 #5, coverage gap): no test calls rerecord_for_promoted_build to show that the promoted binary's marker decides admission, including an unreadable or unmarked promoted exe, which should admit only same-build writers.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-04T08:36:21.226568742Z
+  modified_at: 2026-11-04T08:36:21.226568742Z
   session_id: da1c0d85-1d45-4ce4-a292-5358644f65b9
 history:
 - id: 01a1a4ee-5eab-7123-a18a-eaae4aecb215
