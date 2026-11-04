@@ -3,12 +3,12 @@ spec_id: STORY-b6b1278890774ef993d2ebc327862470-329
 agreed_id: STORY-2331
 title: 'Regression test: a pool grant round-trips an air gap by git bundle (two bare hubs)'
 description: 'From SPIKE-708 (direct root-to-inside workflow, which the advisor ruled the supported model on 2026-11-02). One hermetic integration test: two bare hubs, bundle-only in and out; two inside clones with an observed claim collision and a retry into disjoint ranges; a divergent outside claim; a disjoint union on return; an overlap refusal with refs/HEAD/status unchanged; an ordinary clean bundle pull; and final-slot and exhaustion coverage (depends on the final-slot bug). Also assert that a root block claim leaves no untracked registry/blocks.lock that makes the store dirty and refuses reconcile (Q4). If it does, fix the sidecar''s placement or ignore rule in this story without weakening the lock. Document the supported boundary (direct root-to-hub grants; recursive delegation and pool replenishment are not supported) in the storage docs.'
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-03T02:44:16.945490220Z
-modified_at: 2026-11-04T01:12:56.022230010Z
+modified_at: 2026-11-04T01:20:18.333070969Z
 req_type: Story
 tags:
 - from:SPIKE-708
@@ -96,6 +96,12 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was punted on: blocked-dependency: Round 3 finding 1 (BUG-1796 fixture bytes) cannot be reproduced in this seat, and the ruling forbids inferring them again. Blockers: (1) no lane job runner on this lease (aida lane job run refuses: ''names no lane job runner''); (2) the seat target is cold and a foreground cargo build of aida-cli-lib does not finish within the 60s tool cap, and further retries were denied; (3) CI job logs (job 126215861879) are blocked by the sandbox (results-receiver.actions.githubusercontent.com and *.blob.core.windows.net denied), so the diff the fixture prints on failure cannot be read; (4) running the fixture with an overridden CARGO_TARGET_DIR/AIDA_CI_PREBUILT_CLI, or reproducing its steps by hand in TMPDIR, was denied. Code reading: the pull''s pre-commit (store_push_pull.rs:2448) fires when the store has pending changes. The store write lock is <store>/.aida/store-write.lock, which the PR''s init .gitignore now ignores via ''.aida/*.lock'', so the ''Committed pending orphan changes'' line should drop. CI says otherwise, so some other file or output line differs, and only the real diff can say which. Nothing was pushed this round. Finding 2 (the aggregate lane) depends on finding 1.. No triage reason was given.'
   created_at: 2026-11-04T01:12:54.934202266Z
   modified_at: 2026-11-04T01:12:54.934202266Z
+  session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
+- id: 01a1a424-819d-7d92-977c-6739ee0f6ba8
+  author: joe
+  content: Returned from NeedsAttention to Approved via `aida edit --status`. No triage reason was given.
+  created_at: 2026-11-04T01:20:18.333056750Z
+  modified_at: 2026-11-04T01:20:18.333056750Z
   session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
 history:
 - id: 01a19f4b-61ed-7310-b584-0af8f83cd6a1
@@ -197,6 +203,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: NeedsAttention
+- id: 01a1a424-819d-7d92-977c-672dbfa41fc4
+  author: joe
+  timestamp: 2026-11-04T01:20:18.333053753Z
+  session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: 553f7d5984c6083a9f2b47cfa358ce57c438843b
   branch: main
