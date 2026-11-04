@@ -1,0 +1,20 @@
+id: 01a1a4a5-d401-7553-95ac-3c003f626798
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-205
+agreed_id: BUG-2436
+title: Finished headless implementer lanes keep their lease after pr-opened + queue done, so the review watcher refuses their PR until an advisor ends the lease by hand
+description: 'Observed 2026-11-03 20:30-20:40 MST, five times in one evening. PR-3324 (BUG-2433), PR-3326 (TASK-2802), PR-3327 (TASK-2805) and PR-3330 (BUG-2194) each logged ''review of this head exited without completing (queue work exited 1: help: aida session end <lease> --force)'' or ''the author''s session ... is live and owns the merge'', after the lane had already logged ''queue done succeeded ... My turn is over'' and ''implementer: pr-opened pr=N''. Every lease was clean and pushed, and end-finished.sh deleted each one without loss. The reviews then waited about 1.5h until the advisor noticed. BUG-2224 fixed one cause (copied tags); this is the general case. Fix: the headless launcher ends the implementer lease once the lane exits after pr-opened, with the tree clean and HEAD on origin. Or the watcher treats a lease whose process is gone and whose tree is clean and pushed as finished, and proceeds. Relates to STORY-2351 (hygiene job) and STORY-2325 (ownership).'
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-04T03:41:33.569103017Z
+modified_at: 2026-11-04T03:41:33.569103017Z
+req_type: Bug
+filed_at:
+  code_sha: 76d65a8b0d8f2458d0e0803ee1c05e329d76ccff
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 76d65a8b0d8
+  vendor: claude
+  session: 04f971d5-7365-46ed-b777-d4ff41d730ed
