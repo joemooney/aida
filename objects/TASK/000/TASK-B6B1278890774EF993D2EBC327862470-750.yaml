@@ -12,13 +12,20 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-03T20:04:11.862400344Z
-modified_at: 2026-11-03T20:04:11.862400344Z
+modified_at: 2026-11-04T01:18:33.642924674Z
 req_type: Task
 tags:
 - carried-from:STORY-2346
 - finding-hash:ab996a40
 - from-review:STORY-2346
 - kind:carried-forward
+comments:
+- id: 01a1a422-e8aa-7cb3-9b17-69920d40d776
+  author: joe
+  content: 'ADVISOR RULING (2026-11-03): fix, own small lane. Accept the synthetic mandate-renewal job in done_as (maintenance_schedule.rs:1595) as a no-op acknowledgement, so the instruction render_due_jobs_block gives seats works for every listed job; add a test that ''schedule done mandate-renewal'' succeeds. Gate: LIGHT.'
+  created_at: 2026-11-04T01:18:33.642924674Z
+  modified_at: 2026-11-04T01:18:33.642924674Z
+  session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
 history:
 - id: 01a1a324-05b1-79b0-9b9c-b8fc1bba586c
   author: joe
