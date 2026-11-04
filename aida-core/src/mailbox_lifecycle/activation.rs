@@ -13,10 +13,16 @@
 //! (the same SHA-256 content digest), such as `target/agent/aida` and the
 //! `aida dev build` promoted copy under `~/.local/share/aida/live/`. Any
 //! other build, a replaced (deleted) binary, or a process whose executable
-//! cannot be read or digested is *unverified*. The record names the
-//! source build that wrote it (version and git SHA, shared by the `aida` and
-//! `aida-server` built from one checkout and by a re-promoted build of the
-//! same source), and only that source build honours it: after an upgrade or
+//! cannot be read or digested is *unverified*, unless its executable carries
+//! [`WRITE_PERMIT_MARKER`] (BUG-2437): every binary that links admission
+//! embeds that marker, so an older build, or the replaced binary a long-lived
+//! lane still runs after `aida dev build` promotes, is known to admit when it
+//! speaks this build's permit protocol. A replaced file stays readable through
+//! `/proc/<pid>/exe`, so the check needs nothing from the writer itself.
+//!
+//! The record names the source build that wrote it (version and git SHA,
+//! shared by the `aida` and `aida-server` built from one checkout and by a
+//! re-promoted build of the same source), and only that source build honours it: after an upgrade or
 //! `aida dev rollback` to other source, that build records its own.
 //!
 //! trace:STORY-1843 | ai:claude
@@ -31,6 +37,15 @@ use std::path::{Path, PathBuf};
 /// MCP over stdio) and the REST server.
 const WRITER_EXECUTABLES: &[&str] = &["aida", "aida-server"];
 
+/// Present in every binary that takes a mail write permit:
+/// [`super::admit_resolved`] references it, so any build that links admission
+/// carries these bytes, and a build without admission does not. The version
+/// names the permit protocol; change it whenever an older admitting build
+/// would no longer satisfy what retirement relies on, and builds of the old
+/// protocol stop counting as admitting.
+// trace:BUG-2437 | ai:claude
+pub(crate) static WRITE_PERMIT_MARKER: &[u8] = b"\x01aida:mail-write-permit:protocol=1\x01";
+
 /// One running process as the report sees it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ProcessView {
@@ -42,6 +57,9 @@ pub struct ProcessView {
     /// SHA-256 of the executable's bytes, filled only for writer hosts whose
     /// file differs from this process's; `None` when unread or unreadable.
     pub exe_digest: Option<String>,
+    /// Whether the executable carries [`WRITE_PERMIT_MARKER`], read with the
+    /// digest; `None` when unread or unreadable.
+    pub permit_marker: Option<bool>,
     pub cmdline: Vec<String>,
 }
 
@@ -52,6 +70,10 @@ pub struct BuildIdentity {
     pub exe_id: (u64, u64),
     /// SHA-256 of its bytes, or `None` when it could not be read.
     pub digest: Option<String>,
+    /// This build carries [`WRITE_PERMIT_MARKER`], so a writer that carries it
+    /// too speaks the permit protocol this build's record vouches for. Only
+    /// then does a writer's marker admit it (BUG-2437).
+    pub permit_marker: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -129,11 +151,16 @@ pub fn classify(
         if !WRITER_EXECUTABLES.contains(&name) {
             continue;
         }
-        let verdict = if p.pid == self_pid {
+        // BUG-2437: a writer whose executable carries this build's permit
+        // protocol marker admits, even on another or a replaced binary.
+        let marked = me.is_some_and(|me| me.permit_marker) && p.permit_marker == Some(true);
+        let verdict = if p.pid == self_pid || marked {
             HostVerdict::Admitting
         } else if deleted {
             HostVerdict::Unverified {
-                why: "it runs a binary that has since been replaced".into(),
+                why: "it runs a binary that has since been replaced and does not carry \
+                      this build's write-permit protocol"
+                    .into(),
             }
         } else {
             match me.and_then(|me| same_build(p, me)) {
@@ -183,6 +210,7 @@ pub fn dry_run_report(project_root: &Path) -> ActivationReport {
         .map(|m| BuildIdentity {
             exe_id: (m.dev(), m.ino()),
             digest: None,
+            permit_marker: true,
         });
     let proc = Path::new("/proc");
     let (mut processes, incomplete) = scan_proc(proc, std::process::id());
@@ -232,6 +260,7 @@ pub(crate) fn fresh_scan_admits() -> bool {
         let me = BuildIdentity {
             exe_id: (meta.dev(), meta.ino()),
             digest: None,
+            permit_marker: true,
         };
         let proc = Path::new("/proc");
         let (mut processes, incomplete) = scan_proc(proc, std::process::id());
@@ -296,9 +325,13 @@ pub fn rerecord_for_promoted_build(
         return Ok(None);
     }
     let meta = std::fs::metadata(promoted_exe)?;
+    // The promoted build's own protocol decides which writers it may vouch
+    // for, not this (promoting) process's: a marker admits only when the
+    // promoted binary carries the same one (BUG-2437).
     let me = BuildIdentity {
         exe_id: (meta.dev(), meta.ino()),
         digest: None,
+        permit_marker: inspect_file(promoted_exe).is_some_and(|i| i.permit_marker),
     };
     let proc = Path::new("/proc");
     let (mut processes, incomplete) = scan_proc(proc, std::process::id());
@@ -349,9 +382,11 @@ fn record_named(
 /// Digest the executables of writer hosts that run a file other than this
 /// process's `me` (read from `self_exe`; writers from `proc`), each distinct
 /// file once, so a byte-identical copy at another path is recognised as this
-/// build. Nothing is read when every writer shares this process's file. An
-/// unreadable file keeps no digest, which [`classify`] reports as
-/// unidentified (fail closed).
+/// build, and note whether each carries [`WRITE_PERMIT_MARKER`]. A replaced
+/// (deleted) binary is read too, through `/proc/<pid>/exe` (BUG-2437). Nothing
+/// is read when every writer shares this process's file. An unreadable file
+/// keeps no digest and no marker, which [`classify`] reports as unidentified
+/// (fail closed).
 // trace:BUG-b6b1278890774ef993d2ebc327862470-010 | ai:claude
 fn fill_digests(
     proc: &Path,
@@ -359,15 +394,14 @@ fn fill_digests(
     mut me: BuildIdentity,
     self_exe: &Path,
 ) -> BuildIdentity {
-    let mut digests: HashMap<(u64, u64), String> = HashMap::new();
+    let mut seen: HashMap<(u64, u64), Inspection> = HashMap::new();
     for p in processes.iter_mut() {
         let Some(id) = p.exe_id else { continue };
         let writer = p.exe.as_deref().is_some_and(|exe| {
-            !exe.ends_with(" (deleted)")
-                && Path::new(exe)
-                    .file_name()
-                    .and_then(|n| n.to_str())
-                    .is_some_and(|n| WRITER_EXECUTABLES.contains(&n))
+            Path::new(exe.trim_end_matches(" (deleted)"))
+                .file_name()
+                .and_then(|n| n.to_str())
+                .is_some_and(|n| WRITER_EXECUTABLES.contains(&n))
         });
         if !writer || id == me.exe_id {
             continue;
@@ -376,39 +410,91 @@ fn fill_digests(
             me.digest = digest_file(self_exe);
         }
         let exe_link = proc.join(p.pid.to_string()).join("exe");
-        p.exe_digest = match digests.get(&id) {
-            Some(digest) => Some(digest.clone()),
-            None => digest_writer(&exe_link, id)
-                .map(|digest| digests.entry(id).or_insert(digest).clone()),
+        let inspection = match seen.get(&id) {
+            Some(found) => Some(found.clone()),
+            None => {
+                inspect_writer(&exe_link, id).map(|found| seen.entry(id).or_insert(found).clone())
+            }
         };
+        p.exe_digest = inspection.as_ref().map(|i| i.digest.clone());
+        p.permit_marker = inspection.map(|i| i.permit_marker);
     }
     me
 }
 
-/// Digest the writer executable at `exe_link` only when the opened file is
+/// What one read of an executable shows: its SHA-256 and whether it carries
+/// [`WRITE_PERMIT_MARKER`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct Inspection {
+    digest: String,
+    permit_marker: bool,
+}
+
+/// Inspect the writer executable at `exe_link` only when the opened file is
 /// still the `expected` (dev, ino) the scan recorded. A pid reused between
 /// the scan and this read names another file: that is `None` (unknown, fail
-/// closed), never a digest attributed to `expected`. Only a digest is
-/// cached, so an unreadable host never hides a later readable one.
+/// closed), never a digest or marker attributed to `expected`. Only a
+/// successful read is cached, so an unreadable host never hides a later
+/// readable one.
 // trace:TASK-b6b1278890774ef993d2ebc327862470-050 | ai:claude
-fn digest_writer(exe_link: &Path, expected: (u64, u64)) -> Option<String> {
+fn inspect_writer(exe_link: &Path, expected: (u64, u64)) -> Option<Inspection> {
     let mut file = std::fs::File::open(exe_link).ok()?;
     let meta = file.metadata().ok()?;
     if (meta.dev(), meta.ino()) != expected {
         return None;
     }
-    hash_reader(&mut file)
+    inspect_reader(&mut file)
 }
 
 /// SHA-256 of a file's bytes, hex-encoded, or `None` when it cannot be read.
 fn digest_file(path: &Path) -> Option<String> {
-    hash_reader(&mut std::fs::File::open(path).ok()?)
+    inspect_file(path).map(|i| i.digest)
 }
 
-fn hash_reader(reader: &mut impl std::io::Read) -> Option<String> {
+fn inspect_file(path: &Path) -> Option<Inspection> {
+    inspect_reader(&mut std::fs::File::open(path).ok()?)
+}
+
+/// Hash `reader` and look for [`WRITE_PERMIT_MARKER`] in one pass. The
+/// marker's last `len - 1` bytes of each block carry over, so a marker that
+/// straddles two reads is still found.
+// trace:BUG-2437 | ai:claude
+fn inspect_reader(reader: &mut impl std::io::Read) -> Option<Inspection> {
+    let needle = WRITE_PERMIT_MARKER;
+    let keep = needle.len() - 1;
     let mut hasher = Sha256::new();
-    std::io::copy(reader, &mut hasher).ok()?;
-    Some(format!("{:x}", hasher.finalize()))
+    let mut window: Vec<u8> = Vec::with_capacity(keep + 64 * 1024);
+    let mut block = vec![0u8; 64 * 1024];
+    let mut found = false;
+    loop {
+        let n = match reader.read(&mut block) {
+            Ok(0) => break,
+            Ok(n) => n,
+            Err(e) if e.kind() == std::io::ErrorKind::Interrupted => continue,
+            Err(_) => return None,
+        };
+        hasher.update(&block[..n]);
+        if found {
+            continue;
+        }
+        window.extend_from_slice(&block[..n]);
+        found = contains(&window, needle);
+        let spent = window.len().saturating_sub(keep);
+        window.drain(..spent);
+    }
+    Some(Inspection {
+        digest: format!("{:x}", hasher.finalize()),
+        permit_marker: found,
+    })
+}
+
+fn contains(haystack: &[u8], needle: &[u8]) -> bool {
+    let Some((&first, _)) = needle.split_first() else {
+        return true;
+    };
+    haystack.len() >= needle.len()
+        && (0..=haystack.len() - needle.len())
+            .any(|i| haystack[i] == first && &haystack[i..i + needle.len()] == needle)
 }
 
 /// Read every `/proc/<pid>` this user can see. Unknown means refuse
@@ -494,6 +580,7 @@ fn scan_proc(proc: &Path, self_pid: u32) -> (Vec<ProcessView>, Option<String>) {
             exe,
             exe_id,
             exe_digest: None,
+            permit_marker: None,
             cmdline,
         });
     }
@@ -515,6 +602,7 @@ mod tests {
             exe: Some(exe.into()),
             exe_id: Some(id),
             exe_digest: None,
+            permit_marker: None,
             cmdline: vec![exe.into(), "mcp".into()],
         }
     }
@@ -523,6 +611,7 @@ mod tests {
         BuildIdentity {
             exe_id: id,
             digest: None,
+            permit_marker: true,
         }
     }
 
@@ -540,6 +629,7 @@ mod tests {
         let me = BuildIdentity {
             exe_id: me,
             digest: Some("a".into()),
+            permit_marker: true,
         };
         let report = classify(&procs, Some(&me), 1, None, false);
         let verdicts: Vec<_> = report.hosts.iter().map(|h| (h.pid, &h.verdict)).collect();
@@ -581,6 +671,7 @@ mod tests {
         let me = BuildIdentity {
             exe_id: ino(&dev),
             digest: digest_file(&dev),
+            permit_marker: true,
         };
         let host = |pid, path: &Path, digest| ProcessView {
             exe_digest: digest,
@@ -664,7 +755,7 @@ mod tests {
         assert_eq!(procs[1].exe_digest, expected);
         assert_eq!(procs[2].exe_digest, expected, "pid 6 unreadable: cached");
         let link = proc.path().join("5/exe");
-        assert_eq!(digest_writer(&link, wrong), None);
+        assert_eq!(inspect_writer(&link, wrong), None);
     }
 
     /// Only a digest is cached: an unreadable first host on an exe_id does
@@ -677,6 +768,88 @@ mod tests {
         fill_digests(proc.path(), &mut procs, ident((1, 10)), &exe);
         assert_eq!(procs[0].exe_digest, None, "pid 6 unreadable");
         assert_eq!(procs[1].exe_digest, digest_file(&exe));
+    }
+
+    /// BUG-2437: after a promote, lanes still run the replaced binary of a
+    /// build that takes permits. A writer whose executable carries this
+    /// build's permit protocol marker admits, replaced or not; one without it,
+    /// or unread, still refuses; and a marker vouches for nothing when the
+    /// build judging it does not carry the same protocol.
+    // trace:BUG-2437 | ai:claude
+    #[test]
+    fn a_replaced_or_older_build_carrying_the_permit_marker_admits() {
+        let me = ident((1, 10));
+        let marked = |pid, exe: &str, marker| ProcessView {
+            permit_marker: marker,
+            exe_digest: Some("old".into()),
+            ..view(pid, exe, (1, 20))
+        };
+        let procs = vec![
+            marked(5, "/live/aida (deleted)", Some(true)),
+            marked(6, "/old/aida-server", Some(true)),
+        ];
+        let report = classify(&procs, Some(&me), 1, None, false);
+        assert!(report.would_record, "{report:?}");
+
+        for (marker, why) in [(Some(false), "replaced"), (None, "replaced")] {
+            let procs = [marked(5, "/live/aida (deleted)", marker)];
+            let report = classify(&procs, Some(&me), 1, None, false);
+            assert!(!report.would_record);
+            assert!(
+                matches!(&report.hosts[0].verdict, HostVerdict::Unverified { why: w } if w.contains(why))
+            );
+        }
+        let unmarked = [marked(6, "/old/aida", Some(false))];
+        assert!(!classify(&unmarked, Some(&me), 1, None, false).would_record);
+
+        let other_protocol = BuildIdentity {
+            permit_marker: false,
+            ..me
+        };
+        assert!(!classify(&procs, Some(&other_protocol), 1, None, false).would_record);
+    }
+
+    /// The marker is found wherever it sits, including across two reads, and
+    /// the digest is the plain SHA-256 of the bytes.
+    // trace:BUG-2437 | ai:claude
+    #[test]
+    fn inspect_reader_finds_the_marker_across_a_block_boundary() {
+        for at in [0, 10, 64 * 1024 - 5, 64 * 1024, 200_000] {
+            let mut bytes = vec![0u8; at];
+            bytes.extend_from_slice(WRITE_PERMIT_MARKER);
+            bytes.extend_from_slice(&[7u8; 100]);
+            let found = inspect_reader(&mut std::io::Cursor::new(&bytes)).unwrap();
+            assert!(found.permit_marker, "marker at {at}");
+            assert_eq!(found.digest, format!("{:x}", Sha256::digest(&bytes)));
+        }
+        let mut cut = vec![0u8; 64 * 1024 - 3];
+        cut.extend_from_slice(&WRITE_PERMIT_MARKER[..WRITE_PERMIT_MARKER.len() - 1]);
+        let found = inspect_reader(&mut std::io::Cursor::new(&cut)).unwrap();
+        assert!(!found.permit_marker, "an incomplete marker is no marker");
+    }
+
+    /// A binary that takes permits carries the marker: this test binary links
+    /// admission, so its own executable must show it.
+    // trace:BUG-2437 | ai:claude
+    #[test]
+    fn a_binary_that_links_admission_carries_the_permit_marker() {
+        let found = inspect_file(Path::new("/proc/self/exe")).expect("readable");
+        assert!(found.permit_marker);
+    }
+
+    /// The scan reads a replaced writer's executable through `/proc/<pid>/exe`
+    /// and records its marker.
+    // trace:BUG-2437 | ai:claude
+    #[test]
+    fn fill_digests_reads_the_marker_of_a_replaced_writer() {
+        let (proc, exe, id) = proc_with_writer(5);
+        let mut bytes = b"build-old".to_vec();
+        bytes.extend_from_slice(WRITE_PERMIT_MARKER);
+        std::fs::write(&exe, &bytes).unwrap();
+        let mut procs = vec![view(5, "/x/aida (deleted)", id)];
+        let me = fill_digests(proc.path(), &mut procs, ident((1, 10)), &exe);
+        assert_eq!(procs[0].permit_marker, Some(true));
+        assert!(classify(&procs, Some(&me), 1, None, false).would_record);
     }
 
     fn fake_proc(self_pid: u32, ns: &str) -> tempfile::TempDir {
