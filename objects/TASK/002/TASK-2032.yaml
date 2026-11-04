@@ -11,7 +11,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-20T23:41:45.676543397Z
-modified_at: 2026-11-04T08:01:58.935560603Z
+modified_at: 2026-11-04T08:02:01.694567509Z
 req_type: Task
 tags:
 - contained
@@ -60,6 +60,23 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Round-2 threading is right for session start and the claude exec/resume arms of queue work, but queue work''s other post-chdir launch arms still build the boundary from the cwd-derived launcher_main(), so a contained seat clone launched that way loses clone recognition (round-1 blocker persists there). CI pending at review.. Triage reason: rework brief on spec'
   created_at: 2026-11-04T08:01:58.935557708Z
   modified_at: 2026-11-04T08:01:58.935557708Z
+  session_id: da1c0d85-1d45-4ce4-a292-5358644f65b9
+- id: 01a1a594-4a93-7573-b579-47f7313096b1
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (TASK-2032):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: d71c4552d568
+    Recorded: 2026-11-04T06:58:27.960854318+00:00
+    Findings:
+    1. BLOCKER (ruling item 1 incomplete): queue_cmd.rs:13644 resolves host_main then chdirs into lease.worktree_path (13645), but only exec_claude_resume (13969) and exec_claude_with_session (13982) receive it. run_standalone_reviewer (13703) → session::interactive_reviewer_launch_plan (session.rs:2919, claude_session_args(launcher_main())), spawn_reviewer_launch_plan_granted (session.rs:3047), spawn_vendor_headless_with_seat_granted/spawn_vendor_headless_forking (session.rs:2057 + compose_headless_command_forking 1832), spawn_vendor_headless_resume (session.rs:7353 os_wrapped_program_and_args(launcher_main())) and exec_vendor_headless (14054) all call launcher_main() after the chdir. Inside a seat clone that returns None, so recorded_clone_for fails closed: clone .git denied and no cargo target grant. This affects a contained headless implementer (queue work --no-human) and a contained standalone reviewer in a clone. Fix: give these builders a host_main parameter, pass the value resolved before the chdir, and remove launcher_main() calls below any chdir.
+    2. TEST GAP (ruling item 2): bug_2169 a_clone_launched_from_inside_itself_keeps_its_boundary calls claude_contained_flags/os_wrap_rw_paths directly with the pre-chdir host_main. No test drives the queue-work launch arms (or new_session_for_vendor) with cwd inside the clone and no LauncherMainPin, so the defect above is not caught. Add a test that builds the queue-work headless and reviewer launch commands from inside the clone and asserts clone .git is writable and the target dir is granted.
+    3. RATCHET (minor): launcher_main() is still a public cwd/project-root lookup called from about 35 non-test sites (session.rs, agent_launch.rs, phase_driver*.rs, burndown_run.rs, compete_cmd.rs, leases.rs:4452, queue_cmd.rs:11145/11559). The ruling was no cwd lookup below the entry point. Restrict it to entry points (or add a source ratchet listing the allowed callers) so a new post-chdir builder cannot silently regress.
+    4. DEFENSE-IN-DEPTH SCOPE (minor, non-blocking): plausible_host_main (seat_clone.rs:896) refuses only clones and paths under */target/worktrees. A forged repo in another seat-writable root (e.g. the sandbox TMPDIR) passes. That is acceptable because trust rests on the caller contract, but the host_recorded_clone doc should say plainly that plausible_host_main is a partial filter, not a forgery guarantee.
+    5. VERIFICATION: the implementer's round-2 comment says the ruled gate (cargo test -p aida-cli-lib --lib -- task_2032 bug_2169 bug_1982 task_2053 + check-ci-fast) was not run (untested=true), and PR CI was still pending at d71c4552. The next round must cite a green CI run at head.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-04T08:02:01.491690337Z
+  modified_at: 2026-11-04T08:02:01.491690337Z
   session_id: da1c0d85-1d45-4ce4-a292-5358644f65b9
 history:
 - id: 01a15cbb-fc05-7050-907c-e1e0d5b0996b
