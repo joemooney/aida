@@ -23,7 +23,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T18:47:59.809430950Z
-modified_at: 2026-11-04T01:38:57.589315926Z
+modified_at: 2026-11-04T01:38:59.308916328Z
 req_type: Bug
 relationships:
 - rel_type: BlockedBy
@@ -788,6 +788,12 @@ comments:
   created_at: 2026-10-05T04:15:03.688124271Z
   modified_at: 2026-10-05T04:15:03.688124271Z
   session_id: bfd19354-cbdf-496f-9fae-64fb73c21959
+- id: 01a1a435-9c6c-7011-a326-32f52537635d
+  author: joe
+  content: 'ADVISOR REGROUP (2026-11-03): closed as obsolete/already fixed after verification in the regroup inventory: hard-coded bypassPermissions argv gone; compete_cmd.rs honours drain_contained (BUG-2393, #3229). Authority question remains on TASK-1580.'
+  created_at: 2026-11-04T01:38:59.308916328Z
+  modified_at: 2026-11-04T01:38:59.308916328Z
+  session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
 history:
 - id: 01a0df1f-1b2b-7611-b1e0-04bb5028e16b
   author: joe
