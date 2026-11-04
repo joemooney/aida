@@ -1,0 +1,29 @@
+id: 01a1a5d8-8dcf-7e62-afd0-7013743e7037
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-777
+title: non-blocking minor, containment (follow-up; filing blocked by read-only store):…
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on BUG-2435, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  non-blocking minor, containment (follow-up; filing blocked by read-only store): host_ids_bwrap_args doc (seat_target_overlay.rs:613-614) claims --cap-drop ALL stops a job remounting its ro binds; no test proves that refusal. Add a forced-live test that mount -o remount,rw on a ro bind fails in an overlay job, and audit other unshare -r call sites.
+
+  PR: #3340
+  Reviewed sha: c5996ccafabc95bace24bdea4680ee14f68be443
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-04T09:16:35.151906427Z
+modified_at: 2026-11-04T09:16:35.151906427Z
+req_type: Task
+tags:
+- carried-from:BUG-2435
+- finding-hash:a8bf5751
+- from-review:PR-3340
+- kind:carried-forward
+filed_at:
+  code_sha: e51705844b62a1f11bd4a1e8793369121a7da676
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 8c28911d6d6
+  vendor: claude
