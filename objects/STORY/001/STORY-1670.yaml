@@ -50,12 +50,11 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T20:12:52.425752547Z
-modified_at: 2026-10-19T15:50:50.657269724Z
+modified_at: 2026-11-04T02:30:36.826015400Z
 req_type: Story
 tags:
 - from:aida-host
 - groom:split
-- operator-held
 - regenerability
 relationships:
 - rel_type: Child
@@ -79,10 +78,11 @@ history:
   timestamp: 2026-10-19T15:50:50.936041150Z
   session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
   changes: []
-deferred: true
-deferred_at: 2026-10-19T15:50:50.657269724Z
-deferred_until: when STORY-1853, STORY-1690 and TASK-1945 have landed (dev-cycle speed work) or an operator asks for it
-deferred_reason: 'Advisor triage 2026-10-19: P3 roadmap/design work, parked so the open view shows actionable work while the dev-cycle speed push is on (operator goal: under 100 open).'
+- id: 01a1a464-e090-7282-a8ec-70d1c3479dde
+  author: joe
+  timestamp: 2026-11-04T02:30:36.944520399Z
+  session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
+  changes: []
 filed_at:
   code_sha: 18428db14cad4164704357aa5006bb5482039c62
   branch: main
