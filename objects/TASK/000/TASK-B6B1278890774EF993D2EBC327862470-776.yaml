@@ -1,0 +1,29 @@
+id: 01a1a5d8-7d94-7243-a839-c78322085188
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-776
+title: 'non-blocking minor (follow-up; filing blocked by read-only store): seat_target_…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on BUG-2435, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  non-blocking minor (follow-up; filing blocked by read-only store): seat_target_overlay::probe (seat_target_overlay.rs:648) still probes only unshare -Urm via wrap(), never the nested bwrap --unshare-user --uid/--gid that every overlay job now needs; a host refusing nested userns passes the probe then fails every job instead of falling back to cold. Probe via wrap_lane_job("unshare", ov, "bwrap", <--ro-bind / / true>).
+
+  PR: #3340
+  Reviewed sha: c5996ccafabc95bace24bdea4680ee14f68be443
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-04T09:16:30.996316298Z
+modified_at: 2026-11-04T09:16:30.996316298Z
+req_type: Task
+tags:
+- carried-from:BUG-2435
+- finding-hash:eb0896bb
+- from-review:PR-3340
+- kind:carried-forward
+filed_at:
+  code_sha: e51705844b62a1f11bd4a1e8793369121a7da676
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 8c28911d6d6
+  vendor: claude
