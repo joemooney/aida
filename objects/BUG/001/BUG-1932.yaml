@@ -13,7 +13,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T00:05:24.430788370Z
-modified_at: 2026-11-04T01:38:33.660024968Z
+modified_at: 2026-11-04T01:38:35.198447987Z
 req_type: Bug
 tags:
 - forge
@@ -65,6 +65,12 @@ comments:
   created_at: 2026-10-12T05:55:31.408040216Z
   modified_at: 2026-10-12T05:55:31.408040216Z
   session_id: bf898655-b7b8-4a63-8442-5d6507cfecd2
+- id: 01a1a435-3e3e-7292-8e1a-3eb0e221541e
+  author: joe
+  content: 'ADVISOR REGROUP (2026-11-03): closed as obsolete/already fixed after verification in the regroup inventory: gitlab/aida-store 0 ahead (normal hourly reconcile lag); the hourly reconcile cron and store-mirror fanout failure log cover the alert. Reopen if divergence recurs.'
+  created_at: 2026-11-04T01:38:35.198447987Z
+  modified_at: 2026-11-04T01:38:35.198447987Z
+  session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
 history:
 - id: 01a15cbb-22d6-7543-a678-634c930b6d51
   author: joe
