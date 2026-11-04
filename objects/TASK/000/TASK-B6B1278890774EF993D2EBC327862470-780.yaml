@@ -1,0 +1,29 @@
+id: 01a1a6ab-6958-7c61-9551-c684ea829403
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-780
+title: 'minor (non-blocking, carried from round 1 #5): no test calls rerecord_for_promo…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on BUG-2437, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  minor (non-blocking, carried from round 1 #5): no test calls rerecord_for_promoted_build to show the promoted binary's marker decides admission (activation.rs:337), including an unreadable/unmarked promoted exe that should admit only same-build writers; coverage today is classify with a hand-built BuildIdentity.permit_marker=false.
+
+  PR: #3349
+  Reviewed sha: b82f9203474ab74763cbc321b8fa846f7e264ad9
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-04T13:06:53.912473027Z
+modified_at: 2026-11-04T13:06:53.912473027Z
+req_type: Task
+tags:
+- carried-from:BUG-2437
+- finding-hash:f860b912
+- from-review:PR-3349
+- kind:carried-forward
+filed_at:
+  code_sha: c19294416a9bc68dab12b910c0566ad80a7cc995
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: be275c313c1
+  vendor: claude
