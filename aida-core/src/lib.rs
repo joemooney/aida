@@ -152,6 +152,8 @@ pub mod lifecycle;
 // trace:BUG-677 | ai:claude
 #[cfg(feature = "native")]
 pub mod liveness;
+// Pure agent-launch policy. trace:STORY-2326 | ai:claude
+pub mod launch_policy;
 // Pure advisor-directed worktree-lock verifier (STORY-711 slice 1). No
 // dependencies beyond std, so unlike `liveness` it needs no feature gate.
 // trace:STORY-711 | ai:claude
