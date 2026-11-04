@@ -13,13 +13,20 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-04T04:33:42.579317247Z
-modified_at: 2026-11-04T04:33:42.579317247Z
+modified_at: 2026-11-04T05:00:32.524256968Z
 req_type: Task
 tags:
 - carried-from:TASK-1595
 - finding-hash:444e55f3
 - from-review:PR-3332
 - kind:carried-forward
+comments:
+- id: 01a1a4ee-238c-7031-be17-8db77441e0b8
+  author: joe
+  content: 'ADVISOR RULING (2026-11-03 22:06 MST, operator rule 2026-10-28: rule non-blocking findings once): Accepted: argv size is bounded by per-worktree candidate counts, and a doctor report failing open shows no findings rather than acting.'
+  created_at: 2026-11-04T05:00:32.524256968Z
+  modified_at: 2026-11-04T05:00:32.524256968Z
+  session_id: da1c0d85-1d45-4ce4-a292-5358644f65b9
 filed_at:
   code_sha: b5577764ec0466133c191b7e51d62c40ea3a2c83
   branch: main
