@@ -1,0 +1,41 @@
+id: 01a1a468-488d-7c31-aaa6-b2dbbf72cc45
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-368
+agreed_id: STORY-2402
+title: 'Machine-checked conditions for deferral, attention and handoffs: typed conditions, an hourly resurfacing job, derived needs-attention'
+description: |-
+  Regroup R2, approved by the operator 2026-11-03 19:30 MST. The trigger half (typed conditions plus the resurfacing job) lands now; the derived-attention half lands after STORY-2324 and STORY-2325.
+
+  ### R2. Machine-checked conditions for deferral, attention and handoffs (priority 2)
+
+  - **Evidence:**
+    - 24 deferred specs wait on three Completed specs, the same finding as 10-25; 19 of that pass's 30 TACKLE items are still deferred.
+    - 54 specs carry `operator-held`.
+    - Deferred specs show stored statuses of approved, completed and needs-attention, so the shelf overlays real state.
+    - STORY-1685: a relay misjudged "if #2577 stalls".
+    - TASK-2003: changes-requested marks needs-attention during an active rework.
+    - BUG-1436 parked by recurrence escalation.
+  - **Root cause:** triggers and conditions are free text, so nothing can evaluate them. "Attention" is a status value instead of a derived overlay on work state.
+  - **Proposal:**
+    - **Typed conditions.** Add a small typed condition language: `spec:X=completed`, `pr:N=merged`, `release:>=0.17`, `date:`, `query:count>=n`, `manual:<who>`. Use it for `deferred_until`, relay handoff conditionals, and recurrence escalation.
+    - **Resurfacing job.** A STORY-2351-style scheduled job evaluates the conditions hourly. It un-defers specs whose condition is true, routes `manual` conditions older than 14 days to `aida human`, and refuses new free-text deferrals unless they are explicitly `manual`.
+    - **Derived attention.** Attention becomes a function of (work state, live owner from STORY-2325, verdict from STORY-2324). A spec that a live lane owns is never needs-attention.
+  - **Payoff:** no more stale-shelf regroups, no false needs-attention during rework, and checkable relay handoffs. It also makes the operator-held count honest.
+  - **Cost:** S-M. One data migration (single user, so a rewrite is fine) and one scheduled job.
+  - **Dependencies:** consumes STORY-2325 (owner) and STORY-2324 (effective gate state), so the attention half lands after them. The trigger half can land now.
+
+  Acceptance (trigger half): (1) deferred_until, relay handoff conditionals and recurrence escalation take a typed condition (spec:X=completed, pr:N=merged, release:>=V, date:, query:count>=n, manual:<who>); (2) a one-time rewrite converts existing free-text deferral triggers where they parse and marks the rest manual; (3) an hourly scheduled job un-defers specs whose condition is true and routes manual conditions older than 14 days to aida human; (4) new free-text deferrals are refused unless explicitly manual. Architecture: the implementer posts a file:line sketch with the slice plan on this spec for advisor signoff before code.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-04T02:34:20.173245666Z
+modified_at: 2026-11-04T02:34:20.173245666Z
+req_type: Story
+filed_at:
+  code_sha: 0754a362d797d2d9b246b4609456735b5486095d
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 0f1624a8b38
+  vendor: claude
+  session: 04f971d5-7365-46ed-b777-d4ff41d730ed
