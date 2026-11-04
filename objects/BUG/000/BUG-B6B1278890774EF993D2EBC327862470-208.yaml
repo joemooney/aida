@@ -1,0 +1,20 @@
+id: 01a1a69c-f8ab-7371-b247-7ba016857f83
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-208
+agreed_id: BUG-2439
+title: aida compete passes Claude-only flags to codex exec
+description: x
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-04T12:51:07.563355298Z
+modified_at: 2026-11-04T12:51:07.563355298Z
+req_type: Bug
+filed_at:
+  code_sha: be275c313c1482b990ba38f323bdc67304f1d15c
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 238a7ecc3ea
+  vendor: claude
+  session: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
