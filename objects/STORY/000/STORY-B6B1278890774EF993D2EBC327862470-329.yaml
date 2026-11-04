@@ -3,12 +3,12 @@ spec_id: STORY-b6b1278890774ef993d2ebc327862470-329
 agreed_id: STORY-2331
 title: 'Regression test: a pool grant round-trips an air gap by git bundle (two bare hubs)'
 description: 'From SPIKE-708 (direct root-to-inside workflow, which the advisor ruled the supported model on 2026-11-02). One hermetic integration test: two bare hubs, bundle-only in and out; two inside clones with an observed claim collision and a retry into disjoint ranges; a divergent outside claim; a disjoint union on return; an overlap refusal with refs/HEAD/status unchanged; an ordinary clean bundle pull; and final-slot and exhaustion coverage (depends on the final-slot bug). Also assert that a root block claim leaves no untracked registry/blocks.lock that makes the store dirty and refuses reconcile (Q4). If it does, fix the sidecar''s placement or ignore rule in this story without weakening the lock. Document the supported boundary (direct root-to-hub grants; recursive delegation and pool replenishment are not supported) in the storage docs.'
-status: InProgress
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-03T02:44:16.945490220Z
-modified_at: 2026-11-04T01:55:52.222208736Z
+modified_at: 2026-11-04T02:46:00.842478380Z
 req_type: Story
 tags:
 - from:SPIKE-708
@@ -225,6 +225,20 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1a472-f95c-7d73-99ef-8a321434f8e1
+  author: aida-auto-bump
+  timestamp: 2026-11-04T02:46:00.796917653Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1a472-f98a-7d42-a26c-858bd9cd932c
+  timestamp: 2026-11-04T02:46:00.842473111Z
+  agent: aida
+  commit_sha: 4671a4e53dcf6ac0f7f8fe8018f030ccd8a6723f
+  summary: 'Every STORY-2331 criterion is met and CI run 41757527185 is green on every lane at 6d6a8fcd, contracts included. AC: bare hubs, bundle-only both ways: story_2331_bundle_air_gap.rs:305-331. Inside collision and disjoint retry: :333-359. Final slot and exhaustion: :361-384, plus the db_block.rs PoolExhausted typed refusal; place_claim fails before any save or commit, so Ok(None) in ensure_block_capacity writes nothing. Divergent outside claim: :388-391. Q4, no untracked blocks.lock: :392-399 plus init_cmd.rs:4737-4743. Disjoint union on return: :401-430. Overlap refusal moves nothing: :432-474. Clean bundle pull: :476-500. Supported boundary documented: docs/cli/10-storage.md:332-383, with the spendability claim cited to story_164 tests. The BUG-1796 fixture keeps its byte-for-byte cmp; it commits only when something is staged, and the Committed-pending line is gone because init now ignores the per-clone runtime files. Non-blocking: the test-time-budget entry of 90s is an estimate; lower it from a CI timing.'
+  review_verdict: approved
 filed_at:
   code_sha: 553f7d5984c6083a9f2b47cfa358ce57c438843b
   branch: main
@@ -237,3 +251,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-11-03T19:19:28.879161279Z
   implemented_by: joe
+  completed_at: 2026-11-04T02:46:00.796909026Z
+  completion_sha: 4671a4e53dcf6ac0f7f8fe8018f030ccd8a6723f
