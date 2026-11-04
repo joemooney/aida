@@ -1,0 +1,18 @@
+{
+  "id": "deputy-default-01a1a74c-8e74-7bb3-90ff-45d4557ebc56",
+  "thread_id": "deputy-01a1a74c-8e74-7bb3-90ff-45d4557ebc56",
+  "from": "deputy:default",
+  "to": {
+    "kind": "agent",
+    "agent": "codex-implementer"
+  },
+  "timestamp": 1793808175071,
+  "body": "Deputy \"default\" finished job 01a1a74c-8e74-7bb3-90ff-45d4557ebc56: rc 126 (refused:exec-not-allowed (git is not `aida` or an --allow-exec path)).\nCommand: git fetch origin main\nOutput: /home/joe/ai/aida/.aida/deputy/default/out/01a1a74c-8e74-7bb3-90ff-45d4557ebc56.out\nRead it with `aida deputy log 01a1a74c-8e74-7bb3-90ff-45d4557ebc56`.\n`aida awaiting` lists it until you run `aida deputy ack 01a1a74c-8e74-7bb3-90ff-45d4557ebc56`.\n",
+  "subject": "deputy job 01a1a74c FAILED: rc 126",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}
