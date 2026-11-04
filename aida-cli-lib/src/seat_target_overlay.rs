@@ -642,11 +642,27 @@ pub(crate) fn wrap_lane_job(
     wrap(unshare, ov, bwrap, args)
 }
 
-/// Mount the overlay once in a throwaway namespace and run `true`, so a host
-/// that refuses unprivileged user namespaces or overlay mounts falls back to
-/// cold before the first job. `Err` is the reason.
+/// The bubblewrap argv [`probe`] runs on the overlay: the smallest sandbox
+/// that still needs the nested user namespace every lane job takes.
+// trace:TASK-2829 | ai:claude
+pub(crate) const PROBE_BWRAP_ARGS: [&str; 4] = ["--ro-bind", "/", "/", "true"];
+
+/// Mount the overlay once in a throwaway namespace and run `bwrap ... true`
+/// in it exactly as a lane job's bwrap runs there ([`wrap_lane_job`]: a
+/// nested user namespace back to the host uid and gid), so a host that
+/// refuses unprivileged user namespaces, overlay mounts or the nested user
+/// namespace falls back to cold before the first job instead of failing
+/// every job. `Err` is the reason.
+// trace:TASK-2829 | ai:claude
 pub(crate) fn probe(unshare: &str, ov: &LaneOverlay) -> Result<(), String> {
-    let (program, args) = wrap(unshare, ov, "true", Vec::new())?;
+    probe_with(unshare, "bwrap", ov)
+}
+
+/// [`probe`] with the bubblewrap program to use.
+// trace:TASK-2829 | ai:claude
+pub(crate) fn probe_with(unshare: &str, bwrap: &str, ov: &LaneOverlay) -> Result<(), String> {
+    let bwrap_args = PROBE_BWRAP_ARGS.iter().map(|a| a.to_string()).collect();
+    let (program, args) = wrap_lane_job(unshare, ov, bwrap, bwrap_args)?;
     let out = std::process::Command::new(&program)
         .args(&args)
         .stdin(std::process::Stdio::null())
@@ -657,7 +673,7 @@ pub(crate) fn probe(unshare: &str, ov: &LaneOverlay) -> Result<(), String> {
     }
     let err = String::from_utf8_lossy(&out.stderr);
     Err(format!(
-        "the overlay mount failed (exit {:?}): {}",
+        "the overlay mount or the lane-job bwrap on it failed (exit {:?}): {}",
         out.status.code(),
         err.lines().next().unwrap_or("").trim()
     ))
