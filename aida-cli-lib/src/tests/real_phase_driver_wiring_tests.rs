@@ -3293,6 +3293,18 @@ fn task_1625_implementer_watchdog_survives_store_commit_refusal() {
     let tmp = tempfile::tempdir().unwrap();
     let (work, store_root) =
         bug_2185_project_with_store(tmp.path(), "[forge]\nprovider = \"github\"\n");
+    // Confirm the unpublished branch is absent, rather than exercising the
+    // driver's eventually-consistent PR lookup retry path.
+    git(tmp.path(), &["init", "--bare", "-q", "origin.git"]);
+    git(
+        &work,
+        &[
+            "remote",
+            "add",
+            "origin",
+            tmp.path().join("origin.git").to_str().unwrap(),
+        ],
+    );
     git(&work, &["checkout", "-q", "-b", "task-1625"]);
     // The hardened host commit refuses an embedded repository, even if the
     // store otherwise has nothing pending. Prove the refusal below first.
@@ -3330,7 +3342,8 @@ EOF
 exec sleep 120
 "#,
     );
-    let gh = fake_gh(tmp.path(), "#!/bin/sh\nprintf '[]\\n'\n");
+    // `gh -q` projects an empty PR list to empty output, not raw JSON.
+    let gh = fake_gh(tmp.path(), "#!/bin/sh\nexit 0\n");
     let _env = crate::test_env::EnvVarsGuard::set(&[("AIDA_TEST_GH_BINARY", gh.to_str().unwrap())]);
     let mut d = driver(&work, "TASK-1625");
     d.aida_exe = fake_aida;
