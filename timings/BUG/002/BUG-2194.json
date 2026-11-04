@@ -1,0 +1,95 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-2194",
+  "publishes": [
+    {
+      "at": "2026-11-04T12:39:53.207318538Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-04T01:41:07.678011339Z",
+      "spec": "BUG-2194",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-04T01:58:10.737650960Z",
+      "spec": "BUG-2194",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-11-04T03:05:52.748531970Z",
+      "spec": "BUG-2194",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "BUG-2194",
+        "branch": "origin/bug-2194",
+        "first_seen": "2026-11-04T03:05:52.748478815+00:00"
+      }
+    },
+    {
+      "ts": "2026-11-04T04:03:56.323640244Z",
+      "spec": "BUG-2194",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "edit",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-04T04:03:56.376469120Z",
+      "spec": "BUG-2194",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Needs Attention",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-04T04:17:18.129505599Z",
+      "spec": "BUG-2194",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-11-04T12:39:29.906114483Z",
+      "spec": "BUG-2194",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 3330
+      }
+    },
+    {
+      "ts": "2026-11-04T12:39:52.862867404Z",
+      "spec": "BUG-2194",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "be275c313c1482b990ba38f323bdc67304f1d15c",
+        "pr": 3330,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
