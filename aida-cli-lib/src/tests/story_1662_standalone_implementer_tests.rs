@@ -71,6 +71,7 @@ fn hold() -> HoldSignal {
         spec: "STORY-9".into(),
         branch: "claude/story-9".into(),
         reason: None,
+        spec_key: None,
     }
 }
 

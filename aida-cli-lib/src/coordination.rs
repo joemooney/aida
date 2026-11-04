@@ -1483,13 +1483,28 @@ pub(crate) fn acquire_lock_claim(
                 });
             }
             Ok(false) => {
-                let _ =
-                    aida_core::git_ops::rollback_commit_if_head_matches(store_root, &committed_sha);
+                // A failed rollback leaves our claim commit in an unclean
+                // store: stop, never retry. trace:BUG-2194 | ai:claude
+                aida_core::git_ops::rollback_commit_if_head_matches(store_root, &committed_sha)
+                    .with_context(|| {
+                        format!(
+                            "{} claim push was rejected and its rollback failed",
+                            kind.label()
+                        )
+                    })?;
                 continue;
             }
             Err(e) => {
-                let _ =
-                    aida_core::git_ops::rollback_commit_if_head_matches(store_root, &committed_sha);
+                // Unavailable means "proceed local-only"; that is only true
+                // once our unpushed claim commit is really gone.
+                // trace:BUG-2194 | ai:claude
+                aida_core::git_ops::rollback_commit_if_head_matches(store_root, &committed_sha)
+                    .with_context(|| {
+                        format!(
+                            "could not push {} claim ({e}) and its rollback failed",
+                            kind.label()
+                        )
+                    })?;
                 return Ok(LockAcquireOutcome::Unavailable(format!(
                     "could not push {} claim ({e})",
                     kind.label()

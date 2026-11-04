@@ -1635,6 +1635,11 @@ fn admit_resolved(
     source: &Source,
     kind: PermitKind,
 ) -> Result<std::result::Result<LocalPermit, String>> {
+    // Keep the permit protocol marker in every binary that admits, so the
+    // activation scan can tell an older or replaced build that admits from
+    // one that does not (BUG-2437).
+    // trace:BUG-2437 | ai:claude
+    std::hint::black_box(activation::WRITE_PERMIT_MARKER);
     let probe = ProbeSource::system();
     let holder = this_process();
     let held = lock(&source.anchor, LIFECYCLE_LOCK_TIMEOUT)?;

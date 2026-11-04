@@ -342,7 +342,14 @@ fn codex_resume_command_honours_a_flag_only_containment_request() {
     codex_native_policy(root.path(), false);
     // `--sandbox` alone (no env, no knob) still runs Codex's native sandbox,
     // and a bypass request never widens a contained resume.
-    let cmd = session::build_codex_resume_command("019a-thread", true, false, None, true).unwrap();
+    // trace:TASK-2712 | ai:claude — the resumed lane's own tree.
+    let lane = session::CodexLane {
+        tree: root.path(),
+        role: None,
+        host_main: None,
+    };
+    let cmd =
+        session::build_codex_resume_command("019a-thread", true, false, None, true, lane).unwrap();
     let args = args_of(&cmd);
     assert!(
         args.windows(2)
@@ -358,7 +365,8 @@ fn codex_resume_command_honours_a_flag_only_containment_request() {
         "{args:?}"
     );
     // Without the flag, the bypass request maps to Codex's bypass flag.
-    let cmd = session::build_codex_resume_command("019a-thread", true, false, None, false).unwrap();
+    let cmd =
+        session::build_codex_resume_command("019a-thread", true, false, None, false, lane).unwrap();
     assert!(
         args_of(&cmd)
             .iter()
@@ -369,8 +377,9 @@ fn codex_resume_command_honours_a_flag_only_containment_request() {
     // BUG-2394: a resumed `--plan-only` lane keeps the read-only sandbox on
     // both postures; bypass and workspace-write never survive it.
     for contained in [true, false] {
-        let cmd = session::build_codex_resume_command("019a-thread", true, true, None, contained)
-            .unwrap();
+        let cmd =
+            session::build_codex_resume_command("019a-thread", true, true, None, contained, lane)
+                .unwrap();
         let args = args_of(&cmd);
         assert!(
             args.windows(2).any(|w| w == ["--sandbox", "read-only"]),

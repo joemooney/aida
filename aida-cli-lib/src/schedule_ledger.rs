@@ -419,7 +419,12 @@ pub(crate) fn write_cas_opts(
         match git_ops::push_exact(store_root, "origin", &committed_sha, &branch) {
             Ok(true) => return Ok(true),
             Ok(false) => {
-                let _ = git_ops::rollback_commit_if_head_matches(store_root, &committed_sha);
+                // A failed rollback leaves the store unclean: stop, never retry.
+                // The offline (push Err) policy below runs no rollback.
+                // trace:BUG-2194 | ai:claude
+                git_ops::rollback_commit_if_head_matches(store_root, &committed_sha).with_context(
+                    || format!("schedule ledger for '{job}': push rejected and rollback failed"),
+                )?;
                 continue;
             }
             Err(e) => {
@@ -586,7 +591,9 @@ pub(crate) fn write_batch_cas_opts(
         match git_ops::push_exact(store_root, "origin", &committed_sha, &branch) {
             Ok(true) => return Ok(count),
             Ok(false) => {
-                let _ = git_ops::rollback_commit_if_head_matches(store_root, &committed_sha);
+                // trace:BUG-2194 | ai:claude
+                git_ops::rollback_commit_if_head_matches(store_root, &committed_sha)
+                    .context("schedule tick: push rejected and rollback failed")?;
             }
             Err(e) => {
                 eprintln!(

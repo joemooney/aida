@@ -731,6 +731,18 @@ pub(crate) fn apply_agent_default_flags(
             if !posture.is_empty() {
                 anyhow::bail!("native sandbox, not AIDA-contained: drop conflicting --extra-flag posture options: {}", posture.join(" "));
             }
+            // TASK-2712: the native write set is AIDA's alone; a passthrough
+            // `--add-dir` (agents.toml or `--extra-flag`) is refused, never
+            // forwarded or silently dropped.
+            // trace:TASK-2712 | ai:claude
+            crate::codex_native_sandbox::refuse_user_add_dir(
+                &flag_options.extra_flags,
+                "--extra-flag",
+            )?;
+            crate::codex_native_sandbox::refuse_user_add_dir(
+                &per_tool,
+                "[agents.codex] default_flags in agents.toml",
+            )?;
             if load_agents_bypass(project_root)? {
                 anyhow::bail!(
                     "[agents] bypass and [agents] contained are mutually exclusive launch postures"
@@ -739,8 +751,11 @@ pub(crate) fn apply_agent_default_flags(
             per_tool = split_posture_flags(config.agent_type, per_tool).0;
             config.default_args =
                 split_posture_flags(config.agent_type, std::mem::take(&mut config.default_args)).0;
-            // A native posture is a vendor sandbox (Codex), whose flags never
-            // read the host main; `None` keeps any other tool fail-closed.
+            // A native posture is a vendor sandbox (Codex). No host main is
+            // pinned here (`queue work` reaches this after its chdir), so
+            // `None`: a seat clone is not recognised and the write set fails
+            // closed; launchers that know the lane rescope with their pinned
+            // main (TASK-2032).
             config
                 .default_args
                 .extend(tool_contained_flags(None, config.agent_type)?);
