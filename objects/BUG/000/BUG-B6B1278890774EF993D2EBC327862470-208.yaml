@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T12:51:07.563355298Z
-modified_at: 2026-11-04T19:19:31.212082032Z
+modified_at: 2026-11-04T19:27:17.986569340Z
 req_type: Bug
 tags:
 - area:compete
@@ -35,6 +35,25 @@ comments:
   created_at: 2026-11-04T19:19:31.212082032Z
   modified_at: 2026-11-04T19:19:31.212082032Z
   session_id: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
+- id: 01a1a807-ade2-77f1-8b28-aa9994a2964a
+  author: joe
+  content: |-
+    ## Implementer approach (salvage resume)
+
+    ### Acceptance criteria as tests
+    - **Unit:** `codex_compete_native_argv_matches_preview_and_runs` proves (1) a contained Codex arm gets `--sandbox workspace-write --ask-for-approval never exec ...` with no Claude-only flags, the judge stays read-only, and (2) the dry-run preview argv equals the built Command argv, both contained and uncontained.
+    - **Unit (subprocess):** `compete_vendor_dies_with_parent` proves (3) that Claude and Codex vendor children die after compete is sent SIGTERM or SIGKILL (PR_SET_PDEATHSIG).
+
+    ### Expected files
+    - `aida-cli-lib/src/compete_cmd.rs`
+    - `docs/cli/03-work-autonomy.md`
+
+    ### Ambiguities / conflicts as questions
+    - None. The salvaged diff covers all three criteria. I am reviewing it and gating it rather than rewriting it.
+  created_at: 2026-11-04T19:27:17.986569340Z
+  modified_at: 2026-11-04T19:27:17.986569340Z
+  session_id: 01a1a8069579
+  harness_version: 2.1.318 (Claude Code)
 history:
 - id: 01a1a69d-4a2d-7292-9de1-00c519ffe27a
   author: joe
