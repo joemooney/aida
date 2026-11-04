@@ -17,7 +17,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-04T01:12:57.233776955Z
-modified_at: 2026-11-04T01:12:57.233776955Z
+modified_at: 2026-11-04T01:19:18.513161444Z
 req_type: Task
 tags:
 - from-advisor:STORY-2331
@@ -26,6 +26,13 @@ tags:
 - loop-guard
 - review-recurrence
 - severity:major
+comments:
+- id: 01a1a423-97f1-7840-a705-035288b33500
+  author: joe
+  content: 'ADVISOR RESOLUTION (2026-11-03 18:20): resolved by a narrower ruling on the parent spec. The recurrence came from the implementer not reproducing (STORY-2331: inferred fixture bytes) / not compiling (STORY-2338); the new ruling names the exact reproduce/compile commands that must be cited. Re-dispatched to a fresh lane.'
+  created_at: 2026-11-04T01:19:18.513161444Z
+  modified_at: 2026-11-04T01:19:18.513161444Z
+  session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
 filed_at:
   code_sha: 0f1624a8b38d961973328d79d05642add4464fc8
   branch: main
