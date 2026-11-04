@@ -3,12 +3,12 @@ spec_id: TASK-826
 agreed_id: TASK-826
 title: 'Canonical cutover: repoint origin to gitlab + [forge] provider=gitlab + verify drain end-to-end'
 description: 'EPIC-44 Phase 2 (the actual flip — DRAFT/gated, do NOT execute until STORY-621 forge wiring + the .gitlab-ci.yml land and in-flight github PRs are finished). Steps: (1) repoint remotes so gitlab.joemooney.com is the canonical two-leg sync target (rename gitlab->origin, github->github-mirror, OR equivalent), keeping the all dual-push; (2) set .aida/config.toml [forge] provider = gitlab so aida own dogfooding uses the GitLab forge; (3) confirm every agent has gitlab.joemooney.com SSH (port 2222) access; (4) VERIFY a full aida queue work --auto-complete drain runs end-to-end on GitLab (MR create -> CI -> review -> merge -> pull auto-bump) before declaring cutover. BlockedBy STORY-621 + the gitlab-ci task. Parent EPIC-44.'
-status: Draft
+status: Rejected
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-14T21:58:51.972669614Z
-modified_at: 2026-11-04T02:32:08.073460238Z
+modified_at: 2026-11-04T02:32:09.814992188Z
 req_type: Task
 tags:
 - batch:gitlab-canonical
@@ -30,3 +30,11 @@ history:
   timestamp: 2026-11-04T02:32:06.955810022Z
   session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
   changes: []
+- id: 01a1a466-4b56-79f1-ad40-4b148bcb6e39
+  author: joe
+  timestamp: 2026-11-04T02:32:09.814989256Z
+  session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Rejected
