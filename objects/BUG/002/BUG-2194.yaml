@@ -17,7 +17,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-20T18:10:31.087634134Z
-modified_at: 2026-11-04T04:17:17.331744591Z
+modified_at: 2026-11-04T04:35:07.075368031Z
 req_type: Bug
 tags:
 - from-implementer:TASK-1981
@@ -72,6 +72,13 @@ comments:
   created_at: 2026-11-04T04:03:55.049896559Z
   modified_at: 2026-11-04T04:03:55.049896559Z
   session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
+- id: 01a1a4d6-dcc3-75f0-b5bf-23a47ea858f2
+  author: joe
+  content: 'Round 2 rework (PR-3330) at a4f9ffd04cf: bug_2194_rollback_caller_tests.rs hook fixtures (pre-push, pre-receive) now use crate::test_exec::write_executable; PermissionsExt import dropped. No other changes. Local gates (umask 022): Executable fixture ratchet OK (7), git auto-maintenance ratchet OK (8), glyph-lint --block OK, trace/doc-header stranding OK (+9 unit tests), rustfmt OK. Full ''make check-ci-fast'' could not complete in this lane: its ''Check aida-cli without default features'' cargo step exceeds the 60s per-call cap on a cold target, so each non-cargo gate the reviewer named was run individually from ci.yml step bodies. Clippy is a [full]-tier gate and was not run locally; CI will cover it. Lane cargo test (-p aida-cli-lib --lib bug_2194) timed out at 900s on an overlay-stale seed: untested=true locally.'
+  created_at: 2026-11-04T04:35:07.075368031Z
+  modified_at: 2026-11-04T04:35:07.075368031Z
+  session_id: 01a1a4c67f0b
+  harness_version: 2.1.318 (Claude Code)
 history:
 - id: 01a15cbb-4740-7a70-afb8-6dedec1b643f
   author: joe
