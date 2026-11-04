@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T01:35:35.019044810Z
-modified_at: 2026-11-04T07:29:32.835144431Z
+modified_at: 2026-11-04T07:56:11.387640438Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -62,6 +62,13 @@ comments:
     Scope note: under the default the seat itself is NOT bwrap-wrapped (only its jobs, each in the BUG-2383 job profile). Wrapping the seat by default is what broke the fixtures and changes every implementer's launch profile; operators who want that keep AIDA_OS_WRAP=1 / config os_wrap=true.
   created_at: 2026-11-04T07:29:32.835144431Z
   modified_at: 2026-11-04T07:29:32.835144431Z
+  session_id: 01a1a56ee3a1
+  harness_version: 2.1.318 (Claude Code)
+- id: 01a1a58e-f2fb-7992-aff5-8a5c6a8ff8f5
+  author: joe
+  content: 'Rework pushed to PR #3347 as a9a34372. Gate NOT met in this lane: the targeted ''cargo test -p aida-cli-lib --lib -- bug_2434'' lane job timed out twice at 900s while compiling aida-cli-lib (stale overlay), before any test ran; raising AIDA_CARGO_TIMEOUT and ''make check-ci-fast'' were denied by this seat''s permissions. untested=true; CI is the first run.'
+  created_at: 2026-11-04T07:56:11.387640438Z
+  modified_at: 2026-11-04T07:56:11.387640438Z
   session_id: 01a1a56ee3a1
   harness_version: 2.1.318 (Claude Code)
 history:
