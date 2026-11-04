@@ -14,13 +14,20 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-04T01:16:55.484093355Z
-modified_at: 2026-11-04T01:16:55.484093355Z
+modified_at: 2026-11-04T04:18:42.631723519Z
 req_type: Task
 tags:
 - carried-from:BUG-2426
 - finding-hash:f8b7291a
 - from-review:PR-3305
 - kind:carried-forward
+comments:
+- id: 01a1a4c7-d747-7910-8291-c1e64529285a
+  author: joe
+  content: 'ADVISOR RULING (2026-11-03 21:20 MST): folded into TASK-2813. Cosmetic parks()/since fix.'
+  created_at: 2026-11-04T04:18:42.631723519Z
+  modified_at: 2026-11-04T04:18:42.631723519Z
+  session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
 history:
 - id: 01a1a443-3d64-7041-bb7e-e764e76a889f
   author: joe
