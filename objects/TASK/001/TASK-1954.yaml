@@ -58,7 +58,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-19T16:01:15.460127350Z
-modified_at: 2026-11-04T19:30:39.298770371Z
+modified_at: 2026-11-04T19:53:19.569362277Z
 req_type: Task
 tags:
 - cli
@@ -288,6 +288,11 @@ comments:
   created_at: 2026-11-04T16:43:48.718723008Z
   modified_at: 2026-11-04T16:43:48.718723008Z
   session_id: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
+- id: 01a1a81f-81d1-7e13-8a1e-e38b82a5bac8
+  author: mcp
+  content: 'Advisor rework for PR #3372: replaced the overlapping variant-import matcher with an extracted path-segment helper and fixtures for glob/group/mixed/renamed imports under bare, crate:: and super:: prefixes, including allowed {self}. Restored the cache-binding A1 doc attachment, added both BUG-2129 criterion traces, and added a real implementer-driver watchdog/store-commit-refusal regression. Its CI budget covers the production 30-second watchdog cadence. Final make check-ci-fast passed all 36 gates; targeted Rust test binary is still compiling. No shipping or review-verdict action will be taken by this standalone implementer.'
+  created_at: 2026-11-04T19:53:19.569343927Z
+  modified_at: 2026-11-04T19:53:19.569343927Z
 history:
 - id: 01a154e5-8be2-7ad1-b92b-8f8f1d3f7bcf
   author: joe
