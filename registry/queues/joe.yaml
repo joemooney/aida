@@ -13,14 +13,6 @@
   added_at: 2026-11-03T20:48:15.252188106Z
   for_role: advisor
 - user_id: joe
-  requirement_id: 01a1a49c-9ef9-7700-9b6d-2aecd34b0321
-  position: 348000
-  added_by: joe
-  note: auto-queued by `session end` (01a1a42b); covers 3 specs
-  added_at: 2026-11-04T03:32:17.863186485Z
-  for_role: reviewer
-  added_by_machine: imac
-- user_id: joe
   requirement_id: 01a15a81-fe2f-7ee3-a5f3-e6b879e8252d
   position: 357000
   added_by: joe
