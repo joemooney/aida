@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-04T04:52:10.142429990Z
-modified_at: 2026-11-04T05:00:53.593981792Z
+modified_at: 2026-11-04T05:43:24.502295922Z
 req_type: Task
 tags:
 - docs
@@ -22,6 +22,12 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a1a515-62c5-75a1-86bd-a523704e8404
+  author: joe
+  timestamp: 2026-11-04T05:43:24.613298449Z
+  session_id: 01a1a5138ed8
+  harness_version: 2.1.318 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 6dcf370f9d3e6fc593ef2c22489665b702a248fc
   branch: agy2/audit-polish
@@ -29,3 +35,11 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: b5577764ec0
   vendor: antigravity
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: AC3 met (59 skills, 22 hooks, explorer, no spec IDs, 7 crates correct) but AC1 missing the engineering-audit.html link, and AC2 has stale hardcoded counts that contradict the embedded data plus two invented topic categories presented as official help-all categories
+  recovery_hint: address the review findings, move TASK-2995 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-11-04T05:43:24.502295922Z
