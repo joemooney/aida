@@ -1,0 +1,29 @@
+id: 01a1a6ab-79d9-7770-8cb7-305794ecbff7
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-781
+title: 'minor (non-blocking): a deleted writer running an old unmarked build is now rea…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on BUG-2437, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  minor (non-blocking): a deleted writer running an old unmarked build is now read to EOF in fill_digests (no hit, so no early stop), including inside fresh_scan_admits on the session-end retirement path; with several distinct replaced debug binaries during the transition window this adds full-file reads. Bounded by distinct inode and transitional only.
+
+  PR: #3349
+  Reviewed sha: b82f9203474ab74763cbc321b8fa846f7e264ad9
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-04T13:06:58.137432402Z
+modified_at: 2026-11-04T13:06:58.137432402Z
+req_type: Task
+tags:
+- carried-from:BUG-2437
+- finding-hash:2ab6fc05
+- from-review:PR-3349
+- kind:carried-forward
+filed_at:
+  code_sha: c19294416a9bc68dab12b910c0566ad80a7cc995
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: be275c313c1
+  vendor: claude
