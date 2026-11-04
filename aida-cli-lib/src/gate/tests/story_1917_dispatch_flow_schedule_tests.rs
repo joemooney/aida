@@ -1120,6 +1120,7 @@ fn task_2344_q2_mid_execution_authority_revocation_aborts_before_merge_and_rearm
                 verdict_ref: None,
                 release_condition: None,
                 spec: Some("TASK-100".into()),
+                spec_key: None,
                 placed_by: Some("reviewer".into()),
                 absorbed: vec![],
             })
@@ -1788,6 +1789,7 @@ fn hold_record(pr: u64) -> crate::gate::merge_hold_core::MergeHoldRecord {
         verdict_ref: None,
         release_condition: None,
         spec: Some("TASK-100".into()),
+        spec_key: None,
         placed_by: Some("reviewer".into()),
         absorbed: vec![],
     }

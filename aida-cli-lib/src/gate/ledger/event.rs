@@ -3,6 +3,7 @@
 // mandate-gate
 
 use super::ChangeKey;
+use crate::gate::canon::GateSpec;
 use crate::gate::merge_hold_core::MergeHoldRecord;
 use crate::gate::review_verdict::{JsonObj, RecorderAttestation, ATTESTATION_KEY};
 use std::path::Path;
@@ -33,9 +34,16 @@ pub(crate) struct GateEvent {
     /// That branch's tip when the identity was taken.
     #[serde(default)]
     pub base_tip: Option<String>,
-    /// Index only: the spec the event concerns.
+    /// Index only: the spec the event concerns, as the writer spelled it
+    /// (upper-cased). Today's readers index by this label.
     #[serde(default)]
     pub spec: Option<String>,
+    /// STORY-2324 PR-B: the canonical key `spec` resolved to when the event
+    /// was written (or `aida gate migrate` stamped it). `None` when the label
+    /// named no requirement. Readers decide by it from PR-C on.
+    // trace:STORY-2324 | ai:claude
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub spec_key: Option<crate::gate::canon::SpecKey>,
     /// The recorder's attestation, as the verdict record carries it.
     #[serde(default)]
     pub actor: Option<RecorderAttestation>,
@@ -141,6 +149,7 @@ impl GateEvent {
             base_ref: None,
             base_tip: None,
             spec: None,
+            spec_key: None,
             actor: None,
             body,
         }
@@ -176,13 +185,15 @@ pub(crate) fn patch_identity(
     (Some(base), Some(tip), patch)
 }
 
-/// The `verdict` event for `record` on `change`, recorded from `root`.
+/// The `verdict` event for `record` on `change`, recorded from `root`. A
+/// spec label (never a change key) is written with its canonical key.
 // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+// trace:STORY-2324 | ai:claude
 pub(crate) fn verdict_event(
     root: &Path,
     change: ChangeKey,
     record: &JsonObj,
-    spec: Option<&str>,
+    spec: Option<&GateSpec>,
 ) -> GateEvent {
     let mut event = GateEvent::new(
         change,
@@ -197,9 +208,11 @@ pub(crate) fn verdict_event(
     event.actor = record
         .get(ATTESTATION_KEY)
         .and_then(|v| serde_json::from_value(v.clone()).ok());
-    event.spec = spec
-        .map(|s| s.trim().to_ascii_uppercase())
-        .filter(|s| !s.is_empty() && ChangeKey::parse(s).is_none());
+    if let Some(spec) = spec.filter(|s| !s.label.is_empty() && ChangeKey::parse(&s.label).is_none())
+    {
+        event.spec = Some(spec.label.clone());
+        event.spec_key = spec.key;
+    }
     if let Some(head) = event.head.as_deref() {
         (event.base_ref, event.base_tip, event.patch_id) = patch_identity(root, head);
     }
@@ -207,11 +220,13 @@ pub(crate) fn verdict_event(
 }
 
 /// The `verdict` event for `record` on `spec`'s unbound ledger: `change` is
-/// the spec key, and the patch identity is taken at the record's head.
+/// the spec label, and the patch identity is taken at the record's head.
 // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
-pub(crate) fn verdict_event_unbound(root: &Path, spec: &str, record: &JsonObj) -> GateEvent {
+// trace:STORY-2324 | ai:claude
+pub(crate) fn verdict_event_unbound(root: &Path, spec: &GateSpec, record: &JsonObj) -> GateEvent {
     let mut event = verdict_event(root, ChangeKey::pr(0), record, Some(spec));
-    event.change = spec.trim().to_ascii_uppercase();
+    event.change = spec.label.clone();
     event.spec = Some(event.change.clone());
+    event.spec_key = spec.key;
     event
 }

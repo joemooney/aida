@@ -1733,7 +1733,12 @@ pub(crate) fn write_verdict_object_for_spec(
     refuse_unsafe_legacy_history(path, round_sha(obj).as_deref())?;
     let mut obj = obj.clone();
     carry_unarchived_rounds(path, &mut obj);
-    crate::gate::ledger::record_verdict_at(path, &obj, spec).map(|_| ())
+    // trace:STORY-2324 | ai:claude — E2: the spec label is resolved once, here.
+    let spec = spec.and_then(|s| {
+        let (root, _) = canonical_verdict_key(path)?;
+        Some(crate::gate::ledger::GateSpec::resolve(&root, s))
+    });
+    crate::gate::ledger::record_verdict_at(path, &obj, spec.as_ref()).map(|_| ())
 }
 
 /// TASK-1766: a later recording at the same commit keeps the displaced
@@ -2583,7 +2588,8 @@ pub fn collect_standalone_verdict(
     let change = crate::gate::ledger::legacy::change_of_verdict_path(canonical)
         .map(|(_, change)| change)
         .ok_or_else(|| format!("{} does not name a change", canonical.display()))?;
-    let spec_bodies: Vec<(String, JsonObj)> = spec_ids
+    // trace:STORY-2324 | ai:claude — E2: each credited label resolved once.
+    let spec_bodies: Vec<(crate::gate::ledger::GateSpec, JsonObj)> = spec_ids
         .iter()
         .map(|id| {
             let body = worktree_specs
@@ -2594,7 +2600,10 @@ pub fn collect_standalone_verdict(
                         .is_some_and(|s| s.to_string_lossy().eq_ignore_ascii_case(id))
                 })
                 .map_or_else(|| source.obj.clone(), |c| c.obj.clone());
-            (id.clone(), body)
+            (
+                crate::gate::ledger::GateSpec::resolve(launcher_root, id),
+                body,
+            )
         })
         .collect();
     crate::gate::ledger::record_collected_verdict(launcher_root, change, &source.obj, &spec_bodies)
