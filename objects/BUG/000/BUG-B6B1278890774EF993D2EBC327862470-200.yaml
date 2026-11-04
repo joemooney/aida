@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-200
 agreed_id: BUG-2431
 title: aida ship --from-seat refuses a seat branch whose commits carry only (Refs SPEC-ID) trailers, so a partial slice of a spec cannot be published from a contained seat
 description: '2026-11-03: publishing the TASK-2708 step-1 seat commit (subject ends ''(Refs TASK-2708)'') was refused with ''no seat commit carries a (SPEC-ID) trailer''. seat_trailer_check (ship_from_seat.rs:386) uses extract_spec_ids_from_commit, which skips Refs references. Refs-only slices are the normal shape for multi-PR specs (STORY-2325 PR-B and STORY-2326 PR-A use them). Expected: accept Refs trailers for attribution and the explicit-spec check, and open the PR without marking the spec for completion.'
-status: Done
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-03T18:23:59.292492928Z
-modified_at: 2026-11-03T22:26:07.691112313Z
+modified_at: 2026-11-04T01:13:44.863721434Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -52,6 +52,20 @@ history:
   timestamp: 2026-11-03T22:26:08.794405995Z
   session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
   changes: []
+- id: 01a1a41e-809c-71a3-8303-ce6517a704bf
+  author: aida-auto-bump
+  timestamp: 2026-11-04T01:13:44.860752914Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a1a41e-809f-7b11-b3a8-5bcd75e77233
+  timestamp: 2026-11-04T01:13:44.863717315Z
+  agent: aida
+  commit_sha: a9d92b5b862723499f1de1895617fd5e777f7f8b
+  summary: Refs-only seat commits now pass seat_trailer_check, feed explicit_spec_check, dead Refs IDs refused, PR title stays non-completing; CI green at head (run 41725219598).
+  review_verdict: approved
 filed_at:
   code_sha: c016e786454b8d89e36474513cf42d4481398394
   branch: main
@@ -64,3 +78,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-11-03T21:49:27.948925926Z
   implemented_by: joe
+  completed_at: 2026-11-04T01:13:44.860746926Z
+  completion_sha: a9d92b5b862723499f1de1895617fd5e777f7f8b
