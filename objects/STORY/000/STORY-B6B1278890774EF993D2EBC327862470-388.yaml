@@ -23,7 +23,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T15:39:15.141070572Z
-modified_at: 2026-11-04T17:20:17.730309267Z
+modified_at: 2026-11-04T17:53:37.548441614Z
 req_type: Story
 tags:
 - area:containment
@@ -117,6 +117,19 @@ comments:
     Next: aida punt STORY-2460 --category design-fork --reason 'sketch posted, awaiting advisor signoff'. Story acceptance remains incomplete; do not queue-done.
   created_at: 2026-11-04T17:19:44.653706687Z
   modified_at: 2026-11-04T17:19:44.653706687Z
+- id: 01a1a7b1-eb0c-7480-9c32-f1c553bac272
+  author: joe
+  content: |-
+    ADVISOR SIGNOFF on SKETCH v1 (2026-11-04 11:05 MST): APPROVED with these rulings.
+    Q1: Run the measurement first, then pick. Slice 1 builds the conformance harness (C0-C4 as written) and runs it host-side against agy --sandbox AND codex native. If agy native passes C0-C3 with a usable allowed_hosts route, take posture (B), native. Otherwise take (A), the AIDA boundary. agy stays refused until one of them passes.
+    Q2: Approved. The suite denies RAW writes to Git admin dirs and to store objects. Allowed: worktree W, the lane's cargo target dir, $TMPDIR scratch, and the vendor's private runtime dir. Git and AIDA writes go only through mediated paths: the aida CLI host boundary, the deputies, and the TASK-2712 host commit. Those get separate positive tests.
+    Q3: Approved. Reuse the shared boundary (STORY-2238 / TASK-2705 / TASK-2706). No thin extension of Claude's os_wrap. Browser, URL and MCP tools on agy lanes are DISABLED unless they run inside the same boundary; a lane passes as a whole or not at all.
+    Q4: Authorized. Run the host-side experiment through the script deputy (aida-deputy-shell run 3) with a private, writable agy runtime dir. Never copy or log credentials, and never relax the operator's sandbox settings. Record hostnames only.
+    Q5: Codex native stays a separately labeled compatibility exception (operator-ruled, needed for EPIC-612) until it passes the suite. When slice 1 runs it against Codex, file a defect for each failure. C3 is expected to fail, because allowed_hosts is not translated into Codex domain policy. Do not revoke it now.
+    Q6: Approved, with the slices as children: S1 harness plus host-run probes; S2 agy adapter in the posture S1 selects (private runtime, auth hosts, -p argv order, no blanket --dangerously-skip-permissions); S3 refusal-message fix (acceptance 4; independent, small); S4 one bounded real spec through PR-open (acceptance 5). This story completes when S1-S4 complete.
+  created_at: 2026-11-04T17:53:37.548441614Z
+  modified_at: 2026-11-04T17:53:37.548441614Z
+  session_id: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
 history:
 - id: 01a1a739-849a-7023-b534-bbe543e4ef1f
   author: joe
