@@ -11,7 +11,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-20T20:08:51.552079826Z
-modified_at: 2026-11-04T01:43:01.802687247Z
+modified_at: 2026-11-04T01:43:03.253516528Z
 req_type: Task
 tags:
 - from-review:PR-2785
@@ -34,6 +34,12 @@ comments:
   created_at: 2026-10-21T04:28:06.333789082Z
   modified_at: 2026-10-21T04:28:06.333789082Z
   session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+- id: 01a1a439-5555-7d43-849b-4b04a286a58e
+  author: joe
+  content: 'ADVISOR REGROUP (2026-11-03): undeferred; revisit trigger met or still-live defect verified in the regroup inventory. Approved for dispatch, LIGHT gate.'
+  created_at: 2026-11-04T01:43:03.253516528Z
+  modified_at: 2026-11-04T01:43:03.253516528Z
+  session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
 history:
 - id: 01a15cb7-a1aa-72a3-a509-3930d0fc908f
   author: joe
