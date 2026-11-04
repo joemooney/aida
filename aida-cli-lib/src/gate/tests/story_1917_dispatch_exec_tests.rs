@@ -1171,6 +1171,7 @@ fn reviewer_worktree_cleanup_preserves_merge_hold_and_refuses_live_occupant() {
     let my_pid = std::process::id();
     let my_start = crate::process_probe::process_start_identity(my_pid);
     let lease = crate::SessionLease {
+        pid_namespace: crate::agent_registry::current_pid_namespace(),
         tree_kind: Default::default(),
         id: "lease-live-88".into(),
         scope: "PR-88".into(),

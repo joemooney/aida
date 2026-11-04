@@ -120,7 +120,10 @@ pub(crate) fn active_worktree_paths(project_root: &std::path::Path) -> HashSet<s
         if lease.worktree_path.as_os_str().is_empty() {
             continue;
         }
-        if matches!(lease_state_for(&lease, &live, now), LeaseState::Live) {
+        if matches!(
+            lease_state_for(&lease, &live, now),
+            LeaseState::Live | LeaseState::Unknown
+        ) {
             out.insert(canon(&lease.worktree_path));
         }
     }
@@ -1808,7 +1811,9 @@ pub(crate) fn probe_lease_death_facts(
     caller: Option<(u32, Option<&str>)>,
     active: &HashSet<std::path::PathBuf>,
 ) -> LeaseDeathFacts {
-    let owner_is_caller = lease.active_pid.is_none()
+    let owner_is_caller = aida_core::pid_observer::PidObserver::current()
+        .can_observe(lease.pid_namespace)
+        && lease.active_pid.is_none()
         && caller.is_some_and(|(pid, start)| {
             lease.creator_pid == Some(pid)
                 && match (lease.creator_pid_start_time.as_deref(), start) {
@@ -1826,13 +1831,7 @@ pub(crate) fn probe_lease_death_facts(
     LeaseDeathFacts {
         same_host: lease.hostname == this_host,
         tree_exists: lease.worktree_path.try_exists().ok(),
-        owner_gone: aida_core::liveness::lease_owner_process_gone(
-            lease.active_pid,
-            lease.active_pid_start_time.as_deref(),
-            lease.creator_pid,
-            lease.creator_pid_start_time.as_deref(),
-            process_probe::process_identity_is_alive,
-        ),
+        owner_gone: crate::leases::lease_owner_gone(lease),
         owner_is_caller,
         tree_active: !lease.worktree_path.as_os_str().is_empty()
             && worktree_is_active(&lease.worktree_path, active),

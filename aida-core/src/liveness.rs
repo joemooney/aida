@@ -1356,6 +1356,9 @@ fn pid_is_alive_impl(pid: u32) -> bool {
 // trace:TASK-55 | ai:claude
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LeaseState {
+    /// The owner PID is outside this observer's namespace.
+    // trace:BUG-2425 | ai:codex
+    Unknown,
     /// Live claude found inside the worktree — actively working.
     Live,
     /// Worktree exists, no live claude inside, <24h old. Could be a
@@ -1372,6 +1375,7 @@ impl LeaseState {
     // trace:TASK-55 | ai:claude
     pub fn label(self) -> &'static str {
         match self {
+            LeaseState::Unknown => "unknown (foreign pidns)",
             LeaseState::Live => "live",
             LeaseState::Dormant => "dormant",
             LeaseState::Stale => "stale",
@@ -1400,6 +1404,47 @@ pub fn classify_lease_state(
     LeaseState::Dormant
 }
 
+/// BUG-2425: age past which a lease whose pids cannot be probed from this
+/// PID namespace is presumed over — the same 24h bound at which
+/// [`classify_lease_state`] calls an ownerless lease Stale.
+// trace:BUG-2425 | ai:claude
+pub const FOREIGN_LEASE_BACKSTOP_HOURS: i64 = 24;
+
+/// Whether a foreign-namespace lease last refreshed at `last_heartbeat` (its
+/// lease-file mtime, never earlier than `started_at`) has gone silent for
+/// [`FOREIGN_LEASE_BACKSTOP_HOURS`]. Keyed on the heartbeat, not the start,
+/// so a live long-running session is not presumed gone.
+// trace:BUG-2425 | ai:claude
+pub fn foreign_lease_backstop_expired(
+    last_heartbeat: chrono::DateTime<chrono::Utc>,
+    now: chrono::DateTime<chrono::Utc>,
+) -> bool {
+    now.signed_duration_since(last_heartbeat).num_hours() >= FOREIGN_LEASE_BACKSTOP_HOURS
+}
+
+/// BUG-2425: the lease state of a lease whose recorded pids live in another
+/// PID namespace. Only the pid probe is skipped — a foreign namespace is not
+/// evidence of death — so every pid-free signal still decides: a live claude
+/// seen in the worktree is Live; a missing worktree, or the same 24h age
+/// backstop [`classify_lease_state`] applies, is Stale. Otherwise the owner
+/// cannot be judged from here: Unknown. `advisory` is a worktree-less
+/// review/claim lock, judged on age alone.
+// trace:BUG-2425 | ai:claude
+pub fn classify_foreign_lease_state(
+    advisory: bool,
+    worktree_exists: bool,
+    has_live_claude: bool,
+    age_hours: i64,
+) -> LeaseState {
+    if !advisory && has_live_claude {
+        return LeaseState::Live;
+    }
+    if age_hours >= FOREIGN_LEASE_BACKSTOP_HOURS || (!advisory && !worktree_exists) {
+        return LeaseState::Stale;
+    }
+    LeaseState::Unknown
+}
+
 // ============================================================================
 // Per-spec liveness classifier (moved from aida-cli, STORY-694).
 // ============================================================================
@@ -1408,6 +1453,9 @@ pub fn classify_lease_state(
 // trace:STORY-694 | ai:claude
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SpecLiveness {
+    /// The recorded process cannot be observed in this PID namespace.
+    // trace:BUG-2425 | ai:codex
+    Unknown,
     /// A spec-scoped lease exists and its holder process is alive (a live
     /// claude is in the worktree). The In-Progress flag is liveness-backed.
     Live,
@@ -1439,6 +1487,7 @@ pub enum SpecLiveness {
 // trace:STORY-694 | ai:claude
 pub fn classify_spec_liveness(lease_state: Option<LeaseState>, in_progress: bool) -> SpecLiveness {
     match lease_state {
+        Some(LeaseState::Unknown) => SpecLiveness::Unknown,
         Some(LeaseState::Live) => SpecLiveness::Live,
         Some(LeaseState::Dormant) | Some(LeaseState::Stale) => SpecLiveness::Stale,
         None if in_progress => SpecLiveness::FlagOnly,
@@ -1530,6 +1579,10 @@ pub fn classify_stale_lease_recovery(
     worktree_exists: bool,
     worktree_dirty_count: usize,
 ) -> StaleLeaseRecovery {
+    // trace:BUG-2425 | ai:codex
+    if lease_state == LeaseState::Unknown {
+        return StaleLeaseRecovery::UnknownLiveness;
+    }
     // Either liveness signal saying "alive" pins the lease as live. `aida ps`
     // showing ● live is sufficient on its own (a live claude in the worktree
     // with no recorded pid still means someone is working there).
@@ -1561,6 +1614,10 @@ pub fn classify_stale_lease_recovery(
 // trace:BUG-677 | ai:claude
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct SessionLeaseLite {
+    /// Namespace in which the recorded PIDs are meaningful.
+    // trace:BUG-2425 | ai:codex
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pid_namespace: Option<u64>,
     /// Raw scope string the user passed to `--owns` (matched against spec ids).
     pub scope: String,
     /// Worktree path (canonicalized at write time). Empty for advisory leases.
@@ -1606,6 +1663,22 @@ pub struct SessionLeaseLite {
     // trace:STORY-1653 | ai:claude
     #[serde(default)]
     pub driver: Option<String>,
+    /// BUG-2425: the lease file's mtime, filled by [`read_session_leases`]
+    /// (heartbeats and lease rewrites bump it). Not part of the TOML.
+    // trace:BUG-2425 | ai:claude
+    #[serde(skip)]
+    pub file_mtime: Option<chrono::DateTime<chrono::Utc>>,
+}
+
+impl SessionLeaseLite {
+    /// The lease's last sign of life: the later of `started_at` and the lease
+    /// file's mtime. Mirrors `aida-cli::lease_heartbeat`, so the foreign
+    /// backstop runs on one clock in both crates.
+    // trace:BUG-2425 | ai:claude
+    pub fn heartbeat(&self) -> chrono::DateTime<chrono::Utc> {
+        self.file_mtime
+            .map_or(self.started_at, |m| m.max(self.started_at))
+    }
 }
 
 /// One work-item spec projected for the liveness pass — the display id, the two
@@ -1652,7 +1725,12 @@ pub fn read_session_leases(project_root: &Path) -> Vec<SessionLeaseLite> {
             continue;
         }
         if let Ok(content) = std::fs::read_to_string(&p) {
-            if let Ok(lease) = toml::from_str::<SessionLeaseLite>(&content) {
+            if let Ok(mut lease) = toml::from_str::<SessionLeaseLite>(&content) {
+                lease.file_mtime = entry
+                    .metadata()
+                    .ok()
+                    .and_then(|m| m.modified().ok())
+                    .map(chrono::DateTime::<chrono::Utc>::from);
                 out.push(lease);
             }
         }
@@ -1672,6 +1750,24 @@ pub fn lease_state_for(
     live_sessions: &[LiveSession],
     now: chrono::DateTime<chrono::Utc>,
 ) -> LeaseState {
+    let worktree_exists = l.worktree_path.exists();
+    let has_live_claude = || {
+        live_sessions.iter().any(|s| {
+            !s.stale_cwd && (s.cwd == l.worktree_path || s.cwd.starts_with(&l.worktree_path))
+        })
+    };
+    let age_hours = now.signed_duration_since(l.started_at).num_hours();
+    // A foreign lease ages from its heartbeat, not started_at, so a live
+    // long-running foreign session is not Stale. trace:BUG-2425 | ai:claude
+    if !crate::pid_observer::PidObserver::current().can_observe(l.pid_namespace) {
+        let advisory = l.review_verb || l.claim_verb;
+        return classify_foreign_lease_state(
+            advisory,
+            worktree_exists,
+            !advisory && has_live_claude(),
+            now.signed_duration_since(l.heartbeat()).num_hours(),
+        );
+    }
     if l.review_verb || l.claim_verb {
         let alive = l
             .creator_pid
@@ -1690,12 +1786,7 @@ pub fn lease_state_for(
             LeaseState::Stale
         };
     }
-    let worktree_exists = l.worktree_path.exists();
-    let has_live_claude = live_sessions
-        .iter()
-        .any(|s| !s.stale_cwd && (s.cwd == l.worktree_path || s.cwd.starts_with(&l.worktree_path)));
-    let age_hours = now.signed_duration_since(l.started_at).num_hours();
-    classify_lease_state(worktree_exists, has_live_claude, age_hours)
+    classify_lease_state(worktree_exists, has_live_claude(), age_hours)
 }
 
 /// Does `lease`'s scope resolve to `spec`? True iff the raw scope string equals
@@ -1745,6 +1836,7 @@ pub fn spec_verdicts(
         }
         match map.get(&key) {
             Some(SpecLiveness::Live) => {}
+            Some(SpecLiveness::Unknown) if state != SpecLiveness::Live => {}
             _ => {
                 map.insert(key, state);
             }
@@ -1755,11 +1847,7 @@ pub fn spec_verdicts(
     for l in leases {
         let state = lease_state_for(l, live, now);
         if let Some(spec) = specs.iter().find(|s| scope_matches_spec(&l.scope, s)) {
-            let verdict = if state == LeaseState::Live {
-                SpecLiveness::Live
-            } else {
-                SpecLiveness::Stale
-            };
+            let verdict = classify_spec_liveness(Some(state), false);
             upsert(&mut map, &spec.disp, verdict);
         }
     }
@@ -1774,14 +1862,16 @@ pub fn spec_verdicts(
             .filter(|l| scope_matches_spec(&l.scope, s))
             .map(|l| lease_state_for(l, live, now))
             // If several leases claim the spec, the strongest (Live) wins — the
-            // spec is genuinely being worked. Order: Live < Dormant < Stale in
-            // the enum, and Live is what we care about, so take the min.
+            // spec is genuinely being worked. Unknown outranks stale/dormant
+            // evidence, while an observed live session is strongest.
             .min_by_key(|st| match st {
+                LeaseState::Unknown => 1,
                 LeaseState::Live => 0,
-                LeaseState::Dormant => 1,
-                LeaseState::Stale => 2,
+                LeaseState::Dormant => 2,
+                LeaseState::Stale => 3,
             });
         match classify_spec_liveness(lease_state, true) {
+            SpecLiveness::Unknown => upsert(&mut map, &s.disp, SpecLiveness::Unknown),
             SpecLiveness::Live => upsert(&mut map, &s.disp, SpecLiveness::Live),
             // Stale lease OR flag-only (no lease) both surface as Stale on the
             // TUI glyph — parity with `parse_ps_json`, which maps every orphaned
@@ -2685,6 +2775,7 @@ mod tests {
 
     fn lease(scope: &str, worktree: &str) -> SessionLeaseLite {
         SessionLeaseLite {
+            pid_namespace: crate::pid_observer::current_pid_namespace(),
             scope: scope.to_string(),
             worktree_path: PathBuf::from(worktree),
             started_at: chrono::Utc::now(),
@@ -2696,6 +2787,7 @@ mod tests {
             claim_verb: false,
             authorized_by: None,
             driver: None,
+            file_mtime: None,
         }
     }
 
@@ -3157,5 +3249,101 @@ started_at = "2026-01-01T00:00:00Z"
         let summary = tree.descendant_age_summary(1).unwrap();
         assert_eq!(summary.ages, vec![120]);
         assert_eq!(summary.unsampled, 1);
+    }
+}
+
+#[cfg(test)]
+mod bug_2425_tests {
+    use super::*;
+
+    /// A lease whose pids were recorded in a namespace this observer is not in.
+    fn foreign_lease(
+        ns: u64,
+        worktree: &Path,
+        started_at: chrono::DateTime<chrono::Utc>,
+    ) -> SessionLeaseLite {
+        let mut lease: SessionLeaseLite = toml::from_str(&format!(
+            "scope = 'BUG-2425'\nstarted_at = '2026-01-01T00:00:00Z'\nactive_pid = 4294967294\nactive_pid_start_time = 'linux-starttime:1'\npid_namespace = {}\n", ns ^ 1
+        )).unwrap();
+        lease.worktree_path = worktree.to_path_buf();
+        lease.started_at = started_at;
+        lease
+    }
+
+    fn spec() -> SpecLivenessInput {
+        SpecLivenessInput {
+            disp: "BUG-2425".into(),
+            agreed_id: Some("BUG-2425".into()),
+            spec_id: None,
+            in_progress: true,
+            orphan_excluded: false,
+        }
+    }
+
+    // trace:BUG-2425 | ai:codex
+    #[test]
+    fn foreign_namespace_keeps_core_spec_verdict_unknown() {
+        let Some(ns) = crate::pid_observer::current_pid_namespace() else {
+            return; // no PID namespaces on this platform
+        };
+        let tmp = tempfile::tempdir().unwrap();
+        let now = chrono::Utc::now();
+        let lease = foreign_lease(ns, tmp.path(), now);
+        assert_eq!(lease_state_for(&lease, &[], now), LeaseState::Unknown);
+        assert_eq!(
+            spec_verdicts(&[spec()], &[lease], &[], now)["BUG-2425"],
+            SpecLiveness::Unknown
+        );
+        let observer = crate::pid_observer::PidObserver::current();
+        assert!(observer.can_observe(Some(ns)));
+        assert!(!observer.can_observe(Some(ns ^ 1)));
+    }
+
+    // Only the pid probe is skipped: the 24h age backstop and a missing
+    // worktree still settle a foreign-namespace lease.
+    // trace:BUG-2425 | ai:claude
+    #[test]
+    fn foreign_namespace_lease_still_ages_out() {
+        let Some(ns) = crate::pid_observer::current_pid_namespace() else {
+            return;
+        };
+        let tmp = tempfile::tempdir().unwrap();
+        let now = chrono::Utc::now();
+        let old = now - chrono::Duration::hours(FOREIGN_LEASE_BACKSTOP_HOURS + 1);
+        assert_eq!(
+            lease_state_for(&foreign_lease(ns, tmp.path(), old), &[], now),
+            LeaseState::Stale
+        );
+        let gone = tmp.path().join("gone");
+        assert_eq!(
+            lease_state_for(&foreign_lease(ns, &gone, now), &[], now),
+            LeaseState::Stale
+        );
+        // A fresh heartbeat keeps an old foreign lease Unknown, and the lease
+        // file mtime read_session_leases records is that heartbeat.
+        let mut beating = foreign_lease(ns, tmp.path(), now - chrono::Duration::hours(48));
+        assert_eq!(lease_state_for(&beating, &[], now), LeaseState::Stale);
+        beating.file_mtime = Some(now);
+        assert_eq!(lease_state_for(&beating, &[], now), LeaseState::Unknown);
+        let dir = leases_dir(tmp.path());
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("beating.toml"), toml::to_string(&beating).unwrap()).unwrap();
+        let read = read_session_leases(tmp.path());
+        assert_eq!(read.len(), 1);
+        assert!(read[0].heartbeat() > read[0].started_at);
+        assert_eq!(
+            lease_state_for(&read[0], &[], chrono::Utc::now()),
+            LeaseState::Unknown
+        );
+        assert!(foreign_lease_backstop_expired(old, now));
+        assert!(!foreign_lease_backstop_expired(now, now));
+        assert_eq!(
+            classify_foreign_lease_state(true, false, false, 1),
+            LeaseState::Unknown
+        );
+        assert_eq!(
+            classify_foreign_lease_state(false, true, true, 30),
+            LeaseState::Live
+        );
     }
 }

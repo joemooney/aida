@@ -179,6 +179,8 @@ pub mod oplog;
 /// trace:STORY-333 | ai:claude
 pub mod pickability;
 #[cfg(feature = "native")]
+pub mod pid_observer;
+#[cfg(feature = "native")]
 pub mod process_probe;
 #[cfg(feature = "native")]
 pub mod project;

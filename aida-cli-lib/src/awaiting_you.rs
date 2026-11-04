@@ -28,6 +28,12 @@ pub(crate) const DEFAULT_CAP: usize = 5;
 pub(crate) struct AwaitingReport {
     // trace:STORY-2336 | ai:codex
     pub idle_eligible: Vec<crate::idle_eligible::IdleEligibleItem>,
+    /// Open changes `aida review watch` is skipping without reviewing them,
+    /// each with the watcher's own reason: a stale overlapping head, a
+    /// refused branch update routed here, an exited review, the round cap.
+    /// A local state-file read, so it rides the per-turn notice too.
+    // trace:BUG-2426 | ai:claude
+    pub review_watch_skipped: Vec<WatchSkippedItem>,
     /// Open PRs that pass the awaiting-you gate: `MERGEABLE` + no failing
     /// or pending CI + reviewer verdict is not `CHANGES_REQUESTED`. The
     /// aida-chat motivating case: 5 PRs sat open for hours because the
@@ -1235,6 +1241,36 @@ pub(crate) struct MergeablePrItem {
     pub under_review: Option<String>,
 }
 
+/// One change the review watcher is parking, with its reason.
+// trace:BUG-2426 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+pub(crate) struct WatchSkippedItem {
+    pub change: String,
+    pub head: String,
+    pub reason: String,
+    pub since: chrono::DateTime<chrono::Utc>,
+}
+
+impl WatchSkippedItem {
+    pub(crate) fn from_watcher(root: &std::path::Path) -> Vec<Self> {
+        crate::review_watch::skipped_changes(root)
+            .into_iter()
+            .map(|(change, head, reason, since)| Self {
+                change,
+                head,
+                reason,
+                since,
+            })
+            .collect()
+    }
+    fn short_head(&self) -> &str {
+        self.head.get(..12).unwrap_or(&self.head)
+    }
+    fn since_label(&self) -> String {
+        self.since.format("%Y-%m-%d %H:%M UTC").to_string()
+    }
+}
+
 /// A broken PR which has fallen between the review and repair lanes.
 // trace:TASK-192 | ai:codex
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -1876,6 +1912,8 @@ impl AwaitingReport {
         vec![
             ("prs", self.mergeable_prs.len()),
             ("idle_eligible", self.idle_eligible.len()),
+            // trace:BUG-2426 | ai:claude
+            ("review_watch_skipped", self.review_watch_skipped.len()),
             (
                 "recusal_holds",
                 self.recusal_holds
@@ -2047,6 +2085,28 @@ impl AwaitingReport {
             "reviewer_actionable: {} of {} routed",
             self.reviewer_actionable_count(),
             self.reviewer_queue_items.len()
+        );
+        // trace:BUG-2426 | ai:claude
+        let skipped: Vec<Vec<String>> = self
+            .review_watch_skipped
+            .iter()
+            .map(|p| {
+                vec![
+                    p.change.clone(),
+                    p.short_head().to_string(),
+                    p.reason.clone(),
+                    p.since_label(),
+                ]
+            })
+            .collect();
+        let _ = writeln!(
+            out,
+            "{}",
+            crate::toon::table_raw(
+                "review_watch_skipped",
+                &["change", "head", "reason", "since"],
+                &skipped
+            )
         );
         let idle: Vec<Vec<String>> = self
             .idle_eligible
@@ -2540,6 +2600,22 @@ impl AwaitingReport {
             budget -= 1;
         }
 
+        // trace:BUG-2426 | ai:claude
+        for item in &self.review_watch_skipped {
+            if budget == 0 {
+                overflow += 1;
+                continue;
+            }
+            writeln!(
+                w,
+                "  review watch skips {} at {} — {} (since {})",
+                item.change.bold(),
+                item.short_head(),
+                item.reason,
+                item.since_label()
+            )?;
+            budget -= 1;
+        }
         // trace:STORY-2336 | ai:codex
         for item in &self.idle_eligible {
             if budget == 0 {
@@ -3039,6 +3115,8 @@ impl AwaitingReport {
         serde_json::json!({
             "total": self.total(),
             "idle_eligible": self.idle_eligible,
+            // trace:BUG-2426 | ai:claude
+            "review_watch_skipped": self.review_watch_skipped,
             "mergeable_prs": self.mergeable_prs.iter().map(|p| serde_json::json!({
                 "number": p.number,
                 "title": p.title,
@@ -3277,6 +3355,13 @@ impl AwaitingReport {
         }
         if !self.idle_eligible.is_empty() {
             parts.push(format!("{} idle eligible", self.idle_eligible.len()));
+        }
+        // trace:BUG-2426 | ai:claude
+        if !self.review_watch_skipped.is_empty() {
+            parts.push(format!(
+                "{} skipped by review watch",
+                self.review_watch_skipped.len()
+            ));
         }
         if !self.mergeable_prs.is_empty() {
             parts.push(pluralize(self.mergeable_prs.len(), "PR", "PRs"));
@@ -5760,6 +5845,14 @@ mod tests {
                         observed_at: chrono::Utc::now(),
                         next_command: "aida queue work PR-42 --role reviewer".into(),
                     });
+            }),
+            ("review_watch_skipped", |r| {
+                r.review_watch_skipped.push(WatchSkippedItem {
+                    change: "PR-7".into(),
+                    head: "a".repeat(40),
+                    reason: "behind `main` with overlap; update-branch conflicts".into(),
+                    since: chrono::Utc::now(),
+                });
             }),
             ("recusal_holds", |r| {
                 r.recusal_holds.push(RecusalHoldItem {

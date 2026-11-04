@@ -22,6 +22,7 @@ const OPERATOR: &str = "aida review record (operator)";
 
 pub(super) fn lease(id: &str, scope: &str, worktree: PathBuf) -> SessionLease {
     SessionLease {
+        pid_namespace: crate::agent_registry::current_pid_namespace(),
         tree_kind: Default::default(),
         id: id.to_string(),
         scope: scope.to_string(),
@@ -61,7 +62,7 @@ pub(super) fn lease(id: &str, scope: &str, worktree: PathBuf) -> SessionLease {
     }
 }
 
-fn write_lease(root: &Path, l: &SessionLease) {
+pub(super) fn write_lease(root: &Path, l: &SessionLease) {
     let path = crate::lease_path(root, &l.id);
     std::fs::create_dir_all(path.parent().unwrap()).unwrap();
     std::fs::write(path, toml::to_string_pretty(l).unwrap()).unwrap();
