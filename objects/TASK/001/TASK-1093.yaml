@@ -12,7 +12,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-07-02T16:43:29.399510347Z
-modified_at: 2026-11-04T01:40:01.163531560Z
+modified_at: 2026-11-04T01:40:03.350838962Z
 req_type: Task
 tags:
 - followup-src:docs/plans/2026-07-02-spike-76-dispatch-resilience.md
@@ -20,6 +20,13 @@ relationships:
 - rel_type: Child
   target_id: 019f21bf-59d6-77e1-9d7d-e5519f5b0b59
   created_at: 2026-07-02T16:43:35.108185662Z
+comments:
+- id: 01a1a436-9696-7c82-badc-0b6d3227b8f4
+  author: joe
+  content: 'ADVISOR REGROUP (2026-11-03): closed as obsolete/already fixed after verification in the regroup inventory: superseded in practice: headless phases honour the configured vendor (BUG-2389, BUG-2386, BUG-2416).'
+  created_at: 2026-11-04T01:40:03.350838962Z
+  modified_at: 2026-11-04T01:40:03.350838962Z
+  session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
 history:
 - id: 01a1a436-8ea2-79e2-8d59-ac8cff5a56c1
   author: joe
