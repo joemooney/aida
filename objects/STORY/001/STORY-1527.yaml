@@ -15,7 +15,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-06T03:58:29.391669890Z
-modified_at: 2026-11-04T02:30:12.094154250Z
+modified_at: 2026-11-04T02:30:13.474596361Z
 req_type: Story
 relationships:
 - rel_type: Blocks
@@ -28,6 +28,12 @@ comments:
   content: 'PROXY DECISION (orchestrator for Joe): apply recorded operator answer Hold numeric threshold (2026-10-08). No eight-spec threshold is approved, no bulk backfill as independent evidence, delta remains explicitly unknown. Park until an organically criterion-traced subject corpus exists and readiness criteria can be grounded in that evidence. Existing proposed eight-spec acceptance is not authorization to implement that threshold. Deferral is not completion.'
   created_at: 2026-10-08T16:20:18.822897436Z
   modified_at: 2026-10-08T16:20:18.822897436Z
+- id: 01a1a464-84e2-7421-9446-9c3f60fafc7b
+  author: joe
+  content: 'OPERATOR RULING (2026-11-03 19:30 MST, relayed by advisor): regroup ruling 1: the regeneration / north-star research line does not continue. Rejected.'
+  created_at: 2026-11-04T02:30:13.474596361Z
+  modified_at: 2026-11-04T02:30:13.474596361Z
+  session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
 history:
 - id: 01a1a464-7fe8-7d63-84c9-064921cd2236
   author: joe
