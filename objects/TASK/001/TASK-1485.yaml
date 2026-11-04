@@ -23,10 +23,8 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-24T15:09:38.693878746Z
-modified_at: 2026-11-04T02:41:07.537354993Z
+modified_at: 2026-11-04T02:42:38.467174793Z
 req_type: Task
-tags:
-- operator-held
 comments:
 - id: 01a0d46a-5038-7cc2-b829-eeb079f97c9e
   author: joe
@@ -65,7 +63,8 @@ history:
   timestamp: 2026-11-04T02:41:04.929485196Z
   session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
   changes: []
-deferred: true
-deferred_at: 2026-11-04T02:41:04.477239230Z
-deferred_until: the operator reopens the regeneration / north-star research line
-deferred_reason: 'OPERATOR RULING 2026-11-03 19:36 MST: the regeneration / north-star research line stays deferred (revised from reject).'
+- id: 01a1a46f-e389-7000-b173-567cfc025e7b
+  author: joe
+  timestamp: 2026-11-04T02:42:38.601762724Z
+  session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
+  changes: []
