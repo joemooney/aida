@@ -21,7 +21,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T06:46:56.104025446Z
-modified_at: 2026-11-04T01:31:03.742012036Z
+modified_at: 2026-11-04T01:36:59.421172844Z
 req_type: Bug
 tags:
 - audit
@@ -144,6 +144,12 @@ comments:
   modified_at: 2026-11-03T23:55:40.726366180Z
   session_id: 01a1a3ac7b64
   harness_version: 2.1.317 (Claude Code)
+- id: 01a1a433-c81d-7a61-b891-ad86d7c047f0
+  author: joe
+  content: 'ADVISOR RULING (PR-3309 round 4 at aeea9436, 2026-11-03 18:40 MST): rework, final round. Fix in this PR: (1) BLOCKING: regenerate the help golden, do not hand-edit: AIDA_UPDATE_SNAPSHOTS=1 cargo test --profile agent -p aida-cli-lib help_surface_matches_golden_snapshot, run through the lane job runner, and commit the result. (2) minor, bundled (cheap, user-facing): CODEX_LANE_NEEDS_GRANT (dispatch.rs:267) names the real remedy: resubmit with ''aida dispatch request take|impl'' and run ''aida dispatch serve'' from a role-entered advisor terminal. (3) minor, bundled (correctness: a request is lost whenever the tick wins): resolve the lane vendor at claim time and return WaitingForServe for Codex take/impl when !via_serve, as pass_admission does (gate/dispatch_authority.rs:1748), plus a test that the tick leaves it Pending and serve then runs it. (4) ACCEPTED, no change: the worktree-reuse gap on the Codex take path. git''s ''already checked out'' error names the branch, the path needs a dead implementer worktree, and STORY-2326 (one launcher) owns worktree reuse. Gate: LIGHT (the snapshot test + the new dispatch test + check-ci-fast, umask 022).'
+  created_at: 2026-11-04T01:36:59.421172844Z
+  modified_at: 2026-11-04T01:36:59.421172844Z
+  session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
 history:
 - id: 01a195dc-94a3-73e2-8979-5b3cd7a026e1
   author: joe
