@@ -13,14 +13,6 @@
   added_at: 2026-11-03T20:48:15.252188106Z
   for_role: advisor
 - user_id: joe
-  requirement_id: 01a1a54c-662f-7f33-bf61-69fe28e37bb2
-  position: 382000
-  added_by: joe
-  note: auto-queued by `session end` (01a1a51d); covers 1 spec
-  added_at: 2026-11-04T06:43:58.255392082Z
-  for_role: reviewer
-  added_by_machine: imac
-- user_id: joe
   requirement_id: 01a15aee-5660-7a00-b624-a30d03b34741
   position: 386000
   added_by: joe
@@ -62,14 +54,6 @@
   added_by: joe
   note: auto-queued by `session end` (01a1a63d); covers 1 spec
   added_at: 2026-11-04T16:40:27.692988526Z
-  for_role: reviewer
-  added_by_machine: imac
-- user_id: joe
-  requirement_id: 01a1a771-67af-7660-a6ec-6598f4ef85f3
-  position: 402000
-  added_by: joe
-  note: auto-queued by `session end` (01a1a641); covers 1 spec
-  added_at: 2026-11-04T16:43:23.176160758Z
   for_role: reviewer
   added_by_machine: imac
 - user_id: joe
