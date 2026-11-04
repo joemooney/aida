@@ -39,7 +39,8 @@ const WRITER_EXECUTABLES: &[&str] = &["aida", "aida-server"];
 
 /// Present in every binary that takes a mail write permit:
 /// [`super::admit_resolved`] references it, so any build that links admission
-/// carries these bytes, and a build without admission does not. The version
+/// carries these bytes. A build that predates this marker (or the permit
+/// protocol) does not carry it, so it never counts as admitting. The version
 /// names the permit protocol; change it whenever an older admitting build
 /// would no longer satisfy what retirement relies on, and builds of the old
 /// protocol stop counting as admitting.
@@ -239,9 +240,11 @@ pub fn dry_run_report(project_root: &Path) -> ActivationReport {
 /// host runs this very build is the same evidence [`record`] writes down, so a
 /// retirement may honour it for itself without anyone re-recording (a dev
 /// rebuild changes the source build and would otherwise strand every
-/// mail-bearing checkout). Nothing is written; any writer of another build,
-/// an unidentifiable executable, an incomplete scan or a build that names no
-/// source still refuses (fail closed). In unit tests the scan is replaced by
+/// mail-bearing checkout). A writer of another or a replaced build admits
+/// only when its executable carries [`WRITE_PERMIT_MARKER`] (BUG-2437).
+/// Nothing is written; any other writer of another build, an unidentifiable
+/// executable, an incomplete scan or a build that names no source still
+/// refuses (fail closed). In unit tests the scan is replaced by
 /// [`FRESH_SCAN`] (default: refuse) so a test never depends on this machine.
 // trace:BUG-2411 | ai:claude
 pub(crate) fn fresh_scan_admits() -> bool {
@@ -331,7 +334,7 @@ pub fn rerecord_for_promoted_build(
     let me = BuildIdentity {
         exe_id: (meta.dev(), meta.ino()),
         digest: None,
-        permit_marker: inspect_file(promoted_exe).is_some_and(|i| i.permit_marker),
+        permit_marker: scan_file_for_marker(promoted_exe) == Some(true),
     };
     let proc = Path::new("/proc");
     let (mut processes, incomplete) = scan_proc(proc, std::process::id());
@@ -383,10 +386,11 @@ fn record_named(
 /// process's `me` (read from `self_exe`; writers from `proc`), each distinct
 /// file once, so a byte-identical copy at another path is recognised as this
 /// build, and note whether each carries [`WRITE_PERMIT_MARKER`]. A replaced
-/// (deleted) binary is read too, through `/proc/<pid>/exe` (BUG-2437). Nothing
-/// is read when every writer shares this process's file. An unreadable file
-/// keeps no digest and no marker, which [`classify`] reports as unidentified
-/// (fail closed).
+/// (deleted) binary is read too, through `/proc/<pid>/exe` (BUG-2437), but
+/// only up to the marker and never hashed: its digest could not admit it.
+/// Nothing is read when every writer shares this process's file. An
+/// unreadable file keeps no digest and no marker, which [`classify`] reports
+/// as unidentified (fail closed).
 // trace:BUG-b6b1278890774ef993d2ebc327862470-010 | ai:claude
 fn fill_digests(
     proc: &Path,
@@ -394,39 +398,40 @@ fn fill_digests(
     mut me: BuildIdentity,
     self_exe: &Path,
 ) -> BuildIdentity {
-    let mut seen: HashMap<(u64, u64), Inspection> = HashMap::new();
+    let mut seen: HashMap<((u64, u64), bool), Inspection> = HashMap::new();
     for p in processes.iter_mut() {
         let Some(id) = p.exe_id else { continue };
-        let writer = p.exe.as_deref().is_some_and(|exe| {
-            Path::new(exe.trim_end_matches(" (deleted)"))
-                .file_name()
-                .and_then(|n| n.to_str())
-                .is_some_and(|n| WRITER_EXECUTABLES.contains(&n))
-        });
+        let Some(exe) = p.exe.as_deref() else {
+            continue;
+        };
+        let deleted = exe.ends_with(" (deleted)");
+        let writer = Path::new(exe.trim_end_matches(" (deleted)"))
+            .file_name()
+            .and_then(|n| n.to_str())
+            .is_some_and(|n| WRITER_EXECUTABLES.contains(&n));
         if !writer || id == me.exe_id {
             continue;
         }
-        if me.digest.is_none() {
+        if !deleted && me.digest.is_none() {
             me.digest = digest_file(self_exe);
         }
         let exe_link = proc.join(p.pid.to_string()).join("exe");
-        let inspection = match seen.get(&id) {
+        let inspection = match seen.get(&(id, deleted)) {
             Some(found) => Some(found.clone()),
-            None => {
-                inspect_writer(&exe_link, id).map(|found| seen.entry(id).or_insert(found).clone())
-            }
+            None => inspect_writer(&exe_link, id, !deleted)
+                .map(|found| seen.entry((id, deleted)).or_insert(found).clone()),
         };
-        p.exe_digest = inspection.as_ref().map(|i| i.digest.clone());
+        p.exe_digest = inspection.as_ref().and_then(|i| i.digest.clone());
         p.permit_marker = inspection.map(|i| i.permit_marker);
     }
     me
 }
 
-/// What one read of an executable shows: its SHA-256 and whether it carries
-/// [`WRITE_PERMIT_MARKER`].
+/// What one read of an executable shows: its SHA-256, when it was hashed, and
+/// whether it carries [`WRITE_PERMIT_MARKER`].
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct Inspection {
-    digest: String,
+    digest: Option<String>,
     permit_marker: bool,
 }
 
@@ -435,34 +440,39 @@ struct Inspection {
 /// the scan and this read names another file: that is `None` (unknown, fail
 /// closed), never a digest or marker attributed to `expected`. Only a
 /// successful read is cached, so an unreadable host never hides a later
-/// readable one.
+/// readable one. Without `hash`, the read stops at the marker.
 // trace:TASK-b6b1278890774ef993d2ebc327862470-050 | ai:claude
-fn inspect_writer(exe_link: &Path, expected: (u64, u64)) -> Option<Inspection> {
+fn inspect_writer(exe_link: &Path, expected: (u64, u64), hash: bool) -> Option<Inspection> {
     let mut file = std::fs::File::open(exe_link).ok()?;
     let meta = file.metadata().ok()?;
     if (meta.dev(), meta.ino()) != expected {
         return None;
     }
-    inspect_reader(&mut file)
+    inspect_reader(&mut file, hash)
 }
 
 /// SHA-256 of a file's bytes, hex-encoded, or `None` when it cannot be read.
 fn digest_file(path: &Path) -> Option<String> {
-    inspect_file(path).map(|i| i.digest)
+    inspect_reader(&mut std::fs::File::open(path).ok()?, true)?.digest
 }
 
-fn inspect_file(path: &Path) -> Option<Inspection> {
-    inspect_reader(&mut std::fs::File::open(path).ok()?)
-}
-
-/// Hash `reader` and look for [`WRITE_PERMIT_MARKER`] in one pass. The
-/// marker's last `len - 1` bytes of each block carry over, so a marker that
-/// straddles two reads is still found.
+/// Whether the file at `path` carries [`WRITE_PERMIT_MARKER`], reading only
+/// up to the first hit and hashing nothing; `None` when it cannot be read.
 // trace:BUG-2437 | ai:claude
-fn inspect_reader(reader: &mut impl std::io::Read) -> Option<Inspection> {
+fn scan_file_for_marker(path: &Path) -> Option<bool> {
+    inspect_reader(&mut std::fs::File::open(path).ok()?, false).map(|i| i.permit_marker)
+}
+
+/// Look for [`WRITE_PERMIT_MARKER`] in `reader` and, with `hash`, take the
+/// SHA-256 of all of it in the same pass. Without `hash`, reading stops at
+/// the first hit. The marker's last `len - 1` bytes of each block carry over,
+/// so a marker that straddles two reads is still found.
+// trace:BUG-2437 | ai:claude
+fn inspect_reader(reader: &mut impl std::io::Read, hash: bool) -> Option<Inspection> {
     let needle = WRITE_PERMIT_MARKER;
     let keep = needle.len() - 1;
-    let mut hasher = Sha256::new();
+    let skip = horspool_skips(needle);
+    let mut hasher = hash.then(Sha256::new);
     let mut window: Vec<u8> = Vec::with_capacity(keep + 64 * 1024);
     let mut block = vec![0u8; 64 * 1024];
     let mut found = false;
@@ -473,28 +483,50 @@ fn inspect_reader(reader: &mut impl std::io::Read) -> Option<Inspection> {
             Err(e) if e.kind() == std::io::ErrorKind::Interrupted => continue,
             Err(_) => return None,
         };
-        hasher.update(&block[..n]);
+        if let Some(hasher) = hasher.as_mut() {
+            hasher.update(&block[..n]);
+        }
         if found {
             continue;
         }
         window.extend_from_slice(&block[..n]);
-        found = contains(&window, needle);
+        found = contains(&window, needle, &skip);
+        if found && hasher.is_none() {
+            break;
+        }
         let spent = window.len().saturating_sub(keep);
         window.drain(..spent);
     }
     Some(Inspection {
-        digest: format!("{:x}", hasher.finalize()),
+        digest: hasher.map(|h| format!("{:x}", h.finalize())),
         permit_marker: found,
     })
 }
 
-fn contains(haystack: &[u8], needle: &[u8]) -> bool {
-    let Some((&first, _)) = needle.split_first() else {
-        return true;
-    };
-    haystack.len() >= needle.len()
-        && (0..=haystack.len() - needle.len())
-            .any(|i| haystack[i] == first && &haystack[i..i + needle.len()] == needle)
+/// Boyer-Moore-Horspool shift table: how far the search may jump when the
+/// byte under the needle's last position is `b`. It keeps the scan of a large
+/// executable cheap even in an unoptimised build.
+fn horspool_skips(needle: &[u8]) -> [usize; 256] {
+    let mut skip = [needle.len(); 256];
+    let last = needle.len() - 1;
+    for (j, &b) in needle[..last].iter().enumerate() {
+        skip[usize::from(b)] = last - j;
+    }
+    skip
+}
+
+fn contains(haystack: &[u8], needle: &[u8], skip: &[usize; 256]) -> bool {
+    let m = needle.len();
+    let last = m - 1;
+    let mut i = 0;
+    while i + m <= haystack.len() {
+        let b = haystack[i + last];
+        if b == needle[last] && haystack[i..i + last] == needle[..last] {
+            return true;
+        }
+        i += skip[usize::from(b)];
+    }
+    false
 }
 
 /// Read every `/proc/<pid>` this user can see. Unknown means refuse
@@ -755,7 +787,7 @@ mod tests {
         assert_eq!(procs[1].exe_digest, expected);
         assert_eq!(procs[2].exe_digest, expected, "pid 6 unreadable: cached");
         let link = proc.path().join("5/exe");
-        assert_eq!(inspect_writer(&link, wrong), None);
+        assert_eq!(inspect_writer(&link, wrong, true), None);
     }
 
     /// Only a digest is cached: an unreadable first host on an exe_id does
@@ -818,28 +850,56 @@ mod tests {
             let mut bytes = vec![0u8; at];
             bytes.extend_from_slice(WRITE_PERMIT_MARKER);
             bytes.extend_from_slice(&[7u8; 100]);
-            let found = inspect_reader(&mut std::io::Cursor::new(&bytes)).unwrap();
+            let found = inspect_reader(&mut std::io::Cursor::new(&bytes), true).unwrap();
             assert!(found.permit_marker, "marker at {at}");
-            assert_eq!(found.digest, format!("{:x}", Sha256::digest(&bytes)));
+            assert_eq!(found.digest, Some(format!("{:x}", Sha256::digest(&bytes))));
+            let scanned = inspect_reader(&mut std::io::Cursor::new(&bytes), false).unwrap();
+            assert!(scanned.permit_marker, "scan: marker at {at}");
+            assert_eq!(scanned.digest, None, "a marker-only scan hashes nothing");
         }
         let mut cut = vec![0u8; 64 * 1024 - 3];
         cut.extend_from_slice(&WRITE_PERMIT_MARKER[..WRITE_PERMIT_MARKER.len() - 1]);
-        let found = inspect_reader(&mut std::io::Cursor::new(&cut)).unwrap();
-        assert!(!found.permit_marker, "an incomplete marker is no marker");
+        for hash in [true, false] {
+            let found = inspect_reader(&mut std::io::Cursor::new(&cut), hash).unwrap();
+            assert!(!found.permit_marker, "an incomplete marker is no marker");
+        }
     }
 
-    /// A binary that takes permits carries the marker: this test binary links
-    /// admission, so its own executable must show it.
+    /// A marker-only scan stops at the first hit: a reader that fails once
+    /// the marker has been delivered is never read that far.
+    // trace:BUG-2437 | ai:claude
+    #[test]
+    fn a_marker_scan_stops_at_the_first_hit() {
+        struct FailsAfter(std::io::Cursor<Vec<u8>>);
+        impl std::io::Read for FailsAfter {
+            fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+                match self.0.read(buf)? {
+                    0 => Err(std::io::Error::other("read past the marker")),
+                    n => Ok(n),
+                }
+            }
+        }
+        let mut bytes = vec![0u8; 1000];
+        bytes.extend_from_slice(WRITE_PERMIT_MARKER);
+        let scanned = inspect_reader(&mut FailsAfter(std::io::Cursor::new(bytes.clone())), false);
+        assert_eq!(scanned.map(|i| i.permit_marker), Some(true));
+        let hashed = inspect_reader(&mut FailsAfter(std::io::Cursor::new(bytes)), true);
+        assert_eq!(hashed, None, "a hashing read goes to the end");
+    }
+
+    /// Smoke check on a real executable: this test binary links admission,
+    /// so a marker-only scan of it (which stops at the first hit and hashes
+    /// nothing, keeping this fast in a debug build) finds the marker.
     // trace:BUG-2437 | ai:claude
     #[test]
     fn a_binary_that_links_admission_carries_the_permit_marker() {
         let exe = std::env::current_exe().expect("own executable path");
-        let found = inspect_file(&exe).expect("readable");
-        assert!(found.permit_marker);
+        assert_eq!(scan_file_for_marker(&exe), Some(true));
     }
 
     /// The scan reads a replaced writer's executable through `/proc/<pid>/exe`
-    /// and records its marker.
+    /// and records its marker, without hashing it: a replaced binary's digest
+    /// could not admit it.
     // trace:BUG-2437 | ai:claude
     #[test]
     fn fill_digests_reads_the_marker_of_a_replaced_writer() {
@@ -850,6 +910,7 @@ mod tests {
         let mut procs = vec![view(5, "/x/aida (deleted)", id)];
         let me = fill_digests(proc.path(), &mut procs, ident((1, 10)), &exe);
         assert_eq!(procs[0].permit_marker, Some(true));
+        assert_eq!(procs[0].exe_digest, None);
         assert!(classify(&procs, Some(&me), 1, None, false).would_record);
     }
 
