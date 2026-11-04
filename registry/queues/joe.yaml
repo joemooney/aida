@@ -27,14 +27,6 @@
   added_at: 2026-11-03T20:48:15.252188106Z
   for_role: advisor
 - user_id: joe
-  requirement_id: 01a1a373-a5cf-7071-8720-4cc86cd372a8
-  position: 340000
-  added_by: joe
-  note: auto-queued by `session end` (01a1a2d2); covers 1 spec
-  added_at: 2026-11-03T22:07:27.270282249Z
-  for_role: reviewer
-  added_by_machine: imac
-- user_id: joe
   requirement_id: 01a1a2ba-58fe-77c2-83f3-359717dd8d38
   position: 345000
   added_by: joe
@@ -111,14 +103,6 @@
   added_at: 2026-11-04T04:33:42.737743130Z
   for_role: advisor
 - user_id: joe
-  requirement_id: 01a1a4d4-ecb3-7f52-9d13-f95f4fbbea81
-  position: 363000
-  added_by: joe
-  note: auto-queued by `session end` (01a1a4b1); covers 1 spec
-  added_at: 2026-11-04T04:33:56.049287349Z
-  for_role: reviewer
-  added_by_machine: imac
-- user_id: joe
   requirement_id: 01a15368-9f33-71d3-bc9d-6e177941df4f
   position: 365000
   added_by: joe
@@ -143,4 +127,10 @@
   position: 368000
   added_by: joe
   added_at: 2026-11-04T05:06:42.424573460Z
+  for_role: advisor
+- user_id: joe
+  requirement_id: 01a1a432-7e6b-7873-89c5-e83d7181ed30
+  position: 369000
+  added_by: joe
+  added_at: 2026-11-04T05:08:28.189578298Z
   for_role: advisor
