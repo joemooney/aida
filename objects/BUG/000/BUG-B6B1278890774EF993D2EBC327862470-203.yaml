@@ -8,8 +8,15 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-04T01:35:35.019044810Z
-modified_at: 2026-11-04T01:35:35.019044810Z
+modified_at: 2026-11-04T01:51:06.341491627Z
 req_type: Bug
+comments:
+- id: 01a1a440-b465-7221-af0c-da70f56045ed
+  author: joe
+  content: 'ADVISOR EVIDENCE (18:45): the trial worked. STORY-2338''s lane, launched with AIDA_OS_WRAP=1, ran ''aida lane job run -- cargo ...'' and the job exited rc=0 after 472s, where the os_wrap=false lanes logged the untested warning. The advisor now launches all lanes with AIDA_OS_WRAP=1 (fill-slots-wrap.sh). Fix direction for this bug: when doctor''s bwrap probe is live, implementer lanes default to os_wrap (or launch refuses loudly), and the untested warning reaches the advisor (awaiting/ps), not just the lane log.'
+  created_at: 2026-11-04T01:51:06.341491627Z
+  modified_at: 2026-11-04T01:51:06.341491627Z
+  session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
 filed_at:
   code_sha: 0f1624a8b38d961973328d79d05642add4464fc8
   branch: main
