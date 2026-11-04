@@ -206,6 +206,10 @@ pub(crate) fn session_process_exited(
     owner_gone: Option<bool>,
     worktree_has_live_process: bool,
 ) -> bool {
+    // trace:BUG-2425 | ai:codex
+    if lease_state == LeaseState::Unknown {
+        return false;
+    }
     // BUG-1121: a Dormant normal worktree lease with no recorded pid is the
     // same no-live-process state `aida status <spec>` reports as safe to clear.
     // There is no pid to force-close, so reap may proceed once the worktree and
@@ -979,13 +983,7 @@ pub(crate) fn scan_reapable_with(
         // for it (an empty path would otherwise resolve against the cwd).
         let worktree_has_live_process =
             has_worktree && worktree_is_active(&lease.worktree_path, &active);
-        let owner_gone = aida_core::liveness::lease_owner_process_gone(
-            lease.active_pid,
-            lease.active_pid_start_time.as_deref(),
-            lease.creator_pid,
-            lease.creator_pid_start_time.as_deref(),
-            process_probe::process_identity_is_alive,
-        );
+        let owner_gone = crate::leases::lease_owner_gone(lease);
         let process_exited = session_process_exited(
             lease_state_for(lease, &live, now),
             owner_gone,
@@ -1328,13 +1326,7 @@ fn scan_clone_lease(
     active: &std::collections::HashSet<std::path::PathBuf>,
     now: chrono::DateTime<chrono::Utc>,
 ) -> ReapRow {
-    let owner_gone = aida_core::liveness::lease_owner_process_gone(
-        lease.active_pid,
-        lease.active_pid_start_time.as_deref(),
-        lease.creator_pid,
-        lease.creator_pid_start_time.as_deref(),
-        process_probe::process_identity_is_alive,
-    );
+    let owner_gone = crate::leases::lease_owner_gone(lease);
     let process_exited = session_process_exited(
         lease_state_for(lease, live, now),
         owner_gone,
@@ -1554,6 +1546,8 @@ pub(crate) fn release_lease_files(project_root: &std::path::Path, lease_id: &str
     // trace:BUG-2139 | ai:claude
     crate::session::revoke_lease_child_grant(&lease_path(project_root, lease_id));
     let _ = std::fs::remove_file(lease_path(project_root, lease_id));
+    // trace:STORY-2325 | ai:claude
+    crate::ownership::dual::lease_released(project_root, lease_id, "lease reaped");
     let activity = session_activity_path(project_root, lease_id);
     if activity.exists() {
         let _ = std::fs::remove_file(&activity);

@@ -1640,6 +1640,9 @@ pub(crate) fn run_human_finish_ceremony(opts: HumanFinishOptions) -> Result<()> 
             // the re-run command, and never fails the ship — the PR is open.
             // trace:BUG-2217 | ai:claude
             let _ = queue_review_for_open_pr(&project_root, &branch);
+            // Dual-write: the seat hands its work to the PR (Q2; the seat
+            // HEAD is not detached before PR-C). // trace:STORY-2325 | ai:claude
+            crate::ownership::dual::handed_off(&project_root, &project_root, &branch, &spec, pr);
             eprintln!(
                 "{} aida ship — PR-{} open for {} (--no-merge; not merged). Review + merge it, \
                  or finish with `aida ship`.",
@@ -1981,6 +1984,21 @@ pub(crate) fn fetch_ship_refs(
     Ok(())
 }
 
+/// BUG-727: a human at an interactive terminal is the explicit merge the
+/// supervised-merge gate waits for.
+///
+/// BUG-2427: decided by the same function as `merge-hold clear`
+/// (`has_integrity_floor_authority`: stdin is a terminal and, inside a deputy
+/// job, the deputy's TTY policy authorized it). Stdout plays no part: the
+/// script deputy tees a job's stdout into its audited transcript, so a stdout
+/// check refused a human-authorized `pr ship`/`pr train` that `merge-hold
+/// clear` accepted. Defined before `ship_preflight_gates`: the preflight takes
+/// the hold authority the handler decided and must not compute its own.
+// trace:BUG-727 trace:BUG-2427 | ai:claude
+pub(crate) fn ship_interactive_tty() -> bool {
+    crate::gate::role_authority::has_integrity_floor_authority()
+}
+
 // trace:TASK-1606 | ai:codex
 #[allow(clippy::too_many_arguments)]
 fn ship_preflight_gates(
@@ -2100,14 +2118,6 @@ pub(crate) fn probe_ship_drive_block(
         ship_caller_is_drive_seat(),
         allow_in_drive,
     )
-}
-
-/// BUG-727: a human at an interactive terminal is the explicit merge the
-/// supervised-merge gate waits for.
-// trace:BUG-727 | ai:claude
-pub(crate) fn ship_interactive_tty() -> bool {
-    std::io::IsTerminal::is_terminal(&std::io::stdin())
-        && std::io::IsTerminal::is_terminal(&std::io::stdout())
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -2427,6 +2437,19 @@ pub(crate) fn pr_ship_with_method_and_dispatch_ctx(
                             "  {} created PR-{}",
                             crate::glyph(crate::glyphs::Glyph::Check).green(),
                             new_n
+                        );
+                        // Dual-write: the seat hands its work to the PR. // trace:STORY-2325 | ai:claude
+                        let shipped_spec = list_leases(&main_worktree)
+                            .into_iter()
+                            .find(|l| l.branch == branch)
+                            .map(|l| l.scope)
+                            .unwrap_or_default();
+                        crate::ownership::dual::handed_off(
+                            &project_root,
+                            &project_root,
+                            &branch,
+                            &shipped_spec,
+                            new_n,
                         );
                         log_ship_activity(
                             &main_worktree,

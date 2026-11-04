@@ -223,6 +223,7 @@ fn shipped_lane() -> Fixture {
 
 fn seat_lease(seat: &Path) -> crate::SessionLease {
     crate::SessionLease {
+        pid_namespace: crate::agent_registry::current_pid_namespace(),
         tree_kind: Default::default(),
         id: "lease-story-2315".into(),
         scope: "STORY-2315".into(),
@@ -258,6 +259,7 @@ fn seat_lease(seat: &Path) -> crate::SessionLease {
         driver: None,
         child_grant_id: None,
         vendor_session_id: None,
+        lane_jobs: None,
     }
 }
 

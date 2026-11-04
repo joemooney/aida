@@ -92,6 +92,7 @@ fn bug_1624_stacks_json_cascade_refuses_a_malformed_record() {
     std::fs::create_dir_all(&dir).unwrap();
     for (id, branch) in [("stk001", "feat"), ("stk002", REBASE_EXEC)] {
         let lease = SessionLease {
+            pid_namespace: crate::agent_registry::current_pid_namespace(),
             tree_kind: Default::default(),
             id: id.into(),
             scope: "BUG-1".into(),
@@ -127,6 +128,7 @@ fn bug_1624_stacks_json_cascade_refuses_a_malformed_record() {
             driver: None,
             child_grant_id: None,
             vendor_session_id: None,
+            lane_jobs: None,
         };
         std::fs::write(
             dir.join(format!("{id}.toml")),

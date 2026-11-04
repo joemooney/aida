@@ -31,6 +31,7 @@ fn lease_at(
     active_pid: Option<u32>,
 ) -> SessionLease {
     SessionLease {
+        pid_namespace: crate::agent_registry::current_pid_namespace(),
         tree_kind: Default::default(),
         id: "019f8357abcd".to_string(),
         scope: "TASK-5".to_string(),
@@ -66,6 +67,7 @@ fn lease_at(
         driver: None,
         child_grant_id: None,
         vendor_session_id: None,
+        lane_jobs: None,
     }
 }
 

@@ -15,6 +15,7 @@ const PR: u64 = 2791;
 
 fn lease(id: &str, scope: &str, worktree: PathBuf, branch: &str) -> SessionLease {
     SessionLease {
+        pid_namespace: crate::agent_registry::current_pid_namespace(),
         tree_kind: Default::default(),
         id: id.to_string(),
         scope: scope.to_string(),
@@ -47,6 +48,7 @@ fn lease(id: &str, scope: &str, worktree: PathBuf, branch: &str) -> SessionLease
         driver: None,
         child_grant_id: None,
         vendor_session_id: None,
+        lane_jobs: None,
         interrupted_reason: None,
         ending_retained_at: None,
         ending_retained_reason: None,

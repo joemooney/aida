@@ -28,6 +28,10 @@ pub(crate) use ready::required_checks;
 // The author's findings mail and the round-cap wake. trace:TASK-1945 | ai:claude
 #[path = "review_watch_notice.rs"]
 mod notice;
+// The watcher's one branch write: updating a stale head whose author is
+// gone, else routing it to the advisor. trace:BUG-2426 | ai:claude
+#[path = "review_watch_update.rs"]
+mod update;
 
 #[derive(Args, Debug)]
 pub struct ReviewWatchArgs {
@@ -80,6 +84,11 @@ const READY_INTERVAL: chrono::Duration = if cfg!(test) {
 } else {
     chrono::Duration::seconds(120)
 };
+// How long a review process recorded in another PID namespace (one this
+// observer cannot probe) keeps its slot: well past the one-hour bound
+// `aida dispatch` puts on a review run, so expiry is evidence it is gone.
+// trace:BUG-2425 | ai:claude
+const FOREIGN_IDENTITY_TTL: chrono::Duration = chrono::Duration::hours(4);
 // Wakes kept per change: current-head ones only, so two at most.
 const MAX_WAKES: usize = 8;
 
@@ -110,19 +119,46 @@ fn bounded_diagnostic(text: &str) -> String {
     out
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Identity {
+    // Absent fields are omitted only so a legacy record round-trips
+    // unchanged. Identity::of always stamps both, so state this binary writes
+    // does NOT parse under a pre-BUG-2425 binary after `aida dev rollback`
+    // (deny_unknown_fields); that break is accepted (single-user substrate,
+    // clear the review-watch state by hand if rolling back).
+    // trace:BUG-2425 | ai:codex
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pid_namespace: Option<u64>,
+    // When the identity was recorded: the backstop for a process this
+    // observer cannot probe. trace:BUG-2425 | ai:claude
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    recorded_at: Option<chrono::DateTime<chrono::Utc>>,
     pid: u32,
     start: String,
     boot: String,
 }
+/// Process identity equality: the same kernel process, regardless of when it
+/// was observed. `recorded_at` is observation metadata (the foreign-namespace
+/// backstop clock) and must not make two reads of one process differ.
+// trace:BUG-2425 | ai:claude
+impl PartialEq for Identity {
+    fn eq(&self, other: &Self) -> bool {
+        self.pid_namespace == other.pid_namespace
+            && self.pid == other.pid
+            && self.start == other.start
+            && self.boot == other.boot
+    }
+}
+impl Eq for Identity {}
 impl Identity {
     fn current() -> Result<Self> {
         Self::of(std::process::id())
     }
     fn of(pid: u32) -> Result<Self> {
         Ok(Self {
+            pid_namespace: crate::agent_registry::current_pid_namespace(),
+            recorded_at: Some(chrono::Utc::now()),
             pid,
             start: aida_core::liveness::process_start_identity_exact(pid)
                 .context("cannot bind review launch to its kernel process identity")?,
@@ -132,6 +168,10 @@ impl Identity {
     /// The same kernel process is still running (not reused, not a zombie).
     // trace:TASK-1993 | ai:claude
     fn alive(&self) -> bool {
+        // trace:BUG-2425 | ai:claude
+        if !self.observable() {
+            return self.within_foreign_backstop(chrono::Utc::now(), boot_id().ok().as_deref());
+        }
         let zombie = std::fs::read_to_string(format!("/proc/{}/stat", self.pid))
             .ok()
             .and_then(|stat| {
@@ -143,6 +183,30 @@ impl Identity {
             && boot_id().is_ok_and(|boot| boot == self.boot)
             && aida_core::liveness::process_start_identity_exact(self.pid).as_deref()
                 == Some(self.start.as_str())
+    }
+}
+impl Identity {
+    /// This observer shares the PID namespace the identity was recorded in.
+    // trace:BUG-2425 | ai:claude
+    fn observable(&self) -> bool {
+        aida_core::pid_observer::PidObserver::current().can_observe(self.pid_namespace)
+    }
+    /// A process in another PID namespace cannot be probed from here, and
+    /// that absence proves nothing — but independent evidence still ends it:
+    /// a reboot (the boot id changed), or its record outliving
+    /// [`FOREIGN_IDENTITY_TTL`]. A legacy record with no `recorded_at` keeps
+    /// its reservation until a reboot or an observer in its namespace.
+    // trace:BUG-2425 | ai:claude
+    fn within_foreign_backstop(
+        &self,
+        now: chrono::DateTime<chrono::Utc>,
+        boot: Option<&str>,
+    ) -> bool {
+        if boot.is_some_and(|boot| boot != self.boot) {
+            return false;
+        }
+        self.recorded_at
+            .is_none_or(|at| now - at <= FOREIGN_IDENTITY_TTL)
     }
 }
 fn boot_id() -> Result<String> {
@@ -290,6 +354,14 @@ struct Entry {
     // The last readiness report, for display only: never authority.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     readiness: Option<Reported>,
+    // The branch update the watcher requested for a stale overlapping head.
+    // trace:BUG-2426 | ai:claude
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    update: Option<update::BranchUpdate>,
+    // Why the current head is parked (skipped and not reviewed), since when:
+    // what `aida awaiting` lists. Display only. trace:BUG-2426 | ai:claude
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    skipped: Option<Reported>,
 }
 impl Entry {
     fn is_empty(&self) -> bool {
@@ -299,6 +371,8 @@ impl Entry {
             && self.findings.is_empty()
             && self.cap.is_none()
             && self.readiness.is_none()
+            && self.update.is_none()
+            && self.skipped.is_none()
     }
 }
 /// One readiness report: the head it judged, the verdict line, and when.
@@ -1059,6 +1133,18 @@ fn validate_state(state: &State, repository: &str) -> Result<()> {
                 )),
             "invalid review-watch findings receipt"
         );
+        // trace:BUG-2426 | ai:claude
+        anyhow::ensure!(
+            entry
+                .update
+                .as_ref()
+                .is_none_or(update::BranchUpdate::valid)
+                && entry
+                    .skipped
+                    .as_ref()
+                    .is_none_or(|r| valid_sha(&r.head) && r.line.len() <= DIAGNOSTIC_LIMIT),
+            "invalid review-watch branch update or skip record"
+        );
     }
     Ok(())
 }
@@ -1119,6 +1205,10 @@ fn select(
         // and keeping one per stale head grew to the 256 cap and then failed
         // every transaction for the change. trace:TASK-1955 | ai:claude (TASK-2064)
         entry.notices.retain(|head, _| *head == change.head);
+        // trace:BUG-2426 | ai:claude
+        if entry.update.as_ref().is_some_and(|u| u.head != change.head) {
+            entry.update = None;
+        }
         let history = store.history(&key)?;
         store.retain(&key, history.blocking_keys())?;
         if overlap {
@@ -1131,7 +1221,7 @@ fn select(
             // ID), so a retry re-delivers that exact message idempotently; one
             // recorded before notices named the base still matches its
             // template. trace:TASK-1993 | ai:claude
-            if notice.sent { return Ok(Action::Skip("stale overlapping head already notified".into())); }
+            if notice.sent { return Ok(Action::Skip(update::STALE_NOTIFIED.into())); }
             let recorded = serde_json::to_value(&notice.message)?;
             // A notice recorded before recipients were mapped went to the
             // forge login itself. trace:TASK-1955 | ai:claude (TASK-1-410)
@@ -1195,7 +1285,7 @@ fn probe_unneeded(store: &Store, change: &forge::Change) -> Result<Option<String
             return Ok(None);
         };
         if entry.notices.get(head).is_some_and(|n| n.sent) {
-            return Ok(Some("stale overlapping head already notified".to_string()));
+            return Ok(Some(update::STALE_NOTIFIED.to_string()));
         }
         Ok(entry
             .attempts
@@ -1453,6 +1543,13 @@ fn confirm(attempt: &Attempt) -> std::result::Result<(), String> {
     }
     if let Some(process) = attempt.recorded().into_iter().find(|p| p.alive()) {
         return Err(format!("recorded process {} is still running", process.pid));
+    }
+    // BUG-2425: a group led from another PID namespace cannot be scanned
+    // here; with every recorded process past its backstop (checked above),
+    // the group is gone with its namespace. trace:BUG-2425 | ai:claude
+    let anchor = attempt.dispatcher.as_ref().or(attempt.identity.as_ref());
+    if anchor.is_some_and(|a| !a.observable()) {
+        return Ok(());
     }
     let unrecorded = attempt.unrecorded_descendant()
         || (attempt.identity.is_none() && attempt.dispatcher.is_none());
@@ -2000,14 +2097,38 @@ fn watch_change(
     // A reviewed head is reported on, and needs no base probe to be skipped.
     // trace:TASK-1945 | ai:claude
     let live = ready::Live { root, repo };
+    // A notified stale head whose author is gone gets its branch updated, or
+    // is routed to the advisor, instead of waiting forever.
+    // trace:BUG-2426 | ai:claude
+    if let Some(reason) = update::follow_up(
+        root,
+        store,
+        &change,
+        &|c| update::author_live(root, c),
+        &|c| update::forge_update(root, repo, c),
+    )? {
+        eprintln!("{key}: {reason}");
+        record_skip(store, &change, Some(&reason))?;
+        return report(root, store, &change, &live);
+    }
     // trace:TASK-1955 | ai:claude (TASK-2064, TASK-1-411)
     if let Some(reason) = probe_unneeded(store, &change)? {
         eprintln!("{key}: {reason}");
+        record_skip(store, &change, Some(&reason))?;
         return report(root, store, &change, &live);
     }
     repo.probe(root, &mut change)
         .context("base evidence refused")?;
-    match select(store, &change, args.vendor.clone(), args.max_concurrent)? {
+    let action = select(store, &change, args.vendor.clone(), args.max_concurrent)?;
+    record_skip(
+        store,
+        &change,
+        match &action {
+            Action::Skip(reason) => Some(reason.as_str()),
+            _ => None,
+        },
+    )?;
+    match action {
         Action::Skip(reason) => {
             eprintln!("{key}: {reason}");
             report(root, store, &change, &live)?;
@@ -2109,6 +2230,67 @@ fn watch_change(
         }
     }
     Ok(())
+}
+
+/// Whether a skip reason parks the head: it is not reviewed and nothing in
+/// flight will review it. A head already reviewed or under review, or one
+/// waiting only for a free reviewer slot, is not parked.
+// trace:BUG-2426 | ai:claude
+fn parks(reason: &str) -> bool {
+    ![
+        "head already has a recorded review",
+        "head already reserved",
+        "global reviewer capacity",
+    ]
+    .iter()
+    .any(|p| reason.starts_with(p))
+}
+
+/// Record (or clear) why the current head is parked, for `aida awaiting`.
+/// The record keeps its first-seen time while the head and reason hold, so
+/// a steady skip writes no state.
+// trace:BUG-2426 | ai:claude
+fn record_skip(store: &Store, change: &forge::Change, reason: Option<&str>) -> Result<()> {
+    let key = change.key();
+    let line = reason.filter(|r| parks(r)).map(bounded_diagnostic);
+    store.transaction(&key, |state| {
+        let current = state.entries.get(&key).and_then(|e| e.skipped.as_ref());
+        let same = match (current, line.as_deref()) {
+            (Some(r), Some(line)) => r.head == change.head && r.line == line,
+            (None, None) => true,
+            _ => false,
+        };
+        if same {
+            return Ok(());
+        }
+        let entry = state.entries.entry(key.clone()).or_default();
+        entry.skipped = line.map(|line| Reported {
+            head: change.head.clone(),
+            line,
+            checked_at: chrono::Utc::now(),
+        });
+        Ok(())
+    })
+}
+
+/// Every change whose current head the watcher is parking, as `(change,
+/// head, reason, since)`, read without creating or changing any watcher
+/// state (`aida awaiting`).
+// trace:BUG-2426 | ai:claude
+pub(crate) fn skipped_changes(
+    root: &Path,
+) -> Vec<(String, String, String, chrono::DateTime<chrono::Utc>)> {
+    let Some(state) = read_only_state(root) else {
+        return Vec::new();
+    };
+    state
+        .entries
+        .into_iter()
+        .filter_map(|(key, entry)| {
+            let r = entry.skipped?;
+            Some((key, r.head, r.line, r.checked_at))
+        })
+        .collect()
 }
 
 /// Report a reviewed change's ship readiness, at most once per
@@ -2294,3 +2476,7 @@ mod ready_tests;
 #[cfg(test)]
 #[path = "tests/task_1945_review_watch_notice_tests.rs"]
 mod notice_tests;
+
+#[cfg(test)]
+#[path = "tests/bug_2426_review_watch_update_tests.rs"]
+mod update_tests;

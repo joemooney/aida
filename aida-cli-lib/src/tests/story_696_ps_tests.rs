@@ -2,6 +2,7 @@ use super::*;
 
 fn ps_lease(id: &str, scope: &str, worktree: std::path::PathBuf) -> SessionLease {
     SessionLease {
+        pid_namespace: crate::agent_registry::current_pid_namespace(),
         tree_kind: Default::default(),
         id: id.to_string(),
         scope: scope.to_string(),
@@ -37,6 +38,7 @@ fn ps_lease(id: &str, scope: &str, worktree: std::path::PathBuf) -> SessionLease
         driver: None,
         child_grant_id: None,
         vendor_session_id: None,
+        lane_jobs: None,
     }
 }
 
@@ -2025,4 +2027,166 @@ mod bug_1553_seat_activity {
         assert_eq!(rows[0].state, LeaseState::Stale);
         assert_eq!(rows[0].activity, None);
     }
+}
+
+// trace:BUG-2425 | ai:codex
+#[test]
+fn bug_2425_foreign_pidns_is_unknown_and_cannot_be_reaped() {
+    let tmp = tempfile::tempdir().unwrap();
+    let mut lease = ps_lease("foreign", "BUG-2425", tmp.path().to_path_buf());
+    lease.started_at = chrono::Utc::now();
+    lease.pid_namespace = Some(agent_registry::current_pid_namespace().unwrap_or(0) ^ 1);
+    lease.active_pid = Some(u32::MAX - 1);
+    lease.active_pid_start_time = Some("linux-starttime:1".into());
+    assert!(
+        lease_is_live(&[], chrono::Utc::now())(&lease),
+        "foreign leases must block automatic conflict release"
+    );
+    assert!(
+        requeue_lease_liveness(&lease, &std::cell::OnceCell::new(), chrono::Utc::now()).is_err()
+    );
+    let specs = vec![RunningWorkSpec {
+        disp: "BUG-2425".into(),
+        agreed_id: Some("BUG-2425".into()),
+        spec_id: None,
+        title: "foreign session".into(),
+        in_progress: true,
+        orphan_excluded_type: false,
+    }];
+    let (rows, orphans) = build_running_work(
+        &specs,
+        std::slice::from_ref(&lease),
+        &[],
+        chrono::Utc::now(),
+        |_| panic!("foreign rows must not be classified stalled or salvageable"),
+        |_| None,
+        |_| None,
+        |_| None,
+        |_| None,
+        |_| panic!("foreign PIDs must not be inspected for mail identity"),
+        |_, _| panic!("foreign PIDs must not be inspected for activity"),
+    );
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0].state.label(), "unknown (foreign pidns)");
+    let warning = ps_liveness_warning(&rows).unwrap();
+    assert!(warning.starts_with("partial, running in pid namespace "));
+    assert!(warning.contains("1 leases from host namespace"));
+    assert!(warning.contains(&lease.pid_namespace.unwrap().to_string()));
+    assert!(warning.ends_with("run outside the sandbox"));
+    assert_eq!(ps_liveness_warning(&[]), None);
+    assert_ne!(rows[0].state, LeaseState::Stale); // never stale_hidden
+    assert_eq!(rows[0].pid, None);
+    assert!(orphans.is_empty());
+    assert_eq!(crate::leases::lease_owner_gone(&lease), None);
+    assert!(!session_reap::session_process_exited(
+        rows[0].state,
+        crate::leases::lease_owner_gone(&lease),
+        false
+    ));
+    assert_eq!(
+        lease_recorded_owner(&lease),
+        aida_core::liveness::RecordedLeaseOwner::NotProvablyDead
+    );
+    assert_eq!(
+        aida_core::liveness::classify_stale_lease_recovery(rows[0].state, Some(true), false, 0),
+        aida_core::liveness::StaleLeaseRecovery::UnknownLiveness
+    );
+}
+
+// Advisor ruling (PR #3298 round 2): a foreign namespace skips only the pid
+// probe. Past the 24h age backstop the lease is Stale, its owner counts as
+// gone, and reap / stale-lease recovery may proceed on their other gates.
+// trace:BUG-2425 | ai:claude
+#[test]
+fn bug_2425_foreign_pidns_lease_past_its_backstop_is_reapable() {
+    let tmp = tempfile::tempdir().unwrap();
+    let mut lease = ps_lease("foreign-old", "BUG-2425", tmp.path().to_path_buf());
+    lease.pid_namespace = Some(agent_registry::current_pid_namespace().unwrap_or(0) ^ 1);
+    lease.active_pid = Some(u32::MAX - 1);
+    lease.active_pid_start_time = Some("linux-starttime:1".into());
+    lease.started_at = chrono::Utc::now() - chrono::Duration::hours(25);
+    let now = chrono::Utc::now();
+    assert_eq!(lease_state_for(&lease, &[], now), LeaseState::Stale);
+    assert!(!lease_is_live(&[], now)(&lease));
+    assert_eq!(crate::leases::lease_owner_gone(&lease), Some(true));
+    assert!(session_reap::session_process_exited(
+        lease_state_for(&lease, &[], now),
+        crate::leases::lease_owner_gone(&lease),
+        false
+    ));
+    // A live process seen in the worktree still keeps it.
+    assert!(!session_reap::session_process_exited(
+        LeaseState::Stale,
+        Some(true),
+        true
+    ));
+}
+
+// Advisor ruling (PR #3298 round 4): the foreign-namespace backstop ages a
+// lease from its heartbeat (lease-file mtime), not from started_at, so a
+// live long-running foreign session is not judged gone.
+// trace:BUG-2425 | ai:claude
+#[test]
+fn bug_2425_foreign_pidns_lease_with_fresh_heartbeat_is_not_gone() {
+    let tmp = tempfile::tempdir().unwrap();
+    let mut lease = ps_lease("foreign-live", "BUG-2425", tmp.path().to_path_buf());
+    lease.pid_namespace = Some(agent_registry::current_pid_namespace().unwrap_or(0) ^ 1);
+    lease.active_pid = Some(u32::MAX - 1);
+    lease.active_pid_start_time = Some("linux-starttime:1".into());
+    lease.started_at = chrono::Utc::now() - chrono::Duration::hours(48);
+    lease.parent_project_root = Some(tmp.path().to_path_buf());
+    // No lease file yet: the heartbeat falls back to started_at.
+    assert_eq!(crate::leases::lease_owner_gone(&lease), Some(true));
+    // A freshly written lease file is a heartbeat.
+    let path = crate::leases::lease_path(tmp.path(), &lease.id);
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    std::fs::write(&path, toml::to_string(&lease).unwrap()).unwrap();
+    assert!(crate::leases::lease_heartbeat(&lease) > lease.started_at);
+    assert_eq!(crate::leases::lease_owner_gone(&lease), None);
+    // Round 5: ps and spec liveness share that clock — the 48h-old,
+    // heartbeating lease is Unknown, never Stale / stale-hidden / orphaned.
+    let now = chrono::Utc::now();
+    assert_eq!(lease_state_for(&lease, &[], now), LeaseState::Unknown);
+    let specs = vec![RunningWorkSpec {
+        disp: "BUG-2425".into(),
+        agreed_id: Some("BUG-2425".into()),
+        spec_id: None,
+        title: "foreign session".into(),
+        in_progress: true,
+        orphan_excluded_type: false,
+    }];
+    let (rows, orphans) = build_running_work(
+        &specs,
+        std::slice::from_ref(&lease),
+        &[],
+        now,
+        |_| panic!("foreign rows must not be classified stalled or salvageable"),
+        |_| None,
+        |_| None,
+        |_| None,
+        |_| None,
+        |_| panic!("foreign PIDs must not be inspected for mail identity"),
+        |_, _| panic!("foreign PIDs must not be inspected for activity"),
+    );
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0].state, LeaseState::Unknown);
+    assert!(orphans.is_empty());
+}
+
+// trace:BUG-2425 | ai:codex
+#[test]
+fn bug_2425_foreign_pid_collision_cannot_borrow_local_process() {
+    let mut lease = ps_lease("collision", "BUG-2425", std::path::PathBuf::from("."));
+    lease.started_at = chrono::Utc::now();
+    lease.pid_namespace = Some(agent_registry::current_pid_namespace().unwrap_or(0) ^ 1);
+    lease.active_pid = Some(std::process::id());
+    assert_eq!(
+        lease_state_for(&lease, &[], chrono::Utc::now()),
+        LeaseState::Unknown
+    );
+    lease.pid_namespace = agent_registry::current_pid_namespace();
+    assert_eq!(
+        lease_state_for(&lease, &[], chrono::Utc::now()),
+        LeaseState::Live
+    );
 }

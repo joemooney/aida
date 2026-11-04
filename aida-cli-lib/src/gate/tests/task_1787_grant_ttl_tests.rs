@@ -538,6 +538,7 @@ fn test_session_show_displays_grant_ttl() {
     _env.set_key(crate::gate::seat_authority::GRANT_ENV, grant_id.as_str());
 
     let lease = crate::leases::SessionLease {
+        pid_namespace: crate::agent_registry::current_pid_namespace(),
         tree_kind: Default::default(),
         id: "123456789012".to_string(),
         scope: "TASK-1787".to_string(),
@@ -574,6 +575,7 @@ fn test_session_show_displays_grant_ttl() {
         // trace:BUG-2165 | ai:codex
         child_grant_id: None,
         vendor_session_id: None,
+        lane_jobs: None,
     };
     let leases_dir = aida_dir.join("leases");
     fs::create_dir_all(&leases_dir).unwrap();

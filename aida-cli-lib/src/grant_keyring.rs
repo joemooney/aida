@@ -53,7 +53,13 @@ impl InstallError {
 
 impl std::fmt::Display for InstallError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{} (errno {})", self.what, self.errno)
+        write!(f, "{} (errno {})", self.what, self.errno)?;
+        // trace:BUG-2429 | ai:claude
+        #[cfg(target_os = "linux")]
+        if self.errno == libc::ELOOP {
+            write!(f, ": the session keyring chain is nested too deeply")?;
+        }
+        Ok(())
     }
 }
 
@@ -68,6 +74,10 @@ thread_local! {
     /// fail with this errno.
     pub(crate) static FORCE_ADD_KEY_ERRNO: std::cell::Cell<Option<i32>> =
         const { std::cell::Cell::new(None) };
+    /// Test seam: make this thread's next join treat the previous session
+    /// keyring as nested too deeply to link (`ELOOP`).
+    pub(crate) static FORCE_HOLD_ELOOP: std::cell::Cell<bool> =
+        const { std::cell::Cell::new(false) };
 }
 
 /// What a possession probe found for one grant.
@@ -168,6 +178,59 @@ mod sys {
         InstallError::new(what, errno())
     }
 
+    /// The keys and keyrings linked directly into keyring `ring`.
+    fn members(ring: libc::c_long) -> Option<Vec<libc::c_long>> {
+        let mut buf: Vec<i32> = vec![0; 16];
+        loop {
+            let cap = buf.len() * std::mem::size_of::<i32>();
+            let n = keyctl(
+                KEYCTL_READ,
+                ring,
+                buf.as_mut_ptr() as libc::c_long,
+                cap as libc::c_long,
+            );
+            if n < 0 {
+                return None;
+            }
+            let n = n as usize;
+            if n <= cap {
+                buf.truncate(n / std::mem::size_of::<i32>());
+                return Some(buf.into_iter().map(libc::c_long::from).collect());
+            }
+            buf.resize(n.div_ceil(std::mem::size_of::<i32>()), 0);
+        }
+    }
+
+    /// Link the previous session keyring `old` into the thread keyring so it
+    /// stays possessed across a join, and return what was held. Each launch
+    /// nests the previous session keyring one level deeper; once that chain
+    /// reaches the kernel's keyring nesting limit (a launcher started by a
+    /// launcher started by a launcher...), linking `old` anywhere fails with
+    /// `ELOOP`. Then hold `old`'s direct members instead, so the new keyring
+    /// is no deeper than `old` and the chain stops growing. A member that
+    /// still cannot be linked is dropped: the kernel's search cannot reach a
+    /// key that deep anyway.
+    // trace:BUG-2429 | ai:claude
+    fn hold_previous(old: libc::c_long) -> Result<Vec<libc::c_long>, InstallError> {
+        #[cfg(test)]
+        let forced = super::FORCE_HOLD_ELOOP.with(std::cell::Cell::take);
+        #[cfg(not(test))]
+        let forced = false;
+        if !forced && keyctl(KEYCTL_LINK, old, KEY_SPEC_THREAD_KEYRING, 0) >= 0 {
+            return Ok(vec![old]);
+        }
+        if !forced && errno() != libc::ELOOP {
+            return Err(fail("cannot hold the previous session keyring"));
+        }
+        let Some(members) = members(old) else {
+            return Err(fail("cannot read the previous session keyring"));
+        };
+        Ok(members
+            .into_iter()
+            .filter(|&k| keyctl(KEYCTL_LINK, k, KEY_SPEC_THREAD_KEYRING, 0) >= 0)
+            .collect())
+    }
+
     /// Add `desc` to a session keyring and return that keyring's id. `reuse`
     /// names a keyring this thread joined earlier: while it is still the
     /// session keyring the key goes straight into it; otherwise a fresh
@@ -193,13 +256,16 @@ mod sys {
             // needs possession of the old keyring, which joining a new
             // session keyring ends, so the thread keyring holds it across
             // the join.
-            if keyctl(KEYCTL_LINK, old, KEY_SPEC_THREAD_KEYRING, 0) < 0 {
-                return Err(fail("cannot hold the previous session keyring"));
-            }
+            let held = hold_previous(old)?;
             let new = keyctl(KEYCTL_JOIN_SESSION_KEYRING, 0, 0, 0);
-            let linked = new >= 0 && (old == new || keyctl(KEYCTL_LINK, old, new, 0) >= 0);
+            let linked = new >= 0
+                && held
+                    .iter()
+                    .all(|&k| k == new || keyctl(KEYCTL_LINK, k, new, 0) >= 0);
             let e = errno();
-            keyctl(KEYCTL_UNLINK, old, KEY_SPEC_THREAD_KEYRING, 0);
+            for &k in &held {
+                keyctl(KEYCTL_UNLINK, k, KEY_SPEC_THREAD_KEYRING, 0);
+            }
             if new < 0 {
                 return Err(InstallError::new("cannot create a session keyring", e));
             }
@@ -383,5 +449,72 @@ pub(crate) fn invalidate(id: &str) -> bool {
     {
         let _ = id;
         false
+    }
+}
+
+#[cfg(all(test, target_os = "linux"))]
+mod tests {
+    //! BUG-2429: a launcher whose session keyring is already deeply nested
+    //! (launched by a launcher launched by a launcher) still joins a fresh
+    //! keyring instead of failing with `ELOOP`, and keeps its parent's key.
+    // trace:BUG-2429 | ai:claude
+    use super::*;
+
+    fn held(id: &str) -> bool {
+        matches!(read(id), KeyRead::Held(_))
+    }
+
+    /// Install `id` the way a fresh launcher process does: always join a new
+    /// keyring with the previous one linked in.
+    fn launch(id: &str) -> Result<(), InstallError> {
+        sys::install(&description(id), b"secret", 30, false, None, &mut None).map(|_| ())
+    }
+
+    #[test]
+    fn nested_launch_chain_never_fails_with_eloop() {
+        if !available() {
+            eprintln!("SKIP: the session keyring is unavailable here");
+            return;
+        }
+        // Well past the kernel's keyring nesting limit (6).
+        for depth in 0..12 {
+            let id = format!("bug-2429-chain-{depth}");
+            launch(&id).unwrap_or_else(|e| panic!("launch at depth {depth}: {e}"));
+            assert!(held(&id), "the new key at depth {depth}");
+            if depth > 0 {
+                let parent = format!("bug-2429-chain-{}", depth - 1);
+                assert!(held(&parent), "the parent key at depth {depth}");
+            }
+        }
+    }
+
+    #[test]
+    fn eloop_flattens_the_previous_keyring_and_keeps_its_keys() {
+        if !available() {
+            eprintln!("SKIP: the session keyring is unavailable here");
+            return;
+        }
+        launch("bug-2429-flat-parent").unwrap();
+        let before = sys::session_keyring().unwrap();
+        FORCE_HOLD_ELOOP.with(|f| f.set(true));
+        launch("bug-2429-flat-child").unwrap();
+        assert_ne!(
+            sys::session_keyring().unwrap(),
+            before,
+            "joined a new keyring"
+        );
+        assert!(
+            held("bug-2429-flat-parent"),
+            "the parent key stays possessed"
+        );
+        assert!(held("bug-2429-flat-child"));
+    }
+
+    #[test]
+    fn eloop_error_names_the_cause() {
+        let e = InstallError::new("cannot hold the previous session keyring", libc::ELOOP);
+        assert!(e.to_string().contains("nested too deeply"), "{e}");
+        let e = InstallError::new("cannot add the grant key", libc::EDQUOT);
+        assert!(!e.to_string().contains("nested"), "{e}");
     }
 }

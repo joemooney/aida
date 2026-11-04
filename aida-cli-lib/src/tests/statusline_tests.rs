@@ -5552,6 +5552,7 @@ fn entry_scope_session_match_decision_table() {
         added_by_machine: None,
     };
     let lease = SessionLease {
+        pid_namespace: crate::agent_registry::current_pid_namespace(),
         tree_kind: Default::default(),
         id: "abcdef123456".into(),
         scope: "EPIC-20".into(),
@@ -5587,6 +5588,7 @@ fn entry_scope_session_match_decision_table() {
         driver: None,
         child_grant_id: None,
         vendor_session_id: None,
+        lane_jobs: None,
     };
 
     // No routing tags = visible everywhere.
@@ -6002,6 +6004,7 @@ fn parent_project_root_for_session_returns_recorded_parent() {
     std::fs::create_dir_all(&leases).unwrap();
 
     let lease = SessionLease {
+        pid_namespace: crate::agent_registry::current_pid_namespace(),
         tree_kind: Default::default(),
         id: "abcdef123456".into(),
         scope: "EPIC-20".into(),
@@ -6037,6 +6040,7 @@ fn parent_project_root_for_session_returns_recorded_parent() {
         driver: None,
         child_grant_id: None,
         vendor_session_id: None,
+        lane_jobs: None,
     };
     std::fs::write(
         leases.join("abcdef123456.toml"),

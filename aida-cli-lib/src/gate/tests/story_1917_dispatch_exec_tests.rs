@@ -1171,6 +1171,7 @@ fn reviewer_worktree_cleanup_preserves_merge_hold_and_refuses_live_occupant() {
     let my_pid = std::process::id();
     let my_start = crate::process_probe::process_start_identity(my_pid);
     let lease = crate::SessionLease {
+        pid_namespace: crate::agent_registry::current_pid_namespace(),
         tree_kind: Default::default(),
         id: "lease-live-88".into(),
         scope: "PR-88".into(),
@@ -1206,6 +1207,7 @@ fn reviewer_worktree_cleanup_preserves_merge_hold_and_refuses_live_occupant() {
         driver: None,
         child_grant_id: None,
         vendor_session_id: None,
+        lane_jobs: None,
     };
     let lease_dir = crate::leases::leases_dir(&f.root);
     std::fs::create_dir_all(&lease_dir).unwrap();

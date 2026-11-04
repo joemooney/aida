@@ -2,6 +2,7 @@ use super::*;
 
 fn review_lease(id: &str, scope: &str, creator_pid: Option<u32>) -> SessionLease {
     SessionLease {
+        pid_namespace: crate::agent_registry::current_pid_namespace(),
         tree_kind: Default::default(),
         id: id.to_string(),
         scope: scope.to_string(),
@@ -37,6 +38,7 @@ fn review_lease(id: &str, scope: &str, creator_pid: Option<u32>) -> SessionLease
         driver: None,
         child_grant_id: None,
         vendor_session_id: None,
+        lane_jobs: None,
     }
 }
 

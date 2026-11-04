@@ -658,11 +658,18 @@ pub(crate) fn requirement_is_deferred(req: &aida_core::Requirement) -> bool {
 #[derive(Debug)]
 pub(crate) struct ReviewLeaseGuard {
     pub(crate) path: std::path::PathBuf,
+    /// The project the lease was written in and its id, so the drop also
+    /// releases whatever ownership record names this review session.
+    // trace:STORY-2325 | ai:claude
+    pub(crate) project_root: std::path::PathBuf,
+    pub(crate) lease_id: String,
 }
 
 impl Drop for ReviewLeaseGuard {
     fn drop(&mut self) {
         let _ = std::fs::remove_file(&self.path);
+        // Dual-write: the review ended. // trace:STORY-2325 | ai:claude
+        crate::ownership::dual::lease_released(&self.project_root, &self.lease_id, "review ended");
     }
 }
 
@@ -842,6 +849,7 @@ pub(crate) fn acquire_review_lease_with_mode(
         .or_else(|| std::env::var("USER").ok())
         .unwrap_or_else(|| "unknown".to_string());
     let lease = SessionLease {
+        pid_namespace: crate::agent_registry::current_pid_namespace(),
         tree_kind: Default::default(),
         id: id.clone(),
         scope: spec_id.to_string(),
@@ -878,13 +886,20 @@ pub(crate) fn acquire_review_lease_with_mode(
         driver: None,
         child_grant_id: None,
         vendor_session_id: None,
+        lane_jobs: None,
     };
     std::fs::create_dir_all(leases_dir(project_root))?;
     let path = lease_path(project_root, &id);
     // STORY-1429: atomic, so a reader never sees a half-written lease.
     // trace:STORY-1429 | ai:claude
     aida_core::write_atomic(&path, toml::to_string_pretty(&lease)?)?;
-    Ok(ReviewLeaseGuard { path })
+    // Dual-write: the lease stays authoritative. // trace:STORY-2325 | ai:claude
+    crate::ownership::dual::lease_written(project_root, &lease);
+    Ok(ReviewLeaseGuard {
+        path,
+        project_root: project_root.to_path_buf(),
+        lease_id: id,
+    })
 }
 
 /// BUG-539: a spec already in a terminal/merged state has no live review

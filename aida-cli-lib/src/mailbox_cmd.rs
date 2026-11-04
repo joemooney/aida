@@ -1187,6 +1187,17 @@ fn print_retention_report(project_root: &std::path::Path, json: bool) -> Result<
             }
         };
         println!("  pid {:>7}  {}  ({verdict})", host.pid, host.command);
+        // trace:BUG-2424 | ai:codex
+        if matches!(
+            &host.verdict,
+            aida_core::mailbox_lifecycle::activation::HostVerdict::Unverified { .. }
+        ) {
+            if let Ok(cgroup) = std::fs::read_to_string(format!("/proc/{}/cgroup", host.pid)) {
+                if let Some(line) = retention_service_hint(&cgroup) {
+                    println!("    {line}");
+                }
+            }
+        }
     }
     if let Some(why) = &report.scan_incomplete {
         println!("  the process scan is incomplete: {why}");
@@ -1203,6 +1214,45 @@ fn print_retention_report(project_root: &std::path::Path, json: bool) -> Result<
         );
     }
     Ok(())
+}
+
+// The innermost service owns the writer; user@UID.service is the manager,
+// not a writer's service. Read-only /proc evidence never grants activation.
+// trace:BUG-2424 | ai:codex
+#[cfg(unix)]
+fn retention_service_hint(cgroup: &str) -> Option<String> {
+    let unit = cgroup.lines().find_map(|line| {
+        let path = line.splitn(3, ':').nth(2)?;
+        path.split('/').rev().find(|name| {
+            name.ends_with(".service")
+                && !name.starts_with("user@")
+                && name
+                    .bytes()
+                    .all(|b| b.is_ascii_alphanumeric() || b"-_.@:\\".contains(&b))
+        })
+    })?;
+    // Only AIDA's own watcher units get a restart command: restarting a
+    // foreign service (tmux, code-server, a terminal server) would kill every
+    // session it hosts, so its owner decides.
+    // trace:BUG-2424 | ai:claude
+    if !unit.starts_with("aida-mail-wake-") {
+        return Some(format!(
+            "runs under systemd unit {unit}; that service's owner must restart it"
+        ));
+    }
+    let quoted = if unit.contains('\\') {
+        format!("'{unit}'")
+    } else {
+        unit.to_string()
+    };
+    let scope = if cgroup.lines().any(|line| line.contains("/user.slice/")) {
+        " --user"
+    } else {
+        ""
+    };
+    Some(format!(
+        "systemd unit {unit}; restart with `systemctl{scope} restart {quoted}`"
+    ))
 }
 
 /// The report's lines about the recorded activation. A record made by
@@ -3211,5 +3261,64 @@ fn mailbox_cli_policy(matches: &clap::ArgMatches) -> crate::command_registry::Cm
         per_write_auto_push: false,
         skip_role_restore_prompt: false,
         team_identity_write: false,
+    }
+}
+
+// trace:BUG-2424 | ai:codex
+#[cfg(test)]
+mod service_hint_tests {
+    use super::retention_service_hint;
+
+    #[test]
+    fn names_owning_service_with_actionable_user_restart() {
+        let line = retention_service_hint("0::/user.slice/user-1000.slice/user@1000.service/app.slice/aida-mail-wake-abc.service/child\n").unwrap();
+        assert!(line.contains("systemd unit aida-mail-wake-abc.service"));
+        assert!(line.contains("systemctl --user restart aida-mail-wake-abc.service"));
+        assert!(retention_service_hint(
+            "0::/user.slice/user-1000.slice/user@1000.service/app.slice/session.scope\n"
+        )
+        .is_none());
+        assert!(retention_service_hint("malformed\n").is_none());
+        assert!(
+            retention_service_hint("0::/system.slice/aida-mail-wake-sys.service\n")
+                .unwrap()
+                .contains("`systemctl restart aida-mail-wake-sys.service`")
+        );
+    }
+
+    // A foreign service hosts other sessions too: name it, never tell the
+    // operator to restart it.
+    // trace:BUG-2424 | ai:claude
+    #[test]
+    fn foreign_service_is_named_without_a_restart_command() {
+        for cgroup in [
+            "0::/user.slice/user-1000.slice/user@1000.service/app.slice/tmux.service\n",
+            "0::/system.slice/writer.service\n",
+            "0::/user.slice/user-1000.slice/user@1000.service/app.slice/code\\x2dserver.service\n",
+        ] {
+            let line = retention_service_hint(cgroup).unwrap();
+            assert!(line.contains("runs under systemd unit"), "{line}");
+            assert!(line.contains("owner must restart it"), "{line}");
+            assert!(!line.contains("systemctl"), "{line}");
+        }
+    }
+
+    // systemd escapes '-' inside a unit-name component as `\x2d`; the
+    // restart command must single-quote it so the shell keeps the backslash.
+    // trace:BUG-2424 | ai:claude
+    #[test]
+    fn escaped_aida_unit_name_is_single_quoted() {
+        let line = retention_service_hint(
+            "0::/user.slice/user-1000.slice/user@1000.service/app.slice/aida-mail-wake-x\\x2dy.service\n",
+        )
+        .unwrap();
+        assert!(
+            line.contains("systemd unit aida-mail-wake-x\\x2dy.service"),
+            "{line}"
+        );
+        assert!(
+            line.contains("`systemctl --user restart 'aida-mail-wake-x\\x2dy.service'`"),
+            "{line}"
+        );
     }
 }

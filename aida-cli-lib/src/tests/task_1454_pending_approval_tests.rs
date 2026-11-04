@@ -85,6 +85,7 @@ fn collect_blocked_seat_items_empty_when_no_marker_dir() {
 
 fn test_lease(id: &str, scope: &str, worktree: std::path::PathBuf, pid: u32) -> SessionLease {
     SessionLease {
+        pid_namespace: crate::agent_registry::current_pid_namespace(),
         tree_kind: Default::default(),
         id: id.to_string(),
         scope: scope.to_string(),
@@ -120,6 +121,7 @@ fn test_lease(id: &str, scope: &str, worktree: std::path::PathBuf, pid: u32) -> 
         driver: None,
         child_grant_id: None,
         vendor_session_id: None,
+        lane_jobs: None,
     }
 }
 

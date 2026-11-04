@@ -8,10 +8,12 @@
 //! [`judge`] that turns a record plus injected host facts into a
 //! [`Verdict`].
 //!
-//! PR-A of the slice plan adds only the types and the judge. No decision call
-//! site reads them yet, nothing is persisted, and nothing is migrated: the
-//! writers, the handoff and the one-time rewrite are PR-B, and the cutover of
-//! every reader is PR-C.
+//! PR-A added the types and the judge. PR-B adds the store
+//! ([`store`]: one locked, generation-checked, journaled write path), the
+//! transitions ([`ops`]), the dual-write call-site adapters ([`dual`]), the
+//! one-time rewrite (`aida own migrate`, [`migrate`]) and the diagnostic
+//! `aida own show --compare` ([`compare`]). No decision call site reads the
+//! records yet: the cutover of every reader is PR-C.
 //!
 //! The judge is pure: it reads no file, process, git state or clock. The
 //! caller injects the host it runs on ([`HostFacts`], including a process
@@ -33,11 +35,16 @@
 //!
 //! trace:STORY-2325 | ai:claude
 
-// PR-A ships the types and the judge alone; PR-B wires the writers and
-// PR-C the readers, so nothing outside the tests calls them yet.
+// The readers are PR-C, so part of the judge's surface has no production
+// caller yet.
 #![cfg_attr(not(test), allow(dead_code))]
 
+pub(crate) mod compare;
+pub(crate) mod dual;
 mod judge;
+pub(crate) mod migrate;
+pub(crate) mod ops;
+pub(crate) mod store;
 mod types;
 
 #[allow(unused_imports)]
@@ -52,3 +59,5 @@ pub(crate) use types::{
 
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod writer_tests;

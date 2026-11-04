@@ -1212,6 +1212,8 @@ pub(crate) fn collect_awaiting_report_with_mail_facts(
 
     awaiting_you::AwaitingReport {
         idle_eligible,
+        // trace:BUG-2426 | ai:claude
+        review_watch_skipped: awaiting_you::WatchSkippedItem::from_watcher(project_root),
         mergeable_prs,
         recusal_holds,
         held_prs,
@@ -1444,6 +1446,10 @@ pub(crate) fn mandate_notice_line(
         }
         _ => String::new(),
     };
+    // trace:STORY-2346 | ai:codex
+    if let Ok(root) = crate::find_main_worktree_root() {
+        crate::mandate::notify_expiry(&dir, &root, &state, now);
+    }
     crate::mandate::notice_line(&dir, &state, now, &seat, &gates)
 }
 

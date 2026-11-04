@@ -5,6 +5,7 @@ use process_probe::LiveSession;
 // classifies through the worktree/claude/age matrix like a real fan-out lease.
 fn session_lease_at(worktree: &std::path::Path) -> SessionLease {
     SessionLease {
+        pid_namespace: crate::agent_registry::current_pid_namespace(),
         tree_kind: Default::default(),
         id: "abc123".into(),
         scope: "TASK-1".into(),
@@ -40,6 +41,7 @@ fn session_lease_at(worktree: &std::path::Path) -> SessionLease {
         driver: None,
         child_grant_id: None,
         vendor_session_id: None,
+        lane_jobs: None,
     }
 }
 

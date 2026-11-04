@@ -218,6 +218,7 @@ fn update_lease_branch_rewrites_only_the_branch() {
     let sessions = leases_dir(root);
     std::fs::create_dir_all(&sessions).unwrap();
     let lease = SessionLease {
+        pid_namespace: crate::agent_registry::current_pid_namespace(),
         tree_kind: Default::default(),
         id: "019eabcd-1234".to_string(),
         scope: "EPIC-23".to_string(),
@@ -253,6 +254,7 @@ fn update_lease_branch_rewrites_only_the_branch() {
         driver: None,
         child_grant_id: None,
         vendor_session_id: None,
+        lane_jobs: None,
     };
     std::fs::write(
         sessions.join("019eabcd-1234.toml"),
@@ -300,6 +302,7 @@ fn reconcile_orchestrated_branch_follows_a_pr_branch_swap() {
     let sessions = leases_dir(root);
     std::fs::create_dir_all(&sessions).unwrap();
     let lease = SessionLease {
+        pid_namespace: crate::agent_registry::current_pid_namespace(),
         tree_kind: Default::default(),
         id: "019eaaaa-bbbb".to_string(),
         scope: "EPIC-23".into(),
@@ -335,6 +338,7 @@ fn reconcile_orchestrated_branch_follows_a_pr_branch_swap() {
         driver: None,
         child_grant_id: None,
         vendor_session_id: None,
+        lane_jobs: None,
     };
     std::fs::write(
         sessions.join("019eaaaa-bbbb.toml"),

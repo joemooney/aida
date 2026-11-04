@@ -379,11 +379,14 @@ pub(crate) fn import_seat_branch(
 }
 
 /// The STORY-469 commit-trailer check on the seat's commits in `range`
-/// (read in `repo`): some commit carries a `(SPEC-ID)` trailer, and every
-/// trailer resolves to a live spec through `resolve`. A seat branch with no
-/// commit in `range` has nothing to publish. Returns every trailer ID.
-// trace:BUG-HOME-038 trace:STORY-469 | ai:claude
-pub(crate) fn seat_trailer_check<F>(repo: &Path, range: &str, resolve: F) -> Result<Vec<String>>
+/// (read in `repo`): some commit names a spec, either in a completing
+/// `(SPEC-ID)` trailer or a non-completing `(Refs SPEC-ID)` group (the shape
+/// of a partial slice of a multi-PR spec, BUG-2431), and every named ID
+/// resolves to a live spec through `resolve`. A seat branch with no commit in
+/// `range` has nothing to publish. Returns every named ID. Accepting `Refs`
+/// here never completes the spec: merge-time completion still skips `Refs`.
+// trace:BUG-HOME-038 trace:STORY-469 trace:BUG-2431 | ai:claude
+pub(crate) fn seat_trailer_check<F>(repo: &Path, range: &str, mut resolve: F) -> Result<Vec<String>>
 where
     F: FnMut(&str) -> crate::trace::SpecResolution,
 {
@@ -391,17 +394,43 @@ where
     if commits.is_empty() {
         anyhow::bail!("refusing to publish: the seat branch adds no commit ({range})");
     }
-    let trailer_ids: Vec<String> = commits
-        .iter()
-        .flat_map(|(_, subject)| crate::extract_spec_ids_from_commit(subject))
-        .collect();
+    let mut trailer_ids: Vec<String> = Vec::new();
+    let mut refs_only: Vec<(&String, &String, String)> = Vec::new();
+    for (sha, subject) in &commits {
+        let completing = crate::extract_spec_ids_from_commit(subject);
+        for id in crate::pr_ship::extract_authorship_spec_ids_from_subject(subject) {
+            if !completing
+                .iter()
+                .any(|c| aida_core::id_identity::same_id(c, &id))
+            {
+                trailer_ids.push(id.clone());
+                refs_only.push((sha, subject, id));
+            }
+        }
+        trailer_ids.extend(completing);
+    }
     if trailer_ids.is_empty() {
         anyhow::bail!(
-            "refusing to publish: no seat commit carries a `(SPEC-ID)` trailer. Amend the \
-             commit inside the seat, then publish again"
+            "refusing to publish: no seat commit carries a `(SPEC-ID)` or `(Refs SPEC-ID)` \
+             trailer. Amend the commit inside the seat, then publish again"
         );
     }
-    let violations = crate::trace::validate_trailer_references(&commits, resolve);
+    let mut violations = crate::trace::validate_trailer_references(&commits, &mut resolve);
+    // The STORY-469 guard reads completing trailers only; a `Refs` ID must
+    // name a live spec too. // trace:BUG-2431 | ai:claude
+    for (sha, subject, id) in refs_only {
+        let verdict = match resolve(&id) {
+            crate::trace::SpecResolution::Live => continue,
+            crate::trace::SpecResolution::Rejected => crate::trace::TrailerVerdict::Rejected,
+            crate::trace::SpecResolution::Missing => crate::trace::TrailerVerdict::Nonexistent,
+        };
+        violations.push(crate::trace::TrailerViolation {
+            sha: sha.clone(),
+            subject: subject.clone(),
+            spec_id: id,
+            verdict,
+        });
+    }
     if !violations.is_empty() {
         anyhow::bail!(
             "{}",
@@ -633,6 +662,10 @@ fn finish_published(
         }
     };
     (deps.after_open)(main, branch);
+    // Dual-write, host side: the contained seat never writes `.aida/` itself
+    // (A6); the host that verified and pushed its bundle records the
+    // handoff. // trace:STORY-2325 | ai:claude
+    crate::ownership::dual::handed_off_from_seat(main, spec, tip, pr);
     eprintln!(
         "{} aida ship --from-seat — PR-{pr} open for {} (not merged)",
         "⏸".yellow().bold(),

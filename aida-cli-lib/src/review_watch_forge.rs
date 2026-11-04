@@ -17,6 +17,9 @@ pub(super) struct Change {
     // Commits the head is behind its base, from the same probe as `overlap`.
     // trace:TASK-1945 | ai:claude
     pub behind: Option<u64>,
+    // The change's source branch, when the forge reported it: the watcher
+    // asks whether a live lease still holds it. trace:BUG-2426 | ai:claude
+    pub head_branch: Option<String>,
 }
 impl Change {
     pub fn key(&self) -> String {
@@ -156,6 +159,11 @@ impl Repository {
             remote,
         })
     }
+    /// `host/project` for a GitHub repository; `None` on GitLab.
+    // trace:BUG-2426 | ai:claude
+    pub fn github_slug(&self) -> Option<String> {
+        (self.kind == ForgeKind::GitHub).then(|| format!("{}/{}", self.host, self.project))
+    }
     pub fn pin_command(&self, command: &mut Command) {
         clear_routing(command);
         command
@@ -187,7 +195,7 @@ impl Repository {
                 "--repo",
                 &format!("{}/{}", self.host, self.project),
                 "--json",
-                "number,headRefOid,baseRefName,isDraft,state,author",
+                "number,headRefOid,headRefName,baseRefName,isDraft,state,author",
             ]);
         } else {
             program = "glab";
@@ -599,6 +607,17 @@ pub(super) fn parse_change(value: &serde_json::Value, gitlab: bool) -> Result<Op
         aida_core::mailbox::recipient_id_rejection(&author).is_none(),
         "change author is not a valid mailbox identity"
     );
+    // Optional: an unknown branch only means liveness cannot be judged.
+    // trace:BUG-2426 | ai:claude
+    let head_branch = value
+        .get(if gitlab {
+            "source_branch"
+        } else {
+            "headRefName"
+        })
+        .and_then(|v| v.as_str())
+        .filter(|b| !b.is_empty() && b.len() <= 255)
+        .map(String::from);
     Ok(Some(Change {
         id,
         head,
@@ -607,6 +626,7 @@ pub(super) fn parse_change(value: &serde_json::Value, gitlab: bool) -> Result<Op
         gitlab,
         overlap: None,
         behind: None,
+        head_branch,
     }))
 }
 

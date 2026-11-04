@@ -243,6 +243,7 @@ fn session_lease_preserves_child_grant_id_across_updates() {
     let lease_file = sessions_dir.join(format!("{lease_id}.toml"));
 
     let lease = SessionLease {
+        pid_namespace: crate::agent_registry::current_pid_namespace(),
         id: lease_id.to_string(),
         scope: "BUG-2165".to_string(),
         slug: "bug-2165".to_string(),
@@ -278,6 +279,7 @@ fn session_lease_preserves_child_grant_id_across_updates() {
         tree_kind: Default::default(),
         child_grant_id: Some("01948abc-def0-7000-8000-000000000001".into()),
         vendor_session_id: None,
+        lane_jobs: None,
     };
     std::fs::write(&lease_file, toml::to_string_pretty(&lease).unwrap()).unwrap();
 

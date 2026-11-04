@@ -3,6 +3,7 @@ use super::*;
 // A minimal fan-out lease at `scope` for shaping the JSON rows.
 fn lease(scope: &str) -> SessionLease {
     SessionLease {
+        pid_namespace: crate::agent_registry::current_pid_namespace(),
         tree_kind: Default::default(),
         id: "abc123def456".into(),
         scope: scope.into(),
@@ -38,6 +39,7 @@ fn lease(scope: &str) -> SessionLease {
         driver: None,
         child_grant_id: None,
         vendor_session_id: None,
+        lane_jobs: None,
     }
 }
 

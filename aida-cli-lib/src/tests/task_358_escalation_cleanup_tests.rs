@@ -11,6 +11,7 @@ fn write_test_lease(
     let sessions = leases_dir(project_root);
     std::fs::create_dir_all(&sessions).unwrap();
     let lease = SessionLease {
+        pid_namespace: crate::agent_registry::current_pid_namespace(),
         tree_kind: Default::default(),
         id: id.to_string(),
         scope: scope.to_string(),
@@ -52,6 +53,7 @@ fn write_test_lease(
         driver: None,
         child_grant_id: None,
         vendor_session_id: None,
+        lane_jobs: None,
     };
     let path = sessions.join(format!("{id}.toml"));
     std::fs::write(&path, toml::to_string_pretty(&lease).unwrap()).unwrap();
