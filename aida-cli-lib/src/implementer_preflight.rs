@@ -365,21 +365,82 @@ pub(crate) fn guards_from_ci(project_root: &Path, names: &[String]) -> Vec<Resol
         .collect()
 }
 
-fn binary_path(project_root: &Path) -> PathBuf {
+/// Where the worktree `aida` binary lives, and whether this project can build
+/// one at all.
+// trace:TASK-1299 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct WorktreeBinary {
+    path: PathBuf,
+    /// False only when the project provably does not build `aida` (no
+    /// `Cargo.toml`, or a workspace without the `aida-cli` package's `aida`
+    /// binary). There is then no worktree binary for an installed one to be
+    /// stale against, so guards use whatever `aida` is on PATH and the build
+    /// is skipped. Unknown (metadata failed) stays true: the build runs and
+    /// reports its own failure, as before.
+    buildable: bool,
+}
+
+const NOT_BUILDABLE_LABEL: &str =
+    "not built (this project does not build the aida binary; guards use `aida` from PATH)";
+
+fn worktree_binary(project_root: &Path) -> WorktreeBinary {
+    let fallback = project_root.join("target/debug/aida");
+    if !project_root.join("Cargo.toml").is_file() {
+        return WorktreeBinary {
+            path: fallback,
+            buildable: false,
+        };
+    }
     let mut metadata = Command::new("cargo");
     metadata
         .args(["metadata", "--format-version", "1", "--no-deps"])
         .current_dir(project_root);
-    if let Ok(Some(out)) = run_bounded(&mut metadata, Duration::from_secs(10)) {
-        if out.status.success() {
-            if let Ok(value) = serde_json::from_slice::<serde_json::Value>(&out.stdout) {
-                if let Some(target) = value.get("target_directory").and_then(|v| v.as_str()) {
-                    return PathBuf::from(target).join("debug/aida");
-                }
-            }
+    let value = match run_bounded(&mut metadata, Duration::from_secs(10)) {
+        Ok(Some(out)) if out.status.success() => {
+            serde_json::from_slice::<serde_json::Value>(&out.stdout).ok()
         }
+        _ => None,
+    };
+    let Some(value) = value else {
+        return WorktreeBinary {
+            path: fallback,
+            buildable: true,
+        };
+    };
+    let path = value
+        .get("target_directory")
+        .and_then(|v| v.as_str())
+        .map(|target| PathBuf::from(target).join("debug/aida"))
+        .unwrap_or(fallback);
+    WorktreeBinary {
+        path,
+        buildable: workspace_builds_aida(&value),
     }
-    project_root.join("target/debug/aida")
+}
+
+/// Whether `cargo metadata` output lists the `aida-cli` package with an `aida`
+/// bin target — exactly what `build_worktree_binary` asks cargo to build.
+// trace:TASK-1299 | ai:claude
+fn workspace_builds_aida(metadata: &serde_json::Value) -> bool {
+    let Some(packages) = metadata.get("packages").and_then(|v| v.as_array()) else {
+        return true;
+    };
+    packages
+        .iter()
+        .filter(|pkg| pkg.get("name").and_then(|v| v.as_str()) == Some("aida-cli"))
+        .flat_map(|pkg| {
+            pkg.get("targets")
+                .and_then(|v| v.as_array())
+                .cloned()
+                .unwrap_or_default()
+        })
+        .any(|target| {
+            target.get("name").and_then(|v| v.as_str()) == Some("aida")
+                && target
+                    .get("kind")
+                    .and_then(|v| v.as_array())
+                    .is_some_and(|kinds| kinds.iter().any(|k| k.as_str() == Some("bin")))
+        })
 }
 
 fn output_text(out: &Output) -> String {
@@ -566,7 +627,10 @@ fn execute(
     budgets: PreflightBudgets,
 ) -> Vec<GuardResult> {
     let timeout = budgets.guard_timeout;
-    let binary_path = binary_path(project_root);
+    let WorktreeBinary {
+        path: binary_path,
+        buildable,
+    } = worktree_binary(project_root);
     // Built at most once, on the first guard that will ACTUALLY RUN.
     //
     // The build is not keyed on `guard_uses_aida`: a guard whose text does not
@@ -577,6 +641,9 @@ fn execute(
     // executes at all (every one resolved Skipped or Invalid): nothing runs,
     // so nothing can consult PATH, so there is nothing to build.
     // trace:TASK-1289 | ai:claude
+    // The other safe skip is a project with no `aida` binary to build: there
+    // is no worktree binary for an installed one to be stale against.
+    // trace:TASK-1299 | ai:claude
     let mut binary: Option<Result<String, String>> = None;
     // The default branch comes from the forge (`gh repo view`) or from
     // `origin/HEAD`, neither of which the operator controls, and the guard
@@ -589,14 +656,18 @@ fn execute(
     let default_branch = crate::git_arg_guard::is_shell_safe_branch_name(&raw_default_branch)
         .then(|| raw_default_branch.clone());
     let inherited_path = std::env::var_os("PATH").unwrap_or_default();
+    // A project that cannot build `aida` gets no worktree directory on PATH:
+    // there is no worktree binary there to prefer. trace:TASK-1299 | ai:claude
+    let worktree_dir = buildable.then(|| {
+        binary_path
+            .parent()
+            .unwrap_or_else(|| Path::new("."))
+            .to_path_buf()
+    });
     let path = std::env::join_paths(
-        std::iter::once(
-            binary_path
-                .parent()
-                .unwrap_or_else(|| Path::new("."))
-                .to_path_buf(),
-        )
-        .chain(std::env::split_paths(&inherited_path)),
+        worktree_dir
+            .into_iter()
+            .chain(std::env::split_paths(&inherited_path)),
     )
     .unwrap_or(inherited_path);
 
@@ -634,9 +705,14 @@ fn execute(
             });
             continue;
         }
-        // This guard will execute, so the worktree binary is needed now.
+        // This guard will execute, so the worktree binary is needed now —
+        // unless the project has none to build. trace:TASK-1299 | ai:claude
         let built = binary.get_or_insert_with(|| {
-            build_worktree_binary(project_root, &binary_path, budgets.build_timeout)
+            if buildable {
+                build_worktree_binary(project_root, &binary_path, budgets.build_timeout)
+            } else {
+                Ok(NOT_BUILDABLE_LABEL.to_string())
+            }
         });
         let binary_label = match &*built {
             Ok(label) | Err(label) => label.clone(),
@@ -663,10 +739,12 @@ fn execute(
             command = command.replace(BASE_REF_PLACEHOLDER, branch);
         }
         let mut child = github_actions_bash(&command);
-        child
-            .current_dir(project_root)
-            .env("PATH", &path)
-            .env("AIDA_PREFLIGHT_BINARY", &binary_path);
+        child.current_dir(project_root).env("PATH", &path);
+        if buildable {
+            child.env("AIDA_PREFLIGHT_BINARY", &binary_path);
+        } else {
+            child.env_remove("AIDA_PREFLIGHT_BINARY");
+        }
         match default_branch.as_deref() {
             Some(branch) => child.env("AIDA_PREFLIGHT_DEFAULT_BRANCH", branch),
             None => child.env_remove("AIDA_PREFLIGHT_DEFAULT_BRANCH"),
@@ -1269,6 +1347,76 @@ mod tests {
         );
         // and skipping still publishes — the acceptance criterion for unknown guards
         assert_eq!(decide(&results), PreflightDecision::Open);
+    }
+
+    /// TASK-1299: a project that cannot build `aida` runs its executing guards
+    /// without a `cargo build`. The Failed output carries the binary label,
+    /// which reads "does not build the aida binary" only when the build was
+    /// never attempted (an attempted build would label a path + build clause).
+    // trace:TASK-1299 | ai:claude
+    #[test]
+    fn executing_guard_in_a_project_without_aida_runs_no_build() {
+        let root = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(root.path().join(".github/workflows")).unwrap();
+        std::fs::write(
+            root.path().join(".github/workflows/ci.yml"),
+            "jobs:\n  build:\n    defaults:\n      run:\n        shell: bash --noprofile --norc -e -o pipefail {0}\n    steps:\n      - name: Lint\n        run: |\n          test -z \"${AIDA_PREFLIGHT_BINARY:-}\" || echo binary-exported\n          exit 1\n",
+        )
+        .unwrap();
+
+        let results = execute(
+            root.path(),
+            guards_from_ci(root.path(), &["Lint".into()]),
+            test_budgets(Duration::from_secs(20)),
+        );
+
+        let [GuardResult::Failed { name, output }] = results.as_slice() else {
+            panic!("the lint guard must execute and fail, got {results:?}")
+        };
+        assert_eq!(name, "Lint");
+        assert!(
+            output.contains(NOT_BUILDABLE_LABEL),
+            "no aida binary to build, so no build may run: {output}"
+        );
+        assert!(
+            !output.contains("binary-exported"),
+            "no worktree binary exists, so none may be advertised: {output}"
+        );
+    }
+
+    /// TASK-1299: the buildability probe reads cargo metadata — a workspace
+    /// without the `aida-cli` package's `aida` bin cannot build it; this
+    /// workspace can; and a missing manifest short-circuits without cargo.
+    // trace:TASK-1299 | ai:claude
+    #[test]
+    fn worktree_binary_is_buildable_only_where_aida_cli_builds_aida() {
+        let bare = tempfile::tempdir().unwrap();
+        assert!(!worktree_binary(bare.path()).buildable);
+
+        let other = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(other.path().join("src")).unwrap();
+        std::fs::write(
+            other.path().join("Cargo.toml"),
+            "[package]\nname = \"other\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[workspace]\n",
+        )
+        .unwrap();
+        std::fs::write(other.path().join("src/lib.rs"), "").unwrap();
+        assert!(!worktree_binary(other.path()).buildable);
+
+        let pkg = |name: &str, target: &str, kind: &str| serde_json::json!({"packages": [{"name": name, "targets": [{"name": target, "kind": [kind]}]}]});
+        assert!(workspace_builds_aida(&pkg("aida-cli", "aida", "bin")));
+        assert!(!workspace_builds_aida(&pkg("aida-cli", "aida", "lib")));
+        assert!(!workspace_builds_aida(&pkg(
+            "aida-cli",
+            "aida-server",
+            "bin"
+        )));
+        assert!(!workspace_builds_aida(&pkg("not-aida", "aida", "bin")));
+        // unreadable metadata keeps the conservative build
+        assert!(workspace_builds_aida(&serde_json::json!({})));
+
+        let this = worktree_binary(&workspace_root());
+        assert!(this.buildable, "this workspace builds aida: {this:?}");
     }
 
     /// Finding 5: the criterion has three branches, and the previous test
