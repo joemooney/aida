@@ -7431,29 +7431,29 @@ fn run_show(
                             }
                             // TASK-1471: linked narrative Docs, both directions. The
                             // reverse (`aida doc add --about`) edge lives on the Doc,
-                            // so scan live Docs only when something points in here.
+                            // so always scan Docs: single-row writes do not refresh cached
+                            // inbound degrees (including immediately after doc add).
                             // Human view only — TOON/JSON returned above.
                             // trace:TASK-1471 | ai:claude
+                            // trace:TASK-1471 | ai:codex
                             {
                                 let mut candidates: Vec<aida_core::models::Requirement> =
                                     Vec::new();
                                 for rel in &req.relationships {
                                     if rel.rel_type == RelationshipType::References {
-                                        if let Ok(Some(t)) = read_target(&rel.target_id) {
+                                        if let Some(t) = read_target(&rel.target_id)? {
                                             candidates.push(t);
                                         }
                                     }
                                 }
-                                if degrees.in_degree > 0 {
-                                    let filter = aida_core::db::ListFilter {
-                                        req_type: Some("Doc".to_string()),
-                                        defer: aida_core::db::DeferFilter::Both,
-                                        ..Default::default()
-                                    };
-                                    for s in backend.list_summaries(&filter).unwrap_or_default() {
-                                        if let Ok(Some(d)) = read_target(&s.id) {
-                                            candidates.push(d);
-                                        }
+                                let filter = aida_core::db::ListFilter {
+                                    req_type: Some("Doc".to_string()),
+                                    defer: aida_core::db::DeferFilter::Both,
+                                    ..Default::default()
+                                };
+                                for summary in backend.list_summaries(&filter)? {
+                                    if let Some(doc) = read_target(&summary.id)? {
+                                        candidates.push(doc);
                                     }
                                 }
                                 let docs = crate::show_docs::collect_linked_docs(&req, candidates);
@@ -10144,3 +10144,7 @@ mod bug_2420_release_note_tests;
 #[cfg(test)]
 #[path = "tests/story_105_agreed_first_tests.rs"]
 mod story_105_agreed_first_tests;
+
+#[cfg(test)]
+#[path = "tests/task_1471_show_docs_tests.rs"]
+mod task_1471_show_docs_tests;
