@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T02:15:29.023069877Z
-modified_at: 2026-11-04T07:10:52.072727699Z
+modified_at: 2026-11-04T07:10:54.786320842Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -50,6 +50,21 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Fix is correct (nested bwrap userns as host uid/gid, cap-drop ALL; CI green at head), but the only test proving the job lands in the host slot dir is outside the forced-live bwrap CI gate, so CI can skip it silently. Triage reason: advisor rework brief on spec; review findings to address'
   created_at: 2026-11-04T07:10:52.072723682Z
   modified_at: 2026-11-04T07:10:52.072723682Z
+  session_id: da1c0d85-1d45-4ce4-a292-5358644f65b9
+- id: 01a1a565-7e8a-7ce3-b910-681c96c29920
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2435):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: ffaed8811639
+    Recorded: 2026-11-04T06:14:25.952041783+00:00
+    Findings:
+    1. BLOCKING: bug_2435_bwrap_overlay_job_takes_its_slot_in_the_host_slot_dir (aida-cli-lib/src/tests/bug_2383_seat_target_overlay_tests.rs) is the only test that proves a job runs as the host uid and writes into the host cargo-slots-<uid> dir, which is BUG-2435's acceptance test. It is not in the forced-live gate: .github/workflows/ci.yml:333 filters on bug_2383_bwrap_ and the expected/ran regexes at :337-338 list (bug_2169|task_2053|bug_2224|bug_1934|bug_2383). In the ordinary lib shards the runner keeps apparmor_restrict_unprivileged_userns=1, so the probe fails and skip_live returns early, and the test passes without running. Fix: add bug_2435_bwrap_ to the cargo test filter and to both regexes, or rename the test to the bug_2383_bwrap_ prefix like the other overlay live tests.
+    2. minor: lane_job.rs:1054 ov::probe only runs 'unshare -Urm sh -c mount; exec true'. It never runs the nested 'bwrap --unshare-user --uid --gid' that every overlay job now needs. A host that allows unshare -Urm but refuses the nested user namespace (user.max_user_namespaces, an LSM policy, bwrap missing) passes the probe and then fails every job instead of falling back to cold, which is what probe() promises. Suggest probing with wrap_lane_job("unshare", ov, "bwrap", <minimal --ro-bind / / true>), or filing a follow-up.
+    3. minor (strict tier: containment): the host_ids_bwrap_args doc comment (seat_target_overlay.rs:613-614) says --cap-drop ALL keeps the job from remounting its read-only binds. No test covers that refusal path. Add a live test that an overlay job's 'mount -o remount,rw' on a ro bind fails, as the implementer's own comment on BUG-2435 suggested, or file it as a tracked follow-up.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-04T07:10:54.602692561Z
+  modified_at: 2026-11-04T07:10:54.602692561Z
   session_id: da1c0d85-1d45-4ce4-a292-5358644f65b9
 history:
 - id: 01a1a4a6-2fae-7cd2-9310-1a89843f3963
