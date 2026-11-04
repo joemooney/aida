@@ -18,12 +18,12 @@ description: |-
   - Detailed records can link to a Draft BUG, review finding, PR, spec, commit, or session without copying raw prompts or transcripts into canonical YAML.
   - Privacy controls document what is recorded, support the existing telemetry opt-out, and avoid storing provider secrets or raw model content by default.
   - Tests cover successful runs, failures, retries, rework, provider-token-unavailable cases, duplicate/correlated events, and avoidability review transitions.
-status: Draft
+status: Rejected
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-24T15:09:38.693878746Z
-modified_at: 2026-11-04T02:31:44.242515671Z
+modified_at: 2026-11-04T02:31:45.669025282Z
 req_type: Task
 comments:
 - id: 01a0d46a-5038-7cc2-b829-eeb079f97c9e
@@ -44,3 +44,11 @@ history:
   timestamp: 2026-11-04T02:31:43.215468249Z
   session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
   changes: []
+- id: 01a1a465-ed05-7630-86b0-9670b67d9a96
+  author: joe
+  timestamp: 2026-11-04T02:31:45.669022667Z
+  session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Rejected
