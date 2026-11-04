@@ -60,30 +60,24 @@ pub enum GateCommand {
         json: bool,
     },
 
-    /// One-time operator step: give every gate-ledger event the canonical
-    /// requirement key its spec label names in the committed store. Lines
-    /// keep their order and bytes; nothing is added or removed. The legacy
-    /// verdict and hold files are reported and left in place.
+    /// One-time rewrite that gives every gate-ledger event its requirement's canonical key.
     // trace:STORY-2324 | ai:claude
-    #[clap(group(
-        ArgGroup::new("migrate_mode")
-            .required(true)
-            .args(["dry_run", "execute", "rollback"]),
-    ))]
     Migrate {
         /// Plan and report; change nothing.
-        #[clap(long)]
+        #[clap(
+            long,
+            conflicts_with_all = ["execute", "rollback"],
+            required_unless_present_any = ["execute", "rollback"]
+        )]
         dry_run: bool,
 
-        /// Rewrite the ledger, keeping the old one as an archive. Needs an
+        /// Rewrite the ledger and keep the old one as an archive. Needs an
         /// interactive terminal in the host shell, outside any sandbox, with
-        /// no drain running, and no open pull request carrying a label that
-        /// names no single requirement.
-        #[clap(long)]
+        /// no drain running.
+        #[clap(long, conflicts_with = "rollback")]
         execute: bool,
 
-        /// Restore the ledger the last `--execute` archived. Refused when the
-        /// ledger was written since. Same terminal and host-shell rules.
+        /// Restore the ledger the last `--execute` archived (same rules).
         #[clap(long)]
         rollback: bool,
 

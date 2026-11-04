@@ -44,13 +44,9 @@ pub(crate) const REPORTS_DIR: &str = "gate-ledger-migrations";
 const V2_DIR: &str = "gate-ledger.v2";
 const ARCHIVE_PREFIX: &str = "gate-ledger.v1-";
 
-/// The legacy stores PR-B reports but leaves in place, under `.aida/`.
-pub(crate) const LEGACY_DIRS: &[&str] = &[
-    "review-verdicts",
-    "merge-holds",
-    "merge-hold-clearances",
-    "pr-holds",
-];
+// The legacy stores PR-B reports but leaves in place, under `.aida/`. They
+// are named only in the sanctioned legacy reader.
+use super::legacy::LEGACY_STORE_DIRS as LEGACY_DIRS;
 
 /// What one ledger line became.
 // trace:STORY-2324 | ai:claude
@@ -897,5 +893,5 @@ fn print_report(plan: &Plan, store_head: &str, blocking: Option<&str>, applied: 
 }
 
 #[cfg(test)]
-#[path = "../tests/story_2324_migrate_tests.rs"]
+#[path = "migrate_tests.rs"]
 mod tests;
