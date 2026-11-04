@@ -575,6 +575,12 @@ fixture_case!(
     bug2406_new_refusal_refuses,
     "PR-77"
 );
+// trace:BUG-2438 | ai:claude — a current-head refusal under the PR key ejects.
+fixture_case!(
+    bug2438_current_head_refusal_refuses_pr_11,
+    bug2406_new_refusal_refuses,
+    "PR-11"
+);
 fixture_case!(
     bug2406_new_refusal_refuses_unrelated,
     bug2406_new_refusal_refuses,
@@ -635,6 +641,124 @@ fn bug2406_new_refusal_refuses(key: &str) {
         "{key}"
     );
     assert!(calls(f.root()).is_empty(), "{key}");
+}
+
+/// BUG-2438: append the incident's PR-3330 ledger shape under PR-11: an
+/// earlier spec-stamped refusal reviewed at `refusal_sha`, then `approval`
+/// recorded with no spec (review watch). Returns the canonical spec key.
+// trace:BUG-2438 | ai:claude
+fn bug2438_ledger(f: &Fixture, refusal_sha: &str, approval: &Value) -> &'static str {
+    let earlier = (chrono::Utc::now() - chrono::Duration::hours(1)).to_rfc3339();
+    let stale = json!({"verdict":"request-changes", "reviewed_sha":refusal_sha,
+        "reviewed_branch":"source/BUG-2400", "recorded_at":earlier,
+        "recorded_by":"fixture earlier-round reviewer"});
+    let canonical = "BUG-b6b1278890774ef993d2ebc327862470-173";
+    for (record, spec) in [(&stale, Some(canonical)), (approval, None)] {
+        let spec = spec.map(|key| ledger::GateSpec::with_key(key, None));
+        ledger::store::append_one(
+            f.root(),
+            ledger::event::verdict_event(
+                f.root(),
+                ledger::ChangeKey::pr(11),
+                record.as_object().unwrap(),
+                spec.as_ref(),
+            ),
+        )
+        .unwrap();
+    }
+    canonical
+}
+
+/// BUG-2438: open the train on the fixture's current-head approvals, then
+/// `record` the case's ledger: the sealed final gate refuses and never
+/// reaches the transport.
+// trace:BUG-2438 | ai:claude
+fn bug2438_refuses(f: &Fixture, why: &str, record: impl FnOnce()) {
+    let forge = GitHubForge::new(f.root());
+    let mut live = f.live(&forge);
+    let (train, change) = f.opened(&mut live);
+    let lease = live.lease(change.id).unwrap();
+    record();
+    assert!(
+        live.merge_verified(&change, &train, lease.as_ref())
+            .is_err(),
+        "{why}"
+    );
+    assert!(calls(f.root()).is_empty(), "{why}");
+}
+
+/// BUG-2438: with NO current-head verdict nothing is superseded, so an
+/// older-head refusal still refuses even beside an older-head approval.
+// trace:BUG-2438 | ai:claude
+#[test]
+fn bug2438_old_head_refusal_without_current_head_verdict_refuses() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let f = Fixture::new(false);
+    let old_head = g(f.root(), &["rev-parse", "main"]);
+    let mut approval = f.records[0].clone();
+    approval["reviewed_sha"] = json!(old_head);
+    bug2438_refuses(&f, "old-head refusal with no current-head verdict", || {
+        bug2438_ledger(&f, &old_head, &approval);
+    });
+}
+
+/// BUG-2438: only a well-formed SHA naming another commit is an older head. A
+/// refusal whose reviewed_sha is malformed or too short to compare keeps
+/// counting (fail closed), even beside a current-head approval.
+// trace:BUG-2438 | ai:claude
+#[test]
+fn bug2438_malformed_reviewed_sha_refusal_is_not_superseded() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    for bad in ["HEAD", "short"] {
+        let f = Fixture::new(false);
+        let head = f.records[0]["reviewed_sha"].as_str().unwrap().to_string();
+        let sha = if bad == "short" {
+            head[..6].to_string()
+        } else {
+            bad.to_string()
+        };
+        bug2438_refuses(&f, bad, || {
+            bug2438_ledger(&f, &sha, &f.records[0]);
+        });
+    }
+}
+
+/// BUG-2438: an earlier round's refusal, stamped with the spec and reviewed at
+/// an older head, is superseded by the PR's approval at the current head
+/// (recorded with no spec, so the spec key's newest verdict is still the old
+/// refusal). The train lands.
+// trace:BUG-2438 | ai:claude
+#[test]
+fn bug2438_old_head_spec_keyed_refusal_is_superseded_by_current_head_approval() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let f = Fixture::new(false);
+    let old_head = g(f.root(), &["rev-parse", "main"]);
+    let canonical = bug2438_ledger(&f, &old_head, &f.records[0]);
+    let by_spec = ledger::project::newest_verdict(f.root(), canonical).unwrap();
+    assert_eq!(
+        by_spec["verdict"],
+        json!("request-changes"),
+        "spec key still names the old refusal"
+    );
+    assert_eq!(
+        ledger::project::newest_verdict(f.root(), "PR-11").unwrap(),
+        *f.records[0].as_object().unwrap()
+    );
+    let forge = GitHubForge::new(f.root());
+    let mut live = f.live(&forge);
+    let (train, change) = f.opened(&mut live);
+    let lease = live.lease(change.id).unwrap();
+    live.merge_verified(&change, &train, lease.as_ref())
+        .unwrap_or_else(|e| panic!("train must land: {e:?}"));
+    let transport = calls(f.root());
+    assert_eq!(transport.len(), 1, "the train merges once");
+    assert!(transport[0].contains(&format!("--match-head-commit {}", train.tip)));
 }
 
 #[test]
