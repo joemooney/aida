@@ -29,7 +29,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T02:34:20.173245666Z
-modified_at: 2026-11-04T04:34:33.593929202Z
+modified_at: 2026-11-04T04:40:33.783207678Z
 req_type: Story
 comments:
 - id: 01a1a468-a682-7271-a707-298d622d86f1
@@ -38,6 +38,50 @@ comments:
   created_at: 2026-11-04T02:34:44.226713178Z
   modified_at: 2026-11-04T02:34:44.226713178Z
   session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
+- id: 01a1a4db-d8f7-7cb2-817a-d4431a3a53a5
+  author: joe
+  content: |-
+    ## Implementer sketch: trigger half (for advisor signoff; no code yet)
+
+    ### Where things are today (file:line)
+    - Field: `aida-core/src/models.rs:4389-4395`. `deferred_until: Option<String>` is free text. `deferred_at` (:4387) and `deferred_reason` (:4402) sit next to it.
+    - Deferral write paths (all free text):
+      - `aida defer --until`: `aida-cli-lib/src/defer_cmd.rs:217` (arg), written at :61-63.
+      - Question resolution token `defer|park|hold|shelve`: `aida-cli-lib/src/questions.rs:520-532`. The `consequence` text becomes `deferred_until`.
+      - MCP has no defer write tool. It reads the field and blocks status writes on deferred specs, so it needs no new gate.
+    - Readers that display the trigger: `status_display.rs:429-440` (also the legacy `deferred:<x>` tag fallback), `punt_done.rs:747-760`, `requirements_cli.rs:5522/6745/6904`, `gate/operator_hold.rs:58`.
+    - Undefer: `defer_cmd.rs:152` (`handle_undefer_command`). `lift_hold_refusal` (operator_hold.rs) refuses lifting an operator hold.
+    - Scheduler: allowlist at `maintenance_schedule.rs:3435-3500`. The STORY-2351 hygiene entry is at :3482-3493 with `hook_allowed: false`. Job config is in `.aida/config.toml:287-298` (`every = "1h"` plus a `CronJobFailed:` route job). A test pins the config entry at `maintenance_schedule.rs:4761`.
+    - Routing to `aida human`: a queue row `for_role=human` (`lib_part2.rs:365`, `human_routed_spec_ids`). Use the existing queue-add path, no new surface.
+    - Relay handoffs: no structured store. The handoff is a markdown brief (`aida-core/templates/skills/aida-handoff.md`, frontmatter read by `brief.rs:901 frontmatter_value`). STORY-1685 conditionals are prose today.
+    - Recurrence escalation: `findings.rs:221-410` (`recurrence:N` tag, `promote_threshold`, `recurrence_gate_hint`). It doesn't write deferrals today. BUG-1436 was deferred by hand with prose.
+
+    ### Condition language (one new core module)
+    `aida-core/src/condition.rs`: `enum Condition { SpecStatus{id, status}, PrMerged{n}, ReleaseAtLeast{semver}, Date{at}, QueryCount{filter, op, n}, Manual{who} }`, with `FromStr`/`Display` round-trip. Canonical forms:
+    `spec:STORY-12=completed` · `pr:2577=merged` · `release:>=0.17` · `date:2026-12-01` · `query:tag=operator-held,status=approved count>=5` · `manual:joe`.
+    Evaluation goes through `trait ConditionFacts` (spec status lookup, PR state, current release, now, filtered count), so unit tests need no git or gh. `Manual` never evaluates true.
+
+    **Storage:** keep `deferred_until: Option<String>` holding the canonical string. Parse on read; unparseable means legacy free text. This means no schema change in the cache, sqlite or postgres backends (`db/cache.rs`, `sqlite_backend.rs`, `postgres_backend.rs`).
+
+    ### Slice plan (each one PR, gate LIGHT)
+    1. **S1: condition module and checker.** `aida-core/src/condition.rs` with unit tests (parse, round-trip, eval against fake facts). Adds `aida condition check "<cond>" [--json]` in `aida-cli-lib/src/condition_cmd.rs` and `condition_cmd_args.rs`, registered via `command_registry::REGISTRY`, plus the help golden. The CLI facts adapter: store for spec/query, `gh pr view --json state` for pr, the workspace version and `git tag` for release, the clock for date. Covers acceptance (1) for the language.
+    2. **S2: typed deferral gate.** `defer_single` (defer_cmd.rs:28) parses `--until`. Free text is refused with a hint listing the forms, unless it is `manual:<who>`; `manual` also needs `--reason`. The questions.rs:525 defer verb does the same: a typed consequence is stored, otherwise it becomes `manual:<resolver>` and the prose goes to a comment. Readers (status_display.rs:438, punt_done.rs:759) render the typed form. Covers acceptance (4).
+    3. **S3: one-time rewrite.** `aida db migrate-defer-conditions [--apply]` in `aida-cli-lib/src/defer_condition_migration.rs`, modelled on `related_edge_migration.rs`. A heuristic parser turns `STORY-X completes|ships|lands` into `spec:` and `#N merges` into `pr:`, and also handles `0.17`, ISO dates and the legacy `deferred:<x>` tags. Everything else becomes `manual:<owner or operator>`. The original text is kept in a `[aida:defer-migration]` comment so nothing is lost. Dry-run is the default. Covers acceptance (2).
+    4. **S4: hourly resurfacing job.** `aida defer resurface [--dry-run] [--manual-age-days 14]` in `aida-cli-lib/src/defer_resurface.rs`. For each deferred spec, it un-defers the spec when its condition is true, reusing the undefer path and writing an audit comment that names the condition. A `manual` condition with `deferred_at` older than 14 days gets a `for_role=human` queue row, added idempotently. Registered as a `ScheduledCommand` at maintenance_schedule.rs:~3493 (`hook_allowed: false`), with `[[schedule.jobs]] name="defer-resurface" every="1h"` and a `CronJobFailed:defer-resurface` advisor route in `.aida/config.toml`, plus a config-pin test like :4761. It exits non-zero only when an evaluation errors (gh down, for example). Covers acceptance (3).
+    5. **S5: relay conditionals and recurrence escalation.** The handoff template (`aida-core/templates/skills/aida-handoff.md`, then `make sync-templates`) gets a frontmatter `conditions:` list of `{if: <typed condition>, then: <action>}`. A relay evaluates each one with `aida condition check`. A condition that fails to parse counts as false and becomes a question to the operator (STORY-1685). `aida findings recur` gets `--until <cond>` so a recurrence-escalation park records a typed condition (findings.rs:391 hint). Covers the rest of acceptance (1).
+
+    The derived-attention half (after STORY-2324 and STORY-2325) is out of scope here.
+
+    ### Questions for signoff
+    1. **Storage:** is a canonical string in the existing `deferred_until` field acceptable, or do you want a typed serde field (a data-model change touching three backends)? I lean string.
+    2. **Operator holds:** when a condition comes true on a spec that carries an operator hold (`deferred_reason` plus `operator-held`), should the job un-defer it (which bypasses `lift_hold_refusal`), or route it to `aida human` instead? I lean: route, never auto-lift a hold.
+    3. **`query:` grammar:** I'd limit it to `aida list`'s existing filters (tag/status/type/feature) plus `count<op>n`, not a general query language. OK?
+    4. **"Recurrence escalation":** no code path writes deferrals today, so I'm reading this as `findings recur` (the S5 `--until`). If you meant something else (a drain escalation that parks?), please name it.
+    5. **`pr:` evaluation** calls gh every hour. When gh is unavailable, I plan to skip those conditions and report them without failing the job. OK?
+  created_at: 2026-11-04T04:40:33.783207678Z
+  modified_at: 2026-11-04T04:40:33.783207678Z
+  session_id: 01a1a4d64ff0
+  harness_version: 2.1.318 (Claude Code)
 history:
 - id: 01a1a468-9c3a-76d2-ab8c-12bf6457966b
   author: joe
