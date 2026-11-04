@@ -662,13 +662,16 @@ fn bug2438_ledger(f: &Fixture, refusal_sha: &str, approval: &Value) -> &'static 
     canonical
 }
 
-/// BUG-2438: the train refuses and never reaches the transport.
+/// BUG-2438: open the train on the fixture's current-head approvals, then
+/// `record` the case's ledger: the sealed final gate refuses and never
+/// reaches the transport.
 // trace:BUG-2438 | ai:claude
-fn bug2438_refuses(f: &Fixture, why: &str) {
+fn bug2438_refuses(f: &Fixture, why: &str, record: impl FnOnce()) {
     let forge = GitHubForge::new(f.root());
     let mut live = f.live(&forge);
     let (train, change) = f.opened(&mut live);
     let lease = live.lease(change.id).unwrap();
+    record();
     assert!(
         live.merge_verified(&change, &train, lease.as_ref())
             .is_err(),
@@ -689,8 +692,9 @@ fn bug2438_old_head_refusal_without_current_head_verdict_refuses() {
     let old_head = g(f.root(), &["rev-parse", "main"]);
     let mut approval = f.records[0].clone();
     approval["reviewed_sha"] = json!(old_head);
-    bug2438_ledger(&f, &old_head, &approval);
-    bug2438_refuses(&f, "old-head refusal with no current-head verdict");
+    bug2438_refuses(&f, "old-head refusal with no current-head verdict", || {
+        bug2438_ledger(&f, &old_head, &approval);
+    });
 }
 
 /// BUG-2438: only a well-formed SHA naming another commit is an older head. A
@@ -710,8 +714,9 @@ fn bug2438_malformed_reviewed_sha_refusal_is_not_superseded() {
         } else {
             bad.to_string()
         };
-        bug2438_ledger(&f, &sha, &f.records[0]);
-        bug2438_refuses(&f, bad);
+        bug2438_refuses(&f, bad, || {
+            bug2438_ledger(&f, &sha, &f.records[0]);
+        });
     }
 }
 
