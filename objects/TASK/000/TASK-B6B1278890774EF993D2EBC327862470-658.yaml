@@ -11,7 +11,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T09:06:27.587006751Z
-modified_at: 2026-11-04T09:26:11.082168500Z
+modified_at: 2026-11-04T09:43:30.917807198Z
 req_type: Task
 tags:
 - architecture
@@ -149,6 +149,13 @@ comments:
   content: 'Rework (brief 2026-11-04 08:36 UTC) done locally, NOT pushed (untested=true). Finding: no containment gap. After #3309 (BUG-2390) dispatch''s Codex take/impl lane runs `aida agent new codex --bg` (dispatch.rs::build_codex_lane_command); the worker is agent_codex_background.rs::build_worker_exec, already in CODEX_SPAWN_PATHS and finalized through prepare_launch. build_implementer_launch_command''s Codex arm is unreachable!. Delta (local commit dec6cffc0bf on top of c01127d7): task_2708_codex_fail_closed_tests.rs drops the stale dispatch.rs/launch_implementer_lane entry and asserts build_codex_lane_command spawns `agent new codex --bg` and the implementer builder''s Codex arm stays unreachable. Gate blocked: two lane-job runs of `cargo test --profile agent -p aida-cli-lib --lib -- task_2708_` (j20261104T085339035-5-0, j20261104T091059944-5-0) timed out at 900s compiling aida-cli-lib (seed: overlay-stale, so effectively cold, but the runner chose the 900s budget). The 3600s override was not permitted in this session. make check-ci-fast cannot finish inside the 60s per-call cap (its first gate is a cargo check). Needs: a warm-seeded rerun (or AIDA_CARGO_TIMEOUT=3600), then push dec6cffc0bf to the PR branch.'
   created_at: 2026-11-04T09:26:11.082168500Z
   modified_at: 2026-11-04T09:26:11.082168500Z
+  session_id: 01a1a5c26b98
+  harness_version: 2.1.318 (Claude Code)
+- id: 01a1a5f1-3565-7ee3-a639-180fa7132e3e
+  author: joe
+  content: 'Update: targeted test PASSED via lane job j20261104T092631981-6-0 (cargo test --profile agent -p aida-cli-lib --lib -- task_2708_: 12 passed, incl. task_2708_every_codex_spawn_path_is_inventoried_and_guarded). Pushed dec6cffc0bf to PR #3307. make check-ci-fast did NOT complete: its first gate (cargo check -p aida-cli --no-default-features) cannot finish aida-cli-lib inside this lane''s 60s per-call cap. The delta is a single cfg(test) file, so that gate is unaffected; the remaining fast gates were not run locally and CI covers them.'
+  created_at: 2026-11-04T09:43:30.917807198Z
+  modified_at: 2026-11-04T09:43:30.917807198Z
   session_id: 01a1a5c26b98
   harness_version: 2.1.318 (Claude Code)
 history:
