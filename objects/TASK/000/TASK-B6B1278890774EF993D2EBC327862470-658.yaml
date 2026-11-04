@@ -11,7 +11,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T09:06:27.587006751Z
-modified_at: 2026-11-04T01:40:47.846962443Z
+modified_at: 2026-11-04T01:56:52.792754891Z
 req_type: Task
 tags:
 - architecture
@@ -87,6 +87,12 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Round-3 fixes (fail-closed guard, real G-i writers, one-time sweep, PR body) largely land, but CI lib-0/lib-1 are red at the head: the new contained-launch code trips six existing authority/home/config/headless ratchets, including two new bind_grant_to_pid calls outside role_lifecycle/seat_authority (STORY-1917). The fail-closed guard also still allows the launch when the trusted policy fails to load.. No triage reason was given.'
   created_at: 2026-11-03T23:06:00.889153214Z
   modified_at: 2026-11-03T23:06:00.889153214Z
+  session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
+- id: 01a1a445-fdb8-7d01-829e-512ebb0a9036
+  author: joe
+  content: 'ADVISOR RULING (PR-3307 round 4 at f6b4ef7260, 2026-11-03 19:00 MST): rework, all items in this round. Blockers: (B1) queue_cmd.rs:12088 two-arg containment_applied from BUG-2428''s merge: fix through the one helper in M2, not a bare None. (B2) task_2707_native_composition_companion_empty_grant_and_generated_profile must not run under the required-live gate without installed Codex: give it its own opt-in env (AIDA_REQUIRE_CODEX_INSTALLED_LIVE) and leave it out of the required count. (B3) move containment/launch_tests.rs to containment/tests/launch_tests.rs (#[path] under #[cfg(test)]) so the task_1752 ratchet is satisfied without exemptions. MAJOR (M1): refuse_unwired_aida_posture_with distinguishes ''no config at the trusted sha'' (Ok(None)) from ''trusted sha unresolvable'' (refuse unless the stamp proves native/none), with a refusal test for a non-repo named root. Bundled minors, all accepted for this round: (M2) one helper session::sandboxed_child_grant(vendor, contained) used at every mint and preflight site (session.rs:2042/7382, queue_cmd.rs:12088/13726/13740/14388). (M3) API RULING: bind_contained_launch_worker takes &ContainmentReceipt, requires is_accepted(), and derives the pid from receipt.worker_pid(); add a refusal test for an unaccepted receipt. (M4) squash/commit trailers: Refs only (''(Refs TASK-2708)''); reword 030d96ba21f/d3df1ccbb1e via a new commit message note in the PR body, and the advisor squash uses Refs. (M5) mask the resolved codex_home (and CODEX_SQLITE_HOME) when it differs from the default, with a test. Before push, through the lane job runner and cited: cargo check -p aida-cli-lib --tests; cargo test -p aida-cli-lib --lib task_2707_ task_2708_ task_1752; make check-ci-fast (umask 022). Do not push untested: if no job runner, stop and comment.'
+  created_at: 2026-11-04T01:56:52.792754891Z
+  modified_at: 2026-11-04T01:56:52.792754891Z
   session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
 history:
 - id: 01a1965c-5ce8-7781-b88f-317b0b12bab5
