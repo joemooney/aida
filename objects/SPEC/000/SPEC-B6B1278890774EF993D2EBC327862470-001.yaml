@@ -20,7 +20,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T07:26:01.071265913Z
-modified_at: 2026-11-04T09:31:33.890973650Z
+modified_at: 2026-11-04T09:31:36.945034643Z
 req_type: Task
 tags:
 - architecture
@@ -809,6 +809,26 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Round-3 delta 8e1fdae fixes F2/F3/F6/F7/F8 and wires a post-exit host commit for agent-new Codex lanes, but AC ac6e55fd is still unmet for the standard queue-work/headless native implementer (linked worktree, exec, no commit/publish), publication still needs an operator ship --from-seat, lane-level wiring is untested, and there is no host evidence; CI pending at head. ACs: ac6e55fd unmet; ac774e2b partial; acca6182 partial; ac97960f unverified.. Triage reason: rework brief on spec'
   created_at: 2026-11-04T09:31:33.890969383Z
   modified_at: 2026-11-04T09:31:33.890969383Z
+  session_id: da1c0d85-1d45-4ce4-a292-5358644f65b9
+- id: 01a1a5e6-4fe2-75a0-9e6d-c4bd25ee34de
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (TASK-2712):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 653b650851d8
+    Recorded: 2026-11-04T09:29:19.386605858+00:00
+    Findings:
+    1. AC ac6e55fd unmet for the standard native pickup: 'aida queue work <SPEC> --vendor codex' (queue_cmd.rs:13873 exec_codex_session) execs Codex in the lease's linked worktree (no host-recorded seat clone, no post-exit step), so the lane still cannot commit or publish and only gets refuse_native_publication. Headless 'queue work --no-human' implementers (session.rs spawn_vendor_headless_forking) likewise get only a rescope, no seat clone and no post-exit commit. The spec's recurrence evidence (TASK-2714, BUG-2424, comment 9) is exactly these pickups. Give queue-work/headless Codex implementers a seat clone plus a host-side post-exit commit (spawn+wait instead of exec), or get an explicit advisor ruling narrowing ac6e55fd to agent-new lanes.
+    2. AC ac6e55fd push/PR leg: even on agent-new lanes post_exit_commit only commits; push and PR still require someone running 'aida ship --from-seat' from main (pr_cmd.rs:8501 is the only caller of ship_from_seat::run). The AC says the implementer completes commit/push/PR handoff without an advisor launching another publisher. Add a host-side publication step after the post-exit commit, or record an advisor ruling that host 'ship --from-seat' by the operator is the sanctioned handoff (parity with contained Claude).
+    3. Advisor brief F1 asked for a test that a LANE whose child left pending work ends with a host commit. Tests call ship_from_seat::post_exit_commit directly (bug_home_038_seat_publish_tests.rs:984, :1014); nothing drives supervise_until_exit -> post_exit_seat_commit (agent_codex_background.rs ~1709/1750) or run_tracked_agent_after_spawn -> native_post_exit_spec (agent_launch.rs ~6852/6869). The implementer-only role gate, the exit_clear=false branch, and the native-posture gate are untested.
+    4. Design/minor: post_exit_message stamps a completing '(SPEC)' trailer on a generic host-authored 'chore(seat): work ... left uncommitted' commit, and the foreground step runs whatever the child's exit status (agent_launch.rs ~6848). A crashed or partial lane's leftovers become a commit that completes the spec at merge. Use '(Refs SPEC)' for salvage commits, or commit with a completing trailer only on a clean exit.
+    5. Minor: in seat_clone::commit_pending, if 'git commit' succeeds but the trailing 'rev-parse --verify HEAD' probe fails, the error branch runs 'git read-tree <pre-staging tree>', so the index is rolled back behind a new HEAD. Restore the index only when HEAD did not move.
+    6. Minor (AC acca6182 path races): the dev/ino pin is re-checked before staging and before commit (ensure_dir_identity), but run_sandboxed_as then binds the clone BY PATH, so a swap between the check and the bwrap bind is still a TOCTOU window. Bind through an opened fd or re-verify identity inside the sandbox.
+    7. AC ac97960f unverified: no host smoke evidence at this head. The live probes (bug_2169_contained_clone_bwrap_tests.rs, bug_home_038 bwrap tests) skip without AIDA_REQUIRE_CODEX_SANDBOX_LIVE/AIDA_REQUIRE_BWRAP_LIVE/AIDA_TEST_AIDA_BIN. The implementer recorded untested=true (no targeted cargo run and no check-ci-fast completed). At review time all 7 CI jobs at 653b650851d8 were still queued/pending, so a green CI cannot be cited.
+    8. Minor (ruling N4 ratchet): spawn-path coverage is helper-level. task_2712_headless_reviewer_argv_carries_the_gate_ledger calls rescope_native_codex_for_seat directly instead of composing argv through spawn_vendor_headless_forking, build_coordinator_headless_command_inner or interactive_reviewer_launch_plan, and no source ratchet catches a new Codex spawn path that bypasses codex_native_sandbox_flags_in.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-04T09:31:36.802517884Z
+  modified_at: 2026-11-04T09:31:36.802517884Z
   session_id: da1c0d85-1d45-4ce4-a292-5358644f65b9
 history:
 - id: 01a1960f-6ca8-7313-8a94-63b0b98a4e44
