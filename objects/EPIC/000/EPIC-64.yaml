@@ -25,7 +25,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-13T21:49:24.192961100Z
-modified_at: 2026-11-04T01:39:32.467340763Z
+modified_at: 2026-11-04T01:39:35.520290620Z
 req_type: Epic
 relationships:
 - rel_type: Child
@@ -64,6 +64,12 @@ comments:
   created_at: 2026-11-02T22:34:58.612399242Z
   modified_at: 2026-11-02T22:34:58.612399242Z
   session_id: ee0bf351-6b17-486f-a38e-cfbb1343c426
+- id: 01a1a436-29e0-79e0-9054-e664205d97c1
+  author: joe
+  content: 'ADVISOR REGROUP (2026-11-03): closed as obsolete/already fixed after verification in the regroup inventory: STORY-1110 completed; rollup complete.'
+  created_at: 2026-11-04T01:39:35.520290620Z
+  modified_at: 2026-11-04T01:39:35.520290620Z
+  session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
 history:
 - id: 01a1a436-1ec4-7093-b0fb-7fdda48b8b33
   author: joe
