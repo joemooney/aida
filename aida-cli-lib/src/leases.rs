@@ -2121,6 +2121,25 @@ pub(crate) fn list_leases_strict(
     project_root: &std::path::Path,
     spec_ids: &[&str],
 ) -> Result<Vec<SessionLease>, String> {
+    list_leases_strict_inner(project_root, spec_ids, false)
+}
+
+/// Lease listing for a branch-ownership judgement: like
+/// [`list_leases_strict`], but EVERY lease file that stays unreadable or
+/// unparseable after the retry is an error, since any lease could own the
+/// branch being judged (a torn write may cut off its `branch` line).
+// trace:TASK-2813 | ai:claude
+pub(crate) fn list_leases_strict_all(
+    project_root: &std::path::Path,
+) -> Result<Vec<SessionLease>, String> {
+    list_leases_strict_inner(project_root, &[], true)
+}
+
+fn list_leases_strict_inner(
+    project_root: &std::path::Path,
+    spec_ids: &[&str],
+    any_unparseable_is_unknown: bool,
+) -> Result<Vec<SessionLease>, String> {
     let dir = leases_dir(project_root);
     if !dir.exists() {
         return Ok(Vec::new());
@@ -2140,7 +2159,13 @@ pub(crate) fn list_leases_strict(
         let label = p.display().to_string();
         match read_lease_file_for_gate(&label, || std::fs::read_to_string(&p), spec_ids) {
             LeaseFileRead::Lease(lease) => out.push(*lease),
-            LeaseFileRead::OtherScope => {}
+            LeaseFileRead::OtherScope if !any_unparseable_is_unknown => {}
+            LeaseFileRead::OtherScope => {
+                if !p.exists() {
+                    continue;
+                }
+                return Err(format!("the lease {label} does not parse"));
+            }
             LeaseFileRead::Unknown(why) => {
                 // A lease removed between the listing and the read is gone,
                 // not unknown.

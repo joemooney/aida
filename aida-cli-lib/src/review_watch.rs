@@ -2233,23 +2233,28 @@ fn watch_change(
 }
 
 /// Whether a skip reason parks the head: it is not reviewed and nothing in
-/// flight will review it. A head already reviewed or under review, or one
-/// waiting only for a free reviewer slot, is not parked.
+/// flight will review it. A head already reviewed or under review, one
+/// waiting only for a free reviewer slot, or one whose earlier head's review
+/// is still being superseded, is not parked.
 // trace:BUG-2426 | ai:claude
+// trace:TASK-2813 | ai:claude
 fn parks(reason: &str) -> bool {
     ![
         "head already has a recorded review",
         "head already reserved",
         "global reviewer capacity",
+        "a review of an earlier head still holds this change",
     ]
     .iter()
     .any(|p| reason.starts_with(p))
 }
 
 /// Record (or clear) why the current head is parked, for `aida awaiting`.
-/// The record keeps its first-seen time while the head and reason hold, so
-/// a steady skip writes no state.
+/// The record keeps its first-seen time while the head stays parked, even
+/// as the reason changes (notified, update requested, routed), so `since`
+/// is since-parked; a steady skip writes no state.
 // trace:BUG-2426 | ai:claude
+// trace:TASK-2813 | ai:claude
 fn record_skip(store: &Store, change: &forge::Change, reason: Option<&str>) -> Result<()> {
     let key = change.key();
     let line = reason.filter(|r| parks(r)).map(bounded_diagnostic);
@@ -2263,11 +2268,14 @@ fn record_skip(store: &Store, change: &forge::Change, reason: Option<&str>) -> R
         if same {
             return Ok(());
         }
+        let since = current
+            .filter(|r| r.head == change.head)
+            .map_or_else(chrono::Utc::now, |r| r.checked_at);
         let entry = state.entries.entry(key.clone()).or_default();
         entry.skipped = line.map(|line| Reported {
             head: change.head.clone(),
             line,
-            checked_at: chrono::Utc::now(),
+            checked_at: since,
         });
         Ok(())
     })
