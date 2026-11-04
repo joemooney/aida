@@ -11,7 +11,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-20T23:41:45.676543397Z
-modified_at: 2026-11-04T10:49:03.739688432Z
+modified_at: 2026-11-04T11:14:25.009992759Z
 req_type: Task
 tags:
 - contained
@@ -85,6 +85,12 @@ comments:
   modified_at: 2026-11-04T10:49:03.739688432Z
   session_id: 01a1a5f46f78
   harness_version: 2.1.318 (Claude Code)
+- id: 01a1a644-6e71-75d1-bf2b-bb12f40b1bbe
+  author: joe
+  content: 'ADVISOR REWORK BRIEF (2026-11-04 04:17 MST, PR #3336 head 1746d4ee): the PR now CONFLICTS with main. #3288 (STORY-2326 PR-A: LaunchContext + spawn_agent for Claude contained paths) and #3326 landed and touch the same launch code. Merge origin/main into the PR branch and resolve: keep main''s LaunchContext/spawn_agent structure and re-apply this PR''s change on top of it (route the change through spawn_agent/LaunchContext where main moved the code; do not resurrect removed call sites). Keep the round-3 threading of the pinned launcher main through every queue-work arm. Where #3288 moved a launch arm into spawn_agent/LaunchContext, carry the pinned main in LaunchContext. Gate (LIGHT): one targeted cargo test filter for this PR''s tests plus make check-ci-fast, then push (no force-push needed after a merge). If the local test run times out, push anyway and say so: CI''s shards are the gate.'
+  created_at: 2026-11-04T11:14:25.009992759Z
+  modified_at: 2026-11-04T11:14:25.009992759Z
+  session_id: da1c0d85-1d45-4ce4-a292-5358644f65b9
 history:
 - id: 01a15cbb-fc05-7050-907c-e1e0d5b0996b
   author: joe
