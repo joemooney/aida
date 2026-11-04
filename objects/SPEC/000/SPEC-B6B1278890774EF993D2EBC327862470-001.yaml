@@ -20,7 +20,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T07:26:01.071265913Z
-modified_at: 2026-11-04T16:06:36.586607690Z
+modified_at: 2026-11-04T16:44:25.571811432Z
 req_type: Task
 tags:
 - architecture
@@ -853,6 +853,12 @@ comments:
   content: 'ADVISOR REWORK BRIEF (2026-11-04 05:52 MST), PR #3351 head 6d3cdaf1: approved, but CI ''Check formatting'' is red. Scope is FORMAT ONLY: run cargo fmt --all and commit the result. The rustfmt diffs are in aida-cli-lib/src/tests/agent_launcher_tests.rs (~2985), bug_home_038_seat_publish_tests.rs (~1029) and story_2254_codex_bg_supervisor_tests.rs (~1221). Make no logic changes. Gate: FASTTRACK (make check-ci-fast, no cargo). Push to the PR branch; the delta re-review is formatting-only.'
   created_at: 2026-11-04T12:47:02.094186338Z
   modified_at: 2026-11-04T12:47:02.094186338Z
+  session_id: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
+- id: 01a1a772-9063-7781-b595-a3c6dcbf2136
+  author: joe
+  content: 'ADVISOR REWORK BRIEF 2 (2026-11-04 09:30 MST), PR #3351 head 29cdc258: the rustfmt fix is in, but CI ''Executable fixture ratchet'' now fails. aida-cli-lib/src/tests/bug_home_038_seat_publish_tests.rs lines 963 and 965 set an executable mode directly; use test_exec::mark_executable instead. Nothing else is in scope. Gate: FASTTRACK. make check-ci-fast is REQUIRED before the push (it runs this ratchet; the last push skipped it). Push to the PR branch.'
+  created_at: 2026-11-04T16:44:25.571811432Z
+  modified_at: 2026-11-04T16:44:25.571811432Z
   session_id: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
 history:
 - id: 01a1960f-6ca8-7313-8a94-63b0b98a4e44
