@@ -8,11 +8,17 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T05:32:54.614008505Z
-modified_at: 2026-11-04T07:15:48.783558960Z
+modified_at: 2026-11-04T07:19:54.904992325Z
 req_type: Bug
 tags:
 - kind:bug-spotted
 - severity:major
+relationships:
+- rel_type:
+    custom: implemented-by
+  target_id: 01a1a56d-929d-72f3-8299-e53d1b788fed
+  created_at: 2026-11-04T07:19:54.904989364Z
+  created_by: joe
 history:
 - id: 01a1a529-3a0b-7851-9f12-63da9e5a1022
   author: aida-session-start
@@ -30,6 +36,11 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a1a56d-c1d0-7822-a928-028fcbe737d1
+  author: joe
+  timestamp: 2026-11-04T07:19:56.112040683Z
+  session_id: da1c0d85-1d45-4ce4-a292-5358644f65b9
+  changes: []
 filed_at:
   code_sha: 906c8e605ef697df3a89df1b5aad96623a0ac353
   branch: main
