@@ -1,5 +1,6 @@
 id: 01a1a4d5-7933-7be2-93fa-5d15150bf109
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-763
+agreed_id: TASK-2820
 title: 'cosmetic: stranded_commits.rs:297-298 comment ''pins its dangling ancestors with…'
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on TASK-1595, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
@@ -36,6 +37,10 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Rejected
+- id: 01a1a4f3-f7e1-7e00-b0f3-2e6b87db0e2b
+  author: joe
+  timestamp: 2026-11-04T05:06:54.561293714Z
+  changes: []
 filed_at:
   code_sha: b5577764ec0466133c191b7e51d62c40ea3a2c83
   branch: main

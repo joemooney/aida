@@ -1,5 +1,6 @@
 id: 01a1a4d5-6303-7b42-b9af-4eafa76bb132
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-761
+agreed_id: TASK-2818
 title: 'minor: opt-in fsck mode named in the acceptance sketch is not delivered and no …'
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on TASK-1595, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
@@ -36,6 +37,10 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Rejected
+- id: 01a1a4f3-f7c8-7f70-bd73-0c8527bed5ce
+  author: joe
+  timestamp: 2026-11-04T05:06:54.536010607Z
+  changes: []
 filed_at:
   code_sha: b5577764ec0466133c191b7e51d62c40ea3a2c83
   branch: main
