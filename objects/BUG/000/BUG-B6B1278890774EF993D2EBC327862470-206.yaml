@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T04:41:19.994753856Z
-modified_at: 2026-11-04T07:10:59.685395460Z
+modified_at: 2026-11-04T07:11:05.240920572Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -35,6 +35,23 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Marker design is sound and the refusal paths are tested, but CI gates are red: the new test adds an unallowlisted /proc literal that trips the portability ratchet. Triage reason: advisor rework brief on spec; review findings to address'
   created_at: 2026-11-04T07:10:59.685394092Z
   modified_at: 2026-11-04T07:10:59.685394092Z
+  session_id: da1c0d85-1d45-4ce4-a292-5358644f65b9
+- id: 01a1a565-a75f-73c3-b0aa-76207b453c9f
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2437):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 3024c245caff
+    Recorded: 2026-11-04T06:22:36.146359621+00:00
+    Findings:
+    1. BLOCKING (CI red): CI (gates) fails at step 'Check Rust test portability ratchet' (run 41783462053, job 126420106762), and Build (ubuntu-latest) fails with it. Cause: aida-core/src/mailbox_lifecycle/activation.rs test a_binary_that_links_admission_carries_the_permit_marker adds the string literal "/proc/self/exe", which matches the proc-literal rule in scripts/portability-rules.json and is not in scripts/portability-allowlist.txt. Fix: read std::env::current_exe() instead, or allowlist the site with a justification.
+    2. minor (test proves nothing): a_binary_that_links_admission_carries_the_permit_marker cannot fail. The test binary carries WRITE_PERMIT_MARKER because the test bodies and inspect_reader reference it, so the test passes even with the std::hint::black_box in admit_resolved (mod.rs:1642) removed. It does not show that admission is what keeps the marker. For the same reason, the doc claim on WRITE_PERMIT_MARKER that 'a build without admission does not' carry it is wrong: any binary that links the activation scan carries it. Fix the wording, or tie the marker only to admission and test it in a way that can fail.
+    3. minor (stale doc): the fresh_scan_admits doc comment (activation.rs, BUG-2411 block) still says 'any writer of another build ... still refuses'. After this PR, classify admits a writer of another build or a replaced binary when it carries the marker, and fresh_scan_admits relies on classify. Update the comment so the retirement path's real admission rule is documented.
+    4. minor (perf): fill_digests now reads and hashes every distinct replaced (deleted) writer binary in full, and it keeps hashing after the marker is found. This also runs inside fresh_scan_admits on the retirement path. A deleted binary's digest never admits, since classify sends deleted writers to Unverified unless they carry the marker, so for deleted exes you can stop reading once the marker is found or the file ends. Also, rerecord_for_promoted_build reads the promoted binary twice: inspect_file for the marker and digest_file inside fill_digests.
+    5. minor (coverage gap): no test calls rerecord_for_promoted_build to check that the promoted binary's marker decides admission, including a promoted exe that is unreadable or unmarked (that case should only admit same-build writers). Today the only coverage is classify with a hand-built BuildIdentity.permit_marker=false.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-04T07:11:05.055133106Z
+  modified_at: 2026-11-04T07:11:05.055133106Z
   session_id: da1c0d85-1d45-4ce4-a292-5358644f65b9
 history:
 - id: 01a1a4ee-5eab-7123-a18a-eaae4aecb215
