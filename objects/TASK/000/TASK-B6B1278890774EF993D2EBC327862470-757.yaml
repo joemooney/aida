@@ -14,7 +14,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T01:17:09.371397785Z
-modified_at: 2026-11-04T11:57:58.527023647Z
+modified_at: 2026-11-04T12:18:42.031643330Z
 req_type: Task
 tags:
 - carried-from:BUG-2428
@@ -121,6 +121,13 @@ comments:
   created_at: 2026-11-04T11:37:18.532402586Z
   modified_at: 2026-11-04T11:37:18.532402586Z
   session_id: da1c0d85-1d45-4ce4-a292-5358644f65b9
+- id: 01a1a67f-48ef-7ef2-b8a4-ddba823494c9
+  author: joe
+  content: 'Rework for PR #3343 (head ea1c240): the pool owns the trees it hands out (STORY-714: reset and idled, never removed), and the setup rollback already returns a pooled tree through return_to_pool_with. So the TASK-1337 assertion was corrected: every tree besides the main checkout and the .aida-store worktree must be a pool entry on a detached HEAD with no lease. cargo test -p aida-cli --test queue_work_dry_run task_1337: 3 passed. make check-ci-fast was not run (its cargo step exceeds this lane''s 60s tool cap). Review finding 2 (headless implementer spawn counted before the spawn) is left as is: it fails safe by keeping the setup, and the advisor brief supersedes it.'
+  created_at: 2026-11-04T12:18:42.031643330Z
+  modified_at: 2026-11-04T12:18:42.031643330Z
+  session_id: 01a1a66c32a4
+  harness_version: 2.1.318 (Claude Code)
 history:
 - id: 01a1a443-3d11-7700-8298-3f5783f310c6
   author: joe
