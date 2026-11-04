@@ -11,11 +11,10 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-20T20:08:51.552079826Z
-modified_at: 2026-10-21T05:48:48.754412710Z
+modified_at: 2026-11-04T01:43:01.802687247Z
 req_type: Task
 tags:
 - from-review:PR-2785
-- operator-held
 - severity:minor
 relationships:
 - rel_type: Supersedes
@@ -46,10 +45,11 @@ history:
   timestamp: 2026-10-21T05:48:49.228538919Z
   session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
   changes: []
-deferred: true
-deferred_at: 2026-10-21T05:48:48.754412710Z
-deferred_until: test lanes have gated main for 2 weeks (after 2026-11-03)
-deferred_reason: Needs more CI runs with the test-lane budgets gating
+- id: 01a1a439-5020-7150-a193-d34368f75302
+  author: joe
+  timestamp: 2026-11-04T01:43:01.920877314Z
+  session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
+  changes: []
 filed_at:
   code_sha: 629f813b0c1a72d0f0e36b759853bd66d5e124aa
   branch: pr-2785
