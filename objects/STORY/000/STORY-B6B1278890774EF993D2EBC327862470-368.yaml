@@ -29,8 +29,15 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-04T02:34:20.173245666Z
-modified_at: 2026-11-04T02:34:41.594889116Z
+modified_at: 2026-11-04T02:34:44.226713178Z
 req_type: Story
+comments:
+- id: 01a1a468-a682-7271-a707-298d622d86f1
+  author: joe
+  content: 'ADVISOR DISPATCH (2026-11-03 19:35 MST): sketch phase first. Post a file:line sketch with the slice plan on this spec, then stop for advisor signoff; no code before signoff. Gate for later slices: LIGHT.'
+  created_at: 2026-11-04T02:34:44.226713178Z
+  modified_at: 2026-11-04T02:34:44.226713178Z
+  session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
 history:
 - id: 01a1a468-9c3a-76d2-ab8c-12bf6457966b
   author: joe
