@@ -24,32 +24,22 @@ pub(crate) enum Ancestry {
 }
 
 /// Network ancestry evidence: the forge compare API's `behind_by` for
-/// `base...head`, bounded by the forge call timeout. Any failure is `Unknown`.
-// trace:STORY-2336 | ai:claude
+/// `base...head`, read through forge.rs (STORY-2401). Anything not settled
+/// (`Pending` or `Transient`) is `Unknown`.
+// trace:STORY-2336 trace:STORY-2401 | ai:claude
 pub(crate) fn forge_ancestry(root: &Path, base: &str, head: &str) -> Ancestry {
-    let Some(gh) = crate::resolve_gh_binary() else {
-        return Ancestry::Unknown;
-    };
-    let mut cmd = std::process::Command::new(gh);
-    cmd.current_dir(root).args([
-        "api",
-        &format!("repos/{{owner}}/{{repo}}/compare/{base}...{head}"),
-        "--jq",
-        ".behind_by",
-    ]);
-    match crate::command_output_with_timeout(cmd, crate::FORGE_CLI_CALL_TIMEOUT) {
-        Some(out) if out.status.success() => {
-            ancestry_from_behind_by(String::from_utf8_lossy(&out.stdout).trim())
-        }
-        _ => Ancestry::Unknown,
+    ancestry_from_observed(crate::forge::github_compare_behind_by(root, base, head))
+}
+fn ancestry_from_observed(behind_by: crate::forge_observed::Observed<u64>) -> Ancestry {
+    match behind_by.known() {
+        Some(0) => Ancestry::Current,
+        Some(_) => Ancestry::Behind,
+        None => Ancestry::Unknown,
     }
 }
+#[cfg(test)]
 fn ancestry_from_behind_by(s: &str) -> Ancestry {
-    match s.parse::<u64>() {
-        Ok(0) => Ancestry::Current,
-        Ok(_) => Ancestry::Behind,
-        Err(_) => Ancestry::Unknown,
-    }
+    ancestry_from_observed(crate::forge::parse_behind_by(s))
 }
 impl ForgeEvidence {
     pub fn from_json(pr: &serde_json::Value) -> Self {

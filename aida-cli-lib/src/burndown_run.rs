@@ -1056,21 +1056,32 @@ pub(crate) fn wave_pr_review_facts(
         base: String::new(),
         title: None,
     };
-    match forge::forge_for(project_root).change_status(&change_ref) {
-        Ok(status) => (
+    let forge = forge::forge_for(project_root);
+    match forge.observe_change_status(&change_ref) {
+        crate::forge_observed::Observed::Known(status) => (
             status.review == forge::ReviewDecision::ChangesRequested,
-            if status.mergeable {
-                integrate::MergeableState::Mergeable
-            } else {
-                // `gh` reports non-mergeable for both a real conflict and a
-                // not-yet-computed state; the gate treats Unknown optimistically
-                // and the forge still refuses a dirty merge, so this degrade is
-                // safe in both directions.
-                integrate::MergeableState::Unknown
-            },
+            wave_mergeable_state(forge.kind(), &status.mergeable),
             (!status.head_sha.trim().is_empty()).then_some(status.head_sha),
         ),
-        Err(_) => (false, integrate::MergeableState::Unknown, None),
+        _ => (false, integrate::MergeableState::Unknown, None),
+    }
+}
+
+/// STORY-2401: the integration gate's mergeable state, taken from the
+/// tri-state forge read. On GitHub a settled `false` means `CONFLICTING`, a
+/// real conflict. On GitLab a settled `false` also covers blocks that are not
+/// conflicts (approvals, draft), so it stays `Unknown` and the forge still
+/// refuses the merge. Anything not settled is `Unknown`: the gate treats it
+/// optimistically, and the forge refuses a dirty merge.
+// trace:STORY-2401 trace:TASK-2794 | ai:claude
+pub(crate) fn wave_mergeable_state(
+    kind: forge::ForgeKind,
+    mergeable: &crate::forge_observed::Observed<bool>,
+) -> integrate::MergeableState {
+    match mergeable.as_known() {
+        Some(true) => integrate::MergeableState::Mergeable,
+        Some(false) if kind == forge::ForgeKind::GitHub => integrate::MergeableState::Conflicting,
+        _ => integrate::MergeableState::Unknown,
     }
 }
 

@@ -408,6 +408,7 @@ mod first_run;
 mod focus;
 mod focus_cmd;
 mod forge;
+mod forge_observed;
 mod forge_profiles;
 mod gate_cmd;
 // trace:STORY-1656 | ai:claude — GitLab create-if-missing + multi-hub agreement.

@@ -24,6 +24,7 @@
 //! trace:EPIC-35 trace:SPIKE-49 trace:TASK-1242 | ai:claude+codex
 #![allow(dead_code)] // Providers/trait are wired into call sites in follow-on slice-1 commits.
 
+use crate::forge_observed::Observed;
 use crate::process_retry::RetryEtxtbsy;
 
 use anyhow::{Context, Result};
@@ -492,7 +493,11 @@ pub enum ReviewDecision {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ChangeStatus {
     pub state: ChangeState,
-    pub mergeable: bool,
+    /// STORY-2401 / TASK-2794: tri-state. GitHub computes mergeability
+    /// lazily and reports `UNKNOWN` until it has; that is `Pending`, never
+    /// `false`. Only `Known(false)` may back a refusal.
+    // trace:STORY-2401 trace:TASK-2794 | ai:claude
+    pub mergeable: crate::forge_observed::Observed<bool>,
     pub review: ReviewDecision,
     pub head_sha: String,
 }
@@ -1085,6 +1090,132 @@ pub trait Forge {
 
     /// `gh pr list` / `glab mr list` / local branches.
     fn list_changes(&self, filter: ChangeFilter) -> Result<Vec<ChangeRef>>;
+
+    // ── STORY-2401: tri-state reads for decision-making callers ──────────
+    //
+    // Each `observe_*` read returns an [`Observed`]: `Known` is the only
+    // value a caller may decide on. The defaults wrap the `Result` reads
+    // (`Err` → `Transient`), so every provider gets them; a provider that
+    // can tell "not settled" from "failed" overrides them.
+
+    /// [`Forge::change_status`] as an observation. GitHub overrides it to
+    /// classify the `gh` reply (network failure → `Transient`).
+    // trace:STORY-2401 | ai:claude
+    fn observe_change_status(&self, c: &ChangeRef) -> Observed<ChangeStatus> {
+        Observed::from_result(self.change_status(c))
+    }
+
+    /// [`Forge::change_metadata`] as an observation.
+    // trace:STORY-2401 | ai:claude
+    fn observe_change_metadata(
+        &self,
+        id: u64,
+        sink: &mut dyn crate::network_retry::RetrySink,
+    ) -> Observed<ChangeMetadata> {
+        Observed::from_result(self.change_metadata(id, sink))
+    }
+
+    /// [`Forge::check_rows`] as an observation. An empty rollup is
+    /// `Pending`: the forge has not registered the checks yet (BUG-2401,
+    /// BUG-2423), which is not the same as "no failing checks".
+    // trace:STORY-2401 | ai:claude
+    fn observe_check_rows(&self, change: &ChangeRef) -> Observed<Vec<crate::ci_gate::CheckRow>> {
+        match self.check_rows(change) {
+            Ok(rows) if rows.is_empty() => Observed::Pending(format!(
+                "no CI checks registered on change {} yet",
+                change.id
+            )),
+            Ok(rows) => Observed::Known(rows),
+            Err(e) => Observed::Transient(format!("{e:#}")),
+        }
+    }
+
+    /// [`Forge::change_for_branch`] as an observation. `Unreachable` and a
+    /// missing CLI are `Transient`; `Found`, `NoChange` and a definitive
+    /// `CliFailed` are settled answers.
+    // trace:STORY-2401 | ai:claude
+    fn observe_change_for_branch(&self, branch: &str) -> Observed<ChangeLookup> {
+        match self.change_for_branch(branch) {
+            Ok(ChangeLookup::Unreachable(why)) => Observed::Transient(why),
+            Ok(ChangeLookup::CliMissing) => {
+                Observed::Transient(format!("`{}` is not installed", self.cli_name()))
+            }
+            Ok(lookup) => Observed::Known(lookup),
+            Err(e) => Observed::Transient(format!("{e:#}")),
+        }
+    }
+}
+
+// ───────────── STORY-2401: gh reads moved out of their callers ─────────────
+
+/// The merge train's required-check policy read (`gh api <endpoint>`),
+/// through the train's transient-retry runner. Moved here from pr_train.rs
+/// so raw `gh` spawns stay behind forge.rs (STORY-2401 ratchet).
+// trace:BUG-2401 trace:BUG-2219 trace:STORY-2401 | ai:claude
+pub(crate) fn train_gh_api_read(repo: &Path, endpoint: &str) -> Result<std::process::Output> {
+    let gh =
+        crate::kernel::resolve_gh_binary().ok_or_else(|| anyhow::anyhow!("gh is unavailable"))?;
+    crate::pr_train::net_output(repo, &format!("gh api {endpoint}"), || {
+        let mut cmd = Command::new(&gh);
+        cmd.current_dir(repo)
+            .args(["api", endpoint])
+            .stdin(std::process::Stdio::null());
+        cmd
+    })
+}
+
+/// The merge train's `gh <args>` in the project root, through the train's
+/// transient-retry runner, returning stdout. A non-zero exit errs with the
+/// stderr. Moved here from pr_train.rs (STORY-2401 ratchet).
+// trace:BUG-2214 trace:BUG-2219 trace:STORY-2401 | ai:claude
+pub(crate) fn train_gh_stdout(repo: &Path, args: &[&str]) -> Result<String> {
+    let out = crate::pr_train::net_output(repo, &format!("gh {}", args.join(" ")), || {
+        let mut cmd = Command::new("gh");
+        cmd.current_dir(repo)
+            .args(args)
+            .stdin(std::process::Stdio::null());
+        cmd
+    })?;
+    anyhow::ensure!(
+        out.status.success(),
+        "`gh {}` failed: {}",
+        args.join(" "),
+        String::from_utf8_lossy(&out.stderr).trim()
+    );
+    Ok(String::from_utf8_lossy(&out.stdout).trim_end().to_string())
+}
+
+/// How far `head` is behind `base` on GitHub (the compare API's
+/// `behind_by` for `base...head`), bounded by the forge call timeout. Any
+/// failure to run or answer is `Transient`, and a reply that is not a count is
+/// `Pending`. Moved here from idle_eligible.rs (STORY-2401 ratchet).
+// trace:STORY-2336 trace:STORY-2401 | ai:claude
+pub(crate) fn github_compare_behind_by(root: &Path, base: &str, head: &str) -> Observed<u64> {
+    let Some(gh) = crate::resolve_gh_binary() else {
+        return Observed::Transient("gh is unavailable".to_string());
+    };
+    let mut cmd = Command::new(gh);
+    cmd.current_dir(root).args([
+        "api",
+        &format!("repos/{{owner}}/{{repo}}/compare/{base}...{head}"),
+        "--jq",
+        ".behind_by",
+    ]);
+    crate::forge_observed::observe_gh_stdout(crate::command_output_with_timeout(
+        cmd,
+        crate::FORGE_CLI_CALL_TIMEOUT,
+    ))
+    .and_then(|s| parse_behind_by(&s))
+}
+
+/// The compare API's `behind_by` field: a count is settled, anything else
+/// (an empty or `null` reply) is `Pending`.
+// trace:STORY-2401 | ai:claude
+pub(crate) fn parse_behind_by(s: &str) -> Observed<u64> {
+    match s.trim().parse::<u64>() {
+        Ok(n) => Observed::Known(n),
+        Err(_) => Observed::Pending(format!("compare reported behind_by {:?}", s.trim())),
+    }
 }
 
 // ─────────────────────────── detection + factory ───────────────────────────
@@ -1974,37 +2105,30 @@ impl Forge for GitHubForge {
     }
 
     fn change_status(&self, c: &ChangeRef) -> Result<ChangeStatus> {
-        let out = self.gh(&[
-            "pr",
-            "view",
-            &c.id.to_string(),
-            "--json",
-            "state,mergeable,reviewDecision,headRefOid",
-            "-q",
-            "[.state, .mergeable, .reviewDecision, .headRefOid] | @tsv",
-        ])?;
-        anyhow::ensure!(out.status.success(), "gh pr view failed for #{}", c.id);
-        let line = String::from_utf8_lossy(&out.stdout).trim().to_string();
-        let mut f = line.split('\t');
-        let state = match f.next().unwrap_or("") {
-            "MERGED" => ChangeState::Merged,
-            "CLOSED" => ChangeState::Closed,
-            _ => ChangeState::Open,
-        };
-        let mergeable = f.next().unwrap_or("") == "MERGEABLE";
-        let review = match f.next().unwrap_or("") {
-            "APPROVED" => ReviewDecision::Approved,
-            "CHANGES_REQUESTED" => ReviewDecision::ChangesRequested,
-            "REVIEW_REQUIRED" => ReviewDecision::ReviewRequired,
-            _ => ReviewDecision::None,
-        };
-        let head_sha = f.next().unwrap_or("").to_string();
-        Ok(ChangeStatus {
-            state,
-            mergeable,
-            review,
-            head_sha,
-        })
+        match self.observe_change_status(c) {
+            Observed::Known(status) => Ok(status),
+            Observed::Pending(why) | Observed::Transient(why) => {
+                anyhow::bail!("gh pr view failed for #{}: {why}", c.id)
+            }
+        }
+    }
+
+    // trace:STORY-2401 | ai:claude
+    fn observe_change_status(&self, c: &ChangeRef) -> Observed<ChangeStatus> {
+        let id = c.id.to_string();
+        crate::forge_observed::observe_gh_stdout(
+            self.gh(&[
+                "pr",
+                "view",
+                &id,
+                "--json",
+                "state,mergeable,reviewDecision,headRefOid",
+                "-q",
+                "[.state, .mergeable, .reviewDecision, .headRefOid] | @tsv",
+            ])
+            .ok(),
+        )
+        .map(|stdout| parse_github_change_status(&stdout))
     }
 
     // trace:TASK-963 | ai:claude
@@ -3122,7 +3246,7 @@ impl Forge for PureGitForge {
             } else {
                 ChangeState::Open
             },
-            mergeable: true,
+            mergeable: crate::forge_observed::Observed::Known(true),
             review: ReviewDecision::None,
             head_sha,
         })
@@ -3544,6 +3668,67 @@ fn gitlab_merge_api_shape(
     }
 }
 
+/// One `gh pr view --json state,mergeable,reviewDecision,headRefOid` TSV line.
+// trace:STORY-2401 | ai:claude
+fn parse_github_change_status(line: &str) -> ChangeStatus {
+    let mut f = line.trim().split('\t');
+    let state = match f.next().unwrap_or("") {
+        "MERGED" => ChangeState::Merged,
+        "CLOSED" => ChangeState::Closed,
+        _ => ChangeState::Open,
+    };
+    let mergeable = github_mergeable(f.next().unwrap_or(""));
+    let review = match f.next().unwrap_or("") {
+        "APPROVED" => ReviewDecision::Approved,
+        "CHANGES_REQUESTED" => ReviewDecision::ChangesRequested,
+        "REVIEW_REQUIRED" => ReviewDecision::ReviewRequired,
+        _ => ReviewDecision::None,
+    };
+    let head_sha = f.next().unwrap_or("").to_string();
+    ChangeStatus {
+        state,
+        mergeable,
+        review,
+        head_sha,
+    }
+}
+
+/// GitHub's `mergeable` field: `MERGEABLE` and `CONFLICTING` are settled;
+/// `UNKNOWN` (or an empty field) means GitHub has not computed it yet. That
+/// is `Pending`, which TASK-2794 found being read as "not mergeable".
+// trace:STORY-2401 trace:TASK-2794 | ai:claude
+pub(crate) fn github_mergeable(field: &str) -> crate::forge_observed::Observed<bool> {
+    use crate::forge_observed::Observed;
+    match field.trim() {
+        "MERGEABLE" => Observed::Known(true),
+        "CONFLICTING" => Observed::Known(false),
+        "" => Observed::Pending("GitHub reported no mergeability".to_string()),
+        other => Observed::Pending(format!("GitHub mergeability is {other}")),
+    }
+}
+
+/// GitLab's mergeability: `detailed_merge_status` (modern) or `merge_status`
+/// (legacy). The temporary states [`classify_gitlab_merge_status`] waits on
+/// are `Pending`; a missing field is `Pending`; anything else is settled.
+// trace:STORY-2401 | ai:claude
+fn gitlab_mergeable(
+    detailed: Option<&str>,
+    legacy: Option<&str>,
+) -> crate::forge_observed::Observed<bool> {
+    use crate::forge_observed::Observed;
+    match (detailed, legacy) {
+        (Some(d), _) => match classify_gitlab_merge_status(d) {
+            GitLabMergeGate::Ready => Observed::Known(true),
+            GitLabMergeGate::Wait => Observed::Pending(format!("GitLab merge status is {d}")),
+            GitLabMergeGate::Blocked => Observed::Known(false),
+        },
+        (None, Some("can_be_merged")) => Observed::Known(true),
+        (None, Some("cannot_be_merged" | "cannot_be_merged_recheck")) => Observed::Known(false),
+        (None, Some(other)) => Observed::Pending(format!("GitLab merge status is {other}")),
+        (None, None) => Observed::Pending("GitLab reported no merge status".to_string()),
+    }
+}
+
 // GitLab documents these as temporary mergeability states. In particular,
 // `ci_must_pass` can briefly remain after the head pipeline turns green; that
 // race was the live BUG-1232 failure. Everything unknown fails closed and is
@@ -3678,10 +3863,10 @@ fn parse_glab_mr_status(body: &str) -> Result<ChangeStatus> {
     let state = glab_state_from_str(v.get("state").and_then(|s| s.as_str()).unwrap_or(""));
     // GitLab's modern field is `detailed_merge_status` ("mergeable" when ready);
     // older servers use `merge_status` ("can_be_merged"). Accept either.
-    let mergeable = match v.get("detailed_merge_status").and_then(|s| s.as_str()) {
-        Some(d) => d == "mergeable",
-        None => v.get("merge_status").and_then(|s| s.as_str()).unwrap_or("") == "can_be_merged",
-    };
+    let mergeable = gitlab_mergeable(
+        v.get("detailed_merge_status").and_then(|s| s.as_str()),
+        v.get("merge_status").and_then(|s| s.as_str()),
+    );
     let head_sha = v
         .get("sha")
         .and_then(|s| s.as_str())
@@ -5031,7 +5216,7 @@ mod tests {
             .change_status(&cr)
             .expect("phase=pre-merge-status: change_status failed");
         for _ in 0..10 {
-            if status.mergeable {
+            if status.mergeable.is_known_true() {
                 break;
             }
             std::thread::sleep(std::time::Duration::from_secs(3));
@@ -5699,7 +5884,7 @@ mod tests {
         let st = forge.change_status(&cref).unwrap();
         assert_eq!(st.state, ChangeState::Open, "feature ahead of main → Open");
         assert_eq!(st.review, ReviewDecision::None);
-        assert!(st.mergeable);
+        assert!(st.mergeable.is_known_true());
 
         // Merge feature into main → now ancestor → Merged.
         g(&["checkout", "-q", "main"]);
@@ -6040,7 +6225,10 @@ mod tests {
     fn parse_glab_mr_status_open_mergeable() {
         let st = parse_glab_mr_status(&mr_view_fixture("opened", "mergeable", "abc123")).unwrap();
         assert_eq!(st.state, ChangeState::Open);
-        assert!(st.mergeable, "detailed_merge_status=mergeable → mergeable");
+        assert!(
+            st.mergeable.is_known_true(),
+            "detailed_merge_status=mergeable → mergeable"
+        );
         assert_eq!(st.review, ReviewDecision::None);
         assert_eq!(st.head_sha, "abc123");
     }
@@ -6049,7 +6237,7 @@ mod tests {
     fn parse_glab_mr_status_merged_not_mergeable() {
         let st = parse_glab_mr_status(&mr_view_fixture("merged", "not_open", "deadbeef")).unwrap();
         assert_eq!(st.state, ChangeState::Merged);
-        assert!(!st.mergeable);
+        assert!(st.mergeable.is_known_false());
         assert_eq!(st.head_sha, "deadbeef");
     }
 
@@ -6060,7 +6248,7 @@ mod tests {
         let body = r#"{"iid":1,"state":"opened","merge_status":"can_be_merged","sha":"f00"}"#;
         let st = parse_glab_mr_status(body).unwrap();
         assert!(
-            st.mergeable,
+            st.mergeable.is_known_true(),
             "legacy merge_status=can_be_merged → mergeable"
         );
         assert_eq!(st.head_sha, "f00");
@@ -6071,7 +6259,11 @@ mod tests {
         let body = r#"{"iid":1,"state":"opened","diff_refs":{"head_sha":"diffsha"}}"#;
         let st = parse_glab_mr_status(body).unwrap();
         assert_eq!(st.head_sha, "diffsha", "falls back to diff_refs.head_sha");
-        assert!(!st.mergeable, "no merge-status field → not mergeable");
+        // STORY-2401: no merge-status field says nothing settled.
+        assert!(
+            matches!(st.mergeable, crate::forge_observed::Observed::Pending(_)),
+            "no merge-status field → pending, not a settled no"
+        );
     }
 
     #[test]

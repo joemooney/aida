@@ -2098,6 +2098,41 @@ pub(crate) fn ship_interactive_tty() -> bool {
     crate::gate::role_authority::has_integrity_floor_authority()
 }
 
+/// How many times the ship preflight reads the status, and the pause between reads.
+const SHIP_STATUS_READS: u32 = 3;
+const SHIP_STATUS_BACKOFF: std::time::Duration = std::time::Duration::from_secs(2);
+
+/// The change status for the ship preflight. It re-reads, up to a bound,
+/// while the read itself or its mergeability has not settled. It returns the
+/// last status the forge gave, settled or not, and errs only when no read
+/// succeeded.
+// trace:STORY-2401 | ai:claude
+fn ship_status_settled(
+    forge: &dyn crate::forge::Forge,
+    change: &crate::forge::ChangeRef,
+) -> Result<crate::forge::ChangeStatus> {
+    use crate::forge_observed::Observed;
+    let mut last_status = None;
+    let observed = crate::forge_observed::settle(SHIP_STATUS_READS, SHIP_STATUS_BACKOFF, || {
+        forge.observe_change_status(change).and_then(|status| {
+            let unsettled = status.mergeable.unsettled_reason().map(str::to_string);
+            last_status = Some(status);
+            match unsettled {
+                None => Observed::Known(()),
+                Some(why) => Observed::Pending(why),
+            }
+        })
+    });
+    match last_status {
+        Some(status) => Ok(status),
+        None => anyhow::bail!(
+            "could not read PR-{}'s status: {}",
+            change.id,
+            observed.unsettled_reason().unwrap_or("no reply")
+        ),
+    }
+}
+
 // trace:TASK-1606 | ai:codex
 #[allow(clippy::too_many_arguments)]
 fn ship_preflight_gates(
@@ -2112,12 +2147,23 @@ fn ship_preflight_gates(
 ) -> Result<()> {
     use crate::gate::ship::ShipRefusal;
     let forge = crate::forge::forge_for(project_root);
-    let status = forge.change_status(change)?;
-    if !status.mergeable {
+    let status = ship_status_settled(forge.as_ref(), change)?;
+    // STORY-2401 / TASK-2794: only a settled "no" refuses. GitHub reports
+    // UNKNOWN until it has computed mergeability. If the value is still not
+    // settled after the bounded re-read, ship proceeds, and the forge's own
+    // merge call refuses a PR that turns out to conflict.
+    // trace:STORY-2401 trace:TASK-2794 | ai:claude
+    if status.mergeable.is_known_false() {
         return Err(ShipRefusal::NotMergeable.error(format!(
             "PR-{} is not mergeable — rebase the branch and try again.",
             change.id
         )));
+    }
+    if let Some(why) = status.mergeable.unsettled_reason() {
+        eprintln!(
+            "note: PR-{} mergeability is not settled yet ({why}); the merge itself will refuse a conflict.",
+            change.id
+        );
     }
     let ids = ship_gate_known_ids(
         project_root,
