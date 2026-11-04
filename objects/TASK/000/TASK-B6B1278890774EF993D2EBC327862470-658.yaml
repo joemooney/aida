@@ -11,7 +11,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T09:06:27.587006751Z
-modified_at: 2026-11-04T08:52:27.401955283Z
+modified_at: 2026-11-04T09:26:11.082168500Z
 req_type: Task
 tags:
 - architecture
@@ -144,6 +144,13 @@ comments:
   created_at: 2026-11-04T08:36:11.816744311Z
   modified_at: 2026-11-04T08:36:11.816744311Z
   session_id: da1c0d85-1d45-4ce4-a292-5358644f65b9
+- id: 01a1a5e1-578a-7632-bca5-8c3615e46fb4
+  author: joe
+  content: 'Rework (brief 2026-11-04 08:36 UTC) done locally, NOT pushed (untested=true). Finding: no containment gap. After #3309 (BUG-2390) dispatch''s Codex take/impl lane runs `aida agent new codex --bg` (dispatch.rs::build_codex_lane_command); the worker is agent_codex_background.rs::build_worker_exec, already in CODEX_SPAWN_PATHS and finalized through prepare_launch. build_implementer_launch_command''s Codex arm is unreachable!. Delta (local commit dec6cffc0bf on top of c01127d7): task_2708_codex_fail_closed_tests.rs drops the stale dispatch.rs/launch_implementer_lane entry and asserts build_codex_lane_command spawns `agent new codex --bg` and the implementer builder''s Codex arm stays unreachable. Gate blocked: two lane-job runs of `cargo test --profile agent -p aida-cli-lib --lib -- task_2708_` (j20261104T085339035-5-0, j20261104T091059944-5-0) timed out at 900s compiling aida-cli-lib (seed: overlay-stale, so effectively cold, but the runner chose the 900s budget). The 3600s override was not permitted in this session. make check-ci-fast cannot finish inside the 60s per-call cap (its first gate is a cargo check). Needs: a warm-seeded rerun (or AIDA_CARGO_TIMEOUT=3600), then push dec6cffc0bf to the PR branch.'
+  created_at: 2026-11-04T09:26:11.082168500Z
+  modified_at: 2026-11-04T09:26:11.082168500Z
+  session_id: 01a1a5c26b98
+  harness_version: 2.1.318 (Claude Code)
 history:
 - id: 01a1965c-5ce8-7781-b88f-317b0b12bab5
   author: joe
