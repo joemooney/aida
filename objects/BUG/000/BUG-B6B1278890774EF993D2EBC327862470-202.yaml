@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T01:08:27.711738671Z
-modified_at: 2026-11-04T03:57:15.112988298Z
+modified_at: 2026-11-04T03:58:36.999346974Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -16,6 +16,13 @@ relationships:
   target_id: 01a1a49f-47bf-7ca2-98fd-69181037bc0c
   created_at: 2026-11-04T03:34:42.533726953Z
   created_by: joe
+comments:
+- id: 01a1a4b5-71c7-7ea2-90ec-3dfff746cbaa
+  author: joe
+  content: 'ADVISOR RULING (PR-3324 round 2 at c42bc4f1e2, 2026-11-03 21:00 MST): rework, final round. (1) BLOCKER: story_1690_train_tests.rs:1974-1977 asserts the car commits on out.landed ((1,''car1''),(2,''car2''), as drive() records them), plus rails.landed_on_main == [(1,''Lcar1''),(2,''Lcar2'')] before drop(rails). (2) Bundled: extract the merged_despite_error fallback predicate (or the loop over an injected metadata reader) and unit-test the forge-silent proof, plus its refusals when main == base and when the trees differ. (3) Bundled: re-read only when the forge merge call itself errored. Deterministic pre-merge refusals from pr_train_verified.rs collect() surface immediately. (4) SEMANTICS RULING: fail closed. The main-tree fallback applies only when forge metadata is unreadable or transient on every read. If the forge answers Open on all three reads, the train is not landed, even if the trees match: report the contradiction and leave members open for the advisor. Fix the comment to match. This is slice 1 of STORY-2401 (R1). Gate, through the lane job runner and cited: cargo test -p aida-cli-lib --lib -- story_1690 bug_2433 plus check-ci-fast (umask 022).'
+  created_at: 2026-11-04T03:58:36.999346974Z
+  modified_at: 2026-11-04T03:58:36.999346974Z
+  session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
 history:
 - id: 01a1a423-4350-7112-af29-196ae6b08115
   author: joe
