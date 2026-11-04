@@ -23,7 +23,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-04T15:39:15.141070572Z
-modified_at: 2026-11-04T15:42:07.002752078Z
+modified_at: 2026-11-04T15:43:16.911919616Z
 req_type: Story
 tags:
 - area:containment
@@ -36,6 +36,12 @@ comments:
   content: 'OPERATOR INPUT + ADVISOR FRAMING (2026-11-04 08:43 MST). (1) Evidence for option B: ''agy --help'' lists ''--sandbox: Run in a sandbox with terminal restrictions enabled''. ''Terminal restrictions'' does not say whether the filesystem write root or the network is restricted, so the sketch must probe it empirically: can a write outside the worktree succeed, and can a host outside allowed_hosts be reached. (2) Strategic question raised by the operator: is AIDA''s own sandbox a strategic benefit? Advisor''s recommended direction, to be decided in this sketch or split out: AIDA owns the containment POLICY and its PROOF (the worktree write root, allowed_hosts, and a vendor-neutral conformance suite of negative tests), not necessarily the ENFORCEMENT. A vendor''s native sandbox earns the ''native'' posture by passing the conformance suite, and the AIDA wrapper stays the fallback for vendors that fail. This turns today''s hand-granted codex=''native'' exception into an earned, tested posture and caps per-vendor containment engineering. The cost evidence for keeping the wrapper minimal: BUG-2144, BUG-2151, the lane-job overlay/bwrap fixes, keyring errno 40, and STORY-2343''s AF_UNIX fork. Candidate for the post-zero regroup/rearchitecture review.'
   created_at: 2026-11-04T15:42:05.141434966Z
   modified_at: 2026-11-04T15:42:05.141434966Z
+  session_id: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
+- id: 01a1a73a-95af-71c2-b8d3-99f126292217
+  author: joe
+  content: 'OPERATOR RULING (2026-11-04 08:43 MST, joe: ''agreed''): adopt the direction ''AIDA owns the containment policy and its proof, not necessarily the enforcement''. A vendor''s native sandbox earns the ''native'' posture by passing a vendor-neutral conformance suite of negative tests (writes outside the worktree, hosts outside allowed_hosts); AIDA''s own wrapper is the fallback for vendors that fail it. The sketch must define the conformance suite first, run it against ''agy --sandbox'', and then pick (A) or (B) for agy from the results. Codex''s existing native posture must also pass the suite.'
+  created_at: 2026-11-04T15:43:16.911919616Z
+  modified_at: 2026-11-04T15:43:16.911919616Z
   session_id: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
 history:
 - id: 01a1a739-849a-7023-b534-bbe543e4ef1f
