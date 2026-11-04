@@ -2048,7 +2048,7 @@ fn spawn_vendor_headless_forking(
     // every headless phase behaves identically whoever launched it.
     // trace:TASK-1169 | ai:claude
     let (ceiling_key, ceiling_value) = crate::bg_wait_ceiling_env(Some(&headless_worktree_root()));
-    let (program, args) = compose_headless_command_forking(
+    let (program, mut args) = compose_headless_command_forking(
         vendor,
         prompt,
         session_id,
@@ -2057,6 +2057,8 @@ fn spawn_vendor_headless_forking(
         tuning.effort.as_deref(),
         fork_thread,
     )?;
+    // Each seat gets its own role's write set. trace:TASK-2712 | ai:claude
+    rescope_native_codex_for_seat(vendor, &mut args, &headless_worktree_root(), seat.as_str())?;
     // The boundary (the contained mailbox) is set up before any grant exists.
     let posture = containment_posture(vendor, contained)?; // trace:TASK-2631 | ai:codex
     let ctx = headless_launch_context(vendor, program, args, posture)?; // trace:STORY-2326 | ai:claude
@@ -2474,8 +2476,14 @@ pub(crate) fn codex_read_only_args(args: Vec<String>) -> Vec<String> {
         if arg == "--dangerously-bypass-approvals-and-sandbox" || arg.starts_with("--sandbox=") {
             continue;
         }
-        if arg == "--sandbox" || arg == "-s" {
+        // TASK-2712: a plan lane writes nothing, so the native write set's
+        // `--add-dir` grants go with the workspace-write posture.
+        // trace:TASK-2712 | ai:claude
+        if arg == "--sandbox" || arg == "-s" || arg == "--add-dir" {
             iter.next();
+            continue;
+        }
+        if arg.starts_with("--add-dir=") {
             continue;
         }
         out.push(arg);
@@ -2698,13 +2706,20 @@ pub fn exec_codex_session(
     read_only: bool,
     model: Option<&str>,
     grant_id: Option<&str>,
+    role: Option<&str>,
 ) -> Result<()> {
     // trace:TASK-2631 | ai:codex
     let requested = drain_contained(&headless_worktree_root())?;
     let posture = containment_posture(HeadlessVendor::Codex, requested)?;
     let mut cmd = if posture == ContainmentPosture::Native {
         let mut cmd = std::process::Command::new("codex");
-        let mut args = crate::tool_contained_flags("codex")?;
+        // TASK-2712: the write set of the lane's own tree and role (the gate
+        // ledger only for a reviewer).
+        // trace:TASK-2712 | ai:claude
+        let mut args = crate::codex_native_sandbox::codex_native_sandbox_flags_in(
+            &headless_worktree_root(),
+            role,
+        )?;
         args.extend(codex_session_args(initial_prompt, false, model));
         // trace:BUG-2394 | ai:claude — a plan lane narrows the native sandbox.
         if read_only {
@@ -2763,6 +2778,15 @@ pub fn exec_codex_session(
     }
 }
 
+/// TASK-2712: the lane a native Codex launch writes for: its own tree and its
+/// role (`None` when unknown: no gate ledger).
+// trace:TASK-2712 | ai:claude
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct CodexLane<'a> {
+    pub(crate) tree: &'a Path,
+    pub(crate) role: Option<&'a str>,
+}
+
 /// BUG-2386: an interactive `codex resume <thread>` on the posture a fresh
 /// interactive Codex launch resolves ([`exec_codex_session`]): a contained
 /// request (the parent's `AIDA_CONTAINED` or the `[agents] contained` knob)
@@ -2772,6 +2796,8 @@ pub fn exec_codex_session(
 /// `queue work --sandbox`), OR-ed with the parent env and the knob so a
 /// flag-only request is never dropped. `read_only` keeps a plan lane's
 /// read-only sandbox (BUG-2394) on the resumed thread; it wins over bypass.
+/// `lane` is the RESUMED lane's own tree and role, whose write set a native
+/// resume gets (TASK-2712 F8), never this process's cwd.
 // trace:BUG-2386 | ai:claude
 pub(crate) fn build_codex_resume_command(
     thread_id: &str,
@@ -2779,6 +2805,7 @@ pub(crate) fn build_codex_resume_command(
     read_only: bool,
     grant_id: Option<&str>,
     contained: bool,
+    lane: CodexLane<'_>,
 ) -> Result<std::process::Command> {
     let requested = contained || drain_contained(&headless_worktree_root())?;
     require_vendor_containment(HeadlessVendor::Codex, requested, "resumed codex session")?;
@@ -2788,7 +2815,7 @@ pub(crate) fn build_codex_resume_command(
         std::process::Command::new(resolve_agent_program(HeadlessVendor::Codex.program()));
     cmd.args(codex_interactive_resume_args(
         thread_id,
-        native,
+        native.then_some(lane),
         bypass && !native,
         read_only,
     )?);
@@ -2817,8 +2844,10 @@ pub fn exec_codex_resume(
     read_only: bool,
     grant_id: Option<&str>,
     contained: bool,
+    lane: CodexLane<'_>,
 ) -> Result<()> {
-    let mut cmd = build_codex_resume_command(thread_id, bypass, read_only, grant_id, contained)?;
+    let mut cmd =
+        build_codex_resume_command(thread_id, bypass, read_only, grant_id, contained, lane)?;
     finalize_codex_resume(&mut cmd, &headless_worktree_root())?;
     #[cfg(unix)]
     {
@@ -2933,7 +2962,13 @@ pub(crate) fn interactive_reviewer_launch_plan(
                 program: resolve_agent_program(vendor.program()),
                 // trace:TASK-2631 | ai:codex
                 args: if contained {
-                    let mut args = crate::tool_contained_flags("codex")?;
+                    // TASK-2712 F2: a reviewer's write set (gate ledger
+                    // included) for the tree it launches in.
+                    // trace:TASK-2712 | ai:claude
+                    let mut args = crate::codex_native_sandbox::codex_native_sandbox_flags_in(
+                        &headless_worktree_root(),
+                        Some("reviewer"),
+                    )?;
                     args.extend(codex_session_args(prompt, false, None));
                     args
                 } else {
@@ -3695,7 +3730,14 @@ pub(crate) fn headless_vendor_args_contained_in(
             containment_posture_in(dir, vendor.as_str(), true)?;
             let mut args = codex_headless_args_with_model_and_effort(prompt, model, effort);
             args.retain(|arg| arg != "--dangerously-bypass-approvals-and-sandbox");
-            args.splice(0..0, crate::tool_contained_flags("codex")?);
+            // TASK-2712: the write set of the child's own tree. A drain
+            // child's role is not known here, so no gate ledger (reviewer
+            // only).
+            // trace:TASK-2712 | ai:claude
+            args.splice(
+                0..0,
+                crate::codex_native_sandbox::codex_native_sandbox_flags_in(dir, None)?,
+            );
             Ok(args)
         }
         _ => headless_vendor_args(vendor, prompt, session_id, false, model, effort),
@@ -4048,10 +4090,13 @@ pub(crate) fn codex_resume_exec_args(
 /// Codex's bypass flag, as a fresh interactive launch does (BUG-743).
 /// `read_only` (a plan lane, BUG-2394) forces Codex's read-only sandbox over
 /// either posture, exactly as a fresh plan-only launch does.
-// trace:BUG-2386 | ai:claude
+/// `native` is the resumed lane (its own tree and role) when the resume is
+/// native-contained: its write set comes from that lane, never this
+/// process's cwd (TASK-2712 F8).
+// trace:BUG-2386 trace:TASK-2712 | ai:claude
 pub(crate) fn codex_interactive_resume_args(
     thread_id: &str,
-    native_contained: bool,
+    native: Option<CodexLane<'_>>,
     bypass: bool,
     read_only: bool,
 ) -> Result<Vec<String>> {
@@ -4059,8 +4104,8 @@ pub(crate) fn codex_interactive_resume_args(
         crate::codex_resume::valid_thread_id(thread_id),
         "refusing to resume `{thread_id}`: not a Codex thread id"
     );
-    let mut args = if native_contained {
-        crate::tool_contained_flags("codex")?
+    let mut args = if let Some(lane) = native {
+        crate::codex_native_sandbox::codex_native_sandbox_flags_in(lane.tree, lane.role)?
     } else if bypass {
         vec!["--dangerously-bypass-approvals-and-sandbox".to_string()]
     } else {
@@ -4372,25 +4417,15 @@ pub(crate) fn aida_mcp_server_config_json() -> String {
     .to_string()
 }
 
-/// The contained launch settings for `write_roots`. Errors (the launch is
-/// refused) when the main git directory's deny cannot be expressed exactly as
-/// a sandbox and tool rule (BUG-1982): Claude Code's own sandbox would leave
-/// it writable to a linked-worktree session, so a launch without that deny
-/// fails open.
-// trace:BUG-1982 | ai:claude
-pub(crate) fn claude_contained_settings_json(write_roots: &[PathBuf]) -> Result<String> {
-    // Egress allowlist is strictly opt-in via `[contained] allowed_hosts`. When
-    // the project root or config can't be resolved we fall back to an empty
-    // allowlist — i.e. the pre-STORY-605 behavior. trace:STORY-605 | ai:claude
-    let root = crate::find_project_root().ok();
-    let allowed_hosts = root
-        .as_ref()
-        .map(|r| contained_allowed_hosts(r))
-        .unwrap_or_default();
-    let managed_only = root
-        .as_ref()
-        .map(|r| contained_managed_domains_only(r))
-        .unwrap_or(false);
+/// The paths a contained lane on `write_roots` writes beyond the roots
+/// themselves, and the paths it must never write. Claude renders them into its
+/// `--settings`; native Codex passes the grants as `--add-dir`
+/// ([`crate::codex_native_sandbox`]), so both vendors get ONE write set.
+/// Errors refuse the launch: the main git directory's deny cannot be
+/// expressed exactly (BUG-1982), or the tree's `.git` points somewhere the
+/// host does not vouch for (BUG-2016).
+// trace:TASK-2712 | ai:claude
+pub(crate) fn contained_write_set(write_roots: &[PathBuf]) -> Result<ContainedWriteSet> {
     // trace:BUG-1928 | ai:claude
     // BUG-1929: the main checkout's store and cache, so the session's `aida`
     // writes (claim, comment, queue done) land. Priming first makes the
@@ -4490,6 +4525,52 @@ pub(crate) fn claude_contained_settings_json(write_roots: &[PathBuf]) -> Result<
             }
         }
     }
+    Ok(ContainedWriteSet {
+        grant_paths: store_paths,
+        deny_paths: extra_deny,
+        clone,
+    })
+}
+
+/// [`contained_write_set`]'s result.
+// trace:TASK-2712 | ai:claude
+#[derive(Debug, Clone, Default)]
+pub(crate) struct ContainedWriteSet {
+    /// Store, cache, mailbox, deputy inbox, and the build slots or the seat
+    /// clone's own cargo target.
+    pub(crate) grant_paths: Vec<PathBuf>,
+    /// Every spelling of the main git directory and, for a seat clone, main's
+    /// `.aida/sessions`.
+    pub(crate) deny_paths: Vec<PathBuf>,
+    /// The host-recorded seat clone the first write root is, if any.
+    pub(crate) clone: Option<crate::seat_clone::HostRecordedClone>,
+}
+
+/// The contained launch settings for `write_roots`. Errors (the launch is
+/// refused) when the main git directory's deny cannot be expressed exactly as
+/// a sandbox and tool rule (BUG-1982): Claude Code's own sandbox would leave
+/// it writable to a linked-worktree session, so a launch without that deny
+/// fails open.
+// trace:BUG-1982 | ai:claude
+pub(crate) fn claude_contained_settings_json(write_roots: &[PathBuf]) -> Result<String> {
+    // Egress allowlist is strictly opt-in via `[contained] allowed_hosts`. When
+    // the project root or config can't be resolved we fall back to an empty
+    // allowlist — i.e. the pre-STORY-605 behavior. trace:STORY-605 | ai:claude
+    let root = crate::find_project_root().ok();
+    let allowed_hosts = root
+        .as_ref()
+        .map(|r| contained_allowed_hosts(r))
+        .unwrap_or_default();
+    let managed_only = root
+        .as_ref()
+        .map(|r| contained_managed_domains_only(r))
+        .unwrap_or(false);
+    // trace:TASK-2712 | ai:claude
+    let ContainedWriteSet {
+        grant_paths: store_paths,
+        deny_paths: extra_deny,
+        clone,
+    } = contained_write_set(write_roots)?;
     let json = contained_settings_json_with_boundary(
         &allowed_hosts,
         managed_only,
@@ -5886,8 +5967,31 @@ pub(crate) fn coordinator_headless_preview(
         tuning.effort.as_deref(),
         false,
     )?;
+    // trace:TASK-2712 | ai:claude
+    rescope_native_codex_for_seat(vendor, &mut args, &root, seat.as_str())?;
     adapt_coordinator_args(vendor, &mut args, Some(mode), contained, stream);
     Ok((program, args))
+}
+
+/// TASK-2712 (advisor ruling F2): a composed native Codex argv's write set
+/// re-derived for the lane's own `tree` and `seat` role, through the one
+/// role-aware helper, so a reviewer seat gets the gate ledger and every other
+/// seat does not. Other vendors and non-native argv are left alone.
+// trace:TASK-2712 | ai:claude
+pub(crate) fn rescope_native_codex_for_seat(
+    vendor: HeadlessVendor,
+    args: &mut Vec<String>,
+    tree: &Path,
+    seat: &str,
+) -> Result<()> {
+    if vendor != HeadlessVendor::Codex {
+        return Ok(());
+    }
+    crate::codex_native_sandbox::rescope_codex_native_flags(
+        args,
+        tree,
+        Some(&crate::canonical_role_name(seat)),
+    )
 }
 
 /// The permission mode a headless coordinator launches with. Claude resolves
@@ -6019,6 +6123,8 @@ fn build_coordinator_headless_command_inner(
     let contained = aida_contained_env()? || contained;
     let (program, mut args) =
         compose_headless_command_for(vendor, prompt, session_id, contained, model, effort, resume)?;
+    // trace:TASK-2712 | ai:claude
+    rescope_native_codex_for_seat(vendor, &mut args, &headless_worktree_root(), seat)?;
     adapt_coordinator_args(vendor, &mut args, mode, contained, stream);
     // TASK-1169 / ADR-22: same bounded ceiling as the spawn path — the exec
     // path is the `--no-human` phase-1 implementer, which must not diverge.
@@ -7365,14 +7471,20 @@ pub(crate) fn spawn_vendor_headless_resume_granted(
         cwd,
         &resolve_agent_program(vendor.program()),
         codex_resume_exec_args(
-            headless_vendor_args_contained_in(
-                vendor,
-                &effective_prompt,
-                target.session_id,
-                contained.then_some(cwd),
-                tuning.model.as_deref(),
-                tuning.effort.as_deref(),
-            )?,
+            {
+                let mut args = headless_vendor_args_contained_in(
+                    vendor,
+                    &effective_prompt,
+                    target.session_id,
+                    contained.then_some(cwd),
+                    tuning.model.as_deref(),
+                    tuning.effort.as_deref(),
+                )?;
+                // TASK-2712 F2/F8: the resumed lane's own tree and seat role.
+                // trace:TASK-2712 | ai:claude
+                rescope_native_codex_for_seat(vendor, &mut args, cwd, seat)?;
+                args
+            },
             target.resume_id,
         )?,
     )?;
@@ -8809,8 +8921,24 @@ pub(crate) fn codex_session_resume_command(
     target: &ResumeTarget,
     contained: bool,
 ) -> Result<std::process::Command> {
-    let mut cmd = build_codex_resume_command(&target.id, false, false, None, contained)?;
-    if let Some(cwd) = codex_resume_cwd(target) {
+    // TASK-2712 F8: the write set of the resumed session's own tree (the
+    // process cwd only when that tree is unknown). No role is recorded for
+    // a session resume, so no gate ledger.
+    // trace:TASK-2712 | ai:claude
+    let cwd = codex_resume_cwd(target);
+    let tree = cwd.clone().unwrap_or_else(headless_worktree_root);
+    let mut cmd = build_codex_resume_command(
+        &target.id,
+        false,
+        false,
+        None,
+        contained,
+        CodexLane {
+            tree: &tree,
+            role: None,
+        },
+    )?;
+    if let Some(cwd) = cwd {
         cmd.current_dir(cwd);
     }
     finalize_codex_resume(&mut cmd, &headless_worktree_root())?;
@@ -11901,33 +12029,40 @@ mod tests {
     // trace:BUG-2386 | ai:claude
     #[test]
     fn codex_interactive_resume_argv_per_posture() {
+        let tmp = tempfile::tempdir().unwrap();
+        let lane = || {
+            Some(CodexLane {
+                tree: tmp.path(),
+                role: None,
+            })
+        };
         assert_eq!(
-            codex_interactive_resume_args("t-1", false, false, false).unwrap(),
+            codex_interactive_resume_args("t-1", None, false, false).unwrap(),
             ["resume", "t-1"]
         );
         assert_eq!(
-            codex_interactive_resume_args("t-1", false, true, false).unwrap(),
+            codex_interactive_resume_args("t-1", None, true, false).unwrap(),
             [
                 "--dangerously-bypass-approvals-and-sandbox",
                 "resume",
                 "t-1"
             ]
         );
-        let native = codex_interactive_resume_args("t-1", true, true, false).unwrap();
+        let native = codex_interactive_resume_args("t-1", lane(), true, false).unwrap();
         assert!(
             !native.iter().any(|a| a.contains("dangerously")),
             "a contained resume never carries the bypass: {native:?}"
         );
         assert_eq!(&native[native.len() - 2..], ["resume", "t-1"]);
         assert!(native.iter().any(|a| a == "workspace-write"), "{native:?}");
-        assert!(codex_interactive_resume_args("-x", false, false, false).is_err());
+        assert!(codex_interactive_resume_args("-x", None, false, false).is_err());
         // BUG-2394: a plan-only resume keeps the read-only sandbox and never
         // the bypass, on either posture. trace:BUG-2394 | ai:claude
         assert_eq!(
-            codex_interactive_resume_args("t-1", false, true, true).unwrap(),
+            codex_interactive_resume_args("t-1", None, true, true).unwrap(),
             ["--sandbox", "read-only", "resume", "t-1"]
         );
-        let plan_native = codex_interactive_resume_args("t-1", true, false, true).unwrap();
+        let plan_native = codex_interactive_resume_args("t-1", lane(), false, true).unwrap();
         assert_eq!(&plan_native[..2], ["--sandbox", "read-only"]);
         assert_eq!(
             plan_native.iter().filter(|a| *a == "--sandbox").count(),

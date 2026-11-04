@@ -13842,12 +13842,17 @@ pub(crate) fn handle_queue_work(
                     )
                     .cyan()
                 );
+                // trace:TASK-2712 | ai:claude — the resumed lane's own tree and role.
                 return session::exec_codex_resume(
                     &thread,
                     codex_bypass,
                     codex_read_only,
                     child_grant_id.as_deref(),
                     contained,
+                    session::CodexLane {
+                        tree: &lease.worktree_path,
+                        role: Some(&crate::canonical_role_name(&role)),
+                    },
                 );
             }
             eprintln!(
@@ -13869,12 +13874,14 @@ pub(crate) fn handle_queue_work(
                 )
                 .cyan()
             );
+            // trace:TASK-2712 | ai:claude — the lane's role picks its write set.
             return session::exec_codex_session(
                 &prompt,
                 codex_bypass,
                 codex_read_only,
                 resolved_model.as_deref(),
                 child_grant_id.as_deref(),
+                Some(&crate::canonical_role_name(&role)),
             );
         }
         // BUG-1607: an interactive Agy launch is now refused by
@@ -14491,12 +14498,18 @@ pub(crate) fn run_standalone_reviewer(
                     )?;
                     // A reviewer never runs a plan lane; the seat comes from
                     // the reviewer grant, set by `finalize_codex_resume`.
+                    // trace:TASK-2712 | ai:claude — the reviewer's own tree:
+                    // its write set carries the gate ledger.
                     let mut cmd = session::build_codex_resume_command(
                         &resume_id,
                         permission_mode == Some("bypassPermissions"),
                         false,
                         Some(&grant.id),
                         contained,
+                        session::CodexLane {
+                            tree: worktree,
+                            role: Some("reviewer"),
+                        },
                     )?;
                     cmd.current_dir(worktree);
                     // trace:BUG-2386 | ai:claude
