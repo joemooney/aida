@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-2426",
+  "publishes": [
+    {
+      "at": "2026-11-04T01:08:17.879183573Z",
+      "closed_by": "queue-done"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-03T19:38:44.789151965Z",
+      "spec": "BUG-2426",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    }
+  ]
+}
