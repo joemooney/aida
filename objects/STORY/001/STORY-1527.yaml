@@ -15,10 +15,8 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-06T03:58:29.391669890Z
-modified_at: 2026-11-04T02:42:27.476463543Z
+modified_at: 2026-11-04T02:45:06.671460154Z
 req_type: Story
-tags:
-- operator-held
 relationships:
 - rel_type: Blocks
   target_id: 01a0deff-ff18-7be3-91e4-382e8b28c388
@@ -61,10 +59,11 @@ history:
   timestamp: 2026-11-04T02:42:24.714956456Z
   session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
   changes: []
-deferred: true
-deferred_at: 2026-11-04T02:42:24.527683131Z
-deferred_until: the operator reopens the regeneration / north-star research line
-deferred_reason: 'OPERATOR RULING 2026-11-03 19:36 MST: the regeneration / north-star research line stays deferred (revised from reject).'
+- id: 01a1a472-266e-7733-80a8-ec60ce6146fe
+  author: joe
+  timestamp: 2026-11-04T02:45:06.798268608Z
+  session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
+  changes: []
 filed_at:
   code_sha: dafb66432e7a58201cbdd274f131702e1fbbc90d
   branch: main
