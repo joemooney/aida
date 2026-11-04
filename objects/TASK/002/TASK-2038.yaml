@@ -13,11 +13,10 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-21T04:21:30.919680820Z
-modified_at: 2026-10-21T05:48:52.272790805Z
+modified_at: 2026-11-04T02:33:19.666747855Z
 req_type: Task
 tags:
 - from-review:PR-2791
-- operator-held
 - severity:minor
 - testing
 history:
@@ -26,10 +25,11 @@ history:
   timestamp: 2026-10-21T05:48:52.748864711Z
   session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
   changes: []
-deferred: true
-deferred_at: 2026-10-21T05:48:52.272790805Z
-deferred_until: the next git version bump on the CI runners
-deferred_reason: Evidence-only record; no code change, low value now
+- id: 01a1a467-5c84-7fa0-87d8-715642924d36
+  author: joe
+  timestamp: 2026-11-04T02:33:19.748264833Z
+  session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
+  changes: []
 filed_at:
   code_sha: 3c116d8919d1294c220c0127d70405d871c956ca
   branch: pr-2791
