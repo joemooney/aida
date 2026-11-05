@@ -33,7 +33,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-10T20:30:55.867848469Z
-modified_at: 2026-11-05T13:19:48.952206969Z
+modified_at: 2026-11-05T13:19:51.295766892Z
 req_type: Story
 tags:
 - docs
@@ -90,6 +90,27 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Docs audience split is mostly sound (AC2 tested, AC4 inventory complete+gated fast), but AC1 not met (docs/aida, docs/casts internal material still top-level, no guard), AC3 has mis-retargeted references, adopter-project defaults were silently moved under docs/internal/, AC5 unverified; CI still in progress at review time.. Triage reason: Address the latest review on #3424 (see its last ''## Review'' comment and the spec''s review verdict) and any red CI at the current head; push to branch story-1651 (no new branch). LIGHT gate.'
   created_at: 2026-11-05T13:19:48.952205441Z
   modified_at: 2026-11-05T13:19:48.952205441Z
+  session_id: b83457ff-84e3-46cb-8f68-4be531a63422
+- id: 01a1abdd-a173-7f71-a517-9f1e3a4c8b4f
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (STORY-1651):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: ff093ccc4dd3
+    Recorded: 2026-11-05T13:00:47.217443024+00:00
+    Findings:
+    1. AC1 unmet (STORY-1651.ac2d00dc): docs/ top level still holds contributor material. docs/aida/ (00-constitution, 01-vision, 02-constraints, 07-quality, 10-glossary, cache-locks.md, doctor.md, multi-source-coordination.md, all audience=internal in inventory.tsv) and docs/casts/ (asciinema recordings referenced only from docs/internal/) remain at the top level. Only docs/aida/05-decisions ADRs are protected by the constraint. Move them under docs/internal/, or record an explicit spec-approved exception. docs/plans/ staying is allowed by scope item 3.
+    2. AC1 has no guard: no test or check enforces the docs/ top-level allow-list. audience() in docs/archive/2026-10-cleanup/inventory.py only maps paths to audiences, so an internal doc dir at the top level (docs/aida/, docs/plans/) passes. Add a check in tests/test_doc_audiences.py that lists docs/ top-level entries against the allowed set (landing, adopter pages, advanced/, internal/, archive/, cli/, book assets, plus any approved exceptions).
+    3. AC3 (STORY-1651.ac31417a): a mechanical docs/<x>/ -> docs/internal/<x>/ rewrite retargeted references to files TASK-1611 had already archived, so they point at paths that do not exist. The real files are under docs/archive/. Affected: aida-cli-lib/src/config_init.rs:235 (docs/internal/spikes/2026-06-07-spike-8-ultraplan-comparison.md), config_init.rs:750 and session_start.rs:1183 (docs/internal/research/2026-06-29-warm-pool-build-delta.md), aida-core/templates/.aida/discipline/glossary.yaml:312 + mirror (docs/internal/competitive-analysis/2026-05-26-agent-memory-libraries.md), docs/internal/presentation/2026-06-management-demo.md:140,287 (docs/internal/positioning/vs-claude-code-workflows.md, docs/internal/competitive-analysis/2026-05-31-round2-moat-gaps-moves.md). Point them at docs/archive/...
+    4. AC3 has no guard: scripts/check-doc-links.py only checks markdown/html link targets under docs/** plus README/CONTRIBUTING. It does not scan code, templates, OVERVIEW/CLAUDE/AGENTS, or plain-text/backtick path mentions, which is how the wrong retargets above got through. inventory.tsv already maps path_before_cleanup to path. Add a check that fails when any tracked non-archive file names a moved-from path, or a docs/ path that does not exist.
+    5. Scope/behavior change for adopter projects without sign-off: the reorg of AIDA's own repo changed product defaults that every project inherits. 'aida research --dir' now defaults to docs/internal/research (questions.rs, golden help snapshot). aida init scaffolds docs/internal/competitive-analysis/ecosystem-watch.md and lists it in the init footprint (scaffold_init.rs:499, init_cmd.rs:304, aida-core/build.rs:91). The spike protocol text now says docs/internal/spikes. Shipped skill templates (aida-ecosystem-scan, aida-docs bash block 'aida list > docs/internal/reports/...', advisor-role) direct adopter projects into docs/internal/. A project already scaffolded at docs/competitive-analysis/ gets a second ecosystem-watch file on re-init, and the scan skill writes to the new path. The spec's constraints say to keep end-user paths stable and move contributor material only. Either keep project-neutral defaults (AIDA's own repo can pass --dir or config) or get advisor approval for a product convention change with a migration and a fallback for the old path (as done for spikes).
+    6. Inventory gate makes every PR edit one shared file: inventory.py --check fails for ANY new tracked .md/.html anywhere in the repo (plans, crate READMEs, templates) unless the same PR regenerates the 950-row docs/archive/2026-10-cleanup/inventory.tsv. About 24 such files landed on main in the past week, so every parallel lane will now edit, and conflict on, this one TSV. audience() already derives an audience from the path for every case except an unknown docs/ top-level entry. Make the check path-derived (fail only when audience(p) is None or a row disagrees) and keep the TSV a generated report, or limit the required rows to docs/**.
+    7. Misclassified as adopter by the docs/agents/ prefix rule: docs/agents/session-communication.md (pause/abort/resume semantics for running agent sessions; operator/mailbox material, which scope item 2 puts in advanced), and docs/agents/codex-brief-pickup.md plus antigravity-brief-pickup.md (AIDA-generated 'DO NOT EDIT' files about advisor brief pickup; should be generated or advanced).
+    8. AC5 (STORY-1651.ace54862) unverified: there is no evidence of a fresh-reader agent run given only docs/README.md. The spec comment records only the implementer re-running the command block. Run and record the fresh-reader test (agent transcript or a scripted smoke test of the landing-page sequence: git init, aida init, aida add, aida list, aida show), or trace it to a test.
+    9. Cosmetic: in inventory.py main(), the 'if "--check" not in sys.argv' after the early 'return check()' is dead. 'make book-serve' now runs 'mdbook serve docs', which serves the internal/archive assets that build-reader-book.py prunes from the published build.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-05T13:19:51.155296305Z
+  modified_at: 2026-11-05T13:19:51.155296305Z
   session_id: b83457ff-84e3-46cb-8f68-4be531a63422
 history:
 - id: 01a12786-de64-7f61-81ce-787aedc7543e
