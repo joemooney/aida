@@ -365,7 +365,7 @@ fn rework_held_approved_pickup_wants_pr_head_branch() {
     let plan = plan_with(QueueWorkMode::Item, "TASK-116", vec![approved]);
 
     assert!(queue_work_wants_rework_pr_branch(&plan, None, true));
-    assert!(!queue_work_wants_rework_pr_branch(&plan, None, false));
+    assert!(queue_work_wants_rework_pr_branch(&plan, None, false));
 }
 
 // trace:BUG-b6b1278890774ef993d2ebc327862470-022 | ai:claude

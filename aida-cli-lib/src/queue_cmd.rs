@@ -9026,11 +9026,12 @@ pub(crate) fn preclaim_collision_check(
 pub(crate) fn queue_work_wants_rework_pr_branch(
     plan: &QueueWorkPlan,
     explicit_branch: Option<&str>,
-    spec_rework_held: bool,
+    _spec_rework_held: bool,
 ) -> bool {
     explicit_branch.is_none()
         && (queue_work_plan_wants_pr_head_branch(plan)
-            || (spec_rework_held && plan.review_target.is_none() && plan.entries.len() == 1))
+            // trace:STORY-2475 | ai:codex
+            || (plan.review_target.is_none() && plan.entries.len() == 1))
 }
 
 /// BUG-022: an open PR carrying a Rework hold for the spec is the spec's PR —

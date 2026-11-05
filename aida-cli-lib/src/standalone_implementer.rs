@@ -787,6 +787,63 @@ pub(crate) fn run(launch: Launch<'_>) -> Result<()> {
     } = finished?;
     store_commit.commit();
 
+    // Publish before reading the final seat state or ending its lease. A punt
+    // or manual hold is an explicit instruction to leave publication alone.
+    // trace:STORY-2475 | ai:codex
+    let mut outcome = outcome;
+    if launch.vendor == crate::session::HeadlessVendor::Codex
+        && launch.contained
+        && !matches!(outcome, Outcome::Punted { .. } | Outcome::Held { .. })
+    {
+        match crate::ship_from_seat::post_exit_commit_reported(
+            &main_root,
+            &worktree,
+            launch.spec,
+            launch.lease_id,
+            status.success(),
+        ) {
+            crate::ship_from_seat::PostExitCommit::Committed(_) if status.success() => {
+                crate::ship_from_seat::run_at(
+                    &main_root,
+                    crate::ship_from_seat::FromSeatOptions {
+                        clone: worktree.clone(),
+                        spec: Some(launch.spec.to_string()),
+                        no_pr: false,
+                        dry_run: false,
+                        commit_pending: None,
+                    },
+                )?;
+                outcome = classify(None, None, || lookup_pr(launch.project_root, launch.branch));
+            }
+            crate::ship_from_seat::PostExitCommit::Clean => {
+                let message = format!("Codex queue-work lane for {} exited with no pending changes in {} (exit {:?}).",
+                    launch.spec, worktree.display(), status.code());
+                let sent = std::env::current_exe().ok().and_then(|exe| {
+                    std::process::Command::new(exe)
+                        .current_dir(&main_root)
+                        .args([
+                            "mailbox",
+                            "send",
+                            "--to",
+                            "advisor",
+                            "--subject",
+                            "Queue-work lane exited without changes",
+                            &message,
+                        ])
+                        .status()
+                        .ok()
+                });
+                if !sent.is_some_and(|s| s.success()) {
+                    eprintln!("warning: could not notify advisor: {message}");
+                }
+            }
+            crate::ship_from_seat::PostExitCommit::Failed(why) => {
+                anyhow::bail!("host post-exit commit failed: {why}");
+            }
+            _ => {}
+        }
+    }
+
     // trace:BUG-B6B1278890774EF993D2EBC327862470-044 | ai:claude
     // trace:BUG-B6B1278890774EF993D2EBC327862470-050 | ai:claude
     let seat = bg::SeatState::read(&worktree, launch.branch);

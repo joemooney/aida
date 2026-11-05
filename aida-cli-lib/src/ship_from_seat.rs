@@ -764,8 +764,13 @@ pub(crate) struct Deps<'a> {
 // trace:BUG-HOME-038 | ai:claude
 pub(crate) fn run(opts: FromSeatOptions) -> Result<()> {
     let cwd = std::env::current_dir().context("could not read the current directory")?;
+    run_at(&cwd, opts)
+}
+
+// trace:STORY-2475 | ai:codex
+pub(crate) fn run_at(cwd: &Path, opts: FromSeatOptions) -> Result<()> {
     run_from(
-        &cwd,
+        cwd,
         opts,
         &Deps {
             bundle: &crate::seat_clone::bundle_branch,
