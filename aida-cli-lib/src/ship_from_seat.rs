@@ -1027,7 +1027,7 @@ pub(crate) fn seat_pr_body(message: &str, seat_name: &str) -> String {
 }
 
 /// Open the PR for a published seat branch at `tip`: titled from the owning
-/// spec, its body [`seat_pr_body`].
+/// spec when the commit subject is generic, its body [`seat_pr_body`].
 // trace:BUG-HOME-038 | ai:claude
 fn open_seat_pr(
     forge: &dyn crate::forge::Forge,
@@ -1072,13 +1072,24 @@ fn open_seat_pr(
 /// Recognize the old rework summary independently of AI attribution/scope.
 // trace:TASK-2891 | ai:codex
 fn generic_rework_title(title: &str) -> bool {
+    let title = title.trim();
+    let title = if title.starts_with("[AI:") {
+        title.split_once(']').map_or(title, |(_, rest)| rest.trim())
+    } else {
+        title
+    };
     let summary = title.split_once(": ").map_or(title, |(_, rest)| rest);
-    summary == "address CI failures and review findings"
-        || summary.starts_with("address CI failures and review findings (")
+    let summary = summary.split_once('(').map_or(summary, |(head, _)| head);
+    summary
+        .trim()
+        .eq_ignore_ascii_case("address CI failures and review findings")
 }
 
 // trace:TASK-2891 | ai:codex
 fn publication_title(main: &Path, spec: &str, subject: &str) -> Result<String> {
+    if !generic_rework_title(subject) {
+        return seat_pr_title(None, subject);
+    }
     let store = crate::load_store_for_lookup(main);
     let requirement = store.as_ref().and_then(|store| {
         store.requirements.iter().find(|r| {
@@ -1094,7 +1105,9 @@ fn publication_title(main: &Path, spec: &str, subject: &str) -> Result<String> {
 }
 
 /// Spec text supplies the summary and, when conventional, its type/scope.
-/// Otherwise use the requirement type and feature. Keep the commit's AI tag
+/// Preserve descriptive commit subjects. For generic subjects, prefer the
+/// commit's conventional prefix over the requirement type/feature default.
+/// Keep the commit's AI tag
 /// and exact authority-bearing suffix: a salvage Refs must stay a Refs, and
 /// a multi-spec completion group must neither lose nor gain IDs.
 // trace:TASK-2891 | ai:codex
@@ -1107,11 +1120,12 @@ pub(crate) fn seat_pr_title(
         !subject.is_empty(),
         "the seat's commit has an empty subject; cannot title the PR"
     );
-    let Some(requirement) = requirement else {
-        anyhow::ensure!(!generic_rework_title(subject),
-            "cannot derive a descriptive PR title: the owning spec is unavailable; restore store access and retry");
+    if !generic_rework_title(subject) {
         return Ok(subject.to_string());
-    };
+    }
+    let requirement = requirement.ok_or_else(|| anyhow::anyhow!(
+        "cannot derive a descriptive PR title: the owning spec is unavailable; restore store access and retry"
+    ))?;
     // Retain all adjacent completing/reference groups verbatim. Do not infer
     // completion authority from the spec whose prose supplies the summary.
     let mut head = subject;
@@ -1121,7 +1135,7 @@ pub(crate) fn seat_pr_title(
         {
             break;
         }
-        let Some(at) = head.rfind(" (") else { break };
+        let Some(at) = head.rfind('(') else { break };
         head = head[..at].trim_end();
     }
     let suffix = &subject[head.len()..];
@@ -1180,7 +1194,21 @@ pub(crate) fn seat_pr_title(
                 format!("({token})")
             }
         };
-        format!("{kind}{scope}: {title}")
+        let commit_head = ai
+            .and_then(|tag| head.strip_prefix(tag))
+            .unwrap_or(head)
+            .trim();
+        let prefix = if conventional.is_match(commit_head) {
+            commit_head.split_once(':').map(|(prefix, _)| prefix)
+        } else {
+            None
+        };
+        format!(
+            "{}: {title}",
+            prefix
+                .map(str::to_string)
+                .unwrap_or_else(|| format!("{kind}{scope}"))
+        )
     };
     let title = format!(
         "{}{summary}{refs}{suffix}",

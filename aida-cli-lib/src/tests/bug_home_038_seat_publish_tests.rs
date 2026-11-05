@@ -1442,7 +1442,10 @@ fn task_2891_spec_title_preserves_attribution_and_authority() {
     ] {
         let subject = format!("[AI:codex] fix: address CI failures and review findings {trailer}");
         let title = seat_pr_title(Some(&req), &subject).unwrap();
-        assert_eq!(title, format!("[AI:codex] fix(regeneration-controls): Validate committed fractional aggregates {trailer}"));
+        assert_eq!(
+            title,
+            format!("[AI:codex] fix: Validate committed fractional aggregates {trailer}")
+        );
         assert_eq!(
             crate::pr_ship::extract_trailing_spec_ids_from_subject(&title),
             crate::pr_ship::extract_trailing_spec_ids_from_subject(&subject)
@@ -1460,30 +1463,38 @@ fn task_2891_spec_title_preserves_attribution_and_authority() {
     assert_eq!(crate::pr_ship::refs_spec_ids_in_text(&title), vec!["BUG-1"]);
     let req = title_spec("fix(regen): validate committed fractional aggregates");
     assert_eq!(
-        seat_pr_title(Some(&req), "[AI:claude] chore(seat): leftover work (BUG-1)").unwrap(),
+        seat_pr_title(
+            Some(&req),
+            "[AI:claude] chore(seat): address CI failures and review findings (BUG-1)"
+        )
+        .unwrap(),
         "[AI:claude] fix(regen): validate committed fractional aggregates (BUG-1)"
     );
     assert!(seat_pr_title(
         Some(&title_spec("Validate aggregates (TASK-99)")),
-        "fix: work"
+        "fix: address CI failures and review findings"
     )
     .is_err());
     assert!(seat_pr_title(
         Some(&title_spec("Validate (Refs TASK-99) aggregates")),
-        "fix: work (BUG-1)"
+        "fix: address CI failures and review findings (BUG-1)"
     )
     .is_err());
     let req = title_spec("Validate aggregates");
     assert_eq!(
-        seat_pr_title(Some(&req), "fix: work without completion credit").unwrap(),
-        "fix(regeneration-controls): Validate aggregates"
+        seat_pr_title(Some(&req), "fix: address CI failures and review findings").unwrap(),
+        "fix: Validate aggregates"
     );
     assert!(seat_pr_title(None, "fix: address CI failures and review findings (BUG-1)").is_err());
     assert_eq!(
         seat_pr_title(None, "fix(regen): validate aggregates (BUG-1)").unwrap(),
         "fix(regen): validate aggregates (BUG-1)"
     );
-    assert!(seat_pr_title(Some(&title_spec("  ")), "fix: work (BUG-1)").is_err());
+    assert!(seat_pr_title(
+        Some(&title_spec("  ")),
+        "fix: address CI failures and review findings (BUG-1)"
+    )
+    .is_err());
 }
 
 /// Drive real bundle publication with a spec-backed title, then the rework
@@ -1533,9 +1544,24 @@ fn task_2891_publication_opens_and_repairs_spec_titles() {
         branch: "seat-titles".into(),
         base: "main".into(),
         title: Some(
-            "[AI:codex] fix: address CI failures and review findings (BUG-1 TASK-2)".into(),
+            "[AI:codex] fix: Address CI failures and review findings   (BUG-1 TASK-2)".into(),
         ),
     });
+    std::fs::remove_file(fx.main.join("requirements.yaml")).unwrap();
+    let err = run(&forge).unwrap_err().to_string();
+    assert!(
+        err.contains("the owning spec is unavailable; restore store access and retry"),
+        "{err}"
+    );
+    assert_eq!(
+        handoffs.get(),
+        1,
+        "unavailable spec must prevent after_open"
+    );
+    assert!(forge.retitled.lock().unwrap().is_empty());
+    aida_core::Storage::new(fx.main.join("requirements.yaml"))
+        .save(&store)
+        .unwrap();
     forge.retitle_error = Some("forge edit refused".into());
     assert!(run(&forge)
         .unwrap_err()
@@ -1546,7 +1572,7 @@ fn task_2891_publication_opens_and_repairs_spec_titles() {
     run(&forge).unwrap();
     assert_eq!(
         *forge.retitled.lock().unwrap(),
-        vec![(77, expected.replace("(BUG-1)", "(BUG-1 TASK-2)"))]
+        vec![(77, expected.replace(" (BUG-1)", "   (BUG-1 TASK-2)"))]
     );
     if let crate::forge::ChangeLookup::Found(change) = &mut forge.open_for_branch {
         change.title = Some("fix(regen): author-selected descriptive summary (BUG-1)".into());
@@ -1571,9 +1597,56 @@ fn task_2891_default_type_scope_and_single_line_summary() {
         req.req_type = kind;
         req.feature = "Uncategorized".into();
         assert_eq!(
-            crate::ship_from_seat::seat_pr_title(Some(&req), "[AI:codex] fix: rework (BUG-1)")
-                .unwrap(),
+            crate::ship_from_seat::seat_pr_title(
+                Some(&req),
+                "[AI:codex] address CI failures and review findings (BUG-1)"
+            )
+            .unwrap(),
             format!("[AI:codex] {prefix}: Repair publication titles (BUG-1)")
         );
+    }
+}
+
+// trace:TASK-2891 | ai:codex
+#[test]
+fn task_2891_descriptive_subject_survives_truncated_finding_title() {
+    let mut req = title_spec(
+        "cosmetic: squash title 'fix: address CI failures and review findings' is generi…",
+    );
+    req.req_type = aida_core::RequirementType::Task;
+    for subject in [
+        "[AI:codex] fix(ship): derive seat PR titles from owning specs (TASK-2891)",
+        "fix: foo(BUG-1)",
+    ] {
+        assert_eq!(
+            crate::ship_from_seat::seat_pr_title(Some(&req), subject).unwrap(),
+            subject
+        );
+    }
+}
+
+// trace:TASK-2891 | ai:codex
+#[test]
+fn task_2891_generic_subject_normalization_and_adjacent_credit() {
+    let mut req = title_spec("Repair publication titles");
+    req.req_type = aida_core::RequirementType::Task;
+    for (subject, suffix) in [
+        (
+            "[AI:codex] fix(ship): Address CI failures and review findings(BUG-1)",
+            "(BUG-1)",
+        ),
+        (
+            "[AI:codex] fix(ship): ADDRESS CI FAILURES AND REVIEW FINDINGS   (BUG-1)",
+            "   (BUG-1)",
+        ),
+    ] {
+        assert_eq!(
+            crate::ship_from_seat::seat_pr_title(Some(&req), subject).unwrap(),
+            format!("[AI:codex] fix(ship): Repair publication titles{suffix}")
+        );
+        let err = crate::ship_from_seat::seat_pr_title(None, subject)
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("the owning spec is unavailable"), "{err}");
     }
 }
