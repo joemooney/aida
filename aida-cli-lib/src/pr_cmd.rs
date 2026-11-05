@@ -7891,6 +7891,7 @@ mod pr_ship_environment_tests {
                    echo main\n\
                    exit 0\n\
                  fi\n\
+                 if [ \"$1\" = pr ] && [ \"$2\" = list ]; then exit 0; fi\n\
                  printf '%s\\n' \"$*\" > '{}'\n\
                  test \"$1\" = pr\n\
                  test \"$2\" = create\n\

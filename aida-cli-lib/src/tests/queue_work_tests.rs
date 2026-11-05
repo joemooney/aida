@@ -355,68 +355,6 @@ fn approved_or_review_pickup_does_not_use_pr_head_branch() {
     assert!(!queue_work_plan_wants_pr_head_branch(&review_plan));
 }
 
-// BUG-022: `aida queue rework` returns the spec to Approved, so a Rework hold
-// on its open PR — not the status — is what routes the lane onto that PR.
-// trace:BUG-b6b1278890774ef993d2ebc327862470-022 | ai:claude
-#[test]
-fn rework_held_approved_pickup_wants_pr_head_branch() {
-    let r = req("TASK-116", None, RequirementType::Task);
-    let approved = resolved("TASK-116", entry(r.id, Some("implementer"), None));
-    let plan = plan_with(QueueWorkMode::Item, "TASK-116", vec![approved]);
-
-    assert!(queue_work_wants_rework_pr_branch(&plan, None, true));
-    assert!(!queue_work_wants_rework_pr_branch(&plan, None, false));
-}
-
-// trace:BUG-b6b1278890774ef993d2ebc327862470-022 | ai:claude
-#[test]
-fn explicit_branch_forks_even_with_rework_hold() {
-    let r = req("TASK-116", None, RequirementType::Task);
-    let e = resolved_with_status(
-        "TASK-116",
-        entry(r.id, Some("implementer"), None),
-        "In Progress",
-    );
-    let plan = plan_with(QueueWorkMode::Item, "TASK-116", vec![e]);
-
-    assert!(!queue_work_wants_rework_pr_branch(
-        &plan,
-        Some("task-116-alt"),
-        true
-    ));
-}
-
-// trace:BUG-b6b1278890774ef993d2ebc327862470-022 | ai:claude
-#[test]
-fn rework_hold_does_not_reroute_review_or_cluster_pickups() {
-    let review = resolved("PR-3107", entry(Uuid::now_v7(), Some("reviewer"), None));
-    let review_plan = plan_with(QueueWorkMode::Item, "PR-3107", vec![review]);
-    assert!(!queue_work_wants_rework_pr_branch(&review_plan, None, true));
-
-    let a = req("TASK-116", None, RequirementType::Task);
-    let b = req("TASK-117", None, RequirementType::Task);
-    let cluster = plan_with(
-        QueueWorkMode::Cluster,
-        "EPIC-3",
-        vec![
-            resolved("TASK-116", entry(a.id, Some("implementer"), None)),
-            resolved("TASK-117", entry(b.id, Some("implementer"), None)),
-        ],
-    );
-    assert!(!queue_work_wants_rework_pr_branch(&cluster, None, true));
-}
-
-// trace:BUG-b6b1278890774ef993d2ebc327862470-022 | ai:claude
-#[test]
-fn held_pr_is_accepted_without_a_metadata_match() {
-    // The hold names the spec, so its PR is taken even when its branch
-    // (`...-116`, a different suffix) would not match by name.
-    assert!(rework_pr_head_accepted(&[3107], 3107, || false));
-    // An unheld PR still has to name the spec.
-    assert!(!rework_pr_head_accepted(&[3107], 3109, || false));
-    assert!(rework_pr_head_accepted(&[], 3109, || true));
-}
-
 /// Single-role cluster → that role, "cluster-derived", no warnings.
 #[test]
 fn role_uniform_cluster_picks_that_role() {
@@ -4514,4 +4452,59 @@ fn bug_1957_rework_match_hold_never_unmatches_the_specs_own_pr() {
         "fix: prose",
         "Traces TASK-1538.",
     ));
+}
+
+// trace:BUG-2451 | ai:codex
+#[test]
+fn bug_2451_queue_pickup_uses_pr_head_at_every_workable_status() {
+    let mut forge = crate::forge::fake::RecordingForge::new();
+    forge.open_for_spec = crate::forge::ChangeLookup::Found(crate::forge::ChangeRef {
+        id: 42,
+        url: String::new(),
+        branch: "original-pr".into(),
+        base: "main".into(),
+        title: None,
+    });
+    for status in ["Approved", "In Progress", "Needs Attention"] {
+        let r = req("TASK-116", None, RequirementType::Task);
+        let plan = plan_with(
+            QueueWorkMode::Item,
+            "TASK-116",
+            vec![resolved_with_status(
+                "TASK-116",
+                entry(r.id, Some("implementer"), None),
+                status,
+            )],
+        );
+        assert_eq!(
+            rework_pr_head_branch_override(&forge, &plan, None).unwrap(),
+            Some((42, "original-pr".into()))
+        );
+        assert!(rework_pr_head_branch_override(&forge, &plan, Some("new-2")).is_err());
+    }
+}
+
+// trace:BUG-2451 | ai:codex
+#[test]
+fn bug_2451_cluster_cannot_fork_away_from_a_members_open_pr() {
+    let mut forge = crate::forge::fake::RecordingForge::new();
+    forge.open_for_spec = crate::forge::ChangeLookup::Found(crate::forge::ChangeRef {
+        id: 42,
+        url: String::new(),
+        branch: "original-pr".into(),
+        base: "main".into(),
+        title: None,
+    });
+    let plan = plan_with(
+        QueueWorkMode::Cluster,
+        "EPIC-3",
+        vec![
+            resolved("TASK-116", entry(Uuid::now_v7(), Some("implementer"), None)),
+            resolved("TASK-117", entry(Uuid::now_v7(), Some("implementer"), None)),
+        ],
+    );
+    assert!(rework_pr_head_branch_override(&forge, &plan, None)
+        .unwrap_err()
+        .to_string()
+        .contains("individually"));
 }

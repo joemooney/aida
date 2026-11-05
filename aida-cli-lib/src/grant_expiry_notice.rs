@@ -57,6 +57,18 @@ struct Ledger {
     crossed: u8,
 }
 
+// trace:BUG-2451 | ai:codex
+struct NoticeLock(std::fs::File);
+
+impl Drop for NoticeLock {
+    fn drop(&mut self) {
+        // A concurrent fork can retain this open file description until exec.
+        // Explicitly unlock on every exit, including deduplication and errors,
+        // rather than waiting for the last inherited descriptor to close.
+        let _ = FileExt::unlock(&self.0);
+    }
+}
+
 fn threshold(left: Duration) -> u8 {
     if left <= Duration::zero() {
         3
@@ -90,6 +102,7 @@ fn claim(base: &Path, id: &str, epoch: &str, crossing: u8) -> Result<bool> {
         Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => return Ok(false),
         Err(error) => return Err(error.into()),
     }
+    let _lock = NoticeLock(lock);
     let path = dir.join("notice.json");
     let mut ledger: Ledger = match std::fs::read(&path) {
         Ok(bytes) => serde_json::from_slice(&bytes).context("invalid expiry notice ledger")?,

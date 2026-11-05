@@ -1132,7 +1132,8 @@ fn an_explicit_clone_refuses_review_reentry_and_a_non_seat_path() {
     let start = |owns: &str, path: Option<&std::path::Path>, force_claim: bool| {
         crate::session_start::session_start(
             owns,
-            None,
+            // trace:BUG-2451 | ai:codex — reentry explicitly selects the existing branch.
+            (owns == "TASK-2178").then_some("task-2178"),
             None,
             false,
             path.map(|p| p.to_str().unwrap()),

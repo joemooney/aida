@@ -294,6 +294,33 @@ fn task_2707_notice_leaf_epoch_and_crossed_dedup() {
     assert!(!dir.path().join(format!("{id}.notice.json")).exists());
 }
 
+// trace:BUG-2451 | ai:codex
+#[test]
+fn task_2707_notice_unlocks_with_an_inherited_descriptor() {
+    let dir = tempfile::tempdir().unwrap();
+    let id = "11111111-1111-4111-8111-111111111111";
+    let leaf = dir.path().join(id);
+    std::fs::create_dir(&leaf).unwrap();
+    let file = std::fs::OpenOptions::new()
+        .create(true)
+        .truncate(false)
+        .read(true)
+        .write(true)
+        .open(leaf.join("notice.lock"))
+        .unwrap();
+    file.try_lock_exclusive().unwrap();
+    // dup shares the open file description just as fork does, deterministically
+    // retaining the descriptor that a parallel process spawn can inherit.
+    let inherited = file.try_clone().unwrap();
+    let guard = NoticeLock(file);
+    assert!(!claim(dir.path(), id, "epoch", 1).unwrap());
+    drop(guard);
+    assert!(claim(dir.path(), id, "epoch", 1).unwrap());
+    assert!(!claim(dir.path(), id, "epoch", 1).unwrap());
+    assert!(claim(dir.path(), id, "epoch", 2).unwrap());
+    drop(inherited);
+}
+
 /// TASK-2708 ruling 4: the legacy sweep runs ONCE. After the first complete
 /// pass, a marker in the grant-notices base makes later hook calls skip the
 /// session-grants readdir, so a legacy file planted afterwards survives.

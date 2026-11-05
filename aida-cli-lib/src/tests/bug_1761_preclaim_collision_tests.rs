@@ -3,9 +3,9 @@ use super::{
     PreclaimDecision, QueueWorkEntry, QueueWorkMode, QueueWorkPlan,
 };
 
-// trace:BUG-1761 | ai:codex
+// trace:BUG-1761 BUG-2451 | ai:codex
 #[test]
-fn open_pr_refusal_names_pr_spec_and_both_recovery_actions() {
+fn open_pr_refusal_names_pr_spec_and_existing_branch_recovery() {
     let decision = preclaim_collision_check(
         "BUG-1819",
         Some((
@@ -26,8 +26,8 @@ fn open_pr_refusal_names_pr_spec_and_both_recovery_actions() {
         "Fix the pickup",
         "https://github.com/example/aida/pull/2319",
         "OPEN",
-        "--from-pr",
-        "--force-claim",
+        "aida queue work BUG-1819",
+        "retain its head branch",
     ] {
         assert!(
             message.contains(expected),
@@ -67,7 +67,7 @@ fn force_claim_bypasses_open_pr_refusal() {
     );
 }
 
-// trace:BUG-1761 | ai:codex
+// trace:BUG-1761 BUG-2451 | ai:codex
 #[test]
 fn stale_branch_refusal_names_branch_without_suggesting_suffix() {
     let decision =
@@ -77,7 +77,7 @@ fn stale_branch_refusal_names_branch_without_suggesting_suffix() {
     };
     assert!(message.contains("bug-7"));
     assert!(message.contains("no open PR"));
-    assert!(message.contains("--force-claim"));
+    assert!(!message.contains("--force-claim"));
     assert!(message.contains("--branch <name>"));
     assert!(message.contains("delete the stale branch"));
     assert!(message.contains("will not silently allocate `bug-7-2`"));

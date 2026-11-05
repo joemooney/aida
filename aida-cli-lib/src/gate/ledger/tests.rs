@@ -2191,3 +2191,107 @@ fn verdicts_at_a_commit_keep_the_newest_record_per_key_in_ledger_order() {
 // trace:STORY-2324 | ai:claude — every writer stamps the canonical key.
 #[path = "story_2324_writer_tests.rs"]
 mod story_2324_writers;
+
+// trace:BUG-2451 | ai:codex
+#[test]
+fn bug_2451_publication_reuses_existing_head_and_refuses_duplicate_or_unknown() {
+    let _env = uncontained();
+    let (_tmp, root) = root();
+    let mut forge = crate::forge::fake::RecordingForge::new();
+    forge.opens_as = Some(99);
+    let existing = crate::forge::ChangeRef {
+        id: 42,
+        url: "https://example.invalid/42".into(),
+        branch: "original".into(),
+        base: "main".into(),
+        title: None,
+    };
+    forge.open_for_spec = crate::forge::ChangeLookup::Found(existing.clone());
+    let mut req = crate::forge::OpenChange {
+        branch: "duplicate-2".into(),
+        base: "main".into(),
+        title: "fix".into(),
+        body: String::new(),
+        draft: false,
+    };
+    let specs = vec!["BUG-2451".into()];
+    assert!(super::open_change_bound(&forge, &root, req.clone(), &specs)
+        .unwrap_err()
+        .to_string()
+        .contains("refusing a second"));
+    req.branch = "original".into();
+    assert_eq!(
+        super::open_change_bound(&forge, &root, req.clone(), &specs)
+            .unwrap()
+            .id,
+        existing.id
+    );
+    forge.open_for_spec = crate::forge::ChangeLookup::Unreachable("offline".into());
+    assert!(super::open_change_bound(&forge, &root, req, &specs).is_err());
+    assert!(forge.opened.lock().unwrap().is_empty());
+}
+
+// trace:BUG-2451 | ai:codex
+#[test]
+fn bug_2451_train_publication_accepts_only_its_listed_riders() {
+    let _env = uncontained();
+    let (_tmp, root) = root();
+    let mut forge = crate::forge::fake::RecordingForge::new();
+    forge.opens_as = Some(99);
+    forge.open_for_spec = crate::forge::ChangeLookup::Found(crate::forge::ChangeRef {
+        id: 42,
+        url: String::new(),
+        branch: "rider".into(),
+        base: "main".into(),
+        title: None,
+    });
+    let req = crate::forge::OpenChange {
+        branch: "train/fix".into(),
+        base: "main".into(),
+        title: "train".into(),
+        body: String::new(),
+        draft: false,
+    };
+    let specs = vec!["BUG-2451".into()];
+    assert!(
+        super::open_change_bound_with_riders(&forge, &root, req.clone(), &specs, &[41]).is_err()
+    );
+    assert!(forge.opened.lock().unwrap().is_empty());
+    let train = super::open_change_bound_with_riders(&forge, &root, req, &specs, &[42]).unwrap();
+    assert_eq!(train.id, 99);
+    assert_eq!(forge.opened.lock().unwrap().len(), 1);
+}
+
+// trace:BUG-2451 | ai:codex
+#[test]
+fn bug_2451_publication_refuses_two_found_changes_even_from_original_head() {
+    let _env = uncontained();
+    let (_tmp, root) = root();
+    let mut forge = crate::forge::fake::RecordingForge::new();
+    forge.all_for_spec = Some(
+        [42, 43]
+            .into_iter()
+            .map(|id| crate::forge::ChangeRef {
+                id,
+                branch: format!("head-{id}"),
+                url: String::new(),
+                base: "main".into(),
+                title: None,
+            })
+            .collect(),
+    );
+    for branch in ["head-42", "head-43", "new-head"] {
+        let req = crate::forge::OpenChange {
+            branch: branch.into(),
+            base: "main".into(),
+            title: "fix".into(),
+            body: String::new(),
+            draft: false,
+        };
+        let error = super::open_change_bound(&forge, &root, req, &["BUG-2451".into()])
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("#42") && error.contains("#43"), "{error}");
+    }
+    assert!(forge.opened.lock().unwrap().is_empty());
+}

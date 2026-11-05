@@ -83,6 +83,7 @@ fn adopt_as(owns: &str, branch: &str, path: &Path, contained: bool) -> anyhow::R
         /* contained_seat */ contained,
         /* rollback_failed_setup */ false,
         crate::session_start::PathReentry::AdoptOrphan,
+        None,
     )
     .map(|mut receipt| receipt.disarm())
 }
@@ -606,7 +607,7 @@ fn queue_work_as(
 
 /// An Approved requirement for `scope`, queued for the hermetic test user,
 /// in `main`'s store; returns the storage and a setter for its status.
-fn queued_scope(
+pub(super) fn queued_scope(
     main: &Path,
     scope: &str,
 ) -> (crate::Storage, impl Fn(aida_core::RequirementStatus)) {

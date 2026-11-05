@@ -1138,6 +1138,9 @@ pub(crate) fn session_end_with_discard_unpushed(
     // run outside the sandbox). An unreadable clone is kept: fail closed.
     // trace:TASK-2053 | ai:claude
     let is_clone = target.tree_kind == crate::seat_clone::TreeKind::Clone;
+    // Explicit discard may release an unreadable seat, but never deletes its data.
+    // trace:BUG-2454 | ai:codex
+    let mut unreadable_clone = None;
     let clone_facts = if is_clone {
         // TASK-2110: a squash-merged PR's head counts as shipped.
         // trace:TASK-2110 | ai:claude
@@ -1153,9 +1156,21 @@ pub(crate) fn session_end_with_discard_unpushed(
             None,
         ) {
             crate::seat_clone::Probe::Known(facts) => Some(facts),
+            crate::seat_clone::Probe::Unknown(why) if force && discard_unpushed => {
+                eprintln!(
+                    "Warning: seat clone {} could not be read ({why}); ending the session \
+                     with explicit discard, but keeping the clone, cargo target and base pin \
+                     for recovery. No salvage can be guaranteed.",
+                    target.worktree_path.display()
+                );
+                unreadable_clone = Some(why);
+                None
+            }
             crate::seat_clone::Probe::Unknown(why) => anyhow::bail!(
                 "session {} works in the seat clone {}, whose state could not be read ({why}). \
-                 The session was NOT ended: its lease, clone and base pin are unchanged.",
+                 The session was NOT ended: its lease, clone and base pin are unchanged. \
+                 Retry with --force --discard-unpushed to release the lease while keeping \
+                 the unreadable clone for recovery.",
                 &target.id[..target.id.len().min(8)],
                 target.worktree_path.display(),
             ),
@@ -1189,6 +1204,7 @@ pub(crate) fn session_end_with_discard_unpushed(
     // TASK-2053: a clone's branch is not in main; its count is the probe's.
     let commits_ahead = match &clone_facts {
         Some(facts) => Some(u32::try_from(facts.unpushed).unwrap_or(u32::MAX)),
+        None if is_clone => None,
         None => branch_unshipped_patch_count_default(&project_root, &target.branch)
             .or_else(|| branch_commits_ahead_main(&project_root, &target.branch)),
     };
@@ -1435,7 +1451,10 @@ pub(crate) fn session_end_with_discard_unpushed(
         lease_path(&project_root, &target.id).display()
     );
     // BUG-734: only promise a worktree removal when there is one.
-    if is_clone {
+    // trace:BUG-2454 | ai:codex
+    if unreadable_clone.is_some() {
+        eprintln!("  - keep the unreadable seat clone, cargo target and base pin for recovery");
+    } else if is_clone {
         // trace:TASK-2053 | ai:claude
         eprintln!(
             "  - remove seat clone {} and its cargo target dir; salvage any work origin does \
@@ -1526,6 +1545,10 @@ pub(crate) fn session_end_with_discard_unpushed(
         // commits origin lacks, so a refusal is never an empty list.
         // trace:BUG-2224 trace:BUG-B6B1278890774EF993D2EBC327862470-051 | ai:claude
         crate::seat_clone::unshipped_items(facts)
+    } else if is_clone {
+        // Unknown is not clean; explicit discard retains the entire clone.
+        // Never fall back to host git in this seat. trace:BUG-2454 | ai:codex
+        Vec::new()
     } else if has_worktree {
         dirty_entries_ignoring_runtime_links(
             &target.worktree_path,
@@ -1538,11 +1561,9 @@ pub(crate) fn session_end_with_discard_unpushed(
     // commit already on `origin/<branch>` (the branch moved on under it from
     // another worktree) loses nothing; it is not dirty for this gate.
     // trace:TASK-1955 | ai:claude (BUG-2205)
-    let dirty_entries = if staged_tree_is_pushed(
-        &target.worktree_path,
-        &target.branch,
-        &dirty_entries,
-    ) {
+    let dirty_entries = if !is_clone
+        && staged_tree_is_pushed(&target.worktree_path, &target.branch, &dirty_entries)
+    {
         eprintln!(
             "{} worktree {} has only staged changes, and they match a commit already pushed to origin/{}; nothing is lost by ending it",
             crate::glyph(crate::glyphs::Glyph::Info).cyan(),
@@ -1726,7 +1747,7 @@ pub(crate) fn session_end_with_discard_unpushed(
     // child grant is revoked. The BUG-1988 cleanup tail does not run.
     // trace:STORY-1843 | ai:claude
     let mut retirement = None;
-    if tears_down_worktree {
+    if tears_down_worktree && unreadable_clone.is_none() {
         match crate::mail_retention::retire_tree(
             &project_root,
             &target.worktree_path,
@@ -1857,6 +1878,17 @@ pub(crate) fn session_end_with_discard_unpushed(
             target.worktree_path.display(),
             peer.id.yellow(),
             peer.scope
+        );
+    } else if let Some(why) = &unreadable_clone {
+        // Do not retry the failed probe or retire mail from a retained clone.
+        // Holder checks and ordinary lease/grant cleanup still apply.
+        // trace:BUG-2454 | ai:codex
+        clone_kept = true;
+        eprintln!(
+            "Warning: seat clone {} retained ({why}); run `aida worktree dismiss {}` \
+             once it is readable. Its base pin and cargo target are also retained.",
+            target.worktree_path.display(),
+            target.worktree_path.display()
         );
     } else if is_clone {
         // TASK-2053: the only teardown for a seat clone. The dirty gate above

@@ -249,11 +249,12 @@ pub enum SessionCommand {
         forge: Option<String>,
 
         /// Branch naming style when --branch isn't given.
-        ///   `auto` (default): try slug, then slug-2..-10, then
-        ///                     slug-YYYY-MM-DD, then slug-YYYY-MM-DD-2..-10.
+        ///   `auto` (default): use the scope slug; refuse on collision.
         ///   `date`:           always slug-YYYY-MM-DD (with -N suffix on
         ///                     collision). Useful when every session
         ///                     should be traceable to its date.
+        /// An open PR always fixes the branch to its existing head.
+        // trace:BUG-2451 | ai:codex
         // trace:STORY-65 | ai:claude
         #[clap(long, value_name = "STYLE", default_value = "auto")]
         branch_style: String,

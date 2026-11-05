@@ -2230,7 +2230,7 @@ impl TrainForge for LiveTrainForge<'_> {
             .iter()
             .flat_map(|c| crate::pr_ship::extract_trailing_spec_ids_from_subject(&c.member.subject))
             .collect();
-        crate::gate::ledger::open_change_bound(
+        crate::gate::ledger::open_change_bound_with_riders(
             self.forge,
             &self.main_worktree,
             crate::forge::OpenChange {
@@ -2243,6 +2243,7 @@ impl TrainForge for LiveTrainForge<'_> {
                 draft: false,
             },
             &specs,
+            &train.cars.iter().map(|c| c.member.pr).collect::<Vec<_>>(),
         )
         .inspect(|change| {
             // Dual-write: each rider's change record names the train. // trace:STORY-2325 | ai:claude

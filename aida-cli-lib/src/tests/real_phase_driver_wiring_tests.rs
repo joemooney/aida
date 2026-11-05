@@ -837,6 +837,8 @@ exit 1
 
     let mut driver = driver(&root, "TASK-1224");
     driver.aida_exe = fake_aida;
+    driver.retry_implementer_worktree = Some(root.clone());
+    driver.retry_implementer_branch = Some(branch.to_string());
     driver.no_human = Some(crate::auto_complete::NoHumanMode::Both);
 
     // The fake implementer commits, pushes, "opens" a PR according to gh,
@@ -1428,6 +1430,7 @@ fn fake_gh_that_opens_pr(dir: &std::path::Path, pr_number: u64) -> std::path::Pa
              if [ \"$1\" = \"--version\" ]; then echo 'gh version test'; exit 0; fi\n\
              case \"$*\" in\n\
              \t*\"pr create\"*) echo 'https://github.com/example/aida/pull/{pr_number}'; exit 0 ;;\n\
+             \t*\"pr list\"*) exit 0 ;;\n\
              esac\n\
              exit 1\n"
         ),
@@ -3348,6 +3351,8 @@ exec sleep 120
     let _env = crate::test_env::EnvVarsGuard::set(&[("AIDA_TEST_GH_BINARY", gh.to_str().unwrap())]);
     let mut d = driver(&work, "TASK-1625");
     d.aida_exe = fake_aida;
+    d.retry_implementer_worktree = Some(work.clone());
+    d.retry_implementer_branch = Some("task-1625".to_string());
     d.contained = true;
     d.no_human = Some(crate::auto_complete::NoHumanMode::Both);
     d.drain_tuning.no_progress = std::time::Duration::ZERO;
