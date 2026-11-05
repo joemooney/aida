@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T12:41:58.353194121Z
-modified_at: 2026-11-05T23:12:26.587340691Z
+modified_at: 2026-11-05T23:12:30.886071204Z
 req_type: Task
 tags:
 - from-advisor:STORY-1651
@@ -116,6 +116,24 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: CI lib-0 red at head (base main green). The new pre-bundle reconcile in run_at applies the live-owner and clean-tree checks to every non-dry ship --from-seat. AC1/AC3/AC4 verified by unit tests. AC2 is implemented, but its production path has no test and it regresses the documented seat-commits/host-publishes flow.. No triage reason was given.'
   created_at: 2026-11-05T23:12:26.587338253Z
   modified_at: 2026-11-05T23:12:26.587338253Z
+  session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
+- id: 01a1adfc-3349-7ea1-a6c6-5affb9a7fec6
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (TASK-2879):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 97cd36065267
+    Recorded: 2026-11-05T23:07:31.110605969+00:00
+    Findings:
+    1. CI (lib-0) 'Run tests' step FAILED at 97cd3606 while main's base bdeb8f499 is green. The reviewer sandbox could not fetch the job log (blob host denied), so the failing test is unidentified. Identify and fix it; cli-0/cli-1/lib-1/rest/contracts passed, gates still pending.
+    2. ship_from_seat.rs run_at bundle closure (~L1215-1238) calls pending_commit_preflight (live-owner refusal) and merge_publication_head's clean-tree check on EVERY non-dry publish, before pin_remote_branch even shows the remote exists. A plain 'aida ship --from-seat <clone>' of already-committed work is now refused when the seat's lane process is live, which breaks the documented flow (docs/cli/04-git-lifecycle.md:95 'seat commits there; the host then publishes'). It is also refused for any stray untracked file once the branch exists remotely, and the refusal text says 'refusing to commit the seat's pending work' when nothing was being committed. Run the preflight and merge only when the pinned remote tip is not already an ancestor of the local branch tip, and word the refusal for the merge case.
+    3. ship_from_seat.rs run_at: the remote-head merge commit is written into the seat BEFORE check_staged (diff/trailer/explicit-spec checks) and the push. A later refusal therefore leaves a persisted merge commit in the seat even though the output says nothing was published. Either run the merge after the staged checks pass, or document and test the leftover state.
+    4. ship_from_seat.rs run_at closure resolves the spec with crate::ship::resolve_spec(None, branch, Some(&scope)) and ignores opts.spec. An explicit 'aida ship <SPEC> --from-seat <clone>' that run_from accepted, because its branch/scope names no spec, now fails in the closure with 'could not resolve publication spec'. Pass the already-resolved spec into the closure.
+    5. ship_from_seat.rs run_at merge message hardcodes '[AI:codex] chore(seat): merge remote PR head'. This path runs for every ship --from-seat, including Claude/agy contained seats, which misattributes the AI tool in the commit history. Derive the tag from the seat's vendor or use a neutral host prefix.
+    6. Test gap for AC2: no test drives run_at's production bundle closure end to end (pin_remote_branch + preflight + merge_publication_head + bundle_branch + push against a moved remote). There is also no test that post_exit_commit itself emits a Refs trailer when the forge reports a Refs-titled PR, so the forge lookup wiring in post_exit_commit is untested. Existing tests cover only the pure helpers. Add a fixture-level test with a bare origin whose PR branch moved, plus refusal-path tests (live owner present, conflict) at the run_at level.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-05T23:12:29.001896019Z
+  modified_at: 2026-11-05T23:12:29.001896019Z
   session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
 history:
 - id: 01a1abc2-d856-7cc0-94a6-cbf7448053ba
