@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T13:50:30.827731392Z
-modified_at: 2026-11-05T16:27:14.309204494Z
+modified_at: 2026-11-05T16:30:06.818043931Z
 req_type: Task
 tags:
 - finding
@@ -20,6 +20,12 @@ comments:
   content: 'Investigation reproduced the retained lease with the baseline test plus diagnostic-only assertion output: AIDA_TRUST_PID_NAMESPACE=0 RUST_MIN_STACK=8388608 target/debug/deps/queue_work_dry_run-300600e1df90223b --exact task_1337_post_setup_launch_error_rolls_back_the_owned_setup --nocapture. Cleanup explicitly reports: not verified free of live processes (this process runs in a separate pid namespace ... outside it are hidden). SessionStartCleanup correctly returns before releasing the lease when release_tree refuses. The rollback summary already qualifies that anything kept is named above; the old assertion hid that output. This is a fixture namespace assumption, not failed lease deletion. Fix scoped to this disposable fixture: explicitly set AIDA_TRUST_PID_NAMESPACE=1, matching existing teardown tests, and include captured launch diagnostics in lease assertion failures. No production rollback or process-guard behavior changed. Reproduction log: /tmp/task3110-untrusted.log. Full queue_work_dry_run suite and pre-push gates are running.'
   created_at: 2026-11-05T16:27:14.309204494Z
   modified_at: 2026-11-05T16:27:14.309204494Z
+  session_id: 01a1ac80c18d
+- id: 01a1ac8b-d1e2-7662-999f-ca1425f49ba3
+  author: joe
+  content: 'Committed 45c35ee9d8b: fixture-only namespace trust plus assertion diagnostics. Validation: full queue_work_dry_run suite passed 15/15; direct fixed-test executable with AIDA_TRUST_PID_NAMESPACE=0 in the parent passed 1/1 (18.53s), while the diagnostic-only baseline failed under that same setting (29.33s). cargo fmt --all -- --check and git diff --check passed. make check-ci-fast still running before push. No additional conversational flags found.'
+  created_at: 2026-11-05T16:30:06.818043931Z
+  modified_at: 2026-11-05T16:30:06.818043931Z
   session_id: 01a1ac80c18d
 history:
 - id: 01a1ac7d-217b-7f42-bb89-775b227bd601
