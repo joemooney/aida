@@ -21,7 +21,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T04:40:54.168438456Z
-modified_at: 2026-11-05T05:38:18.419258806Z
+modified_at: 2026-11-05T05:56:52.342932391Z
 req_type: Story
 comments:
 - id: 01a1aa09-5cd4-71a0-98d9-fd711f6a6770
@@ -193,6 +193,11 @@ comments:
   created_at: 2026-11-05T05:35:54.358945235Z
   modified_at: 2026-11-05T05:35:54.358945235Z
   session_id: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
+- id: 01a1aa48-11f6-7c71-afde-b93cfc2b5b5c
+  author: mcp
+  content: 'Slice 1 implementation underway under the master OpenSSH amendment: operator-only enrolled-node roster; canonical JSON + detached sshsig in aida-review-receipt namespace; signed exact-head author-session publications; validated host recorder/collector publication; shared gate/alias/ship/readiness authority projection with current-roster revocation and no local-approval fallback. No grants or human receipts are exported. Watcher reservation synchronization remains slice 2. Initial cargo check passed; two-clone real OpenSSH/collector/gate tests and final checks are in progress.'
+  created_at: 2026-11-05T05:56:52.342916055Z
+  modified_at: 2026-11-05T05:56:52.342916055Z
 history:
 - id: 01a1aa03-2e29-79d0-827e-4c56622f79bd
   author: joe
