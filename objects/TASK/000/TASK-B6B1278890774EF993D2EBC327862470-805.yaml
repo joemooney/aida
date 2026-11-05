@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-805
 agreed_id: TASK-2860
 title: Cross-node review needs portable authority and authorship evidence
 description: 'STORY-2492 design review: synced verdict JSON cannot currently authorize shipping on a second machine. verified_authority_keys requires local grant/parent or human-receipt evidence, while author-session evidence is local too. The proposed portable validated publication receipt and distributed reservation protocol need master sign-off under AGENTS.md Sketch-First Protocol. See docs/plans/2026-11-04-story-2492-cross-machine-review.md; no approval gate has been weakened.'
-status: Done
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T04:48:10.186942102Z
-modified_at: 2026-11-05T18:48:57.954344010Z
+modified_at: 2026-11-05T18:49:05.611522973Z
 req_type: Task
 tags:
 - from-advisor:STORY-2492
@@ -249,6 +249,14 @@ history:
   timestamp: 2026-11-05T18:22:13.261547947Z
   session_id: 01a1acef1adb
   changes: []
+- id: 01a1ad0b-0fd0-72b2-851b-309dc9142019
+  author: joe
+  timestamp: 2026-11-05T18:49:05.744824250Z
+  session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Approved
 filed_at:
   aida_version: 0.16.0
   aida_build_sha: e1fc3f06903
@@ -259,4 +267,5 @@ implementation_info:
   test_coverage_notes: git diff HEAD^ HEAD --check; source inspection of gate authority and watcher history; checked STORY-2492 recorded rulings
   implemented_at: 2026-11-05T18:22:09.922862530Z
   implemented_by: joe
+  reopened_at_sha: c02cb56144d01e1a43da14a1a018906b3bfbe689
 interface_changes: {}
