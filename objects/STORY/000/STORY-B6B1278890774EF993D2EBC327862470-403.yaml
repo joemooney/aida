@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T00:31:51.425362067Z
-modified_at: 2026-11-05T05:00:24.456503785Z
+modified_at: 2026-11-05T05:31:56.530736190Z
 req_type: Story
 relationships:
 - rel_type:
@@ -94,6 +94,13 @@ comments:
   content: Commit 41c14a03d16 references this requirement
   created_at: 2026-11-05T05:00:24.456503785Z
   modified_at: 2026-11-05T05:00:24.456503785Z
+  session_id: 01a1aa1285d1
+  harness_version: 2.1.318 (Claude Code)
+- id: 01a1aa31-3ef2-7663-ab3b-2770092cda14
+  author: joe
+  content: 'Rework brief done: cherry-picked Codex review fixes 84ff97dcf03 onto #3398 branch as 41c14a03d16 and pushed. Conflicts (headless_background, queue_cmd, seat_clone, session, ship_from_seat, queue_work_tests, docs 06-roles-sessions) resolved by taking the review-fixed side, a superset refactor of the original publish path on the same base. Build blockers fixed: CI cli-0/cli-1/lib-1/contracts/rest pass. CI lib-0 still fails, and it also failed on #3407 at 84ff97dcf03, so the failure came in with Codex''s commit. Job logs are blocked by the sandbox, so the failing test is not identified. Local targeted tests: lane runner timed out twice at 900s compiling aida-cli-lib (untested=true). make check-ci-fast cannot finish inside the 60s tool cap.'
+  created_at: 2026-11-05T05:31:56.530736190Z
+  modified_at: 2026-11-05T05:31:56.530736190Z
   session_id: 01a1aa1285d1
   harness_version: 2.1.318 (Claude Code)
 history:

@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T04:41:04.196617281Z
-modified_at: 2026-11-05T05:32:52.918334549Z
+modified_at: 2026-11-05T05:32:58.111281827Z
 req_type: Bug
 comments:
 - id: 01a1aa05-1068-7553-b16c-23edf47a2495
@@ -30,6 +30,19 @@ comments:
     - protocol: bug — missing test-file change (layer: type; no test file in the diff)
   created_at: 2026-11-05T05:32:50.053200841Z
   modified_at: 2026-11-05T05:32:50.053200841Z
+  session_id: 01a1aa054d1b
+- id: 01a1aa32-2f7f-7981-8165-5c03035c6233
+  author: joe
+  content: |
+    Implemented BUG-2450 in the native Codex seat. Exited, clean seats with remote copies of every HEAD/local-branch commit can be reclaimed for review, including already-pushed staged indexes. Unsafe dead seats retain their lease/work and notify the advisor. Watcher setup failures before reviewer spawn are retryable; started/ambiguous reviewer launches remain protected from duplicate attempts.
+
+    Session end now checks remote commit reachability before any teardown and again just before teardown, independent of --force. --discard-unpushed is the explicit override. Private-clone checks remain sandboxed and support pushed explicit refspecs without tracking refs; local host copies alone are not remote coverage. Help snapshot and CLI documentation updated.
+
+    Validation: 10 new regressions passed; affected takeover (30), watcher (43), supersede (23), clone lifecycle (48), mailbox-retention (15), and pushed-index (1) cases verified; help snapshot check, cargo fmt and git diff --check passed. Default CLI check and final --no-default-features check passed. Two optional pre-existing clone capability cases self-skipped (reftable migration unavailable and the special live-bwrap child gate unset); the new live-bwrap regression ran successfully. Container fixtures explicitly trust their own isolated PID namespace; production safety remains unchanged.
+
+    Native-seat handoff: .git is read-only in this process (git add refuses with read-only filesystem), so changes are intentionally pending for the documented host post-exit commit and from-seat publication workflow. The launcher can commit after this process exits; publish from the host with aida ship BUG-2450 --from-seat /home/joe/ai/aida-worktrees/aida-seat-aida-bug-b6b1278890774ef993d2ebc327862470-216. Suggested subject: [AI:codex] fix(sessions): reclaim exited leases and protect unpushed commits (BUG-2450). No PR ship or review-record command was run.
+  created_at: 2026-11-05T05:32:58.111281827Z
+  modified_at: 2026-11-05T05:32:58.111281827Z
   session_id: 01a1aa054d1b
 history:
 - id: 01a1aa04-0d9a-7422-b7ac-32092a03e6ee
