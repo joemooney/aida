@@ -21,7 +21,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T04:40:54.168438456Z
-modified_at: 2026-11-05T05:56:52.342932391Z
+modified_at: 2026-11-05T06:11:29.219889946Z
 req_type: Story
 comments:
 - id: 01a1aa09-5cd4-71a0-98d9-fd711f6a6770
@@ -198,6 +198,11 @@ comments:
   content: 'Slice 1 implementation underway under the master OpenSSH amendment: operator-only enrolled-node roster; canonical JSON + detached sshsig in aida-review-receipt namespace; signed exact-head author-session publications; validated host recorder/collector publication; shared gate/alias/ship/readiness authority projection with current-roster revocation and no local-approval fallback. No grants or human receipts are exported. Watcher reservation synchronization remains slice 2. Initial cargo check passed; two-clone real OpenSSH/collector/gate tests and final checks are in progress.'
   created_at: 2026-11-05T05:56:52.342916055Z
   modified_at: 2026-11-05T05:56:52.342916055Z
+- id: 01a1aa55-7343-7260-a81c-892e74a2dbfa
+  author: mcp
+  content: 'Direct native validation: both real-OpenSSH two-clone collector/ship-gate tests passed (2/2), covering exact-head approval without B''s local receipt on A, stale-head refusal, request-changes findings, concurrent store advancement, local-approval disagreement, revocation, resumed author rejection, invalid authority, unsupported schema and committed symlink refusal. CLI help snapshot regenerated; broader touched-area and fast CI checks are underway. Publication boundary: `aida ship STORY-2492 --no-merge --dry-run` explicitly refuses this native Codex seat and directs leaving edits uncommitted for the lane''s host-side exit step. No attempt to bypass that refusal, no PR, review record, merge or ship action. `aida lane job run` also reports that this standalone lease has no lane runner (formal untested=true); direct Cargo checks are best-effort evidence, separately reported.'
+  created_at: 2026-11-05T06:11:29.219879877Z
+  modified_at: 2026-11-05T06:11:29.219879877Z
 history:
 - id: 01a1aa03-2e29-79d0-827e-4c56622f79bd
   author: joe
