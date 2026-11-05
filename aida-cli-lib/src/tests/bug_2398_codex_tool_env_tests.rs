@@ -249,7 +249,8 @@ fn real_codex_roles(native: bool) {
         .env("AIDA_SESSION_SCOPE", "TASK-1")
         .env(
             "AIDA_CONTAINMENT_POSTURE",
-            if native { "native" } else { "aida" },
+            // trace:TASK-2708 | ai:claude — `aida` is refused at this finalizer.
+            if native { "native" } else { "none" },
         )
         .env("AIDA_SESSION_ID", "bug2398-independent-session")
         .env("AIDA_AGENT_TYPE", "codex")
@@ -1475,7 +1476,9 @@ fn bug_2398_real_codex_inherit_all_drops_unassigned_launcher_context() {
         .env("AIDA_SESSION_ROLE", "implementer")
         .env("AIDA_USER", "bug2398-child")
         .env("AIDA_PROJECT_ROOT", root)
-        .env("AIDA_CONTAINMENT_POSTURE", "aida")
+        // trace:TASK-2708 | ai:claude — an `aida` stamp is refused by name at
+        // this finalizer; the whitelisted key still carries a public value.
+        .env("AIDA_CONTAINMENT_POSTURE", "native")
         .env("AIDA_AGENT_TYPE", "codex");
     let aida_path = crate::test_exec::matching_aida_cli();
     let _aida_probe = crate::kernel::test_aida_exe::set(aida_path.clone());
@@ -1527,12 +1530,9 @@ fn bug_2398_codex_advisor_consult_delegates_own_child_and_refuses_without_delega
     let project = tmp.path().join("project");
     std::fs::create_dir_all(home.join(".aida")).unwrap();
     std::fs::create_dir_all(&project).unwrap();
-    assert!(Command::new("git")
-        .args(["init", "-q"])
-        .current_dir(&project)
-        .status()
-        .unwrap()
-        .success());
+    // trace:TASK-2708 | ai:claude — a real project (a resolvable default
+    // branch): the finalizer refuses a root whose trusted sha cannot resolve.
+    crate::test_git::commit_fixture(&project);
     let capture = tmp.path().join("advisor-grant.txt");
     let fake = tmp.path().join("fake-codex");
     crate::test_exec::write_executable(
@@ -1865,6 +1865,9 @@ fn bug_2395_hook_under_prepared_codex_launch_sees_seat_role() {
         "purpose = \"Lane fixture purpose\"\n",
     )
     .unwrap();
+    // trace:TASK-2708 | ai:claude — a real project: the finalizer refuses a
+    // root whose trusted default branch cannot be resolved.
+    crate::test_git::commit_fixture(&project);
 
     let mut cmd = Command::new("codex");
     cmd.args(["exec", "--", "prompt"])
@@ -1916,6 +1919,9 @@ fn bug_2395_hook_under_prepared_codex_launch_sees_seat_role() {
 #[test]
 fn bug_2416_guided_codex_launch_is_finalized_by_prepare_launch() {
     let tmp = tempfile::TempDir::new().unwrap();
+    // trace:TASK-2708 | ai:claude — a real project: the finalizer refuses a
+    // root whose trusted default branch cannot be resolved.
+    crate::test_git::commit_fixture(tmp.path());
     let launch = crate::session::GuidedSessionLaunch {
         program: "codex",
         prompt: "guided prompt".into(),
@@ -2016,6 +2022,11 @@ fn bug_2440_wrapped_codex_prepares_with_explicit_command_separator() {
                 child
                     .args(&wrapped)
                     .current_dir(&root)
+                    // The launcher stamps the posture it resolved. This
+                    // fixture root is no git repo, so without the stamp the
+                    // TASK-2708 fail-closed check would (rightly) refuse.
+                    // trace:TASK-2708 | ai:claude
+                    .env("AIDA_CONTAINMENT_POSTURE", "native")
                     .env("AIDA_SESSION_GRANT", "")
                     .env("AIDA_USER", "wrapped-child");
                 prepare_launch(&mut child).unwrap();

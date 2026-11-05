@@ -75,6 +75,9 @@ fn aida(repo: &Path, home: &Path) -> Command {
     // AIDA_USER, AIDA_DEV_*, AIDA_PERMISSION_MODE, ...) is absent by
     // construction now; individual tests still `.env(...)` in the specific
     // values they need (e.g. AIDA_SESSION_ID once a lease exists).
+    // These fixtures own all relevant processes inside their test namespace.
+    // trace:BUG-2450 | ai:codex
+    cmd.env("AIDA_TRUST_PID_NAMESPACE", "1");
     cmd
 }
 
@@ -118,6 +121,14 @@ impl Project {
         git(&repo, &["config", "user.email", "test@example.com"]);
         git(&repo, &["config", "user.name", "Protocol Test"]);
         git(&repo, &["commit", "-q", "--allow-empty", "-m", "init"]);
+        // trace:BUG-2450 | ai:codex — cleanup requires remote commit coverage.
+        let origin = repo.parent().unwrap().join("origin.git");
+        git(&repo, &["init", "-q", "--bare", origin.to_str().unwrap()]);
+        git(
+            &repo,
+            &["remote", "add", "origin", origin.to_str().unwrap()],
+        );
+        git(&repo, &["push", "-q", "origin", "main"]);
         run(
             {
                 let mut cmd = aida(&repo, &home);

@@ -388,6 +388,12 @@ pub(crate) const FACADE_EXTERNAL_LEAVES: &[(&str, &str)] = &[
         "seat name normalisation; feeds authority",
     ),
     ("crate::DoctorFinding", "doctor report row; output only"),
+    // trace:TASK-2708 | ai:claude
+    (
+        "crate::containment::launch::ContainmentReceipt",
+        "contained-worker receipt, re-exported on the floor (kernel_deps); \
+         its accepted worker pid is the only pid a launch grant binds to",
+    ),
     (
         "crate::coordination::hostname",
         "host label on the review marker",

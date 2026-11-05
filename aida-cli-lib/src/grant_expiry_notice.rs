@@ -69,10 +69,14 @@ fn threshold(left: Duration) -> u8 {
     }
 }
 
-fn claim(dir: &Path, id: &str, epoch: &str, crossing: u8) -> Result<bool> {
+fn claim(base: &Path, id: &str, epoch: &str, crossing: u8) -> Result<bool> {
     if crossing == 0 {
         return Ok(false);
     }
+    // trace:TASK-2707 | ai:codex — informational state has its own directory
+    // leaf; the lane never writes canonical grant records or their locks.
+    let dir = base.join(id);
+    std::fs::create_dir_all(&dir)?;
     // Permanent lock inode, never renamed or unlinked. Nonblocking contention
     // defers to the next tool call; the shell hard timeout is the outer bound.
     let lock = std::fs::OpenOptions::new()
@@ -80,13 +84,13 @@ fn claim(dir: &Path, id: &str, epoch: &str, crossing: u8) -> Result<bool> {
         .truncate(false)
         .read(true)
         .write(true)
-        .open(dir.join(format!("{id}.notice.lock")))?;
+        .open(dir.join("notice.lock"))?;
     match lock.try_lock_exclusive() {
         Ok(()) => {}
         Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => return Ok(false),
         Err(error) => return Err(error.into()),
     }
-    let path = dir.join(format!("{id}.notice.json"));
+    let path = dir.join("notice.json");
     let mut ledger: Ledger = match std::fs::read(&path) {
         Ok(bytes) => serde_json::from_slice(&bytes).context("invalid expiry notice ledger")?,
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ledger::default(),
@@ -106,6 +110,65 @@ fn claim(dir: &Path, id: &str, epoch: &str, crossing: u8) -> Result<bool> {
     Ok(true)
 }
 
+// trace:TASK-2707 | ai:codex
+pub(crate) fn notice_base() -> Result<std::path::PathBuf> {
+    Ok(crate::gate::seat_authority::grant_dir()?
+        .parent()
+        .context("grant directory has no parent")?
+        .join("grant-notices"))
+}
+
+pub(crate) fn notice_leaf(id: &str) -> Result<std::path::PathBuf> {
+    anyhow::ensure!(
+        uuid::Uuid::parse_str(id).is_ok(),
+        "invalid notice grant selector"
+    );
+    Ok(notice_base()?.join(id))
+}
+
+/// Marker in the grant-notices base: the one-time legacy sweep has run.
+// trace:TASK-2708 | ai:claude
+const LEGACY_SWEPT_MARKER: &str = ".legacy-notices-swept-v1";
+
+/// Host-only surgery, no migration or compatibility reads. Never unlink the
+/// new permanent lock. A contained caller cannot write session-grants.
+/// ONE-TIME (TASK-2708 ruling 4): the hook runs per tool call, so after the
+/// first complete sweep a marker in the grant-notices base turns every later
+/// call into a single `stat`, never a readdir of session-grants.
+// trace:TASK-2708 | ai:claude
+fn sweep_legacy_notices() {
+    if std::env::var_os("AIDA_CONTAINED").is_some() {
+        return;
+    }
+    if let (Ok(grants), Ok(base)) = (crate::gate::seat_authority::grant_dir(), notice_base()) {
+        sweep_legacy_notices_once(&grants, &base);
+    }
+}
+
+pub(crate) fn sweep_legacy_notices_once(grants: &Path, base: &Path) {
+    let marker = base.join(LEGACY_SWEPT_MARKER);
+    if marker.exists() {
+        return;
+    }
+    match std::fs::read_dir(grants) {
+        Ok(entries) => {
+            for entry in entries.flatten() {
+                let name = entry.file_name();
+                let name = name.to_string_lossy();
+                if name.ends_with(".notice.json") || name.ends_with(".notice.lock") {
+                    let _ = std::fs::remove_file(entry.path());
+                }
+            }
+        }
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        // Unreadable now: retry on a later call rather than marking it done.
+        Err(_) => return,
+    }
+    if std::fs::create_dir_all(base).is_ok() {
+        let _ = std::fs::write(&marker, b"");
+    }
+}
+
 fn notice(root: &Path, now: DateTime<Utc>) -> Result<Option<String>> {
     let Some(grant) = crate::gate::seat_authority::notice_grant(root, now)? else {
         return Ok(None);
@@ -113,12 +176,7 @@ fn notice(root: &Path, now: DateTime<Utc>) -> Result<Option<String>> {
     let crossing = threshold(grant.expiry.expires_at - now);
     // Expiry changes also reset the epoch for an in-place renewal.
     let epoch = format!("{}:{}", grant.id, grant.expiry.expires_at);
-    if !claim(
-        &crate::gate::seat_authority::grant_dir()?,
-        &grant.id,
-        &epoch,
-        crossing,
-    )? {
+    if !claim(&notice_base()?, &grant.id, &epoch, crossing)? {
         return Ok(None);
     }
     let expiry = grant.expiry;
@@ -131,6 +189,7 @@ fn notice(root: &Path, now: DateTime<Utc>) -> Result<Option<String>> {
 }
 
 pub(crate) fn handle(raw_client: &str) -> Result<()> {
+    sweep_legacy_notices();
     let client = match NoticeClient::parse(raw_client) {
         Ok(client) => client,
         Err(error) => {

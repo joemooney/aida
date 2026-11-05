@@ -12096,7 +12096,10 @@ pub(crate) fn handle_queue_work(
                 // trace:BUG-2428 | ai:claude
                 if is_standalone_reviewer(&role, plan.review_target.is_some()) {
                     refuse_unpresentable_contained_reviewer(contained)?;
-                } else if mints_child && session::containment_applied(launch_vendor, contained) {
+                } else if mints_child
+                    // trace:TASK-2708 | ai:claude
+                    && session::sandboxed_child_grant(launch_vendor, contained)?
+                {
                     crate::gate::seat_authority::preflight_sandboxed_child_key(&child_seat)?;
                 }
             }
@@ -13744,7 +13747,8 @@ pub(crate) fn handle_queue_work(
                 &crate::canonical_role_name(&role),
                 &crate::current_user_id(None),
                 // trace:TASK-2631 | ai:codex
-                session::containment_applied(launch_vendor, contained),
+                // trace:TASK-2708 | ai:claude
+                session::sandboxed_child_grant(launch_vendor, contained)?,
             )?;
             child_grant_id = Some(child_grant.id);
         } else if matches!(launch, QueueWorkLaunch::Fresh(_)) {
@@ -13758,7 +13762,8 @@ pub(crate) fn handle_queue_work(
                 &seat,
                 &crate::current_user_id(None),
                 // trace:TASK-2631 | ai:codex
-                session::containment_applied(launch_vendor, contained),
+                // trace:TASK-2708 | ai:claude
+                session::sandboxed_child_grant(launch_vendor, contained)?,
             )?;
             match &grant {
                 crate::gate::seat_authority::HeadlessChildGrant::Issued(issued) => {
@@ -14527,7 +14532,8 @@ pub(crate) fn run_standalone_reviewer(
                         project_root,
                         "reviewer",
                         &crate::current_user_id(None),
-                        session::containment_applied(recorded, contained),
+                        // trace:TASK-2708 | ai:claude
+                        session::sandboxed_child_grant(recorded, contained)?,
                     )?;
                     // A reviewer never runs a plan lane; the seat comes from
                     // the reviewer grant, set by `finalize_codex_resume`.
