@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "spec": "STORY-1468",
+  "publishes": [
+    {
+      "at": "2026-11-05T20:32:31.775147401Z",
+      "closed_by": "queue-done"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-05T19:13:21.204269473Z",
+      "spec": "STORY-1468",
+      "seat": "implementer",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "In Progress",
+        "after": "In Progress"
+      }
+    }
+  ]
+}
