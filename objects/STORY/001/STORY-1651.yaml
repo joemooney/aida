@@ -28,12 +28,12 @@ description: |-
 
   ## Sequencing
   Starts after TASK-1611 merges. It builds on that branch's moves and inventory.
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-10T20:30:55.867848469Z
-modified_at: 2026-11-05T13:00:47.302547747Z
+modified_at: 2026-11-05T13:19:48.952206969Z
 req_type: Story
 tags:
 - docs
@@ -85,6 +85,12 @@ comments:
   created_at: 2026-11-05T12:43:54.904284159Z
   modified_at: 2026-11-05T12:43:54.904284159Z
   session_id: 01a1aba9a850
+- id: 01a1abdd-98d8-7233-8443-33add1b71154
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Docs audience split is mostly sound (AC2 tested, AC4 inventory complete+gated fast), but AC1 not met (docs/aida, docs/casts internal material still top-level, no guard), AC3 has mis-retargeted references, adopter-project defaults were silently moved under docs/internal/, AC5 unverified; CI still in progress at review time.. Triage reason: Address the latest review on #3424 (see its last ''## Review'' comment and the spec''s review verdict) and any red CI at the current head; push to branch story-1651 (no new branch). LIGHT gate.'
+  created_at: 2026-11-05T13:19:48.952205441Z
+  modified_at: 2026-11-05T13:19:48.952205441Z
+  session_id: b83457ff-84e3-46cb-8f68-4be531a63422
 history:
 - id: 01a12786-de64-7f61-81ce-787aedc7543e
   author: joe
@@ -134,6 +140,14 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1abdd-98d8-7233-8443-339d5cebe7a0
+  author: joe
+  timestamp: 2026-11-05T13:19:48.952186702Z
+  session_id: b83457ff-84e3-46cb-8f68-4be531a63422
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: f266cde60648dfa5846cc6556b8641e661b3694a
   branch: main
@@ -142,11 +156,3 @@ filed_at:
   aida_build_sha: fe6723558e
   vendor: antigravity
   session: cb4777a7-1c2d-4646-a80c-0ba4295cf83f
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: Docs audience split is mostly sound (AC2 tested, AC4 inventory complete+gated fast), but AC1 not met (docs/aida, docs/casts internal material still top-level, no guard), AC3 has mis-retargeted references, adopter-project defaults were silently moved under docs/internal/, AC5 unverified; CI still in progress at review time.
-  recovery_hint: address the review findings, move STORY-1651 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-05T13:00:47.302547747Z
