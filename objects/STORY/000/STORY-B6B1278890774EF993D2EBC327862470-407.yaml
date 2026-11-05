@@ -22,12 +22,12 @@ description: |
 
   ## Non-goals
   Automatic sanitization, automatic spec creation, transferring source history, auto-publishing intake to a public forge.
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T02:09:00.558985162Z
-modified_at: 2026-11-05T02:51:34.126969211Z
+modified_at: 2026-11-05T02:51:54.621319967Z
 req_type: Story
 comments:
 - id: 01a1a99e-6b6e-7532-b180-a007c3a8b18c
@@ -148,6 +148,14 @@ history:
   timestamp: 2026-11-05T02:49:59.703875522Z
   session_id: 01a1a99c9599
   changes: []
+- id: 01a1a99e-bb7d-7b60-93fa-f8cd00220936
+  author: joe
+  timestamp: 2026-11-05T02:51:54.621338081Z
+  session_id: 01a1a99c9599
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: efca74e51a683b314e45f7ccbc9afaccab2b1ec8
   branch: main
@@ -156,3 +164,9 @@ filed_at:
   aida_build_sha: fb2086e9008
   vendor: claude
   session: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
+attention_reason:
+  category: design-fork
+  detail: New envelope wire format and intake transport authority require master sign-off under AGENTS.md Sketch-First Protocol. Current work transport is hard-pinned to aida-store and requires a store baseline; observation-only intake must work without a store. Sketch posted as spec comment and committed at 6423aace1cf in docs/plans/2026-11-04-story-2479-observation-envelopes.md. Decide whether to enroll an independent intake policy/remote or extend the work profile before implementation.
+  lean: Approve an independently enrolled clone-local intake policy and pinned remote; retain existing store-only work transport contract. Proposed v1 six-key envelope, canonical hashing, lock-protected orphan worktree, and explicit crash-safe processing are documented in the sketch.
+  raised_by: implementer
+  raised_at: 2026-11-05T02:51:54.621319967Z
