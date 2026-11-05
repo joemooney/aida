@@ -8,12 +8,19 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T02:00:49.799626224Z
-modified_at: 2026-11-05T17:40:01.284931846Z
+modified_at: 2026-11-05T17:41:25.550416927Z
 req_type: Task
 relationships:
 - rel_type: Child
   target_id: 01a1a91e-a1e8-7e81-981e-cba544d1ee9c
   created_at: 2026-11-05T02:00:59.022929165Z
+comments:
+- id: 01a1accd-1bae-7d03-adf5-e350fe01b3de
+  author: joe
+  content: Proposed contract committed as 5b6aaba7e61 in docs/plans/2026-11-05-task-3074-request-dispositions.md. Parent ruling approved slice 1 only and deferred approval of this lifecycle/schema. Proposal covers recipient-authorized versioned action ledger separate from read ACK, explicit acted/declined/deferred outcomes, one-reader shared-role resolution, bounded deferred deadline, exact alarm/message correlation, legacy/ambiguous recovery, and existing bounded operator notifier. Requests sign-off on schema/authority and replacing unspecified N nudges with one request plus 30-minute unresolved/persistent escalation. No runtime behavior changed. git diff --check passed; documentation-only change requires no Rust tests. Holding PR pending master sign-off per AGENTS.md Sketch-First Protocol.
+  created_at: 2026-11-05T17:41:25.550416927Z
+  modified_at: 2026-11-05T17:41:25.550416927Z
+  session_id: 01a1accb44db
 history:
 - id: 01a1a970-1ff1-7783-809b-737caac6fcab
   author: joe
