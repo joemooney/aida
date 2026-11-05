@@ -13,13 +13,6 @@
   added_at: 2026-11-05T11:19:22.153426454Z
   for_role: implementer
 - user_id: role:implementer
-  requirement_id: 01a1a4e6-791e-7941-8078-89f2a342722e
-  position: 120000
-  added_by: role:implementer
-  note: 'Address the request-changes review on #3342 (see the PR''s latest Review comment and .aida/review-verdicts/TASK-2995.json); push to branch agy2/task-2995-features-page, no new branch.'
-  added_at: 2026-11-05T09:49:47.791179124Z
-  for_role: implementer
-- user_id: role:implementer
   requirement_id: 01a1aa61-24c7-7241-8a43-dbed2f2dea49
   position: 121000
   added_by: role:implementer
