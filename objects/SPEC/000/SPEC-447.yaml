@@ -2,12 +2,12 @@ id: 01a1403f-ecb1-7412-bd8a-56dd869eb0b2
 spec_id: SPEC-447
 title: Investigate exact floating-rate validation across regen control and consensus JSON roundtrips
 description: TASK-1734 author self-check reproduced a serde_json roundtrip mismatch for the mathematically valid ratio1/11. Its optional display reader is now tolerant within8*f64::EPSILON and recomputes rates from counts. The strict scoring/control eligibility code still compares floating pass_rate with integer division exactly (e.g. regen/score/controls.rs::require_execution). Investigate whether valid committed control/consensus evidence can be refused after JSON persistence; cover1/11 and other representable ratios in real committed fixtures. If confirmed, design a bounded consistency check retaining integer-count and provenance validation, NaN/materially wrong rejection, and existing authority gates. Do not silently apply the display policy to strict gates. This is a separate investigation, not a claim of completed reproduction through a live control execution. Search of roundtrip/floating found no matching existing spec.
-status: InProgress
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-15T15:48:13.617378738Z
-modified_at: 2026-11-05T00:30:24.644195428Z
+modified_at: 2026-11-05T01:09:16.851788610Z
 req_type: Task
 tags:
 - from-implementer:TASK-1734
@@ -147,6 +147,20 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1a940-c5af-71e2-a889-d3ecb53f6e1e
+  author: aida-auto-bump
+  timestamp: 2026-11-05T01:09:16.847088236Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1a940-c5b3-7eb3-8d85-7b9de26d38c5
+  timestamp: 2026-11-05T01:09:16.851773856Z
+  agent: aida
+  commit_sha: fb2086e9008949e1361f6bc7d0751617b4cc0e4f
+  summary: 'All 5 SPEC-447 investigation criteria met: committed-JSON fixtures reproduce 1/11 and 43/44 strict control/trial refusals and accept exact fractions; consensus fixtures cover 7 fractions plus wrong rate/count/provenance/non-finite refusals; bounded repair designed in docs/plans and deferred to TASK-2842; no production change. Round-1 findings resolved (store_git rename clears ratchet, retitled, float_roundtrip noted). CI lib-0/lib-1/cli/rest/contracts/gates green at head; merge-hold-gate red only as the supervised hold awaiting advisor clear.'
+  review_verdict: approved
 filed_at:
   code_sha: 3d85bbde84130b00330ac845d79ffdd4eb9bcce7
   branch: main
@@ -161,4 +175,6 @@ implementation_info:
     cargo fmt --all -- --check and git diff --check passed
   implemented_at: 2026-11-04T19:27:57.469200845Z
   implemented_by: joe
+  completed_at: 2026-11-05T01:09:16.847082431Z
+  completion_sha: fb2086e9008949e1361f6bc7d0751617b4cc0e4f
 interface_changes: {}
