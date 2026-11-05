@@ -3,12 +3,12 @@ spec_id: STORY-b6b1278890774ef993d2ebc327862470-403
 agreed_id: STORY-2475
 title: Headless Codex queue-work lanes publish their own work on exit (host-side commit + ship)
 description: 'Codex''s native sandbox makes .git read-only, so a Codex `aida queue work` lane leaves validated edits uncommitted in its seat clone and exits with ''pr-opened ... untested'' or nothing. Someone has to run `aida ship SPEC --from-seat <clone> --commit-pending ...` by hand. On 2026-11-04 the BUG-2439 fix sat uncommitted for 3 hours. TASK-2712 added the host commit for agent-new lanes only. Acceptance: (1) when a contained Codex queue-work lane exits with pending seat changes, the host commits them with a generated [AI:codex] message naming the spec, and ships them to the existing PR or opens one; (2) this also covers reworks of an existing PR branch; (3) an exit with no changes is reported to the advisor by mail, not silently; (4) it replaces the advisor''s auto-publish.sh workaround.'
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T00:31:51.425362067Z
-modified_at: 2026-11-05T02:34:00.950256594Z
+modified_at: 2026-11-05T03:38:02.727723069Z
 req_type: Story
 relationships:
 - rel_type:
@@ -96,6 +96,15 @@ history:
   timestamp: 2026-11-05T02:34:02.143336387Z
   session_id: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
   changes: []
+- id: 01a1a9c8-f867-7c61-9097-db3889c22002
+  author: aida-orchestrator
+  timestamp: 2026-11-05T03:38:02.727744610Z
+  session_id: 01a1a9c69c94
+  harness_version: 2.1.318 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 47e9f216d38bf2bb6c503baeebfcca728604bd57
   branch: main
@@ -104,3 +113,11 @@ filed_at:
   aida_build_sha: 47e9f216d38
   vendor: claude
   session: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'Does not compile after the merge from main: host_recorded_clone now takes (main, root) (TASK-2032, efca74e) but two new call sites pass one argument; every CI build job fails (exit 101). Design matches the advisor ruling, but the routing/refusal paths have no tests above the helper level.'
+  recovery_hint: address the review findings, move STORY-2475 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-11-05T03:38:02.727723069Z
