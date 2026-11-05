@@ -59,10 +59,14 @@ pub(crate) fn handle_supervise_command(
 ) -> Result<()> {
     match cmd {
         SuperviseCommand::Nudge => handle_supervise_nudge(backend, store_path),
-        SuperviseCommand::Stalls { execute, json } => {
+        SuperviseCommand::Stalls {
+            execute,
+            json,
+            threshold_mins,
+        } => {
             let root = store_path.parent().context("missing project root")?;
             let root = crate::main_worktree_root_from(root);
-            let report = pipeline_stall::run(&root, *execute, &mut |body| {
+            let report = pipeline_stall::run(&root, *execute, *threshold_mins, &mut |body| {
                 nudge_pass(backend, store_path, Some(body)).map(|line| line.is_some())
             })?;
             if *json {
@@ -97,6 +101,7 @@ pub(crate) fn handle_supervise_command(
             objective,
             execute,
             interval,
+            threshold_mins,
             json,
         } => handle_supervise_watch(
             backend,
@@ -104,6 +109,7 @@ pub(crate) fn handle_supervise_command(
             objective.as_deref(),
             *execute,
             *interval,
+            *threshold_mins,
             *json,
         ),
     }
@@ -452,6 +458,7 @@ fn handle_supervise_watch(
     objective: Option<&str>,
     execute: bool,
     interval: Option<u64>,
+    threshold_mins: u32,
     json: bool,
 ) -> Result<()> {
     let project_root = store_path
@@ -459,7 +466,15 @@ fn handle_supervise_watch(
         .ok_or_else(|| anyhow::anyhow!("cannot derive project root from store path"))?;
     let objective = resolve_objective(objective, project_root)?;
     loop {
-        run_watch_pass(backend, store_path, project_root, &objective, execute, json)?;
+        run_watch_pass(
+            backend,
+            store_path,
+            project_root,
+            &objective,
+            execute,
+            threshold_mins,
+            json,
+        )?;
         match interval {
             Some(secs) if secs > 0 => std::thread::sleep(std::time::Duration::from_secs(secs)),
             _ => break,
@@ -499,6 +514,7 @@ fn run_watch_pass(
     project_root: &Path,
     objective: &str,
     execute: bool,
+    threshold_mins: u32,
     json: bool,
 ) -> Result<()> {
     let queued = queued_spec_ids();
@@ -513,9 +529,9 @@ fn run_watch_pass(
 
     // trace:STORY-2476 | ai:codex
     let root = crate::main_worktree_root_from(project_root);
-    let stalls = pipeline_stall::run(&root, execute, &mut |body| {
+    let stalls = pipeline_stall::run_for_watch(&root, execute, threshold_mins, &mut |body| {
         nudge_pass(backend, store_path, Some(body)).map(|line| line.is_some())
-    })?;
+    });
     if json {
         eprintln!("{}", serde_json::to_string(&stalls)?);
     } else {

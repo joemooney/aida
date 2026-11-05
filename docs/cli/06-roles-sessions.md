@@ -812,11 +812,13 @@ or use the same detector integrated into `aida supervise watch --execute`.
 A watch preview also previews these alarms; watch JSON keeps its objective
 report on stdout and emits the alarm report on stderr.
 
-Each alarm requires 30 minutes of continuous observations:
+Each alarm requires `--threshold-mins N` minutes of continuous observations
+(default 30, minimum 15), on both `stalls` and `watch`:
 
 - `pipeline-idle`: no worker lane is running, no PR is ship-ready, and a PR
   has red CI/current-head request-changes or the project has queued work.
-  Any worker lane or ready PR suppresses this kind.
+  Any implementer/reviewer lane, running train or ready PR suppresses this kind.
+  Role-less, integrator, advisor and product seats do not count as worker lanes.
 - `ready-without-train`: a PR is ship-ready and no train is running. Worker
   activity does not suppress this kind.
 
@@ -830,7 +832,9 @@ frequently than that gap; a preview never advances an observation timer.
 
 Execute ticks serialize through the permanent main-worktree
 `.aida/pipeline-stalls.lock` sidecar and atomically replace the disposable,
-versioned `.aida/pipeline-stalls.json` state. One bounded actionable digest
+versioned `.aida/pipeline-stalls.json` state. Alarm state I/O failures are
+reported as unknown by watch; its objective/redrive reporting continues.
+One bounded actionable digest
 covers due kinds through the existing supervisor nudge path: urgent mailbox
 `kind=request` to the live advisor, or the configured operator notification
 fallback. Delivery failure retains the pending episode for retry. An accepted

@@ -6,7 +6,6 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::path::Path;
 
-const THRESHOLD_MS: i64 = 30 * 60 * 1000;
 // An absent observer cannot prove that a predicate held throughout a long gap.
 const MAX_GAP_MS: i64 = 15 * 60 * 1000;
 
@@ -96,8 +95,43 @@ fn any(values: &[Option<bool>]) -> Option<bool> {
 pub(super) fn run(
     root: &Path,
     execute: bool,
+    threshold_mins: u32,
     send: &mut dyn FnMut(&str) -> Result<bool>,
 ) -> Result<Report> {
+    run_with_home(
+        root,
+        crate::home_dir().as_deref(),
+        execute,
+        threshold_mins,
+        send,
+    )
+}
+
+// Alarm persistence failures must not terminate the oversight watch or hide its report.
+pub(super) fn run_for_watch(
+    root: &Path,
+    execute: bool,
+    threshold_mins: u32,
+    send: &mut dyn FnMut(&str) -> Result<bool>,
+) -> Report {
+    run(root, execute, threshold_mins, send).unwrap_or_else(|e| Report {
+        execute,
+        unknown: vec![format!("pipeline alarm observation failed: {e:#}")],
+        ..Default::default()
+    })
+}
+
+fn run_with_home(
+    root: &Path,
+    home: Option<&Path>,
+    execute: bool,
+    threshold_mins: u32,
+    send: &mut dyn FnMut(&str) -> Result<bool>,
+) -> Result<Report> {
+    anyhow::ensure!(
+        threshold_mins >= 15,
+        "alarm threshold must be at least 15 minutes"
+    );
     // Read-only preview never creates a directory, lock, timer, eligibility cache or mail.
     let lock = if execute {
         let dir = root.join(".aida");
@@ -118,12 +152,13 @@ pub(super) fn run(
     } else {
         None
     };
-    let snapshot = observe(root);
+    let snapshot = observe(root, home);
     let report = tick(
         root,
         &snapshot,
         chrono::Utc::now().timestamp_millis(),
         execute,
+        threshold_mins,
         send,
     );
     drop(lock); // permanent sidecar is never unlinked
@@ -134,6 +169,7 @@ fn tick(
     snapshot: &Snapshot,
     now: i64,
     execute: bool,
+    threshold_mins: u32,
     send: &mut dyn FnMut(&str) -> Result<bool>,
 ) -> Result<Report> {
     let path = root.join(".aida/pipeline-stalls.json");
@@ -175,12 +211,12 @@ fn tick(
             };
         }
         episode.observed_ms = now;
-        if now - episode.first_ms >= THRESHOLD_MS && !episode.accepted {
+        if now - episode.first_ms >= i64::from(threshold_mins) * 60_000 && !episode.accepted {
             report.due.push(kind.into());
         }
     }
     if execute && !report.due.is_empty() {
-        let body = format!("Pipeline needs attention: {} (continuously observed >= 30 minutes).\n{}\nInspect: aida ps; aida queue list --for implementer; aida integrate\nNo lanes, leases or PRs were changed by this alarm.",
+        let body = format!("Pipeline needs attention: {} (continuously observed >= {threshold_mins} minutes).\n{}\nInspect: aida ps; aida queue list --for implementer; aida integrate\nNo lanes, leases or PRs were changed by this alarm.",
             report.due.join(", "), bounded_digest(&snapshot.details));
         // Retain the episode on refused/failed delivery so the next tick retries.
         match send(&body) {
@@ -236,10 +272,10 @@ fn files(dir: &Path) -> Result<Vec<std::path::PathBuf>> {
     }
 }
 fn lane_role(role: Option<&str>) -> bool {
-    // Advisors are observers; any other scoped worker suppresses pipeline-idle.
-    !matches!(role, Some("advisor" | "product"))
+    // Only implementation/review lanes suppress idle; interactive observers do not.
+    matches!(role, Some("implementer" | "reviewer"))
 }
-fn observe(root: &Path) -> Snapshot {
+fn observe(root: &Path, home: Option<&Path>) -> Snapshot {
     let mut s = Snapshot::default();
     let observer = aida_core::pid_observer::PidObserver::current();
     let leases = crate::leases::list_leases_strict_all(root);
@@ -340,7 +376,7 @@ fn observe(root: &Path) -> Snapshot {
         }
         s.ready = any(&readiness);
         s.train_running = any(&train);
-        s.work_waiting = any(&[Some(blocked), queue_waiting(root)]);
+        s.work_waiting = any(&[Some(blocked), queue_waiting(root, home)]);
     }
     // A merge train is itself an active pipeline lane even without an agent row.
     s.lanes_running = any(&[s.lanes_running, s.train_running]);
@@ -354,7 +390,7 @@ fn observe(root: &Path) -> Snapshot {
     s
 }
 
-fn queue_waiting(root: &Path) -> Option<bool> {
+fn queue_waiting(root: &Path, home: Option<&Path>) -> Option<bool> {
     // Do not shell out to queue list: it opportunistically garbage-collects queues.
     let mut present = Vec::new();
     for path in files(&root.join(".aida-store/registry/queues")).ok()? {
@@ -365,7 +401,7 @@ fn queue_waiting(root: &Path) -> Option<bool> {
         let rows: Vec<aida_core::QueueEntry> = serde_yaml::from_slice(&bytes).ok()?;
         present.push(Some(!rows.is_empty()));
     }
-    if let Some(home) = crate::home_dir() {
+    if let Some(home) = home {
         let path = home.join(".aida/queue/implementer.yaml");
         let rows = crate::global_queue::read_queue(&path, "implementer").ok()?;
         present
@@ -387,7 +423,8 @@ fn forge_snapshot(
     if kind != Some(crate::forge::ForgeKind::GitHub) {
         return None;
     }
-    let mut cmd = std::process::Command::new(crate::resolve_gh_binary()?);
+    let gh = crate::resolve_gh_binary()?;
+    let mut cmd = std::process::Command::new(gh);
     cmd.current_dir(root).args(["pr", "list", "--state", "open", "--limit", "1000", "--json",
         "number,title,headRefName,headRefOid,statusCheckRollup,mergeable,reviewDecision,labels,isDraft,baseRefName,body"]);
     let out = crate::command_output_with_timeout(cmd, crate::FORGE_CLI_CALL_TIMEOUT)?;
@@ -458,12 +495,11 @@ fn pr_ready(root: &Path, pr: &crate::status_cleanup::OpenPrItem) -> Option<bool>
         let path = root
             .join(".aida/review-verdicts")
             .join(format!("{id}.json"));
-        match crate::gate::review_verdict::read_verdict_body(&path) {
-            Ok(body) => {
-                crate::gate::review_verdict::parse_recorded_verdict(&body)?;
-            }
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
-            Err(_) => return None,
+        if crate::gate::review_verdict::verdict_file_refused(&path) {
+            return None;
+        }
+        if let Some(current) = crate::gate::review_verdict::current_verdict(root, &id) {
+            crate::gate::review_verdict::parse_recorded_verdict(&current.body)?;
         }
     }
     Some(
@@ -491,8 +527,80 @@ mod tests {
         minutes: i64,
         send: &mut dyn FnMut(&str) -> Result<bool>,
     ) -> Report {
-        tick(root, s, minutes * MIN, true, send).unwrap()
+        tick(root, s, minutes * MIN, true, 30, send).unwrap()
     }
+    // trace:STORY-2476 | ai:codex
+    #[test]
+    fn nondefault_threshold_controls_due_time_and_digest() {
+        let t = tempfile::tempdir().unwrap();
+        std::fs::create_dir(t.path().join(".aida")).unwrap();
+        for minute in [0, 10, 20, 30, 40, 44] {
+            assert!(tick(t.path(), &idle(), minute * MIN, true, 45, &mut |_| {
+                panic!("alarm fired before configured threshold")
+            })
+            .unwrap()
+            .due
+            .is_empty());
+        }
+        let report = tick(t.path(), &idle(), 45 * MIN, true, 45, &mut |body| {
+            assert!(body.contains(">= 45 minutes"));
+            Ok(true)
+        })
+        .unwrap();
+        assert_eq!(report.accepted, ["pipeline-idle"]);
+    }
+
+    #[test]
+    fn watch_reports_unwritable_alarm_state_as_unknown() {
+        let t = tempfile::tempdir().unwrap();
+        // A directory at the lock path refuses open even for a privileged test user.
+        std::fs::create_dir_all(t.path().join(".aida/pipeline-stalls.lock")).unwrap();
+        let report = run_for_watch(t.path(), true, 30, &mut |_| panic!("must not send"));
+        assert!(report.accepted.is_empty());
+        assert_eq!(report.unknown.len(), 1);
+        assert!(report.summary().contains("observation failed"));
+        assert!(!t.path().join(".aida/pipeline-stalls.json").exists());
+    }
+
+    #[test]
+    fn only_implementer_and_reviewer_roles_suppress_idle() {
+        for role in [None, Some("integrator"), Some("advisor"), Some("product")] {
+            assert!(!lane_role(role), "{role:?}");
+        }
+        for role in [Some("implementer"), Some("reviewer")] {
+            assert!(lane_role(role), "{role:?}");
+        }
+        let t = tempfile::tempdir().unwrap();
+        let home = tempfile::tempdir().unwrap();
+        let leases = crate::leases::leases_dir(t.path());
+        std::fs::create_dir_all(&leases).unwrap();
+        // A live role-less interactive lease must not mask an idle pipeline.
+        let lease = format!(
+            r#"
+            id = "interactive"
+            scope = "STORY-2476"
+            slug = "interactive"
+            owner = "test"
+            worktree_path = "{}"
+            branch = "interactive"
+            started_at = "2026-11-04T00:00:00Z"
+            hostname = "{}"
+            creator_pid = {}
+        "#,
+            t.path().display(),
+            crate::coordination::hostname(),
+            std::process::id()
+        );
+        std::fs::write(leases.join("interactive.toml"), lease).unwrap();
+        let parsed = crate::leases::list_leases_strict_all(t.path()).unwrap();
+        assert_eq!(parsed.len(), 1);
+        assert!(parsed[0].role.is_none());
+        assert_eq!(
+            observe(t.path(), Some(home.path())).lanes_running,
+            Some(false)
+        );
+    }
+
     #[test]
     fn boundary_dedup_retry_and_episode_reset() {
         let t = tempfile::tempdir().unwrap();
@@ -507,7 +615,7 @@ mod tests {
             assert!(at(t.path(), &idle(), minute, &mut send).due.is_empty());
         }
         let before = std::fs::read(t.path().join(".aida/pipeline-stalls.json")).unwrap();
-        let dry = tick(t.path(), &idle(), 30 * MIN, false, &mut |_| {
+        let dry = tick(t.path(), &idle(), 30 * MIN, false, 30, &mut |_| {
             panic!("dry-run sent")
         })
         .unwrap();
@@ -646,14 +754,21 @@ mod tests {
     #[test]
     fn preview_creates_nothing_and_busy_tick_does_not_observe_or_send() {
         let t = tempfile::tempdir().unwrap();
-        let report = run(t.path(), false, &mut |_| panic!("preview sends")).unwrap();
+        let report = run_with_home(t.path(), Some(t.path()), false, 30, &mut |_| {
+            panic!("preview sends")
+        })
+        .unwrap();
         assert!(report.accepted.is_empty());
         assert!(!t.path().join(".aida").exists());
         std::fs::create_dir(t.path().join(".aida")).unwrap();
         let path = t.path().join(".aida/pipeline-stalls.lock");
         let f = std::fs::File::create(&path).unwrap();
         f.lock_exclusive().unwrap();
-        assert!(run(t.path(), true, &mut |_| panic!()).unwrap().busy);
+        assert!(
+            run_with_home(t.path(), Some(t.path()), true, 30, &mut |_| panic!())
+                .unwrap()
+                .busy
+        );
         assert!(!t.path().join(".aida/pipeline-stalls.json").exists());
         assert!(path.exists());
     }
@@ -675,7 +790,7 @@ mod tests {
         std::fs::create_dir_all(&dir).unwrap();
         std::fs::write(dir.join("broken.toml"), "broken [").unwrap();
         assert!(registry(t.path()).is_err());
-        assert_eq!(observe(t.path()).lanes_running, None);
+        assert_eq!(observe(t.path(), Some(t.path())).lanes_running, None);
         let observer = aida_core::pid_observer::PidObserver {
             namespace: Some(42),
             isolated: false,
