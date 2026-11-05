@@ -42,6 +42,8 @@ const ENTRY_POINTS: &[(&str, &str)] = &[
     ("burndown_run.rs", "build_burndown_quiet_command"),
     ("burndown_run.rs", "build_burndown_verbose_command"),
     ("compete_cmd.rs", "build_compete_arm_command"),
+    // `aida compete --dry-run` previews the arm argv at the host root.
+    ("compete_cmd.rs", "handle_compete_command"),
     ("phase_driver.rs", "spawn_advisor_session"),
     ("phase_driver_trait.rs", "attempt_ci_fix"),
     ("phase_driver_trait.rs", "resume_implementer"),

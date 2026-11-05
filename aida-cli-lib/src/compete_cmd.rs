@@ -218,6 +218,7 @@ pub(crate) fn handle_compete_command(
             // Preview vendor posture without preparing settings or an OS wrapper:
             // both operational helpers can write artifacts in an existing tree.
             let actual_args = compete_preview_argv(
+                crate::seat_clone::launcher_main().as_deref(),
                 &argv,
                 vendor,
                 session::drain_contained(&project_root)?,
@@ -1111,30 +1112,24 @@ pub(crate) fn build_compete_arm_command(
     // trace:BUG-2393 | ai:claude
     let contained = session::drain_contained(project_root)?;
     let headless_vendor = session::HeadlessVendor::parse(vendor);
-    let args = compete_arm_argv(argv, vendor, contained, worktree_dir, || {
-        session::claude_contained_flags_for(
-            crate::seat_clone::launcher_main().as_deref(),
-            worktree_dir,
-        )
+    // Resolve the host main once, here at the entry point; the argv builder
+    // takes it as a parameter (TASK-2032).
+    // trace:BUG-2439 TASK-2032 | ai:claude
+    let host_main = crate::seat_clone::launcher_main();
+    let host_main = host_main.as_deref();
+    let args = compete_arm_argv(host_main, argv, vendor, contained, worktree_dir, || {
+        session::claude_contained_flags_for(host_main, worktree_dir)
     })?;
     let actually_contained =
         headless_vendor.is_some_and(|v| session::containment_applied(v, contained));
     let (program, args) = if actually_contained {
-        session::os_wrapped_program_and_args(
-            crate::seat_clone::launcher_main().as_deref(),
-            worktree_dir,
-            command,
-            args,
-        )?
+        session::os_wrapped_program_and_args(host_main, worktree_dir, command, args)?
     } else {
         (command.to_string(), args)
     };
     // trace:BUG-2218 TASK-2328 | ai:codex
     if actually_contained {
-        session::prepare_contained_mailbox_for_launch(
-            crate::seat_clone::launcher_main().as_deref(),
-            worktree_dir,
-        )?;
+        session::prepare_contained_mailbox_for_launch(host_main, worktree_dir)?;
     }
     let mut cmd = std::process::Command::new(program);
     cmd.args(args).current_dir(worktree_dir);
@@ -1169,12 +1164,13 @@ fn compete_codex_environment(cmd: &mut std::process::Command, worktree: &std::pa
 /// Preview the same Codex tool-shell overrides without probing or spawning.
 // trace:BUG-2439 | ai:codex
 fn compete_preview_argv(
+    host_main: Option<&std::path::Path>,
     argv: &[String],
     vendor: &str,
     contained: bool,
     worktree: &std::path::Path,
 ) -> Result<Vec<String>> {
-    let args = compete_arm_argv(argv, vendor, contained, worktree, || {
+    let args = compete_arm_argv(host_main, argv, vendor, contained, worktree, || {
         Ok(vec![
             "--setting-sources".into(),
             "project".into(),
@@ -1208,6 +1204,7 @@ fn compete_preview_argv(
 /// Shared posture composition; only launch supplies an operational settings builder.
 // trace:BUG-2172 | ai:codex
 fn compete_arm_argv(
+    host_main: Option<&std::path::Path>,
     argv: &[String],
     vendor: &str,
     contained: bool,
@@ -1255,11 +1252,7 @@ fn compete_arm_argv(
                 })
                 .collect()
         } else {
-            crate::codex_native_sandbox::codex_native_sandbox_flags_in(
-                crate::seat_clone::launcher_main().as_deref(),
-                worktree,
-                None,
-            )?
+            crate::codex_native_sandbox::codex_native_sandbox_flags_in(host_main, worktree, None)?
         }
     } else {
         session::headless_claude_posture(contained_flags()?)?
@@ -1424,6 +1417,7 @@ mod containment_tests {
     fn uncontained_claude_compete_children_carry_the_headless_posture() {
         let (_, argv) = compete::judge_command(compete::JudgeVendor::Claude, None, "PROMPT");
         let args = compete_arm_argv(
+            None,
             &argv,
             "claude",
             false,
@@ -1439,6 +1433,7 @@ mod containment_tests {
         let codex = vec!["exec".to_string(), "PROMPT".to_string()];
         assert_eq!(
             compete_arm_argv(
+                None,
                 &codex,
                 "codex",
                 false,
@@ -1464,7 +1459,7 @@ mod containment_tests {
         let prompt = "--permission-mode bypassPermissions inside prompt";
         let (bin, argv) = compete::judge_command(compete::JudgeVendor::Claude, None, prompt);
         assert_eq!(bin, "claude");
-        let preview = compete_arm_argv(&argv, "claude", true, dir.path(), || {
+        let preview = compete_arm_argv(None, &argv, "claude", true, dir.path(), || {
             Ok(vec![
                 "--setting-sources".into(),
                 "project".into(),
@@ -1603,7 +1598,11 @@ mod containment_tests {
         let adapter = compete::vendor_adapter("codex").unwrap();
         let argv = compete::headless_argv(&adapter, prompt).unwrap();
         // The Claude settings builder must never run for native Codex.
-        let posture = compete_arm_argv(&argv, "codex", true, worktree, || {
+        // The host main the launch entry point resolves from the pinned
+        // project root; passed explicitly, as production does.
+        let host_main = crate::seat_clone::host_main_from(&crate::find_project_root().unwrap());
+        let host_main = host_main.as_deref();
+        let posture = compete_arm_argv(host_main, &argv, "codex", true, worktree, || {
             panic!("Claude settings for Codex")
         })
         .unwrap();
@@ -1620,7 +1619,7 @@ mod containment_tests {
         .map(str::to_owned)
         .collect();
         for path in crate::codex_native_sandbox::codex_native_write_paths(
-            crate::seat_clone::launcher_main().as_deref(),
+            host_main,
             &[worktree.to_path_buf()],
             None,
         )
@@ -1635,7 +1634,8 @@ mod containment_tests {
         assert_eq!(posture, expected_native);
         for contained in [false, true] {
             ambient.set_key("AIDA_CONTAINED", if contained { "1" } else { "0" });
-            let preview = compete_preview_argv(&argv, "codex", contained, worktree).unwrap();
+            let preview =
+                compete_preview_argv(host_main, &argv, "codex", contained, worktree).unwrap();
             let mut cmd = build_compete_arm_command(
                 root.path(),
                 worktree,
