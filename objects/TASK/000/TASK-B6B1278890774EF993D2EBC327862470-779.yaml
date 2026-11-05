@@ -9,12 +9,12 @@ description: |-
 
   PR: #3353
   Reviewed sha: ab7108bd9065ff87111108a22469177ef5387a22
-status: Done
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T11:57:10.724108127Z
-modified_at: 2026-11-05T02:21:10.312483830Z
+modified_at: 2026-11-05T02:32:33.918317979Z
 req_type: Task
 tags:
 - carried-from:BUG-2438
@@ -87,6 +87,15 @@ history:
   author: joe
   timestamp: 2026-11-05T02:21:14.589531076Z
   changes: []
+- id: 01a1a98d-057e-73c1-81d0-e72a9af02389
+  author: aida-orchestrator
+  timestamp: 2026-11-05T02:32:33.918337568Z
+  session_id: 01a1a982f97d
+  harness_version: 2.1.318 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: NeedsAttention
 filed_at:
   code_sha: 238a7ecc3eaf8123b58a85fffe626be170d139a1
   branch: main
@@ -102,4 +111,12 @@ implementation_info:
     cargo fmt --all -- --check; git diff --cached --check — passed
   implemented_at: 2026-11-05T02:18:32.791749244Z
   implemented_by: joe
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'Tests are correct and cover all three claim-window paths, but CI (lib-0) fails the ''Test time budget'' gate: the new interrupted-claim test runs >=10s by design against default_limit=10 with no budget entry.'
+  recovery_hint: address the review findings, move TASK-2832 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-11-05T02:32:33.918317979Z
 interface_changes: {}
