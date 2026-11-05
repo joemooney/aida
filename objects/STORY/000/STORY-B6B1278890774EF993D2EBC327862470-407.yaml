@@ -1,0 +1,39 @@
+id: 01a1a977-748e-7091-949e-e1c3bbeab894
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-407
+agreed_id: STORY-2479
+title: Observation envelopes without creating requirements, with an optional orphan aida-intent intake branch
+description: |
+  Operator ask (2026-11-04): get bug reports and ideas back from the work machine without creating requirements there and without leaking work data. An earlier session (on the work/Aster side) drafted the full spec. It is reproduced here as the acceptance basis.
+
+  ## Goal
+  A first-class, no-spec observation envelope that can be reviewed, emailed by hand, or published to a separate orphan intake branch (`aida-intent`).
+
+  ## Acceptance
+  - `aida intent note --category observation|question|request --title ... --file note.md` generates an envelope. It allocates no requirement ID, writes nothing to the store, makes no commit, and pushes nothing.
+  - Allowed fields only: version, envelope kind, category, title, body, checksum. Author identity, hostname, paths, source spec IDs, comments, attachments, logs, credentials and git provenance are never included automatically.
+  - SHA-256 over a documented canonical JSON form. `INTENT-<prefix>` is the human label; the full digest is used for verification.
+  - Validation covers schema, field types, size limits, checksum, and configured sensitive-content patterns. Validation does not certify sanitization.
+  - Email export is self-contained. A receiver can validate it without creating a spec.
+  - Optional publication commits only the reviewed envelope to the orphan `aida-intent` branch (no ancestry with product branches or aida-store), at `observations/<sha256>.json`. It requires explicit review confirmation. Filenames are immutable and digest-addressed, and duplicates are detected. It never force-pushes. Only `aida-intent` is pushed and pulled for these operations, and it is materialized in a separate worktree.
+  - Processing at home is explicit: keep pending, dismiss, create a requirement, or comment on an existing one. Receipts are stored separately at `receipts/<sha256>.json`. Human and JSON views show pending vs processed.
+  - Existing-comment recovery: a preview-only extraction of a comment from a local backup ref into a draft observation. It never transfers the YAML object or the commit.
+  - Tests cover tampering, unknown fields, sensitive text, duplicates, concurrent publication, manual-email round trips, and proof that generation and publication don't mutate canonical store refs.
+  - Envelope text is untrusted data, never instructions.
+
+  ## Non-goals
+  Automatic sanitization, automatic spec creation, transferring source history, auto-publishing intake to a public forge.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-05T02:09:00.558985162Z
+modified_at: 2026-11-05T02:09:00.558985162Z
+req_type: Story
+filed_at:
+  code_sha: efca74e51a683b314e45f7ccbc9afaccab2b1ec8
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: fb2086e9008
+  vendor: claude
+  session: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
