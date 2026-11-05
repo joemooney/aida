@@ -21,7 +21,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T04:40:54.168438456Z
-modified_at: 2026-11-05T09:48:17.107786672Z
+modified_at: 2026-11-05T09:48:17.834194477Z
 req_type: Story
 tags:
 - docs:impacted
@@ -271,6 +271,12 @@ comments:
   modified_at: 2026-11-05T09:21:27.753435032Z
   session_id: 01a1aaf32ad3
   harness_version: 2.1.318 (Claude Code)
+- id: 01a1ab1b-f1a6-7c23-92ce-4f8ee2b885ed
+  author: joe
+  content: '#3411 conflicts with main and CI red. Rebase onto main on the PR branch, resolve conflicts, push.'
+  created_at: 2026-11-05T09:48:17.702805715Z
+  modified_at: 2026-11-05T09:48:17.702805715Z
+  session_id: b83457ff-84e3-46cb-8f68-4be531a63422
 history:
 - id: 01a1aa03-2e29-79d0-827e-4c56622f79bd
   author: joe
