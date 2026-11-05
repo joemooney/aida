@@ -936,6 +936,17 @@ fn collect_spec_prs(
                     ));
                 }
                 for pr in rows {
+                    // A train carries its riders' commit trailers but is not
+                    // their rework head. Keep the single-change lookup intact.
+                    // trace:BUG-2451 | ai:codex
+                    if scope == SpecPrScope::All
+                        && pr
+                            .head_branch
+                            .as_deref()
+                            .is_some_and(|b| b.starts_with("train/"))
+                    {
+                        continue;
+                    }
                     if seen.insert(pr.number) {
                         candidates.push(pr);
                     }

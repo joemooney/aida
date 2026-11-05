@@ -145,11 +145,22 @@ fn unknown_branch_style_errors() {
 #[test]
 fn bug_2451_pickup_refuses_two_found_changes_naming_both() {
     let mut forge = crate::forge::fake::RecordingForge::new();
-    forge.all_for_spec = Some([42, 43].into_iter().map(|id| crate::forge::ChangeRef {
-        id, branch: format!("head-{id}"), url: String::new(), base: "main".into(), title: None,
-    }).collect());
+    forge.all_for_spec = Some(
+        [42, 43]
+            .into_iter()
+            .map(|id| crate::forge::ChangeRef {
+                id,
+                branch: format!("head-{id}"),
+                url: String::new(),
+                base: "main".into(),
+                title: None,
+            })
+            .collect(),
+    );
     for explicit in [None, Some("head-42"), Some("head-43")] {
-        let error = pickup_pr_branch(&forge, "BUG-2451", explicit).unwrap_err().to_string();
+        let error = pickup_pr_branch(&forge, "BUG-2451", explicit)
+            .unwrap_err()
+            .to_string();
         assert!(error.contains("#42") && error.contains("#43"), "{error}");
     }
 }
