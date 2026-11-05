@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-02T19:20:32.021326811Z
-modified_at: 2026-11-04T12:38:51.453492781Z
+modified_at: 2026-11-05T18:48:29.172660699Z
 req_type: Story
 tags:
 - architecture
@@ -289,6 +289,12 @@ comments:
   created_at: 2026-11-04T12:38:51.453492781Z
   modified_at: 2026-11-04T12:38:51.453492781Z
   session_id: da1c0d85-1d45-4ce4-a292-5358644f65b9
+- id: 01a1ad0a-80f4-7081-b81d-8c53052ea147
+  author: joe
+  content: 'ADVISOR A2 GATE REPORT 2026-11-05 11:55 MST (main c02cb56): ran ''aida gate state --compare'' on all 19 open PRs. 2 show 0 differences (PR-3440, PR-3424). 17 show 1 difference, and every one is the same EXPLAINED class. Today''s gate lists a spec under both its display ID and its uppercased origin ID (e.g. ''STORY-2475, STORY-B6B1...-403''), while the canonical side lists the one canonical key. The supervised-mode decision is identical on both sides in every case. Zero unexplained diffs, so the precondition is MET. PR-C (cutover) is AUTHORIZED per the slice plan: route merge_gate_verdict_candidates callers (approval.rs, mandate_ship.rs, pr_train*.rs, rework_hold_release.rs) through effective_gate_state; import or archive the legacy review-verdicts, merge-holds, clearances and pr-holds files (single user: a one-time import, no compat reader); add the ratchet that forbids a spec &str below the boundary; re-enable the ignored PR3306 fixture; comment on STORY-1392. The PR3185/PR3194 fixture replay goes in PR-C''s tests. STRICT review, LIGHT local gate.'
+  created_at: 2026-11-05T18:48:29.172660699Z
+  modified_at: 2026-11-05T18:48:29.172660699Z
+  session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
 history:
 - id: 01a19ec9-2f7e-7e41-b3a1-1cb5a299a222
   author: joe
