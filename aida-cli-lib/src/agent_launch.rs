@@ -4758,6 +4758,7 @@ fn prepare_agent_launch_attempt_inner(
                     } else {
                         crate::session_start::PathReentry::None
                     },
+                    None,
                 )
             });
             let restore_result = std::env::set_current_dir(&previous_cwd);

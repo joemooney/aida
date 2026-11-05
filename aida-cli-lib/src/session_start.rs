@@ -387,7 +387,13 @@ pub(crate) fn branch_exists_anywhere(project_root: &std::path::Path, branch: &st
 #[path = "tests/bug_442_distributed_detection_tests.rs"]
 mod bug_442_distributed_detection_tests;
 
-/// Resolve the existing change before branch allocation, regardless of spec status.
+// trace:BUG-2451 | ai:codex
+fn single_spec_pickup_scope(scope: &str) -> bool {
+    aida_core::id_identity::IdKey::parse(scope)
+        .is_some_and(|id| !matches!(id.prefix.split('-').next(), Some("EPIC" | "PR" | "MR")))
+}
+
+/// Resolve a single spec's existing change before branch allocation.
 /// Unknown forge evidence must never authorize a fresh rework branch.
 // trace:BUG-2451 | ai:codex
 pub(crate) fn pickup_pr_branch(
@@ -396,6 +402,10 @@ pub(crate) fn pickup_pr_branch(
     explicit: Option<&str>,
 ) -> Result<Option<(u64, String)>> {
     use crate::forge::ChangeLookup;
+    // Cluster, feature and path ownership have no single PR head.
+    if !single_spec_pickup_scope(spec) {
+        return Ok(None);
+    }
     match forge.change_for_spec(spec)? {
         ChangeLookup::NoChange => Ok(None),
         ChangeLookup::Found(change) => {
@@ -740,8 +750,18 @@ pub(crate) fn resolve_session_branch(
             return Ok(cand.clone());
         }
     }
+    let merged = if branch_style == "auto" {
+        match crate::forge::forge_for_open_change(project_root).merged_change_for_branch(slug) {
+            Ok(crate::forge::ChangeLookup::Found(change)) => {
+                format!("; merged PR #{} retained this branch", change.id)
+            }
+            _ => String::new(),
+        }
+    } else {
+        String::new()
+    };
     anyhow::bail!(
-        "all {} candidate branch names are taken (slug `{}`); pass --branch explicitly",
+        "all {} candidate branch names are taken (slug `{}`){merged}; pass --branch explicitly or --branch-style date",
         candidates.len(),
         slug
     )
@@ -1874,6 +1894,7 @@ pub(crate) fn session_start(
         contained_seat,
         false,
         PathReentry::None,
+        None,
     )
     .map(|mut receipt| receipt.disarm())
 }
@@ -1918,6 +1939,8 @@ pub(crate) fn session_start_with_receipt(
     // BUG-2223 / TASK-2823: whether an existing `explicit_path` may be
     // re-entered in place, and on what terms (see [`PathReentry`]).
     path_reentry: PathReentry,
+    // Some(None) is a confirmed negative from a single-spec queue pickup.
+    resolved_pr: Option<Option<(u64, String)>>,
 ) -> Result<SessionStartReceipt> {
     let adopt_orphan = path_reentry == PathReentry::AdoptOrphan;
     // BUG-75: derive paths from the MAIN worktree root, not from cwd's
@@ -2025,11 +2048,15 @@ pub(crate) fn session_start_with_receipt(
     // trace:STORY-65 | ai:claude
     // trace:BUG-2451 | ai:codex — agent-new and direct session starts share queue policy.
     let existing_pr = if review_target.is_none() && !is_review_session {
-        pickup_pr_branch(
-            &*crate::forge::forge_for_open_change(&project_root),
-            owns,
-            branch,
-        )?
+        if let Some(resolved) = resolved_pr {
+            resolved
+        } else {
+            pickup_pr_branch(
+                &*crate::forge::forge_for_open_change(&project_root),
+                owns,
+                branch,
+            )?
+        }
     } else {
         None
     };

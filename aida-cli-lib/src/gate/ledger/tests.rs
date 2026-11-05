@@ -2230,3 +2230,34 @@ fn bug_2451_publication_reuses_existing_head_and_refuses_duplicate_or_unknown() 
     assert!(super::open_change_bound(&forge, &root, req, &specs).is_err());
     assert!(forge.opened.lock().unwrap().is_empty());
 }
+
+// trace:BUG-2451 | ai:codex
+#[test]
+fn bug_2451_train_publication_accepts_only_its_listed_riders() {
+    let _env = uncontained();
+    let (_tmp, root) = root();
+    let mut forge = crate::forge::fake::RecordingForge::new();
+    forge.opens_as = Some(99);
+    forge.open_for_spec = crate::forge::ChangeLookup::Found(crate::forge::ChangeRef {
+        id: 42,
+        url: String::new(),
+        branch: "rider".into(),
+        base: "main".into(),
+        title: None,
+    });
+    let req = crate::forge::OpenChange {
+        branch: "train/fix".into(),
+        base: "main".into(),
+        title: "train".into(),
+        body: String::new(),
+        draft: false,
+    };
+    let specs = vec!["BUG-2451".into()];
+    assert!(
+        super::open_change_bound_with_riders(&forge, &root, req.clone(), &specs, &[41]).is_err()
+    );
+    assert!(forge.opened.lock().unwrap().is_empty());
+    let train = super::open_change_bound_with_riders(&forge, &root, req, &specs, &[42]).unwrap();
+    assert_eq!(train.id, 99);
+    assert_eq!(forge.opened.lock().unwrap().len(), 1);
+}

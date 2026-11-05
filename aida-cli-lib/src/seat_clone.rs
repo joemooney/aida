@@ -3091,3 +3091,8 @@ mod seat_publish_tests;
 #[cfg(test)]
 #[path = "tests/story_b6b_100_seat_clone_handshake_tests.rs"]
 mod seat_clone_handshake_tests;
+
+// trace:BUG-2451 | ai:codex
+#[cfg(test)]
+#[path = "tests/bug_2451_pickup_entry_tests.rs"]
+mod pickup_entry_tests;

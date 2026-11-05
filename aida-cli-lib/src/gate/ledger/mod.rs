@@ -305,12 +305,26 @@ pub(crate) fn open_change_bound(
     req: crate::forge::OpenChange,
     specs: &[String],
 ) -> anyhow::Result<crate::forge::ChangeRef> {
+    open_change_bound_with_riders(forge, start, req, specs, &[])
+}
+
+// trace:BUG-2451 | ai:codex — train riders remain open until the train lands.
+pub(crate) fn open_change_bound_with_riders(
+    forge: &dyn crate::forge::Forge,
+    start: &Path,
+    req: crate::forge::OpenChange,
+    specs: &[String],
+    riders: &[u64],
+) -> anyhow::Result<crate::forge::ChangeRef> {
     // trace:BUG-2451 | ai:codex — all AIDA publication paths use this boundary.
     let mut existing = None;
     for spec in specs {
         match forge.change_for_spec(spec)? {
             crate::forge::ChangeLookup::NoChange => {}
             crate::forge::ChangeLookup::Found(change) => {
+                if change.branch != req.branch && riders.contains(&change.id) {
+                    continue;
+                }
                 if change.branch != req.branch {
                     anyhow::bail!("{spec} already has open change #{} on `{}`; refusing a second change from `{}`. Continue the existing branch.", change.id, change.branch, req.branch);
                 }

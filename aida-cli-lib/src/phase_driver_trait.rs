@@ -57,7 +57,7 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                 }
                 resolve_pickup_workspace(&self.project_root, &self.spec, "auto")
                     .map(|(path, branch)| Some((path.display().to_string(), branch)))
-                    .map_err(|err| format!("{err:#}"))
+                    .map_err(|err| format!("{err:#}. Start `aida session start --owns {} --branch-style date` (or --branch <name>), then retry this drain; it will use the recorded lease.", self.spec))
             }
         }
     }

@@ -2533,30 +2533,25 @@ mod bug_1628_pickup_resolver_tests {
     #[test]
     fn bug_1628_pickup_resolver_skips_a_taken_branch_for_both_paths() {
         let (_temp, root) = temp_project("qci");
-        let git = |args: &[&str]| {
-            let status = crate::test_git::git_command()
+        let driver = driver_for(&root, "SPEC-016");
+        for args in [
+            &["commit", "-q", "--allow-empty", "-m", "init"][..],
+            &["branch", "spec-016"][..],
+        ] {
+            assert!(crate::test_git::git_command()
                 .arg("-C")
                 .arg(&root)
                 .args(["-c", "user.name=t", "-c", "user.email=t@example.invalid"])
                 .args(args)
                 .status()
-                .unwrap();
-            assert!(status.success(), "git {args:?}");
-        };
-        git(&["commit", "-q", "--allow-empty", "-m", "init"]);
-        git(&["branch", "spec-016"]);
-
-        let driver = driver_for(&root, "SPEC-016");
-        let (_, auto_branch) = auto_complete::PhaseDriver::implementer_workspace(&driver)
-            .unwrap()
-            .unwrap();
-        let (_, pickup_branch) = resolve_pickup_workspace(&root, "SPEC-016", "auto").unwrap();
-        assert_eq!(auto_branch, pickup_branch);
-        assert_eq!(pickup_branch, "spec-016-2");
-        assert!(crate::workflow_hints::branch_belongs_to_spec(
-            &auto_branch,
-            "SPEC-016"
-        ));
+                .unwrap()
+                .success());
+        }
+        let err = auto_complete::PhaseDriver::implementer_workspace(&driver).unwrap_err();
+        assert!(err.contains("--branch-style date"), "{err}");
+        assert!(resolve_pickup_workspace(&root, "SPEC-016", "auto").is_err());
+        let (_, branch) = resolve_pickup_workspace(&root, "SPEC-016", "date").unwrap();
+        assert!(branch.starts_with("spec-016-"));
     }
 }
 

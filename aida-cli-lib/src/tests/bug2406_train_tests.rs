@@ -73,7 +73,12 @@ if a[:2]==['pr','view']:
         if '@tsv' in q:
             if '.state' in q: print('OPEN\tMERGEABLE\tAPPROVED\t'+v['headRefOid']); sys.exit(0)
     emit(v)
-if a[:2]==['pr','list']: emit([])
+if a[:2]==['pr','list']:
+    if '--state' in a and a[a.index('--state')+1]=='open':
+        for n in ['11','12']:
+            v=meta(n)
+            print(str(v['number'])+'\t'+v['title']+'\t'+v['url']+'\t'+v['headRefName'])
+    sys.exit(0)
 if a[:2]==['pr','checks']:
     if '--watch' in a: sys.exit(0)
     emit([dict(name=n,bucket='pass',state='SUCCESS',workflow='CI',link='') for n in ['Build (ubuntu-latest)','merge-hold-gate']])

@@ -862,6 +862,23 @@ fn batched_commit_evidence_before(
     }
 }
 
+// trace:BUG-2451 | ai:codex — a Rework marker is positive association evidence,
+// but only a currently open forge row supplies the head to continue.
+fn rework_held_prs_for_spec(project_root: &std::path::Path, spec: &str) -> Vec<u64> {
+    use crate::gate::merge_hold_core as mh;
+    let canonical =
+        |id: &str| aida_core::id_identity::id_key(&aida_core::node_alias::expand_or_keep(id));
+    let wanted = canonical(spec);
+    let root = mh::hold_store_root(project_root);
+    mh::list_holds(&root)
+        .into_iter()
+        .filter_map(|(pr, _)| mh::read_hold_record(&root, pr).map(|r| (pr, r)))
+        .filter(|(_, r)| r.reason_kind == mh::HoldReasonKind::Rework)
+        .filter(|(_, r)| r.spec.as_deref().is_some_and(|s| canonical(s) == wanted))
+        .map(|(pr, _)| pr)
+        .collect()
+}
+
 fn collect_spec_prs(
     project_root: &std::path::Path,
     spec: &str,
@@ -893,6 +910,9 @@ fn collect_spec_prs(
             return result;
         }
     };
+    let held = rework_held_prs_for_spec(project_root, spec);
+    let associated =
+        |pr: &OpenPrInfo| held.contains(&pr.number) || pr_references_spec_ids(pr, &ids);
     let mut candidates = Vec::new();
     let mut seen = std::collections::HashSet::new();
     for filter in [
@@ -927,10 +947,7 @@ fn collect_spec_prs(
         // all-open path needs the remaining list and commit evidence.
         // trace:BUG-2400 | ai:claude
         if scope == SpecPrScope::First {
-            if let Some(at) = candidates
-                .iter()
-                .position(|pr| pr_references_spec_ids(pr, &ids))
-            {
+            if let Some(at) = candidates.iter().position(associated) {
                 result.matched.push(candidates.swap_remove(at));
                 result.unknown = None;
                 return result;
@@ -939,13 +956,13 @@ fn collect_spec_prs(
     }
     let unmatched: Vec<u64> = candidates
         .iter()
-        .filter(|pr| !pr_references_spec_ids(pr, &ids))
+        .filter(|pr| !associated(pr))
         .map(|pr| pr.number)
         .collect();
     let evidence =
         batched_commit_evidence_before(project_root, &gh_bin, &unmatched, &ids, deadline);
     for pr in candidates {
-        if pr_references_spec_ids(&pr, &ids) {
+        if associated(&pr) {
             result.matched.push(pr);
             continue;
         }

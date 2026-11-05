@@ -9006,7 +9006,7 @@ pub(crate) fn preclaim_collision_check(
     }
     if let Some((number, title, url)) = open_pr {
         return PreclaimDecision::Refuse(format!(
-            "{spec_display} has open PR #{number} ({title}) at {url}. The PR is OPEN. Drive the existing PR with `aida queue work {spec_display}`; pickup must retain its head branch.",
+            "{spec_display} has open PR #{number} ({title}) at {url}. The PR is OPEN. Pick this spec up individually with `aida queue work {spec_display}` to retain its head branch; a cluster cannot choose a different branch.",
         ));
     }
     if branch_state == PreclaimBranchState::Unmerged {
@@ -11356,7 +11356,7 @@ pub(crate) fn preflight_queue_work_branch_adopting(
         anyhow::bail!(
             "branch `{branch}` is held by a contained seat's private clone at {} before pickup \
              setup. Continue it in that seat, end that seat's session first (`aida session end`), \
-             or choose another --branch.",
+             then retry pickup on this branch.",
             clone.path.display()
         );
     }
@@ -11381,7 +11381,7 @@ pub(crate) fn preflight_queue_work_branch_adopting(
         let recovery = if clean && !leased && !live && !locked && wt.path != root {
             format!("It is idle, clean, and unleased. To retire it, run `git worktree remove {}` then retry pickup.", shell_quote(&wt.path.to_string_lossy()))
         } else {
-            "Keep this checkout; inspect its lease/process/dirty/lock state, or choose another --branch.".to_string()
+            "Keep this checkout; inspect its lease/process/dirty/lock state, then retry pickup on this branch.".to_string()
         };
         anyhow::bail!(
             "branch `{branch}` is held by worktree {} before pickup setup. {recovery}",
@@ -11888,7 +11888,7 @@ pub(crate) fn handle_queue_work(
         &plan,
         branch_override,
     )?;
-    // BUG-022: say where the rework goes, and how to fork instead.
+    // BUG-022: say which existing branch the rework must continue.
     // trace:BUG-b6b1278890774ef993d2ebc327862470-022 | ai:claude
     if let Some((pr, branch)) = rework_pr.as_ref().filter(|_| !list_sessions) {
         eprintln!(
@@ -11904,6 +11904,8 @@ pub(crate) fn handle_queue_work(
         .and_then(|(pr, branch)| {
             crate::rework_direction::detect_main_conflict(&project_root, *pr, branch)
         });
+    let resolved_pickup_pr =
+        (plan.entries.len() == 1 && plan.review_target.is_none()).then(|| rework_pr.clone());
     let rework_branch_override = rework_pr.map(|(_, branch)| branch);
     let session_branch_override = branch_override.or(rework_branch_override.as_deref());
     // BUG-2223: an adopted orphan fixes the tree and branch; an explicit
@@ -13336,6 +13338,7 @@ pub(crate) fn handle_queue_work(
             } else {
                 crate::session_start::PathReentry::None
             },
+            resolved_pickup_pr.clone(),
         )
     };
     let setup_receipt = if no_launch {

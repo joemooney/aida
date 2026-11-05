@@ -83,6 +83,7 @@ fn adopt_as(owns: &str, branch: &str, path: &Path, contained: bool) -> anyhow::R
         /* contained_seat */ contained,
         /* rollback_failed_setup */ false,
         crate::session_start::PathReentry::AdoptOrphan,
+        None,
     )
     .map(|mut receipt| receipt.disarm())
 }
