@@ -235,7 +235,10 @@ ID and the stored origin ID from the resolved requirement. Remapping an ID
 mid-session therefore preserves ownership of an existing branch and its commit
 trailers. Mixed branches naming unrelated requirements remain refused, even
 when their commits name an accepted alias; unscoped branches retain the existing
-commit-evidence and ledgered `--force` rules.
+commit-evidence and ledgered `--force` rules. Branch lookup failures,
+including seat-clone refusals and detached HEAD, refuse before mutation even
+with `--skip-pr-check`; `--force` warns and retains the ledgered override.
+<!-- trace:TASK-2887 | ai:codex -->
 
 **Drain launch ownership.** A single, batch, or nextN member publishes its
 run UUID and zen provenance before the phase-1 status bump and phase-child
