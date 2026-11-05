@@ -3,12 +3,12 @@ spec_id: STORY-b6b1278890774ef993d2ebc327862470-404
 agreed_id: STORY-2476
 title: 'Pipeline stall alarm: mail the advisor when nothing is in flight and no PR can ship'
 description: 'On 2026-11-04 main went 3h without a merge. All 9 open PRs were red or had request-changes, no implementer lanes ran, and the advisor''s waits only polled for ''ready to ship''. Nothing in AIDA flagged that the pipeline was idle and blocked. Acceptance: (1) a due job, or the oversight loop, detects for N minutes (default 30): in-flight implementers == 0 AND no PR is ship-ready AND (an open PR has request-changes or red CI OR the queue is non-empty); (2) it mails the advisor one actionable digest: each blocked PR with its blocker (verdict, failing tests, conflict, stale lease) and the command that unblocks it (queue rework / session end / release); (3) the alarm stays silent while any lane runs or a PR is ready.'
-status: Approved
+status: InProgress
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T00:31:59.464117777Z
-modified_at: 2026-11-05T06:37:18.356885062Z
+modified_at: 2026-11-05T06:41:30.558856996Z
 req_type: Story
 relationships:
 - rel_type: Parent
@@ -315,6 +315,13 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
+- id: 01a1aa70-efbe-79a0-9d2e-37ab710f6e8b
+  author: aida-session-start
+  timestamp: 2026-11-05T06:41:30.558851337Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 47e9f216d38bf2bb6c503baeebfcca728604bd57
   branch: main
