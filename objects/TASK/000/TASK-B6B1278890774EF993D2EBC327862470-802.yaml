@@ -1,0 +1,41 @@
+id: 01a1a990-e4cc-7c91-bd55-892212de3f41
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-802
+title: 'Repeated unchanged review findings: TASK-3046'
+description: |-
+  Identical reviewer findings recurred twice for TASK-3046; do not requeue a third implementer round until an advisor chooses a different implementer/seat or resolves the dispute.
+
+  REVIEW FINDINGS TO ADDRESS (TASK-3046):
+  Verdict: CHANGES REQUESTED
+  Reviewed commit: ed410b432a94
+  Recorded: 2026-11-05T01:45:41.678422392+00:00
+  Findings:
+  1. C1/C2 pass ignores file-tool evidence: scripts/containment/conformance.py evaluate() (lines 276-287) sets C1/C2 'pass' from terminal errnos alone. The file-tool loop at lines 493-500 can only downgrade to fail, never to unknown. The docs (containment-conformance.md:77-81) say missing file-tool execution 'is unknown, never a denial pass', and SKETCH C1 requires the file-write-tool repeat. The Codex report records checks.C1.status=pass while both C1 file_tool_observations are 'unknown'. Fix: report a terminal-only sub-status, or make C1/C2 unknown unless file-tool denial is evidenced, then regenerate the evidence. The docs table (line 111) and the STORY-2460 comment say a bare 'pass'.
+  2. Wrong AGY version in recorded results: docs/testing/containment-conformance.md:110 and the STORY-2460 S1 results comment say 'AGY 1.4.12', but the measured report (containment-conformance-2026-11-04.json:31 vendor_version) is '1.5.0'. 1.4.12 is the version from the earlier SKETCH probe. Correct the docs table and the story comment.
+  3. New tests are not wired into CI: tests/test_containment_conformance.py has no step in .github/workflows/ci.yml, which invokes each Python test file explicitly (e.g. lines 270-288). So 'harness exists with tests' has no CI evidence and will rot. Add a CI step (needs git and openssl), e.g. 'python3 -m unittest tests/test_containment_conformance.py', in the same job as the other python unittest gates.
+  4. Integrity check misses a swap-and-restore of the runner or manifest: .conformance-runner.py and .conformance-manifest.json live inside the vendor-writable workspace (conformance.py:405-410). The only integrity check is a before/after hash (line 488). chmod 0444 does not stop replacement in a writable directory. A transient swap (repoint the writes at paths that return EACCES or EROFS, run the exact invocation, then restore) would produce matching-command receipts with denial errnos, so C1/C2 would 'pass' while the real targets stay untouched. That contradicts the doc's 'closed immutable-by-hash payload' claim (md:45, 81-82). Fix: put the runner and manifest in a parent-owned directory outside W (read-only to the vendor), or have the payload emit the runner and manifest sha256 in its JSON output and require it to match.
+  5. The rename probe cannot test rename-over denial on bind-mount sandboxes: the payload renames a source created in W onto the target (conformance.py:212-216), and evaluate() accepts EXDEV(18) as denial (line 284). Any mount-separated target returns EXDEV whether or not it is writable. The Codex outside-rename 'denial' recorded in the evidence is exactly errno 18. C1 still holds only because create/append also need 1/13/30. Fix: create the rename source in the target's own directory (a parent-made sibling), or do not count EXDEV as a denial.
+  6. C3 can never pass, so posture B from the Q1 signoff is unreachable: evaluate() hardcodes C3 to fail-or-unknown (line 294). The payload also pins an explicit fixture ProxyHandler and ignores env proxies, and the fixture names resolve only through that loopback proxy (lines 161-169). A vendor whose allow-list works through its own proxy or DNS can therefore never route allow.fixture.test, and a correct deny-by-default sandbox blocks the loopback 'allowed' route (as AGY did, ECONNREFUSED). Either define a C3 pass rule (allowed receipt plus no denied receipts plus verified receipt) with an allowed route the vendor's policy can express, or state explicitly in the docs and on STORY-2460 that this runner cannot earn native posture and that a C3-capable harness is S2 work. Right now the 'native did not demonstrate a usable allowed_hosts route' rationale is partly an artifact of the harness.
+  7. Cosmetic: verify_terminal_receipt() is tautological. run() takes results from terminal_receipts() and then checks that the same generator yields an equal row (lines 485-486), so receipt is always True when results is not None. Also, evaluate() recomputes the C0 sha comparison that 'positive' already checks (line 280), and shutil.which() returning None for a missing vendor crashes with TypeError at line 427 instead of a clear refusal.
+  Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-05T02:36:47.692421363Z
+modified_at: 2026-11-05T02:36:47.692421363Z
+req_type: Task
+tags:
+- from-advisor:TASK-3046
+- kind:observation
+- linked:TASK-3046
+- loop-guard
+- review-recurrence
+- severity:major
+filed_at:
+  code_sha: efca74e51a683b314e45f7ccbc9afaccab2b1ec8
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: efca74e51a6
+  vendor: claude
+  session: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
