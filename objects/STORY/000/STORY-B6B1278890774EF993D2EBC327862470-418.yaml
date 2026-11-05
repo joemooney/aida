@@ -21,7 +21,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T04:40:54.168438456Z
-modified_at: 2026-11-05T11:21:38.726851719Z
+modified_at: 2026-11-05T11:52:26.594849559Z
 req_type: Story
 tags:
 - docs:impacted
@@ -282,6 +282,13 @@ comments:
   content: Commit 295542e1a35 references this requirement
   created_at: 2026-11-05T11:21:38.726851719Z
   modified_at: 2026-11-05T11:21:38.726851719Z
+  session_id: 01a1ab704645
+  harness_version: 2.1.318 (Claude Code)
+- id: 01a1ab8d-9ae2-7c02-b820-5812678b260c
+  author: joe
+  content: 'Implementer 2026-11-05: merged origin/main again (295542e1a35), since PR-3411 had gone CONFLICTING. The only conflict was in OVERVIEW.md; main''s Codex-boundary subsection was kept in its own section and the STORY-2492 section was moved after it. Every CI job was green at abd0b869eeb except merge-hold-gate, which needs a human (''aida merge-hold clear 3411'' or a recorded Rework auto-release). Two local lane test runs timed out at 900s while still compiling the aida-cli-lib test binary, so this merge is untested locally and CI must cover it. Finding 11 is still open: the slice-2 spec for watcher discovery and synced (change, head) reservation (AC4) has to be filed by an operator or advisor, along with a trailer choice that does not auto-complete STORY-2492.'
+  created_at: 2026-11-05T11:52:26.594849559Z
+  modified_at: 2026-11-05T11:52:26.594849559Z
   session_id: 01a1ab704645
   harness_version: 2.1.318 (Claude Code)
 history:
