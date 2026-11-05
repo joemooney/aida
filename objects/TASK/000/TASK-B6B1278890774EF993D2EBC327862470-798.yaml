@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T02:00:14.760070519Z
-modified_at: 2026-11-05T20:32:58.648391970Z
+modified_at: 2026-11-05T20:41:35.653843812Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -150,6 +150,15 @@ comments:
   content: 'Investigation outcome recorded and status set Completed per the binding Step 0 stop condition; this does not claim an implemented wake adapter. Documentation changes are ready in the assigned worktree. Sandbox refuses git staging because .git is read-only (index.lock: Read-only file system); commit/push/PR require the host launcher. make check-ci-fast is currently running; final validation state will follow.'
   created_at: 2026-11-05T20:32:58.648391970Z
   modified_at: 2026-11-05T20:32:58.648391970Z
+  session_id: 01a1ad6684e2
+- id: 01a1ad72-0ea5-7d42-ba88-53ab80fcc82b
+  author: joe
+  content: |
+    Final validation: make check-ci-fast passed all 37 fast-tier gates (including feature-disabled CLI, standalone TUI and existing Codex mail-wake fixtures: 53 tests, one skipped). cargo fmt --all -- --check and git diff --check passed. Probe evidence was cross-checked against the captured hook responses; both disposable processes were terminated/reaped. No production source or adapter tests were added because Step 0 failed.
+
+    Investigation is Completed under the binding ruling; Claude live wake remains Unsupported, with next-turn mailbox hooks supported. Ready files: docs/testing/task-3072-claude-mail-wake.md and docs/agents/codex-mail-wake.md. Publication is blocked inside this native lane: git add fails creating .git/index.lock with Read-only file system. No commit, push, PR, ship or review verdict is claimed. Host launcher must commit/publish the pending docs; suggested subject: [AI:codex] docs(mailbox): record unsupported Claude wake investigation (TASK-3072). Standalone implementer boundary respected; no aida pr ship or aida review record was run.
+  created_at: 2026-11-05T20:41:35.653843812Z
+  modified_at: 2026-11-05T20:41:35.653843812Z
   session_id: 01a1ad6684e2
 history:
 - id: 01a1a96f-972c-7473-901d-753850a5dee9
