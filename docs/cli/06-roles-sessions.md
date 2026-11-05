@@ -915,6 +915,10 @@ sent/queued after quiet hours; it does not prove read or action. This slice
 does not implement repeated unresolved escalation.
 
 This detector never starts work, ends a session, releases a lease or merges.
-Codex uses the existing armed mailbox wake service. Claude/Antigravity wake,
-acted-on dispositions, under-cap, last-merge age, stale advisor mail and empty
-rework exits are follow-up work; reading or accepting a wake is not action.
+Codex uses the existing armed mailbox wake service. Explicit recipient responses
+use [`aida mailbox disposition`](../mailbox.md#explicit-responses-to-requests),
+independently of read ACKs. Correlating those responses with alarm episodes and
+unresolved escalation remains follow-up work, along with Claude/Antigravity
+wake, under-cap, last-merge age, stale advisor mail and empty rework exits;
+reading or accepting a wake is not action.
+<!-- trace:TASK-3074 | ai:codex -->

@@ -87,6 +87,11 @@ fn classified_flags() -> Vec<(&'static str, Kind)> {
         ("aida load calibration --since", Shared(calibration)),
         ("aida mailbox archive --older-than", Shared(lookback)),
         ("aida mailbox gc --older-than", Shared(lookback)),
+        // trace:TASK-3074 | ai:codex
+        (
+            "aida mailbox disposition --until",
+            NotATimeBound("absolute RFC3339 response deadline per the disposition contract; no relative/lookback grammar"),
+        ),
         ("aida usage --since", Shared(lookback)),
         // Split so the retired-flag lint (scripts/check-removed-flags.sh),
         // which matches the joined spelling, doesn't flag this label.
