@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T12:51:07.563355298Z
-modified_at: 2026-11-05T02:31:29.066980504Z
+modified_at: 2026-11-05T02:43:20.047924579Z
 req_type: Bug
 tags:
 - area:compete
@@ -97,6 +97,11 @@ comments:
   created_at: 2026-11-05T02:20:09.776497386Z
   modified_at: 2026-11-05T02:20:09.776497386Z
   session_id: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
+- id: 01a1a996-e16f-7ce0-b3db-55dee41a584b
+  author: mcp
+  content: 'Round 2 rework in native Codex seat: addressed all three findings from 6e57ac521464. Parent-death pre_exec is now in launch/parent.rs; preview computes Codex tool metadata from explicit env pairs without a vendor Command; native arm flags resolve from the candidate tree; read-only judges derive posture by named sandbox mode and omit all --add-dir grants. Regression fixture pins a candidate repo different from launcher cwd and the full contained judge argv. Launch ratchet (2 tests), compete_cmd (8 tests), resolve_aida_exe (7 tests), fmt and diff whitespace pass. Broader Codex env tests initially 17 passed / 4 missing matching CLI fixture; building fixture before rerun. Native seat .git is read-only, so fast-forward/commit/push cannot run here. Worktree starts at efca74e51a6 and carries the original PR source changes forward with current launcher-main API integration. Advisor/host must commit the pending edits and publish using the sanctioned from-seat path; no finding is disputed.'
+  created_at: 2026-11-05T02:43:20.047792473Z
+  modified_at: 2026-11-05T02:43:20.047792473Z
 history:
 - id: 01a1a69d-4a2d-7292-9de1-00c519ffe27a
   author: joe
