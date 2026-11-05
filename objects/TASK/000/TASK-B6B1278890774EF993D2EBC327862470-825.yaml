@@ -1,0 +1,39 @@
+id: 01a1ab81-d14a-7323-b8b5-c20254de6927
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-825
+title: 'Repeated unchanged review findings: TASK-3096'
+description: |-
+  Identical reviewer findings recurred twice for TASK-3096; do not requeue a third implementer round until an advisor chooses a different implementer/seat or resolves the dispute.
+
+  REVIEW FINDINGS TO ADDRESS (TASK-3096):
+  Verdict: CHANGES REQUESTED
+  Reviewed commit: 395eea71d48a
+  Recorded: 2026-11-05T08:43:28.882231039+00:00
+  Findings:
+  1. MAJOR aida-cli-lib/src/intent_intake.rs:545-605 (push/pull) + 778-786 (process): the normal two-site flow deadlocks. Home runs 'process' (commits receipts/<sha>.json locally, not pushed). Work then publishes another observation. Home 'publish' is refused as non-fast-forward, and home 'pull' refuses with 'Intake diverged'. No command recovers. The 'separate clone' advice drops the local receipts, and a fresh clone has no journal, so re-running '--action create' there duplicates the spec. concurrent_duplicate_publication_serializes_and_divergence_refuses only covers two publishers and asserts the refusal. Fix: let pull re-apply local-only immutable, digest-addressed receipt/observation files on top of the validated incoming tip (an additive replay, not a content rebase), or keep receipts on a home-local ref, or push the receipt atomically inside process with a defined retry. Add a test where the sender publishes between the receiver's process and publish. Advisor decision needed if this changes the approved never-rebase wording.
+  2. MINOR→MAJOR aida-cli-lib/src/intent_intake.rs:700-773: a definite spec-writer failure wedges the observation for good. The journal is written before the child 'aida add'/'aida comment add' runs, and the child's stderr is discarded (transport_process::bounded sets Stdio::null). Wedge cases: the writer refuses (no role grant, store refusal, a title it rejects); spawn fails before the child exists (an envelope title containing a JSON-escaped NUL makes Command::arg fail and '?' returns early); the 30s timeout kills it. Every later 'process' for that checksum, including --action pending and dismiss, then fails with 'Ambiguous prior spec write'. There is no reconcile command, and docs/cli/02-specs.md says not to delete the journal. Fix: when the child never spawned, or has exited and a fresh evidence() scan finds no marker, remove the journal (or mark it retryable), show the child's stderr, and add an explicit reconcile path. Add a test for a refused writer followed by a successful retry.
+  3. MINOR aida-cli-lib/src/intent_intake.rs:339-476, 485-551: intake stops working permanently once fixed limits are hit, and nothing rotates or compacts it. Every operation re-validates the full history: publish validates it 3 times (files(), history(commit), push), with 2 git spawns per commit, all inside a 30s deadline. The caps are 4096 commits, 8192 files and 32 MiB of blobs, and each processed observation costs 2 commits. So intake hits 'deadline exceeded' or a cap after a few hundred to about 2000 observations (only 256 maximum-size envelopes fit in 32 MiB), and pull/list/process all refuse. Fix: cache the validated tip and validate only new commits, and either document the lifetime limit with a rotation procedure or add one.
+  4. COSMETIC aida-cli-lib/src/intent_intake.rs:794-855: the --json flags on enroll/publish/pull/process do nothing. These commands always print JSON, even in human mode. Human 'list' prints the title JSON-quoted. Receipts and the list view show the internal requirement UUID as destination instead of the spec ID the operator passed with --target. Give these commands a human rendering, or drop the dead flags and say so in docs/cli-format-json-audit.md.
+  5. UNVERIFIED: PR CI at 395eea71d48a (run 41995861126: cli-0, cli-1, lib-0, lib-1, gates, contracts, rest) was still pending at review time. The rework head needs every shard green, including bug_1502_format_json_audit, which the implementer could not run locally.
+  Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-05T11:39:34.090431548Z
+modified_at: 2026-11-05T11:39:34.090431548Z
+req_type: Task
+tags:
+- from-advisor:TASK-3096
+- kind:observation
+- linked:TASK-3096
+- loop-guard
+- review-recurrence
+- severity:major
+filed_at:
+  code_sha: c9166da8a3ce240b3c5464e80ef484980aba0846
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: c9166da8a3c
+  vendor: claude
+  session: b83457ff-84e3-46cb-8f68-4be531a63422
