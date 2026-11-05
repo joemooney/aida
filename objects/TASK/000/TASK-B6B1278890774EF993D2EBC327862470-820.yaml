@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-820
 agreed_id: TASK-3096
 title: 'STORY-2479 slice 2: enrolled intake transport for the aida-intent orphan branch (publish, pull, validate history, process with receipts)'
 description: 'Prerequisite for STORY-2480. Child of STORY-2479. TASK-3077 shipped local observation note/validate/export only. This slice delivers the approved independent intake boundary (STORY-2479 advisor ruling, 2026-11-04 20:00): clone-local enrollment with its own pinned remote; publication of a reviewed envelope to observations/<sha256>.json on the orphan branch; pull with incoming-history validation; an index, refs, lock and worktree isolated from product/store operations; and the processing loop (pending / dismiss / create requirement / comment) with receipts/<sha256>.json. The store-only work transport is unchanged. Keep kind a closed per-version enum so STORY-2480 can add ci-result.'
-status: NeedsAttention
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T07:36:50.416655523Z
-modified_at: 2026-11-05T13:22:57.987360217Z
+modified_at: 2026-11-05T15:56:44.852385239Z
 req_type: Task
 tags:
 - docs:impacted
@@ -85,6 +85,12 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was punted on: design-fork: Round 2 finding 1: the approved STORY-2479 contract explicitly requires fast-forward-only pull and refusal of divergent writes, while review requires recovering the normal process-local-receipt versus remote-publication race. Additive replay would change that approved contract. Request advisor authorization to validate both immutable histories, refuse conflicting filenames, and append only local-only digest-addressed files atop the validated incoming tip, retaining an explicit backup ref until publication; no content merge, force push, or spec replay. Other independent round-2 fixes are being prepared on the existing PR.. Triage reason: #3415 at 6a4eb20 conflicts with main (update-branch fails). Rebase the PR branch onto origin/main, resolve conflicts keeping both sides, one targeted test (task_3096) plus make check-ci-fast, push to the same branch.'
   created_at: 2026-11-05T11:39:28.491250810Z
   modified_at: 2026-11-05T11:39:28.491250810Z
+  session_id: b83457ff-84e3-46cb-8f68-4be531a63422
+- id: 01a1ac6d-45b4-7a23-88fd-3518e085a41a
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Round-2 findings 1, 2 and 4 are resolved: publish-before-accept removes the two-site divergence, and writer failures recover. Finding 3''s checkpoint is defeated on every pull that advances: sync() re-validates the old tip in full. Push failures are mislabelled as lost races, and HTTPS enrollment has no credential path. CI is still pending at the head.. No triage reason was given.'
+  created_at: 2026-11-05T15:56:44.852382795Z
+  modified_at: 2026-11-05T15:56:44.852382795Z
   session_id: b83457ff-84e3-46cb-8f68-4be531a63422
 history:
 - id: 01a1aaa3-d806-7392-8539-dab331d61cdd
@@ -170,6 +176,14 @@ history:
   session_id: 01a1abde20ac
   harness_version: 2.1.318 (Claude Code)
   changes: []
+- id: 01a1ac6d-45b4-7a23-88fd-35018b92f051
+  author: joe
+  timestamp: 2026-11-05T15:56:44.852367663Z
+  session_id: b83457ff-84e3-46cb-8f68-4be531a63422
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: 5602eae5bf12f06d8f3e2f3e1753667a9db41246
   branch: main
@@ -178,11 +192,3 @@ filed_at:
   aida_build_sha: d561213a36f
   vendor: claude
   session: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'Round-2 findings 1, 2 and 4 are resolved: publish-before-accept removes the two-site divergence, and writer failures recover. Finding 3''s checkpoint is defeated on every pull that advances: sync() re-validates the old tip in full. Push failures are mislabelled as lost races, and HTTPS enrollment has no credential path. CI is still pending at the head.'
-  recovery_hint: address the review findings, move TASK-3096 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-05T13:22:57.987360217Z
