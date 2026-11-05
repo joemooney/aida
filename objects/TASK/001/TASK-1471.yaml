@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-09-24T04:25:12.035374412Z
-modified_at: 2026-11-05T05:36:44.163841742Z
+modified_at: 2026-11-05T05:36:45.753683142Z
 req_type: Task
 relationships:
 - rel_type:
@@ -124,6 +124,19 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: All 7 ACs implemented and round-2 minors fixed, but the PR''s own e2e test fails deterministically in CI lib-1 (JSON key-set assertion at task_1471_show_docs_tests.rs:163), so Build is red at the head.. No triage reason was given.'
   created_at: 2026-11-05T05:36:44.163837195Z
   modified_at: 2026-11-05T05:36:44.163837195Z
+  session_id: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
+- id: 01a1aa35-a836-7f03-8ca5-11192d43639f
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (TASK-1471):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: a58a33127968
+    Recorded: 2026-11-05T04:44:02.527075294+00:00
+    Findings:
+    1. BLOCKING: CI (lib-1) job 127048969344 fails task_1471_show_docs_immediate_reverse_and_direct_links_preserve_machine_output at aida-cli-lib/src/tests/task_1471_show_docs_tests.rs:163 ('JSON key set changed'). Root cause is in the test, not flake: STORY-1472 has no relationships before the direct link, and Requirement.relationships is #[serde(skip_serializing_if = "Vec::is_empty")] (aida-core/src/models.rs:4345), so json_before_direct has no 'relationships' key and json_after_direct does. Mirror the TOON branch: assert keys(before) is a subset of keys(after) and the only added key is 'relationships' (and the same for any other skip-if-empty field in EDGE_DELTA, e.g. out_degree if it is omitted at 0). Then the existing changed/EDGE_DELTA check still applies; note before.get(k) is None for the new key, which is already handled since 'relationships' is in EDGE_DELTA. Confirm with the targeted test plus a green lib-1 at the new head.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-05T05:36:45.622908702Z
+  modified_at: 2026-11-05T05:36:45.622908702Z
   session_id: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
 history:
 - id: 01a1a438-4c50-72d0-87d7-ecde2738cbc4
