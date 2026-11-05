@@ -38,8 +38,15 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-05T02:09:16.726846978Z
-modified_at: 2026-11-05T02:09:16.726846978Z
+modified_at: 2026-11-05T02:19:34.000674599Z
 req_type: Story
+comments:
+- id: 01a1a981-1ef0-7913-958b-707df93ccc24
+  author: joe
+  content: 'OPERATOR RULINGS (2026-11-04 19:15): (1) Trigger: explicit CI-request refs only (ci/*), not every main push. (2) Policy: answered. The strategic goal is to move off GitHub (make it private) and eventually hand AIDA to work, so work CI builds code work is going to use. The return channel is the operator acting as a free customer of that product: it reports compile, CI and runtime bugs and feature requests back home. No further policy gate.'
+  created_at: 2026-11-05T02:19:34.000674599Z
+  modified_at: 2026-11-05T02:19:34.000674599Z
+  session_id: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
 filed_at:
   code_sha: efca74e51a683b314e45f7ccbc9afaccab2b1ec8
   branch: main
