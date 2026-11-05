@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T00:31:59.464117777Z
-modified_at: 2026-11-05T04:22:03.201459961Z
+modified_at: 2026-11-05T04:56:22.773607287Z
 req_type: Story
 relationships:
 - rel_type: Parent
@@ -105,6 +105,12 @@ comments:
   content: 'Round 2 rework on PR #3396: addressing all five review items. Add --threshold-mins (30 default, 15 minimum) to stalls and watch, report alarm persistence failures as unknown without aborting watch, inject queue HOME into observation tests, and limit idle suppression to implementer/reviewer lanes plus train. Regenerate format JSON audit and help snapshot; use ledger-aware verdict reads and recognized gh resolution to address the additional lib-1 guards. Existing deferred child tasks TASK-3072 through TASK-3075 remain unchanged.'
   created_at: 2026-11-05T04:21:30.270804592Z
   modified_at: 2026-11-05T04:21:30.270804592Z
+  session_id: 01a1a9ecb8ab
+- id: 01a1aa10-aff5-7052-a56c-1d7ad8d40aa0
+  author: joe
+  content: 'Round 2 pushed to PR #3396: 0c3e5294d22 addresses all five findings plus the reported ledger/launch guards; fd68cd4a445 fixes TOML fixture path encoding found by the fast portability gate. --threshold-mins applies to stalls/watch (30 default, minimum 15), watch treats alarm I/O as unknown, tests inject queue HOME and cover role-less seats, and both CLI artifacts were regenerated. Validation: 43 focused supervisor/ledger/launch tests passed, help snapshot comparison passed, CLI build passed, all 36 check-ci-fast gates passed on rerun, audit matches 777 catalog paths and repeat generation exactly. Full JSON audit integration built but 8 tests refuse fixture advisor authority at setup line 140 in the native PID namespace even with inherited AIDA_* removed, before the original line-493 assertion; filed separate finding SPEC-b6b1278890774ef993d2ebc327862470-014. Final role-less lease test recompilation is still running after the TOML-only fixture edit. Remote head pushed fd68cd4a445; local tracking-ref refresh was refused by sandbox. Left open for separate review/merge; no ship or verdict action.'
+  created_at: 2026-11-05T04:56:22.773607287Z
+  modified_at: 2026-11-05T04:56:22.773607287Z
   session_id: 01a1a9ecb8ab
 history:
 - id: 01a1a947-202d-79b2-827b-2b25c0c16d7a
