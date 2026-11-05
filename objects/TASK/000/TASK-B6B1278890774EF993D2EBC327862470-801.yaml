@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T02:07:56.492424622Z
-modified_at: 2026-11-05T22:14:08.346056316Z
+modified_at: 2026-11-05T22:32:15.417259335Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -137,6 +137,12 @@ comments:
   created_at: 2026-11-05T22:12:40.161584835Z
   modified_at: 2026-11-05T22:12:40.161584835Z
   session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
+- id: 01a1add7-5f39-7a10-ae5c-916fc9e2878b
+  author: joe
+  content: 'Round 4 addressed findings 1 and 2 in commit 023d74de43e, pushed and confirmed as PR #3443 head. Fetched CI job 127544436803 logs: the sole failure was the new raw gh site in pipeline_stall_signals.rs. Moved merge-history observation behind forge.rs through Observed<String>, preserving merge completeness validation. Collected active receipt heads and retention membership together; prune settled empty-rework episodes when receipt/head retires or PR closes, retaining delivery_pending and unknown evidence. Added bounded-growth/cleanup/pending/preview regressions and exercised unchanged-head CI-rerun suppression with retention evidence. Validation: 35 targeted pipeline_stall and forge_read_ratchet_tests passed; cargo fmt --all -- --check passed; make check-ci-fast passed all 37 gates. Finding 3 is the expected supervised merge hold: left in place for human/advisor clearance through aida merge-hold clear 3443 once CI is green. No ship or review-record action performed.'
+  created_at: 2026-11-05T22:32:15.417259335Z
+  modified_at: 2026-11-05T22:32:15.417259335Z
+  session_id: 01a1adc6c0d7
 history:
 - id: 01a1a976-ae11-7d51-be68-dfc8d9eb3acd
   author: joe
