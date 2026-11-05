@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-09-24T04:25:12.035374412Z
-modified_at: 2026-11-05T00:43:40.044862635Z
+modified_at: 2026-11-05T01:02:59.473195193Z
 req_type: Task
 relationships:
 - rel_type:
@@ -81,6 +81,11 @@ comments:
   content: 'Follow-up validation: make check-ci-fast completed successfully with all 36 fast-tier gates passed. cargo fmt --all -- --check and git diff --check passed. New regression commit f3d974bffdf strengthens JSON/TOON byte equality when direct and reverse Docs coexist. The targeted task_1471_show_docs run is still compiling the CLI library test binary after a cold dependency build. No failure output so far. Source tree is clean; normal push to existing PR #3367 will follow the test result.'
   created_at: 2026-11-05T00:43:40.044852106Z
   modified_at: 2026-11-05T00:43:40.044852106Z
+- id: 01a1a93b-0391-7471-9bfb-40fa93d00850
+  author: mcp
+  content: 'Rework complete and published to PR #3367, verified forge head 08709ffa6eda43cccb4d71975fa0bd2c80d1ea98. All advisor findings are addressed: reverse Docs scan independently of cached degree; Doc reads/list errors propagate; command-level regression uses real doc add --about and registered run_show to verify immediate Documentation without rebuild and byte-identical JSON/TOON, plus direct/reverse coexistence. Rebased onto origin/main and reconciled published history to allow a normal fast-forward push. Final cargo test --profile agent -p aida-cli-lib --lib task_1471_show_docs passed (2 tests); make check-ci-fast passed all 36 gates; formatting/whitespace checks passed. One initially added assertion was corrected because filing a second Doc can legitimately refresh centrality metrics; final assertion verifies read-only human rendering preserves machine bytes with both link directions. Git push succeeded remotely; only the local tracking-ref update failed on the read-only .git mount. gh pr view confirms the published head. Working tree clean. PR body updated. No ship, review record, merge or merge-hold clearance performed.'
+  created_at: 2026-11-05T01:02:59.473188119Z
+  modified_at: 2026-11-05T01:02:59.473188119Z
 history:
 - id: 01a1a438-4c50-72d0-87d7-ecde2738cbc4
   author: joe
