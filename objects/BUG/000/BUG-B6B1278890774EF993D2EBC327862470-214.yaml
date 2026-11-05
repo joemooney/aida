@@ -15,7 +15,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T01:34:25.744534100Z
-modified_at: 2026-11-05T19:14:11.935032066Z
+modified_at: 2026-11-05T19:14:19.353162386Z
 req_type: Bug
 tags:
 - area:containment
@@ -60,6 +60,12 @@ comments:
   created_at: 2026-11-05T03:16:03.336346425Z
   modified_at: 2026-11-05T03:16:03.336346425Z
   session_id: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
+- id: 01a1ad22-2859-7461-9a82-e2fb5d07b5c6
+  author: joe
+  content: 'Advisor 2026-11-05 12:25 MST: the closure evidence needs the conformance harness to run Codex under AIDA''s shared boundary, which it cannot do today. Filed TASK-3131 (approved, dispatching now). Once it lands, the advisor runs the C3/C4 probes for Codex under the shared boundary and closes this bug if they pass.'
+  created_at: 2026-11-05T19:14:19.353162386Z
+  modified_at: 2026-11-05T19:14:19.353162386Z
+  session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
 history:
 - id: 01a1a957-eade-7d82-a591-cd58b2226672
   author: joe
