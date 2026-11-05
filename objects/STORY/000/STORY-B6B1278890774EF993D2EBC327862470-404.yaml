@@ -3,12 +3,12 @@ spec_id: STORY-b6b1278890774ef993d2ebc327862470-404
 agreed_id: STORY-2476
 title: 'Pipeline stall alarm: mail the advisor when nothing is in flight and no PR can ship'
 description: 'On 2026-11-04 main went 3h without a merge. All 9 open PRs were red or had request-changes, no implementer lanes ran, and the advisor''s waits only polled for ''ready to ship''. Nothing in AIDA flagged that the pipeline was idle and blocked. Acceptance: (1) a due job, or the oversight loop, detects for N minutes (default 30): in-flight implementers == 0 AND no PR is ship-ready AND (an open PR has request-changes or red CI OR the queue is non-empty); (2) it mails the advisor one actionable digest: each blocked PR with its blocker (verdict, failing tests, conflict, stale lease) and the command that unblocks it (queue rework / session end / release); (3) the alarm stays silent while any lane runs or a PR is ready.'
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T00:31:59.464117777Z
-modified_at: 2026-11-05T02:22:03.657993939Z
+modified_at: 2026-11-05T02:40:27.270141954Z
 req_type: Story
 relationships:
 - rel_type: Parent
@@ -146,6 +146,15 @@ history:
   timestamp: 2026-11-05T02:22:05.568464896Z
   session_id: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
   changes: []
+- id: 01a1a994-3e86-7f40-9c4b-c680b5ac3578
+  author: aida-orchestrator
+  timestamp: 2026-11-05T02:40:27.270167968Z
+  session_id: 01a1a9929611
+  harness_version: 2.1.318 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 47e9f216d38bf2bb6c503baeebfcca728604bd57
   branch: main
@@ -154,3 +163,11 @@ filed_at:
   aida_build_sha: 47e9f216d38
   vendor: claude
   session: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: Slice-1 detector design matches the advisor ruling, but CI cli-0 is red because of this PR (format-json audit not regenerated for the new 'supervise stalls' leaf), AC1's configurable N is missing, and an alarm I/O error can kill the supervise watch loop.
+  recovery_hint: address the review findings, move STORY-2476 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-11-05T02:40:27.270141954Z
