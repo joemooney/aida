@@ -943,7 +943,7 @@ fn collect_spec_prs(
                         && pr
                             .head_branch
                             .as_deref()
-                            .is_some_and(|b| b.starts_with("train/"))
+                            .is_some_and(|b| b.starts_with(crate::pr_train::BRANCH_PREFIX))
                     {
                         continue;
                     }
