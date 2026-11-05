@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-801
 agreed_id: TASK-3075
 title: Extend pipeline detector with remaining independent alarm kinds
 description: Follow-up to the approved STORY-2476 slice 1. Add independent under-cap, no-merge-90m, stale-advisor-mail and empty-rework-exit predicates, each with its own suppression and timer policy. Measure last actual merge, never default-branch commit age. Reuse lease/registry identities, nudge request mailbox delivery and operator fallback. Keep unknown evidence and dry-run behavior safe; preserve independence from pipeline-idle and ready-without-train.
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T02:07:56.492424622Z
-modified_at: 2026-11-05T21:04:23.711266214Z
+modified_at: 2026-11-05T21:08:15.994538408Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -72,6 +72,12 @@ comments:
   created_at: 2026-11-05T20:26:48.247580327Z
   modified_at: 2026-11-05T20:26:48.247580327Z
   session_id: 01a1ad460baa
+- id: 01a1ad8a-79fa-7893-98ef-7a317e402077
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Round-1 findings 1-4 are addressed for a single PR, but empty-rework-exit identity is the comma-joined set of every blocked PR, so any change in set membership re-mails heads already alarmed. Separately, CI at the head is still queued.. It was punted on: other: Round 2 findings 1 (unknown-tick dedup), 2 (same-head CI rerun re-alarm), 3 (self-alarm subject exclusion), and 4 (no-advisor/operator-fallback coverage) are all addressed and none is disputed. Work is validated: 59 supervisor tests and all 37 CI gates passed. Unable to create the required new source commit or complete queue-done inside this native Codex seat: Git metadata is read-only, and queue done refuses because HEAD remains the reviewed 150b0a749ce7. The four edited files are ready for the launcher host-side exit commit. No force override or review record used.. No triage reason was given.'
+  created_at: 2026-11-05T21:08:15.994536125Z
+  modified_at: 2026-11-05T21:08:15.994536125Z
+  session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
 history:
 - id: 01a1a976-ae11-7d51-be68-dfc8d9eb3acd
   author: joe
@@ -159,6 +165,14 @@ history:
   session_id: 01a1ad83db56
   harness_version: 2.1.318 (Claude Code)
   changes: []
+- id: 01a1ad8a-79fa-7893-98ef-7a285f1816b6
+  author: joe
+  timestamp: 2026-11-05T21:08:15.994517073Z
+  session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   aida_version: 0.16.0
   aida_build_sha: fb2086e9008
@@ -171,20 +185,6 @@ implementation_info:
     cargo fmt --all -- --check and git diff --check: passed
   implemented_at: 2026-11-05T18:07:39.448198156Z
   implemented_by: joe
-attention_reason:
-  category: other
-  detail: 'Round 2 findings 1 (unknown-tick dedup), 2 (same-head CI rerun re-alarm), 3 (self-alarm subject exclusion), and 4 (no-advisor/operator-fallback coverage) are all addressed and none is disputed. Work is validated: 59 supervisor tests and all 37 CI gates passed. Unable to create the required new source commit or complete queue-done inside this native Codex seat: Git metadata is read-only, and queue done refuses because HEAD remains the reviewed 150b0a749ce7. The four edited files are ready for the launcher host-side exit commit. No force override or review record used.'
-  lean: 'Host: commit the pending four files to PR #3443 using the publication command recorded in the TASK-3075 comment, then run aida queue done TASK-3075 and dispatch independent review. Keep the merge hold.'
-  raised_by: implementer
-  raised_at: 2026-11-05T20:27:08.266167851Z
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: Round-1 findings 1-4 are addressed for a single PR, but empty-rework-exit identity is the comma-joined set of every blocked PR, so any change in set membership re-mails heads already alarmed. Separately, CI at the head is still queued.
-  recovery_hint: address the review findings, move TASK-3075 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-05T21:04:23.711266214Z
 interface_changes:
   cli:
   - aida supervise stalls/watch now report independent under-cap, no-merge-90m, stale-advisor-mail and empty-rework-exit alarms
