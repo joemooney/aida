@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T19:21:39.461941007Z
-modified_at: 2026-11-05T16:46:49.292557252Z
+modified_at: 2026-11-05T16:59:46.792756748Z
 req_type: Task
 tags:
 - area:train
@@ -29,6 +29,12 @@ comments:
   content: Investigation reproduced the 54-case parallel train suite failure using an existing binary (21 passed, 33 failed). strace showed PID-named test homes and missing receipt directories during fixture setup. run_path_isolated_test_output clears AIDA_LIB_TEST_REAL_HOMES, so the child constructor classifies its assigned unique HOME as an operator home, creates a PID-named replacement, and runs stale-home sweeping. Preserve the constructor fence across env_clear so install_nested retains the parent-owned unique TempDir. Added a deterministic regression for assigned Git config and fence membership; production approval validation unchanged. Fresh build and validation in progress.
   created_at: 2026-11-05T16:46:49.292557252Z
   modified_at: 2026-11-05T16:46:49.292557252Z
+  session_id: 01a1ac964bda
+- id: 01a1aca6-fae8-7882-9e5d-59a202fce1d5
+  author: joe
+  content: 'Implementation and validation complete. Preserved AIDA_LIB_TEST_REAL_HOMES through isolated-test env_clear; regression verifies the assigned Git config survives and temporary HOME does not enter the operator-home fence. Validation: 54/54 parallel bug2406 train tests, 14/14 test_env helper tests, 10/10 test_home isolation tests; formatting and diff checks pass. Negative control omitting the fence makes the new regression fail as expected. Changes staged in three files. Native Codex sandbox refused git commit with read-only .git/index.lock; docs/cli/04-git-lifecycle.md documents launcher commit of pending seat work on exit (TASK-2712). Intended subject: [AI:codex] fix(tests): retain assigned home in isolated test children (TASK-2841). PR body prepared at /tmp/task2841-pr-body.md. No PR opened or push performed from this sandbox; launcher/host publication remains pending.'
+  created_at: 2026-11-05T16:59:46.792756748Z
+  modified_at: 2026-11-05T16:59:46.792756748Z
   session_id: 01a1ac964bda
 history:
 - id: 01a1a82b-86be-7da0-aa37-ff792cf599f6
