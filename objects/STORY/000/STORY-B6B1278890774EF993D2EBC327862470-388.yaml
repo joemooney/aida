@@ -23,7 +23,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T15:39:15.141070572Z
-modified_at: 2026-11-05T01:37:06.320363979Z
+modified_at: 2026-11-05T02:29:46.901530650Z
 req_type: Story
 tags:
 - area:containment
@@ -173,6 +173,16 @@ comments:
   created_at: 2026-11-05T01:37:06.320363979Z
   modified_at: 2026-11-05T01:37:06.320363979Z
   session_id: 01a1a949f904
+- id: 01a1a98a-7915-7251-bce0-aa25b76ab970
+  author: mcp
+  content: |-
+    S1 ROUND-2 CORRECTION (TASK-3046): supersedes the 2026-11-05T01:37 S1 results comment. The measured AGY vendor_version is 1.5.0, not 1.4.12 (the latter belonged to the earlier sketch probe). Current conservative reassessment: AGY C0/C1/C2/C3/C4 unknown; Codex C0/C1 unknown, C2/C3/C4 fail from parent-observed violations. Withdraw prior positive C0/C1 credit because a writable payload directory plus before/after hashes did not exclude transient swaps. C1 also lacks native file-tool denial evidence and its EXDEV rename results cannot prove write denial. Original host reports remain unchanged as historical evidence; current conclusions are under reassessment.vendors.*.checks in docs/testing/containment-conformance-2026-11-04.json. No new vendor execution is claimed.
+
+    C3 LIMITATION: the S1 runner hardcodes its loopback fixture proxy and names resolve only there; a working native vendor proxy/DNS allow list may be unable to use that route. This runner cannot earn native posture and C3 has no pass rule. A C3-capable harness with vendor-policy-expressible allowed routing, allowed positive/denied-route coverage and verified execution is S2 work. Posture A remains a conservative fallback, not evidence that AGY cannot implement native containment. AGY remains refused until integrated acceptance; Codex compatibility exception is unchanged.
+
+    Rework changes prepared: terminal_status separated from overall C1/C2, payload moved outside W and read-only bound by outer bwrap, parent-made same-directory rename sources, EXDEV excluded, missing-vendor refusal fixed, and CI gates wired to tests. Fifteen local tests pass including a real bwrap swap/restore attack. Fresh authorized host reruns remain outstanding: deputies 2 and 3 report NOT running. The native seat cannot commit (.git is read-only); launcher post-exit commit/publication is required.
+  created_at: 2026-11-05T02:29:46.901366622Z
+  modified_at: 2026-11-05T02:29:46.901366622Z
 history:
 - id: 01a1a739-849a-7023-b534-bbe543e4ef1f
   author: joe
