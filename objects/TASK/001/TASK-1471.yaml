@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-09-24T04:25:12.035374412Z
-modified_at: 2026-11-05T00:38:55.571377632Z
+modified_at: 2026-11-05T00:43:40.044862635Z
 req_type: Task
 relationships:
 - rel_type:
@@ -76,6 +76,11 @@ comments:
   content: 'Publication blocker narrowed/resolved: raw git merge fails against the read-only .git mount, but standalone git add, git commit and git rebase succeeded through the available command path. The strengthened regression is now committed. After rebasing onto origin/main, reconciled with origin/task-1471 (Git skipped already-applied feature/fix patches) to retain published history and permit a normal push without force. Targeted test and fast gate remain in progress; no further punt is needed if the final push succeeds.'
   created_at: 2026-11-05T00:32:13.167841644Z
   modified_at: 2026-11-05T00:32:13.167841644Z
+- id: 01a1a929-528c-7df3-85fc-2280a4ea87a6
+  author: mcp
+  content: 'Follow-up validation: make check-ci-fast completed successfully with all 36 fast-tier gates passed. cargo fmt --all -- --check and git diff --check passed. New regression commit f3d974bffdf strengthens JSON/TOON byte equality when direct and reverse Docs coexist. The targeted task_1471_show_docs run is still compiling the CLI library test binary after a cold dependency build. No failure output so far. Source tree is clean; normal push to existing PR #3367 will follow the test result.'
+  created_at: 2026-11-05T00:43:40.044852106Z
+  modified_at: 2026-11-05T00:43:40.044852106Z
 history:
 - id: 01a1a438-4c50-72d0-87d7-ecde2738cbc4
   author: joe
