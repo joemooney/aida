@@ -2,13 +2,28 @@ id: 01a1a9ad-ab56-72e2-bc8b-ea358a1dfd5a
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-804
 agreed_id: TASK-3077
 title: Observation envelope v1 generation, validation and manual-email export
-description: 'First slice explicitly authorized by the 2026-11-04 advisor ruling on STORY-2479. Implement store-independent aida intent note/validate/export, the approved exact six-key v1 canonical SHA-256 envelope with a closed observation kind, bounded reads and byte limits, explicit sensitive-content deny patterns, and tests proving manual-email round trips and no product/store mutation. Preserve intent <SPEC>. Intake policy enrollment, branch publication/pull, receipts/processing and comment recovery remain under STORY-2479 for a later slice. Acceptance: strict unknown/duplicate/type/version/kind/checksum refusals; 512 B title, 64 KiB body, 128 KiB envelope; no inferred metadata or automatic startup/store side effects; portable JSON attachment and sanitization limitation.'
+description: |
+  First slice explicitly authorized by the 2026-11-04 advisor ruling on STORY-2479.
+
+  ## Goal
+  Capture and manually email a reviewed observation without initializing or writing a requirement store. Preserve existing spec comprehension.
+
+  ## Acceptance
+  - Add aida intent note/validate/export with the approved exact six-key v1 envelope, canonical ordered compact-JSON SHA-256, full-digest identity and INTENT-<12 hex> display label.
+  - Admit only the observation kind in v1 and observation/question/request categories; refuse unknown/duplicate/missing keys, wrong types, unsupported versions/kinds, trailing JSON and invalid checksums.
+  - Bound reads before parsing and enforce nonempty title <=512 UTF-8 bytes, body <=64 KiB and serialized envelope <=128 KiB. Reject special files without blocking.
+  - Scan decoded title and body with explicit repeatable deny-pattern regex rules. Refusal diagnostics identify the rule without echoing its pattern or private text. Validation does not certify sanitization.
+  - Local commands precede identity, telemetry, role, cache and store startup; infer no metadata and never execute imported prose. Generation/export emit only the self-contained envelope on stdout; validation requires no spec allocation.
+  - Demonstrate manual-email round trips outside initialized projects, a fixed hash vector and no normalization, exact size bounds, sensitive-text refusals, and unchanged product/store refs, index and startup state. Preserve aida intent <SPEC> parsing.
+
+  ## Remaining parent scope
+  Independent intake-policy enrollment/pinned remote, orphan aida-intent publication/pull, receipts/processing and backup-comment recovery remain under STORY-2479 for subsequent slices. Existing store-only transport must remain unchanged.
 status: Draft
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-05T03:08:13.526173495Z
-modified_at: 2026-11-05T03:11:59.811370211Z
+modified_at: 2026-11-05T03:28:32.612423805Z
 req_type: Task
 tags:
 - docs:impacted
@@ -32,6 +47,11 @@ history:
 - id: 01a1a9af-5b34-7753-9ec7-093f60511e69
   author: joe
   timestamp: 2026-11-05T03:10:04.084699017Z
+  session_id: 01a1a9a8fe02
+  changes: []
+- id: 01a1a9c0-4609-7ef0-a7de-e3642337efaa
+  author: joe
+  timestamp: 2026-11-05T03:28:32.777860594Z
   session_id: 01a1a9a8fe02
   changes: []
 filed_at:
