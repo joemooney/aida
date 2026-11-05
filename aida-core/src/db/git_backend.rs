@@ -830,10 +830,12 @@ impl GitBackend {
             crate::git_ops::notice_store_commit_deferred(&self.root);
             return;
         }
-        if let Err(e) = crate::git_ops::refuse_embedded_repos(&self.root) {
-            eprintln!("warning: store change written but not committed: {e:#}");
-            return;
-        }
+        // TASK-1626: no up-front `refuse_embedded_repos` walk here. Every
+        // staging call below (`add_all`, `add`, via
+        // `stage_oplog_and_deferred_targets` too) and `commit` runs the
+        // refusal itself before touching the index, so a plant still fails
+        // before anything is staged; the extra walk only cost a full store
+        // tree scan per targeted write. trace:TASK-1954 trace:TASK-1626 | ai:claude
         for p in paths {
             if !self.path_present_or_tracked(p) {
                 continue;

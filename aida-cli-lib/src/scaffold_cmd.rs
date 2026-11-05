@@ -342,16 +342,20 @@ pub(crate) fn handle_scaffold_command(
                             )
                         })?;
                     }
-                    std::fs::write(&full_path, &artifact.content).with_context(|| {
+                    // trace:BUG-2009 | ai:claude
+                    // trace:TASK-1954 | ai:claude  trace:TASK-1760 | ai:claude
+                    crate::requirements_cli::write_scaffold_artifact(
+                        &artifact.path,
+                        &full_path,
+                        &artifact.content,
+                    )
+                    .with_context(|| {
                         format!(
                             "writing scaffold artifact {} to {}",
                             artifact.path.display(),
                             full_path.display()
                         )
                     })?;
-                    // trace:BUG-2009 | ai:claude
-                    crate::requirements_cli::ensure_executable_if_hook(&artifact.path, &full_path)
-                        .with_context(|| format!("making {} executable", full_path.display()))?;
                 }
 
                 let action = if exists { "updated" } else { "created" };
@@ -621,15 +625,10 @@ pub(crate) fn handle_scaffold_command(
             only,
         } => {
             // trace:FR-1-028 | ai:claude
-            let root = project_root
-                .clone()
-                .unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
-            if !root.exists() {
-                anyhow::bail!("Project root does not exist: {}", root.display());
-            }
             if let Some(crate::cli::ScaffoldUpgradeOnly::GitHooks) = only {
-                return run_scaffold_upgrade_git_hooks(&root, *dry_run);
+                return run_scaffold_upgrade_git_hooks_at(project_root.as_deref(), *dry_run);
             }
+            let root = upgrade_project_root(project_root.as_deref())?;
             let store = storage.load()?;
 
             // trace:BUG-1639 | ai:claude
@@ -912,6 +911,29 @@ mod task1503_tests {
     }
 }
 
+/// The `--project-root` of `aida scaffold upgrade`, or the working
+/// directory; it must exist.
+// trace:TASK-1954 | ai:claude  trace:TASK-1760 | ai:claude
+fn upgrade_project_root(project_root: Option<&std::path::Path>) -> Result<std::path::PathBuf> {
+    let root = project_root
+        .map(std::path::Path::to_path_buf)
+        .unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
+    if !root.exists() {
+        anyhow::bail!("Project root does not exist: {}", root.display());
+    }
+    Ok(root)
+}
+
+/// `aida scaffold upgrade --only git-hooks` from either dispatch path (with
+/// or without a resolvable store): one place resolves the root and runs it.
+// trace:TASK-1954 | ai:claude  trace:TASK-1760 | ai:claude
+pub(crate) fn run_scaffold_upgrade_git_hooks_at(
+    project_root: Option<&std::path::Path>,
+    dry_run: bool,
+) -> Result<()> {
+    run_scaffold_upgrade_git_hooks(&upgrade_project_root(project_root)?, dry_run)
+}
+
 /// `aida scaffold upgrade --only git-hooks`: back up and replace only the
 /// stale AIDA-generated git hooks (the ones a store write refuses), and
 /// make every AIDA hook git would skip for lack of an executable bit 0755.
@@ -1044,6 +1066,9 @@ pub(crate) fn run_scaffold_upgrade(
     #[derive(Default)]
     struct CategoryStats {
         upgraded: Vec<PathBuf>,
+        // A current hook rewritten only to make it executable (BUG-2009).
+        // trace:TASK-1954 | ai:claude  trace:TASK-1760 | ai:claude
+        made_executable: Vec<PathBuf>,
         created: Vec<PathBuf>,
         left_alone: Vec<PathBuf>,
         // BUG-718: files skipped because they are symlinks — writing would
@@ -1197,19 +1222,20 @@ pub(crate) fn run_scaffold_upgrade(
                             )
                         })?;
                     }
-                    std::fs::write(&on_disk_path, &artifact.content).with_context(|| {
+                    // trace:BUG-2009 | ai:claude
+                    // trace:TASK-1954 | ai:claude  trace:TASK-1760 | ai:claude
+                    crate::requirements_cli::write_scaffold_artifact(
+                        &artifact.path,
+                        &on_disk_path,
+                        &artifact.content,
+                    )
+                    .with_context(|| {
                         format!(
                             "writing scaffold artifact {} to {}",
                             artifact.path.display(),
                             on_disk_path.display()
                         )
                     })?;
-                    // trace:BUG-2009 | ai:claude
-                    crate::requirements_cli::ensure_executable_if_hook(
-                        &artifact.path,
-                        &on_disk_path,
-                    )
-                    .with_context(|| format!("making {} executable", on_disk_path.display()))?;
                 }
                 stats.created.push(artifact.path.clone());
             }
@@ -1224,21 +1250,27 @@ pub(crate) fn run_scaffold_upgrade(
                             )
                         })?;
                     }
-                    std::fs::write(&on_disk_path, &artifact.content).with_context(|| {
+                    // trace:BUG-2009 | ai:claude
+                    // trace:TASK-1954 | ai:claude  trace:TASK-1760 | ai:claude
+                    crate::requirements_cli::write_scaffold_artifact(
+                        &artifact.path,
+                        &on_disk_path,
+                        &artifact.content,
+                    )
+                    .with_context(|| {
                         format!(
                             "writing scaffold artifact {} to {}",
                             artifact.path.display(),
                             on_disk_path.display()
                         )
                     })?;
-                    // trace:BUG-2009 | ai:claude
-                    crate::requirements_cli::ensure_executable_if_hook(
-                        &artifact.path,
-                        &on_disk_path,
-                    )
-                    .with_context(|| format!("making {} executable", on_disk_path.display()))?;
                 }
-                stats.upgraded.push(artifact.path.clone());
+                // trace:TASK-1954 | ai:claude  trace:TASK-1760 | ai:claude
+                if !drifted && needs_mode {
+                    stats.made_executable.push(artifact.path.clone());
+                } else {
+                    stats.upgraded.push(artifact.path.clone());
+                }
             }
             UpgradeAction::RewriteAidaBlock => {
                 if !dry_run {
@@ -1364,6 +1396,22 @@ pub(crate) fn run_scaffold_upgrade(
                 );
             }
             total_changes += stats.upgraded.len();
+        }
+        // trace:TASK-1954 | ai:claude  trace:TASK-1760 | ai:claude
+        if !stats.made_executable.is_empty() {
+            println!(
+                "  {} {} made executable (git skips a hook without the executable bit):",
+                crate::glyph(crate::glyphs::Glyph::FlowQueued).cyan().bold(),
+                stats.made_executable.len(),
+            );
+            for p in &stats.made_executable {
+                println!(
+                    "      {} {}",
+                    crate::glyph(crate::glyphs::Glyph::FlowQueued),
+                    p.display()
+                );
+            }
+            total_changes += stats.made_executable.len();
         }
         if !stats.left_alone.is_empty() {
             let why = match cat {
@@ -2164,14 +2212,11 @@ fn run_scaffold(
                     },
             } = &args
             {
-                let root = project_root
-                    .clone()
-                    .unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
-                if !root.exists() {
-                    anyhow::bail!("Project root does not exist: {}", root.display());
-                }
                 return crate::command_registry::returned(
-                    scaffold_cmd::run_scaffold_upgrade_git_hooks(&root, *dry_run),
+                    scaffold_cmd::run_scaffold_upgrade_git_hooks_at(
+                        project_root.as_deref(),
+                        *dry_run,
+                    ),
                 );
             }
             Ok(crate::command_registry::Flow::Continue)

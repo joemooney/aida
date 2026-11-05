@@ -148,7 +148,16 @@ pub(crate) fn publish_to_store(
         return write_record(store_root, project_root, spec_id, &rel, closed_by);
     }
     let mut written = None;
-    let result = aida_core::db::with_store_write_lock(store_root, || {
+    let mut ran = false;
+    let locked = |f: &mut dyn FnMut() -> anyhow::Result<()>| -> anyhow::Result<()> {
+        #[cfg(test)]
+        if FAIL_LOCK.with(|f| f.get()) {
+            anyhow::bail!("injected store write lock failure");
+        }
+        aida_core::db::with_store_write_lock(store_root, f)
+    };
+    let result = locked(&mut || {
+        ran = true;
         written = write_record(store_root, project_root, spec_id, &rel, closed_by);
         if written.is_some() {
             commit_record(store_root, spec_id, &rel, closed_by)?;
@@ -156,7 +165,19 @@ pub(crate) fn publish_to_store(
         Ok(())
     });
     if let Err(e) = result {
-        eprintln!("warning: timing record for {spec_id} not committed to the store: {e:#}");
+        // TASK-1413: a lock failure (timeout, or a store mid-rebase / on a
+        // detached HEAD) stops the closure before the write. Fall back to the
+        // uncommitted write, as before BUG-2178, so this machine's events
+        // still reach other clones at the next store sync.
+        // trace:TASK-1954 trace:TASK-1413 | ai:claude
+        if !ran {
+            written = write_record(store_root, project_root, spec_id, &rel, closed_by);
+            eprintln!(
+                "warning: timing record for {spec_id} written but not committed to the store (store write lock unavailable): {e:#}"
+            );
+        } else {
+            eprintln!("warning: timing record for {spec_id} not committed to the store: {e:#}");
+        }
     }
     written
 }
@@ -165,6 +186,9 @@ pub(crate) fn publish_to_store(
 thread_local! {
     /// Test seam: fail the record's commit after the write.
     static FAIL_COMMIT: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    /// Test seam: fail to take the store write lock, before the write.
+    // trace:TASK-1413 | ai:claude
+    static FAIL_LOCK: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 }
 
 /// Stage and commit only the record at `rel`, leaving every other store
@@ -728,6 +752,25 @@ mod tests {
         assert!(
             porcelain(&store).contains(&rel),
             "record left for the next sync"
+        );
+    }
+
+    /// TASK-1413: a store write lock that cannot be taken (timeout, or a
+    /// store mid-rebase / detached) still writes the record, uncommitted.
+    // trace:TASK-1954 trace:TASK-1413 | ai:claude
+    #[test]
+    fn task_1413_lock_failure_still_writes_the_record() {
+        let (_g, project, store) = git_fixture("BUG-14");
+        FAIL_LOCK.with(|f| f.set(true));
+        let published = publish(&project, "BUG-14", "done");
+        FAIL_LOCK.with(|f| f.set(false));
+
+        let rel = aida_core::object_store::relative_timing_record_path("BUG-14").unwrap();
+        assert_eq!(published, Some(store.join(&rel)));
+        assert!(store.join(&rel).is_file(), "record dropped on lock failure");
+        assert!(
+            porcelain(&store).contains(&rel),
+            "record left uncommitted for the next sync"
         );
     }
 }

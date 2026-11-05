@@ -318,7 +318,13 @@ pub(super) fn survivors(roots: &[PathBuf], guard_fd: Option<RawFd>, kill: bool) 
         // clone(CLONE_PARENT) sibling of one that sets close-on-exec on its
         // copy: it stays in the scored command's process group. Only a sibling
         // that also leaves that group evades, no more than closing the guard.
+        // That is a deliberate narrowing of BUG-2160's "a CLONE_PARENT sibling
+        // is always counted": the leave-the-group-and-set-close-on-exec case
+        // is accepted as an evasion of the same strength as closing the guard
+        // fd, and the stay-in-group case is pinned by
+        // close_on_exec_guard_copy_in_a_clone_parent_sibling_is_a_survivor.
         // trace:TASK-1956 | ai:claude trace:BUG-2155 | ai:claude
+        // trace:TASK-1954 trace:TASK-1972 | ai:claude
         let own_child = is_own_spawn(&entry.path(), pid);
         let holds_guard = guard.as_ref().is_some_and(|guard| {
             std::fs::read_dir(entry.path().join("fd"))
@@ -371,6 +377,22 @@ mod tests {
             }
             std::thread::sleep(std::time::Duration::from_millis(5));
         }
+    }
+
+    /// Whether `/usr/bin/python3` exists for a python-driven regression test.
+    /// A missing interpreter fails the test, so the guard cannot vanish
+    /// silently; `AIDA_TEST_ALLOW_NO_PYTHON3=1` turns that into a printed skip.
+    // trace:TASK-1954 trace:TASK-1973 | ai:claude
+    fn python3_or_skip(test: &str) -> bool {
+        if Path::new("/usr/bin/python3").exists() {
+            return true;
+        }
+        assert!(
+            std::env::var_os("AIDA_TEST_ALLOW_NO_PYTHON3").is_some(),
+            "{test} needs /usr/bin/python3; install it or set AIDA_TEST_ALLOW_NO_PYTHON3=1 to skip"
+        );
+        eprintln!("SKIP {test}: /usr/bin/python3 is missing (AIDA_TEST_ALLOW_NO_PYTHON3 set)");
+        false
     }
 
     // trace:BUG-2160 | ai:claude
@@ -428,6 +450,9 @@ mod tests {
     // trace:TASK-1956 | ai:claude
     #[test]
     fn close_on_exec_guard_copy_in_a_mid_exec_child_is_not_a_survivor() {
+        if !python3_or_skip("close_on_exec_guard_copy_in_a_mid_exec_child_is_not_a_survivor") {
+            return;
+        }
         use std::io::BufRead;
         use std::os::unix::process::CommandExt;
         use std::process::{Command, Stdio};
@@ -456,10 +481,7 @@ mod tests {
                     Ok(())
                 });
             }
-            let Ok(mut child) = cmd.spawn() else {
-                eprintln!("SKIP close_on_exec_guard_copy_in_a_mid_exec_child_is_not_a_survivor: /usr/bin/python3 cannot be spawned");
-                return;
-            };
+            let mut child = cmd.spawn().expect("spawn /usr/bin/python3");
             let pid = child.id() as i32;
             let mut ready = String::new();
             std::io::BufReader::new(child.stdout.take().unwrap())
@@ -494,6 +516,9 @@ mod tests {
     // trace:BUG-2160 | ai:claude
     #[test]
     fn clone_parent_sibling_of_a_scored_command_is_counted_and_killed() {
+        if !python3_or_skip("clone_parent_sibling_of_a_scored_command_is_counted_and_killed") {
+            return;
+        }
         use std::process::{Command, Stdio};
         let temp = TempDir::new().unwrap();
         let root = temp.path().to_path_buf();
@@ -552,6 +577,9 @@ print(pid,flush=True)
     // trace:TASK-1956 | ai:claude
     #[test]
     fn close_on_exec_guard_copy_in_a_clone_parent_sibling_is_a_survivor() {
+        if !python3_or_skip("close_on_exec_guard_copy_in_a_clone_parent_sibling_is_a_survivor") {
+            return;
+        }
         use std::os::unix::process::CommandExt;
         use std::process::{Command, Stdio};
         let mut fds = [0; 2];

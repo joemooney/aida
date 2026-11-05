@@ -149,7 +149,7 @@ fn store_snapshot(f: &Fixture) -> Vec<(PathBuf, Vec<u8>)> {
     out
 }
 
-// trace:TASK-1785.Fixture | ai:claude
+// trace:TASK-1785.ac0ead8d | ai:claude
 // trace:TASK-1785.acbc344f | ai:claude
 #[test]
 fn only_the_unexplained_literal_is_reported() {

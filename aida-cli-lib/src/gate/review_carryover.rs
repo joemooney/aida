@@ -844,8 +844,8 @@ fn git(repo: &Path, args: &[&str]) -> Result<String, CarryOverRefusal> {
 }
 
 /// [`git`] for a call that contacts origin.
-
 // trace:BUG-2181 | ai:claude
+// trace:TASK-1954 | ai:claude  trace:TASK-2002 | ai:claude
 fn origin_git(repo: &Path, args: &[&str]) -> Result<String, CarryOverRefusal> {
     git_via(repo, Some("origin"), args)
 }
