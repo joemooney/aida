@@ -14,7 +14,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T19:24:50.018024034Z
-modified_at: 2026-11-05T21:05:35.735664643Z
+modified_at: 2026-11-05T21:19:59.005358363Z
 req_type: Task
 tags:
 - carried-from:TASK-2842
@@ -68,6 +68,11 @@ comments:
   created_at: 2026-11-05T21:03:30.368248369Z
   modified_at: 2026-11-05T21:03:30.368248369Z
   session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
+- id: 01a1ad95-341d-7800-aa6e-0954686220e0
+  author: mcp
+  content: 'Round 2 addressed all four review findings in 41140e570a7. Preserve descriptive commit subjects (including truncated carried-forward finding specs), substitute only generic summaries, and prefer commit conventional type/scope over requirement defaults. Normalize generic matching for case/whitespace; preserve adjacent completion groups without a space. Added missing-store rework regression asserting recovery error and no after_open handoff. Validation: all five TASK-2891 regressions and all 35 seat_clone::seat_publish_tests passed; cargo fmt --all -- --check and git diff --check passed. Updating existing PR #3456 for independent review; no merge or verdict recording.'
+  created_at: 2026-11-05T21:19:59.005342968Z
+  modified_at: 2026-11-05T21:19:59.005342968Z
 history:
 - id: 01a1ad63-61de-7b02-a9f2-463108532a66
   author: joe
