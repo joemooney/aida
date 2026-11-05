@@ -4,6 +4,12 @@ Claude retains AIDA containment. Missing non-Claude vendor keys still refuse;
 unsupported native vendors refuse. See OVERVIEW.md.
 <!-- trace:TASK-2631 | ai:codex -->
 
+`aida pr hold` preserves Git lookup diagnostics instead of calling every
+refusal a missing branch. Native-seat publication remains subject to the
+private-clone Git refusal; this fix grants no publication authority. See
+[PR lifecycle](docs/cli/04-git-lifecycle.md#aida-pr).
+<!-- trace:TASK-2852 | ai:codex -->
+
 The contained Codex permission preset writes an empty extra `writable_roots`
 list, clearing legacy grants to `~/.cargo`, `~/.rustup` and `~/.aida` in either
 project or user scope. Fetch new Cargo dependencies on the host outside the lane.

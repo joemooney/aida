@@ -129,12 +129,16 @@ fn hold_preserves_a_seat_clone_refusal_for_an_existing_branch() {
 }
 
 // trace:TASK-2852 | ai:codex
+#[cfg(target_os = "linux")]
 #[test]
-fn hold_preserves_git_lookup_errors_outside_a_repository() {
-    let tmp = tempfile::tempdir().unwrap();
+fn hold_preserves_git_lookup_errors_for_an_invalid_git_file() {
+    // Ignore TMPDIR, which may be inside a repository or a seat clone. An
+    // invalid gitfile stops Git discovery even if /tmp has a repository above it.
+    let tmp = tempfile::tempdir_in("/tmp").unwrap();
+    std::fs::write(tmp.path().join(".git"), "invalid gitfile\n").unwrap();
     let err = push_and_verify_held_branch(tmp.path(), "origin", "held-branch").unwrap_err();
     let message = err.to_string();
-    assert!(message.contains("not a git repository"), "{message}");
+    assert!(message.contains("invalid gitfile format"), "{message}");
     assert!(message.contains("PR is not held"), "{message}");
     assert!(!message.contains("does not exist"), "{message}");
 }
