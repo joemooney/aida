@@ -2109,25 +2109,35 @@ const SHIP_STATUS_BACKOFF: std::time::Duration = std::time::Duration::from_secs(
 
 /// The change status for the ship preflight. It re-reads, up to a bound,
 /// while the read itself or its mergeability has not settled. It returns the
-/// last status the forge gave, settled or not, and errs only when no read
-/// succeeded.
-// trace:STORY-2401 | ai:claude
+/// last status the forge gave, settled or not. A definitive refusal fails
+/// immediately; unavailable reads fail when no usable status was obtained.
+// trace:STORY-2401 | ai:codex
 fn ship_status_settled(
     forge: &dyn crate::forge::Forge,
     change: &crate::forge::ChangeRef,
+    backoff: std::time::Duration,
 ) -> Result<crate::forge::ChangeStatus> {
     use crate::forge_observed::Observed;
     let mut last_status = None;
-    let observed = crate::forge_observed::settle(SHIP_STATUS_READS, SHIP_STATUS_BACKOFF, || {
-        forge.observe_change_status(change).and_then(|status| {
+    let observed = crate::forge_observed::settle(SHIP_STATUS_READS, backoff, || {
+        forge.observe_change_status(change).and_then(|reply| {
+            let status = match reply {
+                Ok(status) => status,
+                Err(why) => return Observed::Known(Err(why)),
+            };
             let unsettled = status.mergeable.unsettled_reason().map(str::to_string);
             last_status = Some(status);
             match unsettled {
-                None => Observed::Known(()),
+                None => Observed::Known(Ok(())),
                 Some(why) => Observed::Pending(why),
             }
         })
     });
+    // A settled refusal supersedes any earlier pending status.
+    // trace:STORY-2401 | ai:codex
+    if let Observed::Known(Err(why)) = observed {
+        anyhow::bail!("could not read PR-{}'s status: {why}", change.id);
+    }
     match last_status {
         Some(status) => Ok(status),
         None => anyhow::bail!(
@@ -2138,21 +2148,16 @@ fn ship_status_settled(
     }
 }
 
-// trace:TASK-1606 | ai:codex
-#[allow(clippy::too_many_arguments)]
-fn ship_preflight_gates(
-    project_root: &std::path::Path,
-    main_worktree: &std::path::Path,
-    hold_root: &std::path::Path,
+/// The status/mergeability decision shared by ship's preflight and its tests.
+/// Backoff is supplied explicitly so tests exercise the production retry loop.
+// trace:STORY-2401 trace:TASK-2794 | ai:codex
+pub(crate) fn ship_mergeability_preflight(
+    forge: &dyn crate::forge::Forge,
     change: &crate::forge::ChangeRef,
-    override_stale_check: bool,
-    override_stale_approval: bool,
-    delete_branch: bool,
-    hold_authority: bool,
-) -> Result<()> {
+    backoff: std::time::Duration,
+) -> Result<crate::forge::ChangeStatus> {
     use crate::gate::ship::ShipRefusal;
-    let forge = crate::forge::forge_for(project_root);
-    let status = ship_status_settled(forge.as_ref(), change)?;
+    let status = ship_status_settled(forge, change, backoff)?;
     // STORY-2401 / TASK-2794: only a settled "no" refuses. GitHub reports
     // UNKNOWN until it has computed mergeability. If the value is still not
     // settled after the bounded re-read, ship proceeds, and the forge's own
@@ -2170,6 +2175,24 @@ fn ship_preflight_gates(
             change.id
         );
     }
+    Ok(status)
+}
+
+// trace:TASK-1606 | ai:codex
+#[allow(clippy::too_many_arguments)]
+fn ship_preflight_gates(
+    project_root: &std::path::Path,
+    main_worktree: &std::path::Path,
+    hold_root: &std::path::Path,
+    change: &crate::forge::ChangeRef,
+    override_stale_check: bool,
+    override_stale_approval: bool,
+    delete_branch: bool,
+    hold_authority: bool,
+) -> Result<()> {
+    use crate::gate::ship::ShipRefusal;
+    let forge = crate::forge::forge_for(project_root);
+    let status = ship_mergeability_preflight(forge.as_ref(), change, SHIP_STATUS_BACKOFF)?;
     let ids = ship_gate_known_ids(
         project_root,
         &change.branch,

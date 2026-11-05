@@ -593,16 +593,20 @@ The native desktop and WASM clients (egui-based) were extracted to a separate re
 `Pending` computation and `Transient` read failures. `Forge::observe_*` exposes
 status, metadata, check rows and branch lookup through this type; an empty check
 rollup is pending. GitHub's `UNKNOWN` mergeability stays pending, and incomplete
-status output is transient. Ship preflight retries unsettled mergeability three
-times, two seconds apart, and refuses mergeability only on a settled false;
-the forge still enforces conflicts at merge time. The wave gate distinguishes
-a settled GitHub conflict from unknown evidence.
+status output is transient. Status observations preserve definitive refusals
+(such as a missing PR or denied authentication) as `Known(Err(reason))`; ship
+fails immediately on these without treating them as conflicts. Ship preflight
+retries unsettled mergeability three times, two seconds apart, and refuses
+mergeability only on a settled false; the forge still enforces conflicts at
+merge time. The wave gate distinguishes a settled GitHub conflict from unknown
+evidence.
 
 Train and idle-eligibility GitHub commands now live behind `forge.rs`. A per-file
-ratchet freezes remaining raw GitHub reads outside that boundary. This first
-slice retains legacy `Result` readers; confirmed-negative destructive transitions,
-train journaling and workflow-digest evidence remain later slices of the approved
-story.
+ratchet freezes remaining raw GitHub reads outside that boundary and catches
+calls/imports of the legacy train pass-through helpers outside `pr_train.rs`.
+This first slice retains legacy `Result` readers; confirmed-negative destructive
+transitions, train journaling and workflow-digest evidence remain later slices
+of the approved story.
 <!-- trace:STORY-2401 | ai:codex -->
 
 ### Autonomy & escalation

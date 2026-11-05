@@ -1,7 +1,8 @@
 //! STORY-2401 slice 2: the gh-read ratchet. Every forge read is meant to go
 //! through `forge.rs` / `forge_observed.rs`, where a raw `gh` exit status
 //! becomes an `Observed<T>`. In every non-test source outside those two
-//! files, this gate counts the sites that resolve or spawn `gh` directly.
+//! files, this gate counts the sites that resolve or spawn `gh` directly
+//! and references to the legacy train pass-through helpers outside pr_train.rs.
 //! COUNTS MAY ONLY GO DOWN.
 //!
 //! The advisor ruling (2026-11-03) on how these sites are handled:
@@ -74,15 +75,21 @@ const RAW_GH_ALLOWLIST: &[(&str, usize)] = &[
 /// Raw gh sites in one source: lines outside `#[cfg(test)]` modules and
 /// comments that resolve the gh binary (`resolve_gh_binary*()`,
 /// `resolve_forge_cli(ForgeKind::GitHub)`) or build `Command::new("gh")`,
-/// minus the resolver definitions and any site with a `raw-gh-ok(STORY-2401):`
+/// plus legacy train-helper references unless scanning pr_train.rs, minus the
+/// resolver definitions and any site with a `raw-gh-ok(STORY-2401):`
 /// justification in the three lines above it.
-fn raw_gh_sites(src: &str) -> usize {
+fn raw_gh_sites(src: &str, train_helpers_allowed: bool) -> usize {
     static RAW: std::sync::LazyLock<regex::Regex> = std::sync::LazyLock::new(|| {
         regex::Regex::new(
             r#"resolve_gh_binary(_for_probe)?\(|resolve_forge_cli\(\s*(crate::forge::)?ForgeKind::GitHub|\b\w+::new\("gh"\)"#,
         )
         .unwrap()
     });
+    // References (including imports/aliases) count, not just direct calls.
+    // The legacy helpers are reserved for pr_train.rs until its typed migration.
+    // trace:STORY-2401 | ai:codex
+    static TRAIN_HELPER: std::sync::LazyLock<regex::Regex> =
+        std::sync::LazyLock::new(|| regex::Regex::new(r"\btrain_gh_(stdout|api_read)\b").unwrap());
     static DEF: std::sync::LazyLock<regex::Regex> = std::sync::LazyLock::new(|| {
         regex::Regex::new(r"\bfn\s+resolve_(gh_binary|forge_cli)").unwrap()
     });
@@ -90,7 +97,10 @@ fn raw_gh_sites(src: &str) -> usize {
     let tests = test_module_lines(&lines);
     (0..lines.len())
         .filter(|&i| !tests.contains(&i) && !lines[i].trim_start().starts_with("//"))
-        .filter(|&i| RAW.is_match(lines[i]) && !DEF.is_match(lines[i]))
+        .filter(|&i| {
+            (RAW.is_match(lines[i]) && !DEF.is_match(lines[i]))
+                || (!train_helpers_allowed && TRAIN_HELPER.is_match(lines[i]))
+        })
         .filter(|&i| {
             !lines[i.saturating_sub(3)..i]
                 .iter()
@@ -144,7 +154,31 @@ fn story_2401_raw_gh_scanner_counts_spawns_and_skips_tests_comments_and_escapes(
                fn e() {\n    // raw-gh-ok(STORY-2401): auth probe, not a read.\n    \
                let _ = Command::new(\"gh\");\n}\n\
                #[cfg(test)]\nmod t {\n    fn f() { Command::new(\"gh\"); }\n}\n";
-    assert_eq!(raw_gh_sites(src), 3);
+    assert_eq!(raw_gh_sites(src, false), 3);
+}
+
+// trace:STORY-2401 | ai:codex
+#[test]
+fn story_2401_ratchet_catches_new_train_helper_callers_and_aliases() {
+    for src in [
+        r#"fn f() { crate::forge::train_gh_stdout(root, &["pr", "view"])?; }"#,
+        r#"fn f() { crate::forge::train_gh_api_read(root, endpoint)?; }"#,
+        "use crate::forge::train_gh_stdout as bypass;",
+        "use crate::forge::train_gh_api_read as bypass;",
+    ] {
+        let count = raw_gh_sites(src, false);
+        assert_eq!(count, 1, "new caller must be counted: {src}");
+        let measured = BTreeMap::from([("new_caller.rs".to_string(), count)]);
+        let violations = ratchet_violations(&measured, &[]);
+        assert_eq!(violations.len(), 1);
+        assert!(violations[0].starts_with("new_caller.rs: 1 new raw gh site"));
+        assert_eq!(raw_gh_sites(src, true), 0, "legacy train allowance");
+    }
+    assert_eq!(
+        raw_gh_sites(r#"fn f() { Command::new("gh"); }"#, true),
+        1,
+        "the train allowance must not exempt direct spawns"
+    );
 }
 
 #[test]
@@ -179,7 +213,12 @@ fn story_2401_no_new_raw_gh_reads_outside_forge() {
     let measured: BTreeMap<String, usize> = sources
         .iter()
         .filter(|(file, _)| !BOUNDARY.contains(&file.as_str()))
-        .map(|(file, src)| (file.clone(), raw_gh_sites(src)))
+        .map(|(file, src)| {
+            (
+                file.clone(),
+                raw_gh_sites(src, file == "aida-cli-lib/src/pr_train.rs"),
+            )
+        })
         .filter(|(_, n)| *n > 0)
         .collect();
     // Slice 2 moved the train's and idle_eligible's gh reads behind forge.rs.

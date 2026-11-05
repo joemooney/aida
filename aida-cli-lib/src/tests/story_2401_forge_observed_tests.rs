@@ -337,7 +337,7 @@ fn story_2401_default_observe_reads_bridge_result_reads() {
     );
     assert_eq!(
         forge.observe_change_status(&change()),
-        Observed::Known(status(Observed::Known(true)))
+        Observed::Known(Ok(status(Observed::Known(true))))
     );
     assert!(
         matches!(forge.observe_check_rows(&change()), Observed::Pending(_)),
@@ -360,5 +360,112 @@ fn story_2401_default_observe_reads_bridge_result_reads() {
     assert_eq!(
         settled.observe_change_for_branch("topic"),
         Observed::Known(ChangeLookup::NoChange)
+    );
+}
+
+// trace:STORY-2401 trace:TASK-2794 | ai:codex
+#[test]
+fn story_2401_ship_mergeability_decisions_and_retry_bound() {
+    use crate::gate::ship::{ShipFailure, ShipRefusal};
+    use crate::pr_cmd::ship_mergeability_preflight;
+    for (reads, expected, remaining) in [
+        // Settled false refuses immediately, leaving the next read unused.
+        (
+            vec![
+                Ok(status(Observed::Known(false))),
+                Ok(status(Observed::Known(true))),
+            ],
+            "conflict",
+            1,
+        ),
+        // UNKNOWN must settle within the actual ship loop, not only the parser.
+        (
+            vec![
+                Ok(status(Observed::Pending("UNKNOWN".into()))),
+                Ok(status(Observed::Known(true))),
+                Err(anyhow::anyhow!("unused")),
+            ],
+            "mergeable",
+            1,
+        ),
+    ] {
+        let forge = StubForge {
+            status: std::cell::RefCell::new(reads),
+            rows: vec![],
+            lookup: ChangeLookup::NoChange,
+        };
+        let result = ship_mergeability_preflight(&forge, &change(), Duration::ZERO);
+        match expected {
+            "conflict" => assert_eq!(
+                result
+                    .unwrap_err()
+                    .downcast_ref::<ShipFailure>()
+                    .unwrap()
+                    .reason,
+                ShipRefusal::NotMergeable
+            ),
+            "mergeable" => assert_eq!(result.unwrap(), status(Observed::Known(true))),
+            _ => unreachable!(),
+        }
+        assert_eq!(forge.status.borrow().len(), remaining);
+    }
+    let pending = StubForge {
+        status: std::cell::RefCell::new(
+            (0..4)
+                .map(|_| Ok(status(Observed::Pending("UNKNOWN".into()))))
+                .collect(),
+        ),
+        rows: vec![],
+        lookup: ChangeLookup::NoChange,
+    };
+    let got = ship_mergeability_preflight(&pending, &change(), Duration::ZERO).unwrap();
+    assert!(
+        matches!(got.mergeable, Observed::Pending(_)),
+        "persistent Pending proceeds"
+    );
+    assert_eq!(pending.status.borrow().len(), 1, "exactly three reads");
+    let transient = StubForge {
+        status: std::cell::RefCell::new(
+            (0..4)
+                .map(|_| Err(anyhow::anyhow!("DNS unavailable")))
+                .collect(),
+        ),
+        rows: vec![],
+        lookup: ChangeLookup::NoChange,
+    };
+    let err = ship_mergeability_preflight(&transient, &change(), Duration::ZERO).unwrap_err();
+    assert!(err.to_string().contains("DNS unavailable"));
+    assert!(
+        err.downcast_ref::<ShipFailure>().is_none(),
+        "unavailable read is not a known conflict"
+    );
+    assert_eq!(transient.status.borrow().len(), 1, "exactly three reads");
+}
+
+// trace:STORY-2401 | ai:codex
+#[cfg(unix)]
+#[test]
+fn story_2401_status_refusals_are_settled_and_not_retried() {
+    use crate::forge::observe_github_change_status;
+    for why in [
+        "no pull requests found",
+        "HTTP 404: Not Found",
+        "HTTP 401: authentication refused",
+    ] {
+        let calls = Cell::new(0);
+        let got = settle(3, Duration::ZERO, || {
+            calls.set(calls.get() + 1);
+            observe_github_change_status(Some(output(1, "", why)))
+        });
+        assert_eq!(got, Observed::Known(Err(why.into())));
+        assert_eq!(calls.get(), 1, "a definitive refusal needs no retry");
+    }
+    assert!(matches!(
+        observe_github_change_status(Some(output(1, "", "HTTP 500: Internal Server Error"))),
+        Observed::Transient(_)
+    ));
+    assert_eq!(
+        observe_github_change_status(Some(output(0, "OPEN\tMERGEABLE\t\tabc", ""))),
+        Observed::Known(Ok(status(Observed::Known(true))))
     );
 }

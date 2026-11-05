@@ -1110,10 +1110,15 @@ pub trait Forge {
     // can tell "not settled" from "failed" overrides them.
 
     /// [`Forge::change_status`] as an observation. GitHub overrides it to
-    /// classify the `gh` reply (network failure → `Transient`).
-    // trace:STORY-2401 | ai:claude
-    fn observe_change_status(&self, c: &ChangeRef) -> Observed<ChangeStatus> {
-        Observed::from_result(self.change_status(c))
+    /// classify the `gh` reply (network failure → `Transient`). A definitive
+    /// refusal is `Known(Err(reason))`, distinct from a status and from an
+    /// unavailable read; it neither proves a conflict nor merits a retry.
+    // trace:STORY-2401 | ai:codex
+    fn observe_change_status(
+        &self,
+        c: &ChangeRef,
+    ) -> Observed<std::result::Result<ChangeStatus, String>> {
+        Observed::from_result(self.change_status(c)).map(Ok)
     }
 
     /// [`Forge::change_metadata`] as an observation.
@@ -1157,11 +1162,25 @@ pub trait Forge {
     }
 }
 
+/// Preserve definitive status refusals as settled errors, rather than retrying
+/// them as unavailable evidence. Only successful replies enter the TSV parser.
+// trace:STORY-2401 | ai:codex
+pub(crate) fn observe_github_change_status(
+    out: Option<std::process::Output>,
+) -> Observed<std::result::Result<ChangeStatus, String>> {
+    use crate::forge_observed::{observe_gh, GhReply};
+    observe_gh(out).and_then(|reply| match reply {
+        GhReply::Ok(stdout) => parse_github_change_status(&stdout).map(Ok),
+        GhReply::Refused(why) => Observed::Known(Err(why)),
+    })
+}
+
 // ───────────── STORY-2401: gh reads moved out of their callers ─────────────
 
 /// The merge train's required-check policy read (`gh api <endpoint>`),
 /// through the train's transient-retry runner. Moved here from pr_train.rs
-/// so raw `gh` spawns stay behind forge.rs (STORY-2401 ratchet).
+/// so raw `gh` spawns stay behind forge.rs (STORY-2401 ratchet). This legacy
+/// pass-through is reserved for pr_train.rs; the ratchet counts other callers.
 // trace:BUG-2401 trace:BUG-2219 trace:STORY-2401 | ai:claude
 pub(crate) fn train_gh_api_read(repo: &Path, endpoint: &str) -> Result<std::process::Output> {
     let gh =
@@ -1177,7 +1196,8 @@ pub(crate) fn train_gh_api_read(repo: &Path, endpoint: &str) -> Result<std::proc
 
 /// The merge train's `gh <args>` in the project root, through the train's
 /// transient-retry runner, returning stdout. A non-zero exit errs with the
-/// stderr. Moved here from pr_train.rs (STORY-2401 ratchet).
+/// stderr. Moved here from pr_train.rs (STORY-2401 ratchet). This legacy
+/// pass-through is reserved for pr_train.rs; the ratchet counts other callers.
 // trace:BUG-2214 trace:BUG-2219 trace:STORY-2401 | ai:claude
 pub(crate) fn train_gh_stdout(repo: &Path, args: &[&str]) -> Result<String> {
     let out = crate::pr_train::net_output(repo, &format!("gh {}", args.join(" ")), || {
@@ -2139,17 +2159,20 @@ impl Forge for GitHubForge {
 
     fn change_status(&self, c: &ChangeRef) -> Result<ChangeStatus> {
         match self.observe_change_status(c) {
-            Observed::Known(status) => Ok(status),
-            Observed::Pending(why) | Observed::Transient(why) => {
+            Observed::Known(Ok(status)) => Ok(status),
+            Observed::Known(Err(why)) | Observed::Pending(why) | Observed::Transient(why) => {
                 anyhow::bail!("gh pr view failed for #{}: {why}", c.id)
             }
         }
     }
 
     // trace:STORY-2401 | ai:claude
-    fn observe_change_status(&self, c: &ChangeRef) -> Observed<ChangeStatus> {
+    fn observe_change_status(
+        &self,
+        c: &ChangeRef,
+    ) -> Observed<std::result::Result<ChangeStatus, String>> {
         let id = c.id.to_string();
-        crate::forge_observed::observe_gh_stdout(
+        observe_github_change_status(
             self.gh(&[
                 "pr",
                 "view",
@@ -2161,7 +2184,6 @@ impl Forge for GitHubForge {
             ])
             .ok(),
         )
-        .and_then(|stdout| parse_github_change_status(&stdout))
     }
 
     // trace:TASK-963 | ai:claude

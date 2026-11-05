@@ -1063,7 +1063,7 @@ pub(crate) fn wave_pr_review_facts(
     };
     let forge = forge::forge_for(project_root);
     match forge.observe_change_status(&change_ref) {
-        crate::forge_observed::Observed::Known(status) => (
+        crate::forge_observed::Observed::Known(Ok(status)) => (
             status.review == forge::ReviewDecision::ChangesRequested,
             wave_mergeable_state(forge.kind(), &status.mergeable),
             (!status.head_sha.trim().is_empty()).then_some(status.head_sha),

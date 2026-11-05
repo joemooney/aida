@@ -148,13 +148,13 @@ pub(crate) fn observe_gh_stdout(out: Option<Output>) -> Observed<String> {
 }
 
 fn stderr_is_transient(stderr: &str) -> bool {
-    // external-prose-classifier: forge_observed::stderr_is_transient
     // The shared retry list names common 5xx messages, but every HTTP 5xx
     // (and HTTP 429) describes an unavailable read, not a settled refusal.
     // trace:STORY-2401 | ai:codex
     static HTTP_TRANSIENT: std::sync::LazyLock<regex::Regex> = std::sync::LazyLock::new(|| {
         regex::Regex::new(r"(?i)\bHTTP(?:/\d(?:\.\d)?)?\s+(?:5\d\d|429)\b").unwrap()
     });
+    // external-prose-classifier: forge_observed::stderr_is_transient
     let lower = stderr.to_ascii_lowercase();
     HTTP_TRANSIENT.is_match(stderr)
         || crate::network_retry::default_transient_patterns()
