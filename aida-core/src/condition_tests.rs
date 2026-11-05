@@ -85,6 +85,8 @@ fn canonical_forms_round_trip() {
 fn lenient_spellings_normalise_to_the_canonical_form() {
     for (input, canonical) in [
         ("  SPEC:STORY-12 = Completed ", "spec:STORY-12=completed"),
+        ("spec:story-12=completed", "spec:STORY-12=completed"),
+        ("spec:Story-12=completed", "spec:STORY-12=completed"),
         ("spec:STORY-12=In Progress", "spec:STORY-12=in-progress"),
         ("pr:#2577=MERGED", "pr:2577=merged"),
         ("release:0.17", "release:>=0.17"),

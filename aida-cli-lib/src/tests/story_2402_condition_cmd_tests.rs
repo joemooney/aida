@@ -109,7 +109,7 @@ fn story2402_release_probe_reads_local_numeric_tags_and_reports_missing_repos() 
     assert!(facts.latest_release().is_err());
     let run_git = |args: &[&str]| {
         let output = crate::test_exec::output(
-            std::process::Command::new("git")
+            crate::test_git::git_command()
                 .current_dir(fixture.path())
                 .args(args),
         )

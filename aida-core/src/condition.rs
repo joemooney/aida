@@ -325,7 +325,9 @@ impl FromStr for Condition {
                     ConditionParseError::new(format!("`{status_text}` is not a spec status"))
                 })?;
                 Ok(Condition::Spec {
-                    id: id.to_string(),
+                    // Lookup is case-insensitive; persist one spelling as well.
+                    // trace:STORY-2402 | ai:codex
+                    id: id.to_ascii_uppercase(),
                     status,
                 })
             }

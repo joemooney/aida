@@ -64,6 +64,11 @@ fn read_store(root: &Path, file: Option<&Path>) -> anyhow::Result<RequirementsSt
         },
     };
     if path.is_dir() {
+        // Unit fixtures must not replace the process-wide alias map, literal-ID
+        // check or ID widths used by parallel tests. These fixtures use literal
+        // IDs, so they need only the strict object read below. Production and
+        // binary integration tests always install the store's alias context.
+        // trace:STORY-2402 | ai:codex
         if !cfg!(test) {
             aida_core::node_alias::install_from_store(&path);
         }
