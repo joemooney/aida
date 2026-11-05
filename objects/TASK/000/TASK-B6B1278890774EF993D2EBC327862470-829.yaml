@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-829
 agreed_id: TASK-3110
 title: Investigate queue-work rollback retaining a lease after reporting successful setup rollback
 description: 'Found during BUG-2455 round-2 validation: queue_work_dry_run passes 14/15 tests, but task_1337_post_setup_launch_error_rolls_back_the_owned_setup fails at line 1541 because a spec-scoped session lease remains after the command reports no agent was launched and the owned setup was rolled back. Reproduces as an isolated test and with all ambient AIDA variables removed. The held-branch test and all six required-live BUG-2455 tests pass. This rework does not change rollback logic; baseline reproduction was not performed. Inspect cleanup/retention diagnostics before changing behavior. Logs: /tmp/bug2455-cli-full.log, /tmp/bug2455-cli-rollback.log, /tmp/bug2455-cli-hermetic.log.'
-status: InProgress
+status: Done
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T13:50:30.827731392Z
-modified_at: 2026-11-05T16:35:30.243632403Z
+modified_at: 2026-11-05T16:35:47.640196349Z
 req_type: Task
 tags:
 - finding
@@ -54,8 +54,20 @@ history:
   timestamp: 2026-11-05T16:18:38.212003404Z
   session_id: 01a1ac80c18d
   changes: []
+- id: 01a1ac91-05cf-7b63-9b93-7f7c01fe7a34
+  author: joe
+  timestamp: 2026-11-05T16:35:47.791983849Z
+  session_id: 01a1ac80c18d
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 filed_at:
   aida_version: 0.16.0
   aida_build_sha: c38a77db609
   vendor: codex
   session: 01a1abdf1077
+implementation_info:
+  implemented: true
+  implemented_at: 2026-11-05T16:35:47.640196349Z
+  implemented_by: joe
