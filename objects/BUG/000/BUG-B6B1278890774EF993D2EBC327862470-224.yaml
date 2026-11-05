@@ -18,7 +18,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T18:47:39.717568886Z
-modified_at: 2026-11-05T21:31:48.372236752Z
+modified_at: 2026-11-05T21:36:29.480354305Z
 req_type: Bug
 tags:
 - from-advisor:STORY-2325
@@ -143,6 +143,12 @@ comments:
   content: 'Round 4: commit 8cb06e6020a pushed to PR #3450. Findings 3-5 addressed: removed lease_started pass-through and used lease_written at startup/test, wrapped the subreaper paragraph, and rejected qualified Linux identities whose recorded boot differs from WriterFacts boot (regression covers same boot, mismatched boot, absent boot and PID 1). git diff --check and static manual flags pass; targeted ownership tests and formatting/portability verification are running. Finding 1 / AC5 is still unverified: own migrate --execute refuses with "--execute needs an operator at a terminal"; lane PID namespace 4026533099 differs from host 4026531836. No host output or advisor narrowing has been supplied; no acceptance claim is made. Finding 2 remains pending: run 42111575194 at 842e6e618e96 still had all seven CI lanes in progress when checked. The supervised merge hold is expected and retained.'
   created_at: 2026-11-05T21:31:31.437788824Z
   modified_at: 2026-11-05T21:31:31.437788824Z
+  session_id: 01a1ad9dc6e4
+- id: 01a1ada4-5128-7a80-8a6d-7aec01e6a97c
+  author: joe
+  content: 'Round 4 final validation at pushed commit 8cb06e6020a: cargo test -p aida-cli-lib ownership:: --lib passed all 45 tests (including boot mismatch rejection, unstamped/live Unknown, migration and detached-worker regression). cargo fmt --all -- --check, scripts/check-portability.sh, python3 docs/cli/verify-manual.py --static and git diff --check pass. PR #3450 confirmed at 8cb06e6020af3e05c758988b9495a6491e236207; working tree clean. New-head CI run https://github.com/joemooney/aida/actions/runs/42113364332 was queued when checked; green CI remains unverified. Push reached GitHub successfully, though updating the local remote-tracking ref reported a read-only ref lock. Explicit punt retains Needs Attention for finding 1/AC5 host acceptance and finding 2/CI evidence. No pr ship, review record or hold clearance performed.'
+  created_at: 2026-11-05T21:36:29.480354305Z
+  modified_at: 2026-11-05T21:36:29.480354305Z
   session_id: 01a1ad9dc6e4
 history:
 - id: 01a1ad1a-eea4-75b1-bafd-7e58532b917a
