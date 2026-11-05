@@ -945,6 +945,28 @@ fn bug_2192_host_git_command_resolves_store_hooks_once() {
         0,
         "a host tree never resolves store hooks"
     );
+
+    // The refusal check reuses the same failed resolution: an unverifiable
+    // hooks directory still costs one resolution, and the command refuses.
+    // trace:TASK-2022 | ai:claude
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let hooks = resolve_store_hooks_dir(&store).unwrap().unwrap();
+        std::fs::set_permissions(&hooks, std::fs::Permissions::from_mode(0o700)).unwrap();
+        std::fs::write(hooks.join("pre-rebase"), "#!/bin/sh\nexit 0\n").unwrap();
+    }
+    let (n, mut refused) = resolves(&store);
+    assert_eq!(
+        n, 1,
+        "a refused store git command must resolve the hooks once"
+    );
+    let out = refused.args(["status", "--short"]).output().unwrap();
+    assert!(!out.status.success(), "{out:?}");
+    assert!(
+        String::from_utf8_lossy(&out.stderr)
+            .contains("cannot establish verified host-owned AIDA hooks"),
+        "{out:?}"
+    );
 }
 
 /// Run `f` with every file treated as settled, so the BUG-2192 memo can hit

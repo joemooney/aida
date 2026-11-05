@@ -947,6 +947,7 @@ pub(crate) fn handle_merge_hold(action: &crate::cli::MergeHoldAction) -> Result<
                 verdict_ref,
                 release_condition,
                 spec: None,
+                spec_key: None,
                 placed_by: Some(crate::gate::merge_hold_core::placing_seat()),
                 absorbed: Vec::new(),
             };

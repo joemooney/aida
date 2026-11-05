@@ -12,6 +12,17 @@ use super::ChangeKey;
 use crate::gate::review_verdict as rv;
 use std::path::{Path, PathBuf};
 
+/// STORY-2324 PR-B: every legacy gate-state directory under `.aida/`, for
+/// `aida gate migrate`'s inventory (read-only; the files stay where they are
+/// until the PR-C cutover).
+// trace:STORY-2324 | ai:claude
+pub(crate) const LEGACY_STORE_DIRS: &[&str] = &[
+    "review-verdicts",
+    "merge-holds",
+    "merge-hold-clearances",
+    "pr-holds",
+];
+
 /// The change's legacy verdict files, current file first, then archived
 /// rounds by file name. Paths are relative to `root`.
 pub(crate) fn verdict_files(root: &Path, change: ChangeKey) -> Vec<LegacyFile> {

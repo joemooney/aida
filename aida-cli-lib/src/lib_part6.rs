@@ -216,6 +216,11 @@ mod task_1445_pr_attribution_disagreement_tests;
 #[path = "tests/bug_1486_stakeholder_db_verb_tests.rs"]
 mod bug_1486_stakeholder_db_verb_tests;
 
+// trace:TASK-1939 | ai:claude
+#[cfg(test)]
+#[path = "tests/task_1939_guest_session_leases_tests.rs"]
+mod task_1939_guest_session_leases_tests;
+
 // trace:EPIC-72 trace:TASK-1435 trace:TASK-1436 trace:TASK-1438 trace:TASK-1439 | ai:antigravity
 #[cfg(test)]
 #[path = "tests/epic_72_exposition_tests.rs"]

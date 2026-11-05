@@ -2123,6 +2123,10 @@ Run by: anyone, when: you want to see what's pending (read-only).
 List the decision inbox — every spec with a recorded DecisionRequest, pending ones first. The pure
 read; never prompts (scripting/scanning).
 
+Always shows the full inbox, home or away. Presence only shapes the proactive nudge in `aida
+status`: while away, pending decisions accumulate quietly unless `[presence] questions =
+"always-surface"` (default `"quiet-when-away"`) in `.aida/config.toml`.
+
 Usage: aida questions list [OPTIONS]
 
 Options:
@@ -15255,6 +15259,11 @@ Options:
           check its commit trailers, push it and open the PR. The seat's hooks never run. Never
           merges. With --dry-run, nothing is imported or pushed
 
+      --commit-pending <MSG>
+          With --from-seat: first commit the seat's uncommitted changes with this message, inside
+          AIDA's own sandbox with the seat's hooks off, on the seat's own branch. For a native Codex
+          seat, which cannot commit in its own sandbox. The message must carry the spec trailer
+
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
           compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
@@ -18027,7 +18036,8 @@ win and integrity gates (the kickoff scope-ack, CI, merge-on-green) always apply
 `[presence]` in `.aida/config.toml`: consumers  = "on" | "off"            (master switch; default
 on) away_drain = "headless-both"         (default) | "headless-escalate-defaults" | "headless-park"
 escalation = "defaults" | "park"     (punt handling; unset = derive from away_drain) home_offer =
-"surface" | "dont-block" (home-side; default surface)
+"surface" | "dont-block" (home-side; default surface) questions  = "quiet-when-away" |
+"always-surface" (decision-inbox nudge in `aida status` while away; default quiet-when-away)
 
 Hidden alias for `aida presence away` (kept for muscle memory).
 
@@ -27649,14 +27659,16 @@ and prints the checklist an agent answers for the rest
 Usage: aida gate [OPTIONS] <COMMAND>
 
 Commands:
-  list   List the shipped gates, their versions, and the lifecycle moment each one is a default for
-  show   Print one gate's checklist for an agent to follow
-  run    Run a gate over a spec: the deterministic tier first, then the checklist for what it cannot
-         decide. Advisory; never edits the spec
-  state  Diagnostic: one pull request's effective gate state (verdict, merge hold, execution mode,
-         decision) computed from the requirements it ships, identified once against the committed
-         store, and its gate ledger. Read-only: it decides nothing and changes nothing
-  help   Print this message or the help of the given subcommand(s)
+  list     List the shipped gates, their versions, and the lifecycle moment each one is a default
+           for
+  show     Print one gate's checklist for an agent to follow
+  run      Run a gate over a spec: the deterministic tier first, then the checklist for what it
+           cannot decide. Advisory; never edits the spec
+  state    Diagnostic: one pull request's effective gate state (verdict, merge hold, execution mode,
+           decision) computed from the requirements it ships, identified once against the committed
+           store, and its gate ledger. Read-only: it decides nothing and changes nothing
+  migrate  One-time rewrite that gives every gate-ledger event its requirement's canonical key
+  help     Print this message or the help of the given subcommand(s)
 
 Options:
       --format <FORMAT>
@@ -27777,6 +27789,41 @@ Options:
       --compare
           Also show what today's merge gates decide, column by column, and count where the two
           differ
+
+      --json
+          Emit JSON
+
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida gate migrate
+One-time rewrite that gives every gate-ledger event its requirement's canonical key
+
+Usage: aida gate migrate [OPTIONS]
+
+Options:
+      --dry-run
+          Plan and report; change nothing
+
+      --execute
+          Rewrite the ledger and keep the old one as an archive. Needs an interactive terminal in
+          the host shell, outside any sandbox, with no drain running
+
+      --rollback
+          Restore the ledger the last `--execute` archived (same rules)
 
       --json
           Emit JSON
@@ -45658,6 +45705,11 @@ Working on aida itself
         "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
       },
       {
+        "name": "commit-pending",
+        "takes_value": true,
+        "help": "With --from-seat: first commit the seat's uncommitted changes with this message, inside AIDA's own sandbox with the seat's hooks off, on the seat's own branch. For a native Codex seat, which cannot commit in its own sandbox. The message must carry the spec trailer"
+      },
+      {
         "name": "dry-run",
         "takes_value": false,
         "help": "Print the resolved finish sequence without executing any of it"
@@ -58315,6 +58367,52 @@ Working on aida itself
         "name": "json",
         "takes_value": false,
         "help": "Emit JSON"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "gate",
+      "migrate"
+    ],
+    "about": "One-time rewrite that gives every gate-ledger event its requirement's canonical key",
+    "flags": [
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "dry-run",
+        "takes_value": false,
+        "help": "Plan and report; change nothing"
+      },
+      {
+        "name": "execute",
+        "takes_value": false,
+        "help": "Rewrite the ledger and keep the old one as an archive. Needs an interactive terminal in the host shell, outside any sandbox, with no drain running"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "json",
+        "takes_value": false,
+        "help": "Emit JSON"
+      },
+      {
+        "name": "rollback",
+        "takes_value": false,
+        "help": "Restore the ledger the last `--execute` archived (same rules)"
       }
     ],
     "hidden": false

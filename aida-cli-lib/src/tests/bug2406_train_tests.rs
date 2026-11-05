@@ -120,6 +120,10 @@ impl Fixture {
         self._env = Some(guard);
     }
     fn new(bound: bool) -> Self {
+        Self::with_member_metadata(bound, None, None)
+    }
+    // trace:BUG-2441 | ai:codex
+    fn with_member_metadata(bound: bool, branch: Option<&str>, title: Option<&str>) -> Self {
         let dir = tempfile::tempdir().unwrap();
         let origin = tempfile::tempdir().unwrap();
         let root = dir.path();
@@ -165,8 +169,14 @@ impl Fixture {
                 "STORY-b6b1278890774ef993d2ebc327862470-123",
             ),
         ] {
-            let title = format!("[AI:codex] fix: fixture {n} ({alias})");
-            let branch = format!("source/{alias}");
+            let title = title
+                .filter(|_| n == 11)
+                .map(str::to_owned)
+                .unwrap_or_else(|| format!("[AI:codex] fix: fixture {n} ({alias})"));
+            let branch = branch
+                .filter(|_| n == 11)
+                .map(str::to_owned)
+                .unwrap_or_else(|| format!("source/{alias}"));
             g(root, &["checkout", "-qb", &branch, "main"]);
             fs::write(root.join(format!("car{n}")), format!("reviewed {n}\n")).unwrap();
             let sha = commit(root, &title);
@@ -193,11 +203,17 @@ impl Fixture {
             let obj = record.as_object().unwrap().clone();
             ledger::store::append_one(
                 root,
-                ledger::event::verdict_event(root, ledger::ChangeKey::pr(n), &obj, Some(canonical)),
+                ledger::event::verdict_event(
+                    root,
+                    ledger::ChangeKey::pr(n),
+                    &obj,
+                    Some(&ledger::GateSpec::with_key(canonical, None)),
+                ),
             )
             .unwrap();
             if bound {
-                ledger::store::append_unbound(root, alias, &obj).unwrap();
+                ledger::store::append_unbound(root, &ledger::GateSpec::with_key(alias, None), &obj)
+                    .unwrap();
             }
             records.push(record);
             prs.insert(
@@ -272,6 +288,78 @@ impl Fixture {
         assert_eq!(live.wait_ci(&change, &train).unwrap(), CiVerdict::Green);
         (train, change)
     }
+}
+
+// Exercise the real builder and final gate with queue-work's suffixed branches.
+// trace:BUG-2441 | ai:codex
+fixture_case!(
+    bug2441_rework_branch_with_resolved_title_trains,
+    bug2441_rework_branch_trains,
+    false
+);
+fixture_case!(
+    bug2441_rework_branch_with_resolved_commit_trailer_trains,
+    bug2441_rework_branch_trains,
+    true
+);
+fn bug2441_rework_branch_trains(trailer_only: bool) {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let f = Fixture::with_member_metadata(
+        true,
+        Some("bug-b6b1278890774ef993d2ebc327862470-173-2"),
+        Some(if trailer_only {
+            "fix: rework (BUG-2400)"
+        } else {
+            "fix: rework (Refs BUG-2400)"
+        }),
+    );
+    if trailer_only {
+        // Keep the committed subject's spec while removing the PR-title hint.
+        let mut state: Value =
+            serde_json::from_slice(&fs::read(f.root().join("transport.json")).unwrap()).unwrap();
+        state["prs"]["11"]["title"] = json!("fix: rework");
+        save(f.root(), &state);
+    }
+    let forge = GitHubForge::new(f.root());
+    let mut live = f.live(&forge);
+    let (train, change) = f.opened(&mut live);
+    let lease = live.lease(change.id).unwrap();
+    live.merge_verified(&change, &train, lease.as_ref())
+        .unwrap_or_else(|e| panic!("rework member must train: {e:#}"));
+    assert_eq!(calls(f.root()).len(), 1);
+}
+
+fixture_case!(
+    bug2441_unknown_rework_branch_without_resolved_spec_refuses,
+    bug2441_unresolved_member_refuses,
+    ("bug-b6b1278890774ef993d2ebc327862470-173-2", "fix: rework")
+);
+fixture_case!(
+    bug2441_member_without_spec_ids_refuses,
+    bug2441_unresolved_member_refuses,
+    ("feature/rework", "fix: rework")
+);
+fixture_case!(
+    bug2441_explicit_unknown_id_with_resolved_spec_refuses,
+    bug2441_unresolved_member_refuses,
+    ("feature/rework", "fix: rework (BUG-2400 TASK-999999)")
+);
+fn bug2441_unresolved_member_refuses((branch, title): (&str, &str)) {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let f = Fixture::with_member_metadata(true, Some(branch), Some(title));
+    let forge = GitHubForge::new(f.root());
+    let mut live = f.live(&forge);
+    let (train, change) = f.opened(&mut live);
+    let lease = live.lease(change.id).unwrap();
+    let error = live
+        .merge_verified(&change, &train, lease.as_ref())
+        .unwrap_err();
+    assert!(format!("{error:#}").contains("spec"), "{error:#}");
+    assert!(calls(f.root()).is_empty());
 }
 
 fixture_case!(
@@ -569,6 +657,12 @@ fixture_case!(
     bug2406_new_refusal_refuses,
     "PR-77"
 );
+// trace:BUG-2438 | ai:claude — a current-head refusal under the PR key ejects.
+fixture_case!(
+    bug2438_current_head_refusal_refuses_pr_11,
+    bug2406_new_refusal_refuses,
+    "PR-11"
+);
 fixture_case!(
     bug2406_new_refusal_refuses_unrelated,
     bug2406_new_refusal_refuses,
@@ -606,7 +700,7 @@ fn bug2406_new_refusal_refuses(key: &str) {
                 f.root(),
                 ledger::ChangeKey::pr(77),
                 record.as_object().unwrap(),
-                Some("UNRELATED-1"),
+                Some(&ledger::GateSpec::with_key("UNRELATED-1", None)),
             ),
         )
         .unwrap();
@@ -629,6 +723,124 @@ fn bug2406_new_refusal_refuses(key: &str) {
         "{key}"
     );
     assert!(calls(f.root()).is_empty(), "{key}");
+}
+
+/// BUG-2438: append the incident's PR-3330 ledger shape under PR-11: an
+/// earlier spec-stamped refusal reviewed at `refusal_sha`, then `approval`
+/// recorded with no spec (review watch). Returns the canonical spec key.
+// trace:BUG-2438 | ai:claude
+fn bug2438_ledger(f: &Fixture, refusal_sha: &str, approval: &Value) -> &'static str {
+    let earlier = (chrono::Utc::now() - chrono::Duration::hours(1)).to_rfc3339();
+    let stale = json!({"verdict":"request-changes", "reviewed_sha":refusal_sha,
+        "reviewed_branch":"source/BUG-2400", "recorded_at":earlier,
+        "recorded_by":"fixture earlier-round reviewer"});
+    let canonical = "BUG-b6b1278890774ef993d2ebc327862470-173";
+    for (record, spec) in [(&stale, Some(canonical)), (approval, None)] {
+        let spec = spec.map(|key| ledger::GateSpec::with_key(key, None));
+        ledger::store::append_one(
+            f.root(),
+            ledger::event::verdict_event(
+                f.root(),
+                ledger::ChangeKey::pr(11),
+                record.as_object().unwrap(),
+                spec.as_ref(),
+            ),
+        )
+        .unwrap();
+    }
+    canonical
+}
+
+/// BUG-2438: open the train on the fixture's current-head approvals, then
+/// `record` the case's ledger: the sealed final gate refuses and never
+/// reaches the transport.
+// trace:BUG-2438 | ai:claude
+fn bug2438_refuses(f: &Fixture, why: &str, record: impl FnOnce()) {
+    let forge = GitHubForge::new(f.root());
+    let mut live = f.live(&forge);
+    let (train, change) = f.opened(&mut live);
+    let lease = live.lease(change.id).unwrap();
+    record();
+    assert!(
+        live.merge_verified(&change, &train, lease.as_ref())
+            .is_err(),
+        "{why}"
+    );
+    assert!(calls(f.root()).is_empty(), "{why}");
+}
+
+/// BUG-2438: with NO current-head verdict nothing is superseded, so an
+/// older-head refusal still refuses even beside an older-head approval.
+// trace:BUG-2438 | ai:claude
+#[test]
+fn bug2438_old_head_refusal_without_current_head_verdict_refuses() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let f = Fixture::new(false);
+    let old_head = g(f.root(), &["rev-parse", "main"]);
+    let mut approval = f.records[0].clone();
+    approval["reviewed_sha"] = json!(old_head);
+    bug2438_refuses(&f, "old-head refusal with no current-head verdict", || {
+        bug2438_ledger(&f, &old_head, &approval);
+    });
+}
+
+/// BUG-2438: only a well-formed SHA naming another commit is an older head. A
+/// refusal whose reviewed_sha is malformed or too short to compare keeps
+/// counting (fail closed), even beside a current-head approval.
+// trace:BUG-2438 | ai:claude
+#[test]
+fn bug2438_malformed_reviewed_sha_refusal_is_not_superseded() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    for bad in ["HEAD", "short"] {
+        let f = Fixture::new(false);
+        let head = f.records[0]["reviewed_sha"].as_str().unwrap().to_string();
+        let sha = if bad == "short" {
+            head[..6].to_string()
+        } else {
+            bad.to_string()
+        };
+        bug2438_refuses(&f, bad, || {
+            bug2438_ledger(&f, &sha, &f.records[0]);
+        });
+    }
+}
+
+/// BUG-2438: an earlier round's refusal, stamped with the spec and reviewed at
+/// an older head, is superseded by the PR's approval at the current head
+/// (recorded with no spec, so the spec key's newest verdict is still the old
+/// refusal). The train lands.
+// trace:BUG-2438 | ai:claude
+#[test]
+fn bug2438_old_head_spec_keyed_refusal_is_superseded_by_current_head_approval() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let f = Fixture::new(false);
+    let old_head = g(f.root(), &["rev-parse", "main"]);
+    let canonical = bug2438_ledger(&f, &old_head, &f.records[0]);
+    let by_spec = ledger::project::newest_verdict(f.root(), canonical).unwrap();
+    assert_eq!(
+        by_spec["verdict"],
+        json!("request-changes"),
+        "spec key still names the old refusal"
+    );
+    assert_eq!(
+        ledger::project::newest_verdict(f.root(), "PR-11").unwrap(),
+        *f.records[0].as_object().unwrap()
+    );
+    let forge = GitHubForge::new(f.root());
+    let mut live = f.live(&forge);
+    let (train, change) = f.opened(&mut live);
+    let lease = live.lease(change.id).unwrap();
+    live.merge_verified(&change, &train, lease.as_ref())
+        .unwrap_or_else(|e| panic!("train must land: {e:?}"));
+    let transport = calls(f.root());
+    assert_eq!(transport.len(), 1, "the train merges once");
+    assert!(transport[0].contains(&format!("--match-head-commit {}", train.tip)));
 }
 
 #[test]
@@ -801,7 +1013,7 @@ fn bug2406_sealed_context_refuses(fault: &str) {
                     f.root(),
                     ledger::ChangeKey::pr(77),
                     &record,
-                    Some(spec),
+                    Some(&ledger::GateSpec::with_key(spec, None)),
                 ),
             )
             .unwrap();
@@ -893,7 +1105,10 @@ fn bug2406_source_grant_is_validated_at_original_recording_time() {
             f.root(),
             ledger::ChangeKey::pr(11),
             record.as_object().unwrap(),
-            Some("BUG-B6B1278890774EF993D2EBC327862470-173"),
+            Some(&ledger::GateSpec::with_key(
+                "BUG-B6B1278890774EF993D2EBC327862470-173",
+                None,
+            )),
         ),
     )
     .unwrap();
@@ -924,6 +1139,7 @@ fn hold_on(pr: u64, head: &str) -> crate::gate::merge_hold_core::MergeHoldRecord
         verdict_ref: None,
         release_condition: None,
         spec: None,
+        spec_key: None,
         placed_by: Some("fixture reviewer".into()),
         absorbed: vec![],
     }

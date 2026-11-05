@@ -146,11 +146,7 @@ pub(crate) fn pr_hold_handler(reason: Option<&str>) -> Result<()> {
     // confirm origin's tip matches before recording the hold or saying so.
     // trace:TASK-2793 | ai:claude
     let pushed_sha = push_and_verify_held_branch(&cwd, "origin", &branch)?;
-    let signal = punt::HoldSignal {
-        spec: spec.clone(),
-        branch: branch.clone(),
-        reason: reason.map(str::to_string),
-    };
+    let signal = hold_signal(&project_root, &spec, &branch, reason);
 
     // Prefer the orchestrator-provisioned absolute path (handshake); fall back
     // to the conventional marker path under the main root for a standalone hold.
@@ -186,6 +182,24 @@ pub(crate) fn pr_hold_handler(reason: Option<&str>) -> Result<()> {
         noun,
     );
     Ok(())
+}
+
+/// The [`punt::HoldSignal`] `aida pr hold` records for `spec` on `branch`.
+/// The held spec resolves once, here, against the committed store of the
+/// project at `project_root` (STORY-2324 E3).
+// trace:STORY-2324 | ai:claude
+pub(crate) fn hold_signal(
+    project_root: &std::path::Path,
+    spec: &str,
+    branch: &str,
+    reason: Option<&str>,
+) -> punt::HoldSignal {
+    punt::HoldSignal {
+        spec: spec.to_string(),
+        branch: branch.to_string(),
+        reason: reason.map(str::to_string),
+        spec_key: crate::gate::canon::GateSpec::resolve(project_root, spec).key,
+    }
 }
 
 /// Push `branch` from `repo` to `remote` (setting upstream), then read the
@@ -8446,6 +8460,19 @@ pub(crate) struct ShipArgs {
         conflicts_with_all = ["message", "keep_worktree", "no_trailer_check", "no_merge"]
     )]
     pub from_seat: Option<std::path::PathBuf>,
+
+    /// With --from-seat: first commit the seat's uncommitted changes with
+    /// this message, inside AIDA's own sandbox with the seat's hooks off, on
+    /// the seat's own branch. For a native Codex seat, which cannot commit
+    /// in its own sandbox. The message must carry the spec trailer.
+    // trace:TASK-2712 | ai:claude — plain `//` keeps the marker out of `--help`.
+    #[clap(
+        long,
+        value_name = "MSG",
+        requires = "from_seat",
+        allow_hyphen_values = true
+    )]
+    pub commit_pending: Option<String>,
 }
 
 // STORY-720: `aida ship` dispatches before storage init for the same
@@ -8467,6 +8494,7 @@ fn run_ship(
         dry_run,
         no_trailer_check,
         from_seat,
+        commit_pending,
     } = &args;
     // trace:BUG-HOME-038 | ai:claude
     if let Some(clone) = from_seat {
@@ -8475,8 +8503,18 @@ fn run_ship(
             spec: spec.clone(),
             no_pr: *no_pr,
             dry_run: *dry_run,
+            // trace:TASK-2712 | ai:claude
+            commit_pending: commit_pending.clone(),
         });
     }
+    // TASK-2712: a native Codex lane's git directory is read-only, a seat
+    // clone's included; say so, with the host-commit recovery, before any
+    // git runs.
+    // trace:TASK-2712 | ai:claude
+    crate::codex_native_sandbox::refuse_native_publication(
+        std::env::var("AIDA_CONTAINMENT_POSTURE").ok().as_deref(),
+        &crate::find_project_root().unwrap_or(std::env::current_dir()?),
+    )?;
     return run_human_finish_ceremony(HumanFinishOptions {
         spec: spec.clone(),
         message: message.clone(),

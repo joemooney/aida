@@ -1883,6 +1883,21 @@ pub(crate) fn reviewer_launch_context(root: &Path, id: u64) -> Result<bool> {
 type Launch = (PathBuf, String, String, String);
 thread_local! {
     static LAUNCH: std::cell::RefCell<Option<Launch>> = const { std::cell::RefCell::new(None) };
+    // TASK-2807: agent processes this thread actually spawned, so a pickup
+    // launch tells "the spawn failed" (rolled back) from "an agent ran".
+    // trace:TASK-2807 | ai:claude
+    static SPAWNED: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+}
+
+/// TASK-2807: how many agent processes this thread has spawned through
+/// [`reviewer_status_on_spawn`]. Bumped only once `spawn` returned a child.
+// trace:TASK-2807 | ai:claude
+pub(crate) fn agent_spawn_count() -> u64 {
+    SPAWNED.with(std::cell::Cell::get)
+}
+
+fn note_agent_spawned() {
+    SPAWNED.with(|n| n.set(n.get() + 1));
 }
 
 /// Run the reviewer process queue work launches. Inside a watch launch, mark
@@ -1903,12 +1918,14 @@ pub(crate) fn reviewer_status_on_spawn(
     let launch = LAUNCH.with(|launch| launch.borrow().clone());
     let Some((root, identity, key, head)) = launch else {
         let mut child = cmd.spawn_retrying_etxtbsy()?;
+        note_agent_spawned();
         on_spawn();
         return child.wait();
     };
     let store = Store::open(&root, &identity).map_err(std::io::Error::other)?;
     retry_busy(|| store.record_reviewer(&key, &head, None)).map_err(std::io::Error::other)?;
     let mut child = cmd.spawn_retrying_etxtbsy()?;
+    note_agent_spawned();
     on_spawn();
     match Identity::of(child.id()) {
         Ok(reviewer) => {
@@ -2233,23 +2250,28 @@ fn watch_change(
 }
 
 /// Whether a skip reason parks the head: it is not reviewed and nothing in
-/// flight will review it. A head already reviewed or under review, or one
-/// waiting only for a free reviewer slot, is not parked.
+/// flight will review it. A head already reviewed or under review, one
+/// waiting only for a free reviewer slot, or one whose earlier head's review
+/// is still being superseded, is not parked.
 // trace:BUG-2426 | ai:claude
+// trace:TASK-2813 | ai:claude
 fn parks(reason: &str) -> bool {
     ![
         "head already has a recorded review",
         "head already reserved",
         "global reviewer capacity",
+        "a review of an earlier head still holds this change",
     ]
     .iter()
     .any(|p| reason.starts_with(p))
 }
 
 /// Record (or clear) why the current head is parked, for `aida awaiting`.
-/// The record keeps its first-seen time while the head and reason hold, so
-/// a steady skip writes no state.
+/// The record keeps its first-seen time while the head stays parked, even
+/// as the reason changes (notified, update requested, routed), so `since`
+/// is since-parked; a steady skip writes no state.
 // trace:BUG-2426 | ai:claude
+// trace:TASK-2813 | ai:claude
 fn record_skip(store: &Store, change: &forge::Change, reason: Option<&str>) -> Result<()> {
     let key = change.key();
     let line = reason.filter(|r| parks(r)).map(bounded_diagnostic);
@@ -2263,11 +2285,14 @@ fn record_skip(store: &Store, change: &forge::Change, reason: Option<&str>) -> R
         if same {
             return Ok(());
         }
+        let since = current
+            .filter(|r| r.head == change.head)
+            .map_or_else(chrono::Utc::now, |r| r.checked_at);
         let entry = state.entries.entry(key.clone()).or_default();
         entry.skipped = line.map(|line| Reported {
             head: change.head.clone(),
             line,
-            checked_at: chrono::Utc::now(),
+            checked_at: since,
         });
         Ok(())
     })

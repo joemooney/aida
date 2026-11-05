@@ -433,6 +433,236 @@ fn the_wrapper_mounts_then_execs_the_unchanged_bwrap_argv() {
     assert!(wrap("unshare", &bad, "bwrap", Vec::new()).is_err());
 }
 
+// BUG-2435: the lane-job bwrap on an overlay re-enters the host uid and gid
+// with no capabilities, ahead of the profile's own options.
+// trace:BUG-2435 | ai:claude
+#[test]
+fn bug_2435_the_overlay_job_bwrap_runs_as_the_host_ids_without_caps() {
+    assert_eq!(
+        host_ids_bwrap_args(1000, 1001),
+        [
+            "--unshare-user",
+            "--uid",
+            "1000",
+            "--gid",
+            "1001",
+            "--cap-drop",
+            "ALL"
+        ]
+    );
+    let ov = LaneOverlay {
+        generation: "agent-1-a".into(),
+        lower: "/m/target/lane-base/agent-1-a".into(),
+        upper: "/m/target/lane-overlay/l/upper".into(),
+        work: "/m/target/lane-overlay/l/work".into(),
+        dest: "/m/target/worktrees/s/agent".into(),
+    };
+    let profile = vec![
+        "--ro-bind".to_string(),
+        "/".into(),
+        "/".into(),
+        "cargo".into(),
+    ];
+    let (program, args) = wrap_lane_job("unshare", &ov, "bwrap", profile.clone()).unwrap();
+    assert_eq!(program, "unshare");
+    // SAFETY: getuid and getgid have no preconditions and cannot fail.
+    let (uid, gid) = unsafe { (libc::getuid(), libc::getgid()) };
+    let at = args.iter().position(|a| a == "bwrap").unwrap();
+    let mut expected = host_ids_bwrap_args(uid, gid);
+    expected.extend(profile);
+    assert_eq!(args[at + 1..], expected[..]);
+}
+
+// BUG-2435: a job on the lane overlay runs as the host uid, so the cargo
+// wrapper's `$XDG_RUNTIME_DIR/cargo-slots-$(id -u)` is the host slot
+// directory the sandbox binds read-write: what the job writes there (the
+// wrapper's acquisition marker) is on the host, where host `cargo ps` reads
+// it, and not on a private copy inside the sandbox. Runs the production
+// snapshot, lane overlay, wrapper and lane-job bwrap profile.
+// trace:BUG-2435 | ai:claude
+#[test]
+fn bug_2435_bwrap_overlay_job_takes_its_slot_in_the_host_slot_dir() {
+    let base = live_base();
+    let target = primary(base.path());
+    let lane = lane_under_primary(base.path());
+    let seat_target = base.path().join("target/worktrees/seat");
+    let generation = snapshot(&target, "agent", "lease-ov", Duration::from_secs(5)).unwrap();
+    let ov = prepare_lane(&target, &seat_target, "agent", "lease-ov", &generation).unwrap();
+    if !overlay_usable(&ov) || !bwrap_runs() {
+        return skip_live(&format!(
+            "userns overlay or bwrap unavailable: {:?}",
+            probe("unshare", &ov)
+        ));
+    }
+    // SAFETY: getuid has no preconditions and cannot fail.
+    let uid = unsafe { libc::getuid() };
+    let runtime = base.path().join("run");
+    let slots = runtime.join(format!("cargo-slots-{uid}"));
+    std::fs::create_dir_all(&slots).unwrap();
+    let env: BTreeMap<String, String> =
+        [("XDG_RUNTIME_DIR".to_string(), runtime.display().to_string())].into();
+    let rw = lane.sandbox_rw_paths(&env);
+    assert!(rw.contains(&slots), "{rw:?}");
+    let script = "set -e; id -u; d=\"$XDG_RUNTIME_DIR/cargo-slots-$(id -u)\"; \
+                  [ -w \"$d\" ] || exit 4; echo \"$$\" > \"$d/acq.job\"";
+    let argv = crate::session::lane_job_bwrap_argv(
+        &lane.seat,
+        &rw,
+        &[],
+        "/bin/sh",
+        vec!["-c".into(), script.into()],
+    );
+    let (program, args) = wrap_lane_job("unshare", &ov, "bwrap", argv).unwrap();
+    let out = std::process::Command::new(program)
+        .args(&args)
+        .env("XDG_RUNTIME_DIR", &runtime)
+        .output()
+        .unwrap();
+    assert!(out.status.success(), "{out:?}");
+    assert_eq!(
+        String::from_utf8_lossy(&out.stdout).lines().next(),
+        Some(uid.to_string().as_str()),
+        "the job did not run as the host uid"
+    );
+    assert!(
+        slots.join("acq.job").is_file(),
+        "the job's slot marker is not in the host slot directory"
+    );
+}
+
+// TASK-2829: the overlay probe runs the same nested bwrap a lane job runs
+// (a user namespace back to the host ids, no capabilities), so a host that
+// mounts the overlay but refuses the nested user namespace falls back to cold
+// instead of failing every job. A stand-in `unshare` records the argv.
+// trace:TASK-2829 | ai:claude
+// trace:TASK-2829 | ai:codex
+#[test]
+fn task_2829_the_probe_runs_the_lane_job_bwrap_in_a_nested_userns() {
+    let tmp = tempfile::tempdir().unwrap();
+    let ov = LaneOverlay {
+        generation: "agent-1-a".into(),
+        lower: tmp.path().join("lower"),
+        upper: tmp.path().join("upper"),
+        work: tmp.path().join("work"),
+        dest: tmp.path().join("dest"),
+    };
+    let record = tmp.path().join("argv");
+    let fake = tmp.path().join("unshare");
+    crate::test_exec::write_executable(
+        &fake,
+        format!(
+            "#!/bin/sh\nprintf '%s\\n' \"$@\" > '{}'\nexit 0\n",
+            record.display()
+        ),
+    );
+    let fake = fake.display().to_string();
+    probe_with(&fake, "/opt/bwrap", &ov).unwrap();
+    let argv: Vec<String> = std::fs::read_to_string(&record)
+        .unwrap()
+        .lines()
+        .map(str::to_string)
+        .collect();
+    let at = argv.iter().position(|a| a == "/opt/bwrap").unwrap();
+    // SAFETY: getuid and getgid have no preconditions and cannot fail.
+    let (uid, gid) = unsafe { (libc::getuid(), libc::getgid()) };
+    let mut expected = host_ids_bwrap_args(uid, gid);
+    expected.extend(PROBE_BWRAP_ARGS.iter().map(|a| a.to_string()));
+    assert_eq!(argv[at + 1..], expected[..], "{argv:?}");
+    // The argv is the lane job's own wrapping, only the bwrap profile differs.
+    let job_args: Vec<String> = PROBE_BWRAP_ARGS.iter().map(|a| a.to_string()).collect();
+    let (_, job) = wrap_lane_job(&fake, &ov, "/opt/bwrap", job_args).unwrap();
+    assert_eq!(argv, job);
+}
+
+// TASK-2829: with the real `unshare` the probe fails when the nested bwrap
+// stage fails, even though the overlay mounted, and passes with the real
+// bubblewrap. Joins the forced-live CI gate.
+// trace:TASK-2829 | ai:claude
+#[test]
+fn bug_2435_bwrap_probe_fails_when_the_nested_bwrap_fails() {
+    let base = live_base();
+    let target = primary(base.path());
+    let seat_target = base.path().join("target/worktrees/seat");
+    let generation = snapshot(&target, "agent", "lease-ov", Duration::from_secs(5)).unwrap();
+    let ov = prepare_lane(&target, &seat_target, "agent", "lease-ov", &generation).unwrap();
+    if !overlay_usable(&ov) || !bwrap_runs() {
+        return skip_live(&format!(
+            "userns overlay or bwrap unavailable: {:?}",
+            probe("unshare", &ov)
+        ));
+    }
+    assert!(probe_with("unshare", "bwrap", &ov).is_ok());
+    let refused = probe_with("unshare", "false", &ov);
+    assert!(refused.is_err(), "{refused:?}");
+}
+
+// TASK-2830: `--cap-drop ALL` on the overlay job's bwrap keeps the job from
+// remounting the read-only binds it runs under: `/` and a fresh bind of a
+// directory outside the job's writable paths both stay read-only, and the
+// host file under them is unchanged. Runs the production snapshot, lane
+// overlay, wrapper and lane-job bwrap profile. Joins the forced-live CI gate.
+// trace:TASK-2830 | ai:claude
+#[test]
+fn bug_2435_bwrap_overlay_job_cannot_remount_a_ro_bind_rw() {
+    let base = live_base();
+    let target = primary(base.path());
+    let lane = lane_under_primary(base.path());
+    let seat_target = base.path().join("target/worktrees/seat");
+    let generation = snapshot(&target, "agent", "lease-ov", Duration::from_secs(5)).unwrap();
+    let ov = prepare_lane(&target, &seat_target, "agent", "lease-ov", &generation).unwrap();
+    if !overlay_usable(&ov) || !bwrap_runs() {
+        return skip_live(&format!(
+            "userns overlay or bwrap unavailable: {:?}",
+            probe("unshare", &ov)
+        ));
+    }
+    let ro = base.path().join("ro");
+    std::fs::create_dir_all(&ro).unwrap();
+    let victim = ro.join("victim");
+    std::fs::write(&victim, "host\n").unwrap();
+    let env: BTreeMap<String, String> = BTreeMap::new();
+    let rw = lane.sandbox_rw_paths(&env);
+    assert!(!rw.iter().any(|p| ro.starts_with(p)), "{rw:?}");
+    let ro_s = ro.display().to_string();
+    let script = format!(
+        "command -v mount >/dev/null || exit 3; \
+         echo x > '{ro_s}/victim' 2>/dev/null && echo WROTE-BEFORE; \
+         mount -o remount,rw / 2>&1 && echo REMOUNTED-ROOT; \
+         mount -o remount,bind,rw / 2>&1 && echo REMOUNTED-ROOT-BIND; \
+         mount --bind '{ro_s}' '{ro_s}' 2>&1 && echo BOUND; \
+         mount -o remount,bind,rw '{ro_s}' 2>&1 && echo REMOUNTED-RO; \
+         echo x > '{ro_s}/victim' 2>/dev/null && echo WROTE-AFTER; \
+         grep -q ' / / ro[, ]' /proc/self/mountinfo && echo ROOT-STILL-RO; \
+         echo READY"
+    );
+    let argv = crate::session::lane_job_bwrap_argv(
+        &lane.seat,
+        &rw,
+        &[],
+        "/bin/sh",
+        vec!["-c".into(), script],
+    );
+    let (program, args) = wrap_lane_job("unshare", &ov, "bwrap", argv).unwrap();
+    let out = std::process::Command::new(program)
+        .args(&args)
+        .output()
+        .unwrap();
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(out.status.success(), "{out:?}");
+    assert!(stdout.contains("READY"), "the job did not run: {stdout}");
+    for refused in [
+        "WROTE-BEFORE",
+        "REMOUNTED-ROOT",
+        "BOUND",
+        "REMOUNTED-RO",
+        "WROTE-AFTER",
+    ] {
+        assert!(!stdout.contains(refused), "{refused}: {stdout}");
+    }
+    assert!(stdout.contains("ROOT-STILL-RO"), "{stdout}");
+    assert_eq!(std::fs::read_to_string(&victim).unwrap(), "host\n");
+}
+
 /// A lane whose seat target is `<root>/target/worktrees/seat`, under the
 /// fixture primary.
 fn lane_under_primary(root: &Path) -> crate::lane_job::LaneJobs {
@@ -498,7 +728,8 @@ fn an_unavailable_overlay_falls_back_to_a_reported_cold_seed() {
     );
 }
 
-/// Whether `unshare -Urm` can mount an overlay here.
+/// Whether `unshare -Urm` can mount an overlay here and run the lane job's
+/// nested bwrap on it.
 fn overlay_usable(ov: &LaneOverlay) -> bool {
     probe("unshare", ov).is_ok()
 }
@@ -563,7 +794,7 @@ fn bug_2383_bwrap_overlay_seat_write_never_changes_a_primary_inode() {
         "/bin/sh",
         vec!["-c".into(), script],
     );
-    let (program, args) = wrap("unshare", &ov, "bwrap", argv).unwrap();
+    let (program, args) = wrap_lane_job("unshare", &ov, "bwrap", argv).unwrap();
     let out = std::process::Command::new(program)
         .args(&args)
         .output()
@@ -665,7 +896,7 @@ fn bug_2383_bwrap_a_planted_upper_symlink_never_redirects_a_later_job() {
             vec!["-c".into(), script],
         );
         let (program, args) = if overlay {
-            wrap("unshare", &ov, "bwrap", argv).unwrap()
+            wrap_lane_job("unshare", &ov, "bwrap", argv).unwrap()
         } else {
             ("bwrap".to_string(), argv)
         };

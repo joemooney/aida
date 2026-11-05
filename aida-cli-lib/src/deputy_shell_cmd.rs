@@ -18,6 +18,8 @@ use crate::deputy_shell::{
     self as ds, JobState, JobView, Queue, ShellJob, OPERATOR_TTY, RC_WAIT_TIMEOUT,
 };
 
+/// How long `wait` treats a job dir with no state as a claim in progress.
+const CLAIM_GRACE: Duration = Duration::from_secs(10);
 /// The seats a refreshed grant may delegate unless `--delegate-seat` says.
 const DEFAULT_DELEGATE_SEATS: [&str; 4] = ["advisor", "implementer", "reviewer", "integrator"];
 
@@ -354,10 +356,23 @@ pub(crate) fn wait(
 ) -> Result<i32> {
     let begun = std::time::Instant::now();
     let mut last_note = std::time::Instant::now();
+    let mut claiming_since: Option<std::time::Instant> = None;
     loop {
         let Some(view) = q.locate(id)? else {
+            // Mid-claim the runner has moved the job out of `incoming/` into
+            // its `jobs/<id>/` dir but not yet written `state.json`, so for a
+            // moment it is in neither place. Keep polling through that window
+            // (bounded, so an interrupted claim still errors) instead of
+            // reporting a live job as missing.
+            // trace:STORY-b6b1278890774ef993d2ebc327862470-334.ac930a33 | ai:claude
+            let since = *claiming_since.get_or_insert_with(std::time::Instant::now);
+            if q.job_dir(id).is_dir() && since.elapsed() < CLAIM_GRACE {
+                std::thread::sleep(Duration::from_millis(50));
+                continue;
+            }
             bail!("no script job {id} in deputy {:?}", q.name);
         };
+        claiming_since = None;
         if finished(&view.state) {
             if let Ok(bytes) = std::fs::read(q.transcript_path(id)) {
                 out.write_all(&bytes)?;
