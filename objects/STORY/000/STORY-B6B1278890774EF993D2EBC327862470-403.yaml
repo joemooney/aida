@@ -3,12 +3,12 @@ spec_id: STORY-b6b1278890774ef993d2ebc327862470-403
 agreed_id: STORY-2475
 title: Headless Codex queue-work lanes publish their own work on exit (host-side commit + ship)
 description: 'Codex''s native sandbox makes .git read-only, so a Codex `aida queue work` lane leaves validated edits uncommitted in its seat clone and exits with ''pr-opened ... untested'' or nothing. Someone has to run `aida ship SPEC --from-seat <clone> --commit-pending ...` by hand. On 2026-11-04 the BUG-2439 fix sat uncommitted for 3 hours. TASK-2712 added the host commit for agent-new lanes only. Acceptance: (1) when a contained Codex queue-work lane exits with pending seat changes, the host commits them with a generated [AI:codex] message naming the spec, and ships them to the existing PR or opens one; (2) this also covers reworks of an existing PR branch; (3) an exit with no changes is reported to the advisor by mail, not silently; (4) it replaces the advisor''s auto-publish.sh workaround.'
-status: NeedsAttention
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T00:31:51.425362067Z
-modified_at: 2026-11-05T01:55:49.069449562Z
+modified_at: 2026-11-05T01:55:50.969359841Z
 req_type: Story
 comments:
 - id: 01a1a924-ab5d-7630-baf2-668624abd4e4
@@ -28,6 +28,12 @@ comments:
   content: 'ADVISOR RULING (2026-11-04 19:00) on merge-conflict handling: the host never resolves conflicts. Before seating a rework for a spec with an open PR, the host seats the PR head branch and attempts merge origin/main. If it''s clean, commit the merge and launch. If it conflicts, abort the merge, don''t launch Codex, and route the spec to a non-native-sandbox vendor (claude) with a mail to the advisor naming the conflicting files. Exit publishing: after a contained Codex lane exits with pending changes, the host commits them and ships to the existing PR (or opens one). After a no-change exit on a still-red PR, mail the advisor with kind=request. Continue from 858ffdffaba on branch story-b6b1278890774ef993d2ebc327862470-403 and open the PR.'
   created_at: 2026-11-05T01:55:49.069449562Z
   modified_at: 2026-11-05T01:55:49.069449562Z
+  session_id: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
+- id: 01a1a96b-6839-7690-ad08-9320e43b909a
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was punted on: design-fork: Partial implementation in seat: standalone Codex queue-work post-exit commit and publication, plus PR-head lookup independent of Approved status or Rework hold. Acceptance addition also requires host merge-from-main before every vendor starts. Need ruling for conflicting merges: refuse and park before launch, or expose conflicts to a lane that cannot write Git metadata and have host finish the merge. Existing conflict_task asks the child to commit, incompatible with native Codex. Drain and resume publication coverage also remains. Do not mark complete or publish as finished.. No triage reason was given.'
+  created_at: 2026-11-05T01:55:50.969356389Z
+  modified_at: 2026-11-05T01:55:50.969356389Z
   session_id: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
 history:
 - id: 01a1a947-16f2-71f0-9679-9dc05c31b942
@@ -58,6 +64,14 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1a96b-6839-7690-ad08-931669713686
+  author: joe
+  timestamp: 2026-11-05T01:55:50.969341540Z
+  session_id: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: 47e9f216d38bf2bb6c503baeebfcca728604bd57
   branch: main
@@ -66,9 +80,3 @@ filed_at:
   aida_build_sha: 47e9f216d38
   vendor: claude
   session: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
-attention_reason:
-  category: design-fork
-  detail: 'Partial implementation in seat: standalone Codex queue-work post-exit commit and publication, plus PR-head lookup independent of Approved status or Rework hold. Acceptance addition also requires host merge-from-main before every vendor starts. Need ruling for conflicting merges: refuse and park before launch, or expose conflicts to a lane that cannot write Git metadata and have host finish the merge. Existing conflict_task asks the child to commit, incompatible with native Codex. Drain and resume publication coverage also remains. Do not mark complete or publish as finished.'
-  lean: Refuse and park before vendor launch when host sandboxed merge conflicts; provide an explicit host repair workflow. Reuse verified seat sandbox for merge and never run host Git in the seat repository.
-  raised_by: implementer
-  raised_at: 2026-11-05T01:41:05.224179955Z
