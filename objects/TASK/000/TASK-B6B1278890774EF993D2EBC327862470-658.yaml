@@ -11,7 +11,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T09:06:27.587006751Z
-modified_at: 2026-11-05T13:19:09.490075952Z
+modified_at: 2026-11-05T17:59:19.744217650Z
 req_type: Task
 tags:
 - architecture
@@ -265,6 +265,22 @@ comments:
   created_at: 2026-11-05T13:19:09.490075952Z
   modified_at: 2026-11-05T13:19:09.490075952Z
   session_id: b83457ff-84e3-46cb-8f68-4be531a63422
+- id: 01a1acdd-7fc0-7c92-82e7-412c1762b378
+  author: joe
+  content: |-
+    ADVISOR HOST EVIDENCE C12/M1 (2026-11-05, main c8721a696fc): Claude Code 2.1.318. Scripts+outputs: /home/joe/ai/aida-worktrees/c12-probe/ (c12_driver.py runs the shipped egress_probe.py+contained_lane.py+contained_host.py verbatim via host_contained(); same bwrap vector as WriteProfile::args: --unshare-all --cap-drop ALL, ro /, rw seat+state, RO masks/overmounts; relay env; F-a broker).
+    Claude: claude -p --model haiku --settings S --setting-sources user --allowedTools=Bash; env CLAUDE_CONFIG_DIR=<state>/claude-config (rw private), ~/.claude/.credentials.json RO file-bind, ~/.claude masked, TMPDIR=CLAUDE_CODE_TMPDIR=<state>/tmp. S={"sandbox":{"enabled":true,"failIfUnavailable":true,"autoAllowBashIfSandboxed":true,"allowUnsandboxedCommands":false,"network":{"httpProxyPort":<relay port>,"allowedDomains":[contained allowed_hosts]}}}
+    1) SHIPPED filter/broker: chain FAILS CLOSED. Bash tool: "Sandbox is required but failed to initialize: Failed to create bridge sockets after 5 attempts" (no unsandboxed fallback). Three causes, each reproduced in-lane: (a) socat aborts "bit out of range 0 - FD_SETSIZE" - its diag socketpair(AF_UNIX,SOCK_DGRAM) is denied; (b) nested bwrap --unshare-net: "loopback: Failed to look up lo" (if_nametoindex needs an inet SOCK_DGRAM) then "Failed to create NETLINK_ROUTE socket: Permission denied"; (c) in Claude's nested netns curl->localhost:3128 (srt inner bridge) "Couldn't connect to server": the F-a broker refuses every loopback port but the relay, even in a nested netns.
+    2) PROBE-ONLY amendments (C12_RELAX=1 C12_RELAX_DGRAM=1 C12_BROKER_NESTED=1): unix socketpair any type; socket(AF_NETLINK); inet SOCK_DGRAM; broker CONTINUEs inet connects only when /proc/<pid>/ns/net != lane netns. Live Claude sandboxed Bash, inner netns net:[4026533022] != lane net:[4026533045], srt "Using external HTTP proxy on port <relay>":
+     allowed: "ALLOWED github.com http=200" + host "proxy allowed github.com:443"
+     denied: "curl: (56) CONNECT tunnel failed, response 403" + host "proxy DENIED example.com:443"
+     direct IP: "Failed to connect to 140.82.112.3 port 443" (rc=7)
+     C12 locked mount: in Claude sandbox "protected/locked.txt: Read-only file system", umount "must be superuser"; in-lane unshare -Urm: umount EINVAL ("not mounted"), remount,rw "permission denied", write EROFS. Lane-netns loopback to a non-relay port still refused.
+     Auth C7: OAuth via relay (api.anthropic.com:443) with RO credentials worked in all 4 live runs; credentials sha256 unchanged. Non-fatal EROFS: ~/.local/state/claude/locks, ~/.claude/bridge-spawn.
+    VERDICT: NOT PROVEN on shipped main (fails closed). PROVEN feasible with the 3 amendments above, so M1 holds; M2 not needed. Amending F-a's filter/broker needs advisor signoff before AC(1).
+  created_at: 2026-11-05T17:59:19.744217650Z
+  modified_at: 2026-11-05T17:59:19.744217650Z
+  session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
 history:
 - id: 01a1965c-5ce8-7781-b88f-317b0b12bab5
   author: joe
