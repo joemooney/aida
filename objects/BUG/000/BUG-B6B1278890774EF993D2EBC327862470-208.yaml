@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T12:51:07.563355298Z
-modified_at: 2026-11-05T18:24:29.024548408Z
+modified_at: 2026-11-05T18:45:47.369333381Z
 req_type: Bug
 tags:
 - area:compete
@@ -458,6 +458,12 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
+- id: 01a1ad08-095e-73b1-968b-dab22cb2fcde
+  author: joe
+  timestamp: 2026-11-05T18:45:47.486896203Z
+  session_id: 01a1acd7e029
+  harness_version: 2.1.318 (Claude Code)
+  changes: []
 filed_at:
   code_sha: be275c313c1482b990ba38f323bdc67304f1d15c
   branch: main
@@ -471,3 +477,11 @@ implementation_info:
   implemented_at: 2026-11-04T20:00:49.095793592Z
   implemented_by: joe
   reopened_at_sha: 83ce565277a264e7468fc8b2e08e75dedc095284
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: BUG-2439 acceptance (1)-(3) met in source and tests, and the round-5 fixes are on the branch; but CI lib-0 fails deterministically at b11c566e (attempt 1 and the rerun), although it was green at e86ea042 and on main c8721a69, so the main merge introduced an interaction failure.
+  recovery_hint: address the review findings, move BUG-2439 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-11-05T18:45:47.369333381Z
