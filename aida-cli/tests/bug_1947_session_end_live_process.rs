@@ -53,6 +53,9 @@ fn aida(cwd: &Path, home: &Path) -> Command {
         .env("AIDA_OUTPUT_FORMAT", "human")
         .env("NO_COLOR", "1");
     hermetic(&mut cmd);
+    // These fixtures own all relevant processes inside their test namespace.
+    // trace:BUG-2450 | ai:codex
+    cmd.env("AIDA_TRUST_PID_NAMESPACE", "1");
     cmd
 }
 
@@ -188,6 +191,7 @@ impl Session {
                 })
                 .unwrap_or_else(|| panic!("no worktree_path in lease:\n{lease}"));
             assert!(worktree.is_dir(), "worktree {} missing", worktree.display());
+            Self::publish_baseline(&repo, &worktree);
             return Session {
                 _temp: temp,
                 repo,
@@ -222,6 +226,7 @@ impl Session {
             })
             .unwrap_or_else(|| panic!("no session id export in:\n{shell}"));
         assert!(worktree.is_dir(), "worktree {} missing", worktree.display());
+        Self::publish_baseline(&repo, &worktree);
         Session {
             _temp: temp,
             repo,
@@ -231,6 +236,21 @@ impl Session {
             worktree,
             _checkout: checkout,
         }
+    }
+
+    // Cleanup requires remote coverage, including any pool setup commit.
+    // Add origin only after setup: these holder/salvage tests do not need
+    // store auto-push hooks on init, allocation, add, claim and status writes.
+    // Keeping those unrelated pushes out of setup preserves the 10s CI budget.
+    // trace:BUG-2450 | ai:codex
+    fn publish_baseline(repo: &Path, worktree: &Path) {
+        let origin = repo.parent().unwrap().join("origin.git");
+        git(repo, &["init", "-q", "--bare", origin.to_str().unwrap()]);
+        git(repo, &["remote", "add", "origin", origin.to_str().unwrap()]);
+        git(
+            worktree,
+            &["push", "-q", "origin", "HEAD:refs/heads/session-baseline"],
+        );
     }
 
     fn end(&self, cwd: &Path, extra: &[&str]) -> Output {

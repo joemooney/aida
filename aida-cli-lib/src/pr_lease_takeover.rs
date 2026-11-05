@@ -9,12 +9,12 @@
 //!
 //! 1. the lease's owning process is verifiably gone (a live one is skipped);
 //! 2. its seat holds no uncommitted change;
-//! 3. the seat's HEAD is already in the PR (an ancestor of, or equal to, the
-//!    PR branch's head on origin).
+//! 3. every commit on HEAD or any local branch is reachable from a remote.
+//!    Local copies in the host repository alone do not establish this.
 //!
 //! When all three hold, nothing in the seat is lost by `session end --force`,
 //! and the caller ends the lease itself. A dirty seat, or a seat with commits
-//! the PR lacks, refuses with that reason. A lease whose death cannot be
+//! absent from remotes, refuses with that reason. A lease whose death cannot be
 //! proven, whose seat cannot be read, or whose PR head cannot be read, is not
 //! judged here: the caller keeps its previous behavior (plain `session end`,
 //! whose own guards apply).
@@ -65,7 +65,7 @@ pub(crate) enum SeatReading {
 // trace:STORY-2315 | ai:claude
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum PrLeaseCheck {
-    /// Owner gone, seat clean and fully in the PR: end it with `--force`.
+    /// Owner gone, seat clean and fully pushed: end it with `--force`.
     SafeToForceEnd,
     /// A live process backs the lease: never ended here.
     Live,
@@ -149,6 +149,31 @@ pub(crate) fn check_pr_lease(main: &Path, lease: &SessionLease, pr_branch: &str)
         return classify(liveness, &SeatReading::Missing, None, |_, _| false);
     }
     let seat = read_seat(main, lease, pr_branch);
+    // A finished seat can have moved to another pushed branch since the
+    // PR head. Remote coverage of the seat's HEAD and lease branch (all local
+    // branches for a private clone) protects that work too;
+    // comparing only HEAD to this PR incorrectly refuses a clean pushed seat.
+    // trace:BUG-2450 | ai:codex
+    if matches!(&seat, SeatReading::Read { dirty, .. } if dirty.is_empty()) {
+        match crate::seat_clone::remote_missing_commits(
+            main,
+            &lease.worktree_path,
+            lease.tree_kind == crate::seat_clone::TreeKind::Clone,
+            &lease.branch,
+        ) {
+            Ok(0) => return PrLeaseCheck::SafeToForceEnd,
+            Ok(n) => {
+                return PrLeaseCheck::Refuse(format!(
+                    "its seat has {n} commit(s) on HEAD or local branches that no remote has"
+                ))
+            }
+            Err(error) => {
+                return PrLeaseCheck::NotProvable(format!(
+                    "remote commit coverage could not be read: {error:#}"
+                ))
+            }
+        }
+    }
     let pr_head = match &seat {
         SeatReading::Read {
             dirty,
@@ -166,7 +191,7 @@ pub(crate) fn check_pr_lease(main: &Path, lease: &SessionLease, pr_branch: &str)
 // trace:STORY-2315 | ai:claude
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum LeaseEndAction {
-    /// `session end --force`: the seat holds nothing the PR lacks.
+    /// `session end --force`: the seat holds no unpublished work.
     ForceEnd,
     /// Plain `session end`, whose own guards (dirty tree, live process)
     /// decide, as before STORY-2315.
@@ -234,7 +259,7 @@ pub(crate) fn refusal_message(lease: &SessionLease, pr_branch: &str, reason: &st
     format!(
         "lease {} ({}, seat {}) holds branch `{}`{} and its session has exited, but it was not \
          ended automatically: {}. Commit and push the work to the PR, or discard it with \
-         `aida session end {} --force`, then retry",
+         `aida session end {} --force --discard-unpushed`, then retry",
         lease.id,
         lease.role.as_deref().unwrap_or("(unset)"),
         lease.worktree_path.display(),
@@ -330,6 +355,13 @@ pub(crate) fn read_seat(main: &Path, lease: &SessionLease, pr_branch: &str) -> S
         path,
         crate::status_sections::worktree_dirty_entries(path),
     );
+    // Apply the same already-pushed index exception as session end.
+    // trace:BUG-2450 | ai:codex
+    let dirty = if crate::session_end::staged_tree_is_pushed(path, pr_branch, &dirty) {
+        Vec::new()
+    } else {
+        dirty
+    };
     match git_stdout(path, &["rev-parse", "--verify", "--quiet", "HEAD^{commit}"]) {
         Some(head) => SeatReading::Read {
             dirty,
@@ -405,3 +437,48 @@ fn short(sha: &str) -> &str {
 #[cfg(test)]
 #[path = "tests/story_2315_pr_lease_takeover_tests.rs"]
 mod story_2315_pr_lease_takeover_tests;
+
+/// Leave unsafe dead seats intact and route the exact lease/reason once.
+// trace:BUG-2450 | ai:codex
+pub(crate) fn notify_advisor(
+    main: &Path,
+    lease: &SessionLease,
+    reason: &str,
+) -> anyhow::Result<()> {
+    use aida_core::mailbox::{Intent, Message, Recipient, SenderSource};
+    use sha2::{Digest, Sha256};
+    let id = format!(
+        "review-lease-{:x}",
+        Sha256::digest(format!("{}\0{reason}", lease.id))
+    );
+    let message = Message {
+        id: id.clone(),
+        thread_id: id,
+        from: "review-launch".into(),
+        to: Recipient::Agent("advisor".into()),
+        timestamp: chrono::Utc::now().timestamp_millis(),
+        in_reply_to: None,
+        subject: Some(format!("Review blocked by retained lease {}", lease.id)),
+        body: reason.into(),
+        urgent: false,
+        intent: Intent::Request,
+        retracted: false,
+        deleted: false,
+        archived: false,
+        from_source: SenderSource::Explicit,
+        from_role: None,
+        relayed_from: None,
+    };
+    // Keep an existing notice's archive/retraction state and timestamp.
+    if aida_core::mailbox::read_local_messages(main)?
+        .iter()
+        .any(|old| old.id == message.id)
+    {
+        return Ok(());
+    }
+    match aida_core::mailbox::write_local_message(main, &message) {
+        Ok(()) => Ok(()),
+        Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => Ok(()),
+        Err(error) => Err(error.into()),
+    }
+}

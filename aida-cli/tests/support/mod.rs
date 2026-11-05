@@ -176,7 +176,12 @@ pub fn test_process_binding() -> String {
     let pid = std::process::id();
     let start = aida_core::liveness::process_start_identity(pid)
         .expect("this test process's start identity is readable");
-    format!("proc:{pid}@{start}")
+    // Match production's namespace-qualified grant binding inside a sandbox;
+    // host processes retain the ordinary token. trace:BUG-2450 | ai:codex
+    match aida_core::local_pid_ns().filter(|ns| ns.trim() != "4026531836") {
+        Some(ns) => format!("proc:{pid}@pidns-{}/{start}", ns.trim()),
+        None => format!("proc:{pid}@{start}"),
+    }
 }
 
 /// The store the spawned binary will detect for `repo`: the first
