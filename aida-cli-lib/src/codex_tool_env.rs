@@ -90,9 +90,110 @@ pub(crate) fn tool_env_overrides<'a>(
     Ok(args)
 }
 
+/// The named refusal for a Codex launch surface that is not wired for the
+/// AIDA posture. Only the receipt-owning headless boundary
+/// (`containment::launch`) runs Codex under `codex = "aida"`.
+// trace:TASK-2708 | ai:claude
+pub(crate) const UNWIRED_AIDA_POSTURE: &str =
+    "Codex AIDA posture requires the receipt-owning headless launch boundary";
+
+/// Fail closed: every Codex child that reaches this finalizer is, by
+/// construction, NOT on the receipt-owning boundary (that path bypasses
+/// `prepare_launch`). Refuse it when either its own stamp says `aida` or the
+/// trusted default-branch policy of the project it launches into resolves
+/// Codex to the AIDA posture. The policy is re-derived here rather than
+/// trusted from the stamp, so a surface that stamps `native`/`none`, or never
+/// stamps at all, cannot launch Codex uncontained under `codex = "aida"`.
+// trace:TASK-2708 | ai:claude
+pub(crate) fn refuse_unwired_aida_posture(child: &Command) -> Result<()> {
+    // Tests never inherit this checkout's policy (mirrors the
+    // `session::containment_posture` test seam): a test child that names no
+    // root is judged projectless. Production resolves the main worktree and
+    // fails closed when it cannot; `refuse_unwired_aida_posture_with` carries
+    // that logic and is exercised directly with a failing resolver.
+    #[cfg(not(test))]
+    let fallback = || crate::find_main_worktree_root().map(Some);
+    #[cfg(test)]
+    let fallback = || Ok(None);
+    refuse_unwired_aida_posture_with(child, fallback)
+}
+
+/// [`refuse_unwired_aida_posture`] with an explicit fallback root resolver,
+/// consulted only when the child names no project (`AIDA_PROJECT_ROOT`, then
+/// its cwd). FAILS CLOSED: a resolver error refuses unless the child's own
+/// stamp proves a non-AIDA posture (`native`/`none`, which the launcher only
+/// writes after resolving the posture itself), and any error loading the
+/// trusted policy refuses. `Ok(None)` from the resolver means there is no
+/// project, so no trusted policy can select `aida`. For a resolved root, a
+/// trusted sha with no config at it is "no policy", but an unresolvable
+/// trusted sha refuses on the same stamp rule as an unresolvable root.
+// trace:TASK-2708 | ai:claude
+pub(crate) fn refuse_unwired_aida_posture_with(
+    child: &Command,
+    fallback_root: impl FnOnce() -> Result<Option<std::path::PathBuf>>,
+) -> Result<()> {
+    let explicit = |key: &str| {
+        child
+            .get_envs()
+            .find(|(k, _)| *k == key)
+            .and_then(|(_, v)| v)
+            .map(std::path::PathBuf::from)
+    };
+    let stamp = explicit("AIDA_CONTAINMENT_POSTURE");
+    let stamp = stamp.as_deref().and_then(std::path::Path::to_str);
+    anyhow::ensure!(stamp != Some("aida"), "{UNWIRED_AIDA_POSTURE}");
+    let named = explicit("AIDA_PROJECT_ROOT")
+        .or_else(|| child.get_current_dir().map(std::path::Path::to_path_buf));
+    let root = match named {
+        Some(root) => Some(root),
+        None => match fallback_root() {
+            Ok(root) => root,
+            Err(_) if matches!(stamp, Some("native" | "none")) => None,
+            Err(error) => {
+                return Err(error.context(format!(
+                    "{UNWIRED_AIDA_POSTURE}: no project root resolves, so the trusted Codex \
+                     containment policy cannot be checked; refusing to launch Codex"
+                )))
+            }
+        },
+    };
+    let Some(root) = root else {
+        return Ok(());
+    };
+    // trace:TASK-2708 | ai:claude — "no config at the trusted sha" is a real
+    // answer (no policy can select `aida`); "the trusted sha cannot be
+    // resolved" (a non-repo root, no default branch) is no answer at all, so it
+    // refuses unless the child's own stamp proves a non-AIDA posture.
+    let Some(sha) = crate::trusted_config::trusted_default_branch_sha(&root) else {
+        anyhow::ensure!(
+            matches!(stamp, Some("native" | "none")),
+            "{UNWIRED_AIDA_POSTURE}: the trusted default branch of {} cannot be resolved, so \
+             the trusted Codex containment policy cannot be checked; refusing to launch Codex",
+            root.display()
+        );
+        return Ok(());
+    };
+    let body = crate::trusted_config::read_config_at_sha(&root, &sha);
+    let trusted = crate::agent_config::contained_vendor_in_trusted_body(body.as_deref(), "codex")
+        .map_err(|error| {
+        error.context(format!(
+            "{UNWIRED_AIDA_POSTURE}: the trusted Codex containment policy could not be \
+                 loaded; refusing to launch Codex"
+        ))
+    })?;
+    anyhow::ensure!(
+        trusted.as_deref() != Some("aida"),
+        "{UNWIRED_AIDA_POSTURE}: the trusted policy sets [contained.vendors] codex = \"aida\" \
+         and this launch surface is not wired for it; refusing to launch Codex without AIDA \
+         containment"
+    );
+    Ok(())
+}
+
 /// Call once, after the child grant, identity and customization are final,
 /// immediately before spawn/exec. Other vendors never enter this adapter.
 pub(crate) fn prepare_launch(child: &mut Command) -> Result<()> {
+    refuse_unwired_aida_posture(child)?;
     // The child Command is the full source of truth for whitelisted metadata:
     // under Codex's default inherit="all", a key the launcher process has but
     // the child never assigned would otherwise leak into the tool shell and
@@ -173,9 +274,14 @@ fn codex_argv_start(child: &Command) -> Result<usize> {
 /// Translate only sandbox/config options, never model/prompt flags. Current
 /// Codex sandbox uses permission profiles rather than the model CLI's -s.
 fn sandbox_args(child: &Command) -> Result<Vec<std::ffi::OsString>> {
-    use std::ffi::OsString;
     let all_args: Vec<_> = child.get_args().collect();
-    let args = &all_args[codex_argv_start(child)?..];
+    sandbox_args_from(&all_args[codex_argv_start(child)?..])
+}
+
+/// [`sandbox_args`] over a bare Codex argv (no program, no bwrap prefix).
+// trace:TASK-2708 | ai:claude
+fn sandbox_args_from(args: &[&std::ffi::OsStr]) -> Result<Vec<std::ffi::OsString>> {
+    use std::ffi::OsString;
     let mut out = vec![OsString::from("sandbox")];
     let mut i = 0;
     while i < args.len() {
@@ -503,7 +609,25 @@ fn bounded_status(
 #[path = "tests/bug_2398_codex_tool_env_tests.rs"]
 mod tests;
 
+// trace:TASK-2708 | ai:claude
+#[cfg(test)]
+#[path = "tests/task_2708_codex_fail_closed_tests.rs"]
+mod task_2708_codex_fail_closed_tests;
+
 #[cfg(test)]
 pub(crate) fn tool_env_keys_for_test() -> &'static [&'static str] {
     TOOL_ENV
+}
+
+// trace:TASK-2707 | ai:codex
+pub(crate) fn sandbox_args_for_contained(args: &[String]) -> Result<Vec<String>> {
+    // TASK-2708: an argv, not a child; no Command is built here (STORY-2326).
+    let args: Vec<&std::ffi::OsStr> = args.iter().map(std::ffi::OsStr::new).collect();
+    sandbox_args_from(&args)?
+        .into_iter()
+        .map(|v| {
+            v.into_string()
+                .map_err(|_| anyhow::anyhow!("non-UTF8 sandbox argument"))
+        })
+        .collect()
 }

@@ -12096,7 +12096,10 @@ pub(crate) fn handle_queue_work(
                 // trace:BUG-2428 | ai:claude
                 if is_standalone_reviewer(&role, plan.review_target.is_some()) {
                     refuse_unpresentable_contained_reviewer(contained)?;
-                } else if mints_child && session::containment_applied(launch_vendor, contained) {
+                } else if mints_child
+                    // trace:TASK-2708 | ai:claude
+                    && session::sandboxed_child_grant(launch_vendor, contained)?
+                {
                     crate::gate::seat_authority::preflight_sandboxed_child_key(&child_seat)?;
                 }
             }
@@ -13390,8 +13393,11 @@ pub(crate) fn handle_queue_work(
             // BUG-2223: re-enter the orphan's tree in place. Session start
             // re-checks it and bypasses nothing else: a live claim on the
             // scope still refuses. trace:BUG-2223 | ai:claude
-            /* adopt_orphan */
-            adopt_orphan.is_some(),
+            if adopt_orphan.is_some() {
+                crate::session_start::PathReentry::AdoptOrphan
+            } else {
+                crate::session_start::PathReentry::None
+            },
         )
     };
     let setup_receipt = if no_launch {
@@ -13741,7 +13747,8 @@ pub(crate) fn handle_queue_work(
                 &crate::canonical_role_name(&role),
                 &crate::current_user_id(None),
                 // trace:TASK-2631 | ai:codex
-                session::containment_applied(launch_vendor, contained),
+                // trace:TASK-2708 | ai:claude
+                session::sandboxed_child_grant(launch_vendor, contained)?,
             )?;
             child_grant_id = Some(child_grant.id);
         } else if matches!(launch, QueueWorkLaunch::Fresh(_)) {
@@ -13755,7 +13762,8 @@ pub(crate) fn handle_queue_work(
                 &seat,
                 &crate::current_user_id(None),
                 // trace:TASK-2631 | ai:codex
-                session::containment_applied(launch_vendor, contained),
+                // trace:TASK-2708 | ai:claude
+                session::sandboxed_child_grant(launch_vendor, contained)?,
             )?;
             match &grant {
                 crate::gate::seat_authority::HeadlessChildGrant::Issued(issued) => {
@@ -14524,7 +14532,8 @@ pub(crate) fn run_standalone_reviewer(
                         project_root,
                         "reviewer",
                         &crate::current_user_id(None),
-                        session::containment_applied(recorded, contained),
+                        // trace:TASK-2708 | ai:claude
+                        session::sandboxed_child_grant(recorded, contained)?,
                     )?;
                     // A reviewer never runs a plan lane; the seat comes from
                     // the reviewer grant, set by `finalize_codex_resume`.
@@ -17979,8 +17988,19 @@ fn run_queue(
     matches: &clap::ArgMatches,
     ctx: &crate::command_registry::DispatchCtx,
 ) -> anyhow::Result<crate::command_registry::Flow> {
-    use crate::*;
     let args = <QueueArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    dispatch_queue_args(&args, ctx)
+}
+
+/// The `aida queue` store-phase execution path, shared by `run_queue` and
+/// `aida pr review` (which builds `queue work <change> --auto-complete` and
+/// runs it here, so every queue-work gate and refusal stays in one place).
+// trace:TASK-1715 | ai:claude
+pub(crate) fn dispatch_queue_args(
+    args: &QueueArgs,
+    ctx: &crate::command_registry::DispatchCtx,
+) -> anyhow::Result<crate::command_registry::Flow> {
+    use crate::*;
     match &ctx.store {
         None => Ok(crate::command_registry::Flow::Continue),
         Some(crate::command_registry::StoreCtx::Distributed { .. }) => {
@@ -17992,7 +18012,7 @@ fn run_queue(
         }) => {
             use crate::git_backend_cmd::*;
             let (store_path, backend) = (*store_path, *backend);
-            match &args {
+            match args {
                 QueueArgs { inner: queue_cmd } => {
                     // STORY-78: `aida queue list --sync` pulls before listing.
                     // Done here at dispatch (not inside handle_queue_command) so
@@ -18016,7 +18036,7 @@ fn run_queue(
             requirements_path,
         }) => {
             let (storage, requirements_path) = (*storage, *requirements_path);
-            match &args {
+            match args {
                 QueueArgs { inner: queue_cmd } => {
                     handle_queue_command(queue_cmd, &storage, &requirements_path)?;
                 }
@@ -18221,7 +18241,7 @@ pub(crate) static REWORK: crate::command_registry::CommandReg =
 // Per-verb policy, carried over from the legacy stakeholder and per-write
 // auto-push tables. An unparseable invocation gets the fail-closed answer.
 // trace:STORY-1728 | ai:claude
-fn queue_cli_policy(matches: &clap::ArgMatches) -> crate::command_registry::CmdPolicy {
+pub(crate) fn queue_cli_policy(matches: &clap::ArgMatches) -> crate::command_registry::CmdPolicy {
     use crate::cli::QueueCommand;
     use crate::stakeholder_role::StakeholderAction as SA;
     let args = <QueueArgs as clap::FromArgMatches>::from_arg_matches(matches).ok();

@@ -679,6 +679,12 @@ changing the queue entry.
 - Command: `/aida-review` inside a reviewer session (`aida queue work PR-N`
   spawns one). Findings from a headless reviewer surface via
   `aida findings list`.
+- Whole pipeline: `aida pr review <N|PR-N|MR-N>` runs
+  `aida queue work PR-N --auto-complete` (`MR-N` on GitLab; a bare number
+  takes the configured forge's prefix): independent review, rework routing,
+  and merge only where merge is already authorized.
+  <!-- trace:TASK-1715 | ai:claude -->
+
 
 **A verdict is state, not prose — and it gates `queue done`.** A "changes
 requested" written only as a comment cannot be enforced: the incident behind

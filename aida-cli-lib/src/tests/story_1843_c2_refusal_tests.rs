@@ -30,6 +30,13 @@ fn repo() -> tempfile::TempDir {
     std::fs::write(dir.path().join("README.md"), "seed\n").unwrap();
     git(dir.path(), &["add", "README.md"]);
     git(dir.path(), &["commit", "-qm", "seed"]);
+    // Teardown fixtures represent pushed work; the mailbox fence is the
+    // refusal being exercised, not the unpushed-commit guard.
+    // trace:BUG-2450 | ai:codex
+    git(
+        dir.path(),
+        &["update-ref", "refs/remotes/origin/main", "HEAD"],
+    );
     dir
 }
 

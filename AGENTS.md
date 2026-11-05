@@ -446,11 +446,15 @@ context, `CLAUDE.md` for the broad repository guide, and
 context, and `docs/agents/session-communication.md` for Claude/Codex/
 Antigravity session communication semantics.
 
-The closed filesystem/supervisor tracer lives in `aida-cli-lib/src/containment/`
+The fixed filesystem/supervisor tracer lives in `aida-cli-lib/src/containment/`
 and is exposed by `aida config permissions probe --vendor <name>`. A passing
 synthetic probe never enables a vendor or grants applied-containment credit.
-See OVERVIEW.md and docs/cli/07-project-setup.md for its boundary.
-<!-- trace:TASK-2705 | ai:codex -->
+The separate `launch/contained.rs` owner handles trusted Codex AIDA-posture
+fresh foreground headless phases with exact env transport, private state, a
+mandatory connect broker and host-attested receipts before vendor exec. API-key
+mode only; ChatGPT auth and remaining launch surfaces refuse until later slices.
+Claude keeps its named legacy arm. See OVERVIEW.md and docs/cli/07-project-setup.md.
+<!-- trace:TASK-2705 TASK-2707 | ai:codex -->
 
 ## Child launch containment
 
@@ -525,6 +529,16 @@ Global role queues use permanent `~/.aida/queue/<role>.lock` sidecars and
 atomic YAML replacement (BUG-1682). Never unlink those sidecars or add a
 snapshot-save writer. Corrupt queues fail closed on mutation; position
 placement is still computed by callers outside the lock. See OVERVIEW.md.
+
+## Local observation envelopes
+
+`aida intent note|validate|export` operate on explicitly supplied data before
+identity, telemetry or store setup. The six-field v1 JSON format and hash are
+specified in [the CLI guide](docs/cli/02-specs.md#aida-intent-note-validate-and-export).
+Keep these operations independent of store-only transport and spec comprehension.
+Use direct spellings; local observation commands reaching late alias dispatch
+refuse with direct-spelling guidance before performing observation I/O.
+<!-- trace:STORY-2479 | ai:codex -->
 
 ## Requirements Management
 

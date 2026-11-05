@@ -60,6 +60,9 @@ fn aida(cwd: &Path, home: &Path) -> Command {
     ] {
         cmd.env_remove(k);
     }
+    // These fixtures own all relevant processes inside their test namespace.
+    // trace:BUG-2450 | ai:codex
+    cmd.env("AIDA_TRUST_PID_NAMESPACE", "1");
     cmd
 }
 
@@ -104,6 +107,14 @@ fn project(base_dir: &Path, pool: bool) -> (PathBuf, PathBuf) {
     git(&repo, &["config", "user.name", "t"]);
     git(&repo, &["config", "commit.gpgsign", "false"]);
     git(&repo, &["commit", "-q", "--allow-empty", "-m", "init"]);
+    // trace:BUG-2450 | ai:codex — cleanup requires remote commit coverage.
+    let origin = repo.parent().unwrap().join("origin.git");
+    git(&repo, &["init", "-q", "--bare", origin.to_str().unwrap()]);
+    git(
+        &repo,
+        &["remote", "add", "origin", origin.to_str().unwrap()],
+    );
+    git(&repo, &["push", "-q", "origin", "main"]);
 
     let init = aida(&repo, &home)
         .args([
@@ -196,6 +207,16 @@ fn start_session(repo: &Path, home: &Path, spec: &str) -> Lease {
     assert!(run.status.success(), "queue work failed: {}", show(&run));
     let lease = lease_for(repo, spec);
     assert!(lease.worktree.is_dir(), "worktree not created");
+    // trace:BUG-2450 | ai:codex — publish any warm-pool setup commit.
+    git(
+        &lease.worktree,
+        &[
+            "push",
+            "-q",
+            "origin",
+            &format!("HEAD:refs/heads/baseline-{}", lease.id),
+        ],
+    );
     // The worktree reaches the main checkout's sessions dir only via the
     // runtime symlink session start installs — the state BUG-1952 strips.
     assert!(
@@ -287,6 +308,20 @@ fn session_end_inside_worktree_resolves_main_root_and_matches_main_checkout() {
     let spec_main = add_spec(&repo, &home, "end me from main");
     let in_wt = start_session(&repo, &home, &spec_in);
     let from_main = start_session(&repo, &home, &spec_main);
+
+    // trace:BUG-2450 | ai:codex — shared host refs do not belong to either seat.
+    git(&repo, &["checkout", "-q", "-b", "unrelated-host-work"]);
+    git(
+        &repo,
+        &[
+            "commit",
+            "-q",
+            "--allow-empty",
+            "-m",
+            "unpublished host work",
+        ],
+    );
+    git(&repo, &["checkout", "-q", "main"]);
 
     let out = session_end(&in_wt.worktree, &home, &in_wt.id);
     assert!(

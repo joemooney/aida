@@ -4184,6 +4184,84 @@ fn bug_2390_codex_take_and_impl_launch_detached_and_report_acceptance() {
     assert!(!wt_root.join("impl-1917").exists());
 }
 
+/// TASK-2823: a Codex take whose PR branch is already checked out in another
+/// linked worktree re-enters that worktree (`--cwd`), as the Claude path
+/// does, instead of a `git worktree add` that git refuses. An impl lane and a
+/// take whose branch is checked out nowhere name no `--cwd`.
+// trace:TASK-2823 | ai:claude
+#[test]
+fn task_2823_codex_take_reuses_the_worktree_already_on_the_pr_branch() {
+    let f = ExecFixture::new(&["implementer"]);
+    write_agents_vendor(&f.root, "codex");
+    f.start_mandate(&[Scope::ShipHeld, Scope::Dispatch], false);
+    let now = Utc::now();
+    let log = f._tmp.path().join("codex-reuse.log");
+    let _bins = install_test_bins(Some(fake_codex_bg_aida(&f, &log, true)), None);
+
+    let existing = f._tmp.path().join("pr-100-checkout");
+    git(
+        &f.root,
+        &[
+            "worktree",
+            "add",
+            "-q",
+            "-b",
+            "claude/fix-100",
+            existing.to_str().unwrap(),
+            "origin/claude/fix-100",
+        ],
+    );
+
+    let take = submit_request(
+        &f.root,
+        &f.mandate_dir,
+        &f.principal,
+        &DispatchRequestVerb::Take {
+            pr: 100,
+            branch: "claude/fix-100".into(),
+            spec: "TASK-100".into(),
+            brief: f.write_brief("take.md", "Fix PR 100.\n"),
+            vendor: None,
+        },
+        now,
+    )
+    .unwrap();
+    let res = execute_one_request(&f.root, &f.mandate_dir, &take.request.id, true, now).unwrap();
+    assert_eq!(res.status, DispatchStatus::Done, "{res:?}");
+
+    let calls = std::fs::read_to_string(&log).unwrap();
+    let take_prompt = briefs_dir(&f.root).join(format!("{}.prompt.md", take.request.id));
+    let listed = existing.canonicalize().unwrap();
+    assert!(
+        calls.contains(&format!(
+            "ARGS=agent new codex --role implementer --bg --spec TASK-100 \
+             --branch claude/fix-100 --base origin/claude/fix-100 --prompt-file {} --cwd {}\n",
+            take_prompt.display(),
+            listed.display()
+        )),
+        "{calls}"
+    );
+    assert!(
+        !worktrees_root(&f.root).join("take-100").exists(),
+        "dispatch made no worktree of its own"
+    );
+
+    // The branch checked out nowhere: no --cwd, the lane makes its own tree.
+    let target = CodexLaneTarget {
+        spec: "STORY-1917",
+        branch: "codex/story-1917-s2",
+        base: "origin/main",
+        fetch_ref: Some("main"),
+        existing_worktree: None,
+    };
+    let cmd = build_codex_lane_command(Path::new("aida"), &f.root, &target, Path::new("p.md"));
+    assert!(
+        !cmd.get_args().any(|a| a == "--cwd"),
+        "{:?}",
+        cmd.get_args().collect::<Vec<_>>()
+    );
+}
+
 /// BUG-2390: the schedule `dispatch tick` holds no seat grant, and the
 /// detached Codex launch mints its worker's grant from one. The tick decides
 /// that at claim time and leaves a Codex take/impl `Pending` (waiting for

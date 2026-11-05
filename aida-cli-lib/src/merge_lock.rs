@@ -440,6 +440,44 @@ pub(crate) fn live_status(project_root: &Path) -> Vec<(String, Holder)> {
         .collect()
 }
 
+/// Read-only alarm observation. Unknown records never establish no running train.
+// trace:STORY-2476 | ai:codex
+pub(crate) fn observed_train_running(root: &Path) -> Option<bool> {
+    let entries = match std::fs::read_dir(locks_dir(root)) {
+        Ok(entries) => entries,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Some(false),
+        Err(_) => return None,
+    };
+    let mut unknown = false;
+    for entry in entries {
+        let Ok(entry) = entry else { return None };
+        if entry.file_name().to_string_lossy().starts_with('.') {
+            continue;
+        }
+        let Ok(body) = std::fs::read_to_string(entry.path()) else {
+            return None;
+        };
+        let h = parse(&body);
+        if !is_complete_record(&body) || h.pid == 0 || h.note.is_empty() {
+            unknown = true;
+            continue;
+        }
+        if h.note != crate::pr_train::TRAIN_LEASE_NOTE {
+            continue;
+        }
+        if probeable_pid(&h, &crate::coordination::hostname()).is_none() {
+            unknown = true;
+        } else if holder_alive(&h) {
+            return Some(true);
+        }
+    }
+    if unknown {
+        None
+    } else {
+        Some(false)
+    }
+}
+
 /// Every active merge-lease as `(branch, holder)`, ascending by branch — the
 /// `aida merge-lock status` surface.
 pub(crate) fn status(project_root: &Path) -> Vec<(String, Holder)> {
@@ -955,5 +993,42 @@ mod tests {
         let h = parse(&std::fs::read_to_string(lock_path(root, "main")).unwrap());
         assert_eq!(h.pid_ns, aida_core::local_pid_ns());
         assert_eq!(h.boot, aida_core::local_boot_id());
+    }
+}
+
+#[cfg(test)]
+mod pipeline_alarm_tests {
+    use super::*;
+    // trace:STORY-2476 | ai:codex
+    #[test]
+    fn train_observation_refuses_partial_and_foreign_owners_and_honors_live_identity() {
+        let t = tempfile::tempdir().unwrap();
+        assert_eq!(observed_train_running(t.path()), Some(false));
+        std::fs::create_dir_all(locks_dir(t.path())).unwrap();
+        let path = lock_path(t.path(), "main");
+        std::fs::write(&path, "partial").unwrap();
+        assert_eq!(observed_train_running(t.path()), None);
+        let pid = std::process::id();
+        let mut holder = Holder {
+            host: crate::coordination::hostname(),
+            pid,
+            pid_start: aida_core::liveness::process_start_identity(pid),
+            pid_ns: aida_core::local_pid_ns(),
+            boot: aida_core::local_boot_id(),
+            pr: Some(42),
+            note: crate::pr_train::TRAIN_LEASE_NOTE.into(),
+            acquired_at: 0,
+            ttl_secs: 1,
+        };
+        std::fs::write(&path, serialize(&holder)).unwrap();
+        if probeable_pid(&holder, &holder.host).is_some() {
+            assert_eq!(observed_train_running(t.path()), Some(true)); // age is not identity
+            holder.pid_start = Some("linux-starttime:0".into());
+            std::fs::write(&path, serialize(&holder)).unwrap();
+            assert_eq!(observed_train_running(t.path()), Some(false));
+        }
+        holder.host = "foreign-host".into();
+        std::fs::write(&path, serialize(&holder)).unwrap();
+        assert_eq!(observed_train_running(t.path()), None);
     }
 }
