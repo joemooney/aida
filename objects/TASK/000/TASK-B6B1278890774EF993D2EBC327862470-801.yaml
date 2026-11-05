@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T02:07:56.492424622Z
-modified_at: 2026-11-05T20:21:36.964683359Z
+modified_at: 2026-11-05T20:26:48.247580327Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -65,6 +65,12 @@ comments:
   content: 'Round 2: findings 1–4 addressed in the working tree; none disputed. Age/event episodes retain accepted and unresolved deliveries through unknown/false ticks, observation gaps and clock changes, re-arming on changed evidence identity. Added regressions for all three identity kinds and red -> pending CI rerun -> red on an unchanged head. Detector mail now has stable sender aida-pipeline-detector; exclusion requires that sender AND subject, and another sender with that subject counts. No-advisor stale-mail remains explicitly unknown, now documented and tested; all four new kinds have configured operator-fallback coverage, plus persisted sender/subject coverage. All 37 make check-ci-fast gates passed (including no-default-features CLI, TUI seam, formatting and portability); git diff --check passed. Initial test compilation found three incorrect paths in new tests, now fixed. Corrected full supervise_cmd test run is still compiling from the cold cache; no test pass claimed yet. Native Git metadata is read-only: git add -n and aida ship --no-merge --dry-run refused. AIDA explicitly directs leaving edits for the host-side exit commit. Four edited files are ready; suggested commit: [AI:codex] fix(supervise): preserve alarm evidence identities (TASK-3075). PR #3443 already exists. No merge-hold clearance, pr ship or review record attempted.'
   created_at: 2026-11-05T20:21:36.964683359Z
   modified_at: 2026-11-05T20:21:36.964683359Z
+  session_id: 01a1ad460baa
+- id: 01a1ad64-8437-7e71-bf1a-bddd0924e644
+  author: joe
+  content: 'Final Round 2 validation: corrected full supervise_cmd suite passed: 59 passed, 0 failed (including all 27 pipeline detector tests and all new regressions). All 37 make check-ci-fast gates passed. Formatting and git diff --check passed. All four review findings accepted and addressed; no implementer findings filed. The four files remain uncommitted solely because native Codex Git metadata is read-only; aida ship explicitly delegates this to the host-side exit commit. Host/operator publication command from the main checkout: aida ship TASK-3075 --from-seat /home/joe/ai/aida-worktrees/aida-seat-aida-task-b6b1278890774ef993d2ebc327862470-801 --commit-pending "[AI:codex] fix(supervise): preserve alarm evidence identities (TASK-3075)" --no-merge. Existing PR #3443; leave the merge hold, independent review and merge to their separate seats.'
+  created_at: 2026-11-05T20:26:48.247580327Z
+  modified_at: 2026-11-05T20:26:48.247580327Z
   session_id: 01a1ad460baa
 history:
 - id: 01a1a976-ae11-7d51-be68-dfc8d9eb3acd
