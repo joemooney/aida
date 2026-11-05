@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-218
 agreed_id: BUG-2452
 title: queue work accepts a rework lane's no-commit 'already done' exit on a PR that is still red or conflicting
 description: 'Observed 2026-11-04 at least five times: TASK-2708 (Codex, then Claude), TASK-2823 (Claude), TASK-1471 (Codex), STORY-2479. Each exited code 0 with no new commits, reporting ''nothing changed / already done'' or ''blocked'', while its PR had red CI, a request-changes verdict at the current head, or a merge conflict. AIDA recorded the exit as pr-opened with an unchanged head, or as no-pr, and moved on, so the advisor had to notice and re-brief by hand. Acceptance: (1) on a rework lane''s exit, queue work compares the PR head before and after; if it''s unchanged and the PR still has a request-changes verdict at that head, failing required checks, or mergeable=CONFLICTING, the exit is classified as an empty rework, not success; (2) an empty rework re-queues once with an auto-brief naming the failing check names, the conflicting state or the open findings; a second empty exit punts to the advisor by mail (kind=request); (3) an explicit punt that names a disputed finding is still honoured; (4) tests for each trigger. Related: STORY-2476 empty-rework-exit alarm, BUG-2451.'
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T06:24:15.559664936Z
-modified_at: 2026-11-05T07:46:03.347491398Z
+modified_at: 2026-11-05T09:49:38.583922620Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -35,6 +35,12 @@ comments:
   created_at: 2026-11-05T07:38:07.701014252Z
   modified_at: 2026-11-05T07:38:07.701014252Z
   session_id: 01a1aa92b2df
+- id: 01a1ab1d-2d97-7733-ae6c-14499493516a
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Empty-rework classification, one retry with a brief, and the advisor escalation are implemented and unit-tested. But the --required checks probe hard-errors when a PR head has no checks, so a CONFLICTING PR whose head never got CI fails the lane with an error instead of being requeued. CI was still pending at review time.. Triage reason: Address the request-changes review on #3413 (see the PR''s latest Review comment and .aida/review-verdicts/BUG-2452.json); push to branch bug-b6b1278890774ef993d2ebc327862470-218, no new branch.'
+  created_at: 2026-11-05T09:49:38.583919194Z
+  modified_at: 2026-11-05T09:49:38.583919194Z
+  session_id: b83457ff-84e3-46cb-8f68-4be531a63422
 history:
 - id: 01a1aa90-4f06-7a00-a7b2-ee4650556bad
   author: joe
@@ -70,6 +76,14 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1ab1d-2d97-7733-ae6c-143f0c616854
+  author: joe
+  timestamp: 2026-11-05T09:49:38.583905377Z
+  session_id: b83457ff-84e3-46cb-8f68-4be531a63422
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: d561213a36febec31d45921d3d43d4dc7590135e
   branch: main
@@ -78,11 +92,3 @@ filed_at:
   aida_build_sha: d561213a36f
   vendor: claude
   session: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: Empty-rework classification, one retry with a brief, and the advisor escalation are implemented and unit-tested. But the --required checks probe hard-errors when a PR head has no checks, so a CONFLICTING PR whose head never got CI fails the lane with an error instead of being requeued. CI was still pending at review time.
-  recovery_hint: address the review findings, move BUG-2452 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-05T07:46:03.347491398Z
