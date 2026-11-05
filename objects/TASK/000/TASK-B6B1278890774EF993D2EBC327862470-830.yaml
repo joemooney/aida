@@ -22,7 +22,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-05T15:56:53.912490522Z
-modified_at: 2026-11-05T15:56:53.912490522Z
+modified_at: 2026-11-05T15:59:11.910500174Z
 req_type: Task
 tags:
 - from-advisor:STORY-2492
@@ -31,6 +31,13 @@ tags:
 - loop-guard
 - review-recurrence
 - severity:major
+comments:
+- id: 01a1ac6f-8426-7433-a0a6-7cd764474ff6
+  author: joe
+  content: 'Advisor triage: loop-guard acted on: STORY-2492 re-routed to a Claude lane (merge-capable) with the seat clone released.'
+  created_at: 2026-11-05T15:59:11.910500174Z
+  modified_at: 2026-11-05T15:59:11.910500174Z
+  session_id: b83457ff-84e3-46cb-8f68-4be531a63422
 filed_at:
   code_sha: 70a5d68133ad33fa17635a4651ea3663865cebcb
   branch: main
