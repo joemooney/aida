@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T04:52:10.142429990Z
-modified_at: 2026-11-05T11:22:09.038501133Z
+modified_at: 2026-11-05T11:24:45.340099529Z
 req_type: Task
 tags:
 - docs
@@ -39,6 +39,11 @@ comments:
   created_at: 2026-11-05T09:49:47.178043884Z
   modified_at: 2026-11-05T09:49:47.178043884Z
   session_id: b83457ff-84e3-46cb-8f68-4be531a63422
+- id: 01a1ab74-419c-79a2-8a07-3d03df9aa866
+  author: mcp
+  content: 'Round 2 finding addressed in 82842edb179 on agy2/task-2995-features-page (PR #3342): terminal now belongs to aida-cli-lib in COMMAND_FAMILIES; all crate counts read aida-cli-lib 163 / aida-tui 1; removed the inaccurate TUI multiplexer claim and documented the user-local Terminator plugin installer on the CLI library card. Verified embedded ownership and displayed counts, python3 docs/showcase/build.py --check, 14 showcase build tests, 7 showcase publish tests, cargo fmt --all -- --check, and git diff --check. make check-ci-fast was attempted but interrupted while queued behind occupied Cargo build slots; no full fast-check success claimed. Existing merge hold remains for human/advisor or eligible recorded Rework clearance; no ship or review-record action taken.'
+  created_at: 2026-11-05T11:24:45.340081674Z
+  modified_at: 2026-11-05T11:24:45.340081674Z
 history:
 - id: 01a1a4ee-75d9-73f1-810d-e41d3e072f38
   author: joe
