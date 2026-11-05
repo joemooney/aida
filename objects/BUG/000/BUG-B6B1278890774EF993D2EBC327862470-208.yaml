@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T12:51:07.563355298Z
-modified_at: 2026-11-05T10:54:39.536042183Z
+modified_at: 2026-11-05T11:03:10.526375795Z
 req_type: Bug
 tags:
 - area:compete
@@ -178,6 +178,11 @@ comments:
   created_at: 2026-11-05T09:48:13.208311220Z
   modified_at: 2026-11-05T09:48:13.208311220Z
   session_id: b83457ff-84e3-46cb-8f68-4be531a63422
+- id: 01a1ab60-7fbe-75c3-b6e8-88c4987d41da
+  author: mcp
+  content: 'Round 4 review rework: commit 610b133a97c applies cargo fmt --all to the two formatting drifts in codex_compete_native_argv_matches_preview_and_runs. Formatting-only, no logic changes. cargo fmt --all -- --check and git diff --check pass. make check-ci-fast is running; final outcome will be recorded after completion.'
+  created_at: 2026-11-05T11:03:10.526359933Z
+  modified_at: 2026-11-05T11:03:10.526359933Z
 history:
 - id: 01a1a69d-4a2d-7292-9de1-00c519ffe27a
   author: joe
