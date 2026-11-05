@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T17:53:47.688167385Z
-modified_at: 2026-11-05T02:30:33.812363947Z
+modified_at: 2026-11-05T02:30:53.558408720Z
 req_type: Task
 tags:
 - area:containment
@@ -64,6 +64,12 @@ comments:
   created_at: 2026-11-05T02:19:44.240276721Z
   modified_at: 2026-11-05T02:19:44.240276721Z
   session_id: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
+- id: 01a1a98b-7d76-7f20-9c9b-9201ff10d444
+  author: joe
+  content: 'Round-2 fixes are prepared for findings 1-7; no finding disputed. Separate terminal_status and unknown C1/C2 absent file-tool evidence; payload outside W under read-only outer bwrap mount; same-directory parent rename sources; EXDEV never denial; CI gates wiring; AGY 1.5.0 and C3 limitation corrected in docs and a superseding STORY-2460 comment; redundant verifier/C0 check removed and missing-vendor refusal clarified. Original reports retained with reproducible conservative reassessment (no fresh vendor execution). Validation: 15 tests pass, including real bwrap swap/restore protection, cargo fmt --all -- --check passes, whitespace checks pass. Pending changes await launcher post-exit commit/publication: current branch starts at efca74e51a6 rather than reviewed ed410b432a94, so original four files were restored before fixes. Patch against reviewed commit: /tmp/task3046-round2.patch; subject file: /tmp/task3046-round2-commit-message.txt. Punted for blocked fresh host measurements and read-only Git metadata. No merge, reviewer verdict or merge-hold change.'
+  created_at: 2026-11-05T02:30:53.558408720Z
+  modified_at: 2026-11-05T02:30:53.558408720Z
+  session_id: 01a1a984c04a
 history:
 - id: 01a1a7b2-3e77-7b11-be33-eb44a8ab90c9
   author: joe
