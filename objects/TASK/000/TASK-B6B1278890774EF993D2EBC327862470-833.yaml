@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T16:10:17.612205275Z
-modified_at: 2026-11-05T19:54:08.118185201Z
+modified_at: 2026-11-05T19:54:15.289217168Z
 req_type: Task
 tags:
 - from-advisor
@@ -63,6 +63,21 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Fixes for TASK-2864/2865/2870/2871 are correct and the TASK-2863 docs match STORY-2460, but the new outside-cwd conformance test needs a local origin/main ref, so the CI gates lane is red; the PR body also lacks the required TASK-2863 note.. It was punted on: other: Implementation and all 37 fast gates are ready, but native seat Git metadata is read-only: aida ship --no-merge --dry-run refuses commit/publication and requires host-side exit publication. Eight-file diff remains uncommitted for that step; no PR or completion claimed. Rust targeted tests untested=true: lane job has no runner, direct compile interrupted with exit 130 before tests ran. See final spec comment for exact host publication handoff and findings disposition.. No triage reason was given.'
   created_at: 2026-11-05T19:54:08.118183617Z
   modified_at: 2026-11-05T19:54:08.118183617Z
+  session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
+- id: 01a1ad46-b6ef-7f71-9ec3-9c6419954230
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (TASK-3114):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: abe29b03f3cd
+    Recorded: 2026-11-05T19:31:57.295861694+00:00
+    Findings:
+    1. BLOCKING (CI red): tests/test_containment_conformance.py:24-31 test_policy_resolves_in_script_repository_from_outside_cwd only passes when the checkout has a refs/remotes/origin/main ref. In CI, actions/checkout@v5 (.github/workflows/ci.yml:50) on pull_request fetches only refs/pull/N/merge at depth 1, so trusted_policy_sha() raises ValueError and step 'Containment conformance evidence tests' fails on job 127443672375 at abe29b03, and earlier at b493a81 (the same step passes on main at c8721a6). Fix: build a fixture repo (git init + commit + git update-ref refs/remotes/origin/main HEAD) with scripts/containment/conformance.py under it. Patch c.__file__ to that path, as the missing-ref test already does, and compare against the fixture SHA. The test must never read the real checkout's refs.
+    2. ACCEPTANCE GAP: TASK-3114 says 'if it no longer applies, say so in the PR body'. PR #3438's body is only the generic from-seat publication line. It never states that TASK-2863 is resolved by the STORY-2460 advisor ruling and fresh-run record (comments[9]/[10], 2026-11-05 12:29/12:41 UTC) or that further AGY work belongs to TASK-3048, which the seat handoff explicitly requested. Fix: edit the PR body with gh pr edit 3438 --body to list each superseded finding and its disposition. No code change.
+    3. NON-BLOCKING (minor): aida-cli-lib/src/lib_part1.rs:1205-1226 derive_semantic_title's pr-review branch takes the token right after the first 'review' anywhere in argv via skip_while, not the positional after the matched pr/review pair. So 'aida pr review --some-option 12' falls back to the generic title. A bare number is also always labelled PR-N, even on a GitLab project where it resolves to MR-N. Suggest using the first non-flag argument after the matched pair. Optional in this rework.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-05T19:54:15.151915823Z
+  modified_at: 2026-11-05T19:54:15.151915823Z
   session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
 history:
 - id: 01a1ac7a-9749-7001-82e3-4961ecdfe225
