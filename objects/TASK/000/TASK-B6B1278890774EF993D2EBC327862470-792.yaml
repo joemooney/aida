@@ -1,5 +1,6 @@
 id: 01a1a883-cf45-7c20-9ce6-17a1e24d4299
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-792
+agreed_id: TASK-2846
 title: 'non-blocking/cosmetic: bug_2383_seat_target_overlay_tests.rs:537-538 carries du…'
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on TASK-2829, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
@@ -20,6 +21,11 @@ tags:
 - finding-hash:d87a53aa
 - from-review:PR-3385
 - kind:carried-forward
+history:
+- id: 01a1a940-a933-7cc3-940d-ca7dec56637d
+  author: joe
+  timestamp: 2026-11-05T01:09:09.555905292Z
+  changes: []
 filed_at:
   code_sha: 47e9f216d38bf2bb6c503baeebfcca728604bd57
   branch: main
