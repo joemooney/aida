@@ -1,0 +1,18 @@
+{
+  "id": "deputy-default-01a1a94b-58cc-73a1-b8be-6fb676c8b23c",
+  "thread_id": "deputy-01a1a94b-58cc-73a1-b8be-6fb676c8b23c",
+  "from": "deputy:default",
+  "to": {
+    "kind": "agent",
+    "agent": "codex-implementer"
+  },
+  "timestamp": 1793841651196,
+  "body": "Deputy \"default\" finished job 01a1a94b-58cc-73a1-b8be-6fb676c8b23c: rc 0 (ok).\nCommand: aida statusline\nOutput: /home/joe/ai/aida/.aida/deputy/default/out/01a1a94b-58cc-73a1-b8be-6fb676c8b23c.out\nRead it with `aida deputy log 01a1a94b-58cc-73a1-b8be-6fb676c8b23c`.\n",
+  "subject": "deputy job 01a1a94b done: rc 0",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}
