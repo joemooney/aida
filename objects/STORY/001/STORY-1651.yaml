@@ -33,7 +33,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-10T20:30:55.867848469Z
-modified_at: 2026-11-05T13:31:06.899763008Z
+modified_at: 2026-11-05T13:31:56.493113899Z
 req_type: Story
 tags:
 - docs
@@ -112,6 +112,25 @@ comments:
   created_at: 2026-11-05T13:19:51.155296305Z
   modified_at: 2026-11-05T13:19:51.155296305Z
   session_id: b83457ff-84e3-46cb-8f68-4be531a63422
+- id: 01a1abe8-b2cd-7ea0-8d0f-bdb2e6950f5b
+  author: joe
+  content: |-
+    ## Implementer approach
+
+    ### Acceptance criteria as tests
+    - Unit/fixture: docs top-level allow-list, reader SUMMARY audiences, path-derived inventory and tracked-source path-reference guard prove AC1-4, including negative fixtures.
+    - Command-level: scripted fresh temporary Git project executes the landing-page init/add/list/show sequence for AC5.
+    - Fixture/build: pruned reader output is also the book-serve root.
+
+    ### Expected files
+    - docs/aida contributor pages, docs/casts, docs/advanced indexes, inventory generator/report, scripts/check-doc-links.py, scripts/build-reader-book.py, tests/test_doc_audiences.py and landing smoke test.
+    - Product defaults and template references named in findings 3 and 5; inbound links throughout tracked sources.
+
+    ### Ambiguities / conflicts as questions
+    - None: retain normative ADRs and generated instructions in place, restore project-neutral output defaults, retain docs/plans per explicit scope exception.
+  created_at: 2026-11-05T13:31:56.493113899Z
+  modified_at: 2026-11-05T13:31:56.493113899Z
+  session_id: 01a1abe7a8ce
 history:
 - id: 01a12786-de64-7f61-81ce-787aedc7543e
   author: joe
