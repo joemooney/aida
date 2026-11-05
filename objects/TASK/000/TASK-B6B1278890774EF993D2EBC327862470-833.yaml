@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-833
 agreed_id: TASK-3114
 title: 'Nit sweep C: containment harness and docs findings'
 description: 'Batched non-blocking review findings (advisor triage 2026-11-05). For each listed spec, read it with `aida show <ID> --full`, verify the finding still applies on main, and fix it; if it no longer applies, say so in the PR body. Keep each fix minimal; no behavior change beyond the finding. One PR. Findings: TASK-2863 TASK-2864 TASK-2865 TASK-2870 TASK-2871'
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T16:10:17.612205275Z
-modified_at: 2026-11-05T19:31:57.409010587Z
+modified_at: 2026-11-05T19:54:08.118185201Z
 req_type: Task
 tags:
 - from-advisor
@@ -58,6 +58,12 @@ comments:
   created_at: 2026-11-05T17:30:02.710126722Z
   modified_at: 2026-11-05T17:30:02.710126722Z
   session_id: 01a1acb0c9c3
+- id: 01a1ad46-9b76-73a3-9fe0-fb769ca96283
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Fixes for TASK-2864/2865/2870/2871 are correct and the TASK-2863 docs match STORY-2460, but the new outside-cwd conformance test needs a local origin/main ref, so the CI gates lane is red; the PR body also lacks the required TASK-2863 note.. It was punted on: other: Implementation and all 37 fast gates are ready, but native seat Git metadata is read-only: aida ship --no-merge --dry-run refuses commit/publication and requires host-side exit publication. Eight-file diff remains uncommitted for that step; no PR or completion claimed. Rust targeted tests untested=true: lane job has no runner, direct compile interrupted with exit 130 before tests ran. See final spec comment for exact host publication handoff and findings disposition.. No triage reason was given.'
+  created_at: 2026-11-05T19:54:08.118183617Z
+  modified_at: 2026-11-05T19:54:08.118183617Z
+  session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
 history:
 - id: 01a1ac7a-9749-7001-82e3-4961ecdfe225
   author: joe
@@ -115,6 +121,14 @@ history:
   session_id: 01a1ad307ed6
   harness_version: 2.1.318 (Claude Code)
   changes: []
+- id: 01a1ad46-9b76-73a3-9fe0-fb6ab75a9b34
+  author: joe
+  timestamp: 2026-11-05T19:54:08.118167873Z
+  session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: 70a5d68133ad33fa17635a4651ea3663865cebcb
   branch: main
@@ -123,16 +137,3 @@ filed_at:
   aida_build_sha: c38a77db609
   vendor: claude
   session: b83457ff-84e3-46cb-8f68-4be531a63422
-attention_reason:
-  category: other
-  detail: 'Implementation and all 37 fast gates are ready, but native seat Git metadata is read-only: aida ship --no-merge --dry-run refuses commit/publication and requires host-side exit publication. Eight-file diff remains uncommitted for that step; no PR or completion claimed. Rust targeted tests untested=true: lane job has no runner, direct compile interrupted with exit 130 before tests ran. See final spec comment for exact host publication handoff and findings disposition.'
-  raised_by: implementer
-  raised_at: 2026-11-05T17:30:05.016036814Z
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: Fixes for TASK-2864/2865/2870/2871 are correct and the TASK-2863 docs match STORY-2460, but the new outside-cwd conformance test needs a local origin/main ref, so the CI gates lane is red; the PR body also lacks the required TASK-2863 note.
-  recovery_hint: address the review findings, move TASK-3114 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-05T19:31:57.409010587Z
