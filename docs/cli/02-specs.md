@@ -362,6 +362,9 @@ Capture an observation, question, or request for manual review without creating 
 requirement. These local commands work outside an initialized project. They skip
 identity, role, telemetry, cache and store setup and do not commit or contact a
 remote. The existing `aida intent <SPEC>` comprehension command remains available.
+Use the direct spellings below: user aliases expanding to local observation
+commands are refused by the later dispatcher. Validation accepts `--format json`
+or `AIDA_OUTPUT_FORMAT=json` as well as its dedicated `--json` flag.
 
 ```bash
 aida intent note --category observation --title 'Unexpected retry behavior' --file note.md > observation.json

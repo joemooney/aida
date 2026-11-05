@@ -11315,7 +11315,7 @@ state classifier): this is a cached, drift-stamped LLM synthesis. Generated on f
 since generation
 
 Usage: aida intent [OPTIONS] <ID>
-       aida intent [OPTIONS] [ID] <COMMAND>
+       aida intent <note|validate|export> ...
 
 Commands:
   note      Generate an observation envelope on stdout, without a spec or store

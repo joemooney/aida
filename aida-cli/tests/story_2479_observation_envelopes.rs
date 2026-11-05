@@ -135,14 +135,29 @@ fn manual_email_round_trip_without_project_or_identity() {
         report["label"],
         format!("INTENT-{}", &envelope["checksum"].as_str().unwrap()[..12])
     );
-    success(&receiver.run(&[
+    let global_json = receiver.run(&[
         "--format",
         "json",
         "intent",
         "validate",
         "--file",
         "envelope.json",
-    ]));
+    ]);
+    success(&global_json);
+    assert_eq!(
+        serde_json::from_slice::<Value>(&global_json.stdout).unwrap()["valid"],
+        true
+    );
+    let env_json = receiver
+        .command(&["intent", "validate", "--file", "envelope.json"])
+        .env("AIDA_OUTPUT_FORMAT", "json")
+        .output()
+        .unwrap();
+    success(&env_json);
+    assert_eq!(
+        serde_json::from_slice::<Value>(&env_json.stdout).unwrap()["valid"],
+        true
+    );
     success(&receiver.run(&[
         "intent",
         "--format",
@@ -322,6 +337,8 @@ fn spec_comprehension_cli_remains_available() {
     assert!(text.contains("--audience"));
     assert!(text.contains("--refresh"));
     assert!(text.contains("note"));
+    assert!(text.contains("aida intent [OPTIONS] <ID>"));
+    assert!(text.contains("aida intent <note|validate|export> ..."));
     assert!(!fixture.run(&["intent"]).status.success());
     fs::write(fixture.root().join("note.md"), b"body").unwrap();
     assert!(!fixture
@@ -339,8 +356,57 @@ fn spec_comprehension_cli_remains_available() {
         .status
         .success());
     // Parsing a legacy ID must reach store discovery, not a clap argument error.
-    let legacy = fixture.run(&["intent", "STORY-1", "--audience", "llm", "--json"]);
-    assert!(!String::from_utf8_lossy(&legacy.stderr).contains("unexpected argument"));
+    let legacy = fixture
+        .command(&["intent", "STORY-1", "--audience", "llm", "--json"])
+        // The guest sentinel deliberately refuses writes before discovery;
+        // remove it here so this compatibility probe reaches store lookup.
+        .env_remove("AIDA_SESSION_ROLE")
+        .output()
+        .unwrap();
+    assert!(!legacy.status.success());
+    assert_ne!(
+        legacy.status.code(),
+        Some(2),
+        "{}",
+        String::from_utf8_lossy(&legacy.stderr)
+    );
+    // The legacy --json contract can render errors on stdout.
+    let diagnostic = format!(
+        "{}{}",
+        String::from_utf8_lossy(&legacy.stdout),
+        String::from_utf8_lossy(&legacy.stderr)
+    );
+    assert!(
+        diagnostic.contains("no requirement store reachable"),
+        "{diagnostic}"
+    );
+}
+
+#[test]
+fn extension_arguments_do_not_trigger_local_observation_parsing() {
+    use std::os::unix::fs::PermissionsExt;
+    let fixture = Fixture::new();
+    let bin = fixture.root().join("bin");
+    fs::create_dir(&bin).unwrap();
+    let extension = bin.join("aida-envelope-fixture");
+    fs::write(&extension, "#!/bin/sh\nprintf '%s\\n' \"$@\"\nexit 37\n").unwrap();
+    fs::set_permissions(&extension, fs::Permissions::from_mode(0o755)).unwrap();
+    let mut paths = vec![bin];
+    paths.extend(std::env::split_paths(
+        &std::env::var_os("PATH").unwrap_or_default(),
+    ));
+    let output = fixture
+        .command(&["envelope-fixture", "intent", "export"])
+        .env("PATH", std::env::join_paths(paths).unwrap())
+        .output()
+        .unwrap();
+    assert_eq!(
+        output.status.code(),
+        Some(37),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(output.stdout, b"intent\nexport\n");
 }
 
 #[test]

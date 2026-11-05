@@ -277,7 +277,9 @@ pub(crate) fn local_entry() -> Option<Result<()>> {
     {
         return None;
     }
-    let cli = crate::command_registry::parse_from(argv);
+    // Raw argv may belong to an extension or an alias. Let normal dispatch
+    // own rewriting and clap diagnostics when this speculative parse fails.
+    let cli = crate::command_registry::try_parse_from(argv).ok()?;
     if cli.command.name() != "intent" {
         return None;
     }

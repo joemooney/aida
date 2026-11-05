@@ -372,7 +372,8 @@ AIDA's bet is **vertical depth on horizontal ground**: Anthropic ships the subst
 **Store-independent observations.** `aida intent note`, `validate`, and `export`
 produce or inspect an explicit six-field JSON envelope without requirements,
 identity discovery, telemetry, store setup or network calls. A dedicated entry
-path precedes shared CLI startup. SHA-256 covers ordered compact JSON of the five
+path precedes shared CLI startup; late alias dispatch refuses and directs the
+caller to the direct spelling. SHA-256 covers ordered compact JSON of the five
 payload fields; the full digest is the identity, with a 12-hex display label.
 Reads and serialized size are bounded, imported prose is data, and optional
 explicit regex rules refuse sensitive content without certifying sanitization.
