@@ -1,0 +1,29 @@
+id: 01a1add3-e2e4-7000-9ebe-e00b3a8e5460
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-850
+title: 'COSMETIC (non-blocking) coverage: publication tests inject run_at and advisor_r…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on STORY-2475, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  COSMETIC (non-blocking) coverage: publication tests inject run_at and advisor_request (publish_queue_exit_with, with_post_exit_step). Neither the real ship --from-seat call nor the mailbox send is exercised from a lane exit, and docs/cli/06-roles-sessions.md:607-611 itself flags the interactive-exec and clone-seat Claude reroute as untested.
+
+  PR: #3398
+  Reviewed sha: 6172950a13332e4b1e072fff15fedf1e0d422d7a
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-05T22:28:26.980743076Z
+modified_at: 2026-11-05T22:28:26.980743076Z
+req_type: Task
+tags:
+- carried-from:STORY-2475
+- finding-hash:ea39ad2b
+- from-review:PR-3398
+- kind:carried-forward
+filed_at:
+  code_sha: bdeb8f499786848a3cd0fec9d3e4b9bc6a0c03f0
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 0b0f8a6b701
+  vendor: claude
