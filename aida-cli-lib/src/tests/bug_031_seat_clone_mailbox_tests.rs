@@ -101,3 +101,94 @@ fn an_unverified_clone_send_stays_local_and_says_so() {
     assert!(note.contains("aida mailbox sync"), "names the sync: {note}");
     assert_eq!(mailbox_home(&fx.main).send_note(), None);
 }
+
+/// ACK in a verified seat clone uses the primary's common-Git receipt
+/// anchor. Moving to a linked worktree or another seat does not resurrect it.
+// trace:BUG-2449 | ai:codex
+#[test]
+fn bug2449_receipt_survives_switching_between_seat_clones_and_worktrees() {
+    use super::tests::git_ok;
+    use crate::mailbox_view::{commit_ack, explicit_limits, own_audience, plan_ack, read_own_mail};
+    use aida_core::mailbox_logical::ResolvedAudience;
+    let _env = crate::test_env::AgentSessionIsolation::apply(&[
+        ("AIDA_USER", Some("operator")),
+        ("AIDA_SESSION_ROLE", Some("advisor")),
+        ("AIDA_AGENT_TYPE", None),
+    ]);
+    let fx = fixture();
+    let clone = leased_clone(&fx, "bug2449-first", "b2449c10e001");
+    let other = super::s4_host_git_tests::leased_clone_on(
+        &fx,
+        "bug2449-second",
+        "b2449c10e002",
+        "other-seat",
+    );
+    let store = fx.main.join(".aida-store");
+    git_ok(
+        &fx.main,
+        &[
+            "worktree",
+            "add",
+            "-q",
+            "-b",
+            "aida-store",
+            store.to_str().unwrap(),
+        ],
+    );
+    let sibling = fx.root.join("sibling");
+    git_ok(
+        &fx.main,
+        &[
+            "worktree",
+            "add",
+            "-q",
+            "-b",
+            "sibling",
+            sibling.to_str().unwrap(),
+        ],
+    );
+    for root in [&clone, &other, &sibling] {
+        std::os::unix::fs::symlink(&store, root.join(".aida-store")).unwrap();
+    }
+    let audience: ResolvedAudience = own_audience();
+    let msg: aida_core::mailbox::Message = serde_json::from_value(serde_json::json!({
+        "id": "seen-in-seat", "thread_id": "seen-in-seat", "from": "sender",
+        "to": { "kind": "agent", "agent": "advisor" },
+        "timestamp": 1, "body": "already read in the first seat"
+    }))
+    .unwrap();
+    crate::mailbox_store::write_message(&fx.main, &msg).unwrap();
+    let first = read_own_mail(
+        &clone,
+        &clone.join(".aida-store"),
+        &audience,
+        &explicit_limits(),
+    );
+    assert!(!first.is_partial(), "{:?}", first.partial_note());
+    let rows = first.records().iter().collect::<Vec<_>>();
+    assert_eq!(first.unread().len(), 1);
+    let plan = plan_ack(&first, &rows).unwrap().unwrap();
+    commit_ack(&clone, plan, &audience).unwrap();
+    // Drop the clone-local mirror: only the shared durable receipt remains.
+    std::fs::remove_dir_all(clone.join(".aida/mailbox/.read-receipts")).unwrap();
+    for root in [&fx.main, &sibling, &other] {
+        let after = read_own_mail(
+            root,
+            &root.join(".aida-store"),
+            &audience,
+            &explicit_limits(),
+        );
+        assert!(
+            !after.is_partial(),
+            "{}: {:?}",
+            root.display(),
+            after.partial_note()
+        );
+        assert_eq!(after.records().len(), 1);
+        assert!(
+            after.unread().is_empty(),
+            "{} resurrected acknowledged mail",
+            root.display()
+        );
+    }
+}

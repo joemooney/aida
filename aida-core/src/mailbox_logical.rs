@@ -842,8 +842,10 @@ pub struct LogicalSnapshot {
     pub anchor_error: Option<SourceErrorCode>,
     /// Queued role deliveries this reader may bind (slice D1).
     pub pending_deliveries: Vec<PendingDelivery>,
-    /// Diagnostic-only local unknowns. These preserve the established own-reader
-    /// complete/ACK contract; inspection must not treat them as cleared mail.
+    /// Records whose delivery or receipt evidence could not be determined.
+    /// Readers must not project these as unread or cleared mail. The raw
+    /// records remain available for explicit ID resolution; coverage and ACK
+    /// eligibility still follow the source errors.
     // trace:BUG-b6b1278890774ef993d2ebc327862470-178 | ai:codex
     pub inspection_unknown_ids: Vec<String>,
 }
@@ -862,9 +864,24 @@ impl LogicalSnapshot {
             && self.conflicts.is_empty()
     }
 
-    /// Records with no read evidence (archived records excluded).
+    /// Records confirmed to have no read evidence (archived and unknown
+    /// records excluded). An incomplete receipt read never proves unread.
+    // trace:BUG-2449 | ai:codex
     pub fn unread_ids(&self) -> Vec<&str> {
-        self.ids_where(|read| *read == ReadEvidence::Unread)
+        let unknown: HashSet<&str> = self
+            .inspection_unknown_ids
+            .iter()
+            .map(String::as_str)
+            .collect();
+        self.records
+            .iter()
+            .filter(|r| {
+                !r.message.archived
+                    && r.read == ReadEvidence::Unread
+                    && !unknown.contains(r.message.id.as_str())
+            })
+            .map(|r| r.message.id.as_str())
+            .collect()
     }
 
     /// Records covered only by a legacy watermark (archived records
@@ -1094,7 +1111,11 @@ fn snapshot_for_policy(
                 .map(str::to_string)
                 .collect(),
         };
-        let mut receipt_unknown = false;
+        // An incomplete inventory may omit a worktree holding a receipt.
+        // A local-only project's one source is still fully knowable.
+        // trace:BUG-2449 | ai:codex
+        let mut receipt_unknown =
+            inventory_error.is_some_and(|code| code != SourceErrorCode::NotAGitCheckout);
         let read = read_evidence(
             &message,
             &keys,
@@ -2702,7 +2723,13 @@ fn read_evidence(
     let holders: BTreeSet<usize> = provenance.iter().map(|p| p.source).collect();
     let mut legacy = None;
     for (index, source) in observed.iter().enumerate().take(local_count) {
-        let Some(source) = source else { continue };
+        let Some(source) = source else {
+            // A failed mailbox-source read also left its receipts unobserved;
+            // an absent mailbox, unlike an errored source, holds no receipts.
+            // trace:BUG-2449 | ai:codex
+            *unknown |= matches!(sources[index].status, SourceStatus::Error(_));
+            continue;
+        };
         for key in &keys {
             if budget.expired() {
                 *unknown = true;

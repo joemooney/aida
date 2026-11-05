@@ -193,6 +193,12 @@ them** (STORY-1843 slice B2c):
    the receipt anchor could not be fully read) plans nothing and says
    `not marked read: …`, because an unread source may hold a newer state of a
    shown message.
+   For your own inbox, failed receipt reads leave affected messages with
+   unknown read state, withheld from inbox rows and unread counts; independently
+   readable mail can still appear with a partial-view warning. An explicit
+   ID read can still resolve those messages. Retrying after receipt reads
+   recover uses the existing acknowledgements without re-sending mail.
+   <!-- trace:BUG-2449 | ai:codex -->
 2. It writes and flushes the output.
 3. Only then it commits the plan: under the mailbox lifecycle lock, then the
    receipt lock, it checks that every shown message still has the bytes it

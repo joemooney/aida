@@ -8,8 +8,10 @@
 //! fully read makes the view [`Coverage::Partial`], and readers say so rather
 //! than reporting an empty inbox.
 //!
-//! Read state follows the B2 ruling: only [`ReadEvidence::Unread`] is new
-//! mail. Passive counts and notices treat a legacy watermark as not-new; the
+//! Read state follows the B2 ruling: only [`ReadEvidence::Unread`] with
+//! fully determined receipt evidence is new mail. Records with unknown read
+//! state are withheld from inbox rows and counts, with a partial-view warning.
+//! Passive counts and notices treat a legacy watermark as not-new; the
 //! explicit inbox labels it "read (legacy)".
 //!
 //! Marking is the post-flush explicit ACK (slice B2c, the successor to
@@ -372,9 +374,25 @@ fn snapshot_view(
             conflicts: snapshot.conflicts.len(),
         }
     };
+    let unknown: std::collections::HashSet<&str> = snapshot
+        .inspection_unknown_ids
+        .iter()
+        .map(String::as_str)
+        .collect();
     let view = OwnMail {
         audience: audience.clone(),
-        records: snapshot.records.clone(),
+        // A failed receipt lookup is unknown, not evidence of unread mail.
+        // Keep the raw snapshot for ACK eligibility and ID resolution, but
+        // never project uncertain records into inbox rows or passive counts.
+        // trace:BUG-2449 | ai:codex
+        records: snapshot
+            .records
+            .iter()
+            .filter(|r| {
+                matches!(query, Query::Addressable) || !unknown.contains(r.message.id.as_str())
+            })
+            .cloned()
+            .collect(),
         coverage,
         ack_basis: Some((
             ctx.repository().map(|r| r.path().to_path_buf()),
