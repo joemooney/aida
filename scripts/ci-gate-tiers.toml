@@ -54,6 +54,8 @@
 "Generated protobuf mirror drift guard" = "full"
 "Run tests" = "full"
 "STORY-1853 test-speed tooling tests" = "fast"
+# Pure Python with git/openssl fixtures, ~3s. trace:TASK-3046 | ai:claude
+"Containment conformance evidence tests" = "fast"
 "GitLab live-smoke workflow guard" = "fast"
 "External-prose classifier inventory" = "fast"
 "test-touched planner tests" = "fast"
