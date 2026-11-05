@@ -3,12 +3,12 @@ spec_id: TASK-1471
 agreed_id: TASK-1471
 title: Show linked documentation in human-format aida show
 description: 'Make human-readable aida show output surface linked narrative Docs and human-authored expositions that reference the displayed spec. Acceptance: (1) aida show <SPEC> in human format includes a clearly labeled Documentation or Explanations section when linked Docs exist; (2) each entry shows its Doc ID, title, audience/scenario/tags where available, and an actionable command such as aida doc show <DOC-ID>; (3) entries are absent when none exist; (4) reverse References links are resolved without changing canonical spec content; (5) default machine-oriented formats remain stable and do not gain prose unless their schema explicitly includes a documentation field; (6) the output distinguishes human-authored exposition from generated or other documentation provenance; (7) add coverage for direct and reverse documentation links, including STORY-1472 -> DOC-1-174.'
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-09-24T04:25:12.035374412Z
-modified_at: 2026-11-05T09:08:11.363910369Z
+modified_at: 2026-11-05T09:48:47.854304961Z
 req_type: Task
 relationships:
 - rel_type:
@@ -145,6 +145,12 @@ comments:
   modified_at: 2026-11-05T06:16:15.792387416Z
   session_id: 01a1aa3d4c9d
   harness_version: 2.1.318 (Claude Code)
+- id: 01a1ab1c-676e-7591-8441-065640665164
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: All 7 ACs are implemented in show_docs.rs + run_show, but the PR''s own e2e test still fails deterministically in CI lib-1 at task_1471_show_docs_tests.rs:196: it asserts the JSON relationships array contains the direct Doc''s UUID, while the JSON projection emits display IDs, so Build is red at the head.. Triage reason: CI red at 8eae576: lib-1 task_1471_show_docs_immediate_reverse_and_direct_links_preserve_machine_output still panics (round 5). Reproduce with one targeted cargo test before pushing.'
+  created_at: 2026-11-05T09:48:47.854300453Z
+  modified_at: 2026-11-05T09:48:47.854300453Z
+  session_id: b83457ff-84e3-46cb-8f68-4be531a63422
 history:
 - id: 01a1a438-4c50-72d0-87d7-ecde2738cbc4
   author: joe
@@ -329,15 +335,15 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1ab1c-676e-7591-8441-0648ae69d3f4
+  author: joe
+  timestamp: 2026-11-05T09:48:47.854288324Z
+  session_id: b83457ff-84e3-46cb-8f68-4be531a63422
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 implementation_info:
   implemented: true
   implemented_at: 2026-11-04T11:57:50.448772116Z
   implemented_by: joe
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'All 7 ACs are implemented in show_docs.rs + run_show, but the PR''s own e2e test still fails deterministically in CI lib-1 at task_1471_show_docs_tests.rs:196: it asserts the JSON relationships array contains the direct Doc''s UUID, while the JSON projection emits display IDs, so Build is red at the head.'
-  recovery_hint: address the review findings, move TASK-1471 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-05T09:08:11.363910369Z
