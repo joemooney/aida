@@ -1,4 +1,11 @@
 - user_id: role:implementer
+  requirement_id: 01a1a91e-8281-7861-bd4f-3240aef12160
+  position: 114000
+  added_by: role:implementer
+  note: '#3398 at d6fe567 conflicts with main again, in .github/workflows/ci.yml only (2 hunks in the live-bwrap step). Merge origin/main into the PR branch (merge, no rebase/force) and COMBINE both sides: keep this PR''s --logfile result-file counting (lib_results/cli_results, ''^ok <name>$'' matching) AND main''s TASK-2708 additions: the task_2707_ filter on the lib cargo test line and the required task_2707 count, with ran_2707 counted from $lib_results (''^ok .*task_2707_...$'') instead of the console $log, keeping not_required_2707 excluded on both sides and the task_2706_egress_ipc_live check against $lib_results. Run make check-ci-fast, push to the same branch.'
+  added_at: 2026-11-05T12:46:09.767529941Z
+  for_role: implementer
+- user_id: role:implementer
   requirement_id: 01a1965c-3483-70e3-af35-1caaf7df3f96
   position: 115000
   added_by: role:implementer
@@ -9,13 +16,6 @@
   position: 116000
   added_by: role:implementer
   added_at: 2026-11-05T12:42:07.144859773Z
-  for_role: implementer
-- user_id: role:implementer
-  requirement_id: 01a1a91e-8281-7861-bd4f-3240aef12160
-  position: 118000
-  added_by: role:implementer
-  note: '#3398 conflicts with main (update-branch fails). Rebase the PR branch onto origin/main, resolve conflicts keeping both sides'' behavior, run one targeted test plus make check-ci-fast, push.'
-  added_at: 2026-11-05T11:19:30.943103060Z
   for_role: implementer
 - user_id: role:implementer
   requirement_id: 01a1aa11-fa56-7602-a58d-a101b1972fbe
