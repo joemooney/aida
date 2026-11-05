@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T00:31:36.411397250Z
-modified_at: 2026-11-05T01:24:55.768410360Z
+modified_at: 2026-11-05T01:28:06.189202763Z
 req_type: Bug
 comments:
 - id: 01a1a94f-1958-7ed3-88ca-643b76fd08f5
@@ -16,6 +16,12 @@ comments:
   content: 'Implementation prepared in bug-b6b1278890774ef993d2ebc327862470-211: review ownership now uses classify_session_leases, so an exited active lane cannot borrow a live creator; watcher skip includes lease ID. Regression covers alive creator plus reaped active child and verifies update-branch admission. Local watcher test build is in progress; cargo fmt and diff checks pass. Publication blocker: .git is read-only in native sandbox (git add fails creating index.lock); command deputy runs at main checkout, and script deputy rejects implementer seat (allowed: advisor). No PR or completion claimed.'
   created_at: 2026-11-05T01:24:55.768410360Z
   modified_at: 2026-11-05T01:24:55.768410360Z
+  session_id: 01a1a9485113
+- id: 01a1a952-012d-7fd1-8522-64fc3b638532
+  author: joe
+  content: 'Validation complete: cargo test -p aida-cli-lib --lib review_watch::update_tests:: --offline (12 passed, including BUG-2442 regression); status_prs::bug_1291_orphan_sweep_tests (7 passed). Broad review_watch:: run: 112 passed, one existing restart_after_intent_is_idempotent SIGTERM trap timeout; immediate exact rerun passed. cargo fmt --all -- --check and git diff --check pass. Patch remains uncommitted because native sandbox denies Git metadata writes; implementer is refused by script deputy. Publication blocker filed as a draft finding. Host publisher should commit the three changed Rust files with [AI:codex] fix(review): align author ownership with lease liveness (BUG-2442), push this branch and open the PR. Do not ship or record a review from this standalone implementer.'
+  created_at: 2026-11-05T01:28:06.189202763Z
+  modified_at: 2026-11-05T01:28:06.189202763Z
   session_id: 01a1a9485113
 history:
 - id: 01a1a947-0e7e-7b01-8e98-3f6cd4cac68d
