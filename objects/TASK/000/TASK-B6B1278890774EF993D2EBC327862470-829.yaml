@@ -8,12 +8,19 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T13:50:30.827731392Z
-modified_at: 2026-11-05T16:18:38.074681141Z
+modified_at: 2026-11-05T16:27:14.309204494Z
 req_type: Task
 tags:
 - finding
 - from-implementer:BUG-2455
 - severity:minor
+comments:
+- id: 01a1ac89-3005-7960-b123-f9220bca7daa
+  author: joe
+  content: 'Investigation reproduced the retained lease with the baseline test plus diagnostic-only assertion output: AIDA_TRUST_PID_NAMESPACE=0 RUST_MIN_STACK=8388608 target/debug/deps/queue_work_dry_run-300600e1df90223b --exact task_1337_post_setup_launch_error_rolls_back_the_owned_setup --nocapture. Cleanup explicitly reports: not verified free of live processes (this process runs in a separate pid namespace ... outside it are hidden). SessionStartCleanup correctly returns before releasing the lease when release_tree refuses. The rollback summary already qualifies that anything kept is named above; the old assertion hid that output. This is a fixture namespace assumption, not failed lease deletion. Fix scoped to this disposable fixture: explicitly set AIDA_TRUST_PID_NAMESPACE=1, matching existing teardown tests, and include captured launch diagnostics in lease assertion failures. No production rollback or process-guard behavior changed. Reproduction log: /tmp/task3110-untrusted.log. Full queue_work_dry_run suite and pre-push gates are running.'
+  created_at: 2026-11-05T16:27:14.309204494Z
+  modified_at: 2026-11-05T16:27:14.309204494Z
+  session_id: 01a1ac80c18d
 history:
 - id: 01a1ac7d-217b-7f42-bb89-775b227bd601
   author: joe
