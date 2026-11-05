@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T04:41:04.196617281Z
-modified_at: 2026-11-05T09:04:50.534170865Z
+modified_at: 2026-11-05T09:12:02.160336650Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -90,6 +90,12 @@ comments:
   created_at: 2026-11-05T09:01:20.849933772Z
   modified_at: 2026-11-05T09:01:20.849933772Z
   session_id: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
+- id: 01a1aafa-bf70-74a2-bee0-f243258f0742
+  author: joe
+  content: 'Advisor CI-budget follow-up: cli-1 job 127107298522 (run 41986172303) failed only on session_end_refuses_to_return_a_pooled_worktree_a_live_process_is_using at 10.710s versus the unchanged 10s default. Commit 1b217cf5ba1 defers the holder fixture origin setup until after init/allocation/add/session start and publishes its actual HEAD once, avoiding unrelated store auto-push hooks during setup. Both pooled live-holder refusal and explicit override remain tested through the real CLI; remote commit coverage remains required. Validation: all 11 suite cases pass under nextest ci; test-timings.py accepts the JUnit report with the existing budget file (offending case 6.64s in the suite, 5.50s alone; slowest case 7.86s). All 8 Git maintenance ratchet checks, cargo fmt --all -- --check, and git diff --check pass. No budget raised, no test ignored, no ship or review-record action.'
+  created_at: 2026-11-05T09:12:02.160336650Z
+  modified_at: 2026-11-05T09:12:02.160336650Z
+  session_id: 01a1aaf42109
 history:
 - id: 01a1aa04-0d9a-7422-b7ac-32092a03e6ee
   author: joe
