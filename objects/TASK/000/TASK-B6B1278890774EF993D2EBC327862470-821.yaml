@@ -1,0 +1,29 @@
+id: 01a1aac6-2367-7482-a262-ca2e0d852111
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-821
+title: (minor, non-blocking) pipeline_stall.rs:510-537 ci_checks dedupes check runs by…
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on STORY-2476, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  (minor, non-blocking) pipeline_stall.rs:510-537 ci_checks dedupes check runs by name only. Two workflows with a same-named job (CheckRun.workflowName differs) collapse to one entry, so a newer green run in one workflow can hide a red run in the other, and the PR reads as pass or ready. Key the latest-attempt map by (workflowName, name) for CheckRuns.
+
+  PR: #3396
+  Reviewed sha: 9b3f40b8304a34db5c48b12bea3ce70aef42de91
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-05T08:14:34.343277750Z
+modified_at: 2026-11-05T08:14:34.343277750Z
+req_type: Task
+tags:
+- carried-from:STORY-2476
+- finding-hash:15c90ec9
+- from-review:PR-3396
+- kind:carried-forward
+filed_at:
+  code_sha: c735c7e8c30ad8c104e5656f7fbc40506084aaf4
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: d561213a36f
+  vendor: claude
