@@ -7,7 +7,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-15T15:48:13.617378738Z
-modified_at: 2026-11-05T00:21:56.390083652Z
+modified_at: 2026-11-05T00:21:57.965613990Z
 req_type: Task
 tags:
 - from-implementer:TASK-1734
@@ -47,6 +47,21 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: All 5 SPEC-447 investigation criteria met (test-only + plan doc, no production change), but CI gates is red: git auto-maintenance ratchet counts the new git commit at controls.rs:730 (8 > baseline 7). No triage reason was given.'
   created_at: 2026-11-05T00:21:56.390082203Z
   modified_at: 2026-11-05T00:21:56.390082203Z
+  session_id: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
+- id: 01a1a915-73c7-7180-a85d-bf87eb84e516
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (SPEC-447):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 2f9a9c884b9c
+    Recorded: 2026-11-04T21:04:41.726263256+00:00
+    Findings:
+    1. BLOCKING (CI gates red): tests/test_git_maintenance_ratchet.py fails with 'aida-cli-lib/src/regen/score/controls.rs: 8 > baseline 7' for the new site controls.rs:730 git(&["commit",...]). Reproduce: python3 -m unittest tests/test_git_maintenance_ratchet.py. The call IS guarded at runtime (closure at :703 uses crate::test_git::git_command()), but the scanner resolves it to the unguarded git closure at :1141. Root cause is a scanner bug that predates this PR: Definitions.guarded_call_in uses start + c.start() and Definitions.calls uses d[2] + c.start(), but re.finditer(masked, s, e) already returns absolute offsets, so the lookup lands past the real call. Fix in this PR: either give the closure a name that is unique in the file (e.g. let store_git = |...|), so resolve() cannot pick a later definition, or fix the double offset in the scanner and re-run --write-baseline (check that no other baselines go stale).
+    2. Commit/PR title is misleading: '[AI:codex] fix(regen): refuse non-roundtrippable floating rates in regen control and consensus JSON...' but the diff changes no production code; it characterizes the existing refusal with tests and documents a proposed repair (the repair is deferred to TASK-2842). The squash title will mislead history and merge-time completion readers. Retitle, e.g. '[AI:codex] test(regen): characterize committed fractional-rate refusals; document bounded repair (SPEC-447)', which matches the subject the implementer's own handoff comment proposed.
+    3. Minor (non-blocking): json_fraction_roundtrip_error_survey (controls.rs:631) asserts changed > 0, which pins serde_json's lossy default float parser. The plan doc sets aside serde_json's float_roundtrip feature as out of scope, but it would remove the drift at the root with zero tolerance, which is simpler than a 2-ULP comparator. Record float_roundtrip as a candidate repair on TASK-2842, and note in the survey test's comment that enabling it is expected to flip this assertion.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-05T00:21:57.831895301Z
+  modified_at: 2026-11-05T00:21:57.831895301Z
   session_id: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
 history:
 - id: 01a154db-eb1a-7e22-97df-21cd34a4604f
