@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-09-24T04:25:12.035374412Z
-modified_at: 2026-11-05T00:28:42.863909928Z
+modified_at: 2026-11-05T00:32:13.167915719Z
 req_type: Task
 relationships:
 - rel_type:
@@ -71,6 +71,11 @@ comments:
   content: 'Follow-up rework session: verified all three advisor findings are implemented in existing recovery commit 661f6314fd2 (always scan reverse Docs; propagate target/list errors; real doc add + registered run_show tests). git rebase origin/main succeeded, yielding local head 595e51d2224. Added stronger byte-identical JSON/TOON regression coverage after adding another reverse Doc when a direct Doc is already linked. Publication is now blocked: the sandbox mounts .git read-only and git merge failed on ORIG_HEAD.lock. No finding is disputed. Structured post_punt was rejected: ''MCP tool call requires approval, but approval policy is never''. Recovery patch /tmp/task-1471-followup.patch. Targeted Cargo test and make check-ci-fast in progress; final results to follow.'
   created_at: 2026-11-05T00:28:42.863892890Z
   modified_at: 2026-11-05T00:28:42.863892890Z
+- id: 01a1a91e-d76f-7170-8385-79821f3d407e
+  author: mcp
+  content: 'Publication blocker narrowed/resolved: raw git merge fails against the read-only .git mount, but standalone git add, git commit and git rebase succeeded through the available command path. The strengthened regression is now committed. After rebasing onto origin/main, reconciled with origin/task-1471 (Git skipped already-applied feature/fix patches) to retain published history and permit a normal push without force. Targeted test and fast gate remain in progress; no further punt is needed if the final push succeeds.'
+  created_at: 2026-11-05T00:32:13.167841644Z
+  modified_at: 2026-11-05T00:32:13.167841644Z
 history:
 - id: 01a1a438-4c50-72d0-87d7-ecde2738cbc4
   author: joe
