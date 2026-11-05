@@ -14,7 +14,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T11:57:08.462259290Z
-modified_at: 2026-11-05T11:01:22.186209280Z
+modified_at: 2026-11-05T11:05:54.381678885Z
 req_type: Task
 tags:
 - carried-from:BUG-2438
@@ -73,6 +73,11 @@ comments:
   content: 'Round 2: choosing reviewer fix direction (a). Parameterize bug2438_refuses with the expected refusal message: retain the train-source refusing-review assertion for malformed SHAs, assert the actual earlier carry-over/corpus refusal for the old-head integration fixture, and correct the helper/case documentation. Production gate ordering stays unchanged. Will validate targeted regressions and disclose the prior known-failing state and current verification in PR #3395.'
   created_at: 2026-11-05T11:01:22.186202240Z
   modified_at: 2026-11-05T11:01:22.186202240Z
+- id: 01a1ab62-ffcd-7a23-89ef-42d2cbe2fc4a
+  author: mcp
+  content: 'Round 2 implementation committed as 02e4bd31791e3f8814ba4f63341d6e2b709a59c3 ([AI:codex] test(train): assert case-specific review refusals (TASK-2831)). bug2438_refuses accepts the expected error substring; old-head fixture expects ''The approval did not carry over'', malformed-SHA fixture retains ''train source has a refusing review''. Helper and case comments now accurately describe the separate gates. Production code/gate order is unchanged. cargo fmt --all -- --check and git diff --check pass. The fresh targeted test build is still compiling. PR #3395 title/body updated, explicitly disclosing that 2e8fa0b09100 was previously published with a known-failing test. Ordinary git commit succeeded in this seat, so the documented post-exit commit fallback is unnecessary.'
+  created_at: 2026-11-05T11:05:54.381667501Z
+  modified_at: 2026-11-05T11:05:54.381667501Z
 history:
 - id: 01a1a67e-5028-7810-aab8-4c8c2b0687e8
   author: joe
