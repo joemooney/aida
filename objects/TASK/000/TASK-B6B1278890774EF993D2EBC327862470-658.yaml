@@ -6,12 +6,12 @@ description: |-
   Acceptance: (1) Migrate Claude to signed common wrapper, keep existing grants/CLI/MCP/headless/bg and containment regressions, no weakened floors/fallback. Vendor additions use data not new containment code. (2) Independent installed Linux evidence for all7 parent AC: actual Codex-only product/advisor/implementer/reviewer loop, interactive/headless/bg, allowed/denied network, protected writes, own grant recording, missing-kernel refusal and Claude parity. Missing evidence keeps parent open. (3) CLI/doctor/config/manual/trust reporting matches actual support and limits, publication only reviewed merged docs per owning publication task. No new unattended runs. Layers: remaining vendor migration, cross-surface integration/live evidence, public diagnostics/docs. Signed sliceD.
 
   All signed STORY2238 sketch C1-C12 and BUG2398 B1-B4 apply. Linux only, fakeHOME/synthetic tests, no global user settings or schedules. No partial backend may report AIDA containment applied or launch ordinary agents until all required protections are ready; named refusal, no fallback. STRICT independent review, operator merge floor. LIGHT one targeted test plus fast gates; shared infra or >10files adds touched-test/compile, fullsuiteCI only. Longcargo background, no slotbypass. Parent all7AC remain open until final installed-tool evidence; no slice alone completes parent.
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T09:06:27.587006751Z
-modified_at: 2026-11-05T12:25:20.831896698Z
+modified_at: 2026-11-05T12:27:49.711985038Z
 req_type: Task
 tags:
 - architecture
@@ -500,6 +500,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1abae-004f-7be1-baab-0b835d3728d7
+  author: joe
+  timestamp: 2026-11-05T12:27:49.711999880Z
+  session_id: 01a1ababb2d4
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 4ce0af750fcb68d4adf57496e4e002aefd8ace77
   branch: main
@@ -507,3 +515,9 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: 4ce0af750fc
   vendor: codex
+attention_reason:
+  category: design-fork
+  detail: 'AC(1) pre-code audit: #3307/96c521861aa supplies PreparedLaunch only for Codex foreground headless, exact API-key env, receipt and broker; Claude remains ClaudeNative with legacy os_wrap, and --bg explicitly refuses OS wrapping (BUG-2169). Signed STORY-2238 C7 forbids broad writable ~/.claude and requires probe-backed selection of relocated dedicated auth state versus shape-validated locked write-back; existing Claude os_wrap_home_rw_paths writes ~/.claude and ~/.claude.json. No Claude credential-layout/refresh selection or corresponding probe evidence was found in the signed rulings. The latest brief requires preserving existing Claude behavior while deferring AC(2) installed evidence. Please settle how existing Claude subscription/auth refresh is preserved under C7 without starting the deferred installed-evidence slice; an API-key-only replacement would change supported behavior. C12/M1 also requires named refusal until live nested-proxy proof. Separately git fetch origin main fails because .git/FETCH_HEAD is read-only in this seat, so commit/push/new PR cannot be completed here. No source edits or tests performed.'
+  lean: Authorize a narrowly scoped model-free synthetic-HOME Claude auth-layout/refresh probe to select C7(i) or C7(ii), retaining M1 named refusal until the separately arranged live proof. Resume implementation with a writable Git/host-commit path; keep AC(2)/AC(3) deferred.
+  raised_by: implementer
+  raised_at: 2026-11-05T12:27:49.711985038Z
