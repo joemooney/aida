@@ -3,12 +3,12 @@ spec_id: STORY-1468
 agreed_id: STORY-1468
 title: Capture originating user prompt when opening a feature requirement
 description: 'When an LLM chat turns a user request into a new AIDA requirement, preserve the originating user prompt as requirement provenance so future agents and reviewers can understand why the spec exists. The provenance should be clearly labeled and separate from the normalized title, description, and acceptance criteria. It must be stored in the AIDA substrate (not a parallel PROMPT_HISTORY file), remain available through normal requirement inspection/history, and not leak into ordinary end-user CLI output. Because prompts may contain secrets or private context, define a safe redaction/opt-out path and avoid silently copying credentials into the requirement store. Acceptance: a newly opened feature spec can be traced back to its originating prompt; later edits preserve the original prompt separately from derived product text; provenance is excluded or summarized in user-facing views unless explicitly requested; and tests cover absent, redacted, and captured provenance.'
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-09-24T00:32:52.190913727Z
-modified_at: 2026-11-05T18:14:09.423376161Z
+modified_at: 2026-11-05T18:15:54.302230931Z
 req_type: Story
 comments:
 - id: 01a0d0d5-7dfa-7e41-80d5-f47b293e4316
@@ -34,6 +34,28 @@ comments:
   created_at: 2026-11-05T16:25:08.236714268Z
   modified_at: 2026-11-05T16:25:08.236714268Z
   session_id: b83457ff-84e3-46cb-8f68-4be531a63422
+- id: 01a1acec-a947-7f63-8fa8-93d8f2b83b02
+  author: joe
+  content: |
+    Architecture sketch for advisor/master signoff (2026-11-05; trace:STORY-1468 | ai:codex)
+
+    Verified the 2026-09-24 product decision, CR-8's reserved FilingProvenance slot in aida-core/src/models.rs, and the 2026-11-05 requeue comment. Requeue supplied no storage decision or sketch approval. CLAUDE.md requires advisor signoff before architecture implementation; AGENTS.md's Sketch-First Protocol explicitly includes file formats and MCP contracts.
+
+    Recommended contract for approval:
+    1. Capture is OFF by default. First slice uses explicit intake only: aida add --origin-prompt-file <reviewed-UTF8-file> (mutually exclusive with --no-origin-prompt), plus an optional structured origin_prompt input on MCP add_requirement. No hooks, session-log scraping, environment capture, or project-wide automatic opt-in. Omitted or --no-origin-prompt stores nothing. Document that callers must review and redact before submission; file input avoids placing prompt text in argv.
+    2. Follow the explicit product decision: store content separately from requirement objects in a versioned provenance artifact keyed by requirement UUID, proposed git path provenance/origin-prompts/<uuid>.yaml. Store a version, captured timestamp, disposition (captured/redacted), and reviewed text only. Never persist the unredacted source or a hash of it. Do not embed content in filed_at, comments, tags, or custom_fields. CR-8's reserved inline-content slot is superseded by this decision. No content-bearing reference is needed in ordinary Requirement projections.
+    3. Add explicit aida show <id> --origin-prompt retrieval and include_origin_prompt=false on MCP show_requirement. Default show (including JSON/card/full), list, search, digest, exports, regen corpus, and agent context must not load or return artifact text. Retrieval labels the material as untrusted historical user input, separate from current instructions and product text. Git history retains artifact changes; ordinary requirement inspection offers explicit access. No automatic history-feed injection.
+    4. Redaction is caller-controlled before persistence, with an explicit redacted disposition. Apply the repository's existing secret-screening mechanism if suitable after inventory; refuse obvious credentials/private-key material with a content-free error. This is defense in depth, not a guarantee that free text is secret-free. Bound input size and refuse invalid encoding; never echo rejected input. Opt-out is omission or --no-origin-prompt.
+    5. Creation must commit requirement and artifact together under the existing writer lock; failure cannot leave a filed spec falsely reporting captured provenance. Preserve artifacts through edits, remaps, archive and store merge. Artifact keys use UUIDs, not mutable display IDs. Backend interface must explicitly support creation/read of provenance; legacy backends must either implement equivalent separate persistence or refuse explicit capture before any mutation, never silently discard it. This backend scope is part of the approval request.
+    6. Retention: immutable ordinary capture, retained with store Git history and any replicas/backups. No edit-time rewrite or automatic deletion; document that deleting a working-tree artifact does not erase historical secrets. Project policy/config defaults and history-purge tooling are outside this slice; do not imply confidentiality or revocation from view filtering.
+    7. Acceptance tests: absent/captured/redacted round trips; explicit opt-out and conflicting input; rejection before persistence; later description/status edits preserve original artifact; all default CLI/MCP/context/export projections omit text; explicit retrieval returns labeled reviewed text; atomic create failure; archive/remap/merge preservation; unsupported-backend refusal. Old stores require no migration when capture is absent.
+
+    Alternative requiring explicit product reversal: add content inside FilingProvenance and redact every serializer/projection. This has substantially broader disclosure risk because raw requirement serialization is used across CLI, MCP and exports. I recommend the separate-artifact contract above.
+
+    Requested decision: approve or amend points 1-7, especially separate artifact layout and legacy-backend support/refusal. This is a proposed design, not implementation or completion evidence. No source edits or PR; headless execution will punt rather than wait for signoff or repeat the unresolved choice.
+  created_at: 2026-11-05T18:15:53.415833412Z
+  modified_at: 2026-11-05T18:15:53.415833412Z
+  session_id: 01a1aceb0a45
 history:
 - id: 01a1a437-be76-7fc2-88e3-c0cf9d177253
   author: joe
@@ -79,3 +101,22 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1aceb-a522-7a20-a203-0186c2adef5d
+  author: joe
+  timestamp: 2026-11-05T18:14:46.818693194Z
+  session_id: 01a1aceb0a45
+  changes: []
+- id: 01a1acec-acbe-7053-a991-8cbec0cc4bf3
+  author: joe
+  timestamp: 2026-11-05T18:15:54.302250268Z
+  session_id: 01a1aceb0a45
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
+attention_reason:
+  category: design-fork
+  detail: Architecture sketch posted on owning spec on 2026-11-05. Separate prompt artifact introduces a store file format and CLI/MCP contracts requiring advisor signoff under CLAUDE.md and AGENTS.md Sketch-First Protocol. Previous requeue supplied no decision. Need approval/amendment of explicit intake, artifact layout, redaction, retrieval, retention and backend support/refusal before implementation.
+  lean: Approve the posted separate-artifact design with explicit opt-in intake, reviewed/redacted text only, default projection exclusion and explicit unsupported-backend refusal.
+  raised_by: implementer
+  raised_at: 2026-11-05T18:15:54.302230931Z
