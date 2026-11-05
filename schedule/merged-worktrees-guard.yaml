@@ -1,6 +1,10 @@
 job: merged-worktrees-guard
-last_run: 2026-10-06T03:48:25.242200641Z
+last_run: 2026-11-05T03:53:40.188422847Z
 last_by:
   seat: substrate
   vendor: tick
-result: ok
+result: failed:124
+failure_trips:
+- trip_id: merged-worktrees-guard@2026-11-05T03:53:40.188422847Z
+  at: 2026-11-05T03:53:40.188422847Z
+  status: 124
