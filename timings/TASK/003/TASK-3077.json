@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "spec": "TASK-3077",
+  "publishes": [
+    {
+      "at": "2026-11-05T07:09:42.648038680Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-05T07:06:00.616182014Z",
+      "spec": "TASK-3077",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 3403
+      }
+    },
+    {
+      "ts": "2026-11-05T07:09:42.431483833Z",
+      "spec": "TASK-3077",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "8a5e625506f2468f483944b07faa83c49e0d39f0",
+        "pr": 3403,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
