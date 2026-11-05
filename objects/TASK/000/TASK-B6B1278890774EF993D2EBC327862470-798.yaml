@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T02:00:14.760070519Z
-modified_at: 2026-11-05T17:47:57.455125029Z
+modified_at: 2026-11-05T18:42:28.411836099Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -27,6 +27,15 @@ comments:
   created_at: 2026-11-05T17:47:57.455125029Z
   modified_at: 2026-11-05T17:47:57.455125029Z
   session_id: 01a1accfff53
+- id: 01a1ad04-ffbb-76e0-af90-949ea26aced6
+  author: joe
+  content: |-
+    ADVISOR RULING 2026-11-05 11:50 MST on the sketch at acf4b064974: SOCKET route APPROVED, conditionally. Channels route REJECTED: it overlaps SPIKE-40 and changes the MCP/launch contract.
+    Step 0 (gate, before production code): establish the CLAUDE_CODE_MESSAGING_SOCKET message/response contract ONLY from Claude Code's official cross-session-messaging documentation plus ONE disposable live probe. The probe uses two throwaway `claude` sessions on a scratch dir, never a fleet session. Record the doc URL, the request/response bytes and the busy/idle/hold behaviour on this spec. If the documented contract does not define a message payload and a response you can classify (accepted, held or refused), STOP: Claude wake stays Unsupported (next-turn hook delivery is the supported path), document that, and complete this spec as an investigation with that outcome. Never infer a private wire schema.
+    If step 0 passes, implement the proposed contract: binding captured only from the receiver's own SessionStart, validated by session id, pid/start time and socket ancestry; no token in the shared store or logs; socket acceptance = queued, never read and never acted; reuse mailbox_wake_run's ledger, inflight and recovery logic. Fake-transport tests plus that one live probe. LIGHT gate.
+  created_at: 2026-11-05T18:42:28.411836099Z
+  modified_at: 2026-11-05T18:42:28.411836099Z
+  session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
 history:
 - id: 01a1a96f-972c-7473-901d-753850a5dee9
   author: joe
