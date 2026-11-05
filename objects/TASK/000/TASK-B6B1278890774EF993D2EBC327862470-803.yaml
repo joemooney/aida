@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T02:52:09.542251339Z
-modified_at: 2026-11-05T16:41:11.011902912Z
+modified_at: 2026-11-05T17:05:28.519869849Z
 req_type: Task
 tags:
 - from-advisor:STORY-2479
@@ -26,6 +26,12 @@ comments:
   content: 'Investigation: pr_hold_handler already passes cwd to push_and_verify_held_branch, so this is not main-worktree root confusion. host_git_command returns a fixed nonzero seat-clone safety refusal when containment cannot be attested (notably native Codex seats), and the helper discards stderr and calls every nonzero rev-parse result a missing branch. Fix preserves the refusal/error, claims absence only for quiet exit 1 with empty stderr, and retains fail-closed publication. Regression coverage includes nested sibling-worktree success, existing branch with clone safety refusal, and invalid repository lookup. Native-seat publication authorization remains unchanged.'
   created_at: 2026-11-05T16:41:11.011902912Z
   modified_at: 2026-11-05T16:41:11.011902912Z
+  session_id: 01a1ac933cfa
+- id: 01a1acac-31c7-71b3-a7be-a8d7b40ad913
+  author: joe
+  content: Implemented in 2cf37ec93ca and pushed to origin/task-b6b1278890774ef993d2ebc327862470-803. Git lookup refusals now retain their diagnostic and explicitly report no hold; only quiet missing-ref exit 1 reports branch absence. All 8 targeted hold tests passed (including 3 new regressions); cargo fmt --all -- --check, git diff --check and trace-header checks passed. No publication authority changes. Preparing standalone PR handoff; no ship or review-record operation.
+  created_at: 2026-11-05T17:05:28.519869849Z
+  modified_at: 2026-11-05T17:05:28.519869849Z
   session_id: 01a1ac933cfa
 history:
 - id: 01a1a9a4-9331-74f3-8922-e37e24c30e09
