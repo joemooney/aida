@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T13:50:30.827731392Z
-modified_at: 2026-11-05T16:30:06.818043931Z
+modified_at: 2026-11-05T16:35:30.243632403Z
 req_type: Task
 tags:
 - finding
@@ -26,6 +26,12 @@ comments:
   content: 'Committed 45c35ee9d8b: fixture-only namespace trust plus assertion diagnostics. Validation: full queue_work_dry_run suite passed 15/15; direct fixed-test executable with AIDA_TRUST_PID_NAMESPACE=0 in the parent passed 1/1 (18.53s), while the diagnostic-only baseline failed under that same setting (29.33s). cargo fmt --all -- --check and git diff --check passed. make check-ci-fast still running before push. No additional conversational flags found.'
   created_at: 2026-11-05T16:30:06.818043931Z
   modified_at: 2026-11-05T16:30:06.818043931Z
+  session_id: 01a1ac80c18d
+- id: 01a1ac90-c143-7b93-ab8f-87b683969bd3
+  author: joe
+  content: 'Final pre-push validation: make check-ci-fast passed all 37 gates. Full queue_work_dry_run passed 15/15 and the fixed direct namespace regression passed 1/1. Publishing the focused test correction for independent review.'
+  created_at: 2026-11-05T16:35:30.243632403Z
+  modified_at: 2026-11-05T16:35:30.243632403Z
   session_id: 01a1ac80c18d
 history:
 - id: 01a1ac7d-217b-7f42-bb89-775b227bd601
