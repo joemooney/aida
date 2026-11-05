@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T12:51:07.563355298Z
-modified_at: 2026-11-05T04:44:56.401618215Z
+modified_at: 2026-11-05T05:12:26.171584720Z
 req_type: Bug
 tags:
 - area:compete
@@ -125,6 +125,13 @@ comments:
   created_at: 2026-11-05T04:43:26.075093579Z
   modified_at: 2026-11-05T04:43:26.075093579Z
   session_id: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
+- id: 01a1aa1f-633b-7053-9621-59d530d3ac84
+  author: joe
+  content: 'Round 2: CI lib-1 red at 9f87b707 was the TASK-2032 launcher_main ratchet — compete_arm_argv called launcher_main() itself. It now takes host_main as a parameter; build_compete_arm_command resolves it once (argv, OS wrapper, mailbox), and the dry-run preview in handle_compete_command (added to the ratchet''s entry points) passes it to compete_preview_argv. Review findings 1-3 were addressed in 9f87b707 (pre_exec in launch/parent.rs, preview env from pairs, worktree-scoped native flags with worktree != cwd test, read-only judge built from posture constant without --add-dir, full judge argv pinned).'
+  created_at: 2026-11-05T05:12:26.171584720Z
+  modified_at: 2026-11-05T05:12:26.171584720Z
+  session_id: 01a1aa062eb2
+  harness_version: 2.1.318 (Claude Code)
 history:
 - id: 01a1a69d-4a2d-7292-9de1-00c519ffe27a
   author: joe
