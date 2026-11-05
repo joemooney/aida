@@ -10,12 +10,12 @@ description: |
   Reproduce with scripts/containment/conformance.py --vendor codex --output <fresh-home-directory> --timeout 120. Private evidence: /home/joe/aida-conformance-task3046-codex-v6/report.json. This proves access to the fixture capability, not exploitation of an actual host broker. Production refusal matrix, grant revocation and descendant teardown were not measured and remain unknown.
 
   Acceptance: restrict host-capable IPC to explicitly scoped mediated capabilities, with an independently reviewed policy that preserves authenticated vendor startup. A same-profile real-vendor host-IPC negative must deliver no nonce while its host positive control succeeds. Also validate real launcher lifecycle/teardown; do not substitute this synthetic canary for actual broker authorization tests.
-status: Approved
+status: InProgress
 priority: Medium
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T01:34:25.744534100Z
-modified_at: 2026-11-05T02:30:37.715088975Z
+modified_at: 2026-11-05T02:58:45.725649021Z
 req_type: Bug
 tags:
 - area:containment
@@ -39,6 +39,13 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a1a9a5-015d-7613-873c-19ca74632aaf
+  author: aida-session-start
+  timestamp: 2026-11-05T02:58:45.725644079Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   aida_version: 0.16.0
   aida_build_sha: fb2086e9008
