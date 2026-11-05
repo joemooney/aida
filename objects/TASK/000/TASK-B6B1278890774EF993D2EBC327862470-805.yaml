@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T04:48:10.186942102Z
-modified_at: 2026-11-05T20:47:20.825410890Z
+modified_at: 2026-11-05T20:49:44.445631777Z
 req_type: Task
 tags:
 - from-advisor:STORY-2492
@@ -222,6 +222,13 @@ comments:
   created_at: 2026-11-05T20:45:42.849590318Z
   modified_at: 2026-11-05T20:45:42.849590318Z
   session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
+- id: 01a1ad79-83fd-7be1-9f03-9f9499d09b1f
+  author: joe
+  content: |
+    Round 2: all four requested findings addressed in new commit 51b33645ec7, pushed to the existing PR https://github.com/joemooney/aida/pull/3452. Merged current origin/main (including slice-1 0b0f8a6b701) without conflicts. The plan now records the approved explicit GitHub hub/ref, mirror/bridge restrictions, named unreachable refusal/no failover and stopped-admission migration; cites the 12:00 MST APPROVED publication/state-table/OpenSSH signoff; links landed slice-1 code; and specifies client-side explicit force-with-lease CAS with the cooperating-writers-only trust assumption. Approved state table unchanged. Validation passed: whitespace, relative links, stale text removal and slice-1 ancestry. No production tests for this documentation-only change. Original checkout Git metadata is read-only, so merge/commit/push used /tmp/aida-task-2860-round2; original checkout remains unchanged. Latest CI check read reported no checks yet on the new head. No ship or review-record command run; handing the open PR to reviewer/merge seat.
+  created_at: 2026-11-05T20:49:44.445631777Z
+  modified_at: 2026-11-05T20:49:44.445631777Z
+  session_id: 01a1ad7745d6
 history:
 - id: 01a1aa76-52e6-7370-b6c4-2f6dbc6d878a
   author: joe
