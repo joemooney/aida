@@ -1,5 +1,6 @@
 id: 01a1ad2b-a073-7963-8f8e-84ec9c780385
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-838
+agreed_id: TASK-2898
 title: 'non-blocking (cosmetic): commit subject ''fix: address CI failures and review fi…'
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on TASK-2841, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
@@ -20,6 +21,11 @@ tags:
 - finding-hash:56da7887
 - from-review:PR-3434
 - kind:carried-forward
+history:
+- id: 01a1ad63-629a-7913-8f3e-f7e7282ff758
+  author: joe
+  timestamp: 2026-11-05T20:25:34.106938909Z
+  changes: []
 filed_at:
   code_sha: 70e10d2b449f980b725a733bf35159164941039b
   branch: main

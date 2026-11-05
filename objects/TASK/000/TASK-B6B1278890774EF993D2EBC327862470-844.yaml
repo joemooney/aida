@@ -1,5 +1,6 @@
 id: 01a1ad2b-ef64-7181-b3a2-fa7edc30696d
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-844
+agreed_id: TASK-2895
 title: 'minor (non-blocking, test coverage): TASK-2867 pr_cmd.rs:8462 pr_cli_policy for…'
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on TASK-3112, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
@@ -20,6 +21,11 @@ tags:
 - finding-hash:8693872c
 - from-review:PR-3439
 - kind:carried-forward
+history:
+- id: 01a1ad63-623f-72c0-b137-c0f3af921d65
+  author: joe
+  timestamp: 2026-11-05T20:25:34.015641953Z
+  changes: []
 filed_at:
   code_sha: 70e10d2b449f980b725a733bf35159164941039b
   branch: main

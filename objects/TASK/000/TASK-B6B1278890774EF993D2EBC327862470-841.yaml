@@ -1,5 +1,6 @@
 id: 01a1ad2b-c7e2-7b42-9a03-5944d4d0fa9f
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-841
+agreed_id: TASK-2891
 title: 'cosmetic: squash title ''fix: address CI failures and review findings'' is generi…'
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on TASK-2842, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
@@ -20,6 +21,11 @@ tags:
 - finding-hash:5eb020cb
 - from-review:PR-3436
 - kind:carried-forward
+history:
+- id: 01a1ad63-61de-7b02-a9f2-463108532a66
+  author: joe
+  timestamp: 2026-11-05T20:25:33.918622699Z
+  changes: []
 filed_at:
   code_sha: 70e10d2b449f980b725a733bf35159164941039b
   branch: main

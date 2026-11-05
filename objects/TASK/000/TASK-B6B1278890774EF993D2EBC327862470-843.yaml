@@ -1,5 +1,6 @@
 id: 01a1ad2b-e35d-7c51-973c-ab40bf5a954b
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-843
+agreed_id: TASK-2897
 title: 'minor (non-blocking, test coverage): pipeline_stall.rs:1080 held_green_pr_is_no…'
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on TASK-3112, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
@@ -20,6 +21,11 @@ tags:
 - finding-hash:3eca54de
 - from-review:PR-3439
 - kind:carried-forward
+history:
+- id: 01a1ad63-628f-7942-a1bb-0429e6d00537
+  author: joe
+  timestamp: 2026-11-05T20:25:34.096001573Z
+  changes: []
 filed_at:
   code_sha: 70e10d2b449f980b725a733bf35159164941039b
   branch: main
