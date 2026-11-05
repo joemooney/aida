@@ -1,0 +1,17 @@
+id: 01a1a96f-ad68-79b1-aa59-600a76a58221
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-799
+agreed_id: TASK-3073
+title: Add exact-session Antigravity mailbox wake adapter
+description: 'Follow-up to STORY-2476 advisor ruling: establish supported exact-session live agy wake via the existing mailbox wake lifecycle, including busy-session and idempotence semantics. Keep unsupported delivery explicit; do not substitute a resumed process for injection.'
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-05T02:00:30.824843797Z
+modified_at: 2026-11-05T02:00:30.824843797Z
+req_type: Task
+filed_at:
+  aida_version: 0.16.0
+  aida_build_sha: fb2086e9008
+  vendor: codex
+  session: 01a1a96dc251
