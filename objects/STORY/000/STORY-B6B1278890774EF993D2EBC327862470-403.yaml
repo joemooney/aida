@@ -8,8 +8,15 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-05T00:31:51.425362067Z
-modified_at: 2026-11-05T00:31:51.425362067Z
+modified_at: 2026-11-05T00:38:35.101822153Z
 req_type: Story
+comments:
+- id: 01a1a924-ab5d-7630-baf2-668624abd4e4
+  author: joe
+  content: 'Also observed 2026-11-04 17:33: the TASK-2708 rework lane for PR #3307 started on a fresh branch off main (task-...-658-2), not on the PR branch. Codex can''t switch branches in its sandbox, so it punted with no changes. Acceptance addition: a queue-work rework for a spec with an open PR always seats the PR''s head branch (the host does the checkout and merge-from-main before the lane starts), for every vendor.'
+  created_at: 2026-11-05T00:38:35.101822153Z
+  modified_at: 2026-11-05T00:38:35.101822153Z
+  session_id: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
 filed_at:
   code_sha: 47e9f216d38bf2bb6c503baeebfcca728604bd57
   branch: main
