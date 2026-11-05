@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T11:37:41.860562323Z
-modified_at: 2026-11-05T11:56:23.549013365Z
+modified_at: 2026-11-05T11:57:10.220899576Z
 req_type: Bug
 history:
 - id: 01a1ab80-8b6c-7341-a303-74e723a31fe7
@@ -26,6 +26,11 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1ab91-ef29-7823-95bf-44a8d8d88e7f
+  author: joe
+  timestamp: 2026-11-05T11:57:10.313407598Z
+  session_id: 01a1ab913020
+  changes: []
 filed_at:
   code_sha: c9166da8a3ce240b3c5464e80ef484980aba0846
   branch: main
