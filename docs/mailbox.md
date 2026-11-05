@@ -330,3 +330,43 @@ These are known gaps (tracked for the master to triage):
 - **Intent on the notice surface + read-mail skill.** `aida mailbox inbox` and the `read_inbox` MCP tool surface a message's `intent`, but folding it into the unread *notice* surface (`aida mailbox notice`) and the read-mail skill's interpret step is still pending — TASK-790.
 
 Resolved since the first cut: the operator overview (`aida mailbox list` + `aida mailbox inbox --all`, STORY-539 / BUG-513); urgency surfacing in the statusline (`--urgent`, STORY-539); retract/delete (STORY-583); the read/notice loop that surfaces unread mail into an agent's context (STORY-585); and message intent markers (`fyi | request | handoff`) + the act-on-mail policy (TASK-782).
+
+## Explicit responses to requests
+
+<!-- trace:TASK-3074 | ai:codex -->
+Reading or acknowledging mail, accepting a wake, replying, and archiving do
+not establish that a request was acted on. Record a response explicitly:
+
+```bash
+aida mailbox disposition <complete-message-id> acted --reason 'CI rerun started' --evidence 'https://github.com/org/repo/actions/runs/123'
+aida mailbox disposition <complete-message-id> declined --reason 'This request belongs with the release owner'
+aida mailbox disposition <complete-message-id> deferred --reason 'Waiting for the current build' --until '2026-11-06T01:00:00Z'
+aida mailbox read <message-id> --json
+```
+
+Only an authorized current recipient can record a disposition, including one
+current reader of a shared role inbox with a verified session binding. An
+unbound role hint grants no action authority. Sender access or inspecting another
+inbox grants no authority. The command requires an exact ID and a nonempty
+reason of at most 4096 bytes. `acted` also requires `--evidence`: this is the
+recipient's assertion, not verified completion of a spec, review, or merge.
+`deferred` requires a future RFC3339 deadline within 24 hours; other outcomes
+refuse `--until`. Retractions, deletions and non-request messages refuse.
+Archived requests retain their evidence.
+
+Action receipts live in a separate version-1 ledger under the common Git
+mail-lifecycle anchor (`actions-v1.json`), serialized by Lifecycle then
+`actions.lock`. Revisions retain the actor, recipient UUID when available,
+matched inbox keys, message fingerprint, reason, evidence and server time;
+the latest authorized revision wins. The ledger refuses at 4096 revisions or
+4 MiB, without pruning history. Corrupt or unsafe ledgers, partial/conflicting
+mail snapshots, retiring sources, changed copies and changed recipient
+authority fail closed.
+
+`mailbox disposition --json` returns `{schema: 1, action: <receipt>}`.
+`mailbox read --json` returns `{schema: 1, message: <message>, action:
+<receipt-or-null>}`. `null` means action unknown, including older mail with a
+read watermark. Neither command advances read ACKs. A disposition closes only
+the response obligation; it does not establish that a pipeline stall cleared.
+Alarm correlation and unresolved/persistent escalation follow in a separate
+implementation slice.

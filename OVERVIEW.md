@@ -4,6 +4,15 @@ and empty role/vendor audiences, and lists group readers. Known people retain
 offline inboxes; historical reads do not require a live recipient.
 <!-- trace:STORY-1843 | ai:codex -->
 
+Request action assertions use a separate bounded version-1 ledger under the
+common Git mail-lifecycle anchor. Recipient-authorized `mailbox disposition`
+records acted/declined/deferred revisions after revalidating identity, source
+generations and exact replicas under Lifecycle then action-ledger locks.
+Read ACKs and wake acceptance never write it, and assertions grant no protected
+operation or completion authority. See [request responses](docs/mailbox.md#explicit-responses-to-requests)
+for the CLI/schema and deadline rules; alarm correlation/escalation is separate.
+<!-- trace:TASK-3074 | ai:codex -->
+
 Review watch discovers open non-draft GitHub/GitLab changes against pinned
 origin and each change's own base-branch evidence and dispatches ordinary attested reviewers before
 CI settles. Atomic version-1 state under the main worktree's `.aida/review-watch`

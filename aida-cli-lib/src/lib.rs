@@ -499,6 +499,8 @@ mod mail_retention;
 mod mailbox_cmd;
 mod mailbox_store;
 // trace:STORY-1843 | ai:claude
+// trace:TASK-3074 | ai:codex
+mod mailbox_action;
 mod mailbox_view;
 // trace:TASK-2347 | ai:codex
 mod mail_wake;
