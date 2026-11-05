@@ -368,7 +368,10 @@ fn send_advisor_body(project_root: &Path, advisor: &str, body: String) -> Result
     // trace:BUG-1592 | ai:claude
     let from_role = crate::resolve_mail_sender_role();
     let msg = Message {
-        subject: None,
+        // trace:TASK-3075 | ai:codex
+        subject: body
+            .starts_with("Pipeline needs attention:")
+            .then(|| "Pipeline stall alarm".into()),
         id: id.clone(),
         thread_id: id,
         from,
