@@ -1,0 +1,23 @@
+id: 01a1ac77-357d-7f21-8295-e4947011d60b
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-832
+agreed_id: TASK-3112
+title: 'Nit sweep B: code cosmetic and minor findings'
+description: 'Batched non-blocking review findings (advisor triage 2026-11-05). For each listed spec, read it with `aida show <ID> --full`, verify the finding still applies on main, and fix it; if it no longer applies, say so in the PR body. Keep each fix minimal; no behavior change beyond the finding. One PR. Findings: TASK-2834 TASK-2840 TASK-2844 TASK-2850 TASK-2851 TASK-2853 TASK-2867 TASK-2868 TASK-2873 TASK-2874 TASK-2876'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-05T16:07:36.061610524Z
+modified_at: 2026-11-05T16:07:36.061610524Z
+req_type: Task
+tags:
+- from-advisor
+- nit-sweep
+filed_at:
+  code_sha: 70a5d68133ad33fa17635a4651ea3663865cebcb
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: c38a77db609
+  vendor: claude
+  session: b83457ff-84e3-46cb-8f68-4be531a63422
