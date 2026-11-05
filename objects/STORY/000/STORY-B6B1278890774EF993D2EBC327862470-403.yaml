@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T00:31:51.425362067Z
-modified_at: 2026-11-05T13:52:40.773250744Z
+modified_at: 2026-11-05T14:07:42.693417523Z
 req_type: Story
 relationships:
 - rel_type:
@@ -181,6 +181,13 @@ comments:
   content: Commit 93b9f98db7d references this requirement
   created_at: 2026-11-05T13:52:40.773250744Z
   modified_at: 2026-11-05T13:52:40.773250744Z
+  session_id: 01a1abf75368
+  harness_version: 2.1.318 (Claude Code)
+- id: 01a1ac09-7265-7dd3-b53d-de5f08bb36ed
+  author: joe
+  content: 'Round 3 (claude): merged origin/main (93b9f98db7d; adopted BUG-2451 forge PR-head lookup, kept host-merge conflict routing, dropped tests for helpers main deleted). 15e3b77030b fixes the CI lib-1/lib-0 failures in story_2475_conflicting_codex_rework_relaunches_claude_in_the_seated_tree (HOME pin now uses run_path_isolated_test; AIDA_AGENT_MODEL is set through EnvVarsGuard::set_key, not raw set_var). Findings 1 and 2 were already fixed on the branch (no raw current_exe in ship_from_seat.rs; the TASK-2807 ratchet finds run_queue_resume_to_exit and checks that the wrapper calls spawn_vendor_headless_resume without pre-marking). Finding 3: story_2475_all_codex_lane_exits_publish_after_child_exit passes in a targeted lane run (all 3 modes x 3 vendor cases) and was not among CI failures at e2491c9. Finding 5: covered by the seated-tree integration test (headless + interactive; clone-seat boundary documented in its doc comment). Lane runs: story_2475 12/12, ratchets 3/3, queue_work_tests+bug_2451+bug_2428 185/185. Finding 4 (bwrap 49/49) waits on CI at 15e3b77.'
+  created_at: 2026-11-05T14:07:42.693417523Z
+  modified_at: 2026-11-05T14:07:42.693417523Z
   session_id: 01a1abf75368
   harness_version: 2.1.318 (Claude Code)
 history:
