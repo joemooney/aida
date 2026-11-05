@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T12:51:07.563355298Z
-modified_at: 2026-11-05T17:36:18.475800469Z
+modified_at: 2026-11-05T17:36:23.578523496Z
 req_type: Bug
 tags:
 - area:compete
@@ -219,6 +219,22 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: BUG-2439 acceptance (1)-(3) are met in source and tests (native codex argv, dry-run==launch incl. linked-worktree case, PR_SET_PDEATHSIG via launch::parent), but head 6fd369fe still does not compile: the round-5 fix commits (bd2b0041d8b, bb2dfa6f93d) were never pushed, so 8 CI jobs fail at build.. No triage reason was given.'
   created_at: 2026-11-05T17:36:18.475798095Z
   modified_at: 2026-11-05T17:36:18.475798095Z
+  session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
+- id: 01a1acc8-7cdf-7781-bc70-3bb1eda3033b
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2439):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 6fd369fee806
+    Recorded: 2026-11-05T16:02:04.124466459+00:00
+    Findings:
+    1. BLOCKER (compile; CI gates, lib-0, lib-1, cli-0, cli-1, contracts and rest are red at 6fd369fe, and Build (ubuntu-latest) aggregates them): aida-cli-lib/src/compete_cmd.rs:1129 calls session::containment_applied(v, contained) with 2 args, but session.rs:3345 takes 3 (vendor, contained, receipt: Option<&ContainmentReceipt>). Pass None. The round-5 local commit bd2b0041d8b made this fix, but it is not on the PR branch (the push was rejected non-fast-forward after the main merge 6fd369fee80). Integrate it: merge or rebase it onto origin/bug-b6b1278890774ef993d2ebc327862470-208-2, then push without force.
+    2. MINOR (duplicated containment decision): compete_cmd.rs:1146 recomputes headless_vendor.is_some_and(|v| session::containment_applied(v, contained, None)), which is the same value as actually_contained at line 1128. Use 'if actually_contained' so AIDA_CONTAINED, the OS wrapper and the mailbox prep cannot disagree. Commit bd2b0041d8b also fixes this; publish it.
+    3. MINOR (unpublished fixture repair): the round-5 commit bb2dfa6f93d repaired the parent-death fixture with a trusted native Codex policy, and it is also missing from the PR branch. Publish it with bd2b0041d8b and confirm compete_cmd::containment_tests (compete_vendor_dies_with_parent) is green in CI lib-0/lib-1 at the new head.
+    4. PROCESS (not a code defect): merge-hold-gate is red because the supervised spec carries an aida:merge-hold. After CI is green, release it through 'aida merge-hold clear 3401' (human) or 'aida merge-hold auto-release 3401'.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-05T17:36:22.751597649Z
+  modified_at: 2026-11-05T17:36:22.751597649Z
   session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
 history:
 - id: 01a1a69d-4a2d-7292-9de1-00c519ffe27a
