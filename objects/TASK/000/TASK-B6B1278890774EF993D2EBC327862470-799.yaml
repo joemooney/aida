@@ -8,12 +8,19 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T02:00:30.824843797Z
-modified_at: 2026-11-05T17:55:59.750576206Z
+modified_at: 2026-11-05T17:57:15.338098832Z
 req_type: Task
 relationships:
 - rel_type: Child
   target_id: 01a1a91e-a1e8-7e81-981e-cba544d1ee9c
   created_at: 2026-11-05T02:00:36.902368008Z
+comments:
+- id: 01a1acdb-99ca-7210-9458-1e7649fcb63b
+  author: joe
+  content: 'Investigation 2026-11-05: installed agy --version is 1.5.1. Read-only agy --help, agy help acp, agy help remote-control, and remote-control start/status --help expose --conversation (resume), --input-format stream-json (stdin turns owned by that process), ACP stdio, and remote-control daemon start/status/stop. None of these help surfaces documents exact-existing-live-session injection, busy-session queue acceptance, or idempotent submission/recovery receipts. Existing AIDA mail_wake::WakeAdapter::for_vendor returns Unsupported for antigravity; launch_wake warns next-turn delivery; mailbox_wake_run::watch_row refuses non-Codex before opening a ledger or submitting. The existing Codex watcher audience, lifecycle, ledger and acknowledgement semantics should be reused once a supported AGY transport is identified. No live session was contacted, no daemon was started, and no resume was attempted. Implementation cannot safely claim exact-session delivery on this evidence. Needed to proceed: a documented supported AGY live transport with authenticated exact conversation targeting, busy/idle behavior, acceptance versus inbox ACK distinction, duplicate/uncertain-submission behavior, and a disposable-session conformance test. A launch-owned stdin/ACP broker or remote-control protocol would introduce a new lifecycle/contract and needs a sketch plus advisor sign-off under AGENTS.md. No source changes, commit, PR, or completion credit claimed.'
+  created_at: 2026-11-05T17:57:15.338098832Z
+  modified_at: 2026-11-05T17:57:15.338098832Z
+  session_id: 01a1acda685c
 history:
 - id: 01a1a96f-c976-7551-88ab-62d2281179d0
   author: joe
@@ -35,6 +42,11 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1acda-f80e-7c03-84e8-b4e0cd65b95f
+  author: joe
+  timestamp: 2026-11-05T17:56:33.934398717Z
+  session_id: 01a1acda685c
+  changes: []
 filed_at:
   aida_version: 0.16.0
   aida_build_sha: fb2086e9008
