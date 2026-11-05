@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-786
 agreed_id: TASK-3048
 title: 'STORY-2460 S2: agy adapter in the posture S1 selects (private runtime, auth hosts, argv order, all-tool confinement)'
 description: 'Per signoff Q3 and Q6, blocked on S1''s posture decision. Private writable agy runtime dir; exact auth host inventory; options placed before the final -p <prompt>; no blanket --dangerously-skip-permissions inside a claimed boundary; browser, URL and MCP tools disabled unless confined. Accept agy=<posture> only from trusted origin/main config, and fail closed otherwise. Acceptance: the conformance harness passes for agy.'
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T17:54:51.353376614Z
-modified_at: 2026-11-05T12:41:54.411433028Z
+modified_at: 2026-11-05T12:41:58.190617870Z
 req_type: Task
 tags:
 - area:containment
@@ -37,6 +37,12 @@ comments:
   content: 'Advisor ruling: ADVISOR BRIEF 2026-11-05 05:45: S1 evidence ruling is made (option a, fresh runs recorded on STORY-2460). Posture A (shared AIDA boundary) stands. Scope for this lane: (1) scripts/containment/conformance.py: for --vendor agy, provision a fixture-scoped permissions.allow rule (write_file/edit/shell limited to the fixture workspace) in the private runtime settings so headless probes execute; never pass --dangerously-skip-permissions; add an offline test that the generated settings contain only fixture-scoped rules. (2) Implement the agy adapter in the shared boundary as data (posture/argv/auth-host tables), raw store writes denied, mediated writes only; keep agy refused (named refusal) until a fresh all-tool run passes. Host measurement runs are the ADVISOR''s job via deputy 3; do not try to reach deputies from the lane. Open the PR with a Refs STORY-2460 title. LIGHT gate.'
   created_at: 2026-11-05T12:41:54.280312962Z
   modified_at: 2026-11-05T12:41:54.280312962Z
+  session_id: b83457ff-84e3-46cb-8f68-4be531a63422
+- id: 01a1abba-f2ae-7552-9846-dbbb174eb2d9
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was punted on: blocked-dependency: AGY S2 cannot satisfy its conformance acceptance from current evidence: S1 left an unresolved advisor ruling on fresh shipped-harness runs; the harness cannot pass C3 or whole-lane coverage; exact auth/refresh hosts remain unknown. Authorized script deputies 2 and 3 report NOT running, preventing the required scoped host measurements. Existing Codex launcher also grants raw store writes contrary to signed AGY Q2. See investigation comment for concrete recovery; no containment opt-in or completion claimed.. No triage reason was given.'
+  created_at: 2026-11-05T12:41:58.190616541Z
+  modified_at: 2026-11-05T12:41:58.190616541Z
   session_id: b83457ff-84e3-46cb-8f68-4be531a63422
 history:
 - id: 01a1a7b3-3699-7713-8ae7-69568c287956
@@ -74,6 +80,14 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1abba-f2ae-7552-9846-dbacf7d991a1
+  author: joe
+  timestamp: 2026-11-05T12:41:58.190606458Z
+  session_id: b83457ff-84e3-46cb-8f68-4be531a63422
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: 6a331a8a5c91ca7485b695a076af44bdf9be3894
   branch: main
@@ -82,9 +96,3 @@ filed_at:
   aida_build_sha: e422daaa1a4
   vendor: claude
   session: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
-attention_reason:
-  category: blocked-dependency
-  detail: 'AGY S2 cannot satisfy its conformance acceptance from current evidence: S1 left an unresolved advisor ruling on fresh shipped-harness runs; the harness cannot pass C3 or whole-lane coverage; exact auth/refresh hosts remain unknown. Authorized script deputies 2 and 3 report NOT running, preventing the required scoped host measurements. Existing Codex launcher also grants raw store writes contrary to signed AGY Q2. See investigation comment for concrete recovery; no containment opt-in or completion claimed.'
-  lean: Retain posture A and fail-closed AGY refusal. Resume after S1 evidence ruling and an available authorized host deputy; build the adapter and integrated proof against signed Q2/Q3 without reusing Codex raw-store grants.
-  raised_by: implementer
-  raised_at: 2026-11-05T12:26:50.733666515Z
