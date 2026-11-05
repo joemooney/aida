@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-09-24T00:32:52.190913727Z
-modified_at: 2026-11-05T20:32:30.974468575Z
+modified_at: 2026-11-05T20:32:44.900842069Z
 req_type: Story
 comments:
 - id: 01a0d0d5-7dfa-7e41-80d5-f47b293e4316
@@ -73,6 +73,15 @@ comments:
   content: 'Implementation progress (ai:codex): approved separate-artifact design is implemented on branch story-1468. Explicit CLI file intake/MCP reviewed input, 64 KiB UTF-8/credential refusals, opt-out, explicit labeled retrieval, Git-only persistence, retention documentation, and preservation through edits/archive/remap/merge are in place. Six core regressions and three CLI/MCP feature tests passed; default and feature-disabled CLI checks passed. Final help snapshot/schema checks, pre-push guards, and compile-all test-target validation are still running. Changes are staged; no commit or PR yet. This is progress evidence, not completion.'
   created_at: 2026-11-05T19:52:52.010109739Z
   modified_at: 2026-11-05T19:52:52.010109739Z
+- id: 01a1ad69-f564-7342-8d65-03cd9943761c
+  author: joe
+  content: |
+    Implemented and pushed commit 4aa6118a6da on story-1468 (ai:codex). Follows the approved separate-artifact design: capture is off by default; explicit reviewed CLI-file/MCP intake creates immutable version-1 UUID-keyed Git provenance, with caller-redacted disposition, 64 KiB UTF-8 cap and content-free credential/private-key refusals. Explicit CLI/MCP retrieval labels historical input; ordinary requirement objects, views, history, context and exports omit the text. Edits/archive/remaps/merges preserve artifacts. Legacy backends and enabled WORK transport capture refuse before filing; retention and Git-history limits are documented.
+
+    Validation completed: 6 core tests + 6 CLI/MCP/schema/help-snapshot tests passed; standalone-binary smoke check passed captured/redacted/absent/refused intake, retrieval after edits, and default JSON/card/full/list/search omission; make check-ci-fast passed all 37 gates on the committed branch; make check-ci-compile compiled every workspace test target successfully; formatting/whitespace checks passed. Working tree clean. Opening the PR as the final implementer step, ready for independent review.
+  created_at: 2026-11-05T20:32:44.900842069Z
+  modified_at: 2026-11-05T20:32:44.900842069Z
+  session_id: 01a1ad20639a
 history:
 - id: 01a1a437-be76-7fc2-88e3-c0cf9d177253
   author: joe
