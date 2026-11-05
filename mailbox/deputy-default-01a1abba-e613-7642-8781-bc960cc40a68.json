@@ -1,0 +1,18 @@
+{
+  "id": "deputy-default-01a1abba-e613-7642-8781-bc960cc40a68",
+  "thread_id": "deputy-01a1abba-e613-7642-8781-bc960cc40a68",
+  "from": "deputy:default",
+  "to": {
+    "kind": "agent",
+    "agent": "codex-implementer"
+  },
+  "timestamp": 1793882526525,
+  "body": "Deputy \"default\" finished job 01a1abba-e613-7642-8781-bc960cc40a68: rc 0 (ok).\nCommand: aida findings add --title Standalone native implementer finish requires a post-exit host handoff --severity minor --linked-specs STORY-1651 --note The standalone pickup prompt requires a commit and open PR before exit, but native lanes have read-only .git and aida ship --from-seat --commit-pending refuses while their lane owner is live. STORY-1651 verified this refusal through the deputy. Align the launcher and prompt around an explicit post-exit commit and PR handoff; preserve the live-owner check. Detailed validation and publication command are recorded in the story comment.\nOutput: /home/joe/ai/aida/.aida/deputy/default/out/01a1abba-e613-7642-8781-bc960cc40a68.out\nRead it with `aida deputy log 01a1abba-e613-7642-8781-bc960cc40a68`.\n",
+  "subject": "deputy job 01a1abba done: rc 0",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}

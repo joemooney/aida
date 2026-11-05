@@ -1,0 +1,18 @@
+{
+  "id": "deputy-default-01a1abb8-b8c1-74f0-b8c3-7458affd8bc3",
+  "thread_id": "deputy-01a1abb8-b8c1-74f0-b8c3-7458affd8bc3",
+  "from": "deputy:default",
+  "to": {
+    "kind": "agent",
+    "agent": "codex-implementer"
+  },
+  "timestamp": 1793882374451,
+  "body": "Deputy \"default\" finished job 01a1abb8-b8c1-74f0-b8c3-7458affd8bc3: rc 1 (exit).\nCommand: aida ship STORY-1651 --from-seat /home/joe/ai/aida-worktrees/aida-seat-aida-story-1651 --commit-pending [AI:codex] docs(audiences): separate adopter operator and contributor guides (STORY-1651) --dry-run\nOutput: /home/joe/ai/aida/.aida/deputy/default/out/01a1abb8-b8c1-74f0-b8c3-7458affd8bc3.out\nRead it with `aida deputy log 01a1abb8-b8c1-74f0-b8c3-7458affd8bc3`.\n`aida awaiting` lists it until you run `aida deputy ack 01a1abb8-b8c1-74f0-b8c3-7458affd8bc3`.\n",
+  "subject": "deputy job 01a1abb8 FAILED: rc 1",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}
