@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T16:07:36.061610524Z
-modified_at: 2026-11-05T17:22:44.931661090Z
+modified_at: 2026-11-05T17:33:20.514027957Z
 req_type: Task
 tags:
 - from-advisor
@@ -64,6 +64,33 @@ comments:
   content: 'Implementation is in the assigned native Codex seat, with all eleven carried-forward findings confirmed applicable at launch baseline b66ec083185. Added targeted regressions; local Rust validation is still running. Publication is host-owned: git add failed with read-only .git/index.lock. Per docs/cli/04-git-lifecycle.md (TASK-2712), the launcher must commit pending seat edits after exit and publish via aida ship --from-seat; no attempt will bypass the native sandbox. The task remains In Progress until publication. PR description prepared at /tmp/task3112-pr-body.md.'
   created_at: 2026-11-05T17:22:44.931661090Z
   modified_at: 2026-11-05T17:22:44.931661090Z
+  session_id: 01a1acaef563
+- id: 01a1acc5-b502-7442-b6c1-2bb7e5b06aec
+  author: joe
+  content: |
+    Implementation and local validation complete; ready for host commit/PR handoff. All eleven carried-forward findings were applicable and addressed (see table below). Ten new regressions pass. Affected suites pass: history 16, pipeline-stall 19, usage 25, PR-review aliases 9, rework hints 5, activation 16, BUG-2450 setup/retry 12. Formatting and whitespace checks pass. Initial new regression failures exposed an incorrect identity heuristic and a missing git-init fixture; both were corrected and rerun successfully.
+
+    Native Codex .git is read-only: git add could not create .git/index.lock. Edits remain in /home/joe/ai/aida-worktrees/aida-seat-aida-task-b6b1278890774ef993d2ebc327862470-832 for the launcher's post-exit commit. Host recovery from main: aida ship TASK-3112 --from-seat /home/joe/ai/aida-worktrees/aida-seat-aida-task-b6b1278890774ef993d2ebc327862470-832 --commit-pending '[AI:codex] fix(review): resolve minor sweep findings (TASK-3112)'. This opens a PR and never merges. No PR is open yet; TASK-3112 remains In Progress and has not been dequeued. No CI or independent review verdict has been read. PR body and full handoff are /tmp/task3112-pr-body.md and /tmp/task3112-handoff.md.
+
+    Resolve the eleven carried-forward findings in TASK-3112 with minimal fixes. All eleven remained applicable at launch baseline b66ec083185 (origin/main).
+
+    | Finding | Change |
+    | --- | --- |
+    | TASK-2834 | Bound a process-local marker inspection cache to 16 pinned executable inodes; cache positive and negative results and invalidate on metadata changes. The first inspection of an unmarked file still must read to EOF to prove absence. |
+    | TASK-2840 | Drive the actual presence status section with a cached pending decision under away + always-surface and away + quiet, capturing its output. |
+    | TASK-2844 | Resolve a numeric rework suffix before dropping an unresolved branch hint; retain the owning spec's policy alongside explicit Refs metadata. |
+    | TASK-2850 | Share the executable-artifact predicate across core and CLI scaffold writes; atomically install all matching artifacts at mode 0755. |
+    | TASK-2851 | Display original creation time in opened views even without --since; order opened rows by that time. |
+    | TASK-2853 | Handle attached -p/-s values and derive flag-table regression expectations from clap GlobalArgs. |
+    | TASK-2867 | Normalize the review change ID using the configured forge before deriving queue policy, matching run_pr. |
+    | TASK-2868 | Distinguish missing input, permission denial and symlink refusal without exposing input paths. |
+    | TASK-2873 | Treat a latest failed merge-hold-gate as a readiness blocker and print the hold guidance even when the active hold label is missing. Keep hold logs out of CI failure logs. |
+    | TASK-2874 | Deduplicate check attempts by workflow name and check name, retaining same-named jobs from different workflows. |
+    | TASK-2876 | Identify Exited-to-Failed setup conversions by their recorded diagnostic. Transient preflight and spawn failures remain retryable, and preserve an already pending setup retry. |
+
+    Validation: all 8 new CLI regressions and both new core regressions pass. Affected suites pass: history views 16, pipeline stall 19, usage 25, PR review aliases 9, rework branch hints 5, activation 16, and BUG-2450 setup/retry coverage 12. cargo fmt --all -- --check and git diff --check pass. CI and the independent review verdict have not been read.
+  created_at: 2026-11-05T17:33:20.514027957Z
+  modified_at: 2026-11-05T17:33:20.514027957Z
   session_id: 01a1acaef563
 history:
 - id: 01a1ac77-9411-73c0-9829-8b1bfe90d2c0
