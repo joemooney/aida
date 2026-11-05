@@ -10420,7 +10420,7 @@ Arguments:
 Options:
       --plain
           Print the cached plain-English rationale layer for this spec, regenerating
-          `docs/internal/plain/<SPEC>.md` only when the spec changed
+          `docs/plain/<SPEC>.md` only when the spec changed
 
       --json
           Machine-readable JSON
@@ -41119,7 +41119,7 @@ Working on aida itself
       {
         "name": "plain",
         "takes_value": false,
-        "help": "Print the cached plain-English rationale layer for this spec, regenerating `docs/internal/plain/<SPEC>.md` only when the spec changed"
+        "help": "Print the cached plain-English rationale layer for this spec, regenerating `docs/plain/<SPEC>.md` only when the spec changed"
       }
     ],
     "hidden": false

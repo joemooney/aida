@@ -303,7 +303,7 @@
           "aida-core/src/lib.rs",
           "aida-core/src/models.rs",
           "aida-generate-types/Cargo.toml",
-          "docs/internal/cli-format-json-audit.md",
+          "docs/cli-format-json-audit.md",
           "docs/cli/08-reporting.md",
           "docs/plans/2026-10-15-story-1673-constraint-probes.md",
           "scripts/generate-format-json-audit.py",
@@ -541,7 +541,7 @@
           "aida-cli-lib/src/tests/story_1687_rework_release_tests.rs",
           "aida-cli-lib/src/tests/story_1697_attested_release_tests.rs",
           "aida-core/templates/.aida/discipline/git-sync-and-review.md",
-          "docs/internal/agents/aida-repository-guide.md"
+          "docs/agents/aida-repository-guide.md"
         ],
         "ids_count": 121,
         "ids_sha256": "4e825df063c7572883182c1056502363197c67c48fe02c77950743305a21dc4b"
@@ -927,9 +927,9 @@
           "aida-cli-lib/src/merge_hold.rs",
           "aida-cli-lib/src/pr_cmd.rs",
           "aida-cli-lib/src/tests/story_1698_mandate_tests.rs",
-          "docs/internal/cli-format-json-audit.md",
+          "docs/cli-format-json-audit.md",
           "docs/cli/04-git-lifecycle.md",
-          "docs/internal/monitor-contract-fixtures/events-follow.json"
+          "docs/monitor-contract-fixtures/events-follow.json"
         ],
         "ids_count": 839,
         "ids_sha256": "7cd30dd1ed845b8f5451cdb16fb44575ac39bb14fef6991082eddd64e2b04236"
@@ -1597,7 +1597,7 @@
           "aida-cli-lib/src/regen/score.rs",
           "aida-cli-lib/src/regen/score/adapter.rs",
           "aida-cli-lib/src/regen/score/report.rs",
-          "docs/internal/cli-format-json-audit.md"
+          "docs/cli-format-json-audit.md"
         ],
         "ids_count": 681,
         "ids_sha256": "671e2c1f9221201e5817a0a8440b27dc64a6d87d4a246658debe4f13f0b18bbb"
@@ -1816,7 +1816,7 @@
           "aida-cli-lib/src/regen/score/guards.rs",
           "aida-cli-lib/src/regen/score/oracle.rs",
           "aida-cli-lib/src/regen/score/roots.rs",
-          "docs/internal/cli-format-json-audit.md",
+          "docs/cli-format-json-audit.md",
           "scripts/config-trust.toml"
         ],
         "ids_count": 680,
@@ -2014,8 +2014,8 @@
           "aida-cli-lib/src/seat_occupancy/tests.rs",
           "aida-core/src/lib.rs",
           "aida-core/src/process_probe.rs",
-          "docs/internal/architecture/external-tool-output-classifiers.md",
-          "docs/internal/cli-format-json-audit.md",
+          "docs/architecture/external-tool-output-classifiers.md",
+          "docs/cli-format-json-audit.md",
           "docs/plans/2026-10-03-story-1485-seat-occupancy-sketch.md",
           "scripts/config-trust.toml",
           "tests/test_seat_takeover_lifecycle.py"
@@ -2337,7 +2337,7 @@
           "aida-cli-lib/src/cli.rs",
           "aida-cli-lib/src/lib.rs",
           "aida-cli-lib/src/regen.rs",
-          "docs/internal/cli-format-json-audit.md"
+          "docs/cli-format-json-audit.md"
         ],
         "ids_count": 769,
         "ids_sha256": "707b13f44e4d128acf6380e5a790dfc225d62d737d1a3b383de79d38ac2fc444"
@@ -2392,7 +2392,7 @@
           "OVERVIEW.md",
           "aida-core/src/git_ops.rs",
           "aida-core/src/store_hooks.rs",
-          "docs/internal/agents/claude-bubblewrap-sandbox.md",
+          "docs/agents/claude-bubblewrap-sandbox.md",
           "scripts/config-trust.toml"
         ],
         "ids_count": 228,
@@ -3406,7 +3406,7 @@
           "aida-core/src/lib.rs",
           "aida-core/src/models.rs",
           "aida-generate-types/Cargo.toml",
-          "docs/internal/cli-format-json-audit.md",
+          "docs/cli-format-json-audit.md",
           "docs/cli/08-reporting.md",
           "docs/plans/2026-10-15-story-1673-constraint-probes.md",
           "scripts/generate-format-json-audit.py",
@@ -3461,7 +3461,7 @@
           "aida-generate-types/Cargo.toml": [
             "NotRust"
           ],
-          "docs/internal/cli-format-json-audit.md": [
+          "docs/cli-format-json-audit.md": [
             "NotRust"
           ],
           "docs/cli/08-reporting.md": [
@@ -3632,7 +3632,7 @@
           "aida-cli-lib/src/tests/story_1687_rework_release_tests.rs",
           "aida-cli-lib/src/tests/story_1697_attested_release_tests.rs",
           "aida-core/templates/.aida/discipline/git-sync-and-review.md",
-          "docs/internal/agents/aida-repository-guide.md"
+          "docs/agents/aida-repository-guide.md"
         ],
         "new_fallbacks": {
           ".aida/discipline/git-sync-and-review.md": [
@@ -3662,7 +3662,7 @@
           "aida-core/templates/.aida/discipline/git-sync-and-review.md": [
             "NotRust"
           ],
-          "docs/internal/agents/aida-repository-guide.md": [
+          "docs/agents/aida-repository-guide.md": [
             "NotRust"
           ]
         },
@@ -3938,9 +3938,9 @@
           "aida-cli-lib/src/merge_hold.rs",
           "aida-cli-lib/src/pr_cmd.rs",
           "aida-cli-lib/src/tests/story_1698_mandate_tests.rs",
-          "docs/internal/cli-format-json-audit.md",
+          "docs/cli-format-json-audit.md",
           "docs/cli/04-git-lifecycle.md",
-          "docs/internal/monitor-contract-fixtures/events-follow.json"
+          "docs/monitor-contract-fixtures/events-follow.json"
         ],
         "new_fallbacks": {
           "aida-cli-lib/src/cli.rs": [
@@ -3976,13 +3976,13 @@
           "aida-cli-lib/src/watch.rs": [
             "MacroName"
           ],
-          "docs/internal/cli-format-json-audit.md": [
+          "docs/cli-format-json-audit.md": [
             "NotRust"
           ],
           "docs/cli/04-git-lifecycle.md": [
             "NotRust"
           ],
-          "docs/internal/monitor-contract-fixtures/events-follow.json": [
+          "docs/monitor-contract-fixtures/events-follow.json": [
             "NotRust"
           ]
         },
@@ -4471,7 +4471,7 @@
           "aida-cli-lib/src/regen/score.rs",
           "aida-cli-lib/src/regen/score/adapter.rs",
           "aida-cli-lib/src/regen/score/report.rs",
-          "docs/internal/cli-format-json-audit.md"
+          "docs/cli-format-json-audit.md"
         ],
         "new_fallbacks": {
           "AGENTS.md": [
@@ -4495,7 +4495,7 @@
           "aida-cli-lib/src/regen/score/report.rs": [
             "Opaque"
           ],
-          "docs/internal/cli-format-json-audit.md": [
+          "docs/cli-format-json-audit.md": [
             "NotRust"
           ]
         },
@@ -4646,7 +4646,7 @@
           "aida-cli-lib/src/regen/score/guards.rs",
           "aida-cli-lib/src/regen/score/oracle.rs",
           "aida-cli-lib/src/regen/score/roots.rs",
-          "docs/internal/cli-format-json-audit.md",
+          "docs/cli-format-json-audit.md",
           "scripts/config-trust.toml"
         ],
         "new_fallbacks": {
@@ -4674,7 +4674,7 @@
           "aida-cli-lib/src/regen/score/roots.rs": [
             "Opaque"
           ],
-          "docs/internal/cli-format-json-audit.md": [
+          "docs/cli-format-json-audit.md": [
             "NotRust"
           ],
           "scripts/config-trust.toml": [
@@ -4872,8 +4872,8 @@
           "aida-cli-lib/src/seat_occupancy/tests.rs",
           "aida-core/src/lib.rs",
           "aida-core/src/process_probe.rs",
-          "docs/internal/architecture/external-tool-output-classifiers.md",
-          "docs/internal/cli-format-json-audit.md",
+          "docs/architecture/external-tool-output-classifiers.md",
+          "docs/cli-format-json-audit.md",
           "docs/plans/2026-10-03-story-1485-seat-occupancy-sketch.md",
           "scripts/config-trust.toml",
           "tests/test_seat_takeover_lifecycle.py"
@@ -4924,10 +4924,10 @@
           "aida-core/src/process_probe.rs": [
             "Opaque"
           ],
-          "docs/internal/architecture/external-tool-output-classifiers.md": [
+          "docs/architecture/external-tool-output-classifiers.md": [
             "NotRust"
           ],
-          "docs/internal/cli-format-json-audit.md": [
+          "docs/cli-format-json-audit.md": [
             "NotRust"
           ],
           "docs/plans/2026-10-03-story-1485-seat-occupancy-sketch.md": [
@@ -5099,7 +5099,7 @@
           "aida-cli-lib/src/cli.rs",
           "aida-cli-lib/src/lib.rs",
           "aida-cli-lib/src/regen.rs",
-          "docs/internal/cli-format-json-audit.md"
+          "docs/cli-format-json-audit.md"
         ],
         "new_fallbacks": {
           "AGENTS.md": [
@@ -5123,7 +5123,7 @@
           "aida-cli-lib/src/store_sync.rs": [
             "ExternalSource"
           ],
-          "docs/internal/cli-format-json-audit.md": [
+          "docs/cli-format-json-audit.md": [
             "NotRust"
           ]
         },
@@ -5143,7 +5143,7 @@
           "OVERVIEW.md",
           "aida-core/src/git_ops.rs",
           "aida-core/src/store_hooks.rs",
-          "docs/internal/agents/claude-bubblewrap-sandbox.md",
+          "docs/agents/claude-bubblewrap-sandbox.md",
           "scripts/config-trust.toml"
         ],
         "new_fallbacks": {
@@ -5171,7 +5171,7 @@
           "aida-core/src/store_hooks.rs": [
             "Opaque"
           ],
-          "docs/internal/agents/claude-bubblewrap-sandbox.md": [
+          "docs/agents/claude-bubblewrap-sandbox.md": [
             "NotRust"
           ],
           "scripts/config-trust.toml": [
@@ -5856,7 +5856,7 @@
             "aida-generate-types/Cargo.toml": [
               "NotRust"
             ],
-            "docs/internal/cli-format-json-audit.md": [
+            "docs/cli-format-json-audit.md": [
               "NotRust"
             ],
             "docs/cli/08-reporting.md": [
@@ -6008,7 +6008,7 @@
             "aida-core/templates/.aida/discipline/git-sync-and-review.md": [
               "NotRust"
             ],
-            "docs/internal/agents/aida-repository-guide.md": [
+            "docs/agents/aida-repository-guide.md": [
               "NotRust"
             ]
           },
@@ -6230,13 +6230,13 @@
             "aida-cli-lib/src/timing_record.rs": [
               "Opaque"
             ],
-            "docs/internal/cli-format-json-audit.md": [
+            "docs/cli-format-json-audit.md": [
               "NotRust"
             ],
             "docs/cli/04-git-lifecycle.md": [
               "NotRust"
             ],
-            "docs/internal/monitor-contract-fixtures/events-follow.json": [
+            "docs/monitor-contract-fixtures/events-follow.json": [
               "NotRust"
             ]
           },
@@ -6591,7 +6591,7 @@
             "aida-cli-lib/src/regen/score/report.rs": [
               "ChangedUse"
             ],
-            "docs/internal/cli-format-json-audit.md": [
+            "docs/cli-format-json-audit.md": [
               "NotRust"
             ]
           },
@@ -6717,7 +6717,7 @@
             "aida-cli-lib/src/regen/score/roots.rs": [
               "ChangedUse"
             ],
-            "docs/internal/cli-format-json-audit.md": [
+            "docs/cli-format-json-audit.md": [
               "NotRust"
             ],
             "scripts/config-trust.toml": [
@@ -6866,10 +6866,10 @@
             "aida-core/src/process_probe.rs": [
               "ChangedUse"
             ],
-            "docs/internal/architecture/external-tool-output-classifiers.md": [
+            "docs/architecture/external-tool-output-classifiers.md": [
               "NotRust"
             ],
-            "docs/internal/cli-format-json-audit.md": [
+            "docs/cli-format-json-audit.md": [
               "NotRust"
             ],
             "docs/plans/2026-10-03-story-1485-seat-occupancy-sketch.md": [
@@ -7002,7 +7002,7 @@
             "aida-cli-lib/src/regen.rs": [
               "ChangedUse"
             ],
-            "docs/internal/cli-format-json-audit.md": [
+            "docs/cli-format-json-audit.md": [
               "NotRust"
             ]
           },
@@ -7031,7 +7031,7 @@
             "aida-core/src/store_hooks.rs": [
               "ChangedAttribute"
             ],
-            "docs/internal/agents/claude-bubblewrap-sandbox.md": [
+            "docs/agents/claude-bubblewrap-sandbox.md": [
               "NotRust"
             ],
             "scripts/config-trust.toml": [

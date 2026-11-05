@@ -1120,5 +1120,35 @@
     "target": "docs/a.md",
     "count": 2,
     "reason": "Synthetic test fixture or generated output path; not a repository document."
+  },
+  {
+    "source": "docs/internal/testing/task-1800-trace-exclusions.json",
+    "target": "docs/agents/aida-repository-guide.md",
+    "count": 4,
+    "reason": "Frozen historical replay evidence: paths identify committed blobs, not current documentation."
+  },
+  {
+    "source": "docs/internal/testing/task-1800-trace-exclusions.json",
+    "target": "docs/agents/claude-bubblewrap-sandbox.md",
+    "count": 4,
+    "reason": "Frozen historical replay evidence: paths identify committed blobs, not current documentation."
+  },
+  {
+    "source": "docs/internal/testing/task-1800-trace-exclusions.json",
+    "target": "docs/architecture/external-tool-output-classifiers.md",
+    "count": 4,
+    "reason": "Frozen historical replay evidence: paths identify committed blobs, not current documentation."
+  },
+  {
+    "source": "docs/internal/testing/task-1800-trace-exclusions.json",
+    "target": "docs/cli-format-json-audit.md",
+    "count": 24,
+    "reason": "Frozen historical replay evidence: paths identify committed blobs, not current documentation."
+  },
+  {
+    "source": "docs/internal/testing/task-1800-trace-exclusions.json",
+    "target": "docs/monitor-contract-fixtures/events-follow.json",
+    "count": 4,
+    "reason": "Frozen historical replay evidence: paths identify committed blobs, not current documentation."
   }
 ]

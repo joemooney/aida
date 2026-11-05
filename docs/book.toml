@@ -3,7 +3,7 @@
 # Contributor chapters are excluded from SUMMARY.md; their index is docs/internal/README.md.
 #
 # Publish: python3 scripts/build-reader-book.py (output → docs/book/, gitignored)
-# Read:   mdbook serve docs --open
+# Read:   make book-serve
 #
 # The CLI manual (docs/cli/*.md) is nested here as the "CLI Reference" part —
 # one Book, one nav, one search index (operator decision 2026-06-13). The
