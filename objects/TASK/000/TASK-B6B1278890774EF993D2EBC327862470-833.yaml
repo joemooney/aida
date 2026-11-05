@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T16:10:17.612205275Z
-modified_at: 2026-11-05T17:15:09.569361413Z
+modified_at: 2026-11-05T17:22:04.906350437Z
 req_type: Task
 tags:
 - from-advisor
@@ -40,6 +40,12 @@ comments:
   content: 'Implementation in this native seat addresses TASK-2864 (repository-relative, bounded origin/main commit lookup; Git errors become conformance refusals; caller must refresh the documented local snapshot), TASK-2865 (explicit C1/C2 file-tool and C3 pass limitations), TASK-2870 (orientation notes trimmed to architectural boundary and wire-format pointer), and TASK-2871 (blank line plus numeric/PR-/MR- review cast titles and slugs). TASK-2863 no longer applies: STORY-2460 advisor comments at 2026-11-05 12:29/12:41 UTC record option-a ruling and fresh shipped-harness Codex/AGY runs; TASK-3048 owns remaining AGY follow-up. Docs retain the recorded results without claiming a new run. Python conformance suite: 19 tests PASS. cargo fmt --all -- --check, explicit rustfmt checks for include files, and git diff --check PASS. Targeted Rust tests untested=true: aida lane job run refused because lease 01a1acb0c9c3 has no lane job runner. make check-ci-fast is still running. Publication preflight aida ship TASK-3114 --no-merge --dry-run refuses because native seat Git metadata is read-only and directs leaving edits uncommitted for the launcher exit step. No PR, queue done, review verdict or merge claimed. Requested commit/PR title: [AI:codex] fix(containment): resolve harness and documentation nits (TASK-3114). Host publication recovery: from main, aida ship TASK-3114 --from-seat /home/joe/ai/aida-worktrees/aida-seat-aida-task-b6b1278890774ef993d2ebc327862470-833 --commit-pending with that subject. Stop at PR-open.'
   created_at: 2026-11-05T17:15:09.569361413Z
   modified_at: 2026-11-05T17:15:09.569361413Z
+  session_id: 01a1acb0c9c3
+- id: 01a1acbb-65ea-7493-919a-ae70df00b803
+  author: joe
+  content: 'Validation update: make check-ci-fast completed successfully: all 37 fast-tier gates PASS, including no-default-features CLI compilation, standalone TUI compilation, 19 containment evidence tests, formatting, and trace/header guards. Some guards could not fetch because Git metadata is read-only but passed against existing local refs. A direct targeted cargo test --profile agent -p aida-cli-lib --lib -- story_423_asciinema_tests was also attempted through the normal build-slot wrapper after the lane-job refusal; it acquired a slot and is compiling (not yet a test pass). Publication remains blocked by native seat read-only Git metadata; no completion claimed.'
+  created_at: 2026-11-05T17:22:04.906350437Z
+  modified_at: 2026-11-05T17:22:04.906350437Z
   session_id: 01a1acb0c9c3
 history:
 - id: 01a1ac7a-9749-7001-82e3-4961ecdfe225
