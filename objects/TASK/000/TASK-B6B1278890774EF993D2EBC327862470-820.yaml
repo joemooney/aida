@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T07:36:50.416655523Z
-modified_at: 2026-11-05T17:39:25.891991440Z
+modified_at: 2026-11-05T18:08:46.358828609Z
 req_type: Task
 tags:
 - docs:impacted
@@ -142,6 +142,18 @@ comments:
   created_at: 2026-11-05T17:35:34.491700472Z
   modified_at: 2026-11-05T17:35:34.491700472Z
   session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
+- id: 01a1ace6-2516-7212-863e-003bb133a938
+  author: mcp
+  content: |-
+    Round 4 rework addresses all four findings against 03fab762a630 in the existing PR #3415 seat. CI logs were fetched successfully using a writable temporary gh cache: the two failures were a raw/normalized spec-ID assertion mismatch and a receipt-publication error whose outer context hid Git stderr. Assertions now use friendly_id consistently, and publication recovery errors include the bounded underlying diagnostic.
+
+    Receipts now require a validated operation UUID, and receipt/journal recovery compares it with the durable journal operation as well as action/destination. A competing confirmed comment on the same target is reported as an orphan and retains its journal, including under --reconcile. Existing-receipt reconciliation now clears only a freshly scanned unconfirmed journal after the operator assertion; pending --reconcile synchronizes and returns the published receipt. Git ls-remote/fetch failures preserve bounded stderr, and retrying an accepted local-ahead commit uses the observed remote tip as its push race baseline, preserving hook/policy errors. The manual documents the new receipt field and reconciliation behavior.
+
+    Validation: all 20 intake tests passed (19 unchanged/regression cases in the main per-test run plus the final corrected concurrency test), and the complete bug_1502_format_json_audit passed 9/9. This includes both formerly failing tests, the actual push race, concurrent comments on the same canonical target, crash-before-writer reconciliation, local/fetch/SSH diagnostics, and local-ahead policy refusal. The concurrent fixture imports the canonical store snapshot through Git; its final barrier observes the second canonical comment rather than assuming Git invokes a server hook for a rejected losing push. Final targeted Clippy with denied correctness lints passed. Measured local debug budgets cover all 20 intake tests using x2 rounded to 5s, retaining larger prior budgets. Timing evidence: /tmp/task3096-r4-verified-timings.json; build/test/lint logs: /tmp/task3096-r4-*.log; full patch: /tmp/task3096-r4.patch.
+
+    Publication remains the launcher's post-exit step: this native Codex sandbox keeps .git read-only, per docs/cli/04-git-lifecycle.md. Suggested new commit: [AI:codex] fix(intent): bind receipts to operations and preserve diagnostics (TASK-3096). Do not reuse the prior round's commit. New-head CI/shard results remain unverified until that commit is pushed. The existing supervised merge hold is retained; no pr ship, review record, or hold clearance was attempted. Local root-hygiene reports only the sandbox-injected protected .aws directory; no test-generated root files are present.
+  created_at: 2026-11-05T18:08:46.358812159Z
+  modified_at: 2026-11-05T18:08:46.358812159Z
 history:
 - id: 01a1aaa3-d806-7392-8539-dab331d61cdd
   author: joe
