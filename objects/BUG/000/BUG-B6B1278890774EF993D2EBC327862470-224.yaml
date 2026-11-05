@@ -18,7 +18,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T18:47:39.717568886Z
-modified_at: 2026-11-05T21:16:10.338109445Z
+modified_at: 2026-11-05T21:18:16.826923987Z
 req_type: Bug
 tags:
 - from-advisor:STORY-2325
@@ -108,6 +108,12 @@ comments:
   content: 'Round 3 in progress: removed the session-start snapshot that stamped the short-lived CLI PID. lease_started now passes the original lease to lease_written, sharing holder derivation with subsequent writes and migrate repair. Added the unstamped/live regression with compare and repair idempotence checks; canonical criterion traces now make all five ACs report traced. AC5 tracing is regression coverage only, not host acceptance. Host evidence remains unavailable: /proc/self/ns/pid is 4026533032 and own migrate --execute refuses without an operator terminal. Git staging also refuses .git/index.lock as read-only. Validation is running; findings 3 and 5 plus publication will be explicitly punted if these restrictions remain.'
   created_at: 2026-11-05T21:11:52.939825693Z
   modified_at: 2026-11-05T21:11:52.939825693Z
+  session_id: 01a1ad89e4a0
+- id: 01a1ad93-a4fa-7400-87f2-cb087953dc76
+  author: joe
+  content: 'Round 3 final validation: cargo test -p aida-cli-lib ownership:: --lib --offline passes 45/45 (0 failed), including unstamped_session_stays_unknown_after_setup_exits_while_lease_is_live, worker-only identity, init/subreaper validation, generation-pinned repair and detached worker death. The new regression verifies the Live/Unknown expected compare result, identical startup/later-write holders, repair of the old setup-PID record and repair idempotence. cargo fmt --all -- --check, git diff --check, scripts/check-portability.sh and verify-manual.py --static pass. aida criteria BUG-2458 reports all five ACs traced; ac1d6672 coverage is a local compare regression, not evidence that host acceptance has passed. Full manual verification has not completed and is not claimed. Current old-head CI at 22c4fce90ead has lib-1, cli-0, cli-1, rest, gates and contracts green; lib-0 remains running, merge-hold-gate is the expected supervised refusal. No new head exists: git add refuses .git/index.lock as Read-only file system, so no commit or push is possible here. The explicit punt names findings 3 and 5 and publication; keep Needs Attention and the merge hold. Changes are preserved in dual.rs, writer_tests.rs and docs/cli/06-roles-sessions.md. Proposed host subject: [AI:codex] fix(ownership): leave unstamped sessions without a holder witness (BUG-2458). No pr ship or review record was run.'
+  created_at: 2026-11-05T21:18:16.826923987Z
+  modified_at: 2026-11-05T21:18:16.826923987Z
   session_id: 01a1ad89e4a0
 history:
 - id: 01a1ad1a-eea4-75b1-bafd-7e58532b917a
