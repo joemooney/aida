@@ -14,7 +14,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T19:24:50.018024034Z
-modified_at: 2026-11-05T20:30:29.953318124Z
+modified_at: 2026-11-05T20:34:40.186712045Z
 req_type: Task
 tags:
 - carried-from:TASK-2842
@@ -28,6 +28,12 @@ comments:
   created_at: 2026-11-05T20:27:18.979287398Z
   modified_at: 2026-11-05T20:27:18.979287398Z
   session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
+- id: 01a1ad6b-b7ba-7d83-80eb-aafb9dc4372b
+  author: joe
+  content: 'Implementing advisor triage scope: derive seat-publication summaries from the owning spec (explicit conventional type/scope when present, otherwise requirement type and feature), preserve AI attribution and existing completion/Refs groups, repair only existing generic rework titles, and retain descriptive author titles. Targeted coverage includes creation, rework, retitle failure, multi-spec credit and salvage references.'
+  created_at: 2026-11-05T20:34:40.186712045Z
+  modified_at: 2026-11-05T20:34:40.186712045Z
+  session_id: 01a1ad674920
 history:
 - id: 01a1ad63-61de-7b02-a9f2-463108532a66
   author: joe
