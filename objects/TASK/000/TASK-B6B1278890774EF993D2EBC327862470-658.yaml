@@ -11,7 +11,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T09:06:27.587006751Z
-modified_at: 2026-11-05T17:59:19.744217650Z
+modified_at: 2026-11-05T18:23:21.102165967Z
 req_type: Task
 tags:
 - architecture
@@ -280,6 +280,19 @@ comments:
     VERDICT: NOT PROVEN on shipped main (fails closed). PROVEN feasible with the 3 amendments above, so M1 holds; M2 not needed. Amending F-a's filter/broker needs advisor signoff before AC(1).
   created_at: 2026-11-05T17:59:19.744217650Z
   modified_at: 2026-11-05T17:59:19.744217650Z
+  session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
+- id: 01a1acf3-7e0e-7dd3-8ff0-96b4e73ec2ae
+  author: joe
+  content: |-
+    ADVISOR RULING 2026-11-05 11:25 MST: F-a amendment for Claude M1 (TASK-2708 AC1). Evidence: ADVISOR HOST EVIDENCE C12/M1 comment above (main c8721a696fc, /home/joe/ai/aida-worktrees/c12-probe/). M1 holds and M2 is not filed. C1-C12, the 07:40 signoff and the F-a ruling otherwise stay binding. The lane filter/broker may be amended as follows, tightened from the probe:
+    1. socketpair(AF_UNIX, any type): ALLOWED. It makes an anonymous connected pair and reaches no path. socket(AF_UNIX, SOCK_DGRAM|SOCK_SEQPACKET) stays DENIED, because sendto to a path bypasses connect brokering.
+    2. socket(AF_NETLINK): ALLOWED for protocol NETLINK_ROUTE only. Every other netlink protocol stays denied (filter on the protocol arg). Test: netlink_non_route_protocols_denied.
+    3. socket(AF_INET/AF_INET6, SOCK_DGRAM): ALLOWED. The lane netns has only lo and no route. RAW stays denied. Tests: the existing direct_v4_v6_dns_unreachable must also cover UDP sendto (ENETUNREACH), plus lane_udp_to_relay_port_gets_nothing.
+    4. Broker pass-through for nested namespaces: CONTINUE is allowed only when the SOCKET being connected belongs to a netns other than the lane's. The broker gets the target fd (pidfd_getfd), reads its netns with ioctl SIOCGSKNS and compares inode/dev to the lane netns. The CALLER's /proc/<pid>/ns/net is NOT sufficient: a socket created in the lane netns and connected from a thread that has since unshared would pass a caller check and connect unbrokered in the lane netns. Any lookup failure means refuse. Test: lane_socket_connected_from_nested_netns_is_still_brokered (create in lane, unshare -n, connect to a non-relay loopback port, expect refusal).
+    5. Generated Claude settings, per the evidence: sandbox.enabled, failIfUnavailable=true, allowUnsandboxedCommands=false, network.httpProxyPort=<relay port>, socksProxyPort unset. TMPDIR and CLAUDE_CODE_TMPDIR go inside the lane state dir. C7: private writable CLAUDE_CONFIG_DIR, .credentials.json RO bind, ~/.claude masked, host-side pre-launch refresh per the 05:47 ruling. Claude AIDA-posture paths still refuse by name whenever any of this is unavailable.
+    Scope: AC1 only, Refs TASK-2708, STRICT independent review, advisor-host required-live run at the exact head, operator merge floor. Execution: Claude lane (git-heavy, heft 9), not Codex. The relaunch is authorized now.
+  created_at: 2026-11-05T18:23:21.102165967Z
+  modified_at: 2026-11-05T18:23:21.102165967Z
   session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
 history:
 - id: 01a1965c-5ce8-7781-b88f-317b0b12bab5
