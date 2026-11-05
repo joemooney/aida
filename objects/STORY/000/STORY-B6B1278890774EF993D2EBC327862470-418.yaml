@@ -16,12 +16,12 @@ description: |-
   6. Docs: a short operator guide for running a second review node.
 
   Case 2 (untrusted/work node, envelope-based) is a separate deferred story.
-status: InProgress
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T04:40:54.168438456Z
-modified_at: 2026-11-05T08:15:08.496119814Z
+modified_at: 2026-11-05T09:01:14.568669277Z
 req_type: Story
 tags:
 - docs:impacted
@@ -374,6 +374,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1aaf0-de42-7860-935d-2c29c745ab2f
+  author: joe
+  timestamp: 2026-11-05T09:01:14.690090841Z
+  session_id: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Approved
 filed_at:
   code_sha: d561213a36febec31d45921d3d43d4dc7590135e
   branch: main
