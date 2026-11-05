@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T02:52:09.542251339Z
-modified_at: 2026-11-05T18:47:05.522789503Z
+modified_at: 2026-11-05T18:47:13.893842181Z
 req_type: Task
 tags:
 - from-advisor:STORY-2479
@@ -43,6 +43,21 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Fix is correct by inspection (preserves seat-clone refusal / repo errors, missing-ref only on quiet exit 1, hold marker never written on failure), but PR CI is red at the reviewed head: CI (lib-0) ''Run tests'' failed in the aida-cli-lib unit shard that carries the 3 new tests; lib-0 is green on other recent branches.. No triage reason was given.'
   created_at: 2026-11-05T18:47:05.522786418Z
   modified_at: 2026-11-05T18:47:05.522786418Z
+  session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
+- id: 01a1ad09-44c6-7e12-bc82-cd5526241145
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (TASK-2852):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 2cf37ec93ca9
+    Recorded: 2026-11-05T17:40:56.439802685+00:00
+    Findings:
+    1. BLOCKING: CI run 42071282811 job 'CI (lib-0)' (127399567115) step 16 'Run tests' FAILED at 2cf37ec93ca9 (and the aggregate 'Build (ubuntu-latest)' failed). lib-0 runs aida-cli-lib unit tests, where the three new task_2793_pr_hold_push_tests live; lib-0 passed on other recent branches (475a2680e, 46a371fc0, ffd5b5a40), so treat it as caused by this PR until shown otherwise. The reviewer sandbox could not fetch job logs/artifacts. Identify the failing test from the job log, fix it, and push for a green run.
+    2. Likely suspect: hold_preserves_git_lookup_errors_outside_a_repository (task_2793_pr_hold_push_tests.rs:131-139) assumes tempfile::tempdir() is not inside any git work tree and not under an aida-seat-* ancestor. If TMPDIR is inside a checkout, rev-parse resolves the enclosing repo and exits 1 quietly, so the 'does not exist' path fires and the 'not a git repository' assertion fails. If an ancestor is a seat clone, the refusal text replaces the git error. Make the fixture hermetic, for example by running the lookup in a path with a guaranteed non-repo ancestry, or by asserting only the invariant ('PR is not held' and not 'does not exist') together with whichever diagnostic git actually returns.
+    3. Spec-fit (non-blocking): the fix makes the failure honest but does not make 'aida pr hold' work in the reported native-seat worktree (aida-seat-*), where host_git_command refuses by design. That is consistent with the investigation comment and STORY-2479's punt. The PR body and docs say so, so no code change is needed. Just confirm that TASK-2852 is closed as 'diagnostic preserved', not 'hold works in native seats'.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-05T18:47:08.230270008Z
+  modified_at: 2026-11-05T18:47:08.230270008Z
   session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
 history:
 - id: 01a1a9a4-9331-74f3-8922-e37e24c30e09
