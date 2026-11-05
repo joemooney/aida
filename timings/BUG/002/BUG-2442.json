@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-2442",
+  "publishes": [
+    {
+      "at": "2026-11-05T03:22:19.704348606Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-05T02:19:49.790984164Z",
+      "spec": "BUG-2442",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-05T03:21:35.520541861Z",
+      "spec": "BUG-2442",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 3400
+      }
+    },
+    {
+      "ts": "2026-11-05T03:22:19.497862311Z",
+      "spec": "BUG-2442",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "e1fc3f06903785151ac46e5dc911e75cd6965b94",
+        "pr": 3400,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
