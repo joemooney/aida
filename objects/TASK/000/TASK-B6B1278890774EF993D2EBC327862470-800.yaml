@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T02:00:49.799626224Z
-modified_at: 2026-11-05T17:41:44.228743208Z
+modified_at: 2026-11-05T18:42:14.379496027Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -27,6 +27,16 @@ comments:
   created_at: 2026-11-05T17:41:44.228743208Z
   modified_at: 2026-11-05T17:41:44.228743208Z
   session_id: 01a1accb44db
+- id: 01a1ad04-c8eb-7222-9902-2c547c2e20b9
+  author: joe
+  content: |-
+    ADVISOR SIGNOFF 2026-11-05 11:50 MST on the sketch at 5b6aaba7e61 (docs/plans/2026-11-05-task-3074-request-dispositions.md): APPROVED, with three simplifications.
+    Approved as proposed: the `aida mailbox disposition <id> <acted|declined|deferred> --reason` CLI and its JSON projection; a separate versioned action ledger beside the read receipts (the read-receipt schema is unchanged); recipient-only authority through the existing inbox authority resolver; one-reader shared-role resolution; revisions retained, with the latest authorized revision winning; deferred capped at 24h; acted/declined close the response obligation but not the stall; the single request plus 30-minute unresolved escalation and 30-minute persistent escalation via notify::send_direct_bounded, which replaces the N-nudge policy; and no automatic lease, rework, merge or status mutation.
+    Simplifications (single-user project, surgery OK): (1) No legacy recovery tooling. v1 alarm state without a message ID is reported as "action unknown" and closed at the next predicate evaluation. Do not build an explicit recovery command. (2) Bound the ledger by size and refuse when full; no exhaustion edge cases beyond one test. (3) Concurrency: one ledger lock acquired after the lifecycle lock is enough; a revalidate-under-lock test, not a matrix.
+    Delivery: two PRs. PR-A covers steps 1 and 4 (authority, ledger and CLI tests). PR-B covers steps 2 and 3 (typed send result, episode correlation and escalation, with injected-time tests). PR-A is titled '(Refs TASK-3074)' and PR-B completes. LIGHT gate.
+  created_at: 2026-11-05T18:42:14.379496027Z
+  modified_at: 2026-11-05T18:42:14.379496027Z
+  session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
 history:
 - id: 01a1a970-1ff1-7783-809b-737caac6fcab
   author: joe
