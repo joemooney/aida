@@ -169,6 +169,7 @@ fn task_1471_show_docs_immediate_reverse_and_direct_links_preserve_machine_outpu
     let before: serde_json::Value = serde_json::from_str(&json_before_direct).unwrap();
     let after: serde_json::Value = serde_json::from_str(&json_after_direct).unwrap();
     let (before, after) = (before.as_object().unwrap(), after.as_object().unwrap());
+    assert_eq!(before["relationships"], serde_json::json!([]));
     let keys = |m: &serde_json::Map<String, serde_json::Value>| {
         m.keys().cloned().collect::<std::collections::BTreeSet<_>>()
     };
@@ -193,8 +194,13 @@ fn task_1471_show_docs_immediate_reverse_and_direct_links_preserve_machine_outpu
         changed.iter().all(|k| EDGE_DELTA.contains(k)),
         "unexpected JSON delta: {changed:?}"
     );
-    let rels = after["relationships"].to_string();
-    assert!(rels.contains(&direct.display_id()), "{rels}");
+    // The show projection resolves relationship IDs to display IDs, not UUIDs.
+    // Assert the fields themselves so a title match cannot hide a regression.
+    // trace:TASK-1471 | ai:codex
+    let rels = after["relationships"].as_array().unwrap();
+    assert_eq!(rels.len(), 1, "{rels:?}");
+    assert_eq!(rels[0]["id"], direct.display_id());
+    assert_eq!(rels[0]["title"], direct.title);
 
     // TOON: same top-level fields before and after; the new edge is visible
     // and the human-only section is not.
