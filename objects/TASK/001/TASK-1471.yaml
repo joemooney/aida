@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-09-24T04:25:12.035374412Z
-modified_at: 2026-11-05T09:48:47.854304961Z
+modified_at: 2026-11-05T09:48:49.956544745Z
 req_type: Task
 relationships:
 - rel_type:
@@ -150,6 +150,21 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: All 7 ACs are implemented in show_docs.rs + run_show, but the PR''s own e2e test still fails deterministically in CI lib-1 at task_1471_show_docs_tests.rs:196: it asserts the JSON relationships array contains the direct Doc''s UUID, while the JSON projection emits display IDs, so Build is red at the head.. Triage reason: CI red at 8eae576: lib-1 task_1471_show_docs_immediate_reverse_and_direct_links_preserve_machine_output still panics (round 5). Reproduce with one targeted cargo test before pushing.'
   created_at: 2026-11-05T09:48:47.854300453Z
   modified_at: 2026-11-05T09:48:47.854300453Z
+  session_id: b83457ff-84e3-46cb-8f68-4be531a63422
+- id: 01a1ab1c-6ef7-7471-8394-c9a80b349364
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (TASK-1471):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 8eae57614f7e
+    Recorded: 2026-11-05T09:08:11.316605289+00:00
+    Findings:
+    1. BLOCKING: CI (lib-1) job 127103715373 fails task_1471_show_docs_immediate_reverse_and_direct_links_preserve_machine_output at aida-cli-lib/src/tests/task_1471_show_docs_tests.rs:196 (assert!(rels.contains(&direct.id.to_string()))). Deterministic, not a flake: the show --format json relationships projection (requirements_cli.rs:6600-6615, RelJson) emits id = read_target(..).display_id() (agreed_id or spec_id, e.g. DOC-1-174) plus display_id and title. It never emits the target UUID, so the UUID substring check cannot pass. Fix: assert on the display ID the projection actually writes, e.g. rels.contains(&direct.display_id()) or the literal "DOC-1-174", in the same way the TOON check at :223 uses direct.friendly_id(). Confirm with the targeted test filter and a green CI lib-1 at the new head.
+    2. Cosmetic: the test comment at task_1471_show_docs_tests.rs:154-157 (and the round-4 note) says a first edge introduces the 'relationships' key because it is skip-if-empty. That is not true of the show JSON projection: run_show always inserts 'relationships' (requirements_cli.rs:6801-6804), even as []. The subset-and-EDGE_DELTA assertions are still sound, but correct the comment so the next reader does not chase a non-existent key addition.
+    3. Cosmetic: the docs/cli/02-specs.md 'Linked documentation in aida show' paragraph does not say that archived, Rejected and Superseded Docs are omitted (show_docs.rs:96-104). Add one clause so a user who does not see a declined Doc knows why.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-05T09:48:49.783487858Z
+  modified_at: 2026-11-05T09:48:49.783487858Z
   session_id: b83457ff-84e3-46cb-8f68-4be531a63422
 history:
 - id: 01a1a438-4c50-72d0-87d7-ecde2738cbc4
