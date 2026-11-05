@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T04:57:47.350553675Z
-modified_at: 2026-11-05T09:48:03.462989310Z
+modified_at: 2026-11-05T09:48:06.443985106Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -113,6 +113,21 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Round-3 source changes close all four round-2 findings (dated merged-retained branch on queue work, duplicate open PRs refused in pickup+publication, list-sessions offline, BUG-1763 comment reconciled), and AC1-AC4 have test coverage. PR CI at 0a192b2e is red: lib-0 Run tests fails (it has failed on every run of this branch while main is green) and gates fails Check formatting. AC status: AC1 verified by bug_2451_real_session_refuses_a_held_head_in_worktree_and_clone_modes, bug_2451_pickup_pins_existing_pr_even_without_a_seat, bug_2451_queue_pickup_uses_pr_head_at_every_workable_status; AC2 verified by auto_branch slug-only resolver + bug_2451_retained_branch_requires_confirmed_absence_of_open_pr (dated auto name only on confirmed merge plus no open PR, per round-2 direction); AC3 verified by ledger bug_2451_publication_* and train-rider tests; AC4 verified by bug_2451_pickup_entry_tests through real session_start/handle_queue_work. None of this is CI-proven while lib-0 is red.. It was punted on: blocked-dependency: Round-3 finding 5 and the mandatory new-commit contract are blocked by the native seat permission profile: git add cannot create .git/index.lock (Read-only file system). Findings 1-4 and both actual CI regressions are implemented in the working tree, with tests added. No finding is disputed. A writable Git seat/host must commit and push the changes to PR #3409 and obtain green CI before approval; the supervised merge hold remains in place. Rust validation is still compiling; final results will be added to this spec.. Triage reason: CI red at 0a192b2: lib-0 pr_train::verified::bug2406::* panic at bug2406_train_tests.rs:292:48 (many cases), plus CI (gates). Fix on the PR branch, push, no new branch.'
   created_at: 2026-11-05T09:48:03.462986851Z
   modified_at: 2026-11-05T09:48:03.462986851Z
+  session_id: b83457ff-84e3-46cb-8f68-4be531a63422
+- id: 01a1ab1b-c53f-7a00-bb47-c91b95405f5b
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2451):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 0a192b2e7ae9
+    Recorded: 2026-11-05T08:59:03.038916703+00:00
+    Findings:
+    1. [blocking/CI] PR CI run 41995720015 at 0a192b2e: CI (lib-0) 'Run tests' step fails. lib-0 also failed on this branch's earlier runs 41987027674, 41987190821 and 41995473575, while main run 41992879135 is green, so the failure is attributable to this PR. The round-3 handoff comment says the targeted Rust run never finished, so the round-3 tests (bug_2451_queue_workspace_dates_confirmed_merged_retained_branch, bug_2451_queue_list_sessions_never_contacts_offline_forge, bug_2451_retained_branch_requires_confirmed_absence_of_open_pr, bug_2451_pickup_refuses_two_found_changes_naming_both, bug_2451_publication_refuses_two_found_changes_even_from_original_head, bug_2451_github_pickup_sees_all_open_prs_instead_of_first_match) are the first suspects. The reviewer sandbox cannot fetch the job log, so the failing test name is unknown. Run 'make test-lane LANE=lib-0' (or the bug_2451 filter), fix the failure, and push for a green run.
+    2. [blocking/CI] CI (gates) 'Check formatting' fails: aida-cli-lib/src/tests/auto_branch_tests.rs:146-158 (bug_2451_pickup_refuses_two_found_changes_naming_both) is not rustfmt-formatted. The one-line ChangeRef struct literal inside the map closure and the unwrap_err().to_string() chain need rustfmt's layout. Run 'cargo fmt --all' and confirm 'cargo fmt --all -- --check' is clean before pushing.
+    3. [minor] GitHubForge::open_changes_for_spec (forge.rs:1901) uses SpecPrScope::All, which counts commit-trailer evidence. While a merge-train PR is open, its train branch carries every rider's '(SPEC)' commits, so a rider spec matches both the rider PR and the train PR. pickup_pr_branch (session_start.rs:408) and open_change_bound_with_riders (gate/ledger/mod.rs:321) then refuse with 'multiple open changes'. Refusing is safe, but the message does not explain the cause. Either exclude train/* heads from the duplicate count, or name the train in the message, and add a test.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-05T09:48:06.335864147Z
+  modified_at: 2026-11-05T09:48:06.335864147Z
   session_id: b83457ff-84e3-46cb-8f68-4be531a63422
 history:
 - id: 01a1aa24-e1ae-7ac3-82d4-8a340dec1723
