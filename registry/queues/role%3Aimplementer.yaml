@@ -1,4 +1,11 @@
 - user_id: role:implementer
+  requirement_id: 01a1aa11-fa56-7602-a58d-a101b1972fbe
+  position: 119000
+  added_by: role:implementer
+  note: 'CI (gates) red at 8a8ad92 on #3409: grant_expiry_notice::tests::task_2707_notice_leaf_epoch_and_crossed_dedup FAILED (main c9166da is green on it) and bug-2383-lane-fixture tests::lane_fixture_fails. Fix on the PR branch.'
+  added_at: 2026-11-05T11:19:22.153426454Z
+  for_role: implementer
+- user_id: role:implementer
   requirement_id: 01a1a4e6-791e-7941-8078-89f2a342722e
   position: 120000
   added_by: role:implementer
@@ -53,13 +60,6 @@
   added_by: role:implementer
   note: 'CI red at a9ea09f: CI (gates) failing. Read the gates log, fix on the PR branch. After it lands close #3382.'
   added_at: 2026-11-05T09:48:13.900968754Z
-  for_role: implementer
-- user_id: role:implementer
-  requirement_id: 01a1aa11-fa56-7602-a58d-a101b1972fbe
-  position: 128000
-  added_by: role:implementer
-  note: 'CI red at 0a192b2: lib-0 pr_train::verified::bug2406::* panic at bug2406_train_tests.rs:292:48 (many cases), plus CI (gates). Fix on the PR branch, push, no new branch.'
-  added_at: 2026-11-05T09:48:06.897392796Z
   for_role: implementer
 - user_id: role:implementer
   requirement_id: 01a1aa02-abc4-7ee2-a89a-635ae0f2c5c3
