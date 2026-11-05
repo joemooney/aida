@@ -1496,6 +1496,11 @@ fn task_1337_post_setup_launch_error_rolls_back_the_owned_setup() {
     let output = aida(&repo, &home)
         .env("AIDA_HOME", &home)
         .env("PATH", path)
+        // This disposable fixture owns all processes that can use its trees.
+        // Without this opt-in, a PID namespace correctly retains the tree and
+        // lease because outside holders cannot be ruled out.
+        // trace:TASK-3110 | ai:codex
+        .env("AIDA_TRUST_PID_NAMESPACE", "1")
         .env("AIDA_SESSION_ROLE", "implementer")
         .env("AIDA_SESSION_GRANT", advisor_grant(&repo, &home))
         .args(["queue", "work", &spec, "--guided", "--fresh", "--no-pull"])
@@ -1536,7 +1541,7 @@ fn task_1337_post_setup_launch_error_rolls_back_the_owned_setup() {
         leases.iter().all(|p| !std::fs::read_to_string(p)
             .unwrap_or_default()
             .contains(spec.as_str())),
-        "the lease is removed: {leases:?}"
+        "the lease is removed: {leases:?}\n{text}"
     );
     // ... and so is the worktree. The pool owns a tree it handed out
     // (STORY-714: a pooled tree is reset and idled, never removed), so the
