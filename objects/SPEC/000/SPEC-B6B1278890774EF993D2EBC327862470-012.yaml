@@ -1,0 +1,18 @@
+id: 01a1a951-d088-7b70-8221-68cf17ee839e
+spec_id: SPEC-b6b1278890774ef993d2ebc327862470-012
+title: Native Codex implementer cannot publish tested fix with read-only Git metadata
+description: 'BUG-2442 is implemented and tested in /home/joe/ai/aida-worktrees/aida-seat-aida-bug-b6b1278890774ef993d2ebc327862470-211 (three modified tracked Rust files). Native Codex sandbox makes .git read-only: git add fails creating .git/index.lock. Available command deputy runs in the main checkout and offers no cwd selection; script deputy submit explicitly rejects implementer (allowed: advisor). No commit, push, PR or queue completion is claimed. Provide a bounded lane-scoped commit/push handoff or authorize the appropriate host publishing path, then publish these changes. Validation: all 12 review_watch::update_tests and 7 status_prs::bug_1291_orphan_sweep_tests pass; broad review_watch run had 112/113 pass and one existing SIGTERM-trap timeout, which passed alone on immediate rerun; cargo fmt and git diff --check pass.'
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-05T01:27:53.736953851Z
+modified_at: 2026-11-05T01:27:53.736953851Z
+req_type: Task
+tags:
+- from-implementer:BUG-2442
+- kind:followup-suggestion
+- severity:major
+filed_at:
+  aida_version: 0.16.0
+  aida_build_sha: 47e9f216d38
