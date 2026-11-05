@@ -16,12 +16,12 @@ description: |-
   6. Docs: a short operator guide for running a second review node.
 
   Case 2 (untrusted/work node, envelope-based) is a separate deferred story.
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T04:40:54.168438456Z
-modified_at: 2026-11-05T04:58:52.431432105Z
+modified_at: 2026-11-05T05:00:30.893750779Z
 req_type: Story
 comments:
 - id: 01a1aa09-5cd4-71a0-98d9-fd711f6a6770
@@ -214,6 +214,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1aa14-792d-7153-b0cb-24e21167ef15
+  author: joe
+  timestamp: 2026-11-05T05:00:30.893773402Z
+  session_id: 01a1aa12efe6
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: d561213a36febec31d45921d3d43d4dc7590135e
   branch: main
@@ -222,3 +230,9 @@ filed_at:
   aida_build_sha: e1fc3f06903
   vendor: claude
   session: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
+attention_reason:
+  category: design-fork
+  detail: 'New dependency conflict while applying the approved receipt design: the binding ruling requires reusing STORY-2238 grant-keyring public-key signing primitives with no new crypto, but this branch at 914dcbec5406094df0550c8e59471cb5f31eed24 has no such primitives. aida-cli-lib/src/grant_keyring.rs implements Linux keyctl secret possession (install/read/invalidate), and gate/seat_authority.rs:894 hashes a possessed secret with SHA-256; neither can sign or verify receipts against a roster public key. Repository search found no Ed25519/ECDSA/signing-key/signature-verification implementation. Adding a signing algorithm/backend and node private-key provisioning lifecycle would choose new credential/authority behavior contrary to the reuse-only instruction. Need the exact existing signer API/commit to reuse, or an amended ruling authorizing a specified signing backend and node-key generation/storage policy. Receipt trust, roster removal revocation, exact-head binding and slice-2 deferral remain accepted; this is not reopening that approved design. No source changes, tests, PR, review record or ship action performed.'
+  lean: If no existing signer exists, authorize a maintained Ed25519 implementation and a host-only persistent node key outside synced store and agent write roots; enroll only its public key through explicit operator action. Do not adapt grant secrets or export grant/human receipt evidence.
+  raised_by: implementer
+  raised_at: 2026-11-05T05:00:30.893750779Z
