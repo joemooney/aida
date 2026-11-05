@@ -21,7 +21,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T04:40:54.168438456Z
-modified_at: 2026-11-05T07:57:38.626581160Z
+modified_at: 2026-11-05T08:15:08.496119814Z
 req_type: Story
 tags:
 - docs:impacted
@@ -251,6 +251,13 @@ comments:
   created_at: 2026-11-05T07:55:47.093174988Z
   modified_at: 2026-11-05T07:55:47.093174988Z
   session_id: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
+- id: 01a1aac6-a8d0-7853-b03c-1ce32b51f84f
+  author: joe
+  content: 'Round-2 rework (slice 1, PR-3411): per-change publication layout reviews/v1/changes/<CHANGE>/{publications,authorship} + spec routing index reviews/v1/specs/<key>/<CHANGE>; head-filtered per-change selection (stale-head publications ignored); author evidence unions all heads of a change and is republished on every AIDA open/push (open_change_bound binds req.branch tip, adopt_change_bound, ship --from-seat rework); publication failure after a durable local verdict/open is a reported pending state with a retry command; rebase runs inside the store writer lock; enroll/revoke idempotent rerun as roster-race recovery. AC4 (watcher discovery + synced head reservation) is NOT in slice 1 per the advisor ruling; a slice-2 child spec must be filed (this seat could not allocate an ID: read-only store).'
+  created_at: 2026-11-05T08:15:08.496119814Z
+  modified_at: 2026-11-05T08:15:08.496119814Z
+  session_id: 01a1aab69b5b
+  harness_version: 2.1.318 (Claude Code)
 history:
 - id: 01a1aa03-2e29-79d0-827e-4c56622f79bd
   author: joe
