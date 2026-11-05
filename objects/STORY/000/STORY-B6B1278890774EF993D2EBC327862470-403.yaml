@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T00:31:51.425362067Z
-modified_at: 2026-11-05T01:41:05.224179955Z
+modified_at: 2026-11-05T01:41:54.958970432Z
 req_type: Story
 comments:
 - id: 01a1a924-ab5d-7630-baf2-668624abd4e4
@@ -17,6 +17,12 @@ comments:
   created_at: 2026-11-05T00:38:35.101822153Z
   modified_at: 2026-11-05T00:38:35.101822153Z
   session_id: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
+- id: 01a1a95e-a68e-7cb3-af24-76c84cd99990
+  author: joe
+  content: 'Draft commit 858ffdffaba pushed to story-b6b1278890774ef993d2ebc327862470-403 for triage; no PR opened, incomplete. git diff --check passed and cargo fmt ran. Local lane job runner unavailable; cargo check still running at handoff. Upstream accepted push but local upstream config/tracking writes were refused by read-only .git. Remaining: host merge preparation/conflict policy, drain/resume coverage, robust publication tests. untested=true.'
+  created_at: 2026-11-05T01:41:54.958970432Z
+  modified_at: 2026-11-05T01:41:54.958970432Z
+  session_id: 01a1a95a924e
 history:
 - id: 01a1a947-16f2-71f0-9679-9dc05c31b942
   author: joe
