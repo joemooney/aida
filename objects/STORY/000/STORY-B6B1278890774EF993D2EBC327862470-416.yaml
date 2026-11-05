@@ -1,0 +1,35 @@
+id: 01a1a9c5-6c10-7741-a49d-6d53b837a12c
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-416
+agreed_id: STORY-2488
+title: 'Review PR-3403: [AI:codex] feat(intent): add portable observation envelopes (TASK-3077)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `story-b6b1278890774ef993d2ebc327862470-407`.
+
+  - PR: <https://github.com/joemooney/aida/pull/3403>
+  - Branch: `story-b6b1278890774ef993d2ebc327862470-407` → `main`
+
+  ## Covers
+
+  - TASK-3077
+  - STORY-2479
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 3403` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-05T03:34:10.192686427Z
+modified_at: 2026-11-05T03:34:10.192686427Z
+req_type: Story
+filed_at:
+  code_sha: e1fc3f06903785151ac46e5dc911e75cd6965b94
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: e1fc3f06903
+  vendor: codex
+  session: 01a1a9a8fe02
