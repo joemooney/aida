@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-798
 agreed_id: TASK-3072
 title: Add exact-session Claude mailbox wake adapter
 description: 'Follow-up to STORY-2476 advisor ruling: reuse durable kind=request mailbox delivery and ACKs. Establish supported exact-session live Claude wake, busy-session and idempotence semantics; retain mailbox/hook and operator fallback. Queue acceptance must not imply read or acted.'
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-05T02:00:14.760070519Z
-modified_at: 2026-11-05T02:00:14.760070519Z
+modified_at: 2026-11-05T16:13:47.418391670Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -20,6 +20,14 @@ history:
   timestamp: 2026-11-05T02:00:25.132503966Z
   session_id: 01a1a96dc251
   changes: []
+- id: 01a1ac7c-e01a-7d61-a3d5-c5dcb922ee26
+  author: joe
+  timestamp: 2026-11-05T16:13:47.418383593Z
+  session_id: b83457ff-84e3-46cb-8f68-4be531a63422
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   aida_version: 0.16.0
   aida_build_sha: fb2086e9008
