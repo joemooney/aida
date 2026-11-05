@@ -194,6 +194,9 @@ jobs:
         # (pipefail keeps the runner's exit status). trace:STORY-1853 | ai:claude
         env:
           AIDA_REQUIRE_ZSH: ${{ runner.os == 'Linux' && '1' || '' }}
+          # Namespace setup above must support the concurrent PID-1 regression.
+          # Refuse a silent skip on CI. trace:TASK-2886 | ai:codex
+          AIDA_REQUIRE_USERNS: ${{ runner.os == 'Linux' && '1' || '' }}
         run: python3 scripts/ci-test-shards.py --runner nextest --shard "${{ matrix.shard }}" < /dev/null 2>&1 | tee target/test-run.log
 
       # trace:TASK-1949 | ai:codex

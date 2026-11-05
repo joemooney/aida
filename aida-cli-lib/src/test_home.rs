@@ -211,10 +211,9 @@ fn sweep_stale_test_homes(
         #[cfg(unix)]
         {
             use std::os::unix::fs::MetadataExt;
-            if !entry
-                .metadata()
-                .is_ok_and(|m| m.uid() == unsafe { libc::geteuid() })
-            {
+            // SAFETY: geteuid always succeeds and has no preconditions.
+            let uid = unsafe { libc::geteuid() };
+            if !entry.metadata().is_ok_and(|m| m.uid() == uid) {
                 continue;
             }
         }
@@ -383,7 +382,14 @@ fn create_test_home_in(root: &Path, namespace: Option<&str>, pid: u32) -> std::i
         "{TEST_HOME_PREFIX}{}-{pid}-",
         namespace.unwrap_or("unknown")
     );
-    let temp = tempfile::Builder::new().prefix(&prefix).tempdir_in(root)?;
+    let mut builder = tempfile::Builder::new();
+    builder.prefix(&prefix);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        builder.permissions(std::fs::Permissions::from_mode(0o700));
+    }
+    let temp = builder.tempdir_in(root)?;
     let test_home = temp.path();
     std::fs::create_dir(test_home.join(".aida"))?;
     // Git reads identity and defaults from `$HOME/.gitconfig`; give spawned
@@ -691,6 +697,11 @@ mod tests {
         match probe {
             Ok(output) if output.status.success() => {}
             other => {
+                assert_ne!(
+                    std::env::var("AIDA_REQUIRE_USERNS").as_deref(),
+                    Ok("1"),
+                    "required PID namespace regression cannot run: {other:?}"
+                );
                 eprintln!("SKIP PID namespace test: unshare unavailable: {other:?}");
                 return;
             }
@@ -714,7 +725,7 @@ mod tests {
             }
         }
         let root = tempfile::tempdir().unwrap();
-        let binary = std::env::current_exe().unwrap();
+        let binary = std::fs::read_link("/proc/self/exe").unwrap();
         let spawn = |slot: &str| {
             let mut command = Command::new("unshare");
             command
@@ -771,6 +782,7 @@ mod tests {
         std::fs::write(root.path().join("release-second"), "").unwrap();
         wait_success(&mut second);
         assert!(!second_home.exists());
+        eprintln!("PID namespace regression ran: two concurrent PID-1 homes survived peer startup and exit");
     }
 
     // trace:TASK-2886 | ai:codex
