@@ -1,0 +1,18 @@
+{
+  "id": "deputy-default-01a1ab6d-45e2-7e41-ac20-929b56637eaa",
+  "thread_id": "deputy-01a1ab6d-45e2-7e41-ac20-929b56637eaa",
+  "from": "deputy:default",
+  "to": {
+    "kind": "agent",
+    "agent": "codex-implementer"
+  },
+  "timestamp": 1793877428685,
+  "body": "Deputy \"default\" finished job 01a1ab6d-45e2-7e41-ac20-929b56637eaa: rc 1 (exit).\nCommand: aida ship TASK-3096 --from-seat /home/joe/ai/aida-worktrees/aida-seat-aida-task-b6b1278890774ef993d2ebc327862470-820 --dry-run\nOutput: /home/joe/ai/aida/.aida/deputy/default/out/01a1ab6d-45e2-7e41-ac20-929b56637eaa.out\nRead it with `aida deputy log 01a1ab6d-45e2-7e41-ac20-929b56637eaa`.\n`aida awaiting` lists it until you run `aida deputy ack 01a1ab6d-45e2-7e41-ac20-929b56637eaa`.\n",
+  "subject": "deputy job 01a1ab6d FAILED: rc 1",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}
