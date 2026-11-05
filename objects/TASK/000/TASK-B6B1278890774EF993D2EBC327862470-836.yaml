@@ -12,12 +12,12 @@ description: |
   - Vendors the shared launch does not support yet (claude before TASK-2708 AC1, agy) refuse with a named reason; no fallback.
   - One offline test with a fake vendor binary, plus a recorded host run for codex (the advisor runs it through deputy 3).
   - LIGHT gate.
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T19:13:33.556939585Z
-modified_at: 2026-11-05T19:31:46.146957406Z
+modified_at: 2026-11-05T19:33:26.866362510Z
 req_type: Task
 tags:
 - area:containment
@@ -54,6 +54,14 @@ history:
   timestamp: 2026-11-05T19:31:46.245924299Z
   session_id: 01a1ad319cdd
   changes: []
+- id: 01a1ad33-aad2-7a50-a370-d884b9a99a38
+  author: joe
+  timestamp: 2026-11-05T19:33:26.866381006Z
+  session_id: 01a1ad319cdd
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: c02cb56144d01e1a43da14a1a018906b3bfbe689
   branch: main
@@ -62,3 +70,9 @@ filed_at:
   aida_build_sha: b66ec083185
   vendor: claude
   session: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
+attention_reason:
+  category: design-fork
+  detail: Production PreparedLaunch::prepare (aida-cli-lib/src/launch/contained.rs:419) requires a locally trusted committed contained.vendors.codex=aida policy (lines 433-441), required canonical store/cache roots, and a valid requested-seat preflight (lines 718-736). Current origin/main policy explicitly selects codex=native; conformance.py prepare() instead creates an unrelated disposable repository with no trusted policy or seat binding. Acceptance does not specify whether boundary=aida evidence may use a synthetic committed fixture policy plus fixture authority, or must preserve the real project policy and use an authorized production child worktree. Those choices produce materially different policy SHA/authority evidence. Need advisor ruling on the fixture policy and seat/authority contract before adding a bridge; do not bypass trusted policy, substitute a successful preflight, or silently present fixture evidence as production-profile evidence. Native behavior remains untouched; no code changes or PR.
+  lean: Use an explicitly labeled disposable fixture policy and disposable authority context, record both the source production policy SHA and effective fixture policy SHA plus accepted receipt digest, and exercise prepare/spawn/release without bypasses. Advisor should confirm this meets same-profile evidence and specify how the host run obtains its valid fixture seat grant.
+  raised_by: implementer
+  raised_at: 2026-11-05T19:33:26.866362510Z
