@@ -2022,6 +2022,11 @@ fn bug_2440_wrapped_codex_prepares_with_explicit_command_separator() {
                 child
                     .args(&wrapped)
                     .current_dir(&root)
+                    // The launcher stamps the posture it resolved. This
+                    // fixture root is no git repo, so without the stamp the
+                    // TASK-2708 fail-closed check would (rightly) refuse.
+                    // trace:TASK-2708 | ai:claude
+                    .env("AIDA_CONTAINMENT_POSTURE", "native")
                     .env("AIDA_SESSION_GRANT", "")
                     .env("AIDA_USER", "wrapped-child");
                 prepare_launch(&mut child).unwrap();

@@ -549,7 +549,9 @@ impl PreparedLaunch {
             }
             let git = base.join(".git");
             if git.exists() {
-                if base == &root && crate::seat_clone::recorded_clone_for(host_main, &root).is_some() {
+                if base == &root
+                    && crate::seat_clone::recorded_clone_for(host_main, &root).is_some()
+                {
                     // Explicit native carve-out: the native workspace default
                     // protects .git even when its parent is writable.
                     profile.add(&git, true)?;
