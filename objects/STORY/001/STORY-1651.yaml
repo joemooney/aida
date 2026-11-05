@@ -33,7 +33,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-10T20:30:55.867848469Z
-modified_at: 2026-11-05T13:31:56.493113899Z
+modified_at: 2026-11-05T13:39:45.491684644Z
 req_type: Story
 tags:
 - docs
@@ -130,6 +130,31 @@ comments:
     - None: retain normative ADRs and generated instructions in place, restore project-neutral output defaults, retain docs/plans per explicit scope exception.
   created_at: 2026-11-05T13:31:56.493113899Z
   modified_at: 2026-11-05T13:31:56.493113899Z
+  session_id: 01a1abe7a8ce
+- id: 01a1abef-dad3-70a2-9161-f8a66a378330
+  author: joe
+  content: |-
+    Round 2 implementation and validation (findings 1–9 accepted, none disputed):
+
+    1–2: Moved non-ADR docs/aida pages to docs/internal/aida and recordings to docs/internal/casts. Normative docs/aida/05-decisions and scope-approved docs/plans stay. Added top-level allow-list and ADR-only subtree tests.
+    3–4: Corrected the five named archived citations in Rust comments, glossary master/mirror and presentation; retargeted other known moved citations. Added scripts/check-doc-paths.py across all tracked non-archive text including code, templates and backticks. It reads rename history from inventory.tsv. Exact counted source/target exceptions describe existing output contracts, synthetic fixtures and historical proposals; new sources and added occurrences fail. Negative fixtures cover prose/code/template paths, moved-but-existing targets and exception counting.
+    5: Restored project-neutral research, ecosystem-watch, reports and spike defaults, footprint/help snapshot and shipped skill/protocol text. Existing ecosystem-watch scaffold test now also refuses creation of an internal output directory. Repo-internal citations retain their actual locations.
+    6: Inventory coverage is path-derived. New recognized docs need no TSV row; unclassified paths and invalid/duplicate/stale/wrong existing rows fail. TSV remains a generated historical report.
+    7: Session communication moved to advanced; generated brief-pickup docs remain in place with generated audience.
+    8: tests/test_docs_landing_smoke.py reads only the landing command block and executes git init, aida init, aida add, aida list, then shows the returned ID in a fresh isolated HOME/project. PASS with installed aida 0.16.0 c38a77db609; CI runs it with its freshly built target/debug/aida.
+    9: Removed the redundant inventory branch. book-serve now serves the pruned reader build on a loopback ephemeral port, with no contributor/archive assets.
+
+    CI diagnosis: the reported lane_fixture_fails panic is the intended negative child of a passing fixture test (69 passed in its parent run). Actual gates failure was 20 archived links hardcoding /home/joe/ai/aida; changed to relative repository paths. merge-hold remains for the authorized reviewer/merge seat.
+
+    Validation: 32 audience/showcase tests passed, landing smoke passed (11 combined audience+landing tests), inventory covers all 943 working-tree Markdown/HTML docs, all 1417 file links resolve, tracked-path guard passes, static manual flags and all 67 CI gate classifications pass, reader mdBook builds/prunes successfully after mdbook-mermaid install docs, cargo fmt --all -- --check and git diff --check pass. Cargo no-default-features check waited for a build slot without compiling; cancelled rather than reporting it passed. Full Rust tests/full CI not run in this lane.
+
+    PUBLICATION BLOCKER: .git/index.lock creation is read-only. Sanctioned host deputy dry-run 01a1abec-0bbd-7c62-8adf-afd2b66f4431 also refused commit-pending because live owner PID 3172130 owns this lane. No commit/push was possible; do not bypass that live-owner guard. This round therefore punts the publication requirement explicitly; findings 1–9 are implemented in the working tree but unpublished. After lane exit, host must run:
+
+    aida ship STORY-1651 --from-seat /home/joe/ai/aida-worktrees/aida-seat-aida-story-1651 --commit-pending "[AI:codex] fix(docs): close audience review gaps (STORY-1651)"
+
+    This from-seat path never merges. Stage/rename detection and ordinary tracked-file gates must run on the host/CI. Existing PR is #3424; preserve branch story-1651. No review record, hold clearance or merge was attempted.
+  created_at: 2026-11-05T13:39:45.491684644Z
+  modified_at: 2026-11-05T13:39:45.491684644Z
   session_id: 01a1abe7a8ce
 history:
 - id: 01a12786-de64-7f61-81ce-787aedc7543e
