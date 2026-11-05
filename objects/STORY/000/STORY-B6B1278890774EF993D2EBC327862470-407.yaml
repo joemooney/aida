@@ -27,7 +27,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T02:09:00.558985162Z
-modified_at: 2026-11-05T05:36:48.546392633Z
+modified_at: 2026-11-05T05:36:50.544112380Z
 req_type: Story
 relationships:
 - rel_type: Parent
@@ -160,6 +160,23 @@ comments:
   created_at: 2026-11-05T03:35:14.249363590Z
   modified_at: 2026-11-05T03:35:14.249363590Z
   session_id: 01a1a9a8fe02
+- id: 01a1aa35-baeb-7a93-9367-41638c33f70d
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #3403):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: dede3933efa1
+    Recorded: 2026-11-05T03:46:48.029567309+00:00
+    Findings:
+    1. BLOCKER: CI (cli-0) failed in step 'Run tests' at dede3933 (run 41962406813, job 127031592775); main's last 3 CI runs are green on cli-0, so treat this as PR-caused. cli-0 runs aida-cli integration targets, which include the new aida-cli/tests/story_2479_observation_envelopes.rs. The reviewer sandbox could not download the job log (blob host denied), so the implementer must read the log, fix the failing test, and get every shard green. lib-0 and gates were still pending at review time.
+    2. aida-cli-lib/src/observation_envelope.rs:273-280: local_entry() calls command_registry::parse_from on RAW argv, which exits the process on any clap error, before run() applies user_alias::expand, builtin_alias_rewrites and external_cmd::maybe_dispatch. Any argv that contains the literal tokens 'intent' and one of note|validate|export now dies with a clap error instead of reaching its real handler, e.g. 'aida myext intent export' (an aida-myext extension on PATH) or a user alias whose arguments contain those words. Fix: use try_parse_from and return None on Err so run() keeps owning error handling and rewrites. Add a test that runs an aida-<name> extension with these tokens.
+    3. aida-cli-lib/src/plan_intent.rs:2328: if a local subcommand reaches run_intent at all (for example a user alias that expands to 'intent note ...', since local_entry only matches literal raw tokens), it runs after identity, telemetry, role and store startup, which breaks AC5 (local commands precede that startup), and it hard-codes json_format=false, so --format json and AIDA_OUTPUT_FORMAT are ignored. Either refuse local subcommands in run_intent with a pointer to the direct spelling, or make sure the early path handles post-alias argv; and pass the resolved output format instead of false.
+    4. aida-cli/tests/story_2479_observation_envelopes.rs:342-343: the 'preserve aida intent <SPEC> parsing' check (AC6) only asserts that stderr lacks 'unexpected argument'. Any other clap parse failure, such as a missing required argument or an invalid value (exit 2), still passes. Assert that the exit code is not clap's 2 and that the error comes from store/project discovery, so the test actually proves the legacy positional plus --audience/--json still parse.
+    5. cosmetic: aida-cli-lib/src/tests/golden/cli_help_snapshot.txt: 'aida intent --help' usage now reads 'aida intent [OPTIONS] [ID] <COMMAND>', which suggests a subcommand is required and ID is optional, and the legacy 'aida intent <ID>' form is no longer shown. Add an override_usage listing both 'aida intent [OPTIONS] <ID>' and 'aida intent <note|validate|export> ...'.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-05T05:36:50.411933848Z
+  modified_at: 2026-11-05T05:36:50.411933848Z
+  session_id: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
 history:
 - id: 01a1a981-2741-7142-a61b-c4c33c95996d
   author: joe
