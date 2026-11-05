@@ -33,7 +33,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-10T20:30:55.867848469Z
-modified_at: 2026-11-05T18:48:31.184736820Z
+modified_at: 2026-11-05T18:56:20.102568762Z
 req_type: Story
 tags:
 - docs
@@ -190,6 +190,12 @@ comments:
   content: 'Round 3 publication blocked, no findings disputed. Direct git add fails because .git is read-only. Host deputy job 01a1ad03-f815-7bd2-87bb-237dfe879f21 ran the supported native-seat publication route and refused commit-pending because owner PID 587433 is live; nothing was committed. Do not bypass that check. After this lane exits, the launcher must run: aida ship STORY-1651 --from-seat /home/joe/ai/aida-worktrees/aida-seat-aida-story-1651 --commit-pending "[AI:codex] fix(docs): restore output paths and split smoke tier (STORY-1651)". This publishes to existing PR #3424 and never merges. Findings 1–4 are fixed in the working tree. For finding 5, prior CI failure was traced to rewritten historical paths in task-1800-semantic-audit.json; restored the audit and trace-exclusions JSON from origin/main frozen originals, with exact source/count exceptions in the literal-doc-path guard. Verified 514 historical blob hashes across 18 vendored replay cases. 10 audience tests, isolated landing smoke with installed CLI, generated-cache allow/ignore check, inventory, 1436 local links, literal path guard, CI tier audit and formatting passed. A new commit and green final-head CI cannot be established before host publication; do not treat those requirements as completed.'
   created_at: 2026-11-05T18:44:13.012990569Z
   modified_at: 2026-11-05T18:44:13.012990569Z
+  session_id: 01a1ad01974a
+- id: 01a1ad11-b086-7c31-9f29-72d6d65824aa
+  author: joe
+  content: 'Round 3 final validation: every fast-tier gate passed across the complete rerun through formatting and a resumed 11-gate tail after fixing the moved-cast exclusion. Full CI formatting includes both cargo fmt and explicit rustfmt lib_part*.rs; formatted story_255_discipline_pack_tests.rs to close prior CI formatting failure. Added docs/internal/casts exclusion plus a fixture ensuring live internal docs still refuse removed flags. Targeted aida-core seeded protocol test passed; landing smoke passed using installed CLI; 18 replay cases / 514 historical blob hashes passed; audience, inventory, local links, path guard, tier audit and git diff checks passed. Git fetch attempts inside local guards were refused by the lane boundary, so remote evidence was not refreshed. All source changes remain UNCOMMITTED: direct staging and supported deputy publication refused as documented. STORY-1651 remains Needs Attention for host publication after lane exit and green final-head CI (finding 5). No findings disputed. Do not merge or record review from this implementer lane.'
+  created_at: 2026-11-05T18:56:20.102568762Z
+  modified_at: 2026-11-05T18:56:20.102568762Z
   session_id: 01a1ad01974a
 history:
 - id: 01a12786-de64-7f61-81ce-787aedc7543e
