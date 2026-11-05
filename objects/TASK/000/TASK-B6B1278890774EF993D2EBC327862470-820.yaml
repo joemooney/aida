@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T07:36:50.416655523Z
-modified_at: 2026-11-05T07:53:12.675807431Z
+modified_at: 2026-11-05T08:35:00.285805800Z
 req_type: Task
 tags:
 - docs:impacted
@@ -18,6 +18,19 @@ comments:
   content: Implementation follows the advisor-approved STORY-2479 sketch. Independent intake is isolated under the clone-common aida-intake directory with its own Git repository/worktree/index/objects/refs and permanent lock. Publication uses reviewed exact bytes and a pinned validated SHA, pull quarantines and validates all reachable history before fast-forward acceptance, and processing records immutable receipts plus a durable random operation identity. Normal CLI writers retain requirement/comment authorization. Local bare-remote integration coverage and processing crash-recovery coverage are in progress; no ship or review-record action will run.
   created_at: 2026-11-05T07:52:19.741517667Z
   modified_at: 2026-11-05T07:52:19.741517667Z
+  session_id: 01a1aaa4cf95
+- id: 01a1aad8-d83d-7002-89dd-a64e5ccf33fc
+  author: joe
+  content: |
+    Implementation ready for publication: direct intent enroll/publish/pull/list/process commands, an independently pinned destination and reviewed deny-pattern policy, a clone-common private repository/worktree/index/objects/refs/lock, full reachable orphan linear history validation, pinned-SHA publication, quarantined fast-forward pull, immutable receipts and durable processing journals. Requirement/comment mutations reuse normal authorized CLI writers; confirmed operation markers recover without duplicate writes and ambiguous replay refuses. Store-only transport is unchanged. The v1 envelope kind remains closed.
+
+    Final validation: default-feature intake integration 8/8; existing envelope integration 11/11; refreshed default-feature help snapshot 1/1; final no-default-features cargo check passed; cargo fmt check passed. Manual-verifier unit tests 13/13, doc-intent tests 8/8 and static manual flags passed. All 785 default-feature catalog paths match the regenerated JSON audit, which regenerates identically. Processing/recovery measured 12.83s; added a 30s CI timing budget. Non-generated whitespace checks passed; the byte-exact golden retains one Clap-generated whitespace-only line before enum values.
+
+    Verification limits: the full JSON conformance test fails before audit assertions at its existing advisor-grant fixture setup (requested Approved downgraded to Draft), reproduced on existing draft finding TASK-2862. Root hygiene reports the pre-existing sandbox-managed read-only .aws directory. The broad live manual scan is still running without a result; static/manual unit coverage is green. Logs: /tmp/task3096-tests4.log, /tmp/task3096-snapshot2.log, /tmp/task3096-finalcheck-direct.log, /tmp/task3096-audit-test.log, /tmp/task3096-manual-live.log.
+
+    Prepared PR body: /tmp/task3096-pr.md. Intended commit subject: [AI:codex] feat(intent): add enrolled intake transport and receipts (TASK-3096). Attempting the documented host-side publisher next. No pr ship or review record command has run; stop at the open PR.
+  created_at: 2026-11-05T08:35:00.285805800Z
+  modified_at: 2026-11-05T08:35:00.285805800Z
   session_id: 01a1aaa4cf95
 history:
 - id: 01a1aaa3-d806-7392-8539-dab331d61cdd
