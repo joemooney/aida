@@ -1,0 +1,33 @@
+id: 01a1a982-4794-7a80-982d-b655ad7990e5
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-410
+agreed_id: STORY-2482
+title: 'Review PR-3394: [AI:codex] test(deputy): cover the claim grace window (TASK-2832)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a1a971`) for branch `task-b6b1278890774ef993d2ebc327862470-779`.
+
+  - PR: <https://github.com/joemooney/aida/pull/3394>
+  - Branch: `task-b6b1278890774ef993d2ebc327862470-779` → `main`
+
+  ## Covers
+
+  - TASK-2832
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 3394` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-05T02:20:49.940487449Z
+modified_at: 2026-11-05T02:20:49.940487449Z
+req_type: Story
+filed_at:
+  code_sha: efca74e51a683b314e45f7ccbc9afaccab2b1ec8
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: fb2086e9008
+  vendor: claude
