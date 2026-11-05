@@ -33,12 +33,12 @@ description: |
   - Does work policy permit personal-project use of work runners and this return channel? This needs a human answer before rollout.
 
   Depends on: observation-envelope story (shared aida-intent branch + validator).
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T02:09:16.726846978Z
-modified_at: 2026-11-05T07:19:36.725232102Z
+modified_at: 2026-11-05T07:19:49.848436589Z
 req_type: Story
 comments:
 - id: 01a1a981-1ef0-7913-958b-707df93ccc24
@@ -74,6 +74,14 @@ history:
   timestamp: 2026-11-05T07:17:39.241738577Z
   session_id: 01a1aa916835
   changes: []
+- id: 01a1aa94-0558-7582-8ad0-696aef80ceb3
+  author: joe
+  timestamp: 2026-11-05T07:19:49.848451996Z
+  session_id: 01a1aa916835
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: efca74e51a683b314e45f7ccbc9afaccab2b1ec8
   branch: main
@@ -82,3 +90,9 @@ filed_at:
   aida_build_sha: fb2086e9008
   vendor: claude
   session: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
+attention_reason:
+  category: design-fork
+  detail: AGENTS.md Sketch-First Protocol requires master sign-off for the new CI receipt wire format and intake transport boundary. Shared aida-intent enrollment/publication/processing from STORY-2479 remains unimplemented (only TASK-3077 local envelope commands shipped). Review docs/plans/2026-11-05-story-2480-work-ci-relay.md and approve receipt schema/inventory policy plus prerequisite sequencing before implementation.
+  lean: Reuse the separately enrolled intake boundary already approved on STORY-2479; complete that prerequisite first, then implement CI receipt validation, work relay, and home status processing in bounded slices.
+  raised_by: implementer
+  raised_at: 2026-11-05T07:19:49.848436589Z
