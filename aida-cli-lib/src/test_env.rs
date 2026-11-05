@@ -71,6 +71,16 @@ pub(crate) fn run_path_isolated_test_output() -> Option<std::process::Output> {
         .env("GIT_CONFIG_NOSYSTEM", "1")
         .env("AIDA_TEST_PATH_CHILD", name)
         .args(["--exact", "--nocapture", "--test-threads=1", name]);
+    // Keep the constructor's real-home fence across env_clear. Without it the
+    // child treats its assigned HOME as an operator home, replaces it with a
+    // PID-named directory and sweeps sibling homes. PID namespaces can share
+    // those names while their liveness probes cannot see each other's owners.
+    // trace:TASK-2841 | ai:codex
+    command.env(
+        crate::test_home::REAL_HOMES_ENV,
+        std::env::var_os(crate::test_home::REAL_HOMES_ENV)
+            .expect("test constructor exports the real-home fence"),
+    );
     // Some test binaries are linked against Rust libraries in cargo's search path.
     if let Some(path) = std::env::var_os("LD_LIBRARY_PATH") {
         command.env("LD_LIBRARY_PATH", path);
@@ -687,6 +697,24 @@ impl Drop for AmbientGuard {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // The child constructor must keep the home supplied by this helper,
+    // including its Git config, and must not add it to the real-home fence.
+    // trace:TASK-2841 | ai:codex
+    #[test]
+    fn path_isolated_child_retains_assigned_home_and_fence() {
+        if run_path_isolated_test() {
+            return;
+        }
+        let home = crate::home_dir().unwrap();
+        let config = std::fs::read_to_string(home.join(".gitconfig")).unwrap();
+        assert!(config.contains("email = test@example.invalid"), "{config}");
+        let fence = std::env::var_os(crate::test_home::REAL_HOMES_ENV).unwrap();
+        assert!(
+            !std::env::split_paths(&fence).any(|real| real == home),
+            "the assigned temporary home must not become a fenced operator home"
+        );
+    }
 
     /// TASK-1559 AC1: a second `env_lock()` on a thread that already holds it
     /// panics immediately instead of self-deadlocking.
