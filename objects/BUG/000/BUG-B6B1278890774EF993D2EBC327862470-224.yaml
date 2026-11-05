@@ -13,12 +13,12 @@ description: |
   - Regression test: a detached (setsid, reparented) lane's record names the lane pid, and the judge reads it dead after the lane exits.
   - `aida own show --compare` shows zero UNEXPLAINED rows caused by holder pid on this host.
   Blocks STORY-2325 PR-C (cutover precondition: zero unexplained compare diffs).
-status: NeedsAttention
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T18:47:39.717568886Z
-modified_at: 2026-11-05T21:41:54.315902104Z
+modified_at: 2026-11-05T21:43:35.942591650Z
 req_type: Bug
 tags:
 - from-advisor:STORY-2325
@@ -150,6 +150,12 @@ comments:
   created_at: 2026-11-05T21:36:29.480354305Z
   modified_at: 2026-11-05T21:36:29.480354305Z
   session_id: 01a1ad9dc6e4
+- id: 01a1adaa-d306-7342-8305-5cbc764f56de
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Round 4 code findings 3-5 resolved (lease_started inlined, doc rewrapped, qualified identities now boot-checked with regression); full-diff sweep found no new code defects. Still blocked: AC5 host evidence absent and CI at 8cb06e6 queued, not green.. It was punted on: blocked-dependency: Round 4 finding 1 (AC5) remains blocked on operator/advisor action: this foreign-PID-namespace implementer cannot supply host acceptance, and aida own migrate --execute explicitly refuses without an operator terminal. Please run migrate --execute followed by own show --compare on the host and attach output assigning every residual UNEXPLAINED row a non-holder-pid cause, or record an advisor ruling narrowing AC5. No criterion is disputed or silently waived. Findings 3-5 are fixed in pushed commit 8cb06e6020a on existing PR #3450. Finding 2 also remains unverified: CI at the reviewed head was in progress and new-head run 42113364332 is queued; no green run is claimed. Retain the supervised merge hold pending host evidence and green CI; do not repeatedly return the host-only acceptance step to an implementer lane.. No triage reason was given.'
+  created_at: 2026-11-05T21:43:35.942590312Z
+  modified_at: 2026-11-05T21:43:35.942590312Z
+  session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
 history:
 - id: 01a1ad1a-eea4-75b1-bafd-7e58532b917a
   author: aida-session-start
@@ -271,6 +277,14 @@ history:
   session_id: 01a1ada74d8e
   harness_version: 2.1.318 (Claude Code)
   changes: []
+- id: 01a1adaa-d306-7342-8305-5cada8c696e1
+  author: joe
+  timestamp: 2026-11-05T21:43:35.942578597Z
+  session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: c02cb56144d01e1a43da14a1a018906b3bfbe689
   branch: main
@@ -283,16 +297,3 @@ implementation_info:
   implemented: true
   implemented_at: 2026-11-05T19:25:58.313401260Z
   implemented_by: joe
-attention_reason:
-  category: blocked-dependency
-  detail: 'Round 4 finding 1 (AC5) remains blocked on operator/advisor action: this foreign-PID-namespace implementer cannot supply host acceptance, and aida own migrate --execute explicitly refuses without an operator terminal. Please run migrate --execute followed by own show --compare on the host and attach output assigning every residual UNEXPLAINED row a non-holder-pid cause, or record an advisor ruling narrowing AC5. No criterion is disputed or silently waived. Findings 3-5 are fixed in pushed commit 8cb06e6020a on existing PR #3450. Finding 2 also remains unverified: CI at the reviewed head was in progress and new-head run 42113364332 is queued; no green run is claimed. Retain the supervised merge hold pending host evidence and green CI; do not repeatedly return the host-only acceptance step to an implementer lane.'
-  raised_by: implementer
-  raised_at: 2026-11-05T21:31:48.372236752Z
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'Round 4 code findings 3-5 resolved (lease_started inlined, doc rewrapped, qualified identities now boot-checked with regression); full-diff sweep found no new code defects. Still blocked: AC5 host evidence absent and CI at 8cb06e6 queued, not green.'
-  recovery_hint: address the review findings, move BUG-2458 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-05T21:41:54.315902104Z
