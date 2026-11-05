@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-784
 agreed_id: TASK-3046
 title: 'STORY-2460 S1: containment conformance harness (C0-C4) plus host-run probes of agy --sandbox and codex native'
 description: 'Implement the vendor-neutral conformance contract from SKETCH v1 sections 1-2 as a host-runnable harness, as ruled at signoff 2026-11-04 11:05 (Q1, Q2, Q4). Run it host-side through the script deputy against agy --sandbox (private runtime dir, no credential copying) and against codex native. Record per-check results on STORY-2460, and the posture S1 selects for agy. File a defect for each Codex failure (Q5). Acceptance: the harness exists with tests; both vendors have recorded results; the posture decision is recorded.'
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T17:53:47.688167385Z
-modified_at: 2026-11-05T01:39:12.379948307Z
+modified_at: 2026-11-05T01:45:41.755845989Z
 req_type: Task
 tags:
 - area:containment
@@ -67,6 +67,15 @@ history:
   timestamp: 2026-11-05T01:39:13.447014924Z
   session_id: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
   changes: []
+- id: 01a1a962-1c7b-7bb3-a1ef-1deeb001a1b4
+  author: aida-orchestrator
+  timestamp: 2026-11-05T01:45:41.755862343Z
+  session_id: 01a1a95dffd5
+  harness_version: 2.1.318 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 6a331a8a5c91ca7485b695a076af44bdf9be3894
   branch: main
@@ -75,3 +84,11 @@ filed_at:
   aida_build_sha: e422daaa1a4
   vendor: claude
   session: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: Harness, tests, both vendor runs, AGY posture A decision and Codex defects BUG-2446/2447/2448 are all present, and the harness hash matches the evidence. But the recorded evidence overclaims Codex C1, misstates the AGY version, the new tests are not run in CI, and the hash-only integrity check misses a payload swap. CI at the head was still pending (all 7 CI jobs queued) at review time.
+  recovery_hint: address the review findings, move TASK-3046 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-11-05T01:45:41.755845989Z
