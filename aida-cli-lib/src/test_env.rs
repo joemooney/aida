@@ -68,6 +68,12 @@ pub(crate) fn run_path_isolated_test_output() -> Option<std::process::Output> {
         .env_clear()
         .env("PATH", std::env::var_os("PATH").unwrap_or_default())
         .env("HOME", home.path())
+        // The pre-main test-home constructor uses PID-based names and sweeps
+        // stale homes. Native seats have separate PID namespaces but share
+        // /tmp, so their equal PIDs must never share that constructor's root.
+        // Keep every child's scratch files inside this parent's unique dir.
+        // trace:TASK-2861 | ai:codex
+        .env("TMPDIR", home.path())
         .env("GIT_CONFIG_NOSYSTEM", "1")
         .env("AIDA_TEST_PATH_CHILD", name)
         .args(["--exact", "--nocapture", "--test-threads=1", name]);

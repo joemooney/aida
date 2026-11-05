@@ -260,6 +260,12 @@ fn solo_self_approval_recorded_through_the_cli_carries_solo_and_clears_the_ship_
         root.path(),
         None,
         &[
+            // Pin the launcher's handshake anchor as well as the thread-local
+            // root: cwd may still be a real standalone seat checkout.
+            // trace:TASK-2861 | ai:codex
+            ("AIDA_PROJECT_ROOT", Some(root.path().to_str().unwrap())),
+            ("AIDA_DRIVE_ROOT", Some(root.path().to_str().unwrap())),
+            ("AIDA_REVIEW_VERDICT_FILE", None),
             ("AIDA_SESSION_ID", Some(AUTHOR_SESSION)),
             ("AIDA_AGENT_NAME", None),
             ("AIDA_AGENT_TYPE", None),
@@ -291,6 +297,10 @@ fn solo_self_approval_recorded_through_the_cli_carries_solo_and_clears_the_ship_
     assert!(crate::gate::review_verdict::read_recorded_verdict(root.path(), SPEC).is_none());
 
     record(&format!("{SPEC} #{PR}")).expect("the solo human approves their own claim");
+    assert!(
+        crate::gate::review_verdict::current_verdict(root.path(), &format!("PR-{PR}")).is_some(),
+        "the PR handshake stays on the fixture's gate ledger"
+    );
     // M1 slice 2: the record is on the gate ledger, not a verdict file.
     // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
     let raw: serde_json::Value = serde_json::from_str(
