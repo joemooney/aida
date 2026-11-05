@@ -170,6 +170,22 @@ impl Fixture {
         self.q.accept(&j).unwrap();
         j
     }
+    /// A job already on file in `accepted/` (the runner's socket took it
+    /// earlier), written without `accept`'s queue check so a test can damage
+    /// the queue first and still have something to (not) claim.
+    fn file_accepted_unchecked(&self, script: &str) -> ShellJob {
+        let j = job(
+            &self.q,
+            script,
+            submitter(&advisor(), LIVE_TOKEN, self.root(), "sess-a"),
+        );
+        crate::deputy::write_private_new(
+            &self.q.accepted_job(&j.id),
+            &serde_json::to_vec(&j).unwrap(),
+        )
+        .unwrap();
+        j
+    }
     fn cfg(&self, p: Probes) -> RunnerConfig {
         RunnerConfig {
             project_root: self.root().to_path_buf(),
@@ -274,7 +290,17 @@ fn queue_dirs_are_0700_and_a_loose_or_linked_dir_stops_claiming() {
     let runner = std::thread::spawn(move || runner::run(&q, &cfg, &AtomicBool::new(false)));
     wait_until("the runner to start", || f.q.runner_json().exists());
     loose().unwrap();
-    let j = f.submit("touch ran");
+    // `accept` itself refuses a loose queue, so the socket could not file
+    // a job now; one filed before the mode changed must still not run.
+    assert!(f
+        .q
+        .accept(&job(
+            &f.q,
+            "true",
+            submitter(&advisor(), LIVE_TOKEN, f.root(), "sess-a")
+        ))
+        .is_err());
+    let j = f.file_accepted_unchecked("touch ran");
     assert_eq!(runner.join().unwrap().unwrap(), 0);
     assert!(f.q.accepted_job(&j.id).exists(), "the job must stay queued");
     assert_eq!(
@@ -1653,6 +1679,15 @@ fn a_file_dropped_where_submitters_used_to_write_is_never_claimed() {
     assert!(f.q.queued_ids().is_empty());
     assert!(!f.q.job_dir(&j.id).exists());
     assert!(!f.home().join("ran").exists());
+    // ...but it does not vanish silently: the runner said so once at start.
+    let noted: Vec<_> =
+        f.q.read_audit()
+            .into_iter()
+            .filter(|r| r.event == "legacy-incoming-ignored")
+            .collect();
+    assert_eq!(noted.len(), 1, "one notice per runner start");
+    let files = noted[0].detail.as_ref().unwrap()["files"].to_string();
+    assert!(files.contains(&j.id), "{files}");
 }
 
 // trace:STORY-2343 | ai:claude
@@ -1708,4 +1743,43 @@ fn a_stale_socket_is_replaced_under_the_lock_and_a_non_socket_is_refused() {
         .expect("refused");
     assert!(err.to_string().contains("not a socket"), "{err}");
     assert!(f.q.socket_path().is_file(), "never removed");
+}
+
+// trace:STORY-2343 | ai:claude
+#[cfg(unix)]
+#[test]
+fn a_client_that_never_finishes_its_request_does_not_stall_other_requests() {
+    let f = Fixture::new("t");
+    let server = socket::serve(&f.q, probes(&[], &[], &[]), system_clock()).expect("serve");
+    let cancel = || {
+        socket::request(
+            &f.q,
+            &socket::Request::Cancel {
+                id: crate::deputy::new_job_id(),
+            },
+        )
+        .expect("a reply")
+    };
+    // One connection that sends nothing and never half-closes.
+    let silent = std::os::unix::net::UnixStream::connect(f.q.socket_path()).unwrap();
+    let begun = std::time::Instant::now();
+    let resp = cancel();
+    assert_eq!(resp.reason.as_deref(), Some("refused:schema"), "{resp:?}");
+    assert!(
+        begun.elapsed() < Duration::from_secs(3),
+        "answered beside the silent client, took {:?}",
+        begun.elapsed()
+    );
+    // Enough silent clients to fill every slot: the next is refused as busy
+    // at once rather than queued behind them.
+    let more: Vec<_> = (0..15)
+        .map(|_| std::os::unix::net::UnixStream::connect(f.q.socket_path()).unwrap())
+        .collect();
+    let begun = std::time::Instant::now();
+    let resp = cancel();
+    assert_eq!(resp.reason.as_deref(), Some("refused:busy"), "{resp:?}");
+    assert!(begun.elapsed() < Duration::from_secs(3));
+    drop(more);
+    drop(silent);
+    drop(server);
 }

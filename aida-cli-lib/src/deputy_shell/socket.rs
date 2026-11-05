@@ -5,7 +5,8 @@
 //! response. For a submit the runner:
 //!
 //! 1. reads the peer's `(pid, uid)` from the kernel (`SO_PEERCRED`) and pins
-//!    the peer process with a pidfd (`SO_PEERPIDFD`, else `pidfd_open`);
+//!    the peer process with the kernel's own pidfd (`SO_PEERPIDFD`, Linux
+//!    6.5+; without it the submit is refused, never pinned by pid);
 //! 2. refuses a peer of another uid;
 //! 3. loads the grant the job names and walks the peer's process ancestry
 //!    (`/proc/<pid>/stat`, bounded). One process on that chain must be a
@@ -188,8 +189,42 @@ mod unix {
     pub(crate) const MAX_REQUEST: u64 = 8 << 20;
     /// `sun_path` holds 108 bytes including the terminating NUL.
     const MAX_SOCKET_PATH: usize = 107;
-    /// How long either side waits on the other's bytes.
+    /// How long the client waits on the runner's reply.
     const IO_TIMEOUT: Duration = Duration::from_secs(30);
+    /// How long the runner gives a client to send its WHOLE request (a
+    /// deadline, not a per-read timeout, so a slow drip cannot extend it).
+    const REQUEST_DEADLINE: Duration = Duration::from_secs(5);
+    /// Requests the runner handles at once; more are refused as busy.
+    const MAX_CONNECTIONS: usize = 16;
+
+    /// Read one request (to the client's half-close) within `deadline`,
+    /// at most `MAX_REQUEST + 1` bytes.
+    fn read_request(stream: &UnixStream, deadline: Duration) -> std::io::Result<Vec<u8>> {
+        let until = std::time::Instant::now() + deadline;
+        let mut bytes = Vec::new();
+        let mut buf = [0u8; 64 * 1024];
+        loop {
+            let left = until.saturating_duration_since(std::time::Instant::now());
+            if left.is_zero() {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::TimedOut,
+                    "the request was not complete in time",
+                ));
+            }
+            stream.set_read_timeout(Some(left))?;
+            match (&*stream).read(&mut buf) {
+                Ok(0) => return Ok(bytes),
+                Ok(n) => {
+                    bytes.extend_from_slice(&buf[..n]);
+                    if bytes.len() as u64 > MAX_REQUEST {
+                        return Ok(bytes);
+                    }
+                }
+                Err(e) if e.kind() == std::io::ErrorKind::Interrupted => {}
+                Err(e) => return Err(e),
+            }
+        }
+    }
 
     #[cfg(target_os = "linux")]
     fn peer_cred(fd: RawFd) -> std::io::Result<PeerCred> {
@@ -226,10 +261,15 @@ mod unix {
         ))
     }
 
-    /// A pidfd for the peer: the kernel's own (`SO_PEERPIDFD`, Linux 6.5+), else
-    /// `pidfd_open(pid)`. `None` when neither is available.
+    /// The kernel's own pidfd for the peer (`SO_PEERPIDFD`, Linux 6.5+): it
+    /// names the process that connected even if that pid has since been
+    /// reused. There is deliberately no `pidfd_open(pid)` fallback: a peer
+    /// that wrote its request and exited could have its pid recycled before
+    /// the fallback ran, and the recycled process would be pinned and walked
+    /// in its place. `None` (an older kernel) refuses the submit.
+    // trace:STORY-2343 | ai:claude
     #[cfg(target_os = "linux")]
-    fn peer_pidfd(fd: RawFd, pid: u32) -> Option<OwnedFd> {
+    fn peer_pidfd(fd: RawFd) -> Option<OwnedFd> {
         const SO_PEERPIDFD: libc::c_int = 77;
         let mut pidfd: libc::c_int = -1;
         let mut len = std::mem::size_of::<libc::c_int>() as libc::socklen_t;
@@ -243,18 +283,12 @@ mod unix {
                 &mut len,
             )
         };
-        if rc == 0 && pidfd >= 0 {
-            // SAFETY: the kernel just handed us this descriptor.
-            return Some(unsafe { OwnedFd::from_raw_fd(pidfd) });
-        }
-        // SAFETY: pidfd_open takes a pid and flags, no pointers.
-        let fd = unsafe { libc::syscall(libc::SYS_pidfd_open, pid as libc::pid_t, 0) } as i32;
-        // SAFETY: the kernel just returned this descriptor to us.
-        (fd >= 0).then(|| unsafe { OwnedFd::from_raw_fd(fd) })
+        // SAFETY: on success the kernel just handed us this descriptor.
+        (rc == 0 && pidfd >= 0).then(|| unsafe { OwnedFd::from_raw_fd(pidfd) })
     }
 
     #[cfg(not(target_os = "linux"))]
-    fn peer_pidfd(_fd: RawFd, _pid: u32) -> Option<OwnedFd> {
+    fn peer_pidfd(_fd: RawFd) -> Option<OwnedFd> {
         None
     }
 
@@ -337,11 +371,33 @@ mod unix {
         let q2 = q.clone();
         let done2 = Arc::clone(&done);
         let handle = std::thread::spawn(move || {
+            // One thread per connection, so a client that connects and never
+            // finishes its request stalls only itself (and only until
+            // REQUEST_DEADLINE), never every other submit and cancel.
+            // trace:STORY-2343 | ai:claude
+            let mut live: Vec<JoinHandle<()>> = Vec::new();
             while !done2.load(Ordering::SeqCst) {
+                live.retain(|h| !h.is_finished());
                 match listener.accept() {
+                    Ok((stream, _)) if live.len() >= MAX_CONNECTIONS => {
+                        let _ = stream.set_nonblocking(false);
+                        let _ = stream.set_write_timeout(Some(Duration::from_secs(1)));
+                        reply(
+                            stream,
+                            &Response::refused(&refusal(
+                                "busy",
+                                format!(
+                                    "the script deputy is already handling {MAX_CONNECTIONS} requests; try again"
+                                ),
+                            )),
+                        );
+                    }
                     Ok((stream, _)) => {
-                        let resp = serve_one(&q2, &probes, &clock, &stream);
-                        reply(stream, &resp);
+                        let (q3, probes3, clock3) = (q2.clone(), probes.clone(), clock.clone());
+                        live.push(std::thread::spawn(move || {
+                            let resp = serve_one(&q3, &probes3, &clock3, &stream);
+                            reply(stream, &resp);
+                        }));
                     }
                     Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {
                         std::thread::sleep(Duration::from_millis(25));
@@ -351,6 +407,11 @@ mod unix {
                         std::thread::sleep(Duration::from_millis(250));
                     }
                 }
+            }
+            // Nothing is filed after the runner stops: in-flight requests
+            // finish (each bounded by REQUEST_DEADLINE) before the socket goes.
+            for h in live {
+                let _ = h.join();
             }
         });
         Ok(Server {
@@ -378,8 +439,7 @@ mod unix {
             Response::refused(&r)
         };
         let _ = stream.set_nonblocking(false);
-        let _ = stream.set_read_timeout(Some(IO_TIMEOUT));
-        let _ = stream.set_write_timeout(Some(IO_TIMEOUT));
+        let _ = stream.set_write_timeout(Some(REQUEST_DEADLINE));
         let cred = match peer_cred(stream.as_raw_fd()) {
             Ok(c) => c,
             Err(e) => {
@@ -391,16 +451,18 @@ mod unix {
             }
         };
         // Pin the peer before anything is read from /proc about it.
-        let pidfd = peer_pidfd(stream.as_raw_fd(), cred.pid);
+        let pidfd = peer_pidfd(stream.as_raw_fd());
         let start = aida_core::liveness::process_start_identity(cred.pid);
-        let mut bytes = Vec::new();
-        if let Err(e) = (&*stream).take(MAX_REQUEST + 1).read_to_end(&mut bytes) {
-            return refuse(
-                refusal("schema", format!("could not read the request: {e}")),
-                "unknown",
-                None,
-            );
-        }
+        let bytes = match read_request(stream, REQUEST_DEADLINE) {
+            Ok(b) => b,
+            Err(e) => {
+                return refuse(
+                    refusal("schema", format!("could not read the request: {e}")),
+                    "unknown",
+                    None,
+                )
+            }
+        };
         if bytes.len() as u64 > MAX_REQUEST {
             return refuse(
                 refusal("schema", "the request is over the size limit"),
@@ -475,6 +537,16 @@ mod unix {
                         )
                     }
                 };
+                if pidfd.is_none() {
+                    return refuse(
+                        refusal(
+                            "unattested",
+                            "the kernel gave no pidfd for the submitting process (SO_PEERPIDFD needs Linux 6.5 or later), so it cannot be pinned against pid reuse",
+                        ),
+                        &actor,
+                        Some(&job.id),
+                    );
+                }
                 let chain = ancestry(cred.pid);
                 let alive = |pid: u32, s: &str| {
                     aida_core::liveness::process_identity_matches_strict(pid, s)

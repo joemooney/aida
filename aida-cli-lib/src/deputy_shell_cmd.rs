@@ -359,7 +359,7 @@ pub(crate) fn wait(
     let mut claiming_since: Option<std::time::Instant> = None;
     loop {
         let Some(view) = q.locate(id)? else {
-            // Mid-claim the runner has moved the job out of `incoming/` into
+            // Mid-claim the runner has moved the job out of `accepted/` into
             // its `jobs/<id>/` dir but not yet written `state.json`, so for a
             // moment it is in neither place. Keep polling through that window
             // (bounded, so an interrupted claim still errors) instead of

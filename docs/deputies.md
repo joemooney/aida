@@ -108,7 +108,14 @@ user id). The deputy accepts the job only when:
   A binding recorded in another pid namespace (inside a container) is never
   matched against a process here;
 - the process is still the same one when the check ends, so a reused pid
-  cannot pass.
+  cannot pass. The deputy holds the kernel's own handle on the process that
+  connected (`SO_PEERPIDFD`, Linux 6.5 or later), never one looked up by pid;
+  on an older kernel every submit is refused as `refused:unattested`.
+
+The deputy handles each connection separately and gives a client 5 seconds to
+send its whole request, so a client that connects and stalls holds up nobody
+else. With 16 requests already in progress, the next is refused as
+`refused:busy`; try it again.
 
 It records that process on the job as the attested submitter, replacing
 anything the client claimed about itself. A submit that fails these checks is
@@ -145,6 +152,17 @@ records are readable by you) cannot submit as that session.
 
 A process running as you, outside any sandbox, can still edit the queue's
 files directly, as it could edit your shell profile; no queue can stop that.
+For the same reason a cancel over the socket checks only that the caller runs
+as you: `cancel` itself refuses another session's job unless you run it at
+your terminal, but any unsandboxed process running as you could cancel a job
+directly over the socket, or by writing its cancel file. A cancel stops a job;
+it never runs anything.
+
+Jobs written into the old `incoming/` directory by a release before the socket
+are never claimed. When it starts, the deputy lists any it finds on your
+terminal and in `audit.jsonl` (`legacy-incoming-ignored`); `status` and `wait`
+report them as unknown. Resubmit them, then delete the directory.
+
 No seat's sandbox is given access to unix sockets, so a contained lane cannot
 reach the deputy at all.
 
@@ -168,7 +186,8 @@ reach the deputy at all.
 `audit.jsonl` records every state change (`submit-refused`, `queued`,
 `claimed`, `refused`,
 `started`, `finished`, `cancel-requested`, `cancelled`, `orphaned`, `acked`,
-`pruned`), the runner starting and stopping, pauses, and each grant refresh.
+`pruned`, `legacy-incoming-ignored`), the runner starting and stopping, pauses,
+and each grant refresh.
 It is never truncated.
 
 ### Grant refresh, mandate, retention

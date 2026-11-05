@@ -140,6 +140,7 @@ pub(crate) fn run(q: &Queue, cfg: &RunnerConfig, stop: &AtomicBool) -> Result<us
             "keep_days": cfg.keep_days,
         }))
     });
+    note_legacy_incoming(q, cfg, &grant_id, now);
     q.prune(now, cfg.keep_days);
     let mut last_prune = now;
     let mut last_refresh = now;
@@ -289,6 +290,46 @@ fn tty_name(fd: RawFd) -> Option<String> {
 }
 
 /// Write `text` to the operator's terminal, if there is one.
+/// Jobs left in the retired submitter-writable `incoming/` directory (from
+/// before submit moved to the socket) are never claimed: nothing vouches for
+/// who wrote them. Say so once at start, on the terminal and in the audit, so
+/// they do not simply vanish; `status`/`wait` report them as unknown.
+// trace:STORY-2343 | ai:claude
+fn note_legacy_incoming(q: &Queue, cfg: &RunnerConfig, grant_id: &str, now: DateTime<Utc>) {
+    let legacy = q.root.join("incoming");
+    let ids: Vec<String> = std::fs::read_dir(&legacy)
+        .into_iter()
+        .flatten()
+        .flatten()
+        .filter_map(|e| e.file_name().into_string().ok())
+        .filter(|n| !n.starts_with('.'))
+        .collect();
+    if ids.is_empty() {
+        return;
+    }
+    q.audit_event(
+        now,
+        "legacy-incoming-ignored",
+        None,
+        &actor(grant_id),
+        |r| {
+            r.reason = Some(format!(
+            "{} file(s) in the retired incoming/ directory were not claimed; resubmit those jobs",
+            ids.len()
+        ));
+            r.detail = Some(serde_json::json!({ "dir": legacy, "files": ids }));
+        },
+    );
+    say(
+        cfg,
+        &format!(
+            "[deputy shell] {} job file(s) in {} predate the socket submit and will never run; resubmit them, then remove that directory\r\n",
+            ids.len(),
+            legacy.display()
+        ),
+    );
+}
+
 fn say(cfg: &RunnerConfig, text: &str) {
     if let Some(t) = cfg.terminal {
         write_fd(t.output, text.as_bytes());
