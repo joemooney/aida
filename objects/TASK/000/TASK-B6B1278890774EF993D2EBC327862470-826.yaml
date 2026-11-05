@@ -1,5 +1,6 @@
 id: 01a1abba-f351-7042-bd65-910d901bd1de
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-826
+agreed_id: TASK-2879
 title: Standalone native implementer finish requires a post-exit host handoff
 description: The standalone pickup prompt requires a commit and open PR before exit, but native lanes have read-only .git and aida ship --from-seat --commit-pending refuses while their lane owner is live. STORY-1651 verified this refusal through the deputy. Align the launcher and prompt around an explicit post-exit commit and PR handoff; preserve the live-owner check. Detailed validation and publication command are recorded in the story comment.
 status: Draft
@@ -14,6 +15,11 @@ tags:
 - kind:observation
 - linked:STORY-1651
 - severity:minor
+history:
+- id: 01a1abc2-d856-7cc0-94a6-cbf7448053ba
+  author: joe
+  timestamp: 2026-11-05T12:50:35.734365180Z
+  changes: []
 filed_at:
   code_sha: 9f572b1f0d1fb80300d25c2eaa21cdda507fc1e8
   branch: main
