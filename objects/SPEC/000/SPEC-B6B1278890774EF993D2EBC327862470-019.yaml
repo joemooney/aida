@@ -8,12 +8,19 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-05T19:18:00.735366850Z
-modified_at: 2026-11-05T19:18:00.735366850Z
+modified_at: 2026-11-05T20:27:49.893554831Z
 req_type: Task
 tags:
 - from-implementer:BUG-2458
 - kind:followup-suggestion
 - severity:minor
+comments:
+- id: 01a1ad65-7505-7f22-8424-3c57341a2053
+  author: joe
+  content: 'Advisor triage 2026-11-05 13:40: covered by BUG-2458''s own acceptance: the advisor runs ''aida own migrate'' and the compare verification host-side after BUG-2458 merges. No separate spec needed.'
+  created_at: 2026-11-05T20:27:49.893554831Z
+  modified_at: 2026-11-05T20:27:49.893554831Z
+  session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
 history:
 - id: 01a1ad2a-b3e9-7761-b72b-02cdecdd6bc8
   author: joe
