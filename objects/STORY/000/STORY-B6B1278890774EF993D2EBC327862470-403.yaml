@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T00:31:51.425362067Z
-modified_at: 2026-11-05T03:57:49.862038795Z
+modified_at: 2026-11-05T03:57:52.259624411Z
 req_type: Story
 relationships:
 - rel_type:
@@ -52,6 +52,25 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Does not compile after the merge from main: host_recorded_clone now takes (main, root) (TASK-2032, efca74e) but two new call sites pass one argument; every CI build job fails (exit 101). Design matches the advisor ruling, but the routing/refusal paths have no tests above the helper level.. No triage reason was given.'
   created_at: 2026-11-05T03:57:49.862037322Z
   modified_at: 2026-11-05T03:57:49.862037322Z
+  session_id: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
+- id: 01a1a9db-1e76-7670-b32f-819fa85220bc
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (STORY-2475):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: dff409a552cf
+    Recorded: 2026-11-05T03:38:01.797710361+00:00
+    Findings:
+    1. BLOCKER compile: aida-cli-lib/src/headless_background.rs:478 calls crate::seat_clone::host_recorded_clone(worktree) with one argument; main's TASK-2032 (efca74e) changed the signature to host_recorded_clone(main: &Path, root: &Path) (seat_clone.rs:846). CI cli-0/cli-1/lib-0/lib-1/contracts/gates all fail at 'Build aida binary' with exit 101. Pass the launcher's main root (e.g. crate::main_worktree_root_from(worktree) or the caller's host main) and keep the anchor semantics TASK-2032 introduced.
+    2. BLOCKER compile: aida-cli-lib/src/seat_clone.rs:2390 prepare_rework_merge calls host_recorded_clone(tree) with one argument; use host_recorded_clone(main, tree). Once the call is anchored to main, the seat.main == main.canonicalize() check at 2393-2397 can probably go.
+    3. TEST GAP (strict tier: vendor routing/containment): no test covers the handle_queue_work refusal path at queue_cmd.rs:13416-13475. Missing cases: a conflicting rework mails the advisor, routes to Claude and never launches Codex; a conflicting Codex Resume bails; a fetch/merge/abort failure stops the launch. prepare_rework_merge's own refusals (wrong branch, dirty seat, existing MERGE_HEAD, seat behind the PR head) are also untested; only finish_rework_merge is tested. Add at least one test that drives the vendor-reroute decision and one for each prepare_rework_merge refusal.
+    4. TEST GAP: publish_queue_exit (ship_from_seat.rs:368) is only tested through the finish_queue_exit dispatcher. Nothing tests the punt/hold veto, the Clean-but-unpushed publish branch, or the Probe::Unknown refusal. The three call sites (session.rs exec_vendor_headless, queue_cmd.rs Codex resume, standalone_implementer.rs run) and the new seat-clone branch in SeatState::read (headless_background.rs:478) also have no coverage.
+    5. MINOR behavior: prepare_rework_merge refuses when the seat has pending changes (seat_clone.rs 'rework seat has pending changes; merge refused'). It runs for every implementer launch with an open PR, including QueueWorkLaunch::Resume. A resumed rework lane whose seat still holds the prior run's uncommitted edits now fails to launch, where it used to resume. Skip the merge preparation (or skip only the dirty check) on Resume of an existing seat, or show that Resume always seats a fresh clone.
+    6. MINOR message accuracy: in publish_queue_exit's Clean branch, when the seat had unpushed commits (e.g. the host's pre-launch merge), publish() runs and then the advisor still gets 'exited with no pending changes ... a still-red PR needs a new rework assignment'. Return after a successful publish, or reword the mail to say commits were published. Separately, the conflict mail at queue_cmd.rs:13431 says 'will not launch Codex' even when the requested vendor was already Claude.
+    7. COSMETIC: queue_work_wants_rework_pr_branch keeps a dead _spec_rework_held parameter (queue_cmd.rs:9029), and its caller still computes held_prs only to pass it in. Drop the parameter and update the test rework_held_approved_pickup_wants_pr_head_branch, whose name and two assertions now describe the same thing. Also note every single-spec pickup now does a forge PR lookup (detect_open_pr_for_spec_via_forge).
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-05T03:57:52.118269445Z
+  modified_at: 2026-11-05T03:57:52.118269445Z
   session_id: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
 history:
 - id: 01a1a947-16f2-71f0-9679-9dc05c31b942
