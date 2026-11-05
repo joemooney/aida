@@ -1,0 +1,17 @@
+id: 01a1a96f-f787-7fd0-93be-1771c17f37d2
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-800
+agreed_id: TASK-3074
+title: Track acted-on request dispositions and unresolved stall escalation
+description: 'Follow-up to STORY-2476 advisor ruling: define and approve explicit acted, declined and deferred dispositions tied to message IDs. Preserve seen/read ACK distinctions. Add authorized receipts and unresolved alarm escalation through the existing operator notifier; reading or wake acceptance never proves action.'
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-05T02:00:49.799626224Z
+modified_at: 2026-11-05T02:00:49.799626224Z
+req_type: Task
+filed_at:
+  aida_version: 0.16.0
+  aida_build_sha: fb2086e9008
+  vendor: codex
+  session: 01a1a96dc251
