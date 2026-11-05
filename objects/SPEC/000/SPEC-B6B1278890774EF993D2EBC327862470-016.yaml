@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T16:49:13.714847256Z
-modified_at: 2026-11-05T18:05:31.238200076Z
+modified_at: 2026-11-05T18:16:56.465892287Z
 req_type: Task
 tags:
 - from-implementer:TASK-2861
@@ -20,6 +20,12 @@ comments:
   content: 'Implementation: atomically allocate private randomized test homes, qualify stale cleanup by Linux boot UUID and PID namespace device/inode, and retain legacy/foreign/unknown homes. Namespace-local kill(0) probes require ESRCH before cleanup because procfs can belong to an ancestor namespace. Added deterministic ownership/fallback tests and a live concurrent unshare regression with two PID-1 test binaries sharing TMPDIR; validation compiling.'
   created_at: 2026-11-05T18:05:31.238200076Z
   modified_at: 2026-11-05T18:05:31.238200076Z
+  session_id: 01a1acde43fb
+- id: 01a1aced-9f91-7dc0-a6b8-61512446e026
+  author: joe
+  content: 'Validation: all 11 test_home tests passed, including the live concurrent PID-1 namespace regression (not skipped); cargo fmt --all -- --check, scripts/check-portability.sh and diff checks passed. Built matching CLI. Adjacent dispatch module passed 18/19; the remaining bug_2398 test also fails alone with private TMPDIR. Captured log identifies sandbox session-key grant refusal, not missing/deleted HOME files; filed a separate draft finding. No production authority checks changed.'
+  created_at: 2026-11-05T18:16:56.465892287Z
+  modified_at: 2026-11-05T18:16:56.465892287Z
   session_id: 01a1acde43fb
 history:
 - id: 01a1acd1-6e74-7df0-802c-e645794fc0f2
