@@ -61,3 +61,16 @@ resolution; a passing stress run must not be represented as proof of that
 separate original mechanism.
 
 <!-- trace:BUG-1994 | ai:codex -->
+
+The isolated child also inherits `AIDA_LIB_TEST_REAL_HOMES`, the constructor's
+real-home fence, through the otherwise cleared environment. This tells its
+constructor to retain the unique temporary HOME and Git config assigned by the
+parent. Without the marker, the child treats that HOME as an operator home,
+replaces it with a PID-named home, and runs stale-home sweeping. Parallel train
+fixtures reproduced missing approval receipts on that path; PID-named homes
+can also collide across sandbox PID namespaces sharing a temporary directory.
+The regression `path_isolated_child_retains_assigned_home_and_fence` checks
+that the assigned Git config survives and its HOME never enters the real-home
+fence. Production receipt validation is unchanged.
+
+<!-- trace:TASK-2841 | ai:codex -->
