@@ -1,0 +1,55 @@
+{
+  "schema_version": 1,
+  "spec": "STORY-2475",
+  "publishes": [
+    {
+      "at": "2026-11-05T22:28:12.190026291Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-05T03:57:50.716804925Z",
+      "spec": "STORY-2475",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-05T09:48:24.618426764Z",
+      "spec": "STORY-2475",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-05T22:27:39.189246579Z",
+      "spec": "STORY-2475",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 3398
+      }
+    },
+    {
+      "ts": "2026-11-05T22:28:12.032893003Z",
+      "spec": "STORY-2475",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "bdeb8f499786848a3cd0fec9d3e4b9bc6a0c03f0",
+        "pr": 3398,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
