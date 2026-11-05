@@ -8,12 +8,19 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T16:49:13.714847256Z
-modified_at: 2026-11-05T18:00:47.740926335Z
+modified_at: 2026-11-05T18:05:31.238200076Z
 req_type: Task
 tags:
 - from-implementer:TASK-2861
 - kind:bug-spotted
 - severity:minor
+comments:
+- id: 01a1ace3-2ae6-7042-994c-73717fb3ad18
+  author: joe
+  content: 'Implementation: atomically allocate private randomized test homes, qualify stale cleanup by Linux boot UUID and PID namespace device/inode, and retain legacy/foreign/unknown homes. Namespace-local kill(0) probes require ESRCH before cleanup because procfs can belong to an ancestor namespace. Added deterministic ownership/fallback tests and a live concurrent unshare regression with two PID-1 test binaries sharing TMPDIR; validation compiling.'
+  created_at: 2026-11-05T18:05:31.238200076Z
+  modified_at: 2026-11-05T18:05:31.238200076Z
+  session_id: 01a1acde43fb
 history:
 - id: 01a1acd1-6e74-7df0-802c-e645794fc0f2
   author: joe
