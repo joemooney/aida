@@ -2,9 +2,11 @@
 
 <!-- trace:TASK-2860 | ai:codex -->
 
-First-round sketch for TASK-2860, supporting STORY-2492. Documentation only;
+Approved design sketch for TASK-2860, supporting STORY-2492. Documentation only;
 this task's 2026-11-05 triage explicitly excludes production implementation.
-The complete sketch is also posted on TASK-2860 for advisor review.
+TASK-2860 comment 3 records the 2026-11-05 12:00 MST advisor signoff: APPROVED.
+The publication contract and reservation state table are approved as written,
+with the OpenSSH `sshsig` signer. The topology ruling is incorporated below.
 
 ## Decisions already recorded
 
@@ -19,19 +21,27 @@ authority for this choice. Slice 1 is receipts/roster/consumers; slice 2 is
 watcher discovery and distributed head reservations. Neither slice by itself
 completes the entire story.
 
-The original sketch is preserved in STORY-2492's first comment and on its
-implementation branch at `docs/plans/2026-11-04-story-2492-cross-machine-review.md`.
-That file and the slice-1 implementation are absent from this task's baseline
-`c8721a696fc`. Later implementation/review comments on the story are handoff
-evidence, not proof that slice 1 has landed on this baseline. Integrate with
-that work rather than implementing a second receipt format here.
+Slice 1 landed on `origin/main` in merge commit `0b0f8a6b701` (PR #3411),
+and this branch incorporates that mainline work. Its approved sketch is
+[Cross-machine review on trusted nodes](2026-11-04-story-2492-cross-machine-review.md);
+[second-node setup](../agents/second-review-node.md) describes operation.
+`aida-cli-lib/src/gate/review_publication.rs` implements the enrolled node
+roster, OpenSSH-signed publication/authorship receipts and consume-side
+validation. `gate/review_authority.rs::verified_authority_keys` validates
+portable identities through `review_publication::verified_identity`, and
+`gate/review_alias.rs` projects synced verdicts through
+`review_publication::current`. Slice 2 builds on these landed paths and their
+receipt format; it does not introduce a second format.
 
 ## Existing trust boundary
 
-`gate/review_authority.rs::verified_authority_keys` validates grants and their
-delegation/roster context or local human receipts. `author_sessions_at` and
-`all_author_sessions` depend on leases and the local authorship ledger.
-Copying verdict JSON to another machine supplies neither validation.
+`gate/review_authority.rs::verified_authority_keys` validates local grants
+and their delegation/roster context or local human receipts, and now validates
+portable publication identities through the landed slice-1 consumer.
+`author_sessions_at` and `all_author_sessions` supply local authorship evidence;
+slice 1 adds signed portable authorship evidence for remote independence checks.
+Copying unsigned verdict JSON alone still supplies neither authority nor
+portable authorship validation.
 
 `review_watch.rs::Store::history` reads local verdict files/archives and
 returns early when the verdict directory is absent. Its runtime reservation
@@ -87,19 +97,32 @@ failure preserves a durable local pending result, reports an actionable retry,
 and awards no remote approval. Normal request-changes must carry filed finding
 origin IDs through the real recorder and collector without manual JSON edits.
 
-## Reservation proposal requiring topology confirmation
+## Approved reservation topology and transitions
 
-Recommend one explicitly configured authoritative hub/ref for admission.
-All reviewing nodes must reach that same authority; mirrors distribute
-evidence but cannot independently admit work. A successful CAS against one
-of several independently writable hubs does not prevent another hub from
-accepting the same head. Do not infer authority from a node's `origin` alias.
-Do not silently fail over during a partition. A topology change requires an
-operator-controlled migration with admission stopped and old claims reconciled.
+The 2026-11-05 12:00 MST advisor ruling selects a single authoritative
+admission hub: GitHub origin (`github.com/joemooney/aida`), at
+`refs/aida/review-admission`. The hub URL and ref must be explicit configuration
+under `[review]`, using `admission_hub` and `admission_ref`; they are never
+inferred from a node's `origin` alias. For this topology:
+
+```toml
+[review]
+admission_hub = "https://github.com/joemooney/aida.git"
+admission_ref = "refs/aida/review-admission"
+```
+
+This is the slice-2 configuration contract, not an implemented setting in this
+documentation task. GitLab is a mirror only: it distributes evidence and never
+admits. The hourly reconcile bridge copies evidence and never admits. All
+reviewing nodes must reach the configured GitHub authority. If it is unreachable,
+admission refuses with a named `admission_hub_unreachable` error and spawns no
+reviewer; there is no failover during a partition. A successful CAS on another
+writable hub grants no admission. A topology change is an operator migration
+with admission stopped and old claims reconciled before admission resumes.
 
 The logical key is `(repository, forge, change, exact head)`; each generation
 has an unpredictable claim token, owner node/session, signed transition and
-explicit predecessor. Proposed transitions are:
+explicit predecessor. Approved transitions are:
 
 | State | Allowed next state | Admission effect |
 | --- | --- | --- |
@@ -114,7 +137,17 @@ current synced verdicts and claims, apply one transition, commit and perform
 the exact expected-tip push. On rejection, reload the winner and reconstruct
 the transition; do not union-merge conflicting admission records or blindly
 rebase a losing claim into a new accepted claim. Preserve unrelated writers.
-The authority must enforce fast-forward/CAS ref updates with no force writers.
+CAS is enforced by AIDA clients using
+`git push --force-with-lease=<ref>:<expected> <hub-url> <new-tip>:<ref>`,
+where `<ref>` and `<hub-url>` are the explicit admission configuration and
+`<expected>` is the fetched, pinned tip (empty only for initial ref creation).
+Each new commit must descend from that tip; the explicit lease rejects a
+concurrent update rather than overwriting it. This is client-side CAS, not a
+claim of GitHub branch/ruleset protection for the custom `refs/aida/` namespace.
+The trust assumption is that only cooperating AIDA writers update this ref:
+no operator, bridge, mirror or other credential holder force-pushes, deletes or
+rewinds it outside this protocol. GitHub does not enforce that assumption for
+this custom ref. Operator recovery uses the stopped-admission migration above.
 Bound retries; exhaustion means no spawn.
 
 Require a definite successful push and confirmation of the accepted token
@@ -156,11 +189,13 @@ entry points; testing only a pure approval predicate is insufficient.
   authority may accept claims. A loser reloads without resurrecting its claim;
   unrelated store changes survive retry and explicit recovery.
 
-Before slice 2 starts, record the authoritative-hub/ref decision and file its
-own acceptance-backed implementation spec; link it to STORY-2492. Retain a
-non-completing story reference on slice-1 PR #3411 until all story acceptance
-is satisfied. Do not weaken gates to make the end-to-end test pass.
+Implementation belongs to STORY-2492 slice 2, under its own acceptance-backed
+spec linked to STORY-2492. The authoritative hub/ref decision is already
+recorded by the 2026-11-05 12:00 MST APPROVED signoff. Slice-1 PR #3411 is
+merged; use its landed roster, signed receipts and consume-side checks as the
+foundation. The story remains incomplete until all story acceptance is
+satisfied. Do not weaken gates to make the end-to-end test pass.
 
-This sketch delivers the requested first round. Existing receipt/signing
-approval stands. The additional topology/recovery detail is proposed for
-advisor confirmation; no production gate, schema or reservation is activated.
+This sketch incorporates the advisor's approved topology, publication contract
+and reservation state table with the OpenSSH `sshsig` signer. No production
+gate, schema or reservation is activated by this documentation task.
