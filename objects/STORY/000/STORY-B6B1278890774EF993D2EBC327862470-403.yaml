@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T00:31:51.425362067Z
-modified_at: 2026-11-05T09:48:23.292517668Z
+modified_at: 2026-11-05T09:48:26.001047389Z
 req_type: Story
 relationships:
 - rel_type:
@@ -108,6 +108,23 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Design matches the advisor ruling and the round-1 findings are addressed, but CI is red at 1cd38825 because of this PR: lib-0 fails the exe-resolver ratchet and the PR''s own end-to-end publication test, and lib-1 fails the TASK-2807 launch ratchet after the merge from main. Main is green at merge-base c735c7e.. Triage reason: CI red at 1cd3882: story_2475_all_codex_lane_exits_publish_after_child_exit, resolve_aida_exe_tests::no_cli_source_outside_the_resolver_uses_raw_current_executable_lookup, bug_2428_launch_rollback_tests::every_spawning_launch_is_marked_and_no_exec_is, plus CI (gates). Fix on the PR branch.'
   created_at: 2026-11-05T09:48:23.292516300Z
   modified_at: 2026-11-05T09:48:23.292516300Z
+  session_id: b83457ff-84e3-46cb-8f68-4be531a63422
+- id: 01a1ab1c-11a5-7bb0-9ca8-63e3b543f82e
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (STORY-2475):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 1cd38825262c
+    Recorded: 2026-11-05T09:04:46.960360457+00:00
+    Findings:
+    1. BLOCKER (CI lib-0): aida-cli-lib/src/ship_from_seat.rs:458 advisor_request spawns std::process::Command::new(std::env::current_exe()?). Ratchet resolve_aida_exe_tests::no_cli_source_outside_the_resolver_uses_raw_current_executable_lookup allows raw lookups only in kernel.rs/aida_bin.rs. Use crate::resolve_aida_exe() (kernel.rs:705) or aida_exe_path().
+    2. BLOCKER (CI lib-1, appeared after the merge from main): queue_cmd.rs:14082 now calls run_queue_resume_to_exit(...) instead of session::spawn_vendor_headless_resume(...), so bug_2428_launch_rollback_tests::every_spawning_launch_is_marked_and_no_exec_is panics at line 129 (.expect("the implementer resume")). Update the TASK-2807 ratchet so it finds the new resume boundary, and keep its invariant: the resume is counted at the spawn, not pre-marked. Do not weaken the assertion.
+    3. BLOCKER (CI lib-0, also red on #3407 at 84ff97dcf03): this PR's own test bug_044_headless_background_tests::story_2475_all_codex_lane_exits_publish_after_child_exit fails at line 1064: assert_eq!(result.is_ok(), mode != 0). For at least one (mode, vendor, contained) combination, the standalone/drain/resume exit path returns a different Ok/Err than the test expects in CI's isolated run. Job logs were unreachable from the reviewer sandbox, so the case is not identified. Reproduce with one targeted run (cargo test --profile agent -p aida-cli-lib story_2475_all_codex_lane_exits_publish_after_child_exit) and fix the code or the fixture, without dropping a mode/vendor case. This is the only end-to-end evidence for acceptance (1) and (3) on all three exit paths.
+    4. CI gates: the live bwrap gate reported 'only 48 of 49 live bwrap tests ran ok' at 1cd38825. It passed at 41c14a03d16 and on main at c735c7e, and the PR adds no bwrap tests (the lane_fixture_fails panic is the BUG-2383 fixture's expected output). Possibly a flake or a merge interaction. Re-run after the fixes above and confirm 49/49. If it repeats, identify the missing test.
+    5. MINOR test gap: the handle_queue_work wiring at queue_cmd.rs:13484-13530 (prepare_rework_merge -> rework_conflict_route -> install_headless_vendor_override -> resolve/preflight/require_vendor_containment -> conflict_task prompt append) is only tested through its helpers. Nothing shows that a conflicting Codex rework actually launches Claude in a seat that was provisioned before the reroute (a clone seat after lease mint), or that interactive (non --no-human) implementer pickups behave sensibly when the host merge conflicts. Add one integration-level test, or document the boundary.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-05T09:48:25.893026767Z
+  modified_at: 2026-11-05T09:48:25.893026767Z
   session_id: b83457ff-84e3-46cb-8f68-4be531a63422
 history:
 - id: 01a1a947-16f2-71f0-9679-9dc05c31b942
