@@ -281,6 +281,15 @@ jobs:
         if: matrix.shard == 'gates'
         run: python3 -m unittest tests/test_codex_mail_wake.py
 
+      # Disposable Git/OpenSSL fixtures; no vendor credentials or model calls.
+      # trace:TASK-3046 | ai:codex
+      - name: Containment conformance evidence tests
+        if: matrix.shard == 'gates'
+        run: |
+          command -v git
+          command -v openssl
+          python3 -m unittest tests/test_containment_conformance.py
+
       # Test-timing parser, budget gate and local test-profile reshape: pure
       # Python, no cargo. trace:STORY-1853 | ai:claude
       - name: STORY-1853 test-speed tooling tests

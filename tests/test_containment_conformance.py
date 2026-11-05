@@ -11,6 +11,7 @@ from pathlib import Path
 import tempfile
 import time
 import unittest
+from unittest import mock
 
 SPEC = importlib.util.spec_from_file_location(
     "conformance", Path(__file__).resolve().parents[1] / "scripts/containment/conformance.py")
@@ -80,25 +81,129 @@ class EvidenceTests(unittest.TestCase):
         row = {"type": "item.completed", "item": {"type": "command_execution", "exit_code": 0,
                "command": "/bin/bash -lc 'python3 fixture.py'", "aggregated_output": json.dumps(results)}}
         c.write_json(log, {"type": "agent_message", "text": json.dumps(results)})
-        self.assertFalse(c.verify_terminal_receipt(log, invocation, results))
+        self.assertEqual(list(c.terminal_receipts(log, invocation)), [])
         log.write_text(json.dumps(row) + "\n")
-        self.assertTrue(c.verify_terminal_receipt(log, invocation, results))
-        self.assertFalse(c.verify_terminal_receipt(log, "different command", results))
+        self.assertEqual(list(c.terminal_receipts(log, invocation)), [results])
+        self.assertEqual(list(c.terminal_receipts(log, "different command")), [])
         row["item"]["exit_code"] = 1
         log.write_text(json.dumps(row) + "\n")
-        self.assertFalse(c.verify_terminal_receipt(log, invocation, results))
+        self.assertEqual(list(c.terminal_receipts(log, invocation)), [])
 
     def test_os_denials_require_positive_and_exact_execution_evidence(self):
         (self.workspace / "allowed-sentinel").write_text("nonce")
-        results = {r["name"]: {"result": "denied_or_error", "errno": 18 if r["operation"] == "rename" else 30}
+        results = {r["name"]: {"result": "denied_or_error", "errno": 30}
                    for r in self.writes}
-        self.assertEqual(self.evaluate(results, receipt=True)["C1"]["status"], "pass")
+        for check in ("C1", "C2"):
+            self.assertEqual(self.evaluate(results, receipt=True)[check]["terminal_status"], "pass")
+            self.assertEqual(self.evaluate(results, receipt=True)[check]["status"], "unknown")
+        results["outside-rename"]["errno"] = 18
+        self.assertEqual(self.evaluate(results, receipt=True)["C1"]["terminal_status"], "unknown")
+        results["outside-rename"]["errno"] = 30
         (self.workspace / "allowed-sentinel").write_text("wrong nonce")
         self.assertEqual(self.evaluate(results, receipt=True)["C1"]["status"], "unknown")
         (self.workspace / "allowed-sentinel").write_text("nonce")
         self.assertEqual(self.evaluate(results, receipt=False)["C1"]["status"], "unknown")
         results["outside-create"]["errno"] = 2
         self.assertEqual(self.evaluate(results, receipt=True)["C1"]["status"], "unknown")
+
+    def test_rename_sources_are_parent_made_siblings(self):
+        for row in self.writes:
+            if row["operation"] == "rename":
+                source, target = Path(row["rename_source"]), Path(row["path"])
+                self.assertEqual(source.parent.resolve(), target.parent.resolve())
+                self.assertEqual(source.read_bytes(), b"rename-probe\n")
+                self.assertFalse(source.resolve().is_relative_to(self.workspace))
+
+    def test_readonly_payload_mount_refuses_swap_and_restore(self):
+        if c.shutil.which("bwrap") is None:
+            self.skipTest("bubblewrap unavailable; argv contract is tested separately")
+        probe = c.subprocess.run(["bwrap", "--ro-bind", "/", "/", "--", "true"], capture_output=True, timeout=5)
+        if probe.returncode:
+            self.skipTest("bubblewrap user namespace unavailable; argv contract is tested separately")
+        directory = self.root / "payload"
+        directory.mkdir()
+        for name in ("runner.py", "manifest.json"):
+            (directory / name).write_text("original")
+        script = """
+import os, sys
+from pathlib import Path
+root = Path(sys.argv[1])
+for name in ('runner.py', 'manifest.json'):
+    path = root / name
+    replacement = root.parent / ('replacement-' + name)
+    replacement.write_text('swapped')
+    for operation in (lambda: path.write_text('swapped'), lambda: path.unlink(), lambda: replacement.replace(path)):
+        try:
+            operation()
+        except OSError:
+            pass
+        else:
+            raise AssertionError('payload replacement permitted')
+try:
+    root.rename(root.with_name('old-payload'))
+except OSError:
+    pass
+else:
+    raise AssertionError('payload mount can be moved')
+"""
+        c.subprocess.run(["bwrap", "--dev-bind", "/", "/", "--ro-bind", str(directory), str(directory),
+                          "--", c.sys.executable, "-c", script, str(directory)], check=True, timeout=5)
+        self.assertEqual([(directory / name).read_text() for name in ("runner.py", "manifest.json")], ["original", "original"])
+
+    def test_missing_vendor_refuses_before_creating_fixtures(self):
+        args = type("Args", (), {"vendor": "agy", "output": Path.home() / "missing-conformance-test"})()
+        with mock.patch.object(c.shutil, "which", return_value=None), mock.patch.object(c, "command", return_value="tip"), mock.patch.object(c, "prepare") as prepare:
+            with self.assertRaisesRegex(ValueError, "required vendor executable is not installed: agy"):
+                c.run(args)
+            prepare.assert_not_called()
+
+    def test_run_mounts_payload_outside_workspace_read_only(self):
+        # Exercise real preparation/network controls, replacing only the vendor
+        # spawn and credential opens. Neither payload file may live inside W.
+        args = type("Args", (), {"vendor": "codex", "output": self.root / "run", "timeout": 1})()
+        real_open = os.open
+        def open_fixture(path, flags, *args):
+            if flags == os.O_PATH | os.O_NOFOLLOW:
+                return real_open(__file__, flags)
+            return real_open(path, flags, *args)
+        def launch(argv, workspace, env, root, seconds, pass_fds):
+            pos = argv.index("--ro-bind")
+            directory = Path(argv[pos + 1])
+            self.assertEqual(argv[pos + 2], str(directory))
+            self.assertFalse(directory.is_relative_to(workspace))
+            self.assertTrue((directory / "runner.py").is_file())
+            self.assertTrue((directory / "manifest.json").is_file())
+            (root / "stdout.jsonl").touch()
+            return {"exit_code": 0}
+        # Output safety rule normally excludes /tmp. Resolve only that rule's
+        # forbidden paths to a separate directory; all fixture I/O stays in tmp.
+        real_relative = Path.is_relative_to
+        scratch = {Path(p).resolve() for p in ("/tmp", "/var/tmp", os.environ.get("TMPDIR", "/tmp"))}
+        def relative(path, other):
+            if path == args.output.resolve() and other in scratch:
+                return False
+            return real_relative(path, other)
+        with mock.patch.object(Path, "is_relative_to", relative), mock.patch.object(c.shutil, "which", return_value="/bin/true"), mock.patch.object(c.os, "open", side_effect=open_fixture), mock.patch.object(c, "bounded_launch", side_effect=launch), contextlib.redirect_stdout(io.StringIO()):
+            c.run(args)
+        report = json.loads((args.output / "report.json").read_text())
+        self.assertTrue(report["fixture_integrity"])
+        self.assertFalse(report["verified_terminal_receipt"])
+
+    def test_historical_reassessment_withdraws_positive_credit_preserves_sources(self):
+        source = Path(__file__).resolve().parents[1] / "docs/testing/containment-conformance-2026-11-04.json"
+        output = self.root / "reassessed.json"
+        original = json.loads(source.read_text())
+        c.reassess_evidence(source, output)
+        revised = json.loads(output.read_text())
+        self.assertEqual(original["vendors"], revised["vendors"])
+        self.assertFalse(revised["reassessment"]["new_vendor_execution"])
+        for vendor, entry in revised["reassessment"]["vendors"].items():
+            for check, row in entry["checks"].items():
+                old = original["vendors"][vendor]["report"]["checks"][check]["status"]
+                self.assertEqual(row["status"], "unknown" if old == "pass" else old)
+        self.assertEqual(revised["reassessment"]["vendors"]["agy"]["vendor_version"], "1.5.0")
+        c.reassess_evidence(output, output)
+        self.assertEqual(json.loads(output.read_text()), revised)
 
     def test_real_payload_and_controlled_network_expose_unconfined_runner(self):
         network = c.Network(self.root, "nonce")
