@@ -864,3 +864,18 @@ This detector never starts work, ends a session, releases a lease or merges.
 Codex uses the existing armed mailbox wake service. Claude/Antigravity wake,
 acted-on dispositions, under-cap, last-merge age, stale advisor mail and empty
 rework exits are follow-up work; reading or accepting a wake is not action.
+
+### `aida own` — ownership diagnostics and migration
+
+`aida own show --compare` compares session leases with the new ownership
+records. Process witnesses use the worker PID and its recorded start identity;
+a launcher does not keep an exited worker alive. Init and known init/subreaper
+processes, including `systemd --user`, report `holder identity invalid`.
+
+`aida own migrate --dry-run` reports missing records and the number of holder
+witness repairs. `aida own migrate --execute` adds missing records and repairs existing process
+witnesses without changing their session, phase or tree. Repairs include orphan
+records with invalid holders and use generation checks to retain concurrent
+writes. Execution still requires a host terminal outside containment with no
+drain running. Legacy leases, worktrees and branches are untouched.
+<!-- trace:BUG-2458 | ai:codex -->

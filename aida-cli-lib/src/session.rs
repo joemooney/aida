@@ -7328,6 +7328,9 @@ pub(crate) fn stamp_lease_active_pid_at(
         }
         if let Some(start_time) = &start_time {
             doc["active_pid_start_time"] = value(start_time.clone());
+        } else {
+            // trace:BUG-2458 | ai:codex
+            doc.remove("active_pid_start_time");
         }
         // BUG-2419: the pid was read in this process's pid namespace.
         // trace:BUG-2419 | ai:claude
@@ -7340,7 +7343,12 @@ pub(crate) fn stamp_lease_active_pid_at(
         // STORY-1429: atomic, so a reader never sees a half-rewritten lease.
         // trace:STORY-1429 | ai:claude
         aida_core::write_atomic(&path, doc.to_string())
-            .with_context(|| format!("writing lease {}", path.display()))
+            .with_context(|| format!("writing lease {}", path.display()))?;
+        // trace:BUG-2458 | ai:codex
+        if let Ok(lease) = toml::from_str::<crate::SessionLease>(&doc.to_string()) {
+            crate::ownership::dual::lease_written(project_root, &lease);
+        }
+        Ok(())
     })?;
     // BUG-1918: the spawned worker — not the launcher that claimed — works
     // this lease; record its process as one of the lease's authors so the
@@ -7434,6 +7442,10 @@ pub(crate) fn stamp_lease_detached_worker_at(
                 && back.get(LEASE_CHILD_GRANT_KEY).and_then(|v| v.as_str()) == Some(expected_grant),
             "lease {lease_id} did not persist the detached worker stamp"
         );
+        // trace:BUG-2458 | ai:codex
+        if let Ok(lease) = toml::from_str::<crate::SessionLease>(&doc.to_string()) {
+            crate::ownership::dual::lease_written(project_root, &lease);
+        }
         Ok(())
     })
 }

@@ -21,8 +21,8 @@ pub enum OwnCommand {
     },
 
     /// One-time rewrite of the existing session, review and train records
-    /// into ownership records. Only adds records; never changes, archives or
-    /// deletes an existing record, worktree or branch.
+    /// into ownership records, repairing existing holder process witnesses.
+    /// Never changes a worktree, branch or legacy record.
     Migrate {
         /// Plan and report; write nothing.
         #[clap(long, conflicts_with = "execute", required_unless_present = "execute")]

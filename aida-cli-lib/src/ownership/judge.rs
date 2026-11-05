@@ -43,6 +43,9 @@ pub(crate) fn process_witness(
     if writer_pid_ns != Some(INITIAL_PID_NAMESPACE_INODE) {
         return None;
     }
+    if id.pid <= 1 {
+        return None;
+    }
     parse_start_identity(&id.start)?;
     Some(Witness {
         kind: WitnessKind::Process {
@@ -117,6 +120,10 @@ fn judge_process(
                 "{id} was recorded in another pid namespace, so it cannot be probed from here"
             ))
         }
+    }
+    // trace:BUG-2458 | ai:codex
+    if id.pid <= 1 {
+        return WitnessReading::Unknown("holder identity invalid: init cannot own a lane".into());
     }
     match (host.probe)(id) {
         Probe::Alive => WitnessReading::Alive,

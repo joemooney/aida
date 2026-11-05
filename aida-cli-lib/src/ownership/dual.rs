@@ -104,6 +104,9 @@ impl WriterFacts {
         now: DateTime<Utc>,
     ) -> Option<Witness> {
         let id = identity_from_record(pid, start?, self.boot.as_deref()?)?;
+        if super::process::invalid_holder(&ProbeSource::system(), &id).is_some() {
+            return None;
+        }
         super::process_witness(self.pid_ns, &self.host, id, now)
     }
 }
@@ -113,12 +116,18 @@ impl WriterFacts {
 /// time, the non-Linux sysinfo time) cannot be converted and is `None`.
 // trace:STORY-2325 | ai:claude
 pub(crate) fn identity_from_record(pid: u32, start: &str, boot: &str) -> Option<ProcessIdentity> {
+    if let Some((recorded_boot, _)) = aida_core::process_probe::parse_start_identity(start) {
+        return (pid > 1 && !recorded_boot.is_empty()).then(|| ProcessIdentity {
+            pid,
+            start: start.to_string(),
+        });
+    }
     let ticks: u64 = start
         .strip_prefix("linux-starttime:")?
         .trim()
         .parse()
         .ok()?;
-    if pid == 0 || boot.is_empty() {
+    if pid <= 1 || boot.is_empty() {
         return None;
     }
     Some(ProcessIdentity {
@@ -206,17 +215,39 @@ pub(crate) fn holder_for_lease(
         .file_name()
         .map(|n| n.to_string_lossy().into_owned())
         .unwrap_or_else(|| lease.slug.clone());
-    let mut witnesses = Vec::new();
-    for (pid, start) in [
-        (lease.active_pid, lease.active_pid_start_time.as_deref()),
-        (lease.creator_pid, lease.creator_pid_start_time.as_deref()),
-    ] {
-        if let Some(w) = pid.and_then(|pid| writer.witness(pid, start, now)) {
-            if !witnesses.contains(&w) {
-                witnesses.push(w);
-            }
-        }
-    }
+    // The worker owns the lane. Its launcher must not keep an exited worker alive.
+    // trace:BUG-2458 | ai:codex
+    let (pid, start, origin_ns) = match lease.active_pid {
+        Some(pid) => (
+            Some(pid),
+            lease.active_pid_start_time.as_deref(),
+            lease.active_pid_ns.as_deref(),
+        ),
+        None => (
+            lease.creator_pid,
+            lease.creator_pid_start_time.as_deref(),
+            lease.creator_pid_ns.as_deref(),
+        ),
+    };
+    let namespace_matches = origin_ns.map_or_else(
+        || {
+            lease
+                .pid_namespace
+                .is_none_or(|ns| Some(ns) == writer.pid_ns)
+        },
+        |ns| {
+            ns.parse::<u64>()
+                .ok()
+                .is_some_and(|ns| Some(ns) == writer.pid_ns)
+        },
+    );
+    let witnesses = if lease.hostname == writer.host && namespace_matches {
+        pid.and_then(|pid| writer.witness(pid, start, now))
+            .into_iter()
+            .collect()
+    } else {
+        Vec::new()
+    };
     Holder {
         seat,
         role,

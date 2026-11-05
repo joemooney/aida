@@ -1019,3 +1019,268 @@ fn compare_names_every_expected_difference_and_flags_the_rest() {
     );
     assert!(orphan_outcome(&train, &dead).is_none());
 }
+
+// trace:BUG-2458 | ai:codex
+#[test]
+fn worker_is_the_only_witness_even_when_exited_or_unproven() {
+    let mut l = lease("worker", "STORY-1", "creator_pid = 43\ncreator_pid_start_time = \"linux-starttime:9\"\nactive_pid = 42\nactive_pid_start_time = \"linux-starttime:8\"\n");
+    let h = dual::holder_for_lease(&l, &host_writer(), now());
+    assert_eq!(h.witnesses.len(), 1);
+    assert!(matches!(&h.witnesses[0].kind, WitnessKind::Process { id, .. } if id.pid == 42));
+    l.active_pid_start_time = None;
+    assert!(dual::holder_for_lease(&l, &host_writer(), now())
+        .witnesses
+        .is_empty());
+    l.active_pid = None;
+    assert_eq!(
+        dual::holder_for_lease(&l, &host_writer(), now())
+            .witnesses
+            .len(),
+        1
+    );
+    l.hostname = "another-host".into();
+    assert!(dual::holder_for_lease(&l, &host_writer(), now())
+        .witnesses
+        .is_empty());
+}
+
+// trace:BUG-2458 | ai:codex
+#[test]
+fn init_and_user_subreaper_holders_are_invalid_and_migration_repairs_orphans() {
+    use aida_core::process_probe::{fixture::FakeProc, Probe, ProbeSource};
+    let dir = tempfile::tempdir().unwrap();
+    let fake = FakeProc::new(dir.path(), BOOT);
+    let source = ProbeSource::at(dir.path());
+    for (pid, name, cmd) in [
+        (1, "systemd", "/sbin/init"),
+        (2013, "systemd", "/usr/lib/systemd/systemd"),
+        (2014, "tini", "/sbin/tini"),
+    ] {
+        fake.add(pid, 1, name, 'S', 9, &[cmd, "--user"]);
+        let id = source.capture(pid).unwrap();
+        assert_eq!(source.probe(&id), Probe::Alive);
+        let w = Witness {
+            kind: WitnessKind::Process {
+                host: "host-a".into(),
+                id: id.clone(),
+                pid_ns: Some(INITIAL_PID_NAMESPACE_INODE),
+            },
+            recorded_at: now(),
+        };
+        let probe = |id: &ProcessIdentity| super::process::probe(&source, id);
+        let host = HostFacts {
+            host: "host-a".into(),
+            boot: Some(BOOT.into()),
+            pid_ns: Some(INITIAL_PID_NAMESPACE_INODE),
+            probe: &probe,
+        };
+        assert!(
+            matches!(judge_owner(&Holder { witnesses: vec![w.clone()], ..holder("orphan") }, &host, now()), OwnerVerdict::Unknown { why } if why.contains("holder identity invalid"))
+        );
+        let r = rec(
+            spec(u128::from(pid)),
+            Some(Holder {
+                witnesses: vec![w],
+                ..holder("orphan")
+            }),
+            Phase::Leased,
+        );
+        let repairs = migrate::repair_holders(&[r], &[], &host_writer(), &source, now());
+        assert_eq!(repairs.len(), 1);
+        assert!(repairs[0].holder.as_ref().unwrap().witnesses.is_empty());
+    }
+    // A reused PID keeps its ordinary dead proof, rather than classifying its new occupant.
+    assert!(matches!(
+        super::process::probe(
+            &source,
+            &ProcessIdentity {
+                pid: 2013,
+                start: format!("linux:{BOOT}:8")
+            }
+        ),
+        Probe::Dead(_)
+    ));
+}
+
+// trace:BUG-2458 | ai:codex
+#[test]
+fn migrate_repairs_worker_identity_without_changing_phase_and_skips_newer_writes() {
+    use aida_core::process_probe::ProbeSource;
+    let (_d, store) = store();
+    let key = spec(2458);
+    let mut l = lease(
+        "lane",
+        "STORY-1",
+        "active_pid = 42\nactive_pid_start_time = \"linux-starttime:8\"\n",
+    );
+    let old = Holder {
+        witnesses: vec![host_writer()
+            .witness(43, Some("linux-starttime:9"), now())
+            .unwrap()],
+        ..holder("lane")
+    };
+    let phase = Phase::Reviewing {
+        head: "retained-head".into(),
+    };
+    store
+        .update(&key, "seed", Expect::Absent, |_| {
+            Some((rec(key.clone(), Some(old), phase.clone()), None))
+        })
+        .unwrap();
+    let records = vec![store.load(&key).unwrap().unwrap()];
+    let mut plan = migrate::plan(
+        &[],
+        &[],
+        Default::default(),
+        vec![],
+        &host_writer(),
+        &|_, _| false,
+        now(),
+    );
+    plan.repairs = migrate::repair_holders(
+        &records,
+        &[l.clone()],
+        &host_writer(),
+        &ProbeSource::system(),
+        now(),
+    );
+    assert_eq!(migrate::apply(&store, &plan).unwrap().written, 1);
+    let repaired = store.load(&key).unwrap().unwrap();
+    assert_eq!(repaired.phase, phase);
+    assert_eq!(repaired.holder.as_ref().unwrap().session, "lane");
+    assert_eq!(
+        repaired.holder.as_ref().unwrap().witnesses,
+        dual::holder_for_lease(&l, &host_writer(), now()).witnesses
+    );
+    assert_eq!(migrate::apply(&store, &plan).unwrap().written, 0);
+    assert!(migrate::repair_holders(
+        &[repaired.clone()],
+        &[l.clone()],
+        &host_writer(),
+        &ProbeSource::system(),
+        now() + chrono::Duration::seconds(1)
+    )
+    .is_empty());
+    l.active_pid = Some(44);
+    plan.repairs = migrate::repair_holders(
+        &[repaired],
+        &[l],
+        &host_writer(),
+        &ProbeSource::system(),
+        now(),
+    );
+    store
+        .update_all(vec![acquire_step(key.clone(), "new-session", Expect::Any)])
+        .unwrap();
+    assert_eq!(migrate::apply(&store, &plan).unwrap().written, 0);
+    assert_eq!(
+        store.load(&key).unwrap().unwrap().holder.unwrap().session,
+        "new-session"
+    );
+}
+
+// trace:BUG-2458 | ai:codex
+#[cfg(target_os = "linux")]
+#[test]
+fn detached_reparented_lane_stamps_its_own_pid_and_is_dead_after_exit() {
+    use aida_core::process_probe::{Probe, ProbeSource};
+    use std::process::Command;
+    // The intermediate parent exits. The detached worker is adopted by init/a subreaper.
+    let out = Command::new("python3").args(["-c", "import subprocess; p = subprocess.Popen(['sleep', '15'], start_new_session=True, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL); print(p.pid)"]).output().unwrap();
+    assert!(out.status.success());
+    let pid: u32 = String::from_utf8(out.stdout)
+        .unwrap()
+        .trim()
+        .parse()
+        .unwrap();
+    struct Cleanup(ProcessIdentity);
+    impl Drop for Cleanup {
+        fn drop(&mut self) {
+            if ProbeSource::system().probe(&self.0) == Probe::Alive {
+                unsafe {
+                    libc::kill(self.0.pid as i32, libc::SIGKILL);
+                }
+            }
+        }
+    }
+    let source = ProbeSource::system();
+    let identity = source.capture(pid).unwrap();
+    let _cleanup = Cleanup(identity.clone());
+    assert_eq!(unsafe { libc::getsid(pid as i32) }, pid as i32);
+    let dir = repo();
+    dual::enable_for_test();
+    let id = uuid::Uuid::from_u128(2458);
+    let mut l = lease(
+        "detached",
+        &id.to_string(),
+        "child_grant_id = \"test-grant\"\n",
+    );
+    l.hostname = crate::coordination::hostname();
+    l.creator_pid = Some(std::process::id());
+    l.creator_pid_start_time = crate::process_probe::process_start_identity(std::process::id());
+    let sessions = dir.path().join(".aida/sessions");
+    std::fs::create_dir_all(&sessions).unwrap();
+    std::fs::write(sessions.join("detached.toml"), toml::to_string(&l).unwrap()).unwrap();
+    dual::lease_written(dir.path(), &l);
+    let start = crate::process_probe::process_start_identity(pid).unwrap();
+    for detached in [false, true] {
+        if detached {
+            crate::session::stamp_lease_detached_worker_at(
+                dir.path(),
+                "detached",
+                "test-grant",
+                pid,
+                &start,
+            )
+            .unwrap();
+        } else {
+            crate::session::stamp_lease_active_pid_at(dir.path(), "detached", pid).unwrap();
+        }
+        let r = repo_store(dir.path())
+            .load(&WorkKey::Spec { spec: SpecKey(id) })
+            .unwrap()
+            .unwrap();
+        // The test may run in a sandbox: explicitly supply host facts to test witness production.
+        let stored: crate::SessionLease =
+            toml::from_str(&std::fs::read_to_string(sessions.join("detached.toml")).unwrap())
+                .unwrap();
+        let writer = WriterFacts {
+            host: l.hostname.clone(),
+            boot: aida_core::local_boot_id(),
+            pid_ns: Some(INITIAL_PID_NAMESPACE_INODE),
+        };
+        let h = dual::holder_for_lease(&stored, &writer, now());
+        assert_eq!(h.witnesses.len(), 1);
+        assert!(matches!(&h.witnesses[0].kind, WitnessKind::Process { id, .. } if id == &identity));
+        if WriterFacts::here().pid_ns == Some(INITIAL_PID_NAMESPACE_INODE) {
+            assert_eq!(r.holder.unwrap().witnesses[0].kind, h.witnesses[0].kind);
+        }
+    }
+    unsafe {
+        libc::kill(pid as i32, libc::SIGKILL);
+    }
+    let until = std::time::Instant::now() + std::time::Duration::from_secs(3);
+    while source.probe(&identity) == Probe::Alive && std::time::Instant::now() < until {
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+    assert!(matches!(source.probe(&identity), Probe::Dead(_)));
+    l.active_pid = Some(pid);
+    l.active_pid_start_time = Some(start);
+    let writer = WriterFacts {
+        host: l.hostname.clone(),
+        boot: aida_core::local_boot_id(),
+        pid_ns: Some(INITIAL_PID_NAMESPACE_INODE),
+    };
+    let h = dual::holder_for_lease(&l, &writer, now());
+    let probe = |id: &ProcessIdentity| super::process::probe(&source, id);
+    let host = HostFacts {
+        host: writer.host.clone(),
+        boot: writer.boot.clone(),
+        pid_ns: writer.pid_ns,
+        probe: &probe,
+    };
+    assert!(matches!(
+        judge_owner(&h, &host, now()),
+        OwnerVerdict::Dead { .. }
+    ));
+}

@@ -13,10 +13,10 @@ const BOOT: &str = "boot-a";
 const HOST_NS: u64 = INITIAL_PID_NAMESPACE_INODE;
 const SANDBOX_NS: u64 = 4_026_535_667;
 
-/// pid 1 runs, pid 2 has exited, anything else cannot be probed.
+/// pid 101 runs, pid 2 has exited, anything else cannot be probed.
 fn probe(id: &ProcessIdentity) -> Probe {
     match id.pid {
-        1 => Probe::Alive,
+        101 => Probe::Alive,
         2 => Probe::Dead(format!("process {} no longer exists", id.pid)),
         _ => Probe::Unknown("cannot read /proc".to_string()),
     }
@@ -137,7 +137,7 @@ fn process_witness_matrix() {
         start: String::new(),
     };
     let cases: Vec<(&str, Witness, HostFacts<'static>, &str)> = vec![
-        ("same host, live pid", local(1), host(), "alive"),
+        ("same host, live pid", local(101), host(), "alive"),
         ("same host, exited pid", local(2), host(), "dead"),
         ("same host, unprobeable pid", local(3), host(), "unknown"),
         (
@@ -148,13 +148,13 @@ fn process_witness_matrix() {
         ),
         (
             "another boot: the host rebooted",
-            proc_w(HOST, ident(1, "boot-old"), Some(HOST_NS)),
+            proc_w(HOST, ident(101, "boot-old"), Some(HOST_NS)),
             host(),
             "dead",
         ),
         (
             "another boot, recorded in a foreign namespace: still rebooted",
-            proc_w(HOST, ident(1, "boot-old"), Some(SANDBOX_NS)),
+            proc_w(HOST, ident(101, "boot-old"), Some(SANDBOX_NS)),
             host(),
             "dead",
         ),
@@ -252,12 +252,12 @@ fn combination_rule_matrix() {
         ),
         (
             "live process + stale heartbeat (idle interactive seat)",
-            vec![local(1), stale_beat()],
+            vec![local(101), stale_beat()],
             "alive",
         ),
         (
             "stale heartbeat + live process (order does not matter)",
-            vec![stale_beat(), local(1)],
+            vec![stale_beat(), local(101)],
             "alive",
         ),
         (
@@ -403,7 +403,7 @@ fn reclaim_matrix() {
         ),
     ];
     let owners: [(&str, Vec<Witness>); 3] = [
-        ("alive", vec![local(1)]),
+        ("alive", vec![local(101)]),
         ("dead", vec![local(2)]),
         ("unknown", vec![local(3)]),
     ];
@@ -502,7 +502,7 @@ fn ownership_record_round_trips_as_json() {
                 kind: TreeKind::Worktree,
                 branch: Some("story-9".into()),
             }),
-            ..holder(vec![local(1), beat(3, 30)])
+            ..holder(vec![local(101), beat(3, 30)])
         }),
         phase: Phase::InPr {
             change: change(12),
@@ -525,12 +525,12 @@ fn ownership_record_round_trips_as_json() {
 
 fn witness_strategy() -> impl Strategy<Value = Witness> {
     prop_oneof![
-        Just(local(1)),
+        Just(local(101)),
         Just(local(2)),
         Just(local(3)),
         Just(proc_w(HOST, ident(2, BOOT), Some(SANDBOX_NS))),
         Just(proc_w("other", ident(2, BOOT), Some(HOST_NS))),
-        Just(proc_w(HOST, ident(1, "boot-old"), Some(HOST_NS))),
+        Just(proc_w(HOST, ident(101, "boot-old"), Some(HOST_NS))),
         Just(beat(5, 30)),
         Just(stale_beat()),
     ]

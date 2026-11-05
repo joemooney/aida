@@ -175,7 +175,8 @@ pub(crate) fn run(main: &Path, filter: Option<&str>, compare: bool, json: bool) 
     let (records, malformed) = store.list();
     let writer = dual::WriterFacts::here();
     let probe_src = aida_core::process_probe::ProbeSource::system();
-    let probe = |id: &aida_core::process_probe::ProcessIdentity| probe_src.probe(id);
+    let probe =
+        |id: &aida_core::process_probe::ProcessIdentity| super::process::probe(&probe_src, id);
     let host = HostFacts {
         host: writer.host.clone(),
         boot: writer.boot.clone(),

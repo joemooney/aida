@@ -586,6 +586,10 @@ pub(crate) fn adopt_spec_lease_for_subagent(
             continue;
         };
         if write_atomic(&path, &content).is_ok() {
+            // trace:BUG-2458 | ai:codex
+            if let Ok(lease) = toml::from_str::<SessionLease>(&content) {
+                crate::ownership::dual::lease_written(project_root, &lease);
+            }
             return Some(id);
         }
     }

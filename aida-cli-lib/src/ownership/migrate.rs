@@ -2,7 +2,8 @@
 //! `.aida/ownership/` (STORY-2325 PR-B, sketch section 3, amendment A4).
 //!
 //! The classification is pure ([`classify`]): every fact is read first by
-//! [`collect`]. The rewrite only ADDS records. It never edits, archives or
+//! [`collect`]. The rewrite adds records and repairs invalid or launcher
+//! process witnesses. It never edits, archives or
 //! deletes a lease, lane file, review marker or merge lock (they stay
 //! authoritative until PR-C, A6), never detaches a seat HEAD (deferred to
 //! PR-C by the advisor ruling of 2026-11-03), and never touches a tree. Rolling it back is removing
@@ -313,6 +314,7 @@ pub(crate) struct Accounted {
 #[derive(Debug, Clone)]
 pub(crate) struct MigrationPlan {
     pub leases: Vec<LeasePlan>,
+    pub repairs: Vec<Ownership>,
     pub trains: Vec<Ownership>,
     pub accounted: Accounted,
     /// Records two inputs both planned for one key: a Live plan wins over
@@ -335,6 +337,9 @@ impl MigrationPlan {
             .chain(self.trains.iter())
         {
             seen.entry(rec.key.clone()).or_insert_with(|| rec.clone());
+        }
+        for rec in &self.repairs {
+            seen.insert(rec.key.clone(), rec.clone());
         }
         seen.into_values().collect()
     }
@@ -392,6 +397,7 @@ pub(crate) fn plan(
     }
     MigrationPlan {
         leases: lease_plans,
+        repairs: Vec::new(),
         trains,
         accounted,
         duplicates,
@@ -440,9 +446,8 @@ pub(crate) struct Applied {
     pub kept: usize,
 }
 
-/// Write every planned record that has no record yet, in one locked step.
-/// A key that already has a record keeps it: a writer since PR-B recorded
-/// newer truth than the migration can reconstruct. Idempotent.
+/// Add missing records and apply generation-pinned witness repairs under the
+/// writer lock. Existing lifecycle state and newer writes are retained. Idempotent.
 // trace:STORY-2325 | ai:claude
 pub(crate) fn apply(store: &OwnershipStore, plan: &MigrationPlan) -> Result<Applied> {
     let records = plan.records();
@@ -454,8 +459,17 @@ pub(crate) fn apply(store: &OwnershipStore, plan: &MigrationPlan) -> Result<Appl
             op: "migrate".to_string(),
             expect: Expect::Any,
             transition: Box::new(move |cur| {
-                cur.is_none()
-                    .then(|| (rec, Some("one-time migration from v0 records".to_string())))
+                let repair = plan.repairs.iter().any(|r| r.key == rec.key);
+                if cur.is_none() && !repair {
+                    return Some((rec, Some("one-time migration from v0 records".to_string())));
+                }
+                // Repairs carry the observed generation; never overwrite a newer writer.
+                // trace:BUG-2458 | ai:codex
+                if repair && cur.is_some_and(|c| c.generation == rec.generation) {
+                    Some((rec, Some("repair holder process identity".to_string())))
+                } else {
+                    None
+                }
             }),
         })
         .collect();
@@ -608,7 +622,8 @@ fn file_names(dir: &Path) -> Vec<String> {
 pub(crate) fn collect(main: &Path, now: DateTime<Utc>) -> MigrationPlan {
     let writer = WriterFacts::here();
     let probe_src = aida_core::process_probe::ProbeSource::system();
-    let probe = |id: &aida_core::process_probe::ProcessIdentity| probe_src.probe(id);
+    let probe =
+        |id: &aida_core::process_probe::ProcessIdentity| super::process::probe(&probe_src, id);
     let host = HostFacts {
         host: writer.host.clone(),
         boot: writer.boot.clone(),
@@ -700,7 +715,67 @@ pub(crate) fn collect(main: &Path, now: DateTime<Utc>) -> MigrationPlan {
             .status()
             .is_ok_and(|s| s.success())
     };
-    plan(&facts, &trains, accounted, gaps, &writer, &is_ancestor, now)
+    let mut plan = plan(&facts, &trains, accounted, gaps, &writer, &is_ancestor, now);
+    let (records, malformed) = OwnershipStore::at(store_dir(main)).list();
+    plan.gaps.extend(
+        malformed
+            .into_iter()
+            .map(|(path, why)| format!("{}: {why}", path.display())),
+    );
+    plan.repairs = repair_holders(&records, &leases, &writer, &probe_src, now);
+    plan
+}
+
+/// Repair witnesses only: retain session, phase, tree and lifecycle evidence.
+// trace:BUG-2458 | ai:codex
+pub(super) fn repair_holders(
+    records: &[Ownership],
+    leases: &[crate::SessionLease],
+    writer: &WriterFacts,
+    source: &aida_core::process_probe::ProbeSource,
+    now: DateTime<Utc>,
+) -> Vec<Ownership> {
+    records
+        .iter()
+        .filter_map(|rec| {
+            let holder = rec.holder.as_ref()?;
+            let lease = leases
+                .iter()
+                .find(|l| l.id == holder.session && l.hostname == writer.host);
+            let mut witnesses = holder.witnesses.clone();
+            if let Some(lease) = lease {
+                // Use the recorded worker even after exit; never recapture a recycled PID.
+                witnesses = dual::holder_for_lease(lease, writer, now).witnesses;
+                witnesses.extend(
+                    holder
+                        .witnesses
+                        .iter()
+                        .filter(|w| matches!(w.kind, super::WitnessKind::Heartbeat { .. }))
+                        .cloned(),
+                );
+            } else {
+                witnesses.retain(|w| match &w.kind {
+                    super::WitnessKind::Process { host, id, pid_ns }
+                        if host == &writer.host && *pid_ns == writer.pid_ns =>
+                    {
+                        super::process::invalid_holder(source, id).is_none()
+                    }
+                    _ => true,
+                });
+            }
+            // Recording time alone is not a repair (idempotence).
+            if witnesses
+                .iter()
+                .map(|w| &w.kind)
+                .eq(holder.witnesses.iter().map(|w| &w.kind))
+            {
+                return None;
+            }
+            let mut repaired = rec.clone();
+            repaired.holder.as_mut()?.witnesses = witnesses;
+            Some(repaired)
+        })
+        .collect()
 }
 
 /// The store directory the migration writes into.
@@ -748,6 +823,7 @@ fn report_json(plan: &MigrationPlan, applied: Option<&Applied>) -> serde_json::V
         "leases": plan.leases.len(),
         "counts": plan.counts().into_iter().map(|(c, n)| (serde_json::to_value(c).ok().and_then(|v| v.as_str().map(str::to_string)).unwrap_or_default(), n)).collect::<BTreeMap<_, _>>(),
         "records": plan.records().len(),
+        "holder_repairs": plan.repairs.len(),
         "trains": plan.trains.len(),
         "accounted": plan.accounted,
         "duplicates": plan.duplicates.iter().map(|(k, w)| serde_json::json!({"key": k, "input": w})).collect::<Vec<_>>(),
@@ -771,6 +847,7 @@ fn print_report(plan: &MigrationPlan, applied: Option<&Applied>) {
         println!("  {:<14} {n}", format!("{class:?}"));
     }
     println!("  train leases   {}", plan.trains.len());
+    println!("  holder repairs {}", plan.repairs.len());
     println!(
         "  lanes: {} derived from a lease, {} orphaned; {} review marker(s); {} other merge lease(s)",
         plan.accounted.lanes_derived,
