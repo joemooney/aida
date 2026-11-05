@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T16:00:53.147986638Z
-modified_at: 2026-11-05T18:43:35.665521903Z
+modified_at: 2026-11-05T18:45:27.725009093Z
 req_type: Task
 tags:
 - from-implementer:BUG-2440
@@ -54,6 +54,11 @@ comments:
   created_at: 2026-11-05T18:41:05.657145169Z
   modified_at: 2026-11-05T18:41:05.657145169Z
   session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
+- id: 01a1ad07-bc2c-7e31-b9ae-04d0bb222847
+  author: mcp
+  content: 'Round 2 rework addresses all three findings in new commit 60fea37a907 ([AI:codex] docs(codex): clarify linked-cache coordination contract (TASK-2836)), pushed and confirmed as PR #3440 head. Replaced bare Codex flag citation with prose ''Codex add-dir grants''; replaced developer-only aida dev status/current-build recovery with aida --version, upgrade if needed, and relaunch guidance. Retitled PR #3440 to the intended docs(codex) subject. Validation: PATH=target/debug:$PATH python3 docs/cli/verify-manual.py 07-project-setup.md exited 0 (spec IDs, subcommands and flags all OK); target/debug/aida is absent so this used installed aida 0.16.0 built at b66ec083185. git diff --check passed. Push reached GitHub; local remote-tracking-ref refresh reported read-only .git, and gh pr view independently confirmed head 60fea37a907ffa5cef1109ed0f76330ffff829dd and corrected title. Merge hold remains for independent review/merge seat; no ship or review-record command invoked.'
+  created_at: 2026-11-05T18:45:27.724886011Z
+  modified_at: 2026-11-05T18:45:27.724886011Z
 history:
 - id: 01a1a769-c350-7b21-8fbc-14a580bffafe
   author: joe
