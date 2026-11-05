@@ -65,7 +65,10 @@ fn reasons(
     }) {
         reasons.push(format!(
             "blocking review: {}\n{}",
-            verdict.summary.as_deref().unwrap_or(&verdict.raw),
+            verdict
+                .summary
+                .as_deref()
+                .unwrap_or(verdict.kind.canonical().unwrap_or("unknown")),
             verdict.findings.join("\n")
         ));
     }
@@ -73,8 +76,9 @@ fn reasons(
 }
 
 /// Signals take precedence; a fresh PR or a pushed head never enters this guard.
+/// Unknown local push evidence skips classification: the forge can lag a push.
 /// Two forge head reads bind the checks to the same head, rather than diagnosing
-/// a head that changed while evidence was collected. Unknown reads refuse success.
+/// a head that changed while evidence was collected. Unknown forge reads error.
 pub(super) fn inspect(
     root: &Path,
     spec: &str,
@@ -91,7 +95,7 @@ pub(super) fn inspect(
     let Some((pr, before)) = launch.pr else {
         return Ok(None);
     };
-    if seat.pushed_since(launch.head) == Some(true) {
+    if seat.pushed_since(launch.head) != Some(false) {
         return Ok(None);
     }
     // These PR-specific states and required-check semantics are GitHub's.
@@ -117,14 +121,13 @@ pub(super) fn inspect(
         ],
     )?;
     let stdout = String::from_utf8_lossy(&out.stdout);
+    let stderr = String::from_utf8_lossy(&out.stderr);
     let mut checks = if stdout.trim().starts_with('[') {
         crate::ci_gate::parse_check_rows(&stdout).context("invalid required-check rows")?
+    } else if crate::pr_ship::gh_pr_checks_output_is_unregistered(&stdout, &stderr) {
+        Vec::new()
     } else {
-        crate::forge::required_checks_from_output(
-            out.status.success(),
-            &stdout,
-            &String::from_utf8_lossy(&out.stderr),
-        )?;
+        crate::forge::required_checks_from_output(out.status.success(), &stdout, &stderr)?;
         Vec::new()
     };
     // Local readiness policy may require checks even without forge branch

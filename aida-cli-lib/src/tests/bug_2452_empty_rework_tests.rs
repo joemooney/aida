@@ -49,6 +49,129 @@ fn bug_2452_current_head_findings_only() {
 }
 
 #[test]
+fn bug_2452_missing_summary_uses_verdict_kind_without_raw_json() {
+    let state = clean();
+    for (raw, kind) in [
+        ("CHANGES REQUESTED", "request-changes"),
+        ("FAIL", "rejected"),
+        ("unrecognized verdict with verbose context", "unknown"),
+    ] {
+        let verdict = crate::gate::review_verdict::parse_recorded_verdict(
+            &serde_json::json!({
+                "verdict": raw, "reviewed_sha": state.head_ref_oid,
+                "findings": ["F1: close the handle"]
+            })
+            .to_string(),
+        )
+        .unwrap();
+        assert_eq!(
+            reasons(&state, &[], &[verdict]),
+            vec![format!("blocking review: {kind}\nF1: close the handle")]
+        );
+    }
+}
+
+#[test]
+fn bug_2452_unknown_local_push_skips_even_if_forge_outcome_has_old_head() {
+    let head = "a".repeat(40);
+    let launch_pr = (7, Some(head.clone()));
+    let launch = super::super::LaunchSeat {
+        pr: Some(&launch_pr),
+        head: Some(&head),
+    };
+    let outcome = super::super::Outcome::PrOpened {
+        pr: 7,
+        head: Some(head.clone()),
+    };
+    for seat in [
+        super::super::SeatState {
+            head: Some("b".repeat(40)),
+            origin: crate::headless_background::OriginHead::Unknown,
+            uncommitted: Some(0),
+        },
+        super::super::SeatState {
+            head: None,
+            origin: crate::headless_background::OriginHead::At(head.clone()),
+            uncommitted: Some(0),
+        },
+    ] {
+        assert_eq!(seat.pushed_since(launch.head), None);
+        // No forge I/O is needed: an old forge head cannot disprove a push.
+        assert!(inspect(
+            Path::new("/no-such-root"),
+            "BUG-2452",
+            &launch,
+            &outcome,
+            &seat
+        )
+        .unwrap()
+        .is_none());
+    }
+}
+
+#[test]
+fn bug_2452_conflicting_pr_without_registered_checks_is_classified() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    std::fs::create_dir_all(root.join(".aida")).unwrap();
+    let head = "a".repeat(40);
+    std::fs::write(
+        root.join("view.json"),
+        serde_json::json!({"state":"OPEN","headRefOid":head,"mergeable":"CONFLICTING"}).to_string(),
+    )
+    .unwrap();
+    let path = format!("{}:/usr/bin:/bin", root.display());
+    let _env = crate::test_env::EnvVarsGuard::apply(&[("PATH", Some(&path))]);
+    let launch_pr = (7, Some(head.clone()));
+    let launch = super::super::LaunchSeat {
+        pr: Some(&launch_pr),
+        head: Some(&head),
+    };
+    let seat = super::super::SeatState {
+        head: Some(head.clone()),
+        origin: crate::headless_background::OriginHead::At(head.clone()),
+        uncommitted: Some(0),
+    };
+    for configured in [false, true] {
+        std::fs::write(
+            root.join(".aida/config.toml"),
+            format!(
+                "[forge]\nprovider = \"github\"\n{}",
+                if configured {
+                    "[review_watch]\nrequired_checks = [\"Build\"]\n"
+                } else {
+                    ""
+                }
+            ),
+        )
+        .unwrap();
+        for redirect in ["", " >&2"] {
+            crate::test_exec::write_executable(
+                &root.join("gh"),
+                &format!(
+                    "#!/bin/sh\ncase \"$2\" in\nview) /bin/cat view.json ;;\nchecks) printf 'no checks reported on the rework branch\\n'{redirect}; exit 1 ;;\nesac\n"
+                ),
+            );
+            let result = inspect(
+                root,
+                "BUG-2452",
+                &launch,
+                &super::super::Outcome::NoPr,
+                &seat,
+            )
+            .unwrap()
+            .expect("conflicts must trigger routing even when CI never registered");
+            assert_eq!(result.0, 7);
+            assert_eq!(result.1, head);
+            assert!(result.2.contains("mergeable=CONFLICTING"));
+        }
+    }
+}
+
+#[test]
 fn bug_2452_explicit_disputed_finding_punt_precedes_forge_io() {
     let outcome = super::super::Outcome::Punted {
         reason: "dispute finding F1: intended behavior".into(),
