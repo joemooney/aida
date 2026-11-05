@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T00:31:59.464117777Z
-modified_at: 2026-11-05T05:36:27.526244410Z
+modified_at: 2026-11-05T05:36:29.890759845Z
 req_type: Story
 relationships:
 - rel_type: Parent
@@ -117,6 +117,24 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Round-1 findings all addressed and CI code jobs green, but PR readiness is never observable on real GitHub data: any SKIPPED check makes the rollup ''?'', so ready-without-train cannot fire and any green PR silences pipeline-idle as unknown.. No triage reason was given.'
   created_at: 2026-11-05T05:36:27.526241979Z
   modified_at: 2026-11-05T05:36:27.526241979Z
+  session_id: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
+- id: 01a1aa35-6a3a-7032-a119-1b0cff2ddd34
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (STORY-2476):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 20911d7a1422
+    Recorded: 2026-11-05T05:26:53.411712632+00:00
+    Findings:
+    1. (major) pipeline_stall.rs pr_ready (~line 599 of the new file) returns None whenever ci_rollup != "pass". status_prs::summarize_status_check_rollup returns "?" when any check is SKIPPED/NEUTRAL, and every open PR in this repo has a SKIPPED 'Release (${{ matrix.os }})' check (live gh pr list: 11 of 12 open PRs, including fully green PR-3404). Result: (a) ready is never Some(true), so ready-without-train is unreachable; (b) one green, unheld PR, including one with a current-head local request-changes verdict (the 2026-11-04 incident shape, because own-PR reviews never set GitHub CHANGES_REQUESTED), makes ready None, so pipeline-idle stays 'unknown' and silent, which breaks AC1. Fix: treat SKIPPED/NEUTRAL as non-blocking for readiness (or evaluate required checks only); return Some(false) on current_rejection/local request-changes BEFORE the CI-evidence gate; add a pr_ready test whose statusCheckRollup contains a SKIPPED row next to SUCCESS rows.
+    2. (minor) MAX_GAP_MS is fixed at 15 min, but supervise watch --execute --interval accepts any value. With --interval > 900 s, every tick resets the episode and the alarm never fires, with no error. The docs only advise against it. Reject or warn on --execute with interval > 900 s, or derive the gap from the interval, and test it.
+    3. (minor) tick(): when send() returns Ok(true) and the following aida_core::write_atomic of .aida/pipeline-stalls.json fails, the accepted flag is lost. run_for_watch hides the error as 'unknown', so every later watch tick sends another urgent request mail. Persist the accepted marker in a way that survives this, or refuse to send when the state cannot be written first (e.g. probe/write the pending state before send), and add a test.
+    4. (minor) observe(): an open train/* PR whose owner cannot be proven dead (foreign host, missing pid_ns/boot, legacy or unparseable owner line; train_abandoned returns None) is mapped to Some(true). That sets train_running and lanes_running, so a stranded train PR suppresses BOTH pipeline-idle and ready-without-train with no time limit. The adjacent comment says 'unknown owner', and the code should agree: map it to None so it shows as unknown with a digest line, or at least add an evidence line naming the train PR and its cleanup command.
+    5. (minor) AC2 digest gaps: blocked-PR lines give failed check names rather than failing tests. A PR blocked only by a merge hold or by draft status gets no blocker label and no unblocking command (e.g. aida merge-hold auto-release/clear). Every PR, ready ones included, gets an 'aida queue rework' suggestion. Name the actual blocker for each non-ready PR and suggest only the command that applies.
+    6. (cosmetic) 'aida supervise stalls --execute' and '--json' have no doc comments: the help snapshot shows empty help, so --help does not say that --execute writes .aida/pipeline-stalls.{lock,json} and sends mail or notifications.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-05T05:36:29.754959126Z
+  modified_at: 2026-11-05T05:36:29.754959126Z
   session_id: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
 history:
 - id: 01a1a947-202d-79b2-827b-2b25c0c16d7a
