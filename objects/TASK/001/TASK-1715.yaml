@@ -16,12 +16,12 @@ description: |
 
   ## Handoff
   Advisor decision is approved by the operator in this session. Inspect existing PrCommand, queue-work dispatch and forge identifier helpers before implementation. Keep this a bounded additive alias; any change to orchestration semantics or authority requires a separate design decision. Implement in an isolated claimed session and obtain independent review.
-status: InProgress
+status: Done
 priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-08T04:28:54.577389253Z
-modified_at: 2026-11-05T02:48:57.761675463Z
+modified_at: 2026-11-05T03:57:27.958128442Z
 req_type: Task
 comments:
 - id: 01a11cf7-a146-7782-b29f-a9c76e58bee3
@@ -150,6 +150,13 @@ comments:
   modified_at: 2026-11-05T02:48:57.761675463Z
   session_id: 01a1a999e1a6
   harness_version: 2.1.318 (Claude Code)
+- id: 01a1a9da-ad30-7a71-81b8-4892d8b3b274
+  author: joe
+  content: 'Implemented in PR #3404 (head 706759e2). aida pr review <N|PR-N|MR-N> builds QueueArgs for ''queue work <change> --auto-complete'' and runs the shared queue_cmd::dispatch_queue_args, with the queue-work policy. Bare N resolves via resolve_forge_kind (GitHub PR-N, GitLab MR-N, pure-git refuses). 9 targeted tests pass in the lane runner; help golden regenerated. make check-ci-fast not run locally (exceeds lane tool cap), so CI gates it. Review auto-queue unconfirmed: the sandbox can''t write the store worktree.'
+  created_at: 2026-11-05T03:57:23.120727970Z
+  modified_at: 2026-11-05T03:57:23.120727970Z
+  session_id: 01a1a999e1a6
+  harness_version: 2.1.318 (Claude Code)
 history:
 - id: 01a119ea-3e16-7a33-8411-ac7968b10987
   author: aida-session-start
@@ -189,6 +196,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1a9da-c09e-7e73-afb8-f313508900c1
+  author: joe
+  timestamp: 2026-11-05T03:57:28.094724998Z
+  session_id: 01a1a999e1a6
+  harness_version: 2.1.318 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 filed_at:
   code_sha: 5d4180e5ded8a55ad1b02beac5571c190d3da0ac
   branch: main
