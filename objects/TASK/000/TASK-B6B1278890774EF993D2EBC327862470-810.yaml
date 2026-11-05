@@ -12,12 +12,12 @@ description: |-
   Investigate test-context isolation or explicitly classify these as host-only fixtures; do not weaken native authority or filesystem boundaries. A baseline outside this seat has not been established. The three new cross-node publication tests pass, including the revocation conflict test; these residual fixtures concern existing launch/root paths outside that slice.
 
   State metadata from `aida state-snapshot --spec STORY-2492 --json`: branch=null, pr.state=none, drain.phase=null, drain.mode=interactive, drain.orchestrator=false, tests='not run', fmt='not run', plan.state=none. Snapshot branch/commit are unknown inside the native seat. Direct test results are separate best-effort observations; the standalone lease has no lane job runner (formal untested=true).
-status: Done
+status: Completed
 priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T06:40:20.321747849Z
-modified_at: 2026-11-05T16:54:51.996181451Z
+modified_at: 2026-11-05T20:25:50.508686942Z
 req_type: Task
 tags:
 - from-implementer:STORY-2492
@@ -102,6 +102,20 @@ history:
   timestamp: 2026-11-05T16:54:58.958662237Z
   session_id: b83457ff-84e3-46cb-8f68-4be531a63422
   changes: []
+- id: 01a1ad63-a2a7-77a3-8958-c3dccd1ea5dc
+  author: aida-auto-bump
+  timestamp: 2026-11-05T20:25:50.503129143Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a1ad63-a2ac-7a90-b9dc-6c8686cc821a
+  timestamp: 2026-11-05T20:25:50.508682753Z
+  agent: aida
+  commit_sha: 5409dbcbe393618a082aefc8f7072dc744425d31
+  summary: 'Test-only isolation fixes for the three native-seat fixture failures; no production authority/filesystem code touched (test_env/test modules are cfg(test), with_pid_namespace is test-only); PR CI green at head (cli-0/1, contracts, gates, lib-0/1, rest). AC: drain_gate unresolved-root fixture verified drain_gate.rs:1881-1888; solo-review ledger pin verified story_1655_solo_review_tests.rs:263-268,300-303; bug_2398 native-ns grants verified story_1917_dispatch_flow_schedule_tests.rs:2878-2889 (native-seat pass is implementer-local evidence only); no boundary weakening verified. Non-blocking: generic commit/PR title and empty PR body.'
+  review_verdict: approved
 filed_at:
   aida_version: 0.16.0
   aida_build_sha: d561213a36f
@@ -109,3 +123,5 @@ implementation_info:
   implemented: true
   implemented_at: 2026-11-05T16:52:55.485215437Z
   implemented_by: joe
+  completed_at: 2026-11-05T20:25:50.503121948Z
+  completion_sha: 5409dbcbe393618a082aefc8f7072dc744425d31
