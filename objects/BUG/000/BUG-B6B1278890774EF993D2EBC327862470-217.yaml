@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T04:57:47.350553675Z
-modified_at: 2026-11-05T08:33:24.066465640Z
+modified_at: 2026-11-05T08:59:03.460857633Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -203,6 +203,12 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1aaee-ddf7-7721-9326-d007196429ab
+  author: joe
+  timestamp: 2026-11-05T08:59:03.543813568Z
+  session_id: 01a1aadc29e6
+  harness_version: 2.1.318 (Claude Code)
+  changes: []
 filed_at:
   code_sha: d561213a36febec31d45921d3d43d4dc7590135e
   branch: main
@@ -221,3 +227,11 @@ attention_reason:
   lean: Preserve the working tree and have the launcher commit/push it; do not reopen a duplicate PR or clear the merge hold.
   raised_by: implementer
   raised_at: 2026-11-05T08:12:10.419681164Z
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'Round-3 source changes close all four round-2 findings (dated merged-retained branch on queue work, duplicate open PRs refused in pickup+publication, list-sessions offline, BUG-1763 comment reconciled), and AC1-AC4 have test coverage. PR CI at 0a192b2e is red: lib-0 Run tests fails (it has failed on every run of this branch while main is green) and gates fails Check formatting. AC status: AC1 verified by bug_2451_real_session_refuses_a_held_head_in_worktree_and_clone_modes, bug_2451_pickup_pins_existing_pr_even_without_a_seat, bug_2451_queue_pickup_uses_pr_head_at_every_workable_status; AC2 verified by auto_branch slug-only resolver + bug_2451_retained_branch_requires_confirmed_absence_of_open_pr (dated auto name only on confirmed merge plus no open PR, per round-2 direction); AC3 verified by ledger bug_2451_publication_* and train-rider tests; AC4 verified by bug_2451_pickup_entry_tests through real session_start/handle_queue_work. None of this is CI-proven while lib-0 is red.'
+  recovery_hint: address the review findings, move BUG-2451 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-11-05T08:59:03.460857633Z
