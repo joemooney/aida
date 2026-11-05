@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-221
 agreed_id: BUG-2455
 title: An exited implementer lane's seat clone keeps holding the PR branch, so the next rework pickup (--force-claim --branch) refuses
 description: 'Hit 4 times on 2026-11-05 (TASK-2832, STORY-2492, STORY-2475, TASK-2995 worktree). After a headless Codex lane exits, its lease and seat clone survive; ''aida queue work SPEC --role implementer --force-claim --branch <PR branch>'' then fails ''branch ... is held by a contained seat''s private clone ... before pickup setup''. The advisor must hand-verify the clone, publish any pending edits, and ''session end --force'' it. Sibling of BUG-2450 (reviewer side). Acceptance: (1) --force-claim on a branch held by an exited (dead-pid) lane''s clean, pushed clone retires that clone and lease automatically; (2) a dirty clone is published (commit-pending to the PR branch) or refused with the exact path and diff stat; (3) regression test covers both.'
-status: InProgress
+status: Done
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T11:37:41.860562323Z
-modified_at: 2026-11-05T12:09:50.233610276Z
+modified_at: 2026-11-05T12:13:10.815802032Z
 req_type: Bug
 comments:
 - id: 01a1ab9d-8799-7f02-b3ac-f417f56bd79c
@@ -38,6 +38,14 @@ history:
   timestamp: 2026-11-05T11:57:10.313407598Z
   session_id: 01a1ab913020
   changes: []
+- id: 01a1aba0-99bb-7251-a8f9-555cede0c8b6
+  author: joe
+  timestamp: 2026-11-05T12:13:11.483941628Z
+  session_id: 01a1ab913020
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 filed_at:
   code_sha: c9166da8a3ce240b3c5464e80ef484980aba0846
   branch: main
@@ -46,3 +54,7 @@ filed_at:
   aida_build_sha: c9166da8a3c
   vendor: claude
   session: b83457ff-84e3-46cb-8f68-4be531a63422
+implementation_info:
+  implemented: true
+  implemented_at: 2026-11-05T12:13:10.815802032Z
+  implemented_by: joe
