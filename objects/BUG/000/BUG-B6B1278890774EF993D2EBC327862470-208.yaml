@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T12:51:07.563355298Z
-modified_at: 2026-11-05T13:19:20.018100462Z
+modified_at: 2026-11-05T13:19:27.997887074Z
 req_type: Bug
 tags:
 - area:compete
@@ -193,6 +193,20 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: BUG-2439 acceptance (1)-(3) remain met in code and tests (native codex exec argv, dry-run==launch incl. linked-worktree case, PR_SET_PDEATHSIG via launch::parent), but the merge from main (c34720b4) does not compile: main''s TASK-2707 made session::containment_applied take 3 args and this PR''s new call at compete_cmd.rs:1129 still passes 2, so CI gates/lib-1/cli-1/contracts fail at build.. Triage reason: Address the latest review on #3401 (see its last ''## Review'' comment and the spec''s review verdict) and any red CI at the current head; push to branch bug-b6b1278890774ef993d2ebc327862470-208-2 (no new branch). LIGHT gate.'
   created_at: 2026-11-05T13:19:20.018099043Z
   modified_at: 2026-11-05T13:19:20.018099043Z
+  session_id: b83457ff-84e3-46cb-8f68-4be531a63422
+- id: 01a1abdd-35b8-7603-a930-707ead6e2edd
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2439):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: c34720b4aed7
+    Recorded: 2026-11-05T11:22:34.419180482+00:00
+    Findings:
+    1. BLOCKER (compile, CI gates 'Check aida-cli without default features', lib-1 'Build aida binary', cli-1 'Run tests', contracts 'Build all packages' all red at c34720b4): aida-cli-lib/src/compete_cmd.rs:1129 calls session::containment_applied(v, contained) but main (96c521861aa, TASK-2707) changed the signature to containment_applied(vendor, contained, receipt: Option<&ContainmentReceipt>) at session.rs:3345. The merge auto-resolved line 1146 to the 3-arg form but missed this PR-added line. Fix: pass None (compete arms have no receipt; Codex then stays uncredited, matching the native posture this PR uses). Then run make check-ci-fast plus cargo test -p aida-cli-lib --lib compete_cmd.
+    2. MINOR (duplication introduced by the same resolution): compete_cmd.rs:1146 recomputes headless_vendor.is_some_and(|v| session::containment_applied(v, contained, None)), which is exactly actually_contained from line 1128. Use 'if actually_contained' so the AIDA_CONTAINED env, the OS wrapper, and the mailbox prep can never disagree.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-05T13:19:23.576732480Z
+  modified_at: 2026-11-05T13:19:23.576732480Z
   session_id: b83457ff-84e3-46cb-8f68-4be531a63422
 history:
 - id: 01a1a69d-4a2d-7292-9de1-00c519ffe27a
