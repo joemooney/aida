@@ -873,6 +873,17 @@ pub trait Forge {
     /// swapped). GitHub: `gh pr list --search <spec> --state open`.
     fn change_for_spec(&self, spec: &str) -> Result<ChangeLookup>;
 
+    /// Complete open-change evidence for pickup and publication. Providers with
+    /// a single-result lookup may retain that behavior; GitHub enumerates all.
+    // trace:BUG-2451 | ai:codex
+    fn open_changes_for_spec(&self, spec: &str) -> Result<Vec<ChangeRef>> {
+        match self.change_for_spec(spec)? {
+            ChangeLookup::NoChange => Ok(Vec::new()),
+            ChangeLookup::Found(change) => Ok(vec![change]),
+            unknown => anyhow::bail!("cannot establish open changes for {spec}: {unknown:?}"),
+        }
+    }
+
     /// STORY-516: the *merged* change for `branch` (did the branch's PR already
     /// land?). GitHub: `gh pr list --head <branch> --state merged`.
     fn merged_change_for_branch(&self, branch: &str) -> Result<ChangeLookup>;
@@ -2015,6 +2026,28 @@ impl Forge for GitHubForge {
             crate::detect_open_pr_for_spec_github(&self.project_root, spec),
             "",
         ))
+    }
+
+    // trace:BUG-2451 | ai:codex
+    fn open_changes_for_spec(&self, spec: &str) -> Result<Vec<ChangeRef>> {
+        crate::pr_lookup::all_open_pr_info_for_spec(&self.project_root, spec)
+            .map(|rows| {
+                rows.into_iter()
+                    .map(|pr| ChangeRef {
+                        id: pr.number,
+                        branch: pr.head_branch.unwrap_or_default(),
+                        url: pr.url,
+                        base: String::new(),
+                        title: Some(pr.title),
+                    })
+                    .collect()
+            })
+            .map_err(|unknown| {
+                anyhow::anyhow!(
+                    "cannot establish open changes for {spec}: {:?}",
+                    change_lookup_from_pr_lookup(unknown, "")
+                )
+            })
     }
 
     fn merged_change_for_branch(&self, branch: &str) -> Result<ChangeLookup> {
@@ -4826,6 +4859,7 @@ pub(crate) mod fake {
     pub(crate) struct RecordingForge {
         pub(crate) open_for_branch: ChangeLookup,
         pub(crate) open_for_spec: ChangeLookup,
+        pub(crate) all_for_spec: Option<Vec<ChangeRef>>,
         pub(crate) merged_for_branch: ChangeLookup,
         pub(crate) author: Option<String>,
         /// What `change_metadata` reports for `is_draft` — scripts the
@@ -4864,6 +4898,7 @@ pub(crate) mod fake {
             Self {
                 open_for_branch: ChangeLookup::NoChange,
                 open_for_spec: ChangeLookup::NoChange,
+                all_for_spec: None,
                 merged_for_branch: ChangeLookup::NoChange,
                 author: Some("codex-bot".into()),
                 is_draft: false,
@@ -4924,6 +4959,16 @@ pub(crate) mod fake {
         }
         fn change_for_spec(&self, _: &str) -> Result<ChangeLookup> {
             Ok(self.open_for_spec.clone())
+        }
+        fn open_changes_for_spec(&self, spec: &str) -> Result<Vec<ChangeRef>> {
+            if let Some(rows) = &self.all_for_spec {
+                return Ok(rows.clone());
+            }
+            match self.change_for_spec(spec)? {
+                ChangeLookup::NoChange => Ok(vec![]),
+                ChangeLookup::Found(change) => Ok(vec![change]),
+                unknown => anyhow::bail!("cannot establish open changes for {spec}: {unknown:?}"),
+            }
         }
         fn merged_change_for_branch(&self, _: &str) -> Result<ChangeLookup> {
             Ok(self.merged_for_branch.clone())

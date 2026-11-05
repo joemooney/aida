@@ -35,6 +35,7 @@ fn launching_setup(scope: &str) -> crate::session_start::SessionStartReceipt {
         /* contained_seat */ false,
         /* rollback_failed_setup */ true,
         crate::session_start::PathReentry::None,
+        None,
     )
     .unwrap();
     assert!(receipt.owns_setup(), "a launching pickup owns its setup");
