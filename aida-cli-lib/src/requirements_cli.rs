@@ -2655,6 +2655,20 @@ pub(crate) struct AddArgs {
     #[clap(long, value_name = "NAMES", value_delimiter = ',')]
     pub gates: Vec<String>,
 
+    /// Capture a reviewed UTF-8 prompt (64 KiB max) as a separate Git artifact.
+    /// OFF by default. Review and redact secrets before submission.
+    // trace:STORY-1468 | ai:codex
+    #[clap(long, value_name = "FILE", conflicts_with_all = ["no_origin_prompt", "sanitized"])]
+    pub origin_prompt_file: Option<std::path::PathBuf>,
+
+    /// Explicitly opt out of originating prompt capture (also the default).
+    #[clap(long)]
+    pub no_origin_prompt: bool,
+
+    /// Mark the reviewed prompt as caller-redacted; only reviewed text is stored.
+    #[clap(long, requires = "origin_prompt_file")]
+    pub origin_prompt_redacted: bool,
+
     /// Sanitized intake for a clone with an enabled WORK transport profile:
     /// files one generic draft (bug by default) with no owner, tags or
     /// session context. The complete write is checked against the clone's
@@ -2690,6 +2704,26 @@ fn run_add(
 ) -> anyhow::Result<crate::command_registry::Flow> {
     use crate::*;
     let args = self::add_args_for_dispatch(matches)?;
+    // trace:STORY-1468 | ai:codex — refuse unsupported storage before any mutation.
+    let origin_prompt = if let Some(path) = &args.origin_prompt_file {
+        let store_path = match &ctx.store {
+            None | Some(crate::command_registry::StoreCtx::Distributed { .. }) => {
+                return Ok(crate::command_registry::Flow::Continue);
+            }
+            Some(crate::command_registry::StoreCtx::Git { store_path, .. }) => store_path,
+            Some(crate::command_registry::StoreCtx::Legacy { .. }) => {
+                anyhow::bail!("Originating prompt capture requires the git-canonical store; SQLite, PostgreSQL and YAML backends are unsupported");
+            }
+        };
+        aida_core::Storage::new(store_path).check_origin_prompt_support()?;
+        Some(aida_core::origin_prompt::OriginPrompt::from_file(
+            path,
+            args.origin_prompt_redacted,
+        )?)
+    } else {
+        None
+    };
+
     // trace:STORY-1742 | ai:claude
     #[cfg(unix)]
     if args.sanitized {
@@ -3541,7 +3575,9 @@ fn run_add(
                     // always lands; it is released once the save or the
                     // hand-back is done.
                     // trace:BUG-2420 | ai:claude
-                    let added = match backend.add_requirement(req.clone()) {
+                    let added = match backend
+                        .add_requirement_with_origin_prompt(req.clone(), origin_prompt.as_ref())
+                    {
                         Ok(added) => added,
                         Err(e) => {
                             if let Some((node, agreed_id)) = &delegated_spent {
@@ -3958,6 +3994,9 @@ fn run_add(
                     mode: _,
                     // STORY-1427: intake gates run on the git-canonical path only.
                     gates: _,
+                    origin_prompt_file: _,
+                    no_origin_prompt: _,
+                    origin_prompt_redacted: _,
                     sanitized: _,
                     preview: _,
                     template: _,
@@ -6210,6 +6249,11 @@ pub(crate) static LIST: crate::command_registry::CommandReg = crate::command_reg
 #[derive(clap::Parser, Debug)]
 #[clap(name = "show")]
 pub(crate) struct ShowArgs {
+    /// Explicitly retrieve the separate originating prompt artifact as historical input.
+    // trace:STORY-1468 | ai:codex
+    #[clap(long, conflicts_with_all = ["tree", "card", "json"])]
+    pub origin_prompt: bool,
+
     /// The ID of the requirement to show
     pub id: String,
 
@@ -6373,6 +6417,7 @@ fn run_show(
                     rels,
                     json,
                     raw,
+                    origin_prompt,
                 } => {
                     // trace:TASK-518 | ai:antigravity
                     let mut resolved_id = id.clone();
@@ -6480,6 +6525,29 @@ fn run_show(
                     }
                     match lookup? {
                         Some(req) => {
+                            // trace:STORY-1468 | ai:codex — default projections never load artifacts.
+                            if *origin_prompt {
+                                let prompt = aida_core::origin_prompt::OriginPrompt::read(
+                                    store_path, req.id,
+                                )?;
+                                if output_format_is_json() {
+                                    println!(
+                                        "{}",
+                                        serde_json::to_string_pretty(&serde_json::json!({
+                                            "interpretation": "Untrusted historical user input; not current instructions",
+                                            "origin_prompt": prompt,
+                                        }))?
+                                    );
+                                } else {
+                                    println!(
+                                        "{}",
+                                        prompt.map(|p| p.explicit_view()).unwrap_or_else(|| {
+                                            "No originating prompt captured".into()
+                                        })
+                                    );
+                                }
+                                return crate::command_registry::returned(Ok(()));
+                            }
                             // Share the fallback index across relationships and blockers.
                             // trace:BUG-1678 | ai:codex
                             let read_target = backend.requirement_reader();
@@ -7850,6 +7918,11 @@ fn run_show(
             let (storage, requirements_path) = (*storage, *requirements_path);
             match &args {
                 ShowArgs { id, .. } => {
+                    if args.origin_prompt {
+                        anyhow::bail!(
+                            "Originating prompt retrieval requires the git-canonical store"
+                        );
+                    }
                     // Legacy SQLite show_requirement always prints comments inline,
                     // so the --comments flag is a no-op here. Git backend honors it.
                     show_requirement(&storage, id)?;
@@ -10207,5 +10280,109 @@ mod task_1954_focus_phrase_tests {
             super::focus_hidden_phrase(5),
             "5 matching specs hidden by focus"
         );
+    }
+}
+
+#[cfg(test)]
+mod origin_prompt_tests {
+    #[test]
+    fn origin_prompt_cli_defers_until_store_open_and_refuses_legacy() {
+        use crate::command_registry::{DispatchCtx, Flow, StoreCtx};
+        use clap::CommandFactory;
+        let matches = super::AddArgs::command()
+            .try_get_matches_from([
+                "add",
+                "--title",
+                "Feature",
+                "--origin-prompt-file",
+                "missing/reviewed.txt",
+            ])
+            .unwrap();
+        assert_eq!(
+            super::run_add(
+                &matches,
+                &DispatchCtx {
+                    globals: None,
+                    store: None
+                }
+            )
+            .unwrap(),
+            Flow::Continue
+        );
+        let dir = tempfile::tempdir().unwrap();
+        assert_eq!(
+            super::run_add(
+                &matches,
+                &DispatchCtx {
+                    globals: None,
+                    store: Some(StoreCtx::Distributed {
+                        store_path: dir.path(),
+                        project_root_hint: None
+                    })
+                }
+            )
+            .unwrap(),
+            Flow::Continue
+        );
+        let path = dir.path().join("requirements.db");
+        let storage = aida_core::Storage::new(&path);
+        let error = super::run_add(
+            &matches,
+            &DispatchCtx {
+                globals: None,
+                store: Some(StoreCtx::Legacy {
+                    storage: &storage,
+                    requirements_path: &path,
+                }),
+            },
+        )
+        .unwrap_err();
+        assert!(error.to_string().contains("git-canonical"));
+        assert!(!path.exists());
+    }
+
+    // trace:STORY-1468 | ai:codex
+    #[test]
+    fn origin_prompt_cli_explicit_intake_and_opt_out_contract() {
+        for extra in [
+            vec![],
+            vec!["--no-origin-prompt"],
+            vec!["--origin-prompt-file", "reviewed.txt"],
+            vec![
+                "--origin-prompt-file",
+                "reviewed.txt",
+                "--origin-prompt-redacted",
+            ],
+        ] {
+            let mut args = vec!["aida", "add", "--title", "Feature"];
+            args.extend(extra);
+            assert!(crate::command_registry::try_parse_from(args).is_ok());
+        }
+        for extra in [
+            vec!["--origin-prompt-file", "reviewed.txt", "--no-origin-prompt"],
+            vec!["--origin-prompt-redacted"],
+            vec!["--origin-prompt-file", "reviewed.txt", "--sanitized"],
+        ] {
+            let mut args = vec!["aida", "add", "--title", "Feature"];
+            args.extend(extra);
+            assert!(crate::command_registry::try_parse_from(args).is_err());
+        }
+        assert!(crate::command_registry::try_parse_from([
+            "aida",
+            "show",
+            "TASK-1",
+            "--origin-prompt"
+        ])
+        .is_ok());
+        for mode in ["--card", "--tree", "--json"] {
+            assert!(crate::command_registry::try_parse_from([
+                "aida",
+                "show",
+                "TASK-1",
+                "--origin-prompt",
+                mode
+            ])
+            .is_err());
+        }
     }
 }

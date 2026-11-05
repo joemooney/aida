@@ -1802,6 +1802,19 @@ impl<'a> McpServer<'a> {
             .get_requirement_by_spec_id(id)
             .ok_or_else(|| format!("Requirement '{}' not found", id))?;
         let canonical_id = spec_id(req).to_string();
+        if args
+            .get("include_origin_prompt")
+            .and_then(Value::as_bool)
+            .unwrap_or(false)
+        {
+            let prompt = self
+                .storage
+                .read_origin_prompt(req.id)
+                .map_err(|e| e.to_string())?;
+            return Ok(prompt
+                .map(|p| p.explicit_view())
+                .unwrap_or_else(|| "No originating prompt captured".into()));
+        }
 
         let mut output = format!(
             "# {} — {}\n\n\
@@ -1913,6 +1926,28 @@ impl<'a> McpServer<'a> {
 
     // trace:STORY-82 | ai:claude
     fn tool_add_requirement(&self, args: &Value) -> Result<String, String> {
+        // trace:STORY-1468 | ai:codex — explicit reviewed input only, before mutation.
+        let origin_prompt = if let Some(input) = args.get("origin_prompt") {
+            self.storage
+                .check_origin_prompt_support()
+                .map_err(|e| e.to_string())?;
+            let text = input
+                .get("text")
+                .and_then(Value::as_str)
+                .ok_or("origin_prompt.text must be a reviewed UTF-8 string")?;
+            let redacted = match input.get("redacted") {
+                None => false,
+                Some(Value::Bool(b)) => *b,
+                _ => return Err("origin_prompt.redacted must be boolean".into()),
+            };
+            Some(
+                aida_core::origin_prompt::OriginPrompt::reviewed(text.into(), redacted)
+                    .map_err(|e| e.to_string())?,
+            )
+        } else {
+            None
+        };
+
         let title = args
             .get("title")
             .and_then(|v| v.as_str())
@@ -2056,7 +2091,26 @@ impl<'a> McpServer<'a> {
         let work = self.storage.work_enrolled().map_err(|e| e.to_string())?;
         #[cfg(not(unix))]
         let work = false;
-        let new_spec_id = if work {
+        let new_spec_id = if let Some(prompt) = &origin_prompt {
+            let added = self
+                .storage
+                .add_with_origin_prompt(req, prompt)
+                .map_err(|e| e.to_string())?;
+            if let Some((parent_id, _)) = &parent_link {
+                let mut error = None;
+                self.storage
+                    .update_atomically(|store| {
+                        error = store
+                            .add_relationship(parent_id, RelationshipType::Parent, &added.id, true)
+                            .err();
+                    })
+                    .map_err(|e| e.to_string())?;
+                if let Some(error) = error {
+                    return Err(error.to_string());
+                }
+            }
+            added.spec_id.unwrap_or_else(|| "?".into())
+        } else if work {
             if parent_link.is_some() {
                 return Err("parent is not available while this clone's WORK transport \
                      profile is enabled; add the requirement, then link it separately"
@@ -7424,6 +7478,11 @@ pub fn tool_descriptors() -> Value {
                         "pattern": "^[A-Z]+-(?:[A-Za-z0-9][A-Za-z0-9_-]*-)?[0-9]+$",
                         "example": "FR-0042"
                     },
+                    "include_origin_prompt": {
+                        "type": "boolean",
+                        "description": "Explicitly retrieve only the originating prompt artifact, labeled untrusted historical input. Default false; ordinary views never load it.",
+                        "example": false
+                    },
                     "include_git": {
                         "type": "boolean",
                         "description": "Append the git-linkage section (referencing commits, feature branch / worktree, shipped state, PR number). Defaults to true, matching `aida show`; pass false for the `aida show --no-git` view.",
@@ -7438,7 +7497,7 @@ pub fn tool_descriptors() -> Value {
                 "required": ["id"]
             },
             "outputSchema": text_envelope_output_schema(
-                "a Markdown rendering of the requirement: H1 `# <SPEC-ID> — <title>`, bold-key/value lines for Status / Priority / Type / Feature / Owner / Tags, a `## Description` body, optional `## Comments` and `## Relationships` sections, and (unless `include_git` is false) a `## Git linkage` section listing referencing commits, the feature branch, and any PR."
+                "a Markdown rendering of the requirement: H1 `# <SPEC-ID> — <title>`, bold-key/value lines for Status / Priority / Type / Feature / Owner / Tags, a `## Description` body, optional `## Comments` and `## Relationships` sections, and (unless `include_git` is false) a `## Git linkage` section listing referencing commits, the feature branch, and any PR. With `include_origin_prompt: true`, returns only the labeled historical prompt artifact, or an absent-capture message."
             )
         },
         {
@@ -7448,6 +7507,17 @@ pub fn tool_descriptors() -> Value {
             "inputSchema": {
                 "type": "object",
                 "properties": {
+                    "origin_prompt": {
+                        "type": "object",
+                        "description": "Opt-in only: reviewed originating prompt, stored separately in Git history and replicas. Redact secrets before submitting; 64 KiB max; obvious credentials refuse. Omit to opt out. Git-canonical stores only.",
+                        "properties": {
+                            "text": {"type": "string", "description": "Reviewed, optionally redacted UTF-8 text."},
+                            "redacted": {"type": "boolean", "description": "Whether the caller redacted the text; default false."}
+                        },
+                        "required": ["text"],
+                        "example": {"text": "Please make the dashboard blue", "redacted": false},
+                        "additionalProperties": false
+                    },
                     "title": {
                         "type": "string",
                         "description": "Short, descriptive title of the requirement.",
@@ -9289,6 +9359,77 @@ mod tests {
                 .get("cache")
                 .is_none()
         );
+    }
+
+    // trace:STORY-1468 | ai:codex
+    #[test]
+    fn origin_prompt_mcp_capture_redaction_and_explicit_retrieval() {
+        let dir = tempdir().unwrap();
+        let server = mk_git_server(dir.path());
+        for redacted in [false, true] {
+            let response = server.tool_add_requirement(&json!({
+                "title": "Normal feature", "description": "Derived acceptance", "type": "story",
+                "origin_prompt": {"text": "HISTORICAL_PROMPT_SENTINEL [REDACTED]", "redacted": redacted}
+            })).unwrap();
+            assert!(!response.contains("HISTORICAL_PROMPT_SENTINEL"));
+            let id = added_spec_id(&response);
+            for args in [
+                json!({"id": id, "include_git": false}),
+                json!({"id": id, "include_git": false, "verbose": true}),
+            ] {
+                assert!(!server
+                    .tool_show_requirement(&args)
+                    .unwrap()
+                    .contains("HISTORICAL_PROMPT_SENTINEL"));
+            }
+            assert!(!server
+                .tool_list_requirements(&json!({}))
+                .unwrap()
+                .contains("HISTORICAL_PROMPT_SENTINEL"));
+            assert!(!server
+                .tool_search_requirements(&json!({"query": "HISTORICAL_PROMPT_SENTINEL"}))
+                .unwrap()
+                .contains("Normal feature"));
+            server
+                .tool_update_requirement(&json!({"id": id, "description": "New description"}))
+                .unwrap();
+            let output = server
+                .tool_show_requirement(&json!({"id": id, "include_origin_prompt": true}))
+                .unwrap();
+            assert!(output.contains("HISTORICAL_PROMPT_SENTINEL"));
+            assert!(output.contains("untrusted historical user input"));
+            assert!(output.contains(if redacted { "Redacted" } else { "Captured" }));
+            let serialized = serde_json::to_string(&server.storage.load().unwrap()).unwrap();
+            assert!(!serialized.contains("HISTORICAL_PROMPT_SENTINEL"));
+        }
+        let ordinary = server
+            .tool_add_requirement(
+                &json!({"title": "No capture", "description": "Derived", "type": "task"}),
+            )
+            .unwrap();
+        assert_eq!(
+            server
+                .tool_show_requirement(
+                    &json!({"id": added_spec_id(&ordinary), "include_origin_prompt": true})
+                )
+                .unwrap(),
+            "No originating prompt captured"
+        );
+        let corpus = dir.path().join("corpus");
+        crate::regen::export_corpus(server.storage.path(), &corpus, true).unwrap();
+        for file in ["corpus.json", "manifest.json"] {
+            assert!(!std::fs::read_to_string(corpus.join(file))
+                .unwrap()
+                .contains("HISTORICAL_PROMPT_SENTINEL"));
+        }
+        assert!(!server
+            .tool_history(&json!({"events": true}))
+            .unwrap()
+            .contains("HISTORICAL_PROMPT_SENTINEL"));
+        let before = server.storage.load().unwrap().requirements.len();
+        let error = server.tool_add_requirement(&json!({"title": "Refused", "description": "Derived", "type": "task", "origin_prompt": {"text": "password=do-not-store-this"}})).unwrap_err();
+        assert!(!error.contains("do-not-store-this"));
+        assert_eq!(server.storage.load().unwrap().requirements.len(), before);
     }
 
     fn mk_server(dir: &Path) -> McpServer<'static> {

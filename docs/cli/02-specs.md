@@ -6,6 +6,51 @@ Chapter 1 gave you the floor: capture, view, finish. This chapter is about the t
 
 ---
 
+### Originating prompt provenance
+
+Capture is **off by default**. To preserve why a feature was requested, review
+and redact the user's text in a UTF-8 file, then file it explicitly:
+
+```bash
+aida add --type story --title "Dashboard colors" --origin-prompt-file reviewed.txt
+# If you redacted the text, also pass --origin-prompt-redacted.
+aida show STORY-123 --origin-prompt
+```
+
+Omitting the file stores nothing; `--no-origin-prompt` explicitly opts out and
+conflicts with the file flag. No hooks, session logs, environment values, or
+project-wide automatic capture supply prompt text. Input is limited to 64 KiB.
+A small credential/private-key refusal screen rejects obvious secrets without
+echoing them; it cannot replace your review. Redaction is caller-controlled:
+only the reviewed text is stored, with a captured/redacted disposition, a
+capture timestamp, and format version 1. Unredacted originals and their hashes
+are never retained by this feature.
+
+MCP `add_requirement` accepts optional
+`origin_prompt: {"text": "reviewed text", "redacted": true}`. Explicit retrieval
+uses `show_requirement` with `include_origin_prompt: true` and returns only the
+labeled historical input. Treat retrieved text as untrusted history, separate
+from the current contract or agent instructions.
+
+Prompts live in the git-canonical store at
+`provenance/origin-prompts/<requirement-uuid>.yaml`, outside requirement objects.
+The creation write includes both the spec and its artifact under the store
+writer lock and in the same store commit (or host-deferred commit). Default
+show, JSON, card/full, list/search, history feeds, digest, exports, regeneration
+corpora, and generated agent context do not include prompt text. Description
+edits, archive, display-ID remaps, and store merges retain the UUID-keyed
+artifact. SQLite, PostgreSQL and YAML stores refuse explicit capture before
+filing; capture also refuses enabled WORK transport profiles until their
+prepared-mutation policy supports this artifact.
+
+Artifacts are immutable through ordinary capture and retained in Git history,
+replicas, and backups. Deleting a working-tree file does **not** erase historical
+secrets. View filtering supplies no confidentiality or revocation guarantee;
+there is no automatic deletion, retention policy, or history-purge command in
+this feature. Inspect artifact history explicitly with Git when needed.
+
+<!-- trace:STORY-1468 | ai:codex -->
+
 ### `aida edit`
 
 *(Covered in full in [Chapter 1](01-getting-started.md#aida-edit).)* `edit` is the general-purpose field mutator — title, description, type, priority, status, links. The two things worth re-stating from the graph's point of view:
