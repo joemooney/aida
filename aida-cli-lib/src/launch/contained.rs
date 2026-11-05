@@ -1,5 +1,9 @@
-//! Headless Codex boundary. Credentials exist only in the exact child env.
+//! The one AIDA contained headless boundary (Codex and Claude). Vendor
+//! differences are rows of [`CONTAINED_VENDORS`] plus each vendor's argv
+//! finisher; credentials exist only in the exact child env (Codex) or as a
+//! read-only credentials leaf (Claude).
 // trace:TASK-2707 | ai:codex
+// trace:TASK-2708 | ai:claude
 use anyhow::{Context, Result};
 use serde::Deserialize;
 use std::collections::BTreeMap;
@@ -320,6 +324,175 @@ fn resolve_program(child: &Command, env: &BTreeMap<String, String>) -> Result<Pa
     }
     anyhow::bail!("contained vendor executable unavailable")
 }
+/// How a contained vendor authenticates. Each kind is one fixed, reviewed
+/// mechanism; a vendor row picks one, it never supplies its own.
+// trace:TASK-2708 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum VendorAuth {
+    /// An API key in the worker's own exact environment (Codex, P3 pending).
+    OpenAiApiKey,
+    /// The Claude OAuth credentials leaf, bound read-only (C7, 05:47 ruling).
+    ClaudeCredentialsFile,
+}
+
+/// One vendor's data for the shared contained boundary (TASK-2708 AC1:
+/// "vendor additions use data, not new containment code"). The mounts,
+/// masks, filter, broker, relay, receipt and seat probe are common; a row
+/// names only the vendor's program/policy key, where its private home and
+/// tmp are pointed, fixed env, and which auth mechanism it uses.
+// trace:TASK-2708 | ai:claude
+#[derive(Debug)]
+pub(crate) struct ContainedVendor {
+    /// The program basename and its `[contained.vendors]` key.
+    pub(crate) key: &'static str,
+    label: &'static str,
+    /// Env names pointed at the private vendor home inside the lane state.
+    private_home_env: &'static [&'static str],
+    /// Env names pointed at the lane tmp inside the state root (`TMPDIR`
+    /// otherwise stays the lane's private `/tmp` tmpfs).
+    private_tmp_env: &'static [&'static str],
+    fixed_env: &'static [(&'static str, &'static str)],
+    auth: VendorAuth,
+}
+
+pub(crate) const CONTAINED_VENDORS: &[ContainedVendor] = &[
+    ContainedVendor {
+        key: "codex",
+        label: "Codex",
+        private_home_env: &["CODEX_HOME", "CODEX_SQLITE_HOME"],
+        private_tmp_env: &[],
+        fixed_env: &[],
+        auth: VendorAuth::OpenAiApiKey,
+    },
+    // Ruling item 5 / C7: private writable CLAUDE_CONFIG_DIR, TMPDIR and
+    // CLAUDE_CODE_TMPDIR inside the lane state, no self-update.
+    ContainedVendor {
+        key: "claude",
+        label: "Claude",
+        private_home_env: &["CLAUDE_CONFIG_DIR"],
+        private_tmp_env: &["TMPDIR", "CLAUDE_CODE_TMPDIR"],
+        fixed_env: &[("DISABLE_AUTOUPDATER", "1")],
+        auth: VendorAuth::ClaudeCredentialsFile,
+    },
+];
+
+impl ContainedVendor {
+    /// The row for a launch child's program (by basename), or a named refusal.
+    pub(crate) fn for_program(program: &std::ffi::OsStr) -> Result<&'static Self> {
+        let name = Path::new(program)
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or_default();
+        CONTAINED_VENDORS
+            .iter()
+            .find(|v| v.key == name)
+            .with_context(|| format!("`{name}` has no AIDA contained launch profile"))
+    }
+}
+
+enum Auth {
+    Env(&'static str, String),
+    File(PathBuf),
+}
+
+/// The OAuth credentials leaf inside a Claude config dir.
+pub(crate) const CLAUDE_CREDENTIALS: &str = ".credentials.json";
+
+/// The named refusal when the RO credentials expire inside a lane (05:47).
+pub(crate) const CLAUDE_EXPIRED_IN_LANE: &str =
+    "claude credentials expired inside a contained lane; relaunch";
+
+/// Seconds a baseline (grant-less) Claude lane must still have on its token.
+const CLAUDE_BASELINE_LIFETIME_SECS: i64 = 3600;
+
+/// Unix-millisecond expiry of the Claude OAuth token in `credentials`.
+// trace:TASK-2708 | ai:claude
+pub(crate) fn claude_credentials_expiry_ms(credentials: &Path) -> Result<i64> {
+    let body = std::fs::read_to_string(credentials).with_context(|| {
+        format!(
+            "contained Claude requires its subscription credentials at {}",
+            credentials.display()
+        )
+    })?;
+    let value: serde_json::Value =
+        serde_json::from_str(&body).context("Claude credentials are not JSON")?;
+    value
+        .pointer("/claudeAiOauth/expiresAt")
+        .and_then(serde_json::Value::as_i64)
+        .context("contained Claude requires Claude OAuth credentials (claudeAiOauth.expiresAt)")
+}
+
+/// 05:47 ruling: the token must outlive the lane's grant. When it would
+/// not, the host refreshes ONCE before launch; if it still would not, the
+/// launch refuses by name. Never a writable credential bind.
+// trace:TASK-2708 | ai:claude
+pub(crate) fn ensure_claude_credentials_outlive(
+    credentials: &Path,
+    ttl_secs: i64,
+    refresh: impl FnOnce() -> Result<()>,
+) -> Result<()> {
+    let needed = ttl_secs.max(CLAUDE_BASELINE_LIFETIME_SECS);
+    let remaining = |path: &Path| -> Result<i64> {
+        Ok((claude_credentials_expiry_ms(path)? - chrono::Utc::now().timestamp_millis()) / 1000)
+    };
+    if remaining(credentials)? >= needed {
+        return Ok(());
+    }
+    refresh().context("host-side Claude credential refresh failed")?;
+    let left = remaining(credentials)?;
+    anyhow::ensure!(
+        left >= needed,
+        "claude credentials expire in {left}s, before this contained lane's {needed}s grant; \
+         refresh Claude auth on the host (`claude auth login`) and relaunch"
+    );
+    Ok(())
+}
+
+/// One host-side refresh: the host's own `claude auth status`, which renews
+/// an expiring OAuth token with the host's (writable) credential store. It
+/// runs as the launcher, before any lane exists, with no prompt and no model
+/// call, and is bounded.
+// trace:TASK-2708 | ai:claude
+fn refresh_host_claude_credentials(child: &Command) -> Result<()> {
+    let mut refresh = Command::new(child.get_program());
+    refresh
+        .args(["auth", "status"])
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null());
+    let mut process = refresh.spawn().context("host claude unavailable")?;
+    let deadline = Instant::now() + Duration::from_secs(30);
+    loop {
+        if let Some(status) = process.try_wait()? {
+            anyhow::ensure!(status.success(), "host `claude auth status` failed");
+            return Ok(());
+        }
+        if Instant::now() >= deadline {
+            let _ = process.kill();
+            let _ = process.wait();
+            anyhow::bail!("host `claude auth status` timed out");
+        }
+        std::thread::sleep(Duration::from_millis(50));
+    }
+}
+
+/// The host credentials leaf, pinned by descriptor for a read-only bind: a
+/// regular, single-link file owned by this user, never a symlink.
+// trace:TASK-2708 | ai:claude
+fn open_credentials_leaf(credentials: &Path) -> Result<File> {
+    let file = std::fs::OpenOptions::new()
+        .read(true)
+        .custom_flags(libc::O_PATH | libc::O_NOFOLLOW | libc::O_CLOEXEC)
+        .open(credentials)
+        .context("Claude credentials unavailable")?;
+    let md = file.metadata()?;
+    anyhow::ensure!(
+        md.is_file() && md.nlink() == 1 && md.uid() == unsafe { libc::getuid() },
+        "Claude credentials identity refused"
+    );
+    Ok(file)
+}
+
 fn refuse_chatgpt(home: &Path) -> Result<()> {
     anyhow::ensure!(
         !home.join("auth.json").exists(),
@@ -410,6 +583,8 @@ pub(crate) struct PreparedLaunch {
     writer: File,
     accept_reader: File,
     accept_writer: File,
+    /// The host Claude credentials leaf whose expiry names a mid-lane failure.
+    credentials: Option<PathBuf>,
 }
 impl PreparedLaunch {
     /// Takes finalized child assignments only. Never inherits ambient authority.
@@ -417,9 +592,13 @@ impl PreparedLaunch {
     /// launch entry point (TASK-2032); `None` recognises no seat clone.
     // trace:TASK-2708 TASK-2032 | ai:claude
     pub(crate) fn prepare(child: &Command, root: &Path, host_main: Option<&Path>) -> Result<Self> {
+        // trace:TASK-2708 | ai:claude — the vendor is data selected by the
+        // child's program; everything below is the one shared boundary.
+        let vendor = ContainedVendor::for_program(child.get_program())?;
+        let label = vendor.label;
         anyhow::ensure!(
             explicit(child, "AIDA_HEADLESS").as_deref() == Some("1"),
-            "Codex AIDA posture currently supports foreground headless launches only (PR2 pending)"
+            "{label} AIDA posture currently supports foreground headless launches only (PR2 pending)"
         );
         anyhow::ensure!(
             Path::new("/usr/bin/python3").is_file(),
@@ -436,8 +615,8 @@ impl PreparedLaunch {
             .context("pinned policy unreadable")?;
         let policy: toml::Value = toml::from_str(&body)?;
         anyhow::ensure!(
-            policy.pointer_vendor() == Some("aida"),
-            "Codex AIDA posture requires trusted policy"
+            policy.pointer_vendor(vendor.key) == Some("aida"),
+            "{label} AIDA posture requires trusted policy"
         );
         let allowed = policy
             .get("contained")
@@ -461,7 +640,7 @@ impl PreparedLaunch {
             .is_some_and(|v| v.as_array().is_none_or(|a| !a.is_empty()))
         {
             anyhow::bail!(
-                "contained Codex strict read allowlist is not supported by this launch slice"
+                "contained {label} strict read allowlist is not supported by this launch slice"
             );
         }
         for host in &allowed {
@@ -494,13 +673,9 @@ impl PreparedLaunch {
         let codex_home = std::env::var_os("CODEX_HOME")
             .map(PathBuf::from)
             .unwrap_or_else(|| host_home.join(".codex"));
-        refuse_chatgpt(&codex_home)?;
-        let key = std::env::var("OPENAI_API_KEY").map_err(|_| {
-            anyhow::anyhow!(
-                "contained Codex requires OPENAI_API_KEY; ChatGPT auth waits for P3 (PR2)"
-            )
-        })?;
-        anyhow::ensure!(!key.is_empty(), "contained Codex requires OPENAI_API_KEY");
+        let claude_home = std::env::var_os("CLAUDE_CONFIG_DIR")
+            .map(PathBuf::from)
+            .unwrap_or_else(|| host_home.join(".claude"));
         let grant = explicit(child, crate::gate::seat_authority::GRANT_ENV)
             .context("contained child requires explicit grant decision")?;
         let ttl = if grant.is_empty() {
@@ -509,6 +684,27 @@ impl PreparedLaunch {
             (crate::gate::seat_authority::read_grant(&grant)?.expires_at - chrono::Utc::now())
                 .num_seconds()
                 .max(1)
+        };
+        // Credentials resolve BEFORE any mount or state: a missing or
+        // unusable one is a named refusal, never a lane without it.
+        let auth = match vendor.auth {
+            VendorAuth::OpenAiApiKey => {
+                refuse_chatgpt(&codex_home)?;
+                let key = std::env::var("OPENAI_API_KEY").map_err(|_| {
+                    anyhow::anyhow!(
+                        "contained Codex requires OPENAI_API_KEY; ChatGPT auth waits for P3 (PR2)"
+                    )
+                })?;
+                anyhow::ensure!(!key.is_empty(), "contained Codex requires OPENAI_API_KEY");
+                Auth::Env("OPENAI_API_KEY", key)
+            }
+            VendorAuth::ClaudeCredentialsFile => {
+                let credentials = claude_home.join(CLAUDE_CREDENTIALS);
+                ensure_claude_credentials_outlive(&credentials, ttl, || {
+                    refresh_host_claude_credentials(child)
+                })?;
+                Auth::File(credentials)
+            }
         };
         let mut profile = WriteProfile::new();
         profile.add(&root, true)?;
@@ -532,7 +728,14 @@ impl PreparedLaunch {
         // CODEX_SQLITE_HOME, which the default-path masks alone would leave
         // readable inside the sandbox.
         let sqlite_home = std::env::var_os("CODEX_SQLITE_HOME").map(PathBuf::from);
-        for p in host_vendor_state_masks(&host_home, &codex_home, sqlite_home.as_deref()) {
+        let mut masks = host_vendor_state_masks(&host_home, &codex_home, sqlite_home.as_deref());
+        // trace:TASK-2708 | ai:claude — and a relocated CLAUDE_CONFIG_DIR.
+        if let Ok(relocated) = std::fs::canonicalize(&claude_home) {
+            if !masks.contains(&relocated) {
+                masks.push(relocated);
+            }
+        }
+        for p in masks {
             let file = File::open(&empty)?;
             profile.mounts.push(Mount {
                 file,
@@ -606,15 +809,39 @@ impl PreparedLaunch {
         }
         // HOME remains the issuer's canonical AIDA home (read-only). Core
         // tool filtering retains HOME but not AIDA_HOME; relocating HOME would
-        // silently redirect grant lookup. Vendor mutable state is separate.
-        let private_codex = state.path().join("codex");
-        ensure_dir(&private_codex)?;
+        // silently redirect grant lookup. Vendor mutable state is separate:
+        // a private vendor home inside the lane state (rw with the state).
+        let private_home = state.path().join(vendor.key);
+        ensure_dir(&private_home)?;
         let runtime = state.path().join("runtime");
         ensure_dir(&runtime)?;
         std::fs::set_permissions(&runtime, std::fs::Permissions::from_mode(0o700))?;
-        let config = private_codex.join("config.toml");
-        std::fs::write(&config, profile.native())?;
-        profile.add(&config, false)?;
+        // trace:TASK-2708 | ai:claude — a lane tmp inside the state root, so
+        // a vendor's own bridge sockets there are private-endpoint connects.
+        let lane_tmp = state.path().join("tmp");
+        ensure_dir(&lane_tmp)?;
+        std::fs::set_permissions(&lane_tmp, std::fs::Permissions::from_mode(0o700))?;
+        let credentials = match &auth {
+            Auth::Env(..) => {
+                let config = private_home.join("config.toml");
+                std::fs::write(&config, profile.native())?;
+                profile.add(&config, false)?;
+                None
+            }
+            // C7 (05:47 ruling): the credentials leaf is bound READ-ONLY into
+            // the private config dir; host ~/.claude is masked above, and no
+            // writable credential root exists in the lane.
+            Auth::File(credentials) => {
+                let leaf = private_home.join(CLAUDE_CREDENTIALS);
+                std::fs::write(&leaf, "")?;
+                profile.mounts.push(Mount {
+                    file: open_credentials_leaf(credentials)?,
+                    path: leaf,
+                    writable: false,
+                });
+                Some(credentials.clone())
+            }
+        };
         let mut env = selected_environment(child);
         env.insert(
             "CARGO_HOME".into(),
@@ -644,11 +871,6 @@ impl PreparedLaunch {
         }
         for (name, value) in [
             ("HOME", authority_home.to_string_lossy().into_owned()),
-            ("CODEX_HOME", private_codex.to_string_lossy().into_owned()),
-            (
-                "CODEX_SQLITE_HOME",
-                private_codex.to_string_lossy().into_owned(),
-            ),
             ("XDG_RUNTIME_DIR", runtime.to_string_lossy().into_owned()),
             ("TMPDIR", "/tmp".into()),
             ("LANG", "C.UTF-8".into()),
@@ -660,9 +882,21 @@ impl PreparedLaunch {
             ("AIDA_CONTAINED", "1".into()),
             ("AIDA_HEADLESS", "1".into()),
             ("AIDA_CONTAINMENT_POSTURE", "aida".into()),
-            ("OPENAI_API_KEY", key),
         ] {
             env.insert(name.into(), value);
+        }
+        // trace:TASK-2708 | ai:claude — the vendor's data rows.
+        for name in vendor.private_home_env {
+            env.insert((*name).into(), private_home.to_string_lossy().into_owned());
+        }
+        for name in vendor.private_tmp_env {
+            env.insert((*name).into(), lane_tmp.to_string_lossy().into_owned());
+        }
+        for (name, value) in vendor.fixed_env {
+            env.insert((*name).into(), (*value).into());
+        }
+        if let Auth::Env(name, key) = auth {
+            env.insert(name.into(), key);
         }
         // Select an ephemeral number; the listener binds it only in the new
         // network namespace. No persistent host port is assigned.
@@ -671,58 +905,19 @@ impl PreparedLaunch {
         drop(reservation);
         env.extend(relay_environment(port));
         let program = resolve_program(child, &env)?;
-        let mut final_child = Command::new(&program);
-        final_child.env_clear().envs(&env);
-        let mut args = crate::codex_tool_env::codex_tool_env_overrides(&final_child)?;
-        for name in TOOL_NET_ENV.iter().chain(TOOL_BUILD_ENV) {
-            args.extend([
-                "-c".into(),
-                format!(
-                    "shell_environment_policy.set.{name}={}",
-                    toml::Value::String(env[*name].clone())
-                ),
-            ]);
-        }
-        args.extend(["-P".into(), "aida".into()]);
         let original: Vec<_> = child
             .get_args()
             .map(|v| v.to_string_lossy().into_owned())
             .collect();
-        if let Some(at) = original.iter().position(|a| a == "exec") {
-            anyhow::ensure!(
-                !original
-                    .get(at + 1)
-                    .is_some_and(|a| matches!(a.as_str(), "resume" | "fork")),
-                "contained Codex resume/fork waits for private-state lifecycle support (PR2)"
-            );
-        }
-        let mut i = 0;
-        while i < original.len() {
-            if original[i] == "--sandbox"
-                && original.get(i + 1).map(String::as_str) == Some("workspace-write")
-            {
-                i += 2;
-                continue;
+        // trace:TASK-2708 | ai:claude — the vendor finishes only its own argv;
+        // the requested-seat probe that follows is shared.
+        let (args, mut preflight) = match vendor.auth {
+            VendorAuth::OpenAiApiKey => codex_argv(&program, &env, &original)?,
+            VendorAuth::ClaudeCredentialsFile => {
+                (claude_argv(&original, port, &allowed)?, Vec::new())
             }
-            anyhow::ensure!(
-                !matches!(
-                    original[i].as_str(),
-                    "--dangerously-bypass-approvals-and-sandbox"
-                        | "--full-auto"
-                        | "--sandbox"
-                        | "-s"
-                        | "-P"
-                        | "--permission-profile"
-                ),
-                "contained Codex cannot override its generated native profile"
-            );
-            args.push(original[i].clone());
-            i += 1;
-        }
-        let mut preflight = vec![program.to_string_lossy().into_owned()];
-        preflight.extend(crate::codex_tool_env::sandbox_args_for_contained(&args)?);
+        };
         preflight.extend([
-            "--".into(),
             crate::aida_exe_path().to_string_lossy().into_owned(),
             "role".into(),
             "current".into(),
@@ -738,8 +933,157 @@ impl PreparedLaunch {
         argv.extend(args);
         let cfg = serde_json::json!({"grant":grant,"ttl":ttl,"mode":"normal","port":port,"allowed":allowed,
             "state":state.path(),"policy_sha":sha,"bwrap":profile.args(&root),"preflight":preflight,"argv":argv});
-        Self::from_config(profile, state, sha, cfg, env, &root)
+        let mut prepared = Self::from_config(profile, state, sha, cfg, env, &root)?;
+        prepared.credentials = credentials;
+        Ok(prepared)
     }
+}
+
+/// Codex's argv: the tool-env and native-profile overrides, then the site's
+/// argv minus anything that would replace the generated profile. Its seat
+/// probe runs through Codex's own sandbox as well (`codex sandbox ... --`).
+// trace:TASK-2707 TASK-2708 | ai:claude
+fn codex_argv(
+    program: &Path,
+    env: &BTreeMap<String, String>,
+    original: &[String],
+) -> Result<(Vec<String>, Vec<String>)> {
+    let mut final_child = Command::new(program);
+    final_child.env_clear().envs(env);
+    let mut args = crate::codex_tool_env::codex_tool_env_overrides(&final_child)?;
+    for name in TOOL_NET_ENV.iter().chain(TOOL_BUILD_ENV) {
+        args.extend([
+            "-c".into(),
+            format!(
+                "shell_environment_policy.set.{name}={}",
+                toml::Value::String(env[*name].clone())
+            ),
+        ]);
+    }
+    args.extend(["-P".into(), "aida".into()]);
+    if let Some(at) = original.iter().position(|a| a == "exec") {
+        anyhow::ensure!(
+            !original
+                .get(at + 1)
+                .is_some_and(|a| matches!(a.as_str(), "resume" | "fork")),
+            "contained Codex resume/fork waits for private-state lifecycle support (PR2)"
+        );
+    }
+    let mut i = 0;
+    while i < original.len() {
+        if original[i] == "--sandbox"
+            && original.get(i + 1).map(String::as_str) == Some("workspace-write")
+        {
+            i += 2;
+            continue;
+        }
+        anyhow::ensure!(
+            !matches!(
+                original[i].as_str(),
+                "--dangerously-bypass-approvals-and-sandbox"
+                    | "--full-auto"
+                    | "--sandbox"
+                    | "-s"
+                    | "-P"
+                    | "--permission-profile"
+            ),
+            "contained Codex cannot override its generated native profile"
+        );
+        args.push(original[i].clone());
+        i += 1;
+    }
+    let mut preflight = vec![program.to_string_lossy().into_owned()];
+    preflight.extend(crate::codex_tool_env::sandbox_args_for_contained(&args)?);
+    preflight.push("--".into());
+    Ok((args, preflight))
+}
+
+/// Claude's argv: the site's argv with its one generated `--settings`
+/// finished for the lane (ruling item 5): Claude's own sandbox on, required,
+/// with no unsandboxed escape, its proxy chained to the lane relay
+/// (`httpProxyPort`, no SOCKS port) and its domain list the trusted
+/// `allowed_hosts`. A flag that would skip permissions, or a second or
+/// missing `--settings`, refuses. Its seat probe runs directly under the lane
+/// filter: the Bash sandbox wraps tool calls, not the vendor process.
+// trace:TASK-2708 | ai:claude
+fn claude_argv(original: &[String], port: u16, allowed: &[String]) -> Result<Vec<String>> {
+    let mut args = Vec::with_capacity(original.len());
+    let mut settings_seen = 0;
+    let mut i = 0;
+    while i < original.len() {
+        let arg = original[i].as_str();
+        anyhow::ensure!(
+            !matches!(
+                arg,
+                "--dangerously-skip-permissions" | "--allow-dangerously-skip-permissions"
+            ) && !(arg == "--permission-mode"
+                && original.get(i + 1).map(String::as_str) == Some("bypassPermissions"))
+                && arg != "--permission-mode=bypassPermissions",
+            "contained Claude cannot skip its permission checks"
+        );
+        anyhow::ensure!(
+            !arg.starts_with("--settings="),
+            "contained Claude settings must be the one generated --settings value"
+        );
+        // A resumed session lives in a config dir the lane's fresh private
+        // one does not hold. trace:TASK-2708 | ai:claude
+        anyhow::ensure!(
+            !matches!(
+                arg,
+                "--resume" | "-r" | "--continue" | "-c" | "--fork-session"
+            ) && !arg.starts_with("--resume="),
+            "contained Claude resume waits for private-state lifecycle support"
+        );
+        if arg == "--settings" {
+            let value = original
+                .get(i + 1)
+                .context("contained Claude --settings has no value")?;
+            settings_seen += 1;
+            args.push(original[i].clone());
+            args.push(claude_lane_settings(value, port, allowed)?);
+            i += 2;
+            continue;
+        }
+        args.push(original[i].clone());
+        i += 1;
+    }
+    anyhow::ensure!(
+        settings_seen == 1,
+        "contained Claude requires exactly one generated --settings value"
+    );
+    Ok(args)
+}
+
+/// The generated contained settings with the lane's sandbox block applied.
+// trace:TASK-2708 | ai:claude
+pub(crate) fn claude_lane_settings(json: &str, port: u16, allowed: &[String]) -> Result<String> {
+    let mut settings: serde_json::Value =
+        serde_json::from_str(json).context("contained Claude settings are not JSON")?;
+    let object = settings
+        .as_object_mut()
+        .context("contained Claude settings must be an object")?;
+    let sandbox = object
+        .entry("sandbox")
+        .or_insert_with(|| serde_json::json!({}));
+    let sandbox = sandbox
+        .as_object_mut()
+        .context("contained Claude sandbox settings must be an object")?;
+    sandbox.insert("enabled".into(), true.into());
+    sandbox.insert("failIfUnavailable".into(), true.into());
+    sandbox.insert("allowUnsandboxedCommands".into(), false.into());
+    let network = sandbox
+        .entry("network")
+        .or_insert_with(|| serde_json::json!({}));
+    let network = network
+        .as_object_mut()
+        .context("contained Claude sandbox network settings must be an object")?;
+    network.insert("httpProxyPort".into(), port.into());
+    network.remove("socksProxyPort");
+    network.insert("allowedDomains".into(), serde_json::json!(allowed));
+    Ok(settings.to_string())
+}
+
+impl PreparedLaunch {
     fn from_config(
         profile: WriteProfile,
         state: tempfile::TempDir,
@@ -767,6 +1111,7 @@ impl PreparedLaunch {
             writer,
             accept_reader,
             accept_writer,
+            credentials: None,
         })
     }
     pub(crate) fn spawn(mut self, stdout: Stdio) -> Result<ContainedChild> {
@@ -806,6 +1151,7 @@ impl PreparedLaunch {
             child,
             acceptance: None,
             receipt: None,
+            credentials: self.credentials,
             _state: self._state,
         };
         drop((self.writer, self.accept_reader));
@@ -841,23 +1187,37 @@ impl PreparedLaunch {
     }
 }
 trait PolicyVendor {
-    fn pointer_vendor(&self) -> Option<&str>;
+    fn pointer_vendor(&self, vendor: &str) -> Option<&str>;
 }
 impl PolicyVendor for toml::Value {
-    fn pointer_vendor(&self) -> Option<&str> {
-        self.get("contained")?
-            .get("vendors")?
-            .get("codex")?
-            .as_str()
+    fn pointer_vendor(&self, vendor: &str) -> Option<&str> {
+        self.get("contained")?.get("vendors")?.get(vendor)?.as_str()
     }
 }
 pub(crate) struct ContainedChild {
     pub(crate) child: Child,
     receipt: Option<ContainmentReceipt>,
     acceptance: Option<File>,
+    credentials: Option<PathBuf>,
     _state: tempfile::TempDir,
 }
 impl ContainedChild {
+    /// The vendor's exit, unless it failed because its read-only Claude
+    /// credentials expired inside the lane: that is the named refusal
+    /// (05:47 ruling), never a silent failure or a writable retry.
+    // trace:TASK-2708 | ai:claude
+    pub(crate) fn vendor_exit(
+        &self,
+        status: std::process::ExitStatus,
+    ) -> Result<std::process::ExitStatus> {
+        if let Some(credentials) = &self.credentials {
+            let expired = claude_credentials_expiry_ms(credentials)
+                .map(|at| at <= chrono::Utc::now().timestamp_millis())
+                .unwrap_or(true);
+            anyhow::ensure!(status.success() || !expired, CLAUDE_EXPIRED_IN_LANE);
+        }
+        Ok(status)
+    }
     /// Caller finishes host registry/lease binding while exec is still blocked.
     pub(crate) fn release(&mut self) -> Result<()> {
         self.acceptance

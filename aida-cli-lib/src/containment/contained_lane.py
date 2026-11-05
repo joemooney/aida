@@ -11,16 +11,26 @@
 # preflight under the filter -> exec the vendor. No model work before ready.
 
 O_NONBLOCK_FLAG = 0o4000
+NETLINK_ROUTE = 0
 PR_SET_DUMPABLE = 4
 
 
 def lane_filter():
     """x86-64 seccomp program for the contained worker and every descendant.
 
-    connect() is always a user notification: the host broker reads the
-    sockaddr once and installs a socket it chose (never CONTINUE).
-    socket(): AF_UNIX STREAM/SEQPACKET and AF_INET/AF_INET6 STREAM only.
-    socketpair(): AF_UNIX STREAM/SEQPACKET only. sendto/sendmsg/sendmmsg with
+    connect() is always a user notification, never CONTINUE: the host
+    broker reads the sockaddr once and installs a socket it chose, or (for
+    a socket the kernel says lives in a nested netns) connects that same
+    socket itself (see broker_connect_contained).
+    socket(): AF_UNIX STREAM/SEQPACKET, AF_INET/AF_INET6 STREAM/DGRAM, and
+    AF_NETLINK protocol NETLINK_ROUTE only. A unix DGRAM socket could
+    sendto() a host path past connect brokering, so it stays denied. Inet
+    DGRAM reaches nothing: the lane netns has only lo and no route.
+    NETLINK_ROUTE lets a nested netns bring up its own lo (the lane netns
+    itself is cap-dropped). RAW inet and every other netlink protocol stay
+    denied. socketpair(): AF_UNIX, any type: an anonymous connected pair
+    reaches no path. trace:TASK-2708 | ai:claude
+    sendto/sendmsg/sendmmsg with
     MSG_FASTOPEN (an implicit connect) are refused. ptrace and cross-process
     memory/fd access are refused so a worker cannot drive the unfiltered
     relay helper. io_uring and setns are refused (connect/namespace bypass).
@@ -59,10 +69,11 @@ def lane_filter():
     emit(LD, 16)
     emit(JEQ, socket.AF_UNIX, 'local_type', None)
     emit(JEQ, socket.AF_INET, 'inet_type', None)
-    emit(JEQ, socket.AF_INET6, 'inet_type', 'deny')
+    emit(JEQ, socket.AF_INET6, 'inet_type', None)
+    emit(JEQ, socket.AF_NETLINK, 'netlink_protocol', 'deny')
     label('pair')
     emit(LD, 16)
-    emit(JEQ, socket.AF_UNIX, 'local_type', 'deny')
+    emit(JEQ, socket.AF_UNIX, 'allow', 'deny')
     label('local_type')
     emit(LD, 24)
     emit(AND, 0xf)
@@ -71,7 +82,11 @@ def lane_filter():
     label('inet_type')
     emit(LD, 24)
     emit(AND, 0xf)
-    emit(JEQ, socket.SOCK_STREAM, 'allow', 'deny')
+    emit(JEQ, socket.SOCK_STREAM, 'allow', None)
+    emit(JEQ, socket.SOCK_DGRAM, 'allow', 'deny')
+    label('netlink_protocol')
+    emit(LD, 16 + 8 * 2)
+    emit(JEQ, NETLINK_ROUTE, 'allow', 'deny')
     label('notify')
     emit(RET, NOTIFY)
     label('allow')

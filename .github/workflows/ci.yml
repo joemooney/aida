@@ -350,7 +350,7 @@ jobs:
           # TASK-2705 nested userns is host-attested; keep its normal shard mode.
           # TASK-2706 slice B is required-live on this runner. trace:TASK-2706 | ai:codex
           AIDA_REQUIRE_BWRAP_LIVE=1 AIDA_REQUIRE_CODEX_CONTAINMENT_LIVE=1 cargo test -p aida-cli-lib --lib -- --nocapture \
-            bwrap_write_confinement_live_or_fail_closed bug_2169_bwrap_ task_2053_bwrap_ bug_2224_bwrap_ bug_2383_bwrap_ bug_2435_bwrap_ bug_2455_bwrap_ containment::tests::task_2706_egress_ipc_live task_2707_ 2>&1 | tee "$log"
+            bwrap_write_confinement_live_or_fail_closed bug_2169_bwrap_ task_2053_bwrap_ bug_2224_bwrap_ bug_2383_bwrap_ bug_2435_bwrap_ bug_2455_bwrap_ containment::tests::task_2706_egress_ipc_live task_2707_ task_2708_live_ 2>&1 | tee "$log"
           AIDA_REQUIRE_BWRAP_LIVE=1 cargo test -p aida-cli --test bug_1934_bwrap_presenter -- --nocapture \
             bug_1934_bwrap_ 2>&1 | tee -a "$log"
           expected=$(grep -rhoE 'fn (bug_2169|task_2053|bug_2224|bug_1934|bug_2383|bug_2435|bug_2455)_bwrap_[a-z0-9_]+' aida-cli-lib/src aida-cli/tests/bug_1934_bwrap_presenter.rs | sort -u | wc -l)
@@ -375,6 +375,14 @@ jobs:
           ran_2707=$(grep -oE 'task_2707_[a-z0-9_]+ \.\.\. ok$' "$log" | grep -v "$not_required_2707" | sort -u | wc -l)
           echo "task_2707 contained-launch tests: $ran_2707 of $expected_2707 ran ok"
           if [ "$ran_2707" -ne "$expected_2707" ]; then echo "::error::only $ran_2707 of $expected_2707 task_2707_ tests ran ok"; exit 1; fi
+          # trace:TASK-2708 | ai:claude — the F-a amendment tests for Claude M1
+          # (advisor ruling 2026-11-05 11:25: netlink route-only, inet DGRAM
+          # reaches nothing, the broker judges the socket's own netns) run
+          # required-live under the same gate and count.
+          expected_2708=$(grep -rhoE 'fn task_2708_live_[a-z0-9_]+' aida-cli-lib/src | sort -u | wc -l)
+          ran_2708=$(grep -oE 'task_2708_live_[a-z0-9_]+ \.\.\. ok$' "$log" | sort -u | wc -l)
+          echo "task_2708 F-a amendment live tests: $ran_2708 of $expected_2708 ran ok"
+          if [ "$expected_2708" -eq 0 ] || [ "$ran_2708" -ne "$expected_2708" ]; then echo "::error::only $ran_2708 of $expected_2708 task_2708_live_ tests ran ok"; exit 1; fi
 
       # MCP stdio compatibility suite — black-box tests against `aida mcp-serve`.
       # Runs the FULL roundtrip: descriptors + CLI->MCP read direction

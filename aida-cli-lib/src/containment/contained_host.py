@@ -60,10 +60,67 @@ def fd_flags(pid, fd):
     raise RuntimeError('target descriptor flags unavailable')
 
 
-def broker_connect_contained(listener, state_fd, state_prefix, connector, port):
-    """F-a broker: read the sockaddr ONCE, never CONTINUE. Relay port on
-    127.0.0.1 gets a relay-connected socket; a pathname beneath the private
-    state root gets the pinned private endpoint; everything else refuses."""
+SIOCGSKNS = 0x894C
+
+
+def target_socket(pid, target_fd):
+    """A host-side duplicate of the trapped task's descriptor (pidfd_getfd):
+    the very socket object the task named, not a path or caller claim."""
+    pidfd = os.pidfd_open(pid)
+    try:
+        fd = LIBC.syscall(438, pidfd, target_fd, 0)
+        if fd < 0:
+            raise OSError(C.get_errno(), 'target socket unavailable')
+    finally:
+        os.close(pidfd)
+    os.set_inheritable(fd, False)
+    return fd
+
+
+def socket_netns(fd):
+    """(st_dev, st_ino) of the netns the SOCKET belongs to (SIOCGSKNS). The
+    caller's /proc/<pid>/ns/net is not the socket's: a socket made in the
+    lane netns stays there after its thread unshares. trace:TASK-2708 | ai:claude"""
+    ns = LIBC.ioctl(fd, C.c_ulong(SIOCGSKNS), C.c_ulong(0))
+    if ns < 0:
+        raise OSError(C.get_errno(), 'socket netns unavailable')
+    try:
+        md = os.fstat(ns)
+        return (md.st_dev, md.st_ino)
+    finally:
+        os.close(ns)
+
+
+def sock_type(fd):
+    value, size = C.c_int(0), C.c_uint(4)
+    if LIBC.getsockopt(fd, socket.SOL_SOCKET, socket.SO_TYPE, C.byref(value), C.byref(size)) < 0:
+        raise OSError(C.get_errno(), 'target socket type unavailable')
+    return value.value
+
+
+def connect_nested(listener, ident, dup, address):
+    """Connect the inspected nested-netns socket itself, with the address read
+    once, and answer with the kernel's result. Never CONTINUE: the trapped
+    task re-resolving its fd number could reach a swapped-in lane socket.
+    The connect runs in the socket's own netns, which is not the lane's."""
+    try:
+        try:
+            rc = LIBC.connect(dup, C.c_char_p(address), C.c_uint(len(address)))
+            error = 0 if rc == 0 else -C.get_errno()
+        finally:
+            os.close(dup)
+        ioctl(listener, SEND, Response(ident, 0, error, 0))
+    except (OSError, RuntimeError):
+        pass  # the trapped task died or was interrupted; nothing to answer
+
+
+def broker_connect_contained(listener, state_fd, state_prefix, connector, port, lane_net):
+    """F-a broker: read the sockaddr ONCE, never CONTINUE. A lane-netns
+    stream socket naming the relay port on 127.0.0.1 gets a relay-connected
+    socket; a pathname beneath the private state root gets the pinned private
+    endpoint; an inet socket the kernel places in a nested netns (never the
+    lane's) is connected as-is by the broker; everything else refuses.
+    trace:TASK-2708 | ai:claude"""
     n = Notification()
     if LIBC.ioctl(listener, C.c_ulonglong(RECV), C.byref(n)) < 0:
         # ENOENT: the trapped task was interrupted or every filtered task is
@@ -88,17 +145,39 @@ def broker_connect_contained(listener, state_fd, state_prefix, connector, port):
         require(len(address) == length, 'short socket address')
         family = struct.unpack('H', address[:2])[0]
         connected = None
-        if family == socket.AF_INET:
+        if family in (socket.AF_INET, socket.AF_INET6):
             answer = ECONNREFUSED_ERR
-            require(length >= 8, 'short inet address')
-            dport = struct.unpack('!H', address[2:4])[0]
-            if address[4:8] == b'\x7f\x00\x00\x01' and dport == port:
-                connector.send(b'connect-v1')
-                reply, fds = receive(connector)
-                require(reply == b'connected-v1' and len(fds) == 1, 'relay connector refused')
-                connected = socket.socket(fileno=fds[0])
-        elif family == socket.AF_INET6:
-            answer = ECONNREFUSED_ERR
+            # trace:TASK-2708 | ai:claude — the target's own socket decides:
+            # its netns (nested or lane) and its type. Any failure refuses.
+            try:
+                dup = target_socket(n.pid, target_fd)
+            except OSError:
+                dup = None  # bad fd, not a socket, gone task: refuse
+            kind = nested = None
+            if dup is not None:
+                try:
+                    ioctl(listener, VALID, ident)
+                    kind = sock_type(dup)
+                    nested = socket_netns(dup) != lane_net
+                except OSError:
+                    kind = nested = None
+                except BaseException:
+                    os.close(dup)
+                    raise
+                if nested:
+                    threading.Thread(target=connect_nested,
+                                     args=(listener, n.id, dup, address), daemon=True).start()
+                    return True
+                os.close(dup)
+            if family == socket.AF_INET and kind == socket.SOCK_STREAM and nested is False:
+                require(length >= 8, 'short inet address')
+                dport = struct.unpack('!H', address[2:4])[0]
+                if address[4:8] == b'\x7f\x00\x00\x01' and dport == port:
+                    connector.send(b'connect-v1')
+                    reply, fds = receive(connector)
+                    require(reply == b'connected-v1' and len(fds) == 1,
+                            'relay connector refused')
+                    connected = socket.socket(fileno=fds[0])
         elif family == socket.AF_UNIX:
             path = address[2:].rstrip(b'\0')
             prefix = state_prefix + b'/'
@@ -254,6 +333,10 @@ def host_contained(cfg, receipt_fd, acceptance_fd):
         for name, value in namespaces.items():
             require(value != os.readlink('/proc/self/ns/' + name),
                     'lane namespace not private: ' + name)
+        # trace:TASK-2708 | ai:claude — the lane netns identity the broker
+        # compares each connecting socket's own netns (SIOCGSKNS) against.
+        lane_md = os.stat('/proc/%d/ns/net' % worker)
+        lane_net = (lane_md.st_dev, lane_md.st_ino)
         os.write(block_w, b'R')
         os.close(block_w)
         block_w = None
@@ -274,7 +357,8 @@ def host_contained(cfg, receipt_fd, acceptance_fd):
                     'contained requested-seat preflight did not complete')
             ready, _, _ = select.select([broker, notification, proxy], [], [], 0.1)
             if notification in ready:
-                broker_connect_contained(notification, state_fd, state_prefix, connector, port)
+                broker_connect_contained(notification, state_fd, state_prefix, connector, port,
+                                         lane_net)
             if proxy in ready:
                 data, got = receive(proxy)
                 require(data, 'proxy died during preflight')
@@ -311,7 +395,7 @@ def host_contained(cfg, receipt_fd, acceptance_fd):
         while process.poll() is None:
             ready, _, _ = select.select(watch, [], [], 0.2)
             if notification in ready and not broker_connect_contained(
-                    notification, state_fd, state_prefix, connector, port):
+                    notification, state_fd, state_prefix, connector, port, lane_net):
                 if select.poll and _hung_up(notification):
                     watch.remove(notification)
             if proxy in ready:

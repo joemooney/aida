@@ -180,9 +180,14 @@ for path in {paths}:
     try:
         s.connect(path);raise AssertionError('host service reachable')
     except OSError as e: assert e.errno==errno.EACCES,e
-try:
-    socket.socket(socket.AF_INET,socket.SOCK_DGRAM);raise AssertionError('UDP allowed')
-except OSError as e: assert e.errno==errno.EACCES,e
+# trace:TASK-2708 | ai:claude — inet DGRAM and any unix socketpair are now
+# allowed (they reach no host path); RAW inet and unix DGRAM stay denied.
+socket.socket(socket.AF_INET,socket.SOCK_DGRAM).close()
+for pair in socket.socketpair(socket.AF_UNIX,socket.SOCK_DGRAM): pair.close()
+for args in ((socket.AF_INET,socket.SOCK_RAW,socket.IPPROTO_ICMP),(socket.AF_UNIX,socket.SOCK_DGRAM)):
+    try:
+        socket.socket(*args);raise AssertionError('%r allowed' % (args,))
+    except OSError as e: assert e.errno==errno.EACCES,e
 print('host services denied')
 "#
     );
@@ -752,4 +757,500 @@ Path('.aida/grant-notices/11111111-1111-4111-8111-111111111111/notice.json').wri
         std::fs::read_to_string(notice.join("notice.json")).unwrap(),
         "informational"
     );
+}
+
+// ---- TASK-2708 AC1: F-a filter/broker amendments for Claude M1 ------------
+// (advisor ruling 2026-11-05 11:25). trace:TASK-2708 | ai:claude
+
+/// The shipped lane filter, evaluated by a classic-BPF interpreter over
+/// synthetic seccomp_data. Runs everywhere (no namespace needed), so the
+/// filter's socket decisions are pinned even where the live tests skip.
+#[test]
+fn task_2708_lane_filter_socket_decisions() {
+    let script = format!(
+        "{COMMON}\n{LANE}\n{}",
+        r#"
+def run(ops, nr, args):
+    data = struct.pack('<iIQ6Q', nr, 0xc000003e, 0, *(list(args) + [0] * (6 - len(args))))
+    pc, a = 0, 0
+    while True:
+        code, jt, jf, k = ops[pc]
+        if code == 0x20:
+            a = struct.unpack_from('<I', data, k)[0]; pc += 1
+        elif code == 0x54:
+            a &= k; pc += 1
+        elif code == 0x15:
+            pc += 1 + (jt if a == k else jf)
+        elif code == 0x45:
+            pc += 1 + (jt if a & k else jf)
+        elif code == 0x06:
+            return k
+        else:
+            raise AssertionError('unknown op %#x' % code)
+ops = lane_filter()
+S, P = 41, 53
+CLOEXEC, NONBLOCK = 0o2000000, 0o4000
+cases = [
+    ('socketpair_unix_dgram', P, (socket.AF_UNIX, socket.SOCK_DGRAM), ALLOW),
+    ('socketpair_unix_dgram_cloexec', P, (socket.AF_UNIX, socket.SOCK_DGRAM | CLOEXEC), ALLOW),
+    ('socketpair_unix_stream', P, (socket.AF_UNIX, socket.SOCK_STREAM), ALLOW),
+    ('socketpair_unix_seqpacket', P, (socket.AF_UNIX, socket.SOCK_SEQPACKET), ALLOW),
+    ('socketpair_inet_denied', P, (socket.AF_INET, socket.SOCK_STREAM), DENY),
+    ('unix_stream', S, (socket.AF_UNIX, socket.SOCK_STREAM), ALLOW),
+    ('unix_seqpacket', S, (socket.AF_UNIX, socket.SOCK_SEQPACKET), ALLOW),
+    ('unix_dgram_denied', S, (socket.AF_UNIX, socket.SOCK_DGRAM), DENY),
+    ('unix_dgram_cloexec_denied', S, (socket.AF_UNIX, socket.SOCK_DGRAM | CLOEXEC), DENY),
+    ('inet_stream', S, (socket.AF_INET, socket.SOCK_STREAM), ALLOW),
+    ('inet_dgram', S, (socket.AF_INET, socket.SOCK_DGRAM | NONBLOCK), ALLOW),
+    ('inet6_dgram', S, (socket.AF_INET6, socket.SOCK_DGRAM), ALLOW),
+    ('inet_raw_denied', S, (socket.AF_INET, socket.SOCK_RAW, 1), DENY),
+    ('inet6_raw_denied', S, (socket.AF_INET6, socket.SOCK_RAW, 58), DENY),
+    ('packet_denied', S, (17, socket.SOCK_RAW), DENY),
+    ('netlink_route_raw', S, (socket.AF_NETLINK, socket.SOCK_RAW, 0), ALLOW),
+    ('netlink_route_dgram', S, (socket.AF_NETLINK, socket.SOCK_DGRAM | CLOEXEC, 0), ALLOW),
+    ('connect_notifies', 42, (3, 0, 16), NOTIFY),
+]
+cases += [('netlink_%d_denied' % proto, S, (socket.AF_NETLINK, socket.SOCK_RAW, proto), DENY)
+          for proto in range(1, 32)]
+for name, nr, args, want in cases:
+    got = run(ops, nr, args)
+    assert got == want, '%s: %#x != %#x' % (name, got, want)
+print('filter decisions ok: %d' % len(cases))
+"#
+    );
+    let out = Command::new("/usr/bin/python3")
+        .args(["-I", "-S", "-c", &script])
+        .output()
+        .unwrap();
+    let text = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        out.status.success() && text.contains("filter decisions ok: 49"),
+        "{text}{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+}
+
+/// Ruling item 2: only NETLINK_ROUTE; every other netlink protocol refuses.
+#[test]
+fn task_2708_live_netlink_non_route_protocols_denied() {
+    if !live_available() {
+        return;
+    }
+    let output = run_script(
+        r#"
+import socket,errno
+socket.socket(socket.AF_NETLINK,socket.SOCK_RAW,0).close()
+for proto in range(1,32):
+    try:
+        socket.socket(socket.AF_NETLINK,socket.SOCK_RAW,proto).close()
+        raise AssertionError('netlink protocol %d allowed' % proto)
+    except OSError as e: assert e.errno==errno.EACCES,(proto,e)
+print('netlink route only')
+"#,
+    );
+    assert!(output.contains("netlink route only"), "{output}");
+}
+
+/// Ruling item 3: direct v4/v6 TCP is refused by the broker, and the newly
+/// allowed UDP reaches nothing: sendto has no route (ENETUNREACH), a UDP
+/// connect is refused, and name resolution fails.
+#[test]
+fn task_2708_live_direct_v4_v6_dns_unreachable() {
+    if !live_available() {
+        return;
+    }
+    let output = run_script(
+        r#"
+import socket,errno
+for fam,addr in ((socket.AF_INET,('8.8.8.8',53)),(socket.AF_INET6,('2001:4860:4860::8888',53))):
+    s=socket.socket(fam,socket.SOCK_STREAM)
+    try:
+        s.connect(addr);raise AssertionError('direct tcp %r' % (addr,))
+    except OSError as e: assert e.errno==errno.ECONNREFUSED,e
+    u=socket.socket(fam,socket.SOCK_DGRAM)
+    try:
+        u.sendto(b'\0'*12,addr);raise AssertionError('direct udp %r' % (addr,))
+    except OSError as e: assert e.errno==errno.ENETUNREACH,e
+    try:
+        u.connect(addr);raise AssertionError('udp connect %r' % (addr,))
+    except OSError as e: assert e.errno==errno.ECONNREFUSED,e
+try:
+    socket.getaddrinfo('example.com',443);raise AssertionError('dns resolved')
+except socket.gaierror: pass
+print('direct v4 v6 dns unreachable')
+"#,
+    );
+    assert!(output.contains("direct v4 v6 dns unreachable"), "{output}");
+}
+
+/// Ruling item 3: a lane UDP datagram to the relay port gets nothing, a UDP
+/// connect to it is refused (never swapped for a relay stream), and the
+/// relay still serves TCP afterwards (positive control).
+#[test]
+fn task_2708_live_lane_udp_to_relay_port_gets_nothing() {
+    if !live_available() {
+        return;
+    }
+    let output = run_script(
+        r#"
+import socket,errno,os
+port=int(os.environ['HTTP_PROXY'].rsplit(':',1)[1])
+u=socket.socket(socket.AF_INET,socket.SOCK_DGRAM);u.settimeout(1)
+u.sendto(b'CONNECT github.com:443 HTTP/1.1\r\n\r\n',('127.0.0.1',port))
+try:
+    data=u.recv(4096);raise AssertionError('udp reply %r' % data)
+except socket.timeout: pass
+c=socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
+try:
+    c.connect(('127.0.0.1',port));raise AssertionError('udp connect to relay')
+except OSError as e: assert e.errno==errno.ECONNREFUSED,e
+s=socket.socket();s.connect(('127.0.0.1',port))
+s.sendall(b'GET / HTTP/1.1\r\n\r\n');assert b'405' in s.recv(4096)
+print('udp to relay gets nothing')
+"#,
+    );
+    assert!(output.contains("udp to relay gets nothing"), "{output}");
+}
+
+/// Ruling item 4: the broker judges the SOCKET's netns, not the caller's. A
+/// socket made in the lane netns and connected after its process unshared
+/// into a nested user+net namespace is still brokered (refused for a
+/// non-relay loopback port). Positive control: a socket made in the nested
+/// netns reaches a listener there, so the pass-through is real.
+#[test]
+fn task_2708_live_lane_socket_connected_from_nested_netns_is_still_brokered() {
+    if !live_available() {
+        return;
+    }
+    let output = run_script(
+        r#"
+import ctypes as C,socket,errno,struct,fcntl
+lib=C.CDLL(None,use_errno=True)
+lane=socket.socket()
+other=socket.socket();other.bind(('127.0.0.1',0));other.listen();other.setblocking(False)
+target=other.getsockname()
+assert lib.unshare(0x10000000|0x40000000)==0,C.get_errno()
+try:
+    lane.connect(target);raise AssertionError('lane socket connected unbrokered')
+except OSError as e: assert e.errno==errno.ECONNREFUSED,e
+try:
+    other.accept();raise AssertionError('lane listener reached')
+except BlockingIOError: pass
+d=socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
+flags=struct.unpack_from('H',fcntl.ioctl(d.fileno(),0x8913,struct.pack('16sH22x',b'lo',0)),16)[0]
+fcntl.ioctl(d.fileno(),0x8914,struct.pack('16sH22x',b'lo',flags|1))
+n=socket.socket();n.bind(('127.0.0.1',0));n.listen()
+c=socket.socket();c.connect(n.getsockname());n.accept()[0].close()
+print('lane socket brokered; nested socket passed through')
+"#,
+    );
+    assert!(
+        output.contains("lane socket brokered; nested socket passed through"),
+        "{output}"
+    );
+}
+
+// ---- TASK-2708 AC1: Claude on the shared contained wrapper ----------------
+// trace:TASK-2708 | ai:claude
+
+/// Vendor differences are rows; an unknown program has no profile.
+#[test]
+fn task_2708_vendor_rows_are_data() {
+    let claude = ContainedVendor::for_program(std::ffi::OsStr::new("/opt/bin/claude")).unwrap();
+    assert_eq!(claude.key, "claude");
+    assert_eq!(claude.auth, VendorAuth::ClaudeCredentialsFile);
+    assert_eq!(claude.private_home_env, ["CLAUDE_CONFIG_DIR"]);
+    assert_eq!(claude.private_tmp_env, ["TMPDIR", "CLAUDE_CODE_TMPDIR"]);
+    let codex = ContainedVendor::for_program(std::ffi::OsStr::new("codex")).unwrap();
+    assert_eq!(codex.auth, VendorAuth::OpenAiApiKey);
+    assert_eq!(codex.private_home_env, ["CODEX_HOME", "CODEX_SQLITE_HOME"]);
+    for other in ["agy", "opencode", "claude-wrapper", ""] {
+        assert!(
+            ContainedVendor::for_program(std::ffi::OsStr::new(other)).is_err(),
+            "{other}"
+        );
+    }
+}
+
+/// Ruling item 5: Claude's own sandbox on, required, no unsandboxed escape,
+/// chained to the relay by httpProxyPort with no SOCKS port; the rest of the
+/// generated settings (permissions, env) is preserved.
+#[test]
+fn task_2708_claude_lane_settings_chain_the_relay() {
+    let generated = serde_json::json!({
+        "permissions": {"allow": ["Bash(aida *)"], "deny": ["Monitor"]},
+        "env": {"CLAUDE_CODE_DISABLE_BACKGROUND_TASKS": "1"},
+        "sandbox": {"enabled": false, "allowUnsandboxedCommands": true,
+                    "network": {"socksProxyPort": 1080, "allowedDomains": ["evil.example"]}}
+    })
+    .to_string();
+    let allowed = vec!["api.anthropic.com".to_string(), "github.com".to_string()];
+    let out: serde_json::Value =
+        serde_json::from_str(&claude_lane_settings(&generated, 41234, &allowed).unwrap()).unwrap();
+    let sandbox = &out["sandbox"];
+    assert_eq!(sandbox["enabled"], true);
+    assert_eq!(sandbox["failIfUnavailable"], true);
+    assert_eq!(sandbox["allowUnsandboxedCommands"], false);
+    assert_eq!(sandbox["network"]["httpProxyPort"], 41234);
+    assert!(sandbox["network"].get("socksProxyPort").is_none(), "{out}");
+    assert_eq!(
+        sandbox["network"]["allowedDomains"],
+        serde_json::json!(allowed)
+    );
+    assert_eq!(out["permissions"]["deny"], serde_json::json!(["Monitor"]));
+    assert_eq!(out["env"]["CLAUDE_CODE_DISABLE_BACKGROUND_TASKS"], "1");
+    assert!(claude_lane_settings("not json", 1, &[]).is_err());
+    assert!(claude_lane_settings("[]", 1, &[]).is_err());
+}
+
+/// The Claude argv keeps the site's flags, finishes its one --settings, and
+/// refuses permission skips, resume, and a missing or duplicate --settings.
+#[test]
+fn task_2708_claude_argv_finishes_settings_and_refuses_escapes() {
+    let settings = r#"{"sandbox":{"enabled":true}}"#.to_string();
+    let base = |extra: &[&str]| -> Vec<String> {
+        let mut args: Vec<String> = ["-p", "--setting-sources", "project", "--settings"]
+            .map(String::from)
+            .into();
+        args.push(settings.clone());
+        args.extend(extra.iter().map(|s| s.to_string()));
+        args.push("prompt".into());
+        args
+    };
+    let out = claude_argv(&base(&["--session-id", "s1"]), 5555, &[]).unwrap();
+    assert_eq!(out.len(), base(&["--session-id", "s1"]).len());
+    let at = out.iter().position(|a| a == "--settings").unwrap();
+    let finished: serde_json::Value = serde_json::from_str(&out[at + 1]).unwrap();
+    assert_eq!(finished["sandbox"]["network"]["httpProxyPort"], 5555);
+    assert_eq!(out.last().unwrap(), "prompt");
+    for (extra, needle) in [
+        (
+            &["--dangerously-skip-permissions"][..],
+            "skip its permission",
+        ),
+        (
+            &["--allow-dangerously-skip-permissions"][..],
+            "skip its permission",
+        ),
+        (
+            &["--permission-mode", "bypassPermissions"][..],
+            "skip its permission",
+        ),
+        (
+            &["--permission-mode=bypassPermissions"][..],
+            "skip its permission",
+        ),
+        (&["--resume", "abc"][..], "resume"),
+        (&["--resume=abc"][..], "resume"),
+        (&["-c"][..], "resume"),
+        (&["--settings", "{}"][..], "exactly one"),
+        (&["--settings={}"][..], "one generated --settings"),
+    ] {
+        let error = claude_argv(&base(extra), 1, &[]).unwrap_err().to_string();
+        assert!(error.contains(needle), "{extra:?}: {error}");
+    }
+    let error = claude_argv(&["-p".into(), "prompt".into()], 1, &[])
+        .unwrap_err()
+        .to_string();
+    assert!(error.contains("exactly one"), "{error}");
+}
+
+fn credentials_expiring_in(dir: &Path, secs: i64) -> PathBuf {
+    let path = dir.join(CLAUDE_CREDENTIALS);
+    let at = chrono::Utc::now().timestamp_millis() + secs * 1000;
+    std::fs::write(
+        &path,
+        serde_json::json!({"claudeAiOauth": {"accessToken": "synthetic-2708", "expiresAt": at}})
+            .to_string(),
+    )
+    .unwrap();
+    path
+}
+
+/// 05:47 ruling: a token that outlives the grant launches without a refresh;
+/// one that would not gets ONE host refresh; if that does not help, or the
+/// credentials are missing or not OAuth, the launch refuses by name.
+#[test]
+fn task_2708_claude_credentials_must_outlive_the_grant() {
+    let dir = tempfile::tempdir().unwrap();
+    let fresh = credentials_expiring_in(dir.path(), 8 * 3600);
+    ensure_claude_credentials_outlive(&fresh, 4 * 3600, || panic!("no refresh needed")).unwrap();
+
+    let stale = credentials_expiring_in(dir.path(), 600);
+    let refreshes = std::cell::Cell::new(0);
+    let error = ensure_claude_credentials_outlive(&stale, 4 * 3600, || {
+        refreshes.set(refreshes.get() + 1);
+        Ok(())
+    })
+    .unwrap_err()
+    .to_string();
+    assert_eq!(refreshes.get(), 1);
+    assert!(error.contains("claude credentials expire in"), "{error}");
+    assert!(error.contains("relaunch"), "{error}");
+
+    let renewed = ensure_claude_credentials_outlive(&stale, 4 * 3600, || {
+        credentials_expiring_in(dir.path(), 8 * 3600);
+        Ok(())
+    });
+    assert!(renewed.is_ok(), "{renewed:?}");
+
+    // A baseline (grant-less, ttl 0) lane still needs an hour of token.
+    credentials_expiring_in(dir.path(), 60);
+    let failed = ensure_claude_credentials_outlive(&stale, 0, || anyhow::bail!("offline"));
+    assert!(
+        format!("{:#}", failed.unwrap_err()).contains("host-side Claude credential refresh failed")
+    );
+
+    let missing = dir.path().join("absent").join(CLAUDE_CREDENTIALS);
+    let error = ensure_claude_credentials_outlive(&missing, 60, || Ok(())).unwrap_err();
+    assert!(
+        error.to_string().contains("subscription credentials"),
+        "{error}"
+    );
+    std::fs::write(&stale, r#"{"apiKey":"x"}"#).unwrap();
+    let error = ensure_claude_credentials_outlive(&stale, 60, || Ok(())).unwrap_err();
+    assert!(error.to_string().contains("claudeAiOauth"), "{error}");
+}
+
+/// The credentials leaf is pinned by descriptor: never a symlink or a
+/// hard-linked alias.
+#[test]
+fn task_2708_claude_credentials_leaf_identity() {
+    let dir = tempfile::tempdir().unwrap();
+    let real = credentials_expiring_in(dir.path(), 3600);
+    assert!(open_credentials_leaf(&real).is_ok());
+    let link = dir.path().join("link.json");
+    std::os::unix::fs::symlink(&real, &link).unwrap();
+    assert!(open_credentials_leaf(&link).is_err());
+    let alias = dir.path().join("alias.json");
+    std::fs::hard_link(&real, &alias).unwrap();
+    assert!(open_credentials_leaf(&real).is_err());
+}
+
+/// A lane whose RO credentials expired exits with the named refusal; any
+/// other exit is reported as the vendor's own.
+#[test]
+fn task_2708_claude_expired_in_lane_is_a_named_refusal() {
+    let dir = tempfile::tempdir().unwrap();
+    let child = |credentials: Option<PathBuf>| ContainedChild {
+        child: Command::new("/bin/true").spawn().unwrap(),
+        receipt: None,
+        acceptance: None,
+        credentials,
+        _state: tempfile::tempdir().unwrap(),
+    };
+    let failed = Command::new("/bin/false").status().unwrap();
+    let ok = Command::new("/bin/true").status().unwrap();
+    let expired = credentials_expiring_in(dir.path(), -60);
+    let run = child(Some(expired));
+    assert_eq!(
+        run.vendor_exit(failed).unwrap_err().to_string(),
+        CLAUDE_EXPIRED_IN_LANE
+    );
+    assert!(run.vendor_exit(ok).unwrap().success());
+    credentials_expiring_in(dir.path(), 3600);
+    assert!(!run.vendor_exit(failed).unwrap().success());
+    assert!(!child(None).vendor_exit(failed).unwrap().success());
+}
+
+fn trusted_policy(root: &Path, vendors: &str) {
+    let git = |args: &[&str]| {
+        let out = crate::test_git::git_command()
+            .arg("-C")
+            .arg(root)
+            .args(args)
+            .output()
+            .unwrap();
+        assert!(out.status.success(), "git {args:?}: {out:?}");
+    };
+    if !root.join(".git").exists() {
+        git(&["init", "-q", "-b", "main"]);
+        git(&["config", "user.name", "test"]);
+        git(&["config", "user.email", "test@example.com"]);
+    }
+    std::fs::create_dir_all(root.join(".aida")).unwrap();
+    std::fs::write(
+        root.join(".aida/config.toml"),
+        format!("[contained]\nenable = true\n[contained.vendors]\n{vendors}\n"),
+    )
+    .unwrap();
+    git(&["add", ".aida/config.toml"]);
+    git(&["commit", "-q", "--allow-empty", "-m", "trusted policy"]);
+    git(&["update-ref", "refs/remotes/origin/main", "HEAD"]);
+    git(&[
+        "symbolic-ref",
+        "refs/remotes/origin/HEAD",
+        "refs/remotes/origin/main",
+    ]);
+}
+
+/// Only an explicit trusted `claude = "aida"` selects the wrapper; then
+/// every Claude AIDA composition outside a wrapper-owned headless launch
+/// (interactive, --bg, coordinator, resume) refuses by name, and inside one
+/// the legacy os_wrap is not applied. Applied credit for Claude with a
+/// receipt is the receipt's acceptance, never the Claude-native credit.
+#[test]
+fn task_2708_claude_wrapper_selection_and_unwired_surfaces_refuse() {
+    use crate::session::{self, HeadlessVendor};
+    let root = tempfile::tempdir().unwrap();
+    let _cwd = session::contained_cwd_seam::pin(root.path());
+    trusted_policy(root.path(), "");
+    assert!(!session::claude_uses_contained_wrapper(root.path()).unwrap());
+    assert!(!session::contained_wrapper_launch(HeadlessVendor::Claude, true).unwrap());
+    if let Err(error) = session::claude_contained_flags_for(None, root.path()) {
+        assert!(
+            !error.to_string().contains("shared contained wrapper"),
+            "{error}"
+        );
+    }
+
+    trusted_policy(root.path(), "claude = \"aida\"");
+    assert!(session::claude_uses_contained_wrapper(root.path()).unwrap());
+    assert!(session::contained_wrapper_launch(HeadlessVendor::Claude, true).unwrap());
+    assert!(!session::contained_wrapper_launch(HeadlessVendor::Claude, false).unwrap());
+    let error = session::claude_contained_flags_for(None, root.path()).unwrap_err();
+    assert_eq!(error.to_string(), session::CLAUDE_WRAPPER_UNWIRED);
+    {
+        let _scope = session::ClaudeWrapperComposition::enter();
+        if let Err(error) = session::claude_contained_flags_for(None, root.path()) {
+            assert!(
+                !error.to_string().contains("shared contained wrapper"),
+                "{error}"
+            );
+        }
+        let args = vec!["-p".to_string(), "x".to_string()];
+        assert_eq!(
+            session::os_wrapped_program_and_args(None, root.path(), "claude", args.clone())
+                .unwrap(),
+            ("claude".to_string(), args)
+        );
+    }
+    // The scope ends with its guard.
+    assert_eq!(
+        session::claude_contained_flags_for(None, root.path())
+            .unwrap_err()
+            .to_string(),
+        session::CLAUDE_WRAPPER_UNWIRED
+    );
+
+    trusted_policy(root.path(), "claude = \"bogus\"");
+    assert!(session::claude_uses_contained_wrapper(root.path()).is_err());
+
+    let unaccepted: ContainmentReceipt = serde_json::from_value(serde_json::json!({
+        "version": 1, "posture": "aida", "worker_pid": 1, "worker_start": "0",
+        "wrapper_pid": 1, "namespaces": {}, "uid_map_identity": true,
+        "seat_preflight": true, "broker": "seccomp_notify_addfd", "relay_port": 1,
+        "policy_sha": "x", "keyring": "isolated_child_only"
+    }))
+    .unwrap();
+    assert!(!session::containment_applied(
+        HeadlessVendor::Claude,
+        true,
+        Some(&unaccepted)
+    ));
+    assert!(session::containment_applied(
+        HeadlessVendor::Claude,
+        true,
+        None
+    ));
 }
