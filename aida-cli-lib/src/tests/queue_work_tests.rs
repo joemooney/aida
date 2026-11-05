@@ -4548,8 +4548,9 @@ fn story_2475_preparation_or_mail_failure_cannot_admit_a_launch() {
 /// launch. Boundary: clone seats run the same Git through
 /// `run_commit_sandboxed`, covered by the seat_clone and live bwrap tests.
 // trace:STORY-2475 | ai:claude
+// trace:BUG-2456 | ai:codex
 #[test]
-fn story_2475_conflicting_codex_rework_relaunches_claude_in_the_seated_tree() {
+fn bug_2456_host_publishes_clean_rework_or_routes_conflicts_before_launch() {
     use crate::session::HeadlessVendor;
     use std::cell::Cell;
     // HOME is pinned to the fixture, so the test runs in its own process.
@@ -4598,11 +4599,14 @@ fn story_2475_conflicting_codex_rework_relaunches_claude_in_the_seated_tree() {
     git(&project, &["add", "."]);
     git(&project, &["commit", "-qm", "base"]);
     git(&project, &["push", "-q", "origin", "main"]);
-    for (branch, file) in [("conflict-pr", "shared.rs"), ("clean-pr", "other.rs")] {
-        git(&project, &["checkout", "-qb", branch, "main"]);
-        std::fs::write(project.join(file), format!("{branch}\n")).unwrap();
-        git(&project, &["commit", "-qam", branch]);
-        git(&project, &["push", "-q", "origin", branch]);
+    for interactive in [false, true] {
+        for (stem, file) in [("conflict-pr", "shared.rs"), ("clean-pr", "other.rs")] {
+            let branch = format!("{stem}-{interactive}");
+            git(&project, &["checkout", "-qb", &branch, "main"]);
+            std::fs::write(project.join(file), format!("{branch}\n")).unwrap();
+            git(&project, &["commit", "-qam", &branch]);
+            git(&project, &["push", "-q", "origin", &branch]);
+        }
     }
     git(&project, &["checkout", "-q", "main"]);
     std::fs::write(project.join("shared.rs"), "main moved\n").unwrap();
@@ -4610,7 +4614,9 @@ fn story_2475_conflicting_codex_rework_relaunches_claude_in_the_seated_tree() {
     git(&project, &["push", "-q", "origin", "main"]);
 
     for interactive in [false, true] {
-        for (branch, conflicts) in [("conflict-pr", true), ("clean-pr", false)] {
+        for (stem, conflicts) in [("conflict-pr", true), ("clean-pr", false)] {
+            let branch_name = format!("{stem}-{interactive}");
+            let branch = branch_name.as_str();
             // Fresh seat on the pushed PR head, provisioned before the merge.
             git(
                 &project,
@@ -4657,7 +4663,10 @@ fn story_2475_conflicting_codex_rework_relaunches_claude_in_the_seated_tree() {
                 .output()
                 .unwrap();
             assert!(!merging.status.success(), "no unfinished merge");
+            // Remote evidence must agree before a vendor can be started.
+            let remote = git(&origin, &["rev-parse", &format!("refs/heads/{branch}")]);
             if conflicts {
+                assert_eq!(remote, head, "conflicts must not publish");
                 assert_eq!(vendor, HeadlessVendor::Claude);
                 assert_eq!(mailed.get(), 1);
                 assert_eq!(git(&seat, &["rev-parse", "HEAD"]), head, "merge aborted");
@@ -4669,6 +4678,11 @@ fn story_2475_conflicting_codex_rework_relaunches_claude_in_the_seated_tree() {
                     HeadlessVendor::Claude
                 );
             } else {
+                assert_eq!(
+                    remote,
+                    git(&seat, &["rev-parse", "HEAD"]),
+                    "host pushed before launch"
+                );
                 assert_eq!(vendor, HeadlessVendor::Codex);
                 assert_eq!(mailed.get(), 0);
                 assert_ne!(git(&seat, &["rev-parse", "HEAD"]), head, "merge committed");
