@@ -7,12 +7,19 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-05T20:55:46.456129472Z
-modified_at: 2026-11-05T20:55:46.456129472Z
+modified_at: 2026-11-05T21:11:39.281411537Z
 req_type: Task
 tags:
 - from-implementer:TASK-3074
 - kind:bug-spotted
 - severity:minor
+comments:
+- id: 01a1ad8d-9411-7850-bd6d-80be1c0fe32a
+  author: joe
+  content: 'Additional native publication evidence: `aida pr hold --reason` refused with local branch task-3074-r1329 does not exist, while `git branch --show-current` reports task-3074-r1329. Thus the supported hold command did not record a manual gate for the required PR-A Refs-title override. No forced Git operation, push or hold-marker fabrication was attempted. The host must use the explicit seat path and a non-completing commit/PR subject.'
+  created_at: 2026-11-05T21:11:39.281411537Z
+  modified_at: 2026-11-05T21:11:39.281411537Z
+  session_id: 01a1ad68128d
 filed_at:
   aida_version: 0.16.0
   aida_build_sha: 70e10d2b449
