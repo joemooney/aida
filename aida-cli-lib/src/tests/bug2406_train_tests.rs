@@ -73,7 +73,12 @@ if a[:2]==['pr','view']:
         if '@tsv' in q:
             if '.state' in q: print('OPEN\tMERGEABLE\tAPPROVED\t'+v['headRefOid']); sys.exit(0)
     emit(v)
-if a[:2]==['pr','list']: emit([])
+if a[:2]==['pr','list']:
+    if '--state' in a and a[a.index('--state')+1]=='open':
+        for n in ['11','12']:
+            v=meta(n)
+            print(str(v['number'])+'\t'+v['title']+'\t'+v['url']+'\t'+v['headRefName'])
+    sys.exit(0)
 if a[:2]==['pr','checks']:
     if '--watch' in a: sys.exit(0)
     emit([dict(name=n,bucket='pass',state='SUCCESS',workflow='CI',link='') for n in ['Build (ubuntu-latest)','merge-hold-gate']])
@@ -84,6 +89,15 @@ if a[:2]==['pr','merge']:
         (r/'transport.json').write_text(json.dumps(s)); print('error connecting to api.github.com',file=sys.stderr); sys.exit(1)
     sys.exit(0)
 if a[0]=='api':
+    # All-open association examines unrelated riders too. Supply their real
+    # commit evidence instead of treating a new GraphQL read as a transport fault.
+    # trace:BUG-2451 | ai:codex
+    if a[1]=='graphql':
+        repo={}
+        for n,v in s['prs'].items():
+            message=subprocess.check_output(['git','show','-s','--format=%B',v['headRefOid']],text=True)
+            repo['p'+n]=dict(headRefOid=v['headRefOid'],commits=dict(totalCount=1,nodes=[dict(commit=dict(oid=v['headRefOid'],message=message))]))
+        emit(dict(data=dict(repository=repo)))
     endpoint=next((x for x in a[1:] if x.startswith('repos/')),a[1])
     if '/check-runs' in endpoint:
         sha=endpoint.split('/commits/')[1].split('/')[0]

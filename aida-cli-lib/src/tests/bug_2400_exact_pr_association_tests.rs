@@ -912,3 +912,68 @@ fn bug_2400_many_unrelated_open_prs_under_latency() {
     ));
     assert!(logged().contains("pulls/5000"));
 }
+
+// trace:BUG-2451 | ai:codex
+#[test]
+fn bug_2451_github_pickup_sees_all_open_prs_instead_of_first_match() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let f = Fixture::new();
+    let root = f.dir.path();
+    let rows = format!(
+        "{}{}",
+        row(42, "fix (BUG-2392)", "original"),
+        row(43, "fix (BUG-2392)", "duplicate")
+    );
+    std::fs::write(root.join("search"), &rows).unwrap();
+    std::fs::write(root.join("all"), &rows).unwrap();
+    let forge = crate::forge::GitHubForge::new(root);
+    use crate::forge::Forge as _;
+    let changes = forge.open_changes_for_spec("BUG-2392").unwrap();
+    assert_eq!(changes.len(), 2);
+    assert!(changes
+        .iter()
+        .all(|c| c.url.starts_with("https://example.test/pr/")));
+    let error = crate::session_start::pickup_pr_branch(&forge, "BUG-2392", None)
+        .unwrap_err()
+        .to_string();
+    assert!(error.contains("#42") && error.contains("#43"), "{error}");
+}
+
+// trace:BUG-2451 | ai:codex
+#[test]
+fn bug_2451_github_pickup_ignores_train_carrying_rider_commits() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let f = Fixture::new();
+    let root = f.dir.path();
+    let rows = format!(
+        "{}{}",
+        row(42, "fix (BUG-2392)", "rider"),
+        row(3200, "merge train", "train/riders")
+    );
+    std::fs::write(root.join("search"), &rows).unwrap();
+    std::fs::write(root.join("all"), &rows).unwrap();
+    // This train would match by commit evidence if it were enumerated.
+    std::fs::write(
+        root.join("commits-1"),
+        serde_json::to_vec(&vec![commit(1, "fix (BUG-2392)")]).unwrap(),
+    )
+    .unwrap();
+    std::fs::write(
+        root.join("detail"),
+        serde_json::json!({"commits":1,"head":{"sha":format!("{:040x}",1)}}).to_string(),
+    )
+    .unwrap();
+    let forge = crate::forge::GitHubForge::new(root);
+    assert_eq!(
+        crate::session_start::pickup_pr_branch(&forge, "BUG-2392", None).unwrap(),
+        Some((42, "rider".into()))
+    );
+    use crate::forge::Forge as _;
+    assert_eq!(forge.open_changes_for_spec("BUG-2392").unwrap().len(), 1);
+    let calls = std::fs::read_to_string(root.join("args")).unwrap();
+    assert!(!calls.contains("/pulls/3200"), "{calls}");
+}

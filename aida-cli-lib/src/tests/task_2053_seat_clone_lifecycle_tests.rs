@@ -2366,3 +2366,82 @@ fn bug2450_bwrap_remote_coverage_protects_host_only_side_branches() {
         0
     );
 }
+
+// A hung sandbox cannot wedge explicit lease release. Preserve all seat data,
+// and never run host git or repeat the failed sandbox during the cleanup tail.
+// trace:BUG-2454 | ai:codex
+#[cfg(target_os = "linux")]
+#[test]
+fn bug2454_hanging_sandbox_allows_explicit_lease_release() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let fx = fixture();
+    let id = "b2454c0ffee1";
+    let clone = seat(&fx, "hung-probe", id);
+    let target = target_dir(&fx, &clone);
+    std::fs::create_dir_all(&target).unwrap();
+    let pin = pin_ref(&clone).unwrap();
+    seat_commit(&clone, "precious.txt");
+    let canary = fx.root.join("host-fsmonitor-ran");
+    git_ok(
+        &clone,
+        &[
+            "config",
+            "core.fsmonitor",
+            &format!("touch {}; false", canary.display()),
+        ],
+    );
+    let shim = fx.root.join("hung-bwrap");
+    std::fs::create_dir_all(&shim).unwrap();
+    let calls = fx.root.join("bwrap-calls");
+    crate::test_exec::write_executable(
+        &shim.join("bwrap"),
+        format!(
+            "#!/bin/sh\necho called >> '{}'\nexec sleep 30\n",
+            calls.display()
+        ),
+    );
+    let path = format!("{}:{}", shim.display(), std::env::var("PATH").unwrap());
+    let _ambient = crate::test_env::AmbientGuard::hermetic_and(
+        &fx.main,
+        None,
+        &[("PATH", Some(&path)), (SHIP_CLEANUP_PROBE_ENV, Some("1"))],
+    );
+    let end = |force, discard| {
+        crate::session_end::session_end_with_discard_unpushed(
+            Some(id),
+            None,
+            None,
+            true,
+            force,
+            false,
+            false,
+            false,
+            true,
+            false,
+            false,
+            false,
+            discard,
+        )
+    };
+    for (force, discard) in [(false, false), (true, false), (false, true)] {
+        let err = format!("{:#}", end(force, discard).unwrap_err());
+        assert!(
+            err.contains("submodule evidence") && err.contains("did not finish"),
+            "{err}"
+        );
+        assert!(err.contains("--force --discard-unpushed"), "{err}");
+        assert!(clone.exists() && target.exists() && ref_exists(&fx.main, &pin));
+        assert!(crate::lease_path(&fx.main, id).exists());
+    }
+    end(true, true).unwrap();
+    assert!(!crate::lease_path(&fx.main, id).exists());
+    assert!(clone.join("precious.txt").exists());
+    assert!(target.exists() && ref_exists(&fx.main, &pin));
+    assert!(
+        !canary.exists(),
+        "host git must never inspect the unreadable clone"
+    );
+    assert_eq!(std::fs::read_to_string(calls).unwrap().lines().count(), 4);
+}
