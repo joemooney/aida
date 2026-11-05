@@ -33,7 +33,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-10T20:30:55.867848469Z
-modified_at: 2026-11-05T12:23:42.475307351Z
+modified_at: 2026-11-05T12:41:33.128720856Z
 req_type: Story
 tags:
 - docs
@@ -50,6 +50,25 @@ comments:
   created_at: 2026-11-04T01:41:29.135331727Z
   modified_at: 2026-11-04T01:41:29.135331727Z
   session_id: 04f971d5-7365-46ed-b777-d4ff41d730ed
+- id: 01a1abba-90c8-7cf2-88ec-0756288430a6
+  author: joe
+  content: |
+    Implementation prepared in /home/joe/ai/aida-worktrees/aida-seat-aida-story-1651 on branch story-1651.
+
+    Moved 190 tracked files into docs/advanced/ and docs/internal/, retargeted Markdown/HTML links and code, template and script consumers. docs/README.md now has the three audience doors and a command-only first-spec path. README routes contributors through CONTRIBUTING/OVERVIEW. docs/plans/ stays in place with an internal-index link (explicitly allowed by this story), and normative ADRs/template masters/generated mirrors/live instructions retain their locations. The spike deliverable gate accepts the old directory for other projects as well as the new internal directory.
+
+    Extended the existing cleanup inventory with complete audience coverage and negative tests (new/missing, duplicate, invalid, wrong and stale rows). The Documentation audience coverage CI step is classified fast and is picked up by make check-ci-fast. Added a repository-local file-link checker. Main and focused CLI book summaries exclude contributor material. make book now builds the unified reader book via scripts/build-reader-book.py, which also prunes internal/archive assets that installed mdBook 0.5.3 would otherwise copy despite excluding them from SUMMARY. Advanced chapter URL redirects preserve old book links. Website generation handles source-relative figure paths for moved operator guides, with a regression test. Template master source location stays unchanged while its ecosystem-watch output moves under internal/.
+
+    Validation: 59 focused Python tests passed; 17 growth-classifier/cadence/parser tests passed; glossary generator fixture passed; CLI static citation guard passed; audience coverage passed for 943 tracked Markdown/HTML documents (947 inventory rows including historical moved assets); all 1,415 local documentation file-link targets passed; reader book builds with no warnings and contains no internal/archive/plans/aida asset directories; cargo fmt and git diff --check passed. The exact landing-page Git/init/add/list sequence succeeded in a fresh temporary project without internal docs. The Rust changed-file include_str/include_bytes targets all resolve. The no-default-features aida-cli cargo check passed during make check-ci-fast; the remaining aggregate is still building/checking the TUI from a cold target directory. A broad growth plotting suite was interrupted during first-use Matplotlib font-cache initialization; its non-plotting classifier tests were run separately and passed.
+
+    Publication boundary: .git is read-only in this native lane, so git mv/add/commit/push are refused. Filesystem moves leave the same rename-detectable changes for the host to stage. aida claim was also refused by the shared metadata write boundary; this launch already has a spec-scoped live lease. A host deputy dry run with --commit-pending explicitly refused because live process 2784973 owns the lane. No commit or PR was created and no shipping/review-record command was run. The launcher must finish the host-side commit after this lane exits, then open the PR (never merge):
+
+    aida ship STORY-1651 --from-seat /home/joe/ai/aida-worktrees/aida-seat-aida-story-1651 --commit-pending '[AI:codex] docs(audiences): separate adopter operator and contributor guides (STORY-1651)'
+
+    After the PR exists, finish queue done on the host. Do not bypass the live-owner check or mark this story Completed before publication/review.
+  created_at: 2026-11-05T12:41:33.128720856Z
+  modified_at: 2026-11-05T12:41:33.128720856Z
+  session_id: 01a1aba9a850
 history:
 - id: 01a12786-de64-7f61-81ce-787aedc7543e
   author: joe
