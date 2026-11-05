@@ -1,4 +1,11 @@
 - user_id: role:implementer
+  requirement_id: 01a1aa02-8498-71d2-80b4-0983d03abc5a
+  position: 110000
+  added_by: role:implementer
+  note: 'Address the latest review on #3411 (see its last ''## Review'' comment and the spec''s review verdict) and any red CI at the current head; push to branch story-b6b1278890774ef993d2ebc327862470-418 (no new branch). LIGHT gate.'
+  added_at: 2026-11-05T13:19:44.448936061Z
+  for_role: implementer
+- user_id: role:implementer
   requirement_id: 01a1a7b3-0b59-7e62-ae47-3c0283f551ac
   position: 111000
   added_by: role:implementer
@@ -66,13 +73,6 @@
   added_by: role:implementer
   note: 'CI red at 2e8fa0b: lib-0 bug2406_train_tests.rs:768 bug2438_old_head_refusal_without_current_head_verdict_refuses panics. Update branch and fix.'
   added_at: 2026-11-05T09:48:32.934753066Z
-  for_role: implementer
-- user_id: role:implementer
-  requirement_id: 01a1aa02-8498-71d2-80b4-0983d03abc5a
-  position: 126000
-  added_by: role:implementer
-  note: '#3411 conflicts with main and CI red. Rebase onto main on the PR branch, resolve conflicts, push.'
-  added_at: 2026-11-05T09:48:19.950481259Z
   for_role: implementer
 - user_id: role:implementer
   requirement_id: 01a1aa02-abc4-7ee2-a89a-635ae0f2c5c3
