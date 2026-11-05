@@ -21,7 +21,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T04:40:54.168438456Z
-modified_at: 2026-11-05T15:56:52.807231726Z
+modified_at: 2026-11-05T16:26:53.553600571Z
 req_type: Story
 tags:
 - docs:impacted
@@ -328,6 +328,13 @@ comments:
   created_at: 2026-11-05T15:56:50.374351977Z
   modified_at: 2026-11-05T15:56:50.374351977Z
   session_id: b83457ff-84e3-46cb-8f68-4be531a63422
+- id: 01a1ac88-def1-7943-9cf2-aaeeb66add82
+  author: joe
+  content: 'Round 3 (PR #3411, 710e09f1f7a): merged origin/main (gate/ledger/mod.rs conflict: kept BUG-2451 open_change_bound_with_riders + authorship hook). Findings 2,3,4,5,7 fixed (ordinary refusals publish; receipts/authorship use the change''s bound spec set; headless merge gate falls back to branch head; revoked-only / unknown-head evidence absent-with-report; reports captured via take_reports). Finding 1: PR retitled ''(Refs STORY-2492)'' so the merge does not complete this story; slice-2 spec (watcher discovery + synced (change, head) reservation, AC4) STILL NEEDS FILING by operator/advisor — aida add fails here with read-only ID allocation. Finding 6 (drive ship/ready entry point with faked forge) deferred: merge_path_approval_gate resolves its forge via forge_for() with no injection seam; needs a seam to test without a live forge.'
+  created_at: 2026-11-05T16:26:53.553600571Z
+  modified_at: 2026-11-05T16:26:53.553600571Z
+  session_id: 01a1ac7029be
+  harness_version: 2.1.318 (Claude Code)
 history:
 - id: 01a1aa03-2e29-79d0-827e-4c56622f79bd
   author: joe
