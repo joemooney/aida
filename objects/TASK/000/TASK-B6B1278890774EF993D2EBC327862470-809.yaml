@@ -18,7 +18,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-05T06:37:04.476791926Z
-modified_at: 2026-11-05T06:37:04.476791926Z
+modified_at: 2026-11-05T15:58:49.066354027Z
 req_type: Task
 tags:
 - from-advisor:TASK-2832
@@ -27,6 +27,13 @@ tags:
 - loop-guard
 - review-recurrence
 - severity:major
+comments:
+- id: 01a1ac6f-2aea-7e42-99f6-7a34d0b4d2ac
+  author: joe
+  content: 'Advisor triage: loop-guard observation resolved: TASK-2832 merged in #3394.'
+  created_at: 2026-11-05T15:58:49.066354027Z
+  modified_at: 2026-11-05T15:58:49.066354027Z
+  session_id: b83457ff-84e3-46cb-8f68-4be531a63422
 history:
 - id: 01a1aa76-522c-7901-a94b-7f010e320c4e
   author: joe
