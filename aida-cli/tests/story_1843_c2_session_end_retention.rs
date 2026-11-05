@@ -52,6 +52,9 @@ fn aida(cwd: &Path, home: &Path) -> Command {
     ] {
         cmd.env_remove(k);
     }
+    // These fixtures own all relevant processes inside their test namespace.
+    // trace:BUG-2450 | ai:codex
+    cmd.env("AIDA_TRUST_PID_NAMESPACE", "1");
     cmd
 }
 

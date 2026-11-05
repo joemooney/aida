@@ -1059,6 +1059,45 @@ pub(crate) fn session_end(
     // longer removes a tree another live process is using.
     include_in_use: bool,
 ) -> Result<()> {
+    session_end_with_discard_unpushed(
+        id_query,
+        spec_query,
+        branch_query,
+        yes,
+        force,
+        purge_cc,
+        wait_ci,
+        watch_ci,
+        skip_ci,
+        return_to_pool,
+        remove,
+        include_in_use,
+        false,
+    )
+}
+
+// trace:BUG-2450 | ai:codex
+// why: mirrors the CLI's independent teardown flags; internal callers retain the safe wrapper.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn session_end_with_discard_unpushed(
+    id_query: Option<&str>,
+    spec_query: Option<&str>,
+    branch_query: Option<&str>,
+    yes: bool,
+    force: bool,
+    purge_cc: bool,
+    wait_ci: bool,
+    watch_ci: bool,
+    skip_ci: bool,
+    // STORY-714: explicit --return (back-compat; pooled trees now return by
+    // default). TASK-985: --remove forces deletion instead of returning.
+    return_to_pool: bool,
+    remove: bool,
+    // BUG-1986: the dedicated live-process override. `--force` alone no
+    // longer removes a tree another live process is using.
+    include_in_use: bool,
+    discard_unpushed: bool,
+) -> Result<()> {
     // Returning is now the default; the flag is kept for compat.
     let _ = return_to_pool;
     // BUG-1952: run from inside the worktree being ended, `find_project_root`
@@ -1132,6 +1171,13 @@ pub(crate) fn session_end(
     } else {
         None
     };
+
+    // --force concerns uncommitted files only. Never destroy the only copy
+    // of a commit, including side branches with no upstream configured.
+    // trace:BUG-2450 | ai:codex
+    if !target.worktree_path.as_os_str().is_empty() && target.worktree_path.exists() {
+        guard_remote_commits(&project_root, &target, discard_unpushed)?;
+    }
 
     // BUG-361: visibility-first guard for the ceiling variant where an agent
     // commits locally and exits without any lifecycle command (`queue done`,
@@ -1591,6 +1637,12 @@ pub(crate) fn session_end(
                  was not removed or reset."
             );
         }
+    }
+
+    // Re-read immediately before any teardown writes.
+    // trace:BUG-2450 | ai:codex
+    if has_worktree {
+        guard_remote_commits(&project_root, &target, discard_unpushed)?;
     }
 
     // Snapshot the lease file's authoritative on-disk location BEFORE we
@@ -2571,3 +2623,26 @@ pub(crate) fn leaked_to_terminate_targets(
 #[cfg(test)]
 #[path = "tests/bug_1986_teardown_recheck_tests.rs"]
 mod bug_1986_teardown_recheck_tests;
+
+/// Explicit discard is independent of --force and live-process overrides.
+// trace:BUG-2450 | ai:codex
+pub(crate) fn guard_remote_commits(
+    main: &std::path::Path,
+    lease: &SessionLease,
+    discard_unpushed: bool,
+) -> Result<()> {
+    if discard_unpushed {
+        return Ok(());
+    }
+    let count = crate::seat_clone::remote_missing_commits(
+        main,
+        &lease.worktree_path,
+        lease.tree_kind == crate::seat_clone::TreeKind::Clone,
+        &lease.branch,
+    )
+    .context("cannot establish remote commit coverage; session was NOT ended")?;
+    anyhow::ensure!(count == 0,
+        "lease {} at {} holds {} commit(s) reachable from HEAD or local branches that no remote has. The session was NOT ended; push the commits, or explicitly pass --discard-unpushed to discard them (--force does not override this guard)",
+        lease.id, lease.worktree_path.display(), count);
+    Ok(())
+}
