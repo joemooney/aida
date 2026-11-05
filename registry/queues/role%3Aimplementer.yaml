@@ -1,4 +1,10 @@
 - user_id: role:implementer
+  requirement_id: 01a1965c-3483-70e3-af35-1caaf7df3f96
+  position: 162000
+  added_by: role:implementer
+  added_at: 2026-11-05T00:22:03.769558090Z
+  for_role: implementer
+- user_id: role:implementer
   requirement_id: 01a1403f-ecb1-7412-bd8a-56dd869eb0b2
   position: 163000
   added_by: role:implementer
@@ -52,13 +58,6 @@
   added_by: role:implementer
   note: lane went dormant without committing
   added_at: 2026-11-04T11:37:21.124874240Z
-  for_role: implementer
-- user_id: role:implementer
-  requirement_id: 01a1965c-3483-70e3-af35-1caaf7df3f96
-  position: 179000
-  added_by: role:implementer
-  note: 'merge conflict with #3288'
-  added_at: 2026-11-04T11:14:35.899276721Z
   for_role: implementer
 - user_id: role:implementer
   requirement_id: 01a1a50b-c5d6-7441-b192-89d4e403ca32
