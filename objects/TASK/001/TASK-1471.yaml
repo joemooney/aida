@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-09-24T04:25:12.035374412Z
-modified_at: 2026-11-05T13:34:51.547939975Z
+modified_at: 2026-11-05T13:50:40.770868407Z
 req_type: Task
 relationships:
 - rel_type:
@@ -177,6 +177,11 @@ comments:
   content: 'Round-5 follow-up: current head 03247496cae already contains all three requested corrections (display-ID assertion, always-present relationships comment, and archived/Rejected/Superseded Doc documentation). This session strengthens the regression to parse the relationship array and assert its exact id/title plus the initial empty array. No review finding is disputed. Correction to the round-4 note: run_show JSON always includes relationships, including []; adding the first edge changes its value, not key presence. PR #3367 currently reports MERGEABLE. The only completed failing check is the active merge-hold; no hold clearance is being attempted. The prescribed targeted lane run was refused because this standalone session has no lane job runner (untested=true); make check-ci-fast is running. MCP refused the Needs Attention -> In Progress transition for lack of advisor authority, so lifecycle status is unchanged.'
   created_at: 2026-11-05T13:34:51.547924169Z
   modified_at: 2026-11-05T13:34:51.547924169Z
+- id: 01a1abf9-da82-75b0-aab9-12d4aa51fe91
+  author: mcp
+  content: 'Round-5 follow-up published to existing PR #3367, forge-confirmed head 9c166ff3b4d103534f2f2426d5983a496f1f03f5. New commit [AI:codex] test(show): assert projected relationship display ID (TASK-1471) verifies the exact parsed relationship id/title and the always-present initial empty relationships array. All three original findings remain addressed by predecessor 03247496cae; none disputed. Corrected the misleading historical round-4 key-presence explanation in the earlier comment. Remote branch advanced via a main merge during validation; fetched and rebased the new commit onto bfbc892318d without conflicts, then reran make check-ci-fast: all 37 gates passed at final head. Formatting and whitespace checks passed; working tree clean. Targeted cargo test was requested through aida lane job run but refused because this standalone session has no lane runner, so untested=true for the Rust regression and no green lib-1 is claimed. Push succeeded remotely (gh confirms exact head); only its local tracking-ref update reported read-only .git. PR remains open, merge hold retained; no ship, review record or hold clearance attempted. Lifecycle transition to In Progress was refused by MCP for lack of advisor authority; status remains Needs Attention pending authorized handling.'
+  created_at: 2026-11-05T13:50:40.770861167Z
+  modified_at: 2026-11-05T13:50:40.770861167Z
 history:
 - id: 01a1a438-4c50-72d0-87d7-ecde2738cbc4
   author: joe
