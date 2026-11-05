@@ -1,0 +1,36 @@
+id: 01a1aa6c-e05c-7cd3-a369-c407295c5486
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-809
+title: 'Repeated unchanged review findings: TASK-2832'
+description: |-
+  Identical reviewer findings recurred twice for TASK-2832; do not requeue a third implementer round until an advisor chooses a different implementer/seat or resolves the dispute.
+
+  REVIEW FINDINGS TO ADDRESS (TASK-2832):
+  Verdict: CHANGES REQUESTED
+  Reviewed commit: fa97b48bcb09
+  Recorded: 2026-11-05T02:32:33.661594889+00:00
+  Findings:
+  1. CI blocker: CI (lib-0) run 41954321808 job 127005455263 fails step 'Test time budget' (Run tests passed). aida-cli-lib/src/deputy_shell/tests.rs wait_refuses_an_interrupted_claim_after_the_grace_expires asserts begun.elapsed() >= 10s, i.e. it necessarily exceeds scripts/test-time-budget.toml default_limit = 10, and as a test in a changed file it is held to the strict limit with no entry. Fix: either make the claim grace injectable for tests (e.g. a wait_with_grace(q,id,limit,grace,out) helper that wait() calls with CLAIM_GRACE, test with ~300ms) — preferred, removes 10s+ of wall clock per run — or add a reasoned budget entry '"aida-cli-lib deputy_shell::tests::wait_refuses_an_interrupted_claim_after_the_grace_expires" = 25' in scripts/test-time-budget.toml.
+  2. Coverage note (non-blocking, fold into the same fix): if the grace becomes injectable, also assert the refusal happens near the grace (e.g. elapsed < grace + margin) so a regression that loops until some other bound is caught; the current 20s recv_timeout only bounds a hang.
+  Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-05T06:37:04.476791926Z
+modified_at: 2026-11-05T06:37:04.476791926Z
+req_type: Task
+tags:
+- from-advisor:TASK-2832
+- kind:observation
+- linked:TASK-2832
+- loop-guard
+- review-recurrence
+- severity:major
+filed_at:
+  code_sha: d561213a36febec31d45921d3d43d4dc7590135e
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: d561213a36f
+  vendor: claude
+  session: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
