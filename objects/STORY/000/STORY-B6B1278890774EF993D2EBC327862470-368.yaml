@@ -29,7 +29,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T02:34:20.173245666Z
-modified_at: 2026-11-05T15:56:33.525449176Z
+modified_at: 2026-11-05T15:56:36.063579693Z
 req_type: Story
 comments:
 - id: 01a1a468-a682-7271-a707-298d622d86f1
@@ -111,6 +111,23 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: S1 condition language and checker are sound against the signed-off slice, but CI is red at the head in three jobs (gates, contracts, lib-1) because of this PR''s test and docs. No triage reason was given.'
   created_at: 2026-11-05T15:56:33.525447712Z
   modified_at: 2026-11-05T15:56:33.525447712Z
+  session_id: b83457ff-84e3-46cb-8f68-4be531a63422
+- id: 01a1ac6d-22f4-7fc3-9a7f-34ffbb267a79
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #3428):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 1c44a2e46c79
+    Recorded: 2026-11-05T13:41:45.170789182+00:00
+    Review comment: https://github.com/joemooney/aida/pull/3428#issuecomment-6659492664
+    Findings:
+    1. CI gates red (Executable fixture ratchet, reproduced with python3 -m unittest tests/test_executable_fixture_ratchet.py): aida-cli-lib/src/tests/story_2402_condition_cmd_tests.rs:72 sets the executable mode with std::fs::set_permissions. Write the gh fixture with crate::test_exec::write_executable (or mark_executable) instead.
+    2. CI contracts red (CLI-manual drift guard, docs/cli/verify-manual.py): docs/cli/02-specs.md:429 example 'spec:STORY-12=completed' is a bare SPEC-ID in the user-facing manual, which the SPEC-ID leak check hard-fails. Use a placeholder (spec:<spec-id>=completed). The same section, at docs/cli/02-specs.md:448, cites '--file', which is a top-level-only option that 'aida condition check --help' does not list, so the flag-accuracy check likely fails too. Reword it (for example 'the top-level aida --file option') and run python3 docs/cli/verify-manual.py with a built binary on PATH before pushing.
+    3. CI lib-1 red ('Run tests' step, run 42034704804, job 127269707915); the reviewer sandbox cannot fetch the log. The likely cause is the new story2402_pr_probe_requires_a_known_state_and_bounds_the_process test: it rewrites and execs the same fixture path 8 times without the ETXTBSY-safe test_exec helper, so a spawn failure yields None where Some(true)/Some(false) is expected. Read the job log, fix the failing test, and confirm lib-1 is green at the new head.
+    4. Minor, non-blocking: aida-core/src/condition.rs Condition::Release maps 'no release tagged' (Ok(None)) to NotMet for every operator, so 'release:<1.0' reads not-met in a repo with no tags. Either document it or compare against an implicit 0. The git-tag latest_release adapter in condition_cmd.rs also has no adapter test (spec/PR/store paths do).
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-05T15:56:35.956022705Z
+  modified_at: 2026-11-05T15:56:35.956022705Z
   session_id: b83457ff-84e3-46cb-8f68-4be531a63422
 history:
 - id: 01a1a468-9c3a-76d2-ab8c-12bf6457966b
