@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T00:31:59.464117777Z
-modified_at: 2026-11-05T01:58:27.471987389Z
+modified_at: 2026-11-05T02:19:12.350303067Z
 req_type: Story
 relationships:
 - rel_type: Parent
@@ -66,6 +66,12 @@ comments:
   created_at: 2026-11-05T01:55:53.071054340Z
   modified_at: 2026-11-05T01:55:53.071054340Z
   session_id: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
+- id: 01a1a980-ca5e-7280-a7a8-9d0eab12e0c0
+  author: joe
+  content: 'Slice 1 implemented under the 2026-11-05 01:55 UTC ruling: independent pipeline-idle and ready-without-train predicates, 30-minute observation timers, per-kind suppression and accepted-delivery deduplication, nonblocking permanent main-worktree lock plus atomic versioned runtime state, unknown/gap resets, bounded digest, urgent request mailbox via supervise_cmd::nudge_pass and bounded existing operator fallback. Wired into oversight watch and standalone supervise stalls (preview default). Preview avoids queue GC, config repair, eligibility caches, lock/state creation and sends. Scope is GitHub observations; unsupported/incomplete forge evidence stays unknown. Deferred children filed: TASK-3072 Claude wake; TASK-3073 Antigravity wake; TASK-3074 acted dispositions/escalation; TASK-3075 remaining alarm kinds. Validation: 37 supervise_cmd tests + 1 train identity regression + 10 configuration-trust tests passed; cargo check -p aida-cli --no-default-features --offline passed; cargo fmt --all -- --check and git diff --check passed. Publication boundary: aida ship STORY-2476 --no-merge --dry-run refused in the native Codex sandbox because seat Git metadata is read-only. No commit/push/PR performed; edits remain for the documented host-side exit commit. Host operator publication from the main checkout: aida ship STORY-2476 --from-seat /home/joe/ai/aida-worktrees/aida-seat-aida-story-b6b1278890774ef993d2ebc327862470-404 --commit-pending "feat(supervise): detect independent pipeline stalls (STORY-2476)" --no-merge. Leave merge/review verdicts to separate seats. Story is not marked Done/Completed.'
+  created_at: 2026-11-05T02:19:12.350303067Z
+  modified_at: 2026-11-05T02:19:12.350303067Z
+  session_id: 01a1a96dc251
 history:
 - id: 01a1a947-202d-79b2-827b-2b25c0c16d7a
   author: joe
