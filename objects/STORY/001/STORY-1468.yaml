@@ -3,12 +3,12 @@ spec_id: STORY-1468
 agreed_id: STORY-1468
 title: Capture originating user prompt when opening a feature requirement
 description: 'When an LLM chat turns a user request into a new AIDA requirement, preserve the originating user prompt as requirement provenance so future agents and reviewers can understand why the spec exists. The provenance should be clearly labeled and separate from the normalized title, description, and acceptance criteria. It must be stored in the AIDA substrate (not a parallel PROMPT_HISTORY file), remain available through normal requirement inspection/history, and not leak into ordinary end-user CLI output. Because prompts may contain secrets or private context, define a safe redaction/opt-out path and avoid silently copying credentials into the requirement store. Acceptance: a newly opened feature spec can be traced back to its originating prompt; later edits preserve the original prompt separately from derived product text; provenance is excluded or summarized in user-facing views unless explicitly requested; and tests cover absent, redacted, and captured provenance.'
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-09-24T00:32:52.190913727Z
-modified_at: 2026-11-05T18:49:00.156200782Z
+modified_at: 2026-11-05T18:49:15.259651275Z
 req_type: Story
 comments:
 - id: 01a0d0d5-7dfa-7e41-80d5-f47b293e4316
@@ -61,6 +61,12 @@ comments:
   content: 'ADVISOR SIGNOFF 2026-11-05 12:00 MST on the 18:15Z sketch: APPROVED points 1-7, amended as follows. (1) Explicit intake only, as proposed: --origin-prompt-file, --no-origin-prompt and the MCP add_requirement origin_prompt. Capture is OFF by default and there is no hook capture in this slice. (2) Separate artifact provenance/origin-prompts/<uuid>.yaml in the git-canonical store; CR-8''s inline slot is superseded. (5) Backend scope: ONLY the git-canonical store implements it. sqlite and postgres refuse explicit capture with a named error BEFORE any mutation (single user, no parity work). Archive, remap and merge preservation is tested on git only. (4) Redaction: reuse the existing secret screen if one exists, otherwise a small private-key and token regex refusal; content-free errors; 64 KiB cap. (6) Retention as proposed, with no purge tooling. One PR, LIGHT gate, tests per point 7 minus the non-git backend rows except a single refusal test.'
   created_at: 2026-11-05T18:49:00.156200782Z
   modified_at: 2026-11-05T18:49:00.156200782Z
+  session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
+- id: 01a1ad0b-34fb-7f91-a149-fc1b9f13bd10
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was punted on: design-fork: Architecture sketch posted on owning spec on 2026-11-05. Separate prompt artifact introduces a store file format and CLI/MCP contracts requiring advisor signoff under CLAUDE.md and AGENTS.md Sketch-First Protocol. Previous requeue supplied no decision. Need approval/amendment of explicit intake, artifact layout, redaction, retrieval, retention and backend support/refusal before implementation.. No triage reason was given.'
+  created_at: 2026-11-05T18:49:15.259649721Z
+  modified_at: 2026-11-05T18:49:15.259649721Z
   session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
 history:
 - id: 01a1a437-be76-7fc2-88e3-c0cf9d177253
@@ -120,9 +126,11 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
-attention_reason:
-  category: design-fork
-  detail: Architecture sketch posted on owning spec on 2026-11-05. Separate prompt artifact introduces a store file format and CLI/MCP contracts requiring advisor signoff under CLAUDE.md and AGENTS.md Sketch-First Protocol. Previous requeue supplied no decision. Need approval/amendment of explicit intake, artifact layout, redaction, retrieval, retention and backend support/refusal before implementation.
-  lean: Approve the posted separate-artifact design with explicit opt-in intake, reviewed/redacted text only, default projection exclusion and explicit unsupported-backend refusal.
-  raised_by: implementer
-  raised_at: 2026-11-05T18:15:54.302230931Z
+- id: 01a1ad0b-34fb-7f91-a149-fc0b7e86f5ec
+  author: joe
+  timestamp: 2026-11-05T18:49:15.259637601Z
+  session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
