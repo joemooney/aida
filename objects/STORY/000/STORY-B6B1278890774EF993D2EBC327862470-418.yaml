@@ -21,7 +21,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T04:40:54.168438456Z
-modified_at: 2026-11-05T13:19:40.285157714Z
+modified_at: 2026-11-05T13:19:43.897975305Z
 req_type: Story
 tags:
 - docs:impacted
@@ -296,6 +296,25 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Slice-1 receipt/roster/consume path is sound and round-1 findings 1-10,12 are addressed, but AC4 is unmet with no slice-2 spec while every trailer completes STORY-2492, and ordinary request-changes/multi-spec reviews never publish without manual steps.. Triage reason: Address the latest review on #3411 (see its last ''## Review'' comment and the spec''s review verdict) and any red CI at the current head; push to branch story-b6b1278890774ef993d2ebc327862470-418 (no new branch). LIGHT gate.'
   created_at: 2026-11-05T13:19:40.285156127Z
   modified_at: 2026-11-05T13:19:40.285156127Z
+  session_id: b83457ff-84e3-46cb-8f68-4be531a63422
+- id: 01a1abdd-8495-7bc2-8599-a22c53f179a0
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (STORY-2492):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: cb52c3316709
+    Recorded: 2026-11-05T12:02:26.581026593+00:00
+    Findings:
+    1. 1 (blocking, carry-over of round-1 #11): AC4 (watcher discovery + synced (change, head) reservation) is not implemented (docs/agents/second-review-node.md:138 says slice 2), no slice-2 spec exists (aida search finds none), and all 5 commits plus the PR title end in (STORY-2492), so the squash merge auto-completes STORY-2492 with AC4 unmet. File the slice-2 spec (advisor/operator) and retitle/re-trailer the PR so it does not complete STORY-2492 (e.g. Refs STORY-2492), or implement AC4.
+    2. 2: An ordinary request-changes never publishes. publish() (review_publication.rs:609-612) requires blocking_finding_origin_ids when findings exist, but 'aida review record' has no flag for them and the collected reviewer verdict file carries none, so every real B refusal stays pending until someone runs 'aida review publish --blocking-findings' by hand. AC5 leg 2 (A sees B's findings and verdict) only passes because the test fixture injects blocking_finding_origin_ids directly (story_2492_publication_tests.rs:226-229). Carry origin IDs through the real recorder/collector (e.g. --blocking-finding on review record, or resolve the filed from-review findings) and test through that path.
+    3. 3: Multi-spec PRs do not publish via the direct recorder. record_verdict_at (gate/ledger/mod.rs:213, 224-229) publishes with labels=[one spec] and adopt_verdict_file passes spec=None (labels empty -> 'unresolved publication specs'), while author_evidence (review_publication.rs:1333-1340) demands exact equality with the authorship spec coverage -> 'review publication omits authored PR specs'. Authorship coverage also grows whenever a rework tip commit names extra IDs (ship_from_seat.rs:955 and orchestrator_leases.rs extract IDs from the tip commit message only), which then breaks even collector publications. Use the change's bound spec set for both authorship and receipt coverage, and add a two-spec PR test.
+    4. 4: merge_gate_verdict_candidates (gate/ship.rs:1046) calls current_at_head(root, keys, head.unwrap_or("")); with head=None the empty expected head filters out every publication, so local/archive approvals answer even when a synced refusal exists. Fall back to current() (branch-resolved head) or refuse when head is unknown, and test it.
+    5. 5: Fail-closed lockout with no recovery path: select() bails 'all review publishing nodes of {key} were revoked' (review_publication.rs:842-845), and current_head bails when several heads exist and the branch is unfetched (770-793). resolve_current turns either into a permanent synthetic request-changes, and load_view (effective.rs:580) turns it into Unsafe, for that change and, via the spec index, its specs. A fresh review on a non-publisher node can never clear it. Treat revoked-only/unknown-head evidence as absent-with-report (or document and test an operator recovery), and add a test.
+    6. 6 (minor): AC5 is still only partially exercised. The two-clone test never runs 'aida ship' or a train. train_decision (tests:270-284) calls merge_path_approval_decision directly, B's verdict is injected via record_collected_verdict with a fixture human receipt, and the reworked head is pushed to 'main' rather than a PR branch. Drive at least the ship/ready entry point (forge faked) over the bare hub.
+    7. 7 (minor): AC3 disagreement reporting is only eprintln in resolve_current/choose_current (review_publication.rs:1054-1056, review_verdict.rs:1191-1194). The tests assert the pure disagreement() string, not that any gate path emits it. Add an assertion on the reported path (e.g. return or capture the report).
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-05T13:19:43.765911755Z
+  modified_at: 2026-11-05T13:19:43.765911755Z
   session_id: b83457ff-84e3-46cb-8f68-4be531a63422
 history:
 - id: 01a1aa03-2e29-79d0-827e-4c56622f79bd
