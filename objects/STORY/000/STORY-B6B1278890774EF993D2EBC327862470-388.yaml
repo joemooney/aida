@@ -23,7 +23,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T15:39:15.141070572Z
-modified_at: 2026-11-05T02:29:46.901530650Z
+modified_at: 2026-11-05T05:42:36.242645365Z
 req_type: Story
 tags:
 - area:containment
@@ -183,6 +183,13 @@ comments:
     Rework changes prepared: terminal_status separated from overall C1/C2, payload moved outside W and read-only bound by outer bwrap, parent-made same-directory rename sources, EXDEV excluded, missing-vendor refusal fixed, and CI gates wired to tests. Fifteen local tests pass including a real bwrap swap/restore attack. Fresh authorized host reruns remain outstanding: deputies 2 and 3 report NOT running. The native seat cannot commit (.git is read-only); launcher post-exit commit/publication is required.
   created_at: 2026-11-05T02:29:46.901366622Z
   modified_at: 2026-11-05T02:29:46.901366622Z
+- id: 01a1aa3b-01d2-7a03-9377-e4d4e415cc6c
+  author: joe
+  content: 'TASK-3046 round 3 (PR #3392 @ bff8078de70): ADVISOR RULING REQUESTED on review finding 3. The recorded vendor reports (harness_sha256 96544b6a...) predate the shipped harness: the read-only payload mount, same-directory rename sources, rename-source snapshots and file-tool rules have never run against agy or codex. The implementer seat cannot run them, because a fresh run means real vendor model calls with operator credentials through the script deputy at a human terminal, which is outside this lane''s sandbox. Choose one: (a) operator runs ''python3 scripts/containment/conformance.py --vendor agy|codex --output ~/aida-conformance-<vendor>-FRESH'' host-side through the script deputy and records both report.json files here; or (b) rule that historical + offline reassessment satisfies S1, with the fresh run tracked as a named follow-up under TASK-3048. Findings 1, 2, 4 and 5 are addressed in bff8078de70.'
+  created_at: 2026-11-05T05:42:36.242645365Z
+  modified_at: 2026-11-05T05:42:36.242645365Z
+  session_id: 01a1aa38555f
+  harness_version: 2.1.318 (Claude Code)
 history:
 - id: 01a1a739-849a-7023-b534-bbe543e4ef1f
   author: joe
