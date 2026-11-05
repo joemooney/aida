@@ -601,6 +601,10 @@ mergeability only on a settled false; the forge still enforces conflicts at
 merge time. The wave gate distinguishes a settled GitHub conflict from unknown
 evidence.
 
+The condition checker also reads PR merge states through this boundary, with a
+15-second timeout; failed reads and malformed states evaluate to Unknown.
+<!-- trace:STORY-2402 | ai:codex -->
+
 Train and idle-eligibility GitHub commands now live behind `forge.rs`. A per-file
 ratchet freezes remaining raw GitHub reads outside that boundary and catches
 calls/imports of the legacy train pass-through helpers outside `pr_train.rs`.

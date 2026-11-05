@@ -64,6 +64,11 @@ pub(crate) fn command_groups() -> &'static [(&'static str, &'static [(&'static s
                 // trace:BUG-520 — defer/undefer were real commands missing from any group
                 ("defer", "Park a spec as primed/conditional work"),
                 ("undefer", "Restore a deferred spec to the active view"),
+                // trace:STORY-2402 | ai:claude
+                (
+                    "condition",
+                    "Check a typed condition (deferral trigger) now",
+                ),
                 ("lint", "EARS-style requirement quality lens"),
             ],
         ),
