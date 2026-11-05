@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T02:52:09.542251339Z
-modified_at: 2026-11-05T18:59:20.364517636Z
+modified_at: 2026-11-05T19:03:45.603978401Z
 req_type: Task
 tags:
 - from-advisor:STORY-2479
@@ -59,6 +59,12 @@ comments:
   created_at: 2026-11-05T18:47:08.230270008Z
   modified_at: 2026-11-05T18:47:08.230270008Z
   session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
+- id: 01a1ad18-7cc3-7533-852f-fb1f321b7e32
+  author: joe
+  content: 'Round 2 investigation: fetched run 42071282811 job 127399567115 logs. The actual failure is deputy_shell::tests::status_tells_queued_running_done_and_cancelled_apart at tests.rs:742: status unwrap receives no script job during the existing claim window (accepted job removed before state publication). Fix polls optional published state before asserting strict running status in both running transitions. Also replaces the TMPDIR-dependent non-repository fixture with an explicit /tmp temp directory and invalid gitfile that stops Git discovery. Scope/closure is diagnostic preserved, not hold works in native seats; native-seat publication authority is unchanged. Unit execution requested through aida lane job run, but this standalone lease has no lane job runner; untested=true. Required make check-ci-fast is in progress.'
+  created_at: 2026-11-05T19:03:45.603978401Z
+  modified_at: 2026-11-05T19:03:45.603978401Z
+  session_id: 01a1ad1465f2
 history:
 - id: 01a1a9a4-9331-74f3-8922-e37e24c30e09
   author: joe
