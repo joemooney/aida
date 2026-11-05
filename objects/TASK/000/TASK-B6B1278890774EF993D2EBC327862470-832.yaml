@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-832
 agreed_id: TASK-3112
 title: 'Nit sweep B: code cosmetic and minor findings'
 description: 'Batched non-blocking review findings (advisor triage 2026-11-05). For each listed spec, read it with `aida show <ID> --full`, verify the finding still applies on main, and fix it; if it no longer applies, say so in the PR body. Keep each fix minimal; no behavior change beyond the finding. One PR. Findings: TASK-2834 TASK-2840 TASK-2844 TASK-2850 TASK-2851 TASK-2853 TASK-2867 TASK-2868 TASK-2873 TASK-2874 TASK-2876'
-status: InProgress
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T16:07:36.061610524Z
-modified_at: 2026-11-05T17:35:05.428915651Z
+modified_at: 2026-11-05T19:24:13.224671561Z
 req_type: Task
 tags:
 - from-advisor
@@ -170,6 +170,20 @@ history:
   timestamp: 2026-11-05T17:35:16.207892801Z
   session_id: b83457ff-84e3-46cb-8f68-4be531a63422
   changes: []
+- id: 01a1ad2b-3821-7781-84eb-c4cb202415c0
+  author: aida-auto-bump
+  timestamp: 2026-11-05T19:24:13.217548524Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1ad2b-3828-7340-bdd1-d97c3bedd6e5
+  timestamp: 2026-11-05T19:24:13.224666609Z
+  agent: aida
+  commit_sha: 0fd74a9439deb9c93656faf72321481c3b4192b0
+  summary: All 11 carried-forward findings (TASK-2834/2840/2844/2850/2851/2853/2867/2868/2873/2874/2876) fixed minimally with targeted regressions; PR CI green at head. Non-blocking nits only.
+  review_verdict: approved
 filed_at:
   code_sha: 70a5d68133ad33fa17635a4651ea3663865cebcb
   branch: main
@@ -178,3 +192,7 @@ filed_at:
   aida_build_sha: c38a77db609
   vendor: claude
   session: b83457ff-84e3-46cb-8f68-4be531a63422
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-05T19:24:13.217540129Z
+  completion_sha: 0fd74a9439deb9c93656faf72321481c3b4192b0
