@@ -63,6 +63,13 @@ review is routed; a by-design skip (which may exit zero) or failure does not.
 Report the reason and the command's retry guidance; never claim review was
 queued without that evidence.
 
+Once review is routed, whoever drives the queue (an operator or advisor seat,
+not the implementer) starts the independent review pipeline with
+`aida pr review <N|PR-N|MR-N>`, the same pipeline as
+`aida queue work PR-N --auto-complete`. It can continue through merge only
+where merge is already authorized. The implementer's part ends at the handoff.
+<!-- trace:TASK-1715 | ai:claude -->
+
 ## Agent judgment and boundaries
 
 - Confirm the intended changes and relevant validation are ready before

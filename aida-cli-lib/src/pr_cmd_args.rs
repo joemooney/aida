@@ -55,6 +55,28 @@ pub enum PrCommand {
         branch: Option<String>,
     },
 
+    /// Start the independent review pipeline for an open PR/MR. Runs exactly
+    /// `aida queue work <PR-N|MR-N> --auto-complete`: a separate reviewer
+    /// session reviews the change, rework goes back to the implementer, and
+    /// the pipeline continues through merge only where merge is already
+    /// authorized. Ownership, leases, merge holds and supervised/draft
+    /// restrictions apply as they do for `queue work`; this command grants
+    /// no extra authority.
+    ///
+    /// A bare number resolves through the project's configured forge: `PR-N`
+    /// on GitHub, `MR-N` on GitLab. Pass `PR-N` or `MR-N` to name the forge
+    /// explicitly.
+    ///
+    /// Compare: `aida ship --no-merge` finishes implementation and opens the
+    /// PR/MR; `aida pr review` gets it independently reviewed; `aida pr ship`
+    /// lands work that is already approved.
+    // trace:TASK-1715 | ai:claude
+    Review {
+        /// The change to review: `N`, `PR-N` or `MR-N`.
+        #[clap(value_name = "N|PR-N|MR-N")]
+        id: String,
+    },
+
     /// List every open PR/MR with its spec ID (when one can be found),
     /// CI state and rebase status.
     #[clap(visible_alias = "mr")]
@@ -122,8 +144,8 @@ pub enum PrCommand {
 
     /// Ship a PR: create-if-needed → watch CI → squash-merge → pull →
     /// worktree-aware cleanup. The direct-publish counterpart to
-    /// `aida queue work PR-N --auto-complete` (which drives the full
-    /// reviewer pipeline) — use this for human-pre-approved work where
+    /// `aida pr review N` / `aida queue work PR-N --auto-complete` (which
+    /// drive the full reviewer pipeline) — use this for already-approved work where
     /// no orchestrator review phase is needed (docs PRs, master-signed
     /// architecture work, recovery merges).
     ///
