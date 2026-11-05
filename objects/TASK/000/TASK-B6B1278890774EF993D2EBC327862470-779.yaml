@@ -14,7 +14,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T11:57:10.724108127Z
-modified_at: 2026-11-05T09:48:38.242541950Z
+modified_at: 2026-11-05T11:38:05.363561487Z
 req_type: Task
 tags:
 - carried-from:BUG-2438
@@ -107,6 +107,11 @@ comments:
   created_at: 2026-11-05T09:48:35.977508724Z
   modified_at: 2026-11-05T09:48:35.977508724Z
   session_id: b83457ff-84e3-46cb-8f68-4be531a63422
+- id: 01a1ab80-76b3-79c2-a229-72f8af6fcbd7
+  author: mcp
+  content: 'Rework pushed to existing PR #3394 as 2150d4032fd. The advisor backup changes were already preserved in 3983467b183; fixed the merge-from-main compile regression by replacing both obsolete Queue::incoming_job fixture calls with Queue::accepted_job. Kept all claim-window tests, wait_with_grace, production 10s grace, and injected 300ms expiry with lower/upper elapsed bounds. Validation passed: cargo test --profile agent -p aida-cli-lib deputy_shell -- --nocapture (38 passed, 0 failed; execution 1.15s following cold build); make check-ci-fast (37 gates passed); cargo fmt --all -- --check; git diff --cached --check. Push accepted by origin; local remote-tracking ref refresh was refused by the read-only mount. Standalone implementer stops at the open PR for independent review and merge-seat handling.'
+  created_at: 2026-11-05T11:38:05.363543868Z
+  modified_at: 2026-11-05T11:38:05.363543868Z
 history:
 - id: 01a1a67e-507a-7cb1-abfd-d3a599160617
   author: joe
