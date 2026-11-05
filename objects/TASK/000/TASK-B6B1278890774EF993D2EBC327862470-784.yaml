@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T17:53:47.688167385Z
-modified_at: 2026-11-05T05:36:20.901973822Z
+modified_at: 2026-11-05T05:36:24.070870766Z
 req_type: Task
 tags:
 - area:containment
@@ -99,6 +99,23 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Round-1 findings 1-7 are addressed in code, docs and the STORY-2460 correction comment. But the new CI gate ''Containment conformance evidence tests'' fails at the PR head, which fails CI (gates) and the Build aggregate. The reassessment also mislabels Codex C0 terminal_status as fail, and the recorded vendor runs predate the shipped harness.. No triage reason was given.'
   created_at: 2026-11-05T05:36:20.901972419Z
   modified_at: 2026-11-05T05:36:20.901972419Z
+  session_id: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
+- id: 01a1aa35-536c-7823-bfa0-0942220e2695
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (TASK-3046):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 8fe94552d086
+    Recorded: 2026-11-05T05:26:12.140570242+00:00
+    Findings:
+    1. CI red at 8fe94552: gates job 127014835742 step 24 'Containment conformance evidence tests' failed; Build (ubuntu-latest) fails only because it requires every lane. The job log was unreachable from the reviewer sandbox, so read it to confirm. Most likely cause: scripts/containment/conformance.py:385 run() calls command(['git','rev-parse','origin/main']). actions/checkout@v5 (ci.yml:50) is a shallow PR-merge checkout with no origin/main ref, so test_run_mounts_payload_outside_workspace_read_only (tests/test_containment_conformance.py:160-190) raises CalledProcessError. It passes locally because worktrees have origin/main. Fix: mock c.command for the policy-SHA lookup in that test, or inject the policy SHA. Then confirm the step is green in CI, not only in make check-ci-fast.
+    2. reassess_evidence() mislabels C0: conformance.py:550-551 sets terminal_status='fail' whenever changed_targets is non-empty, including C0. C0's changed target is the positive workspace sentinel, i.e. success. The committed evidence (containment-conformance-2026-11-04.json reassessment.vendors.codex.checks.C0.terminal_status) therefore says 'fail'. That contradicts evaluate() (conformance.py:283-295, where C0 terminal_status is pass/unknown) and the docs. Fix: limit the changed->fail rule to C1/C2 (C0 -> unknown), regenerate the evidence with --reassess, and assert the C0 terminal_status in test_historical_reassessment_withdraws_positive_credit_preserves_sources.
+    3. Recorded vendor results predate the shipped harness: both vendors.*.report.harness_sha256 are 96544b6a..., while the shipped conformance.py (and reassessment.harness_sha256) is 2e734986.... The read-only payload mount, same-directory rename sources and file-tool rules have never run against agy or codex. The acceptance 'both vendors have recorded results' is met only by historical runs plus an offline reassessment. Either run the shipped harness host-side through the script deputy for both vendors and record the reports on STORY-2460, or get an explicit advisor ruling on STORY-2460/TASK-3048 that historical+reassessment suffices for S1, with the fresh run tracked as a named follow-up.
+    4. Rename sources are unobserved protected writes: prepare() (conformance.py:250-251, 271-272) creates <name>-rename-source files inside the protected outside/admin/common/store directories. The before/after snapshots (conformance.py:425, 494) digest only row['path']. A vendor that modifies or deletes a rename source in a protected directory is never seen as a violation. Fix: include rename_source in the snapshot for its check (C1/C2), and add a test where a changed source fails the check.
+    5. Cosmetic: the PR title (the squash subject on main) is '[AI:codex] fix: address CI failures and review findings (TASK-3046)'. It doesn't describe what lands: a new host-side containment conformance harness, tests, CI gate and evidence. Retitle, e.g. '[AI:codex] test(containment): host conformance harness C0-C4 with agy/codex evidence (TASK-3046)'.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-05T05:36:23.916100374Z
+  modified_at: 2026-11-05T05:36:23.916100374Z
   session_id: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
 history:
 - id: 01a1a7b2-3e77-7b11-be33-eb44a8ab90c9
