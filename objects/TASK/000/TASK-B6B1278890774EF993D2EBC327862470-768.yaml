@@ -14,7 +14,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T05:07:38.080379297Z
-modified_at: 2026-11-05T00:47:40.748526311Z
+modified_at: 2026-11-05T01:02:55.585365444Z
 req_type: Task
 tags:
 - carried-from:BUG-2390
@@ -38,6 +38,12 @@ comments:
   created_at: 2026-11-04T11:04:54.812766539Z
   modified_at: 2026-11-04T11:04:54.812766539Z
   session_id: da1c0d85-1d45-4ce4-a292-5358644f65b9
+- id: 01a1a93a-f461-78a0-bb4b-4edf8b005a92
+  author: joe
+  content: 'ADVISOR REWORK BRIEF (2026-11-04 18:05): PR #3373 is CONFLICTING with main, so it can''t merge or be reviewed. The work isn''t ''already done''. Required: git fetch origin; git merge origin/main into task-b6b1278890774ef993d2ebc327862470-768; resolve the conflicts, keeping main''s structure plus this PR''s Codex-take worktree reuse; run the targeted dispatch tests and make check-ci-fast; push. Report the conflicting files in the PR comment.'
+  created_at: 2026-11-05T01:02:55.585365444Z
+  modified_at: 2026-11-05T01:02:55.585365444Z
+  session_id: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
 history:
 - id: 01a1a544-4897-7732-9908-dab25ca6f67e
   author: joe
