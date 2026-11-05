@@ -3,12 +3,12 @@ spec_id: SPEC-b6b1278890774ef993d2ebc327862470-014
 agreed_id: TASK-2862
 title: CLI JSON audit fixtures refuse advisor authority inside native Codex PID namespace
 description: 'During STORY-2476 round-2 validation, cargo test --profile agent -p aida-cli --test bug_1502_format_json_audit built successfully but 8/9 tests failed at fixture setup line 140: add --status approved returned ''filed as draft (requested approved needs advisor authority)''. Re-running the compiled test binary with all inherited AIDA_* variables removed gave the same result, before the audit assertions. Likely cause: aida-cli/tests/support/mod.rs::test_process_binding emits unqualified proc:<pid>@<start>, whereas production gate/seat_authority.rs now uses review_authority::author_process_token to namespace-qualify presenters inside non-host PID namespaces (BUG-2419). Suggested follow-up: make fixture bindings use the same namespace-qualified contract and test in native Codex sandbox. aida lane job run is unavailable: this standalone lease names no runner. No production authority checks were relaxed; the audit was regenerated from the built CLI and checked separately.'
-status: Draft
+status: Superseded
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-05T04:45:47.454316631Z
-modified_at: 2026-11-05T16:00:44.986823045Z
+modified_at: 2026-11-05T16:00:48.143606817Z
 req_type: Task
 tags:
 - from-implementer:STORY-2476
@@ -32,6 +32,14 @@ history:
   author: joe
   timestamp: 2026-11-05T06:47:24.581475603Z
   changes: []
+- id: 01a1ac70-fc0f-72a0-b8a4-41618eff42df
+  author: joe
+  timestamp: 2026-11-05T16:00:48.143603742Z
+  session_id: b83457ff-84e3-46cb-8f68-4be531a63422
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   aida_version: 0.16.0
   aida_build_sha: e1fc3f06903
