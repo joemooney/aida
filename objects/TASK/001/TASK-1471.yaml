@@ -3,12 +3,12 @@ spec_id: TASK-1471
 agreed_id: TASK-1471
 title: Show linked documentation in human-format aida show
 description: 'Make human-readable aida show output surface linked narrative Docs and human-authored expositions that reference the displayed spec. Acceptance: (1) aida show <SPEC> in human format includes a clearly labeled Documentation or Explanations section when linked Docs exist; (2) each entry shows its Doc ID, title, audience/scenario/tags where available, and an actionable command such as aida doc show <DOC-ID>; (3) entries are absent when none exist; (4) reverse References links are resolved without changing canonical spec content; (5) default machine-oriented formats remain stable and do not gain prose unless their schema explicitly includes a documentation field; (6) the output distinguishes human-authored exposition from generated or other documentation provenance; (7) add coverage for direct and reverse documentation links, including STORY-1472 -> DOC-1-174.'
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-09-24T04:25:12.035374412Z
-modified_at: 2026-11-05T04:44:02.574660624Z
+modified_at: 2026-11-05T05:36:44.163841742Z
 req_type: Task
 relationships:
 - rel_type:
@@ -118,6 +118,12 @@ comments:
   content: 'ADVISOR REWORK BRIEF (20:36): new head 7e029a01fad conflicts with main (watcher 20:34). Merge origin/main into task-1471, resolve conflicts, rerun the show/doc-link targeted tests plus make check-ci-fast, push.'
   created_at: 2026-11-05T03:35:40.882538573Z
   modified_at: 2026-11-05T03:35:40.882538573Z
+  session_id: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
+- id: 01a1aa35-a283-7a43-aa6b-0e1facb46c34
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: All 7 ACs implemented and round-2 minors fixed, but the PR''s own e2e test fails deterministically in CI lib-1 (JSON key-set assertion at task_1471_show_docs_tests.rs:163), so Build is red at the head.. No triage reason was given.'
+  created_at: 2026-11-05T05:36:44.163837195Z
+  modified_at: 2026-11-05T05:36:44.163837195Z
   session_id: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
 history:
 - id: 01a1a438-4c50-72d0-87d7-ecde2738cbc4
@@ -279,15 +285,15 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1aa35-a283-7a43-aa6b-0e0301c13bb0
+  author: joe
+  timestamp: 2026-11-05T05:36:44.163828148Z
+  session_id: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 implementation_info:
   implemented: true
   implemented_at: 2026-11-04T11:57:50.448772116Z
   implemented_by: joe
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: All 7 ACs implemented and round-2 minors fixed, but the PR's own e2e test fails deterministically in CI lib-1 (JSON key-set assertion at task_1471_show_docs_tests.rs:163), so Build is red at the head.
-  recovery_hint: address the review findings, move TASK-1471 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-05T04:44:02.574660624Z
