@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T12:51:07.563355298Z
-modified_at: 2026-11-05T18:45:47.369333381Z
+modified_at: 2026-11-05T19:00:00.385343924Z
 req_type: Bug
 tags:
 - area:compete
@@ -241,6 +241,20 @@ comments:
   content: 'Advisor 11:26: closed #3382 as superseded by #3401; #3401 is the single open change (reviewer running at its head).'
   created_at: 2026-11-05T18:24:29.024548408Z
   modified_at: 2026-11-05T18:24:29.024548408Z
+  session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
+- id: 01a1ad15-0c84-7531-bf97-b8a67b29e236
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2439):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: b11c566edfb1
+    Recorded: 2026-11-05T18:45:46.816842355+00:00
+    Findings:
+    1. BLOCKER (CI lib-0 red at b11c566edfb1, Build (ubuntu-latest) aggregates it): 'Run tests' failed in job 127423583615 and again in the rerun, job 127441954087 (run 42078096072, attempt 2), so it is deterministic. All other jobs are green (gates, lib-1, cli-0, cli-1, contracts, rest). The same PR content was fully green at e86ea042, and main c8721a69 is green. So the merge of main (agy adapter TASK-3048: session::vendor_containment_posture, launch/mod.rs, bug_2455 force-claim tests, show_docs) interacts with this PR's changes. The reviewer could not name the test: the sandbox blocks the log hosts. Read the lib-0 log, identify the failing test, fix it on bug-b6b1278890774ef993d2ebc327862470-208-2 (no force push), and confirm lib-0 is green at the new head. Suspects to check first: compete_cmd::containment_tests (compete_vendor_dies_with_parent, codex_compete_native_argv_matches_preview_and_runs) and the launch/ ratchets (story_2326_launch_ratchet_tests, task_2032_launcher_main_ratchet_tests) after both branches added a launch/ submodule.
+    2. PROCESS (not a code defect): merge-hold-gate is red because the supervised spec carries aida:merge-hold. After CI is green and an independent approval is recorded, release it through 'aida merge-hold clear 3401' (human) or 'aida merge-hold auto-release 3401'.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-05T19:00:00.260199624Z
+  modified_at: 2026-11-05T19:00:00.260199624Z
   session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
 history:
 - id: 01a1a69d-4a2d-7292-9de1-00c519ffe27a
