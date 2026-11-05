@@ -457,10 +457,12 @@ Claude keeps its named legacy arm. See OVERVIEW.md and docs/cli/07-project-setup
 <!-- trace:TASK-2705 TASK-2707 | ai:codex -->
 
 Forge read APIs use `forge_observed::Observed<T>` for Known/Pending/Transient
-evidence. GitHub UNKNOWN mergeability stays pending; new raw GitHub spawns outside
+evidence. Condition PR probes use this boundary with a 15-second timeout and
+preserve failed or malformed observations as Unknown. GitHub UNKNOWN mergeability
+stays pending; new raw GitHub spawns outside
 `forge.rs` are guarded by a per-file ratchet. Legacy reads and later destructive
 transition migration remain; see [forge observations](OVERVIEW.md#forge-observations).
-<!-- trace:STORY-2401 | ai:codex -->
+<!-- trace:STORY-2401 STORY-2402 | ai:codex -->
 
 ## Child launch containment
 

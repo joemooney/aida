@@ -97,7 +97,12 @@ exactly one is required). A recovery waits for the service's current step on
 that thread, so the service cannot overwrite it.
 `aida mailbox wake-run --once` runs one pass and prints each armed agent's
 result. Antigravity has no live wake primitive, so its mail still arrives on its
-next turn.
+next turn. Claude live mailbox wake is also unsupported: the official socket
+documentation does not define the message payload and classifiable response
+needed by an external adapter. Claude uses existing next-turn mailbox hooks;
+an operator can ask it to read its inbox. See the
+[contract investigation and disposable probe](../testing/task-3072-claude-mail-wake.md).
+<!-- trace:TASK-3072 | ai:codex -->
 
 ## Install and verify
 
