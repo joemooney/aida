@@ -604,7 +604,7 @@ pub(crate) fn handle_burndown_run(
         } else {
             // trace:BUG-2165 | ai:antigravity
             // trace:BUG-2218 TASK-2328 | ai:codex
-            if session::containment_applied(vendor, contained) {
+            if session::containment_applied(vendor, contained, None) {
                 session::prepare_contained_mailbox_for_launch(
                     crate::seat_clone::launcher_main().as_deref(),
                     &project_root,
@@ -615,7 +615,8 @@ pub(crate) fn handle_burndown_run(
                 &project_root,
                 "implementer",
                 &current_user_id(None),
-                session::containment_applied(vendor, contained),
+                // trace:TASK-2708 | ai:claude
+                session::sandboxed_child_grant(vendor, contained)?,
             )?;
             if let crate::gate::seat_authority::HeadlessChildGrant::Baseline { cause } =
                 &child_grant
@@ -2067,7 +2068,7 @@ pub(crate) fn run_burndown_verbose(
         find_project_root().unwrap_or_else(|_| std::env::current_dir().unwrap_or_default());
     // Prepare before logs/tee and child authority are allocated.
     // trace:BUG-2218 TASK-2328 | ai:codex
-    if session::containment_applied(vendor, contained) {
+    if session::containment_applied(vendor, contained, None) {
         session::prepare_contained_mailbox_for_launch(
             crate::seat_clone::launcher_main().as_deref(),
             &project_root,
@@ -2118,7 +2119,8 @@ pub(crate) fn run_burndown_verbose(
         &project_root,
         "implementer",
         &current_user_id(None),
-        session::containment_applied(vendor, contained),
+        // trace:TASK-2708 | ai:claude
+        session::sandboxed_child_grant(vendor, contained)?,
     )?;
     if let crate::gate::seat_authority::HeadlessChildGrant::Baseline { cause } = &child_grant {
         eprintln!(
