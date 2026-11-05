@@ -16,12 +16,12 @@ description: |-
   6. Docs: a short operator guide for running a second review node.
 
   Case 2 (untrusted/work node, envelope-based) is a separate deferred story.
-status: NeedsAttention
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T04:40:54.168438456Z
-modified_at: 2026-11-05T13:27:47.308220941Z
+modified_at: 2026-11-05T13:39:30.659765684Z
 req_type: Story
 tags:
 - docs:impacted
@@ -316,6 +316,12 @@ comments:
   created_at: 2026-11-05T13:19:43.765911755Z
   modified_at: 2026-11-05T13:19:43.765911755Z
   session_id: b83457ff-84e3-46cb-8f68-4be531a63422
+- id: 01a1abef-a0e3-7e90-839f-44b1362cb857
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was punted on: blocked-dependency: Round 3 blocked before implementation by mandatory merge-first prerequisite. Exact requested command git fetch origin main && git merge origin/main failed: cannot open .git/FETCH_HEAD: Read-only file system. Lane permissions make Git metadata read-only and approvals unavailable; no merge, commit or push is possible here. All findings remain open, none disputed: #1 slice-2 spec and non-completing PR trailer; #2 blocking finding origin IDs through real recorder/collector; #3 bound multi-spec authorship and publication coverage; #4 unknown-head synced refusal handling; #5 revoked-only/unknown-head recovery; #6 real ship/ready two-clone entry-point test; #7 gate-path disagreement reporting assertion. Resume on host with writable Git metadata, merge and push main first, then address findings. Merge-hold requires its existing authorized human/advisor clearance path.. Triage reason: #3411 conflicts with main in aida-cli-lib/src/gate/ledger/mod.rs (open_change_bound). Main''s BUG-2451 split it into open_change_bound_with_riders (duplicate-open-change guard: refuse a second change for the same spec from a different branch). Merge origin/main into the PR branch (merge commit, no force), keep main''s guard intact, and apply this PR''s change on top of open_change_bound_with_riders. Then address all seven open review findings recorded on the spec. One targeted cargo test plus make check-ci-fast; push to story-b6b1278890774ef993d2ebc327862470-418.'
+  created_at: 2026-11-05T13:39:30.659764177Z
+  modified_at: 2026-11-05T13:39:30.659764177Z
+  session_id: b83457ff-84e3-46cb-8f68-4be531a63422
 history:
 - id: 01a1aa03-2e29-79d0-827e-4c56622f79bd
   author: joe
@@ -496,6 +502,14 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1abef-a0e3-7e90-839f-44a457fad67a
+  author: joe
+  timestamp: 2026-11-05T13:39:30.659753201Z
+  session_id: b83457ff-84e3-46cb-8f68-4be531a63422
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: d561213a36febec31d45921d3d43d4dc7590135e
   branch: main
@@ -504,8 +518,3 @@ filed_at:
   aida_build_sha: e1fc3f06903
   vendor: claude
   session: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
-attention_reason:
-  category: blocked-dependency
-  detail: 'Round 3 blocked before implementation by mandatory merge-first prerequisite. Exact requested command git fetch origin main && git merge origin/main failed: cannot open .git/FETCH_HEAD: Read-only file system. Lane permissions make Git metadata read-only and approvals unavailable; no merge, commit or push is possible here. All findings remain open, none disputed: #1 slice-2 spec and non-completing PR trailer; #2 blocking finding origin IDs through real recorder/collector; #3 bound multi-spec authorship and publication coverage; #4 unknown-head synced refusal handling; #5 revoked-only/unknown-head recovery; #6 real ship/ready two-clone entry-point test; #7 gate-path disagreement reporting assertion. Resume on host with writable Git metadata, merge and push main first, then address findings. Merge-hold requires its existing authorized human/advisor clearance path.'
-  raised_by: implementer
-  raised_at: 2026-11-05T13:27:47.308220941Z
