@@ -29,7 +29,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T02:34:20.173245666Z
-modified_at: 2026-11-05T17:53:45.973085720Z
+modified_at: 2026-11-05T18:02:56.547946439Z
 req_type: Story
 comments:
 - id: 01a1a468-a682-7271-a707-298d622d86f1
@@ -167,6 +167,12 @@ comments:
   content: 'Round 3 PR #3428: committed and pushed 8f635674406. Finding 1: release Git fixture now uses crate::test_git::git_command(), retaining test_exec output handling. Reproduced maintenance ratchet failure before the change; all 8 tests pass after. Finding 2: spec condition IDs normalize to ASCII uppercase; lower/mixed-case regression cases added. Finding 3: documented that unit fixtures skip process-global alias/literal-ID/width installation to avoid parallel-test interference; production and binary integration tests retain installation. cargo fmt --all -- --check and git diff --check pass. Targeted Rust tests are compiling; CI run 42078979722 is queued at the exact new SHA. Remote push succeeded and GitHub confirms the head, although the sandbox refused the local remote-tracking ref update. No findings disputed; no merge-hold clearance or review verdict attempted.'
   created_at: 2026-11-05T17:53:45.973085720Z
   modified_at: 2026-11-05T17:53:45.973085720Z
+  session_id: 01a1acd5e4cb
+- id: 01a1ace0-cea3-77e1-9e4e-a65917d7da6d
+  author: joe
+  content: 'Round 3 final validation at pushed commit 8f635674406: maintenance ratchet 8/8, aida-core condition tests 12/12, and aida-cli-lib story2402 adapter tests 4/4 all pass. Formatting and diff checks pass; working tree is clean. PR #3428 body now records implementation scope and validation. CI run 42078979722 has started; CI (gates) was still running Check aida-cli without default features at handoff, so full gates-shard green confirmation remains pending. Merge-hold-gate reports the active hold. All three review findings are addressed and none disputed. Stopping at the open PR per standalone implementer instructions; no ship, review record, hold clearance or merge attempted.'
+  created_at: 2026-11-05T18:02:56.547946439Z
+  modified_at: 2026-11-05T18:02:56.547946439Z
   session_id: 01a1acd5e4cb
 history:
 - id: 01a1a468-9c3a-76d2-ab8c-12bf6457966b
