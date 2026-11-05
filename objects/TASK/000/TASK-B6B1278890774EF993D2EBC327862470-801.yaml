@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-801
 agreed_id: TASK-3075
 title: Extend pipeline detector with remaining independent alarm kinds
 description: Follow-up to the approved STORY-2476 slice 1. Add independent under-cap, no-merge-90m, stale-advisor-mail and empty-rework-exit predicates, each with its own suppression and timer policy. Measure last actual merge, never default-branch commit age. Reuse lease/registry identities, nudge request mailbox delivery and operator fallback. Keep unknown evidence and dry-run behavior safe; preserve independence from pipeline-idle and ready-without-train.
-status: InProgress
+status: Done
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T02:07:56.492424622Z
-modified_at: 2026-11-05T21:34:32.141339102Z
+modified_at: 2026-11-05T21:34:36.463842790Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -212,6 +212,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1ada2-9829-7dc1-815a-751da8750d5d
+  author: joe
+  timestamp: 2026-11-05T21:34:36.585747692Z
+  session_id: 01a1ad8c9940
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 filed_at:
   aida_version: 0.16.0
   aida_build_sha: fb2086e9008
