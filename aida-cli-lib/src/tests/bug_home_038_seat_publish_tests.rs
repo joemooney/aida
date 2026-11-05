@@ -1582,10 +1582,8 @@ fn task_2879_run_at_reconciles_moved_origin_and_refuses_unsafe_merges() {
             None
         };
         if case == "push-refused" {
-            use std::os::unix::fs::PermissionsExt;
             let hook = fx.origin.join("hooks/pre-receive");
-            std::fs::write(&hook, "#!/bin/sh\nexit 1\n").unwrap();
-            std::fs::set_permissions(&hook, std::fs::Permissions::from_mode(0o755)).unwrap();
+            crate::test_exec::write_executable(&hook, "#!/bin/sh\nexit 1\n");
         }
         let result = crate::ship_from_seat::run_at(&fx.main, opts(&clone, false, true));
         if let Some(owner) = &mut owner {
@@ -1722,13 +1720,12 @@ fn task_2879_post_exit_commit_looks_up_refs_pr() {
     if crate::test_env::run_path_isolated_test() {
         return;
     }
-    use std::os::unix::fs::PermissionsExt;
     let fx = fixture();
     let clone = seat_with_pending(&fx, "refs-pr", "c0ffee287912", "refs-pr");
     let bin = fx.root.join("bin");
     std::fs::create_dir(&bin).unwrap();
     let gh = bin.join("gh");
-    std::fs::write(
+    crate::test_exec::write_executable(
         &gh,
         r##"#!/bin/sh
 printf '%s\n' "$*" >> "$(dirname "$0")/called"
@@ -1738,9 +1735,7 @@ case "$*" in
   *) exit 23 ;;
 esac
 "##,
-    )
-    .unwrap();
-    std::fs::set_permissions(&gh, std::fs::Permissions::from_mode(0o755)).unwrap();
+    );
     std::fs::create_dir_all(fx.main.join(".aida")).unwrap();
     std::fs::write(
         fx.main.join(".aida/config.toml"),
