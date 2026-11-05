@@ -581,13 +581,13 @@ mod tests {
             scope = "STORY-2476"
             slug = "interactive"
             owner = "test"
-            worktree_path = "{}"
+            worktree_path = {}
             branch = "interactive"
             started_at = "2026-11-04T00:00:00Z"
             hostname = "{}"
             creator_pid = {}
         "#,
-            t.path().display(),
+            toml::Value::String(t.path().to_string_lossy().into_owned()),
             crate::coordination::hostname(),
             std::process::id()
         );
