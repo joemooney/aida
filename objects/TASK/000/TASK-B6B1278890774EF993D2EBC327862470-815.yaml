@@ -1,0 +1,29 @@
+id: 01a1aa88-51bf-7572-ba73-dba17c0859b6
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-815
+title: 'non-blocking (cosmetic): pr_cmd.rs pr_cli_policy builds queue argv from the unr…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-1715, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  non-blocking (cosmetic): pr_cmd.rs pr_cli_policy builds queue argv from the unresolved id ('42') rather than the resolved change id; harmless today because queue_cli_policy ignores the id, but diverges from what run_pr dispatches.
+
+  PR: #3404
+  Reviewed sha: 706759e210ab463b102684f86b3a0dad92595bdd
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-05T07:07:02.975220126Z
+modified_at: 2026-11-05T07:07:02.975220126Z
+req_type: Task
+tags:
+- carried-from:TASK-1715
+- finding-hash:ce4b1f73
+- from-review:PR-3404
+- kind:carried-forward
+filed_at:
+  code_sha: 5602eae5bf12f06d8f3e2f3e1753667a9db41246
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: d561213a36f
+  vendor: claude
