@@ -2103,6 +2103,81 @@ pub(crate) fn ship_interactive_tty() -> bool {
     crate::gate::role_authority::has_integrity_floor_authority()
 }
 
+/// How many times the ship preflight reads the status, and the pause between reads.
+const SHIP_STATUS_READS: u32 = 3;
+const SHIP_STATUS_BACKOFF: std::time::Duration = std::time::Duration::from_secs(2);
+
+/// The change status for the ship preflight. It re-reads, up to a bound,
+/// while the read itself or its mergeability has not settled. It returns the
+/// last status the forge gave, settled or not. A definitive refusal fails
+/// immediately; unavailable reads fail when no usable status was obtained.
+// trace:STORY-2401 | ai:codex
+fn ship_status_settled(
+    forge: &dyn crate::forge::Forge,
+    change: &crate::forge::ChangeRef,
+    backoff: std::time::Duration,
+) -> Result<crate::forge::ChangeStatus> {
+    use crate::forge_observed::Observed;
+    let mut last_status = None;
+    let observed = crate::forge_observed::settle(SHIP_STATUS_READS, backoff, || {
+        forge.observe_change_status(change).and_then(|reply| {
+            let status = match reply {
+                Ok(status) => status,
+                Err(why) => return Observed::Known(Err(why)),
+            };
+            let unsettled = status.mergeable.unsettled_reason().map(str::to_string);
+            last_status = Some(status);
+            match unsettled {
+                None => Observed::Known(Ok(())),
+                Some(why) => Observed::Pending(why),
+            }
+        })
+    });
+    // A settled refusal supersedes any earlier pending status.
+    // trace:STORY-2401 | ai:codex
+    if let Observed::Known(Err(why)) = observed {
+        anyhow::bail!("could not read PR-{}'s status: {why}", change.id);
+    }
+    match last_status {
+        Some(status) => Ok(status),
+        None => anyhow::bail!(
+            "could not read PR-{}'s status: {}",
+            change.id,
+            observed.unsettled_reason().unwrap_or("no reply")
+        ),
+    }
+}
+
+/// The status/mergeability decision shared by ship's preflight and its tests.
+/// Backoff is supplied explicitly so tests exercise the production retry loop.
+// trace:STORY-2401 trace:TASK-2794 | ai:codex
+pub(crate) fn ship_mergeability_preflight(
+    forge: &dyn crate::forge::Forge,
+    change: &crate::forge::ChangeRef,
+    backoff: std::time::Duration,
+) -> Result<crate::forge::ChangeStatus> {
+    use crate::gate::ship::ShipRefusal;
+    let status = ship_status_settled(forge, change, backoff)?;
+    // STORY-2401 / TASK-2794: only a settled "no" refuses. GitHub reports
+    // UNKNOWN until it has computed mergeability. If the value is still not
+    // settled after the bounded re-read, ship proceeds, and the forge's own
+    // merge call refuses a PR that turns out to conflict.
+    // trace:STORY-2401 trace:TASK-2794 | ai:claude
+    if status.mergeable.is_known_false() {
+        return Err(ShipRefusal::NotMergeable.error(format!(
+            "PR-{} is not mergeable — rebase the branch and try again.",
+            change.id
+        )));
+    }
+    if let Some(why) = status.mergeable.unsettled_reason() {
+        eprintln!(
+            "note: PR-{} mergeability is not settled yet ({why}); the merge itself will refuse a conflict.",
+            change.id
+        );
+    }
+    Ok(status)
+}
+
 // trace:TASK-1606 | ai:codex
 #[allow(clippy::too_many_arguments)]
 fn ship_preflight_gates(
@@ -2117,13 +2192,7 @@ fn ship_preflight_gates(
 ) -> Result<()> {
     use crate::gate::ship::ShipRefusal;
     let forge = crate::forge::forge_for(project_root);
-    let status = forge.change_status(change)?;
-    if !status.mergeable {
-        return Err(ShipRefusal::NotMergeable.error(format!(
-            "PR-{} is not mergeable — rebase the branch and try again.",
-            change.id
-        )));
-    }
+    let status = ship_mergeability_preflight(forge.as_ref(), change, SHIP_STATUS_BACKOFF)?;
     let ids = ship_gate_known_ids(
         project_root,
         &change.branch,
@@ -8458,6 +8527,17 @@ fn pr_cli_policy(matches: &clap::ArgMatches) -> crate::command_registry::CmdPoli
             _ => None,
         });
     if let Some(id) = review {
+        // Match run_pr's forge-specific normalization. trace:TASK-3112 | ai:codex
+        let root = crate::find_project_root()
+            .unwrap_or_else(|_| std::env::current_dir().unwrap_or_default());
+        let Ok(id) = review_change_id(&id, crate::forge::resolve_forge_kind(&root)) else {
+            return crate::command_registry::CmdPolicy {
+                stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+                per_write_auto_push: false,
+                skip_role_restore_prompt: false,
+                team_identity_write: false,
+            };
+        };
         let queue = <crate::queue_cmd::QueueArgs as clap::CommandFactory>::command()
             .try_get_matches_from(review_queue_argv(&id));
         if let Ok(queue) = queue {
