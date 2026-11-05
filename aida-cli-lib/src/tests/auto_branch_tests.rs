@@ -1,5 +1,4 @@
 use super::*;
-use std::process::Command;
 use tempfile::TempDir;
 
 fn init_repo() -> TempDir {
@@ -41,27 +40,87 @@ fn auto_branch_slug_when_free() {
     assert_eq!(got, "epic-20");
 }
 
-// Slug taken → `-2`. trace:STORY-65 | ai:claude
+// trace:BUG-2451 | ai:codex
 #[test]
-fn auto_branch_appends_2_on_first_collision() {
+fn auto_branch_refuses_collision_without_allocating_suffix() {
     let tmp = init_repo();
     create_branch(tmp.path(), "epic-20");
-    let got = resolve_session_branch(tmp.path(), "epic-20", "auto").unwrap();
-    assert_eq!(got, "epic-20-2");
+    let err = resolve_session_branch(tmp.path(), "epic-20", "auto").unwrap_err();
+    assert!(err.to_string().contains("pass --branch explicitly"));
+    assert!(!branch_exists_anywhere(tmp.path(), "epic-20-2"));
 }
 
-/// Slug + slug-2..-10 all taken → falls through to dated form.
-// trace:STORY-65 | ai:claude
+// trace:BUG-2451 | ai:codex
 #[test]
-fn auto_branch_falls_back_to_dated_form() {
+fn explicit_date_style_permits_collision_suffix() {
     let tmp = init_repo();
-    create_branch(tmp.path(), "epic-20");
-    for n in 2..=10 {
-        create_branch(tmp.path(), &format!("epic-20-{}", n));
+    let dated = format!("epic-20-{}", chrono::Local::now().format("%Y-%m-%d"));
+    create_branch(tmp.path(), &dated);
+    assert_eq!(
+        resolve_session_branch(tmp.path(), "epic-20", "date").unwrap(),
+        format!("{dated}-2")
+    );
+}
+
+// trace:BUG-2451 | ai:codex
+#[test]
+fn bug_2451_pickup_pins_existing_pr_even_without_a_seat() {
+    let tmp = init_repo();
+    create_branch(tmp.path(), "original-pr");
+    let mut forge = crate::forge::fake::RecordingForge::new();
+    forge.open_for_spec = crate::forge::ChangeLookup::Found(crate::forge::ChangeRef {
+        id: 42,
+        url: "https://example.invalid/42".into(),
+        branch: "original-pr".into(),
+        base: "main".into(),
+        title: None,
+    });
+    assert_eq!(
+        pickup_pr_branch(&forge, "BUG-2451", None).unwrap(),
+        Some((42, "original-pr".into()))
+    );
+    assert!(pickup_pr_branch(&forge, "BUG-2451", Some("bug-2451-2")).is_err());
+    let holder = tmp.path().join("holder");
+    let out = crate::test_git::git_command()
+        .arg("-C")
+        .arg(tmp.path())
+        .args(["worktree", "add"])
+        .arg(&holder)
+        .arg("original-pr")
+        .output()
+        .unwrap();
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let (_, branch) = pickup_pr_branch(&forge, "BUG-2451", None).unwrap().unwrap();
+    let err = crate::queue_cmd::preflight_queue_work_branch(tmp.path(), Some(&branch)).unwrap_err();
+    assert!(err.to_string().contains(&holder.display().to_string()));
+    assert!(!branch_exists_anywhere(tmp.path(), "bug-2451-2"));
+}
+
+// trace:BUG-2451 | ai:codex
+#[test]
+fn bug_2451_unknown_or_missing_head_never_allocates() {
+    let mut forge = crate::forge::fake::RecordingForge::new();
+    for lookup in [
+        crate::forge::ChangeLookup::CliMissing,
+        crate::forge::ChangeLookup::CliFailed("auth".into()),
+        crate::forge::ChangeLookup::Unreachable("offline".into()),
+        crate::forge::ChangeLookup::Found(crate::forge::ChangeRef {
+            id: 42,
+            url: String::new(),
+            branch: String::new(),
+            base: "main".into(),
+            title: None,
+        }),
+    ] {
+        forge.open_for_spec = lookup;
+        assert!(pickup_pr_branch(&forge, "BUG-2451", None).is_err());
     }
-    let got = resolve_session_branch(tmp.path(), "epic-20", "auto").unwrap();
-    let today = chrono::Local::now().format("%Y-%m-%d").to_string();
-    assert_eq!(got, format!("epic-20-{}", today));
+    forge.open_for_spec = crate::forge::ChangeLookup::NoChange;
+    assert_eq!(pickup_pr_branch(&forge, "BUG-2451", None).unwrap(), None);
 }
 
 /// `--branch-style date` skips the slug attempt and goes straight to
@@ -80,4 +139,28 @@ fn unknown_branch_style_errors() {
     let tmp = init_repo();
     let err = resolve_session_branch(tmp.path(), "epic-20", "wat").unwrap_err();
     assert!(err.to_string().contains("unknown --branch-style"));
+}
+
+// trace:BUG-2451 | ai:codex
+#[test]
+fn bug_2451_pickup_refuses_two_found_changes_naming_both() {
+    let mut forge = crate::forge::fake::RecordingForge::new();
+    forge.all_for_spec = Some(
+        [42, 43]
+            .into_iter()
+            .map(|id| crate::forge::ChangeRef {
+                id,
+                branch: format!("head-{id}"),
+                url: String::new(),
+                base: "main".into(),
+                title: None,
+            })
+            .collect(),
+    );
+    for explicit in [None, Some("head-42"), Some("head-43")] {
+        let error = pickup_pr_branch(&forge, "BUG-2451", explicit)
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("#42") && error.contains("#43"), "{error}");
+    }
 }
