@@ -752,19 +752,22 @@ fn bug2438_ledger(f: &Fixture, refusal_sha: &str, approval: &Value) -> &'static 
 }
 
 /// BUG-2438: open the train on the fixture's current-head approvals, then
-/// `record` the case's ledger: the sealed final gate refuses and never
-/// reaches the transport.
+/// `record` the case's ledger: the sealed final gate refuses specifically
+/// for the refusing review, rather than changed evidence, without transport.
 // trace:BUG-2438 | ai:claude
+// trace:TASK-2831 | ai:codex
 fn bug2438_refuses(f: &Fixture, why: &str, record: impl FnOnce()) {
     let forge = GitHubForge::new(f.root());
     let mut live = f.live(&forge);
     let (train, change) = f.opened(&mut live);
     let lease = live.lease(change.id).unwrap();
     record();
+    let error = live
+        .merge_verified(&change, &train, lease.as_ref())
+        .expect_err(why);
     assert!(
-        live.merge_verified(&change, &train, lease.as_ref())
-            .is_err(),
-        "{why}"
+        format!("{error:#}").contains("train source has a refusing review"),
+        "{why}: {error:#}"
     );
     assert!(calls(f.root()).is_empty(), "{why}");
 }
