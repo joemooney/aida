@@ -8,11 +8,17 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T04:52:10.142429990Z
-modified_at: 2026-11-05T11:25:06.400832460Z
+modified_at: 2026-11-05T11:31:43.725175180Z
 req_type: Task
 tags:
 - docs
 - showcase
+relationships:
+- rel_type:
+    custom: implemented-by
+  target_id: 01a1ab79-f2fd-7d51-be5a-42d69a728dbc
+  created_at: 2026-11-05T11:31:43.725171227Z
+  created_by: joe
 comments:
 - id: 01a1a523-712d-7722-bb9b-fbf4028a62b7
   author: joe
@@ -80,6 +86,10 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a1ab7a-a995-7cf2-82ec-1c4ba61d84f7
+  author: joe
+  timestamp: 2026-11-05T11:31:45.173767712Z
+  changes: []
 filed_at:
   code_sha: 6dcf370f9d3e6fc593ef2c22489665b702a248fc
   branch: agy2/audit-polish
