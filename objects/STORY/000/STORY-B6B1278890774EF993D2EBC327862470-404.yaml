@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T00:31:59.464117777Z
-modified_at: 2026-11-05T03:57:41.982718416Z
+modified_at: 2026-11-05T03:57:45.037008863Z
 req_type: Story
 relationships:
 - rel_type: Parent
@@ -82,6 +82,23 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Slice-1 detector design matches the advisor ruling, but CI cli-0 is red because of this PR (format-json audit not regenerated for the new ''supervise stalls'' leaf), AC1''s configurable N is missing, and an alarm I/O error can kill the supervise watch loop.. No triage reason was given.'
   created_at: 2026-11-05T03:57:41.982715792Z
   modified_at: 2026-11-05T03:57:41.982715792Z
+  session_id: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
+- id: 01a1a9db-0261-7d21-8355-e735a5efe776
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (STORY-2476):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: d90e4107b872
+    Recorded: 2026-11-05T02:40:26.288417141+00:00
+    Findings:
+    1. CI cli-0 red, caused by this PR: bug_1502_format_json_audit::checked_in_audit_is_exhaustive_and_every_honoured_probe_parses panics at aida-cli/tests/bug_1502_format_json_audit.rs:493 because docs/cli-format-json-audit.md has no row for the new 'aida supervise stalls' leaf (rows exist only for supervise/nudge/redrive/watch at lines 276-279). Regenerate the audit with scripts/generate-format-json-audit.py; expect a 'COULD NOT VERIFY' row like supervise watch/redrive, and commit it.
+    2. AC1 says 'for N minutes (default 30)', but pipeline_stall.rs:9 hard-codes THRESHOLD_MS = 30 min and exposes no config key or flag (SuperviseCommand::Stalls in supervise_cmd_args.rs only has --execute/--json). Make N configurable (e.g. a .aida/config.toml key or --threshold-mins defaulting to 30, validated so it cannot fall below the 15-minute gap reset), add a test at a non-default N, and update the 'Each alarm requires 30 minutes' sentence in docs/cli/06-roles-sessions.md.
+    3. The stall detector can now crash the existing watch loop. In supervise_cmd.rs run_watch_pass (~line 516), pipeline_stall::run(...)? propagates create_dir_all/lock-open/write_atomic errors on .aida/pipeline-stalls.{lock,json}. That aborts the pass before emit_pass_output and exits handle_supervise_watch's --interval loop, so an alarm-state I/O failure kills the long-running oversight watch and its objective/redrive report. Degrade the alarm failure to a reported unknown or a stderr line instead of '?', and add a test where the state path is unwritable.
+    4. (minor) Tests are not hermetic: run() and observe() in the unit tests preview_creates_nothing_and_busy_tick_does_not_observe_or_send and unreadable_registry_and_foreign_identity_are_unknown reach queue_waiting(), which reads the real $HOME/.aida/queue/implementer.yaml via crate::home_dir() (pipeline_stall.rs:368-374). Inject the home/queue path or isolate HOME in those tests.
+    5. (minor, consider) lane_role (pipeline_stall.rs:238) counts every non-advisor/product lease as a running lane, including role-less and integrator leases. Any live, idle interactive seat whose process identity is alive therefore suppresses pipeline-idle indefinitely, which is the 3h incident shape where no implementer lanes actually ran. Consider restricting the suppressor to implementer/reviewer lanes (plus the train), or document why other roles count, and test a role-less lease.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-05T03:57:44.929534684Z
+  modified_at: 2026-11-05T03:57:44.929534684Z
   session_id: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
 history:
 - id: 01a1a947-202d-79b2-827b-2b25c0c16d7a
