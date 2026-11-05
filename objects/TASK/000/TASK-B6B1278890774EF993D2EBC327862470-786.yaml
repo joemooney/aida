@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T17:54:51.353376614Z
-modified_at: 2026-11-05T13:24:29.845871373Z
+modified_at: 2026-11-05T13:29:56.228569076Z
 req_type: Task
 tags:
 - area:containment
@@ -106,6 +106,11 @@ comments:
   created_at: 2026-11-05T13:19:35.923389585Z
   modified_at: 2026-11-05T13:19:35.923389585Z
   session_id: b83457ff-84e3-46cb-8f68-4be531a63422
+- id: 01a1abe6-dd04-7140-a0ca-afa85c1e7582
+  author: mcp
+  content: 'Round 2 implementation: commits 0a621f60c39 and f7569c357b6 address all four findings without claiming acceptance. Report now records bounded AGY stream/stderr/private-log unsupported_tool diagnostics as unsupported_reason at report level and on every C0-C4 check; measured violations remain failures. Added mocked stream and runtime-log regressions (20 offline conformance tests PASS). Adapter argv no longer requests unavailable auto mode and records observed default fallback. Updated both reported CI tests, including the later per-tool-flags assertion, to expect AGY''s named conformance gate. Production AGY remains refused; no bypass flag, host measurements or deputy contact. PR #3426 title/body now use Refs STORY-2460 and Refs TASK-3048 without completion trailers because fresh all-tool acceptance remains advisor-owned and unmet. cargo fmt and diff checks pass; make check-ci-fast is still running locally. Targeted Rust unit tests untested=true: lane job refused because lease 01a1abe1d75f has no lane job runner. Existing merge hold remains; no ship/review verdict/merge attempted.'
+  created_at: 2026-11-05T13:29:56.228549687Z
+  modified_at: 2026-11-05T13:29:56.228549687Z
 history:
 - id: 01a1a7b3-3699-7713-8ae7-69568c287956
   author: joe
