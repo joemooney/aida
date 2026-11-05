@@ -1,0 +1,23 @@
+id: 01a1ac79-ac8c-7b21-92c9-8fe959bf7971
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-833
+agreed_id: TASK-3114
+title: 'Nit sweep C: containment harness and docs findings'
+description: 'Batched non-blocking review findings (advisor triage 2026-11-05). For each listed spec, read it with `aida show <ID> --full`, verify the finding still applies on main, and fix it; if it no longer applies, say so in the PR body. Keep each fix minimal; no behavior change beyond the finding. One PR. Findings: TASK-2863 TASK-2864 TASK-2865 TASK-2870 TASK-2871'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-05T16:10:17.612205275Z
+modified_at: 2026-11-05T16:10:17.612205275Z
+req_type: Task
+tags:
+- from-advisor
+- nit-sweep
+filed_at:
+  code_sha: 70a5d68133ad33fa17635a4651ea3663865cebcb
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: c38a77db609
+  vendor: claude
+  session: b83457ff-84e3-46cb-8f68-4be531a63422
