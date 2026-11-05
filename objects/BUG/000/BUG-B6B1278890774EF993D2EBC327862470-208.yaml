@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T12:51:07.563355298Z
-modified_at: 2026-11-05T02:20:05.046325096Z
+modified_at: 2026-11-05T02:20:09.907564259Z
 req_type: Bug
 tags:
 - area:compete
@@ -81,6 +81,21 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Codex arm argv, dry-run parity and parent-death binding meet BUG-2439''s acceptance in code and tests, but CI is red because of this PR: compete_cmd.rs adds two STORY-2326 launch markers, which breaks the ledger, and the ledger may only shrink.. No triage reason was given.'
   created_at: 2026-11-05T02:20:05.046322509Z
   modified_at: 2026-11-05T02:20:05.046322509Z
+  session_id: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
+- id: 01a1a981-aab0-79d3-a39a-c6d1b449c0b6
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2439):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 6e57ac521464
+    Recorded: 2026-11-05T00:54:50.330123263+00:00
+    Findings:
+    1. BLOCKER (CI lib-1 red at 6e57ac52): story_2326_launch_ratchet_tests::launch_sites_outside_the_launcher_match_the_ledger fails because compete_cmd.rs goes from 5 to 7 launch markers. The new ones are std::process::Command::new("codex") in compete_preview_argv (compete_cmd.rs:1175) and cmd.pre_exec(..) in bind_compete_child_to_parent (compete_cmd.rs:1196). Do not raise LEDGER or CEILING. Move the PR_SET_PDEATHSIG pre_exec into the launcher (aida-cli-lib/src/launch/, or a shared launch helper; containment/supervisor.rs:790 has the same pattern). Compute the preview's tool-env overrides without building a vendor Command, for example a codex_tool_env helper that takes the env pairs directly. Build (ubuntu-latest) is the aggregate job and goes green with this fix.
+    2. MINOR: compete_arm_argv gets the codex posture from crate::tool_contained_flags("codex"), which is codex_native_sandbox_flags(). That resolves the --add-dir write set from the launcher's cwd. codex_native_sandbox.rs:124-128 says every native Codex spawn should use codex_native_sandbox_flags_in(<lane tree>, role) and pass the lane's own tree, never the launcher's cwd when the two differ. A compete arm runs in its candidate worktree (build_compete_arm_command worktree_dir), so pass worktree_dir, and use compete_worktree_dir(..) for the dry-run preview. The regression test can't catch this because it pins root == worktree == cwd. Add a case where the worktree differs from cwd.
+    3. MINOR: the codex judge is made read-only by index (flags[1] = "read-only", compete_cmd.rs:~1248), which assumes CODEX_NATIVE_POSTURE's layout. The read-only judge also still receives the --add-dir write grants. Build the read-only posture explicitly from the posture constant, and leave out the --add-dir grants for a read-only judge, or explain why they are harmless. Make the judge assertion in codex_compete_native_argv_matches_preview_and_runs pin the full judge argv.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-05T02:20:09.776497386Z
+  modified_at: 2026-11-05T02:20:09.776497386Z
   session_id: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
 history:
 - id: 01a1a69d-4a2d-7292-9de1-00c519ffe27a
