@@ -1,0 +1,33 @@
+id: 01a1ace3-dc39-7c02-90b7-58351bb20bb9
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-444
+agreed_id: STORY-2521
+title: 'Review PR-3442: [AI:codex] test(hygiene): address batched review findings (TASK-3111)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a1aca9`) for branch `task-b6b1278890774ef993d2ebc327862470-831`.
+
+  - PR: <https://github.com/joemooney/aida/pull/3442>
+  - Branch: `task-b6b1278890774ef993d2ebc327862470-831` → `main`
+
+  ## Covers
+
+  - TASK-3111
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 3442` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-05T18:06:16.633548407Z
+modified_at: 2026-11-05T18:06:16.633548407Z
+req_type: Story
+filed_at:
+  code_sha: c8721a696fcc18157c296a5fdd190fdc9b501bf8
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: b66ec083185
+  vendor: claude
