@@ -801,3 +801,44 @@ instructions. Shared claims carry optional invocation IDs; rollback compares the
 exact acquired claim under the store lock and publishes outside that lock.
 Legacy claims remain readable and are never adopted as rollback authority.
 <!-- trace:BUG-2188 | ai:codex -->
+
+### Pipeline stall alarms
+
+<!-- trace:STORY-2476 | ai:codex -->
+`aida supervise stalls --json` previews two independent alarms without writing
+runtime state, queue data, eligibility caches, mail or notification receipts.
+Run `aida supervise stalls --execute --json` every few minutes from a host job,
+or use the same detector integrated into `aida supervise watch --execute`.
+A watch preview also previews these alarms; watch JSON keeps its objective
+report on stdout and emits the alarm report on stderr.
+
+Each alarm requires 30 minutes of continuous observations:
+
+- `pipeline-idle`: no worker lane is running, no PR is ship-ready, and a PR
+  has red CI/current-head request-changes or the project has queued work.
+  Any worker lane or ready PR suppresses this kind.
+- `ready-without-train`: a PR is ship-ready and no train is running. Worker
+  activity does not suppress this kind.
+
+Readiness uses current-head local review, required CI, mergeability, holds and
+reviewer activity, without the eligible-idle display's age filter. Process
+identity comes from leases, the registry and train ownership, including PID
+namespace checks. Unsupported forges, failed/partial forge reads and invisible
+processes remain unknown. Unknown predicates, cleared predicates, backwards
+clocks and gaps over 15 minutes reset their own timer. Schedule ticks more
+frequently than that gap; a preview never advances an observation timer.
+
+Execute ticks serialize through the permanent main-worktree
+`.aida/pipeline-stalls.lock` sidecar and atomically replace the disposable,
+versioned `.aida/pipeline-stalls.json` state. One bounded actionable digest
+covers due kinds through the existing supervisor nudge path: urgent mailbox
+`kind=request` to the live advisor, or the configured operator notification
+fallback. Delivery failure retains the pending episode for retry. An accepted
+kind stays quiet until its predicate resets; one kind never suppresses another. JSON `accepted` means mailbox persistence or operator notification
+sent/queued after quiet hours; it does not prove read or action. This slice
+does not implement repeated unresolved escalation.
+
+This detector never starts work, ends a session, releases a lease or merges.
+Codex uses the existing armed mailbox wake service. Claude/Antigravity wake,
+acted-on dispositions, under-cap, last-merge age, stale advisor mail and empty
+rework exits are follow-up work; reading or accepting a wake is not action.

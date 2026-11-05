@@ -954,6 +954,15 @@ pub(crate) fn required_status_checks_uncached(
     if forge::resolve_forge_kind(project_root) != forge::ForgeKind::GitHub {
         return Some(Vec::new());
     }
+    github_required_status_checks_uncached(project_root)
+}
+
+/// Read-only GitHub lookup for callers that have already observed the forge.
+/// Avoids the general resolver's opportunistic config repair during previews.
+// trace:STORY-2476 | ai:codex
+pub(crate) fn github_required_status_checks_uncached(
+    project_root: &std::path::Path,
+) -> Option<Vec<String>> {
     let gh_bin = resolve_gh_binary()?;
     let default_branch = detect_default_branch_ref(project_root)
         .and_then(|r| r.rsplit('/').next().map(str::to_string))

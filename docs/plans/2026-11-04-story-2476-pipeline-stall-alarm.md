@@ -1,6 +1,8 @@
 # Pipeline stall alarm sketch
 
-Status: proposed; needs master sign-off before implementation/PR.
+Status: interpretation approved by Joe, 2026-11-05 01:55 UTC. Slice 1 implements
+the detector, pipeline-idle and ready-without-train only; the ruling supersedes
+the proposed scope below.
 Owner: STORY-2476. <!-- trace:STORY-2476 | ai:codex -->
 
 ## Contract and decisions needed
@@ -112,4 +114,22 @@ Vendor tests must distinguish queue acceptance, read ACK and acted disposition,
 and refuse uncertain/foreign/dead session targeting. Run targeted Rust tests
 and `cargo fmt --all -- --check` for implementation changes.
 
-No production changes have been made by this sketch.
+## Approved slice 1 implementation
+
+The detector runs in oversight watch and as `aida supervise stalls` for host
+schedulers. Defaults remain read-only previews. Execute observations use a
+permanent nonblocking main-worktree lock and atomic versioned runtime state;
+each kind has a 30-minute timer and one accepted delivery per episode (mailbox persistence or operator sent/queued).
+Unknown observations and gaps over 15 minutes reset only affected predicates.
+The standalone command allows deployment without an oversight objective.
+Delivery goes through `supervise_cmd::nudge_pass`, retaining urgent request
+mail and the operator notifier. It grants no lifecycle authority.
+
+Deferred child tasks: TASK-3072 (Claude wake), TASK-3073 (Antigravity wake),
+TASK-3074 (acted dispositions and unresolved escalation), TASK-3075 (remaining
+alarm kinds). Remaining alarm kinds
+are explicitly outside slice 1; no default-branch commit-age heuristic is used.
+
+Validation covers 29/30-minute boundary, independent suppression, unknown/gap
+resets, delivery failure/retry/deduplication, preview byte preservation, lock
+contention and fresh/current versus stale review verdicts.

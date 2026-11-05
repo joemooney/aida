@@ -11,6 +11,15 @@ pub enum SuperviseCommand {
     /// Nudge a live advisor about transiently parked work, or fall back to
     /// operator notification when no advisor is live.
     Nudge,
+    /// Observe independent pipeline-idle and ready-without-train alarms.
+    /// Run every few minutes; default is a side-effect-free preview.
+    // trace:STORY-2476 | ai:codex
+    Stalls {
+        #[clap(long)]
+        execute: bool,
+        #[clap(long)]
+        json: bool,
+    },
     /// Re-drive transiently-parked specs (typed tooling causes) on a capped,
     /// backed-off loop; leave genuine needs-human parks for escalation. Lets an
     /// unattended drain self-recover. Reads parks from the store and its attempt
