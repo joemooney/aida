@@ -74,8 +74,14 @@ mod linux {
     /// workspace's (gitignored) `target/`.
     fn fixture_tempdir() -> tempfile::TempDir {
         let workspace = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
+        // A repository nested inside a seat remains part of that seat for
+        // clone detection. Use TMPDIR there, never the operator's host main.
+        // Live bwrap runs need TMPDIR outside /tmp (which they mask).
+        // trace:TASK-2032 | ai:codex
         let base = Some(workspace.join("target"))
-            .filter(|p| !p.starts_with("/tmp"))
+            .filter(|p| {
+                !p.starts_with("/tmp") && !aida_core::seat_clone_detect::is_named_or_marked_clone(p)
+            })
             .unwrap_or_else(std::env::temp_dir)
             .join("bug-2169-bwrap");
         std::fs::create_dir_all(&base).unwrap();
@@ -273,6 +279,9 @@ mod linux {
         )
         .unwrap();
         let _ambient = ambient(&fx.main);
+        // Never let fixture setup reach the operator's checkout or store.
+        // trace:TASK-2032 | ai:codex
+        assert_eq!(crate::find_main_worktree_root().unwrap(), fx.main);
         crate::session_start::session_start(
             "TASK-2169",
             None,
@@ -630,11 +639,35 @@ mod linux {
             None,
             "from inside the clone a cwd lookup has no host main"
         );
-        let flags = crate::session::claude_contained_flags(host_main.as_deref()).unwrap();
-        let settings: serde_json::Value = serde_json::from_str(flags.last().unwrap()).unwrap();
+        // Exercise LaunchContext and spawn_agent too, as session start does.
+        // trace:TASK-2032 | ai:codex
+        let cmd = crate::session::build_claude_exec_command(
+            host_main.as_deref(),
+            None,
+            None,
+            Some("p"),
+            Some("sid"),
+            true,
+            None,
+            None,
+        )
+        .unwrap();
+        let args: Vec<String> = cmd
+            .get_args()
+            .map(|a| a.to_string_lossy().into_owned())
+            .collect();
+        let settings = sandbox_settings_in(&args).expect("contained settings");
         let deny = entries(&settings, "denyWrite");
         let allow = entries(&settings, "allowWrite");
-        assert!(allow.contains(&clone), "{settings}");
+        // Claude grants the session cwd implicitly; allowWrite lists extras.
+        assert!(
+            settings["permissions"]["allow"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|rule| rule.as_str() == Some(&format!("Edit(/{}/**)", clone.display()))),
+            "{settings}"
+        );
         assert!(!deny.contains(&clone.join(".git")), "{settings}");
         assert!(deny.contains(&fx.main.join(".git")), "{settings}");
         assert!(allow.contains(&target), "{settings}");
@@ -786,7 +819,14 @@ mod linux {
                 .unwrap_or_else(|| panic!("{arm}: no contained --settings in {args:?}"));
             let allow = entries(&settings, "allowWrite");
             let deny = entries(&settings, "denyWrite");
-            assert!(allow.contains(&clone), "{arm}: {settings}");
+            assert!(
+                settings["permissions"]["allow"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .any(|rule| rule.as_str() == Some(&format!("Edit(/{}/**)", clone.display()))),
+                "{arm}: {settings}"
+            );
             assert!(!deny.contains(&clone.join(".git")), "{arm}: {settings}");
             assert!(deny.contains(&fx.main.join(".git")), "{arm}: {settings}");
             assert!(allow.contains(&target), "{arm}: {settings}");
@@ -849,7 +889,7 @@ mod linux {
         // A `clone` lease naming the main checkout itself never exempts it.
         let lease = crate::lease_path(&fx.main, "b2169f0e9ed1");
         std::fs::write(
-            lease,
+            &lease,
             format!(
                 "id = \"b2169f0e9ed1\"\nscope = \"BUG-2169\"\nslug = \"x\"\nowner = \"t\"\n\
              worktree_path = {}\nbranch = \"x\"\nstarted_at = \"2026-10-20T00:00:00Z\"\n\
@@ -864,6 +904,12 @@ mod linux {
             &[fx.main.clone()],
         );
         assert!(denied.contains(&fx.main.join(".git")), "{denied:?}");
+
+        // Detection deliberately remembers host lease roots. Retire this
+        // forged self-lease before the next independent attack: otherwise
+        // launcher_main correctly refuses main itself as a leased clone.
+        // trace:TASK-2032 | ai:codex
+        std::fs::remove_file(&lease).unwrap();
 
         // A FORGED MAIN: the seat builds a repository in a directory it can
         // write (its own cargo target dir), points its marker and alternates
@@ -1877,9 +1923,10 @@ true"#;
         for (seat, wants_ledger) in [("reviewer", true), ("implementer", false)] {
             // What the composed headless argv starts as: the role-less set
             // from the launcher's tree, then `exec … <prompt>`.
-            let mut args =
-                crate::codex_native_sandbox::codex_native_sandbox_flags_in(host_main, &fx.main, None)
-                    .unwrap();
+            let mut args = crate::codex_native_sandbox::codex_native_sandbox_flags_in(
+                host_main, &fx.main, None,
+            )
+            .unwrap();
             args.extend(["exec".to_string(), "--json".to_string(), "p".to_string()]);
             crate::session::rescope_native_codex_for_seat(
                 host_main,

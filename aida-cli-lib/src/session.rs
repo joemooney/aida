@@ -2135,7 +2135,8 @@ fn spawn_vendor_headless_forking(
         seat.as_str(),
     )?;
     // The boundary (the contained mailbox) is set up before any grant exists.
-    let posture = containment_posture(vendor, contained)?; // trace:TASK-2631 | ai:codex
+    // trace:TASK-2631 | ai:codex
+    let posture = containment_posture(vendor, contained)?;
     // trace:STORY-2326 TASK-2032 | ai:claude
     let ctx = headless_launch_context(host_main, vendor, program, args, posture)?;
     let mut cmd = crate::launch::spawn_agent(&ctx)?;
@@ -6316,7 +6317,13 @@ fn build_coordinator_headless_command_inner(
         host_main, vendor, prompt, session_id, contained, model, effort, resume,
     )?;
     // trace:TASK-2712 TASK-2032 | ai:claude
-    rescope_native_codex_for_seat(host_main, vendor, &mut args, &headless_worktree_root(), seat)?;
+    rescope_native_codex_for_seat(
+        host_main,
+        vendor,
+        &mut args,
+        &headless_worktree_root(),
+        seat,
+    )?;
     adapt_coordinator_args(vendor, &mut args, mode, contained, stream);
     // TASK-1169 / ADR-22: same bounded ceiling as the spawn path — the exec
     // path is the `--no-human` phase-1 implementer, which must not diverge.

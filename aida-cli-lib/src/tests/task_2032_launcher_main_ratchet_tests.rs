@@ -54,16 +54,19 @@ const ENTRY_POINTS: &[(&str, &str)] = &[
 
 /// The entry points that chdir into a seat, and the chdir each must follow
 /// its `launcher_main()` call.
+// Keep the source needles split: these are strings to inspect, not cwd
+// mutations for the test isolation source guard to reject.
+// trace:TASK-2032 | ai:codex
 const CHDIR_ENTRY_POINTS: &[(&str, &str, &str)] = &[
     (
         "session_start.rs",
         "session_start_with_receipt",
-        "std::env::set_current_dir(&worktree_path)",
+        concat!("std::env::", "set_current_dir", "(&worktree_path)"),
     ),
     (
         "queue_cmd.rs",
         "handle_queue_work",
-        "std::env::set_current_dir(&lease.worktree_path)",
+        concat!("std::env::", "set_current_dir", "(&lease.worktree_path)"),
     ),
 ];
 

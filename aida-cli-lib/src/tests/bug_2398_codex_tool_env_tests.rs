@@ -2001,13 +2001,9 @@ fn bug_2440_wrapped_codex_prepares_with_explicit_command_separator() {
         for vendor in ["codex", "claude", "agy"] {
             let executable = format!("/opt/vendor/{vendor}");
             let args = vec!["exec".into(), "--".into(), "prompt mentioning codex".into()];
-            let (program, wrapped) = crate::session::os_wrapped_program_and_args(
-                None,
-                &root,
-                &executable,
-                args.clone(),
-            )
-            .unwrap();
+            let (program, wrapped) =
+                crate::session::os_wrapped_program_and_args(None, &root, &executable, args.clone())
+                    .unwrap();
             assert_eq!(program, "bwrap");
             let separator = wrapped.iter().position(|arg| arg == "--").unwrap();
             assert_eq!(wrapped[separator + 1], executable);
