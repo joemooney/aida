@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-03T07:21:01.822528019Z
-modified_at: 2026-11-05T03:15:44.739901773Z
+modified_at: 2026-11-05T03:41:56.288096635Z
 req_type: Story
 tags:
 - area:deputy
@@ -186,6 +186,13 @@ comments:
   created_at: 2026-11-05T02:19:59.305734063Z
   modified_at: 2026-11-05T02:19:59.305734063Z
   session_id: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
+- id: 01a1a9cc-88c0-7e00-a144-9ebc4a7f9a50
+  author: joe
+  content: 'Round 2 (PR #3386, commits 9106e3f601b + 2cc77ff087b; CI green on 2cc77ff incl. lib-1; local: deputy_shell 35/35 pass). 1 BLOCKER fixed: queue_dirs_are_0700_... submitted via accept() after loosening jobs/ (accept now checks the queue); it now files the job unchecked and asserts accept refuses. 2 fixed: pidfd_open(pid) fallback removed; without SO_PEERPIDFD a submit is refused:unattested. 3 fixed: per-connection threads (cap 16, then refused:busy; busy request drained 250ms first, since closing an AF_UNIX socket with unread bytes resets the peer), 5s whole-request deadline. 4 documented, not enforced: any unsandboxed same-uid process can already write accepted/<id>.cancel directly, so a server-side owner check adds no boundary; residual stated in docs/deputies.md. 5 fixed: runner emits one legacy-incoming-ignored audit row + terminal notice at start. 6 fixed: stale incoming/ comment.'
+  created_at: 2026-11-05T03:41:56.288096635Z
+  modified_at: 2026-11-05T03:41:56.288096635Z
+  session_id: 01a1a99108e6
+  harness_version: 2.1.318 (Claude Code)
 history:
 - id: 01a1a2a3-f27f-7463-9a97-0b8c7a670b77
   author: joe
