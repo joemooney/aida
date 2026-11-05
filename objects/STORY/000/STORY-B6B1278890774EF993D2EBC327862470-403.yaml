@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T00:31:51.425362067Z
-modified_at: 2026-11-05T09:52:55.426065889Z
+modified_at: 2026-11-05T10:15:30.423297714Z
 req_type: Story
 relationships:
 - rel_type:
@@ -131,6 +131,12 @@ comments:
   content: 'Round 3: fix advisor CLI executable resolution; update TASK-2807 resume ratchet while retaining spawn-time marking; reproduce all nine publication matrix cases and repair fixture/code; rerun live bwrap selection and report exact missing tests if constrained; document the queue-work reroute integration boundary including pre-provisioned seats and interactive pickups.'
   created_at: 2026-11-05T09:52:55.426065889Z
   modified_at: 2026-11-05T09:52:55.426065889Z
+  session_id: 01a1ab1ee084
+- id: 01a1ab34-db77-7023-a9a1-f00d97023bc7
+  author: joe
+  content: 'Round 3 investigation: original CI job 127129634402 reports library result 49 passed / 0 failed and presenter result 2 passed / 0 failed. The missing counter name is task_2053_bwrap_isolated_child_inherits_the_live_gate: its console success line was split by a sibling salvage diagnostic (08:26:14.717 UTC). Changed gate to count dedicated libtest result files, retaining exact source count, required-live flags, skip rejection, and egress success. CI job 127129634024 shows all standalone and drain matrix cases precede a native-policy refusal in the first contained Codex resume; the test seat is an empty unrelated repository without the trusted origin/main config.'
+  created_at: 2026-11-05T10:15:30.423297714Z
+  modified_at: 2026-11-05T10:15:30.423297714Z
   session_id: 01a1ab1ee084
 history:
 - id: 01a1a947-16f2-71f0-9679-9dc05c31b942

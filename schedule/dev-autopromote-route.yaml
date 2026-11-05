@@ -8,6 +8,6 @@ note: 'Inspected routed failure: c7170b4 compiled and smoke-tested successfully;
 due_since: 2026-11-03T20:23:47.691877353Z
 due_reason: on CronJobFailed:dev-autopromote
 due_failure:
-  trip_id: dev-autopromote@2026-11-04T13:18:38.370007854Z
+  trip_id: dev-autopromote@2026-11-05T10:13:59.960269358Z
   job: dev-autopromote
-  error: 'exit 1: build of be275c313c1482b990ba38f323bdc67304f1d15c failed; log /home/joe/.aida/dev-autopromote/20261104T125606Z-be275c313c14.log; tail:     Blocking waiting for file lock on build directory |     Finished `agent` profile [optimized] target(s) in 24.67s | error: "another `aida dev build` or `aida dev rollback` is updating /home/joe/.local/share/aida/live right now; retry when it finishes. Nothing was changed." | help: aida dev build'
+  error: 'exit 1: build of 96c521861aae874d28e42568061c65117b91f895 failed; log /home/joe/.aida/dev-autopromote/20261105T095133Z-96c521861aae.log; tail:    Compiling aida-core v0.16.0 (/home/joe/ai/aida/aida-core) |    Compiling aida-cli-lib v0.16.0 (/home/joe/ai/aida/aida-cli-lib) |    Compiling aida-server v0.16.0 (/home/joe/ai/aida/aida-server) |    Compiling aida-tui v0.16.0 (/home/joe/ai/aida/aida-tui) |    Compiling aida-generate-types v0.16.0 (/home/joe/ai/aida/aida-generate-types) |    Compiling aida v0.16.0 (/home/joe/ai/aida/aida-crate) |    Compiling aida-cli v0.16.0 (/home/joe/ai/aida/aida-cli) |     Finished `agent` profile [optimized] target(s) in 9m 50s | Smoke test passed: /home/joe/.local/share/aida/live/.incoming/aida | error: "the staged build does not match HEAD, so it was not promoted: the staged `aida --version` reports sha 96c521861aa, but HEAD is c9166da8a3ce240b3c5464e80ef484980aba0846." | help: aida --version'
