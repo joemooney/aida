@@ -15,7 +15,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T01:34:10.411285281Z
-modified_at: 2026-11-05T02:56:05.080662308Z
+modified_at: 2026-11-05T02:57:07.999290303Z
 req_type: Bug
 tags:
 - area:containment
@@ -26,6 +26,26 @@ relationships:
 - rel_type: Child
   target_id: 01a1a736-e545-7881-9b39-de61a3c68b66
   created_at: 2026-11-05T01:34:16.920122433Z
+comments:
+- id: 01a1a9a3-839f-7943-9865-dfd07d3226dc
+  author: joe
+  content: |-
+    SKETCH v1 / implementation pickup, 2026-11-04 — trace:BUG-2447 | ai:codex
+
+    Confirmed source at efca74e51a6: config_cmd.rs::write_codex_posture sets sandbox_workspace_write.network_access=true and has no allowed_hosts translation. session.rs reports Native as "native sandbox, not AIDA-contained". containment/mod.rs always sets ordinary_launch_supported=false and aida_containment_applied=false; supervisor.rs::run_egress_probe is explicitly a closed synthetic lane, not a production launcher. TASK-2706 acceptance also forbids ordinary-agent enablement from that slice. No production policy was changed and no new conformance run/pass is claimed.
+
+    Approval gap: STORY-2460 signed Q5 preserves this compatibility exception and requests filing C3 failures; Q3 approves shared-boundary reuse for AGY. Neither selects or approves a production Codex boundary. BUG-2447 itself requires an independently approved boundary. Changing network_access to false would deny allowed HTTPS too and cannot meet acceptance; proxy environment variables alone cannot block direct sockets or bypasses.
+
+    Proposed direction for signoff: reuse the shared network-namespace/host-owned proxy primitives, with a pinned trusted allowed_hosts snapshot, for a separately reviewed Codex production adapter. Keep the existing compatibility label and behavior until explicit policy approval. Before enabling the adapter, define the exact boundary placement around Codex terminal executors and descendants, model/auth transport and any host app-server; confine or disable every enabled browser/URL/MCP/delegated egress surface. Define inherited-FD and UNIX-channel handling jointly with BUG-2448 so a host-capable executor cannot bypass the network namespace. Proxy/broker death must terminate the confined lane, with no permissive fallback. The synthetic probe must remain synthetic and cannot serve as production readiness evidence.
+
+    Questions requiring advisor decision: Q1 approve shared-boundary Codex adapter direction, or require a separately validated native managed-network adapter? Q2 approve which model/auth and host app-server paths remain outside versus inside the boundary, and the exact supported tool inventory? Q3 identify the prerequisite production-lifecycle/grant/IPC work and approve an implementation slice plus independent boundary review before activation?
+
+    Validation after signoff: use a corrected policy-expressible C3 fixture (STORY-2460 latest S1 reassessment says the current hardcoded loopback proxy has no C3 pass rule). Through the real production launcher and actual tools, parent receivers must observe allowed HTTPS while observing no denied-host, redirect, direct-IP/TCP/UDP or proxy-bypass nonce. Require verified payload execution and positive controls; unsupported, unexecuted and deny-all outcomes cannot pass. Repeat across every enabled egress surface, plus broker-death/descendant teardown checks. No tests were run because no implementation changed.
+
+    Punting for the security-boundary design decision. This is not completed and must not be queue-done.
+  created_at: 2026-11-05T02:57:07.999290303Z
+  modified_at: 2026-11-05T02:57:07.999290303Z
+  session_id: 01a1a9a2272a
 history:
 - id: 01a1a957-aeb7-7150-887a-dd6b7a33021d
   author: joe
