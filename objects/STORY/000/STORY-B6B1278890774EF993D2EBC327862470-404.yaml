@@ -3,12 +3,12 @@ spec_id: STORY-b6b1278890774ef993d2ebc327862470-404
 agreed_id: STORY-2476
 title: 'Pipeline stall alarm: mail the advisor when nothing is in flight and no PR can ship'
 description: 'On 2026-11-04 main went 3h without a merge. All 9 open PRs were red or had request-changes, no implementer lanes ran, and the advisor''s waits only polled for ''ready to ship''. Nothing in AIDA flagged that the pipeline was idle and blocked. Acceptance: (1) a due job, or the oversight loop, detects for N minutes (default 30): in-flight implementers == 0 AND no PR is ship-ready AND (an open PR has request-changes or red CI OR the queue is non-empty); (2) it mails the advisor one actionable digest: each blocked PR with its blocker (verdict, failing tests, conflict, stale lease) and the command that unblocks it (queue rework / session end / release); (3) the alarm stays silent while any lane runs or a PR is ready.'
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T00:31:59.464117777Z
-modified_at: 2026-11-05T01:55:47.165267316Z
+modified_at: 2026-11-05T01:55:53.071057358Z
 req_type: Story
 comments:
 - id: 01a1a946-efb8-79d3-b78f-342e7e4872fe
@@ -47,6 +47,12 @@ comments:
   created_at: 2026-11-05T01:55:47.165267316Z
   modified_at: 2026-11-05T01:55:47.165267316Z
   session_id: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
+- id: 01a1a96b-706f-7241-8c0e-13550ce4638b
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was punted on: design-fork: Master sign-off required by AGENTS.md Sketch-First Protocol for action-receipt lifecycle/schema and vendor wake contracts. Description suppresses alarms while any lane runs or PR is ready; operator comments also require under-cap/ready-without-train alarms. Concrete sketch committed as f44af0c8273 at docs/plans/2026-11-04-story-2476-pipeline-stall-alarm.md. Claude/agy exact-session live wake is explicitly unsupported by the current wake runner; need capability/dependency split decision, plus acted disposition and escalation policy.. No triage reason was given.'
+  created_at: 2026-11-05T01:55:53.071054340Z
+  modified_at: 2026-11-05T01:55:53.071054340Z
+  session_id: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
 history:
 - id: 01a1a947-202d-79b2-827b-2b25c0c16d7a
   author: joe
@@ -76,6 +82,14 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1a96b-706f-7241-8c0e-134f01190c90
+  author: joe
+  timestamp: 2026-11-05T01:55:53.071043220Z
+  session_id: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: 47e9f216d38bf2bb6c503baeebfcca728604bd57
   branch: main
@@ -84,9 +98,3 @@ filed_at:
   aida_build_sha: 47e9f216d38
   vendor: claude
   session: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
-attention_reason:
-  category: design-fork
-  detail: Master sign-off required by AGENTS.md Sketch-First Protocol for action-receipt lifecycle/schema and vendor wake contracts. Description suppresses alarms while any lane runs or PR is ready; operator comments also require under-cap/ready-without-train alarms. Concrete sketch committed as f44af0c8273 at docs/plans/2026-11-04-story-2476-pipeline-stall-alarm.md. Claude/agy exact-session live wake is explicitly unsupported by the current wake runner; need capability/dependency split decision, plus acted disposition and escalation policy.
-  lean: Approve separate alarm kinds, retain original pipeline-idle silence rule, reuse Codex wake and existing mailbox receipts, and split unsupported vendor delivery into explicit blocking dependencies; use explicit recipient action dispositions rather than interpreting read ACK as action.
-  raised_by: implementer
-  raised_at: 2026-11-05T01:41:15.485271366Z
