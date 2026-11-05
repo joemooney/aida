@@ -125,9 +125,15 @@ fn task_1471_show_docs_immediate_reverse_and_direct_links_preserve_machine_outpu
         created_by: None,
     });
     backend.update_requirement(&spec).unwrap();
+    // Human rendering must leave machine bytes unchanged when the subject
+    // has both direct and reverse Documentation links.
+    let json_with_direct = show(root, "json");
+    let toon_with_direct = show(root, "toon");
     let human = show(root, "human");
     assert!(human.contains("Direct-linked explanation"), "{human}");
     assert!(human.contains("Reverse-linked exposition"), "{human}");
+    assert_eq!(show(root, "json"), json_with_direct);
+    assert_eq!(show(root, "toon"), toon_with_direct);
     for format in ["json", "toon"] {
         assert!(!show(root, format).contains("Documentation:"));
     }
