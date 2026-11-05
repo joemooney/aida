@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-784
 agreed_id: TASK-3046
 title: 'STORY-2460 S1: containment conformance harness (C0-C4) plus host-run probes of agy --sandbox and codex native'
 description: 'Implement the vendor-neutral conformance contract from SKETCH v1 sections 1-2 as a host-runnable harness, as ruled at signoff 2026-11-04 11:05 (Q1, Q2, Q4). Run it host-side through the script deputy against agy --sandbox (private runtime dir, no credential copying) and against codex native. Record per-check results on STORY-2460, and the posture S1 selects for agy. File a defect for each Codex failure (Q5). Acceptance: the harness exists with tests; both vendors have recorded results; the posture decision is recorded.'
-status: Approved
+status: InProgress
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T17:53:47.688167385Z
-modified_at: 2026-11-05T05:36:24.070870766Z
+modified_at: 2026-11-05T05:39:43.133875384Z
 req_type: Task
 tags:
 - area:containment
@@ -218,6 +218,13 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
+- id: 01a1aa38-5d9d-74f3-a32f-41f22a015ee5
+  author: aida-session-start
+  timestamp: 2026-11-05T05:39:43.133870811Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 6a331a8a5c91ca7485b695a076af44bdf9be3894
   branch: main
