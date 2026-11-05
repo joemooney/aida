@@ -9,12 +9,12 @@ description: |-
 
   PR: #3353
   Reviewed sha: ab7108bd9065ff87111108a22469177ef5387a22
-status: NeedsAttention
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T11:57:10.724108127Z
-modified_at: 2026-11-05T11:38:05.363561487Z
+modified_at: 2026-11-05T12:50:47.834292054Z
 req_type: Task
 tags:
 - carried-from:BUG-2438
@@ -255,6 +255,20 @@ history:
   - field_name: status
     old_value: Approved
     new_value: NeedsAttention
+- id: 01a1abc3-0795-7eb3-8862-338aef29add3
+  author: aida-auto-bump
+  timestamp: 2026-11-05T12:50:47.829040936Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Completed
+processing_record:
+- id: 01a1abc3-079a-7f90-aa4a-b606ca25aefd
+  timestamp: 2026-11-05T12:50:47.834287794Z
+  agent: implementer
+  commit_sha: 4aadaa047b8e8ad47ccecc8320ec075643df70d5
+  summary: 'All TASK-2832 criteria met: existing 10s CLAIM_GRACE traced and kept in production via wait()->wait_with_grace; three focused regressions (claim-window recovery with rc 7 + transcript, interrupted-claim refusal bounded by injected 300ms grace in [grace, grace+1s) with no caller timeout, immediate unknown-job refusal); prior round''s test-time-budget finding fixed; CI run 42020538862 fully green at head. merge-hold-gate failure is the supervised-spec human-release gate, not a code defect.'
+  review_verdict: approved
 filed_at:
   code_sha: 238a7ecc3eaf8123b58a85fffe626be170d139a1
   branch: main
@@ -270,4 +284,6 @@ implementation_info:
     cargo fmt --all -- --check; git diff --cached --check — passed
   implemented_at: 2026-11-05T02:18:32.791749244Z
   implemented_by: joe
+  completed_at: 2026-11-05T12:50:47.829033470Z
+  completion_sha: 4aadaa047b8e8ad47ccecc8320ec075643df70d5
 interface_changes: {}
