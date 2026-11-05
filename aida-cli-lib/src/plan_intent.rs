@@ -2287,17 +2287,25 @@ pub(crate) static WHY: crate::command_registry::CommandReg = crate::command_regi
 };
 
 // trace:STORY-631 | ai:claude
-/// Show the AI-generated plain-terms comprehension of WHY a spec exists —
+/// Capture a portable observation, or show the AI-generated comprehension of WHY a spec exists —
 /// its intent, distilled from the spec + its graph neighborhood. Distinct
 /// from `aida why` (a deterministic state classifier): this is a cached,
 /// drift-stamped LLM synthesis. Generated on first call (or `--refresh`),
 /// printed from cache thereafter; a STALE marker shows when the
 /// neighborhood drifted since generation.
 #[derive(clap::Parser, Debug)]
-#[clap(name = "intent")]
+#[clap(
+    name = "intent",
+    subcommand_negates_reqs = true,
+    override_usage = "aida intent [OPTIONS] <ID>\n       aida intent <note|validate|export> ..."
+)]
 pub(crate) struct IntentArgs {
+    // trace:STORY-2479 | ai:codex
+    #[clap(subcommand)]
+    pub local: Option<crate::observation_envelope::LocalCommand>,
     /// The SPEC-ID to comprehend (any story/task/bug/feature id).
-    pub id: String,
+    #[clap(required = true)]
+    pub id: Option<String>,
     /// Which register to print: `layman` (prose for a human skimmer) or
     /// `llm` (denser/structured, for an agent loading the spec).
     #[clap(long, value_parser = ["layman", "llm"], default_value = "layman")]
@@ -2320,13 +2328,65 @@ fn run_intent(
     _ctx: &crate::command_registry::DispatchCtx,
 ) -> anyhow::Result<()> {
     let args = <IntentArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
-    let IntentArgs {
-        id,
-        audience,
-        refresh,
-        json,
-    } = &args;
-    return handle_intent(id, audience, *refresh, *json);
+    // trace:STORY-2479 | ai:codex
+    if args.local.is_some() {
+        anyhow::bail!(
+            "Local observation commands must use the direct spelling: aida intent <note|validate|export> ... (without an alias)"
+        );
+    }
+    handle_intent(
+        args.id
+            .as_deref()
+            .expect("clap requires a spec or local subcommand"),
+        &args.audience,
+        args.refresh,
+        args.json,
+    )
+}
+
+#[cfg(test)]
+mod local_intent_dispatch_tests {
+    // Aliases are expanded after the raw-argv local entry point. A late
+    // handler must never execute local I/O after shared startup.
+    // trace:STORY-2479 | ai:codex
+    #[test]
+    fn late_local_commands_require_direct_spelling() {
+        for args in [
+            vec![
+                "aida",
+                "intent",
+                "note",
+                "--category",
+                "observation",
+                "--title",
+                "title",
+                "--file",
+                "must-not-be-read",
+            ],
+            vec![
+                "aida",
+                "intent",
+                "validate",
+                "--file",
+                "must-not-be-read",
+                "--format",
+                "json",
+            ],
+            vec!["aida", "intent", "export", "--file", "must-not-be-read"],
+        ] {
+            let cli = crate::command_registry::try_parse_from(args).unwrap();
+            let crate::cli::Command::Registered(invocation) = cli.command;
+            let ctx = crate::command_registry::DispatchCtx {
+                globals: Some(&cli.globals),
+                store: None,
+            };
+            let error = super::run_intent(&invocation.matches, &ctx).unwrap_err();
+            assert!(
+                error.to_string().contains("direct spelling: aida intent"),
+                "{error}"
+            );
+        }
+    }
 }
 
 // trace:STORY-1728 | ai:claude
