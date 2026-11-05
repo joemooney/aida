@@ -1,0 +1,18 @@
+{
+  "id": "review-lease-7343b9d7b205919e5e376db9a8613ea7ffbf9b4ee622b8944656d4009ab8dad0",
+  "thread_id": "review-lease-7343b9d7b205919e5e376db9a8613ea7ffbf9b4ee622b8944656d4009ab8dad0",
+  "from": "review-launch",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1793886437733,
+  "body": "lease 01a1abe7a8ce (implementer, seat /home/joe/ai/aida-worktrees/aida-seat-aida-story-1651) holds branch `story-1651` and its session has exited, but it was not ended automatically: its seat has 142 uncommitted change(s): 1 .M N... 100644 100644 100644 940f32cc113fadb76a34aef8718203c35099a77e 940f32cc113fadb76a34aef8718203c35099a77e .aida/discipline/advisor-role.md; 1 .M N... 100644 100644 100644 fe078b69d171661b8fa1dc6e69d32e5fc62fe82d fe078b69d171661b8fa1dc6e69d32e5fc62fe82d .aida/discipline/backlog-grooming.md; 1 .M N... 100644 100644 100644 6a2afe9bd148687d8e8635610928ee6676cb09ea 6a2afe9bd148687d8e8635610928ee6676cb09ea .aida/discipline/glossary.yaml; 1 .M N... 100644 100644 100644 9fdea5ba6884b43c118f3e5e7fc61b6c59e00ee9 9fdea5ba6884b43c118f3e5e7fc61b6c59e00ee9 .aida/discipline/session-discipline.md; 1 .M N... 100644 100644 100644 b4c5fec044ab43012420262ecb91452e0dc7ad90 b4c5fec044ab43012420262ecb91452e0dc7ad90 .aida/discipline/substrate-as-bouncer.md, … (+137 more). Commit and push the work to the PR, or discard it with `aida session end 01a1abe7a8ce --force --discard-unpushed`, then retry",
+  "subject": "Review blocked by retained lease 01a1abe7a8ce",
+  "urgent": false,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}
