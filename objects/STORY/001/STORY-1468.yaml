@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-09-24T00:32:52.190913727Z
-modified_at: 2026-11-05T19:13:20.831134253Z
+modified_at: 2026-11-05T19:52:52.010125592Z
 req_type: Story
 comments:
 - id: 01a0d0d5-7dfa-7e41-80d5-f47b293e4316
@@ -68,6 +68,11 @@ comments:
   created_at: 2026-11-05T18:49:15.259649721Z
   modified_at: 2026-11-05T18:49:15.259649721Z
   session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
+- id: 01a1ad45-722a-7f30-9095-d91782de73c4
+  author: mcp
+  content: 'Implementation progress (ai:codex): approved separate-artifact design is implemented on branch story-1468. Explicit CLI file intake/MCP reviewed input, 64 KiB UTF-8/credential refusals, opt-out, explicit labeled retrieval, Git-only persistence, retention documentation, and preservation through edits/archive/remap/merge are in place. Six core regressions and three CLI/MCP feature tests passed; default and feature-disabled CLI checks passed. Final help snapshot/schema checks, pre-push guards, and compile-all test-target validation are still running. Changes are staged; no commit or PR yet. This is progress evidence, not completion.'
+  created_at: 2026-11-05T19:52:52.010109739Z
+  modified_at: 2026-11-05T19:52:52.010109739Z
 history:
 - id: 01a1a437-be76-7fc2-88e3-c0cf9d177253
   author: joe
