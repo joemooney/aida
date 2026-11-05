@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T13:39:44.696669725Z
-modified_at: 2026-11-05T23:09:58.910957703Z
+modified_at: 2026-11-05T23:10:12.339354809Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -75,6 +75,12 @@ comments:
   content: 'Round 2 validation complete: AIDA_REQUIRE_BWRAP_LIVE=1 cargo test -p aida-cli-lib --lib bug_2456 -- --nocapture passed all 6 tests (no skips), including actual remote-after-fetch non-fast-forward rejection and clone import cleanup on mismatch/rejection. The compiled test binary also passed all 8 seat_clone::rework_merge_tests and all 11 story_2475 tests. cargo fmt --all -- --check and git diff --check passed. All three review findings addressed. Git add failed because .git/index.lock is read-only in this native lane; the standalone launcher must make this round’s new commit and push it to existing PR #3461 after exit. Suggested commit: [AI:codex] fix(queue): gate rework publication to fresh host merges (BUG-2456). Do not ship or record a review.'
   created_at: 2026-11-05T23:09:58.910957703Z
   modified_at: 2026-11-05T23:09:58.910957703Z
+  session_id: 01a1adf1e72d
+- id: 01a1adfa-1d73-7850-b360-3174dd20eb27
+  author: joe
+  content: 'Host handoff: queue done correctly refused because HEAD remains reviewed e9b9aa1a5bf7 and native .git prevents committing. No --force override used; spec stays InProgress. Source/tests/docs are modified and all targeted checks passed. Host must commit and push these changes to PR #3461, then re-run queue done; no ship/review-record or merge-hold clearance was attempted.'
+  created_at: 2026-11-05T23:10:12.339354809Z
+  modified_at: 2026-11-05T23:10:12.339354809Z
   session_id: 01a1adf1e72d
 history:
 - id: 01a1abf0-8775-7ae3-a3a6-2a1721de7a6c
