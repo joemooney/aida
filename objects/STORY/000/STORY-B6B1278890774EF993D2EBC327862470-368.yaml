@@ -29,7 +29,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T02:34:20.173245666Z
-modified_at: 2026-11-05T17:51:05.591316617Z
+modified_at: 2026-11-05T17:53:45.973085720Z
 req_type: Story
 comments:
 - id: 01a1a468-a682-7271-a707-298d622d86f1
@@ -162,6 +162,12 @@ comments:
   created_at: 2026-11-05T17:35:55.892281772Z
   modified_at: 2026-11-05T17:35:55.892281772Z
   session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
+- id: 01a1acd8-67f5-7162-8447-38d24aae429f
+  author: joe
+  content: 'Round 3 PR #3428: committed and pushed 8f635674406. Finding 1: release Git fixture now uses crate::test_git::git_command(), retaining test_exec output handling. Reproduced maintenance ratchet failure before the change; all 8 tests pass after. Finding 2: spec condition IDs normalize to ASCII uppercase; lower/mixed-case regression cases added. Finding 3: documented that unit fixtures skip process-global alias/literal-ID/width installation to avoid parallel-test interference; production and binary integration tests retain installation. cargo fmt --all -- --check and git diff --check pass. Targeted Rust tests are compiling; CI run 42078979722 is queued at the exact new SHA. Remote push succeeded and GitHub confirms the head, although the sandbox refused the local remote-tracking ref update. No findings disputed; no merge-hold clearance or review verdict attempted.'
+  created_at: 2026-11-05T17:53:45.973085720Z
+  modified_at: 2026-11-05T17:53:45.973085720Z
+  session_id: 01a1acd5e4cb
 history:
 - id: 01a1a468-9c3a-76d2-ab8c-12bf6457966b
   author: joe
