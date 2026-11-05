@@ -14,7 +14,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T19:24:50.018024034Z
-modified_at: 2026-11-05T21:03:26.797883300Z
+modified_at: 2026-11-05T21:03:30.495465702Z
 req_type: Task
 tags:
 - carried-from:TASK-2842
@@ -51,6 +51,22 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Retitle/repair mechanics and credit preservation are sound and tested, but new seat PRs now always take the spec title, which for the ~539 specs with truncated ''…'' finding titles (incl. TASK-2891 itself) yields worse squash subjects than the commit subject and downgrades fix->chore; CI still pending at review time.. No triage reason was given.'
   created_at: 2026-11-05T21:03:26.797879688Z
   modified_at: 2026-11-05T21:03:26.797879688Z
+  session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
+- id: 01a1ad86-1e40-7563-910c-40a5854c5844
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (TASK-2891):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: fddd66888905
+    Recorded: 2026-11-05T20:57:16.824883819+00:00
+    Findings:
+    1. major: ship_from_seat.rs:1040 open_seat_pr / seat_pr_title (ship_from_seat.rs:1098-1196) replace EVERY new seat PR title with the spec title, even when the commit subject is descriptive. 539 of 6904 specs have truncated titles ending in '…' and 114 start with a severity prefix (carried-forward review findings). Concrete: for TASK-2891 itself (type task, title "cosmetic: squash title 'fix: address CI failures and review findings' is generi…") a fresh publication of commit "[AI:codex] fix(ship): derive seat PR titles from owning specs (TASK-2891)" would be titled "[AI:codex] chore: cosmetic: squash title 'fix: address CI failures and review findings' is generi… (TASK-2891)" — truncated, double-prefixed, contains the very generic phrase the spec forbids, and downgrades the commit's correct 'fix(ship)' to 'chore'. Fix: keep a descriptive commit subject (only substitute when generic_rework_title(subject) is true, mirroring the existing-PR path that already preserves descriptive author titles), and/or reject spec titles that are truncated ('…'), severity-prefixed, or contain the generic phrase, falling back to the commit subject; when substituting, prefer the commit's conventional type/scope over the req-type default. Add a regression for a truncated carried-forward finding title.
+    2. minor: seat_pr_title suffix stripping (ship_from_seat.rs:1117-1125) only splits on ' (' — a subject whose trailing completion group is not space-separated (e.g. 'fix: foo(BUG-1)') leaves head==subject, suffix empty, so the final credit-equality ensure fails and publication is refused where it previously succeeded. Either split on the group's own '(' or fall back to the commit subject instead of erroring; add a test.
+    3. minor: generic_rework_title (ship_from_seat.rs:1074-1078) is case- and wording-exact ('address CI failures and review findings'); a lane emitting 'Address CI failures and review findings' or with trailing whitespace before '(' bypasses both the retitle repair and the store-unavailable refusal. Normalize (trim, case-insensitive) before comparing and cover with a test.
+    4. minor (test gap): no test covers the rework retitle path when the owning spec cannot be loaded (publication_title -> seat_pr_title(None, generic) bails after the branch was already pushed); assert the error text and that after_open is not called.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-05T21:03:30.368248369Z
+  modified_at: 2026-11-05T21:03:30.368248369Z
   session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
 history:
 - id: 01a1ad63-61de-7b02-a9f2-463108532a66
