@@ -1,0 +1,29 @@
+id: 01a1add3-d7df-73b0-af4e-e682a2f71b7f
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-849
+title: 'MINOR (non-blocking) unverified input: drain publication passes the lease scope…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on STORY-2475, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  MINOR (non-blocking) unverified input: drain publication passes the lease scope (session.rs run_vendor_headless_to_exit) and resume passes plan.scope (queue_cmd.rs run_queue_resume_to_exit) as the spec for ship --from-seat. A multi-spec or epic scope would reach publication as a non-spec id. Assert single-spec scope or resolve the lane's spec.
+
+  PR: #3398
+  Reviewed sha: 6172950a13332e4b1e072fff15fedf1e0d422d7a
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-05T22:28:24.159087604Z
+modified_at: 2026-11-05T22:28:24.159087604Z
+req_type: Task
+tags:
+- carried-from:STORY-2475
+- finding-hash:c22f2e49
+- from-review:PR-3398
+- kind:carried-forward
+filed_at:
+  code_sha: bdeb8f499786848a3cd0fec9d3e4b9bc6a0c03f0
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 0b0f8a6b701
+  vendor: claude
