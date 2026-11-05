@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T07:36:50.416655523Z
-modified_at: 2026-11-05T15:56:44.852385239Z
+modified_at: 2026-11-05T15:56:47.351240576Z
 req_type: Task
 tags:
 - docs:impacted
@@ -91,6 +91,23 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Round-2 findings 1, 2 and 4 are resolved: publish-before-accept removes the two-site divergence, and writer failures recover. Finding 3''s checkpoint is defeated on every pull that advances: sync() re-validates the old tip in full. Push failures are mislabelled as lost races, and HTTPS enrollment has no credential path. CI is still pending at the head.. No triage reason was given.'
   created_at: 2026-11-05T15:56:44.852382795Z
   modified_at: 2026-11-05T15:56:44.852382795Z
+  session_id: b83457ff-84e3-46cb-8f68-4be531a63422
+- id: 01a1ac6d-4efc-7851-8708-57f94a5fae0b
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (TASK-3096):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: ec28f40b6158
+    Recorded: 2026-11-05T13:22:57.762964409+00:00
+    Findings:
+    1. MINOR (regression of round-2 finding 3) aida-cli-lib/src/intent_intake.rs:688-694: sync() calls history(&incoming), which overwrites validated-tip with the incoming SHA. It then calls history(old). old's rev-list does not contain the newer incoming SHA, so the checkpoint is discarded and the whole local history is fully re-validated (2 git spawns per commit, 30s deadline) on EVERY pull/publish --file/process where the remote advanced. That is the normal case. build():601 also writes validated-tip for an unpublished candidate commit, so every lost push race forces another full validation. Repro: in validated_checkpoint_skips_old_trees_but_checks_new_intermediate_commits, delete the root tree object, have the sender publish once more, then receiver 'intent pull'. It fails with 'Git operation refused'. Fix: drop the redundant history(old) (old is the already-accepted tip) or validate it before incoming, and only persist validated-tip for accepted tips. Add a test that removes an old tree object and then pulls an advanced remote.
+    2. MINOR aida-cli-lib/src/intent_intake.rs:538-565,607-626: push_commit() treats ANY non-zero git push (auth failure, network error, unwritable remote, hook refusal) as a lost race. append() then retries 4 full sync+build+push cycles and finally reports 'lost the race to other writers repeatedly'. git's stderr is discarded (bounded() uses Stdio::null), so an operator with a bad SSH key or an unreachable host sees a misleading race message and no cause. unpublishable_receipt_retries_without_a_second_spec_write exercises exactly this path (read-only objects dir) and passes only via the outer context string. Fix: capture bounded stderr (bounded_with_stderr). Retry only when the remote tip actually moved (ls-remote shows a different SHA, or stderr is a non-fast-forward rejection). Otherwise fail at once with the git diagnostic.
+    3. MINOR aida-cli-lib/src/intent_intake.rs:134-163,226-229,293-295 + docs/cli/02-specs.md 'Credentials and branch restrictions must be configured at the remote independently': enrollment advertises https:// remotes, but git_command sets GIT_CONFIG_GLOBAL=/dev/null and GIT_ASKPASS=/bin/false, and Intake::open refuses any change to the byte-pinned repo config. So no credential helper or askpass can ever supply HTTPS credentials. The only way to publish to an authenticated HTTPS remote (GitHub/GitLab) is to embed a token in the URL, which is then persisted in profile.json and passed on argv. Fix: either refuse userinfo in https URLs and document that authenticated destinations must use ssh:// (agent/keys), or add an explicit reviewed credential mechanism. Make the docs state which one applies.
+    4. MINOR aida-cli-lib/src/intent_intake.rs:789-805,951-959: if a receipt for the checksum already exists, process() returns early without touching the operation journal. Two cases leave a stale journal behind, and the second is worse. (a) A crash after a successful push but before journal removal leaves a stale operation-<sha>.json forever. (b) Two home clones process the same observation concurrently (the window is between the initial sync and the append). The loser's spec write is confirmed, then append fails with 'Conflicting bytes'. Retrying prints the WINNER's receipt and returns Ok, silently orphaning the loser's duplicate spec and its journal. Fix: when a receipt exists and a local journal exists, compare the journal's evidence with the receipt destination. Remove the journal if they match; otherwise report the orphaned duplicate (spec id) for operator reconciliation. Add a test for the crash-after-push case.
+    5. UNVERIFIED: PR CI run 42034538035 at ec28f40b6158 was still in progress or queued at review time (lib-0, lib-1 and gates queued; cli-0, cli-1, contracts and rest running). merge-hold-gate fails by design (supervised merge hold). The rework head needs every CI shard green, including task_3096_intake_transport and bug_1502_format_json_audit.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-05T15:56:47.228127517Z
+  modified_at: 2026-11-05T15:56:47.228127517Z
   session_id: b83457ff-84e3-46cb-8f68-4be531a63422
 history:
 - id: 01a1aaa3-d806-7392-8539-dab331d61cdd
