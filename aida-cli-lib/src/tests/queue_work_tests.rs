@@ -4597,3 +4597,146 @@ fn story_2475_preparation_or_mail_failure_cannot_admit_a_launch() {
     .1
     .is_empty());
 }
+
+/// STORY-2475 review: the `handle_queue_work` conflict wiring on real Git.
+/// The seat (a linked worktree on the PR head) and its lease exist before the
+/// host merge runs, as after `session_start`. A conflicting merge is aborted
+/// in place, the advisor is told the files, and a Codex pickup is relaunched
+/// as Claude in that same seat: vendor resolved and preflighted again, Codex
+/// model pin dropped, conflict task appended. Headless and interactive
+/// pickups take the same route (the interactive launch then starts
+/// interactive Claude). A clean merge is committed and keeps the planned
+/// launch. Boundary: clone seats run the same Git through
+/// `run_commit_sandboxed`, covered by the seat_clone and live bwrap tests.
+// trace:STORY-2475 | ai:claude
+#[test]
+fn story_2475_conflicting_codex_rework_relaunches_claude_in_the_seated_tree() {
+    use crate::session::HeadlessVendor;
+    use std::cell::Cell;
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    let git = |dir: &std::path::Path, args: &[&str]| -> String {
+        let out = crate::test_git::git_command()
+            .current_dir(dir)
+            .args(args)
+            .output()
+            .unwrap();
+        assert!(
+            out.status.success(),
+            "git {args:?}: {}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        String::from_utf8_lossy(&out.stdout).trim().to_string()
+    };
+    let fake_claude = root.join("fake-claude");
+    crate::test_exec::write_executable(&fake_claude, "#!/bin/sh\nexit 0\n");
+    let home = root.join("home");
+    std::fs::create_dir_all(&home).unwrap();
+    let _env = crate::test_env::EnvVarsGuard::apply(&[
+        ("AIDA_HOME", Some(home.to_str().unwrap())),
+        ("HOME", Some(home.to_str().unwrap())),
+        ("AIDA_AGENT_CMD", Some(fake_claude.to_str().unwrap())),
+        ("AIDA_HEADLESS_VENDOR", None),
+        ("AIDA_AGENT_MODEL", None),
+    ]);
+    let origin = root.join("origin.git");
+    let project = root.join("project");
+    git(root, &["init", "-q", "--bare", origin.to_str().unwrap()]);
+    git(root, &["init", "-q", project.to_str().unwrap()]);
+    git(&project, &["symbolic-ref", "HEAD", "refs/heads/main"]);
+    git(
+        &project,
+        &["remote", "add", "origin", origin.to_str().unwrap()],
+    );
+    git(&project, &["config", "user.name", "Host"]);
+    git(&project, &["config", "user.email", "host@example.com"]);
+    std::fs::write(project.join("shared.rs"), "base\n").unwrap();
+    std::fs::write(project.join("other.rs"), "base\n").unwrap();
+    git(&project, &["add", "."]);
+    git(&project, &["commit", "-qm", "base"]);
+    git(&project, &["push", "-q", "origin", "main"]);
+    for (branch, file) in [("conflict-pr", "shared.rs"), ("clean-pr", "other.rs")] {
+        git(&project, &["checkout", "-qb", branch, "main"]);
+        std::fs::write(project.join(file), format!("{branch}\n")).unwrap();
+        git(&project, &["commit", "-qam", branch]);
+        git(&project, &["push", "-q", "origin", branch]);
+    }
+    git(&project, &["checkout", "-q", "main"]);
+    std::fs::write(project.join("shared.rs"), "main moved\n").unwrap();
+    git(&project, &["commit", "-qam", "main moved"]);
+    git(&project, &["push", "-q", "origin", "main"]);
+
+    for interactive in [false, true] {
+        for (branch, conflicts) in [("conflict-pr", true), ("clean-pr", false)] {
+            // Fresh seat on the pushed PR head, provisioned before the merge.
+            git(
+                &project,
+                &["branch", "-f", branch, &format!("origin/{branch}")],
+            );
+            let seat = root.join(format!("seat-{branch}-{interactive}"));
+            git(
+                &project,
+                &["worktree", "add", "-q", seat.to_str().unwrap(), branch],
+            );
+            let head = git(&seat, &["rev-parse", "HEAD"]);
+            std::env::set_var("AIDA_AGENT_MODEL", "gpt-codex");
+            crate::session::set_headless_vendor_override(None);
+            let mut prompt = String::from("/aida-pickup STORY-2475");
+            let mut model = Some("gpt-codex".to_string());
+            let mailed = Cell::new(0);
+            let prepared = crate::seat_clone::prepare_rework_merge(&project, &seat, branch, false);
+            let vendor = apply_rework_conflict_route(
+                &project,
+                prepared,
+                ReworkConflictLaunch {
+                    vendor: HeadlessVendor::Codex,
+                    resume: false,
+                    interactive,
+                    contained: false,
+                    scope: "STORY-2475",
+                    pr: 3398,
+                    branch,
+                },
+                &mut prompt,
+                &mut model,
+                |_, body| {
+                    mailed.set(mailed.get() + 1);
+                    assert!(body.contains("shared.rs"), "{body}");
+                    Ok(())
+                },
+            )
+            .unwrap_or_else(|e| panic!("{branch} interactive={interactive}: {e:#}"));
+            // Either way the seat is left clean with no merge in progress.
+            assert!(git(&seat, &["status", "--porcelain"]).is_empty());
+            let merging = crate::test_git::git_command()
+                .current_dir(&seat)
+                .args(["rev-parse", "-q", "--verify", "MERGE_HEAD"])
+                .output()
+                .unwrap();
+            assert!(!merging.status.success(), "no unfinished merge");
+            if conflicts {
+                assert_eq!(vendor, HeadlessVendor::Claude);
+                assert_eq!(mailed.get(), 1);
+                assert_eq!(git(&seat, &["rev-parse", "HEAD"]), head, "merge aborted");
+                assert!(prompt.contains("conflicting files: shared.rs"), "{prompt}");
+                assert_eq!(model, None);
+                assert!(std::env::var("AIDA_AGENT_MODEL").is_err());
+                assert_eq!(
+                    crate::session::resolve_headless_vendor(&project),
+                    HeadlessVendor::Claude
+                );
+            } else {
+                assert_eq!(vendor, HeadlessVendor::Codex);
+                assert_eq!(mailed.get(), 0);
+                assert_ne!(git(&seat, &["rev-parse", "HEAD"]), head, "merge committed");
+                assert_eq!(prompt, "/aida-pickup STORY-2475");
+                assert_eq!(model.as_deref(), Some("gpt-codex"));
+            }
+            git(
+                &project,
+                &["worktree", "remove", "--force", seat.to_str().unwrap()],
+            );
+        }
+    }
+    crate::session::set_headless_vendor_override(None);
+}

@@ -9084,6 +9084,65 @@ pub(crate) fn rework_conflict_route(
     Ok((session::HeadlessVendor::Claude, files))
 }
 
+/// The launch facts [`apply_rework_conflict_route`] needs from the pickup.
+// trace:STORY-2475 | ai:claude
+pub(crate) struct ReworkConflictLaunch<'a> {
+    pub(crate) vendor: session::HeadlessVendor,
+    pub(crate) resume: bool,
+    pub(crate) interactive: bool,
+    pub(crate) contained: bool,
+    pub(crate) scope: &'a str,
+    pub(crate) pr: u64,
+    pub(crate) branch: &'a str,
+}
+
+/// Apply the host merge result to a pickup whose seat (linked worktree or
+/// clone) and lease already exist. A clean merge keeps the planned vendor,
+/// model and prompt. A conflict reroutes the launch to Claude in the same
+/// seat: the override is installed, the vendor is resolved and preflighted
+/// again (binary, `[agents] enabled`, containment), the vendor-specific model
+/// pin is dropped, and the conflict task is appended to the prompt. An
+/// interactive pickup (`!no_human`) gets the same reroute: the launch below
+/// starts interactive Claude, not Codex. Any refusal returns before
+/// `agent.starting()`, so the BUG-2428 setup rollback releases the seat.
+// trace:STORY-2475 | ai:claude
+pub(crate) fn apply_rework_conflict_route(
+    project_root: &Path,
+    prepared: Result<Vec<String>>,
+    launch: ReworkConflictLaunch<'_>,
+    prompt: &mut String,
+    resolved_model: &mut Option<String>,
+    notify: impl FnOnce(&str, &str) -> Result<()>,
+) -> Result<session::HeadlessVendor> {
+    let (route_vendor, files) = rework_conflict_route(
+        prepared,
+        launch.vendor,
+        launch.resume,
+        launch.scope,
+        launch.pr,
+        launch.branch,
+        notify,
+    )?;
+    if files.is_empty() {
+        return Ok(launch.vendor);
+    }
+    session::install_headless_vendor_override(route_vendor.as_str());
+    let vendor = session::resolve_enabled_headless_vendor(project_root)?;
+    session::preflight_launch_vendor(vendor, launch.interactive)?;
+    session::require_vendor_containment(vendor, launch.contained, "conflict rework")?;
+    std::env::remove_var("AIDA_AGENT_MODEL");
+    *resolved_model = None;
+    prompt.push_str(&format!(
+        "\n\n{}",
+        crate::rework_direction::conflict_task(&crate::rework_direction::MainConflict {
+            pr: launch.pr,
+            base: "main".into(),
+            files,
+        })
+    ));
+    Ok(vendor)
+}
+
 /// BUG-022: whether this pickup resolves the spec's open PR head as its
 /// branch. `aida queue rework` sends a refused spec back to Approved, which the
 /// status test alone reads as a fresh pickup. Every single-spec implementer
@@ -13495,39 +13554,24 @@ pub(crate) fn handle_queue_work(
                     branch,
                     matches!(launch, Some(QueueWorkLaunch::Resume(_))),
                 );
-                let (route_vendor, files) = rework_conflict_route(
+                launch_vendor = apply_rework_conflict_route(
+                    &project_root,
                     files,
-                    launch_vendor,
-                    matches!(launch, Some(QueueWorkLaunch::Resume(_))),
-                    &plan.scope,
-                    *pr,
-                    branch,
+                    ReworkConflictLaunch {
+                        vendor: launch_vendor,
+                        resume: matches!(launch, Some(QueueWorkLaunch::Resume(_))),
+                        interactive: !no_human,
+                        contained,
+                        scope: &plan.scope,
+                        pr: *pr,
+                        branch,
+                    },
+                    &mut prompt,
+                    &mut resolved_model,
                     |subject, body| {
                         crate::ship_from_seat::advisor_request(&project_root, subject, body)
                     },
                 )?;
-                if !files.is_empty() {
-                    session::install_headless_vendor_override(route_vendor.as_str());
-                    launch_vendor = session::resolve_enabled_headless_vendor(&project_root)?;
-                    session::preflight_launch_vendor(launch_vendor, !no_human)?;
-                    session::require_vendor_containment(
-                        launch_vendor,
-                        contained,
-                        "conflict rework",
-                    )?;
-                    std::env::remove_var("AIDA_AGENT_MODEL");
-                    resolved_model = None;
-                    prompt.push_str(&format!(
-                        "\n\n{}",
-                        crate::rework_direction::conflict_task(
-                            &crate::rework_direction::MainConflict {
-                                pr: *pr,
-                                base: "main".into(),
-                                files
-                            }
-                        )
-                    ));
-                }
             }
         }
         let headless_vendor = no_human.then_some(launch_vendor);
