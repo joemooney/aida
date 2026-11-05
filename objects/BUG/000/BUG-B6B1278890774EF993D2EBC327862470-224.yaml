@@ -18,7 +18,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T18:47:39.717568886Z
-modified_at: 2026-11-05T20:05:32.208433492Z
+modified_at: 2026-11-05T20:05:35.474364411Z
 req_type: Bug
 tags:
 - from-advisor:STORY-2325
@@ -49,6 +49,24 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Core fix sound (worker-only witness, init/subreaper refusal, generation-pinned migrate repairs, detached regression test) but PR CI is red: contracts drift-guard fails on a PR-introduced doc citation and lib-1 tests fail; AC1 creator fallback and AC5 host evidence remain open.. No triage reason was given.'
   created_at: 2026-11-05T20:05:32.208430552Z
   modified_at: 2026-11-05T20:05:32.208430552Z
+  session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
+- id: 01a1ad51-17ce-70d2-91dd-b349fcf0a3d9
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2458):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: d88bbc6d6efa
+    Recorded: 2026-11-05T19:56:50.512298864+00:00
+    Findings:
+    1. CI contracts (CLI-manual drift-guard) fails because of this PR: docs/cli/06-roles-sessions.md:873 puts `systemd --user` in backticks, so verify-manual.py's flag check reads it as an unknown flag `--user` cited under `aida own` (reproduced locally: flag_accuracy_misses -> {'flag': '--user', 'path': 'own', line 873}). Fix: drop the backticks or say 'the per-user systemd instance'.
+    2. CI lib-1 'Run tests' failed at d88bbc6 (job in run 42094343962). Job logs are unreachable from the reviewer sandbox, so the failing test is not identified here; read the log and fix or prove it pre-existing on main. Candidates touched by this PR: detached_reparented_lane_stamps_its_own_pid_and_is_dead_after_exit (python3/setsid, reparent target may not reap -> 3s wait), the adopt_spec_lease_for_subagent lease_written call (leases.rs:589), and tests whose fixtures relied on creator+active both being witnesses.
+    3. AC1 partial: dual.rs holder_for_lease still falls back to creator_pid when active_pid is unset, and creator_pid is creator_shell_pid() = the PARENT of the aida process (session_start.rs:3338/899). The spec says the holder is never a parent. When that parent is systemd --user (the detached-launch case) WriterFacts::witness now drops it, leaving zero witnesses (judge 'no witness' Unknown forever) instead of naming the owning process; the root cause in creator_shell_pid is not addressed. Either record the owning process at session start for detached launches or document/justify the creator fallback on the spec.
+    4. Untested refusal path: the write-time subreaper filter in WriterFacts::witness (dual.rs:107) calls invalid_holder with a hard-coded ProbeSource::system(), so no test proves a creator/active pid that is systemd --user is refused at write time; the init test only covers the judge and migrate paths. Make the probe source injectable and add the test.
+    5. AC2 fragility: judge_process (judge.rs:125) only rejects pid<=1; systemd --user/subreaper detection lives in the ownership::process::probe wrapper that callers must remember to pass as HostFacts.probe. Both current callers (compare.rs:178, migrate.rs:625) wrap it, but any future HostFacts built from probe_src.probe silently reads systemd --user as Alive again. Move the check behind a single HostFacts constructor or into the judge. Detection is also name-only (process.rs:16: systemd/init/tini/dumb-init), not an actual subreaper check.
+    6. AC5 unverified: no evidence that 'aida own show --compare' shows zero UNEXPLAINED holder-pid rows on this host after 'aida own migrate --execute' (implementer notes it remains a host step). Also, orphan records whose invalid holder is repaired to empty witnesses still render UNEXPLAINED 'never released' via compare.rs orphan_outcome, so the bug's no-lease examples will keep showing as unexplained; state on the spec how those rows are expected to clear.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-05T20:05:35.310643447Z
+  modified_at: 2026-11-05T20:05:35.310643447Z
   session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
 history:
 - id: 01a1ad1a-eea4-75b1-bafd-7e58532b917a
