@@ -809,8 +809,10 @@ mod linux {
     /// Nothing the seat can write makes a directory a host-recorded clone: not
     /// the `aida-seat-*` name plus marker on a main checkout, not a lease naming
     /// the main checkout itself, and not a directory inside a real clone.
+    /// Named into the forced-live CI gate so its bwrap arm cannot skip there.
+    // trace:TASK-2825 | ai:claude
     #[test]
-    fn only_the_host_lease_makes_a_host_recorded_clone() {
+    fn bug_2169_bwrap_only_the_host_lease_makes_a_host_recorded_clone() {
         let fx = fixture();
         let clone = launch_clone_seat(&fx);
         // trace:TASK-2032 | ai:claude
@@ -1033,9 +1035,11 @@ true"#,
     /// grants nothing in either layer: not a directory outside main, not a
     /// sibling seat's target dir, and the seat's real target dir is dropped
     /// too, since the lease no longer names it.
+    /// Named into the forced-live CI gate so its bwrap arm cannot skip there.
     // trace:TASK-2033 | ai:claude
+    // trace:TASK-2825 | ai:claude
     #[test]
-    fn a_genuine_main_lease_naming_another_cargo_target_dir_grants_nothing() {
+    fn bug_2169_bwrap_a_genuine_main_lease_naming_another_cargo_target_dir_grants_nothing() {
         let fx = fixture();
         let clone = launch_clone_seat(&fx);
         let recorded =

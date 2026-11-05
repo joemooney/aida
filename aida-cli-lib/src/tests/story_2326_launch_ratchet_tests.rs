@@ -66,7 +66,7 @@ const LEDGER: &[(&str, usize, &str)] = &[
     ("aida-cli-lib/src/remote_create.rs", 1, "not a vendor child: forge CLI"),
     ("aida-cli-lib/src/review_watch.rs", 1, "not a vendor child: the watch command"),
     ("aida-cli-lib/src/review_watch_forge.rs", 4, "not a vendor child: forge CLI"),
-    ("aida-cli-lib/src/seat_target_overlay.rs", 1, "not a vendor child: the overlay probe runs `true` under unshare (from main)"),
+    ("aida-cli-lib/src/seat_target_overlay.rs", 1, "not a vendor child: the overlay probe runs the lane-job bwrap on `true` under unshare (from main)"),
     ("aida-cli-lib/src/session.rs", 49, "slice A2: the three Claude resume paths; slice B: Codex session/exec/resume and the vendor resume; the shared seat-env helper; the contained export (its aida control children convert in slice B); the interactive exec of a built launch"),
     ("aida-cli-lib/src/session_start.rs", 2, "not a vendor child: forge CLI"),
     ("aida-cli-lib/src/shift.rs", 2, "generic helper: shift command; pre_exec process group"),

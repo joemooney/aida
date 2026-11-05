@@ -3344,19 +3344,23 @@ pub(crate) fn containment_posture_in(
     vendor_containment_posture(vendor, setting.as_deref())
 }
 
+// trace:TASK-3047 | ai:codex
+const SUPPORTED_CONTAINMENT_VENDORS: &str = "Supported [contained.vendors] settings: claude = \"aida\" (AIDA containment), codex = \"native\" (explicit opt-in in the trusted default-branch config; native sandbox, not AIDA-contained). Use --vendor claude or AIDA_HEADLESS_VENDOR=claude for AIDA containment.";
+
 // trace:TASK-2631 | ai:codex
+// trace:TASK-3047 | ai:codex
 fn vendor_containment_posture(vendor: &str, setting: Option<&str>) -> Result<ContainmentPosture> {
     match (HeadlessVendor::parse(vendor), setting) {
         (Some(HeadlessVendor::Claude), None | Some("aida")) => Ok(ContainmentPosture::Aida),
         (Some(HeadlessVendor::Codex), Some("native")) => Ok(ContainmentPosture::Native),
         (_, Some("native")) => anyhow::bail!(
-            "[contained.vendors] {vendor} = \"native\" is unsupported: `{vendor}` has no supported native sandbox; refusing to launch it"
+            "[contained.vendors] {vendor} = \"native\" is unsupported: `{vendor}` has no supported native sandbox; refusing to launch it. {SUPPORTED_CONTAINMENT_VENDORS}"
         ),
         (_, None | Some("aida")) => anyhow::bail!(
-            "`{vendor}` cannot run an AIDA-contained session; refusing to launch it. Use --vendor claude, or explicitly set [contained.vendors] codex = \"native\" in the trusted default-branch config for Codex (native sandbox, not AIDA-contained)"
+            "`{vendor}` cannot run an AIDA-contained session; refusing to launch it. {SUPPORTED_CONTAINMENT_VENDORS}"
         ),
         (_, Some(value)) => anyhow::bail!(
-            "[contained.vendors] {vendor} = {} must be \"aida\" or \"native\"; refusing to launch it", aida_core::toml_quote::toml_string(value)
+            "[contained.vendors] {vendor} = {} must be \"aida\" or \"native\"; refusing to launch it. {SUPPORTED_CONTAINMENT_VENDORS}", aida_core::toml_quote::toml_string(value)
         ),
     }
 }
@@ -4012,6 +4016,7 @@ pub(crate) fn parse_aida_contained(raw: &str) -> Result<bool> {
 /// a contained request on a vendor that cannot apply it (only Claude can) is
 /// refused, never silently downgraded to an uncontained launch.
 // trace:BUG-2144 | ai:claude
+// trace:TASK-3047 | ai:codex
 pub(crate) fn require_vendor_containment(
     vendor: HeadlessVendor,
     contained: bool,
@@ -4020,7 +4025,7 @@ pub(crate) fn require_vendor_containment(
     // trace:TASK-2631 | ai:codex
     if contained {
         crate::refuse_uncontainable_agent_tool(vendor.as_str()).with_context(|| format!(
-            "the `{}` vendor cannot run a contained session: re-run with --vendor claude or AIDA_HEADLESS_VENDOR=claude, or fix [contained.vendors]\n  [contained] refusing to launch the {what} uncontained", vendor.as_str()
+            "the `{}` vendor cannot run a contained session: {SUPPORTED_CONTAINMENT_VENDORS}\n  [contained] refusing to launch the {what} uncontained", vendor.as_str()
         ))?;
     }
     Ok(())
@@ -4048,6 +4053,7 @@ pub(crate) fn require_child_containment(
 /// The pure decision behind [`require_child_containment`]; `sandbox_available`
 /// is whether the host can provide the contained sandbox.
 // trace:BUG-2133 | ai:claude
+// trace:TASK-3047 | ai:codex
 pub(crate) fn child_containment_preflight(
     vendor: HeadlessVendor,
     contained: bool,
@@ -4060,7 +4066,7 @@ pub(crate) fn child_containment_preflight(
     // trace:BUG-2223 | ai:claude
     // trace:TASK-2631 | ai:codex
     let posture = containment_posture(vendor, true).with_context(|| format!(
-        "the `{}` vendor cannot run a contained session: use --vendor claude or AIDA_HEADLESS_VENDOR=claude, or fix [contained.vendors]\n  [contained] refusing to launch the {child} uncontained", vendor.as_str()
+        "the `{}` vendor cannot run a contained session: {SUPPORTED_CONTAINMENT_VENDORS}\n  [contained] refusing to launch the {child} uncontained", vendor.as_str()
     ))?;
     if posture == ContainmentPosture::Native {
         return Ok(());
