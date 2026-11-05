@@ -23,7 +23,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T15:39:15.141070572Z
-modified_at: 2026-11-05T12:41:50.843972115Z
+modified_at: 2026-11-05T19:12:03.142524483Z
 req_type: Story
 tags:
 - area:containment
@@ -202,6 +202,12 @@ comments:
   created_at: 2026-11-05T12:41:50.843972115Z
   modified_at: 2026-11-05T12:41:50.843972115Z
   session_id: b83457ff-84e3-46cb-8f68-4be531a63422
+- id: 01a1ad20-1446-7423-ad9d-e789fc657a04
+  author: joe
+  content: 'ADVISOR RULING 2026-11-05 12:20 MST (agy posture, amends the STORY-2460 S1 decision). Evidence: ~/aida-conformance-agy-PR3426b-20261105 (agy 1.5.1, harness at the #3426 head). agy''s own agy_tool_safety monitor rejects write_file as ''unsupported_tool'' in default mode BEFORE permissions.allow is consulted (cli.log: ''Monitor agy_tool_safety FINISHED: triggered=true, reason="unsupported_tool: write_file"''), and ''--mode auto is not available for this account''. agy''s native permission layer therefore cannot run a headless implementer on this account; no allow-rule shape fixes it. RULING: agy becomes an OUTER-ONLY vendor in STORY-2238''s vendor-neutral model. AIDA''s shared boundary (bwrap, netns relay, broker and grant keyring) is the sole containment authority. agy runs inside it with --dangerously-skip-permissions, and that flag is permitted ONLY when the launch carries an AIDA ContainmentReceipt (applied). Any other path refuses by name, and the existing refusal for agy without the AIDA boundary stays. The posture is data in vendors.toml (native_layer = "none"); no agy-specific containment code. This is the A2/M2 ''outer-only'' option, signed here for agy only: Claude stays M1 and Codex stays as ruled. CONSEQUENCE: TASK-3048''s remaining acceptance (agy launched in the selected posture) is BLOCKED BY TASK-2708 AC1 (the common contained wrapper for non-Codex vendors). After it lands, TASK-3048''s final slice adds the agy descriptor and argv and runs the harness through AIDA''s boundary; TASK-3049 follows.'
+  created_at: 2026-11-05T19:12:03.142524483Z
+  modified_at: 2026-11-05T19:12:03.142524483Z
+  session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
 history:
 - id: 01a1a739-849a-7023-b534-bbe543e4ef1f
   author: joe
