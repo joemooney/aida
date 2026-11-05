@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T17:20:07.094298824Z
-modified_at: 2026-11-05T19:04:56.661188528Z
+modified_at: 2026-11-05T19:05:00.295750236Z
 req_type: Task
 tags:
 - from-implementer:STORY-2460
@@ -128,6 +128,11 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a1ad19-a164-7ff2-9923-ccec5f8452f6
+  author: joe
+  timestamp: 2026-11-05T19:05:00.516213048Z
+  session_id: 01a1ad0a355d
+  changes: []
 filed_at:
   aida_version: 0.16.0
   aida_build_sha: e422daaa1a4
@@ -135,3 +140,6 @@ implementation_info:
   implemented: true
   implemented_at: 2026-11-05T19:04:56.661188528Z
   implemented_by: joe
+interface_changes:
+  cli:
+  - AGY headless reports denied, unresolved tool-error, and missing terminal evidence as incomplete (exit 65); quiet coordinator output stays readable
