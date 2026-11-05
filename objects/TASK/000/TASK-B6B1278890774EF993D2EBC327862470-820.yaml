@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T07:36:50.416655523Z
-modified_at: 2026-11-05T17:35:24.699941886Z
+modified_at: 2026-11-05T17:35:34.880224652Z
 req_type: Task
 tags:
 - docs:impacted
@@ -125,6 +125,22 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Round-3 fixes for checkpoint persistence, the push-race classifier, the HTTPS userinfo refusal and receipt/journal cleanup are mostly sound. But CI cli-0 is red at this head, and three recovery and diagnostic gaps remain.. It was punted on: blocked-dependency: Round 3 finding 5 and mandatory new-commit publication blocked: git add cannot create .git/index.lock (read-only filesystem); this lease has no lane job runner. Findings 1–4 are fixed in the four-file working tree, including regression tests and corrections for the observed prior CI display-ID and portability ratchets. No new commit or green CI is claimed. Host-side commit/test/push to existing PR #3415 required.. No triage reason was given.'
   created_at: 2026-11-05T17:35:24.699940027Z
   modified_at: 2026-11-05T17:35:24.699940027Z
+  session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
+- id: 01a1acc7-c05b-7a53-8bfe-bf27d107474d
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (TASK-3096):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 03fab762a630
+    Recorded: 2026-11-05T16:26:27.478834709+00:00
+    Findings:
+    1. BLOCKING CI: run 42062694961 job 127368403282 (CI cli-0) failed in 'Run tests' at 03fab762. contracts, gates, lib-0 and lib-1 were still pending at review time; cli-1 and rest passed. The reviewer sandbox cannot fetch job logs, so the failing test is unidentified. Likely candidates are the round-3 additions in aida-cli/tests/task_3096_intake_transport.rs: moved_remote_tip_retries_publication_after_an_actual_push_race (hook-timed race), push_hook_refusal_reports_diagnostic_once_and_keeps_accepted_checkpoint, https_userinfo_refuses_before_persistence_and_ssh_is_supported, or the extended explicit_create_comment_and_recovery_do_not_repeat_spec_writes. The extended test and the two new round-3 tests have no measured entries in scripts/test-time-budget.toml. Fix the failure, add measured budgets, and get every shard green, including task_3096_intake_transport and bug_1502_format_json_audit.
+    2. MINOR aida-cli-lib/src/intent_intake.rs:845-855: the round-3 finding-4 fix compares only receipt.action and destination with the local journal's evidence. For --action comment, two home clones commenting on the same --target produce the same destination. The losing clone's confirmed duplicate comment, tagged with its own intake-op marker, is treated as the crash-after-push case: its journal is removed and the winner's receipt is printed as success. The duplicate comment is silently orphaned, which the round-3 finding said must not happen. Fix: carry the operation UUID in Receipt (receipts are new in this PR, so the v1 wire format can still change) and compare journal.operation with it. Or, for comment, treat any journal whose evidence exists when the receipt was not written by this operation as an orphan. Add a test with two concurrent comment processes on one target.
+    3. MINOR aida-cli-lib/src/intent_intake.rs:843-844 vs 872-889: when a receipt exists and a retained journal has no store evidence, process bails with 'journal retained for manual reconciliation'. This happens when this clone crashed after writing the journal but before the writer spawned, while another clone published the receipt. But the receipt branch returns before the --reconcile handling, so 'process <sum> --reconcile' can never clear it. Every later process call for that checksum fails for good. docs/cli/02-specs.md tells the operator to use --reconcile, not to delete journals. Fix: honour --reconcile inside the receipt branch (fresh evidence still None, so remove the journal), and add a test.
+    4. MINOR aida-cli-lib/src/intent_intake.rs:204-208,659-671,701,679 + docs/cli/02-specs.md ('Other failures stop immediately and show bounded Git stderr, including hook or authentication errors'): every write begins with sync(), and its ls-remote/fetch go through git(), which discards stderr. So a bad SSH key, an unknown host or an unreachable remote still yields only 'Intake Git operation refused (ls-remote)', with no git diagnostic. The doc claim about authentication errors is false, and no test covers it. Separately, push() calls push_commit(&tip, Some(&tip)). Whenever a real push is needed (local ahead of remote), any refusal with a reachable remote is classified as a race (remote tip != Some(tip)), and the hook or policy stderr is dropped for the generic 'Intake push refused; ... Retry'. Fix: have git() surface bounded stderr (bounded_with_stderr) in its error, and pass the observed remote tip as base in push(). Or make the docs match the behavior.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-05T17:35:34.491700472Z
+  modified_at: 2026-11-05T17:35:34.491700472Z
   session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
 history:
 - id: 01a1aaa3-d806-7392-8539-dab331d61cdd
