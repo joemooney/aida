@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T19:25:59.128821503Z
-modified_at: 2026-11-05T16:57:47.582203619Z
+modified_at: 2026-11-05T17:00:12.928929348Z
 req_type: Task
 tags:
 - from-implementer:SPEC-447
@@ -21,6 +21,12 @@ comments:
   created_at: 2026-11-05T00:28:43.114390749Z
   modified_at: 2026-11-05T00:28:43.114390749Z
   session_id: 01a1a91a4d9c
+- id: 01a1aca7-6100-7102-a0fe-c4030c777098
+  author: joe
+  content: 'Evaluated serde_json 1.0.149 float_roundtrip in isolated Cargo package: 131840-ratio survey had zero drift. Dependency feature graph unifies serde_json across CLI/core/server/TUI, so selected the task-scoped <=2 ULP interior consistency check in require_execution rather than changing workspace parsing. Exact counts/endpoints, finite range, stored raw evidence and all authority gates remain. Added positive committed from_records/load/apply regressions and strict boundary/invalid evidence matrix. Targeted validation is running.'
+  created_at: 2026-11-05T17:00:12.928929348Z
+  modified_at: 2026-11-05T17:00:12.928929348Z
+  session_id: 01a1aca2ba91
 history:
 - id: 01a1a82b-89cd-70d2-a673-a09b91b6b3ba
   author: joe
