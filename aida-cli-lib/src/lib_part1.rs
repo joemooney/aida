@@ -1202,6 +1202,29 @@ pub(crate) fn derive_semantic_title(inner_args: &[String]) -> Option<String> {
     let has_pr_ship =
         inner_args.iter().any(|arg| arg == "pr") && inner_args.iter().any(|arg| arg == "ship");
 
+    // trace:TASK-3114 | ai:codex
+    if inner_args
+        .windows(2)
+        .any(|pair| pair[0] == "pr" && pair[1] == "review")
+    {
+        let target = inner_args
+            .iter()
+            .skip_while(|arg| *arg != "review")
+            .nth(1)?;
+        let upper = target.to_ascii_uppercase();
+        if upper.bytes().all(|byte| byte.is_ascii_digit()) && !upper.is_empty() {
+            return Some(format!("AIDA pr review: PR-{upper}"));
+        }
+        if ["PR-", "MR-"].iter().any(|prefix| {
+            upper.strip_prefix(*prefix).is_some_and(|number| {
+                !number.is_empty() && number.bytes().all(|byte| byte.is_ascii_digit())
+            })
+        }) {
+            return Some(format!("AIDA pr review: {upper}"));
+        }
+        return None;
+    }
+
     if has_queue_work {
         let mut specs = Vec::new();
         let mut batch_name = None;
@@ -1280,6 +1303,10 @@ pub(crate) fn derive_spec_aware_slug(inner_args: &[String]) -> Option<String> {
 
     let has_pr_ship =
         inner_args.iter().any(|arg| arg == "pr") && inner_args.iter().any(|arg| arg == "ship");
+    // trace:TASK-3114 | ai:codex
+    let has_pr_review = inner_args
+        .windows(2)
+        .any(|pair| pair[0] == "pr" && pair[1] == "review");
     let spec_re = regex::Regex::new(r"(?i)^[a-z]+-\d+$").unwrap();
     let pr_re = regex::Regex::new(r"^\d+$").unwrap();
 
@@ -1302,7 +1329,7 @@ pub(crate) fn derive_spec_aware_slug(inner_args: &[String]) -> Option<String> {
 
         if spec_re.is_match(arg) {
             parts.push(arg.to_lowercase());
-        } else if has_pr_ship && pr_re.is_match(arg) {
+        } else if (has_pr_ship || has_pr_review) && pr_re.is_match(arg) {
             parts.push(format!("pr-{arg}"));
         }
 
