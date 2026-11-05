@@ -29,7 +29,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T02:34:20.173245666Z
-modified_at: 2026-11-05T16:28:06.095148874Z
+modified_at: 2026-11-05T16:43:52.459186815Z
 req_type: Story
 comments:
 - id: 01a1a468-a682-7271-a707-298d622d86f1
@@ -204,6 +204,12 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1ac98-6bb2-77b3-ba49-f69b5bfd248c
+  author: joe
+  timestamp: 2026-11-05T16:43:52.626611946Z
+  session_id: 01a1ac8f4b59
+  harness_version: 2.1.318 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 0754a362d797d2d9b246b4609456735b5486095d
   branch: main
@@ -218,3 +224,11 @@ attention_reason:
   lean: 'Use the documented TASK-2712 host exit commit path with subject [AI:codex] fix(condition): resolve review CI failures and cover release probes (STORY-2402), push PR #3428, and let host CI confirm the full shard. Keep the merge hold for the independent reviewer/merge seat.'
   raised_by: implementer
   raised_at: 2026-11-05T16:28:06.095148874Z
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'S1 condition language + aida condition check meet the signed-off slice and all round-1 findings are fixed (contracts, lib-1 now green), but CI gates is red at 7c11d77: the new release-probe test runs git commit without the maintenance guard (git auto-maintenance ratchet).'
+  recovery_hint: address the review findings, move STORY-2402 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-11-05T16:43:52.459186815Z
