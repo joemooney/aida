@@ -14,7 +14,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T11:57:08.462259290Z
-modified_at: 2026-11-05T10:57:08.742199582Z
+modified_at: 2026-11-05T11:01:22.186209280Z
 req_type: Task
 tags:
 - carried-from:BUG-2438
@@ -68,6 +68,11 @@ comments:
   created_at: 2026-11-05T09:48:31.821416051Z
   modified_at: 2026-11-05T09:48:31.821416051Z
   session_id: b83457ff-84e3-46cb-8f68-4be531a63422
+- id: 01a1ab5e-d88a-7e82-9ebb-6971df0fe8bd
+  author: mcp
+  content: 'Round 2: choosing reviewer fix direction (a). Parameterize bug2438_refuses with the expected refusal message: retain the train-source refusing-review assertion for malformed SHAs, assert the actual earlier carry-over/corpus refusal for the old-head integration fixture, and correct the helper/case documentation. Production gate ordering stays unchanged. Will validate targeted regressions and disclose the prior known-failing state and current verification in PR #3395.'
+  created_at: 2026-11-05T11:01:22.186202240Z
+  modified_at: 2026-11-05T11:01:22.186202240Z
 history:
 - id: 01a1a67e-5028-7810-aab8-4c8c2b0687e8
   author: joe
