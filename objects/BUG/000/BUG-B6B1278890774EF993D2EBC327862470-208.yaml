@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T12:51:07.563355298Z
-modified_at: 2026-11-05T07:59:20.202615574Z
+modified_at: 2026-11-05T08:34:23.666617132Z
 req_type: Bug
 tags:
 - area:compete
@@ -152,6 +152,13 @@ comments:
   created_at: 2026-11-05T07:55:35.040879775Z
   modified_at: 2026-11-05T07:55:35.040879775Z
   session_id: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
+- id: 01a1aad8-4932-7f01-963e-3ec15295a807
+  author: joe
+  content: 'Round 3 (a9ea09fa83a): compete --dry-run now resolves native Codex --add-dir grants from project_root''s main through a read-only mode of contained_write_set (no cache migration, no hook install, no store marking, no seat-clone grants), never from the not-yet-created or stale aida-compete-* path. codex_compete_native_argv_matches_preview_and_runs now previews against the nonexistent compete_worktree_dir, asserts it was not created, runs git worktree add, and asserts preview == real launch argv. untested=true: two lane runs timed out at 900s compiling aida-cli-lib.'
+  created_at: 2026-11-05T08:34:23.666617132Z
+  modified_at: 2026-11-05T08:34:23.666617132Z
+  session_id: 01a1aab824d1
+  harness_version: 2.1.318 (Claude Code)
 history:
 - id: 01a1a69d-4a2d-7292-9de1-00c519ffe27a
   author: joe
