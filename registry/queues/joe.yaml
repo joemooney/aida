@@ -104,3 +104,11 @@
   added_by: joe
   added_at: 2026-11-05T01:18:03.814318844Z
   for_role: advisor
+- user_id: joe
+  requirement_id: 01a1a952-9366-7731-8e79-0e6ba1801de6
+  position: 431000
+  added_by: joe
+  note: auto-queued by `aida pr` ((no-sess); covers 1 spec
+  added_at: 2026-11-05T01:29:04.033241258Z
+  for_role: reviewer
+  added_by_machine: imac
