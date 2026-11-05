@@ -3,12 +3,12 @@ spec_id: TASK-1471
 agreed_id: TASK-1471
 title: Show linked documentation in human-format aida show
 description: 'Make human-readable aida show output surface linked narrative Docs and human-authored expositions that reference the displayed spec. Acceptance: (1) aida show <SPEC> in human format includes a clearly labeled Documentation or Explanations section when linked Docs exist; (2) each entry shows its Doc ID, title, audience/scenario/tags where available, and an actionable command such as aida doc show <DOC-ID>; (3) entries are absent when none exist; (4) reverse References links are resolved without changing canonical spec content; (5) default machine-oriented formats remain stable and do not gain prose unless their schema explicitly includes a documentation field; (6) the output distinguishes human-authored exposition from generated or other documentation provenance; (7) add coverage for direct and reverse documentation links, including STORY-1472 -> DOC-1-174.'
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-09-24T04:25:12.035374412Z
-modified_at: 2026-11-05T09:53:21.233757178Z
+modified_at: 2026-11-05T10:03:24.463280731Z
 req_type: Task
 relationships:
 - rel_type:
@@ -365,7 +365,21 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1ab29-c7af-7160-bb12-ac16977a6971
+  author: joe
+  timestamp: 2026-11-05T10:03:24.463300241Z
+  session_id: 01a1ab20827e
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 implementation_info:
   implemented: true
   implemented_at: 2026-11-04T11:57:50.448772116Z
   implemented_by: joe
+attention_reason:
+  category: other
+  detail: 'Round 5 unable to publish: all three review findings accepted and fixed locally (JSON relationship display-ID assertion; always-present relationships comment; archived/Rejected/Superseded Doc omissions). git add fails creating .git/index.lock: Read-only file system under the managed sandbox; commit and push cannot proceed. Patch saved at /tmp/task-1471-round5.patch. Targeted tests and make check-ci-fast are still running; final results will be recorded separately. PR #3367 remains open at 8eae57614f7e; no merge-hold clearance attempted.'
+  lean: 'Retain the two-file working diff, complete validation, then commit as [AI:codex] fix(show): align linked-doc regression with JSON display IDs (TASK-1471) and push from a session with authorized Git metadata writes.'
+  raised_by: implementer
+  raised_at: 2026-11-05T10:03:24.463280731Z
