@@ -1,0 +1,21 @@
+id: 01a1aa09-2bca-71b3-ba1e-3403a4b2b8c3
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-805
+title: Cross-node review needs portable authority and authorship evidence
+description: 'STORY-2492 design review: synced verdict JSON cannot currently authorize shipping on a second machine. verified_authority_keys requires local grant/parent or human-receipt evidence, while author-session evidence is local too. The proposed portable validated publication receipt and distributed reservation protocol need master sign-off under AGENTS.md Sketch-First Protocol. See docs/plans/2026-11-04-story-2492-cross-machine-review.md; no approval gate has been weakened.'
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-05T04:48:10.186942102Z
+modified_at: 2026-11-05T04:48:10.186942102Z
+req_type: Task
+tags:
+- from-advisor:STORY-2492
+- kind:architectural-concern
+- linked:STORY-2492
+- severity:major
+filed_at:
+  aida_version: 0.16.0
+  aida_build_sha: e1fc3f06903
+  vendor: codex
+  session: 01a1aa06b62b
