@@ -1,0 +1,45 @@
+id: 01a1aa60-d11f-7281-89e7-14b65a726993
+spec_id: FAQ-b6b1278890774ef993d2ebc327862470-042
+agreed_id: FAQ-149
+title: What is a ratchet test, and why does my PR fail with 'Counts may only shrink'?
+description: |
+  **A ratchet test lets a count of known-bad patterns go down but never up. Route your new code through the approved path; never grow the ledger.**
+
+  ## Why
+  Some patterns can't be removed from the codebase in one PR, for example vendor processes launched outside `launch::spawn_agent`. A ratchet records today's offenders per file in a ledger and fails when:
+  - a new offender appears (the count grows), or
+  - the ledger lists more offenders than exist (someone fixed one but didn't shrink the ledger, so the progress isn't locked in).
+
+  ## How
+  When CI fails with "Counts may only shrink" or a similar ratchet message:
+  1. Read the assertion: it names the file and the expected vs actual counts.
+  2. Change your new code to use the sanctioned API instead of adding a ledger entry. Examples:
+     - `story_2326_launch_ratchet_tests`: launch vendor children only through `launch::spawn_agent` / `assign_seat`.
+     - `headless_env_launches_route_through_shared_argv_builders`: build headless launch argv with the shared builder.
+     - `no_cli_source_outside_the_resolver_uses_raw_current_executable_lookup`: resolve the `aida` binary through the one resolver.
+  3. If you removed an offender, lower its ledger count in the same PR.
+
+  ## See also
+  STORY-2326, TASK-2708
+status: Completed
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-05T06:23:54.143892174Z
+modified_at: 2026-11-05T06:23:54.143892174Z
+req_type: Faq
+tags:
+- audience:dev
+- topic:ci
+- topic:testing
+filed_at:
+  code_sha: d561213a36febec31d45921d3d43d4dc7590135e
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: d561213a36f
+  vendor: claude
+  session: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-05T06:23:54.143909200Z
