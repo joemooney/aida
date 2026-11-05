@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-208
 agreed_id: BUG-2439
 title: aida compete passes Claude-only flags to codex exec
 description: 'Observed 2026-11-04 05:55 MST on live be275c31: aida compete TASK-1715 --vendors codex,claude ran ''codex exec --permission-mode dontAsk --setting-sources project --settings {...}''. Codex exited at once with: unexpected argument ''--permission-mode'' found (log: ~/.aida/compete/compete-task-1715-codex/codex.log). The --dry-run prints the same argv. The compete vendor-argv path applies the Claude settings and permission wrapper to every vendor, instead of building the codex argv the way queue work --vendor codex does. Also: killing the compete parent leaves the claude leg running as an orphan. Acceptance: (1) a codex leg runs with a valid codex exec argv, and a regression test pins it; (2) the --dry-run argv equals the real one; (3) the vendor child dies with compete. Why: the operator wants routine cross-vendor bake-offs to measure relative implementation quality.'
-status: NeedsAttention
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-04T12:51:07.563355298Z
-modified_at: 2026-11-05T00:54:50.853179343Z
+modified_at: 2026-11-05T02:20:05.046325096Z
 req_type: Bug
 tags:
 - area:compete
@@ -76,6 +76,12 @@ comments:
   content: 'Advisor rework complete in the assigned seat checkout, left uncommitted for aida ship --from-seat per binding brief. Only aida-cli-lib/src/compete_cmd.rs changed. Retained valid native global option order: --sandbox workspace-write --ask-for-approval never [--add-dir PATH ...] exec PROMPT; installed Codex accepted this order via exec --help. The regression now creates a mailbox grant, pins the complete expected argv (including grants and the tool-shell override prefix) against preview, built Command and fake-vendor stdout for contained/uncontained launches. Parent-death regression now re-execs through aida_bin::current_executable_path, matching existing test-runner practice; raw-lookup inventory guard remains unchanged. Validation: cargo test -p aida-cli-lib --lib compete_cmd: 8 passed; cargo test -p aida-cli-lib --lib resolve_aida_exe: 7 passed; make check-ci-fast: all 36 gates passed; cargo fmt --all -- --check and git diff --check passed. Two fast guards emitted read-only .git/FETCH_HEAD diagnostics but each reported success and the overall gate exited 0. Logs: /tmp/bug2439-compete-tests.log, /tmp/bug2439-resolver-tests.log, /tmp/bug2439-check-ci-fast.log. No commit/push/ship/review record performed; spec remains In Progress for advisor publication.'
   created_at: 2026-11-04T21:07:38.895615577Z
   modified_at: 2026-11-04T21:07:38.895615577Z
+- id: 01a1a981-9836-7271-aafc-07bc720220b2
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Codex arm argv, dry-run parity and parent-death binding meet BUG-2439''s acceptance in code and tests, but CI is red because of this PR: compete_cmd.rs adds two STORY-2326 launch markers, which breaks the ledger, and the ledger may only shrink.. No triage reason was given.'
+  created_at: 2026-11-05T02:20:05.046322509Z
+  modified_at: 2026-11-05T02:20:05.046322509Z
+  session_id: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
 history:
 - id: 01a1a69d-4a2d-7292-9de1-00c519ffe27a
   author: joe
@@ -152,6 +158,14 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1a981-9836-7271-aafc-07a02c6a5b02
+  author: joe
+  timestamp: 2026-11-05T02:20:05.046301073Z
+  session_id: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: be275c313c1482b990ba38f323bdc67304f1d15c
   branch: main
@@ -165,11 +179,3 @@ implementation_info:
   implemented_at: 2026-11-04T20:00:49.095793592Z
   implemented_by: joe
   reopened_at_sha: 83ce565277a264e7468fc8b2e08e75dedc095284
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'Codex arm argv, dry-run parity and parent-death binding meet BUG-2439''s acceptance in code and tests, but CI is red because of this PR: compete_cmd.rs adds two STORY-2326 launch markers, which breaks the ledger, and the ledger may only shrink.'
-  recovery_hint: address the review findings, move BUG-2439 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-05T00:54:50.853179343Z
