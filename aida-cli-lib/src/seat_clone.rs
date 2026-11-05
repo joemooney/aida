@@ -3273,3 +3273,8 @@ mod bug_2455_force_claim_clone_tests;
 #[cfg(test)]
 #[path = "tests/bug_2451_pickup_entry_tests.rs"]
 mod pickup_entry_tests;
+
+// trace:BUG-2457 | ai:codex
+#[cfg(test)]
+#[path = "tests/bug_2457_review_repickup_tests.rs"]
+mod review_repickup_tests;
