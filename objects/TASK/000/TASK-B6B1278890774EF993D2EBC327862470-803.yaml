@@ -1,5 +1,6 @@
 id: 01a1a99e-f5c6-7320-957b-d8bd187eddb5
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-803
+agreed_id: TASK-2852
 title: PR hold cannot resolve an existing standalone implementer branch
 description: In standalone implementer worktree /home/joe/ai/aida-worktrees/aida-seat-aida-story-b6b1278890774ef993d2ebc327862470-407, git branch --show-current returned story-b6b1278890774ef993d2ebc327862470-407 and git commit created 6423aace1cf. However aida pr hold --reason ... refused with local branch does not exist. Direct git push -u origin HEAD succeeded for that exact branch. Investigate repository-root resolution for hold in sibling worktrees; no PR was opened and no hold signal was confirmed. STORY-2479 was separately punted for design sign-off.
 status: Draft
@@ -14,6 +15,11 @@ tags:
 - kind:observation
 - linked:STORY-2479
 - severity:minor
+history:
+- id: 01a1a9a4-9331-74f3-8922-e37e24c30e09
+  author: joe
+  timestamp: 2026-11-05T02:58:17.521964379Z
+  changes: []
 filed_at:
   aida_version: 0.16.0
   aida_build_sha: efca74e51a6
