@@ -1,0 +1,45 @@
+id: 01a1aa61-01c7-7033-8eb1-17d64ef1a101
+spec_id: FAQ-b6b1278890774ef993d2ebc327862470-043
+agreed_id: FAQ-150
+title: How does a Codex lane's work get published when its sandbox makes .git read-only?
+description: |
+  **From the host, run `aida ship SPEC --from-seat <seat-clone> --commit-pending "[AI:codex] type(scope): summary (SPEC)"`. It commits the seat's pending edits and pushes them to the spec's existing PR, or opens one.**
+
+  ## Why
+  Codex's native sandbox mounts `.git` read-only, so a Codex `queue work` lane can't fetch, merge, commit or push. It leaves validated edits uncommitted in its seat clone and exits.
+
+  ## How
+  1. After the lane exits, check its seat: `git -C <seat> status --porcelain`.
+  2. If there are changes, publish them from the host with the command above. It reuses the open PR on that branch, or creates the PR and files the review story.
+  3. If the seat sits on a stray `<branch>-2` that started from main (BUG-2451), don't publish it as a second PR. Save the diff and apply it on the real PR branch instead.
+  4. If the branch is already on origin with nothing new, the bundle is empty: use `gh pr create --head <branch>`.
+  5. Before ending a seat, confirm no commit is unpushed: `git rev-list HEAD --branches --not --remotes=origin` must be empty.
+  6. Merge-conflict reworks go to a Claude lane; Codex can't fetch or merge.
+
+  ## Caveat
+  STORY-2475 (in review) automates step 2, and BUG-2451 fixes the stray `-2` branches. Once those land, much of this is automatic.
+
+  ## See also
+  STORY-2475, TASK-2712, BUG-2451, BUG-2450
+status: Completed
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-05T06:24:06.599805912Z
+modified_at: 2026-11-05T06:24:06.599805912Z
+req_type: Faq
+tags:
+- audience:dev
+- topic:relay
+- topic:ship
+filed_at:
+  code_sha: d561213a36febec31d45921d3d43d4dc7590135e
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: d561213a36f
+  vendor: claude
+  session: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-05T06:24:06.599822379Z
