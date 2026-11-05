@@ -12,12 +12,12 @@ description: |
   - Vendors the shared launch does not support yet (claude before TASK-2708 AC1, agy) refuse with a named reason; no fallback.
   - One offline test with a fake vendor binary, plus a recorded host run for codex (the advisor runs it through deputy 3).
   - LIGHT gate.
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T19:13:33.556939585Z
-modified_at: 2026-11-05T20:34:52.417435457Z
+modified_at: 2026-11-05T20:37:27.195398003Z
 req_type: Task
 tags:
 - area:containment
@@ -44,6 +44,45 @@ comments:
   created_at: 2026-11-05T20:29:19.524234277Z
   modified_at: 2026-11-05T20:29:19.524234277Z
   session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
+- id: 01a1ad6d-3928-7623-9f36-cabe0274be16
+  author: joe
+  content: |-
+    ## Implementer approach
+
+    ### Acceptance criteria as tests
+    - Fixture/command-level: initialize a disposable repository through production aida init, commit its own contained.vendors.codex=aida policy, and attempt production seat establishment and requested-seat preflight without a TTY. If authority cannot be created, record the named refusal as required by the binding advisor ruling; do not bypass either check.
+    - Fixture: if authority setup succeeds, run the closed C0-C4 payload through the existing contained launcher, recording fixture policy commit, accepted ContainmentReceipt digest and AIDA binary SHA. Exercise an offline fake vendor and native compatibility tests.
+    - Command-level: unsupported shared vendors refuse explicitly, without fallback. Native remains the default and preserves existing behavior.
+    - Host evidence: advisor deputy 3 owns the recorded Codex host run; this implementer cannot claim that run.
+    - Validation: targeted conformance tests and formatting (LIGHT gate) for any implementation changes.
+
+    ### Expected files
+    - scripts/containment/conformance.py
+    - tests/test_containment_conformance.py
+    - Existing containment harness operator documentation, if implementation proceeds.
+
+    ### Ambiguities / conflicts as questions
+    None: the binding advisor ruling resolves the fixture-policy fork and explicitly requires a named refusal if production commands cannot establish fixture authority without the operator TTY.
+  created_at: 2026-11-05T20:36:18.856584162Z
+  modified_at: 2026-11-05T20:36:18.856584162Z
+  session_id: 01a1ad6bdb34
+- id: 01a1ad6e-3de1-7601-850b-c6a2d0ace39a
+  author: joe
+  content: |-
+    Production fixture prerequisite refused (binding advisor ruling followed).
+
+    Created disposable repository using production `aida init --footprint minimal --no-post-hooks --no-agent-config --no-schedule --no-hooks --no-skills`, then committed fixture-only `[contained.vendors] codex = "aida"`. Production `aida role scaffold` succeeded. Production `aida role enter implementer --no-resume --no-title` exited 1: "AIDA-managed agent sessions cannot issue direct TTY grants; request a scoped child seat from the launcher". Production `aida role current --probe-seat --expect implementer` exited 1: "seat_grant_valid=false cause=Absent".
+
+    Fixture policy commit: e678b604f7d58be0605562917e3a57643d669988
+    AIDA binary: /home/joe/.local/share/aida/live/aida
+    AIDA binary SHA256: b0c873cbebb6b989b0e368d9d3f8bde81defff9c65240fea9236a84b2915819a
+    ContainmentReceipt digest: null (no launch accepted).
+    Evidence report with command argv/exit/output: /tmp/task-3131-production-fixture-2c37j15p/report.json
+
+    C0-C4 remain unknown; no production launcher credit, source changes, or PR. The host repository policy was untouched. Did not imitate a seat/lease, bypass or stub policy/preflight, clear the managed-agent identity to obtain authority, or allocate a synthetic TTY. Need a supported production fixture authority bootstrap/delegation path before implementation can proceed under this ruling.
+  created_at: 2026-11-05T20:37:25.601267223Z
+  modified_at: 2026-11-05T20:37:25.601267223Z
+  session_id: 01a1ad6bdb34
 history:
 - id: 01a1ad21-f58b-7aa2-8855-03f913ad7538
   author: joe
@@ -90,6 +129,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1ad6e-441b-7ce2-95ef-3be80ec655ef
+  author: joe
+  timestamp: 2026-11-05T20:37:27.195419904Z
+  session_id: 01a1ad6bdb34
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: c02cb56144d01e1a43da14a1a018906b3bfbe689
   branch: main
@@ -98,3 +145,8 @@ filed_at:
   aida_build_sha: b66ec083185
   vendor: claude
   session: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
+attention_reason:
+  category: blocked-dependency
+  detail: 'fixture-seat-authority-unavailable: Binding advisor ruling requires refusal if production commands cannot establish a disposable fixture seat without operator TTY. Real fixture aida init and role scaffold succeeded, but role enter implementer exited 1 (AIDA-managed agent sessions cannot issue direct TTY grants; request a scoped child seat from the launcher); requested-seat preflight exited 1 (seat_grant_valid=false cause=Absent). Evidence: /tmp/task-3131-production-fixture-2c37j15p/report.json; policy and binary SHA recorded in spec comment. No bypass, launch credit, source changes or PR. Need supported production fixture authority bootstrap/delegation.'
+  raised_by: implementer
+  raised_at: 2026-11-05T20:37:27.195398003Z
