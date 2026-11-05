@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T00:31:51.425362067Z
-modified_at: 2026-11-05T11:36:53.012905005Z
+modified_at: 2026-11-05T12:12:59.305441726Z
 req_type: Story
 relationships:
 - rel_type:
@@ -150,6 +150,13 @@ comments:
   created_at: 2026-11-05T11:19:28.359005650Z
   modified_at: 2026-11-05T11:19:28.359005650Z
   session_id: b83457ff-84e3-46cb-8f68-4be531a63422
+- id: 01a1aba0-6a29-7153-9a00-8831abe8cd3b
+  author: joe
+  content: 'Round 3 (claude, d6fe5674036): (1) resolve_aida_exe and (2) the TASK-2807 ratchet, now pointed at run_queue_resume_to_exit and checking the wrapper never pre-marks, were already fixed on the branch in 8f9d6de09f9. (3) f5d669012d8 repairs the story_2475 fixture: a real seated clone plus a delegated child grant on resumes, and the CI refusal case is kept as an explicit assertion. (4) ci.yml now counts libtest --logfile results, because the BUG-2383 fixture''s concurrent --nocapture panic output could split an ok line (48/49). Needs a CI confirmation. (5) New: apply_rework_conflict_route was extracted from handle_queue_work and tested on real Git (story_2475_conflicting_codex_rework_relaunches_claude_in_the_seated_tree): a seat provisioned before the merge, conflicting Codex rework rerouted to Claude for both headless and interactive, merge aborted, model dropped, conflict task appended; a clean merge commits and keeps Codex. The clone-seat sandboxed Git path is documented as covered by seat_clone and live bwrap tests. untested=true: the lane runner timed out at 900s compiling aida-cli-lib three times; type-check passed.'
+  created_at: 2026-11-05T12:12:59.305441726Z
+  modified_at: 2026-11-05T12:12:59.305441726Z
+  session_id: 01a1ab80fd8e
+  harness_version: 2.1.318 (Claude Code)
 history:
 - id: 01a1a947-16f2-71f0-9679-9dc05c31b942
   author: joe
