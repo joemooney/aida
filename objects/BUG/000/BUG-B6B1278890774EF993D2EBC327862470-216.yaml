@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T04:41:04.196617281Z
-modified_at: 2026-11-05T06:44:53.967273879Z
+modified_at: 2026-11-05T07:03:46.754930635Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -71,6 +71,11 @@ comments:
   created_at: 2026-11-05T06:37:24.272105533Z
   modified_at: 2026-11-05T06:37:24.272105533Z
   session_id: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
+- id: 01a1aa85-5342-75d1-a2ad-18a152b66450
+  author: mcp
+  content: 'Round 2 rework addresses all three reviewed findings: worktree remote coverage now uses HEAD plus the lease''s recorded branch rather than shared --branches (private clones retain all-local-branch checks); watcher setup failures get at most one persisted retry per head, then retain terminal diagnostics and --release recovery; a real session_start reviewer launch regression verifies dirty and unpushed exited seats retain their unchanged lease/work and mail the advisor once across two launches. Added unrelated-host-branch coverage at the guard/reclaim seam and in actual CLI session teardown. Updated old no-remote CLI fixtures with pushed baseline commits. The CI gates log''s actual failure was the Git maintenance ratchet: fixed its three new unguarded fixture push/fetch calls; all 8 ratchet tests pass. All 12 BUG-2450 regressions, 32 takeover tests and 43 watcher tests pass. CLI regressions and no-default-features check are still building. Native seat Git metadata remains read-only: git add failed creating .git/index.lock with Read-only file system. Changes are pending for the documented launcher post-exit commit/publication path; no finding is disputed and no merge-hold clearance, pr ship or review record was attempted. Suggested new commit: [AI:codex] fix(sessions): scope worktree guards and bound review retries (BUG-2450).'
+  created_at: 2026-11-05T07:03:46.754912427Z
+  modified_at: 2026-11-05T07:03:46.754912427Z
 history:
 - id: 01a1aa04-0d9a-7422-b7ac-32092a03e6ee
   author: joe

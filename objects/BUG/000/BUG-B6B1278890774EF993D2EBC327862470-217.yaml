@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T04:57:47.350553675Z
-modified_at: 2026-11-05T06:55:41.067273847Z
+modified_at: 2026-11-05T07:03:26.706616640Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -61,6 +61,12 @@ comments:
   created_at: 2026-11-05T06:37:32.818517096Z
   modified_at: 2026-11-05T06:37:32.818517096Z
   session_id: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
+- id: 01a1aa85-04f2-7ee2-bdc6-8dc8ca553361
+  author: joe
+  content: 'Round 2: addressing all six findings. Train publication will allow only explicitly listed rider PRs; direct pickup lookup is restricted to single-spec scopes and queue setup carries its resolved result. Retained merged branches require explicit naming, with merged-PR and phase-1 recovery diagnostics. Adding real session-start regressions for held heads in worktree/clone modes, stale origin-only seating, broad scopes and resolved lookup. Rework hold records remain positive association evidence. Updating affected CI fixtures and help snapshot; validation underway.'
+  created_at: 2026-11-05T07:03:26.706616640Z
+  modified_at: 2026-11-05T07:03:26.706616640Z
+  session_id: 01a1aa7ddf84
 history:
 - id: 01a1aa24-e1ae-7ac3-82d4-8a340dec1723
   author: joe
