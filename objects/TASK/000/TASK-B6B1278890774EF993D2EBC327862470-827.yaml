@@ -1,0 +1,37 @@
+id: 01a1abdd-c428-7c31-99f3-c1e5a90c8610
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-827
+title: 'Repeated unchanged review findings: TASK-1471'
+description: |-
+  Identical reviewer findings recurred twice for TASK-1471; do not requeue a third implementer round until an advisor chooses a different implementer/seat or resolves the dispute.
+
+  REVIEW FINDINGS TO ADDRESS (TASK-1471):
+  Verdict: CHANGES REQUESTED
+  Reviewed commit: 8eae57614f7e
+  Recorded: 2026-11-05T09:08:11.316605289+00:00
+  Findings:
+  1. BLOCKING: CI (lib-1) job 127103715373 fails task_1471_show_docs_immediate_reverse_and_direct_links_preserve_machine_output at aida-cli-lib/src/tests/task_1471_show_docs_tests.rs:196 (assert!(rels.contains(&direct.id.to_string()))). Deterministic, not a flake: the show --format json relationships projection (requirements_cli.rs:6600-6615, RelJson) emits id = read_target(..).display_id() (agreed_id or spec_id, e.g. DOC-1-174) plus display_id and title. It never emits the target UUID, so the UUID substring check cannot pass. Fix: assert on the display ID the projection actually writes, e.g. rels.contains(&direct.display_id()) or the literal "DOC-1-174", in the same way the TOON check at :223 uses direct.friendly_id(). Confirm with the targeted test filter and a green CI lib-1 at the new head.
+  2. Cosmetic: the test comment at task_1471_show_docs_tests.rs:154-157 (and the round-4 note) says a first edge introduces the 'relationships' key because it is skip-if-empty. That is not true of the show JSON projection: run_show always inserts 'relationships' (requirements_cli.rs:6801-6804), even as []. The subset-and-EDGE_DELTA assertions are still sound, but correct the comment so the next reader does not chase a non-existent key addition.
+  3. Cosmetic: the docs/cli/02-specs.md 'Linked documentation in aida show' paragraph does not say that archived, Rejected and Superseded Docs are omitted (show_docs.rs:96-104). Add one clause so a user who does not see a declined Doc knows why.
+  Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-05T13:20:00.040570133Z
+modified_at: 2026-11-05T13:20:00.040570133Z
+req_type: Task
+tags:
+- from-advisor:TASK-1471
+- kind:observation
+- linked:TASK-1471
+- loop-guard
+- review-recurrence
+- severity:major
+filed_at:
+  code_sha: c38a77db6092f4a4199140b2eeb185ee16f5e489
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: c9166da8a3c
+  vendor: claude
+  session: b83457ff-84e3-46cb-8f68-4be531a63422
