@@ -1878,7 +1878,14 @@ mod bug_2139_headless_phase_seat_tests {
             return;
         }
         let tmp = tempfile::tempdir().unwrap();
-        std::env::set_current_dir(tmp.path()).unwrap();
+        // A temp cwd can still discover a host repository at /tmp/.git.
+        // Remove this child's separate cwd so root discovery deterministically
+        // fails, regardless of ancestor repositories or launch context.
+        // trace:TASK-2861 | ai:codex
+        let cwd = tempfile::tempdir().unwrap();
+        std::env::set_current_dir(cwd.path()).unwrap();
+        cwd.close().unwrap();
+        assert!(std::env::current_dir().is_err());
         assert!(find_main_worktree_root().is_err());
         let storage = Storage::new(tmp.path().join("requirements.yaml"));
         let mut store = aida_core::RequirementsStore::new();
