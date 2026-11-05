@@ -8,8 +8,15 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-05T04:41:04.196617281Z
-modified_at: 2026-11-05T04:42:34.778121382Z
+modified_at: 2026-11-05T04:43:41.032416811Z
 req_type: Bug
+comments:
+- id: 01a1aa05-1068-7553-b16c-23edf47a2495
+  author: joe
+  content: 'Related advisor incident 21:40: `aida session end --force` removed a seat whose only copy of commit 331d3a5de5f sat on a local branch with no upstream (BUG-2439 rework), and the commit was lost. Acceptance addition: session end (even --force) refuses when any commit reachable from the seat''s local branches or HEAD isn''t on a remote (rev-list HEAD --branches --not --remotes), unless an explicit --discard-unpushed is given. Upstream tracking config alone is not the test.'
+  created_at: 2026-11-05T04:43:41.032416811Z
+  modified_at: 2026-11-05T04:43:41.032416811Z
+  session_id: 5bf140f7-38b2-4a04-9e8c-ccf69b1258f8
 history:
 - id: 01a1aa04-0d9a-7422-b7ac-32092a03e6ee
   author: joe
