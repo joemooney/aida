@@ -13,12 +13,12 @@ description: |-
   1. CI blocker: CI (lib-0) run 41954321808 job 127005455263 fails step 'Test time budget' (Run tests passed). aida-cli-lib/src/deputy_shell/tests.rs wait_refuses_an_interrupted_claim_after_the_grace_expires asserts begun.elapsed() >= 10s, i.e. it necessarily exceeds scripts/test-time-budget.toml default_limit = 10, and as a test in a changed file it is held to the strict limit with no entry. Fix: either make the claim grace injectable for tests (e.g. a wait_with_grace(q,id,limit,grace,out) helper that wait() calls with CLAIM_GRACE, test with ~300ms) — preferred, removes 10s+ of wall clock per run — or add a reasoned budget entry '"aida-cli-lib deputy_shell::tests::wait_refuses_an_interrupted_claim_after_the_grace_expires" = 25' in scripts/test-time-budget.toml.
   2. Coverage note (non-blocking, fold into the same fix): if the grace becomes injectable, also assert the refusal happens near the grace (e.g. elapsed < grace + margin) so a regression that loops until some other bound is caught; the current 20s recv_timeout only bounds a hang.
   Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
-status: Draft
+status: Rejected
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-05T06:21:37.626405442Z
-modified_at: 2026-11-05T15:58:45.159441800Z
+modified_at: 2026-11-05T15:58:46.541078918Z
 req_type: Task
 tags:
 - from-advisor:TASK-2832
@@ -39,6 +39,14 @@ history:
   author: joe
   timestamp: 2026-11-05T06:47:23.408713977Z
   changes: []
+- id: 01a1ac6f-210d-7362-a068-1e70333cc093
+  author: joe
+  timestamp: 2026-11-05T15:58:46.541076782Z
+  session_id: b83457ff-84e3-46cb-8f68-4be531a63422
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Rejected
 filed_at:
   code_sha: d561213a36febec31d45921d3d43d4dc7590135e
   branch: main
