@@ -1,4 +1,10 @@
 - user_id: role:implementer
+  requirement_id: 01a1aaa3-97f0-77a1-8bc1-b5d685dc4e27
+  position: 103000
+  added_by: role:implementer
+  added_at: 2026-11-05T15:56:47.845272582Z
+  for_role: implementer
+- user_id: role:implementer
   requirement_id: 01a1a468-10c1-7770-82f8-211bbc415870
   position: 104000
   added_by: role:implementer
@@ -77,13 +83,6 @@
   added_by: role:implementer
   note: 'Address the request-changes review on #3413 (see the PR''s latest Review comment and .aida/review-verdicts/BUG-2452.json); push to branch bug-b6b1278890774ef993d2ebc327862470-218, no new branch.'
   added_at: 2026-11-05T09:49:42.673100145Z
-  for_role: implementer
-- user_id: role:implementer
-  requirement_id: 01a1aaa3-97f0-77a1-8bc1-b5d685dc4e27
-  position: 122000
-  added_by: role:implementer
-  note: 'CI red at 395eea7: task1169_launcher_sets_ceiling_guardrail (every_headless_spawn_site_disables_background_tasks / sets_the_background_wait_ceiling), bug_2181 task_2001_every_host_remote_call_routes_its_credentials, resolve_aida_exe no_cli_source_outside_the_resolver. New spawn site must go through the shared launcher/resolver.'
-  added_at: 2026-11-05T09:48:57.340636693Z
   for_role: implementer
 - user_id: role:implementer
   requirement_id: 01a0d1a9-0c63-7820-aa77-c03595ad09bd
