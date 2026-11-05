@@ -8,12 +8,19 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T16:24:45.297488765Z
-modified_at: 2026-11-05T18:06:07.553456548Z
+modified_at: 2026-11-05T18:22:19.080587735Z
 req_type: Bug
 tags:
 - area:review
 - from-advisor
 - linked:BUG-2428
+comments:
+- id: 01a1acf2-8bc8-73d2-9fda-1b37253c010c
+  author: joe
+  content: 'Implementation ready in the assigned native Codex checkout. Queue reviewer pickup now retires only the default pr-N/mr-N linked checkout when clean, unleased, unlocked, not in use, and outside the caller cwd; preserves the PR legacy hold onto the primary ledger before non-forced mailbox-aware removal; retains unknown markers and non-directory state. Existing setup then fetches and checks out the current PR head. Added real queue-pickup regression covering two different heads plus lease, dirty, live-process, lock, unrelated-marker and hold-preservation cases. Validation passed: bug_2457 (1), pickup_entry_tests (6), held_branch_preflight_offers_retirement_only_when_clean_unleased_unlocked (1), cargo fmt --all -- --check, git diff --check. Native sandbox publication blocker: git add refused .git/index.lock (Read-only file system); no commit/push/PR possible here, so status remains In Progress and queue done was not run. Recurred existing TASK-2879 rather than duplicating the finding. Intended commit/PR title: [AI:codex] fix(review): allow next-head pickup after an idle review (BUG-2457). Changed files: aida-cli-lib/src/queue_cmd.rs, aida-cli-lib/src/seat_clone.rs, aida-cli-lib/src/tests/bug_2457_review_repickup_tests.rs. Host publication must complete the handoff; no ship or review record attempted.'
+  created_at: 2026-11-05T18:22:19.080587735Z
+  modified_at: 2026-11-05T18:22:19.080587735Z
+  session_id: 01a1ace2e7a1
 history:
 - id: 01a1ace2-fcb8-7df3-bdb6-2dcb17aee41f
   author: aida-session-start
