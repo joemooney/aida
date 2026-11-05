@@ -1,4 +1,11 @@
 - user_id: role:implementer
+  requirement_id: 01a1a4e6-791e-7941-8078-89f2a342722e
+  position: 108000
+  added_by: role:implementer
+  note: 'Address the latest review on #3342 (see its last ''## Review'' comment and the spec''s review verdict) and any red CI at the current head; push to branch agy2/task-2995-features-page (no new branch). LIGHT gate.'
+  added_at: 2026-11-05T13:20:12.606225359Z
+  for_role: implementer
+- user_id: role:implementer
   requirement_id: 01a12782-f37b-7193-8d79-033a56623316
   position: 109000
   added_by: role:implementer
