@@ -18,7 +18,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T18:47:39.717568886Z
-modified_at: 2026-11-05T21:07:42.232131848Z
+modified_at: 2026-11-05T21:11:52.939825693Z
 req_type: Bug
 tags:
 - from-advisor:STORY-2325
@@ -103,6 +103,12 @@ comments:
   created_at: 2026-11-05T21:06:23.623809934Z
   modified_at: 2026-11-05T21:06:23.623809934Z
   session_id: 688fbe55-f92b-4b09-a8d1-2ca064cb7e25
+- id: 01a1ad8d-c96b-71e2-b452-3d6505184058
+  author: joe
+  content: 'Round 3 in progress: removed the session-start snapshot that stamped the short-lived CLI PID. lease_started now passes the original lease to lease_written, sharing holder derivation with subsequent writes and migrate repair. Added the unstamped/live regression with compare and repair idempotence checks; canonical criterion traces now make all five ACs report traced. AC5 tracing is regression coverage only, not host acceptance. Host evidence remains unavailable: /proc/self/ns/pid is 4026533032 and own migrate --execute refuses without an operator terminal. Git staging also refuses .git/index.lock as read-only. Validation is running; findings 3 and 5 plus publication will be explicitly punted if these restrictions remain.'
+  created_at: 2026-11-05T21:11:52.939825693Z
+  modified_at: 2026-11-05T21:11:52.939825693Z
+  session_id: 01a1ad89e4a0
 history:
 - id: 01a1ad1a-eea4-75b1-bafd-7e58532b917a
   author: aida-session-start
