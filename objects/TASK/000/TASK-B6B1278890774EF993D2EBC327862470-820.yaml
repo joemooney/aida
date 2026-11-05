@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-05T07:36:50.416655523Z
-modified_at: 2026-11-05T16:15:31.875545132Z
+modified_at: 2026-11-05T16:15:58.507391541Z
 req_type: Task
 tags:
 - docs:impacted
@@ -109,6 +109,12 @@ comments:
   created_at: 2026-11-05T15:56:47.228127517Z
   modified_at: 2026-11-05T15:56:47.228127517Z
   session_id: b83457ff-84e3-46cb-8f68-4be531a63422
+- id: 01a1ac7e-e02b-7ca0-a3d8-61d609391503
+  author: joe
+  content: 'Round 3 working-tree handoff: findings 1–4 addressed in intent_intake.rs, task_3096_intake_transport.rs and docs/cli/02-specs.md. Checkpoint persistence now follows accepted refs only; advanced pull avoids history(old). Push captures bounded stderr and retries only a confirmed remote-tip change. HTTPS userinfo refuses (including persisted profiles); authenticated transport is ssh:// via keys/agent. Receipt recovery verifies retained local journal evidence, clears matching crash-after-push journals and reports orphaned duplicate spec IDs while retaining their journals. Regression fixtures include advanced pull with a missing old tree, rejected candidate checkpoint preservation, one-attempt hook diagnostic, actual concurrent push race, HTTPS/SSH enrollment, crash-after-push cleanup and duplicate reconciliation. Retrieved CI run 42034538035: lib-0 failed the display-ID ratchet (170 versus 169); gates failed portability for shell calls in task_3096_writer_process_tests.rs. Corrected output to friendly_id() and guarded shell tests with cfg(unix). cargo fmt --all -- --check, git diff --check and scripts/check-portability.sh passed. untested=true: required lane job runner absent; fast gate interrupted while cargo awaited build slots. git add blocked by read-only .git/index.lock. No new commit/push. TASK-3096 punted on finding 5/publication for host-side commit, tests and push to existing PR #3415; no findings disputed.'
+  created_at: 2026-11-05T16:15:58.507391541Z
+  modified_at: 2026-11-05T16:15:58.507391541Z
+  session_id: 01a1ac76d6a7
 history:
 - id: 01a1aaa3-d806-7392-8539-dab331d61cdd
   author: joe
